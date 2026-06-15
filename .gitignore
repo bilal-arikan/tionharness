@@ -1,0 +1,26 @@
+# Build artifacts
+/build/
+/bin/
+*.exe
+
+# Local runtime data
+/.localdata*/
+/data/
+/workspaces/
+workspaces.json
+*.db
+*.db-shm
+*.db-wal
+credential-secret
+
+# Dependencies
+/frontend/node_modules/
+/frontend/dist/
+
+# Env
+.env
+.env.local
+
+# OS
+Thumbs.db
+.DS_Store
