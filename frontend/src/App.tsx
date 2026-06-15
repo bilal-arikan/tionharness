@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { api, setActiveWorkspace, getActiveWorkspace } from './api'
-import type { Agent, Session, Message, Workspace } from './types'
+import type { Agent, AgentPatch, Session, Message, Workspace, AppSettings } from './types'
 import { NavRail, type View } from './components/NavRail'
 import { Sidebar } from './components/Sidebar'
 import { MessageList } from './components/MessageList'
@@ -8,13 +8,24 @@ import { Composer } from './components/Composer'
 import { TaskBoard } from './components/TaskBoard'
 import { Schedules } from './components/Schedules'
 import { MemoryPanel } from './components/MemoryPanel'
+import { ToolsPanel } from './components/ToolsPanel'
+import { FlowsPanel } from './components/FlowsPanel'
 import { ChatMeters } from './components/ChatMeters'
+import { SettingsPanel } from './components/SettingsPanel'
+import { LogsPanel } from './components/LogsPanel'
+import { isImagePath, mediaUrl } from './lib/paths'
+import { applyTheme } from './lib/theme'
+import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clientPrefs'
 
 const VIEW_TITLE: Record<View, string> = {
   chat: 'Sohbet',
   board: 'Görevler',
   schedules: 'Zamanlamalar',
   memory: 'Hafıza',
+  tools: 'Araçlar',
+  flows: 'Akışlar',
+  logs: 'Loglar',
+  settings: 'Ayarlar',
 }
 
 export default function App() {
@@ -31,6 +42,21 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('chat')
   const [meterRefresh, setMeterRefresh] = useState(0)
+  // Desktop-notification preference, read live in sendMessage without re-binding.
+  const notifyEnabled = useRef(false)
+
+  // Apply the client-side preferences carried by app settings.
+  const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; keepAwake: boolean; desktopNotifications: boolean }) => {
+    applyTheme(s.theme, s.accent)
+    applyKeepAwake(s.keepAwake)
+    ensureNotificationPermission(s.desktopNotifications)
+    notifyEnabled.current = s.desktopNotifications
+  }, [])
+
+  // Load global settings once and apply theme + client-side behaviours.
+  useEffect(() => {
+    api.getSettings().then(applyClientPrefs).catch((e) => setError(e.message))
+  }, [applyClientPrefs])
 
   // Initial load: workspaces. Pick active (saved or first).
   useEffect(() => {
@@ -59,6 +85,16 @@ export default function App() {
     setActiveSessionId(null)
     api.listAgents().then(setAgents).catch((e) => setError(e.message))
   }, [activeWorkspaceId])
+
+  // Clicking a file path: open images inline (new tab via the file server),
+  // copy other paths to the clipboard as a best-effort action.
+  const openFile = useCallback((path: string) => {
+    if (isImagePath(path)) {
+      window.open(mediaUrl(path), '_blank')
+    } else {
+      navigator.clipboard?.writeText(path).catch(() => {})
+    }
+  }, [])
 
   const switchWorkspace = useCallback((id: string) => {
     setActiveWorkspace(id)
@@ -107,6 +143,11 @@ export default function App() {
     [],
   )
 
+  const updateAgent = useCallback(async (id: string, patch: AgentPatch) => {
+    const updated = await api.updateAgent(id, patch)
+    setAgents((prev) => prev.map((a) => (a.id === id ? updated : a)))
+  }, [])
+
   const newSession = useCallback(async () => {
     if (!activeAgentId) return
     const s = await api.createSession(activeAgentId)
@@ -114,6 +155,18 @@ export default function App() {
     setActiveSessionId(s.id)
     setMessages([])
   }, [activeAgentId])
+
+  // Regenerate a session's title from its conversation on demand.
+  const regenerateSessionTitle = useCallback(async (sessionId: string) => {
+    try {
+      const { title } = await api.generateSessionTitle(sessionId)
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, title } : s)),
+      )
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }, [])
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -142,11 +195,16 @@ export default function App() {
         setSessions((prev) =>
           prev.map((s) =>
             s.id === activeSessionId
-              ? { ...s, messageCount: s.messageCount + 2 }
+              ? {
+                  ...s,
+                  messageCount: s.messageCount + 2,
+                  title: res.sessionTitle ?? s.title,
+                }
               : s,
           ),
         )
         setMeterRefresh((n) => n + 1)
+        notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', res.reply)
       } catch (e) {
         setError((e as Error).message)
         setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
@@ -170,7 +228,7 @@ export default function App() {
 
       {/* The agent/session list only applies to agent-scoped views. Board and
           schedules are workspace-scoped, so the list is hidden there. */}
-      {(view === 'chat' || view === 'memory') && (
+      {(view === 'chat' || view === 'memory' || view === 'tools') && (
         <Sidebar
           agents={agents}
           sessions={sessions}
@@ -179,7 +237,9 @@ export default function App() {
           onSelectAgent={setActiveAgentId}
           onSelectSession={setActiveSessionId}
           onCreateAgent={createAgent}
+          onUpdateAgent={updateAgent}
           onNewSession={newSession}
+          onRegenerateSessionTitle={regenerateSessionTitle}
         />
       )}
 
@@ -212,7 +272,7 @@ export default function App() {
 
         {view === 'chat' && (
           <>
-            <MessageList messages={messages} pending={pending} />
+            <MessageList messages={messages} pending={pending} onOpenFile={openFile} />
             <Composer disabled={!activeSessionId || pending} onSend={sendMessage} />
           </>
         )}
@@ -222,6 +282,21 @@ export default function App() {
           <MemoryPanel
             agent={agents.find((a) => a.id === activeAgentId) ?? null}
             onError={setError}
+          />
+        )}
+        {view === 'tools' && (
+          <ToolsPanel
+            agent={agents.find((a) => a.id === activeAgentId) ?? null}
+            onError={setError}
+          />
+        )}
+        {view === 'flows' && <FlowsPanel agents={agents} onError={setError} />}
+        {view === 'logs' && <LogsPanel onError={setError} />}
+        {view === 'settings' && (
+          <SettingsPanel
+            onError={setError}
+            onSaved={applyClientPrefs}
+            onWorkspaceChanged={() => api.listWorkspaces().then(setWorkspaces).catch(() => {})}
           />
         )}
       </main>

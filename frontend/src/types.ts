@@ -14,8 +14,27 @@ export interface Agent {
   provider: string
   model: string
   planningMode: string
+  // Visual identity for the roster avatar. Both optional — when empty the UI
+  // derives a deterministic circular look from the agent id.
+  avatar?: string
+  color?: string
+  mcpEnabled: boolean
+  allowedTools: string
   createdAt: number
   updatedAt: number
+}
+
+// Editable agent profile fields (PUT /api/agents/{id}). Partial — omitted keys
+// are left unchanged on the backend.
+export interface AgentPatch {
+  name?: string
+  soul?: string
+  identity?: string
+  provider?: string
+  model?: string
+  planningMode?: string
+  avatar?: string
+  color?: string
 }
 
 export interface Session {
@@ -29,11 +48,27 @@ export interface Session {
   updatedAt: number
 }
 
+// A single entry in an assistant turn's activity trace (mirrors agent.TurnStep).
+export type StepKind = 'text' | 'thinking' | 'tool'
+
+export interface TurnStep {
+  kind: StepKind
+  text?: string
+  tool?: string
+  input?: unknown
+  output?: string
+  isError?: boolean
+}
+
 export interface Message {
   id: string
   sessionId: string
   role: 'user' | 'assistant' | 'system' | 'tool'
   text: string
+  // JSON-encoded TurnStep[] as persisted by the backend (empty "[]" for plain
+  // replies). Parsed lazily by the renderer.
+  steps?: string
+  reasoningContent?: string
   createdAt: number
 }
 
@@ -48,6 +83,10 @@ export interface ChatResponse {
   model: string
   userMessage: Message
   replyMessage: Message
+  // Live activity trace for this turn (tool calls + intermediate text).
+  steps?: TurnStep[]
+  // Present only when the first turn auto-generated the session title.
+  sessionTitle?: string
 }
 
 // Kanban board column states (mirror db.Board* constants).
@@ -125,4 +164,180 @@ export interface AgentUsage {
   outputTokens: number
   dailyCallLimit: number
   dailyTokenLimit: number
+}
+
+// MCP servers + tools (Phase 8).
+export type MCPTransport = 'stdio' | 'sse' | 'http'
+
+export interface MCPServer {
+  id: string
+  name: string
+  transport: MCPTransport
+  command: string
+  args: string // JSON array
+  url: string
+  envConfig: string // JSON object
+  enabled: boolean
+  scope: string
+  createdAt: number
+}
+
+// A tool advertised to the model (built-in or MCP-sourced).
+export interface ToolDef {
+  name: string
+  description: string
+  inputSchema?: unknown
+}
+
+export interface MCPTestResult {
+  ok: boolean
+  error?: string
+  toolCount?: number
+  tools?: { name: string; description: string }[]
+}
+
+export interface AgentTools {
+  mcpEnabled: boolean
+  allowedTools: string[]
+  catalog: ToolDef[]
+}
+
+// Orchestration flows (Phase 7).
+export type FlowNodeType = 'agent' | 'branch' | 'parallel'
+
+export interface FlowBranch {
+  contains: string // case-insensitive substring; "" = default
+  next: string
+}
+
+export interface FlowNode {
+  id: string
+  type: FlowNodeType
+  title?: string
+  agentId?: string
+  prompt?: string
+  next?: string
+  branches?: FlowBranch[]
+  parallel?: string[]
+  joinNext?: string
+}
+
+export interface FlowGraph {
+  start: string
+  nodes: FlowNode[]
+}
+
+export interface Flow {
+  id: string
+  name: string
+  description: string
+  graph: string // JSON FlowGraph
+  createdAt: number
+  updatedAt: number
+}
+
+export interface FlowTraceEntry {
+  nodeId: string
+  type: string
+  title: string
+  output: string
+  at: number
+}
+
+export interface FlowState {
+  current: string
+  last: string
+  outputs: Record<string, string>
+  steps: number
+  trace: FlowTraceEntry[]
+}
+
+export interface FlowRun {
+  id: string
+  flowId: string
+  status: 'running' | 'success' | 'failure'
+  input: string
+  state: string // JSON FlowState
+  output: string
+  error: string
+  createdAt: number
+  updatedAt: number
+}
+
+// Application settings (global). Mirrors settings.DTO — the Anthropic key is
+// never returned; anthropicKeySet reports whether one is stored.
+export type Theme = 'dark' | 'light' | 'system'
+
+export interface AppSettings {
+  theme: Theme
+  accent: string
+  language: 'tr' | 'en'
+
+  defaultProvider: string
+  defaultModel: string
+  claudeCliPath: string
+  anthropicKeySet: boolean
+
+  oneMillionContext: boolean
+  extendedPromptCache: boolean
+
+  desktopNotifications: boolean
+  keepAwake: boolean
+
+  userName: string
+  userTimezone: string
+  userCity: string
+  userCountry: string
+  userNotes: string
+
+  maxContextTokens: number
+  keepRecentMsgs: number
+  recallTopN: number
+  recallMinScore: number
+
+  defaultDailyCallLimit: number
+  defaultDailyTokenLimit: number
+
+  defaultHeartbeatSec: number
+  pauseAutonomy: boolean
+
+  autoTitleEnabled: boolean
+  titleModel: string
+
+  mcpGatewayUrl: string
+
+  logLevel: string
+}
+
+// Partial update. anthropicKey is write-only: "" clears, non-empty sets.
+export type SettingsPatch = Partial<
+  Omit<AppSettings, 'anthropicKeySet'> & { anthropicKey: string }
+>
+
+export interface ProviderTestResult {
+  ok: boolean
+  model?: string
+  sample?: string
+  error?: string
+}
+
+// Per-workspace settings (overrides + rename). Resolved from X-Workspace-Id.
+export interface WorkspaceSettings {
+  id: string
+  name: string
+  description: string
+  defaultProvider: string
+  defaultModel: string
+  pauseAutonomy: boolean
+}
+
+export type WorkspaceSettingsPatch = Partial<Omit<WorkspaceSettings, 'id'>>
+
+// A captured log record (application + all workspaces).
+export interface LogEntry {
+  seq: number
+  time: number // unix milliseconds
+  level: string // DEBUG | INFO | WARN | ERROR
+  message: string
+  attrs?: Record<string, string>
 }

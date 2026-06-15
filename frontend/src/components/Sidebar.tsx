@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import type { Agent, Session } from '../types'
+import type { Agent, AgentPatch, Session } from '../types'
+import { AgentAvatar } from './AgentAvatar'
+import { AgentSettingsModal } from './AgentSettingsModal'
 
 interface Props {
   agents: Agent[]
@@ -9,7 +11,9 @@ interface Props {
   onSelectAgent: (id: string) => void
   onSelectSession: (id: string) => void
   onCreateAgent: (name: string, soul: string, provider: string) => void
+  onUpdateAgent: (id: string, patch: AgentPatch) => Promise<void>
   onNewSession: () => void
+  onRegenerateSessionTitle: (sessionId: string) => void
 }
 
 // Sidebar is the middle column: the agent roster and the active agent's
@@ -22,12 +26,26 @@ export function Sidebar({
   onSelectAgent,
   onSelectSession,
   onCreateAgent,
+  onUpdateAgent,
   onNewSession,
+  onRegenerateSessionTitle,
 }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [soul, setSoul] = useState('')
   const [provider, setProvider] = useState('claude-cli')
+  const [retitling, setRetitling] = useState<string | null>(null)
+  // The agent currently open in the settings modal (gear button), if any.
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
+
+  const regenerate = async (sessionId: string) => {
+    setRetitling(sessionId)
+    try {
+      await onRegenerateSessionTitle(sessionId)
+    } finally {
+      setRetitling(null)
+    }
+  }
 
   const submit = () => {
     if (!name.trim()) return
@@ -87,18 +105,32 @@ export function Sidebar({
 
       <div className="max-h-56 overflow-y-auto px-2">
         {agents.map((a) => (
-          <button
+          <div
             key={a.id}
-            onClick={() => onSelectAgent(a.id)}
-            className={`mb-1 flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm transition ${
+            className={`group mb-1 flex w-full items-center rounded-lg pr-1 text-sm transition ${
               activeAgentId === a.id
                 ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
                 : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
             }`}
           >
-            <span className="font-medium">{a.name}</span>
-            <span className="text-xs opacity-70">{a.provider}</span>
-          </button>
+            <button
+              onClick={() => onSelectAgent(a.id)}
+              className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
+            >
+              <AgentAvatar agent={a} size={32} active={activeAgentId === a.id} />
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-medium">{a.name}</span>
+                <span className="truncate text-xs opacity-70">{a.provider}</span>
+              </span>
+            </button>
+            <button
+              onClick={() => setEditingAgent(a)}
+              title="Ajan ayarları"
+              className="ml-1 shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"
+            >
+              ⚙
+            </button>
+          </div>
         ))}
         {agents.length === 0 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
@@ -124,18 +156,30 @@ export function Sidebar({
 
       <div className="flex-1 overflow-y-auto px-2">
         {sessions.map((s) => (
-          <button
+          <div
             key={s.id}
-            onClick={() => onSelectSession(s.id)}
-            className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+            className={`group mb-1 flex w-full items-center rounded-lg pr-2 text-sm transition ${
               activeSessionId === s.id
                 ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
                 : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
             }`}
           >
-            <span className="truncate">{s.title || 'Yeni sohbet'}</span>
-            <span className="ml-2 text-xs opacity-60">{s.messageCount}</span>
-          </button>
+            <button
+              onClick={() => onSelectSession(s.id)}
+              className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-left"
+            >
+              <span className="truncate">{s.title || 'Yeni sohbet'}</span>
+              <span className="ml-2 text-xs opacity-60">{s.messageCount}</span>
+            </button>
+            <button
+              onClick={() => regenerate(s.id)}
+              disabled={retitling === s.id || s.messageCount === 0}
+              title="Başlığı yeniden oluştur"
+              className="ml-1 shrink-0 text-xs text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100 disabled:opacity-20"
+            >
+              {retitling === s.id ? '…' : '⟳'}
+            </button>
+          </div>
         ))}
         {activeAgentId && sessions.length === 0 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
@@ -143,6 +187,14 @@ export function Sidebar({
           </p>
         )}
       </div>
+
+      {editingAgent && (
+        <AgentSettingsModal
+          agent={editingAgent}
+          onClose={() => setEditingAgent(null)}
+          onSave={(patch) => onUpdateAgent(editingAgent.id, patch)}
+        />
+      )}
     </aside>
   )
 }

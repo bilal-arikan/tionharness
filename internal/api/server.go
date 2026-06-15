@@ -7,8 +7,11 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/conversation"
+	"github.com/bilal/swarmgo/internal/logbuf"
 	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal/swarmgo/internal/settings"
 	"github.com/bilal/swarmgo/internal/workspace"
 )
 
@@ -22,17 +25,37 @@ type Server struct {
 	workspaces *workspace.Manager
 	providers  *providers.Registry
 	convo      *conversation.Manager
+	settings   *settings.Store
+	logs       *logbuf.Buffer
 	logger     *slog.Logger
 }
 
-// NewServer constructs an API server.
-func NewServer(manager *workspace.Manager, registry *providers.Registry, logger *slog.Logger) *Server {
-	return &Server{
+// NewServer constructs an API server and pushes the persisted settings into the
+// live subsystems (providers, compaction, autonomy).
+func NewServer(manager *workspace.Manager, registry *providers.Registry, store *settings.Store, logs *logbuf.Buffer, logger *slog.Logger) *Server {
+	s := &Server{
 		workspaces: manager,
 		providers:  registry,
 		convo:      conversation.NewManager(),
+		settings:   store,
+		logs:       logs,
 		logger:     logger,
 	}
+	s.applySettings()
+	return s
+}
+
+// applySettings pushes the current settings into every live subsystem. Called
+// on boot and after each successful settings update.
+func (s *Server) applySettings() {
+	cur := s.settings.Get()
+	s.providers.SetAnthropicKey(s.settings.AnthropicKey())
+	s.providers.SetClaudeCLIPath(cur.ClaudeCLIPath)
+	s.providers.SetDefaultModel(cur.DefaultModel)
+	s.providers.SetAnthropicBetas(cur.OneMillionContext, cur.ExtendedPromptCache)
+	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
+	agent.SetAutonomyPaused(cur.PauseAutonomy)
+	agent.SetTitleModel(cur.TitleModel)
 }
 
 // Routes registers all HTTP routes and returns the handler.
@@ -49,12 +72,19 @@ func (s *Server) Routes() http.Handler {
 	// Workspace-scoped resources.
 	mux.HandleFunc("GET /api/agents", s.handleListAgents)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
+	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
 
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("POST /api/sessions", s.handleCreateSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleListMessages)
+	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
 
 	mux.HandleFunc("POST /api/chat", s.handleChat)
+	// SSE streaming variant: emits each activity step as it occurs.
+	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
+
+	// Inline media (images referenced by chat content) — read-only.
+	mux.HandleFunc("GET /api/files", s.handleServeFile)
 
 	mux.HandleFunc("GET /api/runtime", s.handleRuntimeStatus)
 	mux.HandleFunc("POST /api/agents/{id}/heartbeat", s.handleSetHeartbeat)
@@ -65,6 +95,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
 	mux.HandleFunc("PUT /api/tasks/{id}", s.handleUpdateTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
+	mux.HandleFunc("POST /api/tasks/{id}/title", s.handleGenerateTaskTitle)
 	mux.HandleFunc("POST /api/tasks/{id}/run", s.handleRunTask)
 	mux.HandleFunc("GET /api/tasks/{id}/runs", s.handleListTaskRuns)
 
@@ -78,6 +109,36 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/agents/{id}/usage", s.handleAgentUsage)
 	mux.HandleFunc("POST /api/agents/{id}/budget", s.handleSetBudget)
 	mux.HandleFunc("GET /api/sessions/{id}/context", s.handleSessionContext)
+
+	// MCP servers + per-agent tool access (Phase 8).
+	mux.HandleFunc("GET /api/mcp-servers", s.handleListMCPServers)
+	mux.HandleFunc("POST /api/mcp-servers", s.handleCreateMCPServer)
+	mux.HandleFunc("POST /api/mcp-servers/{id}/toggle", s.handleToggleMCPServer)
+	mux.HandleFunc("POST /api/mcp-servers/{id}/test", s.handleTestMCPServer)
+	mux.HandleFunc("DELETE /api/mcp-servers/{id}", s.handleDeleteMCPServer)
+	mux.HandleFunc("GET /api/agents/{id}/tools", s.handleAgentTools)
+	mux.HandleFunc("POST /api/agents/{id}/tools", s.handleSetAgentTools)
+
+	// Orchestration flows (multi-agent protocols) + runs (Phase 7).
+	mux.HandleFunc("GET /api/flows", s.handleListFlows)
+	mux.HandleFunc("POST /api/flows", s.handleCreateFlow)
+	mux.HandleFunc("PUT /api/flows/{id}", s.handleUpdateFlow)
+	mux.HandleFunc("DELETE /api/flows/{id}", s.handleDeleteFlow)
+	mux.HandleFunc("POST /api/flows/{id}/run", s.handleRunFlow)
+	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
+	mux.HandleFunc("GET /api/flow-runs/{id}", s.handleGetFlowRun)
+
+	// Application settings (global, single document).
+	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
+	mux.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
+	mux.HandleFunc("POST /api/settings/test-provider", s.handleTestProvider)
+
+	// Per-workspace settings (resolved from X-Workspace-Id).
+	mux.HandleFunc("GET /api/workspace-settings", s.handleGetWorkspaceSettings)
+	mux.HandleFunc("PUT /api/workspace-settings", s.handleUpdateWorkspaceSettings)
+
+	// Application + workspace logs (global ring buffer).
+	mux.HandleFunc("GET /api/logs", s.handleListLogs)
 
 	// Memory (per-agent knowledge: documents, journal, reflections).
 	mux.HandleFunc("GET /api/agents/{id}/memories", s.handleListMemories)
