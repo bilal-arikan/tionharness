@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"math/rand"
 	"net/http"
@@ -103,15 +104,27 @@ func doWithRetry(ctx context.Context, client *http.Client, prefix string, build 
 		// Transient failure with attempts remaining: compute the wait, drain any
 		// response body so the connection can be reused, then back off.
 		wait := policy.backoff(attempt)
+		reason := ""
 		if err == nil {
+			reason = fmt.Sprintf("HTTP %d", resp.StatusCode)
 			if ra := parseRetryAfter(resp.Header.Get("Retry-After")); ra > 0 {
 				wait = ra
 			}
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
-		} else if ctx.Err() != nil {
-			return nil, ctx.Err()
+		} else {
+			reason = err.Error()
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 		}
+
+		slog.Warn("provider transport retry",
+			"provider", prefix,
+			"attempt", attempt,
+			"maxAttempts", policy.maxAttempts,
+			"reason", reason,
+			"backoff", wait.Round(time.Millisecond))
 
 		select {
 		case <-ctx.Done():

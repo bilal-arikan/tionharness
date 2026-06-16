@@ -28,6 +28,10 @@ func main() {
 	// while still writing to stdout.
 	logs := logbuf.New(2000)
 	logger := slog.New(logs.Handler(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	// Make this the process default so library code that logs via slog.Default()
+	// (e.g. the provider transport retry warnings) is captured in the ring buffer
+	// and surfaced on the in-app Logs screen.
+	slog.SetDefault(logger)
 
 	cfg, err := config.Load()
 	if err != nil {

@@ -2,6 +2,36 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-16**
 
+## Faz P3 — İzin/onay katmanı (Aşama 1: claude-cli izin modu, 2026-06-16)
+
+**Sorun (kök neden):** claude-cli ajanları **hiçbir dosya editleme işlemini yapamıyordu.**
+SwarmGo `claude -p` (headless) ile shell-out yapıyor ama `--permission-mode` /
+`--dangerously-skip-permissions` bayraklarını **hiç geçmiyordu**. Headless modda
+varsayılan izin modu Edit/Write/Bash için onay ister; soracak arayüz olmadığından bu
+araçlar **sessizce reddediliyordu**. (external-agent-oss'un 3-modlu izin sistemine bakıldı.)
+
+**Aşama 1 — ajan-bazlı izin modu → CLI bayrağı eşlemesi:**
+1. `db.Agent.PermissionMode` (`"read-only" | "ask" | "auto"`, boş = `auto`) — yeni ajanda
+   varsayılan `auto`; mevcut ajanlar (alan boş) da `auto`'ya düşer → anında çözülür.
+   `AgentProfilePatch.PermissionMode` ile kısmi güncelleme (`store.go`).
+2. `providers.Request.PermissionMode` alanı; `agent/toolloop.go` `completeTraced` ajanın
+   modunu `req.PermissionMode`'a basar (hem native hem CLI yolu için).
+3. `providers/claudecli.go` `permissionModeArgs(mode)` → bayrak eşlemesi:
+   `read-only`→`--permission-mode plan`, `ask`→`--permission-mode acceptEdits`,
+   `auto`/boş/bilinmeyen→`--dangerously-skip-permissions`. `Complete`'te `--model`'den
+   hemen sonra eklenir.
+4. API: `createAgentReq`/`updateAgentReq`'e `permissionMode` alanı (`api/agents.go`).
+5. Test: `providers/permission_test.go::TestPermissionModeArgs` (5 mod → bayrak eşlemesi).
+
+✅ `go build`/`vet`/`test ./internal/...` yeşil. **Canlı uçtan-uca kanıt:** headless `claude -p`
+ile temp dizinde dosya yazdırma — **bayrak yokken dosya OLUŞMADI** (eski hata doğrulandı),
+**`--permission-mode acceptEdits` ile dosya OLUŞTU** (düzeltme doğrulandı).
+
+**Kalan (sonraki aşamalar):** Aşama 2 — native (anthropic/minimax) yolda `toolloop.go`
+`reg.Call` öncesi risk-sınıflı gate + `StepPermission` adımı + `WithAsker` ile "ask" onayı.
+Aşama 3 — Composer'da Shift+Tab benzeri mod seçici (oturum-bazlı) + ayarlarda varsayılan +
+ajan formunda alan. Aşama 4 — claude-cli "ask" için Interaction MCP permission-prompt aracı.
+
 ## Kararlar (2026-06-15)
 - **İlk LLM sağlayıcısı:** Anthropic (Claude) ✅
 - **Frontend:** React ✅
@@ -110,6 +140,7 @@ prompt-cache'i etkili kılan statik/dinamik sistem-prompt bölümlemesi (C1).
   context iptaline duyarlı. Son denemede yanıtı (retryable status olsa bile) ya da sarılmış
   ağ hatasını **olduğu gibi** döndürür → çağıran sağlayıcının kendi mesajını/gövdesini sunar.
 - [x] Retryable: ağ hatası + `408/429/500/502/503/504/529` (529 = Anthropic "overloaded").
+- [x] **Retry görünürlüğü (2026-06-16):** her retry öncesi `slog.Warn("provider transport retry", provider/attempt/maxAttempts/reason/backoff)`; `main.go` artık `slog.SetDefault(logger)` çağırdığından bu uyarılar logbuf ring buffer'ına düşer → **Loglar ekranında** (`/api/logs`) görünür. Canlı doğrulandı: MiniMax flaky sunucuya (503→503→200) yönlendirildi, sohbet başarıyla döndü, loglarda `attempt:1 backoff:589ms` + `attempt:2 backoff:801ms reason:HTTP 503` yakalandı.
 - [x] `postJSON` **ve** `postSSE` artık `doWithRetry`'den geçer (SSE yalnız ilk bağlantıyı
   yeniden dener → akış başladıktan sonra kısmi çıktı tekrarlanmaz). İmzalar değişmedi →
   anthropic/minimax çağrıları dokunulmadan retry kazandı.
