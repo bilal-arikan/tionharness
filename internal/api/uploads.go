@@ -17,8 +17,10 @@ const (
 	// maxUploadBytes caps a single uploaded file (25 MB).
 	maxUploadBytes = 25 << 20
 	// maxInlineTextBytes caps how much of a text/pasted attachment is inlined into
-	// the provider message (the full file is still on disk for read_file).
-	maxInlineTextBytes = 100 << 10
+	// the provider message (the full file is still on disk for read_file). Kept
+	// modest so a large paste does not bloat every subsequent turn's context;
+	// bigger files are read on demand via the read_file tool.
+	maxInlineTextBytes = 16 << 10
 )
 
 // handleUpload stores one user-supplied file under the workspace uploads
@@ -98,6 +100,39 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, att)
+}
+
+// handleDeleteUpload removes a single uploaded attachment by its
+// workspace-relative path. Used when the user cancels a staged attachment (the
+// tray "x") before sending, so the already-uploaded file is not orphaned.
+// Restricted to the uploads/ subtree and traversal-guarded.
+//
+// DELETE /api/uploads?rel=uploads/<sid>/<file>
+func (s *Server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	if wsp == nil {
+		writeError(w, http.StatusBadRequest, "no workspace")
+		return
+	}
+	rel := strings.TrimSpace(r.URL.Query().Get("rel"))
+	if rel == "" {
+		writeError(w, http.StatusBadRequest, "rel is required")
+		return
+	}
+	clean := filepath.Clean(filepath.FromSlash(strings.TrimPrefix(rel, "/")))
+	// Only files inside uploads/ may be deleted (never arbitrary workspace files).
+	sep := string(filepath.Separator)
+	if clean != "uploads" && !strings.HasPrefix(clean, "uploads"+sep) {
+		writeError(w, http.StatusBadRequest, "only uploads may be deleted")
+		return
+	}
+	if strings.Contains(clean, ".."+sep) || strings.HasSuffix(clean, sep+"..") || clean == ".." {
+		writeError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+	abs := filepath.Join(wsp.DataDir, "workspace", clean)
+	_ = os.Remove(abs) // best-effort: missing file is not an error
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // sanitizeFileName strips any directory components and keeps a safe basename.

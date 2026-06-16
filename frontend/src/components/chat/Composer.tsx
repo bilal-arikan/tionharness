@@ -142,11 +142,12 @@ export function Composer({
   }
 
   const removePending = (localId: string) => {
-    setPending((p) => {
-      const hit = p.find((x) => x.localId === localId)
-      if (hit?.previewURL) URL.revokeObjectURL(hit.previewURL)
-      return p.filter((x) => x.localId !== localId)
-    })
+    const hit = pending.find((x) => x.localId === localId)
+    if (hit?.previewURL) URL.revokeObjectURL(hit.previewURL)
+    // Delete the already-uploaded file so a cancelled attachment is not orphaned
+    // on disk (best-effort; the file only exists once its upload resolved).
+    if (hit?.attachment?.relPath) api.deleteFile(hit.attachment.relPath).catch(() => {})
+    setPending((p) => p.filter((x) => x.localId !== localId))
   }
 
   const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -23,4 +23,13 @@ export const uploadsApi = {
     if (!res.ok) throw new Error(await errorFromResponse(res))
     return (await res.json()) as Attachment
   },
+
+  // deleteFile removes an uploaded attachment that was staged then cancelled
+  // before sending, so it is not orphaned on disk. Best-effort (fire-and-forget).
+  deleteFile: async (relPath: string): Promise<void> => {
+    const ws = getActiveWorkspace()
+    const headers: Record<string, string> = {}
+    if (ws) headers['X-Workspace-Id'] = ws
+    await fetch(`/api/uploads?rel=${encodeURIComponent(relPath)}`, { method: 'DELETE', headers })
+  },
 }

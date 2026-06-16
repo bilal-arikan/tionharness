@@ -159,6 +159,7 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions", s.handleCreateSession)
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleListMessages)
+	mux.HandleFunc("DELETE /api/sessions/{id}/messages/{msgId}", s.handleDeleteMessage)
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
 	mux.HandleFunc("POST /api/sessions/{id}/summary", s.handleSessionSummary)
 	mux.HandleFunc("POST /api/sessions/{id}/read", s.handleMarkSessionRead)
@@ -276,8 +277,10 @@ func (s *Server) registerMemoryRoutes(mux *http.ServeMux) {
 func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	// Inline media (images referenced by chat content) — read-only.
 	mux.HandleFunc("GET /api/files", s.handleServeFile)
-	// User message attachments: upload a file (or pasted text) for the next turn.
+	// User message attachments: upload a file (or pasted text) for the next turn,
+	// or delete one that was staged then cancelled before sending.
 	mux.HandleFunc("POST /api/uploads", s.handleUpload)
+	mux.HandleFunc("DELETE /api/uploads", s.handleDeleteUpload)
 	// Application + workspace logs (global ring buffer).
 	mux.HandleFunc("GET /api/logs", s.handleListLogs)
 	// Autonomous event feed (heartbeat/task/schedule) — SSE, global.
