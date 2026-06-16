@@ -176,8 +176,8 @@ export function SessionsSidebar({
                             // Live turn in progress: a pulsing dot takes precedence
                             // over the unread dot.
                             <span className="relative flex h-2 w-2 shrink-0" title="Yanıt üretiliyor">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-accent)] opacity-75" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-accent)]" />
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
                             </span>
                           ) : (
                             s.unread && (
@@ -188,13 +188,13 @@ export function SessionsSidebar({
                             {s.title || 'Yeni sohbet'}
                           </span>
                         </span>
-                        <span className="truncate text-[10px] opacity-60">
-                          {isStreaming ? (
-                            <span className="text-[var(--color-accent)]">yazıyor…</span>
-                          ) : (
-                            <>{relativeTime(s.updatedAt)} · {s.messageCount} mesaj</>
-                          )}
-                        </span>
+                        {isStreaming ? (
+                          <span className="truncate text-[10px] font-medium text-emerald-400">yazıyor…</span>
+                        ) : (
+                          <span className="truncate text-[10px] opacity-60">
+                            {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
+                          </span>
+                        )}
                       </span>
                     </button>
                   )}
