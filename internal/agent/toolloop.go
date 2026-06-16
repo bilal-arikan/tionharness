@@ -179,7 +179,31 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		results := make([]providers.ToolResult, 0, len(resp.ToolCalls))
 		for _, call := range resp.ToolCalls {
 			r.logger.Info("tool call", "agent", agent.ID, "tool", call.Name)
-			res := reg.Call(ctx, call)
+
+			// Stream long-running tool output live as tool_delta chunks (keyed by
+			// the call id) when the tool and the live sink both support it.
+			var res providers.ToolResult
+			streamed := false
+			if onStep != nil && call.ID != "" && reg.CanStream(call.Name) {
+				res = reg.CallStream(ctx, call, func(chunk string) {
+					streamed = true
+					emit(TurnStep{Kind: StepToolDelta, ID: call.ID, Tool: call.Name, Output: chunk})
+				})
+			} else {
+				res = reg.Call(ctx, call)
+			}
+			// Retract the live streaming placeholder; the final card (or the
+			// cancellation error below) takes its place.
+			if streamed {
+				emit(TurnStep{Kind: StepTombstone, Ref: call.ID})
+			}
+			// Cancellation mid-tool (user stop / timeout): record it and end the
+			// turn cleanly instead of feeding a half-result back to the model.
+			if ctx.Err() != nil {
+				fail("cancelled", ctx.Err())
+				return last, steps, ctx.Err()
+			}
+
 			results = append(results, res)
 			st := TurnStep{
 				Kind:    StepTool,

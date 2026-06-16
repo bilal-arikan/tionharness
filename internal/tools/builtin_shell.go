@@ -51,7 +51,16 @@ func (ShellTool) Def() providers.ToolDef {
 	}
 }
 
+// Call runs the command and returns its full output (non-streaming).
 func (t ShellTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	return t.CallStream(ctx, input, nil)
+}
+
+// CallStream runs the command, forwarding each output chunk to onChunk (when
+// non-nil) as the process writes it, while still returning the full (capped)
+// output. Implements StreamingTool so the agent loop can surface live tool
+// output as tool_delta steps.
+func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChunk func(string)) (string, error) {
 	var args struct {
 		Command    string `json:"command"`
 		TimeoutSec int    `json:"timeout_sec"`
@@ -84,17 +93,15 @@ func (t ShellTool) Call(ctx context.Context, input json.RawMessage) (string, err
 	}
 	cmd.Dir = t.sb.Root
 
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
+	// Same writer for stdout+stderr: exec serialises writes when they are equal,
+	// so onChunk is never called concurrently.
+	w := &shellStreamWriter{onChunk: onChunk, max: shellMaxOutputBytes}
+	cmd.Stdout = w
+	cmd.Stderr = w
 	runErr := cmd.Run()
 
-	out := buf.Bytes()
-	truncated := false
-	if len(out) > shellMaxOutputBytes {
-		out = out[:shellMaxOutputBytes]
-		truncated = true
-	}
+	out := w.buf.Bytes()
+	truncated := w.truncated
 
 	var b strings.Builder
 	if runCtx.Err() == context.DeadlineExceeded {
@@ -112,4 +119,32 @@ func (t ShellTool) Call(ctx context.Context, input json.RawMessage) (string, err
 		result = "(no output)"
 	}
 	return result, nil
+}
+
+// shellStreamWriter buffers process output up to max bytes (for the final
+// result) while forwarding every chunk to onChunk for live streaming. exec
+// serialises calls when stdout and stderr share one writer, so no locking is
+// needed.
+type shellStreamWriter struct {
+	buf       bytes.Buffer
+	onChunk   func(string)
+	max       int
+	truncated bool
+}
+
+func (w *shellStreamWriter) Write(p []byte) (int, error) {
+	if room := w.max - w.buf.Len(); room > 0 {
+		if len(p) <= room {
+			w.buf.Write(p)
+		} else {
+			w.buf.Write(p[:room])
+			w.truncated = true
+		}
+	} else {
+		w.truncated = true
+	}
+	if w.onChunk != nil {
+		w.onChunk(string(p))
+	}
+	return len(p), nil
 }

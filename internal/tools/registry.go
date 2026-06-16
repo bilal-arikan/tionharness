@@ -20,6 +20,15 @@ type Tool interface {
 	Call(ctx context.Context, input json.RawMessage) (string, error)
 }
 
+// StreamingTool is an optional interface a built-in tool may implement to stream
+// its output incrementally while it runs. onChunk is called with each chunk as
+// it is produced (may be nil — then it behaves like Call); the full output is
+// still returned for the model.
+type StreamingTool interface {
+	Tool
+	CallStream(ctx context.Context, input json.RawMessage, onChunk func(string)) (string, error)
+}
+
 // Registry aggregates built-in tools and an MCP catalog for one agent context.
 type Registry struct {
 	builtins map[string]Tool
@@ -118,4 +127,33 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 	res.Content = fmt.Sprintf("unknown tool %q", call.Name)
 	res.IsError = true
 	return res
+}
+
+// CanStream reports whether the named built-in tool streams its output.
+func (r *Registry) CanStream(name string) bool {
+	t, ok := r.builtins[name]
+	if !ok {
+		return false
+	}
+	_, ok = t.(StreamingTool)
+	return ok
+}
+
+// CallStream executes a tool call, forwarding incremental output to onChunk when
+// the built-in supports streaming; otherwise it behaves exactly like Call.
+func (r *Registry) CallStream(ctx context.Context, call providers.ToolCall, onChunk func(string)) providers.ToolResult {
+	if t, ok := r.builtins[call.Name]; ok {
+		if st, sok := t.(StreamingTool); sok && onChunk != nil {
+			res := providers.ToolResult{CallID: call.ID}
+			out, err := st.CallStream(ctx, call.Input, onChunk)
+			if err != nil {
+				res.Content = "tool error: " + err.Error()
+				res.IsError = true
+				return res
+			}
+			res.Content = out
+			return res
+		}
+	}
+	return r.Call(ctx, call)
 }
