@@ -277,8 +277,9 @@ MCP) otomatik yansır (tek şema kuralı, §2).
 - **Faz 1 (MVP): ✅ TAMAMLANDI (2026-06-16, §15).** HTTP MCP server + `ask_user`
   (bloklayan) + `todo_write`; claude-cli wiring + built-in disallow; canlı
   claude-cli testi geçti (soru penceresi açıldı, cevap CLI'ye döndü, tur devam etti).
-- **Faz 2:** `create_artifact`/`update_artifact` + `request_confirmation`; native
-  built-in'lerle davranış paritesi testi.
+- **Faz 2: ✅ TAMAMLANDI (2026-06-16, §16).** `create_artifact`/`update_artifact`
+  + `request_confirmation`; CLI izinde todo/artifact kart paritesi (namespace strip
+  + todo promotion). Canlı claude-cli testi geçti.
 - **Faz 3:** `notify` + workspace/oturum etkileşimleri; doküman + skill güncelleme.
 - **Faz 4 (CLI genişleme):** Codex / Gemini / Mistral Vibe provider + adaptör;
   her biri aynı Interaction MCP'ye bağlanır; per-CLI built-in-disable + token taşıma
@@ -307,8 +308,12 @@ MCP) otomatik yansır (tek şema kuralı, §2).
    *(eski en büyük risk; claude tarafı artık yeşil)*
 2. **Eşzamanlı repo düzenlemesi** — bu repoda başka bir oturum aktif olabilir;
    çakışmayı önlemek için iş ayrı dosyalarda yoğunlaşır.
-3. **Bloklayan tool zaman aşımı** — kullanıcı hiç cevaplamazsa: `clientGone` +
-   makul timeout ile MCP çağrısı hata döner, model kendi devam eder.
+3. **Bloklayan tool zaman aşımı** — ✅ **çözüldü/önemsiz.** claude-code'da
+   `MCP_TOOL_TIMEOUT` varsayılanı **~28 saat** (unset); progress notification'lar
+   zaten timeout'u uzatmaz (spec). Yani bloklayan `ask_user`/`request_confirmation`
+   pratikte zaman aşımına uğramaz → §6'da ayrıca 15 dk'lık sunucu-tarafı backstop
+   var (kullanıcı hiç cevaplamazsa model devam eder). Diğer CLI'larda kısa varsayılan
+   varsa mcp-config entry'sine per-server `timeout` alanı eklenir (Faz 4).
 4. **Token sızıntısı** — mcp-config temp dosyası tur sonunda silinir (mevcut
    cleanup); token kısa ömürlü, run'a bağlı.
 5. **Zarif düşüş** — interaction entry üretilemez/bağlanamazsa CLI turu **düşmemeli**;
@@ -394,11 +399,41 @@ sonucu `BLUE` aldı → final cevap **"Your color is BLUE."** `go build`/`vet`/`
 yeşil. MCP **kapalı** ajanda çalışması, interaction'ın MCPEnabled'dan bağımsız
 kablolandığını kanıtlar.
 
-**Açık işler (Faz 2'ye):** (1) bloklayan tool için `progressToken` + GET SSE
-keep-alive (uzun beklemede istemci timeout'u — canlı testte hızlı cevapla
-görülmedi); (2) CLI yolunda `todo_write` kalıcı izde generic tool kartı olarak
-görünüyor (canlı `StepTodo` kartı çıkıyor) — `traceToSteps` özel-durumu ile
-parite; (3) askID bazlı çoklu-soru yönlendirme (şu an tek `answer` kanalı yeterli).
+**Açık işler:** (1) ✅ keep-alive gereksiz çıktı (28h timeout — bkz. §12.3);
+(2) ✅ todo/artifact kart paritesi Faz 2'de çözüldü (§16); (3) askID bazlı
+çoklu-soru yönlendirme hâlâ ertelendi (şu an tek `answer` kanalı yeterli — tool
+döngüsü senkron, aynı anda tek soru).
+
+## 16. Faz 2 sonucu (2026-06-16 — TAMAMLANDI ✅)
+
+Interaction MCP araç seti genişletildi ve CLI iz paritesi sağlandı.
+
+**Yeni araçlar (CLI yolunda):**
+- `request_confirmation` (bloklayan, yeni `internal/tools/builtin_confirm.go`):
+  riskli/geri-dönülemez eylem öncesi evet/hayır onayı; cevap `confirmed`/`denied`
+  olarak normalize edilir (`NormalizeConfirmation`, TR+EN kelime eşleşmesi). Native
+  registry'ye de eklendi (`toolsetup.go`); `ask_user` ile aynı bloklama deseni.
+- `create_artifact`/`update_artifact` (bloklamayan): zaten native'de vardı; artık
+  CLI yolunda da çalışır. `chatRun`'a per-agent **artifact sink** (`setArtifacts`)
+  eklendi (chat_stream her ajan turunda kurar); interaction backend sink'i context'e
+  koyup mevcut tool'u çağırır → tek-kaynak.
+
+**CLI iz paritesi (`agent/trace.go`):** `traceStepToTurnStep` artık (a) interaction
+namespace'ini (`mcp__swarmgo_interaction__`) tool adından **soyar** → kartlar native
+ile aynı bare adla eşleşir (artifact/ask), (b) `todo_write` çağrısını **`StepTodo`
+checklist kartına** yükseltir. Böylece CLI yolunda da TodoCard + ArtifactCard kalıcı
+izde doğru render olur (canlı emit yerine izden — çift kart yok).
+
+**Wiring:** `climcp.go` interaction allow-listesi 5 araca çıktı
+(`interactionToolNames`); interaction `Tools()` + backend dispatch eşitlendi.
+
+**Canlı test (claude-cli):** "todo_write → request_confirmation → (onay) →
+create_artifact" promptu → SSE'de TodoCard `[in_progress,pending]`, ASK
+`[Onayla,İptal]` → cevap "Onayla" → `request_confirmation -> confirmed` →
+`create_artifact -> {id...}` → TodoCard `[completed,completed]` → "DONE".
+`GET /api/artifacts` → `('Faz2 Test','markdown',1)` kalıcı. Tool adları izde
+namespace'siz. `go build`/`vet`/`test` yeşil (yeni testler: confirm normalize,
+artifact dispatch, todo no-emit).
 
 ## İlgili dokümanlar
 - `09-CLAUDE-AGENT-SDK.md` — SDK paritesi ADR (native vs CLI yol ayrımı)

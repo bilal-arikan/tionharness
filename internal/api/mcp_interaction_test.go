@@ -3,9 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/bilal/swarmgo/internal/tools"
 )
 
 // captureRun installs a write capture on a run and returns the collected events.
@@ -104,27 +107,73 @@ func TestInteractionBackend_Todo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("call: %v", err)
 	}
-	if res.IsError {
-		t.Fatalf("todo should succeed: %+v", res)
+	if res.IsError || !strings.Contains(res.Text, "Checklist updated") {
+		t.Fatalf("todo should succeed with confirmation text: %+v", res)
 	}
-
+	// No live emit: the CLI trace surfaces the checklist card.
 	mu.Lock()
 	defer mu.Unlock()
-	if len(*steps) != 1 {
-		t.Fatalf("want 1 emitted todo step, got %d", len(*steps))
+	if len(*steps) != 0 {
+		t.Fatalf("todo should not emit a live step, got %d", len(*steps))
 	}
-	var st struct {
-		Kind  string `json:"kind"`
-		Todos []struct {
-			Content string `json:"content"`
-			Status  string `json:"status"`
-		} `json:"todos"`
+}
+
+func TestInteractionBackend_Confirm(t *testing.T) {
+	runs := newChatRuns()
+	run := runs.register("rc", func() {})
+	defer runs.unregister("rc")
+	captureRun(run)
+	b := &interactionBackend{runs: runs}
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		run.answer <- "Onayla"
+	}()
+	res, err := b.Call(context.Background(), run.token, "mcp__swarmgo_interaction__request_confirmation",
+		json.RawMessage(`{"question":"Delete the file?"}`))
+	if err != nil {
+		t.Fatalf("call: %v", err)
 	}
-	if err := json.Unmarshal((*steps)[0].data, &st); err != nil {
-		t.Fatal(err)
+	if res.IsError || res.Text != "confirmed" {
+		t.Fatalf("want confirmed, got %+v", res)
 	}
-	if st.Kind != "todo" || len(st.Todos) != 2 {
-		t.Fatalf("unexpected todo step: %+v", st)
+}
+
+// fakeSink is a minimal ArtifactSink for the artifact dispatch test.
+type fakeSink struct{ created, updated int }
+
+func (f *fakeSink) CreateArtifact(_ context.Context, title, kind, language, content string) (tools.ArtifactRef, error) {
+	f.created++
+	return tools.ArtifactRef{ID: "art-1", Title: title, Kind: kind, Version: 1}, nil
+}
+func (f *fakeSink) UpdateArtifact(_ context.Context, id, content, note string) (tools.ArtifactRef, error) {
+	f.updated++
+	return tools.ArtifactRef{ID: id, Title: "t", Kind: "markdown", Version: 2}, nil
+}
+
+func TestInteractionBackend_Artifact(t *testing.T) {
+	runs := newChatRuns()
+	run := runs.register("ra", func() {})
+	defer runs.unregister("ra")
+	sink := &fakeSink{}
+	run.setArtifacts(sink)
+	b := &interactionBackend{runs: runs}
+
+	res, err := b.Call(context.Background(), run.token, "create_artifact",
+		json.RawMessage(`{"title":"Doc","kind":"markdown","content":"# Hi"}`))
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if res.IsError || sink.created != 1 || !strings.Contains(res.Text, "art-1") {
+		t.Fatalf("create_artifact failed: %+v created=%d", res, sink.created)
+	}
+
+	// No sink installed -> graceful error result.
+	run.setArtifacts(nil)
+	res2, _ := b.Call(context.Background(), run.token, "update_artifact",
+		json.RawMessage(`{"id":"art-1","content":"x"}`))
+	if !res2.IsError {
+		t.Fatalf("want error when no sink, got %+v", res2)
 	}
 }
 

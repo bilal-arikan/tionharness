@@ -6,6 +6,8 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+
+	"github.com/bilal/swarmgo/internal/tools"
 )
 
 // chatRun is the live control handle for one in-flight streaming chat turn.
@@ -24,9 +26,26 @@ type chatRun struct {
 	token string
 
 	// mu serialises SSE writes: the stream handler goroutine and the Interaction
-	// MCP handler goroutine both emit steps onto the same ResponseWriter.
-	mu    sync.Mutex
-	write func(event string, data any) // installed by the stream handler; nil once the turn ends
+	// MCP handler goroutine both emit steps onto the same ResponseWriter. It also
+	// guards artifacts (swapped per responding agent in a multi-agent turn).
+	mu        sync.Mutex
+	write     func(event string, data any) // installed by the stream handler; nil once the turn ends
+	artifacts tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
+}
+
+// setArtifacts installs the artifact sink for the currently responding agent so
+// the Interaction MCP create_artifact/update_artifact tools persist to it.
+func (r *chatRun) setArtifacts(sink tools.ArtifactSink) {
+	r.mu.Lock()
+	r.artifacts = sink
+	r.mu.Unlock()
+}
+
+// artifactSink returns the current artifact sink (nil if none installed).
+func (r *chatRun) artifactSink() tools.ArtifactSink {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.artifacts
 }
 
 // emit writes one SSE event through the run's writer under the lock, so the

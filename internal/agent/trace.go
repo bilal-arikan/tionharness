@@ -2,9 +2,16 @@ package agent
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/bilal/swarmgo/internal/providers"
 )
+
+// interactionToolPrefix is the MCP namespace the Interaction MCP server uses. The
+// CLI reports its tools namespaced (mcp__swarmgo_interaction__ask_user); we strip
+// it so the persisted trace shows the bare tool name and renders with the same
+// cards as the native tool path (todo checklist, artifact card, ask).
+const interactionToolPrefix = "mcp__swarmgo_interaction__"
 
 // StepKind tags the kind of activity captured in a turn trace.
 type StepKind string
@@ -110,15 +117,26 @@ func parseTodos(input json.RawMessage) []TodoItem {
 }
 
 // traceStepToTurnStep maps a single provider trace step to an agent TurnStep.
+// Interaction MCP tool calls (claude-cli path) are normalised to their bare names
+// and a todo_write call is promoted to a first-class checklist step, matching the
+// native tool loop so the CLI path renders the same cards.
 func traceStepToTurnStep(t providers.TraceStep) TurnStep {
-	return TurnStep{
+	tool := strings.TrimPrefix(t.Tool, interactionToolPrefix)
+	st := TurnStep{
 		Kind:    StepKind(t.Kind),
 		Text:    t.Text,
-		Tool:    t.Tool,
+		Tool:    tool,
 		Input:   t.Input,
 		Output:  t.Output,
 		IsError: t.IsError,
 	}
+	if st.Kind == StepTool && !st.IsError && tool == "todo_write" {
+		if todos := parseTodos(t.Input); len(todos) > 0 {
+			st.Kind = StepTodo
+			st.Todos = todos
+		}
+	}
+	return st
 }
 
 // traceToSteps converts a provider-produced trace (claude CLI stream-json) into

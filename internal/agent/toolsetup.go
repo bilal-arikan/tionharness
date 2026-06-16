@@ -60,9 +60,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewHTTPGetTool(),
 		tools.NewMemoryRecallTool(r.mem, agent.ID),
 		// Interaction tools: todo_write surfaces a live checklist; ask_user pauses
-		// the turn for a clarifying question (no-op outside interactive chat).
+		// the turn for a clarifying question; request_confirmation blocks for a
+		// yes/no on a risky action (all no-ops outside interactive chat).
 		tools.NewTodoWriteTool(),
 		tools.NewAskUserTool(),
+		tools.NewRequestConfirmationTool(),
 		// Artifact tools: save/revise substantial content as a versioned artifact
 		// the user can open in a dedicated viewer (no-op outside interactive chat).
 		tools.NewCreateArtifactTool(),

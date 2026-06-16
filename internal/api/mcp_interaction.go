@@ -9,6 +9,7 @@ import (
 
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/interaction"
+	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/tools"
 )
 
@@ -34,12 +35,24 @@ func (b *interactionBackend) Valid(token string) bool {
 // definitions in the tools package — the schema is never re-declared here, so the
 // native and CLI paths advertise the identical contract.
 func (b *interactionBackend) Tools() []interaction.ToolSpec {
-	ask := tools.NewAskUserTool().Def()
-	todo := tools.NewTodoWriteTool().Def()
-	return []interaction.ToolSpec{
-		{Name: ask.Name, Description: ask.Description, InputSchema: ask.InputSchema},
-		{Name: todo.Name, Description: todo.Description, InputSchema: todo.InputSchema},
+	defs := []providers.ToolDef{
+		tools.NewAskUserTool().Def(),
+		tools.NewTodoWriteTool().Def(),
+		tools.NewRequestConfirmationTool().Def(),
+		tools.NewCreateArtifactTool().Def(),
+		tools.NewUpdateArtifactTool().Def(),
 	}
+	specs := make([]interaction.ToolSpec, 0, len(defs))
+	for _, d := range defs {
+		specs = append(specs, interaction.ToolSpec{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
+	}
+	return specs
+}
+
+// bareToolName strips the Interaction MCP namespace so dispatch matches whether
+// the CLI sends the namespaced (mcp__swarmgo_interaction__ask_user) or bare name.
+func bareToolName(name string) string {
+	return strings.TrimPrefix(name, "mcp__swarmgo_interaction__")
 }
 
 // Call implements interaction.Backend.
@@ -48,11 +61,15 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 	if run == nil {
 		return interaction.CallResult{}, errors.New("no live turn for token")
 	}
-	switch name {
-	case "mcp__swarmgo_interaction__ask_user", "ask_user":
+	switch bareToolName(name) {
+	case "ask_user":
 		return b.callAsk(ctx, run, args)
-	case "mcp__swarmgo_interaction__todo_write", "todo_write":
-		return b.callTodo(run, args)
+	case "request_confirmation":
+		return b.callConfirm(ctx, run, args)
+	case "todo_write":
+		return b.callTodo(args)
+	case "create_artifact", "update_artifact":
+		return b.callArtifact(run, bareToolName(name), args)
 	default:
 		return interaction.CallResult{Text: "unknown tool: " + name, IsError: true}, nil
 	}
@@ -71,12 +88,31 @@ func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args jso
 	if strings.TrimSpace(in.Question) == "" {
 		return interaction.CallResult{Text: "question is required", IsError: true}, nil
 	}
+	return b.blockForAnswer(ctx, run, in.Question, in.Options, func(a string) string { return a })
+}
 
-	run.emit("step", agent.TurnStep{Kind: agent.StepAsk, Text: in.Question, Options: in.Options})
+// callConfirm blocks for a yes/no decision on a risky action and normalises it.
+func (b *interactionBackend) callConfirm(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	var in struct {
+		Question string `json:"question"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return interaction.CallResult{Text: "invalid request_confirmation input: " + err.Error(), IsError: true}, nil
+	}
+	if strings.TrimSpace(in.Question) == "" {
+		return interaction.CallResult{Text: "question is required", IsError: true}, nil
+	}
+	return b.blockForAnswer(ctx, run, in.Question, tools.ConfirmOptions, tools.NormalizeConfirmation)
+}
 
+// blockForAnswer emits an ask step (question + clickable options) and blocks until
+// the user answers, the turn ends, the request is cancelled, or the timeout fires.
+// normalize maps the raw answer to the tool's result text.
+func (b *interactionBackend) blockForAnswer(ctx context.Context, run *chatRun, question string, options []string, normalize func(string) string) (interaction.CallResult, error) {
+	run.emit("step", agent.TurnStep{Kind: agent.StepAsk, Text: question, Options: options})
 	select {
 	case ans := <-run.answer:
-		return interaction.CallResult{Text: ans}, nil
+		return interaction.CallResult{Text: normalize(ans)}, nil
 	case <-run.done:
 		return interaction.CallResult{Text: "the turn ended before the user answered; proceed without the answer", IsError: true}, nil
 	case <-ctx.Done():
@@ -86,28 +122,38 @@ func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args jso
 	}
 }
 
-// callTodo validates the checklist (reusing the canonical tool), emits a live
-// checklist card, and returns the confirmation text — non-blocking.
-func (b *interactionBackend) callTodo(run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+// callTodo validates the checklist (reusing the canonical tool) and returns the
+// confirmation text. No live emit — the CLI's stream-json trace surfaces the
+// todo_write call, which traceStepToTurnStep promotes to a checklist card.
+func (b *interactionBackend) callTodo(args json.RawMessage) (interaction.CallResult, error) {
 	text, err := tools.NewTodoWriteTool().Call(context.Background(), args)
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}
-	if todos := parseTodoItems(args); len(todos) > 0 {
-		run.emit("step", agent.TurnStep{Kind: agent.StepTodo, Todos: todos})
-	}
 	return interaction.CallResult{Text: text}, nil
 }
 
-// parseTodoItems extracts the checklist for the UI step from a todo_write input.
-func parseTodoItems(args json.RawMessage) []agent.TodoItem {
-	var in struct {
-		Todos []agent.TodoItem `json:"todos"`
+// callArtifact creates or updates a versioned artifact through the run's sink. The
+// CLI's stream-json trace surfaces the call as an artifact card (no live emit).
+func (b *interactionBackend) callArtifact(run *chatRun, name string, args json.RawMessage) (interaction.CallResult, error) {
+	sink := run.artifactSink()
+	if sink == nil {
+		return interaction.CallResult{Text: "artifacts are not available for this turn", IsError: true}, nil
 	}
-	if err := json.Unmarshal(args, &in); err != nil {
-		return nil
+	actx := tools.WithArtifacts(context.Background(), sink)
+	var (
+		text string
+		err  error
+	)
+	if name == "create_artifact" {
+		text, err = tools.NewCreateArtifactTool().Call(actx, args)
+	} else {
+		text, err = tools.NewUpdateArtifactTool().Call(actx, args)
 	}
-	return in.Todos
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: text}, nil
 }
 
 // interactionURL builds the loopback URL a CLI subprocess uses to reach this

@@ -25,6 +25,16 @@
 
 **Çözüm:** `internal/api/middleware_log.go` — `withRequestLog` her API isteğini loglar (`"http request"`, attrs: `method`/`path`/`status`/`dur`); 2xx→INFO, 4xx→WARN, 5xx→ERROR. `statusRecorder` durum kodunu yakalar **ve** `Flush()`+`Unwrap()` ile `http.Flusher`'ı yeniden açar (SSE `chat/stream`+`events` `w.(http.Flusher)` assertion'ı sarmalayıcıdan geçsin diye — yoksa akış kırılırdı). `skipRequestLog` `/api/logs` (kendi buffer'ını sel etmesin) + `/api/events` (uzun-ömürlü SSE) + `/health`'i atlar. `Routes()` zinciri: `withCORS → withRequestLog → withWorkspace` (OPTIONS preflight CORS'ta erken döndüğünden loglanmaz). ✅ (`go build`/`vet` yeşil; **canlı test**: dev binary yeniden başlatıldı, `/api/agents`→INFO 200, `/api/sessions`→INFO 200, `/api/nonexistent`→WARN 404, `/api/logs` kendini loglamadı).
 
+### Interaction MCP — Faz 2 (request_confirmation + artifacts + CLI kart paritesi) ✅ (2026-06-16)
+Faz 1 üstüne araç seti genişletildi ve CLI iz paritesi sağlandı. Detay: [11-INTERACTION-MCP.md](11-INTERACTION-MCP.md) (§16).
+
+1. **`request_confirmation`** (yeni `internal/tools/builtin_confirm.go`): riskli/geri-dönülemez eylem öncesi evet/hayır onayı; cevap `confirmed`/`denied` normalize (`NormalizeConfirmation`, TR+EN). Native registry'ye de eklendi (`toolsetup.go`); `ask_user` bloklama deseni (ortak `blockForAnswer`).
+2. **`create_artifact`/`update_artifact` CLI yolunda:** `chatRun`'a per-agent **artifact sink** (`setArtifacts`, chat_stream her ajan turunda kurar); interaction backend sink'i context'e koyup mevcut tool'u çağırır (tek-kaynak).
+3. **CLI iz paritesi (`agent/trace.go`):** `traceStepToTurnStep` interaction namespace'ini (`mcp__swarmgo_interaction__`) **soyar** (kartlar bare adla eşleşir) + `todo_write`'ı **`StepTodo`** kartına yükseltir → CLI yolunda da TodoCard/ArtifactCard kalıcı izde doğru render (çift kart yok, canlı emit yerine izden).
+4. **Wiring:** `climcp.go` interaction allow-listesi 5 araca (`interactionToolNames`); `Tools()` + backend dispatch eşitlendi. **Keep-alive gereksiz çıktı:** claude `MCP_TOOL_TIMEOUT` varsayılanı ~28 saat → bloklayan araç pratikte timeout olmaz (+15 dk sunucu backstop).
+
+> Doğrulama: `go build`/`vet`/`test` yeşil (yeni: confirm normalize, artifact dispatch, todo no-emit). **Canlı claude-cli testi:** todo_write→request_confirmation→(onay "Onayla")→create_artifact promptu → SSE'de TodoCard `[in_progress,pending]`, ASK `[Onayla,İptal]` → `request_confirmation→confirmed` → `create_artifact→{id}` → TodoCard `[completed,completed]` → "DONE"; `GET /api/artifacts` → `('Faz2 Test','markdown',1)` kalıcı; tool adları izde namespace'siz. **Sıradaki: Faz 3** (notify) + **Faz 4** (Codex/Gemini/Mistral Vibe adaptör — ilgili CLI'lar kurulmalı). **Not:** eşzamanlı frontend (PendingTray) + `withRequestLog` başka oturumda; commit yalnız backend Faz 2 dosyaları.
+
 ### Interaction MCP — Faz 1 (ask_user + todo_write claude-cli'ye) ✅ (2026-06-16)
 Kendi agentic döngüsünü süren CLI ajanlarının (ilk hedef claude-cli) SwarmGo'nun insan-etkileşimli araçlarını kullanıp SwarmGo UI'ında yüzeyleyebilmesi için **in-process MCP-over-HTTP** sunucusu eklendi. Önceden claude-cli `-p` modunda kendi `AskUserQuestion`'ını cevaplayamıyordu → "soru penceresi hiç çıkmıyordu". Tasarım+detay: [11-INTERACTION-MCP.md](11-INTERACTION-MCP.md) (§15).
 
