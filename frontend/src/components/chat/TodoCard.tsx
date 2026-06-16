@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { TurnStep, TodoItem } from '../../types'
 
 interface Props {
@@ -28,30 +29,37 @@ function readTodos(step: TurnStep): TodoItem[] {
 // items are struck through; the active item is accented — mirroring the task-list
 // affordance in External Agent / Claude Code.
 export function TodoCard({ step }: Props) {
+  const [open, setOpen] = useState(true)
   const todos = readTodos(step)
   if (!todos.length) return null
   const done = todos.filter((t) => t.status === 'completed').length
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-      <div className="mb-1 flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
+    <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
+      >
         <span>✅</span>
         <span className="font-medium text-[var(--color-text)]">Görev Listesi</span>
-        <span className="ml-auto">
+        <span className="ml-auto tabular-nums">
           {done}/{todos.length}
         </span>
-      </div>
-      <ul className="flex flex-col gap-0.5 text-xs">
-        {todos.map((t, i) => {
-          const m = MARK[t.status] ?? MARK.pending
-          return (
-            <li key={i} className={`flex items-start gap-2 ${m.cls}`}>
-              <span className="shrink-0 leading-5">{m.icon}</span>
-              <span className="min-w-0 flex-1 leading-5">{t.content}</span>
-            </li>
-          )
-        })}
-      </ul>
+        <span className="shrink-0 opacity-50">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <ul className="flex flex-col gap-0.5 border-t border-[var(--color-border)] px-3 py-2 text-xs">
+          {todos.map((t, i) => {
+            const m = MARK[t.status] ?? MARK.pending
+            return (
+              <li key={i} className={`flex items-start gap-2 ${m.cls}`}>
+                <span className="shrink-0 leading-5">{m.icon}</span>
+                <span className="min-w-0 flex-1 leading-5">{t.content}</span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

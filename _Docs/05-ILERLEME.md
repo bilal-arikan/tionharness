@@ -31,6 +31,11 @@ kıldı = en-son-kazanır); ardından "1=completed, 2=in_progress" güncellemesi
 panel **1/3**, madde-1 ✓ üstü-çizili yeşil, madde-2 ◐ accent olarak **canlı
 güncellendi**. Kalıcılık: persisted `steps`'ten türetildiği için reload'da kalır.
 
+**İnline TodoCard collapsible (2026-06-17):** Tur izindeki `todo_write` kartı
+(`TodoCard`) de diğer tool kartları gibi **başlık + ▾ chevron** ile açılıp
+kapanır oldu (varsayılan açık; ✅ + "Görev Listesi" + `done/total`). ✅ Playwright:
+0/4·0/3·1/3·3/3 kartlarının hepsi chevron'lu render oldu.
+
 **Cila (2026-06-17):** (a) **Otomatik küçülme** — liste tamamen tamamlanınca
 panel collapsed açılır (`useState(()=>!allDone)` + sig değişiminde
 `setOpen(!allDone)`). (b) **✕ gizle butonu** — kullanıcı paneli kapatabilir;
