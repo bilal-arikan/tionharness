@@ -36,6 +36,17 @@ function baseName(name: string): string {
   return i >= 0 ? name.slice(i + 2) : name
 }
 
+/** Lower-cased base tool name with any MCP namespace prefix removed. */
+export function toolBase(name: string): string {
+  return baseName(name).toLowerCase()
+}
+
+/** True for read-only file readers whose output is the file content. */
+export function isReadTool(name: string): boolean {
+  const base = toolBase(name)
+  return base === 'read' || base === 'read_file'
+}
+
 function pickIcon(name: string): string {
   const base = baseName(name).toLowerCase()
   for (const key of Object.keys(ICONS)) {

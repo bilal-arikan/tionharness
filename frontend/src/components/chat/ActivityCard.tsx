@@ -1,12 +1,37 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import type { TurnStep } from '../../types'
-import { toolMeta } from '../../lib/tools'
+import { toolMeta, isReadTool } from '../../lib/tools'
+import { parseDiff } from '../../lib/diff'
 import { DiffView } from '../markdown/DiffView'
 import { PathText } from './PathText'
 
 interface Props {
   step: TurnStep
   onOpenFile?: (path: string) => void
+}
+
+// headerBadge derives a compact right-aligned summary shown next to the tool
+// label in the collapsed header: +added/−removed for diff-producing tools
+// (edit/write) and a line count for file readers — so the at-a-glance card
+// matches the native DiffCard without expanding it.
+function headerBadge(step: TurnStep, isDiff: boolean, output: string): ReactNode {
+  if (isDiff && output) {
+    const { stats } = parseDiff(output)
+    if (stats.added > 0 || stats.removed > 0) {
+      return (
+        <span className="flex shrink-0 gap-1.5 font-mono">
+          <span className="text-green-400">+{stats.added}</span>
+          <span className="text-red-400">−{stats.removed}</span>
+        </span>
+      )
+    }
+  }
+  if (isReadTool(step.tool || '') && output.trim()) {
+    const count = output.replace(/\n$/, '').split('\n').length
+    return <span className="shrink-0 text-[var(--color-text-dim)]">{count} satır</span>
+  }
+  return null
 }
 
 // ActivityCard renders a single tool invocation as a compact, collapsible card:
@@ -17,6 +42,7 @@ export function ActivityCard({ step, onOpenFile }: Props) {
   const [open, setOpen] = useState(false)
   const meta = toolMeta(step.tool || '', step.input)
   const output = step.output || ''
+  const badge = headerBadge(step, meta.isDiff, output)
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
@@ -32,7 +58,8 @@ export function ActivityCard({ step, onOpenFile }: Props) {
           </span>
         )}
         {step.isError && <span className="shrink-0 text-red-400">hata</span>}
-        <span className="ml-auto shrink-0 opacity-50">{open ? '▾' : '▸'}</span>
+        {badge && <span className="ml-auto">{badge}</span>}
+        <span className={`${badge ? 'ml-1' : 'ml-auto'} shrink-0 opacity-50`}>{open ? '▾' : '▸'}</span>
       </button>
 
       {open && (

@@ -30,12 +30,38 @@ function WorkingDots() {
 }
 
 export function MessageList({ messages, pending, agents, streaming, onOpenFile, onOpenArtifact }: Props) {
-  const endRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  // Whether the user is currently pinned to the bottom of the transcript. When
+  // they scroll up to read history we stop auto-scrolling so streaming deltas
+  // don't yank them back down.
+  const pinnedRef = useRef(true)
+  // First message id, used to detect a session switch (full list swap) and
+  // re-pin to the bottom regardless of the previous scroll position.
+  const firstId = messages[0]?.id
+  const prevFirstId = useRef(firstId)
   const agentById = (id?: string) => (id ? agents.find((a) => a.id === id) : undefined)
 
+  function onScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    pinnedRef.current = distance < 80
+  }
+
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, pending])
+    const el = scrollRef.current
+    if (!el) return
+    if (prevFirstId.current !== firstId) {
+      // Session changed: always land at the bottom of the new transcript.
+      prevFirstId.current = firstId
+      pinnedRef.current = true
+    }
+    if (!pinnedRef.current) return
+    // Jump instantly (not smooth): rapid streaming deltas update `messages` on
+    // every token, and a smooth animation restarted each delta never settles —
+    // the symptom where the live reply seems to vanish until the turn finishes.
+    el.scrollTop = el.scrollHeight
+  }, [messages, pending, firstId])
 
   // When a live assistant bubble is already present (streaming), the standalone
   // pending bubble would duplicate it — suppress it in that case.
@@ -43,7 +69,7 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
   const showStandalonePending = pending && (!last || last.role === 'user')
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6">
+    <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-6 py-6">
       <div className="flex w-full flex-col gap-4">
         {messages.map((m, i) => {
           const prev = messages[i - 1]
@@ -114,7 +140,7 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
           </div>
         )}
 
-        <div ref={endRef} />
+        <div />
       </div>
     </div>
   )
