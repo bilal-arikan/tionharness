@@ -46,11 +46,6 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// DBPath returns the SQLite database file path inside the data directory.
-func (c *Config) DBPath() string {
-	return filepath.Join(c.DataDir, "swarmgo.db")
-}
-
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

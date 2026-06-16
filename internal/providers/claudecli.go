@@ -1,6 +1,8 @@
 package providers
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,6 +18,13 @@ import (
 type ClaudeCLI struct {
 	binPath string
 	model   string // optional alias/name override, e.g. "sonnet"
+
+	// MCP delegation (Phase 8): when mcpConfigPath is set, the CLI is launched
+	// with that MCP config and restricted to allowedTools. The CLI then runs
+	// the full agentic tool loop itself and returns the final text. This is the
+	// keyless tool-use path (no ANTHROPIC_API_KEY required).
+	mcpConfigPath string
+	allowedTools  []string
 }
 
 // NewClaudeCLI creates a provider that invokes the given claude binary.
@@ -23,28 +32,65 @@ func NewClaudeCLI(binPath, model string) *ClaudeCLI {
 	return &ClaudeCLI{binPath: binPath, model: model}
 }
 
+// ConfigureMCP enables MCP tool delegation for subsequent Complete calls.
+// configPath points to a claude --mcp-config JSON file; allowedTools is the
+// list of tool identifiers the CLI may use (e.g. "mcp__filesystem").
+func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools []string) {
+	c.mcpConfigPath = configPath
+	c.allowedTools = allowedTools
+}
+
 // Name implements Provider.
 func (c *ClaudeCLI) Name() string { return "claude-cli" }
 
-// cliResult mirrors the `--output-format json` result envelope.
-type cliResult struct {
-	Type      string `json:"type"`
-	Subtype   string `json:"subtype"`
-	IsError   bool   `json:"is_error"`
-	Result    string `json:"result"`
-	SessionID string `json:"session_id"`
-	Usage     struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
-	} `json:"usage"`
+// --- stream-json event shapes (--output-format stream-json --verbose) ---
+//
+// The CLI emits one JSON object per line: system/init, assistant (content
+// blocks: text/thinking/tool_use), user (tool_result blocks), and a final
+// result envelope. We parse this stream to capture the CLI's own tool loop and
+// thinking as an activity trace — keyless, no ANTHROPIC_API_KEY required.
+
+type cliUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
+
+type cliBlock struct {
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Thinking  string          `json:"thinking"`
+	ID        string          `json:"id"`          // tool_use block identifier
+	Name      string          `json:"name"`
+	Input     json.RawMessage `json:"input"`
+	ToolUseID string          `json:"tool_use_id"` // tool_result → references a tool_use id
+	Content   json.RawMessage `json:"content"`     // tool_result: string or block array
+	IsError   bool            `json:"is_error"`
+}
+
+type cliMessage struct {
+	Model   string     `json:"model"`
+	Content []cliBlock `json:"content"`
+	Usage   *cliUsage  `json:"usage"`
+}
+
+type cliEvent struct {
+	Type       string                     `json:"type"`
+	Subtype    string                     `json:"subtype"`
+	Message    *cliMessage                `json:"message"`
+	IsError    bool                       `json:"is_error"`
+	Result     string                     `json:"result"`
+	Usage      *cliUsage                  `json:"usage"`
 	ModelUsage map[string]json.RawMessage `json:"modelUsage"`
 }
 
-// Complete implements Provider by shelling out to `claude -p`.
+// Complete implements Provider by shelling out to `claude -p` and parsing its
+// streamed JSON event log line-by-line. When req.OnEvent is set, each activity
+// step is delivered as soon as it completes (step-by-step streaming); the final
+// Response carries the full text + trace regardless.
 func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error) {
 	// Note: do NOT use --bare here — it skips keychain reads and breaks the
-	// OAuth/subscription login ("Not logged in"). Print mode + JSON output.
-	args := []string{"-p", "--output-format", "json"}
+	// OAuth/subscription login ("Not logged in"). stream-json needs --verbose.
+	args := []string{"-p", "--output-format", "stream-json", "--verbose"}
 
 	model := req.Model
 	if model == "" {
@@ -57,45 +103,221 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 		args = append(args, "--append-system-prompt", sys)
 	}
 
+	// MCP delegation: load the config and restrict to the allowlist. The
+	// single-value --mcp-config is terminated by the boolean --strict-mcp-config
+	// before the variadic --allowedTools, so the two variadic flags don't merge.
+	if c.mcpConfigPath != "" {
+		args = append(args, "--mcp-config", c.mcpConfigPath, "--strict-mcp-config")
+		if len(c.allowedTools) > 0 {
+			args = append(args, "--allowedTools")
+			args = append(args, c.allowedTools...)
+		}
+	}
+
 	prompt := serializeTranscript(req.Messages)
 
 	cmd := exec.CommandContext(ctx, c.binPath, args...)
 	cmd.Stdin = strings.NewReader(prompt) // pass prompt via stdin to avoid arg limits
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
 
-	out, runErr := cmd.Output()
-
-	// The CLI emits a JSON envelope on stdout even on non-zero exit, so try
-	// to parse it first for a meaningful error (e.g. "Not logged in").
-	var res cliResult
-	if jsonErr := json.Unmarshal(out, &res); jsonErr != nil {
-		if runErr != nil {
-			stderr := ""
-			if exitErr, ok := runErr.(*exec.ExitError); ok {
-				stderr = strings.TrimSpace(string(exitErr.Stderr))
-			}
-			return nil, fmt.Errorf("claude CLI failed: %v %s", runErr, stderr)
+	// Parse events as they stream so OnEvent fires step-by-step. ReadString
+	// handles arbitrarily long lines (tool results / the init tool list).
+	p := newCLIParser(model, req.OnEvent)
+	rd := bufio.NewReader(stdout)
+	for {
+		line, rerr := rd.ReadString('\n')
+		if line != "" {
+			p.feed(line)
 		}
-		return nil, fmt.Errorf("claude CLI decode: %w (raw: %.200s)", jsonErr, string(out))
+		if rerr != nil {
+			break
+		}
 	}
-	if res.IsError {
-		return nil, fmt.Errorf("claude CLI error: %s", res.Result)
+	runErr := cmd.Wait()
+
+	resp, parseErr := p.finish()
+	if parseErr != nil {
+		if runErr != nil {
+			return nil, fmt.Errorf("claude CLI failed: %v %s", runErr, strings.TrimSpace(stderr.String()))
+		}
+		return nil, parseErr
+	}
+	return resp, nil
+}
+
+// cliStreamParser incrementally consumes the stream-json event log, building a
+// Response.Trace and (when onEvent is set) emitting each step the moment it is
+// ready: thinking immediately, intermediate text on flush, a tool step once its
+// result arrives. The trailing text is the final answer (not emitted as a step).
+type cliStreamParser struct {
+	resp      *Response
+	onEvent   func(TraceStep)
+	toolIdx   map[string]int // tool_use id → index in resp.Trace
+	emitted   map[int]bool   // trace index → already delivered via onEvent
+	pending   strings.Builder
+	finalText string
+	sawResult bool
+	hadError  bool
+	errText   string
+}
+
+func newCLIParser(model string, onEvent func(TraceStep)) *cliStreamParser {
+	return &cliStreamParser{
+		resp:    &Response{Model: model},
+		onEvent: onEvent,
+		toolIdx: map[string]int{},
+		emitted: map[int]bool{},
+	}
+}
+
+func (p *cliStreamParser) emit(i int) {
+	if p.onEvent == nil || p.emitted[i] || i < 0 || i >= len(p.resp.Trace) {
+		return
+	}
+	p.emitted[i] = true
+	p.onEvent(p.resp.Trace[i])
+}
+
+func (p *cliStreamParser) flushText() {
+	t := strings.TrimSpace(p.pending.String())
+	p.pending.Reset()
+	if t != "" {
+		p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "text", Text: t})
+		p.emit(len(p.resp.Trace) - 1)
+	}
+}
+
+// feed processes one event line from the stream.
+func (p *cliStreamParser) feed(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" || line[0] != '{' {
+		return
+	}
+	var ev cliEvent
+	if json.Unmarshal([]byte(line), &ev) != nil {
+		return
 	}
 
-	// Resolve the model name actually used (first key of modelUsage).
-	usedModel := model
-	for k := range res.ModelUsage {
-		usedModel = k
-		break
+	switch ev.Type {
+	case "assistant":
+		if ev.Message == nil {
+			return
+		}
+		if ev.Message.Model != "" {
+			p.resp.Model = ev.Message.Model
+		}
+		if ev.Message.Usage != nil {
+			p.resp.Usage.OutputTokens += ev.Message.Usage.OutputTokens
+			if ev.Message.Usage.InputTokens > p.resp.Usage.InputTokens {
+				p.resp.Usage.InputTokens = ev.Message.Usage.InputTokens
+			}
+		}
+		for _, b := range ev.Message.Content {
+			switch b.Type {
+			case "text":
+				p.pending.WriteString(b.Text)
+			case "thinking":
+				p.flushText()
+				if t := strings.TrimSpace(b.Thinking); t != "" {
+					p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "thinking", Text: t})
+					p.emit(len(p.resp.Trace) - 1)
+				}
+			case "tool_use":
+				p.flushText()
+				p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "tool", Tool: b.Name, Input: b.Input})
+				if b.ID != "" {
+					p.toolIdx[b.ID] = len(p.resp.Trace) - 1
+				}
+				// Not emitted yet — wait for its tool_result to fill the output.
+			}
+		}
+	case "user":
+		if ev.Message == nil {
+			return
+		}
+		for _, b := range ev.Message.Content {
+			if b.Type != "tool_result" {
+				continue
+			}
+			if i, ok := p.toolIdx[b.ToolUseID]; ok {
+				p.resp.Trace[i].Output = toolResultText(b.Content)
+				p.resp.Trace[i].IsError = b.IsError
+				p.emit(i)
+			}
+		}
+	case "result":
+		p.sawResult = true
+		if ev.IsError {
+			p.hadError = true
+			p.errText = ev.Result
+			return
+		}
+		p.finalText = ev.Result
+		if ev.Usage != nil {
+			if ev.Usage.InputTokens > 0 {
+				p.resp.Usage.InputTokens = ev.Usage.InputTokens
+			}
+			if ev.Usage.OutputTokens > 0 {
+				p.resp.Usage.OutputTokens = ev.Usage.OutputTokens
+			}
+		}
+		for k := range ev.ModelUsage {
+			p.resp.Model = k
+			break
+		}
 	}
+}
 
-	return &Response{
-		Text:  res.Result,
-		Model: usedModel,
-		Usage: Usage{
-			InputTokens:  res.Usage.InputTokens,
-			OutputTokens: res.Usage.OutputTokens,
-		},
-	}, nil
+// finish resolves the final answer and emits any tool steps whose result never
+// arrived (so the UI still sees them).
+func (p *cliStreamParser) finish() (*Response, error) {
+	if p.hadError {
+		return nil, fmt.Errorf("claude CLI error: %s", p.errText)
+	}
+	if !p.sawResult {
+		return nil, fmt.Errorf("claude CLI: no result in stream")
+	}
+	for i := range p.resp.Trace {
+		if p.resp.Trace[i].Kind == "tool" {
+			p.emit(i)
+		}
+	}
+	if p.finalText == "" {
+		p.finalText = strings.TrimSpace(p.pending.String())
+	}
+	p.resp.Text = p.finalText
+	return p.resp, nil
+}
+
+// toolResultText extracts displayable text from a tool_result content field,
+// which the CLI encodes either as a JSON string or an array of content blocks.
+func toolResultText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var blocks []cliBlock
+	if json.Unmarshal(raw, &blocks) == nil {
+		var b strings.Builder
+		for _, blk := range blocks {
+			if blk.Text != "" {
+				b.WriteString(blk.Text)
+			}
+		}
+		return b.String()
+	}
+	return string(raw)
 }
 
 // serializeTranscript turns a multi-turn history into a single prompt.

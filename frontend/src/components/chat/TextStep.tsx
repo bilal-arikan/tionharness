@@ -1,0 +1,38 @@
+import { useState } from 'react'
+import { Markdown } from '../markdown/Markdown'
+
+interface Props {
+  text: string
+  onOpenFile?: (path: string) => void
+}
+
+// TextStep renders the model's intermediate narration (the "text" steps between
+// tool calls) as a single-line, collapsible card — same shape as the tool
+// ActivityCard and ThinkingBlock so the turn stays compact. Collapsed: a one-
+// line truncated preview. Expanded: the full markdown.
+export function TextStep({ text, onOpenFile }: Props) {
+  const [open, setOpen] = useState(false)
+  const preview = text.replace(/\s+/g, ' ').trim()
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"
+      >
+        <span className="shrink-0">💬</span>
+        <span className="shrink-0 font-medium text-[var(--color-text)]">Düşünce</span>
+        {!open && preview && (
+          <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">{preview}</span>
+        )}
+        <span className="ml-auto shrink-0 opacity-50">{open ? '▾' : '▸'}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-[var(--color-border)] px-3 py-2 text-[var(--color-text-dim)]">
+          <Markdown onOpenFile={onOpenFile}>{text}</Markdown>
+        </div>
+      )}
+    </div>
+  )
+}

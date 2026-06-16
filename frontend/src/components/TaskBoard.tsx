@@ -24,10 +24,10 @@ interface Props {
 
 export function TaskBoard({ agents, onError }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
-  const [title, setTitle] = useState('')
   const [prompt, setPrompt] = useState('')
   const [ownerAgentId, setOwnerAgentId] = useState('')
   const [runningId, setRunningId] = useState<string | null>(null)
+  const [retitlingId, setRetitlingId] = useState<string | null>(null)
   const [runsFor, setRunsFor] = useState<string | null>(null)
   const [runs, setRuns] = useState<Run[]>([])
   const [dragId, setDragId] = useState<string | null>(null)
@@ -42,19 +42,31 @@ export function TaskBoard({ agents, onError }: Props) {
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? '—'
 
+  // Tasks are created from a prompt alone; the backend auto-generates the title.
   const createTask = async () => {
-    if (!title.trim()) return
+    if (!prompt.trim()) return
     try {
       const t = await api.createTask({
-        title: title.trim(),
         prompt: prompt.trim(),
         ownerAgentId: ownerAgentId || undefined,
       })
       setTasks((prev) => [t, ...prev])
-      setTitle('')
       setPrompt('')
     } catch (e) {
       onError((e as Error).message)
+    }
+  }
+
+  // Regenerate a task's title from its prompt on demand.
+  const retitle = async (task: Task) => {
+    setRetitlingId(task.id)
+    try {
+      const updated = await api.generateTaskTitle(task.id)
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)))
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setRetitlingId(null)
     }
   }
 
@@ -118,16 +130,13 @@ export function TaskBoard({ agents, onError }: Props) {
       {/* New task form */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
         <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Görev başlığı"
-          className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
-        />
-        <input
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Ajana verilecek talimat (prompt)"
-          className="min-w-40 flex-[2] rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') createTask()
+          }}
+          placeholder="Ajana verilecek talimat (prompt) — başlık otomatik oluşturulur"
+          className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
         />
         <select
           value={ownerAgentId}
@@ -176,7 +185,17 @@ export function TaskBoard({ agents, onError }: Props) {
                     onDragStart={() => setDragId(t.id)}
                     className="cursor-grab rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 text-sm active:cursor-grabbing"
                   >
-                    <div className="font-medium">{t.title}</div>
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="font-medium">{t.title}</div>
+                      <button
+                        onClick={() => retitle(t)}
+                        disabled={retitlingId === t.id}
+                        title="Başlığı yeniden oluştur"
+                        className="shrink-0 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-30"
+                      >
+                        {retitlingId === t.id ? '…' : '⟳'}
+                      </button>
+                    </div>
                     {t.prompt && (
                       <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]">{t.prompt}</div>
                     )}

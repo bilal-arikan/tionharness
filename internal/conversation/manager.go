@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/providers"
@@ -32,8 +33,10 @@ New messages to fold in:
 
 Updated summary:`
 
-// Manager performs token-budgeted compaction. It is safe to share.
+// Manager performs token-budgeted compaction. It is safe to share and its
+// limits can be updated live from the Settings screen.
 type Manager struct {
+	mu         sync.RWMutex
 	maxTokens  int
 	keepRecent int
 }
@@ -45,6 +48,26 @@ func NewManager() *Manager {
 		maxTokens:  envInt("SWARMGO_MAX_CONTEXT_TOKENS", defaultMaxTokens),
 		keepRecent: envInt("SWARMGO_KEEP_RECENT_MSGS", defaultKeepRecent),
 	}
+}
+
+// SetLimits updates the compaction budget at runtime. Non-positive values are
+// ignored so a partial update can't disable compaction by accident.
+func (m *Manager) SetLimits(maxTokens, keepRecent int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if maxTokens > 0 {
+		m.maxTokens = maxTokens
+	}
+	if keepRecent > 0 {
+		m.keepRecent = keepRecent
+	}
+}
+
+// limits returns the current budget under the read lock.
+func (m *Manager) limits() (maxTokens, keepRecent int) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.maxTokens, m.keepRecent
 }
 
 // Prepared is the result of budgeting a session for one turn.
@@ -66,9 +89,10 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	}
 	pending := history[start:]
 
+	maxTokens, keepRecent := m.limits()
 	compacted := false
-	if EstimateTokens(summary, pending) > m.maxTokens && len(pending) > m.keepRecent {
-		fold := pending[:len(pending)-m.keepRecent]
+	if EstimateTokens(summary, pending) > maxTokens && len(pending) > keepRecent {
+		fold := pending[:len(pending)-keepRecent]
 		newSummary, err := m.summarize(ctx, provider, agent, summary, fold)
 		if err != nil {
 			return Prepared{}, err

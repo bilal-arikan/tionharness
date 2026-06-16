@@ -13,6 +13,17 @@ workspaces.json
 *.db-wal
 credential-secret
 
+# Local dev logs + scratch (not part of the project)
+*.log
+/_be.log
+/_be.err.log
+/.backend.log
+/.frontend.log
+/_agentid.txt
+/.flowids.json
+/.testids.json
+/.mcptest/
+
 # Dependencies
 /frontend/node_modules/
 /frontend/dist/

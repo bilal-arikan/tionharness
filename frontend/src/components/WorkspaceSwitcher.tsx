@@ -30,7 +30,12 @@ export function WorkspaceSwitcher({ workspaces, activeId, onSwitch, onCreate }: 
         className="flex w-full items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm hover:opacity-90"
       >
         <span className="flex items-center gap-2 truncate">
-          <span className="text-[var(--color-text-dim)]">⬡</span>
+          <span
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
+            style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
+          >
+            {active?.icon || '⬡'}
+          </span>
           <span className="truncate font-medium">{active?.name ?? 'Workspace seç'}</span>
         </span>
         <span className="text-xs text-[var(--color-text-dim)]">▾</span>
@@ -51,7 +56,12 @@ export function WorkspaceSwitcher({ workspaces, activeId, onSwitch, onCreate }: 
                   : 'hover:bg-[var(--color-surface-2)]'
               }`}
             >
-              <span className="text-[var(--color-text-dim)]">⬡</span>
+              <span
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
+                style={w.color ? { backgroundColor: w.color + '33' } : undefined}
+              >
+                {w.icon || '⬡'}
+              </span>
               <span className="truncate">{w.name}</span>
             </button>
           ))}

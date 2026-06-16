@@ -1,46 +1,69 @@
 import { useEffect, useRef } from 'react'
 import type { Message } from '../types'
+import { Markdown } from './markdown/Markdown'
+import { TurnSteps, parseSteps } from './chat/TurnSteps'
+import { ThinkingBlock } from './chat/ThinkingBlock'
 
 interface Props {
   messages: Message[]
   pending: boolean
+  onOpenFile?: (path: string) => void
 }
 
-export function MessageList({ messages, pending }: Props) {
+// Bouncing-dots "working" indicator shown while a turn is in flight.
+function WorkingDots() {
+  return (
+    <span className="inline-flex gap-1 text-[var(--color-text-dim)]">
+      <span className="animate-bounce">●</span>
+      <span className="animate-bounce [animation-delay:0.15s]">●</span>
+      <span className="animate-bounce [animation-delay:0.3s]">●</span>
+    </span>
+  )
+}
+
+export function MessageList({ messages, pending, onOpenFile }: Props) {
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, pending])
 
+  // When a live assistant bubble is already present (streaming), the standalone
+  // pending bubble would duplicate it — suppress it in that case.
+  const last = messages[messages.length - 1]
+  const showStandalonePending = pending && (!last || last.role === 'user')
+
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4">
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                m.role === 'user'
-                  ? 'bg-[var(--color-accent)] text-white'
-                  : 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-              }`}
-            >
-              {m.text}
+      <div className="flex w-full flex-col gap-4">
+        {messages.map((m) =>
+          m.role === 'user' ? (
+            <div key={m.id} className="flex justify-end">
+              <div className="max-w-[80%] min-w-0 whitespace-pre-wrap break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-white">
+                {m.text}
+              </div>
             </div>
-          </div>
-        ))}
+          ) : (
+            // Assistant turn: activity trace (thinking + tools) above the final
+            // markdown answer — the External Agent chat layout.
+            <div key={m.id} className="flex w-full justify-start">
+              <div className="w-full min-w-0 rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-[var(--color-text)]">
+                {m.reasoningContent && <ThinkingBlock text={m.reasoningContent} />}
+                <TurnSteps steps={parseSteps(m.steps)} onOpenFile={onOpenFile} />
+                {m.text.trim() && <Markdown onOpenFile={onOpenFile}>{m.text}</Markdown>}
+                {/* Empty live assistant bubble → show the working indicator. */}
+                {!m.text.trim() &&
+                  !m.reasoningContent &&
+                  parseSteps(m.steps).length === 0 && <WorkingDots />}
+              </div>
+            </div>
+          ),
+        )}
 
-        {pending && (
+        {showStandalonePending && (
           <div className="flex justify-start">
-            <div className="rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-sm text-[var(--color-text-dim)]">
-              <span className="inline-flex gap-1">
-                <span className="animate-bounce">●</span>
-                <span className="animate-bounce [animation-delay:0.15s]">●</span>
-                <span className="animate-bounce [animation-delay:0.3s]">●</span>
-              </span>
+            <div className="rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-sm">
+              <WorkingDots />
             </div>
           </div>
         )}

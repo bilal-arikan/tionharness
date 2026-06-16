@@ -2,7 +2,10 @@
 // agents can switch between Anthropic, OpenAI, Ollama, etc.
 package providers
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // Role identifies the author of a message.
 const (
@@ -11,18 +14,57 @@ const (
 	RoleSystem    = "system"
 )
 
-// Message is a provider-agnostic chat turn.
-type Message struct {
-	Role string
-	Text string
+// Stop reasons reported by Complete.
+const (
+	StopEndTurn = "end_turn"  // model finished a normal textual reply
+	StopToolUse = "tool_use"  // model wants one or more tools executed
+	StopMaxTok  = "max_tokens"
+)
+
+// ToolDef describes a tool offered to the model. InputSchema is a JSON Schema
+// object describing the tool's arguments.
+type ToolDef struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"inputSchema"`
 }
 
-// Request is a completion request.
+// ToolCall is a model request to run a tool. Input holds the raw JSON args.
+type ToolCall struct {
+	ID    string          `json:"id"`
+	Name  string          `json:"name"`
+	Input json.RawMessage `json:"input"`
+}
+
+// ToolResult is the outcome of executing a ToolCall, fed back to the model.
+type ToolResult struct {
+	CallID  string `json:"callId"`
+	Content string `json:"content"`
+	IsError bool   `json:"isError"`
+}
+
+// Message is a provider-agnostic chat turn. A turn may carry plain Text, and/or
+// (for the assistant) ToolCalls it requested, and/or (for the user side) the
+// ToolResults answering a previous assistant turn's tool calls.
+type Message struct {
+	Role        string
+	Text        string
+	ToolCalls   []ToolCall
+	ToolResults []ToolResult
+}
+
+// Request is a completion request. Tools, when non-empty, enables tool use.
 type Request struct {
 	Model     string
 	System    string
 	Messages  []Message
 	MaxTokens int
+	Tools     []ToolDef
+	// OnEvent, when set, is called by providers that run the loop internally
+	// (claude CLI) as each activity step (text/thinking/tool) becomes available,
+	// enabling step-by-step streaming to the UI. Ignored by non-streaming
+	// providers. Must be safe to call from the provider's goroutine.
+	OnEvent func(TraceStep)
 }
 
 // Usage reports token consumption.
@@ -31,11 +73,32 @@ type Usage struct {
 	OutputTokens int `json:"outputTokens"`
 }
 
-// Response is a completion result.
+// TraceStep is one entry in a provider-produced activity trace (intermediate
+// text, thinking, or a tool call paired with its result). Providers that run
+// the tool loop themselves (e.g. the claude CLI via stream-json) populate
+// Response.Trace so the agent layer can surface the steps in the UI without
+// driving the loop. Kept provider-local to avoid importing the agent package.
+type TraceStep struct {
+	Kind    string          // "text" | "thinking" | "tool"
+	Text    string          // text/thinking payload
+	Tool    string          // tool name
+	Input   json.RawMessage // tool input
+	Output  string          // tool result
+	IsError bool            // tool failed
+}
+
+// Response is a completion result. When StopReason is StopToolUse, ToolCalls
+// lists the tools the model wants executed before it continues.
 type Response struct {
-	Text  string
-	Usage Usage
-	Model string
+	Text       string
+	ToolCalls  []ToolCall
+	StopReason string
+	Usage      Usage
+	Model      string
+	// Trace is an optional activity trace for providers that run the loop
+	// internally (claude CLI). Empty for the native agentic loop, which the
+	// agent layer traces itself.
+	Trace []TraceStep
 }
 
 // Provider is implemented by every LLM backend.

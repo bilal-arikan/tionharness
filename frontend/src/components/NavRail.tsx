@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Workspace } from '../types'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
-export type View = 'chat' | 'board' | 'schedules' | 'memory'
+export type View = 'chat' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'logs' | 'settings'
 
 interface Props {
   view: View
@@ -18,6 +18,9 @@ const NAV: { key: View; label: string; icon: string }[] = [
   { key: 'board', label: 'Görevler', icon: '🗂' },
   { key: 'schedules', label: 'Zamanlamalar', icon: '⏰' },
   { key: 'memory', label: 'Hafıza', icon: '⛁' },
+  { key: 'tools', label: 'Araçlar', icon: '🔌' },
+  { key: 'flows', label: 'Akışlar', icon: '🔀' },
+  { key: 'logs', label: 'Loglar', icon: '📜' },
 ]
 
 const COLLAPSE_KEY = 'swarmgo.navCollapsed'
@@ -62,8 +65,9 @@ export function NavRail({
           onClick={() => setCollapsed(false)}
           title={active?.name ?? 'Workspace seç'}
           className="mx-2 mb-2 flex h-9 items-center justify-center rounded-lg bg-[var(--color-surface-2)] text-sm font-medium hover:opacity-90"
+          style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
         >
-          {(active?.name ?? '?').charAt(0).toUpperCase()}
+          {active?.icon || (active?.name ?? '?').charAt(0).toUpperCase()}
         </button>
       ) : (
         <WorkspaceSwitcher
@@ -93,6 +97,24 @@ export function NavRail({
             {!collapsed && <span>{item.label}</span>}
           </button>
         ))}
+      </div>
+
+      {/* Settings (pinned at the bottom, separate from primary nav) */}
+      <div className="px-2 pb-1">
+        <button
+          onClick={() => onSelectView('settings')}
+          title={collapsed ? 'Ayarlar' : undefined}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+            collapsed ? 'justify-center' : ''
+          } ${
+            view === 'settings'
+              ? 'bg-[var(--color-accent)] text-white'
+              : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+          }`}
+        >
+          <span className="text-base leading-none">⚙</span>
+          {!collapsed && <span>Ayarlar</span>}
+        </button>
       </div>
 
       {/* Collapse toggle */}

@@ -2,90 +2,98 @@ package db
 
 import (
 	"context"
-	"database/sql"
-	"errors"
+	"sort"
 )
 
-const knowledgeColumns = `id, agent_id, kind, content, embedding, created_at`
-
-func scanKnowledge(s interface{ Scan(...any) error }, k *KnowledgeSource) error {
-	return s.Scan(&k.ID, &k.AgentID, &k.Kind, &k.Content, &k.Embedding, &k.CreatedAt)
+// knowledgeDisk is the on-disk shape of a KnowledgeSource. The in-memory model
+// hides Embedding from JSON (json:"-"), but the store must persist the cached
+// term vector, so we serialize it explicitly here (Go encodes []byte as base64).
+type knowledgeDisk struct {
+	ID        string `json:"id"`
+	AgentID   string `json:"agentId"`
+	Kind      string `json:"kind"`
+	Content   string `json:"content"`
+	Embedding []byte `json:"embedding"`
+	CreatedAt int64  `json:"createdAt"`
 }
 
-// CreateKnowledge inserts a memory row and returns it.
+func toKnowledgeDisk(k KnowledgeSource) knowledgeDisk {
+	return knowledgeDisk{k.ID, k.AgentID, k.Kind, k.Content, k.Embedding, k.CreatedAt}
+}
+
+func (kd knowledgeDisk) toModel() KnowledgeSource {
+	return KnowledgeSource{kd.ID, kd.AgentID, kd.Kind, kd.Content, kd.Embedding, kd.CreatedAt}
+}
+
+func (d *DB) persistKnowledgeLocked(k KnowledgeSource) error {
+	d.knowledge[k.ID] = k
+	return atomicWriteJSON(d.dir(dirKnowledge, k.ID+".json"), toKnowledgeDisk(k))
+}
+
+func (d *DB) loadKnowledge() error {
+	disks, err := loadJSONDir[knowledgeDisk](d.dir(dirKnowledge))
+	if err != nil {
+		return err
+	}
+	for _, kd := range disks {
+		d.knowledge[kd.ID] = kd.toModel()
+	}
+	return nil
+}
+
+// CreateKnowledge inserts a memory and returns it.
 func (d *DB) CreateKnowledge(ctx context.Context, k KnowledgeSource) (KnowledgeSource, error) {
 	k.ID = newID()
 	k.CreatedAt = now()
 	if k.Kind == "" {
 		k.Kind = MemoryDocument
 	}
-	_, err := d.ExecContext(ctx, `INSERT INTO knowledge_sources
-		(id, agent_id, kind, content, embedding, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)`,
-		k.ID, k.AgentID, k.Kind, k.Content, k.Embedding, k.CreatedAt)
-	return k, err
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return k, d.persistKnowledgeLocked(k)
 }
 
 // GetKnowledge loads a memory by id.
 func (d *DB) GetKnowledge(ctx context.Context, id string) (KnowledgeSource, error) {
-	var k KnowledgeSource
-	err := scanKnowledge(d.QueryRowContext(ctx, `SELECT `+knowledgeColumns+` FROM knowledge_sources WHERE id = ?`, id), &k)
-	if errors.Is(err, sql.ErrNoRows) {
-		return k, ErrNotFound
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	k, ok := d.knowledge[id]
+	if !ok {
+		return KnowledgeSource{}, ErrNotFound
 	}
-	return k, err
+	return k, nil
 }
 
 // ListKnowledge returns an agent's memories, newest first. If kinds is
 // non-empty, only those kinds are returned.
 func (d *DB) ListKnowledge(ctx context.Context, agentID string, kinds ...string) ([]KnowledgeSource, error) {
-	query := `SELECT ` + knowledgeColumns + ` FROM knowledge_sources WHERE agent_id = ?`
-	args := []any{agentID}
-	if len(kinds) > 0 {
-		query += ` AND kind IN (` + placeholders(len(kinds)) + `)`
-		for _, k := range kinds {
-			args = append(args, k)
+	allow := map[string]bool{}
+	for _, k := range kinds {
+		allow[k] = true
+	}
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	out := make([]KnowledgeSource, 0)
+	for _, k := range d.knowledge {
+		if k.AgentID != agentID {
+			continue
 		}
-	}
-	query += ` ORDER BY created_at DESC`
-
-	rows, err := d.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []KnowledgeSource
-	for rows.Next() {
-		var k KnowledgeSource
-		if err := scanKnowledge(rows, &k); err != nil {
-			return nil, err
+		if len(allow) > 0 && !allow[k.Kind] {
+			continue
 		}
 		out = append(out, k)
 	}
-	return out, rows.Err()
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out, nil
 }
 
 // DeleteKnowledge removes a memory.
 func (d *DB) DeleteKnowledge(ctx context.Context, id string) error {
-	res, err := d.ExecContext(ctx, `DELETE FROM knowledge_sources WHERE id = ?`, id)
-	if err != nil {
-		return err
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.knowledge[id]; !ok {
+		return ErrNotFound
 	}
-	return mustAffect(res)
-}
-
-// placeholders returns "?, ?, ..." with n entries for IN clauses.
-func placeholders(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	b := make([]byte, 0, n*3)
-	for i := 0; i < n; i++ {
-		if i > 0 {
-			b = append(b, ',', ' ')
-		}
-		b = append(b, '?')
-	}
-	return string(b)
+	delete(d.knowledge, id)
+	return removeFile(d.dir(dirKnowledge, id+".json"))
 }

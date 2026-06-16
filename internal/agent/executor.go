@@ -98,10 +98,16 @@ func (r *Runtime) invokeWithMemory(ctx context.Context, agent db.Agent, prompt s
 	return r.complete(ctx, agent, system, prompt, autonomous)
 }
 
-// complete is the shared provider call used by invoke variants; it routes
-// through guardedComplete for budget enforcement and usage recording.
+// complete is the shared provider call used by invoke variants. It routes
+// through CompleteWithTools, which enforces the daily budget (when autonomous),
+// records usage, and runs the agentic tool loop when the agent has tools
+// enabled.
 func (r *Runtime) complete(ctx context.Context, agent db.Agent, system, prompt string, autonomous bool) (string, error) {
-	resp, err := r.guardedComplete(ctx, agent, providers.Request{
+	provider, err := r.providers.Get(agent.Provider)
+	if err != nil {
+		return "", err
+	}
+	resp, err := r.CompleteWithTools(ctx, agent, provider, providers.Request{
 		Model:  agent.Model,
 		System: system,
 		Messages: []providers.Message{

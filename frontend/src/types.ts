@@ -4,6 +4,8 @@ export interface Workspace {
   id: string
   name: string
   createdAt: number
+  icon?: string
+  color?: string
 }
 
 export interface Agent {
@@ -58,6 +60,14 @@ export interface TurnStep {
   input?: unknown
   output?: string
   isError?: boolean
+}
+
+// A slash command surfaced in the chat composer ("/" menu).
+export interface SlashCommand {
+  name: string // without the leading slash, e.g. "new"
+  description: string
+  icon?: string
+  run: () => void
 }
 
 export interface Message {
@@ -277,6 +287,8 @@ export interface AppSettings {
   defaultModel: string
   claudeCliPath: string
   anthropicKeySet: boolean
+  minimaxKeySet: boolean
+  minimaxBaseUrl: string
 
   oneMillionContext: boolean
   extendedPromptCache: boolean
@@ -309,9 +321,12 @@ export interface AppSettings {
   logLevel: string
 }
 
-// Partial update. anthropicKey is write-only: "" clears, non-empty sets.
+// Partial update. anthropicKey/minimaxKey are write-only: "" clears, non-empty sets.
 export type SettingsPatch = Partial<
-  Omit<AppSettings, 'anthropicKeySet'> & { anthropicKey: string }
+  Omit<AppSettings, 'anthropicKeySet' | 'minimaxKeySet'> & {
+    anthropicKey: string
+    minimaxKey: string
+  }
 >
 
 export interface ProviderTestResult {
@@ -321,17 +336,40 @@ export interface ProviderTestResult {
   error?: string
 }
 
+// Provider/model catalog for the UI's pickers.
+export interface CatalogModel {
+  id: string
+  label: string
+}
+
+export interface CatalogEntry {
+  id: string
+  label: string
+  needsKey: boolean
+  allowCustomModel: boolean
+  available: boolean
+  models: CatalogModel[]
+}
+
 // Per-workspace settings (overrides + rename). Resolved from X-Workspace-Id.
 export interface WorkspaceSettings {
   id: string
   name: string
   description: string
+  icon: string
+  color: string
   defaultProvider: string
   defaultModel: string
   pauseAutonomy: boolean
+  createdAt: number
+  agentCount: number
+  sessionCount: number
+  taskCount: number
 }
 
-export type WorkspaceSettingsPatch = Partial<Omit<WorkspaceSettings, 'id'>>
+export type WorkspaceSettingsPatch = Partial<
+  Pick<WorkspaceSettings, 'name' | 'description' | 'icon' | 'color' | 'defaultProvider' | 'defaultModel' | 'pauseAutonomy'>
+>
 
 // A captured log record (application + all workspaces).
 export interface LogEntry {

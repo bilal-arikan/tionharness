@@ -1,15 +1,30 @@
 @import 'tailwindcss';
+@import 'highlight.js/styles/github-dark.css';
 
-/* SwarmGo theme — dark, focused, custom (not a SwarmClaw copy). */
+/* SwarmGo theme — dark, neutral near-black canvas with a violet accent
+   (External Agents inspired). */
 @theme {
-  --color-bg: #0b0e14;
-  --color-surface: #141a24;
-  --color-surface-2: #1c2533;
-  --color-border: #273140;
-  --color-accent: #4f8cff;
-  --color-accent-soft: #1e3a66;
-  --color-text: #e6edf3;
-  --color-text-dim: #8b98a9;
+  --color-bg: #0c0c10;
+  --color-surface: #161619;
+  --color-surface-2: #212129;
+  --color-border: #2a2a33;
+  --color-accent: #8b5cf6;
+  --color-accent-soft: #2c2545;
+  --color-text: #e7e7ea;
+  --color-text-dim: #9a9aa6;
+}
+
+/* Light theme — activated via <html data-theme="light">. Overrides the dark
+   custom properties; components reference var(--color-*) so they re-theme. */
+[data-theme='light'] {
+  --color-bg: #f6f8fb;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef1f6;
+  --color-border: #d7dde6;
+  --color-accent: #2f6fed;
+  --color-accent-soft: #d8e4fb;
+  --color-text: #16202c;
+  --color-text-dim: #5a6b7d;
 }
 
 html,
@@ -37,3 +52,48 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ---- Markdown typography (Tailwind Preflight strips element styles, so the
+   rendered assistant content needs its own scoped rules). ---- */
+.sg-markdown > *:first-child { margin-top: 0; }
+.sg-markdown > *:last-child { margin-bottom: 0; }
+.sg-markdown p { margin: 0.5rem 0; }
+.sg-markdown h1,
+.sg-markdown h2,
+.sg-markdown h3,
+.sg-markdown h4 { margin: 1rem 0 0.5rem; font-weight: 600; line-height: 1.3; }
+.sg-markdown h1 { font-size: 1.35rem; }
+.sg-markdown h2 { font-size: 1.18rem; }
+.sg-markdown h3 { font-size: 1.05rem; }
+.sg-markdown h4 { font-size: 0.95rem; }
+.sg-markdown ul,
+.sg-markdown ol { margin: 0.5rem 0; padding-left: 1.4rem; }
+.sg-markdown ul { list-style: disc; }
+.sg-markdown ol { list-style: decimal; }
+.sg-markdown li { margin: 0.2rem 0; }
+.sg-markdown li::marker { color: var(--color-text-dim); }
+.sg-markdown blockquote {
+  margin: 0.5rem 0;
+  border-left: 3px solid var(--color-border);
+  padding-left: 0.8rem;
+  color: var(--color-text-dim);
+}
+.sg-markdown hr { margin: 1rem 0; border: 0; border-top: 1px solid var(--color-border); }
+.sg-markdown strong { font-weight: 600; }
+.sg-markdown em { font-style: italic; }
+.sg-markdown table {
+  margin: 0.6rem 0;
+  border-collapse: collapse;
+  font-size: 0.85em;
+  display: block;
+  overflow-x: auto;
+}
+.sg-markdown th,
+.sg-markdown td {
+  border: 1px solid var(--color-border);
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+}
+.sg-markdown th { background: var(--color-surface); font-weight: 600; }
+.sg-markdown input[type='checkbox'] { margin-right: 0.4rem; }
+.sg-markdown .hljs { background: transparent; padding: 0; }

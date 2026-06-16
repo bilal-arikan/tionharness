@@ -30,6 +30,7 @@ import type {
   WorkspaceSettings,
   WorkspaceSettingsPatch,
   LogEntry,
+  CatalogEntry,
 } from './types'
 
 // Active workspace — sent as X-Workspace-Id on every request so the backend
@@ -362,6 +363,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ provider }),
     }),
+
+  // Provider/model catalog (for agent + settings pickers).
+  getCatalog: () => req<CatalogEntry[]>('/api/catalog'),
 
   // Per-workspace settings (active workspace via X-Workspace-Id header).
   getWorkspaceSettings: () => req<WorkspaceSettings>('/api/workspace-settings'),

@@ -1,15 +1,16 @@
 # SwarmGo — Workspace İzolasyonu
 
-> Her workspace **tamamen bağımsızdır**: kendi SQLite veritabanı + kendi agent runtime'ı. Bir workspace'in içeriği asla diğerine sızmaz.
+> Her workspace **tamamen bağımsızdır**: kendi dosya-tabanlı `store/` dizini + kendi agent runtime'ı. Bir workspace'in içeriği asla diğerine sızmaz.
+> Depolama biçimi (JSON/JSONL) için: **`_Docs/08-DEPOLAMA.md`**.
 
-## Neden Ayrı DB Dosyası?
+## Neden Ayrı Store Dizini?
 
-Tek DB + `workspace_id` kolonu yaklaşımı yerine **her workspace için ayrı `swarmgo.db`** seçildi:
+Tek depo + `workspace_id` ayrımı yerine **her workspace için ayrı `store/` dizini** seçildi:
 
 | Yaklaşım | İzolasyon | Risk |
 |----------|-----------|------|
-| Tek DB + workspace_id kolonu | Mantıksal (her sorgu filtrelemeli) | Bir sorgu filtreyi unutursa **sızıntı** |
-| **Ayrı DB dosyası (seçilen)** | **Fiziksel** | Sıfır — sorgular değişmez, karışma imkânsız |
+| Tek depo + workspace_id ayrımı | Mantıksal (her erişim filtrelemeli) | Bir erişim filtreyi unutursa **sızıntı** |
+| **Ayrı store dizini (seçilen)** | **Fiziksel** | Sıfır — erişim değişmez, karışma imkânsız |
 
 ## Mimari
 
@@ -32,16 +33,16 @@ DATA_DIR/
 ├── credential-secret            # global şifreleme anahtarı
 └── workspaces/
     ├── {id-1}/
-    │   ├── swarmgo.db           # Workspace 1'in TÜM verisi
+    │   ├── store/               # Workspace 1'in TÜM verisi (JSON/JSONL dosyaları)
     │   └── workspace/           # Workspace 1'in görev dosyaları
     └── {id-2}/
-        ├── swarmgo.db           # Workspace 2'nin TÜM verisi
+        ├── store/               # Workspace 2'nin TÜM verisi (JSON/JSONL dosyaları)
         └── workspace/
 ```
 
 ## Çalışma Şekli
 
-1. **Manager** (`internal/workspace/manager.go`) açılışta `workspaces.json`'ı okur, her workspace için DB açar + runtime başlatır.
+1. **Manager** (`internal/workspace/manager.go`) açılışta `workspaces.json`'ı okur, her workspace için `store/` dizinini açar (diskten belleğe yükler) + runtime başlatır.
 2. Hiç workspace yoksa **"Varsayılan"** otomatik oluşturulur.
 3. Her HTTP isteği `X-Workspace-Id` header'ı taşır; `withWorkspace` middleware'i doğru workspace'i çözüp context'e koyar.
 4. Handler'lar `ws(r).DB` ve `ws(r).Runtime` ile yalnızca o workspace'in verisine erişir.
@@ -61,7 +62,7 @@ Diğer tüm uçlar (`/api/agents`, `/api/chat`, `/api/runtime` ...) `X-Workspace
 
 - WS1 "Varsayılan" → sadece Ajan-A görüyor ✅
 - WS2 "İş" → sadece Ajan-B görüyor ✅
-- Ayrı klasör + ayrı `swarmgo.db` dosyaları ✅
+- Ayrı klasör + ayrı `store/` dizinleri ✅
 - UI switcher ile geçiş: liste anında o workspace'e göre değişiyor ✅
 
 ## Notlar / Gelecek

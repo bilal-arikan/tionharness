@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { api, setActiveWorkspace, getActiveWorkspace } from './api'
-import type { Agent, AgentPatch, Session, Message, Workspace, AppSettings } from './types'
+import type { Agent, AgentPatch, Session, Message, Workspace, AppSettings, TurnStep, SlashCommand } from './types'
 import { NavRail, type View } from './components/NavRail'
 import { Sidebar } from './components/Sidebar'
 import { MessageList } from './components/MessageList'
@@ -112,6 +112,26 @@ export default function App() {
     }
   }, [])
 
+  // Delete the active workspace, then switch to another (backend forbids
+  // deleting the last one).
+  const deleteActiveWorkspace = useCallback(async () => {
+    if (!activeWorkspaceId) return
+    const target = workspaces.find((w) => w.id === activeWorkspaceId)
+    if (!confirm(`"${target?.name ?? 'Bu workspace'}" ve tüm verisi kalıcı olarak silinsin mi?`)) return
+    try {
+      await api.deleteWorkspace(activeWorkspaceId)
+      const remaining = workspaces.filter((w) => w.id !== activeWorkspaceId)
+      setWorkspaces(remaining)
+      const next = remaining[0]?.id ?? null
+      if (next) {
+        setActiveWorkspace(next)
+        setActiveWorkspaceId(next)
+      }
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }, [activeWorkspaceId, workspaces])
+
   // When the active agent changes, load its sessions.
   useEffect(() => {
     if (!activeAgentId) return
@@ -131,9 +151,9 @@ export default function App() {
   }, [activeSessionId])
 
   const createAgent = useCallback(
-    async (name: string, soul: string, provider: string) => {
+    async (name: string, soul: string, provider: string, model?: string) => {
       try {
-        const agent = await api.createAgent({ name, soul, provider })
+        const agent = await api.createAgent({ name, soul, provider, model })
         setAgents((prev) => [agent, ...prev])
         setActiveAgentId(agent.id)
       } catch (e) {
@@ -172,47 +192,106 @@ export default function App() {
     async (text: string) => {
       if (!activeSessionId) return
       setError(null)
+      const sid = activeSessionId
 
-      // Optimistic user bubble.
+      const now = Math.floor(Date.now() / 1000)
+      // Optimistic user bubble + a live assistant bubble whose steps grow as
+      // the SSE stream delivers them (step-by-step rendering).
       const optimistic: Message = {
         id: `tmp-${Date.now()}`,
-        sessionId: activeSessionId,
+        sessionId: sid,
         role: 'user',
         text,
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: now,
       }
-      setMessages((prev) => [...prev, optimistic])
+      const liveId = `live-${Date.now()}`
+      const live: Message = {
+        id: liveId,
+        sessionId: sid,
+        role: 'assistant',
+        text: '',
+        steps: '[]',
+        createdAt: now,
+      }
+      setMessages((prev) => [...prev, optimistic, live])
       setPending(true)
 
+      let liveSteps: TurnStep[] = []
       try {
-        const res = await api.chat(activeSessionId, text)
-        // Replace optimistic with canonical pair from server.
-        setMessages((prev) => [
-          ...prev.filter((m) => m.id !== optimistic.id),
-          res.userMessage,
-          res.replyMessage,
-        ])
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.id === activeSessionId
-              ? {
-                  ...s,
-                  messageCount: s.messageCount + 2,
-                  title: res.sessionTitle ?? s.title,
-                }
-              : s,
-          ),
-        )
-        setMeterRefresh((n) => n + 1)
-        notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', res.reply)
+        await api.chatStream(sid, text, {
+          onMeta: (m) => {
+            setMessages((prev) =>
+              prev.map((x) => (x.id === optimistic.id ? m.userMessage : x)),
+            )
+          },
+          onStep: (st) => {
+            liveSteps = [...liveSteps, st]
+            const json = JSON.stringify(liveSteps)
+            setPending(false)
+            setMessages((prev) =>
+              prev.map((x) => (x.id === liveId ? { ...x, steps: json } : x)),
+            )
+          },
+          onDone: (d) => {
+            // Replace the live bubble with the canonical persisted reply.
+            setMessages((prev) =>
+              prev.map((x) => (x.id === liveId ? d.replyMessage : x)),
+            )
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sid
+                  ? {
+                      ...s,
+                      messageCount: s.messageCount + 2,
+                      title: d.sessionTitle || s.title,
+                    }
+                  : s,
+              ),
+            )
+            setMeterRefresh((n) => n + 1)
+            notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', d.replyMessage.text)
+          },
+          onError: (err) => {
+            setError(err)
+            setMessages((prev) => prev.filter((m) => m.id !== liveId && m.id !== optimistic.id))
+          },
+        })
       } catch (e) {
         setError((e as Error).message)
-        setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+        setMessages((prev) => prev.filter((m) => m.id !== liveId && m.id !== optimistic.id))
       } finally {
         setPending(false)
       }
     },
     [activeSessionId],
+  )
+
+  // Slash commands available in the chat composer ("/" menu).
+  const chatCommands = useMemo<SlashCommand[]>(
+    () => [
+      { name: 'new', icon: '➕', description: 'Yeni oturum başlat', run: () => void newSession() },
+      {
+        name: 'title',
+        icon: '⟳',
+        description: 'Oturum başlığını yeniden üret',
+        run: () => {
+          if (activeSessionId) void regenerateSessionTitle(activeSessionId)
+        },
+      },
+      {
+        name: 'reflect',
+        icon: '✦',
+        description: 'Ajana yansıma (dream cycle) ürettir',
+        run: () => {
+          if (activeAgentId) api.reflect(activeAgentId).catch((e) => setError((e as Error).message))
+        },
+      },
+      { name: 'memory', icon: '⛁', description: 'Hafıza görünümüne geç', run: () => setView('memory') },
+      { name: 'tools', icon: '🔌', description: 'Araçlar görünümüne geç', run: () => setView('tools') },
+      { name: 'board', icon: '🗂', description: 'Görevler panosuna geç', run: () => setView('board') },
+      { name: 'flows', icon: '🔀', description: 'Akışlar görünümüne geç', run: () => setView('flows') },
+    ],
+    [newSession, regenerateSessionTitle, activeSessionId, activeAgentId],
   )
 
   return (
@@ -243,7 +322,7 @@ export default function App() {
         />
       )}
 
-      <main className="flex h-full flex-1 flex-col">
+      <main className="flex h-full min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">{VIEW_TITLE[view]}</span>
@@ -273,7 +352,13 @@ export default function App() {
         {view === 'chat' && (
           <>
             <MessageList messages={messages} pending={pending} onOpenFile={openFile} />
-            <Composer disabled={!activeSessionId || pending} onSend={sendMessage} />
+            <Composer
+              disabled={!activeSessionId || pending}
+              onSend={sendMessage}
+              agents={agents}
+              onPickAgent={setActiveAgentId}
+              commands={chatCommands}
+            />
           </>
         )}
         {view === 'board' && <TaskBoard agents={agents} onError={setError} />}
@@ -297,6 +382,7 @@ export default function App() {
             onError={setError}
             onSaved={applyClientPrefs}
             onWorkspaceChanged={() => api.listWorkspaces().then(setWorkspaces).catch(() => {})}
+            onDeleteWorkspace={deleteActiveWorkspace}
           />
         )}
       </main>

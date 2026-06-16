@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Agent, AgentPatch } from '../types'
 import { AVATAR_COLORS, AVATAR_GLYPHS, resolveColor } from '../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
+import { ProviderModelSelect } from './ProviderModelSelect'
 
 interface Props {
   agent: Agent
@@ -154,27 +155,15 @@ export function AgentSettingsModal({ agent, onClose, onSave }: Props) {
             </div>
           </Field>
 
-          {/* Provider + model */}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Sağlayıcı">
-              <select
-                value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-              >
-                <option value="claude-cli">claude-cli</option>
-                <option value="anthropic">anthropic</option>
-              </select>
-            </Field>
-            <Field label="Model">
-              <input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="varsayılan"
-                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
-              />
-            </Field>
-          </div>
+          {/* Provider + model (catalog-driven) */}
+          <ProviderModelSelect
+            provider={provider}
+            model={model}
+            onChange={(p, m) => {
+              setProvider(p)
+              setModel(m)
+            }}
+          />
 
           {/* Planning mode */}
           <Field label="Planlama modu">
