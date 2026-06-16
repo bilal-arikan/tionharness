@@ -709,6 +709,16 @@ Kullanıcıyla netleştirilecek:
 
 ## Oturum Günlüğü
 
+### 2026-06-16 — Trace StepKind genişletme: `todo` + `recovery` (E3 düşük-efor)
+`StepKind` ilk-sınıf hale getirildi (`go build`/`vet`/`test ./...` + frontend `tsc` yeşil):
+
+1. **`todo` kind** (`agent/trace.go` `StepTodo` + `TurnStep.Todos []TodoItem` + `parseTodos`): `todo_write` aracı artık generic tool kartı yerine `StepTodo` adımı yayar (`toolloop.go` çağrı sonrası dönüştürür) → frontend `TodoCard.tsx` `step.todos`'u önceler (eski trace'ler için `step.input` fallback'i + tool-adı geriye-dönük render korunur).
+2. **`recovery` kind** (`StepRecovery` + `TurnStep.Reason`): tool döngüsü iterasyon limitine (`maxToolIters`) ulaşınca `reason:"max_tool_iterations"` adımı yayılır → frontend `RecoveryStep.tsx` (amber uyarı satırı + reason rozeti). Tur neden erken bittiğini açıklar.
+3. **Frontend:** `types.ts` `StepKind` union + `TodoItem` tipi; `TurnSteps.tsx` `todo`/`recovery` yönlendirmesi.
+4. **Testler:** `agent/trace_test.go` (`parseTodos` geçerli/bozuk + todo/recovery JSON round-trip).
+
+> Kalan StepKind adayları (sonraki): `subagent` (A2 ile), `tombstone`/`tool_delta` (canlı güncelleme altyapısı, P3). Bkz. `10-KAVRAMSAL-TASARIM-NOTLARI.md` E3.
+
 ### 2026-06-16 — Etkileşim araçları: `todo_write` + `ask_user` (E3/E2/E1)
 `observed-behavior` mimari incelemesinden (`_Docs/10-KAVRAMSAL-TASARIM-NOTLARI.md`) çıkan **etkileşim katmanı** ilk iş paketi uygulandı (`go build`/`vet`/`test ./...` + frontend `tsc`/`build` + canlı tool-katalog smoke testi yeşil):
 
