@@ -117,11 +117,11 @@ graph LR
 - [x] **Faz A1** — Artifact sistemi: sürümlü içerik (doküman/kod/HTML/SVG/Mermaid), `create/update_artifact` araçları, Artifactlar ekranı + sohbet kartı
 - [x] **İki-seviyeli araç yönetimi** — workspace-geneli aktivasyon (denylist `tools-config.json`) + ajan-bazlı seçim (allowlist); `WorkspaceToolCatalog`/`ActiveToolCatalog`/`ToolCatalog` + `GET/PUT /api/workspace-tools`
 - [x] **Talep-üzerine özetler** — "/" komut paleti: hafıza/görev panosu/akışlar (ucuz model) + araç listesi (deterministik); `Runtime.Summarize` + `POST /api/sessions/{id}/summary`
+- [x] **D2** — Provider **retry middleware**: `transport.go` `doWithRetry` (üstel backoff + jitter, `Retry-After` saygılı, 429/5xx/529 + ağ hatası); `postJSON`/`postSSE` sarıldı (+ token streaming `Streamer`)
+- [x] **C1** — Sistem-prompt **cache sınırı**: `Request.System` (statik: persona+profil) / `Request.SystemDynamic` (dinamik: bellek+özet); Anthropic cache breakpoint yalnız statik blokta → araç+statik prefix cache'lenir, dinamik suffix cache'i bozmaz
 - [x] **Ara özellikler** — otonom olay akışı (`/api/events`), workspace switcher + çapraz-ws rozet, tıklanabilir bildirimler, sessions-only sidebar + okundu/okunmadı, tema presetleri
 
 ### Sıradaki — düşük efor / yüksek değer
-- [ ] **D2 kalan** — Provider **retry middleware** (üstel backoff; şu an `internal/providers`'da hiç retry yok) — `transport.go`'ya tek sarmalayıcı
-- [ ] **C1** — Sistem-prompt **cache sınırı**: statik (talimat+araç) / dinamik (bellek+bağlam) bölümleme → cache verimi
 - [ ] **A1** — Agent loop **recovery + `continuationReason`**: kurtarma yollarını (max-token/compaction/iptal) yapısal hale getir (`recovery` StepKind hazır)
 
 ### Mimari sıçrama

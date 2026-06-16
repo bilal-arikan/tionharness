@@ -164,7 +164,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	body := anthropicReq{
 		Model:     model,
 		MaxTokens: maxTokens,
-		System:    a.systemField(req.System),
+		System:    a.systemField(req.System, req.SystemDynamic),
 		Messages:  toAnthropicMessages(req.Messages),
 		Tools:     toAnthropicTools(req.Tools),
 		Thinking:  thinking,
@@ -235,7 +235,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(string
 	body := anthropicReq{
 		Model:     model,
 		MaxTokens: maxTokens,
-		System:    a.systemField(req.System),
+		System:    a.systemField(req.System, req.SystemDynamic),
 		Messages:  toAnthropicMessages(req.Messages),
 		Thinking:  thinking,
 		Stream:    true,
@@ -329,21 +329,36 @@ func (a *Anthropic) betaHeader() string {
 	return strings.Join(betas, ",")
 }
 
-// systemField returns the system prompt either as a plain string or, when
-// extended caching is enabled, as a single cache-controlled block (1h TTL) so
-// the large persona/context prefix is cached across calls.
-func (a *Anthropic) systemField(system string) any {
-	if system == "" {
+// systemField builds the system prompt from a stable static prefix and a
+// volatile dynamic suffix. When extended caching is on, the cache_control
+// breakpoint (1h TTL) is placed on the static block, so the static prefix — plus
+// the tool definitions that precede it in the request — is cached across calls,
+// while the dynamic suffix (recalled memory + running summary) that changes every
+// turn stays outside the cached prefix and never invalidates it. Without caching
+// the two parts are concatenated into a plain string.
+func (a *Anthropic) systemField(static, dynamic string) any {
+	static = strings.TrimSpace(static)
+	dynamic = strings.TrimSpace(dynamic)
+	if static == "" && dynamic == "" {
 		return nil
 	}
 	if !a.extendedCache {
-		return system
+		return strings.TrimSpace(static + "\n\n" + dynamic)
 	}
-	return []systemBlock{{
-		Type:         "text",
-		Text:         system,
-		CacheControl: &cacheControl{Type: "ephemeral", TTL: "1h"},
-	}}
+
+	// The cache breakpoint goes on the static prefix when present; otherwise it
+	// falls to the dynamic block so a static-less prompt is still cached (matching
+	// the prior single-block behavior).
+	cache := &cacheControl{Type: "ephemeral", TTL: "1h"}
+	var blocks []systemBlock
+	if static != "" {
+		blocks = append(blocks, systemBlock{Type: "text", Text: static, CacheControl: cache})
+		cache = nil
+	}
+	if dynamic != "" {
+		blocks = append(blocks, systemBlock{Type: "text", Text: dynamic, CacheControl: cache})
+	}
+	return blocks
 }
 
 // toAnthropicMessages converts provider messages to content-block form,

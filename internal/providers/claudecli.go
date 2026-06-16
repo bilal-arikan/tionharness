@@ -99,7 +99,9 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	if model != "" {
 		args = append(args, "--model", model)
 	}
-	if sys := strings.TrimSpace(req.System); sys != "" {
+	// The CLI has no prompt-cache breakpoint, so the static prefix and dynamic
+	// suffix are merged into one appended system prompt.
+	if sys := strings.TrimSpace(strings.TrimSpace(req.System) + "\n\n" + strings.TrimSpace(req.SystemDynamic)); sys != "" {
 		args = append(args, "--append-system-prompt", sys)
 	}
 

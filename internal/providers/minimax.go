@@ -195,12 +195,13 @@ func (m *Minimax) Stream(ctx context.Context, req Request, onDelta func(string))
 }
 
 // toOAIMessages converts a provider Request into OpenAI-style messages: the
-// system prompt becomes the leading system message; in-band system-role and
-// empty-text turns are dropped.
+// static + dynamic system prompt becomes the leading system message (OpenAI has
+// no cache breakpoint, so the two parts are concatenated); in-band system-role
+// and empty-text turns are dropped.
 func toOAIMessages(req Request) []oaiMessage {
 	msgs := make([]oaiMessage, 0, len(req.Messages)+1)
-	if strings.TrimSpace(req.System) != "" {
-		msgs = append(msgs, oaiMessage{Role: "system", Content: req.System})
+	if sys := strings.TrimSpace(strings.TrimSpace(req.System) + "\n\n" + strings.TrimSpace(req.SystemDynamic)); sys != "" {
+		msgs = append(msgs, oaiMessage{Role: "system", Content: sys})
 	}
 	for _, mm := range req.Messages {
 		if mm.Role == RoleSystem || mm.Text == "" {

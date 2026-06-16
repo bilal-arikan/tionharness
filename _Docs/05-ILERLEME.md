@@ -12,6 +12,51 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### D2 — Provider retry middleware + C1 — Sistem-prompt cache sınırı ✅ (2026-06-16)
+
+İki backlog maddesi tamamlandı: geçici hatalara dayanıklı sağlayıcı çağrıları (D2) ve
+prompt-cache'i etkili kılan statik/dinamik sistem-prompt bölümlemesi (C1).
+
+**D2 — Retry middleware (`internal/providers/transport.go`)**
+- [x] `retryPolicy` (varsayılan 4 deneme, 500ms taban, 8s tavan) + `httpRetry` paket var'ı
+  (testler hızlı/no-retry politikayla değiştirir).
+- [x] `doWithRetry(ctx, client, prefix, build)` — her denemede isteği yeniden kurar (gövde
+  tüketildiği için), **üstel backoff + ±%25 jitter**, `Retry-After` başlığına saygı,
+  context iptaline duyarlı. Son denemede yanıtı (retryable status olsa bile) ya da sarılmış
+  ağ hatasını **olduğu gibi** döndürür → çağıran sağlayıcının kendi mesajını/gövdesini sunar.
+- [x] Retryable: ağ hatası + `408/429/500/502/503/504/529` (529 = Anthropic "overloaded").
+- [x] `postJSON` **ve** `postSSE` artık `doWithRetry`'den geçer (SSE yalnız ilk bağlantıyı
+  yeniden dener → akış başladıktan sonra kısmi çıktı tekrarlanmaz). İmzalar değişmedi →
+  anthropic/minimax çağrıları dokunulmadan retry kazandı.
+
+**C1 — Statik/dinamik sistem-prompt bölümleme**
+- [x] `providers.Request`: `System` (STATİK prefix: persona + kullanıcı profili — turlar arası
+  sabit) + yeni `SystemDynamic` (VOLATİL suffix: recall edilen bellek + konuşma özeti — her tur değişir).
+- [x] `anthropic.go` `systemField(static, dynamic)`: extended-cache açıkken `cache_control`
+  breakpoint'i **yalnız statik blokta** (1h TTL) → araç tanımları + statik prefix cache'lenir,
+  her tur değişen dinamik suffix cache'i geçersiz kılmaz. Cache kapalıyken düz birleştirme.
+  (Statik boşsa breakpoint dinamiğe düşer → eski tek-blok davranışı korunur.)
+- [x] `minimax.go` + `claudecli.go`: cache breakpoint'i olmadığından `System`+`SystemDynamic`
+  birleştirilir. **Önemli:** claude-cli `--append-system-prompt` artık her ikisini birleştirir
+  → belleğin anahtarsız yolda düşmesi (regresyon) engellendi.
+- [x] Çağıranlar (`api/chat.go`, `chat_stream.go`, `agent/executor.go`, `flow.go`): bellek + özet
+  artık `System`'e değil `SystemDynamic`'e konur; persona + profil statik kalır. `Runtime.complete`
+  imzası `(system, systemDynamic, prompt, ...)` oldu.
+
+**CANLI TEST (unit + API):**
+- [x] `transport_test.go`: 503→503→200 retry başarısı (3 çağrı), kalıcı 503'te denemeler bitince
+  son yanıt+gövde döner, non-retryable 400 hiç denenmez, `retryableStatus`/`parseRetryAfter` tablo.
+- [x] `anthropic_test.go`: cache breakpoint sadece statik blokta; statik-yok→dinamik cache'lenir;
+  cache kapalı→düz birleşim; boş→nil.
+- [x] **Canlı API (claude-cli, anahtarsız):** ajana "BLUEFALCON" hafıza belgesi eklendi →
+  "What is the secret project codename?" sorusuna **"BLUEFALCON"** yanıtı → recall'ın `SystemDynamic`
+  üzerinden claude-cli'a ulaştığı uçtan uca doğrulandı (C1 anahtarsız yolu bozmuyor).
+- [x] `go build/vet/test ./...` temiz.
+
+> Not: 1M-context + uzatılmış cache yalnız **anthropic**'te etkili; retry üç sağlayıcıyı da kapsar
+> (ortak transport). claude-cli kendi HTTP'sini yaptığından retry yalnız native (anthropic/minimax)
+> çağrıları + MCP listelemeyi etkiler.
+
 ### Talep-üzerine özetler + "/" komut paleti ✅ (2026-06-16)
 
 Sohbet composer'ındaki `/` komut paletine **workspace verisini özetleyen** dört komut

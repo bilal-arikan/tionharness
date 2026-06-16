@@ -138,18 +138,21 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Static prefix (profile + persona) vs dynamic suffix (memory + summary)
+		// — see chat.go for the prompt-caching rationale.
 		system := buildSystemPrompt(agentRow)
 		if uc := userContextBlock(s.settings.Get()); uc != "" {
 			system = strings.TrimSpace(uc + "\n\n" + system)
 		}
+		var dynamic string
 		if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, req.Message, 5); block != "" {
-			system = strings.TrimSpace(system + "\n\n" + block)
+			dynamic = block
 		}
 		if prep.Summary != "" {
-			system = strings.TrimSpace(system + "\n\n## Conversation summary so far\n" + prep.Summary)
+			dynamic = strings.TrimSpace(dynamic + "\n\n## Conversation summary so far\n" + prep.Summary)
 		}
 
-		llmReq := providers.Request{Model: agentRow.Model, System: system, Messages: prep.Messages}
+		llmReq := providers.Request{Model: agentRow.Model, System: system, SystemDynamic: dynamic, Messages: prep.Messages}
 
 		// Attach a per-agent artifact sink so create_artifact / update_artifact
 		// persist content stamped with this session + agent.

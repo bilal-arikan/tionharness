@@ -99,22 +99,27 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Compose the system prompt: user profile + persona + recalled memory + summary.
+	// Compose the system prompt in two parts so prompt caching stays effective:
+	// the STATIC prefix (user profile + persona) is stable across turns, while the
+	// DYNAMIC suffix (recalled memory + running summary) changes every turn and is
+	// kept outside the cached prefix.
 	system := buildSystemPrompt(agent)
 	if uc := userContextBlock(s.settings.Get()); uc != "" {
 		system = strings.TrimSpace(uc + "\n\n" + system)
 	}
+	var dynamic string
 	if block := ws(r).Runtime.Memory().ContextBlock(ctx, agent.ID, req.Message, 5); block != "" {
-		system = strings.TrimSpace(system + "\n\n" + block)
+		dynamic = block
 	}
 	if prep.Summary != "" {
-		system = strings.TrimSpace(system + "\n\n## Conversation summary so far\n" + prep.Summary)
+		dynamic = strings.TrimSpace(dynamic + "\n\n## Conversation summary so far\n" + prep.Summary)
 	}
 
 	llmReq := providers.Request{
-		Model:    agent.Model,
-		System:   system,
-		Messages: prep.Messages,
+		Model:         agent.Model,
+		System:        system,
+		SystemDynamic: dynamic,
+		Messages:      prep.Messages,
 	}
 
 	// Manual chat is not budget-gated (autonomous=false). When the agent has

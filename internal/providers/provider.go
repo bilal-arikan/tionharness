@@ -55,11 +55,20 @@ type Message struct {
 
 // Request is a completion request. Tools, when non-empty, enables tool use.
 type Request struct {
-	Model     string
-	System    string
-	Messages  []Message
-	MaxTokens int
-	Tools     []ToolDef
+	Model string
+	// System is the STATIC system-prompt prefix: persona + user profile and other
+	// content that is stable across calls for a given agent. With Anthropic prompt
+	// caching, the cache breakpoint is placed at the end of this prefix (after the
+	// tool definitions that precede it), so it is cached and reused turn-to-turn.
+	System string
+	// SystemDynamic is the VOLATILE system-prompt suffix appended after System:
+	// recalled memory, the running conversation summary, and anything that changes
+	// every turn. It is kept outside the cached prefix so it never invalidates the
+	// cache. Providers without caching simply concatenate it onto System.
+	SystemDynamic string
+	Messages      []Message
+	MaxTokens     int
+	Tools         []ToolDef
 	// ThinkingBudget, when > 0, requests extended reasoning with that many
 	// thinking tokens (providers that support it, e.g. anthropic). 0 = off.
 	ThinkingBudget int

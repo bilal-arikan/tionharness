@@ -102,31 +102,31 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 
 // invoke calls the agent's provider with a single user prompt.
 func (r *Runtime) invoke(ctx context.Context, agent db.Agent, prompt string, autonomous bool) (string, error) {
-	return r.complete(ctx, agent, buildSystemPrompt(agent), prompt, autonomous)
+	return r.complete(ctx, agent, buildSystemPrompt(agent), "", prompt, autonomous)
 }
 
 // invokeWithMemory is like invoke but first recalls relevant memories and
-// injects them into the system prompt, so the agent answers with context.
+// passes them as the dynamic (uncached) system suffix, so the agent answers with
+// context without invalidating the cached static persona prefix.
 func (r *Runtime) invokeWithMemory(ctx context.Context, agent db.Agent, prompt string, autonomous bool) (string, error) {
-	system := buildSystemPrompt(agent)
-	if block := r.mem.ContextBlock(ctx, agent.ID, prompt, 5); block != "" {
-		system = strings.TrimSpace(system + "\n\n" + block)
-	}
-	return r.complete(ctx, agent, system, prompt, autonomous)
+	dynamic := strings.TrimSpace(r.mem.ContextBlock(ctx, agent.ID, prompt, 5))
+	return r.complete(ctx, agent, buildSystemPrompt(agent), dynamic, prompt, autonomous)
 }
 
-// complete is the shared provider call used by invoke variants. It routes
-// through CompleteWithTools, which enforces the daily budget (when autonomous),
-// records usage, and runs the agentic tool loop when the agent has tools
-// enabled.
-func (r *Runtime) complete(ctx context.Context, agent db.Agent, system, prompt string, autonomous bool) (string, error) {
+// complete is the shared provider call used by invoke variants. system is the
+// static prefix, systemDynamic the volatile suffix (see providers.Request). It
+// routes through CompleteWithTools, which enforces the daily budget (when
+// autonomous), records usage, and runs the agentic tool loop when the agent has
+// tools enabled.
+func (r *Runtime) complete(ctx context.Context, agent db.Agent, system, systemDynamic, prompt string, autonomous bool) (string, error) {
 	provider, err := r.providers.Get(agent.Provider)
 	if err != nil {
 		return "", err
 	}
 	resp, err := r.CompleteWithTools(ctx, agent, provider, providers.Request{
-		Model:  agent.Model,
-		System: system,
+		Model:         agent.Model,
+		System:        system,
+		SystemDynamic: systemDynamic,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: prompt},
 		},
