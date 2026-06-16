@@ -98,7 +98,7 @@ SwarmGo/
 │   ├── mcp/                     # SDK'sız stdio JSON-RPC istemci (client.go, manager.go)
 │   ├── tools/                   # built-in (fs/shell akan + todo_write/ask_user + artifact) + MCP birleşik registry (registry.go StreamingTool, builtin_*.go, sandbox.go, ask.go, artifact.go)
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
-│   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs
+│   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs (bkz. 12-LOGLAMA.md)
 │   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE
 │   ├── workspace/               # workspace başına DB + Runtime + Scheduler (manager.go)
 │   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat(+stream/control)/files/runtime/tasks/schedules/memory/usage/mcp/agent_tools/flows/artifacts/settings/workspaces/logs/events

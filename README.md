@@ -64,6 +64,8 @@ Tüm plan ve tasarım dokümanları [`_Docs/`](_Docs/) klasöründedir:
 - [Depolama](_Docs/08-DEPOLAMA.md)
 - [Claude Agent SDK Paritesi (ADR)](_Docs/09-CLAUDE-AGENT-SDK.md)
 - [Kavramsal Tasarım Notları](_Docs/10-KAVRAMSAL-TASARIM-NOTLARI.md)
+- [Interaction MCP](_Docs/11-INTERACTION-MCP.md)
+- [Loglama Sistemi](_Docs/12-LOGLAMA.md)
 
 ## Proje Yapısı
 
