@@ -25,6 +25,8 @@
 
 **Çözüm:** `internal/api/middleware_log.go` — `withRequestLog` her API isteğini loglar (`"http request"`, attrs: `method`/`path`/`status`/`dur`); 2xx→INFO, 4xx→WARN, 5xx→ERROR. `statusRecorder` durum kodunu yakalar **ve** `Flush()`+`Unwrap()` ile `http.Flusher`'ı yeniden açar (SSE `chat/stream`+`events` `w.(http.Flusher)` assertion'ı sarmalayıcıdan geçsin diye — yoksa akış kırılırdı). `skipRequestLog` `/api/logs` (kendi buffer'ını sel etmesin) + `/api/events` (uzun-ömürlü SSE) + `/health`'i atlar. `Routes()` zinciri: `withCORS → withRequestLog → withWorkspace` (OPTIONS preflight CORS'ta erken döndüğünden loglanmaz). ✅ (`go build`/`vet` yeşil; **canlı test**: dev binary yeniden başlatıldı, `/api/agents`→INFO 200, `/api/sessions`→INFO 200, `/api/nonexistent`→WARN 404, `/api/logs` kendini loglamadı).
 
+**Ek (aynı gün): İş-seviyesi INFO loglar.** Access-log "hangi uç çağrıldı"yı verir; üstüne "ne oldu" anlamı eklendi: `chat turn completed` (`chat.go`+`chat_stream.go` — agent/provider/model/in-out token/steps/süre, stream yolunda `stream:true`), `agent created/updated/deleted` (`agents.go`), `session created/deleted` (`sessions.go`), `task created` (`tasks.go`), `schedule created/toggled` (`schedules.go`), `mcp server toggled/tested` (`mcp.go`; başarısız test→WARN), `memory added` (`memory.go`). (Zaten vardı: heartbeat `agent tick` `worker.go`, `task run finished` `executor.go`, `flow run started/finished` `flow.go`, `agent reflected` `reflector.go`.) ✅ canlı test: agent+session create/delete dört olay da loglandı.
+
 ### Interaction MCP — Faz 2 (request_confirmation + artifacts + CLI kart paritesi) ✅ (2026-06-16)
 Faz 1 üstüne araç seti genişletildi ve CLI iz paritesi sağlandı. Detay: [11-INTERACTION-MCP.md](11-INTERACTION-MCP.md) (§16).
 
