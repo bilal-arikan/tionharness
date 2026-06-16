@@ -134,6 +134,12 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	// Per-workspace settings (resolved from X-Workspace-Id).
 	mux.HandleFunc("GET /api/workspace-settings", s.handleGetWorkspaceSettings)
 	mux.HandleFunc("PUT /api/workspace-settings", s.handleUpdateWorkspaceSettings)
+
+	// Per-workspace editable config files (prompts/instructions/README under
+	// <workspace>/config/), editable by the user on disk or via the UI.
+	mux.HandleFunc("GET /api/workspace-config", s.handleGetWorkspaceConfig)
+	mux.HandleFunc("PUT /api/workspace-config", s.handleUpdateWorkspaceConfig)
+	mux.HandleFunc("POST /api/workspace-config/reveal", s.handleRevealWorkspaceConfig)
 }
 
 // registerAgentRoutes registers agent CRUD.

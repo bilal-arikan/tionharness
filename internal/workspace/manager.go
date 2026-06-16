@@ -123,7 +123,8 @@ func (m *Manager) open(meta Meta) error {
 	rt.ResumeRunningFlows(context.Background())
 
 	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, DataDir: dir}
-	ws.loadSettings() // apply persisted per-workspace overrides (e.g. autonomy pause)
+	ws.loadSettings()    // apply persisted per-workspace overrides (e.g. autonomy pause)
+	ws.syncConfigFiles() // seed config/ tree + adopt instructions.md (file is authoritative)
 
 	m.mu.Lock()
 	m.workspaces[meta.ID] = ws

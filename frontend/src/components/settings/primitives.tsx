@@ -19,6 +19,7 @@ export type Cat =
   | 'diagnostics'
   | 'about'
   | 'workspace'
+  | 'wsfiles'
 
 export interface CatMeta {
   key: Cat
@@ -42,7 +43,10 @@ export const APP_CATS: CatMeta[] = [
   { key: 'about', label: 'Hakkında', icon: 'ℹ️' },
 ]
 
-export const WS_CATS: CatMeta[] = [{ key: 'workspace', label: 'Genel', icon: '🧩' }]
+export const WS_CATS: CatMeta[] = [
+  { key: 'workspace', label: 'Genel', icon: '🧩' },
+  { key: 'wsfiles', label: 'Promptlar & Dosyalar', icon: '📝' },
+]
 
 // Setters threaded into the per-category panels.
 export type AppSet = <K extends keyof AppSettings>(key: K, val: AppSettings[K]) => void

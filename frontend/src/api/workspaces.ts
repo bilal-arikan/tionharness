@@ -1,6 +1,12 @@
 // Workspaces (not workspace-scoped) + the native folder picker, plus
 // per-workspace settings (active workspace via X-Workspace-Id header).
-import type { Workspace, WorkspaceSettings, WorkspaceSettingsPatch } from '../types'
+import type {
+  Workspace,
+  WorkspaceSettings,
+  WorkspaceSettingsPatch,
+  WorkspaceConfig,
+  WorkspaceConfigPatch,
+} from '../types'
 import { req } from './client'
 
 export const workspaceApi = {
@@ -23,4 +29,14 @@ export const workspaceApi = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
+
+  // Per-workspace editable config files (prompts/instructions/README).
+  getWorkspaceConfig: () => req<WorkspaceConfig>('/api/workspace-config'),
+  updateWorkspaceConfig: (patch: WorkspaceConfigPatch) =>
+    req<WorkspaceConfig>('/api/workspace-config', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+  revealWorkspaceConfig: () =>
+    req<{ path: string }>('/api/workspace-config/reveal', { method: 'POST' }),
 }

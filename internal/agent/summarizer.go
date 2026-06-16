@@ -58,7 +58,7 @@ func (r *Runtime) Summarize(ctx context.Context, agentID, kind string) (string, 
 	}
 	resp, err := r.guardedComplete(ctx, agent, providers.Request{
 		Model:  model,
-		System: summarySystemPrompt,
+		System: r.readPrompt("summary"),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: fmt.Sprintf("Summarize the following %s for the user:\n\n%s", label, data)},
 		},

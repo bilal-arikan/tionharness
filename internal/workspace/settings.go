@@ -143,6 +143,11 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if err := ws.saveSettings(); err != nil {
 		return nil, err
 	}
+	// Mirror an instructions change to config/instructions.md so the file and
+	// ws-settings.json stay in sync (the file is the source of truth on reload).
+	if patch.Instructions != nil {
+		ws.writeInstructionsFile(instructions)
+	}
 	if ws.Runtime != nil {
 		ws.Runtime.SetPaused(paused)
 		ws.Runtime.SetInstructions(instructions)

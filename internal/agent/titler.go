@@ -40,7 +40,7 @@ func (r *Runtime) GenerateTitle(ctx context.Context, agent db.Agent, source stri
 
 	resp, err := r.guardedComplete(ctx, agent, providers.Request{
 		Model:  model,
-		System: titleSystemPrompt,
+		System: r.readPrompt("title"),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: userPrompt},
 		},

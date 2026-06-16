@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
@@ -15,10 +14,9 @@ const reflectMaxJournals = 20
 
 // reflectPrompt instructs the agent to consolidate its journal into a durable
 // self-reflection — the "dream cycle" that turns raw activity into learning.
-const reflectPrompt = `Below are your most recent journal entries. Write a brief first-person reflection (3-5 sentences) capturing what you have been doing, any patterns, preferences, or facts worth remembering long-term. Be concise and concrete. Do not invent details.
-
-Journal:
-%s`
+// The journal entries are appended by Reflect, so this template carries no
+// placeholder — keeping it safe for users to edit the workspace prompt file.
+const reflectPrompt = `Below are your most recent journal entries. Write a brief first-person reflection (3-5 sentences) capturing what you have been doing, any patterns, preferences, or facts worth remembering long-term. Be concise and concrete. Do not invent details.`
 
 // Journal records a memory of the given activity for an agent. Failures are
 // non-fatal to the caller's main flow and only logged.
@@ -58,13 +56,17 @@ func (r *Runtime) Reflect(ctx context.Context, agentID string) (db.KnowledgeSour
 		sb.WriteString("\n")
 	}
 
+	// The editable reflect prompt is the instruction; the journal entries are
+	// appended here so the workspace prompt file needs no format placeholder.
+	userText := strings.TrimRight(r.readPrompt("reflect"), "\n") + "\n\nJournal:\n" + sb.String()
+
 	// Reflection is user-triggered (API), so it is not budget-gated; usage is
 	// still recorded via guardedComplete.
 	resp, err := r.guardedComplete(ctx, agent, providers.Request{
 		Model:  agent.Model,
 		System: r.systemPrompt(agent),
 		Messages: []providers.Message{
-			{Role: providers.RoleUser, Text: fmt.Sprintf(reflectPrompt, sb.String())},
+			{Role: providers.RoleUser, Text: userText},
 		},
 	}, false)
 	if err != nil {

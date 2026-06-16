@@ -30,6 +30,7 @@ import { ProvidersPanel } from './settings/ProvidersPanel'
 import { CommandsPanel } from './settings/CommandsPanel'
 import { StepKindsPanel } from './settings/StepKindsPanel'
 import { WorkspacePanel } from './settings/WorkspacePanel'
+import { WorkspaceFilesPanel } from './settings/WorkspaceFilesPanel'
 
 interface Props {
   onError: (msg: string) => void
@@ -196,7 +197,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
             <span className="text-xs text-[var(--color-text-dim)]">
               {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
             </span>
-            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && (
+            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'wsfiles' && (
               <button
                 onClick={save}
                 disabled={!dirty || saving}
@@ -251,6 +252,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
               {cat === 'workspace' && (
                 <WorkspacePanel ws={ws} setWsField={setWsField} onDeleteWorkspace={onDeleteWorkspace} />
               )}
+              {cat === 'wsfiles' && <WorkspaceFilesPanel onError={onError} />}
             </>
           )}
         </div>
