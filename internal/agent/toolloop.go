@@ -66,6 +66,10 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		}
 	}
 
+	// Carry the agent's permission mode so provider-driven loops (claude CLI) can
+	// gate their tool use. Empty maps to "auto" downstream.
+	req.PermissionMode = agent.PermissionMode
+
 	// Provider-driven paths (claude CLI) surface their own trace via OnEvent.
 	if onStep != nil {
 		req.OnEvent = func(ts providers.TraceStep) { onStep(traceStepToTurnStep(ts)) }

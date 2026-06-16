@@ -47,6 +47,23 @@ func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools, disallowedTool
 // Name implements Provider.
 func (c *ClaudeCLI) Name() string { return "claude-cli" }
 
+// permissionModeArgs maps SwarmGo's permission mode onto the claude CLI's
+// permission flags. In headless (-p) mode the default mode cannot prompt for
+// approval, so Edit/Write/Bash are refused unless an explicit mode is set:
+//   - "read-only" → --permission-mode plan       (no mutations)
+//   - "ask"       → --permission-mode acceptEdits (edits auto-approved)
+//   - "auto"/""   → --dangerously-skip-permissions (everything auto-approved)
+func permissionModeArgs(mode string) []string {
+	switch mode {
+	case "read-only":
+		return []string{"--permission-mode", "plan"}
+	case "ask":
+		return []string{"--permission-mode", "acceptEdits"}
+	default: // "auto", "" and any unknown value
+		return []string{"--dangerously-skip-permissions"}
+	}
+}
+
 // interactionSystemNote tells the CLI to use the SwarmGo Interaction MCP tools
 // (which surface in the SwarmGo UI) instead of its own built-ins, which can't be
 // answered in non-interactive print mode.
@@ -121,6 +138,10 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	if model != "" {
 		args = append(args, "--model", model)
 	}
+	// Headless (-p) mode cannot prompt for approval, so the CLI's default
+	// permission mode refuses Edit/Write/Bash. Set an explicit mode derived from
+	// the agent's permission setting so file edits are not silently blocked.
+	args = append(args, permissionModeArgs(req.PermissionMode)...)
 	// The CLI has no prompt-cache breakpoint, so the static prefix and dynamic
 	// suffix are merged into one appended system prompt.
 	sys := strings.TrimSpace(strings.TrimSpace(req.System) + "\n\n" + strings.TrimSpace(req.SystemDynamic))

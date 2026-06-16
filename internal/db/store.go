@@ -46,6 +46,9 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	if a.PlanningMode == "" {
 		a.PlanningMode = "standard"
 	}
+	if a.PermissionMode == "" {
+		a.PermissionMode = "auto"
+	}
 	if a.AllowedTools == "" {
 		a.AllowedTools = "[]"
 	}
@@ -108,10 +111,11 @@ type AgentProfilePatch struct {
 	Identity     *string
 	Provider      *string
 	Model         *string
-	PlanningMode  *string
-	ThinkingLevel *string
-	Avatar        *string
-	Color         *string
+	PlanningMode   *string
+	ThinkingLevel  *string
+	PermissionMode *string
+	Avatar         *string
+	Color          *string
 }
 
 // UpdateAgent applies a partial profile patch to an existing agent and persists
@@ -138,6 +142,9 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		}
 		if p.ThinkingLevel != nil {
 			a.ThinkingLevel = *p.ThinkingLevel
+		}
+		if p.PermissionMode != nil {
+			a.PermissionMode = *p.PermissionMode
 		}
 		if p.Avatar != nil {
 			a.Avatar = *p.Avatar

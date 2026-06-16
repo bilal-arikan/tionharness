@@ -72,6 +72,10 @@ type Request struct {
 	// ThinkingBudget, when > 0, requests extended reasoning with that many
 	// thinking tokens (providers that support it, e.g. anthropic). 0 = off.
 	ThinkingBudget int
+	// PermissionMode controls tool-use gating for providers that run their own
+	// loop. The claude CLI maps it to its --permission-mode / --dangerously-skip-
+	// permissions flags. "" | "auto" | "ask" | "read-only" (empty = auto).
+	PermissionMode string
 	// OnEvent, when set, is called by providers that run the loop internally
 	// (claude CLI) as each activity step (text/thinking/tool) becomes available,
 	// enabling step-by-step streaming to the UI. Ignored by non-streaming

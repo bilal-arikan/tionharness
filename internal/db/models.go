@@ -13,6 +13,11 @@ type Agent struct {
 	// ThinkingLevel requests extended reasoning: "" / "off" | "low" | "medium" |
 	// "high". Applied on plain (non-tool) completions; anthropic provider only.
 	ThinkingLevel string `json:"thinkingLevel"`
+	// PermissionMode gates how the agent's tool use is approved:
+	// "read-only" | "ask" | "auto". Empty defaults to "auto". For the claude-cli
+	// path this maps to the CLI's --permission-mode / --dangerously-skip-permissions
+	// flags (headless mode refuses edits without an explicit mode).
+	PermissionMode string `json:"permissionMode"`
 
 	// Visual identity for the roster avatar. Avatar holds an optional emoji/glyph
 	// rendered inside the circle; Color is an optional hex accent (e.g. "#7c3aed").
