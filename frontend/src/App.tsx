@@ -320,7 +320,11 @@ export default function App() {
           onReply: (r) => {
             const id = liveId
             setMessages((prev) => prev.map((x) => (x.id === id ? r.replyMessage : x)))
-            notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', r.replyMessage.text)
+            // Clicking the notification jumps to the source chat session.
+            notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', r.replyMessage.text, () => {
+              setView('chat')
+              selectSession(sid)
+            })
           },
           onDone: (d) => {
             setSessions((prev) =>
@@ -341,16 +345,20 @@ export default function App() {
             setMessages((prev) =>
               prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
             )
+            // Clicking the notification jumps to the logs view to inspect it.
+            notify(notifyEnabled.current, 'SwarmGo — hata', err, () => setView('logs'))
           },
         }, ac.signal)
       } catch (e) {
         // A deliberate stop/interrupt aborts the fetch: keep the partial reply
         // bubble visible and don't surface it as an error.
         if (!ac.signal.aborted) {
-          setError((e as Error).message)
+          const msg = (e as Error).message
+          setError(msg)
           setMessages((prev) =>
             prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
           )
+          notify(notifyEnabled.current, 'SwarmGo — hata', msg, () => setView('logs'))
         }
       } finally {
         setPending(false)

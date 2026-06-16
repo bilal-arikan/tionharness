@@ -52,13 +52,23 @@ export function ensureNotificationPermission(enabled: boolean) {
 }
 
 // notify shows a desktop notification when enabled, permitted, and the app is in
-// the background (no point notifying a focused window).
-export function notify(enabled: boolean, title: string, body: string) {
+// the background (no point notifying a focused window). An optional onClick runs
+// when the user clicks the notification (after focusing the window) so callers
+// can navigate to the relevant target, e.g. the source chat or the logs view.
+export function notify(enabled: boolean, title: string, body: string, onClick?: () => void) {
   if (!enabled || !('Notification' in window)) return
   if (Notification.permission !== 'granted') return
   if (document.visibilityState === 'visible') return
   try {
-    new Notification(title, { body: body.slice(0, 180) })
+    const n = new Notification(title, { body: body.slice(0, 180) })
+    if (onClick) {
+      n.onclick = () => {
+        // Bring the app to the foreground, then run the navigation callback.
+        try { window.focus() } catch { /* ignore */ }
+        onClick()
+        n.close()
+      }
+    }
   } catch {
     // ignore
   }
