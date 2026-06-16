@@ -49,6 +49,12 @@ export default function App() {
   )
   // Desktop-notification preference, read live in sendMessage without re-binding.
   const notifyEnabled = useRef(false)
+  // Streaming-turn control: whether a turn is in flight, its abort handle (stop /
+  // interrupt) and run id (steer), plus a message queued to send after it ends.
+  const [streaming, setStreaming] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
+  const runIdRef = useRef('')
+  const queuedRef = useRef('')
 
   // Apply the client-side preferences carried by app settings.
   const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; keepAwake: boolean; desktopNotifications: boolean }) => {
@@ -263,6 +269,9 @@ export default function App() {
       }
       setMessages((prev) => [...prev, optimistic])
       setPending(true)
+      const ac = new AbortController()
+      abortRef.current = ac
+      setStreaming(true)
 
       // The live bubble for the agent currently answering (multi-agent turns
       // produce several bubbles, one per agent, in order).
@@ -271,6 +280,7 @@ export default function App() {
       try {
         await api.chatStream(sid, text, agentIds, {
           onMeta: (m) => {
+            runIdRef.current = m.runId
             setMessages((prev) =>
               prev.map((x) => (x.id === optimistic.id ? m.userMessage : x)),
             )
@@ -332,18 +342,63 @@ export default function App() {
               prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
             )
           },
-        })
+        }, ac.signal)
       } catch (e) {
-        setError((e as Error).message)
-        setMessages((prev) =>
-          prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
-        )
+        // A deliberate stop/interrupt aborts the fetch: keep the partial reply
+        // bubble visible and don't surface it as an error.
+        if (!ac.signal.aborted) {
+          setError((e as Error).message)
+          setMessages((prev) =>
+            prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
+          )
+        }
       } finally {
         setPending(false)
+        setStreaming(false)
+        if (abortRef.current === ac) abortRef.current = null
       }
     },
     [activeSessionId, agents, sessions],
   )
+
+  // After a streaming turn ends, flush a message queued during it.
+  useEffect(() => {
+    if (!streaming && queuedRef.current) {
+      const q = queuedRef.current
+      queuedRef.current = ''
+      void sendMessage(q)
+    }
+  }, [streaming, sendMessage])
+
+  // ---- streaming-turn interventions ----
+
+  // Stop: abort the in-flight stream (server cancels via context).
+  const stopTurn = useCallback(() => {
+    abortRef.current?.abort()
+    setStreaming(false)
+  }, [])
+
+  // Interrupt: stop the current turn and immediately send a new message.
+  const interruptTurn = useCallback(
+    (text: string) => {
+      abortRef.current?.abort()
+      // Let the abort settle before starting the next turn.
+      setTimeout(() => void sendMessage(text), 0)
+    },
+    [sendMessage],
+  )
+
+  // Queue: hold a message to auto-send when the current turn finishes.
+  const queueMessage = useCallback((text: string) => {
+    queuedRef.current = text
+  }, [])
+
+  // Steer: deliver live guidance to the running turn (tool loop folds it in).
+  const steerTurn = useCallback((text: string) => {
+    if (runIdRef.current) {
+      api.chatControl(runIdRef.current, 'steer', text).catch((e) => setError((e as Error).message))
+    }
+  }, [])
 
   // Slash commands available in the chat composer ("/" menu).
   const chatCommands = useMemo<SlashCommand[]>(
@@ -437,8 +492,13 @@ export default function App() {
               onOpenFile={openFile}
             />
             <Composer
-              disabled={!activeSessionId || pending}
+              disabled={!activeSessionId}
+              streaming={streaming}
               onSend={sendMessage}
+              onStop={stopTurn}
+              onInterrupt={interruptTurn}
+              onQueue={queueMessage}
+              onSteer={steerTurn}
               agents={agents}
               commands={chatCommands}
             />

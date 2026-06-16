@@ -138,6 +138,14 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 				return nil, steps, err
 			}
 		}
+		// Live steering: fold any user guidance that arrived since the last
+		// iteration into the conversation before the next model call.
+		for _, m := range drainSteer(ctx) {
+			req.Messages = append(req.Messages, providers.Message{Role: providers.RoleUser, Text: steerPrefix + m})
+			st := TurnStep{Kind: StepText, Text: "↪ Yönlendirme: " + m}
+			steps = append(steps, st)
+			emit(st)
+		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
 			return nil, steps, err

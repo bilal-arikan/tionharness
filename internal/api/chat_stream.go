@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/providers"
@@ -42,7 +44,16 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
+	// Register this turn so it can be stopped or steered while running. The
+	// cancelable context ends the stream on "stop"; the steer channel feeds live
+	// guidance into the tool loop.
+	runID := uuid.NewString()
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	run := s.runs.register(runID, cancel)
+	defer s.runs.unregister(runID)
+	ctx = agent.WithSteer(ctx, run.steer)
+
 	wsp := ws(r)
 	database := wsp.DB
 
@@ -87,7 +98,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	sse("meta", map[string]any{"userMessage": userMsg})
+	sse("meta", map[string]any{"userMessage": userMsg, "runId": runID})
 
 	// Each agent answers in turn, re-reading the (growing) history so later
 	// agents see the earlier replies.

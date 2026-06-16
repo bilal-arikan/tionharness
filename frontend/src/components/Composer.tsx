@@ -4,7 +4,14 @@ import { AgentAvatar } from './AgentAvatar'
 
 interface Props {
   disabled: boolean
+  // streaming: a turn is currently in flight. Changes the action buttons:
+  // empty input → "Durdur"; filled input → Queue / Interrupt / Steer.
+  streaming?: boolean
   onSend: (text: string) => void
+  onStop?: () => void
+  onInterrupt?: (text: string) => void
+  onQueue?: (text: string) => void
+  onSteer?: (text: string) => void
   agents: Agent[]
   commands: SlashCommand[]
 }
@@ -37,7 +44,17 @@ function detectTrigger(value: string, caret: number): Trigger {
 // Composer is the chat input. Typing "@" opens an agent picker; typing "/" at
 // the start opens the slash-command palette. Arrow keys navigate, Enter/Tab
 // select, Esc closes.
-export function Composer({ disabled, onSend, agents, commands }: Props) {
+export function Composer({
+  disabled,
+  streaming = false,
+  onSend,
+  onStop,
+  onInterrupt,
+  onQueue,
+  onSteer,
+  agents,
+  commands,
+}: Props) {
   const [text, setText] = useState('')
   const [trigger, setTrigger] = useState<Trigger>(null)
   const [sel, setSel] = useState(0)
@@ -98,6 +115,20 @@ export function Composer({ disabled, onSend, agents, commands }: Props) {
     closeMenu()
   }
 
+  // Streaming-turn actions (only when a turn is in flight). Each consumes the
+  // input.
+  const act = (fn?: (t: string) => void) => {
+    const t = text.trim()
+    if (!t || !fn) return
+    fn(t)
+    setText('')
+    closeMenu()
+  }
+  const doQueue = () => act(onQueue)
+  const doInterrupt = () => act(onInterrupt)
+  const doSteer = () => act(onSteer)
+  const hasText = text.trim().length > 0
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (trigger && items.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -123,7 +154,13 @@ export function Composer({ disabled, onSend, agents, commands }: Props) {
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      send()
+      // While streaming, Enter queues the typed message (safest default) rather
+      // than interrupting the in-flight turn.
+      if (streaming) {
+        if (hasText) doQueue()
+      } else {
+        send()
+      }
     }
   }
 
@@ -170,13 +207,49 @@ export function Composer({ disabled, onSend, agents, commands }: Props) {
           placeholder="Mesaj yaz — @ ile ajan, / ile komut"
           className="max-h-40 flex-1 resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
         />
-        <button
-          onClick={send}
-          disabled={disabled || !text.trim()}
-          className="rounded-xl bg-[var(--color-accent)] px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-30"
-        >
-          Gönder
-        </button>
+        {!streaming ? (
+          <button
+            onClick={send}
+            disabled={disabled || !hasText}
+            className="rounded-xl bg-[var(--color-accent)] px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-30"
+          >
+            Gönder
+          </button>
+        ) : hasText ? (
+          // Input filled while streaming → queue / interrupt / steer.
+          <div className="flex items-end gap-1.5">
+            <button
+              onClick={doQueue}
+              title="Bu tur bitince gönder"
+              className="rounded-xl border border-[var(--color-border)] px-3 py-3 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)]"
+            >
+              Sıraya
+            </button>
+            <button
+              onClick={doInterrupt}
+              title="Turu kes ve hemen gönder"
+              className="rounded-xl bg-amber-500/90 px-3 py-3 text-sm font-medium text-white transition hover:opacity-90"
+            >
+              Kes
+            </button>
+            <button
+              onClick={doSteer}
+              title="Çalışan turu canlı yönlendir (araç döngüsünde etkili)"
+              className="rounded-xl bg-[var(--color-accent)] px-3 py-3 text-sm font-medium text-white transition hover:opacity-90"
+            >
+              Yönlendir
+            </button>
+          </div>
+        ) : (
+          // Streaming, empty input → stop.
+          <button
+            onClick={onStop}
+            title="Üretimi durdur"
+            className="rounded-xl bg-red-500/90 px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+          >
+            Durdur
+          </button>
+        )}
       </div>
     </div>
   )

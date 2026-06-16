@@ -30,6 +30,7 @@ type Server struct {
 	settings   *settings.Store
 	tun        *agent.Tunables
 	logs       *logbuf.Buffer
+	runs       *chatRuns // in-flight streaming turns (stop/steer control)
 	logger     *slog.Logger
 }
 
@@ -44,6 +45,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		settings:   store,
 		tun:        tun,
 		logs:       logs,
+		runs:       newChatRuns(),
 		logger:     logger,
 	}
 	s.applySettings()
@@ -120,6 +122,8 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/chat", s.handleChat)
 	// SSE streaming variant: emits each activity step as it occurs.
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
+	// Control an in-flight streaming turn: stop (cancel) or steer (live guidance).
+	mux.HandleFunc("POST /api/chat/control", s.handleChatControl)
 }
 
 // registerRuntimeRoutes registers autonomous runtime control + status.

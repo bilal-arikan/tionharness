@@ -11,6 +11,29 @@
 > Not: Faz 8 (MCP/Tools) kullanıcı talebiyle Faz 7'den önce yapıldı; ardından Faz 7 tamamlandı.
 > Kalan sıra: **SDK Paritesi P1/P3/P4 · Faz 9 Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Akış müdahalesi: Durdur / Sıraya / Kes / Yönlendir (steering) ✅ (2026-06-16)
+
+Token akarken kullanıcı turu **canlı kontrol edebiliyor**. Composer butonları streaming durumuna göre değişir.
+
+**Backend (kontrol kanalı):**
+- [x] `api/chat_control.go` (yeni): `chatRuns` kayıt defteri (runId → {cancel, steer chan}); `POST /api/chat/control` (`action: stop|steer`).
+- [x] `api/chat_stream.go`: tur başına `runId` üretir, **cancelable ctx** + steer chan kaydeder, `meta` event'ine `runId` ekler, ctx'i `agent.WithSteer` ile zenginleştirir.
+- [x] `agent/steer.go` (yeni): `WithSteer` ctx + `drainSteer`. `toolloop.go`: native tool döngüsünde her iterasyon başında steer mesajlarını çeker → `[Canlı kullanıcı yönlendirmesi] …` user mesajı olarak ekler + iz adımı (`↪ Yönlendirme`). (Düz/araçsız turda mid-turn etkisizdir; tool döngüsünde etkili.)
+- [x] `server.go`: `runs *chatRuns` alanı + route.
+
+**Frontend:**
+- [x] `api.ts`: `chatStream` `onMeta`'ya `runId`; `chatControl(runId, action, text)`.
+- [x] `App.tsx`: `streaming` state + `AbortController` (stop/interrupt) + `runIdRef` (steer) + `queuedRef` (done'da otomatik gönder); `stopTurn`/`interruptTurn`/`queueMessage`/`steerTurn`. Stop'ta kısmi balon korunur (abort error gizlenir).
+- [x] `Composer.tsx`: **akış yok** → Gönder; **akış + boş input** → 🔴 Durdur; **akış + dolu input** → Sıraya / Kes / Yönlendir. Akarken Enter = Sıraya.
+
+**CANLI TEST (API + Chrome):**
+- [x] Stop deterministik: SSE'den `runId` alındı → `POST /api/chat/control stop` → tur **+1.5sn**'de ctx-iptal ile sonlandı (`error` event).
+- [x] Control validasyon: bilinmeyen run → 404.
+- [x] Chrome: mesaj gönderildi → akış + yanıt geldi (uçtan uca streaming UI çalışıyor).
+- [x] `go build/vet ./...` + `tsc + vite build` temiz.
+
+> Not: Yönlendir (steer) anlamlı etkiyi **araç kullanan (agentic) turlarda** gösterir; düz tek-atış sohbette mid-turn enjekte edilemez. Stop/Interrupt/Queue her ajanda çalışır.
+
 ### Faz P2 — Built-in dosya/shell araçları (SDK paritesi) ✅ (2026-06-16)
 
 Native (anthropic/minimax) tool-use yolundaki ajanlara **yerleşik dosya sistemi araçları** ve (opsiyonel, varsayılan kapalı) **shell** aracı eklendi. Tümü workspace'in `workspace/` alt dizinine **sandbox**'lanır (path-traversal koruması). Detaylı tasarım: [09-CLAUDE-AGENT-SDK.md](09-CLAUDE-AGENT-SDK.md) (Faz P2).

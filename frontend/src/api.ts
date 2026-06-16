@@ -71,7 +71,7 @@ async function streamChat(
   message: string,
   agentIds: string[],
   handlers: {
-    onMeta?: (m: { userMessage: Message }) => void
+    onMeta?: (m: { userMessage: Message; runId: string }) => void
     onAgentStart?: (a: { agentId: string; index: number }) => void
     onStep: (step: TurnStep) => void
     onReply: (r: { replyMessage: Message }) => void
@@ -119,7 +119,7 @@ async function streamChat(
     }
     switch (event) {
       case 'meta':
-        handlers.onMeta?.(data as { userMessage: Message })
+        handlers.onMeta?.(data as { userMessage: Message; runId: string })
         break
       case 'agent':
         handlers.onAgentStart?.(data as { agentId: string; index: number })
@@ -218,7 +218,7 @@ export const api = {
     message: string,
     agentIds: string[],
     handlers: {
-      onMeta?: (m: { userMessage: Message }) => void
+      onMeta?: (m: { userMessage: Message; runId: string }) => void
       onAgentStart?: (a: { agentId: string; index: number }) => void
       onStep: (step: TurnStep) => void
       onReply: (r: { replyMessage: Message }) => void
@@ -227,6 +227,13 @@ export const api = {
     },
     signal?: AbortSignal,
   ): Promise<void> => streamChat(sessionId, message, agentIds, handlers, signal),
+
+  // Control an in-flight streaming turn: stop (cancel) or steer (live guidance).
+  chatControl: (runId: string, action: 'stop' | 'steer', text?: string) =>
+    req<{ result: string }>('/api/chat/control', {
+      method: 'POST',
+      body: JSON.stringify({ runId, action, text }),
+    }),
 
   // Tasks (kanban board).
   listTasks: () => req<Task[]>('/api/tasks'),
