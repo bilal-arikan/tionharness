@@ -766,6 +766,7 @@ export default function App() {
               messages={messages}
               pending={pending}
               agents={agents}
+              streaming={streaming && streamingSessionId === activeSessionId}
               onOpenFile={openFile}
               onOpenArtifact={openArtifact}
             />

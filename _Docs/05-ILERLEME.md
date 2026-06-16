@@ -12,6 +12,14 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Sohbette mesaj zamanı + agent çalışma süresi ✅ (2026-06-16)
+Sohbet ekranında her mesajın **gönderilme saati** ve her asistan turunun **çalışma süresi** gösterilir.
+1. **Zaman yardımcıları (`lib/time.ts`):** `clockTime` ("22:48"), `fullDateTime` (hover title), `formatDuration` ("45 sn" / "2 dk 15 sn" / "1 sa 5 dk").
+2. **Meta bileşenleri (`components/chat/MessageMeta.tsx`, yeni):** `MessageTime` (mesaj saati + tam tarih hover), `TurnDuration` (tamamlanan tur süresi "⏱ 2 dk 15 sn"), `LiveTimer` (akış sürerken her saniye tıklayan canlı sayaç "⏱ 0:45").
+3. **MessageList bağlama (`MessageList.tsx`):** Her mesajın altına rolüne göre hizalı meta satırı. Asistan çalışma süresi ≈ `mesaj.createdAt (tur sonu) − önceki mesaj.createdAt (tur başı)`; **yalnız önceki mesaj kullanıcıysa** gösterilir (enjekte edilen /summary özetleri ve ardışık asistan turları yanıltıcı boşta-süre vermesin). Akıştaki son asistan balonunda `LiveTimer` (createdAt = tur başı), tamamlanınca `TurnDuration`. Yeni prop `streaming` (`App.tsx`'ten `streaming && streamingSessionId === activeSessionId`).
+
+> Test: tsc temiz; **Chrome canlı**: mevcut oturumda tüm mesajlarda saat + doğru süreler (⏱ 6 sn…44 sn); enjekte özet mesajlarında süre gizlendi; yeni turda canlı sayaç 7 sn→31 sn tıkladı, bitince ⏱ 10 sn — doğrulandı.
+
 ### Oturum-bazlı akış göstergesi + buton kapsamı ✅ (2026-06-16)
 Sohbet akışı (streaming) durumu artık **oturuma bağlı** — önceden tek global `streaming` bayrağı tüm oturumları etkiliyordu.
 1. **Buton kapsamı fix'i (`App.tsx`):** Yeni `streamingSessionId` state'i akışın hangi oturuma ait olduğunu izler. Composer'a geçen prop `streaming && streamingSessionId === activeSessionId` oldu; `AskPrompt` de aynı koşula bağlandı. Böylece A oturumunda yanıt üretilirken B oturumuna geçince buton yanlışça "Durdur/Kes/Yönlendir" yerine doğru şekilde **"Gönder"** gösterir. (Akış başlangıcında set, `finally`/`stopTurn`'de temizlenir.)

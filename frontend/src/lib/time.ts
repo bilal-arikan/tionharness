@@ -20,6 +20,45 @@ export function relativeTime(unixSec: number, nowMs = Date.now()): string {
   return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
 }
 
+// clockTime formats a unix-seconds timestamp as a short local clock ("22:43").
+export function clockTime(unixSec: number): string {
+  if (!unixSec) return ''
+  return new Date(unixSec * 1000).toLocaleTimeString('tr-TR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+// fullDateTime formats a unix-seconds timestamp as a full local date+time, used
+// as a hover title alongside the short clock label.
+export function fullDateTime(unixSec: number): string {
+  if (!unixSec) return ''
+  return new Date(unixSec * 1000).toLocaleString('tr-TR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+// formatDuration renders a span of seconds as a compact Turkish label
+// ("45 sn", "2 dk 15 sn", "1 sa 5 dk"). Used for how long an agent turn took
+// and for the live elapsed counter of an in-flight turn.
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds))
+  if (s < MIN) return `${s} sn`
+  if (s < HOUR) {
+    const m = Math.floor(s / MIN)
+    const rem = s % MIN
+    return rem ? `${m} dk ${rem} sn` : `${m} dk`
+  }
+  const h = Math.floor(s / HOUR)
+  const m = Math.floor((s % HOUR) / MIN)
+  return m ? `${h} sa ${m} dk` : `${h} sa`
+}
+
 // Recency bucket ids, ordered newest → oldest.
 export type Bucket = 'today' | 'yesterday' | 'week' | 'month' | 'older'
 
