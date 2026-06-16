@@ -61,7 +61,12 @@ export function SessionDetailPanel({
     setTimeout(() => setCopied(false), 1500)
   }
 
-  const maxFiller = info ? Math.max(1, ...info.fillers.map((f) => f.tokens)) : 1
+  // Context window figures (/context-style): used vs. the compaction threshold,
+  // with the leftover shown as free space.
+  const ctxWindow = info ? info.contextWindow || info.contextTokens || 1 : 1
+  const ctxUsed = info ? info.contextTokens : 0
+  const ctxFree = Math.max(0, ctxWindow - ctxUsed)
+  const ctxPct = Math.round((ctxUsed / ctxWindow) * 100)
 
   return (
     <aside className="flex h-full w-80 shrink-0 flex-col overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]">
@@ -115,35 +120,51 @@ export function SessionDetailPanel({
             </div>
           </Section>
 
-          {/* Context fillers */}
-          <Section title={`Bağlamı dolduranlar · ~${formatTokens(info.contextTokens)} token`}>
-            {info.fillers.length === 0 ? (
-              <p className="text-xs text-[var(--color-text-dim)]">Bağlam boş.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {info.fillers.map((f) => (
-                  <div key={f.role}>
-                    <div className="mb-0.5 flex items-center justify-between text-[11px]">
-                      <span className="text-[var(--color-text)]">
-                        {f.label}
-                        {f.count > 1 && <span className="text-[var(--color-text-dim)]"> ·{f.count}</span>}
-                      </span>
-                      <span className="font-mono text-[var(--color-text-dim)]">~{formatTokens(f.tokens)}</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--color-bg)]">
-                      <div
-                        className="h-full rounded-full bg-[var(--color-accent)]"
-                        style={{ width: `${(f.tokens / maxFiller) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-                {info.hasSummary && (
-                  <p className="text-[10px] text-[var(--color-text-dim)]">
-                    İlk {info.summaryMsgCount} mesaj özete katlandı.
-                  </p>
-                )}
+          {/* Context window usage (/context-style) */}
+          <Section title={`Bağlam penceresi · ${formatTokens(ctxUsed)}/${formatTokens(ctxWindow)} (${ctxPct}%)`}>
+            {/* Stacked usage bar: each filler a coloured segment, remainder free. */}
+            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-bg)]">
+              {info.fillers.map((f) => (
+                <div
+                  key={f.role}
+                  title={`${f.label}: ~${formatTokens(f.tokens)}`}
+                  style={{ width: `${(f.tokens / ctxWindow) * 100}%`, backgroundColor: fillerColor(f.role) }}
+                />
+              ))}
+            </div>
+
+            <div className="mt-2.5 flex flex-col gap-1">
+              {info.fillers.map((f) => (
+                <div key={f.role} className="flex items-center gap-2 text-[11px]">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: fillerColor(f.role) }} />
+                  <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">
+                    {f.label}
+                    {f.count > 1 && <span className="text-[var(--color-text-dim)]"> ·{f.count}</span>}
+                  </span>
+                  <span className="shrink-0 font-mono text-[var(--color-text-dim)]">
+                    ~{formatTokens(f.tokens)} · {pctOf(f.tokens, ctxWindow)}%
+                  </span>
+                </div>
+              ))}
+              {/* Free space */}
+              <div className="flex items-center gap-2 text-[11px]">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-bg)]" />
+                <span className="min-w-0 flex-1 text-[var(--color-text-dim)]">Boş alan</span>
+                <span className="shrink-0 font-mono text-[var(--color-text-dim)]">
+                  ~{formatTokens(ctxFree)} · {pctOf(ctxFree, ctxWindow)}%
+                </span>
               </div>
+            </div>
+
+            {info.hasSummary && (
+              <p className="mt-2 text-[10px] text-[var(--color-text-dim)]">
+                İlk {info.summaryMsgCount} mesaj özete katlandı (~{formatTokens(info.summaryTokens)} token).
+              </p>
+            )}
+            {ctxUsed > ctxWindow && (
+              <p className="mt-1 text-[10px] text-amber-400">
+                Pencere aşıldı — sonraki turda eski turlar özete sıkıştırılır.
+              </p>
             )}
           </Section>
 
@@ -305,6 +326,30 @@ function formatBytes(bytes: number): string {
 function formatTokens(t: number): string {
   if (t < 1000) return String(t)
   return `${(t / 1000).toFixed(1)}k`
+}
+
+// pctOf returns n as a whole-number percent of total (0 when total is 0).
+function pctOf(n: number, total: number): number {
+  return total > 0 ? Math.round((n / total) * 100) : 0
+}
+
+// fillerColor maps a context bucket role to a stable segment colour for the
+// usage bar and legend.
+function fillerColor(role: string): string {
+  switch (role) {
+    case 'summary':
+      return '#f59e0b' // amber — folded history
+    case 'user':
+      return 'var(--color-accent)'
+    case 'assistant':
+      return '#10b981' // emerald
+    case 'tool':
+      return '#8b5cf6' // violet
+    case 'system':
+      return '#64748b' // slate
+    default:
+      return '#94a3b8'
+  }
 }
 
 function formatDate(unixSec: number): string {

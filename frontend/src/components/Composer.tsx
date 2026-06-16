@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Agent, SlashCommand } from '../types'
 import { AgentAvatar } from './AgentAvatar'
 
@@ -12,9 +12,23 @@ interface Props {
   onInterrupt?: (text: string) => void
   onQueue?: (text: string) => void
   onSteer?: (text: string) => void
+  // Per-turn reasoning level ('' = agent default). Picked from a small menu in
+  // the composer and applied to the next message.
+  thinkingLevel?: string
+  onThinkingLevelChange?: (v: string) => void
   agents: Agent[]
   commands: SlashCommand[]
 }
+
+// Reasoning levels offered in the composer picker. '' defers to the agent's own
+// ThinkingLevel; the rest override it for the turn (see chatReq.ThinkingLevel).
+const THINKING_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: '', label: 'Oto', hint: 'Ajanın kendi ayarı' },
+  { value: 'off', label: 'Kapalı', hint: 'Düşünme yok' },
+  { value: 'low', label: 'Düşük', hint: 'Kısa akıl yürütme' },
+  { value: 'medium', label: 'Orta', hint: 'Dengeli' },
+  { value: 'high', label: 'Yüksek', hint: 'Derin akıl yürütme' },
+]
 
 // Trigger detection: what (if any) autocomplete menu the caret is currently in.
 type Trigger =
@@ -52,6 +66,8 @@ export function Composer({
   onInterrupt,
   onQueue,
   onSteer,
+  thinkingLevel = '',
+  onThinkingLevelChange,
   agents,
   commands,
 }: Props) {
@@ -198,6 +214,7 @@ export function Composer({
       )}
 
       <div className="flex w-full items-end gap-2">
+        <ThinkingPicker value={thinkingLevel} onChange={onThinkingLevelChange} />
         <textarea
           ref={taRef}
           value={text}
@@ -251,6 +268,73 @@ export function Composer({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+// ThinkingPicker is the composer's reasoning-level selector: a compact button
+// (🧠 + current label) that opens a small menu above it. The choice applies to
+// the next message; the menu closes on select or outside click.
+function ThinkingPicker({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange?: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const current = THINKING_OPTIONS.find((o) => o.value === value) ?? THINKING_OPTIONS[0]
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title={`Düşünme seviyesi: ${current.label} — ${current.hint}`}
+        className={`flex items-center gap-1 rounded-xl border px-2.5 py-3 text-sm transition ${
+          value
+            ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+            : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+        }`}
+      >
+        <span>🧠</span>
+        <span className="hidden sm:inline">{current.label}</span>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full left-0 mb-2 w-56 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
+          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+            Düşünme seviyesi
+          </div>
+          {THINKING_OPTIONS.map((o) => (
+            <button
+              key={o.value || 'auto'}
+              onClick={() => {
+                onChange?.(o.value)
+                setOpen(false)
+              }}
+              className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
+                o.value === value
+                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'
+              }`}
+            >
+              <span className="font-medium text-[var(--color-text)]">{o.label}</span>
+              <span className="truncate text-xs opacity-60">{o.hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

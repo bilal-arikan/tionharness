@@ -2,11 +2,43 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/tools"
 )
+
+// artifactsContextBlock builds a system-prompt section listing the artifacts a
+// session already has, so the agent can revise them with update_artifact (by id)
+// instead of creating duplicates. Returns "" when the session has none. Kept in
+// the dynamic (uncached) part of the prompt since it changes as artifacts grow.
+func artifactsContextBlock(ctx context.Context, database *db.DB, sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	arts, err := database.ListArtifacts(ctx, sessionID)
+	if err != nil || len(arts) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Artifacts in this session\n")
+	b.WriteString("You have already created these artifacts. To revise one, call update_artifact with its id and the FULL new content — do not create a duplicate. Create a new artifact only for genuinely new content.\n")
+	const max = 30
+	for i, a := range arts {
+		if i >= max {
+			fmt.Fprintf(&b, "- … and %d more\n", len(arts)-max)
+			break
+		}
+		fmt.Fprintf(&b, "- id=%s · %q · kind=%s", a.ID, a.Title, a.Kind)
+		if a.Language != "" {
+			b.WriteString("/" + a.Language)
+		}
+		fmt.Fprintf(&b, " · v%d\n", a.Version)
+	}
+	return strings.TrimSpace(b.String())
+}
 
 // artifactSink adapts a workspace DB into a tools.ArtifactSink for one chat
 // turn, stamping every artifact with its origin session and creating agent.

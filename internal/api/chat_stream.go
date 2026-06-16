@@ -132,6 +132,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// Each agent answers in turn, re-reading the (growing) history so later
 	// agents see the earlier replies.
 	for i, agentRow := range agents {
+		// Per-turn reasoning override (local copy only — never persisted).
+		if req.ThinkingLevel != "" {
+			agentRow.ThinkingLevel = req.ThinkingLevel
+		}
 		provider, perr := s.providers.Get(agentRow.Provider)
 		if perr != nil {
 			sse("error", map[string]string{"error": perr.Error()})
@@ -167,6 +171,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 		if prep.Summary != "" {
 			dynamic = strings.TrimSpace(dynamic + "\n\n## Conversation summary so far\n" + prep.Summary)
+		}
+		// Surface the session's existing artifacts so the agent revises them
+		// (update_artifact by id) instead of creating duplicates.
+		if ab := artifactsContextBlock(ctx, database, session.ID); ab != "" {
+			dynamic = strings.TrimSpace(dynamic + "\n\n" + ab)
 		}
 
 		llmReq := providers.Request{Model: agentRow.Model, System: system, SystemDynamic: dynamic, Messages: prep.Messages}

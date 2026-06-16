@@ -85,6 +85,7 @@ async function streamChat(
     onError: (err: string) => void
   },
   signal?: AbortSignal,
+  thinkingLevel?: string,
 ): Promise<void> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (activeWorkspaceId) headers['X-Workspace-Id'] = activeWorkspaceId
@@ -92,7 +93,7 @@ async function streamChat(
   const res = await fetch('/api/chat/stream', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ sessionId, message, agentIds }),
+    body: JSON.stringify({ sessionId, message, agentIds, thinkingLevel }),
     signal,
   })
   if (!res.ok || !res.body) {
@@ -280,7 +281,8 @@ export const api = {
       onError: (err: string) => void
     },
     signal?: AbortSignal,
-  ): Promise<void> => streamChat(sessionId, message, agentIds, handlers, signal),
+    thinkingLevel?: string,
+  ): Promise<void> => streamChat(sessionId, message, agentIds, handlers, signal, thinkingLevel),
 
   // Control an in-flight streaming turn: stop (cancel), steer (live guidance) or
   // answer (reply to a blocked ask_user prompt).

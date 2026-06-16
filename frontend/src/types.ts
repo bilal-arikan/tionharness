@@ -251,6 +251,7 @@ export interface SessionInfo {
   fileCount: number
 
   contextTokens: number
+  contextWindow: number
   hasSummary: boolean
   summaryMsgCount: number
   summaryTokens: number

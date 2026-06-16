@@ -81,6 +81,15 @@ export default function App() {
   // streaming-turn actions (Durdur/Kes/Yönlendir) when the user is viewing this
   // session; switching to another session shows a normal "Gönder" button.
   const [streamingSessionId, setStreamingSessionId] = useState('')
+  // Per-turn reasoning level picked in the composer ('' = use the agent's own
+  // setting). Persisted so the choice carries across messages and reloads.
+  const [thinkingLevel, setThinkingLevel] = useState(
+    () => localStorage.getItem('swarmgo.thinkingLevel') ?? '',
+  )
+  const setThinkingLevelPersist = useCallback((v: string) => {
+    setThinkingLevel(v)
+    localStorage.setItem('swarmgo.thinkingLevel', v)
+  }, [])
   const abortRef = useRef<AbortController | null>(null)
   const runIdRef = useRef('')
   const queuedRef = useRef('')
@@ -550,7 +559,7 @@ export default function App() {
             // Clicking the notification jumps to the logs view to inspect it.
             notify(notifyEnabled.current, 'SwarmGo — hata', err, () => setView('logs'))
           },
-        }, ac.signal)
+        }, ac.signal, thinkingLevel)
       } catch (e) {
         // A deliberate stop/interrupt aborts the fetch: keep the partial reply
         // bubble visible and don't surface it as an error.
@@ -569,7 +578,7 @@ export default function App() {
         if (abortRef.current === ac) abortRef.current = null
       }
     },
-    [activeSessionId, agents, sessions],
+    [activeSessionId, agents, sessions, thinkingLevel],
   )
 
   // After a streaming turn ends, flush a message queued during it.
@@ -781,6 +790,8 @@ export default function App() {
               onInterrupt={interruptTurn}
               onQueue={queueMessage}
               onSteer={steerTurn}
+              thinkingLevel={thinkingLevel}
+              onThinkingLevelChange={setThinkingLevelPersist}
               agents={agents}
               commands={chatCommands}
             />

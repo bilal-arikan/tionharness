@@ -70,6 +70,14 @@ func (m *Manager) limits() (maxTokens, keepRecent int) {
 	return m.maxTokens, m.keepRecent
 }
 
+// MaxTokens reports the compaction threshold — the effective context window the
+// UI meters usage against.
+func (m *Manager) MaxTokens() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.maxTokens
+}
+
 // Prepared is the result of budgeting a session for one turn.
 type Prepared struct {
 	Summary       string              // rolling summary to inject into the system prompt ("" if none)

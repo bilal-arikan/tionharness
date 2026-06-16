@@ -18,6 +18,11 @@ type chatReq struct {
 	// in the UI). Empty → the session's default agent answers. Multiple → each
 	// answers in order, seeing the prior agents' replies.
 	AgentIDs []string `json:"agentIds"`
+	// ThinkingLevel optionally overrides the responding agent's reasoning level
+	// for this single turn ("low" | "medium" | "high" | "off"). Empty = use the
+	// agent's own setting. Only affects providers with extended-thinking support
+	// (anthropic, non-tool path); others ignore it.
+	ThinkingLevel string `json:"thinkingLevel"`
 }
 
 type chatResp struct {
@@ -65,6 +70,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
+	}
+	// Per-turn reasoning override (local copy only — never persisted).
+	if req.ThinkingLevel != "" {
+		agent.ThinkingLevel = req.ThinkingLevel
 	}
 
 	provider, err := s.providers.Get(agent.Provider)
@@ -116,6 +125,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	if prep.Summary != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n## Conversation summary so far\n" + prep.Summary)
+	}
+	// Let the agent see the session's existing artifacts so it revises them
+	// (update_artifact by id) instead of creating duplicates.
+	if ab := artifactsContextBlock(ctx, database, session.ID); ab != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + ab)
 	}
 
 	llmReq := providers.Request{

@@ -30,6 +30,7 @@ type sessionInfoResp struct {
 	FileCount int    `json:"fileCount"`
 
 	ContextTokens   int  `json:"contextTokens"`
+	ContextWindow   int  `json:"contextWindow"` // compaction threshold (effective window)
 	HasSummary      bool `json:"hasSummary"`
 	SummaryMsgCount int  `json:"summaryMsgCount"`
 	SummaryTokens   int  `json:"summaryTokens"`
@@ -121,6 +122,9 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		pending = history[session.SummaryMsgCount:]
 	}
 	resp.ContextTokens = conversation.EstimateTokens(session.Summary, pending)
+	// Effective window = the compaction threshold pushed into the conversation
+	// manager; once the pending window exceeds it, older turns fold into summary.
+	resp.ContextWindow = s.settings.Get().MaxContextTokens
 
 	// Context fillers: summary bucket + per-role token estimate of the pending
 	// window, sorted by token weight descending.

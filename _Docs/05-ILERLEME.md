@@ -12,6 +12,14 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Composer'da tur-bazlı düşünme seviyesi seçici ✅ (2026-06-16)
+Mesaj gönderme alanına, o tur için **düşünme (reasoning) seviyesini** seçtiren bir menü eklendi.
+1. **UI (`Composer.tsx`):** Textarea'nın solunda `🧠` butonu (mevcut seviyeyi gösterir, seçiliyse accent). Tıklayınca üstte açılan menü: **Oto** (ajanın kendi ayarı), **Kapalı**, **Düşük**, **Orta**, **Yüksek**. Dışarı tıkla-kapat. Seçim `App.tsx`'te `thinkingLevel` state'inde tutulur ve **localStorage**'a yazılır (mesajlar/yenileme arası kalıcı). Props: `thinkingLevel` + `onThinkingLevelChange`.
+2. **Akış (`api.ts`):** `streamChat`/`chatStream` artık `thinkingLevel` parametresi alıp `/api/chat/stream` gövdesine ekler.
+3. **Backend (`chat.go` + `chat_stream.go`):** `chatReq.ThinkingLevel` (`"low"|"medium"|"high"|"off"`, boş = ajan ayarı). Handler, yanıtlayan ajanın **yerel kopyasının** `ThinkingLevel`'ini tur başına override eder (kalıcı değil) → mevcut `thinkingBudgetForLevel` → `req.ThinkingBudget`. Yalnız **anthropic araçsız yolda** etki eder; claude-cli/minimax `ThinkingBudget`'i yok sayar.
+
+> Test: tsc + go build yeşil; **Chrome canlı**: seçici açıldı, "Yüksek" seçildi (accent aktif), yenileme sonrası korundu (localStorage), mesaj hatasız gönderildi. Not: backend override'ı etkin olması için sunucu yeniden başlatılmalı; görsel düşünme etkisi yalnız anthropic anahtarlı ajanlarda görülür.
+
 ### Sohbette mesaj zamanı + agent çalışma süresi ✅ (2026-06-16)
 Sohbet ekranında her mesajın **gönderilme saati** ve her asistan turunun **çalışma süresi** gösterilir.
 1. **Zaman yardımcıları (`lib/time.ts`):** `clockTime` ("22:48"), `fullDateTime` (hover title), `formatDuration` ("45 sn" / "2 dk 15 sn" / "1 sa 5 dk").
@@ -160,6 +168,20 @@ geneli aktivasyon + ajan-bazlı seçim.
 > Not: claude-cli yolu sunucu-bazlı `--allowedTools` ile kendi döngüsünü sürdüğünden per-tool filtre
 > native (anthropic/minimax) yola + katalog/MCP listesine uygulanır (SDK parite deseni). Tarayıcı DOM
 > testi sıradaki doğrulama adımı (API + unit ile çekirdek mantık doğrulandı).
+
+### Faz A1.1 — Artifact: manuel düzenleme + sohbet bağlamına enjeksiyon ✅ (2026-06-16)
+
+Artifact sistemine iki ek yetenek:
+
+1. **Panelden manuel düzenleme / yeni sürüm / yeni oluşturma** (`ArtifactsPanel.tsx`): görüntüleyici header'ında **✎ Düzenle** → içerik `textarea` + başlık/tür/dil alanları + değişiklik notu, **Kaydet/İptal**. İçerik değişince `PUT /api/artifacts/{id} {content,note}` yeni **sürüm** açar (eski sürüm `revisions`'a arşivlenir); yalnız başlık/tür değişince meta güncellenir, **sürüm açılmaz** (seçici patch). Liste header'ında **+ Yeni** → boş artifact oluşturup doğrudan düzenleme moduna girer.
+2. **Sohbet bağlamına artifact enjeksiyonu** (`api/artifacts.go` `artifactsContextBlock` → `chat.go` + `chat_stream.go` `dynamic` suffix): oturumdaki mevcut artifactlar (id/başlık/tür/sürüm) sistem promptunun dinamik (cache'siz) kısmına "## Artifacts in this session" bloğu olarak eklenir → ajan `update_artifact` ile **id üzerinden** revize eder, kopya oluşturmaz. Boş oturumda blok yok; session-scoped (başka oturumun artifactları sızmaz).
+
+**CANLI TEST (API + unit):**
+- [x] UI API yolu: Yeni→v1(boş içerik), içerik düzenle→**v2**+1 revizyon, yalnız-başlık→**v2 kalır** (sürüm açmadı), delete=200.
+- [x] `artifacts_test.go::TestArtifactsContextBlock`: blok id/başlık/`update_artifact` içerir, boş oturumda boş, başka oturumu sızdırmaz — **PASS**.
+- [x] `go build/vet/test ./...` + frontend `tsc --noEmit` + `vite build` temiz.
+
+> Not: Chrome/Playwright canlı UI testi bu turda yapılamadı (mcp-gateway bağlantısı kopuktu); doğrulama UI'ın yaptığı **tam API çağrıları** + Go unit testi + temiz derleme üzerinden yapıldı. UI bileşeni tsc/build'den temiz geçiyor.
 
 ### Faz A1 — Artifact sistemi ✅ (2026-06-16)
 
