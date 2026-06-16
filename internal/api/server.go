@@ -212,6 +212,8 @@ func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
 	mux.HandleFunc("POST /api/settings/test-provider", s.handleTestProvider)
 	mux.HandleFunc("GET /api/catalog", s.handleCatalog)
+	mux.HandleFunc("GET /api/prompts", s.handleListPrompts)
+	mux.HandleFunc("POST /api/prompts/reveal", s.handleRevealPrompts)
 }
 
 // registerMemoryRoutes registers per-agent knowledge (documents, journal,

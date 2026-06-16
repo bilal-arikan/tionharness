@@ -5,6 +5,7 @@ import { THEME_PRESETS } from '../lib/themePresets'
 import { STEP_KINDS } from '../lib/stepKinds'
 import type {
   AppSettings,
+  PromptInfo,
   ProviderTestResult,
   SettingsPatch,
   SlashCommand,
@@ -132,9 +133,14 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
 
   const [saving, setSaving] = useState(false)
 
+  // Built-in runtime prompts (read-only) shown in the Komutlar category.
+  const [prompts, setPrompts] = useState<PromptInfo[]>([])
+  const [promptsDir, setPromptsDir] = useState('')
+
   useEffect(() => {
     api.getSettings().then((s) => { setDraft(s); setOriginal(s) }).catch((e) => onError((e as Error).message))
     api.getWorkspaceSettings().then((s) => { setWs(s); setWsOrig(s) }).catch((e) => onError((e as Error).message))
+    api.getPrompts().then((p) => { setPrompts(p.prompts); setPromptsDir(p.dir) }).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -466,6 +472,44 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
                       ))}
                     </div>
                   )}
+
+                  {/* Read-only view of the built-in prompts behind the commands. */}
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-sm font-semibold">Prompt'lar (salt-okunur)</span>
+                    <button
+                      onClick={() => api.revealPrompts().catch((e) => onError((e as Error).message))}
+                      disabled={!promptsDir}
+                      title={promptsDir || 'Klasör yolu bilinmiyor'}
+                      className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)] disabled:opacity-40"
+                    >
+                      📂 Klasörü aç
+                    </button>
+                  </div>
+                  <p className="text-xs text-[var(--color-text-dim)]">
+                    Bu promptlar uygulamaya gömülüdür ve buradan düzenlenemez. Kaynak klasör:{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1 break-all">{promptsDir || '—'}</code>
+                  </p>
+                  {prompts.map((p) => (
+                    <div key={p.key} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-[var(--color-text)]">{p.label}</span>
+                        <code className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 text-[10px] text-[var(--color-text-dim)]">{p.file}</code>
+                      </div>
+                      {p.system && (
+                        <div className="mt-2">
+                          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">System</div>
+                          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.system}</pre>
+                        </div>
+                      )}
+                      {p.user && (
+                        <div className="mt-2">
+                          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">User turn</div>
+                          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.user}</pre>
+                        </div>
+                      )}
+                      {p.note && <p className="mt-2 text-xs text-[var(--color-text-dim)]">{p.note}</p>}
+                    </div>
+                  ))}
                 </>
               )}
 

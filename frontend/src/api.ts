@@ -31,6 +31,7 @@ import type {
   WorkspaceSettingsPatch,
   LogEntry,
   CatalogEntry,
+  PromptsResponse,
   AppEvent,
   Artifact,
   ArtifactKind,
@@ -463,6 +464,10 @@ export const api = {
 
   // Provider/model catalog (for agent + settings pickers).
   getCatalog: () => req<CatalogEntry[]>('/api/catalog'),
+
+  // Built-in runtime prompts (read-only) + the source folder that holds them.
+  getPrompts: () => req<PromptsResponse>('/api/prompts'),
+  revealPrompts: () => req<{ path: string }>('/api/prompts/reveal', { method: 'POST' }),
 
   // Per-workspace settings (active workspace via X-Workspace-Id header).
   getWorkspaceSettings: () => req<WorkspaceSettings>('/api/workspace-settings'),

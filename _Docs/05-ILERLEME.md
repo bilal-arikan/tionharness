@@ -12,6 +12,14 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Komutlar ekranında salt-okunur prompt görüntüleyici ✅ (2026-06-16)
+Ayarlar → **Komutlar** kategorisine, komutların arkasındaki gömülü promptları **salt-okunur** gösteren bir bölüm + **klasörü aç** butonu eklendi:
+
+1. **Backend** (`internal/agent/prompts.go`): `Prompts()` summary/reflect/title promptlarını (system + user-turn şablonu + not + kaynak dosya adı) döndürür; `PromptsDir()` `runtime.Caller` ile prompt kaynak klasörünü (yerel derlemede `internal/agent`) verir. `GET /api/prompts` (`internal/api/prompts.go`) bunları + `dir`'i döner; `POST /api/prompts/reveal` klasörü Explorer'da açar (session-reveal ile aynı `explorer.exe` deseni). Route'lar `registerSettingsRoutes`'ta.
+2. **Frontend** (`SettingsPanel.tsx`): Komutlar kategorisi prompt listesini `api.getPrompts()` ile çeker; her prompt için System/User turn blokları (`<pre>`, salt-okunur), kaynak dosya rozeti ve not gösterilir. **📂 Klasörü aç** butonu `api.revealPrompts()` çağırır; kaynak klasör yolu da gösterilir. Düzenleme yok — promptlar binary'ye gömülü.
+
+> Doğrulama: `go build ./...` + `tsc` yeşil; `GET /api/prompts` 3 prompt + doğru `dir` döndü; Chrome canlı: Komutlar ekranında promptlar + klasör yolu + "Klasörü aç" butonu render, butona basınca backend hatasız Explorer açtı.
+
 ### Extended thinking native parite (streaming + Complete) ✅ (2026-06-16)
 Extended reasoning artık **native (anthropic) yolda** da uçtan uca yüzeyleniyor — önceden yalnız claude-cli `thinking` bloğunu dolduruyordu; native `Stream` sadece `text_delta` ayrıştırdığından düşünme kayboluyordu.
 

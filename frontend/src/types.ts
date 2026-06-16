@@ -459,6 +459,22 @@ export type WorkspaceSettingsPatch = Partial<
   Pick<WorkspaceSettings, 'name' | 'instructions' | 'icon' | 'color' | 'defaultProvider' | 'defaultModel' | 'pauseAutonomy'>
 >
 
+// A built-in runtime prompt (summary/reflect/title), shown read-only in the
+// Komutlar settings screen.
+export interface PromptInfo {
+  key: string
+  label: string
+  file: string
+  system: string
+  user: string
+  note: string
+}
+
+export interface PromptsResponse {
+  dir: string
+  prompts: PromptInfo[]
+}
+
 // A captured log record (application + all workspaces).
 export interface LogEntry {
   seq: number
