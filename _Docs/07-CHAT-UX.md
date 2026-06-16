@@ -90,6 +90,10 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   dimmed/italik). Varsayılan kapalı.
 - `ActivityCard.tsx` — tek tool çağrısı: ikon + etiket + tek satır niyet
   (başlıkta), açınca girdi/çıktı. Edit/Write çıktısı diff olarak. Hata kırmızı.
+- `DiffCard.tsx` — `kind:diff` adımı için özel dosya-değişikliği kartı: ✏️ +
+  eylem (Oluştur/Düzenle/Yaz) + tıklanabilir yol + `+N −M` satır sayıları
+  (başlıkta), açınca `DiffView` ile birleşik patch. `write_file`/`edit_file`
+  çağrıları `todo_write` gibi generic tool satırı yerine bu kart olur.
 - `PathText.tsx` — düz metindeki dosya yollarını tıklanabilir çiplere çevirir
   (`lib/paths.ts` tespit eder).
 

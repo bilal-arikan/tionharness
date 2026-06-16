@@ -5,6 +5,7 @@ import (
 
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal/swarmgo/internal/tools"
 )
 
 // maxToolIters bounds the native agentic loop so a misbehaving model can't spin
@@ -183,17 +184,21 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		for _, call := range resp.ToolCalls {
 			r.logger.Info("tool call", "agent", agent.ID, "tool", call.Name)
 
+			// Attach a per-call diff sink so file-mutating built-ins (write_file /
+			// edit_file) can surface a structured diff for the UI card below.
+			callCtx, diffs := tools.WithDiffSink(ctx)
+
 			// Stream long-running tool output live as tool_delta chunks (keyed by
 			// the call id) when the tool and the live sink both support it.
 			var res providers.ToolResult
 			streamed := false
 			if onStep != nil && call.ID != "" && reg.CanStream(call.Name) {
-				res = reg.CallStream(ctx, call, func(chunk string) {
+				res = reg.CallStream(callCtx, call, func(chunk string) {
 					streamed = true
 					emit(TurnStep{Kind: StepToolDelta, ID: call.ID, Tool: call.Name, Output: chunk})
 				})
 			} else {
-				res = reg.Call(ctx, call)
+				res = reg.Call(callCtx, call)
 			}
 			// Retract the live streaming placeholder; the final card (or the
 			// cancellation error below) takes its place.
@@ -221,6 +226,16 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 					st.Kind = StepTodo
 					st.Todos = todos
 				}
+			}
+			// A file mutation renders as a diff card instead of a generic tool row.
+			if d := diffs.Take(); d != nil && !res.IsError {
+				st.Kind = StepDiff
+				st.Tool = call.Name
+				st.Path = d.Path
+				st.Added = d.Added
+				st.Removed = d.Removed
+				st.Patch = d.Patch
+				st.Created = d.Created
 			}
 			steps = append(steps, st)
 			emit(st)

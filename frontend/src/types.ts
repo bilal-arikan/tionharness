@@ -71,6 +71,7 @@ export type StepKind =
   | 'steer'
   | 'tool_delta'
   | 'tombstone'
+  | 'diff'
 
 export interface TodoItem {
   content: string
@@ -94,6 +95,13 @@ export interface TurnStep {
   id?: string
   // Target step id a 'tombstone' retracts.
   ref?: string
+  // 'diff' step payload: changed file path, added/removed line counts, an
+  // optional unified patch, and whether the file was newly created.
+  path?: string
+  added?: number
+  removed?: number
+  patch?: string
+  created?: boolean
 }
 
 // A slash command surfaced in the chat composer ("/" menu).

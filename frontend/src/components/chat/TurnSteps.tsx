@@ -8,6 +8,7 @@ import { ErrorStep } from './ErrorStep'
 import { SteerStep } from './SteerStep'
 import { ToolDeltaStep } from './ToolDeltaStep'
 import { ArtifactCard } from './ArtifactCard'
+import { DiffCard } from './DiffCard'
 
 interface Props {
   steps: TurnStep[]
@@ -29,6 +30,7 @@ export function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
       {steps.map((step, i) => {
         if (step.kind === 'thinking') return <ThinkingBlock key={i} text={step.text || ''} />
         if (step.kind === 'todo') return <TodoCard key={i} step={step} />
+        if (step.kind === 'diff') return <DiffCard key={i} step={step} onOpenFile={onOpenFile} />
         if (step.kind === 'recovery') return <RecoveryStep key={i} step={step} />
         if (step.kind === 'error') return <ErrorStep key={i} step={step} />
         if (step.kind === 'steer') return <SteerStep key={i} step={step} />

@@ -1,0 +1,63 @@
+import { useState } from 'react'
+import type { TurnStep } from '../../types'
+import { DiffView } from '../markdown/DiffView'
+
+interface Props {
+  step: TurnStep
+  onOpenFile?: (path: string) => void
+}
+
+// A friendly verb for the mutating tool that produced this diff.
+function actionLabel(step: TurnStep): string {
+  if (step.created) return 'Oluştur'
+  if (step.tool === 'edit_file') return 'Düzenle'
+  if (step.tool === 'write_file') return 'Yaz'
+  return 'Değişiklik'
+}
+
+// DiffCard renders a single file mutation (write_file / edit_file) as a compact
+// row: ✏️ icon, action label, clickable path and the +added/−removed line
+// counts — expandable to the full unified patch. Mirrors the file-change cards
+// in External Agent / Claude Code chat.
+export function DiffCard({ step, onOpenFile }: Props) {
+  const [open, setOpen] = useState(false)
+  const path = step.path || ''
+  const added = step.added || 0
+  const removed = step.removed || 0
+  const hasPatch = !!step.patch?.trim()
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <button
+        onClick={() => setOpen((o) => hasPatch ? !o : o)}
+        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${
+          hasPatch ? 'hover:bg-[var(--color-surface-2)]' : 'cursor-default'
+        }`}
+      >
+        <span className="shrink-0">✏️</span>
+        <span className="shrink-0 font-medium text-[var(--color-text)]">{actionLabel(step)}</span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenFile?.(path) }}
+          className="min-w-0 flex-1 truncate text-left font-mono text-[0.92em] text-[var(--color-accent)] underline decoration-dotted underline-offset-2 hover:opacity-80"
+        >
+          {path}
+        </button>
+        {step.created && (
+          <span className="shrink-0 rounded bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
+            yeni
+          </span>
+        )}
+        {added > 0 && <span className="shrink-0 text-green-400">+{added}</span>}
+        {removed > 0 && <span className="shrink-0 text-red-400">−{removed}</span>}
+        {hasPatch && <span className="ml-1 shrink-0 opacity-50">{open ? '▾' : '▸'}</span>}
+      </button>
+
+      {open && hasPatch && (
+        <div className="border-t border-[var(--color-border)] p-2">
+          <DiffView text={step.patch || ''} />
+        </div>
+      )}
+    </div>
+  )
+}

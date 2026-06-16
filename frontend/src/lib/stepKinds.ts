@@ -111,4 +111,13 @@ export const STEP_KINDS: StepKindInfo[] = [
     description:
       'Daha önce yayılan canlı bir adımı UI’dan kaldıran kontrol sinyali (Ref hedef adım ID’si). Kendisi render edilmez. Akış bitince placeholder’ı geri çeker; iptalde de kullanılır.',
   },
+  {
+    kind: 'diff',
+    label: 'Dosya değişikliği',
+    icon: '✏️',
+    persisted: true,
+    status: 'active',
+    description:
+      'write_file / edit_file ile yapılan dosya değişikliği; yol + eklenen/silinen satır sayısı ve açılabilir birleşik diff (patch) olarak gösterilir.',
+  },
 ]

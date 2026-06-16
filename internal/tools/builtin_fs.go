@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	fsReadMaxBytes  = 256 * 1024 // cap a single file read fed back to the model
-	fsGrepMaxHits   = 200        // cap grep matches returned
-	fsGlobMaxHits   = 500        // cap glob results returned
-	fsListMaxItems  = 1000       // cap directory listing entries
+	fsReadMaxBytes = 256 * 1024 // cap a single file read fed back to the model
+	fsGrepMaxHits  = 200        // cap grep matches returned
+	fsGlobMaxHits  = 500        // cap glob results returned
+	fsListMaxItems = 1000       // cap directory listing entries
 )
 
 // FSReadFileTool reads a UTF-8 text file from the workspace sandbox.
@@ -95,7 +95,7 @@ func (FSWriteFileTool) Def() providers.ToolDef {
 	}
 }
 
-func (t FSWriteFileTool) Call(_ context.Context, input json.RawMessage) (string, error) {
+func (t FSWriteFileTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var args struct {
 		Path    string `json:"path"`
 		Content string `json:"content"`
@@ -107,12 +107,17 @@ func (t FSWriteFileTool) Call(_ context.Context, input json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
+	// Capture the pre-write content (absent = new file) so we can surface a diff.
+	old, statErr := os.ReadFile(abs)
+	created := statErr != nil
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return "", err
 	}
 	if err := os.WriteFile(abs, []byte(args.Content), 0o644); err != nil {
 		return "", err
 	}
+	added, removed, patch := lineDiff(string(old), args.Content)
+	recordDiff(ctx, FileDiff{Path: t.sb.Rel(abs), Added: added, Removed: removed, Patch: patch, Created: created})
 	return fmt.Sprintf("Wrote %d bytes to %s", len(args.Content), t.sb.Rel(abs)), nil
 }
 
@@ -140,7 +145,7 @@ func (FSEditFileTool) Def() providers.ToolDef {
 	}
 }
 
-func (t FSEditFileTool) Call(_ context.Context, input json.RawMessage) (string, error) {
+func (t FSEditFileTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var args struct {
 		Path       string `json:"path"`
 		OldString  string `json:"old_string"`
@@ -161,22 +166,25 @@ func (t FSEditFileTool) Call(_ context.Context, input json.RawMessage) (string, 
 	if err != nil {
 		return "", err
 	}
-	content := string(data)
-	n := strings.Count(content, args.OldString)
+	old := string(data)
+	n := strings.Count(old, args.OldString)
 	if n == 0 {
 		return "", fmt.Errorf("old_string not found in %s", t.sb.Rel(abs))
 	}
 	if n > 1 && !args.ReplaceAll {
 		return "", fmt.Errorf("old_string occurs %d times in %s; set replace_all or make it unique", n, t.sb.Rel(abs))
 	}
+	var content string
 	if args.ReplaceAll {
-		content = strings.ReplaceAll(content, args.OldString, args.NewString)
+		content = strings.ReplaceAll(old, args.OldString, args.NewString)
 	} else {
-		content = strings.Replace(content, args.OldString, args.NewString, 1)
+		content = strings.Replace(old, args.OldString, args.NewString, 1)
 	}
 	if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
 		return "", err
 	}
+	added, removed, patch := lineDiff(old, content)
+	recordDiff(ctx, FileDiff{Path: t.sb.Rel(abs), Added: added, Removed: removed, Patch: patch})
 	return fmt.Sprintf("Replaced %d occurrence(s) in %s", n, t.sb.Rel(abs)), nil
 }
 

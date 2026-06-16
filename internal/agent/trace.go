@@ -50,6 +50,10 @@ const (
 	// remove a previously emitted live step: Ref names the target step's ID. Used
 	// to retract a stale/cancelled live step without resending the whole trace.
 	StepTombstone StepKind = "tombstone"
+	// StepDiff is a file mutation (write_file / edit_file) rendered as a diff card
+	// — path plus added/removed line counts and an optional unified patch — rather
+	// than a generic tool row. The payload lives in Path/Added/Removed/Patch.
+	StepDiff StepKind = "diff"
 )
 
 // TodoItem is one entry in a StepTodo checklist (mirrors the todo_write input).
@@ -84,6 +88,13 @@ type TurnStep struct {
 	ID string `json:"id,omitempty"`
 	// Ref is the target step ID a StepTombstone retracts.
 	Ref string `json:"ref,omitempty"`
+	// StepDiff payload: the changed file path, its added/removed line counts, an
+	// optional unified patch, and whether the file was newly created.
+	Path    string `json:"path,omitempty"`
+	Added   int    `json:"added,omitempty"`
+	Removed int    `json:"removed,omitempty"`
+	Patch   string `json:"patch,omitempty"`
+	Created bool   `json:"created,omitempty"`
 }
 
 // parseTodos extracts the checklist items from a todo_write tool call's input
