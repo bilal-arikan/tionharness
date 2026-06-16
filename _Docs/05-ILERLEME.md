@@ -12,6 +12,14 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### `/reflect` düzeltmesi + `/compact` komutu ✅ (2026-06-16)
+İki sohbet "/" komutu eklendi/düzeltildi (backend `internal/api/summary.go` + `internal/conversation/manager.go`):
+1. **`/reflect` (düzeltme):** Önceden `POST /api/agents/{id}/reflect` çağırıp **hiçbir görsel sonuç** vermiyordu (kullanıcı "çalışmıyor" dedi). Artık `handleSessionSummary` `reflect` kind'ını işliyor → `Runtime.Reflect` (dream cycle) sonucu **sohbete asistan mesajı** olarak yazılıyor ("✦ Yansıma" başlığıyla). `/memory` vb. ile aynı UX.
+2. **`/compact` (yeni):** Sohbeti **şimdi** sıkıştırır. `conversation.Manager.ForceCompact` token bütçesine bakmadan en eski mesajları (son `keepRecent` hariç) yuvarlanan özete katlar, kalıcılaştırır ve "N mesaj katlandı + güncel özet" raporu döner ("🗜 Sohbet sıkıştırma").
+3. **Frontend:** `App.tsx` `summarize(kind)` artık serbest string alır + kind'a göre placeholder ("Yansıma üretiliyor…"/"Sıkıştırılıyor…"); `chatCommands`'a `/reflect` (düzeltildi) + `/compact` (yeni) eklendi.
+
+> Test: go build yeşil; dev binary yeniden başlatıldı; **API canlı**: 64-mesajlı oturumda `/compact` → 56 mesaj katlandı; `/reflect` → dream-cycle yansıması döndü; Chrome: "/" menüsünde `/reflect`+`/compact` üstte listelendi. **Not:** Composer'daki bekleyen-kuyruğu (queue/steer tray, silinebilir) eşzamanlı bir çalışmayla birlikte aynı turda eklendi.
+
 ### Bugfix — HTTP access-log middleware (Loglar ekranı canlı) ✅ (2026-06-16)
 **Sorun:** Kullanıcı "loglar ekranı bayadır kullanıyorum ama yeni log oluşmuyor" dedi. Ekran ve `GET /api/logs` doğru çalışıyordu (HTTP 200 + gerçek kayıtlar), ama yalnızca açılış logları + birkaç "agent reflected" görünüyordu. **Kök neden:** kod sadece **hata** durumlarında (`s.logger.Error/Warn`) ve birkaç otonom olayda slog kaydı üretiyordu; başarılı istek/sohbet/görev hiçbir log basmıyordu → aktif kullanımda yeni kayıt düşmüyordu (beklenen davranış, eksik enstrümantasyon).
 
