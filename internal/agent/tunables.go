@@ -11,6 +11,7 @@ type Tunables struct {
 	mu            sync.RWMutex
 	pauseAutonomy bool
 	titleModel    string
+	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
 }
 
 // NewTunables constructs an empty (unpaused, no title override) Tunables.
@@ -45,4 +46,20 @@ func (t *Tunables) TitleModel() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.titleModel
+}
+
+// SetShellEnabled toggles the built-in `shell` tool. It is off by default
+// because it grants arbitrary command execution inside the workspace sandbox;
+// enable it only once a permission/approval layer is in place.
+func (t *Tunables) SetShellEnabled(enabled bool) {
+	t.mu.Lock()
+	t.shellEnabled = enabled
+	t.mu.Unlock()
+}
+
+// ShellEnabled reports whether the built-in `shell` tool may be offered.
+func (t *Tunables) ShellEnabled() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.shellEnabled
 }

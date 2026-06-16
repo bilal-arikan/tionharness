@@ -98,7 +98,7 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 
-	rt := agent.NewRuntime(database, m.registry, m.tun, m.logger)
+	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), m.logger)
 	if err := rt.StartConfigured(context.Background()); err != nil {
 		m.logger.Warn("start configured agents failed", "workspace", meta.ID, "error", err)
 	}

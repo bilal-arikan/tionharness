@@ -21,6 +21,10 @@ type Runtime struct {
 	tun       *Tunables
 	logger    *slog.Logger
 
+	// workDir is this workspace's sandbox root for built-in filesystem/shell
+	// tools. Every fs/shell tool call is confined to it.
+	workDir string
+
 	mu      sync.Mutex
 	workers map[string]*worker
 
@@ -37,12 +41,14 @@ func (r *Runtime) Paused() bool { return r.paused.Load() }
 
 // NewRuntime constructs the runtime. tun carries the process-wide tunables
 // (autonomy pause, title-model override) shared across all workspace runtimes.
-func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, logger *slog.Logger) *Runtime {
+// workDir is the workspace sandbox root for built-in filesystem/shell tools.
+func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, logger *slog.Logger) *Runtime {
 	return &Runtime{
 		db:        database,
 		providers: registry,
 		mem:       memory.New(database),
 		tun:       tun,
+		workDir:   workDir,
 		logger:    logger,
 		workers:   make(map[string]*worker),
 	}

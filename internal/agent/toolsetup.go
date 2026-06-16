@@ -55,11 +55,29 @@ func allowFunc(agent db.Agent) func(string) bool {
 // the catalog of every enabled MCP server in the workspace. cfgByServer maps
 // sanitized server names back to their configs for dispatch.
 func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Registry {
-	reg := tools.NewRegistry(
+	builtins := []tools.Tool{
 		tools.TimeTool{},
 		tools.NewHTTPGetTool(),
 		tools.NewMemoryRecallTool(r.mem, agent.ID),
-	)
+	}
+
+	// Workspace-scoped filesystem tools (sandboxed to this workspace's work dir).
+	if sb := tools.NewSandbox(r.workDir); sb.Ready() {
+		builtins = append(builtins,
+			tools.NewFSReadFileTool(sb),
+			tools.NewFSWriteFileTool(sb),
+			tools.NewFSEditFileTool(sb),
+			tools.NewFSListDirTool(sb),
+			tools.NewFSGlobTool(sb),
+			tools.NewFSGrepTool(sb),
+		)
+		// The shell tool is high-risk; offer it only when explicitly enabled.
+		if r.tun.ShellEnabled() {
+			builtins = append(builtins, tools.NewShellTool(sb))
+		}
+	}
+
+	reg := tools.NewRegistry(builtins...)
 
 	servers, err := r.db.ListEnabledMCPServers(ctx)
 	if err != nil {

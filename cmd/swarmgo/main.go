@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -63,6 +64,12 @@ func main() {
 	// Process-wide tunables (autonomy pause, title-model override) shared by
 	// every workspace runtime and updated from the settings screen.
 	tun := agent.NewTunables()
+	// The built-in `shell` tool is off by default (arbitrary command execution);
+	// opt in via SWARMGO_ENABLE_SHELL until a permission/approval layer lands.
+	if v := os.Getenv("SWARMGO_ENABLE_SHELL"); v == "1" || strings.EqualFold(v, "true") {
+		tun.SetShellEnabled(true)
+		logger.Warn("built-in shell tool ENABLED (SWARMGO_ENABLE_SHELL); agents can run arbitrary commands in their workspace sandbox")
+	}
 
 	// Workspace manager: each workspace owns its own DB + agent runtime.
 	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, logger)

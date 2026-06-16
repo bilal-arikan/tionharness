@@ -73,12 +73,19 @@ graph TD
   `tool_result` olarak besleyip döngüye devam eder. Frontend: opsiyon butonları +
   metin girişi olan soru kartı.
 
-### Faz P2 — Built-in Araç Seti (SDK'nın en güçlü yanı)
-- `read_file` / `write_file` / `edit_file` / `list_dir` / `grep` / `glob` →
-  `internal/tools/builtin_fs.go` (workspace-scoped kök, path-traversal koruması).
-- `bash` (veya PowerShell) → `internal/tools/builtin_shell.go` (timeout + sandbox
-  dizini). **Permission katmanından sonra** açılmalı.
-- `web_fetch` → mevcut `http_get`'in üstüne içerik özetleme.
+### Faz P2 — Built-in Araç Seti (SDK'nın en güçlü yanı) ✅ (2026-06-16)
+- [x] `read_file` / `write_file` / `edit_file` / `list_dir` / `grep` / `glob` →
+  `internal/tools/builtin_fs.go` (workspace-scoped kök, path-traversal koruması →
+  `internal/tools/sandbox.go`).
+- [x] `shell` (Windows'ta PowerShell, diğerinde `/bin/sh`) → `internal/tools/builtin_shell.go`
+  (timeout + sandbox cwd + 64KB çıktı cap). **Varsayılan KAPALI** (`Tunables.shellEnabled`);
+  `SWARMGO_ENABLE_SHELL=1` ile açılır. Permission katmanı (P3) gelene dek opt-in kalır.
+- [ ] `web_fetch` → mevcut `http_get`'in üstüne içerik özetleme (henüz yok).
+
+> **Yürütme yolu:** Built-in araçlar **native** tool-use döngüsünde (`agent/toolloop.go`
+> + `tools.Registry`) çalışır. claude-cli yolu kendi döngüsünü `--mcp-config` ile sürdüğü
+> ve kendi dosya/bash araçları olduğu için bu built-in'leri kullanmaz. Sandbox kökü her
+> workspace'in `workspace/` alt dizinidir (`Runtime.workDir`). Detay: `05-ILERLEME.md` (Faz P2).
 
 ### Faz P3 — Permission / Onay Katmanı
 - Araç çalıştırmadan önce risk sınıflandırması (read-only / yazma / shell).
