@@ -11,6 +11,7 @@ interface Props {
   onSetDefault: (id: string) => void
   onCreateAgent: (name: string, soul: string, provider: string, model: string) => void
   onUpdateAgent: (id: string, patch: AgentPatch) => Promise<void>
+  onDeleteAgent: (id: string) => Promise<void>
 }
 
 // AgentsView is the two-pane "Ajanlar" screen: a roster on the left, and the
@@ -21,6 +22,7 @@ export function AgentsView({
   onSetDefault,
   onCreateAgent,
   onUpdateAgent,
+  onDeleteAgent,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -141,7 +143,17 @@ export function AgentsView({
       {/* Right: selected agent's settings */}
       <div className="min-w-0 flex-1">
         {selected ? (
-          <AgentSettingsForm key={selected.id} agent={selected} onSave={(p) => onUpdateAgent(selected.id, p)} />
+          <AgentSettingsForm
+            key={selected.id}
+            agent={selected}
+            onSave={(p) => onUpdateAgent(selected.id, p)}
+            onDelete={async () => {
+              if (confirm(`"${selected.name}" ajanı ve sahip olduğu oturumlar kalıcı olarak silinsin mi?`)) {
+                await onDeleteAgent(selected.id)
+                setSelectedId(null)
+              }
+            }}
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-dim)]">
             Düzenlemek için soldan bir ajan seç.

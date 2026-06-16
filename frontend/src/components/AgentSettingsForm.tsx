@@ -12,13 +12,15 @@ interface Props {
   /** Secondary action button (e.g. Cancel in the modal). */
   onCancel?: () => void
   cancelLabel?: string
+  /** Danger action: when set, a "Sil" button is shown at the footer-left. */
+  onDelete?: () => void
 }
 
 // AgentSettingsForm is the editable agent profile (visual identity + core
 // fields). It is reused both inside the modal (roster gear) and as the right
 // pane of the two-panel Agents view. Mount with a key={agent.id} so switching
 // the selected agent resets the field state.
-export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabel = 'İptal' }: Props) {
+export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabel = 'İptal', onDelete }: Props) {
   const [name, setName] = useState(agent.name)
   const [avatar, setAvatar] = useState(agent.avatar ?? '')
   const [color, setColor] = useState(agent.color ?? '')
@@ -203,8 +205,16 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
       </div>
 
       <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] px-5 py-3">
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            className="mr-auto rounded px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+          >
+            🗑 Sil
+          </button>
+        )}
         {savedAt > 0 && !saving && (
-          <span className="mr-auto text-xs text-[var(--color-text-dim)]">Kaydedildi ✓</span>
+          <span className={`text-xs text-[var(--color-text-dim)] ${onDelete ? '' : 'mr-auto'}`}>Kaydedildi ✓</span>
         )}
         {onCancel && (
           <button

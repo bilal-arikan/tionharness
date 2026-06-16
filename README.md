@@ -17,7 +17,7 @@ Açık kaynaklı, kendi sunucunda barındırılan **çoklu-ajan (multi-agent) AI
 - 🔌 **Araçlar + MCP** — yerleşik araçlar (saat/http/recall) + harici MCP sunucuları (SDK'sız stdio JSON-RPC); native tool-use döngüsü **ve** anahtarsız claude-cli MCP delegasyonu
 - 🔀 **Orchestration** — çok-ajanlı akışlar (agent / branch / parallel node grafiği), şablon sistemi, restart-safe run state, görsel akış builder
 - 🏷 **Otomatik başlık** — sohbet ilk turunda ve görev oluşturmada başlık prompt'tan otomatik üretilir, ⟳ ile yeniden üretilebilir
-- ⚙️ **Ayarlar ekranı** — uygulama-geneli `settings.json` (Anthropic anahtarı AES-GCM şifreli); sağlayıcı/model, bağlam limitleri, otonomi duraklat, başlık modeli, açık/koyu/sistem tema + accent — hepsi **canlı** uygulanır
+- ⚙️ **Ayarlar ekranı** — uygulama-geneli `settings.json` (Anthropic anahtarı AES-GCM şifreli); sağlayıcı/model, bağlam limitleri, otonomi duraklat, başlık modeli, açık/koyu/sistem tema + accent + **8 hazır tema paleti** (Gece Moru, Arduvaz, Zümrüt, Gül, Kehribar, Nord, Gün Işığı, Solarized) — hepsi **canlı** uygulanır
 - 💎 **Zengin sohbet arayüzü** — markdown çıktı (GFM + syntax highlight), tool kullanım kartları, düşünme adımları, dosya satır değişimi (diff), tıklanabilir dosya yolları, inline görsel (External Agent benzeri render) — bkz. [Sohbet UX](_Docs/07-CHAT-UX.md)
 - 📜 **Loglar** — uygulama + tüm workspace logları tek ekranda (canlı akış, seviye filtresi, arama)
 

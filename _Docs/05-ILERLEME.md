@@ -12,6 +12,32 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Faz A1 — Artifact sistemi ✅ (2026-06-16)
+
+Ajanların ürettiği önemli, bağımsız içerik (doküman/kod/HTML/SVG/Mermaid) **versiyonlanarak** saklanır ve ayrı bir ekranda görüntülenir — Claude.ai artifacts benzeri.
+
+**Backend**
+- [x] **Depolama** (`internal/db`): `models_artifact.go` (`Artifact`: `SessionID`/`AgentID` köken, `Kind`, `Language`, `Content`, `Version`, inline `Revisions[]` geçmiş), `store_artifact.go` (Create / Get / List(session filtreli) / `UpdateArtifactContent`[eski sürümü `Revisions`'a arşivler + `Version++`] / `UpdateArtifactMeta` / Delete), `db.go` (`artifacts` map + `dirArtifacts` + load).
+- [x] **Üretim araçları** (`internal/tools`): native (anthropic/minimax) yola `create_artifact` + `update_artifact` (`builtin_artifact.go`); `artifact.go` `ArtifactSink` arayüzü + `WithArtifacts`/`artifactsFrom` context köprüsü (ask_user deseni, import-cycle'dan kaçınmak için `tools` paketinde). Araç çıktısı JSON ref (`{id,title,kind,version,action}`).
+- [x] **Wiring** (`internal/agent/toolsetup.go` + `internal/api`): `buildRegistry` iki aracı kaydeder; api `artifactSink` (session+agent damgalı) `chat.go` + `chat_stream.go`'da `WithArtifacts` ile turuna bağlanır. İnteraktif olmayan koşularda sink yok → araç hata döner.
+- [x] **API** (`api/artifacts.go` + `registerArtifactRoutes`): `GET/POST /api/artifacts`, `GET/PUT/DELETE /api/artifacts/{id}`.
+
+**Frontend**
+- [x] `types.ts`/`api.ts`: `Artifact`/`ArtifactKind`/`ArtifactRevision`/`ArtifactRefResult` + artifact CRUD metodları.
+- [x] NavRail "Artifactlar" view (`FileCode` ikonu) + `App.tsx` `artifactTarget` deep-link state + `openArtifact`.
+- [x] `ArtifactsPanel.tsx`: liste (tür rozeti + sürüm + zaman) + sürüm seçicili görüntüleyici + kopya/sil/kaynağa-git.
+- [x] `artifacts/ArtifactView.tsx`: kind→renderer (markdown→`Markdown`, code→`CodeBlock`, html→sandbox'lı `iframe srcDoc`, svg→inline, mermaid→kaynak, text→`pre`).
+- [x] `chat/ArtifactCard.tsx`: `create_artifact`/`update_artifact` tool adımı → tıklanabilir kart (`TurnSteps` özel-durumu) → `onOpenArtifact` ile artifact ekranına atlar.
+
+**CANLI TEST (API + Playwright):**
+- [x] API CRUD: manuel create → list/get/filtre(sessionId) → update (içerik) **v1→v2**, eski sürüm `revisions`'a arşivlendi; 404 doğru.
+- [x] Tool kataloğu: `mcpEnabled` ajanda **13 araç** (`create_artifact`+`update_artifact` dahil).
+- [x] Kalıcılık: tek backend restart'ında **3 artifact diskten reload** edildi (round-trip).
+- [x] Playwright (5174→test backend :8095 proxy): "Artifactlar" view, 3 tür liste, markdown/kod render, **HTML sandbox iframe** (`srcDoc`), sürüm v2/v1 seçici — DOM doğrulandı.
+- [x] `go build/vet/test ./...` + frontend `tsc --noEmit` temiz.
+
+> Not: claude-cli yolu kendi tool döngüsünü `--mcp-config` ile sürdüğünden bu built-in araçları kullanmaz (SDK parite deseniyle bilinçli). Gerçek LLM-tetikli artifact üretimi anthropic/minimax anahtarı gerektirir; API + sink yolu doğrudan doğrulandı.
+
 ### Tırnakla komut kaçışı + Komutlar referans ekranı ✅ (2026-06-16)
 İki küçük UX iyileştirmesi:
 
@@ -23,7 +49,7 @@
 ### Sohbet sidebar = oturum listesi + okundu/okunmadı ✅ (2026-06-16)
 Sohbet sol paneli ajanlardan arındırıldı; oturum-merkezli hale geldi (Playwright ile canlı test edildi):
 
-1. **Sadece oturumlar**: Sohbet sidebar yalnızca oturumları gösterir (`SessionsSidebar.tsx`). Ajan roster'ı `AgentRoster.tsx`'e taşındı (Hafıza/Araçlar sidebar'ı). **Ajanlar** NavRail view'i **iki-panelli** (`AgentsView.tsx`): solda roster (★ ile varsayılan seç), ajana tıklayınca sağda ayarları düzenlenir; form ortak `AgentSettingsForm.tsx`'e çıkarıldı (`AgentsView` sağ paneli + `AgentSettingsModal` roster ⚙'i paylaşır). Eski `Sidebar.tsx` silindi.
+1. **Sadece oturumlar**: Sohbet sidebar yalnızca oturumları gösterir (`SessionsSidebar.tsx`). Ajan roster'ı `AgentRoster.tsx`'e taşındı (Hafıza/Araçlar sidebar'ı). **Ajanlar** NavRail view'i **iki-panelli** (`AgentsView.tsx`): solda roster (★ ile varsayılan seç), ajana tıklayınca sağda ayarları düzenlenir; form ortak `AgentSettingsForm.tsx`'e çıkarıldı (`AgentsView` sağ paneli + `AgentSettingsModal` roster ⚙'i paylaşır). Eski `Sidebar.tsx` silindi. **Ajan silme** (2026-06-16): sağ panel footer'ında 🗑 Sil → `DELETE /api/agents/{id}` (`db.DeleteAgent` ajan + sahip oturumları siler, `Runtime.Stop` worker'ı durdurur), onaylı; Playwright ile test edildi (geçici "SilTest" ajanı oluşturulup silindi, roster + backend'den kalktı).
 2. **Zaman gruplama + sıralama**: oturumlar `updatedAt` desc (backend zaten böyle) + **Bugün / Dün / Geçen hafta / Geçen ay / Daha eski** kovaları (`lib/time.ts`: `bucketOf` takvim-günü bazlı, `relativeTime`). Her satırda relative zaman + mesaj sayısı.
 3. **`updatedAt`**: `AddMessage` her mesajda (kullanıcı turu başı + ajan yanıtı) `UpdatedAt` basıyor → oturum otomatik en üste.
 4. **Oturum ⚙ menüsü**: Başlığı düzenle (inline → `POST /api/sessions/{id}/title {title}`), AI ile başlık, Yolu kopyala (`GET .../path`), Klasörü aç (`POST .../reveal` → Explorer), Sil (`DELETE /api/sessions/{id}`, onaylı).
@@ -729,6 +755,18 @@ Kullanıcıyla netleştirilecek:
 ---
 
 ## Oturum Günlüğü
+
+### 2026-06-16 — UI tema yenileme (Design Refresh)
+Arayüzün görsel dili cilalandı (`go build`/`vet` yeşil; backend `themePreset` kalıcılığı API round-trip ile, yeni tema + preset grid Chrome'da canlı doğrulandı):
+
+1. **Token genişletme** (`frontend/src/index.css`): semantic renkler (`--color-success/warning/danger`), elevation (`--shadow-sm/md/lg`), `--radius`, klavye için tutarlı `:focus-visible` ring. Light tema bu token'ları kendi değerleriyle ezer. **Inter** (gövde) + **JetBrains Mono** (kod/yol) yerel `@fontsource-variable` fontları import edildi; `body::before` ile köşelerde `radial-gradient` + `color-mix` tabanlı **hafif accent glow**.
+2. **Hazır tema paletleri** (`frontend/src/lib/themePresets.ts` — yeni): 8 küratörlü palet — Gece Moru (varsayılan), Arduvaz, Zümrüt, Gül, Kehribar, Nord, Gün Işığı, Solarized Açık. Her preset tam token seti (bg/surface/surface2/border/accent/accentSoft/text/textDim + opsiyonel semantic) + `dark` bayrağı taşır.
+3. **`applyTheme` yeniden yazıldı** (`frontend/src/lib/theme.ts`): imza `applyTheme(theme, accent, preset)`. Preset seçiliyse tüm paleti `<html>` inline style'a basar (stylesheet'i ezer) ve dark/light'ı `data-theme`'den ayarlar; preset yoksa eski theme(dark/light/system)+accent yoluna düşer. Her iki yolda da boş olmayan `accent` accent token'ını override eder. `App.tsx` `applyClientPrefs` artık `themePreset`'i geçirir.
+4. **Backend** (`internal/settings/settings.go` + `store.go`): `ThemePreset` alanı — Settings/DTO/Patch/Apply/Default(`midnight-violet`). `GET/PUT /api/settings` ile kalıcı (yeni uç yok, mevcut DTO genişletildi).
+5. **SettingsPanel** (`frontend/src/components/SettingsPanel.tsx`): Görünüm sekmesine **swatch'lı palet seçici grid** (`grid-cols-2 sm:grid-cols-3`); bir preset tıklanınca `themePreset` + `accent` o paletin rengine senkronlanır. Eski tema dropdown'ı "Temel mod" olarak kaldı (preset yokken/sistem için).
+6. **NavRail** (`frontend/src/components/NavRail.tsx`): emoji ikonlar → **lucide-react**; aktif öğe dolgu-mor yerine `accent-soft` tint + 3px sol indicator (`navItemClass`/`ActiveBar`); gradient marka rozeti (`color-mix`). *(Aynı dosya eşzamanlı "Ajanlar/Artifactlar görünümü" refactor'uyla `agents`/`artifacts` nav öğeleri eklenerek birleşti.)*
+
+> Yeni bağımlılıklar: `lucide-react`, `@fontsource-variable/inter`, `@fontsource-variable/jetbrains-mono`. **Not:** Bu iş, eşzamanlı yürüyen "Ajanlar görünümü + Sessions sidebar bölme + Artifactlar" refactor'uyla aynı çalışma ağacında; o iş yarımken `tsc -b` geçici hata verir. Commit kullanıcı onayına bırakıldı.
 
 ### 2026-06-16 — Trace StepKind genişletme: `todo` + `recovery` (E3 düşük-efor)
 `StepKind` ilk-sınıf hale getirildi (`go build`/`vet`/`test ./...` + frontend `tsc` yeşil):

@@ -40,7 +40,8 @@ Bu tablo başlangıç planıydı. Faz 0–8 sonunda gerçekte kullanılan kararl
 | Anthropic | resmi SDK | **ince HTTP istemci (SDK yok)** | Tam kontrol; ayrıca **claude-cli** (anahtarsız) |
 | Zamanlama | robfig/cron | ✅ **robfig/cron/v3** | Workspace başına scheduler |
 | WebSocket/streaming | coder/websocket | ✅ **SSE** (`POST /api/chat/stream`); WebSocket yok | SSE adım-adım akış kuruldu (bkz. `07-CHAT-UX.md`); kalıcı WebSocket hub'ı gerekmedi |
-| Frontend bileşen | shadcn/ui | **kendi Tailwind v4 bileşenleri** | Koyu tema, sıfır UI bağımlılığı |
+| Frontend bileşen | shadcn/ui | **kendi Tailwind v4 bileşenleri** | Bileşen framework'ü yok; yalnız `lucide-react` (ikon) + `@fontsource-variable/inter`·`jetbrains-mono` (font) eklendi |
+| Tema | tek koyu tema | **token-tabanlı + 8 hazır palet** | `var(--color-*)` token seti; preset `<html>` inline style'a basılır (`lib/themePresets.ts` + `lib/theme.ts`); backend `settings.ThemePreset` ile kalıcı |
 | Frontend state | Zustand/TanStack | **düz React `useState`** | Yeterli; ileride eklenebilir |
 | Recall/embedding | embedding tabanlı | **saf Go lexical cosine** | Anahtarsız/çevrimdışı; embedding ileride |
 | UUID / log / şifreleme | google/uuid · slog · crypto/aes | ✅ hepsi kullanıldı | — |

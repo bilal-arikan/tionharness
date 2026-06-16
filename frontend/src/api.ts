@@ -204,6 +204,9 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
+  // Delete an agent and the sessions it owns.
+  deleteAgent: (id: string) =>
+    req<{ deleted: string }>(`/api/agents/${id}`, { method: 'DELETE' }),
 
   // Sessions.
   // List sessions for an agent, or all sessions in the workspace when omitted.

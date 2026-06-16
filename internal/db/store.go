@@ -54,6 +54,29 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	return a, d.persistAgentLocked(a)
 }
 
+// DeleteAgent removes an agent, its on-disk file, and every session it owns
+// (with their messages/folders), since those sessions become unusable once
+// their default agent is gone.
+func (d *DB) DeleteAgent(ctx context.Context, id string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.agents[id]; !ok {
+		return ErrNotFound
+	}
+	delete(d.agents, id)
+	if err := removeFile(d.dir(dirAgents, id+".json")); err != nil {
+		return err
+	}
+	for sid, s := range d.sessions {
+		if s.AgentID == id {
+			delete(d.sessions, sid)
+			delete(d.messages, sid)
+			_ = os.RemoveAll(d.dir(dirSessions, sid))
+		}
+	}
+	return nil
+}
+
 // GetAgent loads an agent by id.
 func (d *DB) GetAgent(ctx context.Context, id string) (Agent, error) {
 	d.mu.RLock()

@@ -94,6 +94,18 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, agent)
 }
 
+// handleDeleteAgent stops the agent's autonomous worker (if running) and removes
+// the agent together with the sessions it owns.
+func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+	wsp.Runtime.Stop(id) // halt any heartbeat worker before removal
+	if err := wsp.DB.DeleteAgent(r.Context(), id); writeDBError(w, err, "agent not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
+}
+
 type updateAgentReq struct {
 	Name         *string `json:"name"`
 	Soul         *string `json:"soul"`

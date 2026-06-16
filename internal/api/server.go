@@ -114,6 +114,7 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents", s.handleListAgents)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
+	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
 }
 
 // registerSessionRoutes registers chat sessions + messages + titling.
