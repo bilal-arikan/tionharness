@@ -246,8 +246,14 @@ export default function App() {
       // in the open transcript. If it belongs to the session being viewed,
       // reload its messages so the reply appears without a manual reselect.
       const sid = e.target?.sessionId
-      if (e.type === 'chat' && sid && sid === activeSessionIdRef.current) {
-        api.listMessages(sid).then(setMessages).catch(() => {})
+      if (e.type === 'chat' && sid) {
+        // The turn ended (success or failure) — drop any post-reload "thinking"
+        // indicator we restored for it, and refresh the open transcript so the
+        // reply (if any) appears without a manual reselect.
+        chat.clearPending(sid)
+        if (sid === activeSessionIdRef.current) {
+          api.listMessages(sid).then(setMessages).catch(() => {})
+        }
       }
     }
     // Chat completions only drive the badge (the streaming turn already raises
@@ -356,6 +362,14 @@ export default function App() {
     bumpMeter,
   })
 
+  // After a reload (or workspace switch), restore the "thinking" indicator for
+  // any turn still running detached on the server — the user may have refreshed
+  // right after sending. Each turn's chat-completion event clears it again.
+  useEffect(() => {
+    if (!activeWorkspaceId) return
+    api.activeSessions().then(chat.markPending).catch(() => {})
+  }, [activeWorkspaceId, chat.markPending])
+
   return (
     <div className="flex h-full">
       <NavRail
@@ -453,8 +467,9 @@ export default function App() {
             <PendingTray items={chat.activeQueued} onRemove={chat.removePending} />
             <Composer
               disabled={!activeSessionId}
+              sessionId={activeSessionId ?? undefined}
               streaming={chat.activeStreaming}
-              onSend={chat.sendMessage}
+              onSend={(text, attachments) => chat.sendMessage(text, undefined, attachments)}
               onStop={chat.stopTurn}
               onInterrupt={chat.interruptTurn}
               onQueue={chat.queueMessage}

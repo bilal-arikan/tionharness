@@ -85,7 +85,7 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
             m.role === 'assistant' && prev?.role === 'user' ? m.createdAt - prev.createdAt : 0
           return m.role === 'user' ? (
             <div key={m.id} className="flex flex-col gap-1">
-              <UserBubble text={m.text} agents={agents} />
+              <UserBubble text={m.text} agents={agents} attachments={m.attachments} />
               <div className="flex justify-end pr-1">
                 <MessageTime unixSec={m.createdAt} />
               </div>

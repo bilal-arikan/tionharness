@@ -8,6 +8,7 @@ import { workspaceApi } from './api/workspaces'
 import { agentApi } from './api/agents'
 import { sessionApi } from './api/sessions'
 import { chatApi } from './api/chat'
+import { uploadsApi } from './api/uploads'
 import { taskApi } from './api/tasks'
 import { memoryApi } from './api/memory'
 import { mcpApi } from './api/mcp'
@@ -23,6 +24,7 @@ export const api = {
   ...agentApi,
   ...sessionApi,
   ...chatApi,
+  ...uploadsApi,
   ...taskApi,
   ...memoryApi,
   ...mcpApi,

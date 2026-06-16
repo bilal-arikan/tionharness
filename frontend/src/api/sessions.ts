@@ -9,6 +9,10 @@ export const sessionApi = {
     req<Session[]>(
       agentId ? `/api/sessions?agentId=${encodeURIComponent(agentId)}` : '/api/sessions',
     ),
+  // Session ids with a turn still streaming server-side. Queried after a reload
+  // to restore the "thinking" indicator for detached turns still in flight.
+  activeSessions: () =>
+    req<{ sessionIds: string[] }>('/api/sessions/active').then((r) => r.sessionIds),
   createSession: (agentId = '', title = '') =>
     req<Session>('/api/sessions', {
       method: 'POST',

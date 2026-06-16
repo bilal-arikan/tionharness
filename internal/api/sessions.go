@@ -153,6 +153,15 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, messages)
 }
 
+// handleActiveSessions returns the session ids that currently have an in-flight
+// streaming turn. Turns are detached from the client connection, so after a page
+// reload the frontend queries this to restore the "thinking" indicator for any
+// turn still running server-side. Session ids are globally unique, so a single
+// process-wide list is safe to return regardless of workspace.
+func (s *Server) handleActiveSessions(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string][]string{"sessionIds": s.runs.activeSessionIDs()})
+}
+
 // handleMarkSessionRead clears a session's unread flag.
 func (s *Server) handleMarkSessionRead(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

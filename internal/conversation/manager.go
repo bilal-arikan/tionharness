@@ -166,15 +166,41 @@ func (m *Manager) summarize(ctx context.Context, provider providers.Provider, ag
 	return strings.TrimSpace(resp.Text), nil
 }
 
-// toProviderMessages maps stored user/assistant turns to provider messages.
+// toProviderMessages maps stored user/assistant turns to provider messages,
+// folding any user-message attachments into the text the model sees.
 func toProviderMessages(msgs []db.Message) []providers.Message {
 	out := make([]providers.Message, 0, len(msgs))
 	for _, msg := range msgs {
 		if msg.Role == providers.RoleUser || msg.Role == providers.RoleAssistant {
-			out = append(out, providers.Message{Role: msg.Role, Text: msg.Text})
+			out = append(out, providers.Message{Role: msg.Role, Text: withAttachments(msg)})
 		}
 	}
 	return out
+}
+
+// withAttachments appends an "Attachments" block to a user message's text. Text
+// and code attachments are inlined verbatim (the model reads them directly);
+// binary/image attachments are listed by relative path so an agent with the
+// read_file tool can open them from the workspace sandbox.
+func withAttachments(msg db.Message) string {
+	if len(msg.Attachments) == 0 {
+		return msg.Text
+	}
+	var b strings.Builder
+	b.WriteString(msg.Text)
+	b.WriteString("\n\n## Attachments\n")
+	for _, a := range msg.Attachments {
+		if a.TextContent != "" {
+			fmt.Fprintf(&b, "\n### %s (%s)\n```\n%s\n```\n", a.Name, a.Kind, a.TextContent)
+			continue
+		}
+		if a.RelPath != "" {
+			fmt.Fprintf(&b, "- %s (%s, %d bytes) — read_file path: %s\n", a.Name, a.Kind, a.Size, a.RelPath)
+		} else {
+			fmt.Fprintf(&b, "- %s (%s)\n", a.Name, a.Kind)
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func envInt(key string, fallback int) int {

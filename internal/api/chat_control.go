@@ -24,6 +24,10 @@ type chatRun struct {
 	// token is the per-run opaque secret a CLI subprocess presents (Bearer) so
 	// its Interaction MCP calls correlate back to this turn.
 	token string
+	// sessionID is the chat session this turn belongs to, so the UI can ask
+	// "is a turn in flight for session X?" after a page reload (turns are
+	// detached from the client connection and keep running server-side).
+	sessionID string
 
 	// mu serialises SSE writes: the stream handler goroutine and the Interaction
 	// MCP handler goroutine both emit steps onto the same ResponseWriter. It also
@@ -83,19 +87,41 @@ type chatRuns struct {
 func newChatRuns() *chatRuns { return &chatRuns{runs: make(map[string]*chatRun)} }
 
 // register creates a control handle for a run (with a fresh per-run token) and
-// returns it.
-func (c *chatRuns) register(id string, cancel context.CancelFunc) *chatRun {
+// returns it. sessionID ties the run to its chat session for activeSessionIDs.
+func (c *chatRuns) register(id, sessionID string, cancel context.CancelFunc) *chatRun {
 	run := &chatRun{
-		cancel: cancel,
-		steer:  make(chan string, 16),
-		answer: make(chan string, 1),
-		done:   make(chan struct{}),
-		token:  uuid.NewString(),
+		cancel:    cancel,
+		steer:     make(chan string, 16),
+		answer:    make(chan string, 1),
+		done:      make(chan struct{}),
+		token:     uuid.NewString(),
+		sessionID: sessionID,
 	}
 	c.mu.Lock()
 	c.runs[id] = run
 	c.mu.Unlock()
 	return run
+}
+
+// activeSessionIDs returns the distinct session ids that currently have a turn
+// in flight. The frontend uses this after a reload to restore the "thinking"
+// indicator for turns that are still running detached on the server.
+func (c *chatRuns) activeSessionIDs() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	seen := make(map[string]struct{}, len(c.runs))
+	ids := make([]string, 0, len(c.runs))
+	for _, run := range c.runs {
+		if run.sessionID == "" {
+			continue
+		}
+		if _, ok := seen[run.sessionID]; ok {
+			continue
+		}
+		seen[run.sessionID] = struct{}{}
+		ids = append(ids, run.sessionID)
+	}
+	return ids
 }
 
 func (c *chatRuns) unregister(id string) {

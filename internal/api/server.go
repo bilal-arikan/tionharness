@@ -147,6 +147,7 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 // registerSessionRoutes registers chat sessions + messages + titling.
 func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
+	mux.HandleFunc("GET /api/sessions/active", s.handleActiveSessions)
 	mux.HandleFunc("POST /api/sessions", s.handleCreateSession)
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleListMessages)
@@ -267,6 +268,8 @@ func (s *Server) registerMemoryRoutes(mux *http.ServeMux) {
 func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	// Inline media (images referenced by chat content) — read-only.
 	mux.HandleFunc("GET /api/files", s.handleServeFile)
+	// User message attachments: upload a file (or pasted text) for the next turn.
+	mux.HandleFunc("POST /api/uploads", s.handleUpload)
 	// Application + workspace logs (global ring buffer).
 	mux.HandleFunc("GET /api/logs", s.handleListLogs)
 	// Autonomous event feed (heartbeat/task/schedule) — SSE, global.
@@ -278,6 +281,11 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 func (s *Server) withWorkspace(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get("X-Workspace-Id")
+		// Fallback for requests that cannot set headers (e.g. an <img src> loading
+		// an inline attachment): accept ?ws=<id> as the workspace scope.
+		if id == "" {
+			id = r.URL.Query().Get("ws")
+		}
 		var ws *workspace.Workspace
 		if id != "" {
 			// Fall back to the default workspace when the requested id is unknown

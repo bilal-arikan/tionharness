@@ -1,10 +1,13 @@
 // Chat endpoints: the blocking turn, the SSE streaming turn (with its frame
 // parser) and the in-flight control channel.
-import type { Message, ChatResponse, TurnStep } from '../types'
+import type { Attachment, Message, ChatResponse, TurnStep } from '../types'
 import { req, wsHeaders, errorFromResponse } from './client'
 
-// Handlers invoked as the streaming turn dispatches parsed SSE events.
+// Handlers invoked as the streaming turn dispatches parsed SSE events. Also
+// carries the turn's attachments (data, not a callback) sent in the request body.
 export interface ChatStreamHandlers {
+  // Files / pasted text uploaded for this turn (already on the server).
+  attachments?: Attachment[]
   onMeta?: (m: { userMessage: Message; runId: string }) => void
   onAgentStart?: (a: { agentId: string; index: number }) => void
   onStep: (step: TurnStep) => void
@@ -27,7 +30,14 @@ async function streamChat(
   const res = await fetch('/api/chat/stream', {
     method: 'POST',
     headers: wsHeaders(),
-    body: JSON.stringify({ sessionId, message, agentIds, thinkingLevel, permissionMode }),
+    body: JSON.stringify({
+      sessionId,
+      message,
+      agentIds,
+      thinkingLevel,
+      permissionMode,
+      attachments: handlers.attachments ?? [],
+    }),
     signal,
   })
   if (!res.ok || !res.body) {

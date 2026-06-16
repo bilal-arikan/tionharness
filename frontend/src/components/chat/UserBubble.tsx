@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import type { Agent } from '../../types'
+import type { Agent, Attachment } from '../../types'
 import { resolveColor } from '../../lib/avatar'
+import { AttachmentChip } from './AttachmentChip'
 
 // MENTION_RE matches an "@token" the way the composer inserts mentions: "@" then
 // non-space, non-"@" characters.
@@ -65,7 +66,15 @@ function renderWithMentions(text: string, agents: Agent[]): ReactNode[] {
 // UserBubble renders a user chat message. Plain messages keep the accent bubble;
 // messages that mention agents (@) get highlighted chips + a ring, and messages
 // typed as a command (leading "/") render in a distinct monospaced command style.
-export function UserBubble({ text, agents }: { text: string; agents: Agent[] }) {
+export function UserBubble({
+  text,
+  agents,
+  attachments,
+}: {
+  text: string
+  agents: Agent[]
+  attachments?: Attachment[]
+}) {
   // A quote-wrapped command is an explicit escape → render the inner text as a
   // plain bubble (no command style).
   const quotedCmd = quotedCommand(text)
@@ -73,26 +82,39 @@ export function UserBubble({ text, agents }: { text: string; agents: Agent[] }) 
   MENTION_RE.lastIndex = 0
   const isCommand = !quotedCmd && /^\/\S/.test(text.trim())
 
+  // Attachment chips rendered under the bubble (image thumbnails / file cards).
+  const chips = attachments && attachments.length > 0 && (
+    <div className="mt-1.5 flex flex-wrap justify-end gap-2">
+      {attachments.map((a) => (
+        <AttachmentChip key={a.id} attachment={a} />
+      ))}
+    </div>
+  )
+
   if (isCommand) {
     return (
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end">
         <div className="flex max-w-[80%] min-w-0 items-center gap-2 rounded-2xl border border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] px-4 py-2.5 font-mono text-sm break-words text-[var(--color-text)]">
           <span className="text-[var(--color-accent)]">⌘</span>
           <span className="min-w-0 break-words">{text}</span>
         </div>
+        {chips}
       </div>
     )
   }
 
   return (
-    <div className="flex justify-end">
-      <div
-        className={`max-w-[80%] min-w-0 whitespace-pre-wrap break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-white ${
-          hasMention ? 'ring-1 ring-white/40' : ''
-        }`}
-      >
-        {quotedCmd ? quotedCmd : hasMention ? renderWithMentions(text, agents) : text}
-      </div>
+    <div className="flex flex-col items-end">
+      {text.trim() && (
+        <div
+          className={`max-w-[80%] min-w-0 whitespace-pre-wrap break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-white ${
+            hasMention ? 'ring-1 ring-white/40' : ''
+          }`}
+        >
+          {quotedCmd ? quotedCmd : hasMention ? renderWithMentions(text, agents) : text}
+        </div>
+      )}
+      {chips}
     </div>
   )
 }

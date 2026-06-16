@@ -62,7 +62,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	clientGone := r.Context()
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer cancel()
-	run := s.runs.register(runID, cancel)
+	run := s.runs.register(runID, req.SessionID, cancel)
 	defer s.runs.unregister(runID)
 	ctx = agent.WithSteer(ctx, run.steer)
 	// Point any CLI subprocess (claude-cli, ...) at the in-process Interaction MCP
@@ -74,6 +74,24 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 	wsp := ws(r)
 	database := wsp.DB
+
+	// Ensure a terminal chat event fires even when generation fails after the
+	// turn has begun: the frontend uses it to clear the post-reload "thinking"
+	// indicator and reload the transcript. The success path sets emitted=true
+	// and publishes its own richer event below.
+	turnStarted := false
+	emitted := false
+	defer func() {
+		if !turnStarted || emitted {
+			return
+		}
+		wsp.Runtime.Emit(events.Event{
+			Type:   "chat",
+			Level:  "error",
+			Title:  "Sohbet turu sonlandı",
+			Target: map[string]string{"view": "chat", "sessionId": req.SessionID},
+		})
+	}()
 
 	session, err := database.GetSession(ctx, req.SessionID)
 	if err != nil {
@@ -100,6 +118,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// The turn is now committed (user message persisted); arm the terminal-event
+	// guard so a later failure still notifies the frontend.
+	turnStarted = true
 
 	// Begin the event stream.
 	h := w.Header()
@@ -226,6 +247,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	if title == "" {
 		title = "Sohbet"
 	}
+	emitted = true
 	wsp.Runtime.Emit(events.Event{
 		Type:   "chat",
 		Level:  "success",

@@ -78,6 +78,11 @@ type Message struct {
 	// Steps is a JSON array of agent.TurnStep records: the ordered trace of
 	// thinking, intermediate text and tool calls behind this turn. Empty for
 	// plain (non-tool) replies. Drives the rich chat turn renderer.
-	Steps     string `json:"steps"`
-	CreatedAt int64  `json:"createdAt"`
+	Steps string `json:"steps"`
+	// Attachments are user-supplied files (or pasted long text) sent with this
+	// message. Stored on user turns; empty for assistant/system. The files live
+	// under the workspace's uploads/ directory so agents can read them via their
+	// sandboxed read_file tool (see Attachment.RelPath).
+	Attachments []Attachment `json:"attachments,omitempty"`
+	CreatedAt   int64        `json:"createdAt"`
 }

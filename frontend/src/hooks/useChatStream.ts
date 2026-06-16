@@ -14,7 +14,7 @@ import {
   type SetStateAction,
 } from 'react'
 import { api } from '../api'
-import type { Agent, Message, Session, SlashCommand, TurnStep } from '../types'
+import type { Agent, Attachment, Message, Session, SlashCommand, TurnStep } from '../types'
 import type { View } from '../components/NavRail'
 import type { PendingAsk } from '../components/chat/AskPrompt'
 import type { PendingItem } from '../components/chat/PendingTray'
@@ -118,7 +118,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     // `targetSid` lets a queued-message flush (or interrupt) send to a specific
     // session even if the user has since switched away; defaults to the active
     // session for normal sends.
-    async (text: string, targetSid?: string) => {
+    async (text: string, targetSid?: string, attachments: Attachment[] = []) => {
       const sid = targetSid ?? activeSessionId
       if (!sid) return
       setError(null)
@@ -145,6 +145,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         sessionId: sid,
         role: 'user',
         text,
+        attachments: attachments.length ? attachments : undefined,
         createdAt: now,
       }
       // Apply a message update only while THIS turn's session is the one on
@@ -168,6 +169,7 @@ export function useChatStream(deps: ChatStreamDeps) {
       let liveSteps: TurnStep[] = []
       try {
         await api.chatStream(sid, text, agentIds, {
+          attachments,
           onMeta: (m) => {
             const h = runsRef.current.get(sid)
             if (h) h.runId = m.runId
@@ -371,6 +373,27 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionId, sendMessage],
   )
 
+  // ---- post-reload recovery (detached turns still running server-side) ----
+
+  // Seed the "thinking" indicator for sessions whose turn is still in flight
+  // after a page reload (queried via api.activeSessions). Only the pending set
+  // is touched — not streaming — so the composer keeps its Send button (there is
+  // no local run handle to stop/steer after a reload).
+  const markPending = useCallback((ids: string[]) => {
+    if (ids.length === 0) return
+    setPendingSessions((p) => {
+      let next = p
+      for (const id of ids) next = withAdded(next, id)
+      return next
+    })
+  }, [])
+
+  // Clear a session's post-reload pending indicator once its turn has ended
+  // (chat-completion event). Locally-owned live streams clear themselves.
+  const clearPending = useCallback((sid: string) => {
+    setPendingSessions((p) => withRemoved(p, sid))
+  }, [])
+
   // Stable id for a pending item (no crypto needed — display/dedup only).
   const pendingId = () => `p-${Date.now()}-${Math.round(Math.random() * 1e6)}`
 
@@ -482,6 +505,8 @@ export function useChatStream(deps: ChatStreamDeps) {
     queueMessage,
     steerTurn,
     removePending,
+    markPending,
+    clearPending,
     summarize,
     chatCommands,
     activeStreaming,

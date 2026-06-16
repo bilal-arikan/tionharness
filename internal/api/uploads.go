@@ -1,0 +1,179 @@
+package api
+
+import (
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
+
+	"github.com/bilal/swarmgo/internal/db"
+)
+
+const (
+	// maxUploadBytes caps a single uploaded file (25 MB).
+	maxUploadBytes = 25 << 20
+	// maxInlineTextBytes caps how much of a text/pasted attachment is inlined into
+	// the provider message (the full file is still on disk for read_file).
+	maxInlineTextBytes = 100 << 10
+)
+
+// handleUpload stores one user-supplied file under the workspace uploads
+// directory and returns its Attachment descriptor. Pasted long text is uploaded
+// the same way (as a text/plain blob). The file is written inside the workspace
+// sandbox root so agents can later open it via their read_file tool.
+//
+// POST /api/uploads  (multipart/form-data: file=<binary>, sessionId=<id>)
+func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	if wsp == nil {
+		writeError(w, http.StatusBadRequest, "no workspace")
+		return
+	}
+
+	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid upload: "+err.Error())
+		return
+	}
+	sessionID := strings.TrimSpace(r.FormValue("sessionId"))
+	if sessionID == "" {
+		writeError(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+
+	name := sanitizeFileName(header.Filename)
+	id := uuid.NewString()[:8]
+	// Relative path under the sandbox root (DataDir/workspace). Forward slashes so
+	// it matches the agent's read_file path style.
+	rel := "uploads/" + sessionID + "/" + id + "-" + name
+	abs := filepath.Join(wsp.DataDir, "workspace", filepath.FromSlash(rel))
+
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	dst, err := os.Create(abs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	size, copyErr := io.Copy(dst, io.LimitReader(file, maxUploadBytes))
+	closeErr := dst.Close()
+	if copyErr != nil || closeErr != nil {
+		_ = os.Remove(abs)
+		writeError(w, http.StatusInternalServerError, "write failed")
+		return
+	}
+
+	mime := header.Header.Get("Content-Type")
+	if mime == "" {
+		mime = mimeFromName(name)
+	}
+	kind := attachmentKind(mime, name)
+
+	att := db.Attachment{
+		ID:      id,
+		Name:    name,
+		Mime:    mime,
+		Kind:    kind,
+		Size:    size,
+		RelPath: rel,
+	}
+	// Inline the content of text-like attachments (capped + valid UTF-8) so the
+	// model sees it without a read_file round-trip.
+	if kind == "text" || kind == "code" {
+		if b, rerr := os.ReadFile(abs); rerr == nil && len(b) <= maxInlineTextBytes && utf8.Valid(b) {
+			att.TextContent = string(b)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, att)
+}
+
+// sanitizeFileName strips any directory components and keeps a safe basename.
+func sanitizeFileName(name string) string {
+	name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
+	name = strings.TrimSpace(name)
+	if name == "" || name == "." || name == ".." {
+		return "file"
+	}
+	return name
+}
+
+// mimeFromName guesses a coarse MIME type from the file extension when the
+// client did not supply one.
+func mimeFromName(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
+	case ".pdf":
+		return "application/pdf"
+	case ".md", ".txt", ".log", ".csv":
+		return "text/plain"
+	case ".json":
+		return "application/json"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// codeExt is the set of extensions treated as source code (kind "code").
+var codeExt = map[string]bool{
+	".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true,
+	".py": true, ".rs": true, ".java": true, ".c": true, ".h": true,
+	".cpp": true, ".cs": true, ".rb": true, ".php": true, ".sh": true,
+	".html": true, ".css": true, ".sql": true, ".yaml": true, ".yml": true,
+	".toml": true, ".json": true, ".xml": true,
+}
+
+// attachmentKind maps a MIME type (with a filename fallback) to a coarse
+// category used for icon selection and provider-message rendering.
+func attachmentKind(mime, name string) string {
+	m := strings.ToLower(mime)
+	switch {
+	case strings.HasPrefix(m, "image/"):
+		return "image"
+	case strings.HasPrefix(m, "audio/"):
+		return "audio"
+	case strings.HasPrefix(m, "video/"):
+		return "video"
+	case m == "application/pdf":
+		return "pdf"
+	}
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".pdf":
+		return "pdf"
+	case ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx":
+		return "office"
+	case ".zip", ".tar", ".gz", ".rar", ".7z":
+		return "archive"
+	case ".txt", ".md", ".log", ".csv":
+		return "text"
+	}
+	if codeExt[ext] {
+		return "code"
+	}
+	if strings.HasPrefix(m, "text/") {
+		return "text"
+	}
+	return "file"
+}

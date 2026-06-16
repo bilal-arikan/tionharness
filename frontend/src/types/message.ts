@@ -1,4 +1,5 @@
 // Chat messages, the assistant activity trace (TurnStep) and chat responses.
+import type { Attachment } from './attachment'
 
 // A single entry in an assistant turn's activity trace (mirrors agent.TurnStep).
 // Transient (live-only): 'delta' (streaming text), 'ask' (interactive prompt),
@@ -70,6 +71,8 @@ export interface Message {
   // replies). Parsed lazily by the renderer.
   steps?: string
   reasoningContent?: string
+  // User-supplied files / pasted long text sent with this turn (user role only).
+  attachments?: Attachment[]
   createdAt: number
 }
 

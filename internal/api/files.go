@@ -28,15 +28,34 @@ var servableExt = map[string]string{
 //
 // GET /api/files?path=<absolute or file:// path>
 func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
-	raw := r.URL.Query().Get("path")
-	if raw == "" {
-		writeError(w, http.StatusBadRequest, "path is required")
-		return
+	var path string
+	// `rel` resolves a workspace-relative path (e.g. an uploaded attachment under
+	// "uploads/...") against the active workspace sandbox root. `path` is an
+	// absolute/file:// path (e.g. a screenshot a tool produced). rel wins.
+	if rel := r.URL.Query().Get("rel"); rel != "" {
+		wsp := ws(r)
+		if wsp == nil {
+			writeError(w, http.StatusBadRequest, "no workspace")
+			return
+		}
+		// Clean within the sandbox; reject any traversal that escapes it.
+		clean := filepath.Clean(filepath.FromSlash(strings.TrimPrefix(rel, "/")))
+		if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			writeError(w, http.StatusBadRequest, "invalid path")
+			return
+		}
+		path = filepath.Join(wsp.DataDir, "workspace", clean)
+	} else {
+		raw := r.URL.Query().Get("path")
+		if raw == "" {
+			writeError(w, http.StatusBadRequest, "path or rel is required")
+			return
+		}
+		// Accept file:// URLs as well as bare paths.
+		raw = strings.TrimPrefix(raw, "file://")
+		raw = strings.TrimPrefix(raw, "/") // file:///C:/... → C:/...
+		path = filepath.Clean(raw)
 	}
-	// Accept file:// URLs as well as bare paths.
-	raw = strings.TrimPrefix(raw, "file://")
-	raw = strings.TrimPrefix(raw, "/") // file:///C:/... → C:/...
-	path := filepath.Clean(raw)
 
 	ext := strings.ToLower(filepath.Ext(path))
 	mime, ok := servableExt[ext]

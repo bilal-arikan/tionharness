@@ -1,13 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Agent, SlashCommand } from '../../types'
+import { Paperclip } from 'lucide-react'
+import type { Agent, Attachment, SlashCommand } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
+import { AttachmentChip } from './AttachmentChip'
+import { api } from '../../api'
+import { PASTE_AS_FILE_THRESHOLD } from '../../lib/attachments'
+
+// PendingAttachment tracks one attachment while composing: its local preview and
+// upload state, plus the server descriptor once the upload resolves.
+interface PendingAttachment {
+  localId: string
+  name: string
+  previewURL?: string // object URL for image previews
+  uploading: boolean
+  error?: string
+  attachment?: Attachment // populated when the upload succeeds
+}
 
 interface Props {
   disabled: boolean
+  // sessionId scopes uploads; attachments require an active session.
+  sessionId?: string
   // streaming: a turn is currently in flight. Changes the action buttons:
   // empty input → "Durdur"; filled input → Queue / Interrupt / Steer.
   streaming?: boolean
-  onSend: (text: string) => void
+  onSend: (text: string, attachments: Attachment[]) => void
   onStop?: () => void
   onInterrupt?: (text: string) => void
   onQueue?: (text: string) => void
@@ -74,6 +91,7 @@ function detectTrigger(value: string, caret: number): Trigger {
 // select, Esc closes.
 export function Composer({
   disabled,
+  sessionId,
   streaming = false,
   onSend,
   onStop,
@@ -90,7 +108,70 @@ export function Composer({
   const [text, setText] = useState('')
   const [trigger, setTrigger] = useState<Trigger>(null)
   const [sel, setSel] = useState(0)
+  const [pending, setPending] = useState<PendingAttachment[]>([])
+  const [dragOver, setDragOver] = useState(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  // Monotonic id for pending attachments (avoids Date.now collisions on bursts).
+  const seq = useRef(0)
+
+  // uploadFiles uploads each file, tracking per-file progress in `pending`. Image
+  // files get a local object-URL preview shown immediately. Requires a session.
+  const uploadFiles = (files: File[]) => {
+    if (!sessionId || files.length === 0) return
+    for (const file of files) {
+      const localId = `att-${seq.current++}`
+      const isImage = file.type.startsWith('image/')
+      const previewURL = isImage ? URL.createObjectURL(file) : undefined
+      setPending((p) => [...p, { localId, name: file.name, previewURL, uploading: true }])
+      api
+        .uploadFile(sessionId, file)
+        .then((attachment) => {
+          setPending((p) =>
+            p.map((x) => (x.localId === localId ? { ...x, uploading: false, attachment } : x)),
+          )
+        })
+        .catch((e: unknown) => {
+          setPending((p) =>
+            p.map((x) =>
+              x.localId === localId ? { ...x, uploading: false, error: (e as Error).message } : x,
+            ),
+          )
+        })
+    }
+  }
+
+  const removePending = (localId: string) => {
+    setPending((p) => {
+      const hit = p.find((x) => x.localId === localId)
+      if (hit?.previewURL) URL.revokeObjectURL(hit.previewURL)
+      return p.filter((x) => x.localId !== localId)
+    })
+  }
+
+  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    uploadFiles(Array.from(e.target.files ?? []))
+    e.target.value = '' // allow re-selecting the same file
+  }
+
+  // onPaste: large clipboard text becomes a .txt attachment (Claude.ai-style),
+  // and pasted image data (e.g. a screenshot) is uploaded as an image. Plain
+  // short text falls through to the textarea's normal paste.
+  const onPaste = (e: React.ClipboardEvent) => {
+    if (!sessionId) return
+    const files = Array.from(e.clipboardData.files ?? [])
+    if (files.length > 0) {
+      e.preventDefault()
+      uploadFiles(files)
+      return
+    }
+    const txt = e.clipboardData.getData('text')
+    if (txt && txt.length > PASTE_AS_FILE_THRESHOLD) {
+      e.preventDefault()
+      const file = new File([txt], 'pasted-text.txt', { type: 'text/plain' })
+      uploadFiles([file])
+    }
+  }
 
   // Items currently shown in the open menu (filtered by the trigger query).
   const items = useMemo<MenuItem[]>(() => {
@@ -139,12 +220,24 @@ export function Composer({
     taRef.current?.focus()
   }
 
+  // Attachments ready to send (upload finished, no error).
+  const readyAttachments = pending.filter((p) => p.attachment && !p.error).map((p) => p.attachment!)
+  const anyUploading = pending.some((p) => p.uploading)
+  const hasContent = text.trim().length > 0 || readyAttachments.length > 0
+
+  const clearComposer = () => {
+    pending.forEach((p) => p.previewURL && URL.revokeObjectURL(p.previewURL))
+    setText('')
+    setPending([])
+    closeMenu()
+  }
+
   const send = () => {
     const t = text.trim()
-    if (!t || disabled) return
-    onSend(t)
-    setText('')
-    closeMenu()
+    // Block while uploads are still in flight so attachments are never dropped.
+    if (disabled || anyUploading || (!t && readyAttachments.length === 0)) return
+    onSend(t, readyAttachments)
+    clearComposer()
   }
 
   // Streaming-turn actions (only when a turn is in flight). Each consumes the
@@ -206,7 +299,23 @@ export function Composer({
   }
 
   return (
-    <div className="relative border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
+    <div
+      className={`relative border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4 ${
+        dragOver ? 'ring-2 ring-inset ring-[var(--color-accent)]' : ''
+      }`}
+      onDragOver={(e) => {
+        if (!sessionId) return
+        e.preventDefault()
+        setDragOver(true)
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        if (!sessionId) return
+        e.preventDefault()
+        setDragOver(false)
+        uploadFiles(Array.from(e.dataTransfer.files ?? []))
+      }}
+    >
       {/* Autocomplete menu, anchored above the input. */}
       {trigger && items.length > 0 && (
         <div className="absolute bottom-full left-6 mb-2 max-h-64 w-80 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
@@ -238,22 +347,58 @@ export function Composer({
         </div>
       )}
 
+      {/* Attachment tray: chips for files/pasted text staged for the next turn. */}
+      {pending.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2.5">
+          {pending.map((p) =>
+            p.attachment ? (
+              <AttachmentChip
+                key={p.localId}
+                attachment={p.attachment}
+                previewURL={p.previewURL}
+                onRemove={() => removePending(p.localId)}
+              />
+            ) : (
+              <AttachmentChip
+                key={p.localId}
+                attachment={{ id: p.localId, name: p.name, mime: '', kind: 'file', size: 0 }}
+                previewURL={p.previewURL}
+                uploading={p.uploading}
+                onRemove={() => removePending(p.localId)}
+              />
+            ),
+          )}
+        </div>
+      )}
+
       <div className="flex w-full items-end gap-2">
         <ThinkingPicker value={thinkingLevel} onChange={onThinkingLevelChange} />
         <PermissionPicker value={permissionMode} onChange={onPermissionModeChange} />
+        {/* Attach button + hidden multi-file input. */}
+        <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFiles} />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={!sessionId}
+          title="Dosya ekle"
+          className="rounded-xl border border-[var(--color-border)] px-2.5 py-3 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-30"
+        >
+          <Paperclip size={18} />
+        </button>
         <textarea
           ref={taRef}
           value={text}
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           rows={1}
-          placeholder="Mesaj yaz — @ ile ajan, / ile komut"
+          placeholder="Mesaj yaz — @ ile ajan, / ile komut, 📎 ile dosya"
           className="max-h-40 flex-1 resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
         />
         {!streaming ? (
           <button
             onClick={send}
-            disabled={disabled || !hasText}
+            disabled={disabled || !hasContent || anyUploading}
             className="rounded-xl bg-[var(--color-accent)] px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-30"
           >
             Gönder
