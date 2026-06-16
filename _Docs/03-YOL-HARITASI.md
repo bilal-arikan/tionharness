@@ -17,7 +17,7 @@ graph LR
 
 ---
 
-> **Durum (2026-06-15):** Faz 0–6 + Ara Faz (Workspace İzolasyonu) + Faz 6.5 (Sağlamlaştırma) + **Faz 8 (Tool-use + MCP)** + **Faz 7 (Orchestration)** tamamlandı ve Chrome'da canlı test edildi. (Faz 8, kullanıcı talebiyle Faz 7'den önce yapıldı.) Ayrıca üç plan-dışı **ara özellik** eklendi: otomatik başlık (auto-title), uygulama-geneli **Ayarlar ekranı** (`internal/settings`, şifreli `settings.json`) ve **zengin sohbet arayüzü** (Chat UX: markdown/tool kartları/diff/görsel — [07-CHAT-UX.md](07-CHAT-UX.md)). Sıradaki: **Faz 9 — Wails Paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Aşağıda ✅ tamamlanan, parantez içinde **gerçekle ayrışan** kararlar belirtilmiştir. Canlı detay: [05-ILERLEME.md](05-ILERLEME.md).
+> **Durum (2026-06-16):** Faz 0–8 (Faz 8, Faz 7'den önce) + Workspace İzolasyonu + Faz 6.5 + SDK paritesi P1/P2 tamamlandı; aşağıdaki faz işaretleri (✅) canlı durumu yansıtır. **Sıradaki:** **Yapılacaklar / Backlog** bölümü. Plan-dışı ara özelliklerin ve günlüğün tam dökümü: [05-ILERLEME.md](05-ILERLEME.md).
 
 ## Faz 0 — İskelet ve Ortam ✅
 - [x] Go kurulumu (1.26.4)
