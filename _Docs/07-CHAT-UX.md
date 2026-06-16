@@ -156,8 +156,19 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 
 ## Notlar / Sıradaki
 
-- `thinking` adımları: native yolda Anthropic extended-thinking açıksa, claude-cli
-  yolunda CLI `thinking` bloğu yayınlarsa otomatik gösterilir. Extended-thinking'i
-  zorla açmak (maliyet etkisi) ayrı bir tercih olarak bırakıldı.
+- `thinking` adımları: **hem native (anthropic) hem claude-cli** yolunda gösterilir.
+  Ajanın `ThinkingLevel`'i (low/medium/high) `thinkingBudgetForLevel` ile token bütçesine
+  çevrilir ve **araçsız (MCP kapalı) turlarda** `Request.ThinkingBudget` olarak gönderilir.
+  - **Native streaming** (`anthropic.Stream`): SSE `content_block_delta` artık `text_delta`
+    **ve** `thinking_delta`'yı ayrıştırır. Tipli `providers.StreamDelta{Kind: text|thinking}`
+    ile yayılır → `recordedStream` thinking parçalarını sabit `liveThinkingID` ile canlı
+    `StepThinking` olarak akıtır (frontend `App.tsx` id'ye göre tek büyüyen düşünme bloğuna
+    **merge** eder, tool_delta deseni). Tam thinking metni ayrıca `Response.Trace`'e konur →
+    `traceToSteps` ile **kalıcı** `StepThinking` olarak mesaja yazılır (reload sonrası kalır).
+  - **Native non-streaming** (`anthropic.Complete`): `thinking` content-block'u `Response.Trace`'e
+    bir `thinking` adımı olarak parse edilir (otonom/heartbeat turları dâhil).
+  - **claude-cli**: CLI stream-json `thinking` bloğunu zaten yayınlar.
+  Not: native **tool** döngüsünde thinking kapalı tutulur — imzalı thinking bloklarını geri
+  beslemek gerekir, provider soyutlaması bunu korumaz (bkz. `toolloop.go`).
 - claude-cli tool kullanımı, kullanıcının yerel `~/.claude` izin ayarlarına tabidir
   (print modunda izin verilen araçlar çalışır).

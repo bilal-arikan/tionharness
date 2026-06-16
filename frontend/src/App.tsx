@@ -465,6 +465,15 @@ export default function App() {
             // Tombstone: retract a previously emitted live step by id.
             if (st.kind === 'tombstone') {
               liveSteps = liveSteps.filter((s) => s.id !== st.ref)
+            } else if (st.kind === 'thinking' && st.id) {
+              // Merge streamed reasoning chunks into one growing thinking block.
+              const idx = liveSteps.findIndex((s) => s.kind === 'thinking' && s.id === st.id)
+              if (idx >= 0) {
+                const merged = { ...liveSteps[idx], text: (liveSteps[idx].text || '') + (st.text || '') }
+                liveSteps = liveSteps.map((s, k) => (k === idx ? merged : s))
+              } else {
+                liveSteps = [...liveSteps, st]
+              }
             } else if (st.kind === 'tool_delta' && st.id) {
               // Merge streaming tool output into the existing chunk of the same id.
               const idx = liveSteps.findIndex((s) => s.kind === 'tool_delta' && s.id === st.id)

@@ -12,6 +12,18 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Extended thinking native parite (streaming + Complete) ✅ (2026-06-16)
+Extended reasoning artık **native (anthropic) yolda** da uçtan uca yüzeyleniyor — önceden yalnız claude-cli `thinking` bloğunu dolduruyordu; native `Stream` sadece `text_delta` ayrıştırdığından düşünme kayboluyordu.
+
+1. **`providers/provider.go`:** `Streamer` callback'i `func(string)` → tipli `func(StreamDelta)` (yeni `StreamDelta{Kind,Text}` + `DeltaText`/`DeltaThinking` sabitleri).
+2. **`providers/anthropic.go`:** `Stream` SSE `content_block_delta`'da artık `text_delta` **ve** `thinking_delta` parse eder, tipli delta ile yayar; tam thinking metni `Response.Trace`'e `thinking` adımı olarak konur. `Complete` da `thinking` content-block'unu `Response.Trace`'e parse eder.
+3. **`providers/minimax.go`:** `Stream` yeni imzaya uyduruldu (thinking yok → hep `DeltaText`).
+4. **`agent/toolloop.go`:** `recordedStream` thinking'i sabit `liveThinkingID` ile canlı `StepThinking` akıtır; stream yolu artık `traceToSteps(resp.Trace)` döndürür → thinking **kalıcılaşır** (önce `nil` dönüp reload'da kayboluyordu).
+5. **`frontend/src/App.tsx`:** canlı thinking delta'larını `id`'ye göre tek büyüyen `ThinkingBlock`'a merge eder (tool_delta deseni).
+6. **Test (yeni):** `providers/stream_test.go` → `TestAnthropic_StreamSurfacesThinking` (thinking+text delta ayrımı + `Response.Trace` kalıcılığı); mevcut stream testleri yeni imzaya güncellendi.
+
+Bütçe ajanın `ThinkingLevel`'inden (`thinkingBudgetForLevel`: low=2048/medium=8192/high=16384) yalnız **araçsız (MCP kapalı)** turlarda gönderilir. Native **tool** döngüsünde thinking hâlâ kapalı (imzalı blok geri-besleme gerektirir). ✅ `go build`/`vet`/`test ./...` + frontend `tsc --noEmit` temiz. Detay: [07-CHAT-UX.md](07-CHAT-UX.md).
+
 ### D2 — Provider retry middleware + C1 — Sistem-prompt cache sınırı ✅ (2026-06-16)
 
 İki backlog maddesi tamamlandı: geçici hatalara dayanıklı sağlayıcı çağrıları (D2) ve

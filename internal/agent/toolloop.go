@@ -86,7 +86,10 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 				if err != nil {
 					return nil, nil, err
 				}
-				return resp, nil, nil // deltas are transient; full text is on resp
+				// Text deltas are transient (recovered from resp.Text); the
+				// thinking trace, if any, is persisted so the reasoning block
+				// survives reload.
+				return resp, traceToSteps(resp.Trace), nil
 			}
 		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
@@ -248,12 +251,24 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 	return resp, nil
 }
 
-// recordedStream streams a completion, forwarding each text delta as a live
-// StepDelta, and records usage. Deltas are transient (live UI only); the
-// returned Response carries the full text the caller persists as the message.
+// liveThinkingID keys the live thinking chunks so the UI merges the streamed
+// reasoning deltas into a single growing thinking block (same pattern as
+// tool_delta merging) rather than rendering one card per chunk.
+const liveThinkingID = "thinking-stream"
+
+// recordedStream streams a completion, forwarding each chunk as a live step, and
+// records usage. Text chunks become transient StepDelta (live UI only; the full
+// text is on resp.Text); thinking chunks become a merged live StepThinking. The
+// returned Response also carries the full thinking as a TraceStep, which the
+// caller persists so the reasoning block survives reload.
 func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm providers.Streamer, req providers.Request, onStep func(TurnStep)) (*providers.Response, error) {
-	resp, err := sm.Stream(ctx, req, func(delta string) {
-		onStep(TurnStep{Kind: StepDelta, Text: delta})
+	resp, err := sm.Stream(ctx, req, func(d providers.StreamDelta) {
+		switch d.Kind {
+		case providers.DeltaThinking:
+			onStep(TurnStep{Kind: StepThinking, Text: d.Text, ID: liveThinkingID})
+		default:
+			onStep(TurnStep{Kind: StepDelta, Text: d.Text})
+		}
 	})
 	if err != nil {
 		return nil, err

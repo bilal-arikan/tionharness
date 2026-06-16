@@ -146,7 +146,8 @@ func (m *Minimax) Complete(ctx context.Context, req Request) (*Response, error) 
 // Stream implements Streamer via the OpenAI-compatible chat endpoint with
 // "stream": true. Each chunk's delta.content is forwarded to onDelta; the final
 // usage-only chunk (requested via stream_options) populates the Response usage.
-func (m *Minimax) Stream(ctx context.Context, req Request, onDelta func(string)) (*Response, error) {
+// MiniMax does not expose extended reasoning, so every chunk is a text delta.
+func (m *Minimax) Stream(ctx context.Context, req Request, onDelta func(StreamDelta)) (*Response, error) {
 	if m.apiKey == "" {
 		return nil, fmt.Errorf("minimax: missing API key")
 	}
@@ -178,7 +179,7 @@ func (m *Minimax) Stream(ctx context.Context, req Request, onDelta func(string))
 		if len(ch.Choices) > 0 {
 			if c := ch.Choices[0].Delta.Content; c != "" {
 				sb.WriteString(c)
-				onDelta(c)
+				onDelta(StreamDelta{Kind: DeltaText, Text: c})
 			}
 		}
 		if ch.Usage != nil {

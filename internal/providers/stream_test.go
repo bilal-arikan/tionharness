@@ -49,7 +49,7 @@ func TestAnthropic_StreamAccumulatesDeltas(t *testing.T) {
 
 	var got []string
 	resp, err := a.Stream(context.Background(), Request{Messages: []Message{{Role: RoleUser, Text: "hi"}}},
-		func(d string) { got = append(got, d) })
+		func(d StreamDelta) { got = append(got, d.Text) })
 	if err != nil {
 		t.Fatalf("stream: %v", err)
 	}
@@ -64,6 +64,56 @@ func TestAnthropic_StreamAccumulatesDeltas(t *testing.T) {
 	}
 	if resp.StopReason != "end_turn" {
 		t.Errorf("stop = %q, want end_turn", resp.StopReason)
+	}
+}
+
+func TestAnthropic_StreamSurfacesThinking(t *testing.T) {
+	body := strings.Join([]string{
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"Let me "}}`,
+		``,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"reason."}}`,
+		``,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Answer"}}`,
+		``,
+		`event: message_stop`,
+		`data: {"type":"message_stop"}`,
+		``,
+	}, "\n")
+	srv := sseServer(t, body)
+	defer srv.Close()
+
+	a := NewAnthropic("key")
+	a.client = srv.Client()
+	a.client.Transport = rewriteHost(srv.URL)
+
+	var text, thinking []string
+	resp, err := a.Stream(context.Background(),
+		Request{Messages: []Message{{Role: RoleUser, Text: "hi"}}, ThinkingBudget: 1024},
+		func(d StreamDelta) {
+			if d.Kind == DeltaThinking {
+				thinking = append(thinking, d.Text)
+			} else {
+				text = append(text, d.Text)
+			}
+		})
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if resp.Text != "Answer" {
+		t.Errorf("Text = %q, want Answer", resp.Text)
+	}
+	if strings.Join(thinking, "") != "Let me reason." {
+		t.Errorf("thinking deltas = %v, want full reasoning", thinking)
+	}
+	if strings.Join(text, "") != "Answer" {
+		t.Errorf("text deltas = %v, want [Answer]", text)
+	}
+	// The full thinking text is also returned as a persistable trace step.
+	if len(resp.Trace) != 1 || resp.Trace[0].Kind != "thinking" || resp.Trace[0].Text != "Let me reason." {
+		t.Errorf("Trace = %+v, want one thinking step", resp.Trace)
 	}
 }
 
@@ -84,7 +134,7 @@ func TestMinimax_StreamAccumulatesDeltas(t *testing.T) {
 	m := NewMinimax("key", srv.URL)
 	var got []string
 	resp, err := m.Stream(context.Background(), Request{Messages: []Message{{Role: RoleUser, Text: "selam"}}},
-		func(d string) { got = append(got, d) })
+		func(d StreamDelta) { got = append(got, d.Text) })
 	if err != nil {
 		t.Fatalf("stream: %v", err)
 	}

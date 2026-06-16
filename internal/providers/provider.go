@@ -121,15 +121,31 @@ type Provider interface {
 	Complete(ctx context.Context, req Request) (*Response, error)
 }
 
-// Streamer is implemented by providers that can stream a completion's text
+// Delta kinds carried by StreamDelta.
+const (
+	DeltaText     = "text"     // visible answer text
+	DeltaThinking = "thinking" // extended-reasoning (thinking) text
+)
+
+// StreamDelta is one incremental chunk emitted by a streaming provider. Kind
+// routes the chunk in the UI: DeltaText feeds the live answer bubble while
+// DeltaThinking feeds a live reasoning block. Text is never the empty string.
+type StreamDelta struct {
+	Kind string
+	Text string
+}
+
+// Streamer is implemented by providers that can stream a completion's output
 // token-by-token. Complete stays the baseline every provider must satisfy;
 // Stream is a first-class optional capability the runtime prefers when a delta
 // sink is available and the turn uses no tools. onDelta is called with each
-// incremental text chunk (never the empty string) from the provider's
-// goroutine; the returned Response carries the full accumulated text, usage and
-// stop reason, exactly like Complete.
+// incremental chunk (never empty) from the provider's goroutine — text chunks
+// and, when extended reasoning is on, thinking chunks (tagged via Kind). The
+// returned Response carries the full accumulated answer text, usage and stop
+// reason like Complete, plus an optional thinking TraceStep in Trace so the
+// reasoning can be persisted.
 type Streamer interface {
-	Stream(ctx context.Context, req Request, onDelta func(string)) (*Response, error)
+	Stream(ctx context.Context, req Request, onDelta func(StreamDelta)) (*Response, error)
 }
 
 // CanStream reports whether p supports incremental streaming (implements

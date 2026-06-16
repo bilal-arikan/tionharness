@@ -127,11 +127,12 @@ type anthropicTool struct {
 // anthropicResp mirrors the relevant parts of the response body.
 type anthropicResp struct {
 	Content []struct {
-		Type  string          `json:"type"`
-		Text  string          `json:"text"`
-		ID    string          `json:"id"`
-		Name  string          `json:"name"`
-		Input json.RawMessage `json:"input"`
+		Type     string          `json:"type"`
+		Text     string          `json:"text"`
+		Thinking string          `json:"thinking"`
+		ID       string          `json:"id"`
+		Name     string          `json:"name"`
+		Input    json.RawMessage `json:"input"`
 	} `json:"content"`
 	StopReason string `json:"stop_reason"`
 	Model      string `json:"model"`
@@ -192,10 +193,17 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 
 	var text string
 	var calls []ToolCall
+	var trace []TraceStep
 	for _, c := range parsed.Content {
 		switch c.Type {
 		case "text":
 			text += c.Text
+		case "thinking":
+			// Extended-reasoning block (precedes the answer); surface it as a
+			// thinking trace step, mirroring the keyless claude-cli path.
+			if c.Thinking != "" {
+				trace = append(trace, TraceStep{Kind: "thinking", Text: c.Thinking})
+			}
 		case "tool_use":
 			calls = append(calls, ToolCall{ID: c.ID, Name: c.Name, Input: c.Input})
 		}
@@ -206,6 +214,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		ToolCalls:  calls,
 		StopReason: parsed.StopReason,
 		Model:      parsed.Model,
+		Trace:      trace,
 		Usage: Usage{
 			InputTokens:  parsed.Usage.InputTokens,
 			OutputTokens: parsed.Usage.OutputTokens,
@@ -214,11 +223,13 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 }
 
 // Stream implements Streamer via the Messages API with "stream": true. It
-// parses the SSE event sequence (message_start → content_block_delta(text) →
-// message_delta → message_stop), forwarding each text chunk to onDelta and
-// accumulating the full text/usage/stop reason for the returned Response. Tools
-// are not used on the streaming path (text-only turns).
-func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(string)) (*Response, error) {
+// parses the SSE event sequence (message_start → content_block_delta →
+// message_delta → message_stop), forwarding each text/thinking chunk to onDelta
+// (tagged via StreamDelta.Kind) and accumulating the full text/usage/stop
+// reason for the returned Response. When extended reasoning is on, the full
+// thinking text is also returned as a thinking TraceStep so it can be persisted.
+// Tools are not used on the streaming path (text-only turns).
+func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(StreamDelta)) (*Response, error) {
 	if a.apiKey == "" {
 		return nil, fmt.Errorf("anthropic: missing API key")
 	}
@@ -248,7 +259,8 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(string
 		headers["anthropic-beta"] = beta
 	}
 
-	var sb strings.Builder
+	var sb strings.Builder // visible answer text
+	var tb strings.Builder // extended-reasoning (thinking) text
 	out := &Response{Model: model, StopReason: StopEndTurn}
 	parseErr := error(nil)
 
@@ -268,13 +280,25 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(string
 		case "content_block_delta":
 			var ev struct {
 				Delta struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
+					Type     string `json:"type"`
+					Text     string `json:"text"`
+					Thinking string `json:"thinking"`
 				} `json:"delta"`
 			}
-			if json.Unmarshal(data, &ev) == nil && ev.Delta.Type == "text_delta" && ev.Delta.Text != "" {
-				sb.WriteString(ev.Delta.Text)
-				onDelta(ev.Delta.Text)
+			if json.Unmarshal(data, &ev) != nil {
+				return true
+			}
+			switch ev.Delta.Type {
+			case "text_delta":
+				if ev.Delta.Text != "" {
+					sb.WriteString(ev.Delta.Text)
+					onDelta(StreamDelta{Kind: DeltaText, Text: ev.Delta.Text})
+				}
+			case "thinking_delta":
+				if ev.Delta.Thinking != "" {
+					tb.WriteString(ev.Delta.Thinking)
+					onDelta(StreamDelta{Kind: DeltaThinking, Text: ev.Delta.Thinking})
+				}
 			}
 		case "message_delta":
 			var ev struct {
@@ -313,6 +337,9 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(string
 		return nil, parseErr
 	}
 	out.Text = sb.String()
+	if tb.Len() > 0 {
+		out.Trace = []TraceStep{{Kind: "thinking", Text: tb.String()}}
+	}
 	return out, nil
 }
 
