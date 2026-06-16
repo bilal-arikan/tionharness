@@ -9,7 +9,7 @@ import (
 
 // Config holds resolved runtime settings.
 type Config struct {
-	Addr         string // HTTP listen address, e.g. ":8080"
+	Addr         string // HTTP listen address, e.g. "127.0.0.1:8080"
 	DataDir      string // persistent state directory
 	WorkspaceDir string // task workspace root
 	AccessKey    string // dashboard auth token (optional)
@@ -29,7 +29,11 @@ func Load() (*Config, error) {
 	workspaceDir := envOr("SWARMGO_WORKSPACE_DIR", filepath.Join(dataDir, "workspace"))
 
 	cfg := &Config{
-		Addr:            envOr("SWARMGO_ADDR", ":8080"),
+		// Loopback-only by default: the desktop app and dev frontend reach the
+		// API over localhost, and binding to 127.0.0.1 avoids the Windows
+		// Firewall "allow inbound" prompt that a 0.0.0.0 bind triggers on every
+		// rebuild. Set SWARMGO_ADDR (e.g. ":8090" or "0.0.0.0:8090") to expose it.
+		Addr:            envOr("SWARMGO_ADDR", "127.0.0.1:8080"),
 		DataDir:         dataDir,
 		WorkspaceDir:    workspaceDir,
 		AccessKey:       os.Getenv("ACCESS_KEY"),

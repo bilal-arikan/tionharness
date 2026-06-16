@@ -191,7 +191,7 @@ erDiagram
 
 | Değişken | Açıklama |
 |----------|----------|
-| `SWARMGO_ADDR` | HTTP dinleme adresi (varsayılan `:8080`; geliştirmede `:8090`) |
+| `SWARMGO_ADDR` | HTTP dinleme adresi (varsayılan loopback `127.0.0.1:8080`; geliştirmede `127.0.0.1:8090`; ağa açmak için `0.0.0.0:8090`). Loopback, Windows Güvenlik Duvarı'nın izin sormasını önler |
 | `SWARMGO_DATA_DIR` | Kalıcı durum dizini (varsayılan `~/.swarmgo`) |
 | `SWARMGO_WORKSPACE_DIR` | Görev workspace kökü |
 | `SWARMGO_MAX_CONTEXT_TOKENS` | Bağlam sıkıştırma eşiği (varsayılan 12000) |

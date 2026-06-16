@@ -24,8 +24,9 @@ Açık kaynaklı, kendi sunucunda barındırılan **çoklu-ajan (multi-agent) AI
 ## Hızlı Başlangıç (geliştirme)
 
 ```powershell
-# Terminal 1 — backend (:8090 — :8080 unity-mcp ile çakışır)
-$env:SWARMGO_ADDR=":8090"; go run ./cmd/swarmgo
+# Terminal 1 — backend (127.0.0.1:8090 — :8080 unity-mcp ile çakışır)
+# Loopback adresi Windows Güvenlik Duvarı'nın her derlemede "izin ver" sormasını önler.
+$env:SWARMGO_ADDR="127.0.0.1:8090"; go run ./cmd/swarmgo
 
 # Terminal 2 — frontend
 cd frontend; npm install; npm run dev   # http://localhost:5173 (vite proxy → :8090)
@@ -39,7 +40,7 @@ Sağlık kontrolü: `curl http://localhost:8090/health`
 
 | Değişken | Açıklama | Varsayılan |
 |----------|----------|-----------|
-| `SWARMGO_ADDR` | HTTP dinleme adresi | `:8080` |
+| `SWARMGO_ADDR` | HTTP dinleme adresi (loopback varsayılan; ağa açmak için `0.0.0.0:8090`) | `127.0.0.1:8080` |
 | `SWARMGO_DATA_DIR` | Kalıcı durum dizini | `~/.swarmgo` |
 | `SWARMGO_MAX_CONTEXT_TOKENS` | Bağlam sıkıştırma eşiği | `12000` |
 | `SWARMGO_KEEP_RECENT_MSGS` | Sıkıştırmada korunan son mesaj sayısı | `8` |
