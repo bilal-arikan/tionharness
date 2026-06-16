@@ -11,7 +11,6 @@ graph TD
     RT --> MEM[Memory<br/>internal/memory]
     RT --> PROV[Providers<br/>internal/providers]
     RT --> MCP[MCP Istemci<br/>internal/mcp]
-    RT --> CONN[Connectors<br/>internal/connectors]
     MEM --> DB[Dosya Store<br/>JSON/JSONL<br/>internal/db]
     TASK --> DB
     RT --> DB
@@ -29,7 +28,7 @@ graph TD
 
 ### 2. API Katmanı (`internal/api`)
 - HTTP router: **stdlib `net/http` ServeMux** (Go 1.22+ method+path pattern → Chi/Echo gerekmedi). Rotalar domain-bazlı `register*Routes` yardımcılarına bölünmüştür (`server.go`).
-- REST uçları: `/api/agents`, `/api/sessions`, `/api/chat`, `/api/tasks`, `/api/schedules`, `/api/flows`, `/api/mcp-servers`, `/api/settings`, `/api/workspaces` (tam liste için `server.go`). (`/api/connectors` Faz 9'da gelecek.)
+- REST uçları: `/api/agents`, `/api/sessions`, `/api/chat`, `/api/tasks`, `/api/schedules`, `/api/flows`, `/api/mcp-servers`, `/api/settings`, `/api/workspaces` (tam liste için `server.go`).
 - Canlı akış: kalıcı WebSocket hub'ı yerine **SSE** (`POST /api/chat/stream`) — sohbet turu adım adım UI'a akar (bkz. `07-CHAT-UX.md`).
 
 ### 3. Agent Runtime (`internal/agent`)
@@ -42,8 +41,7 @@ graph LR
     CALL --> TOOL[Tool Loop<br/>arac calistirma]
     TOOL --> OUT[Outcome Classification<br/>basari/hata + backoff]
     OUT --> PERSIST[Message Persist<br/>session_messages]
-    PERSIST --> DELIVER[Connector Delivery<br/>outbox retry]
-    DELIVER --> MEMUP[Memory Update<br/>reflection/dream]
+    PERSIST --> MEMUP[Memory Update<br/>reflection/dream]
     MEMUP --> DISPATCH[Task Dispatch<br/>delege gorevler]
 ```
 
@@ -77,14 +75,13 @@ graph LR
 
 ### 7. Diğer Modüller
 - **MCP (`internal/mcp`):** Model Context Protocol istemcisi — SDK'sız elle JSON-RPC 2.0; şu an **stdio** taşıma (SSE/HTTP hedef, henüz yok).
-- **Connectors (`internal/connectors`):** Discord, Slack, Telegram köprüleri + outbox retry kuyruğu.
 - **Tasks (`internal/tasks`):** Pano, atama, delegasyon, yürütme politikası.
 - **DB (`internal/db`):** Dosya-tabanlı store — entity-başına JSON + oturum-başına JSONL, bellek-içi maps + atomik diske yazma (SQLite yok). Bkz. `_Docs/08-DEPOLAMA.md`.
 - **Config (`internal/config`):** Ortam değişkenleri, şifreli kimlik bilgileri (credential secret).
 
 ## Dizin Yapısı
 
-> Yukarıdaki yüksek seviye diyagram **hedef** mimaridir. Aşağıdaki yapı **2026-06-15 itibarıyla gerçekte mevcut** olandır (Faz 0–8). `orchestration`, `mcp`, `tools` artık mevcut; `connectors` Faz 9'da eklenecek (klasör boş placeholder). Ayrı bir `tasks` paketi yerine görev mantığı `db` + `api` + `agent/executor.go` içinde yaşar.
+> Yukarıdaki yüksek seviye diyagram **hedef** mimaridir. Aşağıdaki yapı **gerçekte mevcut** olandır (Faz 0–8). `orchestration`, `mcp`, `tools` artık mevcut. Ayrı bir `tasks` paketi yerine görev mantığı `db` + `api` + `agent/executor.go` içinde yaşar.
 
 ```
 SwarmGo/
@@ -107,11 +104,11 @@ SwarmGo/
 └── go.mod
 ```
 
-> Henüz eklenmemiş (ileri fazlar): `internal/connectors` (Faz 9 — şu an boş placeholder), Wails paketleme (Faz 10), WebSocket streaming. Not: MCP istemcisi yalnızca **stdio** taşımayı destekler; SSE/HTTP henüz yok.
+> Henüz eklenmemiş (ileri fazlar): Wails paketleme (Faz 9), WebSocket (canlı akış şu an SSE ile). Not: MCP istemcisi yalnızca **stdio** taşımayı destekler; SSE/HTTP henüz yok.
 
 ## Tasarım İlkeleri
 
 1. **Modülerlik:** Her sorumluluk ayrı pakette, kod ayrı dosyalara bölünmüş.
-2. **Arayüz odaklı:** Provider, Connector, Memory gibi katmanlar interface ile soyutlanır → kolay test ve genişletme.
+2. **Arayüz odaklı:** Provider, Memory gibi katmanlar interface ile soyutlanır → kolay test ve genişletme.
 3. **Restart-safe:** Run state DB'de tutulur; çökme sonrası kaldığı yerden devam.
 4. **Dil kuralı:** Kod ve yorumlar İngilizce; dokümanlar Türkçe.

@@ -1,15 +1,15 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-15**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-16**
 
 ## Kararlar (2026-06-15)
 - **İlk LLM sağlayıcısı:** Anthropic (Claude) ✅
 - **Frontend:** React ✅
 
-## Mevcut Durum: FAZ 7 ORCHESTRATION TAMAMLANDI ✅ (CANLI TEST GEÇTİ) → Faz 9 (Connectors)
+## Mevcut Durum: FAZ 7 ORCHESTRATION TAMAMLANDI ✅ (CANLI TEST GEÇTİ) → Faz 9 (Wails)
 
 > Not: Faz 8 (MCP/Tools) kullanıcı talebiyle Faz 7'den önce yapıldı; ardından Faz 7 tamamlandı.
-> Kalan sıra: **Faz 9 Connectors · Faz 10 Wails paketleme.**
+> Kalan sıra: **Faz 9 Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
 ### Model kataloğu + provider/model seçici + MiniMax sağlayıcı ✅ (2026-06-15)
 
@@ -585,7 +585,7 @@ kullanıcının OAuth/abonelik girişiyle çalışır — **API anahtarı gerekm
 - [x] Kök `README.md` (Türkçe)
 
 ### Sıradaki Adımlar ⏳ (Faz 1)
-- [ ] Wails v2 CLI kurulumu (Faz 10'a kadar ertelenebilir)
+- [ ] Wails v2 CLI kurulumu (Faz 9'a kadar ertelenebilir)
 - [ ] `internal/db`: SQLite (modernc.org/sqlite) bağlantısı
 - [ ] Migration runner + `0001_init.sql`
 - [ ] `internal/config`: env + credential secret (AES-GCM)

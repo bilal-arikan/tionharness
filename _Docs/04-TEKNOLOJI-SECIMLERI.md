@@ -21,8 +21,6 @@ Her seçim, SwarmClaw'daki TypeScript karşılığının Go ekosistemindeki en u
 | Anthropic SDK | **anthropics/anthropic-sdk-go** | Resmi SDK |
 | OpenAI SDK | **sashabaranov/go-openai** | En yaygın, olgun |
 | MCP istemci | **mark3labs/mcp-go** | Go için en olgun MCP kütüphanesi |
-| Discord | **bwmarrin/discordgo** | Standart Go Discord kütüphanesi |
-| Slack | **slack-go/slack** | Resmi olmayan ama standart |
 | Tarayıcı otomasyonu | **chromedp** veya **playwright-go** | Playwright karşılığı |
 | Gözlemlenebilirlik | **go.opentelemetry.io/otel** | OpenTelemetry resmi |
 | Şifreleme | stdlib **crypto/aes** + GCM | Harici bağımlılık yok |
@@ -47,7 +45,7 @@ Bu tablo başlangıç planıydı. Faz 0–8 sonunda gerçekte kullanılan kararl
 | Recall/embedding | embedding tabanlı | **saf Go lexical cosine** | Anahtarsız/çevrimdışı; embedding ileride |
 | UUID / log / şifreleme | google/uuid · slog · crypto/aes | ✅ hepsi kullanıldı | — |
 | MCP istemci | mark3labs/mcp-go | **SDK'sız elle JSON-RPC 2.0** (stdio) | Bağımlılıksız felsefe; SSE/HTTP henüz yok (Faz 8 ✅) |
-| Connectors · OTel | discordgo · otel | ⏳ ilgili fazlarda (9/sonra) | Henüz eklenmedi |
+| OTel (gözlemlenebilirlik) | otel | ⏳ ileride | Henüz eklenmedi |
 
 > İlke: bağımlılığı ancak gerçekten gerektiğinde ekle. Depolama dosya sistemine taşındıktan sonra `go.mod`'da yalnızca `google/uuid` ve `robfig/cron/v3` kaldı (`modernc.org/sqlite` + ~8 dolaylı bağımlılık kaldırıldı).
 
@@ -57,7 +55,7 @@ Bu tablo başlangıç planıydı. Faz 0–8 sonunda gerçekte kullanılan kararl
 |-------|---------|
 | **Wails v2** | Go backend + web frontend, native WebView, küçük boyut. Electron'un Go karşılığı. |
 
-> Not: Wails opsiyoneldir. Uygulama önce saf web servisi (`localhost`) olarak çalışır; Wails sadece native pencere sarmalayıcısı olarak Faz 10'da eklenir.
+> Not: Wails opsiyoneldir. Uygulama önce saf web servisi (`localhost`) olarak çalışır; Wails sadece native pencere sarmalayıcısı olarak Faz 9'da eklenir.
 
 ## Frontend (Web UI)
 
@@ -80,7 +78,7 @@ Bu tablo başlangıç planıydı. Faz 0–8 sonunda gerçekte kullanılan kararl
 ## Test Stratejisi
 
 - Birim test: stdlib `testing` (CGO yok → `-race` kullanılmaz)
-- Provider/Connector arayüzleri mock'lanabilir (interface tabanlı tasarım)
+- Provider arayüzü mock'lanabilir (interface tabanlı tasarım)
 - Depolama testi: `internal/db/filestore_test.go` — geçici dizinde round-trip (create→reopen→reload).
 - Provider HTTP: `internal/providers/transport_test.go` (`postJSON`) + `minimax_test.go` (`httptest` ile `Complete`).
 - Runtime tunables: `internal/agent/tunables_test.go` (get/set + eşzamanlı erişim).

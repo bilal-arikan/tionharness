@@ -20,7 +20,6 @@ erDiagram
     agents ||--o{ knowledge_sources : "hafiza"
     agents ||--o{ agent_usage : "kullanim"
     flows ||--o{ flow_runs : "uretir"
-    connectors ||--o{ sessions : "kaynak"
 
     agents {
         text id PK
@@ -110,13 +109,6 @@ erDiagram
         int  created_at
         int  updated_at
     }
-    connectors {
-        text id PK
-        text platform
-        text encrypted_key
-        text routing_policy
-        text health
-    }
     knowledge_sources {
         text id PK
         text agent_id FK
@@ -182,7 +174,6 @@ erDiagram
 | `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar |
 | `schedules` | Cron zamanlama; bağlı görev (`task_id`) **veya** doğrudan `prompt`; sonraki/son çalışma + teslim durumu; etkin mi |
 | `runs` | Yürütme kaydı: durum, tetikleyici (`trigger`), ajan çıktısı (`output`), hata |
-| `connectors` | Platform, şifreli kimlik, yönlendirme politikası, sağlık |
 | `knowledge_sources` | Doküman, journal, reflection notları + embedding |
 | `skills` | İsim, özet, etiket, canlı/taslak, kapsam |
 | `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace) |
@@ -218,7 +209,7 @@ erDiagram
 > eklenen alanlar bugün ilgili model struct'larında yaşar:
 
 - **Ana entity'ler** (eski `0001_init`): agents, sessions, session_messages, tasks,
-  schedules, runs, connectors, knowledge_sources, mcp_servers — `models*.go`.
+  schedules, runs, knowledge_sources, mcp_servers — `models*.go`.
 - **Heartbeat** (eski `0002`): `Agent.Heartbeat*` alanları.
 - **Tasks/Schedules** (eski `0003`): `Task.Prompt/LastRun*`, `Schedule.TaskID/Prompt`, `Run.Output/Trigger`.
 - **Context/Budget** (eski `0004`): `Session.Summary*`, `Agent.Daily*Limit`, `Usage` (gün-bazlı dosya).

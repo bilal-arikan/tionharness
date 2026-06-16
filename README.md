@@ -95,6 +95,6 @@ SwarmGo/
 ## Durum
 
 ✅ **Faz 0–8 tamamlandı** (İskelet · DB/Config · Provider+Chat · Web UI · Agent Runtime · Workspace İzolasyonu · Tasks+Schedules · Memory · Sağlamlaştırma · Tool-use+MCP · Orchestration) **+ ara özellikler** (otomatik başlık · uygulama-geneli Ayarlar ekranı · zengin sohbet arayüzü).
-➡️ **Sıradaki: Faz 9 — Connectors** (Discord/Slack/Telegram köprüsü), ardından Faz 10 Wails paketleme. Detaylar için bkz. [İlerleme](_Docs/05-ILERLEME.md).
+➡️ **Sıradaki: Faz 9 — Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Detaylar için bkz. [İlerleme](_Docs/05-ILERLEME.md).
 
 > Not: Faz 8 (Tool-use + MCP) kullanıcı talebiyle Faz 7'den (Orchestration) önce tamamlandı.

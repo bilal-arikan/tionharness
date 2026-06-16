@@ -12,20 +12,19 @@ graph LR
     F5 --> F6[Faz 6<br/>Memory]
     F6 --> F7[Faz 7<br/>Orchestration]
     F7 --> F8[Faz 8<br/>MCP]
-    F8 --> F9[Faz 9<br/>Connectors]
-    F9 --> F10[Faz 10<br/>Wails Paketleme]
+    F8 --> F9[Faz 9<br/>Wails Paketleme]
 ```
 
 ---
 
-> **Durum (2026-06-15):** Faz 0–6 + Ara Faz (Workspace İzolasyonu) + Faz 6.5 (Sağlamlaştırma) + **Faz 8 (Tool-use + MCP)** + **Faz 7 (Orchestration)** tamamlandı ve Chrome'da canlı test edildi. (Faz 8, kullanıcı talebiyle Faz 7'den önce yapıldı.) Ayrıca üç plan-dışı **ara özellik** eklendi: otomatik başlık (auto-title), uygulama-geneli **Ayarlar ekranı** (`internal/settings`, şifreli `settings.json`) ve **zengin sohbet arayüzü** (Chat UX: markdown/tool kartları/diff/görsel — [07-CHAT-UX.md](07-CHAT-UX.md)). Sıradaki: **Faz 9 — Connectors.** Aşağıda ✅ tamamlanan, parantez içinde **gerçekle ayrışan** kararlar belirtilmiştir. Canlı detay: [05-ILERLEME.md](05-ILERLEME.md).
+> **Durum (2026-06-15):** Faz 0–6 + Ara Faz (Workspace İzolasyonu) + Faz 6.5 (Sağlamlaştırma) + **Faz 8 (Tool-use + MCP)** + **Faz 7 (Orchestration)** tamamlandı ve Chrome'da canlı test edildi. (Faz 8, kullanıcı talebiyle Faz 7'den önce yapıldı.) Ayrıca üç plan-dışı **ara özellik** eklendi: otomatik başlık (auto-title), uygulama-geneli **Ayarlar ekranı** (`internal/settings`, şifreli `settings.json`) ve **zengin sohbet arayüzü** (Chat UX: markdown/tool kartları/diff/görsel — [07-CHAT-UX.md](07-CHAT-UX.md)). Sıradaki: **Faz 9 — Wails Paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Aşağıda ✅ tamamlanan, parantez içinde **gerçekle ayrışan** kararlar belirtilmiştir. Canlı detay: [05-ILERLEME.md](05-ILERLEME.md).
 
 ## Faz 0 — İskelet ve Ortam ✅
 - [x] Go kurulumu (1.26.4)
 - [x] Proje klasör yapısı + `go mod init`
 - [x] `_Docs` plan dokümanları
 - [x] `main.go` temel HTTP sunucu (health check)
-- [~] Wails v2 → **Faz 10'a ertelendi**
+- [~] Wails v2 → **Faz 9'a ertelendi**
 - **Çıktı:** `go run` ile ayağa kalkan, `/health` dönen sunucu. ✅
 
 ## Faz 1 — Kalıcılık ve Config ✅
@@ -96,18 +95,13 @@ graph LR
 - [x] UI: "🔌 Araçlar" paneli (`ToolsPanel.tsx`) + "🔀 Akışlar"
 - **Çıktı:** Harici MCP sunucularına bağlanan, araç kullanan ajanlar. ✅
 
-## Faz 9 — Connectors
-- [ ] `internal/connectors`: Discord (discordgo) ilk
-- [ ] Outbox retry kuyruğu + dedup
-- [ ] Slack, Telegram ekleme
-- [ ] Group policy gate
-- **Çıktı:** Mesajlaşma platformlarından erişilen ajanlar.
-
-## Faz 10 — Wails Paketleme + Çoklu Platform
+## Faz 9 — Wails Paketleme + Çoklu Platform
 - [ ] Wails ile native pencere entegrasyonu
 - [ ] `wails build` → Windows `.exe`
 - [ ] GitHub Actions: Win/macOS/Linux otomatik derleme
 - **Çıktı:** Dağıtıma hazır masaüstü uygulaması.
+
+> **Not (2026-06-16):** **Connectors fazı (Discord/Slack/Telegram köprüleri) kapsamdan çıkarıldı.** İhtiyaç olursa ileride ayrı bir faz olarak yeniden değerlendirilebilir.
 
 ---
 
