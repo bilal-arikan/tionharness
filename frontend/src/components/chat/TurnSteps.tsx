@@ -3,6 +3,7 @@ import { ThinkingBlock } from './ThinkingBlock'
 import { ActivityCard } from './ActivityCard'
 import { TextStep } from './TextStep'
 import { TodoCard } from './TodoCard'
+import { RecoveryStep } from './RecoveryStep'
 
 interface Props {
   steps: TurnStep[]
@@ -18,8 +19,11 @@ export function TurnSteps({ steps, onOpenFile }: Props) {
     <div className="mb-2 flex flex-col gap-0.5">
       {steps.map((step, i) => {
         if (step.kind === 'thinking') return <ThinkingBlock key={i} text={step.text || ''} />
+        if (step.kind === 'todo') return <TodoCard key={i} step={step} />
+        if (step.kind === 'recovery') return <RecoveryStep key={i} step={step} />
         if (step.kind === 'tool') {
-          // The working checklist renders as a dedicated card, not a tool row.
+          // Back-compat: traces persisted before 'todo' was a first-class kind
+          // carry the checklist as a todo_write tool step.
           if (step.tool === 'todo_write') return <TodoCard key={i} step={step} />
           return <ActivityCard key={i} step={step} onOpenFile={onOpenFile} />
         }

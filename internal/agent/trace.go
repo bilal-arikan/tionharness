@@ -27,7 +27,21 @@ const (
 	// live-only (never persisted) — the resolved Q&A is persisted as the
 	// ask_user tool step once the answer arrives.
 	StepAsk StepKind = "ask"
+	// StepTodo is the agent's working checklist (from the todo_write tool),
+	// rendered as a first-class checklist card rather than a generic tool row.
+	// The items live in TurnStep.Todos; persisted so the list survives reload.
+	StepTodo StepKind = "todo"
+	// StepRecovery marks the loop taking a non-happy-path branch (e.g. hitting
+	// the tool-iteration cap). Reason carries a stable machine tag; Text is the
+	// human-readable explanation. Persisted so the trace explains itself.
+	StepRecovery StepKind = "recovery"
 )
+
+// TodoItem is one entry in a StepTodo checklist (mirrors the todo_write input).
+type TodoItem struct {
+	Content string `json:"content"`
+	Status  string `json:"status"` // pending | in_progress | completed
+}
 
 // TurnStep is one entry in an assistant turn's activity trace. The ordered list
 // of steps lets the chat UI re-render tool cards, thinking blocks and diffs
@@ -45,6 +59,23 @@ type TurnStep struct {
 	// Options are the suggested clickable answers for a StepAsk prompt (optional;
 	// the user may always type a free-text answer instead).
 	Options []string `json:"options,omitempty"`
+	// Todos carries the checklist items for a StepTodo step.
+	Todos []TodoItem `json:"todos,omitempty"`
+	// Reason is the stable machine tag for a StepRecovery step (e.g.
+	// "max_tool_iterations").
+	Reason string `json:"reason,omitempty"`
+}
+
+// parseTodos extracts the checklist items from a todo_write tool call's input
+// ({"todos":[{content,status}]}). Returns nil on any decode failure.
+func parseTodos(input json.RawMessage) []TodoItem {
+	var in struct {
+		Todos []TodoItem `json:"todos"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return nil
+	}
+	return in.Todos
 }
 
 // traceStepToTurnStep maps a single provider trace step to an agent TurnStep.

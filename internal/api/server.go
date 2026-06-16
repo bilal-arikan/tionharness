@@ -100,6 +100,8 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspaces", s.handleListWorkspaces)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
 	mux.HandleFunc("DELETE /api/workspaces/{id}", s.handleDeleteWorkspace)
+	// Native folder picker (local desktop) for choosing a workspace data dir.
+	mux.HandleFunc("POST /api/pick-folder", s.handlePickFolder)
 
 	// Per-workspace settings (resolved from X-Workspace-Id).
 	mux.HandleFunc("GET /api/workspace-settings", s.handleGetWorkspaceSettings)
@@ -220,12 +222,14 @@ func (s *Server) withWorkspace(next http.Handler) http.Handler {
 		id := r.Header.Get("X-Workspace-Id")
 		var ws *workspace.Workspace
 		if id != "" {
-			found, err := s.workspaces.Get(id)
-			if err != nil {
-				writeError(w, http.StatusBadRequest, "unknown workspace: "+id)
-				return
+			// Fall back to the default workspace when the requested id is unknown
+			// (e.g. a stale id in localStorage after the workspace was deleted), so
+			// the app can always recover instead of bricking on 400s.
+			if found, err := s.workspaces.Get(id); err == nil {
+				ws = found
+			} else {
+				ws = s.workspaces.Default()
 			}
-			ws = found
 		} else {
 			ws = s.workspaces.Default()
 		}

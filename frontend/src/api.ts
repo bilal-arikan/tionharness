@@ -171,13 +171,16 @@ function subscribeEvents(onEvent: (e: AppEvent) => void): () => void {
 export const api = {
   // Workspaces (not workspace-scoped).
   listWorkspaces: () => req<Workspace[]>('/api/workspaces'),
-  createWorkspace: (name: string) =>
+  createWorkspace: (data: { name: string; path?: string; icon?: string; color?: string }) =>
     req<Workspace>('/api/workspaces', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(data),
     }),
   deleteWorkspace: (id: string) =>
     req<{ deleted: string }>(`/api/workspaces/${id}`, { method: 'DELETE' }),
+  // Open the OS native folder picker on the backend host (local desktop app).
+  pickFolder: () =>
+    req<{ path: string; canceled: boolean }>('/api/pick-folder', { method: 'POST' }),
 
   // Agents.
   listAgents: () => req<Agent[]>('/api/agents'),

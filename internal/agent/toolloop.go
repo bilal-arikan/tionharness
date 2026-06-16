@@ -180,6 +180,13 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 				Output:  res.Content,
 				IsError: res.IsError,
 			}
+			// The working checklist is a first-class step, not a generic tool row.
+			if call.Name == "todo_write" && !res.IsError {
+				if todos := parseTodos(call.Input); len(todos) > 0 {
+					st.Kind = StepTodo
+					st.Todos = todos
+				}
+			}
 			steps = append(steps, st)
 			emit(st)
 		}
@@ -189,6 +196,13 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		})
 	}
 	r.logger.Warn("tool loop hit iteration cap", "agent", agent.ID)
+	rec := TurnStep{
+		Kind:   StepRecovery,
+		Reason: "max_tool_iterations",
+		Text:   "Araç döngüsü iterasyon limitine ulaştı; tur burada sonlandırıldı.",
+	}
+	steps = append(steps, rec)
+	emit(rec)
 	return last, steps, nil
 }
 

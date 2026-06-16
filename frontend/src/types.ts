@@ -55,7 +55,20 @@ export interface Session {
 // A single entry in an assistant turn's activity trace (mirrors agent.TurnStep).
 // 'delta' is a transient streaming text chunk (live UI only, never persisted).
 // 'ask' is a transient interactive prompt (the agent is blocked on ask_user).
-export type StepKind = 'text' | 'thinking' | 'tool' | 'delta' | 'ask'
+// 'todo' is the working checklist; 'recovery' marks a non-happy-path branch.
+export type StepKind =
+  | 'text'
+  | 'thinking'
+  | 'tool'
+  | 'delta'
+  | 'ask'
+  | 'todo'
+  | 'recovery'
+
+export interface TodoItem {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+}
 
 export interface TurnStep {
   kind: StepKind
@@ -66,6 +79,10 @@ export interface TurnStep {
   isError?: boolean
   // Suggested clickable answers for an 'ask' prompt.
   options?: string[]
+  // Checklist items for a 'todo' step.
+  todos?: TodoItem[]
+  // Stable machine tag for a 'recovery' step (e.g. "max_tool_iterations").
+  reason?: string
 }
 
 // A slash command surfaced in the chat composer ("/" menu).

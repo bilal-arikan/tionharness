@@ -74,6 +74,10 @@ func (r *Runtime) publish(e events.Event) {
 	r.bus.Publish(e) // nil-safe
 }
 
+// Emit publishes an event from outside the agent package (e.g. the API layer)
+// with this workspace's identity stamped on it.
+func (r *Runtime) Emit(e events.Event) { r.publish(e) }
+
 // agentName resolves an agent's display name for event text, falling back to
 // the id when the lookup fails.
 func (r *Runtime) agentName(id string) string {

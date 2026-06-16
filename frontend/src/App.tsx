@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { api, setActiveWorkspace, getActiveWorkspace } from './api'
 import type { Agent, AgentPatch, Session, Message, Workspace, AppSettings, TurnStep, SlashCommand, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
+import type { NewWorkspaceData } from './components/WorkspaceCreateModal'
 import { Sidebar } from './components/Sidebar'
 import { MessageList } from './components/MessageList'
 import { Composer } from './components/Composer'
@@ -34,6 +35,9 @@ export default function App() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
     getActiveWorkspace(),
   )
+  // Workspaces (other than the active one) with pending activity, shown as a
+  // badge in the switcher. Populated from the autonomous-event feed.
+  const [unreadWs, setUnreadWs] = useState<Set<string>>(() => new Set())
   const [agents, setAgents] = useState<Agent[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [messages, setMessages] = useState<Message[]>([])
@@ -135,12 +139,25 @@ export default function App() {
   const switchWorkspace = useCallback((id: string) => {
     setActiveWorkspace(id)
     setActiveWorkspaceId(id)
+    // Switching to a workspace clears its pending-activity badge.
+    setUnreadWs((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }, [])
 
-  const createWorkspace = useCallback(async (name: string) => {
+  const createWorkspace = useCallback(async (data: NewWorkspaceData) => {
     try {
-      const wsNew = await api.createWorkspace(name)
-      setWorkspaces((prev) => [...prev, wsNew])
+      const wsNew = await api.createWorkspace(data)
+      // Re-fetch the list so the icon/color (stored in ws-settings, absent from
+      // the create response) are reflected immediately; fall back to appending.
+      try {
+        setWorkspaces(await api.listWorkspaces())
+      } catch {
+        setWorkspaces((prev) => [...prev, wsNew])
+      }
       setActiveWorkspace(wsNew.id)
       setActiveWorkspaceId(wsNew.id)
     } catch (e) {
@@ -191,6 +208,20 @@ export default function App() {
   // to the event's target (chat session, board, or logs). Refreshed each render
   // so the stable SSE subscription below always sees current closures/state.
   onEventRef.current = (e: AppEvent) => {
+    // Badge any non-active workspace that produced activity (incl. completed
+    // chats), so the switcher shows where to look.
+    if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) {
+      setUnreadWs((prev) => {
+        if (prev.has(e.workspaceId)) return prev
+        const next = new Set(prev)
+        next.add(e.workspaceId)
+        return next
+      })
+    }
+    // Chat completions only drive the badge (the streaming turn already raises
+    // its own reply notification); other event types raise a desktop
+    // notification that deep-links to the target on click.
+    if (e.type === 'chat') return
     notify(notifyEnabled.current, e.title, e.body, () => {
       const t = e.target || {}
       if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) {
@@ -487,6 +518,7 @@ export default function App() {
         onSelectView={setView}
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
+        unreadWorkspaceIds={unreadWs}
         onSwitchWorkspace={switchWorkspace}
         onCreateWorkspace={createWorkspace}
       />

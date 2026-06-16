@@ -1,35 +1,34 @@
-import type { TurnStep } from '../../types'
+import type { TurnStep, TodoItem } from '../../types'
 
 interface Props {
   step: TurnStep
 }
 
-interface Todo {
-  content: string
-  status: 'pending' | 'in_progress' | 'completed'
-}
-
 // Glyph + colour per todo status.
-const MARK: Record<Todo['status'], { icon: string; cls: string }> = {
+const MARK: Record<TodoItem['status'], { icon: string; cls: string }> = {
   completed: { icon: '✓', cls: 'text-green-400 line-through opacity-70' },
   in_progress: { icon: '◐', cls: 'text-[var(--color-accent)] font-medium' },
   pending: { icon: '○', cls: 'text-[var(--color-text-dim)]' },
 }
 
-function parseTodos(input: unknown): Todo[] {
+// Items come from the typed `todos` field (kind 'todo'); fall back to parsing the
+// tool input for traces persisted before 'todo' was a first-class step kind.
+function readTodos(step: TurnStep): TodoItem[] {
+  if (step.todos?.length) return step.todos
+  const input = step.input
   if (!input || typeof input !== 'object') return []
   const todos = (input as { todos?: unknown }).todos
   if (!Array.isArray(todos)) return []
   return todos.filter(
-    (t): t is Todo => !!t && typeof (t as Todo).content === 'string',
+    (t): t is TodoItem => !!t && typeof (t as TodoItem).content === 'string',
   )
 }
 
-// TodoCard renders a todo_write tool step as a live checklist instead of a
-// generic tool card. Completed items are struck through; the active item is
-// accented — mirroring the task-list affordance in External Agent / Claude Code.
+// TodoCard renders a working checklist instead of a generic tool card. Completed
+// items are struck through; the active item is accented — mirroring the task-list
+// affordance in External Agent / Claude Code.
 export function TodoCard({ step }: Props) {
-  const todos = parseTodos(step.input)
+  const todos = readTodos(step)
   if (!todos.length) return null
   const done = todos.filter((t) => t.status === 'completed').length
 

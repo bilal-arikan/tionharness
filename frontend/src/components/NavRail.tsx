@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Workspace } from '../types'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+import type { NewWorkspaceData } from './WorkspaceCreateModal'
 
 export type View = 'chat' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'logs' | 'settings'
 
@@ -9,8 +10,9 @@ interface Props {
   onSelectView: (v: View) => void
   workspaces: Workspace[]
   activeWorkspaceId: string | null
+  unreadWorkspaceIds: Set<string>
   onSwitchWorkspace: (id: string) => void
-  onCreateWorkspace: (name: string) => void
+  onCreateWorkspace: (data: NewWorkspaceData) => void
 }
 
 const NAV: { key: View; label: string; icon: string }[] = [
@@ -32,6 +34,7 @@ export function NavRail({
   onSelectView,
   workspaces,
   activeWorkspaceId,
+  unreadWorkspaceIds,
   onSwitchWorkspace,
   onCreateWorkspace,
 }: Props) {
@@ -64,15 +67,19 @@ export function NavRail({
         <button
           onClick={() => setCollapsed(false)}
           title={active?.name ?? 'Workspace seç'}
-          className="mx-2 mb-2 flex h-9 items-center justify-center rounded-lg bg-[var(--color-surface-2)] text-sm font-medium hover:opacity-90"
+          className="relative mx-2 mb-2 flex h-9 items-center justify-center rounded-lg bg-[var(--color-surface-2)] text-sm font-medium hover:opacity-90"
           style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
         >
           {active?.icon || (active?.name ?? '?').charAt(0).toUpperCase()}
+          {unreadWorkspaceIds.size > 0 && (
+            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]" />
+          )}
         </button>
       ) : (
         <WorkspaceSwitcher
           workspaces={workspaces}
           activeId={activeWorkspaceId}
+          unreadIds={unreadWorkspaceIds}
           onSwitch={onSwitchWorkspace}
           onCreate={onCreateWorkspace}
         />

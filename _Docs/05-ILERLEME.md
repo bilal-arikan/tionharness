@@ -11,6 +11,18 @@
 > Not: Faz 8 (MCP/Tools) kullanıcı talebiyle Faz 7'den önce yapıldı; ardından Faz 7 tamamlandı.
 > Kalan sıra: **SDK Paritesi P1/P3/P4 · Faz 9 Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Workspace switcher iyileştirmeleri ✅ (2026-06-16)
+Sol-üst workspace seçici elden geçirildi (Playwright ile canlı test edildi):
+
+1. **Dışarı tıkla-kapat** (`WorkspaceSwitcher.tsx`): `mousedown` dinleyicisi + `rootRef`; panel dışına tıklayınca kapanır.
+2. **Boş-isim sağlamlığı**: ad `||` ile gösterilir (önceki `??` boş string'i geçiriyordu); listede fallback "İsimsiz".
+3. **Popup ile oluşturma** (`WorkspaceCreateModal.tsx`): ad + emoji simge paleti + opsiyonel **veri klasörü**. Klasör: `POST /api/pick-folder` (Windows native FolderBrowserDialog) "Gözat" butonu **veya** elle yol. Backend `Manager.Create(name, parentPath)` + `Meta.Path` (boş=varsayılan; özel yolda `{path}/swarmgo-{id}` alt klasörü → silme komşu içeriği bozmaz).
+4. **Varsayılan ajan**: `handleCreateWorkspace`→`seedDefaultAgent` yeni workspace'e "Asistan" ajanı ekler (provider önceliği ws→app→claude-cli).
+5. **Çapraz-workspace etkinlik rozeti**: aktif olmayan workspace'te olay (görev/zamanlama/heartbeat **+ sohbet tamamlanma**) olunca switcher'da nokta belirir. `chat_stream` `done`'da `Runtime.Emit` (yeni exported) `chat` olayı yayar (yalnız rozet). `App.tsx` `unreadWs` Set olay feed'inden dolar, geçince temizlenir; `NavRail` collapsed + switcher tetik/satır nokta.
+6. **Sağlamlık fix**: `withWorkspace` bilinmeyen `X-Workspace-Id`'de 400 yerine Varsayılan'a düşer (silinmiş id uygulamayı kilitlemez).
+
+> Doğrulama: build/vet/test + frontend tsc yeşil; Playwright canlı: dışarı-tıkla-kapat, modal oluşturma (ikon 🚀 + ad), varsayılan ajan beliriş, çapraz-ws rozet beliriş→geçişte temizleniş, konsol temiz.
+
 ### Tıklanabilir bildirimler + otonom olay akışı ✅ (2026-06-16)
 Masaüstü bildirimleri artık hedefe **deep-link**'lenir; otonom olaylar (heartbeat/task/schedule) backend'den frontend'e akar.
 

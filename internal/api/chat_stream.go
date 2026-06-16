@@ -11,6 +11,7 @@ import (
 
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/tools"
 )
@@ -192,6 +193,24 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sse("done", map[string]any{"sessionTitle": sessionTitle})
+
+	// Publish a chat-completion event so other workspaces can flag activity with
+	// a badge when the user is viewing a different workspace. The frontend uses
+	// chat events only for the badge (not a duplicate desktop notification).
+	title := strings.TrimSpace(session.Title)
+	if sessionTitle != "" {
+		title = sessionTitle
+	}
+	if title == "" {
+		title = "Sohbet"
+	}
+	wsp.Runtime.Emit(events.Event{
+		Type:   "chat",
+		Level:  "success",
+		Title:  "Yanıt hazır: " + title,
+		Body:   req.Message,
+		Target: map[string]string{"view": "chat", "sessionId": session.ID},
+	})
 }
 
 // resolveTurnAgents turns the requested agent ids (from "@mention" routing) into

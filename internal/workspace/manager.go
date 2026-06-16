@@ -23,11 +23,14 @@ import (
 	"github.com/bilal/swarmgo/internal/providers"
 )
 
-// Meta is the persisted descriptor of a workspace (no live handles).
+// Meta is the persisted descriptor of a workspace (no live handles). Path, when
+// set, is the workspace's data directory chosen by the user; empty means the
+// default location under the manager root.
 type Meta struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	CreatedAt int64  `json:"createdAt"`
+	Path      string `json:"path,omitempty"`
 }
 
 // Workspace bundles a workspace's live database, runtime and scheduler.
@@ -82,7 +85,7 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 
 	// Ensure a default workspace exists.
 	if len(m.order) == 0 {
-		if _, err := m.Create("Varsayılan"); err != nil {
+		if _, err := m.Create("Varsayılan", ""); err != nil {
 			return nil, fmt.Errorf("create default workspace: %w", err)
 		}
 	}
@@ -92,7 +95,11 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 
 // open instantiates a workspace's DB + runtime and registers it in memory.
 func (m *Manager) open(meta Meta) error {
-	dir := filepath.Join(m.rootDir, "workspaces", meta.ID)
+	// A user-chosen Path overrides the default per-workspace location.
+	dir := meta.Path
+	if dir == "" {
+		dir = filepath.Join(m.rootDir, "workspaces", meta.ID)
+	}
 	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o755); err != nil {
 		return err
 	}
@@ -159,12 +166,18 @@ func (m *Manager) Default() *Workspace {
 	return m.workspaces[m.order[0]]
 }
 
-// Create makes a new isolated workspace.
-func (m *Manager) Create(name string) (*Workspace, error) {
+// Create makes a new isolated workspace. parentPath, when non-empty, is a
+// user-chosen directory under which this workspace's own data folder is created
+// (so deleting the workspace never removes unrelated sibling content); empty
+// uses the default location under the manager root.
+func (m *Manager) Create(name, parentPath string) (*Workspace, error) {
 	if name == "" {
 		name = "Yeni Workspace"
 	}
 	meta := Meta{ID: uuid.NewString(), Name: name, CreatedAt: time.Now().Unix()}
+	if parentPath != "" {
+		meta.Path = filepath.Join(parentPath, "swarmgo-"+meta.ID)
+	}
 	if err := m.open(meta); err != nil {
 		return nil, err
 	}
