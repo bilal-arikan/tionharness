@@ -24,12 +24,21 @@ function readStepTodos(step: TurnStep): TodoItem[] {
 
 // latestTodos returns the most recent checklist in the session — the agent's
 // current todo list — by scanning messages (and their steps) newest-first.
+// Once the list is fully completed, it is hidden as soon as the user moves on
+// (sends another message after it): a finished checklist shouldn't linger. A
+// fresh todo_write produces a newer step, which reappears here.
 export function latestTodos(messages: Message[]): TodoItem[] {
   for (let i = messages.length - 1; i >= 0; i--) {
     const steps = parseSteps(messages[i].steps)
     for (let j = steps.length - 1; j >= 0; j--) {
       const todos = readStepTodos(steps[j])
-      if (todos.length) return todos
+      if (!todos.length) continue
+      if (todos.every((t) => t.status === 'completed')) {
+        for (let k = i + 1; k < messages.length; k++) {
+          if (messages[k].role === 'user') return []
+        }
+      }
+      return todos
     }
   }
   return []

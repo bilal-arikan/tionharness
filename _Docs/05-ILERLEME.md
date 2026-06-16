@@ -35,7 +35,12 @@ güncellendi**. Kalıcılık: persisted `steps`'ten türetildiği için reload'd
 panel collapsed açılır (`useState(()=>!allDone)` + sig değişiminde
 `setOpen(!allDone)`). (b) **✕ gizle butonu** — kullanıcı paneli kapatabilir;
 liste değişince (yeni `todo_write`, imza `sig` farklı) otomatik geri gelir
-(`dismissedSig`). (c) **Nested-button fix** — `PathText` ve `DiffCard`'taki
+(`dismissedSig`). (b2) **Tamamlanınca + kullanıcı mesajı → gizle** — liste tümü
+`completed` olduktan **sonra** kullanıcı yeni mesaj gönderince panel kendiliğinden
+gizlenir (`latestTodos`: son todo all-done ve sonrasında `role:user` mesajı varsa
+`[]` döner); yeni `todo_write` daha yeni step ürettiğinden tekrar belirir. ✅
+canlı: 3/3 collapsed → "tamam, teşekkürler" mesajı → panel gizlendi. (c)
+**Nested-button fix** — `PathText` ve `DiffCard`'taki
 tıklanabilir yol `<button>` yerine `<span role="button" tabIndex>` +
 `stopPropagation` oldu; ActivityCard/DiffCard başlığı zaten `<button>` olduğundan
 "button-in-button" geçersiz HTML / hydration uyarısı çıkıyordu → **giderildi**
