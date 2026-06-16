@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
-import type { SessionInfo } from '../types'
-import { AgentAvatar } from './AgentAvatar'
+import { api } from '../../api'
+import type { SessionInfo } from '../../types'
+import { AgentAvatar } from '../agents/AgentAvatar'
 
 interface Props {
   sessionId: string

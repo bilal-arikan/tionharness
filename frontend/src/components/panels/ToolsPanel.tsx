@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../api'
-import type { MCPServer, MCPTransport, WorkspaceTool } from '../types'
+import { api } from '../../api'
+import type { MCPServer, MCPTransport, WorkspaceTool } from '../../types'
 
 interface Props {
   onError: (msg: string) => void

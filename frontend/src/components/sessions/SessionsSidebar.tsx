@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Agent, Session } from '../types'
-import { AgentAvatar } from './AgentAvatar'
-import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '../lib/time'
+import type { Agent, Session } from '../../types'
+import { AgentAvatar } from '../agents/AgentAvatar'
+import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '../../lib/time'
 
 interface Props {
   sessions: Session[]
   agents: Agent[]
   activeSessionId: string | null
-  // The session whose turn is currently being generated (live), shown with a
-  // pulsing indicator so an in-progress conversation is visible from the list.
-  streamingSessionId?: string | null
+  // Sessions whose turns are currently being generated (live), shown with a
+  // pulsing indicator so in-progress conversations are visible from the list.
+  // A set because several turns can stream concurrently (detached server-side).
+  streamingSessionIds?: ReadonlySet<string>
   newDisabled: boolean
   onSelectSession: (id: string) => void
   onNewSession: () => void
@@ -27,7 +28,7 @@ export function SessionsSidebar({
   sessions,
   agents,
   activeSessionId,
-  streamingSessionId,
+  streamingSessionIds,
   newDisabled,
   onSelectSession,
   onNewSession,
@@ -138,7 +139,7 @@ export function SessionsSidebar({
             {items.map((s) => {
               const owner = agents.find((a) => a.id === s.agentId)
               const isActive = activeSessionId === s.id
-              const isStreaming = streamingSessionId === s.id
+              const isStreaming = streamingSessionIds?.has(s.id) ?? false
               return (
                 <div
                   key={s.id}

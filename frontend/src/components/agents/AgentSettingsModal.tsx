@@ -1,4 +1,4 @@
-import type { Agent, AgentPatch } from '../types'
+import type { Agent, AgentPatch } from '../../types'
 import { AgentSettingsForm } from './AgentSettingsForm'
 
 interface Props {

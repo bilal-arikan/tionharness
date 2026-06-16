@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Agent, AgentPatch } from '../types'
+import type { Agent, AgentPatch } from '../../types'
 import { AgentAvatar } from './AgentAvatar'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentSettingsForm } from './AgentSettingsForm'

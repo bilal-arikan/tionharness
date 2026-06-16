@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
-import type { SessionContext, AgentUsage } from '../types'
+import { api } from '../../api'
+import type { SessionContext, AgentUsage } from '../../types'
 
 interface Props {
   agentId: string | null

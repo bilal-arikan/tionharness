@@ -4,11 +4,11 @@ import {
   Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { api } from '../api'
-import type { Agent, Artifact, ArtifactKind } from '../types'
-import { ArtifactView } from './artifacts/ArtifactView'
-import { AgentAvatar } from './AgentAvatar'
-import { relativeTime } from '../lib/time'
+import { api } from '../../api'
+import type { Agent, Artifact, ArtifactKind } from '../../types'
+import { ArtifactView } from '../artifacts/ArtifactView'
+import { AgentAvatar } from '../agents/AgentAvatar'
+import { relativeTime } from '../../lib/time'
 
 interface Props {
   onError: (msg: string) => void

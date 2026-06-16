@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
-import type { Agent, Memory, MemoryKind } from '../types'
+import { api } from '../../api'
+import type { Agent, Memory, MemoryKind } from '../../types'
 
 interface Props {
   agent: Agent | null

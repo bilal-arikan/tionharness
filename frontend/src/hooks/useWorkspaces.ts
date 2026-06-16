@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, setActiveWorkspace, getActiveWorkspace } from '../api'
 import type { Workspace } from '../types'
-import type { NewWorkspaceData } from '../components/WorkspaceCreateModal'
+import type { NewWorkspaceData } from '../components/workspace/WorkspaceCreateModal'
 
 export function useWorkspaces(setError: (msg: string) => void) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])

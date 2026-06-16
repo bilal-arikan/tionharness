@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
-import type { Agent, Task, Schedule } from '../types'
+import { api } from '../../api'
+import type { Agent, Task, Schedule } from '../../types'
 
 interface Props {
   agents: Agent[]

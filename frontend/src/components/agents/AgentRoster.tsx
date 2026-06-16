@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Agent, AgentPatch } from '../types'
+import type { Agent, AgentPatch } from '../../types'
 import { AgentAvatar } from './AgentAvatar'
 import { AgentSettingsModal } from './AgentSettingsModal'
 import { ProviderModelSelect } from './ProviderModelSelect'

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../api'
-import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../types'
+import { api } from '../../api'
+import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../../types'
 
 interface Props {
   agents: Agent[]

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { api } from '../api'
-import type { LogEntry } from '../types'
+import { api } from '../../api'
+import type { LogEntry } from '../../types'
 
 interface Props {
   onError: (msg: string) => void

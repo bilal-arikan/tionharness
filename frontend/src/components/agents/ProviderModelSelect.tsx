@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
-import type { CatalogEntry } from '../types'
+import { api } from '../../api'
+import type { CatalogEntry } from '../../types'
 
 // Module-level cache so the catalog is fetched once across all pickers.
 let catalogCache: CatalogEntry[] | null = null

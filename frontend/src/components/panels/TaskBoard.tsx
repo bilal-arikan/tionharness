@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
-import type { Agent, Task, Run, BoardState } from '../types'
+import { api } from '../../api'
+import type { Agent, Task, Run, BoardState } from '../../types'
 
 const COLUMNS: { key: BoardState; label: string }[] = [
   { key: 'todo', label: 'Yapılacak' },

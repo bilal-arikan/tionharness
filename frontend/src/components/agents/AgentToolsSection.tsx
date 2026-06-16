@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../api'
-import type { AgentTools } from '../types'
+import { api } from '../../api'
+import type { AgentTools } from '../../types'
 
 interface Props {
   agentId: string

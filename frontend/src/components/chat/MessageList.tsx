@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
-import type { Agent, Message } from '../types'
-import { Markdown } from './markdown/Markdown'
-import { TurnSteps, parseSteps } from './chat/TurnSteps'
-import { ThinkingBlock } from './chat/ThinkingBlock'
-import { UserBubble } from './chat/UserBubble'
-import { MessageTime, TurnDuration, LiveTimer } from './chat/MessageMeta'
-import { AgentAvatar } from './AgentAvatar'
+import type { Agent, Message } from '../../types'
+import { Markdown } from '../markdown/Markdown'
+import { TurnSteps, parseSteps } from './TurnSteps'
+import { ThinkingBlock } from './ThinkingBlock'
+import { UserBubble } from './UserBubble'
+import { MessageTime, TurnDuration, LiveTimer } from './MessageMeta'
+import { AgentAvatar } from '../agents/AgentAvatar'
 
 interface Props {
   messages: Message[]

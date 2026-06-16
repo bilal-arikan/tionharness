@@ -15,8 +15,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { Workspace } from '../types'
-import { WorkspaceSwitcher } from './WorkspaceSwitcher'
-import type { NewWorkspaceData } from './WorkspaceCreateModal'
+import { WorkspaceSwitcher } from './workspace/WorkspaceSwitcher'
+import type { NewWorkspaceData } from './workspace/WorkspaceCreateModal'
 
 export type View = 'chat' | 'agents' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'artifacts' | 'logs' | 'settings'
 

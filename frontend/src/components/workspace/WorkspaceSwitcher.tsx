@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Workspace } from '../types'
+import type { Workspace } from '../../types'
 import { WorkspaceCreateModal, type NewWorkspaceData } from './WorkspaceCreateModal'
 
 interface Props {

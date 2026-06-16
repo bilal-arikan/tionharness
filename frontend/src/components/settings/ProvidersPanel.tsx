@@ -1,7 +1,7 @@
 // Providers category: default provider/model picker, Anthropic + MiniMax keys,
 // connection test and Anthropic beta toggles.
 import type { AppSettings, ProviderTestResult } from '../../types'
-import { ProviderModelSelect } from '../ProviderModelSelect'
+import { ProviderModelSelect } from '../agents/ProviderModelSelect'
 import { Field, Toggle, inputCls, type AppSet } from './primitives'
 
 interface Props {

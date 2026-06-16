@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { Agent, AgentPatch } from '../types'
-import { AVATAR_COLORS, AVATAR_GLYPHS, resolveColor } from '../lib/avatar'
+import type { Agent, AgentPatch } from '../../types'
+import { AVATAR_COLORS, AVATAR_GLYPHS, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentToolsSection } from './AgentToolsSection'

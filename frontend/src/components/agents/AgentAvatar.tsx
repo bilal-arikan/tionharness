@@ -1,5 +1,5 @@
-import type { Agent } from '../types'
-import { avatarGlyph, resolveColor } from '../lib/avatar'
+import type { Agent } from '../../types'
+import { avatarGlyph, resolveColor } from '../../lib/avatar'
 
 interface Props {
   agent: Pick<Agent, 'id' | 'name' | 'avatar' | 'color'>

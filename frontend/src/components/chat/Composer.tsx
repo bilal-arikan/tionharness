@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Agent, SlashCommand } from '../types'
-import { AgentAvatar } from './AgentAvatar'
+import type { Agent, SlashCommand } from '../../types'
+import { AgentAvatar } from '../agents/AgentAvatar'
 
 interface Props {
   disabled: boolean
