@@ -98,17 +98,17 @@ export const STEP_KINDS: StepKindInfo[] = [
     label: 'Araç çıktı akışı',
     icon: '📟',
     persisted: false,
-    status: 'infra',
+    status: 'active',
     description:
-      'Uzun bir aracın çıktısını çalışırken parça parça akıtır (aynı ID birleştirilir). Altyapı hazır; üretici (akan araçlar) eklenecek.',
+      'Uzun bir aracın çıktısını çalışırken parça parça akıtır (aynı ID birleştirilir). shell aracı stdout/stderr’i canlı akıtır.',
   },
   {
     kind: 'tombstone',
     label: 'Geri çekme',
     icon: '🗑️',
     persisted: false,
-    status: 'infra',
+    status: 'active',
     description:
-      'Daha önce yayılan canlı bir adımı UI’dan kaldıran kontrol sinyali (Ref hedef adım ID’si). Kendisi render edilmez. Altyapı hazır.',
+      'Daha önce yayılan canlı bir adımı UI’dan kaldıran kontrol sinyali (Ref hedef adım ID’si). Kendisi render edilmez. Akış bitince placeholder’ı geri çeker; iptalde de kullanılır.',
   },
 ]

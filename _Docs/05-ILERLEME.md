@@ -756,6 +756,17 @@ Kullanıcıyla netleştirilecek:
 
 ## Oturum Günlüğü
 
+### 2026-06-16 — tool_delta/tombstone gerçek üreticileri (tool-streaming + iptal)
+`tool_delta` ve `tombstone` artık altyapı değil, **canlı üreticili** (`go build`/`vet`/`test ./...` yeşil):
+
+1. **`tools.StreamingTool`** arayüzü (`CallStream(ctx,input,onChunk)`) + `Registry.CanStream`/`CallStream` (`registry.go`). Akan araç yoksa düz `Call`'a düşer.
+2. **`shell` aracı akıyor** (`builtin_shell.go`): `Call` → `CallStream`'e taşındı; `shellStreamWriter` stdout+stderr'i (tek writer, exec serialize eder) hem 64KB cap'li buffer'a yazar hem `onChunk`'a iletir.
+3. **`toolloop.go` bağladı:** akan araç + canlı sink varsa `StepToolDelta` (`ID`=call.ID) yayılır; tamamlanınca `StepTombstone` (`Ref`=call.ID) placeholder'ı geri çeker; tool sonrası `ctx.Err()` varsa `fail("cancelled")` → `StepError` ve tur temiz biter (yarım sonuç modele beslenmez).
+4. **Frontend** (geçen turda hazırdı): App.onStep `tool_delta`'yı `ID` ile merge, `tombstone`'u filtreler; `ToolDeltaStep.tsx` canlı çıktı kartı. `stepKinds.ts` durumları `infra`→`active`.
+5. **Test:** `builtin_shell_test.go` — `CanStream("shell")` + `CallStream` onChunk parça + tam çıktı.
+
+> Doküman: `10-KAVRAMSAL` E3 (artık tüm kind'lar üreticili) + SKILL güncellendi. Mekanizma genel: uzun MCP çağrıları da aynı `StreamingTool` yoluna takılabilir.
+
 ### 2026-06-16 — Trace StepKind genişletme #2: error/steer/tool_delta/tombstone + Ayarlar referans ekranı
 4 yeni `StepKind` eklendi (`go build`/`vet`/`test ./...` + frontend `tsc`/`build` yeşil; canlı UI testi mcp-chrome stale-sekme/screenshot kırılganlığı nedeniyle güvenilir alınamadı, otomatik kontroller esas):
 
