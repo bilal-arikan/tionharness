@@ -68,6 +68,7 @@ func (w *Workspace) loadSettings() {
 	}
 	if w.Runtime != nil {
 		w.Runtime.SetPaused(w.settings.cur.PauseAutonomy)
+		w.Runtime.SetInstructions(w.settings.cur.Instructions)
 	}
 }
 
@@ -136,6 +137,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.settings.cur.PauseAutonomy = *patch.PauseAutonomy
 	}
 	paused := ws.settings.cur.PauseAutonomy
+	instructions := ws.settings.cur.Instructions
 	ws.settings.mu.Unlock()
 
 	if err := ws.saveSettings(); err != nil {
@@ -143,6 +145,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	if ws.Runtime != nil {
 		ws.Runtime.SetPaused(paused)
+		ws.Runtime.SetInstructions(instructions)
 	}
 	return ws, nil
 }

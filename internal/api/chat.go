@@ -21,14 +21,14 @@ type chatReq struct {
 }
 
 type chatResp struct {
-	Reply         string          `json:"reply"`
-	Usage         providers.Usage `json:"usage"`
-	Model         string          `json:"model"`
-	UserMsg       db.Message      `json:"userMessage"`
-	ReplyMsg      db.Message      `json:"replyMessage"`
+	Reply         string           `json:"reply"`
+	Usage         providers.Usage  `json:"usage"`
+	Model         string           `json:"model"`
+	UserMsg       db.Message       `json:"userMessage"`
+	ReplyMsg      db.Message       `json:"replyMessage"`
 	Steps         []agent.TurnStep `json:"steps,omitempty"`
-	ContextTokens int             `json:"contextTokens"`
-	Compacted     bool            `json:"compacted"`
+	ContextTokens int              `json:"contextTokens"`
+	Compacted     bool             `json:"compacted"`
 	// SessionTitle is set only when the first turn auto-generated a title, so
 	// the client can update the session label without an extra round-trip.
 	SessionTitle string `json:"sessionTitle,omitempty"`
@@ -106,6 +106,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	system := buildSystemPrompt(agent)
 	if uc := userContextBlock(s.settings.Get()); uc != "" {
 		system = strings.TrimSpace(uc + "\n\n" + system)
+	}
+	if ins := strings.TrimSpace(ws(r).Settings().Instructions); ins != "" {
+		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
 	}
 	var dynamic string
 	if block := ws(r).Runtime.Memory().ContextBlock(ctx, agent.ID, req.Message, 5); block != "" {

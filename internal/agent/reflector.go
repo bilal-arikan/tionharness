@@ -62,7 +62,7 @@ func (r *Runtime) Reflect(ctx context.Context, agentID string) (db.KnowledgeSour
 	// still recorded via guardedComplete.
 	resp, err := r.guardedComplete(ctx, agent, providers.Request{
 		Model:  agent.Model,
-		System: buildSystemPrompt(agent),
+		System: r.systemPrompt(agent),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: fmt.Sprintf(reflectPrompt, sb.String())},
 		},

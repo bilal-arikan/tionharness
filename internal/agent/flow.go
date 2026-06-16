@@ -23,7 +23,7 @@ func (f flowRunner) RunAgentNode(ctx context.Context, agentID, prompt string) (s
 		return "", err
 	}
 	dynamic := strings.TrimSpace(f.rt.mem.ContextBlock(ctx, agentID, prompt, 5))
-	return f.rt.complete(ctx, agent, buildSystemPrompt(agent), dynamic, prompt, f.autonomous)
+	return f.rt.complete(ctx, agent, f.rt.systemPrompt(agent), dynamic, prompt, f.autonomous)
 }
 
 // RunFlow starts a new run of a flow with the given input and drives it to

@@ -102,7 +102,7 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 
 // invoke calls the agent's provider with a single user prompt.
 func (r *Runtime) invoke(ctx context.Context, agent db.Agent, prompt string, autonomous bool) (string, error) {
-	return r.complete(ctx, agent, buildSystemPrompt(agent), "", prompt, autonomous)
+	return r.complete(ctx, agent, r.systemPrompt(agent), "", prompt, autonomous)
 }
 
 // invokeWithMemory is like invoke but first recalls relevant memories and
@@ -110,7 +110,7 @@ func (r *Runtime) invoke(ctx context.Context, agent db.Agent, prompt string, aut
 // context without invalidating the cached static persona prefix.
 func (r *Runtime) invokeWithMemory(ctx context.Context, agent db.Agent, prompt string, autonomous bool) (string, error) {
 	dynamic := strings.TrimSpace(r.mem.ContextBlock(ctx, agent.ID, prompt, 5))
-	return r.complete(ctx, agent, buildSystemPrompt(agent), dynamic, prompt, autonomous)
+	return r.complete(ctx, agent, r.systemPrompt(agent), dynamic, prompt, autonomous)
 }
 
 // complete is the shared provider call used by invoke variants. system is the

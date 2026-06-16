@@ -65,6 +65,30 @@ Diğer tüm uçlar (`/api/agents`, `/api/chat`, `/api/runtime` ...) `X-Workspace
 - Ayrı klasör + ayrı `store/` dizinleri ✅
 - UI switcher ile geçiş: liste anında o workspace'e göre değişiyor ✅
 
+## Workspace Ayarları (`ws-settings.json`)
+
+Her workspace, ayarlar ekranındaki **"Genel"** kategorisinden düzenlenen kendi
+override'larını `store/` yanındaki `ws-settings.json` dosyasında tutar
+(`internal/workspace/settings.go` → `WSSettings`).
+
+| Alan | Açıklama |
+|------|----------|
+| `icon`, `color` | Switcher/rail'de görsel kimlik |
+| `defaultProvider`, `defaultModel` | Boş = uygulama varsayılanı |
+| `pauseAutonomy` | Sadece bu workspace'in otonomisini (heartbeat + scheduler) durdurur |
+| `instructions` | **Bu workspace'teki tüm agent'lara eklenen serbest metin yönergeler** |
+
+### Instructions enjeksiyonu
+
+`instructions`, agent'ın **statik** system prompt önekine (`persona` → soul + identity'den
+sonra) `# Workspace Instructions` başlığıyla eklenir. Statik prefix'te kaldığı için
+prompt cache'i bozmaz.
+
+- **İnteraktif chat:** `internal/api/chat.go` ve `chat_stream.go` → `ws(r).Settings().Instructions`
+- **Otonom yollar** (heartbeat / task / flow / reflection): `internal/agent/runtime.go` →
+  `Runtime.systemPrompt(agent)`. Runtime, değeri `SetInstructions` ile ayarlardan
+  senkron tutar (ilk yükleme `loadSettings`, sonraki güncellemeler `UpdateSettings`).
+
 ## Notlar / Gelecek
 
 - **Runtime izolasyonu:** Her workspace'in kendi agent runtime'ı var → bir workspace'in otonom ajanları diğerini etkilemez. Tüm workspace'lerin heartbeat'leri paralel çalışır.

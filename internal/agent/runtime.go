@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,6 +40,10 @@ type Runtime struct {
 	// paused is this workspace's autonomy brake (set from per-workspace
 	// settings); when true, autonomous calls are rejected like the global one.
 	paused atomic.Bool
+
+	// instructions is this workspace's free-form guidance (set from per-workspace
+	// settings), appended to every agent's static system prompt.
+	instructions atomic.Pointer[string]
 }
 
 // SetPaused toggles this workspace's autonomy brake.
@@ -46,6 +51,9 @@ func (r *Runtime) SetPaused(p bool) { r.paused.Store(p) }
 
 // Paused reports this workspace's autonomy brake state.
 func (r *Runtime) Paused() bool { return r.paused.Load() }
+
+// SetInstructions updates this workspace's agent-wide guidance.
+func (r *Runtime) SetInstructions(s string) { r.instructions.Store(&s) }
 
 // NewRuntime constructs the runtime. tun carries the process-wide tunables
 // (autonomy pause, title-model override) shared across all workspace runtimes.
@@ -223,7 +231,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 	// the agent has them enabled.
 	resp, err := r.CompleteWithTools(ctx, agent, provider, providers.Request{
 		Model:  agent.Model,
-		System: buildSystemPrompt(agent),
+		System: r.systemPrompt(agent),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: agent.HeartbeatPrompt},
 		},
@@ -240,7 +248,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 	return err
 }
 
-// buildSystemPrompt composes the agent's system prompt from soul + identity.
+// buildSystemPrompt composes the agent's persona from soul + identity.
 func buildSystemPrompt(a db.Agent) string {
 	out := ""
 	if a.Soul != "" {
@@ -251,6 +259,22 @@ func buildSystemPrompt(a db.Agent) string {
 			out += "\n\n"
 		}
 		out += a.Identity
+	}
+	return out
+}
+
+// systemPrompt builds an agent's static system prefix: its soul+identity persona
+// followed by this workspace's instructions (when set). Both are stable, so they
+// belong in the cached static prefix rather than the volatile dynamic suffix.
+func (r *Runtime) systemPrompt(a db.Agent) string {
+	out := buildSystemPrompt(a)
+	if p := r.instructions.Load(); p != nil {
+		if ins := strings.TrimSpace(*p); ins != "" {
+			if out != "" {
+				out += "\n\n"
+			}
+			out += "# Workspace Instructions\n" + ins
+		}
 	}
 	return out
 }

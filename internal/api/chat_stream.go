@@ -50,7 +50,16 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// cancelable context ends the stream on "stop"; the steer channel feeds live
 	// guidance into the tool loop.
 	runID := uuid.NewString()
-	ctx, cancel := context.WithCancel(r.Context())
+	// Detach the turn from the client connection. A page refresh or navigation
+	// aborts the SSE fetch; if generation were tied to the request context it
+	// would cancel mid-turn and the assistant reply would never be persisted —
+	// so after reload the answer is gone and the message block "vanishes". By
+	// detaching, generation runs to completion and persists regardless; only an
+	// explicit "stop" control cancels it. The original request context is kept
+	// as clientGone so an interactive ask_user (which needs a live client) does
+	// not block forever once the user has navigated away.
+	clientGone := r.Context()
+	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer cancel()
 	run := s.runs.register(runID, cancel)
 	defer s.runs.unregister(runID)
@@ -110,6 +119,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		select {
 		case ans := <-run.answer:
 			return ans, nil
+		case <-clientGone.Done():
+			// The user navigated away; no one can answer. Surface an error so the
+			// model proceeds on its own instead of blocking the detached turn
+			// forever (and leaking this goroutine).
+			return "", clientGone.Err()
 		case <-ctx.Done():
 			return "", ctx.Err()
 		}
@@ -143,6 +157,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		system := buildSystemPrompt(agentRow)
 		if uc := userContextBlock(s.settings.Get()); uc != "" {
 			system = strings.TrimSpace(uc + "\n\n" + system)
+		}
+		if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
+			system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
 		}
 		var dynamic string
 		if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, req.Message, 5); block != "" {
