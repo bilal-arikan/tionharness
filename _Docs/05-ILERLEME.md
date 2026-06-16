@@ -12,6 +12,12 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Komut çalıştırınca komut balonu + bağlam penceresi göstergesi ✅ (2026-06-16)
+1. **Komut balonu** (`api/summary.go` + `App.tsx`): `/memory`·`/board`·`/flows`·`/tools` paletten çalışınca, komutun kendisi de sohbete **kullanıcı mesajı** (`/kind`, `UserBubble` komut stilinde) olarak yazılır; ardından sonuç asistan mesajı gelir. `POST /api/sessions/{id}/summary` artık `{userMessage, replyMessage}` döndürür (ikisi de kalıcı → reload-safe). Composer her iki balonu da iyimser (optimistic) gösterir.
+2. **Bağlam penceresi göstergesi** (`api/session_info.go` + `SessionDetailPanel.tsx`): `/info` artık `contextWindow` (= `maxContextTokens` sıkıştırma eşiği) döndürür. Oturum bilgisi paneline `/context` tarzı bir bölüm eklendi: kullanılan/pencere (%) başlığı + kategori-renkli **yığılmış kullanım barı** + her kategori (token+%) + **boş alan** satırı; pencere aşılırsa sıkıştırma uyarısı.
+
+> Doğrulama: go/tsc build + API (`/summary` `{userMessage,replyMessage}`, `/info` `contextWindow=32000`) + Chrome canlı (`/board` → "⌘/board" komut balonu + özet; panel `2.5k/32.0k %8`, boş alan %92). Commit: `d03483d` + worker sweep `7f432be`.
+
 ### Composer'da tur-bazlı düşünme seviyesi seçici ✅ (2026-06-16)
 Mesaj gönderme alanına, o tur için **düşünme (reasoning) seviyesini** seçtiren bir menü eklendi.
 1. **UI (`Composer.tsx`):** Textarea'nın solunda `🧠` butonu (mevcut seviyeyi gösterir, seçiliyse accent). Tıklayınca üstte açılan menü: **Oto** (ajanın kendi ayarı), **Kapalı**, **Düşük**, **Orta**, **Yüksek**. Dışarı tıkla-kapat. Seçim `App.tsx`'te `thinkingLevel` state'inde tutulur ve **localStorage**'a yazılır (mesajlar/yenileme arası kalıcı). Props: `thinkingLevel` + `onThinkingLevelChange`.
