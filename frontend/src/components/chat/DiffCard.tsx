@@ -36,13 +36,24 @@ export function DiffCard({ step, onOpenFile }: Props) {
       >
         <span className="shrink-0">✏️</span>
         <span className="shrink-0 font-medium text-[var(--color-text)]">{actionLabel(step)}</span>
-        <button
-          type="button"
+        {/* Span (not <button>) to avoid an invalid button-in-button: the row
+            header itself is a <button>. stopPropagation keeps the path click
+            from also toggling the diff. */}
+        <span
+          role="button"
+          tabIndex={0}
           onClick={(e) => { e.stopPropagation(); onOpenFile?.(path) }}
-          className="min-w-0 flex-1 truncate text-left font-mono text-[0.92em] text-[var(--color-accent)] underline decoration-dotted underline-offset-2 hover:opacity-80"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              e.stopPropagation()
+              onOpenFile?.(path)
+            }
+          }}
+          className="min-w-0 flex-1 cursor-pointer truncate text-left font-mono text-[0.92em] text-[var(--color-accent)] underline decoration-dotted underline-offset-2 hover:opacity-80"
         >
           {path}
-        </button>
+        </span>
         {step.created && (
           <span className="shrink-0 rounded bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
             yeni

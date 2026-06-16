@@ -31,6 +31,17 @@ kıldı = en-son-kazanır); ardından "1=completed, 2=in_progress" güncellemesi
 panel **1/3**, madde-1 ✓ üstü-çizili yeşil, madde-2 ◐ accent olarak **canlı
 güncellendi**. Kalıcılık: persisted `steps`'ten türetildiği için reload'da kalır.
 
+**Cila (2026-06-17):** (a) **Otomatik küçülme** — liste tamamen tamamlanınca
+panel collapsed açılır (`useState(()=>!allDone)` + sig değişiminde
+`setOpen(!allDone)`). (b) **✕ gizle butonu** — kullanıcı paneli kapatabilir;
+liste değişince (yeni `todo_write`, imza `sig` farklı) otomatik geri gelir
+(`dismissedSig`). (c) **Nested-button fix** — `PathText` ve `DiffCard`'taki
+tıklanabilir yol `<button>` yerine `<span role="button" tabIndex>` +
+`stopPropagation` oldu; ActivityCard/DiffCard başlığı zaten `<button>` olduğundan
+"button-in-button" geçersiz HTML / hydration uyarısı çıkıyordu → **giderildi**
+(yola tıklayınca artık kart da toggle olmuyor, UX iyileşti). ✅ Playwright:
+nested-button uyarısı konsoldan kalktı, ✕ ile panel gizlendi, tsc+vite temiz.
+
 ## Ara fix — Context metre gerçek footprint'i sayar (2026-06-17)
 
 Oturum bilgisi panelindeki **Bağlam penceresi** ölçeri eskiden yalnızca özet +
