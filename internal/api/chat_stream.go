@@ -80,9 +80,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
-	firstTurn := session.Kind == "chat" &&
-		strings.TrimSpace(session.Title) == "" && session.MessageCount == 0 &&
-		s.settings.Get().AutoTitleEnabled
+	firstTurn := s.isFirstUntitledTurn(session)
 
 	// Resolve the ordered list of responding agents (default → session agent).
 	agents := s.resolveTurnAgents(ctx, database, session, req.AgentIDs)
@@ -168,29 +166,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Static prefix (profile + persona) vs dynamic suffix (memory + summary)
-		// — see chat.go for the prompt-caching rationale.
-		system := buildSystemPrompt(agentRow)
-		if uc := userContextBlock(s.settings.Get()); uc != "" {
-			system = strings.TrimSpace(uc + "\n\n" + system)
-		}
-		if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
-			system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
-		}
-		var dynamic string
-		if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, req.Message, 5); block != "" {
-			dynamic = block
-		}
-		if prep.Summary != "" {
-			dynamic = strings.TrimSpace(dynamic + "\n\n## Conversation summary so far\n" + prep.Summary)
-		}
-		// Surface the session's existing artifacts so the agent revises them
-		// (update_artifact by id) instead of creating duplicates.
-		if ab := artifactsContextBlock(ctx, database, session.ID); ab != "" {
-			dynamic = strings.TrimSpace(dynamic + "\n\n" + ab)
-		}
-
-		llmReq := providers.Request{Model: agentRow.Model, System: system, SystemDynamic: dynamic, Messages: prep.Messages}
+		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, req.Message, prep)
 
 		// Attach a per-agent artifact sink so create_artifact / update_artifact
 		// persist content stamped with this session + agent — both on the native
@@ -210,19 +186,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		stepsJSON := "[]"
-		if len(steps) > 0 {
-			if b, mErr := json.Marshal(steps); mErr == nil {
-				stepsJSON = string(b)
-			}
-		}
-
 		replyMsg, aerr := database.AddMessage(ctx, db.Message{
 			SessionID: session.ID,
 			Role:      providers.RoleAssistant,
 			AgentID:   agentRow.ID,
 			Text:      resp.Text,
-			Steps:     stepsJSON,
+			Steps:     marshalSteps(steps),
 		})
 		if aerr != nil {
 			sse("error", map[string]string{"error": aerr.Error()})
@@ -239,14 +208,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Auto-title once, after the turn, using the first responding agent.
-	var sessionTitle string
-	if firstTurn {
-		if title, terr := wsp.Runtime.TitleFor(ctx, agents[0].ID, req.Message); terr == nil && title != "" {
-			if serr := database.SetSessionTitle(ctx, session.ID, title); serr == nil {
-				sessionTitle = title
-			}
-		}
-	}
+	sessionTitle := s.maybeAutoTitle(ctx, wsp, firstTurn, agents[0].ID, session.ID, req.Message)
 
 	sse("done", map[string]any{"sessionTitle": sessionTitle})
 
