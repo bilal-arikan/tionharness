@@ -37,6 +37,9 @@ export interface AppSettings {
   recallTopN: number
   recallMinScore: number
 
+  journalCap: number
+  journalMaxLen: number
+
   defaultDailyCallLimit: number
   defaultDailyTokenLimit: number
 

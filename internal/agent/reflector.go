@@ -12,15 +12,24 @@ import (
 // reflectMaxJournals is how many recent journal entries feed one reflection.
 const reflectMaxJournals = 20
 
-// journalCap bounds how many journal entries an agent keeps. Each chat turn and
-// task run appends one, so without a ceiling the memory store (and the Hafıza
-// UI) grow without bound. Older journals beyond this cap are pruned on write;
-// durable knowledge (document/reflection) is never touched.
-const journalCap = 50
+// journalCap / journalMaxLen read the live, settings-driven journal bounds from
+// Tunables (falling back to the built-in defaults when Tunables is absent, e.g.
+// in tests). Each chat turn and task run appends a journal entry, so without
+// these ceilings the memory store (and the Hafıza UI) grow without bound;
+// durable knowledge (document/reflection) is never pruned.
+func (r *Runtime) journalCap() int {
+	if r.tun == nil {
+		return DefaultJournalCap
+	}
+	return r.tun.JournalCap()
+}
 
-// journalMaxLen caps a single journal entry's length so one huge turn cannot
-// bloat the store on its own.
-const journalMaxLen = 1024
+func (r *Runtime) journalMaxLen() int {
+	if r.tun == nil {
+		return DefaultJournalMaxLen
+	}
+	return r.tun.JournalMaxLen()
+}
 
 // reflectPrompt instructs the agent to consolidate its journal into a durable
 // self-reflection — the "dream cycle" that turns raw activity into learning.
@@ -37,14 +46,14 @@ func (r *Runtime) Journal(ctx context.Context, agentID, content string) {
 	if content == "" {
 		return
 	}
-	if n := []rune(content); len(n) > journalMaxLen {
-		content = string(n[:journalMaxLen]) + "…"
+	if maxLen := r.journalMaxLen(); len([]rune(content)) > maxLen {
+		content = string([]rune(content)[:maxLen]) + "…"
 	}
 	if _, err := r.mem.Remember(ctx, agentID, db.MemoryJournal, content); err != nil {
 		r.logger.Warn("journal failed", "agent", agentID, "error", err)
 		return
 	}
-	if _, err := r.mem.PruneKind(ctx, agentID, db.MemoryJournal, journalCap); err != nil {
+	if _, err := r.mem.PruneKind(ctx, agentID, db.MemoryJournal, r.journalCap()); err != nil {
 		r.logger.Warn("journal prune failed", "agent", agentID, "error", err)
 	}
 }

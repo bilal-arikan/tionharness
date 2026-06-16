@@ -125,6 +125,8 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.RecallMinScore != nil {
 		next.RecallMinScore = *p.RecallMinScore
 	}
+	applyInt(&next.JournalCap, p.JournalCap)
+	applyInt(&next.JournalMaxLen, p.JournalMaxLen)
 
 	applyInt(&next.DefaultDailyCallLimit, p.DefaultDailyCallLimit)
 	applyInt(&next.DefaultDailyTokenLimit, p.DefaultDailyTokenLimit)
@@ -217,6 +219,19 @@ func normalize(v Settings) Settings {
 	}
 	if v.RecallMinScore > 1 {
 		v.RecallMinScore = 1
+	}
+	// Journal bounds: keep at least a small buffer; clamp to sane ceilings.
+	if v.JournalCap < 1 {
+		v.JournalCap = 1
+	}
+	if v.JournalCap > 1000 {
+		v.JournalCap = 1000
+	}
+	if v.JournalMaxLen < 64 {
+		v.JournalMaxLen = 64
+	}
+	if v.JournalMaxLen > 65536 {
+		v.JournalMaxLen = 65536
 	}
 	if v.DefaultDailyCallLimit < 0 {
 		v.DefaultDailyCallLimit = 0

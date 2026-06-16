@@ -55,6 +55,10 @@ type Settings struct {
 	RecallTopN       int     `json:"recallTopN"`
 	RecallMinScore   float64 `json:"recallMinScore"`
 
+	// Journal (long-term memory) ring-buffer bounds.
+	JournalCap    int `json:"journalCap"`    // newest journal entries kept per agent (0 = default)
+	JournalMaxLen int `json:"journalMaxLen"` // max runes stored per journal entry (0 = default)
+
 	// Budget defaults applied to newly created agents (0 = unlimited).
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
@@ -93,6 +97,9 @@ func Default() Settings {
 		KeepRecentMsgs:   8,
 		RecallTopN:       5,
 		RecallMinScore:   0.05,
+
+		JournalCap:    50,
+		JournalMaxLen: 1024,
 
 		DefaultDailyCallLimit:  0,
 		DefaultDailyTokenLimit: 0,
@@ -142,6 +149,9 @@ type DTO struct {
 	RecallTopN       int     `json:"recallTopN"`
 	RecallMinScore   float64 `json:"recallMinScore"`
 
+	JournalCap    int `json:"journalCap"`
+	JournalMaxLen int `json:"journalMaxLen"`
+
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
 
@@ -188,6 +198,9 @@ func (s Settings) ToDTO() DTO {
 		KeepRecentMsgs:   s.KeepRecentMsgs,
 		RecallTopN:       s.RecallTopN,
 		RecallMinScore:   s.RecallMinScore,
+
+		JournalCap:    s.JournalCap,
+		JournalMaxLen: s.JournalMaxLen,
 
 		DefaultDailyCallLimit:  s.DefaultDailyCallLimit,
 		DefaultDailyTokenLimit: s.DefaultDailyTokenLimit,
@@ -237,6 +250,9 @@ type Patch struct {
 	KeepRecentMsgs   *int     `json:"keepRecentMsgs"`
 	RecallTopN       *int     `json:"recallTopN"`
 	RecallMinScore   *float64 `json:"recallMinScore"`
+
+	JournalCap    *int `json:"journalCap"`
+	JournalMaxLen *int `json:"journalMaxLen"`
 
 	DefaultDailyCallLimit  *int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit *int `json:"defaultDailyTokenLimit"`

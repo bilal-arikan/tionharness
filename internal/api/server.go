@@ -95,6 +95,7 @@ func (s *Server) applySettings() {
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
 	s.tun.SetTitleModel(cur.TitleModel)
+	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen)
 }
 
 // Routes registers all HTTP routes and returns the handler. Registration is

@@ -2,6 +2,12 @@ package agent
 
 import "sync"
 
+// Default journal bounds, used when the settings-driven values are unset (0).
+const (
+	DefaultJournalCap    = 50   // newest journal entries kept per agent
+	DefaultJournalMaxLen = 1024 // max runes stored per journal entry
+)
+
 // Tunables holds process-wide, settings-driven knobs that cut across every
 // workspace runtime: the global autonomy pause switch and an optional model
 // override for auto-title generation. A single instance is created at boot and
@@ -12,6 +18,8 @@ type Tunables struct {
 	pauseAutonomy bool
 	titleModel    string
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
+	journalCap    int  // 0 → DefaultJournalCap
+	journalMaxLen int  // 0 → DefaultJournalMaxLen
 }
 
 // NewTunables constructs an empty (unpaused, no title override) Tunables.
@@ -62,4 +70,33 @@ func (t *Tunables) ShellEnabled() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.shellEnabled
+}
+
+// SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent)
+// and the per-entry length cap. A value of 0 selects the built-in default.
+func (t *Tunables) SetJournalLimits(cap, maxLen int) {
+	t.mu.Lock()
+	t.journalCap = cap
+	t.journalMaxLen = maxLen
+	t.mu.Unlock()
+}
+
+// JournalCap returns how many journal entries an agent keeps (default when unset).
+func (t *Tunables) JournalCap() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.journalCap <= 0 {
+		return DefaultJournalCap
+	}
+	return t.journalCap
+}
+
+// JournalMaxLen returns the per-entry journal length cap in runes (default when unset).
+func (t *Tunables) JournalMaxLen() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.journalMaxLen <= 0 {
+		return DefaultJournalMaxLen
+	}
+	return t.journalMaxLen
 }
