@@ -1,0 +1,156 @@
+// Shared building blocks for the settings screen: field primitives, the category
+// rail button, the read-only prompt viewer and the category taxonomy.
+import { type ReactNode } from 'react'
+import type { AppSettings, PromptInfo, WorkspaceSettings } from '../../types'
+
+// Category keys: the app-global sections plus the per-workspace section.
+export type Cat =
+  | 'profile'
+  | 'appearance'
+  | 'notifications'
+  | 'providers'
+  | 'context'
+  | 'budget'
+  | 'autonomy'
+  | 'autotitle'
+  | 'mcp'
+  | 'commands'
+  | 'stepkinds'
+  | 'diagnostics'
+  | 'about'
+  | 'workspace'
+
+export interface CatMeta {
+  key: Cat
+  label: string
+  icon: string
+}
+
+export const APP_CATS: CatMeta[] = [
+  { key: 'profile', label: 'Profil', icon: '👤' },
+  { key: 'appearance', label: 'Görünüm', icon: '🎨' },
+  { key: 'notifications', label: 'Bildirimler & Ekran', icon: '🔔' },
+  { key: 'providers', label: 'Sağlayıcılar', icon: '🔑' },
+  { key: 'context', label: 'Bağlam & Bellek', icon: '🧠' },
+  { key: 'budget', label: 'Bütçe', icon: '🛡' },
+  { key: 'autonomy', label: 'Otonomi', icon: '⚙' },
+  { key: 'autotitle', label: 'Otomatik Başlık', icon: '🏷' },
+  { key: 'mcp', label: 'MCP & Araçlar', icon: '🔌' },
+  { key: 'commands', label: 'Komutlar', icon: '⌘' },
+  { key: 'stepkinds', label: 'Adım Türleri', icon: '🧩' },
+  { key: 'diagnostics', label: 'Tanılama', icon: '🩺' },
+  { key: 'about', label: 'Hakkında', icon: 'ℹ️' },
+]
+
+export const WS_CATS: CatMeta[] = [{ key: 'workspace', label: 'Genel', icon: '🧩' }]
+
+// Setters threaded into the per-category panels.
+export type AppSet = <K extends keyof AppSettings>(key: K, val: AppSettings[K]) => void
+export type WsSet = <K extends keyof WorkspaceSettings>(key: K, val: WorkspaceSettings[K]) => void
+
+export const inputCls =
+  'rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
+
+export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-sm font-medium">{label}</span>
+      {children}
+      {hint && <span className="text-xs text-[var(--color-text-dim)]">{hint}</span>}
+    </label>
+  )
+}
+
+export function Toggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-left"
+    >
+      <span>
+        <span className="block text-sm font-medium">{label}</span>
+        {hint && <span className="block text-xs text-[var(--color-text-dim)]">{hint}</span>}
+      </span>
+      <span
+        className={`relative h-5 w-9 flex-shrink-0 rounded-full transition ${
+          checked ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
+            checked ? 'left-4' : 'left-0.5'
+          }`}
+        />
+      </span>
+    </button>
+  )
+}
+
+export function CatButton({
+  c,
+  active,
+  onClick,
+  dirty,
+}: {
+  c: CatMeta
+  active: boolean
+  onClick: () => void
+  dirty: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
+        active ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]' : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+      }`}
+    >
+      <span className="text-base leading-none">{c.icon}</span>
+      <span className="flex-1 truncate">{c.label}</span>
+      {dirty && <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" title="Kaydedilmemiş" />}
+    </button>
+  )
+}
+
+// PromptDetails renders one built-in prompt read-only (System / User-turn blocks
+// + note) with a button to open the source folder. Used inside the expandable
+// command cards on the Komutlar screen.
+export function PromptDetails({ p, dir, onReveal }: { p: PromptInfo; dir: string; onReveal: () => void }) {
+  return (
+    <>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <code className="rounded bg-[var(--color-surface-2)] px-1 text-[10px] text-[var(--color-text-dim)]">{p.file}</code>
+        <button
+          onClick={onReveal}
+          disabled={!dir}
+          title={dir || 'Klasör yolu bilinmiyor'}
+          className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-40"
+        >
+          📂 Klasörü aç
+        </button>
+      </div>
+      {p.system && (
+        <div className="mb-2">
+          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">System</div>
+          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.system}</pre>
+        </div>
+      )}
+      {p.user && (
+        <div className="mb-2">
+          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">User turn</div>
+          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.user}</pre>
+        </div>
+      )}
+      {p.note && <p className="text-xs text-[var(--color-text-dim)]">{p.note}</p>}
+    </>
+  )
+}

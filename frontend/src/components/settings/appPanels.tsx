@@ -1,0 +1,164 @@
+// The simple app-global setting categories (form fields only). The stateful
+// categories (providers, commands, step kinds, workspace) live in their own
+// files; these are pure draft+setter forms.
+import type { AppSettings } from '../../types'
+import { THEME_PRESETS } from '../../lib/themePresets'
+import { Field, Toggle, inputCls, type AppSet } from './primitives'
+
+interface PanelProps {
+  draft: AppSettings
+  set: AppSet
+  setDraft: React.Dispatch<React.SetStateAction<AppSettings | null>>
+}
+
+export function ProfilePanel({ draft, set }: PanelProps) {
+  return (
+    <>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+        Bu bilgiler ajanların yanıtlarını sana göre kişiselleştirmesi için sohbet bağlamına eklenir.
+      </div>
+      <Field label="Ad" hint="Ajan sana nasıl hitap etsin."><input value={draft.userName} onChange={(e) => set('userName', e.target.value)} placeholder="örn. Ada" className={inputCls} /></Field>
+      <Field label="Saat dilimi" hint="'yarın', 'gelecek hafta' gibi göreli tarihler için."><input value={draft.userTimezone} onChange={(e) => set('userTimezone', e.target.value)} placeholder="örn. Europe/Istanbul" className={inputCls} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Şehir"><input value={draft.userCity} onChange={(e) => set('userCity', e.target.value)} placeholder="örn. İstanbul" className={inputCls} /></Field>
+        <Field label="Ülke"><input value={draft.userCountry} onChange={(e) => set('userCountry', e.target.value)} placeholder="örn. Türkiye" className={inputCls} /></Field>
+      </div>
+      <Field label="Notlar" hint="Tercihlerini anlatan serbest metin (talimatlar, çalışma şekli…)."><textarea value={draft.userNotes} onChange={(e) => set('userNotes', e.target.value)} rows={5} className={`${inputCls} resize-none`} placeholder="Ajanların bilmesi gereken tercihlerin…" /></Field>
+    </>
+  )
+}
+
+export function NotificationsPanel({ draft, set }: PanelProps) {
+  return (
+    <>
+      <Toggle label="Masaüstü bildirimleri" hint="Pencere arkadayken asistan cevabı gelince tarayıcı bildirimi gösterir (izin ister)." checked={draft.desktopNotifications} onChange={(v) => set('desktopNotifications', v)} />
+      <Toggle label="Ekranı açık tut" hint="Uygulama açıkken ekran uyku moduna geçmez (Wake Lock)." checked={draft.keepAwake} onChange={(v) => set('keepAwake', v)} />
+    </>
+  )
+}
+
+export function AppearancePanel({ draft, set, setDraft }: PanelProps) {
+  return (
+    <>
+      <Field label="Tema paleti" hint="Hazır bir palet seç; tüm arayüz yeniden renklenir. Vurgu rengini aşağıdan ince ayarlayabilirsin.">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {THEME_PRESETS.map((p) => {
+            const sel = draft.themePreset === p.id
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setDraft((d) => (d ? { ...d, themePreset: p.id, accent: p.tokens.accent } : d))}
+                className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition ${
+                  sel
+                    ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
+                    : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
+                }`}
+              >
+                <span
+                  className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border"
+                  style={{ background: p.tokens.bg, borderColor: p.tokens.border }}
+                >
+                  <span className="h-3.5 w-3.5 rounded-full" style={{ background: p.tokens.accent }} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-medium text-[var(--color-text)]">{p.label}</span>
+                  <span className="block text-[10px] text-[var(--color-text-dim)]">{p.dark ? 'Koyu' : 'Açık'}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </Field>
+      <Field label="Temel mod" hint="Yalnızca özel palet kullanılmadığında (sistem otomatik açık/koyu) etkilidir.">
+        <select value={draft.theme} onChange={(e) => set('theme', e.target.value as AppSettings['theme'])} className={inputCls}>
+          <option value="dark">Koyu</option>
+          <option value="light">Açık</option>
+          <option value="system">Sistem</option>
+        </select>
+      </Field>
+      <Field label="Vurgu rengi (accent)">
+        <div className="flex items-center gap-2">
+          <input type="color" value={draft.accent} onChange={(e) => set('accent', e.target.value)} className="h-9 w-12 cursor-pointer rounded border border-[var(--color-border)] bg-[var(--color-bg)]" />
+          <input value={draft.accent} onChange={(e) => set('accent', e.target.value)} className={`${inputCls} w-32`} />
+        </div>
+      </Field>
+      <Field label="Dil" hint="UI dili tercihi (tam çeviri kademeli ekleniyor).">
+        <select value={draft.language} onChange={(e) => set('language', e.target.value as AppSettings['language'])} className={inputCls}>
+          <option value="tr">Türkçe</option>
+          <option value="en">English</option>
+        </select>
+      </Field>
+    </>
+  )
+}
+
+export function ContextPanel({ draft, set }: PanelProps) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <Field label="Maks. bağlam token" hint="Aşılınca eski turlar özetlenir."><input type="number" value={draft.maxContextTokens} onChange={(e) => set('maxContextTokens', Number(e.target.value))} className={inputCls} /></Field>
+      <Field label="Korunan son mesaj" hint="Her zaman aynen gönderilir."><input type="number" value={draft.keepRecentMsgs} onChange={(e) => set('keepRecentMsgs', Number(e.target.value))} className={inputCls} /></Field>
+      <Field label="Recall sonuç sayısı (top-N)"><input type="number" value={draft.recallTopN} onChange={(e) => set('recallTopN', Number(e.target.value))} className={inputCls} /></Field>
+      <Field label="Recall min skor" hint="0–1 arası benzerlik eşiği."><input type="number" step="0.01" value={draft.recallMinScore} onChange={(e) => set('recallMinScore', Number(e.target.value))} className={inputCls} /></Field>
+    </div>
+  )
+}
+
+export function BudgetPanel({ draft, set }: PanelProps) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <Field label="Günlük çağrı limiti" hint="0 = sınırsız"><input type="number" value={draft.defaultDailyCallLimit} onChange={(e) => set('defaultDailyCallLimit', Number(e.target.value))} className={inputCls} /></Field>
+      <Field label="Günlük token limiti" hint="0 = sınırsız"><input type="number" value={draft.defaultDailyTokenLimit} onChange={(e) => set('defaultDailyTokenLimit', Number(e.target.value))} className={inputCls} /></Field>
+      <p className="col-span-2 text-xs text-[var(--color-text-dim)]">Bu varsayılanlar yalnızca yeni oluşturulan ajanlara uygulanır.</p>
+    </div>
+  )
+}
+
+export function AutonomyPanel({ draft, set }: PanelProps) {
+  return (
+    <>
+      <Toggle label="Tüm otonomiyi duraklat (uygulama geneli)" hint="Heartbeat ve zamanlanmış çağrılar modele gitmeden bloklanır. Manuel sohbet etkilenmez." checked={draft.pauseAutonomy} onChange={(v) => set('pauseAutonomy', v)} />
+      <Field label="Varsayılan heartbeat aralığı (sn)"><input type="number" value={draft.defaultHeartbeatSec} onChange={(e) => set('defaultHeartbeatSec', Number(e.target.value))} className={inputCls} /></Field>
+    </>
+  )
+}
+
+export function AutoTitlePanel({ draft, set }: PanelProps) {
+  return (
+    <>
+      <Toggle label="Otomatik başlık üretimi" hint="Sohbet ilk mesajında ve görev oluşturmada başlık otomatik üretilir." checked={draft.autoTitleEnabled} onChange={(v) => set('autoTitleEnabled', v)} />
+      <Field label="Başlık modeli" hint="Boş = ajanın kendi modeli. Ucuz bir model seçebilirsin."><input value={draft.titleModel} onChange={(e) => set('titleModel', e.target.value)} placeholder="örn. haiku" className={inputCls} /></Field>
+    </>
+  )
+}
+
+export function McpPanel({ draft, set }: PanelProps) {
+  return (
+    <Field label="MCP Gateway URL" hint="Araç entegrasyonları için ağ geçidi adresi."><input value={draft.mcpGatewayUrl} onChange={(e) => set('mcpGatewayUrl', e.target.value)} placeholder="http://localhost:9091/mcp" className={inputCls} /></Field>
+  )
+}
+
+export function DiagnosticsPanel({ draft, set }: PanelProps) {
+  return (
+    <Field label="Log seviyesi" hint="Yeniden başlatınca uygulanır.">
+      <select value={draft.logLevel} onChange={(e) => set('logLevel', e.target.value)} className={inputCls}>
+        <option value="debug">debug</option>
+        <option value="info">info</option>
+        <option value="warn">warn</option>
+        <option value="error">error</option>
+      </select>
+    </Field>
+  )
+}
+
+export function AboutPanel() {
+  return (
+    <p className="text-sm text-[var(--color-text-dim)]">
+      SwarmGo — çok-ajanlı AI runtime. Uygulama ayarları{' '}
+      <code className="rounded bg-[var(--color-surface-2)] px-1">settings.json</code>,
+      workspace ayarları her workspace'in{' '}
+      <code className="rounded bg-[var(--color-surface-2)] px-1">ws-settings.json</code>{' '}
+      dosyasında saklanır.
+    </p>
+  )
+}
