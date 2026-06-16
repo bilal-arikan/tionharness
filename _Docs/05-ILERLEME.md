@@ -32,8 +32,9 @@ Sohbet ekranında her mesajın **gönderilme saati** ve her asistan turunun **ç
 Sohbet akışı (streaming) durumu artık **oturuma bağlı** — önceden tek global `streaming` bayrağı tüm oturumları etkiliyordu.
 1. **Buton kapsamı fix'i (`App.tsx`):** Yeni `streamingSessionId` state'i akışın hangi oturuma ait olduğunu izler. Composer'a geçen prop `streaming && streamingSessionId === activeSessionId` oldu; `AskPrompt` de aynı koşula bağlandı. Böylece A oturumunda yanıt üretilirken B oturumuna geçince buton yanlışça "Durdur/Kes/Yönlendir" yerine doğru şekilde **"Gönder"** gösterir. (Akış başlangıcında set, `finally`/`stopTurn`'de temizlenir.)
 2. **Sidebar canlı göstergesi (`SessionsSidebar.tsx`):** Akışı süren oturum satırında **nabız atan nokta** (`animate-ping`) + alt satırda **"yazıyor…"** etiketi gösterilir (zaman/mesaj sayısı yerine); başlık kalınlaşır. Gösterge yalnız ilgili oturumda görünür, oturum değiştirince akıştaki oturumda kalır. Prop: `streamingSessionId={streaming ? streamingSessionId : null}`.
+3. **Renk iyileştirmesi (sonradan, aynı gün):** Gösterge daha görünür olsun diye nokta + "yazıyor…" etiketi koyu mor `--color-accent` yerine **parlak açık yeşil `emerald-400`** yapıldı; etiketteki `opacity-60` soluklaştırması bu durumda kaldırıldı.
 
-> Test: tsc + go build/vet yeşil; **Chrome canlı**: A oturumunda akış → satırda "yazıyor…" + ping nokta; B'ye geçince buton "Gönder", A bitince gösterge kayboldu — doğrulandı.
+> Test: tsc + go build/vet yeşil; **Chrome canlı**: A oturumunda akış → satırda "yazıyor…" + ping nokta (emerald-400); B'ye geçince buton "Gönder", A bitince gösterge kayboldu — doğrulandı.
 
 ### Komutlar ekranında salt-okunur prompt görüntüleyici ✅ (2026-06-16)
 Ayarlar → **Komutlar** kategorisine, komutların arkasındaki gömülü promptları **salt-okunur** gösteren bir bölüm + **klasörü aç** butonu eklendi:

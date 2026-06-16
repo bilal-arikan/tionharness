@@ -118,10 +118,17 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   - **`/`** (girdinin başında, tek kelime) → **komut paleti**; seçim `SlashCommand.run()`,
     girdi temizlenir. Komutlar `App.tsx`'te `chatCommands` (useMemo): `/reflect` (yansıma),
     `/memory` · `/board` · `/flows` (talep-üzerine özet, `POST /api/sessions/{id}/summary`),
-    `/tools` (deterministik araç listesi). Bir komutu **çalıştırmadan düz metin** göndermek
-    için tırnak içine al: `"/komut"` (bkz. `chat/UserBubble.tsx`).
+    `/tools` (deterministik araç listesi). Özet komutları çalışınca **komutun kendisi de**
+    sohbete bir kullanıcı balonu (`/kind`, komut stilinde) olarak yazılır, ardından sonuç
+    asistan mesajı gelir (ikisi de kalıcı; `{userMessage, replyMessage}`). Bir komutu
+    **çalıştırmadan düz metin** göndermek için tırnak içine al: `"/komut"` (bkz. `chat/UserBubble.tsx`).
   - Klavye: ↑/↓ gezinme, Enter/Tab seçim, Esc kapat (menü açıkken Enter göndermez).
 - `SlashCommand` tipi `types.ts`'te (`name`/`description`/`icon`/`run`).
+- **Düşünme seviyesi seçici (`ThinkingPicker`):** textarea'nın solunda `🧠` butonu +
+  üstte açılan menü (**Oto**=ajan ayarı / **Kapalı** / **Düşük** / **Orta** / **Yüksek**,
+  dışarı-tıkla-kapat). Seçim `App.tsx` `thinkingLevel` state'inde + `localStorage`
+  (`swarmgo.thinkingLevel`) ile kalıcı; `chatStream` gövdesine `thinkingLevel` olarak gider
+  ve o turun reasoning bütçesini **ajan ayarından bağımsız** belirler (bkz. Notlar).
 
 ### Session-bazlı + çok-ajanlı sohbet (`@` yönlendirme)
 - Sohbet **session-bazlı**: sol panel (`SessionsSidebar.tsx`) oturumları **zaman
@@ -137,6 +144,12 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   öncekilerin yanıtını görür. SSE: `meta` → (her ajan için) `agent {agentId,index}` →
   `step`* → `reply {replyMessage}` → `done`. Her asistan turu `Message.AgentID` ile
   kalıcılaşır; `MessageList` her turu **kendi ajanının avatar+adıyla** çizer.
+- **Oturum-bazlı akış durumu:** akış (streaming) artık **oturuma bağlı** — `App.tsx`
+  `streamingSessionId` akışın sahibi oturumu izler. Composer'ın akış aksiyonları
+  (Durdur/Kes/Yönlendir) ve `AskPrompt` yalnız `streamingSessionId === activeSessionId`
+  iken görünür (başka oturuma geçince normal "Gönder"). `SessionsSidebar` akıştaki oturum
+  satırında **nabız atan nokta** (`animate-ping`, **`emerald-400`**) + **"yazıyor…"** etiketi
+  gösterir (başlık kalın); gösterge oturum değişse de akıştaki oturumda kalır.
 
 ### Yerleşim
 - Sohbet **tam genişlik** kullanır (`MessageList`/`Composer`'daki `max-w-3xl` kaldırıldı).
@@ -145,6 +158,12 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 - Bir turdaki üç adım türü de **tek-satır açılır-kapanır kart**: 💭 Düşünme (`thinking`),
   💬 Düşünce (ara `text` — `TextStep`), 🛠️ Tool (`tool` — `ActivityCard`). Nihai
   cevap tam görünür kalır.
+- **Mesaj meta satırı (`chat/MessageMeta.tsx`):** her mesajın altında **gönderilme saati**
+  (`MessageTime`, hover'da tam tarih; `lib/time.ts` `clockTime`/`fullDateTime`) ve her asistan
+  turunda **çalışma süresi** (`TurnDuration` "⏱ 2 dk 15 sn" = asistan.createdAt − önceki
+  **kullanıcı** mesajı.createdAt; yalnız önceki mesaj kullanıcıysa, enjekte özet/ardışık
+  asistan turları yanıltmasın). Akış sürerken son balonda her saniye tıklayan **`LiveTimer`**;
+  `formatDuration` ortak biçimleyici.
 
 ## Doğrulama
 
@@ -168,6 +187,10 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 - `thinking` adımları: **hem native (anthropic) hem claude-cli** yolunda gösterilir.
   Ajanın `ThinkingLevel`'i (low/medium/high) `thinkingBudgetForLevel` ile token bütçesine
   çevrilir ve **araçsız (MCP kapalı) turlarda** `Request.ThinkingBudget` olarak gönderilir.
+  **Tur-bazlı override:** composer'daki `🧠` seçici (`chatReq.ThinkingLevel`) bu turun
+  seviyesini ajan ayarının yerine geçirir — handler yanıtlayan ajanın **yerel kopyasının**
+  `ThinkingLevel`'ini değiştirir (kalıcı değil); boş = ajan ayarı. claude-cli/minimax bütçeyi
+  yok sayar.
   - **Native streaming** (`anthropic.Stream`): SSE `content_block_delta` artık `text_delta`
     **ve** `thinking_delta`'yı ayrıştırır. Tipli `providers.StreamDelta{Kind: text|thinking}`
     ile yayılır → `recordedStream` thinking parçalarını sabit `liveThinkingID` ile canlı
