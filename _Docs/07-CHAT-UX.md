@@ -42,19 +42,29 @@ sohbet ekranı gibi.
 
 ### Adım-adım akış (SSE streaming)
 Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil).
-- `providers.Request.OnEvent func(TraceStep)` — sağlayıcı (claude CLI) her adım
-  hazır olunca çağırır. `claudecli.go` stream-json'u **satır satır** (`bufio`)
-  okuyup olayları anında yayınlar: thinking hemen, ara metin flush'ta, tool adımı
-  sonucu gelince. `cliStreamParser` (feed/finish) artımlı durumu tutar.
+
+İki streaming yolu vardır:
+1. **claude-cli (trace tabanlı):** `providers.Request.OnEvent func(TraceStep)` —
+   `claudecli.go` stream-json'u **satır satır** (`bufio`) okuyup olayları anında
+   yayınlar: thinking hemen, ara metin flush'ta, tool adımı sonucu gelince.
+   `cliStreamParser` (feed/finish) artımlı durumu tutar.
+2. **Native token streaming (`providers.Streamer`):** `anthropic` ve `minimax`
+   artık birinci sınıf token akışı yapar — `Stream(ctx, req, onDelta)` SSE'yi
+   ayrıştırıp her metin parçasını `onDelta`'ya verir. `toolloop.go` araçsız turda
+   bir sağlayıcı `Streamer` ise akışı tercih eder ve her parçayı geçici bir
+   `StepDelta` (kind `"delta"`) olarak yayınlar. Delta'lar **kalıcı değildir**
+   (yalnız canlı UI); tam metin tur sonunda mesaja yazılır.
 - `agent/toolloop.go` `CompleteWithToolsStream(... onStep)` — claude-cli yolunda
-  `OnEvent`'i `onStep`'e köprüler; native döngüde her adımı kendisi yayınlar.
+  `OnEvent`'i `onStep`'e köprüler; native loop her adımı kendisi yayınlar;
+  araçsız streaming yolu `recordedStream` ile `StepDelta`'ları yayınlar.
 - `internal/api/chat_stream.go` — `POST /api/chat/stream` (SSE):
   `meta` (userMessage) → `step` (her TurnStep) → `done` (replyMessage + sessionTitle).
   Tur sonunda mesaj + tam iz kalıcılaştırılır (yeniden yüklemede aynı görünür).
 - Frontend `api.ts:streamChat` — `fetch` + `ReadableStream` ile SSE çerçevelerini
-  ayrıştırır. `App.tsx` canlı bir asistan balonu ekler; `onStep`'te adımlar büyür,
-  `onDone`'da kanonik mesajla değişir. `MessageList` boş canlı balonda
-  "çalışıyor" noktaları gösterir.
+  ayrıştırır. `App.tsx` canlı bir asistan balonu ekler; `onStep`'te `kind:"delta"`
+  parçaları **balon metnine eklenir** (token token büyür), diğer adımlar ize
+  yazılır; `onReply`/`onDone`'da kanonik mesajla değişir. `MessageList` boş canlı
+  balonda "çalışıyor" noktaları gösterir.
 
 ## Frontend
 

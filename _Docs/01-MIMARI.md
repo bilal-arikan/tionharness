@@ -71,7 +71,7 @@ graph LR
 - Ortak `Provider` arayüzü; her LLM için ayrı implementasyon.
 - **Mevcut:** `anthropic` (ince HTTP istemci, SDK yok), `claude-cli` (anahtarsız, OAuth/abonelik), `minimax` (OpenAI-uyumlu — herhangi bir OpenAI-stili uca da uyar). Ortak HTTP iskeleti `transport.go` (`postJSON`).
 - OpenAI/Ollama/Gemini gibi ekler aynı `Provider` arayüzü arkasına takılabilir.
-- Akış: claude-cli stream-json + SSE köprüsü (bkz. `07-CHAT-UX.md`).
+- **Streaming birinci sınıf:** opsiyonel `Streamer` arayüzü (`Stream(ctx, req, onDelta)`); `anthropic` + `minimax` native token akışı yapar, claude-cli kendi stream-json izini yayınlar. UI'a SSE ile akar (bkz. `07-CHAT-UX.md`).
 
 ### 7. Diğer Modüller
 - **MCP (`internal/mcp`):** Model Context Protocol istemcisi — SDK'sız elle JSON-RPC 2.0; şu an **stdio** taşıma (SSE/HTTP hedef, henüz yok).
