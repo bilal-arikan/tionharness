@@ -179,6 +179,7 @@ erDiagram
 | `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace) |
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
+| `artifacts` | Ajanın ürettiği kalıcı, sürümlenen içerik (doküman/kod/HTML/metin/SVG/Mermaid). `kind`+`language`, güncel `content`/`version` ve **inline revizyon geçmişi** (`revisions`, eskiden yeniye); köken `session_id`/`agent_id`. Workspace-scoped — SwarmGo'nun Claude.ai artifact karşılığı |
 
 ## Güvenlik / Şifreleme
 

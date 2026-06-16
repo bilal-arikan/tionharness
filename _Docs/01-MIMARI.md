@@ -28,7 +28,7 @@ graph TD
 
 ### 2. API Katmanı (`internal/api`)
 - HTTP router: **stdlib `net/http` ServeMux** (Go 1.22+ method+path pattern → Chi/Echo gerekmedi). Rotalar domain-bazlı `register*Routes` yardımcılarına bölünmüştür (`server.go`).
-- REST uçları: `/api/agents`, `/api/sessions`, `/api/chat`, `/api/tasks`, `/api/schedules`, `/api/flows`, `/api/mcp-servers`, `/api/settings`, `/api/workspaces` (tam liste için `server.go`).
+- REST uçları: `/api/agents`, `/api/sessions`, `/api/chat`, `/api/tasks`, `/api/schedules`, `/api/flows`, `/api/mcp-servers`, `/api/artifacts`, `/api/settings`, `/api/workspaces`, `/api/logs`, `/api/events` (tam liste için `server.go` ve SKILL API tablosu).
 - Canlı akış: kalıcı WebSocket hub'ı yerine **SSE** (`POST /api/chat/stream`) — sohbet turu adım adım UI'a akar (bkz. `07-CHAT-UX.md`).
 
 ### 3. Agent Runtime (`internal/agent`)
@@ -96,12 +96,12 @@ SwarmGo/
 │   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go)
 │   ├── orchestration/           # akış graf motoru (model.go, engine.go)
 │   ├── mcp/                     # SDK'sız stdio JSON-RPC istemci (client.go, manager.go)
-│   ├── tools/                   # built-in (fs/shell + todo_write/ask_user) + MCP birleşik registry (registry.go, builtin_*.go, sandbox.go, ask.go)
+│   ├── tools/                   # built-in (fs/shell akan + todo_write/ask_user + artifact) + MCP birleşik registry (registry.go StreamingTool, builtin_*.go, sandbox.go, ask.go, artifact.go)
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
 │   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs
 │   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE
 │   ├── workspace/               # workspace başına DB + Runtime + Scheduler (manager.go)
-│   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat(+stream/control)/files/runtime/tasks/schedules/memory/usage/mcp/agent_tools/flows/settings/workspaces/logs/events
+│   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat(+stream/control)/files/runtime/tasks/schedules/memory/usage/mcp/agent_tools/flows/artifacts/settings/workspaces/logs/events
 ├── frontend/                    # React + Vite + TS + Tailwind v4
 └── go.mod
 ```
