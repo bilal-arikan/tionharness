@@ -120,7 +120,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerMemoryRoutes(mux)
 	s.registerMiscRoutes(mux)
 
-	return withCORS(s.withWorkspace(mux))
+	return withCORS(s.withRequestLog(s.withWorkspace(mux)))
 }
 
 // registerWorkspaceRoutes registers workspace management (not workspace-scoped).
