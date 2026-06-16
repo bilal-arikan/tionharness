@@ -114,6 +114,40 @@ function Toggle({
   )
 }
 
+// PromptDetails renders one built-in prompt read-only (System / User-turn blocks
+// + note) with a button to open the source folder. Used inside the expandable
+// command cards on the Komutlar screen.
+function PromptDetails({ p, dir, onReveal }: { p: PromptInfo; dir: string; onReveal: () => void }) {
+  return (
+    <>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <code className="rounded bg-[var(--color-surface-2)] px-1 text-[10px] text-[var(--color-text-dim)]">{p.file}</code>
+        <button
+          onClick={onReveal}
+          disabled={!dir}
+          title={dir || 'Klasör yolu bilinmiyor'}
+          className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-40"
+        >
+          📂 Klasörü aç
+        </button>
+      </div>
+      {p.system && (
+        <div className="mb-2">
+          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">System</div>
+          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.system}</pre>
+        </div>
+      )}
+      {p.user && (
+        <div className="mb-2">
+          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">User turn</div>
+          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.user}</pre>
+        </div>
+      )}
+      {p.note && <p className="text-xs text-[var(--color-text-dim)]">{p.note}</p>}
+    </>
+  )
+}
+
 // SettingsPanel is the two-pane configuration screen: a category rail on the
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
@@ -136,6 +170,8 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
   // Built-in runtime prompts (read-only) shown in the Komutlar category.
   const [prompts, setPrompts] = useState<PromptInfo[]>([])
   const [promptsDir, setPromptsDir] = useState('')
+  // Which command/prompt cards are expanded (name → open) in the Komutlar list.
+  const [openCmds, setOpenCmds] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     api.getSettings().then((s) => { setDraft(s); setOriginal(s) }).catch((e) => onError((e as Error).message))
@@ -456,60 +492,75 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
                     <div className="text-sm text-[var(--color-text-dim)]">Kayıtlı komut yok.</div>
                   ) : (
                     <div className="flex flex-col gap-1.5">
-                      {commands.map((c) => (
-                        <div
-                          key={c.name}
-                          className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-                        >
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-base">
-                            {c.icon ?? '⚡'}
-                          </span>
-                          <div className="min-w-0">
-                            <div className="font-mono text-sm font-medium text-[var(--color-text)]">/{c.name}</div>
-                            <div className="truncate text-xs text-[var(--color-text-dim)]">{c.description}</div>
+                      {commands.map((c) => {
+                        // Map a command to the built-in prompt behind it; /tools is
+                        // deterministic (no prompt).
+                        const p =
+                          c.name === 'reflect'
+                            ? prompts.find((x) => x.key === 'reflect')
+                            : c.name === 'memory' || c.name === 'board' || c.name === 'flows'
+                              ? prompts.find((x) => x.key === 'summary')
+                              : undefined
+                        const open = !!openCmds[c.name]
+                        return (
+                          <div key={c.name} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+                            <button
+                              onClick={() => setOpenCmds((o) => ({ ...o, [c.name]: !o[c.name] }))}
+                              className="flex w-full items-center gap-3 px-3 py-2 text-left"
+                            >
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-base">
+                                {c.icon ?? '⚡'}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-mono text-sm font-medium text-[var(--color-text)]">/{c.name}</div>
+                                <div className="truncate text-xs text-[var(--color-text-dim)]">{c.description}</div>
+                              </div>
+                              <span className="shrink-0 text-xs text-[var(--color-text-dim)]">{open ? '▾' : '▸'}</span>
+                            </button>
+                            {open && (
+                              <div className="border-t border-[var(--color-border)] px-3 py-2.5">
+                                {p ? (
+                                  <PromptDetails p={p} dir={promptsDir} onReveal={() => api.revealPrompts().catch((e) => onError((e as Error).message))} />
+                                ) : (
+                                  <p className="text-xs text-[var(--color-text-dim)]">
+                                    Bu komut deterministiktir — model/prompt kullanmaz; sonuç runtime'da doğrudan üretilir.
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
+
+                      {/* Auto-title isn't a slash command but shares the prompt
+                          folder; surface it here as one more collapsible card. */}
+                      {prompts
+                        .filter((p) => p.key === 'title')
+                        .map((p) => {
+                          const open = !!openCmds['__title']
+                          return (
+                            <div key={p.key} className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg)]">
+                              <button
+                                onClick={() => setOpenCmds((o) => ({ ...o, __title: !o.__title }))}
+                                className="flex w-full items-center gap-3 px-3 py-2 text-left"
+                              >
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-base">🏷</span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium text-[var(--color-text)]">Otomatik başlık</div>
+                                  <div className="truncate text-xs text-[var(--color-text-dim)]">Komut değil — sohbet/görev başlığı üretimi</div>
+                                </div>
+                                <span className="shrink-0 text-xs text-[var(--color-text-dim)]">{open ? '▾' : '▸'}</span>
+                              </button>
+                              {open && (
+                                <div className="border-t border-[var(--color-border)] px-3 py-2.5">
+                                  <PromptDetails p={p} dir={promptsDir} onReveal={() => api.revealPrompts().catch((e) => onError((e as Error).message))} />
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                     </div>
                   )}
-
-                  {/* Read-only view of the built-in prompts behind the commands. */}
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="text-sm font-semibold">Prompt'lar (salt-okunur)</span>
-                    <button
-                      onClick={() => api.revealPrompts().catch((e) => onError((e as Error).message))}
-                      disabled={!promptsDir}
-                      title={promptsDir || 'Klasör yolu bilinmiyor'}
-                      className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)] disabled:opacity-40"
-                    >
-                      📂 Klasörü aç
-                    </button>
-                  </div>
-                  <p className="text-xs text-[var(--color-text-dim)]">
-                    Bu promptlar uygulamaya gömülüdür ve buradan düzenlenemez. Kaynak klasör:{' '}
-                    <code className="rounded bg-[var(--color-surface-2)] px-1 break-all">{promptsDir || '—'}</code>
-                  </p>
-                  {prompts.map((p) => (
-                    <div key={p.key} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-[var(--color-text)]">{p.label}</span>
-                        <code className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 text-[10px] text-[var(--color-text-dim)]">{p.file}</code>
-                      </div>
-                      {p.system && (
-                        <div className="mt-2">
-                          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">System</div>
-                          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.system}</pre>
-                        </div>
-                      )}
-                      {p.user && (
-                        <div className="mt-2">
-                          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">User turn</div>
-                          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.user}</pre>
-                        </div>
-                      )}
-                      {p.note && <p className="mt-2 text-xs text-[var(--color-text-dim)]">{p.note}</p>}
-                    </div>
-                  ))}
                 </>
               )}
 

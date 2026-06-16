@@ -16,7 +16,7 @@
 Ayarlar → **Komutlar** kategorisine, komutların arkasındaki gömülü promptları **salt-okunur** gösteren bir bölüm + **klasörü aç** butonu eklendi:
 
 1. **Backend** (`internal/agent/prompts.go`): `Prompts()` summary/reflect/title promptlarını (system + user-turn şablonu + not + kaynak dosya adı) döndürür; `PromptsDir()` `runtime.Caller` ile prompt kaynak klasörünü (yerel derlemede `internal/agent`) verir. `GET /api/prompts` (`internal/api/prompts.go`) bunları + `dir`'i döner; `POST /api/prompts/reveal` klasörü Explorer'da açar (session-reveal ile aynı `explorer.exe` deseni). Route'lar `registerSettingsRoutes`'ta.
-2. **Frontend** (`SettingsPanel.tsx`): Komutlar kategorisi prompt listesini `api.getPrompts()` ile çeker; her prompt için System/User turn blokları (`<pre>`, salt-okunur), kaynak dosya rozeti ve not gösterilir. **📂 Klasörü aç** butonu `api.revealPrompts()` çağırır; kaynak klasör yolu da gösterilir. Düzenleme yok — promptlar binary'ye gömülü.
+2. **Frontend** (`SettingsPanel.tsx`): Komutlar kategorisi eski komut-kartı görünümünü **korur**; her kart artık **açılır-kapanır** (▸/▾). Açılınca o komuta ait prompt (System/User turn `<pre>` blokları, salt-okunur), kaynak dosya rozeti ve **📂 Klasörü aç** butonu (`api.revealPrompts()`) kartın içinde görünür. `/tools` deterministik olduğundan "prompt yok" notu gösterir. Auto-title komut olmadığından en altta ayrı (kesik çizgili) açılır kart olarak durur. Ortak `PromptDetails` bileşeni. Düzenleme yok — promptlar binary'ye gömülü.
 
 > Doğrulama: `go build ./...` + `tsc` yeşil; `GET /api/prompts` 3 prompt + doğru `dir` döndü; Chrome canlı: Komutlar ekranında promptlar + klasör yolu + "Klasörü aç" butonu render, butona basınca backend hatasız Explorer açtı.
 
