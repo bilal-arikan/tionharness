@@ -57,6 +57,22 @@ func (d *DB) ListEnabledSchedules(ctx context.Context) ([]Schedule, error) {
 	return out, nil
 }
 
+// UpdateSchedule edits the mutable fields of a schedule (agent/cron/task/prompt).
+// Delivery bookkeeping and the enabled flag are left untouched.
+func (d *DB) UpdateSchedule(ctx context.Context, sc Schedule) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cur, ok := d.schedules[sc.ID]
+	if !ok {
+		return ErrNotFound
+	}
+	cur.AgentID = sc.AgentID
+	cur.CronExpr = sc.CronExpr
+	cur.TaskID = sc.TaskID
+	cur.Prompt = sc.Prompt
+	return d.persistScheduleLocked(cur)
+}
+
 // SetScheduleEnabled toggles a schedule on or off.
 func (d *DB) SetScheduleEnabled(ctx context.Context, id string, enabled bool) error {
 	d.mu.Lock()

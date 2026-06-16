@@ -67,6 +67,61 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, schedule)
 }
 
+type updateScheduleReq struct {
+	AgentID  string `json:"agentId"`
+	TaskID   string `json:"taskId"`
+	CronExpr string `json:"cronExpr"`
+	Prompt   string `json:"prompt"`
+}
+
+// handleUpdateSchedule edits a schedule's agent/cron/task/prompt and reloads cron.
+func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+
+	var req updateScheduleReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.AgentID == "" {
+		writeError(w, http.StatusBadRequest, "agentId is required")
+		return
+	}
+	if req.CronExpr == "" {
+		writeError(w, http.StatusBadRequest, "cronExpr is required")
+		return
+	}
+	if req.TaskID == "" && req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "either taskId or prompt is required")
+		return
+	}
+	if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
+		writeError(w, http.StatusBadRequest, "unknown agent")
+		return
+	}
+
+	err := wsp.DB.UpdateSchedule(r.Context(), db.Schedule{
+		ID:       id,
+		AgentID:  req.AgentID,
+		CronExpr: req.CronExpr,
+		TaskID:   req.TaskID,
+		Prompt:   req.Prompt,
+	})
+	if writeDBError(w, err, "schedule not found") {
+		return
+	}
+	if err := wsp.Scheduler.Reload(r.Context()); err != nil {
+		s.logger.Warn("scheduler reload failed", "error", err)
+	}
+	sc, err := wsp.DB.GetSchedule(r.Context(), id)
+	if writeDBError(w, err, "schedule not found") {
+		return
+	}
+	s.logger.Info("schedule updated", "id", id, "agent", req.AgentID, "cron", req.CronExpr)
+	writeJSON(w, http.StatusOK, sc)
+}
+
 type toggleScheduleReq struct {
 	Enabled bool `json:"enabled"`
 }

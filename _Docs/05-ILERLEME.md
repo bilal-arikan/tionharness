@@ -2,6 +2,18 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara özellik — Zamanlama düzenleme (schedule edit) (2026-06-17)
+
+**İstek:** "Zamanlamalar ekranında eklenen zamanlamaları liste halinde görebilelim, tıklayıp aktif/deaktif etme, silme veya editleme yapabilelim."
+
+Liste + toggle (aktif/pasif) + sil zaten vardı (`components/panels/Schedules.tsx`); eksik olan tek şey **düzenleme** idi. Eklenenler:
+
+- **Backend `db.UpdateSchedule`** (`store_schedule.go`): id ile bulup `AgentID`/`CronExpr`/`TaskID`/`Prompt` alanlarını günceller; `Enabled` + teslimat alanları (`LastDeliveryStatus`/`LastRunAt`/`NextRunAt`) **korunur** (yalnızca tanım düzenlenir).
+- **`PUT /api/schedules/{id}`** (`api/schedules.go` `handleUpdateSchedule`): create ile aynı doğrulama (`agentId`+`cronExpr` zorunlu, `taskId` **veya** `prompt` gerekli, bilinmeyen ajan reddi). Başarıda `Scheduler.Reload(ctx)` çağırır (cron tablosu yeni ifadeyle yeniden yüklenir) ve güncel satırı döner. Route `server.go` `registerScheduleRoutes`'a eklendi.
+- **Frontend `api.updateSchedule`** (`api/tasks.ts`) + `Schedules.tsx` **satır-içi düzenleme modu**: her satırda ✎ düğmesi → o satır ajan/preset/cron/görev/prompt formuna dönüşür (**Kaydet**/**İptal**). Kaydedince listedeki satır sunucudan dönen güncel veriyle değiştirilir; tek seferde bir zamanlama düzenlenir.
+
+✅ `go build`/`vet` + `tsc -b`/`vite build` yeşil. **API canlı test** (yeni binary, `127.0.0.1:8090`): schedule create → `PUT` (cron `*/5 * * * *`→`0 9 * * *` ve prompt değişti, `enabled=true` **korundu**) → list ile diskte kalıcılık doğrulandı → delete ile temizlik. Not: gateway/mcp-chrome bu oturumda bağlı değil → tarayıcı görsel testi yapılmadı (API round-trip kanıt).
+
 ## Bugfix — claude-cli transcript'ine sızan harness markup'ı (system-reminder balonu) (2026-06-17)
 
 **Belirti:** `claude-cli` sağlayıcısıyla çalışan bir ajan, çok-turlu bir sohbette araç kullandıktan (Edit/Read) sonra gelen bir kullanıcı isteğine cevap yerine `<system-reminder>The assistant message ... is malformed ...</system-reminder>` metnini **bir sohbet balonu olarak** üretiyordu.

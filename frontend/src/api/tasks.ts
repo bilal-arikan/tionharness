@@ -42,6 +42,14 @@ export const taskApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  updateSchedule: (
+    id: string,
+    data: { agentId: string; cronExpr: string; taskId?: string; prompt?: string },
+  ) =>
+    req<Schedule>(`/api/schedules/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
   toggleSchedule: (id: string, enabled: boolean) =>
     req<{ id: string; enabled: boolean }>(`/api/schedules/${id}/toggle`, {
       method: 'POST',

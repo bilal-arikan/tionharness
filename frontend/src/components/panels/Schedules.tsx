@@ -29,6 +29,13 @@ export function Schedules({ agents, onError }: Props) {
   const [taskId, setTaskId] = useState('')
   const [prompt, setPrompt] = useState('')
 
+  // Inline edit state (one schedule edited at a time).
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editAgentId, setEditAgentId] = useState('')
+  const [editCronExpr, setEditCronExpr] = useState('')
+  const [editTaskId, setEditTaskId] = useState('')
+  const [editPrompt, setEditPrompt] = useState('')
+
   const reload = () =>
     api.listSchedules().then(setSchedules).catch((e) => onError(e.message))
 
@@ -74,6 +81,39 @@ export function Schedules({ agents, onError }: Props) {
     } catch (e) {
       onError((e as Error).message)
       reload()
+    }
+  }
+
+  const startEdit = (s: Schedule) => {
+    setEditId(s.id)
+    setEditAgentId(s.agentId)
+    setEditCronExpr(s.cronExpr)
+    setEditTaskId(s.taskId)
+    setEditPrompt(s.prompt)
+  }
+
+  const cancelEdit = () => setEditId(null)
+
+  const saveEdit = async (s: Schedule) => {
+    if (!editAgentId || !editCronExpr.trim()) {
+      onError('Ajan ve cron ifadesi zorunlu')
+      return
+    }
+    if (!editTaskId && !editPrompt.trim()) {
+      onError('Görev veya prompt gerekli')
+      return
+    }
+    try {
+      const updated = await api.updateSchedule(s.id, {
+        agentId: editAgentId,
+        cronExpr: editCronExpr.trim(),
+        taskId: editTaskId || undefined,
+        prompt: editPrompt.trim() || undefined,
+      })
+      setSchedules((prev) => prev.map((x) => (x.id === s.id ? updated : x)))
+      setEditId(null)
+    } catch (e) {
+      onError((e as Error).message)
     }
   }
 
@@ -157,7 +197,79 @@ export function Schedules({ agents, onError }: Props) {
         {schedules.length === 0 && (
           <p className="text-sm text-[var(--color-text-dim)]">Henüz zamanlama yok.</p>
         )}
-        {schedules.map((s) => (
+        {schedules.map((s) =>
+          editId === s.id ? (
+            <div
+              key={s.id}
+              className="space-y-2 rounded-lg border border-[var(--color-accent)] bg-[var(--color-surface)] p-3 text-sm"
+            >
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={editAgentId}
+                  onChange={(e) => setEditAgentId(e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
+                >
+                  <option value="">Ajan seç</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={editCronExpr}
+                  onChange={(e) => setEditCronExpr(e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
+                >
+                  <option value={editCronExpr}>Hazır ifade seç…</option>
+                  {PRESETS.map((p) => (
+                    <option key={p.expr} value={p.expr}>
+                      {p.label} ({p.expr})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={editCronExpr}
+                  onChange={(e) => setEditCronExpr(e.target.value)}
+                  placeholder="cron: dk sa gün ay haftagünü"
+                  className="w-44 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={editTaskId}
+                  onChange={(e) => setEditTaskId(e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
+                >
+                  <option value="">Görev bağlama (opsiyonel)</option>
+                  {tasks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.title}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={editPrompt}
+                  onChange={(e) => setEditPrompt(e.target.value)}
+                  placeholder="veya doğrudan prompt gönder"
+                  disabled={!!editTaskId}
+                  className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)] disabled:opacity-40"
+                />
+                <button
+                  onClick={() => saveEdit(s)}
+                  className="rounded bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white hover:opacity-90"
+                >
+                  Kaydet
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  className="rounded border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-bg)]"
+                >
+                  İptal
+                </button>
+              </div>
+            </div>
+          ) : (
           <div
             key={s.id}
             className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
@@ -206,6 +318,13 @@ export function Schedules({ agents, onError }: Props) {
               </div>
             </div>
             <button
+              onClick={() => startEdit(s)}
+              className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+              title="Düzenle"
+            >
+              ✎
+            </button>
+            <button
               onClick={() => remove(s)}
               className="text-[var(--color-text-dim)] hover:text-red-400"
               title="Sil"
@@ -213,7 +332,8 @@ export function Schedules({ agents, onError }: Props) {
               ✕
             </button>
           </div>
-        ))}
+          ),
+        )}
       </div>
     </div>
   )

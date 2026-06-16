@@ -197,6 +197,7 @@ func (s *Server) registerTaskRoutes(mux *http.ServeMux) {
 func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/schedules", s.handleListSchedules)
 	mux.HandleFunc("POST /api/schedules", s.handleCreateSchedule)
+	mux.HandleFunc("PUT /api/schedules/{id}", s.handleUpdateSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/toggle", s.handleToggleSchedule)
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
 }
