@@ -44,6 +44,11 @@ type Runtime struct {
 	// instructions is this workspace's free-form guidance (set from per-workspace
 	// settings), appended to every agent's static system prompt.
 	instructions atomic.Pointer[string]
+
+	// reflecting guards against concurrent auto-reflects for the same agent: a
+	// burst of journaled turns must not spawn overlapping dream cycles. Keyed by
+	// agent id; presence means a reflection is in flight.
+	reflecting sync.Map
 }
 
 // SetPaused toggles this workspace's autonomy brake.

@@ -56,12 +56,53 @@ func (r *Runtime) Journal(ctx context.Context, agentID, content string) {
 	if _, err := r.mem.PruneKind(ctx, agentID, db.MemoryJournal, r.journalCap()); err != nil {
 		r.logger.Warn("journal prune failed", "agent", agentID, "error", err)
 	}
+	r.maybeAutoReflect(agentID)
+}
+
+// maybeAutoReflect fires a background dream cycle when an agent's journal grows
+// past the configured threshold. It runs asynchronously (so the caller's turn is
+// never blocked), as an autonomous call (so it respects the global pause and the
+// agent's daily budget), and is guarded against concurrent runs per agent. The
+// reflection consumes the journals it consolidates, naturally pulling the count
+// back below the threshold.
+func (r *Runtime) maybeAutoReflect(agentID string) {
+	if r.tun == nil || !r.tun.AutoReflect() {
+		return
+	}
+	threshold := r.tun.AutoReflectThreshold()
+	if r.tun.AutonomyPaused() || r.Paused() {
+		return
+	}
+	// Count journals cheaply before committing to a goroutine.
+	journals, err := r.mem.List(context.Background(), agentID, db.MemoryJournal)
+	if err != nil || len(journals) < threshold {
+		return
+	}
+	if _, busy := r.reflecting.LoadOrStore(agentID, true); busy {
+		return
+	}
+	go func() {
+		defer r.reflecting.Delete(agentID)
+		if _, err := r.reflect(context.Background(), agentID, true); err != nil {
+			r.logger.Warn("auto-reflect failed", "agent", agentID, "error", err)
+			return
+		}
+		r.logger.Info("auto-reflect completed", "agent", agentID, "threshold", threshold)
+	}()
 }
 
 // Reflect consolidates an agent's recent journal entries into a single
-// reflection memory, written by the agent's own provider. Returns the stored
-// reflection. Errors if there is nothing to reflect on.
+// reflection memory, written by the agent's own provider. This is the manual
+// (user/API-triggered) entry point, so it is not budget-gated. Returns the
+// stored reflection. Errors if there is nothing to reflect on.
 func (r *Runtime) Reflect(ctx context.Context, agentID string) (db.KnowledgeSource, error) {
+	return r.reflect(ctx, agentID, false)
+}
+
+// reflect is the shared dream-cycle core. autonomous=true enforces the global
+// pause and the agent's daily budget (used by auto-reflect); false skips those
+// gates (used by manual reflection).
+func (r *Runtime) reflect(ctx context.Context, agentID string, autonomous bool) (db.KnowledgeSource, error) {
 	agent, err := r.db.GetAgent(ctx, agentID)
 	if err != nil {
 		return db.KnowledgeSource{}, err
@@ -93,15 +134,15 @@ func (r *Runtime) Reflect(ctx context.Context, agentID string) (db.KnowledgeSour
 	// appended here so the workspace prompt file needs no format placeholder.
 	userText := strings.TrimRight(r.readPrompt("reflect"), "\n") + "\n\nJournal:\n" + sb.String()
 
-	// Reflection is user-triggered (API), so it is not budget-gated; usage is
-	// still recorded via guardedComplete.
+	// Usage is always recorded via guardedComplete; autonomous auto-reflects are
+	// additionally gated on pause + daily budget.
 	resp, err := r.guardedComplete(ctx, agent, providers.Request{
 		Model:  agent.Model,
 		System: r.systemPrompt(agent),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: userText},
 		},
-	}, false)
+	}, autonomous)
 	if err != nil {
 		return db.KnowledgeSource{}, err
 	}

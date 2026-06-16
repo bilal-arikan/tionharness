@@ -40,6 +40,9 @@ export interface AppSettings {
   journalCap: number
   journalMaxLen: number
 
+  autoReflect: boolean
+  autoReflectThreshold: number
+
   defaultDailyCallLimit: number
   defaultDailyTokenLimit: number
 

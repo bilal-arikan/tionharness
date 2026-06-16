@@ -27,8 +27,8 @@ type Settings struct {
 	// DefaultPermissionMode seeds new agents' tool-use permission gate:
 	// "read-only" | "ask" | "auto". "" falls back to "auto".
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
-	ClaudeCLIPath         string `json:"claudeCliPath"` // "" = auto-detect on PATH
-	AnthropicKeyEnc string `json:"anthropicKeyEnc"` // AES-GCM, never exposed
+	ClaudeCLIPath         string `json:"claudeCliPath"`   // "" = auto-detect on PATH
+	AnthropicKeyEnc       string `json:"anthropicKeyEnc"` // AES-GCM, never exposed
 
 	// MiniMax (OpenAI-compatible) provider.
 	MinimaxKeyEnc  string `json:"minimaxKeyEnc"` // AES-GCM, never exposed
@@ -58,6 +58,11 @@ type Settings struct {
 	// Journal (long-term memory) ring-buffer bounds.
 	JournalCap    int `json:"journalCap"`    // newest journal entries kept per agent (0 = default)
 	JournalMaxLen int `json:"journalMaxLen"` // max runes stored per journal entry (0 = default)
+
+	// Auto-reflect (dream cycle): consolidate journals into a reflection once the
+	// journal count crosses AutoReflectThreshold.
+	AutoReflect          bool `json:"autoReflect"`
+	AutoReflectThreshold int  `json:"autoReflectThreshold"`
 
 	// Budget defaults applied to newly created agents (0 = unlimited).
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
@@ -101,6 +106,9 @@ func Default() Settings {
 		JournalCap:    50,
 		JournalMaxLen: 1024,
 
+		AutoReflect:          true,
+		AutoReflectThreshold: 30,
+
 		DefaultDailyCallLimit:  0,
 		DefaultDailyTokenLimit: 0,
 
@@ -129,8 +137,8 @@ type DTO struct {
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
 	ClaudeCLIPath         string `json:"claudeCliPath"`
 	AnthropicKeySet       bool   `json:"anthropicKeySet"`
-	MinimaxKeySet   bool   `json:"minimaxKeySet"`
-	MinimaxBaseURL  string `json:"minimaxBaseUrl"`
+	MinimaxKeySet         bool   `json:"minimaxKeySet"`
+	MinimaxBaseURL        string `json:"minimaxBaseUrl"`
 
 	OneMillionContext   bool `json:"oneMillionContext"`
 	ExtendedPromptCache bool `json:"extendedPromptCache"`
@@ -151,6 +159,9 @@ type DTO struct {
 
 	JournalCap    int `json:"journalCap"`
 	JournalMaxLen int `json:"journalMaxLen"`
+
+	AutoReflect          bool `json:"autoReflect"`
+	AutoReflectThreshold int  `json:"autoReflectThreshold"`
 
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
@@ -179,8 +190,8 @@ func (s Settings) ToDTO() DTO {
 		DefaultPermissionMode: s.DefaultPermissionMode,
 		ClaudeCLIPath:         s.ClaudeCLIPath,
 		AnthropicKeySet:       s.AnthropicKeyEnc != "",
-		MinimaxKeySet:   s.MinimaxKeyEnc != "",
-		MinimaxBaseURL:  s.MinimaxBaseURL,
+		MinimaxKeySet:         s.MinimaxKeyEnc != "",
+		MinimaxBaseURL:        s.MinimaxBaseURL,
 
 		OneMillionContext:   s.OneMillionContext,
 		ExtendedPromptCache: s.ExtendedPromptCache,
@@ -201,6 +212,9 @@ func (s Settings) ToDTO() DTO {
 
 		JournalCap:    s.JournalCap,
 		JournalMaxLen: s.JournalMaxLen,
+
+		AutoReflect:          s.AutoReflect,
+		AutoReflectThreshold: s.AutoReflectThreshold,
 
 		DefaultDailyCallLimit:  s.DefaultDailyCallLimit,
 		DefaultDailyTokenLimit: s.DefaultDailyTokenLimit,
@@ -230,9 +244,9 @@ type Patch struct {
 	DefaultModel          *string `json:"defaultModel"`
 	DefaultPermissionMode *string `json:"defaultPermissionMode"`
 	ClaudeCLIPath         *string `json:"claudeCliPath"`
-	AnthropicKey    *string `json:"anthropicKey"` // write-only
-	MinimaxKey      *string `json:"minimaxKey"`   // write-only
-	MinimaxBaseURL  *string `json:"minimaxBaseUrl"`
+	AnthropicKey          *string `json:"anthropicKey"` // write-only
+	MinimaxKey            *string `json:"minimaxKey"`   // write-only
+	MinimaxBaseURL        *string `json:"minimaxBaseUrl"`
 
 	OneMillionContext   *bool `json:"oneMillionContext"`
 	ExtendedPromptCache *bool `json:"extendedPromptCache"`
@@ -253,6 +267,9 @@ type Patch struct {
 
 	JournalCap    *int `json:"journalCap"`
 	JournalMaxLen *int `json:"journalMaxLen"`
+
+	AutoReflect          *bool `json:"autoReflect"`
+	AutoReflectThreshold *int  `json:"autoReflectThreshold"`
 
 	DefaultDailyCallLimit  *int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit *int `json:"defaultDailyTokenLimit"`

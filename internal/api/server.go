@@ -96,6 +96,7 @@ func (s *Server) applySettings() {
 	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
 	s.tun.SetTitleModel(cur.TitleModel)
 	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen)
+	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
 }
 
 // Routes registers all HTTP routes and returns the handler. Registration is

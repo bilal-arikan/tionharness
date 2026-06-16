@@ -33,6 +33,41 @@ func TestTunables_SetAndGet(t *testing.T) {
 	}
 }
 
+func TestTunables_JournalDefaults(t *testing.T) {
+	tun := NewTunables()
+	if got := tun.JournalCap(); got != DefaultJournalCap {
+		t.Errorf("JournalCap = %d, want default %d", got, DefaultJournalCap)
+	}
+	if got := tun.JournalMaxLen(); got != DefaultJournalMaxLen {
+		t.Errorf("JournalMaxLen = %d, want default %d", got, DefaultJournalMaxLen)
+	}
+	// Explicit values override; 0 falls back to the default.
+	tun.SetJournalLimits(7, 0)
+	if got := tun.JournalCap(); got != 7 {
+		t.Errorf("JournalCap = %d, want 7", got)
+	}
+	if got := tun.JournalMaxLen(); got != DefaultJournalMaxLen {
+		t.Errorf("JournalMaxLen = %d, want default after 0", got)
+	}
+}
+
+func TestTunables_AutoReflect(t *testing.T) {
+	tun := NewTunables()
+	if tun.AutoReflect() {
+		t.Error("auto-reflect should default off until configured")
+	}
+	if got := tun.AutoReflectThreshold(); got != DefaultAutoReflectThreshold {
+		t.Errorf("threshold = %d, want default %d", got, DefaultAutoReflectThreshold)
+	}
+	tun.SetAutoReflect(true, 12)
+	if !tun.AutoReflect() {
+		t.Error("auto-reflect should be on after SetAutoReflect(true, …)")
+	}
+	if got := tun.AutoReflectThreshold(); got != 12 {
+		t.Errorf("threshold = %d, want 12", got)
+	}
+}
+
 // TestTunables_ConcurrentAccess exercises the RWMutex under the race detector.
 func TestTunables_ConcurrentAccess(t *testing.T) {
 	tun := NewTunables()

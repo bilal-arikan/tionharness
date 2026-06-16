@@ -127,6 +127,10 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	}
 	applyInt(&next.JournalCap, p.JournalCap)
 	applyInt(&next.JournalMaxLen, p.JournalMaxLen)
+	if p.AutoReflect != nil {
+		next.AutoReflect = *p.AutoReflect
+	}
+	applyInt(&next.AutoReflectThreshold, p.AutoReflectThreshold)
 
 	applyInt(&next.DefaultDailyCallLimit, p.DefaultDailyCallLimit)
 	applyInt(&next.DefaultDailyTokenLimit, p.DefaultDailyTokenLimit)
@@ -232,6 +236,13 @@ func normalize(v Settings) Settings {
 	}
 	if v.JournalMaxLen > 65536 {
 		v.JournalMaxLen = 65536
+	}
+	// Auto-reflect threshold: at least 2 entries to summarize; cap at 1000.
+	if v.AutoReflectThreshold < 2 {
+		v.AutoReflectThreshold = 2
+	}
+	if v.AutoReflectThreshold > 1000 {
+		v.AutoReflectThreshold = 1000
 	}
 	if v.DefaultDailyCallLimit < 0 {
 		v.DefaultDailyCallLimit = 0

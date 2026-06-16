@@ -112,6 +112,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       maxContextTokens: draft.maxContextTokens, keepRecentMsgs: draft.keepRecentMsgs,
       recallTopN: draft.recallTopN, recallMinScore: draft.recallMinScore,
       journalCap: draft.journalCap, journalMaxLen: draft.journalMaxLen,
+      autoReflect: draft.autoReflect, autoReflectThreshold: draft.autoReflectThreshold,
       defaultDailyCallLimit: draft.defaultDailyCallLimit, defaultDailyTokenLimit: draft.defaultDailyTokenLimit,
       defaultHeartbeatSec: draft.defaultHeartbeatSec, pauseAutonomy: draft.pauseAutonomy,
       autoTitleEnabled: draft.autoTitleEnabled, titleModel: draft.titleModel,
