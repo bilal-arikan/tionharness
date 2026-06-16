@@ -92,13 +92,32 @@ func (s *Server) seedDefaultAgent(r *http.Request, wsNew *workspace.Workspace) {
 		model = cfg.DefaultModel
 	}
 
-	if _, err := wsNew.DB.CreateAgent(r.Context(), db.Agent{
+	agent, err := wsNew.DB.CreateAgent(r.Context(), db.Agent{
 		Name:     "Asistan",
 		Soul:     "You are a helpful assistant.",
 		Provider: provider,
 		Model:    model,
-	}); err != nil {
+	})
+	if err != nil {
 		s.logger.Warn("seed default agent failed", "workspace", wsNew.ID, "error", err)
+		return
+	}
+
+	s.seedDefaultSchedule(r, wsNew, agent.ID)
+}
+
+// seedDefaultSchedule adds a starter cron schedule to a freshly created
+// workspace: an hourly job that asks the default agent to report on unfinished
+// tasks. It is created DISABLED so it never fires until the user opts in via the
+// Schedules screen.
+func (s *Server) seedDefaultSchedule(r *http.Request, wsNew *workspace.Workspace, agentID string) {
+	if _, err := wsNew.DB.CreateSchedule(r.Context(), db.Schedule{
+		AgentID:  agentID,
+		CronExpr: "0 * * * *", // hourly
+		Prompt:   "Review the task board for unfinished or stuck tasks and send a notification summarizing them.",
+		Enabled:  false,
+	}); err != nil {
+		s.logger.Warn("seed default schedule failed", "workspace", wsNew.ID, "error", err)
 	}
 }
 

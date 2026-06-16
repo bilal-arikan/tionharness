@@ -111,6 +111,14 @@ yanıt vermiyor) yakalayıp "Sunucuya bağlanılamadı…" döndürür. `chat.ts
 yardımcıyı kullanır. ✅ tsc + vite build temiz; saf eşleme node ile doğrulandı.
 (Canlı 502: çalışan backend'i durdurmamak için tetiklenmedi.)
 
+## Ara özellik — Yeni workspace'te varsayılan deaktif zamanlama (2026-06-17)
+
+**İstek:** "Yeni workspace oluşturunca default olarak saatte 1 çalışan ama deaktif bir zamanlama ekleyebilir misin? 'yarıda kalan taskları bildirim göndersin'."
+
+`api/workspaces.go` `seedDefaultAgent` artık oluşturduğu ajanı döndürür ve yeni `seedDefaultSchedule`'ı çağırır: her yeni workspace'e **saatlik** (`0 * * * *`) ama **`Enabled:false`** bir zamanlama eklenir; prompt yarıda kalan/takılı görevleri özetleyip bildirim göndermeyi ister (`"Review the task board for unfinished or stuck tasks and send a notification summarizing them."`). Deaktif olduğundan cron tablosuna girmez, kendiliğinden ateşlenmez — kullanıcı Zamanlamalar ekranından toggle ile açtığında `Scheduler.Reload` çalışır.
+
+✅ `go build`/`vet` yeşil. **API canlı test** (`127.0.0.1:8090`): `POST /api/workspaces` → yeni ws'de `GET /api/agents` = 1 (Asistan), `GET /api/schedules` = 1 (`cron=0 * * * *`, `enabled=false`, ajana bağlı, prompt doğru) → workspace silindi.
+
 ## Ara özellik — Zamanlama düzenleme (schedule edit) (2026-06-17)
 
 **İstek:** "Zamanlamalar ekranında eklenen zamanlamaları liste halinde görebilelim, tıklayıp aktif/deaktif etme, silme veya editleme yapabilelim."
