@@ -105,6 +105,28 @@ func (r *Runtime) invoke(ctx context.Context, agent db.Agent, prompt string, aut
 	return r.complete(ctx, agent, r.systemPrompt(agent), "", prompt, autonomous)
 }
 
+// invokeTraced is like invoke but also returns the agent's activity trace
+// (thinking/tool steps), so callers can persist a rich chat turn rather than a
+// bare text reply. Used by the scheduler so scheduled runs render like normal
+// chat turns in the agent's schedule session.
+func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt string, autonomous bool) (string, []TurnStep, error) {
+	provider, err := r.providers.Get(agent.Provider)
+	if err != nil {
+		return "", nil, err
+	}
+	resp, steps, err := r.CompleteWithToolsTraced(ctx, agent, provider, providers.Request{
+		Model:  agent.Model,
+		System: r.systemPrompt(agent),
+		Messages: []providers.Message{
+			{Role: providers.RoleUser, Text: prompt},
+		},
+	}, autonomous)
+	if err != nil {
+		return "", nil, err
+	}
+	return resp.Text, steps, nil
+}
+
 // invokeWithMemory is like invoke but first recalls relevant memories and
 // passes them as the dynamic (uncached) system suffix, so the agent answers with
 // context without invalidating the cached static persona prefix.

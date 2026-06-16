@@ -161,18 +161,31 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	if err != nil {
 		return "", err
 	}
-	output, err := s.rt.invoke(ctx, agent, sc.Prompt, true) // scheduled = autonomous
-	if err != nil {
-		return "", err
-	}
 	session, err := s.db.GetOrCreateKindSession(ctx, sc.AgentID, "schedule", "⏰ Schedule")
 	if err != nil {
 		return "", err
 	}
+	// Record the scheduled prompt as a user turn first, so the schedule thread
+	// reads as a real conversation (the UI shows what was asked).
+	if _, err := s.db.AddMessage(ctx, db.Message{
+		SessionID: session.ID,
+		Role:      "user",
+		Text:      sc.Prompt,
+	}); err != nil {
+		return session.ID, err
+	}
+	output, steps, err := s.rt.invokeTraced(ctx, agent, sc.Prompt, true) // scheduled = autonomous
+	if err != nil {
+		return session.ID, err
+	}
+	// Stamp the reply with the agent id (so its avatar/identity renders) and its
+	// activity trace (so tool/thinking steps show like a normal chat turn).
 	_, err = s.db.AddMessage(ctx, db.Message{
 		SessionID: session.ID,
+		AgentID:   sc.AgentID,
 		Role:      "assistant",
-		Text:      "[schedule] " + output,
+		Text:      output,
+		Steps:     encodeSteps(steps),
 	})
 	return session.ID, err
 }
