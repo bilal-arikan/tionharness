@@ -126,7 +126,9 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
   const saveWs = async () => {
     if (!ws) return
     const updated = await api.updateWorkspaceSettings({
-      name: ws.name, instructions: ws.instructions, icon: ws.icon, color: ws.color,
+      // instructions are edited (and saved) in the "Promptlar & Dosyalar" tab as
+      // an editable file; omit here so a Genel save never clobbers a newer value.
+      name: ws.name, icon: ws.icon, color: ws.color,
       defaultProvider: ws.defaultProvider, defaultModel: ws.defaultModel,
       pauseAutonomy: ws.pauseAutonomy,
     })

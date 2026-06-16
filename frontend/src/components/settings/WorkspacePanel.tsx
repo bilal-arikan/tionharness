@@ -48,7 +48,12 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       </div>
 
       <Field label="Workspace adı"><input value={ws.name} onChange={(e) => setWsField('name', e.target.value)} className={inputCls} /></Field>
-      <Field label="Talimatlar (bu workspace)" hint="Bu workspace'teki tüm agent'lara eklenen yönergeler."><textarea value={ws.instructions} onChange={(e) => setWsField('instructions', e.target.value)} rows={4} className={`${inputCls} resize-none`} placeholder="Örn. Tüm cevapları Türkçe ver; commit at ama push'lama." /></Field>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+        📝 Bu workspace'in <span className="font-medium text-[var(--color-text)]">talimatları</span> ve runtime
+        <span className="font-medium text-[var(--color-text)]"> promptları</span> artık yan menüdeki
+        <span className="font-medium text-[var(--color-text)]"> “Promptlar &amp; Dosyalar”</span> sekmesinden,
+        düzenlenebilir dosyalar (<code className="rounded bg-[var(--color-bg)] px-1">config/</code>) olarak yönetilir.
+      </div>
       <Field label="Varsayılan sağlayıcı (bu workspace)" hint="Boş = uygulama varsayılanı.">
         <select value={ws.defaultProvider} onChange={(e) => setWsField('defaultProvider', e.target.value)} className={inputCls}>
           <option value="">(uygulama varsayılanı)</option>
