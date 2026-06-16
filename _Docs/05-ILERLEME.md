@@ -2,6 +2,21 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## UI — Açıklayıcı HTTP hata mesajları (2026-06-17)
+
+Header'daki kırmızı hata pill'i (sol-üst) artık çıplak **"HTTP 502"** yerine
+**eyleme dönük** mesaj gösterir. Kök neden: `api/client.ts` `req()` ve
+`api/chat.ts` non-OK yanıtta gövdeyi JSON parse edip `{error}` arıyor;
+**502/503/504** Vite dev-proxy'den gelir (Go backend ulaşılamıyor) ve gövde
+JSON olmadığından çıplak `HTTP <status>` kalıyordu. **Çözüm:** `client.ts`'e
+`describeHttpError(status)` (status→Türkçe açıklama; 502/503/504 → "Sunucuya
+ulaşılamıyor… `go run ./cmd/swarmgo` çalışıyor mu", 500/404/401/403/400/408/429
+özel) + `errorFromResponse(res)` (backend `{error}` öncelikli, yoksa status
+açıklaması) yardımcıları eklendi; `req()` ayrıca **fetch reddini** (sunucu hiç
+yanıt vermiyor) yakalayıp "Sunucuya bağlanılamadı…" döndürür. `chat.ts` aynı
+yardımcıyı kullanır. ✅ tsc + vite build temiz; saf eşleme node ile doğrulandı.
+(Canlı 502: çalışan backend'i durdurmamak için tetiklenmedi.)
+
 ## Ara özellik — Zamanlama düzenleme (schedule edit) (2026-06-17)
 
 **İstek:** "Zamanlamalar ekranında eklenen zamanlamaları liste halinde görebilelim, tıklayıp aktif/deaktif etme, silme veya editleme yapabilelim."

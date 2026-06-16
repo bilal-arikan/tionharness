@@ -1,7 +1,7 @@
 // Chat endpoints: the blocking turn, the SSE streaming turn (with its frame
 // parser) and the in-flight control channel.
 import type { Message, ChatResponse, TurnStep } from '../types'
-import { req, wsHeaders } from './client'
+import { req, wsHeaders, errorFromResponse } from './client'
 
 // Handlers invoked as the streaming turn dispatches parsed SSE events.
 export interface ChatStreamHandlers {
@@ -22,20 +22,16 @@ async function streamChat(
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
   thinkingLevel?: string,
+  permissionMode?: string,
 ): Promise<void> {
   const res = await fetch('/api/chat/stream', {
     method: 'POST',
     headers: wsHeaders(),
-    body: JSON.stringify({ sessionId, message, agentIds, thinkingLevel }),
+    body: JSON.stringify({ sessionId, message, agentIds, thinkingLevel, permissionMode }),
     signal,
   })
   if (!res.ok || !res.body) {
-    let msg = `HTTP ${res.status}`
-    try {
-      const body = await res.json()
-      if (body?.error) msg = body.error
-    } catch { /* ignore */ }
-    handlers.onError(msg)
+    handlers.onError(await errorFromResponse(res))
     return
   }
 
@@ -108,7 +104,8 @@ export const chatApi = {
     handlers: ChatStreamHandlers,
     signal?: AbortSignal,
     thinkingLevel?: string,
-  ): Promise<void> => streamChat(sessionId, message, agentIds, handlers, signal, thinkingLevel),
+    permissionMode?: string,
+  ): Promise<void> => streamChat(sessionId, message, agentIds, handlers, signal, thinkingLevel, permissionMode),
 
   // Control an in-flight streaming turn: stop (cancel), steer (live guidance) or
   // answer (reply to a blocked ask_user prompt).
