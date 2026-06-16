@@ -240,7 +240,7 @@ export const api = {
   // On-demand summary/listing posted as an assistant message in the session.
   // kind: 'memory' | 'board' | 'flows' | 'tools'. Returns the new message.
   summarizeSession: (sessionId: string, kind: string) =>
-    req<Message>(`/api/sessions/${sessionId}/summary`, {
+    req<{ userMessage: Message; replyMessage: Message }>(`/api/sessions/${sessionId}/summary`, {
       method: 'POST',
       body: JSON.stringify({ kind }),
     }),

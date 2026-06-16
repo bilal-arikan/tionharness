@@ -53,6 +53,17 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Persist the command itself as a user message so the conversation shows what
+	// was run (rendered in the command style), then the assistant's result.
+	userMsg, err := wsp.DB.AddMessage(ctx, db.Message{
+		SessionID: session.ID,
+		Role:      providers.RoleUser,
+		Text:      "/" + kind,
+	})
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+
 	msg, err := wsp.DB.AddMessage(ctx, db.Message{
 		SessionID: session.ID,
 		Role:      providers.RoleAssistant,
@@ -63,5 +74,5 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "session not found") {
 		return
 	}
-	writeJSON(w, http.StatusOK, msg)
+	writeJSON(w, http.StatusOK, map[string]any{"userMessage": userMsg, "replyMessage": msg})
 }

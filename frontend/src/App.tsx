@@ -644,22 +644,31 @@ export default function App() {
     (kind: 'memory' | 'board' | 'flows' | 'tools') => {
       const sid = activeSessionId
       if (!sid) return
-      const tmpId = `sum-${Date.now()}`
+      const now = Math.floor(Date.now() / 1000)
+      const userTmp = `cmd-u-${Date.now()}`
+      const botTmp = `cmd-a-${Date.now()}`
+      // Show the command itself as a user bubble (command style) plus a streaming
+      // placeholder for the result; both are replaced by the persisted messages.
+      const cmdBubble: Message = { id: userTmp, sessionId: sid, role: 'user', text: '/' + kind, createdAt: now }
       const placeholder: Message = {
-        id: tmpId,
+        id: botTmp,
         sessionId: sid,
         role: 'assistant',
         agentId: activeAgentId ?? undefined,
         text: '⏳ Özetleniyor…',
         steps: '[]',
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: now,
       }
-      setMessages((prev) => [...prev, placeholder])
+      setMessages((prev) => [...prev, cmdBubble, placeholder])
       api
         .summarizeSession(sid, kind)
-        .then((msg) => setMessages((prev) => prev.map((m) => (m.id === tmpId ? msg : m))))
+        .then(({ userMessage, replyMessage }) =>
+          setMessages((prev) =>
+            prev.map((m) => (m.id === userTmp ? userMessage : m.id === botTmp ? replyMessage : m)),
+          ),
+        )
         .catch((e) => {
-          setMessages((prev) => prev.filter((m) => m.id !== tmpId))
+          setMessages((prev) => prev.filter((m) => m.id !== userTmp && m.id !== botTmp))
           setError((e as Error).message)
         })
     },
