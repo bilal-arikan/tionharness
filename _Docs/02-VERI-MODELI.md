@@ -176,9 +176,7 @@ erDiagram
 | `schedules` | Cron zamanlama; bağlı görev (`task_id`) **veya** doğrudan `prompt`; sonraki/son çalışma + teslim durumu; etkin mi |
 | `runs` | Yürütme kaydı: durum, tetikleyici (`trigger`), ajan çıktısı (`output`), hata |
 | `knowledge_sources` | Doküman, journal, reflection notları + embedding |
-| `skills` | İsim, özet, etiket, canlı/taslak, kapsam |
 | `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace) |
-| `provider_configs` | Ajan başına LLM override: model, endpoint, anahtar |
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
 
