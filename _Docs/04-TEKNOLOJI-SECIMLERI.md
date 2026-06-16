@@ -2,6 +2,11 @@
 
 Her seçim, SwarmClaw'daki TypeScript karşılığının Go ekosistemindeki en uygun eşleniğidir.
 
+> ⚠️ **GÜNCEL (2026-06-15):** **Depolama SQLite'tan dosya sistemine taşındı.** Aşağıdaki
+> tablolarda **modernc.org/sqlite / sqlc / golang-migrate / `:memory:` test** satırları
+> artık geçerli **değil** — kalıcılık entity-başına JSON + oturum-başına JSONL üzerinde,
+> bağımlılıksız. Güncel depolama tasarımı: **`_Docs/08-DEPOLAMA.md`**.
+
 ## Backend (Go)
 
 | İhtiyaç | Seçim | Gerekçe |
@@ -23,6 +28,28 @@ Her seçim, SwarmClaw'daki TypeScript karşılığının Go ekosistemindeki en u
 | Şifreleme | stdlib **crypto/aes** + GCM | Harici bağımlılık yok |
 | UUID | **google/uuid** | ID üretimi |
 | Loglama | stdlib **log/slog** | Yapılandırılmış log, Go 1.21+ |
+
+## Uygulanan Durum (2026-06-15) — Planlanan vs Gerçek
+
+Bu tablo başlangıç planıydı. Faz 0–8 sonunda gerçekte kullanılan kararlar:
+
+| İhtiyaç | Plan | **Gerçekte** | Not |
+|---------|------|--------------|-----|
+| HTTP router | go-chi/chi | **stdlib `net/http` ServeMux** | Go 1.22+ method+path pattern → bağımlılık gerekmedi |
+| Depolama | modernc.org/sqlite | **dosya sistemi (JSON/JSONL, DB yok)** | bellek-içi maps + atomik diske yazma; bkz. `08-DEPOLAMA.md` |
+| Migration | golang-migrate | **yok (şema yok)** | dosya-store'da migration kavramı yok |
+| SQL üretimi | sqlc | **elle yazılmış store** | `internal/db/store_*.go` (artık SQL değil, dosya I/O) |
+| Anthropic | resmi SDK | **ince HTTP istemci (SDK yok)** | Tam kontrol; ayrıca **claude-cli** (anahtarsız) |
+| Zamanlama | robfig/cron | ✅ **robfig/cron/v3** | Workspace başına scheduler |
+| WebSocket/streaming | coder/websocket | ✅ **SSE** (`POST /api/chat/stream`); WebSocket yok | SSE adım-adım akış kuruldu (bkz. `07-CHAT-UX.md`); kalıcı WebSocket hub'ı gerekmedi |
+| Frontend bileşen | shadcn/ui | **kendi Tailwind v4 bileşenleri** | Koyu tema, sıfır UI bağımlılığı |
+| Frontend state | Zustand/TanStack | **düz React `useState`** | Yeterli; ileride eklenebilir |
+| Recall/embedding | embedding tabanlı | **saf Go lexical cosine** | Anahtarsız/çevrimdışı; embedding ileride |
+| UUID / log / şifreleme | google/uuid · slog · crypto/aes | ✅ hepsi kullanıldı | — |
+| MCP istemci | mark3labs/mcp-go | **SDK'sız elle JSON-RPC 2.0** (stdio) | Bağımlılıksız felsefe; SSE/HTTP henüz yok (Faz 8 ✅) |
+| Connectors · OTel | discordgo · otel | ⏳ ilgili fazlarda (9/sonra) | Henüz eklenmedi |
+
+> İlke: bağımlılığı ancak gerçekten gerektiğinde ekle. Depolama dosya sistemine taşındıktan sonra `go.mod`'da yalnızca `google/uuid` ve `robfig/cron/v3` kaldı (`modernc.org/sqlite` + ~8 dolaylı bağımlılık kaldırıldı).
 
 ## Masaüstü Kabuk
 
@@ -47,11 +74,15 @@ Her seçim, SwarmClaw'daki TypeScript karşılığının Go ekosistemindeki en u
 ## Karar: CGO Yok İlkesi
 
 Çapraz derlemeyi kolaylaştırmak için **CGO gerektiren kütüphanelerden kaçınılır**:
-- ✅ `modernc.org/sqlite` (saf Go) — ❌ `mattn/go-sqlite3` (CGO)
+- Depolama tamamen **stdlib** (`os`/`encoding/json`) üzerine; hiçbir veritabanı bağımlılığı yok (eski `modernc.org/sqlite` de saf Go idi, ama artık tümüyle kaldırıldı).
 - Bu sayede `GOOS=darwin go build` gibi tek komutla diğer platformlara derlenir.
 
 ## Test Stratejisi
 
-- Birim test: stdlib `testing` + `stretchr/testify`
+- Birim test: stdlib `testing` (CGO yok → `-race` kullanılmaz)
 - Provider/Connector arayüzleri mock'lanabilir (interface tabanlı tasarım)
-- Integration test: gerçek SQLite (in-memory `:memory:`)
+- Depolama testi: `internal/db/filestore_test.go` — geçici dizinde round-trip (create→reopen→reload).
+- Provider HTTP: `internal/providers/transport_test.go` (`postJSON`) + `minimax_test.go` (`httptest` ile `Complete`).
+- Runtime tunables: `internal/agent/tunables_test.go` (get/set + eşzamanlı erişim).
+- Rota kaydı: `internal/api/server_test.go` (yinelenen/bozuk pattern panik regresyon koruması).
+- MCP canlı testi: `internal/mcp/live_test.go`.

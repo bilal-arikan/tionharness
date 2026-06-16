@@ -12,7 +12,7 @@ graph TD
     RT --> PROV[Providers<br/>internal/providers]
     RT --> MCP[MCP Istemci<br/>internal/mcp]
     RT --> CONN[Connectors<br/>internal/connectors]
-    MEM --> DB[(SQLite<br/>internal/db)]
+    MEM --> DB[Dosya Store<br/>JSON/JSONL<br/>internal/db]
     TASK --> DB
     RT --> DB
     ORC --> DB
@@ -28,9 +28,9 @@ graph TD
 - UI/UX SwarmClaw'a benzer ama tamamen kendi tasarım dilimiz.
 
 ### 2. API Katmanı (`internal/api`)
-- HTTP router (Chi veya Echo) + WebSocket hub.
-- REST uçları: `/api/agents`, `/api/sessions`, `/api/tasks`, `/api/schedules`, `/api/connectors`, `/api/providers`, `/api/mcp-servers`.
-- WebSocket: canlı ajan çıktısı, görev durumu, oturum mesajları.
+- HTTP router: **stdlib `net/http` ServeMux** (Go 1.22+ method+path pattern → Chi/Echo gerekmedi). Rotalar domain-bazlı `register*Routes` yardımcılarına bölünmüştür (`server.go`).
+- REST uçları: `/api/agents`, `/api/sessions`, `/api/chat`, `/api/tasks`, `/api/schedules`, `/api/flows`, `/api/mcp-servers`, `/api/settings`, `/api/workspaces` (tam liste için `server.go`). (`/api/connectors` Faz 9'da gelecek.)
+- Canlı akış: kalıcı WebSocket hub'ı yerine **SSE** (`POST /api/chat/stream`) — sohbet turu adım adım UI'a akar (bkz. `07-CHAT-UX.md`).
 
 ### 3. Agent Runtime (`internal/agent`)
 Sistemin kalbi. Her ajan bir **goroutine** olarak çalışır.
@@ -51,7 +51,7 @@ graph LR
 - Her ajan = goroutine; ajanlar arası mesaj = channel.
 - Heartbeat = `time.Ticker`; zamanlama = `robfig/cron`.
 - 10 ardışık hatada exponential backoff + otomatik devre dışı.
-- Paralel yürütme = `golang.org/x/sync/errgroup`.
+- Paralel yürütme = düz goroutine + `sync` (orchestration parallel node). `errgroup` planlanmıştı ama gerekmedi; `go.mod`'da yalnızca `google/uuid` + `robfig/cron/v3` var.
 
 ### 4. Orchestration (`internal/orchestration`)
 - Yapılandırılmış oturumlar: dallanma (branch), döngü (loop), paralel birleşme (join).
@@ -60,42 +60,54 @@ graph LR
 
 ### 5. Memory (`internal/memory`)
 - Hibrit hatırlama: doküman + journal + reflection.
-- Embedding tabanlı benzerlik araması (opsiyonel).
-- Arka plan "dream" döngüsü ile hafıza konsolidasyonu (ucuz model).
+- Recall: **saf Go lexical cosine** (token-frekans) — anahtarsız/çevrimdışı; semantik embedding ileride aynı `Store` arkasına takılabilir.
+- "Dream" döngüsü (`agent/reflector.go` → `Reflect`): journal'ı provider'a özetletip reflection üretir.
+
+### 5b. Conversation (`internal/conversation`)
+- Token-bütçeli **compaction**: oturum geçmişi eşiği aşınca eski turlar rolling summary'ye katlanır; sadece özet + son N tur gönderilir → uzun sohbetlerde context taşması yok.
+
+### 5c. Bütçe Guardrail (`agent/budget.go`)
+- `guardedComplete`: tüm runtime provider çağrılarının tek hunisi. Otonom çağrılarda (heartbeat/scheduler) ajan başına günlük limit (`agent_usage`) uygulanır; manuel chat muaf.
 
 ### 6. Providers (`internal/providers`)
 - Ortak `Provider` arayüzü; her LLM için ayrı implementasyon.
-- Anthropic, OpenAI, Ollama, OpenRouter, Gemini...
-- Akış (streaming) desteği.
+- **Mevcut:** `anthropic` (ince HTTP istemci, SDK yok), `claude-cli` (anahtarsız, OAuth/abonelik), `minimax` (OpenAI-uyumlu — herhangi bir OpenAI-stili uca da uyar). Ortak HTTP iskeleti `transport.go` (`postJSON`).
+- OpenAI/Ollama/Gemini gibi ekler aynı `Provider` arayüzü arkasına takılabilir.
+- Akış: claude-cli stream-json + SSE köprüsü (bkz. `07-CHAT-UX.md`).
 
 ### 7. Diğer Modüller
-- **MCP (`internal/mcp`):** Model Context Protocol istemcisi (stdio/SSE/HTTP).
+- **MCP (`internal/mcp`):** Model Context Protocol istemcisi — SDK'sız elle JSON-RPC 2.0; şu an **stdio** taşıma (SSE/HTTP hedef, henüz yok).
 - **Connectors (`internal/connectors`):** Discord, Slack, Telegram köprüleri + outbox retry kuyruğu.
 - **Tasks (`internal/tasks`):** Pano, atama, delegasyon, yürütme politikası.
-- **DB (`internal/db`):** SQLite şema, migration, sorgular.
+- **DB (`internal/db`):** Dosya-tabanlı store — entity-başına JSON + oturum-başına JSONL, bellek-içi maps + atomik diske yazma (SQLite yok). Bkz. `_Docs/08-DEPOLAMA.md`.
 - **Config (`internal/config`):** Ortam değişkenleri, şifreli kimlik bilgileri (credential secret).
 
 ## Dizin Yapısı
 
+> Yukarıdaki yüksek seviye diyagram **hedef** mimaridir. Aşağıdaki yapı **2026-06-15 itibarıyla gerçekte mevcut** olandır (Faz 0–8). `orchestration`, `mcp`, `tools` artık mevcut; `connectors` Faz 9'da eklenecek (klasör boş placeholder). Ayrı bir `tasks` paketi yerine görev mantığı `db` + `api` + `agent/executor.go` içinde yaşar.
+
 ```
 SwarmGo/
 ├── _Docs/                       # Plan ve tasarim dokumanlari (Turkce)
-├── cmd/swarmgo/main.go          # Giris noktasi
+├── cmd/swarmgo/main.go          # Giris: Manager + API server + graceful shutdown
 ├── internal/
-│   ├── agent/                   # Agent runtime (heartbeat, schedule, delegation)
-│   ├── orchestration/           # Yapilandirilmis oturumlar
-│   ├── memory/                  # Recall, journal, reflection
-│   ├── providers/               # LLM saglayicilari
-│   ├── mcp/                      # MCP istemci
-│   ├── connectors/              # Discord, Slack, Telegram
-│   ├── tasks/                   # Task board
-│   ├── db/                      # SQLite katmani
-│   ├── api/                     # HTTP/WS handler
-│   └── config/                  # Konfig + kimlik bilgileri
-├── frontend/                    # Kendi web UI'imiz
-├── wails.json
+│   ├── config/                  # env + AES-GCM secret
+│   ├── db/                      # Dosya store (JSON/JSONL, DB yok): db.go (maps+load+atomik yaz) + store_*.go (agent/session/task/run/schedule/memory/usage/mcp/flow)
+│   ├── providers/               # provider arayüzü, anthropic, claudecli, registry
+│   ├── agent/                   # runtime, worker, executor (RunTask), scheduler (cron), reflector, budget, titler, toolloop, toolsetup, climcp (claude-cli --mcp-config), trace (aktivite izi), tunables, flow
+│   ├── memory/                  # vector.go (lexical cosine), memory.go (Store)
+│   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go)
+│   ├── orchestration/           # akış graf motoru (model.go, engine.go)
+│   ├── mcp/                     # SDK'sız stdio JSON-RPC istemci (client.go, manager.go)
+│   ├── tools/                   # built-in + MCP birleşik registry (registry.go, builtin_*.go)
+│   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
+│   ├── workspace/               # workspace başına DB + Runtime + Scheduler (manager.go)
+│   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat/files/runtime/tasks/schedules/memory/usage/mcp/agent_tools/flows/settings/workspaces
+├── frontend/                    # React + Vite + TS + Tailwind v4
 └── go.mod
 ```
+
+> Henüz eklenmemiş (ileri fazlar): `internal/connectors` (Faz 9 — şu an boş placeholder), Wails paketleme (Faz 10), WebSocket streaming. Not: MCP istemcisi yalnızca **stdio** taşımayı destekler; SSE/HTTP henüz yok.
 
 ## Tasarım İlkeleri
 
