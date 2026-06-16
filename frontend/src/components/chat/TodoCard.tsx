@@ -29,7 +29,9 @@ function readTodos(step: TurnStep): TodoItem[] {
 // items are struck through; the active item is accented — mirroring the task-list
 // affordance in External Agent / Claude Code.
 export function TodoCard({ step }: Props) {
-  const [open, setOpen] = useState(true)
+  // Default collapsed: the pinned TodoPanel already surfaces the current list,
+  // so the inline trace card stays compact (header only) until expanded.
+  const [open, setOpen] = useState(false)
   const todos = readTodos(step)
   if (!todos.length) return null
   const done = todos.filter((t) => t.status === 'completed').length
