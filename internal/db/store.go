@@ -273,7 +273,34 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	s.MessageCount++
 	s.UpdatedAt = m.CreatedAt
 	d.sessions[s.ID] = s
-	return m, d.writeSessionFileLocked(s)
+	// Hot path: append only the new message line (O(1)) instead of rewriting the
+	// whole conversation file (which was O(n) per message → O(n²) per session).
+	// The header line keeps a stale MessageCount/UpdatedAt on disk; both are
+	// recomputed from the message lines on load and refreshed by the next full
+	// rewrite (title/summary change).
+	return m, d.appendMessageLocked(s.ID, m)
+}
+
+// appendMessageLocked appends a single encoded message line to a session's
+// JSONL file. The header line is written at session creation, so the file
+// already exists with its header as line 1.
+func (d *DB) appendMessageLocked(sessionID string, m Message) error {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(m); err != nil {
+		return err
+	}
+	path := d.dir(dirSessions, sessionID, "session.jsonl")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // ListMessages returns messages for a session in chronological order.
@@ -310,6 +337,9 @@ func (d *DB) loadSessions() error {
 			}
 			return err
 		}
+		if s.ID == "" { // empty/headerless file — nothing usable
+			continue
+		}
 		d.sessions[s.ID] = s
 		d.messages[s.ID] = msgs
 	}
@@ -323,28 +353,47 @@ func readSessionFile(path string) (Session, []Message, error) {
 	}
 	defer f.Close()
 
-	var s Session
-	var msgs []Message
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024) // allow large message lines
-	first := true
+	var lines [][]byte
 	for sc.Scan() {
 		line := bytes.TrimSpace(sc.Bytes())
 		if len(line) == 0 {
 			continue
 		}
-		if first {
-			if err := json.Unmarshal(line, &s); err != nil {
-				return Session{}, nil, err
-			}
-			first = false
-			continue
-		}
+		b := make([]byte, len(line)) // scanner reuses its buffer; copy out
+		copy(b, line)
+		lines = append(lines, b)
+	}
+	if err := sc.Err(); err != nil {
+		return Session{}, nil, err
+	}
+	if len(lines) == 0 {
+		return Session{}, nil, nil
+	}
+
+	var s Session
+	if err := json.Unmarshal(lines[0], &s); err != nil {
+		return Session{}, nil, err // header corruption is fatal
+	}
+	msgs := make([]Message, 0, len(lines)-1)
+	for i := 1; i < len(lines); i++ {
 		var m Message
-		if err := json.Unmarshal(line, &m); err != nil {
+		if err := json.Unmarshal(lines[i], &m); err != nil {
+			// A torn trailing line (crash mid-append) is tolerated by dropping it;
+			// corruption on any earlier line is real and fatal.
+			if i == len(lines)-1 {
+				break
+			}
 			return Session{}, nil, err
 		}
 		msgs = append(msgs, m)
 	}
-	return s, msgs, sc.Err()
+	// The append hot-path leaves the header's counters stale; recompute them from
+	// the actual message lines so in-memory state is always authoritative.
+	s.MessageCount = len(msgs)
+	if n := len(msgs); n > 0 && msgs[n-1].CreatedAt > s.UpdatedAt {
+		s.UpdatedAt = msgs[n-1].CreatedAt
+	}
+	return s, msgs, nil
 }

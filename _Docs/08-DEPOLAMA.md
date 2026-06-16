@@ -58,10 +58,22 @@ store/
 - **Satır 2+** = `Message` kayıtları (role, text, toolCalls, reasoningContent,
   steps, createdAt) — kronolojik.
 
-`AddMessage` mesajı belleğe ekler, oturum sayacını artırır ve dosyayı yeniden
-yazar (atomik). Boot'ta `loadSessions` her `session.jsonl`'i okuyup header + mesaj
-satırlarını ayrıştırır. JSON encoder `SetEscapeHTML(false)` ile yazar; UTF-8
-(Türkçe dahil) ve HTML içerik bozulmadan saklanır.
+`AddMessage` mesajı belleğe ekler, oturum sayacını artırır ve **yalnızca yeni
+satırı dosyaya ekler** (`O_APPEND`, O(1)) — tüm dosyayı yeniden yazmaz. Eski
+davranış her mesajda dosyanın tamamını yeniden yazıyordu (mesaj başına O(n),
+oturum başına O(n²)); append-only ile bu O(1)'e indi. Header satırındaki
+`messageCount`/`updatedAt` bu yüzden diskte **bayat** kalabilir; bu sayaçlar
+boot'ta mesaj satırlarından **yeniden hesaplanır** ve bir sonraki tam yeniden
+yazımda (başlık/özet değişimi) tazelenir. Header'ı değiştiren işlemler
+(`SetSessionTitle`, `SetSessionSummary`, oturum oluşturma) hâlâ atomik tam
+yeniden yazım yapar.
+
+Boot'ta `loadSessions` her `session.jsonl`'i okuyup header + mesaj satırlarını
+ayrıştırır. Append modeli gereği bir çökme **yarım bir son satır** bırakabilir;
+`readSessionFile` yalnızca **son** satır ayrıştırılamazsa onu sessizce atar
+(daha önceki bir satırdaki bozulma ise ölümcül hatadır). JSON encoder
+`SetEscapeHTML(false)` ile yazar; UTF-8 (Türkçe dahil) ve HTML içerik bozulmadan
+saklanır.
 
 ## Önemli detaylar
 
