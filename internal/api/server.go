@@ -64,39 +64,73 @@ func (s *Server) applySettings() {
 	s.tun.SetTitleModel(cur.TitleModel)
 }
 
-// Routes registers all HTTP routes and returns the handler.
+// Routes registers all HTTP routes and returns the handler. Registration is
+// split into per-domain helpers (each lives beside its handlers) so the route
+// table stays readable as the surface grows.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", s.handleHealth)
 
-	// Workspace management (not workspace-scoped).
+	s.registerWorkspaceRoutes(mux)
+	s.registerAgentRoutes(mux)
+	s.registerSessionRoutes(mux)
+	s.registerChatRoutes(mux)
+	s.registerRuntimeRoutes(mux)
+	s.registerTaskRoutes(mux)
+	s.registerScheduleRoutes(mux)
+	s.registerUsageRoutes(mux)
+	s.registerMCPRoutes(mux)
+	s.registerFlowRoutes(mux)
+	s.registerSettingsRoutes(mux)
+	s.registerMemoryRoutes(mux)
+	s.registerMiscRoutes(mux)
+
+	return withCORS(s.withWorkspace(mux))
+}
+
+// registerWorkspaceRoutes registers workspace management (not workspace-scoped).
+func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspaces", s.handleListWorkspaces)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
 	mux.HandleFunc("DELETE /api/workspaces/{id}", s.handleDeleteWorkspace)
 
-	// Workspace-scoped resources.
+	// Per-workspace settings (resolved from X-Workspace-Id).
+	mux.HandleFunc("GET /api/workspace-settings", s.handleGetWorkspaceSettings)
+	mux.HandleFunc("PUT /api/workspace-settings", s.handleUpdateWorkspaceSettings)
+}
+
+// registerAgentRoutes registers agent CRUD.
+func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents", s.handleListAgents)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
+}
 
+// registerSessionRoutes registers chat sessions + messages + titling.
+func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("POST /api/sessions", s.handleCreateSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleListMessages)
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
+}
 
+// registerChatRoutes registers the completion endpoints.
+func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/chat", s.handleChat)
 	// SSE streaming variant: emits each activity step as it occurs.
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
+}
 
-	// Inline media (images referenced by chat content) — read-only.
-	mux.HandleFunc("GET /api/files", s.handleServeFile)
-
+// registerRuntimeRoutes registers autonomous runtime control + status.
+func (s *Server) registerRuntimeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/runtime", s.handleRuntimeStatus)
 	mux.HandleFunc("POST /api/agents/{id}/heartbeat", s.handleSetHeartbeat)
 	mux.HandleFunc("POST /api/agents/{id}/wake", s.handleWake)
+}
 
-	// Tasks (kanban board) + runs.
+// registerTaskRoutes registers the kanban board + run history.
+func (s *Server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/tasks", s.handleListTasks)
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
 	mux.HandleFunc("PUT /api/tasks/{id}", s.handleUpdateTask)
@@ -104,19 +138,25 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/title", s.handleGenerateTaskTitle)
 	mux.HandleFunc("POST /api/tasks/{id}/run", s.handleRunTask)
 	mux.HandleFunc("GET /api/tasks/{id}/runs", s.handleListTaskRuns)
+}
 
-	// Schedules (cron).
+// registerScheduleRoutes registers cron schedules.
+func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/schedules", s.handleListSchedules)
 	mux.HandleFunc("POST /api/schedules", s.handleCreateSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/toggle", s.handleToggleSchedule)
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
+}
 
-	// Usage / budget guardrails + context meter.
+// registerUsageRoutes registers budget guardrails + the context meter.
+func (s *Server) registerUsageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents/{id}/usage", s.handleAgentUsage)
 	mux.HandleFunc("POST /api/agents/{id}/budget", s.handleSetBudget)
 	mux.HandleFunc("GET /api/sessions/{id}/context", s.handleSessionContext)
+}
 
-	// MCP servers + per-agent tool access (Phase 8).
+// registerMCPRoutes registers MCP servers + per-agent tool access (Phase 8).
+func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/mcp-servers", s.handleListMCPServers)
 	mux.HandleFunc("POST /api/mcp-servers", s.handleCreateMCPServer)
 	mux.HandleFunc("POST /api/mcp-servers/{id}/toggle", s.handleToggleMCPServer)
@@ -124,8 +164,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/mcp-servers/{id}", s.handleDeleteMCPServer)
 	mux.HandleFunc("GET /api/agents/{id}/tools", s.handleAgentTools)
 	mux.HandleFunc("POST /api/agents/{id}/tools", s.handleSetAgentTools)
+}
 
-	// Orchestration flows (multi-agent protocols) + runs (Phase 7).
+// registerFlowRoutes registers orchestration flows + runs (Phase 7).
+func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flows", s.handleListFlows)
 	mux.HandleFunc("POST /api/flows", s.handleCreateFlow)
 	mux.HandleFunc("PUT /api/flows/{id}", s.handleUpdateFlow)
@@ -133,28 +175,32 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/flows/{id}/run", s.handleRunFlow)
 	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
 	mux.HandleFunc("GET /api/flow-runs/{id}", s.handleGetFlowRun)
+}
 
-	// Application settings (global, single document).
+// registerSettingsRoutes registers the global application settings document.
+func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
 	mux.HandleFunc("POST /api/settings/test-provider", s.handleTestProvider)
 	mux.HandleFunc("GET /api/catalog", s.handleCatalog)
+}
 
-	// Per-workspace settings (resolved from X-Workspace-Id).
-	mux.HandleFunc("GET /api/workspace-settings", s.handleGetWorkspaceSettings)
-	mux.HandleFunc("PUT /api/workspace-settings", s.handleUpdateWorkspaceSettings)
-
-	// Application + workspace logs (global ring buffer).
-	mux.HandleFunc("GET /api/logs", s.handleListLogs)
-
-	// Memory (per-agent knowledge: documents, journal, reflections).
+// registerMemoryRoutes registers per-agent knowledge (documents, journal,
+// reflections).
+func (s *Server) registerMemoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents/{id}/memories", s.handleListMemories)
 	mux.HandleFunc("POST /api/agents/{id}/memories", s.handleCreateMemory)
 	mux.HandleFunc("POST /api/agents/{id}/reflect", s.handleReflect)
 	mux.HandleFunc("POST /api/agents/{id}/recall", s.handleRecall)
 	mux.HandleFunc("DELETE /api/memories/{id}", s.handleDeleteMemory)
+}
 
-	return withCORS(s.withWorkspace(mux))
+// registerMiscRoutes registers inline media serving and the logs feed.
+func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
+	// Inline media (images referenced by chat content) — read-only.
+	mux.HandleFunc("GET /api/files", s.handleServeFile)
+	// Application + workspace logs (global ring buffer).
+	mux.HandleFunc("GET /api/logs", s.handleListLogs)
 }
 
 // withWorkspace resolves the active workspace from the X-Workspace-Id header

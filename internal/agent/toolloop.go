@@ -1,0 +1,162 @@
+package agent
+
+import (
+	"context"
+
+	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/providers"
+)
+
+// maxToolIters bounds the native agentic loop so a misbehaving model can't spin
+// forever calling tools.
+const maxToolIters = 8
+
+// CompleteWithTools runs a completion that may use tools. Behaviour depends on
+// the agent and provider:
+//
+//   - MCP disabled            → a single plain completion.
+//   - claude-cli + MCP        → delegate: the CLI runs the tool loop itself
+//     using a generated --mcp-config (keyless path).
+//   - other provider + MCP    → SwarmGo's own agentic loop drives the tools via
+//     the unified registry (built-ins + MCP).
+//
+// autonomous gates the daily budget; usage is always recorded.
+func (r *Runtime) CompleteWithTools(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool) (*providers.Response, error) {
+	resp, _, err := r.CompleteWithToolsTraced(ctx, agent, provider, req, autonomous)
+	return resp, err
+}
+
+// CompleteWithToolsTraced is CompleteWithTools plus an ordered activity trace
+// (intermediate text + tool calls/results) for the rich chat turn renderer.
+func (r *Runtime) CompleteWithToolsTraced(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool) (*providers.Response, []TurnStep, error) {
+	return r.completeTraced(ctx, agent, provider, req, autonomous, nil)
+}
+
+// CompleteWithToolsStream is CompleteWithToolsTraced that additionally delivers
+// each step to onStep the moment it becomes available — for SSE streaming the
+// chat turn to the UI step-by-step. The returned slice is the full trace (for
+// persistence). onStep is called from the calling goroutine.
+func (r *Runtime) CompleteWithToolsStream(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool, onStep func(TurnStep)) (*providers.Response, []TurnStep, error) {
+	return r.completeTraced(ctx, agent, provider, req, autonomous, onStep)
+}
+
+// completeTraced is the shared implementation. When onStep is non-nil, steps are
+// emitted live: provider-driven paths (claude CLI) wire it through req.OnEvent;
+// the native loop emits as it appends.
+func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool, onStep func(TurnStep)) (*providers.Response, []TurnStep, error) {
+	if autonomous {
+		if err := r.ensureBudget(ctx, agent); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// Provider-driven paths (claude CLI) surface their own trace via OnEvent.
+	if onStep != nil {
+		req.OnEvent = func(ts providers.TraceStep) { onStep(traceStepToTurnStep(ts)) }
+	}
+
+	if !agent.MCPEnabled {
+		resp, err := r.recordedComplete(ctx, agent, provider, req)
+		if err != nil {
+			return nil, nil, err
+		}
+		// claude-cli surfaces its own tool/thinking trace via stream-json.
+		return resp, traceToSteps(resp.Trace), nil
+	}
+
+	// Keyless delegation path: let the claude CLI own the tool loop.
+	if cli, ok := provider.(*providers.ClaudeCLI); ok {
+		path, allowed, cleanup, err := r.writeCLIMCPConfig(ctx)
+		if err != nil {
+			r.logger.Warn("cli mcp config failed", "error", err)
+		} else if path != "" {
+			defer cleanup()
+			cli.ConfigureMCP(path, allowed)
+		}
+		resp, err := r.recordedComplete(ctx, agent, provider, req)
+		if err != nil {
+			return nil, nil, err
+		}
+		// The CLI runs the loop itself; its stream-json trace becomes our steps.
+		return resp, traceToSteps(resp.Trace), nil
+	}
+
+	// Native agentic loop (providers that return structured tool_use). OnEvent
+	// is not used here — we emit each step ourselves as the loop progresses.
+	req.OnEvent = nil
+	reg := r.buildRegistry(ctx, agent)
+	if reg.Empty() {
+		resp, err := r.recordedComplete(ctx, agent, provider, req)
+		return resp, nil, err
+	}
+	req.Tools = reg.Defs(allowFunc(agent))
+
+	emit := func(s TurnStep) {
+		if onStep != nil {
+			onStep(s)
+		}
+	}
+
+	var last *providers.Response
+	var steps []TurnStep
+	for i := 0; i < maxToolIters; i++ {
+		if autonomous {
+			if err := r.ensureBudget(ctx, agent); err != nil {
+				return nil, steps, err
+			}
+		}
+		resp, err := r.recordedComplete(ctx, agent, provider, req)
+		if err != nil {
+			return nil, steps, err
+		}
+		last = resp
+		if resp.StopReason != providers.StopToolUse || len(resp.ToolCalls) == 0 {
+			return resp, steps, nil
+		}
+
+		// Capture the narration the model produced alongside this tool turn.
+		if resp.Text != "" {
+			st := TurnStep{Kind: StepText, Text: resp.Text}
+			steps = append(steps, st)
+			emit(st)
+		}
+
+		// Record the assistant's tool-call turn, then execute and answer each.
+		req.Messages = append(req.Messages, providers.Message{
+			Role:      providers.RoleAssistant,
+			Text:      resp.Text,
+			ToolCalls: resp.ToolCalls,
+		})
+		results := make([]providers.ToolResult, 0, len(resp.ToolCalls))
+		for _, call := range resp.ToolCalls {
+			r.logger.Info("tool call", "agent", agent.ID, "tool", call.Name)
+			res := reg.Call(ctx, call)
+			results = append(results, res)
+			st := TurnStep{
+				Kind:    StepTool,
+				Tool:    call.Name,
+				Input:   call.Input,
+				Output:  res.Content,
+				IsError: res.IsError,
+			}
+			steps = append(steps, st)
+			emit(st)
+		}
+		req.Messages = append(req.Messages, providers.Message{
+			Role:        providers.RoleUser,
+			ToolResults: results,
+		})
+	}
+	r.logger.Warn("tool loop hit iteration cap", "agent", agent.ID)
+	return last, steps, nil
+}
+
+// recordedComplete calls the provider once and records token usage.
+func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
+	resp, err := provider.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	r.RecordUsage(ctx, agent.ID, resp.Usage)
+	return resp, nil
+}
