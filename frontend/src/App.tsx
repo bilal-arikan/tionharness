@@ -16,6 +16,7 @@ import { ToolsPanel } from './components/ToolsPanel'
 import { FlowsPanel } from './components/FlowsPanel'
 import { ArtifactsPanel } from './components/ArtifactsPanel'
 import { ChatMeters } from './components/ChatMeters'
+import { SessionDetailPanel } from './components/SessionDetailPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LogsPanel } from './components/LogsPanel'
 import { isImagePath, mediaUrl } from './lib/paths'
@@ -52,6 +53,17 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('chat')
   const [meterRefresh, setMeterRefresh] = useState(0)
+  // Right-hand session detail panel visibility (persisted).
+  const [detailOpen, setDetailOpen] = useState(
+    () => localStorage.getItem('swarmgo.detailOpen') === '1',
+  )
+  const toggleDetail = useCallback(() => {
+    setDetailOpen((v) => {
+      const next = !v
+      localStorage.setItem('swarmgo.detailOpen', next ? '1' : '0')
+      return next
+    })
+  }, [])
   // Default agent for NEW sessions (chosen from the roster). Persisted so it
   // survives reloads; unmentioned turns in a session use the session's own agent.
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(
@@ -727,6 +739,19 @@ export default function App() {
                 onError={setError}
               />
             )}
+            {view === 'chat' && activeSessionId && (
+              <button
+                onClick={toggleDetail}
+                title="Oturum bilgisi panelini aç/kapat"
+                className={`rounded-lg border px-2 py-1 text-sm transition ${
+                  detailOpen
+                    ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+                }`}
+              >
+                ℹ
+              </button>
+            )}
             {error && (
               <span className="rounded bg-red-500/15 px-2 py-1 text-xs text-red-400">
                 {error}
@@ -802,6 +827,20 @@ export default function App() {
           />
         )}
       </main>
+
+      {view === 'chat' && detailOpen && activeSessionId && (
+        <SessionDetailPanel
+          sessionId={activeSessionId}
+          refreshKey={meterRefresh}
+          onClose={toggleDetail}
+          onError={setError}
+          onCopyPath={copySessionPath}
+          onRevealFolder={revealSession}
+          onGenerateTitle={regenerateSessionTitle}
+          onSummarize={(_, kind) => summarize(kind as 'memory' | 'board' | 'flows' | 'tools')}
+          onDeleteSession={deleteSession}
+        />
+      )}
     </div>
   )
 }

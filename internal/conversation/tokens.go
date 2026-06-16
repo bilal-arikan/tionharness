@@ -15,6 +15,13 @@ func estimateText(s string) int {
 	return len([]rune(s))/charsPerToken + 1
 }
 
+// EstimateText is the exported approximation of a single string's token count.
+// Used by callers that need a per-field breakdown (e.g. the session info panel)
+// rather than the aggregate EstimateTokens.
+func EstimateText(s string) int {
+	return estimateText(s)
+}
+
 // EstimateTokens approximates the tokens of a summary plus a set of messages.
 func EstimateTokens(summary string, msgs []db.Message) int {
 	total := estimateText(summary)

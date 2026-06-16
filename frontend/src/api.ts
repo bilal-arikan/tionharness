@@ -15,6 +15,7 @@ import type {
   MemoryKind,
   RecallHit,
   SessionContext,
+  SessionInfo,
   AgentUsage,
   MCPServer,
   MCPTransport,
@@ -251,6 +252,9 @@ export const api = {
   // Absolute folder holding the session's JSONL file.
   sessionPath: (sessionId: string) =>
     req<{ path: string }>(`/api/sessions/${sessionId}/path`),
+  // Rich session detail: disk footprint, context composition, participating agents.
+  sessionInfo: (sessionId: string) =>
+    req<SessionInfo>(`/api/sessions/${sessionId}/info`),
   // Open the session's folder in the OS file manager (local desktop).
   revealSession: (sessionId: string) =>
     req<{ path: string }>(`/api/sessions/${sessionId}/reveal`, { method: 'POST' }),
