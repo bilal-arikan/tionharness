@@ -166,10 +166,16 @@ claude-cli için doğru çözülür.
 **Şişme/temizlik (a7116a2):** oturum silinince upload dizini de silinir —
 `db.sessionUploadsDir(sid)` (`<storeRoot>/../workspace/uploads/sid`) hem
 `DeleteSession` hem `DeleteAgent` oturum-kaskadında `RemoveAll` edilir
-(`uploads_cleanup_test.go`; canlı doğrulandı: yükle→sil→dizin yok). **Kalan
-şişme kaynakları (v2):** tray'de **gönderilmeden** x ile iptal edilen ek yetim
-kalır (yüklemeyi gönderene kadar ertele ya da `DELETE /api/uploads`); toplam
-kota yok; büyük `TextContent` her turda bağlama girer (100KB→~16KB cap önerisi).
+(`uploads_cleanup_test.go`; canlı doğrulandı: yükle→sil→dizin yok).
+
+**Şişme önlemleri (ee99e9b):** (1) tray'de x ile **gönderilmeden iptal** edilen
+ek diskten silinir — `DELETE /api/uploads?rel=` (uploads alt-ağacına sınırlı,
+traversal-guard) + frontend `uploadsApi.deleteFile` → `Composer.removePending`.
+(2) `maxInlineTextBytes` **100KB→16KB**: büyük text/code ekleri artık her turda
+bağlama inline edilmez (diskte kalır, `read_file` ile okunur). Canlı doğrulandı:
+500B inline, 20KB inline değil, DELETE 204, uploads-dışı path 400. **Kalan
+(v2):** sekme-kapatma/yenileme ile gönderilmeden bırakılan ekler yetim kalabilir
+(yaş/kota bazlı GC); native görsel multimodal.
 
 **Not:** mcp-chrome bu oturumda bağlı olmadığından tarayıcı görsel testi
 yapılamadı. **v2:** görsel **multimodal** (model görseli görür — provider
