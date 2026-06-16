@@ -12,6 +12,11 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Bugfix — HTTP access-log middleware (Loglar ekranı canlı) ✅ (2026-06-16)
+**Sorun:** Kullanıcı "loglar ekranı bayadır kullanıyorum ama yeni log oluşmuyor" dedi. Ekran ve `GET /api/logs` doğru çalışıyordu (HTTP 200 + gerçek kayıtlar), ama yalnızca açılış logları + birkaç "agent reflected" görünüyordu. **Kök neden:** kod sadece **hata** durumlarında (`s.logger.Error/Warn`) ve birkaç otonom olayda slog kaydı üretiyordu; başarılı istek/sohbet/görev hiçbir log basmıyordu → aktif kullanımda yeni kayıt düşmüyordu (beklenen davranış, eksik enstrümantasyon).
+
+**Çözüm:** `internal/api/middleware_log.go` — `withRequestLog` her API isteğini loglar (`"http request"`, attrs: `method`/`path`/`status`/`dur`); 2xx→INFO, 4xx→WARN, 5xx→ERROR. `statusRecorder` durum kodunu yakalar **ve** `Flush()`+`Unwrap()` ile `http.Flusher`'ı yeniden açar (SSE `chat/stream`+`events` `w.(http.Flusher)` assertion'ı sarmalayıcıdan geçsin diye — yoksa akış kırılırdı). `skipRequestLog` `/api/logs` (kendi buffer'ını sel etmesin) + `/api/events` (uzun-ömürlü SSE) + `/health`'i atlar. `Routes()` zinciri: `withCORS → withRequestLog → withWorkspace` (OPTIONS preflight CORS'ta erken döndüğünden loglanmaz). ✅ (`go build`/`vet` yeşil; **canlı test**: dev binary yeniden başlatıldı, `/api/agents`→INFO 200, `/api/sessions`→INFO 200, `/api/nonexistent`→WARN 404, `/api/logs` kendini loglamadı).
+
 ### Interaction MCP — Faz 1 (ask_user + todo_write claude-cli'ye) ✅ (2026-06-16)
 Kendi agentic döngüsünü süren CLI ajanlarının (ilk hedef claude-cli) SwarmGo'nun insan-etkileşimli araçlarını kullanıp SwarmGo UI'ında yüzeyleyebilmesi için **in-process MCP-over-HTTP** sunucusu eklendi. Önceden claude-cli `-p` modunda kendi `AskUserQuestion`'ını cevaplayamıyordu → "soru penceresi hiç çıkmıyordu". Tasarım+detay: [11-INTERACTION-MCP.md](11-INTERACTION-MCP.md) (§15).
 
