@@ -718,12 +718,7 @@ export default function App() {
             onError={setError}
           />
         )}
-        {view === 'tools' && (
-          <ToolsPanel
-            agent={agents.find((a) => a.id === activeAgentId) ?? null}
-            onError={setError}
-          />
-        )}
+        {view === 'tools' && <ToolsPanel onError={setError} />}
         {view === 'flows' && <FlowsPanel agents={agents} onError={setError} />}
         {view === 'artifacts' && (
           <ArtifactsPanel

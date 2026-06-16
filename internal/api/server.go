@@ -180,6 +180,8 @@ func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/mcp-servers/{id}", s.handleDeleteMCPServer)
 	mux.HandleFunc("GET /api/agents/{id}/tools", s.handleAgentTools)
 	mux.HandleFunc("POST /api/agents/{id}/tools", s.handleSetAgentTools)
+	mux.HandleFunc("GET /api/workspace-tools", s.handleWorkspaceTools)
+	mux.HandleFunc("PUT /api/workspace-tools", s.handleSetWorkspaceTools)
 }
 
 // registerFlowRoutes registers orchestration flows + runs (Phase 7).

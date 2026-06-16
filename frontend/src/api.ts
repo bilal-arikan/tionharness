@@ -20,6 +20,7 @@ import type {
   MCPTransport,
   MCPTestResult,
   AgentTools,
+  WorkspaceTools,
   Flow,
   FlowGraph,
   FlowRun,
@@ -385,6 +386,15 @@ export const api = {
       `/api/agents/${agentId}/tools`,
       { method: 'POST', body: JSON.stringify({ mcpEnabled, allowedTools }) },
     ),
+
+  // Workspace-wide tool activation (active for the whole workspace; agents pick
+  // from the active set).
+  workspaceTools: () => req<WorkspaceTools>('/api/workspace-tools'),
+  setWorkspaceTools: (disabledTools: string[]) =>
+    req<{ disabledTools: string[] }>('/api/workspace-tools', {
+      method: 'PUT',
+      body: JSON.stringify({ disabledTools }),
+    }),
 
   // Orchestration flows (Phase 7).
   listFlows: () => req<Flow[]>('/api/flows'),

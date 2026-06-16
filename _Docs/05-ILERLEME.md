@@ -12,6 +12,48 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### İki-seviyeli araç yönetimi (workspace + ajan) ✅ (2026-06-16)
+
+Araç (tool) yönetimi ajan-bazlıdan **iki seviyeli** bir modele çevrildi: workspace
+geneli aktivasyon + ajan-bazlı seçim.
+
+**Model**
+- **Workspace seviyesi**: `db.WorkspaceToolConfig{DisabledTools []string}` — store kökünde
+  `tools-config.json` singleton (denylist; listelenmeyen araç = aktif → yeni MCP araçları
+  otomatik aktif gelir). `store_tools.go` (`GetWorkspaceToolConfig`/`SetWorkspaceToolConfig`/
+  `loadToolConfig`), `db.go` `toolConfig` alanı + load.
+- **Ajan seviyesi**: mevcut `allowed_tools` allowlist korundu (boş = tüm **workspace-aktif** araçlar).
+
+**Backend**
+- [x] `agent/toolsetup.go`: `workspaceDisabledSet` + `toolFilter(ctx,agent)` (workspace denylist ∩
+  ajan allowlist birleşik predicate). Katalog metodları: `WorkspaceToolCatalog` (tümü, ajan-agnostik),
+  `ActiveToolCatalog` (workspace-aktif = ajan seçeneği), `ToolCatalog(agent)` (efektif). `toolloop.go`
+  `req.Tools = reg.Defs(r.toolFilter(ctx,agent))`.
+- [x] `api/workspace_tools.go` (yeni): `GET /api/workspace-tools` (tüm katalog + `enabled` bayrağı +
+  `disabledTools`), `PUT /api/workspace-tools` (`disabledTools` denylist'i yaz). `agent_tools.go`
+  katalog kaynağı `ActiveToolCatalog` (ajanın seçebileceği = workspace-aktif).
+
+**Frontend**
+- [x] `ToolsPanel.tsx` artık **workspace-geneli**: tüm araçlar aç/kapat toggle'larıyla (anında kaydeder)
+  + MCP sunucu yönetimi; ajan bölümü kaldırıldı. App'te `<ToolsPanel onError>` (ajan prop'u yok).
+- [x] `AgentToolsSection.tsx` (yeni): ajanın kullanacağı araçları workspace-aktif kataloğundan seçer
+  (master "araç kullan" + per-tool checkbox + "Hepsi"/"Hiçbiri"; anında kaydeder). `AgentSettingsForm`'a
+  gömüldü → hem Ajanlar ekranı sağ paneli hem roster ⚙ modalı paylaşır.
+- [x] `types.ts`/`api.ts`: `WorkspaceTool`/`WorkspaceTools` + `workspaceTools()`/`setWorkspaceTools()`.
+
+**CANLI TEST (API + unit):**
+- [x] `GET /api/workspace-tools`: 14 araç (shell dahil, `SWARMGO_ENABLE_SHELL=1`); `PUT` ile shell+http_get
+  deaktif → re-fetch `enabled` bayrakları doğru; `store/tools-config.json` diske yazıldı.
+- [x] Ajan kataloğu workspace-aktif **12 araç** döndü (deaktif shell/http_get hariç); alt küme allowlist
+  (`read_file,grep,get_current_time`) kaydedildi.
+- [x] Unit (`tooltier_test.go`): workspace denylist tam kataloğu etkilemeden aktif kataloğu filtreler;
+  ajan efektif seti = workspace-aktif ∩ ajan allowlist (workspace-deaktif araç allowlist'te olsa bile düşer).
+- [x] `go build/vet/test ./...` + frontend `tsc --noEmit` temiz.
+
+> Not: claude-cli yolu sunucu-bazlı `--allowedTools` ile kendi döngüsünü sürdüğünden per-tool filtre
+> native (anthropic/minimax) yola + katalog/MCP listesine uygulanır (SDK parite deseni). Tarayıcı DOM
+> testi sıradaki doğrulama adımı (API + unit ile çekirdek mantık doğrulandı).
+
 ### Faz A1 — Artifact sistemi ✅ (2026-06-16)
 
 Ajanların ürettiği önemli, bağımsız içerik (doküman/kod/HTML/SVG/Mermaid) **versiyonlanarak** saklanır ve ayrı bir ekranda görüntülenir — Claude.ai artifacts benzeri.

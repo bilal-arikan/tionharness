@@ -249,6 +249,18 @@ export interface AgentTools {
   catalog: ToolDef[]
 }
 
+// A tool in the workspace-wide tools screen, with its active/inactive state.
+export interface WorkspaceTool {
+  name: string
+  description: string
+  enabled: boolean
+}
+
+export interface WorkspaceTools {
+  tools: WorkspaceTool[]
+  disabledTools: string[]
+}
+
 // Orchestration flows (Phase 7).
 export type FlowNodeType = 'agent' | 'branch' | 'parallel'
 

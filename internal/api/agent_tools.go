@@ -7,15 +7,17 @@ import (
 	"github.com/bilal/swarmgo/internal/providers"
 )
 
-// handleAgentTools returns the agent's tool access settings plus the live tool
-// catalog (built-ins + tools from enabled MCP servers) it would be offered.
+// handleAgentTools returns the agent's tool access settings plus the catalog of
+// tools it may pick from — the workspace-ACTIVE tools (built-ins + enabled MCP
+// servers, minus the workspace denylist). The agent's allowedTools selects a
+// subset of this catalog (empty = all active tools).
 func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
 	agent, err := ws(r).DB.GetAgent(r.Context(), r.PathValue("id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
 	}
-	catalog := ws(r).Runtime.ToolCatalog(r.Context(), agent)
+	catalog := ws(r).Runtime.ActiveToolCatalog(r.Context())
 	if catalog == nil {
 		catalog = []providers.ToolDef{}
 	}

@@ -122,7 +122,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		return resp, nil, err
 	}
-	req.Tools = reg.Defs(allowFunc(agent))
+	req.Tools = reg.Defs(r.toolFilter(ctx, agent))
 
 	emit := func(s TurnStep) {
 		if onStep != nil {

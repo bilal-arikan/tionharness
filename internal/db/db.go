@@ -46,6 +46,8 @@ type DB struct {
 	flowRuns  map[string]FlowRun
 	artifacts map[string]Artifact
 	usage     map[string]Usage // keyed by agentID + "|" + day
+
+	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
 }
 
 // Open opens (creating if missing) the file-backed store rooted at path and
@@ -235,6 +237,9 @@ func (d *DB) load() error {
 		return err
 	}
 	if err := d.loadUsage(); err != nil {
+		return err
+	}
+	if err := d.loadToolConfig(); err != nil {
 		return err
 	}
 	return d.loadSessions()

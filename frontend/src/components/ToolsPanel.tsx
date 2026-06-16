@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
-import type { Agent, AgentTools, MCPServer, MCPTransport } from '../types'
+import type { MCPServer, MCPTransport, WorkspaceTool } from '../types'
 
 interface Props {
-  agent: Agent | null
   onError: (msg: string) => void
 }
 
-// ToolsPanel manages workspace MCP servers and, for the selected agent, its
-// tool access (whether tools are enabled + the live catalog it would receive).
-export function ToolsPanel({ agent, onError }: Props) {
+// ToolsPanel is the workspace-wide tools screen. It lists every available tool
+// (built-ins + tools from enabled MCP servers) with a per-tool activate/deactivate
+// toggle that applies to the whole workspace, plus MCP server management. Agents
+// then pick which of the active tools they may use from the Agents screen.
+export function ToolsPanel({ onError }: Props) {
   const [servers, setServers] = useState<MCPServer[]>([])
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
@@ -21,23 +22,45 @@ export function ToolsPanel({ agent, onError }: Props) {
   const [argsText, setArgsText] = useState('')
   const [url, setUrl] = useState('')
 
-  // Agent tool settings.
-  const [tools, setTools] = useState<AgentTools | null>(null)
-  const [saving, setSaving] = useState(false)
+  // Workspace tool activation.
+  const [tools, setTools] = useState<WorkspaceTool[]>([])
+  const [disabled, setDisabled] = useState<string[]>([])
+  const [savingTool, setSavingTool] = useState<string | null>(null)
 
   const loadServers = useCallback(() => {
     api.listMCPServers().then(setServers).catch((e) => onError(e.message))
   }, [onError])
 
-  useEffect(() => loadServers(), [loadServers])
+  const loadTools = useCallback(() => {
+    api
+      .workspaceTools()
+      .then((res) => {
+        setTools(res.tools)
+        setDisabled(res.disabledTools)
+      })
+      .catch((e) => onError(e.message))
+  }, [onError])
 
-  useEffect(() => {
-    if (!agent) {
-      setTools(null)
-      return
+  useEffect(() => loadServers(), [loadServers])
+  // Reload the catalog whenever the set of MCP servers changes (enabling a
+  // server adds its tools to the workspace catalog).
+  useEffect(() => loadTools(), [loadTools, servers])
+
+  const toggleTool = async (t: WorkspaceTool) => {
+    const next = t.enabled ? [...new Set([...disabled, t.name])] : disabled.filter((n) => n !== t.name)
+    setSavingTool(t.name)
+    // Optimistic update.
+    setTools((ts) => ts.map((x) => (x.name === t.name ? { ...x, enabled: !t.enabled } : x)))
+    setDisabled(next)
+    try {
+      await api.setWorkspaceTools(next)
+    } catch (e) {
+      onError((e as Error).message)
+      loadTools() // revert on failure
+    } finally {
+      setSavingTool(null)
     }
-    api.agentTools(agent.id).then(setTools).catch((e) => onError(e.message))
-  }, [agent, onError, servers])
+  }
 
   const addServer = async () => {
     if (!name.trim()) return
@@ -92,65 +115,42 @@ export function ToolsPanel({ agent, onError }: Props) {
     }
   }
 
-  const saveAgentTools = async (mcpEnabled: boolean) => {
-    if (!agent || !tools) return
-    setSaving(true)
-    try {
-      await api.setAgentTools(agent.id, mcpEnabled, tools.allowedTools)
-      const fresh = await api.agentTools(agent.id)
-      setTools(fresh)
-    } catch (e) {
-      onError((e as Error).message)
-    } finally {
-      setSaving(false)
-    }
-  }
+  const activeCount = tools.filter((t) => t.enabled).length
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <div className="mx-auto max-w-3xl space-y-8">
-        {/* Agent tool access */}
+        {/* Workspace tool activation */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">Ajan araç erişimi</h2>
-          {!agent ? (
-            <p className="text-sm text-[var(--color-text-dim)]">
-              Soldan bir ajan seçin (araçlar ajan bazında açılır).
-            </p>
-          ) : (
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <label className="flex items-center gap-3 text-sm">
+          <h2 className="mb-1 text-sm font-semibold">Workspace araçları</h2>
+          <p className="mb-3 text-xs text-[var(--color-text-dim)]">
+            Bu workspace'te kullanılabilecek araçları aç/kapat. Kapatılan araçlar hiçbir ajana sunulmaz.
+            Ajanlar, aktif araçlardan hangilerini kullanacağını <strong>Ajanlar</strong> ekranından seçer.
+            ({activeCount}/{tools.length} aktif)
+          </p>
+          <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+            {tools.map((t) => (
+              <label
+                key={t.name}
+                className="flex cursor-pointer items-start gap-3 px-4 py-2.5 hover:bg-[var(--color-surface-2)]"
+              >
                 <input
                   type="checkbox"
-                  checked={tools?.mcpEnabled ?? false}
-                  disabled={saving}
-                  onChange={(e) => saveAgentTools(e.target.checked)}
+                  checked={t.enabled}
+                  disabled={savingTool === t.name}
+                  onChange={() => toggleTool(t)}
+                  className="mt-1"
                 />
-                <span>
-                  <span className="font-medium">{agent.name}</span> için araç kullanımını etkinleştir
+                <span className="min-w-0">
+                  <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">{t.name}</code>
+                  <span className="ml-2 text-sm text-[var(--color-text-dim)]">{t.description}</span>
                 </span>
               </label>
-              {tools?.mcpEnabled && (
-                <div className="mt-3 border-t border-[var(--color-border)] pt-3">
-                  <p className="mb-2 text-xs text-[var(--color-text-dim)]">
-                    Bu ajana sunulan araçlar ({tools.catalog.length}):
-                  </p>
-                  <ul className="space-y-1">
-                    {tools.catalog.map((t) => (
-                      <li key={t.name} className="text-sm">
-                        <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">
-                          {t.name}
-                        </code>
-                        <span className="ml-2 text-[var(--color-text-dim)]">{t.description}</span>
-                      </li>
-                    ))}
-                    {tools.catalog.length === 0 && (
-                      <li className="text-sm text-[var(--color-text-dim)]">Henüz araç yok.</li>
-                    )}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
+            ))}
+            {tools.length === 0 && (
+              <p className="px-4 py-3 text-sm text-[var(--color-text-dim)]">Henüz araç yok.</p>
+            )}
+          </div>
         </section>
 
         {/* MCP servers */}

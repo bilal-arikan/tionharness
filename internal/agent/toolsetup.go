@@ -114,8 +114,57 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	return reg
 }
 
-// ToolCatalog returns the full namespaced tool catalog (built-ins + MCP) for an
-// agent, for display in the UI. Errors per server are best-effort logged.
+// workspaceDisabledSet loads the workspace-level tool denylist as a set. Tools
+// in this set are switched off for the whole workspace regardless of per-agent
+// selection. A nil/empty set means everything is active.
+func (r *Runtime) workspaceDisabledSet(ctx context.Context) map[string]bool {
+	cfg, err := r.db.GetWorkspaceToolConfig(ctx)
+	if err != nil || len(cfg.DisabledTools) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(cfg.DisabledTools))
+	for _, n := range cfg.DisabledTools {
+		set[n] = true
+	}
+	return set
+}
+
+// toolFilter is the effective tool predicate for an agent: a tool is offered
+// only when it is active at the workspace level AND permitted by the agent's
+// own allowlist (empty allowlist = all workspace-active tools).
+func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) bool {
+	disabled := r.workspaceDisabledSet(ctx)
+	agentAllow := allowFunc(agent) // nil => agent allows all
+	if disabled == nil && agentAllow == nil {
+		return nil
+	}
+	return func(name string) bool {
+		if disabled[name] {
+			return false
+		}
+		return agentAllow == nil || agentAllow(name)
+	}
+}
+
+// ToolCatalog returns the effective tool catalog for an agent (workspace-active
+// AND permitted by the agent's allowlist) — the tools it actually receives.
 func (r *Runtime) ToolCatalog(ctx context.Context, agent db.Agent) []providers.ToolDef {
-	return r.buildRegistry(ctx, agent).Defs(allowFunc(agent))
+	return r.buildRegistry(ctx, agent).Defs(r.toolFilter(ctx, agent))
+}
+
+// WorkspaceToolCatalog returns the full, unfiltered tool catalog (every built-in
+// plus every enabled MCP server's tools) for the workspace tools screen, where
+// each tool's active/inactive state is toggled independently of any agent.
+func (r *Runtime) WorkspaceToolCatalog(ctx context.Context) []providers.ToolDef {
+	return r.buildRegistry(ctx, db.Agent{}).Defs(nil)
+}
+
+// ActiveToolCatalog returns the workspace-active tool catalog (full catalog
+// minus the workspace denylist) — the set of tools an agent may pick from.
+func (r *Runtime) ActiveToolCatalog(ctx context.Context) []providers.ToolDef {
+	disabled := r.workspaceDisabledSet(ctx)
+	if disabled == nil {
+		return r.buildRegistry(ctx, db.Agent{}).Defs(nil)
+	}
+	return r.buildRegistry(ctx, db.Agent{}).Defs(func(name string) bool { return !disabled[name] })
 }
