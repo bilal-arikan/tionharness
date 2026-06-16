@@ -49,6 +49,11 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if ab := artifactsContextBlock(ctx, wsp.DB, session.ID); ab != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + ab)
 	}
+	// Surface the active todo checklist so the agent keeps tracking it even after
+	// the original todo_write message scrolls out of context / is compacted away.
+	if tb := todoContextBlock(ctx, wsp.DB, session.ID); tb != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + tb)
+	}
 
 	return providers.Request{
 		Model:         agentRow.Model,

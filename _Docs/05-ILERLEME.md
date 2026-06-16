@@ -2,6 +2,27 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Bağlam — Aktif todo listesi sistem promptuna enjekte (2026-06-17)
+
+**İstek:** Agent, `todo_write` mesajı sohbette geride kalsa / compaction ile
+bağlamdan çıksa bile oturumun **aktif** todo listesini görebilsin.
+
+**Çözüm:** Artifacts-context enjeksiyonuyla aynı desen. `internal/api/todos.go`
+`todoContextBlock(ctx, db, sessionID)` — oturumun **tüm** mesajlarını (compaction
+penceresinden bağımsız) yeniden-eskiye tarayıp en son todo step'ini bulur
+(`latestSessionTodos`/`stepTodos`: kind `todo` veya eski `todo_write` tool input);
+tümü `completed` ise boş döner (takip edilecek bir şey yok), aksi halde
+`## Active todo list (this session)` + `- [x]/[~]/[ ]` maddeleri olarak
+formatlanır (`renderTodoBlock`). `chat_turn.go` `composeTurnRequest` bunu
+`SystemDynamic` (cache'siz, her tur gönderilen suffix) sonuna ekler — artifacts
+bloğunun hemen ardına. Native + claude-cli (System+SystemDynamic'i birleştirir)
+ikisi de alır. Test `todos_test.go` (en-yeni seçim, eski tool-input parse,
+format + all-done baskılama). ✅ go build/vet/test yeşil. **Playwright canlı**:
+aktif liste (Alfa=completed, Beta=in_progress, Gama=pending) oluşturuldu →
+ayrı bir turda "todo_write KULLANMADAN aktif listeni yaz" sorusuna agent listeyi
+**doğru durumlarıyla** üretti ("hafızamdan cevapladım"). Compaction dayanıklılığı
+yapısal: her tur ham geçmişten yeniden türetilip enjekte edilir.
+
 ## UI — Sabit görev listesi paneli (TodoPanel) (2026-06-17)
 
 **İstek:** Sohbette "todo listesi oluştur" denince agent `todo_write` ile liste
