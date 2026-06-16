@@ -114,6 +114,34 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	}, nil
 }
 
+// ForceCompact folds all but the most recent keepRecent messages into the
+// rolling summary regardless of the token budget — the manual "/compact" chat
+// command. Returns how many messages were folded and the updated summary; folds
+// nothing (folded == 0) when there are not enough pending messages.
+func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider providers.Provider, session db.Session, agent db.Agent, history []db.Message) (folded int, summary string, err error) {
+	summary = session.Summary
+	start := session.SummaryMsgCount
+	if start > len(history) {
+		start = len(history)
+	}
+	pending := history[start:]
+
+	_, keepRecent := m.limits()
+	if len(pending) <= keepRecent {
+		return 0, summary, nil // not enough to compact
+	}
+	fold := pending[:len(pending)-keepRecent]
+	newSummary, err := m.summarize(ctx, provider, agent, summary, fold)
+	if err != nil {
+		return 0, "", err
+	}
+	newCount := start + len(fold)
+	if err := database.SetSessionSummary(ctx, session.ID, newSummary, newCount); err != nil {
+		return 0, "", err
+	}
+	return len(fold), newSummary, nil
+}
+
 // summarize folds messages into the existing summary via the provider.
 func (m *Manager) summarize(ctx context.Context, provider providers.Provider, agent db.Agent, existing string, msgs []db.Message) (string, error) {
 	var b strings.Builder
