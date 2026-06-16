@@ -31,6 +31,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [model, setModel] = useState(agent.model ?? '')
   const [planningMode, setPlanningMode] = useState(agent.planningMode || 'standard')
   const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel ?? '')
+  const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
@@ -60,6 +61,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         model: model.trim(),
         planningMode,
         thinkingLevel,
+        permissionMode,
       })
       setSavedAt((n) => n + 1)
       onSaved?.()
@@ -182,6 +184,24 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         </div>
         <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
           Uzatılmış akıl yürütme yalnız <strong>anthropic</strong> sağlayıcıda ve araçsız sohbette etkilidir.
+        </p>
+
+        <Field label="İzin modu (araç kullanımı)">
+          <select
+            value={permissionMode}
+            onChange={(e) => setPermissionMode(e.target.value)}
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
+          >
+            <option value="auto">Otomatik — tüm araçlar onaysız çalışır</option>
+            <option value="ask">Sor — dosya yazma/komut için onay iste</option>
+            <option value="read-only">Salt-okunur — yazma/komut engellenir</option>
+          </select>
+        </Field>
+        <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
+          <strong>Salt-okunur</strong> yalnız okuma araçlarına izin verir. <strong>Sor</strong> modunda yazma/komut
+          araçları için sohbette onay penceresi çıkar (Allow once / Always allow / Deny); onay verecek kimse yoksa
+          (otonom koşu) reddedilir. claude-cli ajanlarında bu mod CLI izin bayrağına çevrilir
+          (salt-okunur→<code>plan</code>, sor→<code>acceptEdits</code>, otomatik→<code>bypass</code>).
         </p>
 
         <Field label="Karakter / sistem promptu (soul)">

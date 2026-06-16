@@ -23,6 +23,14 @@ type chatReq struct {
 	// agent's own setting. Only affects providers with extended-thinking support
 	// (anthropic, non-tool path); others ignore it.
 	ThinkingLevel string `json:"thinkingLevel"`
+	// PermissionMode optionally overrides the responding agent's tool-use
+	// permission gate for this single turn ("read-only" | "ask" | "auto").
+	// Empty = use the agent's own setting.
+	PermissionMode string `json:"permissionMode"`
+	// Attachments are files (or pasted long text) sent with this turn, already
+	// uploaded via POST /api/uploads. Persisted on the user message and folded
+	// into the provider request.
+	Attachments []db.Attachment `json:"attachments"`
 }
 
 type chatResp struct {
@@ -47,8 +55,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if req.SessionID == "" || strings.TrimSpace(req.Message) == "" {
-		writeError(w, http.StatusBadRequest, "sessionId and message are required")
+	if req.SessionID == "" || (strings.TrimSpace(req.Message) == "" && len(req.Attachments) == 0) {
+		writeError(w, http.StatusBadRequest, "sessionId and message (or attachments) are required")
 		return
 	}
 
@@ -74,6 +82,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if req.ThinkingLevel != "" {
 		agent.ThinkingLevel = req.ThinkingLevel
 	}
+	if req.PermissionMode != "" {
+		agent.PermissionMode = req.PermissionMode
+	}
 
 	provider, err := s.providers.Get(agent.Provider)
 	if err != nil {
@@ -83,9 +94,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Persist the incoming user message.
 	userMsg, err := database.AddMessage(ctx, db.Message{
-		SessionID: session.ID,
-		Role:      providers.RoleUser,
-		Text:      req.Message,
+		SessionID:   session.ID,
+		Role:        providers.RoleUser,
+		Text:        req.Message,
+		Attachments: req.Attachments,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

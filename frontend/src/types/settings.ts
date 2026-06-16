@@ -14,6 +14,7 @@ export interface AppSettings {
 
   defaultProvider: string
   defaultModel: string
+  defaultPermissionMode: string
   claudeCliPath: string
   anthropicKeySet: boolean
   minimaxKeySet: boolean

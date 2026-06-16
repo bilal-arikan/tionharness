@@ -11,6 +11,8 @@ export interface Agent {
   model: string
   planningMode: string
   thinkingLevel?: string
+  // Tool-use permission gate: "read-only" | "ask" | "auto". Empty = auto.
+  permissionMode?: string
   // Visual identity for the roster avatar. Both optional — when empty the UI
   // derives a deterministic circular look from the agent id.
   avatar?: string
@@ -31,6 +33,7 @@ export interface AgentPatch {
   model?: string
   planningMode?: string
   thinkingLevel?: string
+  permissionMode?: string
   avatar?: string
   color?: string
 }

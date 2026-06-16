@@ -60,6 +60,10 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	if req.Model == "" {
 		req.Model = cfg.DefaultModel
 	}
+	// Permission mode: request → application default → "auto" (db also defaults).
+	if req.PermissionMode == "" {
+		req.PermissionMode = cfg.DefaultPermissionMode
+	}
 
 	agent, err := ws(r).DB.CreateAgent(r.Context(), db.Agent{
 		Name:         req.Name,

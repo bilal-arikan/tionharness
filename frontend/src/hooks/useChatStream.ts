@@ -97,6 +97,16 @@ export function useChatStream(deps: ChatStreamDeps) {
     localStorage.setItem('swarmgo.thinkingLevel', v)
   }, [])
 
+  // Per-turn permission-mode override picked in the composer ('' = use the
+  // agent's own setting). Persisted across messages and reloads.
+  const [permissionMode, setPermissionMode] = useState(
+    () => localStorage.getItem('swarmgo.permissionMode') ?? '',
+  )
+  const setPermissionModePersist = useCallback((v: string) => {
+    setPermissionMode(v)
+    localStorage.setItem('swarmgo.permissionMode', v)
+  }, [])
+
   // Staged interventions shown above the composer while a turn streams.
   const [queuedItems, setQueuedItems] = useState<PendingItem[]>([])
   const steerTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
@@ -258,7 +268,7 @@ export function useChatStream(deps: ChatStreamDeps) {
             // Clicking the notification jumps to the logs view to inspect it.
             notify(notifyEnabled.current, 'SwarmGo — hata', err, () => setView('logs'))
           },
-        }, ac.signal, thinkingLevel)
+        }, ac.signal, thinkingLevel, permissionMode)
       } catch (e) {
         // A deliberate stop/interrupt aborts the fetch: keep the partial reply
         // bubble visible and don't surface it as an error.
@@ -280,7 +290,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         if (h && h.ac === ac) runsRef.current.delete(sid)
       }
     },
-    [activeSessionId, agents, sessions, thinkingLevel, activeSessionIdRef, notifyEnabled, setMessages, setError, setView, selectSession, refreshSessions, bumpMeter],
+    [activeSessionId, agents, sessions, thinkingLevel, permissionMode, activeSessionIdRef, notifyEnabled, setMessages, setError, setView, selectSession, refreshSessions, bumpMeter],
   )
 
   // Keep a live ref to sendMessage so effects (queue flush) can call the latest
@@ -463,6 +473,8 @@ export function useChatStream(deps: ChatStreamDeps) {
     streamingSessions,
     thinkingLevel,
     setThinkingLevel: setThinkingLevelPersist,
+    permissionMode,
+    setPermissionMode: setPermissionModePersist,
     sendMessage,
     stopTurn,
     answerAsk,

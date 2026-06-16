@@ -55,6 +55,14 @@ export function ProvidersPanel({
         </div>
       </div>
 
+      <Field label="Yeni ajan varsayılan izin modu" hint="Yeni oluşturulan ajanların araç-kullanım izni. Mevcut ajanları Ajanlar ekranından, tek tur için Composer'dan (Shift+Tab) değiştir.">
+        <select value={draft.defaultPermissionMode || 'auto'} onChange={(e) => set('defaultPermissionMode', e.target.value)} className={inputCls}>
+          <option value="auto">Otomatik — tüm araçlar onaysız çalışır</option>
+          <option value="ask">Sor — dosya yazma/komut için onay iste</option>
+          <option value="read-only">Salt-okunur — yazma/komut engellenir</option>
+        </select>
+      </Field>
+
       <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Anthropic</div>
       <Field label="API anahtarı" hint={draft.anthropicKeySet ? 'Kayıtlı (şifreli). Değiştirmek için yeni anahtar gir, temizlemek için sil.' : 'Henüz ayarlanmadı. anthropic sağlayıcısı için gerekli.'}>
         <div className="flex items-center gap-2">

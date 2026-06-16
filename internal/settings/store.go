@@ -105,6 +105,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 
 	applyString(&next.DefaultProvider, p.DefaultProvider)
 	applyString(&next.DefaultModel, p.DefaultModel)
+	applyString(&next.DefaultPermissionMode, p.DefaultPermissionMode)
 	applyString(&next.ClaudeCLIPath, p.ClaudeCLIPath)
 
 	applyBool(&next.OneMillionContext, p.OneMillionContext)

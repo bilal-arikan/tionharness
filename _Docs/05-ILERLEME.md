@@ -112,10 +112,25 @@ ile temp dizinde dosya yazdırma — **bayrak yokken dosya OLUŞMADI** (eski hat
 onay istemi mevcut `StepAsk`→`AskPrompt` UI'ını yeniden kullanır (3 tıklanabilir seçenek);
 mod şu an API ile (`permissionMode`) ayarlanır — composer mod seçici Aşama 3.
 
-**Kalan (sonraki aşamalar):** Aşama 3 — Composer'da Shift+Tab benzeri mod seçici
-(oturum-bazlı) + ayarlarda varsayılan + ajan formunda alan + (ops.) ayrı `StepPermission`
-kart render'ı + oturum-ömürlü "Always allow" kalıcılığı. Aşama 4 — claude-cli "ask" için
-Interaction MCP permission-prompt aracı (`acceptEdits` yerine gerçek tur-içi onay).
+**Aşama 3 — UI (görsel kontrol + tur-bazlı override + varsayılan, 2026-06-17):**
+1. **Ajan formu** (`AgentSettingsForm.tsx` + `types/agent.ts`): "İzin modu (araç kullanımı)"
+   seçici (auto/ask/read-only) + açıklama → ajanın **kalıcı** modu (PUT `permissionMode`).
+   "Nerede görürüm" sorusunun birincil cevabı.
+2. **Composer** (`Composer.tsx` + `App.tsx` + `useChatStream.ts` + `api/chat.ts`): 🛡 tur-bazlı
+   mod seçici + **Shift+Tab** döngü (external-agent-oss imzası); seçim localStorage'da kalıcı;
+   `/api/chat(/stream)` gövdesine `permissionMode`. Backend `chat.go`+`chat_stream.go` tur başına
+   ajanın yerel kopyasının `PermissionMode`'unu override eder (ThinkingLevel deseni).
+3. **Settings** (`ProvidersPanel.tsx` + `types/settings.ts` + `internal/settings`): "Yeni ajan
+   varsayılan izin modu" → `Settings.DefaultPermissionMode` (DTO/Patch/Default=`auto`/store);
+   `api/agents.go` create önceliği: istek → uygulama varsayılanı → `auto`.
+
+✅ `go build`/`vet`/`test` + frontend `tsc`/`vite build` yeşil. **Playwright canlı:** Ajan formu
+İzin modu seçici+açıklama (Part A ✓), Composer 🛡 seçici (Part B ✓), kaydetme backend'e gitti.
+Settings paneli tarayıcı aracı kararsızlığıyla bu turda görsel doğrulanamadı (kod/tsc doğrulandı).
+
+**Kalan:** Aşama 4 — claude-cli "ask" için Interaction MCP permission-prompt aracı
+(`acceptEdits` yerine gerçek tur-içi onay); (ops.) ayrı `StepPermission` kartı + oturum-ömürlü
+"Always allow" kalıcılığı (şu an tur-ömürlü).
 
 ## Kararlar (2026-06-15)
 - **İlk LLM sağlayıcısı:** Anthropic (Claude) ✅

@@ -16,6 +16,10 @@ interface Props {
   // the composer and applied to the next message.
   thinkingLevel?: string
   onThinkingLevelChange?: (v: string) => void
+  // Per-turn permission-mode override ('' = agent default). Picked from a small
+  // menu in the composer or cycled with Shift+Tab; applied to the next message.
+  permissionMode?: string
+  onPermissionModeChange?: (v: string) => void
   agents: Agent[]
   commands: SlashCommand[]
 }
@@ -28,6 +32,16 @@ const THINKING_OPTIONS: { value: string; label: string; hint: string }[] = [
   { value: 'low', label: 'Düşük', hint: 'Kısa akıl yürütme' },
   { value: 'medium', label: 'Orta', hint: 'Dengeli' },
   { value: 'high', label: 'Yüksek', hint: 'Derin akıl yürütme' },
+]
+
+// Permission modes offered in the composer picker / Shift+Tab cycle. '' defers
+// to the agent's own PermissionMode; the rest override it for the turn (see
+// chatReq.PermissionMode). Order is the Shift+Tab cycle order.
+const PERMISSION_OPTIONS: { value: string; label: string; hint: string; icon: string }[] = [
+  { value: '', label: 'Oto (ajan)', hint: 'Ajanın kendi izin ayarı', icon: '🛡' },
+  { value: 'read-only', label: 'Salt-okunur', hint: 'Yazma/komut engellenir', icon: '🔒' },
+  { value: 'ask', label: 'Sor', hint: 'Yazma/komut için onay iste', icon: '✋' },
+  { value: 'auto', label: 'Otomatik', hint: 'Tüm araçlar onaysız', icon: '⚡' },
 ]
 
 // Trigger detection: what (if any) autocomplete menu the caret is currently in.
@@ -68,6 +82,8 @@ export function Composer({
   onSteer,
   thinkingLevel = '',
   onThinkingLevelChange,
+  permissionMode = '',
+  onPermissionModeChange,
   agents,
   commands,
 }: Props) {
@@ -168,6 +184,15 @@ export function Composer({
         return
       }
     }
+    // Shift+Tab cycles the per-turn permission mode (external-agent-oss signature),
+    // but only when no autocomplete menu is open (Tab there selects an item).
+    if (e.key === 'Tab' && e.shiftKey && onPermissionModeChange) {
+      e.preventDefault()
+      const i = PERMISSION_OPTIONS.findIndex((o) => o.value === permissionMode)
+      const next = PERMISSION_OPTIONS[(i + 1) % PERMISSION_OPTIONS.length]
+      onPermissionModeChange(next.value)
+      return
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       // While streaming, Enter queues the typed message (safest default) rather
@@ -215,6 +240,7 @@ export function Composer({
 
       <div className="flex w-full items-end gap-2">
         <ThinkingPicker value={thinkingLevel} onChange={onThinkingLevelChange} />
+        <PermissionPicker value={permissionMode} onChange={onPermissionModeChange} />
         <textarea
           ref={taRef}
           value={text}
@@ -330,6 +356,76 @@ function ThinkingPicker({
               }`}
             >
               <span className="font-medium text-[var(--color-text)]">{o.label}</span>
+              <span className="truncate text-xs opacity-60">{o.hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// PermissionPicker is the composer's per-turn permission-mode selector: a compact
+// button (current icon + label) opening a menu above it. Shift+Tab cycles the
+// same options without opening the menu. The choice applies to the next message.
+function PermissionPicker({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange?: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const current = PERMISSION_OPTIONS.find((o) => o.value === value) ?? PERMISSION_OPTIONS[0]
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title={`İzin modu: ${current.label} — ${current.hint} (Shift+Tab ile değiştir)`}
+        className={`flex items-center gap-1 rounded-xl border px-2.5 py-3 text-sm transition ${
+          value
+            ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+            : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+        }`}
+      >
+        <span>{current.icon}</span>
+        <span className="hidden sm:inline">{current.label}</span>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full left-0 mb-2 w-60 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
+          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+            İzin modu (Shift+Tab)
+          </div>
+          {PERMISSION_OPTIONS.map((o) => (
+            <button
+              key={o.value || 'auto-default'}
+              onClick={() => {
+                onChange?.(o.value)
+                setOpen(false)
+              }}
+              className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
+                o.value === value
+                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 font-medium text-[var(--color-text)]">
+                <span>{o.icon}</span>
+                {o.label}
+              </span>
               <span className="truncate text-xs opacity-60">{o.hint}</span>
             </button>
           ))}

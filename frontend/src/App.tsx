@@ -461,6 +461,8 @@ export default function App() {
               onSteer={chat.steerTurn}
               thinkingLevel={chat.thinkingLevel}
               onThinkingLevelChange={chat.setThinkingLevel}
+              permissionMode={chat.permissionMode}
+              onPermissionModeChange={chat.setPermissionMode}
               agents={agents}
               commands={chat.chatCommands}
             />

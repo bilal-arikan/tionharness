@@ -24,7 +24,10 @@ type Settings struct {
 	// Providers.
 	DefaultProvider string `json:"defaultProvider"` // "claude-cli" | "anthropic"
 	DefaultModel    string `json:"defaultModel"`    // "" = provider default
-	ClaudeCLIPath   string `json:"claudeCliPath"`   // "" = auto-detect on PATH
+	// DefaultPermissionMode seeds new agents' tool-use permission gate:
+	// "read-only" | "ask" | "auto". "" falls back to "auto".
+	DefaultPermissionMode string `json:"defaultPermissionMode"`
+	ClaudeCLIPath         string `json:"claudeCliPath"` // "" = auto-detect on PATH
 	AnthropicKeyEnc string `json:"anthropicKeyEnc"` // AES-GCM, never exposed
 
 	// MiniMax (OpenAI-compatible) provider.
@@ -81,9 +84,10 @@ func Default() Settings {
 		ThemePreset: "midnight-violet",
 		Language:    "tr",
 
-		DefaultProvider: "claude-cli",
-		DefaultModel:    "",
-		ClaudeCLIPath:   "",
+		DefaultProvider:       "claude-cli",
+		DefaultModel:          "",
+		DefaultPermissionMode: "auto",
+		ClaudeCLIPath:         "",
 
 		MaxContextTokens: 12000,
 		KeepRecentMsgs:   8,
@@ -113,10 +117,11 @@ type DTO struct {
 	ThemePreset string `json:"themePreset"`
 	Language    string `json:"language"`
 
-	DefaultProvider string `json:"defaultProvider"`
-	DefaultModel    string `json:"defaultModel"`
-	ClaudeCLIPath   string `json:"claudeCliPath"`
-	AnthropicKeySet bool   `json:"anthropicKeySet"`
+	DefaultProvider       string `json:"defaultProvider"`
+	DefaultModel          string `json:"defaultModel"`
+	DefaultPermissionMode string `json:"defaultPermissionMode"`
+	ClaudeCLIPath         string `json:"claudeCliPath"`
+	AnthropicKeySet       bool   `json:"anthropicKeySet"`
 	MinimaxKeySet   bool   `json:"minimaxKeySet"`
 	MinimaxBaseURL  string `json:"minimaxBaseUrl"`
 
@@ -159,10 +164,11 @@ func (s Settings) ToDTO() DTO {
 		ThemePreset: s.ThemePreset,
 		Language:    s.Language,
 
-		DefaultProvider: s.DefaultProvider,
-		DefaultModel:    s.DefaultModel,
-		ClaudeCLIPath:   s.ClaudeCLIPath,
-		AnthropicKeySet: s.AnthropicKeyEnc != "",
+		DefaultProvider:       s.DefaultProvider,
+		DefaultModel:          s.DefaultModel,
+		DefaultPermissionMode: s.DefaultPermissionMode,
+		ClaudeCLIPath:         s.ClaudeCLIPath,
+		AnthropicKeySet:       s.AnthropicKeyEnc != "",
 		MinimaxKeySet:   s.MinimaxKeyEnc != "",
 		MinimaxBaseURL:  s.MinimaxBaseURL,
 
@@ -207,9 +213,10 @@ type Patch struct {
 	ThemePreset *string `json:"themePreset"`
 	Language    *string `json:"language"`
 
-	DefaultProvider *string `json:"defaultProvider"`
-	DefaultModel    *string `json:"defaultModel"`
-	ClaudeCLIPath   *string `json:"claudeCliPath"`
+	DefaultProvider       *string `json:"defaultProvider"`
+	DefaultModel          *string `json:"defaultModel"`
+	DefaultPermissionMode *string `json:"defaultPermissionMode"`
+	ClaudeCLIPath         *string `json:"claudeCliPath"`
 	AnthropicKey    *string `json:"anthropicKey"` // write-only
 	MinimaxKey      *string `json:"minimaxKey"`   // write-only
 	MinimaxBaseURL  *string `json:"minimaxBaseUrl"`

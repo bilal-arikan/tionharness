@@ -36,8 +36,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if req.SessionID == "" || strings.TrimSpace(req.Message) == "" {
-		writeError(w, http.StatusBadRequest, "sessionId and message are required")
+	if req.SessionID == "" || (strings.TrimSpace(req.Message) == "" && len(req.Attachments) == 0) {
+		writeError(w, http.StatusBadRequest, "sessionId and message (or attachments) are required")
 		return
 	}
 
@@ -91,9 +91,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 	// Persist the incoming user message once.
 	userMsg, err := database.AddMessage(ctx, db.Message{
-		SessionID: session.ID,
-		Role:      providers.RoleUser,
-		Text:      req.Message,
+		SessionID:   session.ID,
+		Role:        providers.RoleUser,
+		Text:        req.Message,
+		Attachments: req.Attachments,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -145,6 +146,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		// Per-turn reasoning override (local copy only — never persisted).
 		if req.ThinkingLevel != "" {
 			agentRow.ThinkingLevel = req.ThinkingLevel
+		}
+		if req.PermissionMode != "" {
+			agentRow.PermissionMode = req.PermissionMode
 		}
 		provider, perr := s.providers.Get(agentRow.Provider)
 		if perr != nil {
