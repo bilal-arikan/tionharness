@@ -756,6 +756,18 @@ Kullanıcıyla netleştirilecek:
 
 ## Oturum Günlüğü
 
+### 2026-06-16 — Trace StepKind genişletme #2: error/steer/tool_delta/tombstone + Ayarlar referans ekranı
+4 yeni `StepKind` eklendi (`go build`/`vet`/`test ./...` + frontend `tsc`/`build` yeşil; canlı UI testi mcp-chrome stale-sekme/screenshot kırılganlığı nedeniyle güvenilir alınamadı, otomatik kontroller esas):
+
+1. **`error`** (`StepError`) — tur düzeyinde hata (sağlayıcı/bütçe/iptal); `toolloop.go` `fail()` budget_exceeded/provider_error yollarında yayar → `ErrorStep.tsx` (kırmızı + reason rozeti). Araç hatasından (tool+isError) ayrı.
+2. **`steer`** (`StepSteer`) — canlı yönlendirme artık `StepText` "↪" prefix'i yerine ayrı tip → `SteerStep.tsx`.
+3. **`tool_delta`** (`StepToolDelta`) — akan tool çıktısı (aynı `ID` birleşir, yalnız-canlı) → `ToolDeltaStep.tsx`; App.onStep `id` ile merge eder. **Altyapı hazır, üretici yok** (tool-streaming gelince).
+4. **`tombstone`** (`StepTombstone`) — `Ref` ile canlı bir adımı geri çeker (render edilmez); App.onStep filtreler. **Altyapı hazır.**
+- `TurnStep`'e `ID`/`Ref` alanları. Tek-kaynak referans `frontend/src/lib/stepKinds.ts` (kind/etiket/ikon/kalıcı?/durum/açıklama) → **Ayarlar ▸ Adım Türleri** read-only ekranı (`SettingsPanel.tsx` yeni `stepkinds` kategorisi).
+- Testler: `trace_test.go` error/steer/tool_delta/tombstone JSON round-trip.
+
+> Doküman: `10-KAVRAMSAL` E3 + SKILL güncellendi.
+
 ### 2026-06-16 — UI tema yenileme (Design Refresh)
 Arayüzün görsel dili cilalandı (`go build`/`vet` yeşil; backend `themePreset` kalıcılığı API round-trip ile, yeni tema + preset grid Chrome'da canlı doğrulandı):
 
