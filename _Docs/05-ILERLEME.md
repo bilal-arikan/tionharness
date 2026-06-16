@@ -2,6 +2,30 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Sohbet — Tek mesaj silme (2026-06-17)
+
+**İstek:** Bir sohbette tek bir mesajı (ör. hatalı/test mesajı) silebilmek.
+
+- **Backend:** `db.DeleteMessage(ctx, sessionID, messageID)` — bellekten çıkarır,
+  `MessageCount`'u düşürür ve session JSONL'ini **tam yeniden yazar**
+  (`writeSessionFileLocked`; append-only depo olduğundan satır-içi silme yok).
+  Yeni uç **`DELETE /api/sessions/{id}/messages/{msgId}`** (`handleDeleteMessage`,
+  `writeDBError` → bilinmeyen mesaj 404 JSON). Test `delete_message_test.go`
+  (ortadaki mesaj silinir, sıra korunur, reopen sonrası kalıcı, bilinmeyen id →
+  ErrNotFound).
+- **Frontend:** `api.deleteMessage(sid, mid)`; `App.tsx` `deleteMessage`
+  (window.confirm onayı → API → `setMessages` filtre → `refreshSessions`);
+  `MessageList` her mesaj satırına **hover'da 🗑** butonu (`group-hover`,
+  user+assistant; akıştaki canlı balon hariç).
+
+✅ go build/vet + `delete_message_test` yeşil; **izole portta (8099)** uç
+doğrulandı: `DELETE .../messages/nope` → `{"error":"message not found"}` (404,
+default değil = route kayıtlı). tsc + vite temiz. **Not:** 8090'ı şu an
+kullanıcının kendi `swarmgo-live.exe`'si (eski) tuttuğundan UI'da canlı denenmedi
+ve **commit kullanıcıya bırakıldı** — çalışma ağacında eşzamanlı attachments
+(upload temizliği, `store.go`) + url-sync (`App.tsx`) işi bu değişikliklerle iç
+içe; ayrı temiz commit çıkarılamadı.
+
 ## Bağlam — Aktif todo listesi sistem promptuna enjekte (2026-06-17)
 
 **İstek:** Agent, `todo_write` mesajı sohbette geride kalsa / compaction ile
@@ -132,11 +156,25 @@ external-agent-oss attachment sistemi referans alındı.
 servis 200 image/png, traversal `../../` → 400, diske kalıcılık, `TextContent`
 inline doğrulandı.
 
+**Fix (9044e0b):** claude-cli ajanı eki okuyamıyordu — `Read` aracı
+`uploads/<sid>/<dosya>` göreli yolunu backend'in başlatma dizinine göre
+çözüyordu. CLI alt sürecinin çalışma dizini **workspace sandbox köküne**
+ayarlandı (`providers.Request.WorkDir` → `toolloop.completeTraced` tek noktada
+`req.WorkDir = r.workDir` → `claudecli.cmd.Dir`). Artık yol hem native hem
+claude-cli için doğru çözülür.
+
+**Şişme/temizlik (a7116a2):** oturum silinince upload dizini de silinir —
+`db.sessionUploadsDir(sid)` (`<storeRoot>/../workspace/uploads/sid`) hem
+`DeleteSession` hem `DeleteAgent` oturum-kaskadında `RemoveAll` edilir
+(`uploads_cleanup_test.go`; canlı doğrulandı: yükle→sil→dizin yok). **Kalan
+şişme kaynakları (v2):** tray'de **gönderilmeden** x ile iptal edilen ek yetim
+kalır (yüklemeyi gönderene kadar ertele ya da `DELETE /api/uploads`); toplam
+kota yok; büyük `TextContent` her turda bağlama girer (100KB→~16KB cap önerisi).
+
 **Not:** mcp-chrome bu oturumda bağlı olmadığından tarayıcı görsel testi
-yapılamadı (çalışan :8090 backend de eski binary — özellik için yeniden başlatma
-gerek). **v2:** görsel **multimodal** (model görseli görür — provider katmanına
-anthropic image content-block eklenmeli), "Artifact'a dönüştür" butonu, drag-drop
-cilası.
+yapılamadı. **v2:** görsel **multimodal** (model görseli görür — provider
+katmanına anthropic image content-block eklenmeli; claude-cli kendi Read'i ile
+görebilir), "Artifact'a dönüştür" butonu, drag-drop cilası.
 
 ## UI — Yenileme sonrası "düşünüyor" göstergesinin geri yüklenmesi (2026-06-17)
 
