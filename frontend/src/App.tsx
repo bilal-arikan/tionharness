@@ -1,14 +1,14 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { api, setActiveWorkspace, getActiveWorkspace } from './api'
-import type { Agent, AgentPatch, Session, Message, Workspace, AppSettings, TurnStep, SlashCommand, AppEvent } from './types'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { api, getActiveWorkspace } from './api'
+import type { Agent, AgentPatch, Session, Message, AppSettings, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
-import type { NewWorkspaceData } from './components/WorkspaceCreateModal'
 import { SessionsSidebar } from './components/SessionsSidebar'
 import { AgentRoster } from './components/AgentRoster'
 import { AgentsView } from './components/AgentsView'
 import { MessageList } from './components/MessageList'
 import { Composer } from './components/Composer'
-import { AskPrompt, type PendingAsk } from './components/chat/AskPrompt'
+import { AskPrompt } from './components/chat/AskPrompt'
+import { PendingTray } from './components/chat/PendingTray'
 import { TaskBoard } from './components/TaskBoard'
 import { Schedules } from './components/Schedules'
 import { MemoryPanel } from './components/MemoryPanel'
@@ -19,6 +19,8 @@ import { ChatMeters } from './components/ChatMeters'
 import { SessionDetailPanel } from './components/SessionDetailPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LogsPanel } from './components/LogsPanel'
+import { useWorkspaces } from './hooks/useWorkspaces'
+import { useChatStream } from './hooks/useChatStream'
 import { isImagePath, mediaUrl } from './lib/paths'
 import { applyTheme } from './lib/theme'
 import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clientPrefs'
@@ -37,22 +39,27 @@ const VIEW_TITLE: Record<View, string> = {
 }
 
 export default function App() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
-    getActiveWorkspace(),
-  )
-  // Workspaces (other than the active one) with pending activity, shown as a
-  // badge in the switcher. Populated from the autonomous-event feed.
-  const [unreadWs, setUnreadWs] = useState<Set<string>>(() => new Set())
   const [agents, setAgents] = useState<Agent[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('chat')
   const [meterRefresh, setMeterRefresh] = useState(0)
+  const bumpMeter = useCallback(() => setMeterRefresh((n) => n + 1), [])
+
+  const {
+    workspaces,
+    activeWorkspaceId,
+    unreadWs,
+    setUnreadWs,
+    switchWorkspace,
+    createWorkspace,
+    deleteActiveWorkspace,
+    refreshWorkspaces,
+  } = useWorkspaces(setError)
+
   // Right-hand session detail panel visibility (persisted).
   const [detailOpen, setDetailOpen] = useState(
     () => localStorage.getItem('swarmgo.detailOpen') === '1',
@@ -69,33 +76,11 @@ export default function App() {
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(
     () => localStorage.getItem('swarmgo.defaultAgentId'),
   )
-  // Desktop-notification preference, read live in sendMessage without re-binding.
+  // Desktop-notification preference, read live in callbacks without re-binding.
   const notifyEnabled = useRef(false)
   // Latest autonomous-event handler, refreshed each render so the once-mounted
   // SSE subscription always navigates with current state/closures.
   const onEventRef = useRef<(e: AppEvent) => void>(() => {})
-  // Streaming-turn control: whether a turn is in flight, its abort handle (stop /
-  // interrupt) and run id (steer), plus a message queued to send after it ends.
-  const [streaming, setStreaming] = useState(false)
-  // The session the in-flight turn belongs to. The Composer only shows
-  // streaming-turn actions (Durdur/Kes/Yönlendir) when the user is viewing this
-  // session; switching to another session shows a normal "Gönder" button.
-  const [streamingSessionId, setStreamingSessionId] = useState('')
-  // Per-turn reasoning level picked in the composer ('' = use the agent's own
-  // setting). Persisted so the choice carries across messages and reloads.
-  const [thinkingLevel, setThinkingLevel] = useState(
-    () => localStorage.getItem('swarmgo.thinkingLevel') ?? '',
-  )
-  const setThinkingLevelPersist = useCallback((v: string) => {
-    setThinkingLevel(v)
-    localStorage.setItem('swarmgo.thinkingLevel', v)
-  }, [])
-  const abortRef = useRef<AbortController | null>(null)
-  const runIdRef = useRef('')
-  const queuedRef = useRef('')
-  // When the agent calls ask_user, the turn pauses and this holds the question
-  // until the user answers (delivered to the still-open stream via chatControl).
-  const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null)
   // Artifact deep-link target: set when a chat artifact card is clicked, opening
   // the artifacts screen with that artifact pre-selected.
   const [artifactTarget, setArtifactTarget] = useState<string | null>(null)
@@ -112,23 +97,6 @@ export default function App() {
   useEffect(() => {
     api.getSettings().then(applyClientPrefs).catch((e) => setError(e.message))
   }, [applyClientPrefs])
-
-  // Initial load: workspaces. Pick active (saved or first).
-  useEffect(() => {
-    api
-      .listWorkspaces()
-      .then((list) => {
-        setWorkspaces(list)
-        const saved = getActiveWorkspace()
-        const valid = list.find((w) => w.id === saved)
-        const chosen = valid?.id ?? list[0]?.id ?? null
-        if (chosen) {
-          setActiveWorkspace(chosen)
-          setActiveWorkspaceId(chosen)
-        }
-      })
-      .catch((e) => setError(e.message))
-  }, [])
 
   // Load agents + ALL sessions whenever the active workspace changes (the chat
   // is session-based: sessions are listed flat, not nested under an agent).
@@ -174,55 +142,6 @@ export default function App() {
     setArtifactTarget(id)
     setView('artifacts')
   }, [])
-
-  const switchWorkspace = useCallback((id: string) => {
-    setActiveWorkspace(id)
-    setActiveWorkspaceId(id)
-    // Switching to a workspace clears its pending-activity badge.
-    setUnreadWs((prev) => {
-      if (!prev.has(id)) return prev
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
-  }, [])
-
-  const createWorkspace = useCallback(async (data: NewWorkspaceData) => {
-    try {
-      const wsNew = await api.createWorkspace(data)
-      // Re-fetch the list so the icon/color (stored in ws-settings, absent from
-      // the create response) are reflected immediately; fall back to appending.
-      try {
-        setWorkspaces(await api.listWorkspaces())
-      } catch {
-        setWorkspaces((prev) => [...prev, wsNew])
-      }
-      setActiveWorkspace(wsNew.id)
-      setActiveWorkspaceId(wsNew.id)
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [])
-
-  // Delete the active workspace, then switch to another (backend forbids
-  // deleting the last one).
-  const deleteActiveWorkspace = useCallback(async () => {
-    if (!activeWorkspaceId) return
-    const target = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!confirm(`"${target?.name ?? 'Bu workspace'}" ve tüm verisi kalıcı olarak silinsin mi?`)) return
-    try {
-      await api.deleteWorkspace(activeWorkspaceId)
-      const remaining = workspaces.filter((w) => w.id !== activeWorkspaceId)
-      setWorkspaces(remaining)
-      const next = remaining[0]?.id ?? null
-      if (next) {
-        setActiveWorkspace(next)
-        setActiveWorkspaceId(next)
-      }
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [activeWorkspaceId, workspaces])
 
   // When the active session changes, load its messages.
   useEffect(() => {
@@ -374,7 +293,7 @@ export default function App() {
         setError((e as Error).message)
       }
     },
-    [],
+    [pickDefaultAgent],
   )
 
   const updateAgent = useCallback(async (id: string, patch: AgentPatch) => {
@@ -421,279 +340,21 @@ export default function App() {
     }
   }, [])
 
-  const sendMessage = useCallback(
-    async (text: string) => {
-      if (!activeSessionId) return
-      setError(null)
-      const sid = activeSessionId
-
-      // Resolve "@mentions" → ordered agentIds. No mention → the session's
-      // default agent answers; multiple → each answers in order.
-      const mentioned: string[] = []
-      const norm = (v: string) => v.toLowerCase().replace(/\s+/g, '')
-      const re = /(?:^|\s)@([^\s@]+)/g
-      let mm: RegExpExecArray | null
-      while ((mm = re.exec(text)) !== null) {
-        const q = norm(mm[1])
-        const a =
-          agents.find((ag) => norm(ag.name) === q) ??
-          agents.find((ag) => norm(ag.name).startsWith(q))
-        if (a && !mentioned.includes(a.id)) mentioned.push(a.id)
-      }
-      const sessAgent = sessions.find((s) => s.id === sid)?.agentId
-      const agentIds = mentioned.length ? mentioned : sessAgent ? [sessAgent] : []
-
-      const now = Math.floor(Date.now() / 1000)
-      const optimistic: Message = {
-        id: `tmp-${Date.now()}`,
-        sessionId: sid,
-        role: 'user',
-        text,
-        createdAt: now,
-      }
-      setMessages((prev) => [...prev, optimistic])
-      setPending(true)
-      const ac = new AbortController()
-      abortRef.current = ac
-      setStreaming(true)
-      setStreamingSessionId(sid)
-
-      // The live bubble for the agent currently answering (multi-agent turns
-      // produce several bubbles, one per agent, in order).
-      let liveId = ''
-      let liveSteps: TurnStep[] = []
-      try {
-        await api.chatStream(sid, text, agentIds, {
-          onMeta: (m) => {
-            runIdRef.current = m.runId
-            setMessages((prev) =>
-              prev.map((x) => (x.id === optimistic.id ? m.userMessage : x)),
-            )
-          },
-          onAgentStart: (a) => {
-            liveId = `live-${a.index}-${Date.now()}`
-            liveSteps = []
-            const bubble: Message = {
-              id: liveId,
-              sessionId: sid,
-              role: 'assistant',
-              agentId: a.agentId,
-              text: '',
-              steps: '[]',
-              createdAt: Math.floor(Date.now() / 1000),
-            }
-            setMessages((prev) => [...prev, bubble])
-            setPending(false)
-          },
-          onStep: (st) => {
-            const id = liveId
-            // Interactive prompt: the agent paused on ask_user. Surface the
-            // question (transient — not added to the persisted trace); the user's
-            // answer resumes the turn over the same stream.
-            if (st.kind === 'ask') {
-              setPendingAsk({ question: st.text || '', options: st.options })
-              return
-            }
-            // Streaming providers emit incremental "delta" steps: append the
-            // chunk to the live bubble's text instead of the activity trace.
-            if (st.kind === 'delta') {
-              const chunk = st.text || ''
-              setMessages((prev) =>
-                prev.map((x) => (x.id === id ? { ...x, text: x.text + chunk } : x)),
-              )
-              return
-            }
-            // Tombstone: retract a previously emitted live step by id.
-            if (st.kind === 'tombstone') {
-              liveSteps = liveSteps.filter((s) => s.id !== st.ref)
-            } else if (st.kind === 'thinking' && st.id) {
-              // Merge streamed reasoning chunks into one growing thinking block.
-              const idx = liveSteps.findIndex((s) => s.kind === 'thinking' && s.id === st.id)
-              if (idx >= 0) {
-                const merged = { ...liveSteps[idx], text: (liveSteps[idx].text || '') + (st.text || '') }
-                liveSteps = liveSteps.map((s, k) => (k === idx ? merged : s))
-              } else {
-                liveSteps = [...liveSteps, st]
-              }
-            } else if (st.kind === 'tool_delta' && st.id) {
-              // Merge streaming tool output into the existing chunk of the same id.
-              const idx = liveSteps.findIndex((s) => s.kind === 'tool_delta' && s.id === st.id)
-              if (idx >= 0) {
-                const merged = { ...liveSteps[idx], output: (liveSteps[idx].output || '') + (st.output || '') }
-                liveSteps = liveSteps.map((s, k) => (k === idx ? merged : s))
-              } else {
-                liveSteps = [...liveSteps, st]
-              }
-            } else {
-              liveSteps = [...liveSteps, st]
-            }
-            const json = JSON.stringify(liveSteps)
-            setMessages((prev) =>
-              prev.map((x) => (x.id === id ? { ...x, steps: json } : x)),
-            )
-          },
-          onReply: (r) => {
-            const id = liveId
-            setPendingAsk(null)
-            setMessages((prev) => prev.map((x) => (x.id === id ? r.replyMessage : x)))
-            // Clicking the notification jumps to the source chat session.
-            notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', r.replyMessage.text, () => {
-              setView('chat')
-              selectSession(sid)
-            })
-          },
-          onDone: (d) => {
-            void d
-            setMeterRefresh((n) => n + 1)
-            // The active session got an agent reply (marked unread on the
-            // backend); the user is viewing it, so clear that, then reload the
-            // list to refresh order/times/counts.
-            api.markSessionRead(sid).catch(() => {}).finally(refreshSessions)
-          },
-          onError: (err) => {
-            setError(err)
-            setPendingAsk(null)
-            setMessages((prev) =>
-              prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
-            )
-            // Clicking the notification jumps to the logs view to inspect it.
-            notify(notifyEnabled.current, 'SwarmGo — hata', err, () => setView('logs'))
-          },
-        }, ac.signal, thinkingLevel)
-      } catch (e) {
-        // A deliberate stop/interrupt aborts the fetch: keep the partial reply
-        // bubble visible and don't surface it as an error.
-        if (!ac.signal.aborted) {
-          const msg = (e as Error).message
-          setError(msg)
-          setMessages((prev) =>
-            prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
-          )
-          notify(notifyEnabled.current, 'SwarmGo — hata', msg, () => setView('logs'))
-        }
-      } finally {
-        setPending(false)
-        setStreaming(false)
-        setStreamingSessionId('')
-        if (abortRef.current === ac) abortRef.current = null
-      }
-    },
-    [activeSessionId, agents, sessions, thinkingLevel],
-  )
-
-  // After a streaming turn ends, flush a message queued during it.
-  useEffect(() => {
-    if (!streaming && queuedRef.current) {
-      const q = queuedRef.current
-      queuedRef.current = ''
-      void sendMessage(q)
-    }
-  }, [streaming, sendMessage])
-
-  // ---- streaming-turn interventions ----
-
-  // Stop: cancel the in-flight turn. The turn is detached from the SSE
-  // connection server-side, so aborting the fetch alone no longer stops
-  // generation — send an explicit "stop" control, then close the stream.
-  const stopTurn = useCallback(() => {
-    if (runIdRef.current) api.chatControl(runIdRef.current, 'stop', '').catch(() => {})
-    abortRef.current?.abort()
-    setStreaming(false)
-    setStreamingSessionId('')
-    setPendingAsk(null)
-  }, [])
-
-  // Answer: deliver the user's reply to a turn paused on ask_user, resuming it.
-  const answerAsk = useCallback((text: string) => {
-    setPendingAsk(null)
-    if (runIdRef.current) {
-      api.chatControl(runIdRef.current, 'answer', text).catch((e) =>
-        setError((e as Error).message),
-      )
-    }
-  }, [])
-
-  // Interrupt: stop the current turn and immediately send a new message.
-  const interruptTurn = useCallback(
-    (text: string) => {
-      // Explicitly cancel the detached server-side turn (a fetch abort alone no
-      // longer stops it), then start the next message once the abort settles.
-      if (runIdRef.current) api.chatControl(runIdRef.current, 'stop', '').catch(() => {})
-      abortRef.current?.abort()
-      setTimeout(() => void sendMessage(text), 0)
-    },
-    [sendMessage],
-  )
-
-  // Queue: hold a message to auto-send when the current turn finishes.
-  const queueMessage = useCallback((text: string) => {
-    queuedRef.current = text
-  }, [])
-
-  // Steer: deliver live guidance to the running turn (tool loop folds it in).
-  const steerTurn = useCallback((text: string) => {
-    if (runIdRef.current) {
-      api.chatControl(runIdRef.current, 'steer', text).catch((e) => setError((e as Error).message))
-    }
-  }, [])
-
-  // Run a "/" summary command: ask the backend to summarize memory/board/flows
-  // or list tools, then append the resulting assistant message to the chat. A
-  // transient placeholder is shown while the (cheap-model) summary is generated.
-  const summarize = useCallback(
-    (kind: 'memory' | 'board' | 'flows' | 'tools') => {
-      const sid = activeSessionId
-      if (!sid) return
-      const now = Math.floor(Date.now() / 1000)
-      const userTmp = `cmd-u-${Date.now()}`
-      const botTmp = `cmd-a-${Date.now()}`
-      // Show the command itself as a user bubble (command style) plus a streaming
-      // placeholder for the result; both are replaced by the persisted messages.
-      const cmdBubble: Message = { id: userTmp, sessionId: sid, role: 'user', text: '/' + kind, createdAt: now }
-      const placeholder: Message = {
-        id: botTmp,
-        sessionId: sid,
-        role: 'assistant',
-        agentId: activeAgentId ?? undefined,
-        text: '⏳ Özetleniyor…',
-        steps: '[]',
-        createdAt: now,
-      }
-      setMessages((prev) => [...prev, cmdBubble, placeholder])
-      api
-        .summarizeSession(sid, kind)
-        .then(({ userMessage, replyMessage }) =>
-          setMessages((prev) =>
-            prev.map((m) => (m.id === userTmp ? userMessage : m.id === botTmp ? replyMessage : m)),
-          ),
-        )
-        .catch((e) => {
-          setMessages((prev) => prev.filter((m) => m.id !== userTmp && m.id !== botTmp))
-          setError((e as Error).message)
-        })
-    },
-    [activeSessionId, activeAgentId],
-  )
-
-  // Slash commands available in the chat composer ("/" menu). These trigger an
-  // agent action in-place rather than navigating — navigation lives in the rail.
-  const chatCommands = useMemo<SlashCommand[]>(
-    () => [
-      {
-        name: 'reflect',
-        icon: '✦',
-        description: 'Ajana yansıma (dream cycle) ürettir',
-        run: () => {
-          if (activeAgentId) api.reflect(activeAgentId).catch((e) => setError((e as Error).message))
-        },
-      },
-      { name: 'memory', icon: '⛁', description: 'Hafıza kayıtlarını özetle', run: () => summarize('memory') },
-      { name: 'tools', icon: '🔌', description: 'Kullanılabilir araçları listele', run: () => summarize('tools') },
-      { name: 'board', icon: '🗂', description: 'Görev panosunu özetle', run: () => summarize('board') },
-      { name: 'flows', icon: '🔀', description: 'Akışları özetle', run: () => summarize('flows') },
-    ],
-    [activeAgentId, summarize],
-  )
+  // Chat-turn streaming machinery (send loop, interventions, slash commands).
+  const chat = useChatStream({
+    agents,
+    sessions,
+    activeSessionId,
+    activeAgentId,
+    activeSessionIdRef,
+    notifyEnabled,
+    setMessages,
+    setError,
+    setView,
+    selectSession,
+    refreshSessions,
+    bumpMeter,
+  })
 
   return (
     <div className="flex h-full">
@@ -715,7 +376,7 @@ export default function App() {
           sessions={sessions}
           agents={agents}
           activeSessionId={activeSessionId}
-          streamingSessionId={streaming ? streamingSessionId : null}
+          streamingSessionIds={chat.streamingSessions}
           newDisabled={agents.length === 0}
           onSelectSession={selectSession}
           onNewSession={newSession}
@@ -782,27 +443,26 @@ export default function App() {
           <>
             <MessageList
               messages={messages}
-              pending={pending}
+              pending={chat.activePending}
               agents={agents}
-              streaming={streaming && streamingSessionId === activeSessionId}
+              streaming={chat.activeStreaming}
               onOpenFile={openFile}
               onOpenArtifact={openArtifact}
             />
-            {pendingAsk && streamingSessionId === activeSessionId && (
-              <AskPrompt ask={pendingAsk} onAnswer={answerAsk} />
-            )}
+            {chat.activeAsk && <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />}
+            <PendingTray items={chat.activeQueued} onRemove={chat.removePending} />
             <Composer
               disabled={!activeSessionId}
-              streaming={streaming && streamingSessionId === activeSessionId}
-              onSend={sendMessage}
-              onStop={stopTurn}
-              onInterrupt={interruptTurn}
-              onQueue={queueMessage}
-              onSteer={steerTurn}
-              thinkingLevel={thinkingLevel}
-              onThinkingLevelChange={setThinkingLevelPersist}
+              streaming={chat.activeStreaming}
+              onSend={chat.sendMessage}
+              onStop={chat.stopTurn}
+              onInterrupt={chat.interruptTurn}
+              onQueue={chat.queueMessage}
+              onSteer={chat.steerTurn}
+              thinkingLevel={chat.thinkingLevel}
+              onThinkingLevelChange={chat.setThinkingLevel}
               agents={agents}
-              commands={chatCommands}
+              commands={chat.chatCommands}
             />
           </>
         )}
@@ -842,9 +502,9 @@ export default function App() {
           <SettingsPanel
             onError={setError}
             onSaved={applyClientPrefs}
-            onWorkspaceChanged={() => api.listWorkspaces().then(setWorkspaces).catch(() => {})}
+            onWorkspaceChanged={refreshWorkspaces}
             onDeleteWorkspace={deleteActiveWorkspace}
-            commands={chatCommands}
+            commands={chat.chatCommands}
           />
         )}
       </main>
@@ -858,7 +518,7 @@ export default function App() {
           onCopyPath={copySessionPath}
           onRevealFolder={revealSession}
           onGenerateTitle={regenerateSessionTitle}
-          onSummarize={(_, kind) => summarize(kind as 'memory' | 'board' | 'flows' | 'tools')}
+          onSummarize={(_, kind) => chat.summarize(kind as 'memory' | 'board' | 'flows' | 'tools')}
           onDeleteSession={deleteSession}
         />
       )}
