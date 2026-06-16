@@ -42,6 +42,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('chat')
   const [meterRefresh, setMeterRefresh] = useState(0)
+  // Default agent for NEW sessions (chosen from the roster). Persisted so it
+  // survives reloads; unmentioned turns in a session use the session's own agent.
+  const [defaultAgentId, setDefaultAgentId] = useState<string | null>(
+    () => localStorage.getItem('swarmgo.defaultAgentId'),
+  )
   // Desktop-notification preference, read live in sendMessage without re-binding.
   const notifyEnabled = useRef(false)
 
@@ -75,7 +80,8 @@ export default function App() {
       .catch((e) => setError(e.message))
   }, [])
 
-  // Load agents whenever the active workspace changes (full reset).
+  // Load agents + ALL sessions whenever the active workspace changes (the chat
+  // is session-based: sessions are listed flat, not nested under an agent).
   useEffect(() => {
     if (!activeWorkspaceId) return
     setAgents([])
@@ -84,7 +90,24 @@ export default function App() {
     setActiveAgentId(null)
     setActiveSessionId(null)
     api.listAgents().then(setAgents).catch((e) => setError(e.message))
+    api
+      .listSessions()
+      .then((s) => {
+        setSessions(s)
+        setActiveSessionId(s.length > 0 ? s[0].id : null)
+        setActiveAgentId(s.length > 0 ? s[0].agentId : null)
+      })
+      .catch((e) => setError(e.message))
   }, [activeWorkspaceId])
+
+  // Keep the default agent (for new sessions) valid: fall back to the first
+  // agent when unset or pointing at a removed agent.
+  useEffect(() => {
+    if (agents.length === 0) return
+    if (!defaultAgentId || !agents.some((a) => a.id === defaultAgentId)) {
+      setDefaultAgentId(agents[0].id)
+    }
+  }, [agents, defaultAgentId])
 
   // Clicking a file path: open images inline (new tab via the file server),
   // copy other paths to the clipboard as a best-effort action.
@@ -132,15 +155,6 @@ export default function App() {
     }
   }, [activeWorkspaceId, workspaces])
 
-  // When the active agent changes, load its sessions.
-  useEffect(() => {
-    if (!activeAgentId) return
-    api.listSessions(activeAgentId).then((s) => {
-      setSessions(s)
-      setActiveSessionId(s.length > 0 ? s[0].id : null)
-    })
-  }, [activeAgentId])
-
   // When the active session changes, load its messages.
   useEffect(() => {
     if (!activeSessionId) {
@@ -150,12 +164,38 @@ export default function App() {
     api.listMessages(activeSessionId).then(setMessages)
   }, [activeSessionId])
 
+  // Select a session: also reflect its default agent (for the header/meters).
+  const selectSession = useCallback(
+    (id: string) => {
+      setActiveSessionId(id)
+      const sess = sessions.find((s) => s.id === id)
+      if (sess) setActiveAgentId(sess.agentId)
+    },
+    [sessions],
+  )
+
+  // Pick the default agent for NEW sessions (from the roster).
+  const pickDefaultAgent = useCallback((id: string) => {
+    setDefaultAgentId(id)
+    localStorage.setItem('swarmgo.defaultAgentId', id)
+  }, [])
+
+  // Roster click: set it as the default agent (for new chats) and as the active
+  // agent (so the Memory/Tools panels, which are agent-scoped, follow along).
+  const pickAgent = useCallback(
+    (id: string) => {
+      setActiveAgentId(id)
+      pickDefaultAgent(id)
+    },
+    [pickDefaultAgent],
+  )
+
   const createAgent = useCallback(
     async (name: string, soul: string, provider: string, model?: string) => {
       try {
         const agent = await api.createAgent({ name, soul, provider, model })
         setAgents((prev) => [agent, ...prev])
-        setActiveAgentId(agent.id)
+        pickDefaultAgent(agent.id)
       } catch (e) {
         setError((e as Error).message)
       }
@@ -169,12 +209,14 @@ export default function App() {
   }, [])
 
   const newSession = useCallback(async () => {
-    if (!activeAgentId) return
-    const s = await api.createSession(activeAgentId)
+    const aid = defaultAgentId ?? agents[0]?.id
+    if (!aid) return
+    const s = await api.createSession(aid)
     setSessions((prev) => [s, ...prev])
     setActiveSessionId(s.id)
+    setActiveAgentId(s.agentId)
     setMessages([])
-  }, [activeAgentId])
+  }, [defaultAgentId, agents])
 
   // Regenerate a session's title from its conversation on demand.
   const regenerateSessionTitle = useCallback(async (sessionId: string) => {
@@ -194,9 +236,24 @@ export default function App() {
       setError(null)
       const sid = activeSessionId
 
+      // Resolve "@mentions" → ordered agentIds. No mention → the session's
+      // default agent answers; multiple → each answers in order.
+      const mentioned: string[] = []
+      const norm = (v: string) => v.toLowerCase().replace(/\s+/g, '')
+      const re = /(?:^|\s)@([^\s@]+)/g
+      let mm: RegExpExecArray | null
+      while ((mm = re.exec(text)) !== null) {
+        const q = norm(mm[1])
+        const a =
+          agents.find((ag) => norm(ag.name) === q) ??
+          agents.find((ag) => norm(ag.name).startsWith(q))
+        if (a && !mentioned.includes(a.id)) mentioned.push(a.id)
+      }
+      const sessAgent = sessions.find((s) => s.id === sid)?.agentId
+      const agentIds = mentioned.length ? mentioned : sessAgent ? [sessAgent] : []
+      const replyCount = agentIds.length || 1
+
       const now = Math.floor(Date.now() / 1000)
-      // Optimistic user bubble + a live assistant bubble whose steps grow as
-      // the SSE stream delivers them (step-by-step rendering).
       const optimistic: Message = {
         id: `tmp-${Date.now()}`,
         sessionId: sid,
@@ -204,66 +261,88 @@ export default function App() {
         text,
         createdAt: now,
       }
-      const liveId = `live-${Date.now()}`
-      const live: Message = {
-        id: liveId,
-        sessionId: sid,
-        role: 'assistant',
-        text: '',
-        steps: '[]',
-        createdAt: now,
-      }
-      setMessages((prev) => [...prev, optimistic, live])
+      setMessages((prev) => [...prev, optimistic])
       setPending(true)
 
+      // The live bubble for the agent currently answering (multi-agent turns
+      // produce several bubbles, one per agent, in order).
+      let liveId = ''
       let liveSteps: TurnStep[] = []
       try {
-        await api.chatStream(sid, text, {
+        await api.chatStream(sid, text, agentIds, {
           onMeta: (m) => {
             setMessages((prev) =>
               prev.map((x) => (x.id === optimistic.id ? m.userMessage : x)),
             )
           },
+          onAgentStart: (a) => {
+            liveId = `live-${a.index}-${Date.now()}`
+            liveSteps = []
+            const bubble: Message = {
+              id: liveId,
+              sessionId: sid,
+              role: 'assistant',
+              agentId: a.agentId,
+              text: '',
+              steps: '[]',
+              createdAt: Math.floor(Date.now() / 1000),
+            }
+            setMessages((prev) => [...prev, bubble])
+            setPending(false)
+          },
           onStep: (st) => {
+            const id = liveId
+            // Streaming providers emit incremental "delta" steps: append the
+            // chunk to the live bubble's text instead of the activity trace.
+            if (st.kind === 'delta') {
+              const chunk = st.text || ''
+              setMessages((prev) =>
+                prev.map((x) => (x.id === id ? { ...x, text: x.text + chunk } : x)),
+              )
+              return
+            }
             liveSteps = [...liveSteps, st]
             const json = JSON.stringify(liveSteps)
-            setPending(false)
             setMessages((prev) =>
-              prev.map((x) => (x.id === liveId ? { ...x, steps: json } : x)),
+              prev.map((x) => (x.id === id ? { ...x, steps: json } : x)),
             )
           },
+          onReply: (r) => {
+            const id = liveId
+            setMessages((prev) => prev.map((x) => (x.id === id ? r.replyMessage : x)))
+            notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', r.replyMessage.text)
+          },
           onDone: (d) => {
-            // Replace the live bubble with the canonical persisted reply.
-            setMessages((prev) =>
-              prev.map((x) => (x.id === liveId ? d.replyMessage : x)),
-            )
             setSessions((prev) =>
               prev.map((s) =>
                 s.id === sid
                   ? {
                       ...s,
-                      messageCount: s.messageCount + 2,
+                      messageCount: s.messageCount + 1 + replyCount,
                       title: d.sessionTitle || s.title,
                     }
                   : s,
               ),
             )
             setMeterRefresh((n) => n + 1)
-            notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', d.replyMessage.text)
           },
           onError: (err) => {
             setError(err)
-            setMessages((prev) => prev.filter((m) => m.id !== liveId && m.id !== optimistic.id))
+            setMessages((prev) =>
+              prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
+            )
           },
         })
       } catch (e) {
         setError((e as Error).message)
-        setMessages((prev) => prev.filter((m) => m.id !== liveId && m.id !== optimistic.id))
+        setMessages((prev) =>
+          prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
+        )
       } finally {
         setPending(false)
       }
     },
-    [activeSessionId],
+    [activeSessionId, agents, sessions],
   )
 
   // Slash commands available in the chat composer ("/" menu).
@@ -311,10 +390,10 @@ export default function App() {
         <Sidebar
           agents={agents}
           sessions={sessions}
-          activeAgentId={activeAgentId}
+          defaultAgentId={defaultAgentId}
           activeSessionId={activeSessionId}
-          onSelectAgent={setActiveAgentId}
-          onSelectSession={setActiveSessionId}
+          onSelectAgent={pickAgent}
+          onSelectSession={selectSession}
           onCreateAgent={createAgent}
           onUpdateAgent={updateAgent}
           onNewSession={newSession}
@@ -351,12 +430,16 @@ export default function App() {
 
         {view === 'chat' && (
           <>
-            <MessageList messages={messages} pending={pending} onOpenFile={openFile} />
+            <MessageList
+              messages={messages}
+              pending={pending}
+              agents={agents}
+              onOpenFile={openFile}
+            />
             <Composer
               disabled={!activeSessionId || pending}
               onSend={sendMessage}
               agents={agents}
-              onPickAgent={setActiveAgentId}
               commands={chatCommands}
             />
           </>

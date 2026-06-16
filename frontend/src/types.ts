@@ -16,6 +16,7 @@ export interface Agent {
   provider: string
   model: string
   planningMode: string
+  thinkingLevel?: string
   // Visual identity for the roster avatar. Both optional — when empty the UI
   // derives a deterministic circular look from the agent id.
   avatar?: string
@@ -35,6 +36,7 @@ export interface AgentPatch {
   provider?: string
   model?: string
   planningMode?: string
+  thinkingLevel?: string
   avatar?: string
   color?: string
 }
@@ -51,7 +53,8 @@ export interface Session {
 }
 
 // A single entry in an assistant turn's activity trace (mirrors agent.TurnStep).
-export type StepKind = 'text' | 'thinking' | 'tool'
+// 'delta' is a transient streaming text chunk (live UI only, never persisted).
+export type StepKind = 'text' | 'thinking' | 'tool' | 'delta'
 
 export interface TurnStep {
   kind: StepKind
@@ -74,6 +77,9 @@ export interface Message {
   id: string
   sessionId: string
   role: 'user' | 'assistant' | 'system' | 'tool'
+  // Which agent produced an assistant turn (empty for user/system). Multi-agent
+  // sessions tag each turn so the UI can show the responding agent's avatar.
+  agentId?: string
   text: string
   // JSON-encoded TurnStep[] as persisted by the backend (empty "[]" for plain
   // replies). Parsed lazily by the renderer.
@@ -340,6 +346,7 @@ export interface ProviderTestResult {
 export interface CatalogModel {
   id: string
   label: string
+  description?: string
 }
 
 export interface CatalogEntry {

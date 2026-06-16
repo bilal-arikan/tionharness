@@ -18,6 +18,10 @@ const (
 	StepThinking StepKind = "thinking"
 	// StepTool is a single tool invocation paired with its result.
 	StepTool StepKind = "tool"
+	// StepDelta is an incremental text chunk emitted while a streaming provider
+	// produces the final answer token-by-token. Delta steps are transient (live
+	// UI only) and are never persisted — the full text lands on the message.
+	StepDelta StepKind = "delta"
 )
 
 // TurnStep is one entry in an assistant turn's activity trace. The ordered list

@@ -6,7 +6,6 @@ interface Props {
   disabled: boolean
   onSend: (text: string) => void
   agents: Agent[]
-  onPickAgent: (id: string) => void
   commands: SlashCommand[]
 }
 
@@ -15,6 +14,11 @@ type Trigger =
   | { mode: 'agent'; query: string; from: number } // "@..." token start index
   | { mode: 'command'; query: string }
   | null
+
+// MenuItem is one row in the autocomplete menu: an agent mention or a slash
+// command. Both `agent` and `cmd` are optional so a single array type covers
+// both menu modes.
+type MenuItem = { key: string; label: string; sub?: string; agent?: Agent; cmd?: SlashCommand }
 
 function detectTrigger(value: string, caret: number): Trigger {
   const before = value.slice(0, caret)
@@ -33,24 +37,24 @@ function detectTrigger(value: string, caret: number): Trigger {
 // Composer is the chat input. Typing "@" opens an agent picker; typing "/" at
 // the start opens the slash-command palette. Arrow keys navigate, Enter/Tab
 // select, Esc closes.
-export function Composer({ disabled, onSend, agents, onPickAgent, commands }: Props) {
+export function Composer({ disabled, onSend, agents, commands }: Props) {
   const [text, setText] = useState('')
   const [trigger, setTrigger] = useState<Trigger>(null)
   const [sel, setSel] = useState(0)
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   // Items currently shown in the open menu (filtered by the trigger query).
-  const items = useMemo(() => {
-    if (!trigger) return [] as { key: string; label: string; sub?: string; agent?: Agent; cmd?: SlashCommand }[]
+  const items = useMemo<MenuItem[]>(() => {
+    if (!trigger) return []
     const q = trigger.query.toLowerCase()
     if (trigger.mode === 'agent') {
       return agents
         .filter((a) => a.name.toLowerCase().includes(q))
-        .map((a) => ({ key: a.id, label: a.name, sub: a.provider, agent: a }))
+        .map((a): MenuItem => ({ key: a.id, label: a.name, sub: a.provider, agent: a }))
     }
     return commands
       .filter((c) => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
-      .map((c) => ({ key: c.name, label: '/' + c.name, sub: c.description, cmd: c }))
+      .map((c): MenuItem => ({ key: c.name, label: '/' + c.name, sub: c.description, cmd: c }))
   }, [trigger, agents, commands])
 
   const updateTrigger = (value: string, caret: number) => {
@@ -70,11 +74,12 @@ export function Composer({ disabled, onSend, agents, onPickAgent, commands }: Pr
     const item = items[index]
     if (!item) return
     if (item.agent) {
-      onPickAgent(item.agent.id)
-      // Drop the "@query" token from the text, keep the rest.
+      // Insert a "@Name " mention at the trigger position — this turn routes to
+      // the mentioned agent(s) (parsed on send).
       if (trigger?.mode === 'agent') {
         const caret = taRef.current?.selectionStart ?? text.length
-        const next = text.slice(0, trigger.from) + text.slice(caret)
+        const mention = '@' + item.agent.name.replace(/\s+/g, '') + ' '
+        const next = text.slice(0, trigger.from) + mention + text.slice(caret)
         setText(next)
       }
     } else if (item.cmd) {

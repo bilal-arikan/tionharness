@@ -11,6 +11,21 @@ import (
 // forever calling tools.
 const maxToolIters = 8
 
+// thinkingBudgetForLevel maps an agent's ThinkingLevel to a provider thinking
+// token budget (0 = off). Providers without thinking support ignore it.
+func thinkingBudgetForLevel(level string) int {
+	switch level {
+	case "low":
+		return 2048
+	case "medium":
+		return 8192
+	case "high":
+		return 16384
+	default:
+		return 0
+	}
+}
+
 // CompleteWithTools runs a completion that may use tools. Behaviour depends on
 // the agent and provider:
 //
@@ -56,6 +71,24 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	}
 
 	if !agent.MCPEnabled {
+		// Extended reasoning is applied only on the plain (non-tool) path: the
+		// native tool loop would need to echo signed thinking blocks back, which
+		// the provider abstraction doesn't preserve. Providers without thinking
+		// support (claude-cli, minimax) ignore the budget.
+		req.ThinkingBudget = thinkingBudgetForLevel(agent.ThinkingLevel)
+
+		// Prefer first-class token streaming when a live sink is present and the
+		// provider supports it (anthropic/minimax). claude-cli is not a Streamer;
+		// it streams its own trace via req.OnEvent wired above.
+		if onStep != nil {
+			if sm, ok := provider.(providers.Streamer); ok {
+				resp, err := r.recordedStream(ctx, agent, sm, req, onStep)
+				if err != nil {
+					return nil, nil, err
+				}
+				return resp, nil, nil // deltas are transient; full text is on resp
+			}
+		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
 			return nil, nil, err
@@ -154,6 +187,20 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 // recordedComplete calls the provider once and records token usage.
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
 	resp, err := provider.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	r.RecordUsage(ctx, agent.ID, resp.Usage)
+	return resp, nil
+}
+
+// recordedStream streams a completion, forwarding each text delta as a live
+// StepDelta, and records usage. Deltas are transient (live UI only); the
+// returned Response carries the full text the caller persists as the message.
+func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm providers.Streamer, req providers.Request, onStep func(TurnStep)) (*providers.Response, error) {
+	resp, err := sm.Stream(ctx, req, func(delta string) {
+		onStep(TurnStep{Kind: StepDelta, Text: delta})
+	})
 	if err != nil {
 		return nil, err
 	}

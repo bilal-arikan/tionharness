@@ -9,7 +9,53 @@
 ## Mevcut Durum: FAZ 7 ORCHESTRATION TAMAMLANDI ✅ (CANLI TEST GEÇTİ) → Faz 9 (Wails)
 
 > Not: Faz 8 (MCP/Tools) kullanıcı talebiyle Faz 7'den önce yapıldı; ardından Faz 7 tamamlandı.
-> Kalan sıra: **Faz 9 Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
+> Kalan sıra: **SDK Paritesi P1/P3/P4 · Faz 9 Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
+
+### Faz P2 — Built-in dosya/shell araçları (SDK paritesi) ✅ (2026-06-16)
+
+Native (anthropic/minimax) tool-use yolundaki ajanlara **yerleşik dosya sistemi araçları** ve (opsiyonel, varsayılan kapalı) **shell** aracı eklendi. Tümü workspace'in `workspace/` alt dizinine **sandbox**'lanır (path-traversal koruması). Detaylı tasarım: [09-CLAUDE-AGENT-SDK.md](09-CLAUDE-AGENT-SDK.md) (Faz P2).
+
+- [x] **Sandbox** (`internal/tools/sandbox.go`): `Sandbox{Root}` + `Resolve` — mutlak yol reddi, `..` kaçış reddi, kök-altı doğrulaması; `Rel` (görüntüleme için).
+- [x] **FS araçları** (`internal/tools/builtin_fs.go`): `read_file` (256KB cap), `write_file` (dizin oluşturur), `edit_file` (tam string değişimi; tekil/`replace_all`), `list_dir` (dizinler önce), `glob` (`**`/`*`/`?` → RE2; 500 cap), `grep` (RE2 + opsiyonel glob filtre; ikili dosya atlama; 200 cap).
+- [x] **Shell aracı** (`internal/tools/builtin_shell.go`): Windows'ta `powershell.exe -NoProfile -NonInteractive`, diğerinde `/bin/sh -c`; cwd = sandbox kökü; timeout (varsayılan 30s, max 120s); çıktı 64KB cap. **Yüksek riskli → varsayılan kapalı**, `SWARMGO_ENABLE_SHELL=1` ile açılır (permission katmanı P3 gelene dek opt-in).
+- [x] **Wiring**: `Runtime.workDir` alanı (`NewRuntime` parametresi); `workspace.Manager.open` her workspace için `filepath.Join(dir,"workspace")` geçirir; `Tunables.shellEnabled` (+ `SetShellEnabled`/`ShellEnabled`); `main.go` env'den okur; `agent/toolsetup.go buildRegistry` sandbox hazırsa fs araçlarını, gate açıksa shell'i kaydeder.
+- [x] **Test** (`internal/tools/builtin_fs_test.go`): sandbox resolve (in-bounds/escape/absolute/not-ready), write→read→edit round-trip, non-unique edit reddi, list/glob/grep, glob-restricted grep, `globToRegexp` tablo testi.
+
+**CANLI TEST (build + unit + API):**
+- [x] `go build/vet ./...` + `go test ./...` tamamı temiz (yeni fs testleri dahil).
+- [x] API: ajan oluştur → `mcpEnabled=true` → `GET /api/agents/{id}/tools` kataloğu **10 araç** döndü (3 built-in + 6 fs + shell, `SWARMGO_ENABLE_SHELL=1` ile).
+- [x] Shell gate doğrulandı: env olmadan katalogda `shell` yok.
+
+> Mimari not: Bu araçlar **native** tool-use döngüsünde (`agent/toolloop.go`) çalışır. **claude-cli** yolu kendi döngüsünü `--mcp-config` ile sürdüğünden (ve kendi Read/Write/Bash araçları olduğundan) bu built-in'leri kullanmaz — SDK parite tasarımıyla bilinçli uyum. Gerçek LLM-tetikli yürütme anthropic/minimax anahtarı gerektirir.
+
+### Session-bazlı sohbet + çok-ajanlı `@` yönlendirme ✅ (2026-06-16)
+
+Sohbet ekranı **ajan-bazlıdan session-bazlıya** çevrildi; her oturumun bir **varsayılan
+ajanı** var ve `@` ile başka ajanlar aynı sohbete dahil edilebiliyor.
+
+- [x] **Backend:** `db.Message.AgentID` (turu üreten ajan). `chatReq.AgentIDs []string`;
+  `chat_stream.go` çoklu-ajan döngüsü (`resolveTurnAgents`, boş→oturum varsayılanı), her ajan
+  sırayla yanıtlar (sonrakiler öncekini görür); SSE `meta`→`agent {agentId,index}`→`step`*→`reply`→`done`;
+  her tur `Message.AgentID` ile kalıcı. `POST /api/sessions` `agentId` opsiyonel (boş→ilk ajan).
+- [x] **Frontend:** `App` tüm oturumları yükler; `Sidebar` düz **"Tüm Oturumlar"** + roster
+  "Ajanlar · varsayılan" seçici (avatarlı); `Composer` `@` menüsü metne `@Ad` mention ekler;
+  `sendMessage` mention'ları `agentIds[]`'e çözer + çoklu-ajan canlı balonları (`onAgentStart`/`onReply`);
+  `MessageList` mesaj başına ajan avatar+adı. `defaultAgentId` localStorage'da.
+- **CANLI TEST (API + Chrome):** `agentIds=[Reminder,StepTest]` → iki asistan mesajı sırayla,
+  biri Reminder biri StepTest etiketli (kalıcı); UI "Tüm Oturumlar" iki ajanın oturumlarını tek
+  listede avatarlarıyla, mesajlar 🤖 Reminder / ST StepTest başlıklarıyla; `@Rem`+Enter →
+  `@Reminder ` eklendi. `go build` + `tsc` temiz.
+
+### Detaylı model etiketleri + ajan thinking seviyesi ✅ (2026-06-16)
+
+- [x] **Detaylı model isimleri** (`internal/providers/catalog.go`): her modele açıklayıcı `Label` (ör. "Claude Opus 4.8 — en yetenekli") + `Description` (tek satır not). `ProviderModelSelect` seçili modelin açıklamasını dropdown altında ipucu olarak gösterir.
+- [x] **Thinking (uzatılmış akıl yürütme) seviyesi** — ajan başına: `db.Agent.ThinkingLevel` ("" / off / low / medium / high) + `AgentProfilePatch`/`UpdateAgent`; `createAgentReq`/`updateAgentReq` (`PUT/POST /api/agents`). `providers.Request.ThinkingBudget`; `anthropic.go` `thinkingFor` → `thinking:{type:enabled,budget_tokens}` + gereğinde `max_tokens` yükseltme (Complete + Stream). `agent/toolloop.go` `thinkingBudgetForLevel` (low=2048/medium=8192/high=16384) **yalnız `!MCPEnabled` (araçsız) dalında** enjekte edilir — native tool döngüsü imzalı thinking bloğu gerektirdiğinden tool turlarında kapalı. claude-cli/minimax param'ı yok sayar (yalnız anthropic etkili).
+- [x] Frontend: `Agent.thinkingLevel` + `AgentPatch`; `AgentSettingsModal`'da "Düşünme (thinking) seviyesi" dropdown'ı (Kapalı/Düşük/Orta/Yüksek) + "yalnız anthropic & araçsız" notu.
+
+**CANLI TEST (API):**
+- [x] `/api/catalog`: tüm modeller detaylı label + description ile döndü (Claude/MiniMax).
+- [x] Ajan create `thinkingLevel=high` → kalıcı; update `medium` → kalıcı.
+- [x] `go build/vet ./...` temiz. (Frontend tsc bu sırada paralel **Composer.tsx** WIP'i yüzünden kırıktı — benim dosyalarımda hata yok; gözcü yeşili bekliyor.)
 
 ### Model kataloğu + provider/model seçici + MiniMax sağlayıcı ✅ (2026-06-15)
 

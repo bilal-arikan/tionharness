@@ -30,11 +30,17 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
+	// agentId is the session's default agent. Optional: when omitted we fall
+	// back to the workspace's first (newest) agent so a session can be created
+	// session-first, then routed per-turn via "@mention".
 	if req.AgentID == "" {
-		writeError(w, http.StatusBadRequest, "agentId is required")
-		return
-	}
-	if _, err := ws(r).DB.GetAgent(r.Context(), req.AgentID); err != nil {
+		agents, _ := ws(r).DB.ListAgents(r.Context())
+		if len(agents) == 0 {
+			writeError(w, http.StatusBadRequest, "no agents exist; create an agent first")
+			return
+		}
+		req.AgentID = agents[0].ID
+	} else if _, err := ws(r).DB.GetAgent(r.Context(), req.AgentID); err != nil {
 		writeError(w, http.StatusBadRequest, "agent not found")
 		return
 	}

@@ -10,6 +10,9 @@ type Agent struct {
 	Model        string `json:"model"`
 	Capabilities string `json:"capabilities"` // JSON array
 	PlanningMode string `json:"planningMode"`
+	// ThinkingLevel requests extended reasoning: "" / "off" | "low" | "medium" |
+	// "high". Applied on plain (non-tool) completions; anthropic provider only.
+	ThinkingLevel string `json:"thinkingLevel"`
 
 	// Visual identity for the roster avatar. Avatar holds an optional emoji/glyph
 	// rendered inside the circle; Color is an optional hex accent (e.g. "#7c3aed").
@@ -54,9 +57,13 @@ type Session struct {
 
 // Message is a single turn within a session.
 type Message struct {
-	ID               string `json:"id"`
-	SessionID        string `json:"sessionId"`
-	Role             string `json:"role"` // system | user | assistant | tool
+	ID        string `json:"id"`
+	SessionID string `json:"sessionId"`
+	Role      string `json:"role"` // system | user | assistant | tool
+	// AgentID records which agent produced an assistant turn (empty for user/
+	// system). In a multi-agent session different turns may come from different
+	// agents (via "@mention" routing); the UI shows each turn's agent.
+	AgentID          string `json:"agentId"`
 	Text             string `json:"text"`
 	ToolCalls        string `json:"toolCalls"`
 	ReasoningContent string `json:"reasoningContent"`

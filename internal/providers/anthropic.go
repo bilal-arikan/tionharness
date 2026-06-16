@@ -59,6 +59,28 @@ type anthropicReq struct {
 	System    any                `json:"system,omitempty"` // string, or []systemBlock when caching
 	Messages  []anthropicMessage `json:"messages"`
 	Tools     []anthropicTool    `json:"tools,omitempty"`
+	Thinking  *thinkingParam     `json:"thinking,omitempty"`
+	Stream    bool               `json:"stream,omitempty"`
+}
+
+// thinkingParam enables extended reasoning. The model emits thinking blocks
+// (not shown by SwarmGo) before its answer; max_tokens must exceed budget.
+type thinkingParam struct {
+	Type         string `json:"type"` // "enabled"
+	BudgetTokens int    `json:"budget_tokens"`
+}
+
+// thinkingFor returns the thinking parameter (or nil) and the max_tokens to use:
+// when thinking is on, max_tokens must be strictly greater than the budget, so
+// it is bumped to leave room for the visible answer.
+func thinkingFor(budget, maxTokens int) (*thinkingParam, int) {
+	if budget <= 0 {
+		return nil, maxTokens
+	}
+	if maxTokens <= budget {
+		maxTokens = budget + defaultMaxTokens
+	}
+	return &thinkingParam{Type: "enabled", BudgetTokens: budget}, maxTokens
 }
 
 // systemBlock is the structured form of the system prompt, used when extended
@@ -137,6 +159,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	if maxTokens <= 0 {
 		maxTokens = defaultMaxTokens
 	}
+	thinking, maxTokens := thinkingFor(req.ThinkingBudget, maxTokens)
 
 	body := anthropicReq{
 		Model:     model,
@@ -144,6 +167,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		System:    a.systemField(req.System),
 		Messages:  toAnthropicMessages(req.Messages),
 		Tools:     toAnthropicTools(req.Tools),
+		Thinking:  thinking,
 	}
 
 	headers := map[string]string{
@@ -187,6 +211,109 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 			OutputTokens: parsed.Usage.OutputTokens,
 		},
 	}, nil
+}
+
+// Stream implements Streamer via the Messages API with "stream": true. It
+// parses the SSE event sequence (message_start → content_block_delta(text) →
+// message_delta → message_stop), forwarding each text chunk to onDelta and
+// accumulating the full text/usage/stop reason for the returned Response. Tools
+// are not used on the streaming path (text-only turns).
+func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(string)) (*Response, error) {
+	if a.apiKey == "" {
+		return nil, fmt.Errorf("anthropic: missing API key")
+	}
+	model := req.Model
+	if model == "" {
+		model = DefaultModel
+	}
+	maxTokens := req.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = defaultMaxTokens
+	}
+	thinking, maxTokens := thinkingFor(req.ThinkingBudget, maxTokens)
+
+	body := anthropicReq{
+		Model:     model,
+		MaxTokens: maxTokens,
+		System:    a.systemField(req.System),
+		Messages:  toAnthropicMessages(req.Messages),
+		Thinking:  thinking,
+		Stream:    true,
+	}
+	headers := map[string]string{
+		"x-api-key":         a.apiKey,
+		"anthropic-version": anthropicVersion,
+	}
+	if beta := a.betaHeader(); beta != "" {
+		headers["anthropic-beta"] = beta
+	}
+
+	var sb strings.Builder
+	out := &Response{Model: model, StopReason: StopEndTurn}
+	parseErr := error(nil)
+
+	err := postSSE(ctx, a.client, "anthropic", anthropicURL, headers, body, func(event string, data []byte) bool {
+		switch event {
+		case "message_start":
+			var ev struct {
+				Message struct {
+					Usage struct {
+						InputTokens int `json:"input_tokens"`
+					} `json:"usage"`
+				} `json:"message"`
+			}
+			if json.Unmarshal(data, &ev) == nil {
+				out.Usage.InputTokens = ev.Message.Usage.InputTokens
+			}
+		case "content_block_delta":
+			var ev struct {
+				Delta struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"delta"`
+			}
+			if json.Unmarshal(data, &ev) == nil && ev.Delta.Type == "text_delta" && ev.Delta.Text != "" {
+				sb.WriteString(ev.Delta.Text)
+				onDelta(ev.Delta.Text)
+			}
+		case "message_delta":
+			var ev struct {
+				Delta struct {
+					StopReason string `json:"stop_reason"`
+				} `json:"delta"`
+				Usage struct {
+					OutputTokens int `json:"output_tokens"`
+				} `json:"usage"`
+			}
+			if json.Unmarshal(data, &ev) == nil {
+				if ev.Delta.StopReason != "" {
+					out.StopReason = ev.Delta.StopReason
+				}
+				out.Usage.OutputTokens = ev.Usage.OutputTokens
+			}
+		case "error":
+			var ev struct {
+				Error struct {
+					Type    string `json:"type"`
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			_ = json.Unmarshal(data, &ev)
+			parseErr = fmt.Errorf("anthropic stream error (%s): %s", ev.Error.Type, ev.Error.Message)
+			return false
+		case "message_stop":
+			return false
+		}
+		return true
+	})
+	if err != nil {
+		return nil, err
+	}
+	if parseErr != nil {
+		return nil, parseErr
+	}
+	out.Text = sb.String()
+	return out, nil
 }
 
 // betaHeader builds the comma-separated anthropic-beta header from the enabled

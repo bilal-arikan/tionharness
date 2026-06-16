@@ -40,6 +40,7 @@ export function ProviderModelSelect({ provider, model, onChange }: Props) {
   const models = entry?.models ?? []
   const inList = models.some((m) => m.id === model)
   const showCustom = custom || (!inList && model !== '' && !!entry)
+  const selectedDesc = models.find((m) => m.id === model)?.description
 
   const selectProvider = (p: string) => {
     const e = catalog.find((c) => c.id === p)
@@ -105,6 +106,9 @@ export function ProviderModelSelect({ provider, model, onChange }: Props) {
             ))}
             {(entry?.allowCustomModel ?? true) && <option value="__custom__">Özel…</option>}
           </select>
+        )}
+        {!showCustom && selectedDesc && (
+          <span className="block text-xs text-[var(--color-text-dim)]">{selectedDesc}</span>
         )}
       </label>
     </div>

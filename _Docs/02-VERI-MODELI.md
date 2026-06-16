@@ -64,6 +64,7 @@ erDiagram
     session_messages {
         text id PK
         text session_id FK
+        text agent_id FK
         text role
         text text
         text tool_calls
@@ -169,7 +170,7 @@ erDiagram
 |-------|-----------|
 | `agents` | Ajan tanımı: soul, kimlik, sağlayıcı, model, planlama modu; **heartbeat** ayarları; **günlük bütçe limitleri** (`daily_call_limit`/`daily_token_limit`); **araç ayarları** (`mcp_enabled`/`allowed_tools` allowlist) |
 | `sessions` | Oturum: ajan ilişkisi, başlık, mesaj sayısı, durum; **compaction** özeti (`summary` + `summary_msg_count`) |
-| `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`) |
+| `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`); **`agent_id`** = turu üreten ajan (çok-ajanlı oturumda mesaj başına ajan) |
 | `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — bütçe guardrail'i için |
 | `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar |
 | `schedules` | Cron zamanlama; bağlı görev (`task_id`) **veya** doğrudan `prompt`; sonraki/son çalışma + teslim durumu; etkin mi |

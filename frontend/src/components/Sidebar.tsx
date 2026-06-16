@@ -7,7 +7,8 @@ import { ProviderModelSelect } from './ProviderModelSelect'
 interface Props {
   agents: Agent[]
   sessions: Session[]
-  activeAgentId: string | null
+  /** Highlighted agent = the default for NEW sessions (roster picker). */
+  defaultAgentId: string | null
   activeSessionId: string | null
   onSelectAgent: (id: string) => void
   onSelectSession: (id: string) => void
@@ -22,7 +23,7 @@ interface Props {
 export function Sidebar({
   agents,
   sessions,
-  activeAgentId,
+  defaultAgentId,
   activeSessionId,
   onSelectAgent,
   onSelectSession,
@@ -102,10 +103,15 @@ export function Sidebar({
       style={{ width }}
       className="relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
     >
-      {/* Agents */}
+      {/* Agents — roster doubles as the "default agent for new chats" picker;
+          the highlighted agent is the default. Use "@" in the composer to bring
+          others into a turn. */}
       <div className="flex items-center justify-between px-4 pt-4 pb-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-          Ajanlar
+        <span
+          className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]"
+          title="Seçili ajan = yeni sohbetlerin varsayılanı. Sohbette @ ile başka ajanları da çağırabilirsin."
+        >
+          Ajanlar · varsayılan
         </span>
         <button
           onClick={() => setShowForm((v) => !v)}
@@ -153,7 +159,7 @@ export function Sidebar({
           <div
             key={a.id}
             className={`group mb-1 flex w-full items-center rounded-lg pr-1 text-sm transition ${
-              activeAgentId === a.id
+              defaultAgentId === a.id
                 ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
                 : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
             }`}
@@ -162,7 +168,7 @@ export function Sidebar({
               onClick={() => onSelectAgent(a.id)}
               className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
             >
-              <AgentAvatar agent={a} size={32} active={activeAgentId === a.id} />
+              <AgentAvatar agent={a} size={32} active={defaultAgentId === a.id} />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate font-medium">{a.name}</span>
                 <span className="truncate text-xs opacity-70">{a.provider}</span>
@@ -184,49 +190,58 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Sessions */}
+      {/* Sessions — flat list across all agents; each row shows its default
+          agent's avatar. */}
       <div className="flex items-center justify-between px-4 pt-4 pb-1">
         <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-          Oturumlar
+          Tüm Oturumlar
         </span>
         <button
           onClick={onNewSession}
-          disabled={!activeAgentId}
+          disabled={agents.length === 0}
           className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-30"
-          title="Yeni oturum"
+          title="Yeni oturum (varsayılan ajanla)"
         >
           +
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2">
-        {sessions.map((s) => (
-          <div
-            key={s.id}
-            className={`group mb-1 flex w-full items-center rounded-lg pr-2 text-sm transition ${
-              activeSessionId === s.id
-                ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-                : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
-            }`}
-          >
-            <button
-              onClick={() => onSelectSession(s.id)}
-              className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-left"
+        {sessions.map((s) => {
+          const owner = agents.find((a) => a.id === s.agentId)
+          return (
+            <div
+              key={s.id}
+              className={`group mb-1 flex w-full items-center rounded-lg pr-2 text-sm transition ${
+                activeSessionId === s.id
+                  ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+              }`}
             >
-              <span className="truncate">{s.title || 'Yeni sohbet'}</span>
-              <span className="ml-2 text-xs opacity-60">{s.messageCount}</span>
-            </button>
-            <button
-              onClick={() => regenerate(s.id)}
-              disabled={retitling === s.id || s.messageCount === 0}
-              title="Başlığı yeniden oluştur"
-              className="ml-1 shrink-0 text-xs text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100 disabled:opacity-20"
-            >
-              {retitling === s.id ? '…' : '⟳'}
-            </button>
-          </div>
-        ))}
-        {activeAgentId && sessions.length === 0 && (
+              <button
+                onClick={() => onSelectSession(s.id)}
+                className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+              >
+                {owner ? (
+                  <AgentAvatar agent={owner} size={20} />
+                ) : (
+                  <span className="h-5 w-5 shrink-0" />
+                )}
+                <span className="min-w-0 flex-1 truncate">{s.title || 'Yeni sohbet'}</span>
+                <span className="ml-1 text-xs opacity-60">{s.messageCount}</span>
+              </button>
+              <button
+                onClick={() => regenerate(s.id)}
+                disabled={retitling === s.id || s.messageCount === 0}
+                title="Başlığı yeniden oluştur"
+                className="ml-1 shrink-0 text-xs text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100 disabled:opacity-20"
+              >
+                {retitling === s.id ? '…' : '⟳'}
+              </button>
+            </div>
+          )
+        })}
+        {sessions.length === 0 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
             Oturum yok. + ile başlat.
           </p>

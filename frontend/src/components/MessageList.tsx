@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react'
-import type { Message } from '../types'
+import type { Agent, Message } from '../types'
 import { Markdown } from './markdown/Markdown'
 import { TurnSteps, parseSteps } from './chat/TurnSteps'
 import { ThinkingBlock } from './chat/ThinkingBlock'
+import { AgentAvatar } from './AgentAvatar'
 
 interface Props {
   messages: Message[]
   pending: boolean
+  agents: Agent[]
   onOpenFile?: (path: string) => void
 }
 
@@ -21,8 +23,9 @@ function WorkingDots() {
   )
 }
 
-export function MessageList({ messages, pending, onOpenFile }: Props) {
+export function MessageList({ messages, pending, agents, onOpenFile }: Props) {
   const endRef = useRef<HTMLDivElement>(null)
+  const agentById = (id?: string) => (id ? agents.find((a) => a.id === id) : undefined)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -44,10 +47,18 @@ export function MessageList({ messages, pending, onOpenFile }: Props) {
               </div>
             </div>
           ) : (
-            // Assistant turn: activity trace (thinking + tools) above the final
-            // markdown answer — the External Agent chat layout.
+            // Assistant turn: who answered (avatar+name) + activity trace above
+            // the final markdown answer — the External Agent chat layout.
             <div key={m.id} className="flex w-full justify-start">
               <div className="w-full min-w-0 rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-[var(--color-text)]">
+                {agentById(m.agentId) && (
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <AgentAvatar agent={agentById(m.agentId)!} size={20} />
+                    <span className="text-xs font-medium text-[var(--color-text-dim)]">
+                      {agentById(m.agentId)!.name}
+                    </span>
+                  </div>
+                )}
                 {m.reasoningContent && <ThinkingBlock text={m.reasoningContent} />}
                 <TurnSteps steps={parseSteps(m.steps)} onOpenFile={onOpenFile} />
                 {m.text.trim() && <Markdown onOpenFile={onOpenFile}>{m.text}</Markdown>}

@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -44,9 +45,29 @@ type oaiMessage struct {
 }
 
 type oaiReq struct {
-	Model     string       `json:"model"`
-	Messages  []oaiMessage `json:"messages"`
-	MaxTokens int          `json:"max_tokens,omitempty"`
+	Model         string         `json:"model"`
+	Messages      []oaiMessage   `json:"messages"`
+	MaxTokens     int            `json:"max_tokens,omitempty"`
+	Stream        bool           `json:"stream,omitempty"`
+	StreamOptions *oaiStreamOpts `json:"stream_options,omitempty"`
+}
+
+type oaiStreamOpts struct {
+	IncludeUsage bool `json:"include_usage"`
+}
+
+// oaiStreamChunk is one SSE chunk of an OpenAI-compatible streaming response.
+type oaiStreamChunk struct {
+	Choices []struct {
+		Delta struct {
+			Content string `json:"content"`
+		} `json:"delta"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+	} `json:"usage"`
 }
 
 type oaiResp struct {
@@ -86,17 +107,7 @@ func (m *Minimax) Complete(ctx context.Context, req Request) (*Response, error) 
 		model = minimaxDefaultModel
 	}
 
-	msgs := make([]oaiMessage, 0, len(req.Messages)+1)
-	if strings.TrimSpace(req.System) != "" {
-		msgs = append(msgs, oaiMessage{Role: "system", Content: req.System})
-	}
-	for _, mm := range req.Messages {
-		if mm.Role == RoleSystem || mm.Text == "" {
-			continue
-		}
-		msgs = append(msgs, oaiMessage{Role: mm.Role, Content: mm.Text})
-	}
-
+	msgs := toOAIMessages(req)
 	headers := map[string]string{"Authorization": "Bearer " + m.apiKey}
 
 	var parsed oaiResp
@@ -130,4 +141,72 @@ func (m *Minimax) Complete(ctx context.Context, req Request) (*Response, error) 
 			OutputTokens: parsed.Usage.CompletionTokens,
 		},
 	}, nil
+}
+
+// Stream implements Streamer via the OpenAI-compatible chat endpoint with
+// "stream": true. Each chunk's delta.content is forwarded to onDelta; the final
+// usage-only chunk (requested via stream_options) populates the Response usage.
+func (m *Minimax) Stream(ctx context.Context, req Request, onDelta func(string)) (*Response, error) {
+	if m.apiKey == "" {
+		return nil, fmt.Errorf("minimax: missing API key")
+	}
+	model := req.Model
+	if model == "" {
+		model = minimaxDefaultModel
+	}
+
+	body := oaiReq{
+		Model:         model,
+		Messages:      toOAIMessages(req),
+		MaxTokens:     req.MaxTokens,
+		Stream:        true,
+		StreamOptions: &oaiStreamOpts{IncludeUsage: true},
+	}
+	headers := map[string]string{"Authorization": "Bearer " + m.apiKey}
+
+	var sb strings.Builder
+	out := &Response{Model: model, StopReason: StopEndTurn}
+
+	err := postSSE(ctx, m.client, "minimax", m.baseURL+"/chat/completions", headers, body, func(_ string, data []byte) bool {
+		if string(data) == "[DONE]" {
+			return false
+		}
+		var ch oaiStreamChunk
+		if json.Unmarshal(data, &ch) != nil {
+			return true // skip an unparseable chunk rather than abort
+		}
+		if len(ch.Choices) > 0 {
+			if c := ch.Choices[0].Delta.Content; c != "" {
+				sb.WriteString(c)
+				onDelta(c)
+			}
+		}
+		if ch.Usage != nil {
+			out.Usage.InputTokens = ch.Usage.PromptTokens
+			out.Usage.OutputTokens = ch.Usage.CompletionTokens
+		}
+		return true
+	})
+	if err != nil {
+		return nil, err
+	}
+	out.Text = sb.String()
+	return out, nil
+}
+
+// toOAIMessages converts a provider Request into OpenAI-style messages: the
+// system prompt becomes the leading system message; in-band system-role and
+// empty-text turns are dropped.
+func toOAIMessages(req Request) []oaiMessage {
+	msgs := make([]oaiMessage, 0, len(req.Messages)+1)
+	if strings.TrimSpace(req.System) != "" {
+		msgs = append(msgs, oaiMessage{Role: "system", Content: req.System})
+	}
+	for _, mm := range req.Messages {
+		if mm.Role == RoleSystem || mm.Text == "" {
+			continue
+		}
+		msgs = append(msgs, oaiMessage{Role: mm.Role, Content: mm.Text})
+	}
+	return msgs
 }

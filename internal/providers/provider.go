@@ -60,6 +60,9 @@ type Request struct {
 	Messages  []Message
 	MaxTokens int
 	Tools     []ToolDef
+	// ThinkingBudget, when > 0, requests extended reasoning with that many
+	// thinking tokens (providers that support it, e.g. anthropic). 0 = off.
+	ThinkingBudget int
 	// OnEvent, when set, is called by providers that run the loop internally
 	// (claude CLI) as each activity step (text/thinking/tool) becomes available,
 	// enabling step-by-step streaming to the UI. Ignored by non-streaming
@@ -107,4 +110,22 @@ type Provider interface {
 	Name() string
 	// Complete runs a non-streaming completion.
 	Complete(ctx context.Context, req Request) (*Response, error)
+}
+
+// Streamer is implemented by providers that can stream a completion's text
+// token-by-token. Complete stays the baseline every provider must satisfy;
+// Stream is a first-class optional capability the runtime prefers when a delta
+// sink is available and the turn uses no tools. onDelta is called with each
+// incremental text chunk (never the empty string) from the provider's
+// goroutine; the returned Response carries the full accumulated text, usage and
+// stop reason, exactly like Complete.
+type Streamer interface {
+	Stream(ctx context.Context, req Request, onDelta func(string)) (*Response, error)
+}
+
+// CanStream reports whether p supports incremental streaming (implements
+// Streamer). Lets callers branch without a type assertion at each call site.
+func CanStream(p Provider) bool {
+	_, ok := p.(Streamer)
+	return ok
 }

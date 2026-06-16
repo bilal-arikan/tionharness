@@ -83,11 +83,12 @@ type AgentProfilePatch struct {
 	Name         *string
 	Soul         *string
 	Identity     *string
-	Provider     *string
-	Model        *string
-	PlanningMode *string
-	Avatar       *string
-	Color        *string
+	Provider      *string
+	Model         *string
+	PlanningMode  *string
+	ThinkingLevel *string
+	Avatar        *string
+	Color         *string
 }
 
 // UpdateAgent applies a partial profile patch to an existing agent and persists
@@ -111,6 +112,9 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		}
 		if p.PlanningMode != nil {
 			a.PlanningMode = *p.PlanningMode
+		}
+		if p.ThinkingLevel != nil {
+			a.ThinkingLevel = *p.ThinkingLevel
 		}
 		if p.Avatar != nil {
 			a.Avatar = *p.Avatar

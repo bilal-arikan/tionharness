@@ -22,6 +22,7 @@ export function AgentSettingsModal({ agent, onClose, onSave }: Props) {
   const [provider, setProvider] = useState(agent.provider)
   const [model, setModel] = useState(agent.model ?? '')
   const [planningMode, setPlanningMode] = useState(agent.planningMode || 'standard')
+  const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel ?? '')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -50,6 +51,7 @@ export function AgentSettingsModal({ agent, onClose, onSave }: Props) {
         provider,
         model: model.trim(),
         planningMode,
+        thinkingLevel,
       })
       onClose()
     } catch (e) {
@@ -165,17 +167,34 @@ export function AgentSettingsModal({ agent, onClose, onSave }: Props) {
             }}
           />
 
-          {/* Planning mode */}
-          <Field label="Planlama modu">
-            <select
-              value={planningMode}
-              onChange={(e) => setPlanningMode(e.target.value)}
-              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-            >
-              <option value="standard">standard</option>
-              <option value="deep">deep</option>
-            </select>
-          </Field>
+          {/* Planning mode + thinking level */}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Planlama modu">
+              <select
+                value={planningMode}
+                onChange={(e) => setPlanningMode(e.target.value)}
+                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
+              >
+                <option value="standard">standard</option>
+                <option value="deep">deep</option>
+              </select>
+            </Field>
+            <Field label="Düşünme (thinking) seviyesi">
+              <select
+                value={thinkingLevel || 'off'}
+                onChange={(e) => setThinkingLevel(e.target.value === 'off' ? '' : e.target.value)}
+                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
+              >
+                <option value="off">Kapalı</option>
+                <option value="low">Düşük (~2K)</option>
+                <option value="medium">Orta (~8K)</option>
+                <option value="high">Yüksek (~16K)</option>
+              </select>
+            </Field>
+          </div>
+          <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
+            Uzatılmış akıl yürütme yalnız <strong>anthropic</strong> sağlayıcıda ve araçsız sohbette etkilidir.
+          </p>
 
           {/* Soul */}
           <Field label="Karakter / sistem promptu (soul)">

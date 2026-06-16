@@ -106,6 +106,19 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   - Klavye: ↑/↓ gezinme, Enter/Tab seçim, Esc kapat (menü açıkken Enter göndermez).
 - `SlashCommand` tipi `types.ts`'te (`name`/`description`/`icon`/`run`).
 
+### Session-bazlı + çok-ajanlı sohbet (`@` yönlendirme)
+- Sohbet **session-bazlı**: sol panel **"Tüm Oturumlar"** düz listesi (ajan altında
+  gruplama yok); her oturumun bir **varsayılan ajanı** (`Session.AgentID`) vardır ve
+  satırda o ajanın avatarı görünür. Roster "**Ajanlar · varsayılan**" = yeni sohbetlerin
+  varsayılan ajan seçicisi. `POST /api/sessions` `agentId` opsiyonel (boş → ilk ajan).
+- **`@` ile tur yönlendirme:** composer `@` menüsü metne `@Ad` mention'ı ekler.
+  `App.sendMessage` mention'ları ajanlara çözüp `agentIds[]` üretir (yoksa oturum
+  varsayılanı). `POST /api/chat/stream` `agentIds` alır.
+- **Çok-ajan (sıralı):** birden çok `@` → her ajan **sırayla** yanıtlar, sonrakiler
+  öncekilerin yanıtını görür. SSE: `meta` → (her ajan için) `agent {agentId,index}` →
+  `step`* → `reply {replyMessage}` → `done`. Her asistan turu `Message.AgentID` ile
+  kalıcılaşır; `MessageList` her turu **kendi ajanının avatar+adıyla** çizer.
+
 ### Yerleşim
 - Sohbet **tam genişlik** kullanır (`MessageList`/`Composer`'daki `max-w-3xl` kaldırıldı).
 - `Sidebar` (Ajanlar + Oturumlar) **sürüklenerek yeniden boyutlandırılır**: sağ kenardaki

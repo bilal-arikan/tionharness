@@ -21,11 +21,12 @@ type createAgentReq struct {
 	Name         string `json:"name"`
 	Soul         string `json:"soul"`
 	Identity     string `json:"identity"`
-	Provider     string `json:"provider"`
-	Model        string `json:"model"`
-	PlanningMode string `json:"planningMode"`
-	Avatar       string `json:"avatar"`
-	Color        string `json:"color"`
+	Provider      string `json:"provider"`
+	Model         string `json:"model"`
+	PlanningMode  string `json:"planningMode"`
+	ThinkingLevel string `json:"thinkingLevel"`
+	Avatar        string `json:"avatar"`
+	Color         string `json:"color"`
 }
 
 func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -63,9 +64,10 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		Name:         req.Name,
 		Soul:         req.Soul,
 		Identity:     req.Identity,
-		Provider:     req.Provider,
-		Model:        req.Model,
-		PlanningMode: req.PlanningMode,
+		Provider:      req.Provider,
+		Model:         req.Model,
+		PlanningMode:  req.PlanningMode,
+		ThinkingLevel: req.ThinkingLevel,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -96,11 +98,12 @@ type updateAgentReq struct {
 	Name         *string `json:"name"`
 	Soul         *string `json:"soul"`
 	Identity     *string `json:"identity"`
-	Provider     *string `json:"provider"`
-	Model        *string `json:"model"`
-	PlanningMode *string `json:"planningMode"`
-	Avatar       *string `json:"avatar"`
-	Color        *string `json:"color"`
+	Provider      *string `json:"provider"`
+	Model         *string `json:"model"`
+	PlanningMode  *string `json:"planningMode"`
+	ThinkingLevel *string `json:"thinkingLevel"`
+	Avatar        *string `json:"avatar"`
+	Color         *string `json:"color"`
 }
 
 func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
@@ -118,11 +121,12 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		Name:         req.Name,
 		Soul:         req.Soul,
 		Identity:     req.Identity,
-		Provider:     req.Provider,
-		Model:        req.Model,
-		PlanningMode: req.PlanningMode,
-		Avatar:       req.Avatar,
-		Color:        req.Color,
+		Provider:      req.Provider,
+		Model:         req.Model,
+		PlanningMode:  req.PlanningMode,
+		ThinkingLevel: req.ThinkingLevel,
+		Avatar:        req.Avatar,
+		Color:         req.Color,
 	})
 	if writeDBError(w, err, "agent not found") {
 		return

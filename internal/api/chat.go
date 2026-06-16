@@ -13,6 +13,10 @@ import (
 type chatReq struct {
 	SessionID string `json:"sessionId"`
 	Message   string `json:"message"`
+	// AgentIDs optionally routes this turn to one or more agents (via "@mention"
+	// in the UI). Empty → the session's default agent answers. Multiple → each
+	// answers in order, seeing the prior agents' replies.
+	AgentIDs []string `json:"agentIds"`
 }
 
 type chatResp struct {
@@ -136,6 +140,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	replyMsg, err := database.AddMessage(ctx, db.Message{
 		SessionID: session.ID,
 		Role:      providers.RoleAssistant,
+		AgentID:   agent.ID,
 		Text:      resp.Text,
 		Steps:     stepsJSON,
 	})

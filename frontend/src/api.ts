@@ -6,7 +6,6 @@ import type {
   Message,
   ChatResponse,
   TurnStep,
-  Usage,
   Workspace,
   Task,
   Run,
@@ -70,10 +69,13 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 async function streamChat(
   sessionId: string,
   message: string,
+  agentIds: string[],
   handlers: {
-    onMeta?: (m: { userMessage: Message; contextTokens: number }) => void
+    onMeta?: (m: { userMessage: Message }) => void
+    onAgentStart?: (a: { agentId: string; index: number }) => void
     onStep: (step: TurnStep) => void
-    onDone: (d: { replyMessage: Message; model: string; usage: Usage; sessionTitle?: string }) => void
+    onReply: (r: { replyMessage: Message }) => void
+    onDone: (d: { sessionTitle?: string }) => void
     onError: (err: string) => void
   },
   signal?: AbortSignal,
@@ -84,7 +86,7 @@ async function streamChat(
   const res = await fetch('/api/chat/stream', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ sessionId, message }),
+    body: JSON.stringify({ sessionId, message, agentIds }),
     signal,
   })
   if (!res.ok || !res.body) {
@@ -117,13 +119,19 @@ async function streamChat(
     }
     switch (event) {
       case 'meta':
-        handlers.onMeta?.(data as { userMessage: Message; contextTokens: number })
+        handlers.onMeta?.(data as { userMessage: Message })
+        break
+      case 'agent':
+        handlers.onAgentStart?.(data as { agentId: string; index: number })
         break
       case 'step':
         handlers.onStep(data as TurnStep)
         break
+      case 'reply':
+        handlers.onReply(data as { replyMessage: Message })
+        break
       case 'done':
-        handlers.onDone(data as { replyMessage: Message; model: string; usage: Usage; sessionTitle?: string })
+        handlers.onDone(data as { sessionTitle?: string })
         break
       case 'error':
         handlers.onError((data as { error: string }).error)
@@ -178,9 +186,12 @@ export const api = {
     }),
 
   // Sessions.
-  listSessions: (agentId: string) =>
-    req<Session[]>(`/api/sessions?agentId=${encodeURIComponent(agentId)}`),
-  createSession: (agentId: string, title = '') =>
+  // List sessions for an agent, or all sessions in the workspace when omitted.
+  listSessions: (agentId?: string) =>
+    req<Session[]>(
+      agentId ? `/api/sessions?agentId=${encodeURIComponent(agentId)}` : '/api/sessions',
+    ),
+  createSession: (agentId = '', title = '') =>
     req<Session>('/api/sessions', {
       method: 'POST',
       body: JSON.stringify({ agentId, title }),
@@ -205,19 +216,17 @@ export const api = {
   chatStream: (
     sessionId: string,
     message: string,
+    agentIds: string[],
     handlers: {
-      onMeta?: (m: { userMessage: Message; contextTokens: number }) => void
+      onMeta?: (m: { userMessage: Message }) => void
+      onAgentStart?: (a: { agentId: string; index: number }) => void
       onStep: (step: TurnStep) => void
-      onDone: (d: {
-        replyMessage: Message
-        model: string
-        usage: Usage
-        sessionTitle?: string
-      }) => void
+      onReply: (r: { replyMessage: Message }) => void
+      onDone: (d: { sessionTitle?: string }) => void
       onError: (err: string) => void
     },
     signal?: AbortSignal,
-  ): Promise<void> => streamChat(sessionId, message, handlers, signal),
+  ): Promise<void> => streamChat(sessionId, message, agentIds, handlers, signal),
 
   // Tasks (kanban board).
   listTasks: () => req<Task[]>('/api/tasks'),
