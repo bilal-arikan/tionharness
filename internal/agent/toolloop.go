@@ -132,9 +132,16 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 
 	var last *providers.Response
 	var steps []TurnStep
+	// fail records a turn-level error as an inline step before the loop returns.
+	fail := func(reason string, err error) {
+		st := TurnStep{Kind: StepError, Reason: reason, Text: err.Error(), IsError: true}
+		steps = append(steps, st)
+		emit(st)
+	}
 	for i := 0; i < maxToolIters; i++ {
 		if autonomous {
 			if err := r.ensureBudget(ctx, agent); err != nil {
+				fail("budget_exceeded", err)
 				return nil, steps, err
 			}
 		}
@@ -142,12 +149,13 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		// iteration into the conversation before the next model call.
 		for _, m := range drainSteer(ctx) {
 			req.Messages = append(req.Messages, providers.Message{Role: providers.RoleUser, Text: steerPrefix + m})
-			st := TurnStep{Kind: StepText, Text: "↪ Yönlendirme: " + m}
+			st := TurnStep{Kind: StepSteer, Text: m}
 			steps = append(steps, st)
 			emit(st)
 		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
+			fail("provider_error", err)
 			return nil, steps, err
 		}
 		last = resp

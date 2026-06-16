@@ -35,6 +35,21 @@ const (
 	// the tool-iteration cap). Reason carries a stable machine tag; Text is the
 	// human-readable explanation. Persisted so the trace explains itself.
 	StepRecovery StepKind = "recovery"
+	// StepError is a turn-level failure surfaced inline (provider error, budget
+	// exceeded, cancellation) — distinct from a tool's own error (StepTool with
+	// IsError). Reason carries the machine tag, Text the message.
+	StepError StepKind = "error"
+	// StepSteer is live user guidance folded into a running turn (the steer
+	// control). Text is the guidance. Rendered distinctly from model narration.
+	StepSteer StepKind = "steer"
+	// StepToolDelta is an incremental chunk of a long tool's output, streamed
+	// live while the tool runs. Transient (live UI only, never persisted); chunks
+	// sharing an ID belong to the same tool invocation and are concatenated.
+	StepToolDelta StepKind = "tool_delta"
+	// StepTombstone is a control signal (not rendered itself) telling the UI to
+	// remove a previously emitted live step: Ref names the target step's ID. Used
+	// to retract a stale/cancelled live step without resending the whole trace.
+	StepTombstone StepKind = "tombstone"
 )
 
 // TodoItem is one entry in a StepTodo checklist (mirrors the todo_write input).
@@ -61,9 +76,14 @@ type TurnStep struct {
 	Options []string `json:"options,omitempty"`
 	// Todos carries the checklist items for a StepTodo step.
 	Todos []TodoItem `json:"todos,omitempty"`
-	// Reason is the stable machine tag for a StepRecovery step (e.g.
-	// "max_tool_iterations").
+	// Reason is the stable machine tag for a StepRecovery/StepError step (e.g.
+	// "max_tool_iterations", "provider_error", "budget_exceeded").
 	Reason string `json:"reason,omitempty"`
+	// ID optionally identifies a live step so a later StepTombstone (or
+	// StepToolDelta chunk) can reference it.
+	ID string `json:"id,omitempty"`
+	// Ref is the target step ID a StepTombstone retracts.
+	Ref string `json:"ref,omitempty"`
 }
 
 // parseTodos extracts the checklist items from a todo_write tool call's input

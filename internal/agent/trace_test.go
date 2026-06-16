@@ -45,3 +45,28 @@ func TestEncodeStepsTodoRoundTrip(t *testing.T) {
 		t.Fatalf("recovery step lost in round-trip: %+v", back[1])
 	}
 }
+
+func TestEncodeStepsErrorSteerTombstoneRoundTrip(t *testing.T) {
+	steps := []TurnStep{
+		{Kind: StepError, Reason: "provider_error", Text: "boom", IsError: true},
+		{Kind: StepSteer, Text: "use TypeScript"},
+		{Kind: StepToolDelta, ID: "t1", Tool: "shell", Output: "chunk"},
+		{Kind: StepTombstone, Ref: "t1"},
+	}
+	var back []TurnStep
+	if err := json.Unmarshal([]byte(encodeSteps(steps)), &back); err != nil {
+		t.Fatalf("round-trip failed: %v", err)
+	}
+	if back[0].Kind != StepError || back[0].Reason != "provider_error" || !back[0].IsError {
+		t.Fatalf("error step lost: %+v", back[0])
+	}
+	if back[1].Kind != StepSteer || back[1].Text != "use TypeScript" {
+		t.Fatalf("steer step lost: %+v", back[1])
+	}
+	if back[2].Kind != StepToolDelta || back[2].ID != "t1" {
+		t.Fatalf("tool_delta step lost: %+v", back[2])
+	}
+	if back[3].Kind != StepTombstone || back[3].Ref != "t1" {
+		t.Fatalf("tombstone step lost: %+v", back[3])
+	}
+}

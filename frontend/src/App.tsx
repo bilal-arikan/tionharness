@@ -342,6 +342,23 @@ export default function App() {
     setAgents((prev) => prev.map((a) => (a.id === id ? updated : a)))
   }, [])
 
+  // Delete an agent (and its owned sessions); refresh the affected lists.
+  const deleteAgent = useCallback(async (id: string) => {
+    try {
+      await api.deleteAgent(id)
+      setAgents((prev) => prev.filter((a) => a.id !== id))
+      // The agent's sessions were removed server-side; reload the list and drop
+      // the active session if it belonged to the deleted agent.
+      try {
+        const fresh = await api.listSessions()
+        setSessions(fresh)
+        setActiveSessionId((cur) => (cur && fresh.some((s) => s.id === cur) ? cur : fresh[0]?.id ?? null))
+      } catch { /* ignore */ }
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }, [])
+
   const newSession = useCallback(async () => {
     const aid = defaultAgentId ?? agents[0]?.id
     if (!aid) return
@@ -445,7 +462,21 @@ export default function App() {
               )
               return
             }
-            liveSteps = [...liveSteps, st]
+            // Tombstone: retract a previously emitted live step by id.
+            if (st.kind === 'tombstone') {
+              liveSteps = liveSteps.filter((s) => s.id !== st.ref)
+            } else if (st.kind === 'tool_delta' && st.id) {
+              // Merge streaming tool output into the existing chunk of the same id.
+              const idx = liveSteps.findIndex((s) => s.kind === 'tool_delta' && s.id === st.id)
+              if (idx >= 0) {
+                const merged = { ...liveSteps[idx], output: (liveSteps[idx].output || '') + (st.output || '') }
+                liveSteps = liveSteps.map((s, k) => (k === idx ? merged : s))
+              } else {
+                liveSteps = [...liveSteps, st]
+              }
+            } else {
+              liveSteps = [...liveSteps, st]
+            }
             const json = JSON.stringify(liveSteps)
             setMessages((prev) =>
               prev.map((x) => (x.id === id ? { ...x, steps: json } : x)),
@@ -676,6 +707,7 @@ export default function App() {
             onSetDefault={pickAgent}
             onCreateAgent={createAgent}
             onUpdateAgent={updateAgent}
+            onDeleteAgent={deleteAgent}
           />
         )}
         {view === 'board' && <TaskBoard agents={agents} onError={setError} />}

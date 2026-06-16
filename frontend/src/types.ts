@@ -55,9 +55,10 @@ export interface Session {
 }
 
 // A single entry in an assistant turn's activity trace (mirrors agent.TurnStep).
-// 'delta' is a transient streaming text chunk (live UI only, never persisted).
-// 'ask' is a transient interactive prompt (the agent is blocked on ask_user).
-// 'todo' is the working checklist; 'recovery' marks a non-happy-path branch.
+// Transient (live-only): 'delta' (streaming text), 'ask' (interactive prompt),
+// 'tool_delta' (streaming tool output), 'tombstone' (retract a live step).
+// Persisted: text, thinking, tool, todo, recovery, error, steer.
+// See lib/stepKinds.ts for human-readable descriptions.
 export type StepKind =
   | 'text'
   | 'thinking'
@@ -66,6 +67,10 @@ export type StepKind =
   | 'ask'
   | 'todo'
   | 'recovery'
+  | 'error'
+  | 'steer'
+  | 'tool_delta'
+  | 'tombstone'
 
 export interface TodoItem {
   content: string
@@ -83,8 +88,12 @@ export interface TurnStep {
   options?: string[]
   // Checklist items for a 'todo' step.
   todos?: TodoItem[]
-  // Stable machine tag for a 'recovery' step (e.g. "max_tool_iterations").
+  // Stable machine tag for a 'recovery'/'error' step (e.g. "max_tool_iterations").
   reason?: string
+  // Optional id of a live step, referenced by a 'tombstone' or 'tool_delta'.
+  id?: string
+  // Target step id a 'tombstone' retracts.
+  ref?: string
 }
 
 // A slash command surfaced in the chat composer ("/" menu).

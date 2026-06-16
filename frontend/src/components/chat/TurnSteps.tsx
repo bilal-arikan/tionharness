@@ -4,6 +4,9 @@ import { ActivityCard } from './ActivityCard'
 import { TextStep } from './TextStep'
 import { TodoCard } from './TodoCard'
 import { RecoveryStep } from './RecoveryStep'
+import { ErrorStep } from './ErrorStep'
+import { SteerStep } from './SteerStep'
+import { ToolDeltaStep } from './ToolDeltaStep'
 import { ArtifactCard } from './ArtifactCard'
 
 interface Props {
@@ -27,6 +30,11 @@ export function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
         if (step.kind === 'thinking') return <ThinkingBlock key={i} text={step.text || ''} />
         if (step.kind === 'todo') return <TodoCard key={i} step={step} />
         if (step.kind === 'recovery') return <RecoveryStep key={i} step={step} />
+        if (step.kind === 'error') return <ErrorStep key={i} step={step} />
+        if (step.kind === 'steer') return <SteerStep key={i} step={step} />
+        if (step.kind === 'tool_delta') return <ToolDeltaStep key={i} step={step} />
+        // 'tombstone' is a control signal handled before render (App.onStep); skip.
+        if (step.kind === 'tombstone') return null
         if (step.kind === 'tool') {
           // Back-compat: traces persisted before 'todo' was a first-class kind
           // carry the checklist as a todo_write tool step.
