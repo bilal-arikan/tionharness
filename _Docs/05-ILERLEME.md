@@ -111,6 +111,16 @@ yanıt vermiyor) yakalayıp "Sunucuya bağlanılamadı…" döndürür. `chat.ts
 yardımcıyı kullanır. ✅ tsc + vite build temiz; saf eşleme node ile doğrulandı.
 (Canlı 502: çalışan backend'i durdurmamak için tetiklenmedi.)
 
+## Ara özellik — Zamanlama formu: ikonlu ajan seçici + zorunlu prompt (2026-06-17)
+
+**İstek:** "Ajan seçerken ikonunu da görelim, görev bağlama olmasın onun yerine doğrudan zorunlu prompt girelim."
+
+- **İkonlu ajan seçici:** Native `<select>` avatar render edemediğinden yeni **`frontend/src/components/agents/AgentPicker.tsx`** özel açılır listesi eklendi. Tetik butonu + her seçenek, ajanın `AgentAvatar` dairesini (özel emoji ya da baş harf, `lib/avatar.ts` deterministik renk) adıyla gösterir; dışarı-tıkla-kapat (`rootRef` + `mousedown`). `Schedules.tsx` hem oluştur hem düzenle formunda bunu kullanır.
+- **Görev bağlama kaldırıldı:** `taskId` select'i, `tasks` state'i ve `api.listTasks` çağrısı `Schedules.tsx`'ten silindi. **Prompt artık zorunlu** tek girdi (oluştur + düzenle doğrulaması "Prompt zorunlu"; eski "task veya prompt" mantığı gitti). Liste satırı her zaman `Prompt: …` gösterir.
+- **Backend dokunulmadı:** `POST/PUT /api/schedules` prompt-only'i zaten kabul ediyordu; `taskId` API alanları geriye-dönük uyumluluk için korundu (eski schedule'lar bozulmaz).
+
+✅ `tsc -b`/`vite build` yeşil. **Chrome canlı test** (`localhost:5173`): açılır listede 3 ajan renkli avatarlarıyla (Thinker/Reminder/StepTest) listelendi, Thinker seçilince trigger'da TH avatarı + ad gösterildi; formda görev alanı yok, prompt placeholder'ı "Prompt (zorunlu)".
+
 ## Ara özellik — Yeni workspace'te varsayılan deaktif zamanlama (2026-06-17)
 
 **İstek:** "Yeni workspace oluşturunca default olarak saatte 1 çalışan ama deaktif bir zamanlama ekleyebilir misin? 'yarıda kalan taskları bildirim göndersin'."
