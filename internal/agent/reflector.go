@@ -12,20 +12,40 @@ import (
 // reflectMaxJournals is how many recent journal entries feed one reflection.
 const reflectMaxJournals = 20
 
+// journalCap bounds how many journal entries an agent keeps. Each chat turn and
+// task run appends one, so without a ceiling the memory store (and the Hafıza
+// UI) grow without bound. Older journals beyond this cap are pruned on write;
+// durable knowledge (document/reflection) is never touched.
+const journalCap = 50
+
+// journalMaxLen caps a single journal entry's length so one huge turn cannot
+// bloat the store on its own.
+const journalMaxLen = 1024
+
 // reflectPrompt instructs the agent to consolidate its journal into a durable
 // self-reflection — the "dream cycle" that turns raw activity into learning.
 // The journal entries are appended by Reflect, so this template carries no
 // placeholder — keeping it safe for users to edit the workspace prompt file.
 const reflectPrompt = `Below are your most recent journal entries. Write a brief first-person reflection (3-5 sentences) capturing what you have been doing, any patterns, preferences, or facts worth remembering long-term. Be concise and concrete. Do not invent details.`
 
-// Journal records a memory of the given activity for an agent. Failures are
-// non-fatal to the caller's main flow and only logged.
+// Journal records a memory of the given activity for an agent. Content is capped
+// to journalMaxLen and old entries beyond journalCap are pruned, so the journal
+// behaves as a bounded ring buffer. Failures are non-fatal to the caller's main
+// flow and only logged.
 func (r *Runtime) Journal(ctx context.Context, agentID, content string) {
-	if strings.TrimSpace(content) == "" {
+	content = strings.TrimSpace(content)
+	if content == "" {
 		return
+	}
+	if n := []rune(content); len(n) > journalMaxLen {
+		content = string(n[:journalMaxLen]) + "…"
 	}
 	if _, err := r.mem.Remember(ctx, agentID, db.MemoryJournal, content); err != nil {
 		r.logger.Warn("journal failed", "agent", agentID, "error", err)
+		return
+	}
+	if _, err := r.mem.PruneKind(ctx, agentID, db.MemoryJournal, journalCap); err != nil {
+		r.logger.Warn("journal prune failed", "agent", agentID, "error", err)
 	}
 }
 
@@ -47,6 +67,10 @@ func (r *Runtime) Reflect(ctx context.Context, agentID string) (db.KnowledgeSour
 	}
 	if len(journals) > reflectMaxJournals {
 		journals = journals[:reflectMaxJournals]
+	}
+	consumed := make([]string, 0, len(journals))
+	for _, j := range journals {
+		consumed = append(consumed, j.ID)
 	}
 
 	var sb strings.Builder
@@ -76,6 +100,11 @@ func (r *Runtime) Reflect(ctx context.Context, agentID string) (db.KnowledgeSour
 	reflection, err := r.mem.Remember(ctx, agentID, db.MemoryReflection, resp.Text)
 	if err != nil {
 		return db.KnowledgeSource{}, err
+	}
+	// Dream cycle = compaction: the durable reflection now stands in for the raw
+	// journals it consolidated, so discard them to keep the store bounded.
+	if err := r.mem.DeleteIDs(ctx, consumed...); err != nil {
+		r.logger.Warn("journal consume failed", "agent", agentID, "error", err)
 	}
 	r.logger.Info("agent reflected", "agent", agentID, "journals", len(journals))
 	return reflection, nil

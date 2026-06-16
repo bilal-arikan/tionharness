@@ -42,6 +42,41 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	return s.db.DeleteKnowledge(ctx, id)
 }
 
+// PruneKind keeps only the newest `keep` memories of the given kind for an agent,
+// deleting the rest. It is the ring-buffer that bounds unbounded kinds (journal):
+// document/reflection are durable and should not be pruned. Returns the number
+// deleted. A keep <= 0 is treated as "keep nothing of this kind".
+func (s *Store) PruneKind(ctx context.Context, agentID, kind string, keep int) (int, error) {
+	if keep < 0 {
+		keep = 0
+	}
+	sources, err := s.db.ListKnowledge(ctx, agentID, kind) // newest first
+	if err != nil {
+		return 0, err
+	}
+	if len(sources) <= keep {
+		return 0, nil
+	}
+	deleted := 0
+	for _, src := range sources[keep:] {
+		if err := s.db.DeleteKnowledge(ctx, src.ID); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
+// DeleteIDs removes the given memories by id, ignoring any that are already gone.
+func (s *Store) DeleteIDs(ctx context.Context, ids ...string) error {
+	for _, id := range ids {
+		if err := s.db.DeleteKnowledge(ctx, id); err != nil && err != db.ErrNotFound {
+			return err
+		}
+	}
+	return nil
+}
+
 // Hit is a recalled memory with its relevance score.
 type Hit struct {
 	Source db.KnowledgeSource
