@@ -16,6 +16,7 @@ import (
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/api"
 	"github.com/bilal/swarmgo/internal/config"
+	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/logbuf"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/settings"
@@ -71,8 +72,12 @@ func main() {
 		logger.Warn("built-in shell tool ENABLED (SWARMGO_ENABLE_SHELL); agents can run arbitrary commands in their workspace sandbox")
 	}
 
+	// Process-wide event bus: autonomous runtimes publish notifications here and
+	// the API streams them to the UI over SSE.
+	bus := events.NewBus()
+
 	// Workspace manager: each workspace owns its own DB + agent runtime.
-	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, logger)
+	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, bus, logger)
 	if err != nil {
 		logger.Error("workspace manager init failed", "error", err)
 		os.Exit(1)
@@ -80,7 +85,7 @@ func main() {
 	defer manager.Close()
 	logger.Info("workspaces ready", "count", len(manager.List()))
 
-	server := api.NewServer(manager, registry, settingsStore, tun, logs, logger)
+	server := api.NewServer(manager, registry, settingsStore, tun, logs, bus, logger)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

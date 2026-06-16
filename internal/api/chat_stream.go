@@ -12,6 +12,7 @@ import (
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal/swarmgo/internal/tools"
 )
 
 // handleChatStream runs one chat turn over Server-Sent Events, emitting each
@@ -99,6 +100,19 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sse("meta", map[string]any{"userMessage": userMsg, "runId": runID})
+
+	// Wire the interactive asker: the ask_user tool emits a transient "ask" step
+	// and blocks here until the client POSTs an answer (or the turn is stopped).
+	// The tool loop runs in this same goroutine, so emitting via sse is safe.
+	ctx = tools.WithAsker(ctx, func(ctx context.Context, question string, options []string) (string, error) {
+		sse("step", agent.TurnStep{Kind: agent.StepAsk, Text: question, Options: options})
+		select {
+		case ans := <-run.answer:
+			return ans, nil
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	})
 
 	// Each agent answers in turn, re-reading the (growing) history so later
 	// agents see the earlier replies.

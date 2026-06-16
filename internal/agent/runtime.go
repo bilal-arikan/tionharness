@@ -7,8 +7,10 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/memory"
 	"github.com/bilal/swarmgo/internal/providers"
 )
@@ -24,6 +26,12 @@ type Runtime struct {
 	// workDir is this workspace's sandbox root for built-in filesystem/shell
 	// tools. Every fs/shell tool call is confined to it.
 	workDir string
+
+	// bus + workspace identity let autonomous events (heartbeat/task/schedule)
+	// be published with enough context for the UI to deep-link on click.
+	bus    *events.Bus
+	wsID   string
+	wsName string
 
 	mu      sync.Mutex
 	workers map[string]*worker
@@ -42,16 +50,57 @@ func (r *Runtime) Paused() bool { return r.paused.Load() }
 // NewRuntime constructs the runtime. tun carries the process-wide tunables
 // (autonomy pause, title-model override) shared across all workspace runtimes.
 // workDir is the workspace sandbox root for built-in filesystem/shell tools.
-func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, logger *slog.Logger) *Runtime {
+// bus + wsID/wsName let autonomous events be published with workspace context
+// (bus may be nil, in which case publishing is a no-op).
+func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, bus *events.Bus, wsID, wsName string, logger *slog.Logger) *Runtime {
 	return &Runtime{
 		db:        database,
 		providers: registry,
 		mem:       memory.New(database),
 		tun:       tun,
 		workDir:   workDir,
+		bus:       bus,
+		wsID:      wsID,
+		wsName:    wsName,
 		logger:    logger,
 		workers:   make(map[string]*worker),
 	}
+}
+
+// publish stamps the workspace identity onto an event and pushes it to the bus.
+func (r *Runtime) publish(e events.Event) {
+	e.WorkspaceID = r.wsID
+	e.WorkspaceName = r.wsName
+	r.bus.Publish(e) // nil-safe
+}
+
+// agentName resolves an agent's display name for event text, falling back to
+// the id when the lookup fails.
+func (r *Runtime) agentName(id string) string {
+	if a, err := r.db.GetAgent(context.Background(), id); err == nil && a.Name != "" {
+		return a.Name
+	}
+	return id
+}
+
+// emitHeartbeatFailure publishes a heartbeat failure (or auto-disable) event
+// that deep-links to the logs view.
+func (r *Runtime) emitHeartbeatFailure(agentID, errMsg string, disabled bool) {
+	name := r.agentName(agentID)
+	title := "Heartbeat hatası: " + name
+	body := errMsg
+	if disabled {
+		title = "Ajan devre dışı: " + name
+		body = "10 ardışık hatadan sonra otomatik durduruldu"
+	}
+	r.publish(events.Event{
+		Type:   "heartbeat",
+		Level:  "error",
+		Title:  title,
+		Body:   body,
+		Target: map[string]string{"view": "logs", "agentId": agentID},
+		Time:   time.Now().Unix(),
+	})
 }
 
 // Memory exposes the runtime's memory store for handlers in the same workspace.

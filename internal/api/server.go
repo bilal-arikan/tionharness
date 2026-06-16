@@ -11,6 +11,7 @@ import (
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/conversation"
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/logbuf"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/settings"
@@ -30,14 +31,16 @@ type Server struct {
 	settings   *settings.Store
 	tun        *agent.Tunables
 	logs       *logbuf.Buffer
-	runs       *chatRuns // in-flight streaming turns (stop/steer control)
+	bus        *events.Bus // autonomous notifications streamed to the UI over SSE
+	runs       *chatRuns   // in-flight streaming turns (stop/steer control)
 	logger     *slog.Logger
 }
 
 // NewServer constructs an API server and pushes the persisted settings into the
 // live subsystems (providers, compaction, autonomy). tun is the shared
-// process-wide tunables updated whenever settings change.
-func NewServer(manager *workspace.Manager, registry *providers.Registry, store *settings.Store, tun *agent.Tunables, logs *logbuf.Buffer, logger *slog.Logger) *Server {
+// process-wide tunables updated whenever settings change; bus is the
+// process-wide event bus exposed via the /api/events SSE feed.
+func NewServer(manager *workspace.Manager, registry *providers.Registry, store *settings.Store, tun *agent.Tunables, logs *logbuf.Buffer, bus *events.Bus, logger *slog.Logger) *Server {
 	s := &Server{
 		workspaces: manager,
 		providers:  registry,
@@ -45,6 +48,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		settings:   store,
 		tun:        tun,
 		logs:       logs,
+		bus:        bus,
 		runs:       newChatRuns(),
 		logger:     logger,
 	}
@@ -205,6 +209,8 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/files", s.handleServeFile)
 	// Application + workspace logs (global ring buffer).
 	mux.HandleFunc("GET /api/logs", s.handleListLogs)
+	// Autonomous event feed (heartbeat/task/schedule) — SSE, global.
+	mux.HandleFunc("GET /api/events", s.handleEvents)
 }
 
 // withWorkspace resolves the active workspace from the X-Workspace-Id header

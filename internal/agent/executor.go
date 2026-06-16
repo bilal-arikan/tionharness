@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/providers"
 )
 
@@ -80,6 +81,22 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 	run.Error = errText
 
 	r.logger.Info("task run finished", "task", taskID, "trigger", trigger, "status", status)
+
+	// Notify on the outcome; clicking deep-links to the board. The frontend
+	// suppresses the desktop notification while its tab is focused, so a manual
+	// run the user is watching won't pop a redundant notification.
+	level, title, body := "success", "Görev tamamlandı: "+task.Title, output
+	if status == db.RunFailure {
+		level, title, body = "error", "Görev başarısız: "+task.Title, errText
+	}
+	r.publish(events.Event{
+		Type:   "task",
+		Level:  level,
+		Title:  title,
+		Body:   body,
+		Target: map[string]string{"view": "board", "taskId": taskID},
+	})
+
 	return run, nil
 }
 

@@ -111,6 +111,11 @@ func (w *worker) tick(trigger string) {
 	w.rt.logger.Info("agent tick",
 		"agent", w.agentID, "trigger", trigger,
 		"failures", w.snapshot().ConsecutiveFailures, "ok", err == nil)
+
+	// Surface autonomous failures (and auto-disable) as desktop notifications.
+	if err != nil {
+		w.rt.emitHeartbeatFailure(w.agentID, err.Error(), w.snapshot().Disabled)
+	}
 }
 
 // nextInterval applies exponential backoff while failing.

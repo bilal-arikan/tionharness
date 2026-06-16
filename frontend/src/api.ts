@@ -30,6 +30,7 @@ import type {
   WorkspaceSettingsPatch,
   LogEntry,
   CatalogEntry,
+  AppEvent,
 } from './types'
 
 // Active workspace — sent as X-Workspace-Id on every request so the backend
@@ -153,6 +154,20 @@ async function streamChat(
   }
 }
 
+// subscribeEvents opens the global autonomous-event SSE feed via EventSource
+// (which reconnects automatically on drop). Returns an unsubscribe function.
+function subscribeEvents(onEvent: (e: AppEvent) => void): () => void {
+  const es = new EventSource('/api/events')
+  es.addEventListener('notify', (ev) => {
+    try {
+      onEvent(JSON.parse((ev as MessageEvent).data) as AppEvent)
+    } catch {
+      // ignore malformed frames
+    }
+  })
+  return () => es.close()
+}
+
 export const api = {
   // Workspaces (not workspace-scoped).
   listWorkspaces: () => req<Workspace[]>('/api/workspaces'),
@@ -228,8 +243,9 @@ export const api = {
     signal?: AbortSignal,
   ): Promise<void> => streamChat(sessionId, message, agentIds, handlers, signal),
 
-  // Control an in-flight streaming turn: stop (cancel) or steer (live guidance).
-  chatControl: (runId: string, action: 'stop' | 'steer', text?: string) =>
+  // Control an in-flight streaming turn: stop (cancel), steer (live guidance) or
+  // answer (reply to a blocked ask_user prompt).
+  chatControl: (runId: string, action: 'stop' | 'steer' | 'answer', text?: string) =>
     req<{ result: string }>('/api/chat/control', {
       method: 'POST',
       body: JSON.stringify({ runId, action, text }),
@@ -390,6 +406,9 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
+
+  // Autonomous event feed (heartbeat/task/schedule) — global SSE stream.
+  subscribeEvents,
 
   // Application + workspace logs (global ring buffer).
   getLogs: (opts?: { limit?: number; level?: string; q?: string }) => {

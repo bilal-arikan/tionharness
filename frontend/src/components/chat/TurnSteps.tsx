@@ -2,6 +2,7 @@ import type { TurnStep } from '../../types'
 import { ThinkingBlock } from './ThinkingBlock'
 import { ActivityCard } from './ActivityCard'
 import { TextStep } from './TextStep'
+import { TodoCard } from './TodoCard'
 
 interface Props {
   steps: TurnStep[]
@@ -17,7 +18,11 @@ export function TurnSteps({ steps, onOpenFile }: Props) {
     <div className="mb-2 flex flex-col gap-0.5">
       {steps.map((step, i) => {
         if (step.kind === 'thinking') return <ThinkingBlock key={i} text={step.text || ''} />
-        if (step.kind === 'tool') return <ActivityCard key={i} step={step} onOpenFile={onOpenFile} />
+        if (step.kind === 'tool') {
+          // The working checklist renders as a dedicated card, not a tool row.
+          if (step.tool === 'todo_write') return <TodoCard key={i} step={step} />
+          return <ActivityCard key={i} step={step} onOpenFile={onOpenFile} />
+        }
         // Intermediate text narration — collapsed to a one-line card.
         if (step.text?.trim()) {
           return <TextStep key={i} text={step.text} onOpenFile={onOpenFile} />

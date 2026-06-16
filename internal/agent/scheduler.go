@@ -10,6 +10,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/events"
 )
 
 // scheduleTimeout bounds a single scheduled fire (task run or prompt delivery).
@@ -105,10 +106,13 @@ func (s *Scheduler) fire(scheduleID string) {
 	}
 
 	var fireErr error
+	var sessionID string
 	if sc.TaskID != "" {
+		// Task runs publish their own outcome event via RunTask.
 		_, fireErr = s.rt.RunTask(ctx, sc.TaskID, "schedule")
 	} else {
-		fireErr = s.deliverPrompt(ctx, sc)
+		sessionID, fireErr = s.deliverPrompt(ctx, sc)
+		s.emitPromptDelivery(sc, sessionID, fireErr)
 	}
 
 	status := "success"
@@ -123,30 +127,54 @@ func (s *Scheduler) fire(scheduleID string) {
 	s.logger.Info("schedule fired", "schedule", scheduleID, "status", status)
 }
 
+// emitPromptDelivery publishes the outcome of a scheduled prompt: success
+// deep-links to the agent's schedule session, failure to the logs view.
+func (s *Scheduler) emitPromptDelivery(sc db.Schedule, sessionID string, err error) {
+	name := s.rt.agentName(sc.AgentID)
+	if err != nil {
+		s.rt.publish(events.Event{
+			Type:   "schedule",
+			Level:  "error",
+			Title:  "Zamanlama hatası: " + name,
+			Body:   err.Error(),
+			Target: map[string]string{"view": "logs", "agentId": sc.AgentID},
+		})
+		return
+	}
+	s.rt.publish(events.Event{
+		Type:   "schedule",
+		Level:  "success",
+		Title:  "Zamanlanmış prompt çalıştı: " + name,
+		Body:   sc.Prompt,
+		Target: map[string]string{"view": "chat", "sessionId": sessionID},
+	})
+}
+
 // deliverPrompt sends a standalone scheduled prompt to the agent and logs the
-// reply in the agent's dedicated "schedule" session.
-func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) error {
+// reply in the agent's dedicated "schedule" session. It returns the session id
+// (when reached) so callers can deep-link a notification to it.
+func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, error) {
 	if sc.Prompt == "" {
-		return fmt.Errorf("schedule %s has neither task nor prompt", sc.ID)
+		return "", fmt.Errorf("schedule %s has neither task nor prompt", sc.ID)
 	}
 	agent, err := s.db.GetAgent(ctx, sc.AgentID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	output, err := s.rt.invoke(ctx, agent, sc.Prompt, true) // scheduled = autonomous
 	if err != nil {
-		return err
+		return "", err
 	}
 	session, err := s.db.GetOrCreateKindSession(ctx, sc.AgentID, "schedule", "⏰ Schedule")
 	if err != nil {
-		return err
+		return "", err
 	}
 	_, err = s.db.AddMessage(ctx, db.Message{
 		SessionID: session.ID,
 		Role:      "assistant",
 		Text:      "[schedule] " + output,
 	})
-	return err
+	return session.ID, err
 }
 
 // nextRun returns the unix time of a schedule's next fire (0 if unknown).

@@ -19,6 +19,7 @@ import (
 
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/providers"
 )
 
@@ -45,6 +46,7 @@ type Manager struct {
 	rootDir  string
 	registry *providers.Registry
 	tun      *agent.Tunables
+	bus      *events.Bus
 	logger   *slog.Logger
 
 	mu         sync.RWMutex
@@ -54,12 +56,14 @@ type Manager struct {
 
 // NewManager loads the registry from disk, opens every workspace, and ensures
 // at least one default workspace exists. tun is the shared process-wide
-// tunables handed to every workspace runtime.
-func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunables, logger *slog.Logger) (*Manager, error) {
+// tunables handed to every workspace runtime; bus is the process-wide event bus
+// each runtime publishes autonomous notifications to.
+func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunables, bus *events.Bus, logger *slog.Logger) (*Manager, error) {
 	m := &Manager{
 		rootDir:    rootDir,
 		registry:   registry,
 		tun:        tun,
+		bus:        bus,
 		logger:     logger,
 		workspaces: make(map[string]*Workspace),
 	}
@@ -98,7 +102,7 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 
-	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), m.logger)
+	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), m.bus, meta.ID, meta.Name, m.logger)
 	if err := rt.StartConfigured(context.Background()); err != nil {
 		m.logger.Warn("start configured agents failed", "workspace", meta.ID, "error", err)
 	}

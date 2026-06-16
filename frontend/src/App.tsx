@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { api, setActiveWorkspace, getActiveWorkspace } from './api'
-import type { Agent, AgentPatch, Session, Message, Workspace, AppSettings, TurnStep, SlashCommand } from './types'
+import type { Agent, AgentPatch, Session, Message, Workspace, AppSettings, TurnStep, SlashCommand, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
 import { Sidebar } from './components/Sidebar'
 import { MessageList } from './components/MessageList'
 import { Composer } from './components/Composer'
+import { AskPrompt, type PendingAsk } from './components/chat/AskPrompt'
 import { TaskBoard } from './components/TaskBoard'
 import { Schedules } from './components/Schedules'
 import { MemoryPanel } from './components/MemoryPanel'
@@ -49,12 +50,18 @@ export default function App() {
   )
   // Desktop-notification preference, read live in sendMessage without re-binding.
   const notifyEnabled = useRef(false)
+  // Latest autonomous-event handler, refreshed each render so the once-mounted
+  // SSE subscription always navigates with current state/closures.
+  const onEventRef = useRef<(e: AppEvent) => void>(() => {})
   // Streaming-turn control: whether a turn is in flight, its abort handle (stop /
   // interrupt) and run id (steer), plus a message queued to send after it ends.
   const [streaming, setStreaming] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const runIdRef = useRef('')
   const queuedRef = useRef('')
+  // When the agent calls ask_user, the turn pauses and this holds the question
+  // until the user answers (delivered to the still-open stream via chatControl).
+  const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null)
 
   // Apply the client-side preferences carried by app settings.
   const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; keepAwake: boolean; desktopNotifications: boolean }) => {
@@ -180,6 +187,23 @@ export default function App() {
     [sessions],
   )
 
+  // Autonomous-event handler: raise a desktop notification whose click deep-links
+  // to the event's target (chat session, board, or logs). Refreshed each render
+  // so the stable SSE subscription below always sees current closures/state.
+  onEventRef.current = (e: AppEvent) => {
+    notify(notifyEnabled.current, e.title, e.body, () => {
+      const t = e.target || {}
+      if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) {
+        switchWorkspace(e.workspaceId)
+      }
+      if (t.view) setView(t.view as View)
+      if (t.sessionId) selectSession(t.sessionId)
+    })
+  }
+
+  // Subscribe once to the global autonomous-event feed (heartbeat/task/schedule).
+  useEffect(() => api.subscribeEvents((e) => onEventRef.current(e)), [])
+
   // Pick the default agent for NEW sessions (from the roster).
   const pickDefaultAgent = useCallback((id: string) => {
     setDefaultAgentId(id)
@@ -302,6 +326,13 @@ export default function App() {
           },
           onStep: (st) => {
             const id = liveId
+            // Interactive prompt: the agent paused on ask_user. Surface the
+            // question (transient — not added to the persisted trace); the user's
+            // answer resumes the turn over the same stream.
+            if (st.kind === 'ask') {
+              setPendingAsk({ question: st.text || '', options: st.options })
+              return
+            }
             // Streaming providers emit incremental "delta" steps: append the
             // chunk to the live bubble's text instead of the activity trace.
             if (st.kind === 'delta') {
@@ -319,6 +350,7 @@ export default function App() {
           },
           onReply: (r) => {
             const id = liveId
+            setPendingAsk(null)
             setMessages((prev) => prev.map((x) => (x.id === id ? r.replyMessage : x)))
             // Clicking the notification jumps to the source chat session.
             notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', r.replyMessage.text, () => {
@@ -342,6 +374,7 @@ export default function App() {
           },
           onError: (err) => {
             setError(err)
+            setPendingAsk(null)
             setMessages((prev) =>
               prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
             )
@@ -384,6 +417,17 @@ export default function App() {
   const stopTurn = useCallback(() => {
     abortRef.current?.abort()
     setStreaming(false)
+    setPendingAsk(null)
+  }, [])
+
+  // Answer: deliver the user's reply to a turn paused on ask_user, resuming it.
+  const answerAsk = useCallback((text: string) => {
+    setPendingAsk(null)
+    if (runIdRef.current) {
+      api.chatControl(runIdRef.current, 'answer', text).catch((e) =>
+        setError((e as Error).message),
+      )
+    }
   }, [])
 
   // Interrupt: stop the current turn and immediately send a new message.
@@ -499,6 +543,7 @@ export default function App() {
               agents={agents}
               onOpenFile={openFile}
             />
+            {pendingAsk && <AskPrompt ask={pendingAsk} onAnswer={answerAsk} />}
             <Composer
               disabled={!activeSessionId}
               streaming={streaming}

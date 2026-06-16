@@ -11,6 +11,16 @@
 > Not: Faz 8 (MCP/Tools) kullanıcı talebiyle Faz 7'den önce yapıldı; ardından Faz 7 tamamlandı.
 > Kalan sıra: **SDK Paritesi P1/P3/P4 · Faz 9 Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Tıklanabilir bildirimler + otonom olay akışı ✅ (2026-06-16)
+Masaüstü bildirimleri artık hedefe **deep-link**'lenir; otonom olaylar (heartbeat/task/schedule) backend'den frontend'e akar.
+
+1. **Frontend bildirim navigasyonu** (`frontend/src/lib/clientPrefs.ts`): `notify(...)` opsiyonel `onClick` alır → `window.focus()` + navigasyon. Sohbet yanıt-hazır bildirimi kaynak sohbete (`setView('chat')`+`selectSession(sid)`), sohbet hatası loglara (`setView('logs')`) atlar (`App.tsx`).
+2. **`internal/events` (yeni):** `Event` (type/level/workspaceId/title/body/target/time) + `Bus` (süreç-geneli pub/sub, nil-safe, slow-subscriber drop).
+3. **`GET /api/events` SSE** (`internal/api/events.go`): aboneye `notify` olayları akıtır; 25sn ping keep-alive; global (workspace-scoped değil).
+4. **Yayın noktaları:** `Runtime` artık `bus`+`wsID`+`wsName` taşır (`NewRuntime`/`NewManager`/`NewServer` imzaları güncellendi, `main.go` `events.NewBus()` enjekte eder). Heartbeat hatası/auto-disable (`worker.tick`→`Runtime.emitHeartbeatFailure`, target=logs), görev bitti/başarısız (`executor.RunTask`→`publish`, target=board+taskId), zamanlanmış prompt teslimi (`scheduler.emitPromptDelivery`: başarı→chat+sessionId, hata→logs). Görev olayları tüm tetikleyiciler için yayılır (frontend görünürken bastırır).
+5. **Frontend abonelik** (`api.subscribeEvents`, EventSource oto-reconnect; `App.tsx` `onEventRef` taze closure + tek-mount `useEffect`): olay gelince `notify` ile bildirim, tıklayınca gerekirse workspace değiştirip `target.view`/`sessionId`'e gider.
+6. **Doğrulama:** `go build`/`vet`/`test ./...` yeşil + frontend `tsc --noEmit` temiz + **canlı SSE smoke**: anahtarsız görev çalıştırma → `event: notify` `{type:task,level:error,target{view:board,taskId},workspaceId,...}` uçtan uca yakalandı.
+
 ### Kullanıcı mesajında @mention / komut stili ✅ (2026-06-16)
 
 Gönderilen kullanıcı mesajları artık `@mention` ve `/komut` içerdiğinde farklı render edilir.
@@ -686,6 +696,17 @@ Kullanıcıyla netleştirilecek:
 ---
 
 ## Oturum Günlüğü
+
+### 2026-06-16 — Etkileşim araçları: `todo_write` + `ask_user` (E3/E2/E1)
+`observed-behavior` mimari incelemesinden (`_Docs/10-KAVRAMSAL-TASARIM-NOTLARI.md`) çıkan **etkileşim katmanı** ilk iş paketi uygulandı (`go build`/`vet`/`test ./...` + frontend `tsc`/`build` + canlı tool-katalog smoke testi yeşil):
+
+1. **E3 — Trace modeli genişletildi** (`internal/agent/trace.go`): yeni `StepAsk` (`"ask"`) kind'ı (delta gibi geçici, kalıcı değil) + `TurnStep.Options []string` (tıklanabilir öneri yanıtlar).
+2. **E2 — `todo_write` aracı + UI** (`internal/tools/builtin_todo.go`): ajan tam görev listesini her seferinde yayınlar (`pending|in_progress|completed`); araç çağrısı yalnızca özet metin döner, listeyi frontend `TodoCard.tsx` canlı checklist olarak render eder (tool adına göre özel-durum, `TurnSteps.tsx`). Sunucu tarafında durum tutulmaz.
+3. **E1 — `ask_user` (suspend/resume)** (`internal/tools/builtin_ask.go` + `ask.go`): ajan soruyu sorar ve **açık SSE stream üzerinden bloklar**. Tam suspend/resume yerine context-kanal deseni: `tools.WithAsker(ctx, fn)` → `chat_stream.go` geçici `StepAsk` yayar, `run.answer` kanalında bekler; kullanıcı `POST /api/chat/control {action:"answer"}` ile yanıtlar (`chat_control.go`). İnteraktif olmayan (heartbeat/scheduler) koşularda asker yok → araç hata döndürür, model kendi devam eder.
+4. **Frontend:** `AskPrompt.tsx` (soru + tıklanabilir seçenekler + serbest metin) composer üstünde gösterilir; `App.tsx` `pendingAsk` state'i + `answerAsk` callback'i. `lib/tools.ts` ikonları (✅ todo_write, 💬 ask_user).
+5. **Testler (yeni):** `internal/tools/builtin_interaction_test.go` — todo_write geçerli/geçersiz-durum/boş, ask_user asker-yok/asker-var/boş-soru.
+
+> Doküman: `10-KAVRAMSAL-TASARIM-NOTLARI.md` güncellendi (B-Ek + D2-streaming "yapıldı" işaretlendi; E1/E2 tamamlandı). Kalan etkileşim işi: `ask_user` kalıcı tool kartı için özel render (şu an generic ActivityCard) ve `EnterPlanMode`/`ExitPlanMode` (plan modu).
 
 ### 2026-06-16 — Modülerlik refactor'ları (davranış değişmedi)
 Dört adet düşük-riskli, davranış-korumalı refactor uygulandı (`go build`/`go vet`/`go test ./...` + canlı `/health` smoke testi yeşil):

@@ -26,6 +26,8 @@ const ICONS: Record<string, string> = {
   grep: '🔎',
   glob: '🗂️',
   browser: '🧭',
+  todo_write: '✅',
+  ask_user: '💬',
 }
 
 /** Strip an MCP namespace prefix (`server__tool`) for display. */

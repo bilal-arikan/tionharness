@@ -54,7 +54,8 @@ export interface Session {
 
 // A single entry in an assistant turn's activity trace (mirrors agent.TurnStep).
 // 'delta' is a transient streaming text chunk (live UI only, never persisted).
-export type StepKind = 'text' | 'thinking' | 'tool' | 'delta'
+// 'ask' is a transient interactive prompt (the agent is blocked on ask_user).
+export type StepKind = 'text' | 'thinking' | 'tool' | 'delta' | 'ask'
 
 export interface TurnStep {
   kind: StepKind
@@ -63,6 +64,8 @@ export interface TurnStep {
   input?: unknown
   output?: string
   isError?: boolean
+  // Suggested clickable answers for an 'ask' prompt.
+  options?: string[]
 }
 
 // A slash command surfaced in the chat composer ("/" menu).
@@ -385,4 +388,18 @@ export interface LogEntry {
   level: string // DEBUG | INFO | WARN | ERROR
   message: string
   attrs?: Record<string, string>
+}
+
+// AppEvent is an autonomous runtime notification streamed over /api/events.
+// `target` carries navigation hints used to deep-link on notification click
+// (keys: view, sessionId, taskId, agentId).
+export interface AppEvent {
+  type: string // task | schedule | heartbeat | agent
+  level: 'info' | 'success' | 'error'
+  workspaceId: string
+  workspaceName?: string
+  title: string
+  body: string
+  target?: Record<string, string>
+  time: number // unix seconds
 }

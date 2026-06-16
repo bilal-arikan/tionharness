@@ -48,13 +48,14 @@ func (c *chatRuns) get(id string) *chatRun {
 
 type chatControlReq struct {
 	RunID  string `json:"runId"`
-	Action string `json:"action"` // "stop" | "steer"
+	Action string `json:"action"` // "stop" | "steer" | "answer"
 	Text   string `json:"text"`
 }
 
-// handleChatControl stops or steers an in-flight streaming turn. "stop" cancels
-// the run's context (ending the stream); "steer" delivers live guidance the tool
-// loop folds in before its next model call.
+// handleChatControl stops, steers or answers an in-flight streaming turn. "stop"
+// cancels the run's context (ending the stream); "steer" delivers live guidance
+// the tool loop folds in before its next model call; "answer" delivers a reply
+// to a blocked ask_user tool call.
 func (s *Server) handleChatControl(w http.ResponseWriter, r *http.Request) {
 	var req chatControlReq
 	if err := decodeJSON(r, &req); err != nil {
@@ -77,6 +78,15 @@ func (s *Server) handleChatControl(w http.ResponseWriter, r *http.Request) {
 		select {
 		case run.steer <- req.Text:
 		default: // buffer full — drop rather than block the request
+		}
+	case "answer":
+		if req.Text == "" {
+			writeError(w, http.StatusBadRequest, "answer text is required")
+			return
+		}
+		select {
+		case run.answer <- req.Text:
+		default: // no question waiting (or already answered) — drop
 		}
 	default:
 		writeError(w, http.StatusBadRequest, "unknown action: "+req.Action)
