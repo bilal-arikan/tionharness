@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { api, getActiveWorkspace } from './api'
 import type { Agent, AgentPatch, Session, Message, AppSettings, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
@@ -9,6 +9,8 @@ import { MessageList } from './components/chat/MessageList'
 import { Composer } from './components/chat/Composer'
 import { AskPrompt } from './components/chat/AskPrompt'
 import { PendingTray } from './components/chat/PendingTray'
+import { TodoPanel } from './components/chat/TodoPanel'
+import { latestTodos } from './lib/todos'
 import { TaskBoard } from './components/panels/TaskBoard'
 import { Schedules } from './components/panels/Schedules'
 import { MemoryPanel } from './components/panels/MemoryPanel'
@@ -370,6 +372,10 @@ export default function App() {
     api.activeSessions().then(chat.markPending).catch(() => {})
   }, [activeWorkspaceId, chat.markPending])
 
+  // The active session's current checklist (latest todo_write across the
+  // transcript). Pinned above the composer and updated as the agent ticks items.
+  const currentTodos = useMemo(() => latestTodos(messages), [messages])
+
   return (
     <div className="flex h-full">
       <NavRail
@@ -464,6 +470,7 @@ export default function App() {
               onOpenArtifact={openArtifact}
             />
             {chat.activeAsk && <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />}
+            <TodoPanel todos={currentTodos} />
             <PendingTray items={chat.activeQueued} onRemove={chat.removePending} />
             <Composer
               disabled={!activeSessionId}

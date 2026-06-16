@@ -2,6 +2,35 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## UI — Sabit görev listesi paneli (TodoPanel) (2026-06-17)
+
+**İstek:** Sohbette "todo listesi oluştur" denince agent `todo_write` ile liste
+yapıyor ama tek bir tura gömülü kalıyor (sıraya alınan mesaj gibi kayboluyor);
+sabit bir yerde görünsün ve agent tamamlayıp güncelleyebilsin.
+
+**Gerçek:** Todo verisi zaten kalıcı — `todo_write` her çağrıda tam listeyi
+`StepTodo` (kind `todo`, `Todos[]`) olarak yayar, mesaj `steps`'ine yazılır
+(reload'da kalır). Eksik olan tek şey **sabit/evrilen görünüm**.
+
+**Çözüm (frontend-only):** Aktif oturumun mesajlarındaki **en son** todo
+step'inden güncel liste türetilip composer üstünde (PendingTray yanında) sabit,
+katlanabilir bir panelde gösterilir.
+- `lib/todos.ts` `latestTodos(messages)` — mesajları yeniden-eskiye tarayıp son
+  todo step'ini bulur (kind `todo` veya eski `todo_write` tool step'i).
+- `components/chat/TodoPanel.tsx` — 📋 başlık + ince progress bar + `done/total`
+  + katlanabilir checklist (✓ completed üstü-çizili, ◐ in_progress accent, ○
+  pending). `App.tsx` `useMemo(latestTodos(messages))` → `<TodoPanel>` AskPrompt
+  ile PendingTray arasında.
+- Backend değişikliği yok: agent yeni `todo_write` çağırınca (durum güncelleme ya
+  da yeni liste) en-son-kazanır mantığıyla panel otomatik güncellenir.
+
+✅ tsc + vite build temiz (döngü yok). **Playwright canlı E2E** (claude-cli
+`mcp__swarmgo_interaction__todo_write` yolu): 3 maddelik liste oluşturuldu →
+panel composer üstünde **0/3** ile belirdi (önceki 4 maddelik listeyi geçersiz
+kıldı = en-son-kazanır); ardından "1=completed, 2=in_progress" güncellemesi →
+panel **1/3**, madde-1 ✓ üstü-çizili yeşil, madde-2 ◐ accent olarak **canlı
+güncellendi**. Kalıcılık: persisted `steps`'ten türetildiği için reload'da kalır.
+
 ## Ara fix — Context metre gerçek footprint'i sayar (2026-06-17)
 
 Oturum bilgisi panelindeki **Bağlam penceresi** ölçeri eskiden yalnızca özet +
