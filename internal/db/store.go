@@ -228,6 +228,36 @@ func (d *DB) SetSessionTitle(ctx context.Context, sessionID, title string) error
 	})
 }
 
+// MarkSessionRead clears a session's unread flag (without bumping UpdatedAt, so
+// reading a thread never reorders the list).
+func (d *DB) MarkSessionRead(ctx context.Context, sessionID string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Unread = false
+	})
+}
+
+// DeleteSession removes a session, its messages, and its on-disk folder.
+func (d *DB) DeleteSession(ctx context.Context, sessionID string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.sessions[sessionID]; !ok {
+		return ErrNotFound
+	}
+	delete(d.sessions, sessionID)
+	delete(d.messages, sessionID)
+	return os.RemoveAll(d.dir(dirSessions, sessionID))
+}
+
+// SessionDir returns the absolute folder holding a session's JSONL file.
+func (d *DB) SessionDir(sessionID string) (string, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if _, ok := d.sessions[sessionID]; !ok {
+		return "", ErrNotFound
+	}
+	return d.dir(dirSessions, sessionID), nil
+}
+
 // GetSession loads a session by id.
 func (d *DB) GetSession(ctx context.Context, id string) (Session, error) {
 	d.mu.RLock()
@@ -276,6 +306,10 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	d.messages[m.SessionID] = append(d.messages[m.SessionID], m)
 	s.MessageCount++
 	s.UpdatedAt = m.CreatedAt
+	// An agent reply marks the session unread; the UI clears it when opened.
+	if m.Role == "assistant" {
+		s.Unread = true
+	}
 	d.sessions[s.ID] = s
 	// Hot path: append only the new message line (O(1)) instead of rewriting the
 	// whole conversation file (which was O(n) per message → O(n²) per session).

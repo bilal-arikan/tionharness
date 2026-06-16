@@ -8,6 +8,29 @@ const MENTION_RE = /@[^\s@]+/g
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
 
+// QUOTE_PAIRS maps an opening quote to its closing counterpart. Wrapping a
+// command in any of these escapes it: the message is treated as plain prose
+// (quotes stripped) instead of the command style — so you can talk *about* a
+// command without it looking like one.
+const QUOTE_PAIRS: Record<string, string> = {
+  '"': '"',
+  "'": "'",
+  '`': '`',
+  '“': '”', // “ ”
+  '‘': '’', // ‘ ’
+}
+
+// quotedCommand returns the inner command text when `text` is a command (leading
+// "/") wrapped in a matching quote pair, or null otherwise.
+function quotedCommand(text: string): string | null {
+  const t = text.trim()
+  if (t.length < 3) return null
+  const close = QUOTE_PAIRS[t[0]]
+  if (!close || !t.endsWith(close)) return null
+  const inner = t.slice(1, -1).trim()
+  return /^\/\S/.test(inner) ? inner : null
+}
+
 // renderWithMentions splits a user message into plain text and highlighted
 // @mention chips, colouring each chip with the mentioned agent's avatar colour
 // when it resolves to a known agent.
@@ -43,9 +66,12 @@ function renderWithMentions(text: string, agents: Agent[]): ReactNode[] {
 // messages that mention agents (@) get highlighted chips + a ring, and messages
 // typed as a command (leading "/") render in a distinct monospaced command style.
 export function UserBubble({ text, agents }: { text: string; agents: Agent[] }) {
+  // A quote-wrapped command is an explicit escape → render the inner text as a
+  // plain bubble (no command style).
+  const quotedCmd = quotedCommand(text)
   const hasMention = MENTION_RE.test(text)
   MENTION_RE.lastIndex = 0
-  const isCommand = /^\/\S/.test(text.trim())
+  const isCommand = !quotedCmd && /^\/\S/.test(text.trim())
 
   if (isCommand) {
     return (
@@ -65,7 +91,7 @@ export function UserBubble({ text, agents }: { text: string; agents: Agent[] }) 
           hasMention ? 'ring-1 ring-white/40' : ''
         }`}
       >
-        {hasMention ? renderWithMentions(text, agents) : text}
+        {quotedCmd ? quotedCmd : hasMention ? renderWithMentions(text, agents) : text}
       </div>
     </div>
   )

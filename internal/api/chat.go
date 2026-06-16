@@ -8,6 +8,7 @@ import (
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal/swarmgo/internal/tools"
 )
 
 type chatReq struct {
@@ -118,7 +119,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Manual chat is not budget-gated (autonomous=false). When the agent has
 	// tools enabled this drives the agentic loop (native) or CLI delegation;
-	// usage is recorded inside CompleteWithTools.
+	// usage is recorded inside CompleteWithTools. Attach an artifact sink so
+	// create_artifact / update_artifact can persist content this turn.
+	ctx = tools.WithArtifacts(ctx, newArtifactSink(database, session.ID, agent.ID))
 	resp, steps, err := ws(r).Runtime.CompleteWithToolsTraced(ctx, agent, provider, llmReq, false)
 	if err != nil {
 		s.logger.Error("provider completion failed", "error", err, "agent", agent.ID)

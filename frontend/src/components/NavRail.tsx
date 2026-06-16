@@ -1,9 +1,24 @@
 import { useEffect, useState } from 'react'
+import {
+  MessageSquare,
+  Users,
+  LayoutGrid,
+  Clock,
+  Database,
+  Plug,
+  GitBranch,
+  FileCode,
+  ScrollText,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  type LucideIcon,
+} from 'lucide-react'
 import type { Workspace } from '../types'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import type { NewWorkspaceData } from './WorkspaceCreateModal'
 
-export type View = 'chat' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'logs' | 'settings'
+export type View = 'chat' | 'agents' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'artifacts' | 'logs' | 'settings'
 
 interface Props {
   view: View
@@ -15,17 +30,39 @@ interface Props {
   onCreateWorkspace: (data: NewWorkspaceData) => void
 }
 
-const NAV: { key: View; label: string; icon: string }[] = [
-  { key: 'chat', label: 'Sohbet', icon: '💬' },
-  { key: 'board', label: 'Görevler', icon: '🗂' },
-  { key: 'schedules', label: 'Zamanlamalar', icon: '⏰' },
-  { key: 'memory', label: 'Hafıza', icon: '⛁' },
-  { key: 'tools', label: 'Araçlar', icon: '🔌' },
-  { key: 'flows', label: 'Akışlar', icon: '🔀' },
-  { key: 'logs', label: 'Loglar', icon: '📜' },
+const NAV: { key: View; label: string; icon: LucideIcon }[] = [
+  { key: 'chat', label: 'Sohbet', icon: MessageSquare },
+  { key: 'agents', label: 'Ajanlar', icon: Users },
+  { key: 'board', label: 'Görevler', icon: LayoutGrid },
+  { key: 'schedules', label: 'Zamanlamalar', icon: Clock },
+  { key: 'memory', label: 'Hafıza', icon: Database },
+  { key: 'tools', label: 'Araçlar', icon: Plug },
+  { key: 'flows', label: 'Akışlar', icon: GitBranch },
+  { key: 'artifacts', label: 'Artifactlar', icon: FileCode },
+  { key: 'logs', label: 'Loglar', icon: ScrollText },
 ]
 
 const COLLAPSE_KEY = 'swarmgo.navCollapsed'
+
+// navItemClass renders the shared look for a nav button. The active state is a
+// soft accent tint with an accent left indicator (instead of a heavy solid
+// fill), which reads as more modern and less visually loud.
+function navItemClass(active: boolean, collapsed: boolean): string {
+  return [
+    'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition',
+    collapsed ? 'justify-center' : '',
+    active
+      ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+      : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]',
+  ].join(' ')
+}
+
+// ActiveBar is the 2px accent indicator on the left edge of the active item.
+function ActiveBar() {
+  return (
+    <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-[var(--color-accent)]" />
+  )
+}
 
 // NavRail is the leftmost column: brand, workspace switcher, and the primary
 // view navigation. It collapses to an icon-only rail to maximise content space.
@@ -50,16 +87,16 @@ export function NavRail({
 
   return (
     <nav
-      className={`flex h-full flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-all duration-200 ${
+      className={`flex h-full flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-sm)] transition-all duration-200 ${
         collapsed ? 'w-14' : 'w-52'
       }`}
     >
       {/* Brand */}
       <div className="flex h-14 items-center gap-2 px-3">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] text-sm font-bold text-white">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[color-mix(in_srgb,var(--color-accent)_60%,#000)] text-sm font-bold text-white shadow-[var(--shadow-sm)]">
           SG
         </div>
-        {!collapsed && <span className="text-lg font-semibold">SwarmGo</span>}
+        {!collapsed && <span className="text-lg font-semibold tracking-tight">SwarmGo</span>}
       </div>
 
       {/* Workspace */}
@@ -87,23 +124,22 @@ export function NavRail({
 
       {/* View navigation */}
       <div className="flex flex-1 flex-col gap-1 px-2 py-2">
-        {NAV.map((item) => (
-          <button
-            key={item.key}
-            onClick={() => onSelectView(item.key)}
-            title={collapsed ? item.label : undefined}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-              collapsed ? 'justify-center' : ''
-            } ${
-              view === item.key
-                ? 'bg-[var(--color-accent)] text-white'
-                : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
-            }`}
-          >
-            <span className="text-base leading-none">{item.icon}</span>
-            {!collapsed && <span>{item.label}</span>}
-          </button>
-        ))}
+        {NAV.map((item) => {
+          const Icon = item.icon
+          const isActive = view === item.key
+          return (
+            <button
+              key={item.key}
+              onClick={() => onSelectView(item.key)}
+              title={collapsed ? item.label : undefined}
+              className={navItemClass(isActive, collapsed)}
+            >
+              {isActive && <ActiveBar />}
+              <Icon size={18} strokeWidth={2} className="shrink-0" />
+              {!collapsed && <span>{item.label}</span>}
+            </button>
+          )
+        })}
       </div>
 
       {/* Settings (pinned at the bottom, separate from primary nav) */}
@@ -111,15 +147,10 @@ export function NavRail({
         <button
           onClick={() => onSelectView('settings')}
           title={collapsed ? 'Ayarlar' : undefined}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-            collapsed ? 'justify-center' : ''
-          } ${
-            view === 'settings'
-              ? 'bg-[var(--color-accent)] text-white'
-              : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
-          }`}
+          className={`w-full ${navItemClass(view === 'settings', collapsed)}`}
         >
-          <span className="text-base leading-none">⚙</span>
+          {view === 'settings' && <ActiveBar />}
+          <Settings size={18} strokeWidth={2} className="shrink-0" />
           {!collapsed && <span>Ayarlar</span>}
         </button>
       </div>
@@ -130,7 +161,7 @@ export function NavRail({
         title={collapsed ? 'Genişlet' : 'Daralt'}
         className="m-2 flex items-center justify-center rounded-lg py-2 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
       >
-        {collapsed ? '»' : '«'}
+        {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
       </button>
     </nav>
   )

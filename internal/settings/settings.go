@@ -16,9 +16,10 @@ const (
 // (json tag "-"); clients see only AnthropicKeySet via the DTO.
 type Settings struct {
 	// Appearance.
-	Theme    string `json:"theme"`
-	Accent   string `json:"accent"`   // hex color, e.g. "#4f8cff"
-	Language string `json:"language"` // "tr" | "en"
+	Theme       string `json:"theme"`
+	Accent      string `json:"accent"`      // hex color, e.g. "#4f8cff"
+	ThemePreset string `json:"themePreset"` // curated palette id; "" = legacy theme+accent
+	Language    string `json:"language"`    // "tr" | "en"
 
 	// Providers.
 	DefaultProvider string `json:"defaultProvider"` // "claude-cli" | "anthropic"
@@ -75,9 +76,10 @@ type Settings struct {
 // user edits anything.
 func Default() Settings {
 	return Settings{
-		Theme:    ThemeDark,
-		Accent:   "#8b5cf6",
-		Language: "tr",
+		Theme:       ThemeDark,
+		Accent:      "#8b5cf6",
+		ThemePreset: "midnight-violet",
+		Language:    "tr",
 
 		DefaultProvider: "claude-cli",
 		DefaultModel:    "",
@@ -106,9 +108,10 @@ func Default() Settings {
 // DTO is the client-facing view of settings: identical to Settings minus the
 // encrypted secret, plus a boolean reporting whether a key is configured.
 type DTO struct {
-	Theme    string `json:"theme"`
-	Accent   string `json:"accent"`
-	Language string `json:"language"`
+	Theme       string `json:"theme"`
+	Accent      string `json:"accent"`
+	ThemePreset string `json:"themePreset"`
+	Language    string `json:"language"`
 
 	DefaultProvider string `json:"defaultProvider"`
 	DefaultModel    string `json:"defaultModel"`
@@ -151,9 +154,10 @@ type DTO struct {
 // ToDTO projects persisted settings into the client view, masking the secret.
 func (s Settings) ToDTO() DTO {
 	return DTO{
-		Theme:    s.Theme,
-		Accent:   s.Accent,
-		Language: s.Language,
+		Theme:       s.Theme,
+		Accent:      s.Accent,
+		ThemePreset: s.ThemePreset,
+		Language:    s.Language,
 
 		DefaultProvider: s.DefaultProvider,
 		DefaultModel:    s.DefaultModel,
@@ -198,9 +202,10 @@ func (s Settings) ToDTO() DTO {
 // any subset. AnthropicKey is write-only — a non-nil empty string clears the
 // stored key, a non-empty value replaces it.
 type Patch struct {
-	Theme    *string `json:"theme"`
-	Accent   *string `json:"accent"`
-	Language *string `json:"language"`
+	Theme       *string `json:"theme"`
+	Accent      *string `json:"accent"`
+	ThemePreset *string `json:"themePreset"`
+	Language    *string `json:"language"`
 
 	DefaultProvider *string `json:"defaultProvider"`
 	DefaultModel    *string `json:"defaultModel"`

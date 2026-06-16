@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from '../api'
 import { ProviderModelSelect } from './ProviderModelSelect'
+import { THEME_PRESETS } from '../lib/themePresets'
 import type {
   AppSettings,
   ProviderTestResult,
   SettingsPatch,
+  SlashCommand,
   WorkspaceSettings,
 } from '../types'
 
@@ -18,6 +20,9 @@ interface Props {
   // Delete the active workspace (app handles confirm/switch). Returns whether
   // the deletion proceeded.
   onDeleteWorkspace?: () => void
+  // Slash commands available in the chat composer — shown read-only in the
+  // "Komutlar" reference category.
+  commands?: SlashCommand[]
 }
 
 // Category keys: the app-global sections plus the per-workspace section.
@@ -31,6 +36,7 @@ type Cat =
   | 'autonomy'
   | 'autotitle'
   | 'mcp'
+  | 'commands'
   | 'diagnostics'
   | 'about'
   | 'workspace'
@@ -45,6 +51,7 @@ const APP_CATS: { key: Cat; label: string; icon: string }[] = [
   { key: 'autonomy', label: 'Otonomi', icon: '⚙' },
   { key: 'autotitle', label: 'Otomatik Başlık', icon: '🏷' },
   { key: 'mcp', label: 'MCP & Araçlar', icon: '🔌' },
+  { key: 'commands', label: 'Komutlar', icon: '⌘' },
   { key: 'diagnostics', label: 'Tanılama', icon: '🩺' },
   { key: 'about', label: 'Hakkında', icon: 'ℹ️' },
 ]
@@ -106,7 +113,7 @@ function Toggle({
 // SettingsPanel is the two-pane configuration screen: a category rail on the
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
-export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWorkspace }: Props) {
+export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWorkspace, commands = [] }: Props) {
   const [cat, setCat] = useState<Cat>('profile')
 
   // App-global settings scope.
@@ -150,7 +157,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
   const saveApp = async () => {
     if (!draft) return
     const patch: SettingsPatch = {
-      theme: draft.theme, accent: draft.accent, language: draft.language,
+      theme: draft.theme, accent: draft.accent, themePreset: draft.themePreset, language: draft.language,
       defaultProvider: draft.defaultProvider, defaultModel: draft.defaultModel, claudeCliPath: draft.claudeCliPath,
       minimaxBaseUrl: draft.minimaxBaseUrl,
       oneMillionContext: draft.oneMillionContext, extendedPromptCache: draft.extendedPromptCache,
@@ -253,7 +260,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
             <span className="text-xs text-[var(--color-text-dim)]">
               {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
             </span>
-            {cat !== 'about' && (
+            {cat !== 'about' && cat !== 'commands' && (
               <button
                 onClick={save}
                 disabled={!dirty || saving}
@@ -294,7 +301,37 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
 
               {cat === 'appearance' && (
                 <>
-                  <Field label="Tema">
+                  <Field label="Tema paleti" hint="Hazır bir palet seç; tüm arayüz yeniden renklenir. Vurgu rengini aşağıdan ince ayarlayabilirsin.">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {THEME_PRESETS.map((p) => {
+                        const sel = draft.themePreset === p.id
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setDraft((d) => (d ? { ...d, themePreset: p.id, accent: p.tokens.accent } : d))}
+                            className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition ${
+                              sel
+                                ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
+                                : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
+                            }`}
+                          >
+                            <span
+                              className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border"
+                              style={{ background: p.tokens.bg, borderColor: p.tokens.border }}
+                            >
+                              <span className="h-3.5 w-3.5 rounded-full" style={{ background: p.tokens.accent }} />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-xs font-medium text-[var(--color-text)]">{p.label}</span>
+                              <span className="block text-[10px] text-[var(--color-text-dim)]">{p.dark ? 'Koyu' : 'Açık'}</span>
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </Field>
+                  <Field label="Temel mod" hint="Yalnızca özel palet kullanılmadığında (sistem otomatik açık/koyu) etkilidir.">
                     <select value={draft.theme} onChange={(e) => set('theme', e.target.value as AppSettings['theme'])} className={inputCls}>
                       <option value="dark">Koyu</option>
                       <option value="light">Açık</option>
@@ -399,6 +436,34 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
 
               {cat === 'mcp' && (
                 <Field label="MCP Gateway URL" hint="Araç entegrasyonları için ağ geçidi adresi."><input value={draft.mcpGatewayUrl} onChange={(e) => set('mcpGatewayUrl', e.target.value)} placeholder="http://localhost:9091/mcp" className={inputCls} /></Field>
+              )}
+
+              {cat === 'commands' && (
+                <>
+                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+                    Sohbet kutusuna <code className="rounded bg-[var(--color-bg)] px-1">/</code> yazınca açılan komut paleti. Bir komutu komut olarak değil düz metin olarak göndermek istersen tırnak içine al: <code className="rounded bg-[var(--color-bg)] px-1">"/komut"</code>.
+                  </div>
+                  {commands.length === 0 ? (
+                    <div className="text-sm text-[var(--color-text-dim)]">Kayıtlı komut yok.</div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      {commands.map((c) => (
+                        <div
+                          key={c.name}
+                          className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-base">
+                            {c.icon ?? '⚡'}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="font-mono text-sm font-medium text-[var(--color-text)]">/{c.name}</div>
+                            <div className="truncate text-xs text-[var(--color-text-dim)]">{c.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
 
               {cat === 'diagnostics' && (

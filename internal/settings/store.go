@@ -100,6 +100,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	next := s.cur
 	applyString(&next.Theme, p.Theme)
 	applyString(&next.Accent, p.Accent)
+	applyString(&next.ThemePreset, p.ThemePreset)
 	applyString(&next.Language, p.Language)
 
 	applyString(&next.DefaultProvider, p.DefaultProvider)

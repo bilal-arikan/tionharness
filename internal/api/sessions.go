@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"os/exec"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
@@ -61,14 +62,16 @@ type titleResp struct {
 }
 
 type generateTitleReq struct {
-	// Source optionally overrides what the title is generated from. When empty,
-	// the session's existing conversation is used.
+	// Title, when set, is applied verbatim (manual rename) and no AI generation
+	// happens. Source optionally overrides what the title is generated from; when
+	// both are empty the session's existing conversation is used.
+	Title  string `json:"title"`
 	Source string `json:"source"`
 }
 
-// handleGenerateSessionTitle (re)generates a title for a chat session and
-// persists it. The source is an explicit override or, by default, the opening
-// of the session's conversation.
+// handleGenerateSessionTitle sets a session's title. With a `title` it renames
+// directly (manual); otherwise it (re)generates from `source` or, by default,
+// the opening of the session's conversation.
 func (s *Server) handleGenerateSessionTitle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
@@ -81,6 +84,15 @@ func (s *Server) handleGenerateSessionTitle(w http.ResponseWriter, r *http.Reque
 
 	var req generateTitleReq
 	_ = decodeJSON(r, &req) // body is optional
+
+	// Manual rename: apply the given title verbatim.
+	if t := strings.TrimSpace(req.Title); t != "" {
+		if err := wsp.DB.SetSessionTitle(ctx, id, t); writeDBError(w, err, "session not found") {
+			return
+		}
+		writeJSON(w, http.StatusOK, titleResp{ID: id, Title: t})
+		return
+	}
 
 	source := strings.TrimSpace(req.Source)
 	if source == "" {
@@ -138,4 +150,48 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 		messages = []db.Message{}
 	}
 	writeJSON(w, http.StatusOK, messages)
+}
+
+// handleMarkSessionRead clears a session's unread flag.
+func (s *Server) handleMarkSessionRead(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := ws(r).DB.MarkSessionRead(r.Context(), id); writeDBError(w, err, "session not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"id": id})
+}
+
+// handleDeleteSession removes a session and its on-disk folder.
+func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := ws(r).DB.DeleteSession(r.Context(), id); writeDBError(w, err, "session not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
+}
+
+// handleSessionPath returns the absolute folder holding the session's JSONL file.
+func (s *Server) handleSessionPath(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	path, err := ws(r).DB.SessionDir(id)
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"path": path})
+}
+
+// handleRevealSession opens the session's folder in the OS file manager on the
+// machine running the backend (local desktop app). Windows: Explorer.
+func (s *Server) handleRevealSession(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	path, err := ws(r).DB.SessionDir(id)
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+	if err := exec.CommandContext(r.Context(), "explorer.exe", path).Start(); err != nil {
+		// explorer.exe returns a non-zero exit code even on success; only a
+		// failure to *start* the process is a real error.
+		s.logger.Warn("reveal session folder failed", "session", id, "error", err)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"path": path})
 }

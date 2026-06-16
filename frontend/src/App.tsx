@@ -3,7 +3,9 @@ import { api, setActiveWorkspace, getActiveWorkspace } from './api'
 import type { Agent, AgentPatch, Session, Message, Workspace, AppSettings, TurnStep, SlashCommand, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
 import type { NewWorkspaceData } from './components/WorkspaceCreateModal'
-import { Sidebar } from './components/Sidebar'
+import { SessionsSidebar } from './components/SessionsSidebar'
+import { AgentRoster } from './components/AgentRoster'
+import { AgentsView } from './components/AgentsView'
 import { MessageList } from './components/MessageList'
 import { Composer } from './components/Composer'
 import { AskPrompt, type PendingAsk } from './components/chat/AskPrompt'
@@ -12,6 +14,7 @@ import { Schedules } from './components/Schedules'
 import { MemoryPanel } from './components/MemoryPanel'
 import { ToolsPanel } from './components/ToolsPanel'
 import { FlowsPanel } from './components/FlowsPanel'
+import { ArtifactsPanel } from './components/ArtifactsPanel'
 import { ChatMeters } from './components/ChatMeters'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LogsPanel } from './components/LogsPanel'
@@ -21,11 +24,13 @@ import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clie
 
 const VIEW_TITLE: Record<View, string> = {
   chat: 'Sohbet',
+  agents: 'Ajanlar',
   board: 'Görevler',
   schedules: 'Zamanlamalar',
   memory: 'Hafıza',
   tools: 'Araçlar',
   flows: 'Akışlar',
+  artifacts: 'Artifactlar',
   logs: 'Loglar',
   settings: 'Ayarlar',
 }
@@ -66,10 +71,13 @@ export default function App() {
   // When the agent calls ask_user, the turn pauses and this holds the question
   // until the user answers (delivered to the still-open stream via chatControl).
   const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null)
+  // Artifact deep-link target: set when a chat artifact card is clicked, opening
+  // the artifacts screen with that artifact pre-selected.
+  const [artifactTarget, setArtifactTarget] = useState<string | null>(null)
 
   // Apply the client-side preferences carried by app settings.
-  const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; keepAwake: boolean; desktopNotifications: boolean }) => {
-    applyTheme(s.theme, s.accent)
+  const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; themePreset?: string; keepAwake: boolean; desktopNotifications: boolean }) => {
+    applyTheme(s.theme, s.accent, s.themePreset)
     applyKeepAwake(s.keepAwake)
     ensureNotificationPermission(s.desktopNotifications)
     notifyEnabled.current = s.desktopNotifications
@@ -136,6 +144,12 @@ export default function App() {
     }
   }, [])
 
+  // Clicking an artifact card in chat: open the artifacts screen on that one.
+  const openArtifact = useCallback((id: string) => {
+    setArtifactTarget(id)
+    setView('artifacts')
+  }, [])
+
   const switchWorkspace = useCallback((id: string) => {
     setActiveWorkspace(id)
     setActiveWorkspaceId(id)
@@ -194,14 +208,68 @@ export default function App() {
     api.listMessages(activeSessionId).then(setMessages)
   }, [activeSessionId])
 
-  // Select a session: also reflect its default agent (for the header/meters).
+  // Reload the session list (fresh order, updated times, unread flags).
+  const refreshSessions = useCallback(() => {
+    api.listSessions().then(setSessions).catch(() => {})
+  }, [])
+
+  // Select a session: reflect its default agent and clear its unread flag.
   const selectSession = useCallback(
     (id: string) => {
       setActiveSessionId(id)
       const sess = sessions.find((s) => s.id === id)
       if (sess) setActiveAgentId(sess.agentId)
+      // Optimistically clear unread, then persist on the backend.
+      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, unread: false } : s)))
+      api.markSessionRead(id).catch(() => {})
     },
     [sessions],
+  )
+
+  // ---- per-session actions (settings menu) ----
+  const renameSession = useCallback(async (id: string, title: string) => {
+    try {
+      await api.setSessionTitle(id, title)
+      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, title } : s)))
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }, [])
+
+  const copySessionPath = useCallback(async (id: string) => {
+    try {
+      const { path } = await api.sessionPath(id)
+      await navigator.clipboard?.writeText(path)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }, [])
+
+  const revealSession = useCallback(async (id: string) => {
+    try {
+      await api.revealSession(id)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }, [])
+
+  const deleteSession = useCallback(
+    async (id: string) => {
+      try {
+        await api.deleteSession(id)
+        setSessions((prev) => {
+          const next = prev.filter((s) => s.id !== id)
+          if (activeSessionId === id) {
+            setActiveSessionId(next[0]?.id ?? null)
+            setActiveAgentId(next[0]?.agentId ?? null)
+          }
+          return next
+        })
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [activeSessionId],
   )
 
   // Autonomous-event handler: raise a desktop notification whose click deep-links
@@ -217,6 +285,11 @@ export default function App() {
         next.add(e.workspaceId)
         return next
       })
+    }
+    // Same-workspace activity (chat/heartbeat/schedule) updates the session list
+    // so unread dots, ordering and times stay live without a manual refresh.
+    if (!e.workspaceId || e.workspaceId === getActiveWorkspace()) {
+      refreshSessions()
     }
     // Chat completions only drive the badge (the streaming turn already raises
     // its own reply notification); other event types raise a desktop
@@ -312,7 +385,6 @@ export default function App() {
       }
       const sessAgent = sessions.find((s) => s.id === sid)?.agentId
       const agentIds = mentioned.length ? mentioned : sessAgent ? [sessAgent] : []
-      const replyCount = agentIds.length || 1
 
       const now = Math.floor(Date.now() / 1000)
       const optimistic: Message = {
@@ -390,18 +462,12 @@ export default function App() {
             })
           },
           onDone: (d) => {
-            setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sid
-                  ? {
-                      ...s,
-                      messageCount: s.messageCount + 1 + replyCount,
-                      title: d.sessionTitle || s.title,
-                    }
-                  : s,
-              ),
-            )
+            void d
             setMeterRefresh((n) => n + 1)
+            // The active session got an agent reply (marked unread on the
+            // backend); the user is viewing it, so clear that, then reload the
+            // list to refresh order/times/counts.
+            api.markSessionRead(sid).catch(() => {}).finally(refreshSessions)
           },
           onError: (err) => {
             setError(err)
@@ -525,18 +591,31 @@ export default function App() {
 
       {/* The agent/session list only applies to agent-scoped views. Board and
           schedules are workspace-scoped, so the list is hidden there. */}
-      {(view === 'chat' || view === 'memory' || view === 'tools') && (
-        <Sidebar
-          agents={agents}
+      {/* Chat: a sessions-only list (agents now live in their own view). */}
+      {view === 'chat' && (
+        <SessionsSidebar
           sessions={sessions}
-          defaultAgentId={defaultAgentId}
+          agents={agents}
           activeSessionId={activeSessionId}
-          onSelectAgent={pickAgent}
+          newDisabled={agents.length === 0}
           onSelectSession={selectSession}
+          onNewSession={newSession}
+          onRenameSession={renameSession}
+          onGenerateTitle={regenerateSessionTitle}
+          onCopyPath={copySessionPath}
+          onRevealFolder={revealSession}
+          onDeleteSession={deleteSession}
+        />
+      )}
+
+      {/* Agent-scoped views need an agent picker; reuse the roster as a sidebar. */}
+      {(view === 'memory' || view === 'tools') && (
+        <AgentRoster
+          agents={agents}
+          defaultAgentId={defaultAgentId}
+          onSelectAgent={pickAgent}
           onCreateAgent={createAgent}
           onUpdateAgent={updateAgent}
-          onNewSession={newSession}
-          onRegenerateSessionTitle={regenerateSessionTitle}
         />
       )}
 
@@ -574,6 +653,7 @@ export default function App() {
               pending={pending}
               agents={agents}
               onOpenFile={openFile}
+              onOpenArtifact={openArtifact}
             />
             {pendingAsk && <AskPrompt ask={pendingAsk} onAnswer={answerAsk} />}
             <Composer
@@ -588,6 +668,15 @@ export default function App() {
               commands={chatCommands}
             />
           </>
+        )}
+        {view === 'agents' && (
+          <AgentsView
+            agents={agents}
+            defaultAgentId={defaultAgentId}
+            onSetDefault={pickAgent}
+            onCreateAgent={createAgent}
+            onUpdateAgent={updateAgent}
+          />
         )}
         {view === 'board' && <TaskBoard agents={agents} onError={setError} />}
         {view === 'schedules' && <Schedules agents={agents} onError={setError} />}
@@ -604,6 +693,17 @@ export default function App() {
           />
         )}
         {view === 'flows' && <FlowsPanel agents={agents} onError={setError} />}
+        {view === 'artifacts' && (
+          <ArtifactsPanel
+            onError={setError}
+            agents={agents}
+            selectedId={artifactTarget}
+            onOpenSession={(sid) => {
+              setView('chat')
+              selectSession(sid)
+            }}
+          />
+        )}
         {view === 'logs' && <LogsPanel onError={setError} />}
         {view === 'settings' && (
           <SettingsPanel
@@ -611,6 +711,7 @@ export default function App() {
             onSaved={applyClientPrefs}
             onWorkspaceChanged={() => api.listWorkspaces().then(setWorkspaces).catch(() => {})}
             onDeleteWorkspace={deleteActiveWorkspace}
+            commands={chatCommands}
           />
         )}
       </main>

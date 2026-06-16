@@ -4,16 +4,22 @@ import { ActivityCard } from './ActivityCard'
 import { TextStep } from './TextStep'
 import { TodoCard } from './TodoCard'
 import { RecoveryStep } from './RecoveryStep'
+import { ArtifactCard } from './ArtifactCard'
 
 interface Props {
   steps: TurnStep[]
   onOpenFile?: (path: string) => void
+  onOpenArtifact?: (id: string) => void
 }
+
+// Tool names the chat renders as a special artifact card instead of a generic
+// activity row.
+const ARTIFACT_TOOLS = new Set(['create_artifact', 'update_artifact'])
 
 // TurnSteps renders an assistant turn's activity trace as compact, collapsible
 // cards: thinking blocks, intermediate narration and tool activity cards — all
 // single-line by default, expandable on click.
-export function TurnSteps({ steps, onOpenFile }: Props) {
+export function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
   if (!steps.length) return null
   return (
     <div className="mb-2 flex flex-col gap-0.5">
@@ -25,6 +31,10 @@ export function TurnSteps({ steps, onOpenFile }: Props) {
           // Back-compat: traces persisted before 'todo' was a first-class kind
           // carry the checklist as a todo_write tool step.
           if (step.tool === 'todo_write') return <TodoCard key={i} step={step} />
+          // Artifact create/update → clickable card linking to the viewer.
+          if (step.tool && ARTIFACT_TOOLS.has(step.tool)) {
+            return <ArtifactCard key={i} step={step} onOpenArtifact={onOpenArtifact} />
+          }
           return <ActivityCard key={i} step={step} onOpenFile={onOpenFile} />
         }
         // Intermediate text narration — collapsed to a one-line card.

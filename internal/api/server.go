@@ -88,6 +88,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerUsageRoutes(mux)
 	s.registerMCPRoutes(mux)
 	s.registerFlowRoutes(mux)
+	s.registerArtifactRoutes(mux)
 	s.registerSettingsRoutes(mux)
 	s.registerMemoryRoutes(mux)
 	s.registerMiscRoutes(mux)
@@ -119,8 +120,12 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("POST /api/sessions", s.handleCreateSession)
+	mux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleListMessages)
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
+	mux.HandleFunc("POST /api/sessions/{id}/read", s.handleMarkSessionRead)
+	mux.HandleFunc("GET /api/sessions/{id}/path", s.handleSessionPath)
+	mux.HandleFunc("POST /api/sessions/{id}/reveal", s.handleRevealSession)
 }
 
 // registerChatRoutes registers the completion endpoints.
@@ -185,6 +190,16 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/flows/{id}/run", s.handleRunFlow)
 	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
 	mux.HandleFunc("GET /api/flow-runs/{id}", s.handleGetFlowRun)
+}
+
+// registerArtifactRoutes registers the artifact store (versioned agent-produced
+// content viewed in a dedicated screen).
+func (s *Server) registerArtifactRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/artifacts", s.handleListArtifacts)
+	mux.HandleFunc("POST /api/artifacts", s.handleCreateArtifact)
+	mux.HandleFunc("GET /api/artifacts/{id}", s.handleGetArtifact)
+	mux.HandleFunc("PUT /api/artifacts/{id}", s.handleUpdateArtifact)
+	mux.HandleFunc("DELETE /api/artifacts/{id}", s.handleDeleteArtifact)
 }
 
 // registerSettingsRoutes registers the global application settings document.

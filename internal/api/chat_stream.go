@@ -151,7 +151,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 		llmReq := providers.Request{Model: agentRow.Model, System: system, Messages: prep.Messages}
 
-		resp, steps, cerr := wsp.Runtime.CompleteWithToolsStream(ctx, agentRow, provider, llmReq, false,
+		// Attach a per-agent artifact sink so create_artifact / update_artifact
+		// persist content stamped with this session + agent.
+		turnCtx := tools.WithArtifacts(ctx, newArtifactSink(database, session.ID, agentRow.ID))
+
+		resp, steps, cerr := wsp.Runtime.CompleteWithToolsStream(turnCtx, agentRow, provider, llmReq, false,
 			func(st agent.TurnStep) { sse("step", st) },
 		)
 		if cerr != nil {

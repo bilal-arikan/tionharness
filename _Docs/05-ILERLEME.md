@@ -12,6 +12,26 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Tırnakla komut kaçışı + Komutlar referans ekranı ✅ (2026-06-16)
+İki küçük UX iyileştirmesi:
+
+1. **Tırnak içine alınan komut = düz metin** (`components/chat/UserBubble.tsx`): Bir mesaj `/` ile başlayan bir komutu **tırnak içinde** içeriyorsa (`"/komut"`, `'/komut'`, `` `/komut` ``, akıllı tırnaklar dahil), komut stili (mono + ⌘ + kenarlık) **uygulanmaz**; tırnaklar soyulur ve içerik normal balonda düz metin olarak gösterilir. Böylece bir komuttan *bahsetmek* mümkün. `quotedCommand()` yardımcısı + `QUOTE_PAIRS` haritası. Composer paleti zaten `/` ile başlamayan girişlerde açılmadığından tırnaklı giriş paleti de tetiklemez.
+2. **"Komutlar" ayar ekranı** (`SettingsPanel.tsx`): Ayarlar'da yeni `commands` kategorisi (⌘ "Komutlar") tüm slash komutlarını ikon + `/ad` + açıklama ile **salt-okunur** listeler. Komut listesi App'ten `commands={chatCommands}` prop'u ile geçirilir; bilgilendirme kutusunda tırnakla kaçış da anlatılır. Bu kategori için Kaydet butonu gizli (referans ekranı).
+
+> Doğrulama: kendi dosyalarımda tsc temiz. Not: Aynı ağaçta paralel **artifacts** WIP'i (ArtifactsPanel) henüz bağlanmadığından `tsc -b` o dosyalarda kırmızı; commit ağaç yeşile dönünce yapılacak.
+
+### Sohbet sidebar = oturum listesi + okundu/okunmadı ✅ (2026-06-16)
+Sohbet sol paneli ajanlardan arındırıldı; oturum-merkezli hale geldi (Playwright ile canlı test edildi):
+
+1. **Sadece oturumlar**: Sohbet sidebar yalnızca oturumları gösterir (`SessionsSidebar.tsx`). Ajan roster'ı `AgentRoster.tsx`'e taşındı (Hafıza/Araçlar sidebar'ı). **Ajanlar** NavRail view'i **iki-panelli** (`AgentsView.tsx`): solda roster (★ ile varsayılan seç), ajana tıklayınca sağda ayarları düzenlenir; form ortak `AgentSettingsForm.tsx`'e çıkarıldı (`AgentsView` sağ paneli + `AgentSettingsModal` roster ⚙'i paylaşır). Eski `Sidebar.tsx` silindi.
+2. **Zaman gruplama + sıralama**: oturumlar `updatedAt` desc (backend zaten böyle) + **Bugün / Dün / Geçen hafta / Geçen ay / Daha eski** kovaları (`lib/time.ts`: `bucketOf` takvim-günü bazlı, `relativeTime`). Her satırda relative zaman + mesaj sayısı.
+3. **`updatedAt`**: `AddMessage` her mesajda (kullanıcı turu başı + ajan yanıtı) `UpdatedAt` basıyor → oturum otomatik en üste.
+4. **Oturum ⚙ menüsü**: Başlığı düzenle (inline → `POST /api/sessions/{id}/title {title}`), AI ile başlık, Yolu kopyala (`GET .../path`), Klasörü aç (`POST .../reveal` → Explorer), Sil (`DELETE /api/sessions/{id}`, onaylı).
+5. **Okundu/okunmadı** (`Session.Unread`): `AddMessage` assistant'ta `Unread=true`; `MarkSessionRead` temizler. Oturum açılınca + aktif tur bitince okundu; açık değilken gelen yanıt **nokta + kalın** ile okunmadı. Olay feed'i aktif workspace'te listeyi tazeler.
+
+> Doğrulama: build/vet + tsc yeşil; Playwright: sessions-only + Bugün/Dün gruplama + zamanlar, ⚙ menü (manuel rename uygulandı), Ajanlar view; API: path doğru + `/api/chat` sonrası `unread=true` + en üste taşındı + frontend nokta/kalın render.
+> Not: Aynı çalışma ağacında eşzamanlı **artifacts** + **tema presetleri** çalışması var; commit ayrımı kullanıcı onayına bırakıldı (bkz. oturum sonu özeti).
+
 ### Workspace switcher iyileştirmeleri ✅ (2026-06-16)
 Sol-üst workspace seçici elden geçirildi (Playwright ile canlı test edildi):
 

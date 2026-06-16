@@ -1,0 +1,278 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Agent, Session } from '../types'
+import { AgentAvatar } from './AgentAvatar'
+import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '../lib/time'
+
+interface Props {
+  sessions: Session[]
+  agents: Agent[]
+  activeSessionId: string | null
+  newDisabled: boolean
+  onSelectSession: (id: string) => void
+  onNewSession: () => void
+  onRenameSession: (id: string, title: string) => void
+  onGenerateTitle: (id: string) => void
+  onCopyPath: (id: string) => void
+  onRevealFolder: (id: string) => void
+  onDeleteSession: (id: string) => void
+}
+
+// SessionsSidebar is the chat column: a flat, time-bucketed list of every
+// session (newest first), with per-row unread dots and a settings menu
+// (rename, AI title, copy path, open folder, delete).
+export function SessionsSidebar({
+  sessions,
+  agents,
+  activeSessionId,
+  newDisabled,
+  onSelectSession,
+  onNewSession,
+  onRenameSession,
+  onGenerateTitle,
+  onCopyPath,
+  onRevealFolder,
+  onDeleteSession,
+}: Props) {
+  const [menuId, setMenuId] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameText, setRenameText] = useState('')
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // Draggable width (persisted), matching the old sidebar behaviour.
+  const MIN = 200
+  const MAX = 560
+  const [width, setWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('swarmgo.sidebarWidth'))
+    return saved >= MIN && saved <= MAX ? saved : 264
+  })
+  const drag = useRef<{ startX: number; startW: number } | null>(null)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!drag.current) return
+      setWidth(Math.min(MAX, Math.max(MIN, drag.current.startW + (e.clientX - drag.current.startX))))
+    }
+    const onUp = () => {
+      if (!drag.current) return
+      drag.current = null
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+      localStorage.setItem('swarmgo.sidebarWidth', String(width))
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [width])
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault()
+    drag.current = { startX: e.clientX, startW: width }
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+  }
+
+  // Close the open row menu on any outside click.
+  useEffect(() => {
+    if (!menuId) return
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setMenuId(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [menuId])
+
+  // Group the (already newest-first) sessions into recency buckets, preserving order.
+  const groups = useMemo(() => {
+    const map = new Map<Bucket, Session[]>()
+    for (const s of sessions) {
+      const b = bucketOf(s.updatedAt)
+      const arr = map.get(b) ?? []
+      arr.push(s)
+      map.set(b, arr)
+    }
+    return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
+  }, [sessions])
+
+  const startRename = (s: Session) => {
+    setRenamingId(s.id)
+    setRenameText(s.title || '')
+    setMenuId(null)
+  }
+  const commitRename = (id: string) => {
+    const t = renameText.trim()
+    if (t) onRenameSession(id, t)
+    setRenamingId(null)
+  }
+
+  return (
+    <aside
+      ref={rootRef}
+      style={{ width }}
+      className="relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
+    >
+      <div className="flex items-center justify-between px-4 pt-4 pb-1">
+        <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+          Oturumlar
+        </span>
+        <button
+          onClick={onNewSession}
+          disabled={newDisabled}
+          className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-30"
+          title="Yeni oturum (varsayılan ajanla)"
+        >
+          +
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-2 pb-2">
+        {groups.map(({ bucket, items }) => (
+          <div key={bucket} className="mb-1">
+            <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+              {BUCKET_LABELS[bucket]}
+            </div>
+            {items.map((s) => {
+              const owner = agents.find((a) => a.id === s.agentId)
+              const isActive = activeSessionId === s.id
+              return (
+                <div
+                  key={s.id}
+                  className={`group relative mb-0.5 flex w-full items-center rounded-lg pr-1 text-sm transition ${
+                    isActive
+                      ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                      : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+                  }`}
+                >
+                  {renamingId === s.id ? (
+                    <input
+                      autoFocus
+                      value={renameText}
+                      onChange={(e) => setRenameText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitRename(s.id)
+                        if (e.key === 'Escape') setRenamingId(null)
+                      }}
+                      onBlur={() => commitRename(s.id)}
+                      className="m-1 flex-1 rounded border border-[var(--color-accent)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => onSelectSession(s.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+                    >
+                      {owner ? (
+                        <AgentAvatar agent={owner} size={20} />
+                      ) : (
+                        <span className="h-5 w-5 shrink-0" />
+                      )}
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="flex items-center gap-1.5">
+                          {s.unread && (
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Okunmadı" />
+                          )}
+                          <span className={`min-w-0 flex-1 truncate ${s.unread ? 'font-semibold text-[var(--color-text)]' : ''}`}>
+                            {s.title || 'Yeni sohbet'}
+                          </span>
+                        </span>
+                        <span className="truncate text-[10px] opacity-60">
+                          {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
+                        </span>
+                      </span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => setMenuId((v) => (v === s.id ? null : s.id))}
+                    title="Oturum ayarları"
+                    className="ml-1 shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"
+                  >
+                    ⚙
+                  </button>
+
+                  {menuId === s.id && (
+                    <div className="absolute right-1 top-9 z-20 w-44 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-sm shadow-xl">
+                      <MenuItem icon="✏️" label="Başlığı düzenle" onClick={() => startRename(s)} />
+                      <MenuItem
+                        icon="✨"
+                        label="AI ile başlık"
+                        disabled={s.messageCount === 0}
+                        onClick={() => {
+                          onGenerateTitle(s.id)
+                          setMenuId(null)
+                        }}
+                      />
+                      <MenuItem
+                        icon="📋"
+                        label="Yolu kopyala"
+                        onClick={() => {
+                          onCopyPath(s.id)
+                          setMenuId(null)
+                        }}
+                      />
+                      <MenuItem
+                        icon="📂"
+                        label="Klasörü aç"
+                        onClick={() => {
+                          onRevealFolder(s.id)
+                          setMenuId(null)
+                        }}
+                      />
+                      <div className="my-1 border-t border-[var(--color-border)]" />
+                      <MenuItem
+                        icon="🗑"
+                        label="Sil"
+                        danger
+                        onClick={() => {
+                          setMenuId(null)
+                          if (confirm(`"${s.title || 'Bu oturum'}" silinsin mi?`)) onDeleteSession(s.id)
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+        {sessions.length === 0 && (
+          <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">Oturum yok. + ile başlat.</p>
+        )}
+      </div>
+
+      <div
+        onMouseDown={startDrag}
+        title="Genişliği ayarla"
+        className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent transition hover:bg-[var(--color-accent)]"
+      />
+    </aside>
+  )
+}
+
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  disabled,
+  danger,
+}: {
+  icon: string
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  danger?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left transition disabled:opacity-30 ${
+        danger
+          ? 'text-red-400 hover:bg-red-500/10'
+          : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
+      }`}
+    >
+      <span className="text-xs">{icon}</span>
+      {label}
+    </button>
+  )
+}

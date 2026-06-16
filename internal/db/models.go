@@ -46,6 +46,9 @@ type Session struct {
 	Title        string `json:"title"`
 	MessageCount int    `json:"messageCount"`
 	State        string `json:"state"`
+	// Unread is true when an agent reply landed in this session while it was not
+	// the one being viewed; cleared when the user opens it.
+	Unread bool `json:"unread"`
 
 	// Conversation compaction state (see internal/conversation).
 	Summary         string `json:"summary"`

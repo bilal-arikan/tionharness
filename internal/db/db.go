@@ -44,6 +44,7 @@ type DB struct {
 	mcp       map[string]MCPServer
 	flows     map[string]Flow
 	flowRuns  map[string]FlowRun
+	artifacts map[string]Artifact
 	usage     map[string]Usage // keyed by agentID + "|" + day
 }
 
@@ -62,6 +63,7 @@ func Open(path string) (*DB, error) {
 		mcp:       map[string]MCPServer{},
 		flows:     map[string]Flow{},
 		flowRuns:  map[string]FlowRun{},
+		artifacts: map[string]Artifact{},
 		usage:     map[string]Usage{},
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
@@ -92,6 +94,7 @@ const (
 	dirMCP       = "mcp-servers"
 	dirFlows     = "flows"
 	dirFlowRuns  = "flow-runs"
+	dirArtifacts = "artifacts"
 	dirUsage     = "usage"
 )
 
@@ -218,6 +221,14 @@ func (d *DB) load() error {
 	}
 	for _, r := range flowRuns {
 		d.flowRuns[r.ID] = r
+	}
+
+	artifacts, err := loadJSONDir[Artifact](d.dir(dirArtifacts))
+	if err != nil {
+		return err
+	}
+	for _, a := range artifacts {
+		d.artifacts[a.ID] = a
 	}
 
 	if err := d.loadKnowledge(); err != nil {

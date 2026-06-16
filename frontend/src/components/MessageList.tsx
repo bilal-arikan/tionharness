@@ -11,6 +11,7 @@ interface Props {
   pending: boolean
   agents: Agent[]
   onOpenFile?: (path: string) => void
+  onOpenArtifact?: (id: string) => void
 }
 
 // Bouncing-dots "working" indicator shown while a turn is in flight.
@@ -24,7 +25,7 @@ function WorkingDots() {
   )
 }
 
-export function MessageList({ messages, pending, agents, onOpenFile }: Props) {
+export function MessageList({ messages, pending, agents, onOpenFile, onOpenArtifact }: Props) {
   const endRef = useRef<HTMLDivElement>(null)
   const agentById = (id?: string) => (id ? agents.find((a) => a.id === id) : undefined)
 
@@ -57,7 +58,7 @@ export function MessageList({ messages, pending, agents, onOpenFile }: Props) {
                   </div>
                 )}
                 {m.reasoningContent && <ThinkingBlock text={m.reasoningContent} />}
-                <TurnSteps steps={parseSteps(m.steps)} onOpenFile={onOpenFile} />
+                <TurnSteps steps={parseSteps(m.steps)} onOpenFile={onOpenFile} onOpenArtifact={onOpenArtifact} />
                 {m.text.trim() && <Markdown onOpenFile={onOpenFile}>{m.text}</Markdown>}
                 {/* Empty live assistant bubble → show the working indicator. */}
                 {!m.text.trim() &&

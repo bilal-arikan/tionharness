@@ -31,6 +31,8 @@ import type {
   LogEntry,
   CatalogEntry,
   AppEvent,
+  Artifact,
+  ArtifactKind,
 } from './types'
 
 // Active workspace — sent as X-Workspace-Id on every request so the backend
@@ -222,6 +224,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(source ? { source } : {}),
     }),
+  // Set a session title verbatim (manual rename).
+  setSessionTitle: (sessionId: string, title: string) =>
+    req<{ id: string; title: string }>(`/api/sessions/${sessionId}/title`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
+  // Clear a session's unread flag.
+  markSessionRead: (sessionId: string) =>
+    req<{ id: string }>(`/api/sessions/${sessionId}/read`, { method: 'POST' }),
+  // Delete a session and its on-disk folder.
+  deleteSession: (sessionId: string) =>
+    req<{ deleted: string }>(`/api/sessions/${sessionId}`, { method: 'DELETE' }),
+  // Absolute folder holding the session's JSONL file.
+  sessionPath: (sessionId: string) =>
+    req<{ path: string }>(`/api/sessions/${sessionId}/path`),
+  // Open the session's folder in the OS file manager (local desktop).
+  revealSession: (sessionId: string) =>
+    req<{ path: string }>(`/api/sessions/${sessionId}/reveal`, { method: 'POST' }),
 
   // Chat.
   chat: (sessionId: string, message: string) =>
@@ -398,6 +418,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ provider }),
     }),
+
+  // Artifacts (versioned agent-produced content, workspace-scoped).
+  listArtifacts: (sessionId?: string) =>
+    req<Artifact[]>(
+      sessionId ? `/api/artifacts?sessionId=${encodeURIComponent(sessionId)}` : '/api/artifacts',
+    ),
+  getArtifact: (id: string) => req<Artifact>(`/api/artifacts/${id}`),
+  createArtifact: (data: {
+    title: string
+    kind?: ArtifactKind
+    language?: string
+    content?: string
+    sessionId?: string
+    agentId?: string
+  }) =>
+    req<Artifact>('/api/artifacts', { method: 'POST', body: JSON.stringify(data) }),
+  updateArtifact: (
+    id: string,
+    patch: { content?: string; note?: string; title?: string; kind?: ArtifactKind; language?: string },
+  ) => req<Artifact>(`/api/artifacts/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  deleteArtifact: (id: string) =>
+    req<{ ok: boolean }>(`/api/artifacts/${id}`, { method: 'DELETE' }),
 
   // Provider/model catalog (for agent + settings pickers).
   getCatalog: () => req<CatalogEntry[]>('/api/catalog'),

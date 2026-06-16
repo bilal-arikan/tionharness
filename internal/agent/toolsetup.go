@@ -63,6 +63,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// the turn for a clarifying question (no-op outside interactive chat).
 		tools.NewTodoWriteTool(),
 		tools.NewAskUserTool(),
+		// Artifact tools: save/revise substantial content as a versioned artifact
+		// the user can open in a dedicated viewer (no-op outside interactive chat).
+		tools.NewCreateArtifactTool(),
+		tools.NewUpdateArtifactTool(),
 	}
 
 	// Workspace-scoped filesystem tools (sandboxed to this workspace's work dir).
