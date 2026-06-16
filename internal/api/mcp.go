@@ -86,6 +86,7 @@ func (s *Server) handleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.logger.Info("mcp server toggled", "id", id, "enabled", req.Enabled)
 	writeJSON(w, http.StatusOK, map[string]bool{"enabled": req.Enabled})
 }
 
@@ -112,9 +113,11 @@ func (s *Server) handleTestMCPServer(w http.ResponseWriter, r *http.Request) {
 
 	tools, err := mcp.ListServerTools(ctx, cfg)
 	if err != nil {
+		s.logger.Warn("mcp server test failed", "server", server.Name, "error", err)
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	s.logger.Info("mcp server tested", "server", server.Name, "tools", len(tools))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "toolCount": len(tools), "tools": tools})
 }
 

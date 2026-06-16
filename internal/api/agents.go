@@ -91,6 +91,8 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 			agent.DailyTokenLimit = cfg.DefaultDailyTokenLimit
 		}
 	}
+	s.logger.Info("agent created", "agent", agent.Name, "id", agent.ID,
+		"provider", agent.Provider, "model", agent.Model)
 	writeJSON(w, http.StatusCreated, agent)
 }
 
@@ -103,6 +105,7 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	if err := wsp.DB.DeleteAgent(r.Context(), id); writeDBError(w, err, "agent not found") {
 		return
 	}
+	s.logger.Info("agent deleted", "id", id)
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
 }
 
@@ -143,5 +146,6 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "agent not found") {
 		return
 	}
+	s.logger.Info("agent updated", "agent", agent.Name, "id", agent.ID)
 	writeJSON(w, http.StatusOK, agent)
 }

@@ -66,6 +66,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
+	s.logger.Info("task created", "task", task.ID, "title", task.Title, "owner", req.OwnerAgentID)
 	writeJSON(w, http.StatusCreated, task)
 }
 

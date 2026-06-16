@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -192,9 +193,14 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		llmReq := providers.Request{Model: agentRow.Model, System: system, SystemDynamic: dynamic, Messages: prep.Messages}
 
 		// Attach a per-agent artifact sink so create_artifact / update_artifact
-		// persist content stamped with this session + agent.
-		turnCtx := tools.WithArtifacts(ctx, newArtifactSink(database, session.ID, agentRow.ID))
+		// persist content stamped with this session + agent — both on the native
+		// tool path (via context) and the CLI path (via the run, used by the
+		// Interaction MCP backend).
+		sink := newArtifactSink(database, session.ID, agentRow.ID)
+		run.setArtifacts(sink)
+		turnCtx := tools.WithArtifacts(ctx, sink)
 
+		agentStart := time.Now()
 		resp, steps, cerr := wsp.Runtime.CompleteWithToolsStream(turnCtx, agentRow, provider, llmReq, false,
 			func(st agent.TurnStep) { sse("step", st) },
 		)
@@ -224,6 +230,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 		wsp.Runtime.Journal(ctx, agentRow.ID, "Q: "+req.Message+"\nA: "+resp.Text)
 		sse("reply", map[string]any{"replyMessage": replyMsg})
+
+		s.logger.Info("chat turn completed",
+			"session", session.ID, "agent", agentRow.Name, "provider", agentRow.Provider,
+			"model", resp.Model, "in", resp.Usage.InputTokens, "out", resp.Usage.OutputTokens,
+			"steps", len(steps), "stream", true,
+			"dur", time.Since(agentStart).Round(time.Millisecond).String())
 	}
 
 	// Auto-title once, after the turn, using the first responding agent.

@@ -63,6 +63,7 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	if err := wsp.Scheduler.Reload(r.Context()); err != nil {
 		s.logger.Warn("scheduler reload failed", "error", err)
 	}
+	s.logger.Info("schedule created", "id", schedule.ID, "agent", req.AgentID, "cron", req.CronExpr)
 	writeJSON(w, http.StatusCreated, schedule)
 }
 
@@ -87,6 +88,7 @@ func (s *Server) handleToggleSchedule(w http.ResponseWriter, r *http.Request) {
 	if err := wsp.Scheduler.Reload(r.Context()); err != nil {
 		s.logger.Warn("scheduler reload failed", "error", err)
 	}
+	s.logger.Info("schedule toggled", "id", id, "enabled", req.Enabled)
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "enabled": req.Enabled})
 }
 

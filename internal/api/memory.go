@@ -56,6 +56,7 @@ func (s *Server) handleCreateMemory(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
+	s.logger.Info("memory added", "agent", agentID, "kind", req.Kind, "id", mem.ID)
 	writeJSON(w, http.StatusCreated, mem)
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/db"
@@ -54,6 +55,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	database := ws(r).DB
+	start := time.Now()
 
 	session, err := database.GetSession(ctx, req.SessionID)
 	// Capture before the user message is appended: an empty title on a fresh
@@ -176,6 +178,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Usage already recorded inside CompleteWithTools; just journal the turn.
 	ws(r).Runtime.Journal(ctx, agent.ID, "Q: "+req.Message+"\nA: "+resp.Text)
+
+	s.logger.Info("chat turn completed",
+		"session", session.ID, "agent", agent.Name, "provider", agent.Provider,
+		"model", resp.Model, "in", resp.Usage.InputTokens, "out", resp.Usage.OutputTokens,
+		"steps", len(steps), "dur", time.Since(start).Round(time.Millisecond).String())
 
 	// On the first turn of an untitled chat, auto-generate a title from the
 	// opening message. Best-effort: a failure must never break the reply.
