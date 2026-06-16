@@ -74,6 +74,7 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 		if s.AgentID == id {
 			delete(d.sessions, sid)
 			delete(d.messages, sid)
+			_ = os.RemoveAll(d.sessionUploadsDir(sid))
 			_ = os.RemoveAll(d.dir(dirSessions, sid))
 		}
 	}
@@ -266,7 +267,9 @@ func (d *DB) MarkSessionRead(ctx context.Context, sessionID string) error {
 	})
 }
 
-// DeleteSession removes a session, its messages, and its on-disk folder.
+// DeleteSession removes a session, its messages, its on-disk folder, and any
+// attachment uploads that belonged to it (so uploaded files don't outlive the
+// session that referenced them).
 func (d *DB) DeleteSession(ctx context.Context, sessionID string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -275,7 +278,15 @@ func (d *DB) DeleteSession(ctx context.Context, sessionID string) error {
 	}
 	delete(d.sessions, sessionID)
 	delete(d.messages, sessionID)
+	_ = os.RemoveAll(d.sessionUploadsDir(sessionID))
 	return os.RemoveAll(d.dir(dirSessions, sessionID))
+}
+
+// sessionUploadsDir returns the attachment-upload folder for a session. Uploads
+// live in the workspace sandbox (workspace/uploads/<sid>), a sibling of the
+// store root (store/), so they are removed together with the session.
+func (d *DB) sessionUploadsDir(sessionID string) string {
+	return filepath.Join(filepath.Dir(d.root), "workspace", "uploads", sessionID)
 }
 
 // SessionDir returns the absolute folder holding a session's JSONL file.
@@ -369,6 +380,34 @@ func (d *DB) appendMessageLocked(sessionID string, m Message) error {
 		return err
 	}
 	return f.Close()
+}
+
+// DeleteMessage removes a single message from a session by id and rewrites the
+// session's JSONL file. Returns ErrNotFound if the session or message is absent.
+func (d *DB) DeleteMessage(ctx context.Context, sessionID, messageID string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s, ok := d.sessions[sessionID]
+	if !ok {
+		return ErrNotFound
+	}
+	msgs := d.messages[sessionID]
+	idx := -1
+	for i, m := range msgs {
+		if m.ID == messageID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return ErrNotFound
+	}
+	d.messages[sessionID] = append(msgs[:idx:idx], msgs[idx+1:]...)
+	if s.MessageCount > 0 {
+		s.MessageCount--
+	}
+	d.sessions[s.ID] = s
+	return d.writeSessionFileLocked(s)
 }
 
 // ListMessages returns messages for a session in chronological order.
