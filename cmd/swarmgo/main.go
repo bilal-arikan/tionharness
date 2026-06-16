@@ -86,6 +86,9 @@ func main() {
 	logger.Info("workspaces ready", "count", len(manager.List()))
 
 	server := api.NewServer(manager, registry, settingsStore, tun, logs, bus, logger)
+	// Advertise this server's own loopback URL so CLI agents can reach the
+	// in-process Interaction MCP endpoint (ask_user/todo_write) for their turn.
+	server.SetBaseURL(cfg.Addr)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

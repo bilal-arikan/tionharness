@@ -274,9 +274,9 @@ MCP) otomatik yansır (tek şema kuralı, §2).
   `initialize` + `tools/list` + tek dummy tool). `claude -p --mcp-config` ile
   gerçekten `tools/list` çekilebiliyor mu **2-3 saatlik timebox** içinde doğrula.
   Tutarsa Faz 1; tutmazsa **stdio fallback**'e geç. En pahalı belirsizliği başta öldürür.
-- **Faz 1 (MVP):** HTTP MCP server + `ask_user` (bloklayan) + `todo_write`;
-  claude-cli wiring + built-in disallow; canlı claude-cli testi (soru penceresi
-  açılır, cevap CLI'ye döner).
+- **Faz 1 (MVP): ✅ TAMAMLANDI (2026-06-16, §15).** HTTP MCP server + `ask_user`
+  (bloklayan) + `todo_write`; claude-cli wiring + built-in disallow; canlı
+  claude-cli testi geçti (soru penceresi açıldı, cevap CLI'ye döndü, tur devam etti).
 - **Faz 2:** `create_artifact`/`update_artifact` + `request_confirmation`; native
   built-in'lerle davranış paritesi testi.
 - **Faz 3:** `notify` + workspace/oturum etkileşimleri; doküman + skill güncelleme.
@@ -368,6 +368,37 @@ claude `system/init` çıktısı: `"mcp_servers":[{"name":"swarmgo_interaction",
 
 Spike kodu repo dışında (throwaway); üretim implementasyonu §9 dosya planına göre
 SwarmGo içinde yazılacak.
+
+## 15. Faz 1 sonucu (2026-06-16 — TAMAMLANDI ✅)
+
+MVP implemente edildi ve canlı claude-cli ile uçtan uca doğrulandı.
+
+**Yeni dosyalar:**
+- `internal/interaction/server.go` — MCP-over-HTTP server (initialize/tools-list/tools-call), bearer auth, protokol sürümü `2025-06-18`; saf protokol (agent/api importu yok). `server_test.go` (bearer reddi, initialize, list, call, GET→405).
+- `internal/tools/interaction.go` — `WithInteractionEndpoint`/`InteractionFrom` context köprüsü (WithAsker deseni).
+- `internal/api/mcp_interaction.go` — `interactionBackend` (token→run çözümü, `ask_user` bloklayan + `todo_write` bloklamayan dispatch; tool şemaları `tools` paketi tanımlarından enumerate). `mcp_interaction_test.go` (ask round-trip, turn-ended, todo, bilinmeyen token).
+
+**Değişen dosyalar:**
+- `internal/api/chat_control.go` — `chatRun`'a `token`/`done`/`mu`/`write` + `emit`/`setWrite`/`clearWrite`; `chatRuns.byToken`; register per-run token üretir, unregister `done`'ı kapatır.
+- `internal/api/chat_stream.go` — SSE yazımı `run.emit` üzerinden serileştirildi (handler + MCP goroutine yarışmaz); interaction endpoint context'e konur.
+- `internal/api/server.go` — `selfURL`/`interactionMCP` alanları, `SetBaseURL`, `/mcp/interaction` route (nil-guard'lı).
+- `internal/agent/climcp.go` — `writeCLIMCPConfig(ctx, mcpEnabled, inter)` imzası; interaction entry (`type:http`, `headers: Bearer`) + allow/disallow listeleri; `cliMCPServer.Headers`.
+- `internal/agent/toolloop.go` — claude-cli, MCP kapalı olsa bile interaction endpoint varsa MCP-delegasyon yoluna girer.
+- `internal/providers/claudecli.go` — `ConfigureMCP(..., disallowedTools)`; `--disallowedTools` (AskUserQuestion/TodoWrite) + interaction sistem-prompt notu.
+- `cmd/swarmgo/main.go` — `server.SetBaseURL(cfg.Addr)`.
+
+**Canlı test (claude-cli, MCP kapalı yeni ajan):** "önce ask_user ile renk sor"
+promptu → `cli mcp config written servers=1 interaction=true` → SSE'de `ask` adımı
+(`options:[RED,BLUE,GREEN]`) → `POST /api/chat/control {answer:"BLUE"}` → CLI tool
+sonucu `BLUE` aldı → final cevap **"Your color is BLUE."** `go build`/`vet`/`test`
+yeşil. MCP **kapalı** ajanda çalışması, interaction'ın MCPEnabled'dan bağımsız
+kablolandığını kanıtlar.
+
+**Açık işler (Faz 2'ye):** (1) bloklayan tool için `progressToken` + GET SSE
+keep-alive (uzun beklemede istemci timeout'u — canlı testte hızlı cevapla
+görülmedi); (2) CLI yolunda `todo_write` kalıcı izde generic tool kartı olarak
+görünüyor (canlı `StepTodo` kartı çıkıyor) — `traceToSteps` özel-durumu ile
+parite; (3) askID bazlı çoklu-soru yönlendirme (şu an tek `answer` kanalı yeterli).
 
 ## İlgili dokümanlar
 - `09-CLAUDE-AGENT-SDK.md` — SDK paritesi ADR (native vs CLI yol ayrımı)

@@ -7,11 +7,13 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/conversation"
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/events"
+	"github.com/bilal/swarmgo/internal/interaction"
 	"github.com/bilal/swarmgo/internal/logbuf"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/settings"
@@ -34,6 +36,12 @@ type Server struct {
 	bus        *events.Bus // autonomous notifications streamed to the UI over SSE
 	runs       *chatRuns   // in-flight streaming turns (stop/steer control)
 	logger     *slog.Logger
+
+	// selfURL is this server's own loopback base URL (e.g. http://127.0.0.1:8090),
+	// used to point CLI subprocesses at the in-process Interaction MCP endpoint.
+	selfURL string
+	// interactionMCP serves the Interaction MCP endpoint (/mcp/interaction).
+	interactionMCP http.Handler
 }
 
 // NewServer constructs an API server and pushes the persisted settings into the
@@ -52,8 +60,27 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		runs:       newChatRuns(),
 		logger:     logger,
 	}
+	// Interaction MCP: lets CLI agents (claude-cli, ...) reach SwarmGo's
+	// human-in-the-loop tools over in-process HTTP. See _Docs/11-INTERACTION-MCP.md.
+	s.interactionMCP = interaction.Handler(&interactionBackend{runs: s.runs}, logger)
 	s.applySettings()
 	return s
+}
+
+// SetBaseURL records this server's own loopback base URL (e.g.
+// http://127.0.0.1:8090) so the Interaction MCP endpoint can be advertised to
+// CLI subprocesses. Pass the listen address; a wildcard/empty host is normalised
+// to 127.0.0.1 so a same-machine subprocess can connect.
+func (s *Server) SetBaseURL(addr string) {
+	host, port, ok := strings.Cut(addr, ":")
+	if !ok {
+		// No colon: treat the whole thing as a host with the default port.
+		host, port = addr, "8080"
+	}
+	if host == "" || host == "0.0.0.0" || host == "[::]" || host == "::" {
+		host = "127.0.0.1"
+	}
+	s.selfURL = "http://" + host + ":" + port
 }
 
 // applySettings pushes the current settings into every live subsystem. Called
@@ -138,6 +165,14 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
 	// Control an in-flight streaming turn: stop (cancel) or steer (live guidance).
 	mux.HandleFunc("POST /api/chat/control", s.handleChatControl)
+	// Interaction MCP endpoint: CLI agents (claude-cli, ...) call SwarmGo's
+	// human-in-the-loop tools (ask_user/todo_write) here over MCP-over-HTTP.
+	// Bound to all methods; the handler does its own bearer auth + method switch.
+	// Guarded so a bare &Server{} (route-registration test) doesn't panic on a
+	// nil handler; NewServer always installs it.
+	if s.interactionMCP != nil {
+		mux.Handle("/mcp/interaction", s.interactionMCP)
+	}
 }
 
 // registerRuntimeRoutes registers autonomous runtime control + status.

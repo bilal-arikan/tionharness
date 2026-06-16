@@ -23,8 +23,9 @@ type ClaudeCLI struct {
 	// with that MCP config and restricted to allowedTools. The CLI then runs
 	// the full agentic tool loop itself and returns the final text. This is the
 	// keyless tool-use path (no ANTHROPIC_API_KEY required).
-	mcpConfigPath string
-	allowedTools  []string
+	mcpConfigPath   string
+	allowedTools    []string
+	disallowedTools []string // CLI built-ins to suppress (e.g. AskUserQuestion, TodoWrite)
 }
 
 // NewClaudeCLI creates a provider that invokes the given claude binary.
@@ -34,14 +35,35 @@ func NewClaudeCLI(binPath, model string) *ClaudeCLI {
 
 // ConfigureMCP enables MCP tool delegation for subsequent Complete calls.
 // configPath points to a claude --mcp-config JSON file; allowedTools is the
-// list of tool identifiers the CLI may use (e.g. "mcp__filesystem").
-func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools []string) {
+// list of tool identifiers the CLI may use (e.g. "mcp__filesystem");
+// disallowedTools suppresses conflicting CLI built-ins (e.g. AskUserQuestion,
+// TodoWrite) so the SwarmGo Interaction MCP equivalents are used instead.
+func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools, disallowedTools []string) {
 	c.mcpConfigPath = configPath
 	c.allowedTools = allowedTools
+	c.disallowedTools = disallowedTools
 }
 
 // Name implements Provider.
 func (c *ClaudeCLI) Name() string { return "claude-cli" }
+
+// interactionSystemNote tells the CLI to use the SwarmGo Interaction MCP tools
+// (which surface in the SwarmGo UI) instead of its own built-ins, which can't be
+// answered in non-interactive print mode.
+const interactionSystemNote = "To ask the user a clarifying question, call the ask_user tool and wait for the reply. " +
+	"To show or update a task checklist, call todo_write. " +
+	"Do not use the built-in AskUserQuestion or TodoWrite tools."
+
+// usesInteractionTools reports whether the SwarmGo Interaction MCP tools are in
+// the allowlist for this call.
+func (c *ClaudeCLI) usesInteractionTools() bool {
+	for _, t := range c.allowedTools {
+		if strings.Contains(t, "swarmgo_interaction") {
+			return true
+		}
+	}
+	return false
+}
 
 // --- stream-json event shapes (--output-format stream-json --verbose) ---
 //
@@ -101,15 +123,24 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	}
 	// The CLI has no prompt-cache breakpoint, so the static prefix and dynamic
 	// suffix are merged into one appended system prompt.
-	if sys := strings.TrimSpace(strings.TrimSpace(req.System) + "\n\n" + strings.TrimSpace(req.SystemDynamic)); sys != "" {
+	sys := strings.TrimSpace(strings.TrimSpace(req.System) + "\n\n" + strings.TrimSpace(req.SystemDynamic))
+	if c.usesInteractionTools() {
+		sys = strings.TrimSpace(sys + "\n\n" + interactionSystemNote)
+	}
+	if sys != "" {
 		args = append(args, "--append-system-prompt", sys)
 	}
 
 	// MCP delegation: load the config and restrict to the allowlist. The
-	// single-value --mcp-config is terminated by the boolean --strict-mcp-config
-	// before the variadic --allowedTools, so the two variadic flags don't merge.
+	// single-value --mcp-config is terminated by the boolean --strict-mcp-config;
+	// --disallowedTools (suppressing conflicting CLI built-ins) precedes the
+	// trailing --allowedTools so neither variadic flag swallows the other.
 	if c.mcpConfigPath != "" {
 		args = append(args, "--mcp-config", c.mcpConfigPath, "--strict-mcp-config")
+		if len(c.disallowedTools) > 0 {
+			args = append(args, "--disallowedTools")
+			args = append(args, c.disallowedTools...)
+		}
 		if len(c.allowedTools) > 0 {
 			args = append(args, "--allowedTools")
 			args = append(args, c.allowedTools...)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 // chatRun is the live control handle for one in-flight streaming chat turn.
@@ -14,6 +16,42 @@ type chatRun struct {
 	// the control endpoint never blocks; only one question is outstanding at a
 	// time because the tool loop runs synchronously.
 	answer chan string
+	// done is closed when the turn finishes (unregister), unblocking any
+	// Interaction MCP tool call still waiting on this run.
+	done chan struct{}
+	// token is the per-run opaque secret a CLI subprocess presents (Bearer) so
+	// its Interaction MCP calls correlate back to this turn.
+	token string
+
+	// mu serialises SSE writes: the stream handler goroutine and the Interaction
+	// MCP handler goroutine both emit steps onto the same ResponseWriter.
+	mu    sync.Mutex
+	write func(event string, data any) // installed by the stream handler; nil once the turn ends
+}
+
+// emit writes one SSE event through the run's writer under the lock, so the
+// stream handler and the Interaction MCP server never race on the ResponseWriter.
+// A no-op once the turn has ended (write cleared).
+func (r *chatRun) emit(event string, data any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.write != nil {
+		r.write(event, data)
+	}
+}
+
+// setWrite installs the SSE writer for this run.
+func (r *chatRun) setWrite(fn func(event string, data any)) {
+	r.mu.Lock()
+	r.write = fn
+	r.mu.Unlock()
+}
+
+// clearWrite drops the writer so late Interaction MCP emits are silently ignored.
+func (r *chatRun) clearWrite() {
+	r.mu.Lock()
+	r.write = nil
+	r.mu.Unlock()
 }
 
 // chatRuns is the registry of active streaming turns, keyed by run id, so the
@@ -25,9 +63,16 @@ type chatRuns struct {
 
 func newChatRuns() *chatRuns { return &chatRuns{runs: make(map[string]*chatRun)} }
 
-// register creates a control handle for a run and returns it.
+// register creates a control handle for a run (with a fresh per-run token) and
+// returns it.
 func (c *chatRuns) register(id string, cancel context.CancelFunc) *chatRun {
-	run := &chatRun{cancel: cancel, steer: make(chan string, 16), answer: make(chan string, 1)}
+	run := &chatRun{
+		cancel: cancel,
+		steer:  make(chan string, 16),
+		answer: make(chan string, 1),
+		done:   make(chan struct{}),
+		token:  uuid.NewString(),
+	}
 	c.mu.Lock()
 	c.runs[id] = run
 	c.mu.Unlock()
@@ -36,14 +81,33 @@ func (c *chatRuns) register(id string, cancel context.CancelFunc) *chatRun {
 
 func (c *chatRuns) unregister(id string) {
 	c.mu.Lock()
+	run := c.runs[id]
 	delete(c.runs, id)
 	c.mu.Unlock()
+	if run != nil {
+		close(run.done)
+	}
 }
 
 func (c *chatRuns) get(id string) *chatRun {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.runs[id]
+}
+
+// byToken resolves a run by its per-run Bearer token (Interaction MCP correlation).
+func (c *chatRuns) byToken(token string) *chatRun {
+	if token == "" {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, run := range c.runs {
+		if run.token == token {
+			return run
+		}
+	}
+	return nil
 }
 
 type chatControlReq struct {

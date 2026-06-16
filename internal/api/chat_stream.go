@@ -64,6 +64,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	run := s.runs.register(runID, cancel)
 	defer s.runs.unregister(runID)
 	ctx = agent.WithSteer(ctx, run.steer)
+	// Point any CLI subprocess (claude-cli, ...) at the in-process Interaction MCP
+	// endpoint for this turn, carrying the per-run token so its ask_user/todo_write
+	// calls correlate back here. No-op when the base URL is unknown.
+	if url := s.interactionURL(); url != "" {
+		ctx = tools.WithInteractionEndpoint(ctx, url, run.token)
+	}
 
 	wsp := ws(r)
 	database := wsp.DB
@@ -103,11 +109,16 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 
-	sse := func(event string, data any) {
+	// Route every SSE write through the run's mutex-guarded writer so the stream
+	// handler goroutine and the Interaction MCP handler goroutine (which emits
+	// ask/todo steps for the CLI path) never race on the ResponseWriter.
+	run.setWrite(func(event string, data any) {
 		b, _ := json.Marshal(data)
 		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
 		flusher.Flush()
-	}
+	})
+	defer run.clearWrite()
+	sse := run.emit
 
 	sse("meta", map[string]any{"userMessage": userMsg, "runId": runID})
 

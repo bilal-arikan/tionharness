@@ -71,7 +71,14 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		req.OnEvent = func(ts providers.TraceStep) { onStep(traceStepToTurnStep(ts)) }
 	}
 
-	if !agent.MCPEnabled {
+	// The claude CLI runs its own tool loop. Route it through the keyless MCP
+	// delegation path when external MCP is enabled OR an Interaction MCP endpoint
+	// is wired for this turn (so ask_user/todo_write work even with MCP off).
+	cli, isCLI := provider.(*providers.ClaudeCLI)
+	inter := tools.InteractionFrom(ctx)
+	cliMCP := isCLI && (agent.MCPEnabled || inter.URL != "")
+
+	if !agent.MCPEnabled && !cliMCP {
 		// Extended reasoning is applied only on the plain (non-tool) path: the
 		// native tool loop would need to echo signed thinking blocks back, which
 		// the provider abstraction doesn't preserve. Providers without thinking
@@ -101,14 +108,16 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		return resp, traceToSteps(resp.Trace), nil
 	}
 
-	// Keyless delegation path: let the claude CLI own the tool loop.
-	if cli, ok := provider.(*providers.ClaudeCLI); ok {
-		path, allowed, cleanup, err := r.writeCLIMCPConfig(ctx)
+	// Keyless delegation path: let the claude CLI own the tool loop, wiring the
+	// external MCP servers (when enabled) plus the Interaction MCP server (when an
+	// endpoint is present) into a single generated --mcp-config.
+	if cliMCP {
+		path, allowed, disallowed, cleanup, err := r.writeCLIMCPConfig(ctx, agent.MCPEnabled, inter)
 		if err != nil {
 			r.logger.Warn("cli mcp config failed", "error", err)
 		} else if path != "" {
 			defer cleanup()
-			cli.ConfigureMCP(path, allowed)
+			cli.ConfigureMCP(path, allowed, disallowed)
 		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
