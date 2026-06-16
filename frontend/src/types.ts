@@ -443,7 +443,7 @@ export interface CatalogEntry {
 export interface WorkspaceSettings {
   id: string
   name: string
-  description: string
+  instructions: string
   icon: string
   color: string
   defaultProvider: string
@@ -456,7 +456,7 @@ export interface WorkspaceSettings {
 }
 
 export type WorkspaceSettingsPatch = Partial<
-  Pick<WorkspaceSettings, 'name' | 'description' | 'icon' | 'color' | 'defaultProvider' | 'defaultModel' | 'pauseAutonomy'>
+  Pick<WorkspaceSettings, 'name' | 'instructions' | 'icon' | 'color' | 'defaultProvider' | 'defaultModel' | 'pauseAutonomy'>
 >
 
 // A captured log record (application + all workspaces).

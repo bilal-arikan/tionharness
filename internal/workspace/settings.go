@@ -15,8 +15,10 @@ const wsSettingsFile = "ws-settings.json"
 // screen's "Bu Workspace" category. Empty provider/model fall back to the
 // application-global defaults; PauseAutonomy pauses only this workspace's
 // runtime (heartbeat + scheduler), independent of the global brake.
+// Instructions is free-form guidance injected into agents running in this
+// workspace (workspace-specific system prompt addendum).
 type WSSettings struct {
-	Description     string `json:"description"`
+	Instructions    string `json:"instructions"`
 	Icon            string `json:"icon"`  // emoji shown in the switcher/rail
 	Color           string `json:"color"` // hex accent for visual identity
 	DefaultProvider string `json:"defaultProvider"`
@@ -28,7 +30,7 @@ type WSSettings struct {
 // handled separately (workspace rename) since it lives in the registry Meta.
 type WSSettingsPatch struct {
 	Name            *string `json:"name"`
-	Description     *string `json:"description"`
+	Instructions    *string `json:"instructions"`
 	Icon            *string `json:"icon"`
 	Color           *string `json:"color"`
 	DefaultProvider *string `json:"defaultProvider"`
@@ -115,8 +117,8 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 
 	ws.settings.mu.Lock()
-	if patch.Description != nil {
-		ws.settings.cur.Description = *patch.Description
+	if patch.Instructions != nil {
+		ws.settings.cur.Instructions = *patch.Instructions
 	}
 	if patch.Icon != nil {
 		ws.settings.cur.Icon = *patch.Icon

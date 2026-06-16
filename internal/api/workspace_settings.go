@@ -12,7 +12,7 @@ import (
 type workspaceSettingsDTO struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
-	Description     string `json:"description"`
+	Instructions    string `json:"instructions"`
 	Icon            string `json:"icon"`
 	Color           string `json:"color"`
 	DefaultProvider string `json:"defaultProvider"`
@@ -30,7 +30,7 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 	dto := workspaceSettingsDTO{
 		ID:              w.ID,
 		Name:            w.Name,
-		Description:     s.Description,
+		Instructions:    s.Instructions,
 		Icon:            s.Icon,
 		Color:           s.Color,
 		DefaultProvider: s.DefaultProvider,

@@ -184,7 +184,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
   const saveWs = async () => {
     if (!ws) return
     const updated = await api.updateWorkspaceSettings({
-      name: ws.name, description: ws.description, icon: ws.icon, color: ws.color,
+      name: ws.name, instructions: ws.instructions, icon: ws.icon, color: ws.color,
       defaultProvider: ws.defaultProvider, defaultModel: ws.defaultModel,
       pauseAutonomy: ws.pauseAutonomy,
     })
@@ -569,7 +569,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
                   </div>
 
                   <Field label="Workspace adı"><input value={ws.name} onChange={(e) => setWsField('name', e.target.value)} className={inputCls} /></Field>
-                  <Field label="Açıklama / not"><textarea value={ws.description} onChange={(e) => setWsField('description', e.target.value)} rows={3} className={`${inputCls} resize-none`} placeholder="Bu workspace ne için?" /></Field>
+                  <Field label="Talimatlar (bu workspace)" hint="Bu workspace'teki tüm agent'lara eklenen yönergeler."><textarea value={ws.instructions} onChange={(e) => setWsField('instructions', e.target.value)} rows={4} className={`${inputCls} resize-none`} placeholder="Örn. Tüm cevapları Türkçe ver; commit at ama push'lama." /></Field>
                   <Field label="Varsayılan sağlayıcı (bu workspace)" hint="Boş = uygulama varsayılanı.">
                     <select value={ws.defaultProvider} onChange={(e) => setWsField('defaultProvider', e.target.value)} className={inputCls}>
                       <option value="">(uygulama varsayılanı)</option>
