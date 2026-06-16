@@ -6,7 +6,7 @@ Açık kaynaklı, kendi sunucunda barındırılan **çoklu-ajan (multi-agent) AI
 
 ## Özellikler
 
-- 🧠 **Ajanlar** — soul/identity ile kişiselleştirilebilir; sağlayıcı başına seçilebilir (`anthropic`, `claude-cli`)
+- 🧠 **Ajanlar** — soul/identity ile kişiselleştirilebilir; ajan başına sağlayıcı + model seçilebilir (`claude-cli`, `anthropic`, `minimax`), thinking seviyesi (off/low/medium/high)
 - 💬 **Sohbet** — çok-turlu, otomatik **bağlam sıkıştırma** (compaction) ile uzun oturumlarda da ucuz
 - ⚙️ **Otonom runtime** — ajan başına heartbeat, exponential backoff, 10 hatada otomatik devre dışı
 - 🗂 **Görevler** — kanban panosu, "şimdi çalıştır", run geçmişi
@@ -14,7 +14,7 @@ Açık kaynaklı, kendi sunucunda barındırılan **çoklu-ajan (multi-agent) AI
 - ⛁ **Hafıza** — belge + günlük + yansıma (reflection/dream cycle), sözcüksel recall (anahtarsız/çevrimdışı)
 - 🛡 **Bütçe guardrail** — otonom çağrılar için ajan başına günlük çağrı/token limiti
 - 🧩 **Workspace izolasyonu** — her workspace ayrı DB + ayrı runtime + ayrı scheduler (fiziksel ayrım)
-- 🔌 **Araçlar + MCP** — yerleşik araçlar (saat/http/recall) + harici MCP sunucuları (SDK'sız stdio JSON-RPC); native tool-use döngüsü **ve** anahtarsız claude-cli MCP delegasyonu
+- 🔌 **Araçlar + MCP** — yerleşik araçlar (saat/http/recall, dosya oku-yaz-düzenle/glob/grep, shell [opsiyonel], todo_write, ask_user, artifact) + harici MCP sunucuları (SDK'sız stdio JSON-RPC); native tool-use döngüsü **ve** anahtarsız claude-cli MCP delegasyonu
 - 🔀 **Orchestration** — çok-ajanlı akışlar (agent / branch / parallel node grafiği), şablon sistemi, restart-safe run state, görsel akış builder
 - 🏷 **Otomatik başlık** — sohbet ilk turunda ve görev oluşturmada başlık prompt'tan otomatik üretilir, ⟳ ile yeniden üretilebilir
 - ⚙️ **Ayarlar ekranı** — uygulama-geneli `settings.json` (Anthropic anahtarı AES-GCM şifreli); sağlayıcı/model, bağlam limitleri, otonomi duraklat, başlık modeli, açık/koyu/sistem tema + accent + **8 hazır tema paleti** (Gece Moru, Arduvaz, Zümrüt, Gül, Kehribar, Nord, Gün Işığı, Solarized) — hepsi **canlı** uygulanır
@@ -74,8 +74,8 @@ SwarmGo/
 ├── internal/
 │   ├── config/             # env + AES-GCM secret
 │   ├── db/                 # Dosya-tabanlı store (JSON/JSONL, DB yok) — bellek-içi + atomik diske yazma
-│   ├── providers/          # anthropic + claude-cli (anahtarsız) + registry
-│   ├── agent/              # runtime, worker, executor, scheduler, reflector, budget, titler, toolloop, trace (aktivite izi), tunables, flow
+│   ├── providers/          # anthropic + claude-cli (anahtarsız) + minimax (OpenAI-uyumlu) + catalog + registry
+│   ├── agent/              # runtime, worker, executor, scheduler, reflector, budget, titler, summarizer (/özet komutları), prompts (prompt görüntüleyici), toolloop, trace (aktivite izi), tunables, flow
 │   ├── memory/             # lexical recall (cosine) + Store
 │   ├── conversation/       # token-bütçeli compaction
 │   ├── orchestration/      # akış graf motoru (agent/branch/parallel node)

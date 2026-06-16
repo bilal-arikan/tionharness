@@ -112,19 +112,24 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 
 ### Composer — `@` ajan / `/` komut menüleri
 - `Composer.tsx` otomatik-tamamlama menüsü: caret konumuna göre `detectTrigger`.
-  - **`@`** (herhangi bir token başında) → **ajan seçici**; seçim `onPickAgent`
-    (aktif ajanı değiştirir), `@token` metinden silinir. Ajanlar `name` ile filtrelenir.
+  - **`@`** (herhangi bir token başında) → **ajan seçici**; seçim, metne `@Ad `
+    **mention'ı ekler** (aktif ajanı DEĞİŞTİRMEZ) — bu tur o ajan(lar)a yönlendirilir
+    (bkz. `@` ile tur yönlendirme). Ajanlar `name` ile filtrelenir.
   - **`/`** (girdinin başında, tek kelime) → **komut paleti**; seçim `SlashCommand.run()`,
-    girdi temizlenir. Komutlar `App.tsx`'te `chatCommands` (useMemo): `/new`, `/title`,
-    `/reflect`, `/memory`, `/tools`, `/board`, `/flows`.
+    girdi temizlenir. Komutlar `App.tsx`'te `chatCommands` (useMemo): `/reflect` (yansıma),
+    `/memory` · `/board` · `/flows` (talep-üzerine özet, `POST /api/sessions/{id}/summary`),
+    `/tools` (deterministik araç listesi). Bir komutu **çalıştırmadan düz metin** göndermek
+    için tırnak içine al: `"/komut"` (bkz. `chat/UserBubble.tsx`).
   - Klavye: ↑/↓ gezinme, Enter/Tab seçim, Esc kapat (menü açıkken Enter göndermez).
 - `SlashCommand` tipi `types.ts`'te (`name`/`description`/`icon`/`run`).
 
 ### Session-bazlı + çok-ajanlı sohbet (`@` yönlendirme)
-- Sohbet **session-bazlı**: sol panel **"Tüm Oturumlar"** düz listesi (ajan altında
-  gruplama yok); her oturumun bir **varsayılan ajanı** (`Session.AgentID`) vardır ve
-  satırda o ajanın avatarı görünür. Roster "**Ajanlar · varsayılan**" = yeni sohbetlerin
-  varsayılan ajan seçicisi. `POST /api/sessions` `agentId` opsiyonel (boş → ilk ajan).
+- Sohbet **session-bazlı**: sol panel (`SessionsSidebar.tsx`) oturumları **zaman
+  kovalarına** gruplar (Bugün/Dün/Geçen hafta/Geçen ay/Daha eski; ajan altında gruplama
+  yok), `updatedAt` desc; her oturumun bir **varsayılan ajanı** (`Session.AgentID`) vardır ve
+  satırda o ajanın avatarı görünür. Ajan roster'ı ayrı **Ajanlar** view'ine taşındı
+  (`AgentRoster`/`AgentsView`) = yeni sohbetlerin varsayılan ajan seçicisi.
+  `POST /api/sessions` `agentId` opsiyonel (boş → ilk ajan).
 - **`@` ile tur yönlendirme:** composer `@` menüsü metne `@Ad` mention'ı ekler.
   `App.sendMessage` mention'ları ajanlara çözüp `agentIds[]` üretir (yoksa oturum
   varsayılanı). `POST /api/chat/stream` `agentIds` alır.
