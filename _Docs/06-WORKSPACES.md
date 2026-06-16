@@ -34,11 +34,20 @@ DATA_DIR/
 └── workspaces/
     ├── {id-1}/
     │   ├── store/               # Workspace 1'in TÜM verisi (JSON/JSONL dosyaları)
-    │   └── workspace/           # Workspace 1'in görev dosyaları
+    │   ├── config/              # Editlenebilir config: prompts/*.md, instructions.md, README.md
+    │   ├── ws-settings.json     # Workspace ayarları (override + instructions)
+    │   └── workspace/           # Workspace 1'in görev dosyaları (ajan fs-sandbox kökü)
     └── {id-2}/
-        ├── store/               # Workspace 2'nin TÜM verisi (JSON/JSONL dosyaları)
+        ├── store/
+        ├── config/
         └── workspace/
 ```
+
+> **`config/` klasörü (2026-06-17):** runtime yardımcı promptları (summary/reflect/title),
+> workspace talimatları ve README **editlenebilir dosyalar** olarak burada tutulur. Hem
+> kullanıcı (diskten) hem uygulama (Ayarlar ▸ Bu Workspace ▸ Promptlar & Dosyalar) düzenler.
+> Bir prompt dosyası boş/yoksa uygulama gömülü varsayılana düşer. Detay: `agent/wsconfig.go`,
+> `api/workspace_config.go`.
 
 ## Çalışma Şekli
 
