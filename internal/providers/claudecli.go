@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -171,6 +172,14 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	prompt := serializeTranscript(req.Messages)
 
 	cmd := exec.CommandContext(ctx, c.binPath, args...)
+	// Run inside the workspace sandbox so relative paths (e.g. an attachment's
+	// "uploads/<sid>/<file>") resolve there rather than the backend's launch
+	// directory. Only set when the dir exists; otherwise inherit the default cwd.
+	if req.WorkDir != "" {
+		if fi, statErr := os.Stat(req.WorkDir); statErr == nil && fi.IsDir() {
+			cmd.Dir = req.WorkDir
+		}
+	}
 	cmd.Stdin = strings.NewReader(prompt) // pass prompt via stdin to avoid arg limits
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

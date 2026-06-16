@@ -76,6 +76,10 @@ type Request struct {
 	// loop. The claude CLI maps it to its --permission-mode / --dangerously-skip-
 	// permissions flags. "" | "auto" | "ask" | "read-only" (empty = auto).
 	PermissionMode string
+	// WorkDir, when set, is the working directory for providers that spawn a CLI
+	// subprocess (claude-cli): its process cwd, so relative paths resolve inside
+	// the workspace sandbox. Ignored by HTTP providers (anthropic/minimax).
+	WorkDir string
 	// OnEvent, when set, is called by providers that run the loop internally
 	// (claude CLI) as each activity step (text/thinking/tool) becomes available,
 	// enabling step-by-step streaming to the UI. Ignored by non-streaming

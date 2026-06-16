@@ -70,6 +70,12 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	// gate their tool use. Empty maps to "auto" downstream.
 	req.PermissionMode = agent.PermissionMode
 
+	// Run provider-driven CLI subprocesses (claude-cli) inside the workspace
+	// sandbox root so relative paths — e.g. an attachment's "uploads/<sid>/<file>"
+	// — resolve there instead of the backend's launch directory. Native providers
+	// ignore this. Empty when no sandbox is configured.
+	req.WorkDir = r.workDir
+
 	// Provider-driven paths (claude CLI) surface their own trace via OnEvent.
 	if onStep != nil {
 		req.OnEvent = func(ts providers.TraceStep) { onStep(traceStepToTurnStep(ts)) }
