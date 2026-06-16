@@ -7,6 +7,9 @@ interface Props {
   sessions: Session[]
   agents: Agent[]
   activeSessionId: string | null
+  // The session whose turn is currently being generated (live), shown with a
+  // pulsing indicator so an in-progress conversation is visible from the list.
+  streamingSessionId?: string | null
   newDisabled: boolean
   onSelectSession: (id: string) => void
   onNewSession: () => void
@@ -24,6 +27,7 @@ export function SessionsSidebar({
   sessions,
   agents,
   activeSessionId,
+  streamingSessionId,
   newDisabled,
   onSelectSession,
   onNewSession,
@@ -134,6 +138,7 @@ export function SessionsSidebar({
             {items.map((s) => {
               const owner = agents.find((a) => a.id === s.agentId)
               const isActive = activeSessionId === s.id
+              const isStreaming = streamingSessionId === s.id
               return (
                 <div
                   key={s.id}
@@ -167,15 +172,28 @@ export function SessionsSidebar({
                       )}
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="flex items-center gap-1.5">
-                          {s.unread && (
-                            <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Okunmadı" />
+                          {isStreaming ? (
+                            // Live turn in progress: a pulsing dot takes precedence
+                            // over the unread dot.
+                            <span className="relative flex h-2 w-2 shrink-0" title="Yanıt üretiliyor">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-accent)] opacity-75" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-accent)]" />
+                            </span>
+                          ) : (
+                            s.unread && (
+                              <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Okunmadı" />
+                            )
                           )}
-                          <span className={`min-w-0 flex-1 truncate ${s.unread ? 'font-semibold text-[var(--color-text)]' : ''}`}>
+                          <span className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}>
                             {s.title || 'Yeni sohbet'}
                           </span>
                         </span>
                         <span className="truncate text-[10px] opacity-60">
-                          {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
+                          {isStreaming ? (
+                            <span className="text-[var(--color-accent)]">yazıyor…</span>
+                          ) : (
+                            <>{relativeTime(s.updatedAt)} · {s.messageCount} mesaj</>
+                          )}
                         </span>
                       </span>
                     </button>

@@ -65,6 +65,10 @@ export default function App() {
   // Streaming-turn control: whether a turn is in flight, its abort handle (stop /
   // interrupt) and run id (steer), plus a message queued to send after it ends.
   const [streaming, setStreaming] = useState(false)
+  // The session the in-flight turn belongs to. The Composer only shows
+  // streaming-turn actions (Durdur/Kes/Yönlendir) when the user is viewing this
+  // session; switching to another session shows a normal "Gönder" button.
+  const [streamingSessionId, setStreamingSessionId] = useState('')
   const abortRef = useRef<AbortController | null>(null)
   const runIdRef = useRef('')
   const queuedRef = useRef('')
@@ -208,6 +212,13 @@ export default function App() {
     api.listMessages(activeSessionId).then(setMessages)
   }, [activeSessionId])
 
+  // Mirror the active session id into a ref so the once-mounted event handler
+  // can tell whether an incoming chat completion belongs to the open transcript.
+  const activeSessionIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId
+  }, [activeSessionId])
+
   // Reload the session list (fresh order, updated times, unread flags).
   const refreshSessions = useCallback(() => {
     api.listSessions().then(setSessions).catch(() => {})
@@ -290,6 +301,14 @@ export default function App() {
     // so unread dots, ordering and times stay live without a manual refresh.
     if (!e.workspaceId || e.workspaceId === getActiveWorkspace()) {
       refreshSessions()
+      // A chat reply that completed server-side after the SSE stream closed
+      // (e.g. the user refreshed mid-turn and the detached turn finished) is not
+      // in the open transcript. If it belongs to the session being viewed,
+      // reload its messages so the reply appears without a manual reselect.
+      const sid = e.target?.sessionId
+      if (e.type === 'chat' && sid && sid === activeSessionIdRef.current) {
+        api.listMessages(sid).then(setMessages).catch(() => {})
+      }
     }
     // Chat completions only drive the badge (the streaming turn already raises
     // its own reply notification); other event types raise a desktop
@@ -416,6 +435,7 @@ export default function App() {
       const ac = new AbortController()
       abortRef.current = ac
       setStreaming(true)
+      setStreamingSessionId(sid)
 
       // The live bubble for the agent currently answering (multi-agent turns
       // produce several bubbles, one per agent, in order).
@@ -533,6 +553,7 @@ export default function App() {
       } finally {
         setPending(false)
         setStreaming(false)
+        setStreamingSessionId('')
         if (abortRef.current === ac) abortRef.current = null
       }
     },
@@ -550,10 +571,14 @@ export default function App() {
 
   // ---- streaming-turn interventions ----
 
-  // Stop: abort the in-flight stream (server cancels via context).
+  // Stop: cancel the in-flight turn. The turn is detached from the SSE
+  // connection server-side, so aborting the fetch alone no longer stops
+  // generation — send an explicit "stop" control, then close the stream.
   const stopTurn = useCallback(() => {
+    if (runIdRef.current) api.chatControl(runIdRef.current, 'stop', '').catch(() => {})
     abortRef.current?.abort()
     setStreaming(false)
+    setStreamingSessionId('')
     setPendingAsk(null)
   }, [])
 
@@ -570,8 +595,10 @@ export default function App() {
   // Interrupt: stop the current turn and immediately send a new message.
   const interruptTurn = useCallback(
     (text: string) => {
+      // Explicitly cancel the detached server-side turn (a fetch abort alone no
+      // longer stops it), then start the next message once the abort settles.
+      if (runIdRef.current) api.chatControl(runIdRef.current, 'stop', '').catch(() => {})
       abortRef.current?.abort()
-      // Let the abort settle before starting the next turn.
       setTimeout(() => void sendMessage(text), 0)
     },
     [sendMessage],
@@ -658,6 +685,7 @@ export default function App() {
           sessions={sessions}
           agents={agents}
           activeSessionId={activeSessionId}
+          streamingSessionId={streaming ? streamingSessionId : null}
           newDisabled={agents.length === 0}
           onSelectSession={selectSession}
           onNewSession={newSession}
@@ -716,10 +744,12 @@ export default function App() {
               onOpenFile={openFile}
               onOpenArtifact={openArtifact}
             />
-            {pendingAsk && <AskPrompt ask={pendingAsk} onAnswer={answerAsk} />}
+            {pendingAsk && streamingSessionId === activeSessionId && (
+              <AskPrompt ask={pendingAsk} onAnswer={answerAsk} />
+            )}
             <Composer
               disabled={!activeSessionId}
-              streaming={streaming}
+              streaming={streaming && streamingSessionId === activeSessionId}
               onSend={sendMessage}
               onStop={stopTurn}
               onInterrupt={interruptTurn}

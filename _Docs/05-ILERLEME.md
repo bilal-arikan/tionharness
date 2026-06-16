@@ -12,6 +12,13 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Oturum-bazlı akış göstergesi + buton kapsamı ✅ (2026-06-16)
+Sohbet akışı (streaming) durumu artık **oturuma bağlı** — önceden tek global `streaming` bayrağı tüm oturumları etkiliyordu.
+1. **Buton kapsamı fix'i (`App.tsx`):** Yeni `streamingSessionId` state'i akışın hangi oturuma ait olduğunu izler. Composer'a geçen prop `streaming && streamingSessionId === activeSessionId` oldu; `AskPrompt` de aynı koşula bağlandı. Böylece A oturumunda yanıt üretilirken B oturumuna geçince buton yanlışça "Durdur/Kes/Yönlendir" yerine doğru şekilde **"Gönder"** gösterir. (Akış başlangıcında set, `finally`/`stopTurn`'de temizlenir.)
+2. **Sidebar canlı göstergesi (`SessionsSidebar.tsx`):** Akışı süren oturum satırında **nabız atan nokta** (`animate-ping`) + alt satırda **"yazıyor…"** etiketi gösterilir (zaman/mesaj sayısı yerine); başlık kalınlaşır. Gösterge yalnız ilgili oturumda görünür, oturum değiştirince akıştaki oturumda kalır. Prop: `streamingSessionId={streaming ? streamingSessionId : null}`.
+
+> Test: tsc + go build/vet yeşil; **Chrome canlı**: A oturumunda akış → satırda "yazıyor…" + ping nokta; B'ye geçince buton "Gönder", A bitince gösterge kayboldu — doğrulandı.
+
 ### Komutlar ekranında salt-okunur prompt görüntüleyici ✅ (2026-06-16)
 Ayarlar → **Komutlar** kategorisine, komutların arkasındaki gömülü promptları **salt-okunur** gösteren bir bölüm + **klasörü aç** butonu eklendi:
 
