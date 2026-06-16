@@ -1,0 +1,61 @@
+// Application-global endpoints: settings, provider catalog, read-only prompts,
+// logs and the autonomous event feed.
+import type {
+  AppSettings,
+  SettingsPatch,
+  ProviderTestResult,
+  CatalogEntry,
+  PromptsResponse,
+  LogEntry,
+  AppEvent,
+} from '../types'
+import { req } from './client'
+
+// subscribeEvents opens the global autonomous-event SSE feed via EventSource
+// (which reconnects automatically on drop). Returns an unsubscribe function.
+function subscribeEvents(onEvent: (e: AppEvent) => void): () => void {
+  const es = new EventSource('/api/events')
+  es.addEventListener('notify', (ev) => {
+    try {
+      onEvent(JSON.parse((ev as MessageEvent).data) as AppEvent)
+    } catch {
+      // ignore malformed frames
+    }
+  })
+  return () => es.close()
+}
+
+export const systemApi = {
+  // Application settings (global).
+  getSettings: () => req<AppSettings>('/api/settings'),
+  updateSettings: (patch: SettingsPatch) =>
+    req<AppSettings>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+  testProvider: (provider: string) =>
+    req<ProviderTestResult>('/api/settings/test-provider', {
+      method: 'POST',
+      body: JSON.stringify({ provider }),
+    }),
+
+  // Provider/model catalog (for agent + settings pickers).
+  getCatalog: () => req<CatalogEntry[]>('/api/catalog'),
+
+  // Built-in runtime prompts (read-only) + the source folder that holds them.
+  getPrompts: () => req<PromptsResponse>('/api/prompts'),
+  revealPrompts: () => req<{ path: string }>('/api/prompts/reveal', { method: 'POST' }),
+
+  // Autonomous event feed (heartbeat/task/schedule) — global SSE stream.
+  subscribeEvents,
+
+  // Application + workspace logs (global ring buffer).
+  getLogs: (opts?: { limit?: number; level?: string; q?: string }) => {
+    const p = new URLSearchParams()
+    if (opts?.limit) p.set('limit', String(opts.limit))
+    if (opts?.level) p.set('level', opts.level)
+    if (opts?.q) p.set('q', opts.q)
+    const qs = p.toString()
+    return req<LogEntry[]>(`/api/logs${qs ? `?${qs}` : ''}`)
+  },
+}
