@@ -105,6 +105,45 @@ graph LR
 
 ---
 
+## Yapılacaklar / Backlog (canlı liste)
+
+> SDK paritesi (P1–P4) + `observed-behavior` mimari incelemesinden çıkan işler. Kavramsal detay: [10-KAVRAMSAL-TASARIM-NOTLARI.md](10-KAVRAMSAL-TASARIM-NOTLARI.md). Her madde bittiğinde işaretle ve [05-ILERLEME.md](05-ILERLEME.md)'ye günlük gir.
+
+### Tamamlananlar ✅
+- [x] **Faz P2** — Built-in dosya/shell araçları (sandbox'lı `read/write/edit/list/glob/grep` + gate'li `shell`)
+- [x] **D2 (kısmi)** — Provider native token streaming (`Streamer`: anthropic+minimax) + claude-cli stream-json → SSE
+- [x] **Faz P1** — Etkileşim araçları: `todo_write` (checklist) + `ask_user` (SSE-blok suspend/resume)
+- [x] **E3 (kısmi)** — Trace `StepKind` genişletme: `ask` + `todo` (ilk-sınıf checklist) + `recovery` (iterasyon-limiti sinyali)
+
+### Sıradaki — düşük efor / yüksek değer
+- [ ] **D2 kalan** — Provider **retry middleware** (üstel backoff; şu an `internal/providers`'da hiç retry yok) — `transport.go`'ya tek sarmalayıcı
+- [ ] **C1** — Sistem-prompt **cache sınırı**: statik (talimat+araç) / dinamik (bellek+bağlam) bölümleme → cache verimi
+- [ ] **A1** — Agent loop **recovery + `continuationReason`**: kurtarma yollarını (max-token/compaction/iptal) yapısal hale getir (`recovery` StepKind hazır)
+
+### Mimari sıçrama
+- [ ] **A2** — **Subagent / Task izolasyonu**: `AgentContext` (parent'tan klon, mutasyon izole, altyapı paylaşılır) + `subagent` StepKind. SwarmGo'nun en büyük boşluğu.
+- [ ] **A3** — İptal hiyerarşisi: yarım kalan tool_call'lara sentetik `cancelled` sonucu (orphan tool_use önler)
+
+### Araç & yetki katmanı
+- [ ] **B1** — Tool sözleşmesi v2: `ReadOnly()`/`ConcurrencySafe()`/`ValidateInput()` + `BaseTool` varsayılanları
+- [ ] **B4** — Paralel tool yürütme (read-only'leri `errgroup`) + büyük çıktı için disk-spill + referans
+- [ ] **B2** — İzin modeli (`allow/ask/deny`, arg-bazlı desen eşleme `Bash(git *)`) — `ask_user` altyapısını yeniden kullanır
+- [ ] **Faz P3** — Permission/onay modu (`auto`/`ask`/`read-only`); shell'i UI onayıyla aç
+- [ ] **Faz P4** — Hooks (`PreToolUse`/`PostToolUse`, subprocess JSON I/O)
+
+### Bağlam, bellek, trace
+- [ ] **C3** — memdir benzeri bellek **yazma/indeksleme** (`memory_write`, frontmatter türleri) — şu an sadece recall
+- [ ] **C4** — Maliyet takibi: `cache_creation` vs `cache_read` ayrımı + oturumlar arası toplam (caching ROI)
+- [ ] **E3 kalan** — `subagent` (A2 ile) + `tombstone`/`tool_delta` (canlı adım güncelleme altyapısı)
+- [ ] **C2** — Compaction emniyet katmanı (`snip`) — 1M tampon var, düşük öncelik
+
+### MCP & dağıtım
+- [ ] **D1** — MCP çoklu-transport (stdio + SSE/HTTP factory) + config kapsam-zinciri (local<user<project)
+- [ ] **Faz 9** — Wails paketleme (yukarıdaki Faz 9 bloğu)
+- [ ] **D3** — Server/Remote/Bridge (kapsam dışı, not olarak saklanır)
+
+---
+
 ## Önceliklendirme Notu
 
 İlk **görünür sonuç** Faz 3'te (çalışan chat UI). Buraya kadar olan kısım (Faz 0-3) projenin "iskelet + nabız" aşamasıdır ve en kritik temeli atar. Sonraki fazlar bu temelin üzerine eklenir.
