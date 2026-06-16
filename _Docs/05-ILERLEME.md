@@ -6,10 +6,11 @@
 - **İlk LLM sağlayıcısı:** Anthropic (Claude) ✅
 - **Frontend:** React ✅
 
-## Mevcut Durum: FAZ 7 ORCHESTRATION TAMAMLANDI ✅ (CANLI TEST GEÇTİ) → Faz 9 (Wails)
+## Mevcut Durum: Faz 0–8 + Faz 7 + SDK Paritesi P2/P1 TAMAMLANDI ✅ → Backlog (Wails dahil)
 
 > Not: Faz 8 (MCP/Tools) kullanıcı talebiyle Faz 7'den önce yapıldı; ardından Faz 7 tamamlandı.
-> Kalan sıra: **SDK Paritesi P1/P3/P4 · Faz 9 Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
+> Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
+> Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
 ### Workspace switcher iyileştirmeleri ✅ (2026-06-16)
 Sol-üst workspace seçici elden geçirildi (Playwright ile canlı test edildi):

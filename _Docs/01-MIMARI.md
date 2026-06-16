@@ -90,16 +90,18 @@ SwarmGo/
 ├── internal/
 │   ├── config/                  # env + AES-GCM secret
 │   ├── db/                      # Dosya store (JSON/JSONL, DB yok): db.go (maps+load+atomik yaz) + store_*.go (agent/session/task/run/schedule/memory/usage/mcp/flow)
-│   ├── providers/               # provider arayüzü, anthropic, claudecli, registry
-│   ├── agent/                   # runtime, worker, executor (RunTask), scheduler (cron), reflector, budget, titler, toolloop, toolsetup, climcp (claude-cli --mcp-config), trace (aktivite izi), tunables, flow
+│   ├── providers/               # provider arayüzü (+Streamer), anthropic, claudecli, minimax, catalog, transport, registry
+│   ├── agent/                   # runtime, worker, executor (RunTask), scheduler (cron), reflector, budget, titler, toolloop, toolsetup, climcp (claude-cli --mcp-config), trace (aktivite izi/StepKind), tunables, flow
 │   ├── memory/                  # vector.go (lexical cosine), memory.go (Store)
 │   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go)
 │   ├── orchestration/           # akış graf motoru (model.go, engine.go)
 │   ├── mcp/                     # SDK'sız stdio JSON-RPC istemci (client.go, manager.go)
-│   ├── tools/                   # built-in + MCP birleşik registry (registry.go, builtin_*.go)
+│   ├── tools/                   # built-in (fs/shell + todo_write/ask_user) + MCP birleşik registry (registry.go, builtin_*.go, sandbox.go, ask.go)
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
+│   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs
+│   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE
 │   ├── workspace/               # workspace başına DB + Runtime + Scheduler (manager.go)
-│   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat/files/runtime/tasks/schedules/memory/usage/mcp/agent_tools/flows/settings/workspaces
+│   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat(+stream/control)/files/runtime/tasks/schedules/memory/usage/mcp/agent_tools/flows/settings/workspaces/logs/events
 ├── frontend/                    # React + Vite + TS + Tailwind v4
 └── go.mod
 ```

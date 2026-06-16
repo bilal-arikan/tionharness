@@ -17,7 +17,7 @@ graph LR
 
 ---
 
-> **Durum (2026-06-16):** Faz 0–8 (Faz 8, Faz 7'den önce) + Workspace İzolasyonu + Faz 6.5 + SDK paritesi P1/P2 tamamlandı; aşağıdaki faz işaretleri (✅) canlı durumu yansıtır. **Sıradaki:** **Yapılacaklar / Backlog** bölümü. Plan-dışı ara özelliklerin ve günlüğün tam dökümü: [05-ILERLEME.md](05-ILERLEME.md).
+> **Durum (2026-06-16):** Faz 0–8 (Faz 8, Faz 7'den önce) + Workspace İzolasyonu + Faz 6.5 + SDK paritesi P1/P2 tamamlandı; ✅ işaretleri canlı durumu yansıtır. **Sıradaki:** Yapılacaklar / Backlog. Plan-dışı ara özellikler ve günlük: [05-ILERLEME.md](05-ILERLEME.md).
 
 ## Faz 0 — İskelet ve Ortam ✅
 - [x] Go kurulumu (1.26.4)
@@ -32,7 +32,7 @@ graph LR
 - [x] `internal/config`: env + AES-GCM credential secret
 - **Çıktı:** Açılışta veriyi diskten yükleyen uygulama. ✅
 
-> › **Güncelleme (2026-06-15):** SQLite (`modernc.org/sqlite`), migration runner ve `migrations/*.sql` tamamen kaldırıldı; kalıcılık bellek-içi maps + atomik diske yazma ile dosya sistemine taşındı.
+> › **Güncelleme (2026-06-15):** SQLite (`modernc.org/sqlite`), migration runner ve `migrations/*.sql` kaldırıldı; kalıcılık bellek-içi maps + atomik diske yazma ile dosya sistemine taşındı.
 
 ## Faz 2 — Provider Katmanı + Chat MVP ✅
 - [x] `internal/providers`: `Provider` arayüzü
@@ -101,7 +101,7 @@ graph LR
 - [ ] GitHub Actions: Win/macOS/Linux otomatik derleme
 - **Çıktı:** Dağıtıma hazır masaüstü uygulaması.
 
-> **Not (2026-06-16):** **Connectors fazı (Discord/Slack/Telegram köprüleri) kapsamdan çıkarıldı.** İhtiyaç olursa ileride ayrı bir faz olarak yeniden değerlendirilebilir.
+> **Not (2026-06-16):** **Connectors fazı (Discord/Slack/Telegram köprüleri) kapsamdan çıkarıldı.** İhtiyaç olursa ayrı bir faz olarak yeniden değerlendirilebilir.
 
 ---
 
@@ -146,4 +146,4 @@ graph LR
 
 ## Önceliklendirme Notu
 
-İlk **görünür sonuç** Faz 3'te (çalışan chat UI). Buraya kadar olan kısım (Faz 0-3) projenin "iskelet + nabız" aşamasıdır ve en kritik temeli atar. Sonraki fazlar bu temelin üzerine eklenir.
+İlk **görünür sonuç** Faz 3'te (çalışan chat UI). Faz 0-3 projenin "iskelet + nabız" aşamasıdır ve en kritik temeli atar; sonraki fazlar bunun üzerine eklenir.
