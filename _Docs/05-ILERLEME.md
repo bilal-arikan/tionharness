@@ -12,6 +12,33 @@
 > Sonrasında **SDK Paritesi Faz P2** (builtin fs/shell araçları) + **Faz P1** (todo_write/ask_user) + Trace `StepKind` genişletme (ask/todo/recovery) ve çok sayıda ara özellik (streaming, MiniMax, workspace switcher, otonom olay akışı) tamamlandı.
 > Kalan sıra: **SDK Paritesi P3/P4 · Faz 9 Wails** ve diğer backlog kalemleri — bkz. [03-YOL-HARITASI.md](03-YOL-HARITASI.md) "Yapılacaklar / Backlog". (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Talep-üzerine özetler + "/" komut paleti ✅ (2026-06-16)
+
+Sohbet composer'ındaki `/` komut paletine **workspace verisini özetleyen** dört komut
+eklendi: ajan hafızası, görev panosu, akışlar ve araç listesi. Sonuç, oturuma normal bir
+asistan mesajı olarak (başlıkla) yazılır.
+
+**Backend**
+- [x] `agent/summarizer.go` (yeni): `Runtime.Summarize(ctx, agentID, kind)` — `memory`/`board`/
+  `flows` türleri ilgili veriyi toplar (`gatherSummaryData`, her tür max **40 kayıt**, kayıt
+  başına 200 rune cap) ve **ucuz bir modele** özetletir (yapılandırılmışsa başlık-modeli override'ı,
+  yoksa ajanın kendi modeli; `guardedComplete` ile bütçeye dahil). `tools` türü **deterministik**
+  (`toolsOverview`, model çağrısı yok) — ajanın efektif araç kataloğunu açıklamalarıyla listeler.
+- [x] `api/summary.go` (yeni): `POST /api/sessions/{id}/summary` (`{kind}`) → `Summarize` çağırır,
+  türe özel başlık ekler (🧠 Hafıza / 🗂 Görev panosu / 🔀 Akışlar / 🔌 Araçlar), sonucu
+  `AddMessage` ile oturuma yazıp mesajı döner. Bilinmeyen tür → 400.
+- [x] `server.go`: `POST /api/sessions/{id}/summary` route'u kaydedildi.
+
+**Frontend**
+- [x] `App.tsx` `summarize(kind)` callback'i: backend'i çağırır, üretim sırasında geçici placeholder
+  gösterir, dönen asistan mesajını sohbete ekler. `/` komut paletine 4 komut (`api.ts`/`types.ts`).
+
+**CANLI TEST (API):**
+- [x] `tools` türü: ajanın efektif araç kataloğu deterministik markdown listesi olarak döndü (model
+  çağrısı yok); MCP kapalı ajanda "araçlar kapalı" mesajı.
+- [x] `memory`/`board`/`flows`: boş veride "_(boş — özetlenecek … yok)_"; dolu veride ucuz model özeti.
+- [x] `go build/vet/test ./...` + frontend `tsc --noEmit` temiz.
+
 ### İki-seviyeli araç yönetimi (workspace + ajan) ✅ (2026-06-16)
 
 Araç (tool) yönetimi ajan-bazlıdan **iki seviyeli** bir modele çevrildi: workspace

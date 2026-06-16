@@ -234,6 +234,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ title }),
     }),
+  // On-demand summary/listing posted as an assistant message in the session.
+  // kind: 'memory' | 'board' | 'flows' | 'tools'. Returns the new message.
+  summarizeSession: (sessionId: string, kind: string) =>
+    req<Message>(`/api/sessions/${sessionId}/summary`, {
+      method: 'POST',
+      body: JSON.stringify({ kind }),
+    }),
   // Clear a session's unread flag.
   markSessionRead: (sessionId: string) =>
     req<{ id: string }>(`/api/sessions/${sessionId}/read`, { method: 'POST' }),

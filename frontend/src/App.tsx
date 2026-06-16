@@ -580,18 +580,39 @@ export default function App() {
     }
   }, [])
 
-  // Slash commands available in the chat composer ("/" menu).
+  // Run a "/" summary command: ask the backend to summarize memory/board/flows
+  // or list tools, then append the resulting assistant message to the chat. A
+  // transient placeholder is shown while the (cheap-model) summary is generated.
+  const summarize = useCallback(
+    (kind: 'memory' | 'board' | 'flows' | 'tools') => {
+      const sid = activeSessionId
+      if (!sid) return
+      const tmpId = `sum-${Date.now()}`
+      const placeholder: Message = {
+        id: tmpId,
+        sessionId: sid,
+        role: 'assistant',
+        agentId: activeAgentId ?? undefined,
+        text: '⏳ Özetleniyor…',
+        steps: '[]',
+        createdAt: Math.floor(Date.now() / 1000),
+      }
+      setMessages((prev) => [...prev, placeholder])
+      api
+        .summarizeSession(sid, kind)
+        .then((msg) => setMessages((prev) => prev.map((m) => (m.id === tmpId ? msg : m))))
+        .catch((e) => {
+          setMessages((prev) => prev.filter((m) => m.id !== tmpId))
+          setError((e as Error).message)
+        })
+    },
+    [activeSessionId, activeAgentId],
+  )
+
+  // Slash commands available in the chat composer ("/" menu). These trigger an
+  // agent action in-place rather than navigating — navigation lives in the rail.
   const chatCommands = useMemo<SlashCommand[]>(
     () => [
-      { name: 'new', icon: '➕', description: 'Yeni oturum başlat', run: () => void newSession() },
-      {
-        name: 'title',
-        icon: '⟳',
-        description: 'Oturum başlığını yeniden üret',
-        run: () => {
-          if (activeSessionId) void regenerateSessionTitle(activeSessionId)
-        },
-      },
       {
         name: 'reflect',
         icon: '✦',
@@ -600,12 +621,12 @@ export default function App() {
           if (activeAgentId) api.reflect(activeAgentId).catch((e) => setError((e as Error).message))
         },
       },
-      { name: 'memory', icon: '⛁', description: 'Hafıza görünümüne geç', run: () => setView('memory') },
-      { name: 'tools', icon: '🔌', description: 'Araçlar görünümüne geç', run: () => setView('tools') },
-      { name: 'board', icon: '🗂', description: 'Görevler panosuna geç', run: () => setView('board') },
-      { name: 'flows', icon: '🔀', description: 'Akışlar görünümüne geç', run: () => setView('flows') },
+      { name: 'memory', icon: '⛁', description: 'Hafıza kayıtlarını özetle', run: () => summarize('memory') },
+      { name: 'tools', icon: '🔌', description: 'Kullanılabilir araçları listele', run: () => summarize('tools') },
+      { name: 'board', icon: '🗂', description: 'Görev panosunu özetle', run: () => summarize('board') },
+      { name: 'flows', icon: '🔀', description: 'Akışları özetle', run: () => summarize('flows') },
     ],
-    [newSession, regenerateSessionTitle, activeSessionId, activeAgentId],
+    [activeAgentId, summarize],
   )
 
   return (

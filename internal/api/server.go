@@ -124,6 +124,7 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleListMessages)
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
+	mux.HandleFunc("POST /api/sessions/{id}/summary", s.handleSessionSummary)
 	mux.HandleFunc("POST /api/sessions/{id}/read", s.handleMarkSessionRead)
 	mux.HandleFunc("GET /api/sessions/{id}/path", s.handleSessionPath)
 	mux.HandleFunc("POST /api/sessions/{id}/reveal", s.handleRevealSession)
