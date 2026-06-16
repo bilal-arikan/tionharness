@@ -12,7 +12,7 @@ interface Props {
   onError: (msg: string) => void
   onCopyPath: (id: string) => void
   onRevealFolder: (id: string) => void
-  onGenerateTitle: (id: string) => void
+  onGenerateTitle: (id: string) => void | Promise<void>
   onSummarize: (id: string, kind: string) => void
   onDeleteSession: (id: string) => void
 }
@@ -41,6 +41,10 @@ export function SessionDetailPanel({
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [titling, setTitling] = useState(false)
+  // Manual-refresh nonce: bumped by the refresh button (and after a title
+  // regeneration) to re-fetch without touching the parent's refreshKey.
+  const [localRefresh, setLocalRefresh] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -53,7 +57,20 @@ export function SessionDetailPanel({
     return () => {
       alive = false
     }
-  }, [sessionId, refreshKey, onError])
+  }, [sessionId, refreshKey, localRefresh, onError])
+
+  // Regenerate the title, showing an inline spinner, then refresh the panel so
+  // the new title is reflected here too.
+  const handleTitle = async () => {
+    if (titling) return
+    setTitling(true)
+    try {
+      await onGenerateTitle(sessionId)
+      setLocalRefresh((n) => n + 1)
+    } finally {
+      setTitling(false)
+    }
+  }
 
   const copyPath = () => {
     onCopyPath(sessionId)
@@ -74,13 +91,23 @@ export function SessionDetailPanel({
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
           Oturum bilgisi
         </span>
-        <button
-          onClick={onClose}
-          title="Paneli kapat"
-          className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setLocalRefresh((n) => n + 1)}
+            disabled={loading}
+            title="Yenile"
+            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-40"
+          >
+            <span className={`inline-block ${loading ? 'animate-spin' : ''}`}>↻</span>
+          </button>
+          <button
+            onClick={onClose}
+            title="Paneli kapat"
+            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {loading && !info ? (
@@ -194,7 +221,13 @@ export function SessionDetailPanel({
           {/* Actions / tools */}
           <Section title="Araçlar">
             <div className="flex flex-col gap-1.5">
-              <ActionBtn icon="✨" label="AI ile başlık üret" onClick={() => onGenerateTitle(sessionId)} disabled={info.messageCount === 0} />
+              <ActionBtn
+                icon="✨"
+                label={titling ? 'Başlık üretiliyor…' : 'AI ile başlık üret'}
+                onClick={handleTitle}
+                disabled={info.messageCount === 0 || titling}
+                busy={titling}
+              />
               <div className="relative">
                 <ActionBtn icon="📝" label="Özet ekle…" onClick={() => setSummaryOpen((v) => !v)} caret />
                 {summaryOpen && (
@@ -284,6 +317,7 @@ function ActionBtn({
   disabled,
   danger,
   caret,
+  busy,
 }: {
   icon: string
   label: string
@@ -291,6 +325,7 @@ function ActionBtn({
   disabled?: boolean
   danger?: boolean
   caret?: boolean
+  busy?: boolean
 }) {
   return (
     <button
@@ -302,7 +337,7 @@ function ActionBtn({
           : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
       }`}
     >
-      <span>{icon}</span>
+      <span className={busy ? 'inline-block animate-spin' : ''}>{busy ? '↻' : icon}</span>
       <span className="flex-1">{label}</span>
       {caret && <span className="text-[var(--color-text-dim)]">▾</span>}
     </button>
