@@ -1,6 +1,43 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-16**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
+
+## Bugfix — claude-cli transcript'ine sızan harness markup'ı (system-reminder balonu) (2026-06-17)
+
+**Belirti:** `claude-cli` sağlayıcısıyla çalışan bir ajan, çok-turlu bir sohbette araç kullandıktan (Edit/Read) sonra gelen bir kullanıcı isteğine cevap yerine `<system-reminder>The assistant message ... is malformed ...</system-reminder>` metnini **bir sohbet balonu olarak** üretiyordu.
+
+**Kök neden:** `providers/serializeTranscript`, çok-turlu geçmişi düz metne çevirirken önceki asistan turunun `Text`'ini **olduğu gibi** CLI'ye geri besliyordu. Önceki turun metnine sızmış tool-call markup'ı (`</parameter></parameter></function_results>` gibi) içeren bir transcript, claude CLI'nin girdi-onarım harness'ini tetikliyor; o da `<system-reminder>` enjekte ediyor ve model bunu geri tükürüyor.
+
+**Düzeltme (`internal/providers/sanitize.go` — yeni):**
+1. **Girdi temizleme (kök neden):** `sanitizeTranscriptText` — `<system-reminder>…</system-reminder>`, `<function_calls|function_results>` blokları ve başıboş `invoke`/`parameter`/`function_*` etiketlerini regex ile strip eder; `serializeTranscript` artık her **asistan** turunu bununla geçirir (kullanıcı metnine dokunulmaz). Sıradan düzyazı/kod korunur (yalnız bu spesifik harness etiket adları hedeflenir).
+2. **Çıktı koruması (savunma):** `cliStreamParser.finish()` artık `isRepairArtifact` ile çıktının bir onarım-reminder'ı olup olmadığını kontrol eder; öyleyse temizler, geriye gerçek cevap kalmazsa turu hata ile başarısız sayar (reminder asla kaydedilmez/gösterilmez).
+
+**Testler:** `providers/sanitize_test.go` (`TestSanitizeTranscriptText_StripsHarnessMarkup`, `TestIsRepairArtifact`, `TestSerializeTranscript_SanitizesAssistantTurns`). ✅ `go build`/`vet`/`test ./internal/...` yeşil. Not: native (anthropic) yol yapısal content-block kullandığından bu sızıntıya açık değil; düzeltme claude-cli düz-metin transcript yoluna özgüdür.
+
+## UI — Akış scroll fix + tool kartı başlık rozetleri (2026-06-17)
+
+İki kullanıcı geri bildirimi (yalnız frontend, düşük risk):
+
+1. **Bug — uzun sohbette canlı cevap "kayboluyor", tur bitince görünüyor.**
+   Kök neden: `components/MessageList.tsx` her `messages` değişiminde (akışta her
+   token bir delta → `setMessages`) `endRef.scrollIntoView({behavior:'smooth'})`
+   çağırıyordu. Uzun transcript'te (büyük scroll yüksekliği) her delta bir önceki
+   smooth animasyonu yarıda kesip yeniden başlatıyor → animasyon hiç oturmuyor,
+   viewport canlı baloncuğu gösteremiyor; akış bitince son scroll oturunca cevap
+   "gözüküyor". **Düzeltme:** sticky-bottom + **anlık** scroll. Scroll konteynerine
+   `ref`+`onScroll` eklendi; `pinnedRef` kullanıcının dibe sabitli olup olmadığını
+   izler (eşik 80px) → yukarı kaydırıp geçmiş okurken deltalar artık dibe çekmiyor.
+   Pinned iken `el.scrollTop = el.scrollHeight` (smooth değil → delta thrash'i yok).
+   Oturum değişiminde (ilk mesaj id'si değişince) yeniden dibe sabitlenir.
+
+2. **Feature — tool kartı başlığında (collapse halinde) özet rozet.** Native yol
+   zaten `diff` step → `DiffCard`'da `+eklendi/−silindi` gösteriyordu; **claude-cli**
+   yolunda Read/Edit/Write `tool` step → `ActivityCard`'a gidiyor ve sayı yalnız
+   kart açılınca (DiffView) görünüyordu. `ActivityCard` başlığına rozet eklendi:
+   Edit/Write için çıktıyı `parseDiff` ile çözüp **`+X −Y`** (added>0||removed>0),
+   Read/`read_file` için çıktı satır sayısı **`N satır`**. `lib/tools.ts`'e
+   `toolBase`/`isReadTool` export'ları eklendi. ✅ tsc + vite build temiz.
+   (Chrome canlı testi: gateway-manager/mcp-chrome bu oturumda bağlı değil — yapılamadı.)
 
 ## Faz P3 — İzin/onay katmanı (Aşama 1: claude-cli izin modu, 2026-06-16)
 

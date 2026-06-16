@@ -347,6 +347,17 @@ func (p *cliStreamParser) finish() (*Response, error) {
 	if p.finalText == "" {
 		p.finalText = strings.TrimSpace(p.pending.String())
 	}
+	// Output guard: if the CLI echoed a harness repair reminder instead of an
+	// answer (a malformed replayed turn can trigger this), don't surface it as
+	// the assistant's reply. Strip the artifact; if nothing genuine remains,
+	// fail the turn so the caller can retry rather than persist the reminder.
+	if isRepairArtifact(p.finalText) {
+		if cleaned := sanitizeTranscriptText(p.finalText); cleaned != "" {
+			p.finalText = cleaned
+		} else {
+			return nil, fmt.Errorf("claude CLI returned only a repair reminder, not an answer")
+		}
+	}
 	p.resp.Text = p.finalText
 	return p.resp, nil
 }
@@ -396,12 +407,17 @@ func serializeTranscript(msgs []Message) string {
 	b.WriteString("Continue this conversation. Reply only as the assistant to the final user message.\n\n")
 	for _, m := range turns {
 		label := "User"
+		text := m.Text
 		if m.Role == RoleAssistant {
 			label = "Assistant"
+			// Strip any leaked tool-call / harness markup from prior assistant
+			// turns so the CLI never sees a malformed message and injects its own
+			// repair <system-reminder> (which the model would then echo back).
+			text = sanitizeTranscriptText(text)
 		}
 		b.WriteString(label)
 		b.WriteString(": ")
-		b.WriteString(m.Text)
+		b.WriteString(text)
 		b.WriteString("\n\n")
 	}
 	return strings.TrimSpace(b.String())
