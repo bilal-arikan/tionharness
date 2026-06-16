@@ -22,3 +22,8 @@ func askerFrom(ctx context.Context) AskFunc {
 	fn, _ := ctx.Value(askKey{}).(AskFunc)
 	return fn
 }
+
+// AskerFrom is the exported view of askerFrom: it lets the permission gate (in
+// the agent package) reuse the interactive ask channel to prompt for tool
+// approval. Returns nil on autonomous runs with no open client connection.
+func AskerFrom(ctx context.Context) AskFunc { return askerFrom(ctx) }

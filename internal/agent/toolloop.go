@@ -149,6 +149,9 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 
 	var last *providers.Response
 	var steps []TurnStep
+	// granted remembers tools the user chose "Always allow" for, scoped to this
+	// turn, so the permission gate does not re-prompt for the same tool.
+	granted := map[string]bool{}
 	// fail records a turn-level error as an inline step before the loop returns.
 	fail := func(reason string, err error) {
 		st := TurnStep{Kind: StepError, Reason: reason, Text: err.Error(), IsError: true}
@@ -196,6 +199,18 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		results := make([]providers.ToolResult, 0, len(resp.ToolCalls))
 		for _, call := range resp.ToolCalls {
 			r.logger.Info("tool call", "agent", agent.ID, "tool", call.Name)
+
+			// Permission gate: under read-only/ask the call may be blocked or need
+			// user approval before it runs. A blocked call becomes an error result
+			// fed back to the model (so it can adapt) instead of executing.
+			if allowed, denyMsg := permGate(ctx, agent.PermissionMode, call, granted); !allowed {
+				r.logger.Info("tool blocked", "agent", agent.ID, "tool", call.Name, "mode", agent.PermissionMode)
+				results = append(results, providers.ToolResult{CallID: call.ID, Content: denyMsg, IsError: true})
+				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "permission_denied", Text: denyMsg, IsError: true}
+				steps = append(steps, st)
+				emit(st)
+				continue
+			}
 
 			// Attach a per-call diff sink so file-mutating built-ins (write_file /
 			// edit_file) can surface a structured diff for the UI card below.

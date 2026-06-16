@@ -27,10 +27,31 @@ araçlar **sessizce reddediliyordu**. (external-agent-oss'un 3-modlu izin sistem
 ile temp dizinde dosya yazdırma — **bayrak yokken dosya OLUŞMADI** (eski hata doğrulandı),
 **`--permission-mode acceptEdits` ile dosya OLUŞTU** (düzeltme doğrulandı).
 
-**Kalan (sonraki aşamalar):** Aşama 2 — native (anthropic/minimax) yolda `toolloop.go`
-`reg.Call` öncesi risk-sınıflı gate + `StepPermission` adımı + `WithAsker` ile "ask" onayı.
-Aşama 3 — Composer'da Shift+Tab benzeri mod seçici (oturum-bazlı) + ayarlarda varsayılan +
-ajan formunda alan. Aşama 4 — claude-cli "ask" için Interaction MCP permission-prompt aracı.
+**Aşama 2 — native (anthropic/minimax) yolda risk-sınıflı gate (2026-06-17):**
+1. `tools/classify.go` (yeni) — `Risk` (`read`/`write`/`exec`) + `Classify(name)`. Bilinen
+   built-in araçlar eşlenir; etkileşim/in-app araçlar (`ask_user`/`todo_write`/artifacts) =
+   `read` (Explore ajanı da kullanabilsin); `write_file`/`edit_file` = `write`; `shell` = `exec`;
+   **bilinmeyen + namespaced MCP araçları = `write`** (varsayılan, güvenli taraf).
+2. `tools/ask.go` — `AskerFrom(ctx)` exported (agent paketinin ask kanalını onay için
+   yeniden kullanması için).
+3. `agent/permission.go` (yeni) — `permGate(ctx, mode, call, granted)`:
+   `auto`→hepsi; `read-only`→yalnız `read`, write/exec **bloklanır**; `ask`→`read` serbest,
+   write/exec **`WithAsker` ile onay sorar** (`Allow once`/`Always allow`/`Deny`; "Always allow"
+   tur boyunca `granted`'da hatırlanır → tekrar sormaz). Asker yoksa (otonom koşu) write/exec
+   reddedilir. `normalizePermAnswer` serbest-metin/tık yanıtını normalize eder.
+4. `agent/toolloop.go` — native döngüde `reg.Call` **öncesi** `permGate`; bloklanan çağrı
+   modele `IsError` tool result olarak döner (model uyum sağlar, tur düşmez) + `StepError`
+   (`reason:"permission_denied"`) adımı yayılır. Tur-ömürlü `granted` haritası.
+5. Testler: `agent/permission_test.go` (auto/read-only/ask×asker-yok/Always-allow-hatırlama/deny).
+
+✅ `go build`/`vet`/`test ./internal/agent ./internal/tools ./internal/providers` yeşil. "ask"
+onay istemi mevcut `StepAsk`→`AskPrompt` UI'ını yeniden kullanır (3 tıklanabilir seçenek);
+mod şu an API ile (`permissionMode`) ayarlanır — composer mod seçici Aşama 3.
+
+**Kalan (sonraki aşamalar):** Aşama 3 — Composer'da Shift+Tab benzeri mod seçici
+(oturum-bazlı) + ayarlarda varsayılan + ajan formunda alan + (ops.) ayrı `StepPermission`
+kart render'ı + oturum-ömürlü "Always allow" kalıcılığı. Aşama 4 — claude-cli "ask" için
+Interaction MCP permission-prompt aracı (`acceptEdits` yerine gerçek tur-içi onay).
 
 ## Kararlar (2026-06-15)
 - **İlk LLM sağlayıcısı:** Anthropic (Claude) ✅
