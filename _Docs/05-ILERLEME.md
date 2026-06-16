@@ -2,6 +2,74 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Faz A2 — Mesaj ekleri (attachments, 2026-06-17)
+
+Kullanıcı sohbet turuna **çoklu dosya** ekleyebilir; ekler input üstünde tip
+ikonlu chip olarak görünür (x ile iptal), gönderince kullanıcı balonunda kalır.
+external-agent-oss attachment sistemi referans alındı.
+
+- **Yükleme:** `POST /api/uploads` (multipart, `api/uploads.go`) → dosyayı
+  workspace sandbox'ında `uploads/<sessionId>/<id>-<ad>` altına yazar (ajan
+  `read_file` ile okur). Kaba `kind` tespiti (image/text/code/pdf/office/
+  archive/audio/video); küçük (≤100KB) text/code dosyaları içeriğini
+  `Attachment.TextContent`'e inline taşır. 25MB cap.
+- **Kalıcılık:** `db.Attachment` (`models_attachment.go`) + `db.Message.Attachments`;
+  `chat.go` + `chat_stream.go` user mesajına yazar. Metin boşsa **ek varken**
+  gönderime izin.
+- **Provider:** `conversation.toProviderMessages` → `withAttachments` ekleri user
+  metnine katar: text/code verbatim inline (```...```), binary/görsel `read_file`
+  path listesi olarak. Test: `conversation/attachments_test.go`.
+- **Inline görsel servis:** `GET /api/files` workspace-göreli **`?rel=`** formu
+  kazandı; `<img>` header gönderemediğinden `?ws=<id>` ile scope alır.
+  Path-traversal guard. `withWorkspace` header yoksa `?ws=` query'sini okur.
+- **Frontend:** `Composer` ek tepsisi (📎 buton + gizli multi-input + drag-drop +
+  **paste**: >2000 karakter pano metni `.txt` ekine, yapıştırılan görsel
+  yüklenir), dosya-başına yükleme durumu + **x**; `AttachmentChip` (görsel
+  thumbnail / dosya kartı) tepside + `UserBubble`'da; `api/uploads.ts`,
+  `lib/attachments.tsx` (ikon/etiket/`imageURL`), `types/attachment.ts`.
+
+✅ go build/vet/test + tsc -b/vite build yeşil. **API canlı round-trip** (geçici
+:8091 scratch instance): text+görsel upload → doğru kind/rel/size, `?rel=` görsel
+servis 200 image/png, traversal `../../` → 400, diske kalıcılık, `TextContent`
+inline doğrulandı.
+
+**Not:** mcp-chrome bu oturumda bağlı olmadığından tarayıcı görsel testi
+yapılamadı (çalışan :8090 backend de eski binary — özellik için yeniden başlatma
+gerek). **v2:** görsel **multimodal** (model görseli görür — provider katmanına
+anthropic image content-block eklenmeli), "Artifact'a dönüştür" butonu, drag-drop
+cilası.
+
+## UI — Yenileme sonrası "düşünüyor" göstergesinin geri yüklenmesi (2026-06-17)
+
+**Sorun:** Mesaj gönderdikten hemen sonra sayfa yenilenince "agent düşünüyor"
+göstergesi kayboluyordu. Turlar istemci bağlantısından **detached** olduğundan
+sunucuda çalışmaya devam eder; ama reload sonrası client'ın `pending` state'i
+sıfırlandığından gösterge gider, yanıt ancak tur bitip `chat` event'i gelince
+görünür — arada "boşluk" oluşuyordu.
+
+**Çözüm:** Sunucu, hangi oturumların **uçuşta** turu olduğunu bildirir; frontend
+reload'da bunu sorgulayıp göstergeyi geri yükler.
+- **Backend:** `chatRun`'a `sessionID` alanı + `chatRuns.activeSessionIDs()`
+  (distinct, in-flight oturumlar). Yeni uç **`GET /api/sessions/active`** →
+  `{sessionIds:[]}` (`handleActiveSessions`, `server.go` route). `register`
+  imzası `(id, sessionID, cancel)`. Ayrıca `chat_stream.go`'da **tur bitişinde
+  hata yolunda da** terminal `chat` event'i yayan guard'lı defer (`turnStarted`
+  +`emitted`) — önceden event yalnız başarı yolunda yayılıyordu, hata olunca
+  gösterge takılı kalabilirdi.
+- **Frontend:** `api.activeSessions()`; `useChatStream` `markPending(ids)` /
+  `clearPending(sid)` (yalnız `pendingSessions` — `streaming` değil, böylece
+  reload sonrası composer "Gönder"de kalır, kırık Durdur yok). `App.tsx`
+  boot/workspace-değişiminde aktif turları seed'ler; her `chat` event'inde ilgili
+  oturumu temizler (+ açık transcript'i yeniden yükler).
+
+✅ go build/vet/test + tsc + vite build yeşil; geçici instance'ta
+`GET /api/sessions/active` → `{"sessionIds":[]}` (200) smoke doğrulandı.
+**Not (1):** çalışan 8090 backend eski binary — uç etkin olması için **backend
+restart** gerekir (eski binary'de uç 404 döner, `api.activeSessions()` sessizce
+yutar → regresyon yok). **Not (2):** çalışma ağacında eşzamanlı **attachments**
+özelliği paylaşılan dosyalara (server.go/App.tsx/useChatStream.ts) iç içe
+girdiğinden bu değişikliklerin commit'i kullanıcıya bırakıldı.
+
 ## UI — Açıklayıcı HTTP hata mesajları (2026-06-17)
 
 Header'daki kırmızı hata pill'i (sol-üst) artık çıplak **"HTTP 502"** yerine
