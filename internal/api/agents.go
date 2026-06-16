@@ -8,8 +8,7 @@ import (
 
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	agents, err := ws(r).DB.ListAgents(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 	if agents == nil {
@@ -68,8 +67,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		Model:        req.Model,
 		PlanningMode: req.PlanningMode,
 	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 
@@ -126,12 +124,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		Avatar:       req.Avatar,
 		Color:        req.Color,
 	})
-	if err == db.ErrNotFound {
-		writeError(w, http.StatusNotFound, "agent not found")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "agent not found") {
 		return
 	}
 	writeJSON(w, http.StatusOK, agent)

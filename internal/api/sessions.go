@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
 )
@@ -9,8 +10,7 @@ import (
 func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	agentID := r.URL.Query().Get("agentId")
 	sessions, err := ws(r).DB.ListSessions(r.Context(), agentID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 	if sessions == nil {
@@ -43,18 +43,89 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		AgentID: req.AgentID,
 		Title:   req.Title,
 	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 	writeJSON(w, http.StatusCreated, session)
 }
 
+type titleResp struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+type generateTitleReq struct {
+	// Source optionally overrides what the title is generated from. When empty,
+	// the session's existing conversation is used.
+	Source string `json:"source"`
+}
+
+// handleGenerateSessionTitle (re)generates a title for a chat session and
+// persists it. The source is an explicit override or, by default, the opening
+// of the session's conversation.
+func (s *Server) handleGenerateSessionTitle(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+	ctx := r.Context()
+
+	session, err := wsp.DB.GetSession(ctx, id)
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+
+	var req generateTitleReq
+	_ = decodeJSON(r, &req) // body is optional
+
+	source := strings.TrimSpace(req.Source)
+	if source == "" {
+		msgs, err := wsp.DB.ListMessages(ctx, id)
+		if writeDBError(w, err, "") {
+			return
+		}
+		source = titleSourceFromMessages(msgs)
+	}
+	if source == "" {
+		writeError(w, http.StatusBadRequest, "no content to generate a title from")
+		return
+	}
+
+	title, err := wsp.Runtime.TitleFor(ctx, session.AgentID, source)
+	if err != nil {
+		s.logger.Warn("session title generation degraded", "session", id, "error", err)
+	}
+	if err := wsp.DB.SetSessionTitle(ctx, id, title); writeDBError(w, err, "session not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, titleResp{ID: id, Title: title})
+}
+
+// titleSourceFromMessages composes a compact source string from the first few
+// turns of a conversation for titling.
+func titleSourceFromMessages(msgs []db.Message) string {
+	var b strings.Builder
+	for _, m := range msgs {
+		if m.Role != "user" && m.Role != "assistant" {
+			continue
+		}
+		text := strings.TrimSpace(m.Text)
+		if text == "" {
+			continue
+		}
+		b.WriteString(m.Role)
+		b.WriteString(": ")
+		b.WriteString(text)
+		b.WriteString("\n")
+		if b.Len() > 1500 {
+			break
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
 func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 	messages, err := ws(r).DB.ListMessages(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 	if messages == nil {

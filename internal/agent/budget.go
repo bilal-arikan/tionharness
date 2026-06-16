@@ -12,6 +12,10 @@ import (
 // daily spend caps. Manual (user-initiated) calls are never subject to this.
 var ErrBudgetExceeded = errors.New("daily budget exceeded")
 
+// ErrAutonomyPaused is returned when the global autonomy brake is engaged and an
+// autonomous call is attempted. Manual calls are unaffected.
+var ErrAutonomyPaused = errors.New("autonomy paused")
+
 // ensureBudget verifies an agent is under its daily caps before an autonomous
 // call. Zero limits mean unlimited.
 func (r *Runtime) ensureBudget(ctx context.Context, agent db.Agent) error {
@@ -44,6 +48,9 @@ func (r *Runtime) RecordUsage(ctx context.Context, agentID string, u providers.U
 // records usage afterward so the meter reflects every call.
 func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req providers.Request, autonomous bool) (*providers.Response, error) {
 	if autonomous {
+		if r.tun.AutonomyPaused() || r.Paused() {
+			return nil, ErrAutonomyPaused
+		}
 		if err := r.ensureBudget(ctx, agent); err != nil {
 			return nil, err
 		}

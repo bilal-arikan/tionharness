@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -17,8 +16,7 @@ func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mems, err := ws(r).Runtime.Memory().List(r.Context(), agentID, kinds...)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 	if mems == nil {
@@ -55,8 +53,7 @@ func (s *Server) handleCreateMemory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mem, err := wsp.Runtime.Memory().Remember(r.Context(), agentID, req.Kind, req.Content)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 	writeJSON(w, http.StatusCreated, mem)
@@ -66,11 +63,7 @@ func (s *Server) handleCreateMemory(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteMemory(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	err := ws(r).Runtime.Memory().Delete(r.Context(), id)
-	if errors.Is(err, db.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "memory not found")
-		return
-	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "memory not found") {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": id, "result": "deleted"})

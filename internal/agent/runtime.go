@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/memory"
@@ -17,18 +18,31 @@ type Runtime struct {
 	db        *db.DB
 	providers *providers.Registry
 	mem       *memory.Store
+	tun       *Tunables
 	logger    *slog.Logger
 
 	mu      sync.Mutex
 	workers map[string]*worker
+
+	// paused is this workspace's autonomy brake (set from per-workspace
+	// settings); when true, autonomous calls are rejected like the global one.
+	paused atomic.Bool
 }
 
-// NewRuntime constructs the runtime.
-func NewRuntime(database *db.DB, registry *providers.Registry, logger *slog.Logger) *Runtime {
+// SetPaused toggles this workspace's autonomy brake.
+func (r *Runtime) SetPaused(p bool) { r.paused.Store(p) }
+
+// Paused reports this workspace's autonomy brake state.
+func (r *Runtime) Paused() bool { return r.paused.Load() }
+
+// NewRuntime constructs the runtime. tun carries the process-wide tunables
+// (autonomy pause, title-model override) shared across all workspace runtimes.
+func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, logger *slog.Logger) *Runtime {
 	return &Runtime{
 		db:        database,
 		providers: registry,
 		mem:       memory.New(database),
+		tun:       tun,
 		logger:    logger,
 		workers:   make(map[string]*worker),
 	}
@@ -142,8 +156,13 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 		return err
 	}
 
-	// Heartbeat is autonomous → enforce the agent's daily budget.
-	resp, err := r.guardedComplete(ctx, agent, providers.Request{
+	provider, err := r.providers.Get(agent.Provider)
+	if err != nil {
+		return err
+	}
+	// Heartbeat is autonomous → enforce the agent's daily budget. Tools run when
+	// the agent has them enabled.
+	resp, err := r.CompleteWithTools(ctx, agent, provider, providers.Request{
 		Model:  agent.Model,
 		System: buildSystemPrompt(agent),
 		Messages: []providers.Message{

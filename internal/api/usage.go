@@ -1,11 +1,9 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/bilal/swarmgo/internal/conversation"
-	"github.com/bilal/swarmgo/internal/db"
 )
 
 // handleAgentUsage returns today's usage plus the agent's daily caps, so the UI
@@ -15,17 +13,12 @@ func (s *Server) handleAgentUsage(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
 
 	agent, err := wsp.DB.GetAgent(r.Context(), agentID)
-	if errors.Is(err, db.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "agent not found")
-		return
-	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "agent not found") {
 		return
 	}
 
 	usage, err := wsp.DB.GetUsageToday(r.Context(), agentID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 
@@ -59,11 +52,7 @@ func (s *Server) handleSetBudget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := wsp.DB.UpdateBudget(r.Context(), agentID, req.DailyCallLimit, req.DailyTokenLimit)
-	if errors.Is(err, db.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "agent not found")
-		return
-	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "agent not found") {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -80,16 +69,11 @@ func (s *Server) handleSessionContext(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
 
 	session, err := wsp.DB.GetSession(r.Context(), sessionID)
-	if errors.Is(err, db.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "session not found")
-		return
-	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "session not found") {
 		return
 	}
 	history, err := wsp.DB.ListMessages(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 

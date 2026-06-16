@@ -1,6 +1,6 @@
 // Package workspace provides fully-isolated workspaces. Each workspace owns its
-// own SQLite database and its own agent runtime, so content is completely
-// independent between workspaces — switching one never leaks into another.
+// own file-based store directory and its own agent runtime, so content is
+// completely independent between workspaces — switching one never leaks into another.
 package workspace
 
 import (
@@ -36,12 +36,15 @@ type Workspace struct {
 	Runtime   *agent.Runtime
 	Scheduler *agent.Scheduler
 	DataDir   string
+
+	settings settingsHolder // per-workspace overrides (ws-settings.json)
 }
 
 // Manager owns all workspaces and persists their registry.
 type Manager struct {
 	rootDir  string
 	registry *providers.Registry
+	tun      *agent.Tunables
 	logger   *slog.Logger
 
 	mu         sync.RWMutex
@@ -50,11 +53,13 @@ type Manager struct {
 }
 
 // NewManager loads the registry from disk, opens every workspace, and ensures
-// at least one default workspace exists.
-func NewManager(rootDir string, registry *providers.Registry, logger *slog.Logger) (*Manager, error) {
+// at least one default workspace exists. tun is the shared process-wide
+// tunables handed to every workspace runtime.
+func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunables, logger *slog.Logger) (*Manager, error) {
 	m := &Manager{
 		rootDir:    rootDir,
 		registry:   registry,
+		tun:        tun,
 		logger:     logger,
 		workspaces: make(map[string]*Workspace),
 	}
@@ -88,12 +93,12 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 
-	database, err := db.Open(filepath.Join(dir, "swarmgo.db"))
+	database, err := db.Open(filepath.Join(dir, "store"))
 	if err != nil {
 		return err
 	}
 
-	rt := agent.NewRuntime(database, m.registry, m.logger)
+	rt := agent.NewRuntime(database, m.registry, m.tun, m.logger)
 	if err := rt.StartConfigured(context.Background()); err != nil {
 		m.logger.Warn("start configured agents failed", "workspace", meta.ID, "error", err)
 	}
@@ -103,7 +108,11 @@ func (m *Manager) open(meta Meta) error {
 		m.logger.Warn("start scheduler failed", "workspace", meta.ID, "error", err)
 	}
 
+	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
+	rt.ResumeRunningFlows(context.Background())
+
 	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, DataDir: dir}
+	ws.loadSettings() // apply persisted per-workspace overrides (e.g. autonomy pause)
 
 	m.mu.Lock()
 	m.workspaces[meta.ID] = ws

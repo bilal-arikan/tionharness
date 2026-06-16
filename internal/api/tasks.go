@@ -3,14 +3,14 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
 )
 
 func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks, err := ws(r).DB.ListTasks(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 	if tasks == nil {
@@ -33,8 +33,13 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if req.Title == "" {
-		writeError(w, http.StatusBadRequest, "title is required")
+	ctx := r.Context()
+	req.Title = strings.TrimSpace(req.Title)
+	req.Prompt = strings.TrimSpace(req.Prompt)
+	// On the board, a task is created from a prompt alone; the title is
+	// auto-generated when omitted. Require at least one of the two.
+	if req.Title == "" && req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "prompt or title is required")
 		return
 	}
 	if req.BoardState != "" && !db.ValidBoardState(req.BoardState) {
@@ -42,15 +47,23 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := ws(r).DB.CreateTask(r.Context(), db.Task{
-		Title:        req.Title,
+	title := req.Title
+	if title == "" {
+		gen, err := ws(r).Runtime.TitleFor(ctx, req.OwnerAgentID, req.Prompt)
+		if err != nil {
+			s.logger.Warn("task title generation degraded", "error", err)
+		}
+		title = gen
+	}
+
+	task, err := ws(r).DB.CreateTask(ctx, db.Task{
+		Title:        title,
 		Description:  req.Description,
 		Prompt:       req.Prompt,
 		OwnerAgentID: req.OwnerAgentID,
 		BoardState:   req.BoardState,
 	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 	writeJSON(w, http.StatusCreated, task)
@@ -70,11 +83,7 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
 
 	task, err := wsp.DB.GetTask(r.Context(), id)
-	if errors.Is(err, db.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "task not found")
-		return
-	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "task not found") {
 		return
 	}
 
@@ -103,8 +112,7 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		task.BoardState = *req.BoardState
 	}
 
-	if err := wsp.DB.UpdateTask(r.Context(), task); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := wsp.DB.UpdateTask(r.Context(), task); writeDBError(w, err, "task not found") {
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
@@ -112,14 +120,45 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 	err := ws(r).DB.DeleteTask(r.Context(), r.PathValue("id"))
-	if errors.Is(err, db.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "task not found")
-		return
-	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "task not found") {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": r.PathValue("id"), "result": "deleted"})
+}
+
+// handleGenerateTaskTitle (re)generates a task's title from its prompt (falling
+// back to description/title) and persists it.
+func (s *Server) handleGenerateTaskTitle(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+	ctx := r.Context()
+
+	task, err := wsp.DB.GetTask(ctx, id)
+	if writeDBError(w, err, "task not found") {
+		return
+	}
+
+	source := strings.TrimSpace(task.Prompt)
+	if source == "" {
+		source = strings.TrimSpace(task.Description)
+	}
+	if source == "" {
+		source = strings.TrimSpace(task.Title)
+	}
+	if source == "" {
+		writeError(w, http.StatusBadRequest, "no content to generate a title from")
+		return
+	}
+
+	title, genErr := wsp.Runtime.TitleFor(ctx, task.OwnerAgentID, source)
+	if genErr != nil {
+		s.logger.Warn("task title generation degraded", "task", id, "error", genErr)
+	}
+	task.Title = title
+	if err := wsp.DB.UpdateTask(ctx, task); writeDBError(w, err, "task not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
 }
 
 // handleRunTask executes a task immediately ("run now") with its owner agent.
@@ -141,8 +180,7 @@ func (s *Server) handleRunTask(w http.ResponseWriter, r *http.Request) {
 // handleListTaskRuns returns the run history for a task.
 func (s *Server) handleListTaskRuns(w http.ResponseWriter, r *http.Request) {
 	runs, err := ws(r).DB.ListRuns(r.Context(), r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if writeDBError(w, err, "") {
 		return
 	}
 	if runs == nil {

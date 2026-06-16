@@ -4,11 +4,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/conversation"
+	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/logbuf"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/settings"
@@ -26,18 +28,21 @@ type Server struct {
 	providers  *providers.Registry
 	convo      *conversation.Manager
 	settings   *settings.Store
+	tun        *agent.Tunables
 	logs       *logbuf.Buffer
 	logger     *slog.Logger
 }
 
 // NewServer constructs an API server and pushes the persisted settings into the
-// live subsystems (providers, compaction, autonomy).
-func NewServer(manager *workspace.Manager, registry *providers.Registry, store *settings.Store, logs *logbuf.Buffer, logger *slog.Logger) *Server {
+// live subsystems (providers, compaction, autonomy). tun is the shared
+// process-wide tunables updated whenever settings change.
+func NewServer(manager *workspace.Manager, registry *providers.Registry, store *settings.Store, tun *agent.Tunables, logs *logbuf.Buffer, logger *slog.Logger) *Server {
 	s := &Server{
 		workspaces: manager,
 		providers:  registry,
 		convo:      conversation.NewManager(),
 		settings:   store,
+		tun:        tun,
 		logs:       logs,
 		logger:     logger,
 	}
@@ -53,9 +58,10 @@ func (s *Server) applySettings() {
 	s.providers.SetClaudeCLIPath(cur.ClaudeCLIPath)
 	s.providers.SetDefaultModel(cur.DefaultModel)
 	s.providers.SetAnthropicBetas(cur.OneMillionContext, cur.ExtendedPromptCache)
+	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
-	agent.SetAutonomyPaused(cur.PauseAutonomy)
-	agent.SetTitleModel(cur.TitleModel)
+	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
+	s.tun.SetTitleModel(cur.TitleModel)
 }
 
 // Routes registers all HTTP routes and returns the handler.
@@ -132,6 +138,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
 	mux.HandleFunc("POST /api/settings/test-provider", s.handleTestProvider)
+	mux.HandleFunc("GET /api/catalog", s.handleCatalog)
 
 	// Per-workspace settings (resolved from X-Workspace-Id).
 	mux.HandleFunc("GET /api/workspace-settings", s.handleGetWorkspaceSettings)
@@ -187,6 +194,22 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// writeDBError maps a store/runtime error to an HTTP response and reports
+// whether it handled one. db.ErrNotFound becomes 404 with notFoundMsg; any
+// other non-nil error becomes 500 with the error text. Lets handlers collapse
+// the repeated not-found/500 branches into: if writeDBError(...) { return }.
+func writeDBError(w http.ResponseWriter, err error, notFoundMsg string) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, db.ErrNotFound):
+		writeError(w, http.StatusNotFound, notFoundMsg)
+	default:
+		writeError(w, http.StatusInternalServerError, err.Error())
+	}
+	return true
 }
 
 func decodeJSON(r *http.Request, v any) error {

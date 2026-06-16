@@ -17,6 +17,24 @@ func (d *DB) persistAgentLocked(a Agent) error {
 	return atomicWriteJSON(d.dir(dirAgents, a.ID+".json"), a)
 }
 
+// mutateAgentLocked loads an agent under the write lock, applies fn to it, bumps
+// UpdatedAt, and persists it — centralizing the lock/lookup/mutate/persist dance
+// shared by every agent mutator. Returns ErrNotFound when the agent is absent.
+func (d *DB) mutateAgentLocked(id string, fn func(*Agent)) (Agent, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	a, ok := d.agents[id]
+	if !ok {
+		return Agent{}, ErrNotFound
+	}
+	fn(&a)
+	a.UpdatedAt = now()
+	if err := d.persistAgentLocked(a); err != nil {
+		return Agent{}, err
+	}
+	return a, nil
+}
+
 // CreateAgent inserts a new agent and returns the stored row.
 func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	a.ID = newID()
@@ -75,56 +93,42 @@ type AgentProfilePatch struct {
 // UpdateAgent applies a partial profile patch to an existing agent and persists
 // it. Only non-nil patch fields are written.
 func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatch) (Agent, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	a, ok := d.agents[agentID]
-	if !ok {
-		return Agent{}, ErrNotFound
-	}
-	if p.Name != nil {
-		a.Name = *p.Name
-	}
-	if p.Soul != nil {
-		a.Soul = *p.Soul
-	}
-	if p.Identity != nil {
-		a.Identity = *p.Identity
-	}
-	if p.Provider != nil {
-		a.Provider = *p.Provider
-	}
-	if p.Model != nil {
-		a.Model = *p.Model
-	}
-	if p.PlanningMode != nil {
-		a.PlanningMode = *p.PlanningMode
-	}
-	if p.Avatar != nil {
-		a.Avatar = *p.Avatar
-	}
-	if p.Color != nil {
-		a.Color = *p.Color
-	}
-	a.UpdatedAt = now()
-	if err := d.persistAgentLocked(a); err != nil {
-		return Agent{}, err
-	}
-	return a, nil
+	return d.mutateAgentLocked(agentID, func(a *Agent) {
+		if p.Name != nil {
+			a.Name = *p.Name
+		}
+		if p.Soul != nil {
+			a.Soul = *p.Soul
+		}
+		if p.Identity != nil {
+			a.Identity = *p.Identity
+		}
+		if p.Provider != nil {
+			a.Provider = *p.Provider
+		}
+		if p.Model != nil {
+			a.Model = *p.Model
+		}
+		if p.PlanningMode != nil {
+			a.PlanningMode = *p.PlanningMode
+		}
+		if p.Avatar != nil {
+			a.Avatar = *p.Avatar
+		}
+		if p.Color != nil {
+			a.Color = *p.Color
+		}
+	})
 }
 
 // UpdateHeartbeat sets the autonomous wake configuration for an agent.
 func (d *DB) UpdateHeartbeat(ctx context.Context, agentID string, enabled bool, intervalSec int, prompt string) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	a, ok := d.agents[agentID]
-	if !ok {
-		return ErrNotFound
-	}
-	a.HeartbeatEnabled = enabled
-	a.HeartbeatIntervalSec = intervalSec
-	a.HeartbeatPrompt = prompt
-	a.UpdatedAt = now()
-	return d.persistAgentLocked(a)
+	_, err := d.mutateAgentLocked(agentID, func(a *Agent) {
+		a.HeartbeatEnabled = enabled
+		a.HeartbeatIntervalSec = intervalSec
+		a.HeartbeatPrompt = prompt
+	})
+	return err
 }
 
 // GetOrCreateHeartbeatSession returns the dedicated heartbeat session for an
@@ -138,6 +142,21 @@ func (d *DB) GetOrCreateHeartbeatSession(ctx context.Context, agentID string) (S
 func (d *DB) persistSessionLocked(s Session) error {
 	d.sessions[s.ID] = s
 	return d.writeSessionFileLocked(s)
+}
+
+// mutateSessionLocked loads a session under the write lock, applies fn, and
+// persists it. Unlike the agent variant it does not touch UpdatedAt, leaving
+// that to fn — some session mutations (e.g. rolling summary) are not "edits".
+// Returns ErrNotFound when the session is absent.
+func (d *DB) mutateSessionLocked(id string, fn func(*Session)) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s, ok := d.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	fn(&s)
+	return d.persistSessionLocked(s)
 }
 
 // writeSessionFileLocked (re)writes a session's JSONL file: line 1 is the
@@ -191,28 +210,18 @@ func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error
 
 // SetSessionSummary persists the rolling compaction summary for a session.
 func (d *DB) SetSessionSummary(ctx context.Context, sessionID, summary string, msgCount int) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	s, ok := d.sessions[sessionID]
-	if !ok {
-		return ErrNotFound
-	}
-	s.Summary = summary
-	s.SummaryMsgCount = msgCount
-	return d.persistSessionLocked(s)
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Summary = summary
+		s.SummaryMsgCount = msgCount
+	})
 }
 
 // SetSessionTitle persists a (re)generated title for a session.
 func (d *DB) SetSessionTitle(ctx context.Context, sessionID, title string) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	s, ok := d.sessions[sessionID]
-	if !ok {
-		return ErrNotFound
-	}
-	s.Title = title
-	s.UpdatedAt = now()
-	return d.persistSessionLocked(s)
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Title = title
+		s.UpdatedAt = now()
+	})
 }
 
 // GetSession loads a session by id.
