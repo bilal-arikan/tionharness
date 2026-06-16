@@ -379,7 +379,11 @@ function fillerColor(role: string): string {
     case 'assistant':
       return '#10b981' // emerald
     case 'tool':
-      return '#8b5cf6' // violet
+      return '#8b5cf6' // violet — tool-result messages
+    case 'tools':
+      return '#a855f7' // purple — tool/MCP schemas (always-sent catalog)
+    case 'artifacts':
+      return '#ec4899' // pink — session artifact context block
     case 'system':
       return '#64748b' // slate
     default:

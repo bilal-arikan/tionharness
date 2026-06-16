@@ -2,6 +2,32 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara fix — Context metre gerçek footprint'i sayar (2026-06-17)
+
+Oturum bilgisi panelindeki **Bağlam penceresi** ölçeri eskiden yalnızca özet +
+sohbet mesajlarını sayıyordu; **sistem promptu, araç/MCP şemaları ve artifact
+bloğu** (her tura giden ama mesaj olmayan içerik) hesaba katılmıyordu → panel
+gerçek doluluğu olduğundan düşük gösteriyordu (kullanıcı tespiti).
+
+- **Backend (`api/session_info.go`):** yeni `systemFillers` —
+  `composeTurnRequest`'i birebir aynalayarak sistem promptunu (persona + kullanıcı
+  profili + workspace talimatları), ajanın **efektif araç kataloğunu**
+  (`Runtime.ToolCatalog`, built-in + MCP) ve session artifact bloğunu tahmin eder;
+  `estimateToolCatalog` araç başına ad+açıklama+JSON şema (+ çerçeve) maliyetini
+  toplar. `ContextTokens` artık bu ekstrayı içerir; `Fillers`'a **Sistem promptu**
+  (`system`), **Araçlar** (`tools`), **Artifactlar** (`artifacts`) kovaları eklenir
+  ve tümü token ağırlığına göre sıralanır.
+- **Frontend (`SessionDetailPanel.tsx`):** `fillerColor`'a `tools` (mor) ve
+  `artifacts` (pembe) renkleri; panel zaten fillers'ı role göre generic render
+  ettiğinden başka değişiklik gerekmedi. "Boş alan" otomatik küçülür.
+- **Test:** `api/session_info_test.go::TestEstimateToolCatalog` (boş=0, monotonik).
+  **Canlı test:** geçici sunucu + boş oturum → `Araçlar ~1942 tok / 15 araç` +
+  `Sistem promptu ~38 tok` (eskiden ~0 gösterirdi). ✅ build/vet/test + tsc yeşil.
+
+> Cevap: tool/MCP şemaları **artık** Context hesabına dahil ve ayrı kalem olarak
+> gösteriliyor. Not: hafıza recall bloğu sorgu-bağımlı olduğundan kasıtlı olarak
+> hariç bırakıldı (yanıltıcı olmasın); özet zaten ayrı kovada sayılıyor.
+
 ## Faz A2 — Mesaj ekleri (attachments, 2026-06-17)
 
 Kullanıcı sohbet turuna **çoklu dosya** ekleyebilir; ekler input üstünde tip

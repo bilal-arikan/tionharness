@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/bilal/swarmgo/internal/conversation"
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal/swarmgo/internal/workspace"
 )
 
 // sessionInfoResp is the rich detail payload behind the session detail panel:
@@ -121,14 +124,24 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	if session.SummaryMsgCount <= len(history) {
 		pending = history[session.SummaryMsgCount:]
 	}
-	resp.ContextTokens = conversation.EstimateTokens(session.Summary, pending)
+	// Non-message context sent on every turn (system prompt, tool/MCP schemas,
+	// artifact block) — estimated so the meter reflects the real footprint, not
+	// just the visible transcript.
+	extra := s.systemFillers(ctx, wsp, session)
+	extraTokens := 0
+	for _, f := range extra {
+		extraTokens += f.Tokens
+	}
+
+	resp.ContextTokens = conversation.EstimateTokens(session.Summary, pending) + extraTokens
 	// Effective window = the compaction threshold pushed into the conversation
 	// manager; once the pending window exceeds it, older turns fold into summary.
 	resp.ContextWindow = s.settings.Get().MaxContextTokens
 
-	// Context fillers: summary bucket + per-role token estimate of the pending
-	// window, sorted by token weight descending.
-	resp.Fillers = buildFillers(session.Summary, pending)
+	// Context fillers: summary + per-role message buckets PLUS the non-message
+	// buckets (system/tools/artifacts), all sorted by token weight descending.
+	resp.Fillers = append(buildFillers(session.Summary, pending), extra...)
+	sort.SliceStable(resp.Fillers, func(i, j int) bool { return resp.Fillers[i].Tokens > resp.Fillers[j].Tokens })
 
 	// Participating agents: distinct agent per assistant turn (falling back to the
 	// session's default agent), with the default agent always present.
@@ -188,6 +201,59 @@ func buildFillers(summary string, pending []db.Message) []contextFiller {
 	}
 	sort.SliceStable(fillers, func(i, j int) bool { return fillers[i].Tokens > fillers[j].Tokens })
 	return fillers
+}
+
+// systemFillers estimates the context that is sent on every turn but never
+// appears as a chat message: the static system prompt (persona + user profile +
+// workspace instructions), the agent's effective tool catalog (built-in + MCP
+// schemas) and the session's artifact context block. Without these the meter
+// under-reports how full the model's context actually is. Mirrors the request
+// assembled by composeTurnRequest.
+func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, session db.Session) []contextFiller {
+	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
+	if err != nil {
+		return nil
+	}
+
+	out := make([]contextFiller, 0, 3)
+
+	// System prompt (static prefix): persona + user profile + workspace instructions.
+	system := buildSystemPrompt(agentRow)
+	if uc := userContextBlock(s.settings.Get()); uc != "" {
+		system = strings.TrimSpace(uc + "\n\n" + system)
+	}
+	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
+		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
+	}
+	if strings.TrimSpace(system) != "" {
+		out = append(out, contextFiller{Label: "Sistem promptu", Role: "system", Tokens: conversation.EstimateText(system), Count: 1})
+	}
+
+	// Tool catalog (built-in + MCP) exactly as the agent receives it.
+	if cat := wsp.Runtime.ToolCatalog(ctx, agentRow); len(cat) > 0 {
+		out = append(out, contextFiller{Label: "Araçlar", Role: "tools", Tokens: estimateToolCatalog(cat), Count: len(cat)})
+	}
+
+	// Session artifact context block (dynamic suffix).
+	if ab := artifactsContextBlock(ctx, wsp.DB, session.ID); strings.TrimSpace(ab) != "" {
+		out = append(out, contextFiller{Label: "Artifactlar", Role: "artifacts", Tokens: conversation.EstimateText(ab), Count: 1})
+	}
+
+	return out
+}
+
+// estimateToolCatalog approximates the token cost of a tool catalog as it is
+// serialised into the request: name + description + JSON input schema per tool,
+// plus a small per-tool framing overhead.
+func estimateToolCatalog(defs []providers.ToolDef) int {
+	total := 0
+	for _, d := range defs {
+		total += conversation.EstimateText(d.Name)
+		total += conversation.EstimateText(d.Description)
+		total += conversation.EstimateText(string(d.InputSchema))
+		total += 8 // JSON framing per tool
+	}
+	return total
 }
 
 // buildAgentStats collects per-agent turn/token counts from a session's history.
