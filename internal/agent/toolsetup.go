@@ -87,6 +87,16 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		}
 	}
 
+	// Workspace config tools (sandboxed to <workspace>/config/): let an agent
+	// read and edit its OWN runtime prompts / instructions / README.
+	if cb := tools.NewSandbox(r.configDir()); cb.Ready() {
+		builtins = append(builtins,
+			tools.NewConfigReadTool(cb),
+			tools.NewConfigWriteTool(cb),
+			tools.NewConfigListTool(cb),
+		)
+	}
+
 	reg := tools.NewRegistry(builtins...)
 
 	servers, err := r.db.ListEnabledMCPServers(ctx)
