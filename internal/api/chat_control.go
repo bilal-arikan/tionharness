@@ -10,6 +10,10 @@ import (
 type chatRun struct {
 	cancel context.CancelFunc
 	steer  chan string
+	// answer delivers a reply to a blocked ask_user tool call. Buffered (1) so
+	// the control endpoint never blocks; only one question is outstanding at a
+	// time because the tool loop runs synchronously.
+	answer chan string
 }
 
 // chatRuns is the registry of active streaming turns, keyed by run id, so the
@@ -23,7 +27,7 @@ func newChatRuns() *chatRuns { return &chatRuns{runs: make(map[string]*chatRun)}
 
 // register creates a control handle for a run and returns it.
 func (c *chatRuns) register(id string, cancel context.CancelFunc) *chatRun {
-	run := &chatRun{cancel: cancel, steer: make(chan string, 16)}
+	run := &chatRun{cancel: cancel, steer: make(chan string, 16), answer: make(chan string, 1)}
 	c.mu.Lock()
 	c.runs[id] = run
 	c.mu.Unlock()

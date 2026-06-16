@@ -59,6 +59,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.TimeTool{},
 		tools.NewHTTPGetTool(),
 		tools.NewMemoryRecallTool(r.mem, agent.ID),
+		// Interaction tools: todo_write surfaces a live checklist; ask_user pauses
+		// the turn for a clarifying question (no-op outside interactive chat).
+		tools.NewTodoWriteTool(),
+		tools.NewAskUserTool(),
 	}
 
 	// Workspace-scoped filesystem tools (sandboxed to this workspace's work dir).

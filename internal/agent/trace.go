@@ -22,6 +22,11 @@ const (
 	// produces the final answer token-by-token. Delta steps are transient (live
 	// UI only) and are never persisted — the full text lands on the message.
 	StepDelta StepKind = "delta"
+	// StepAsk is a transient interactive prompt: the agent called the ask_user
+	// tool and is blocked waiting for the user's answer. Like StepDelta it is
+	// live-only (never persisted) — the resolved Q&A is persisted as the
+	// ask_user tool step once the answer arrives.
+	StepAsk StepKind = "ask"
 )
 
 // TurnStep is one entry in an assistant turn's activity trace. The ordered list
@@ -37,6 +42,9 @@ type TurnStep struct {
 	Input   json.RawMessage `json:"input,omitempty"`
 	Output  string          `json:"output,omitempty"`
 	IsError bool            `json:"isError,omitempty"`
+	// Options are the suggested clickable answers for a StepAsk prompt (optional;
+	// the user may always type a free-text answer instead).
+	Options []string `json:"options,omitempty"`
 }
 
 // traceStepToTurnStep maps a single provider trace step to an agent TurnStep.

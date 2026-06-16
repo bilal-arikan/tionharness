@@ -3,6 +3,7 @@ import type { Agent, Message } from '../types'
 import { Markdown } from './markdown/Markdown'
 import { TurnSteps, parseSteps } from './chat/TurnSteps'
 import { ThinkingBlock } from './chat/ThinkingBlock'
+import { UserBubble } from './chat/UserBubble'
 import { AgentAvatar } from './AgentAvatar'
 
 interface Props {
@@ -41,11 +42,7 @@ export function MessageList({ messages, pending, agents, onOpenFile }: Props) {
       <div className="flex w-full flex-col gap-4">
         {messages.map((m) =>
           m.role === 'user' ? (
-            <div key={m.id} className="flex justify-end">
-              <div className="max-w-[80%] min-w-0 whitespace-pre-wrap break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-white">
-                {m.text}
-              </div>
-            </div>
+            <UserBubble key={m.id} text={m.text} agents={agents} />
           ) : (
             // Assistant turn: who answered (avatar+name) + activity trace above
             // the final markdown answer — the External Agent chat layout.

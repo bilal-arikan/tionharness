@@ -11,6 +11,18 @@
 > Not: Faz 8 (MCP/Tools) kullanıcı talebiyle Faz 7'den önce yapıldı; ardından Faz 7 tamamlandı.
 > Kalan sıra: **SDK Paritesi P1/P3/P4 · Faz 9 Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.)
 
+### Kullanıcı mesajında @mention / komut stili ✅ (2026-06-16)
+
+Gönderilen kullanıcı mesajları artık `@mention` ve `/komut` içerdiğinde farklı render edilir.
+
+- [x] `components/chat/UserBubble.tsx` (yeni): kullanıcı balonunu render eder. `@AjanAdı` token'ları **çip** olarak vurgulanır (eşleşen ajanın avatar rengiyle; eşleşmezse yarı-saydam beyaz). Mention içeren balona `ring-1 ring-white/40` halka. `/` ile başlayan komut-mesajı **mono yazı tipi + ⌘ + accent-soft kenarlık** ile ayrı stilde.
+- [x] `MessageList.tsx`: kullanıcı dalı düz `{m.text}` yerine `<UserBubble text agents>` kullanır.
+
+**CANLI TEST (Chrome DOM):**
+- [x] "@Reminder kısa selam ver" → balon `ring-1`, `@Reminder` çip span'i; mention Reminder'a yönlendi ("Selam! 👋").
+- [x] "/deneme …" → `font-mono` + ⌘ + accent-soft kenarlıklı komut balonu.
+- [x] `tsc + vite build` temiz.
+
 ### Akış müdahalesi: Durdur / Sıraya / Kes / Yönlendir (steering) ✅ (2026-06-16)
 
 Token akarken kullanıcı turu **canlı kontrol edebiliyor**. Composer butonları streaming durumuna göre değişir.
