@@ -535,13 +535,16 @@ export function useChatStream(deps: ChatStreamDeps) {
       }
       setMessages((prev) => [...prev, userBubble, placeholder])
 
-      // Live transcript: each node (by execution index) shows a spinner until its
-      // output arrives. Re-assembled on every event into the bubble's markdown.
-      const nodes = new Map<number, { title: string; output?: string }>()
+      // Live transcript: each node shows a spinner until its output arrives,
+      // re-assembled on every event into the bubble's markdown. Keyed by nodeId
+      // (parallel children share an execution index, so index can't be the key);
+      // ordered by arrival so parallel nodes list in a stable order.
+      const nodes = new Map<string, { title: string; output?: string }>()
       const render = () => {
         let s = `🔀 **${flowName}**\n\n`
-        for (const i of [...nodes.keys()].sort((a, b) => a - b)) {
-          const n = nodes.get(i)!
+        let i = 0
+        for (const n of nodes.values()) {
+          i++
           s += `#### ${i}. ${n.title}\n\n${n.output ?? '_⏳ çalışıyor…_'}\n\n`
         }
         return s.trim()
@@ -555,10 +558,10 @@ export function useChatStream(deps: ChatStreamDeps) {
           onMeta: ({ userMessage }) =>
             setMessages((prev) => prev.map((m) => (m.id === userTmp ? userMessage : m))),
           onNode: (ev) => {
-            const cur = nodes.get(ev.index) ?? { title: ev.title }
+            const cur = nodes.get(ev.nodeId) ?? { title: ev.title }
             cur.title = ev.title
             if (ev.phase === 'done') cur.output = ev.output ?? ''
-            nodes.set(ev.index, cur)
+            nodes.set(ev.nodeId, cur)
             setBotText(render())
           },
           onReply: ({ replyMessage }) =>
