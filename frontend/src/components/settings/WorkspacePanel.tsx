@@ -64,6 +64,29 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       <Field label="Varsayılan model (bu workspace)" hint="Boş = uygulama varsayılanı."><input value={ws.defaultModel} onChange={(e) => setWsField('defaultModel', e.target.value)} placeholder="(uygulama varsayılanı)" className={inputCls} /></Field>
       <Toggle label="Bu workspace'te otonomiyi duraklat" hint="Yalnızca bu workspace'in heartbeat/zamanlama çağrılarını bloklar." checked={ws.pauseAutonomy} onChange={(v) => setWsField('pauseAutonomy', v)} />
 
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Çapraz-session farkındalığı
+      </div>
+      <Toggle
+        label="Session bağlamı"
+        hint="Bu workspace'in ajanlarına aktif + son sessionlarının kısa özetini bağlama ekler ve list_sessions aracını sunar. Mevcut başlık/özet kullanılır (yeni LLM çağrısı yok)."
+        checked={ws.sessionContextEnabled}
+        onChange={(v) => setWsField('sessionContextEnabled', v)}
+      />
+      {ws.sessionContextEnabled && (
+        <>
+          <Toggle
+            label="Her turda ver"
+            hint="Açık: özet her turda güncellenir (token maliyeti). Kapalı: yalnızca session'ın ilk turunda verilir (önerilen)."
+            checked={ws.sessionContextEveryTurn}
+            onChange={(v) => setWsField('sessionContextEveryTurn', v)}
+          />
+          <Field label="Listelenecek geçmiş session sayısı" hint="Aktif olmayan, en son güncellenen N session (1–20).">
+            <input type="number" min={1} max={20} value={ws.sessionContextRecentCount} onChange={(e) => setWsField('sessionContextRecentCount', Number(e.target.value))} className={inputCls} />
+          </Field>
+        </>
+      )}
+
       {onDeleteWorkspace && (
         <div className="mt-2 flex items-center justify-between rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_6%,transparent)] px-3 py-2">
           <span className="text-xs text-[var(--color-text-dim)]">Bu workspace'i ve tüm verisini kalıcı olarak sil.</span>

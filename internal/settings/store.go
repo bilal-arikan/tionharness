@@ -159,10 +159,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
 
-	applyBool(&next.SessionContextEnabled, p.SessionContextEnabled)
-	applyBool(&next.SessionContextEveryTurn, p.SessionContextEveryTurn)
-	applyInt(&next.SessionContextRecentCount, p.SessionContextRecentCount)
-
 	applyString(&next.LogLevel, p.LogLevel)
 
 	applyString(&next.MinimaxBaseURL, p.MinimaxBaseURL)
@@ -296,13 +292,6 @@ func normalize(v Settings) Settings {
 	}
 	if v.DelegationMaxCalls > 100 {
 		v.DelegationMaxCalls = 100
-	}
-	// Session-context recent count: at least 1, capped to bound prompt size.
-	if v.SessionContextRecentCount < 1 {
-		v.SessionContextRecentCount = 1
-	}
-	if v.SessionContextRecentCount > 20 {
-		v.SessionContextRecentCount = 20
 	}
 	switch v.LogLevel {
 	case "debug", "warn", "error", "info":

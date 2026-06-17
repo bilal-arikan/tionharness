@@ -28,6 +28,9 @@ export interface WorkspaceSettings {
   defaultProvider: string
   defaultModel: string
   pauseAutonomy: boolean
+  sessionContextEnabled: boolean
+  sessionContextEveryTurn: boolean
+  sessionContextRecentCount: number
   createdAt: number
   agentCount: number
   sessionCount: number
@@ -35,7 +38,19 @@ export interface WorkspaceSettings {
 }
 
 export type WorkspaceSettingsPatch = Partial<
-  Pick<WorkspaceSettings, 'name' | 'instructions' | 'icon' | 'color' | 'defaultProvider' | 'defaultModel' | 'pauseAutonomy'>
+  Pick<
+    WorkspaceSettings,
+    | 'name'
+    | 'instructions'
+    | 'icon'
+    | 'color'
+    | 'defaultProvider'
+    | 'defaultModel'
+    | 'pauseAutonomy'
+    | 'sessionContextEnabled'
+    | 'sessionContextEveryTurn'
+    | 'sessionContextRecentCount'
+  >
 >
 
 // Editable per-workspace config files under <workspace>/config/ (runtime

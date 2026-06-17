@@ -122,9 +122,6 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       enableShell: draft.enableShell, enableSelfManage: draft.enableSelfManage,
       enableDelegation: draft.enableDelegation,
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
-      sessionContextEnabled: draft.sessionContextEnabled,
-      sessionContextEveryTurn: draft.sessionContextEveryTurn,
-      sessionContextRecentCount: draft.sessionContextRecentCount,
     }
     if (keyInput) patch.anthropicKey = keyInput
     if (minimaxKeyInput) patch.minimaxKey = minimaxKeyInput
@@ -141,6 +138,9 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       name: ws.name, icon: ws.icon, color: ws.color,
       defaultProvider: ws.defaultProvider, defaultModel: ws.defaultModel,
       pauseAutonomy: ws.pauseAutonomy,
+      sessionContextEnabled: ws.sessionContextEnabled,
+      sessionContextEveryTurn: ws.sessionContextEveryTurn,
+      sessionContextRecentCount: ws.sessionContextRecentCount,
     })
     setWs(updated); setWsOrig(updated)
     onWorkspaceChanged?.()

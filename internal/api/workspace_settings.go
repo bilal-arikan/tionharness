@@ -20,6 +20,10 @@ type workspaceSettingsDTO struct {
 	PauseAutonomy   bool   `json:"pauseAutonomy"`
 	CreatedAt       int64  `json:"createdAt"`
 
+	SessionContextEnabled     bool `json:"sessionContextEnabled"`
+	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`
+	SessionContextRecentCount int  `json:"sessionContextRecentCount"`
+
 	AgentCount   int `json:"agentCount"`
 	SessionCount int `json:"sessionCount"`
 	TaskCount    int `json:"taskCount"`
@@ -37,6 +41,10 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		DefaultModel:    s.DefaultModel,
 		PauseAutonomy:   s.PauseAutonomy,
 		CreatedAt:       w.CreatedAt,
+
+		SessionContextEnabled:     s.SessionContextEnabled,
+		SessionContextEveryTurn:   s.SessionContextEveryTurn,
+		SessionContextRecentCount: s.SessionContextRecentCount,
 	}
 	if agents, err := w.DB.ListAgents(ctx); err == nil {
 		dto.AgentCount = len(agents)

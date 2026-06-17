@@ -83,10 +83,14 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + tb)
 	}
 	// Cross-session awareness: a short summary of the workspace's active + recent
-	// sessions. Gated by settings; injected every turn or only on a session's
-	// first turn (its "start") depending on the SessionContextEveryTurn toggle.
-	if sc := s.settings.Get(); sc.SessionContextEnabled && (sc.SessionContextEveryTurn || freshSession) {
-		if sb := sessionsContextBlock(ctx, wsp.DB, session.ID, sc.SessionContextRecentCount); sb != "" {
+	// sessions. Configured PER WORKSPACE; injected every turn or only on a
+	// session's first turn (its "start") depending on the toggle.
+	if sc := wsp.Settings(); sc.SessionContextEnabled && (sc.SessionContextEveryTurn || freshSession) {
+		recent := sc.SessionContextRecentCount
+		if recent <= 0 {
+			recent = 5
+		}
+		if sb := sessionsContextBlock(ctx, wsp.DB, session.ID, recent); sb != "" {
 			dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
 		}
 	}

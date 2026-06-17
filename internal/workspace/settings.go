@@ -24,6 +24,24 @@ type WSSettings struct {
 	DefaultProvider string `json:"defaultProvider"`
 	DefaultModel    string `json:"defaultModel"`
 	PauseAutonomy   bool   `json:"pauseAutonomy"`
+
+	// Cross-session awareness (workspace-specific): inject a short summary of this
+	// workspace's active + recent chat sessions into an agent's context, and offer
+	// the list_sessions pull tool. Each workspace controls its own behaviour.
+	SessionContextEnabled     bool `json:"sessionContextEnabled"`
+	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`   // false = only a session's first turn
+	SessionContextRecentCount int  `json:"sessionContextRecentCount"` // past sessions listed (0 = default 5)
+}
+
+// defaultWSSettings is the seed used before overlaying a persisted ws-settings
+// document, so a fresh workspace (or one whose file predates a new field) gets
+// sensible defaults — notably cross-session awareness on, first-turn, 5 recent.
+func defaultWSSettings() WSSettings {
+	return WSSettings{
+		SessionContextEnabled:     true,
+		SessionContextEveryTurn:   false,
+		SessionContextRecentCount: 5,
+	}
 }
 
 // WSSettingsPatch is a partial update; nil fields are left unchanged. Name is
@@ -36,6 +54,10 @@ type WSSettingsPatch struct {
 	DefaultProvider *string `json:"defaultProvider"`
 	DefaultModel    *string `json:"defaultModel"`
 	PauseAutonomy   *bool   `json:"pauseAutonomy"`
+
+	SessionContextEnabled     *bool `json:"sessionContextEnabled"`
+	SessionContextEveryTurn   *bool `json:"sessionContextEveryTurn"`
+	SessionContextRecentCount *int  `json:"sessionContextRecentCount"`
 }
 
 // settingsHolder is embedded in Workspace to guard concurrent settings access.
@@ -59,16 +81,17 @@ func (w *Workspace) settingsPath() string {
 // loadSettings reads ws-settings.json (absent = zero-value defaults) and applies
 // the autonomy pause to the live runtime.
 func (w *Workspace) loadSettings() {
-	data, err := os.ReadFile(w.settingsPath())
-	if err == nil {
-		var s WSSettings
-		if json.Unmarshal(data, &s) == nil {
-			w.settings.cur = s
-		}
+	// Seed defaults first so an absent file — or a file written before a field
+	// existed — yields the intended defaults rather than zero values.
+	s := defaultWSSettings()
+	if data, err := os.ReadFile(w.settingsPath()); err == nil {
+		_ = json.Unmarshal(data, &s)
 	}
+	w.settings.cur = s
 	if w.Runtime != nil {
-		w.Runtime.SetPaused(w.settings.cur.PauseAutonomy)
-		w.Runtime.SetInstructions(w.settings.cur.Instructions)
+		w.Runtime.SetPaused(s.PauseAutonomy)
+		w.Runtime.SetInstructions(s.Instructions)
+		w.Runtime.SetSessionContext(s.SessionContextEnabled, s.SessionContextEveryTurn, s.SessionContextRecentCount)
 	}
 }
 
@@ -136,8 +159,20 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.PauseAutonomy != nil {
 		ws.settings.cur.PauseAutonomy = *patch.PauseAutonomy
 	}
+	if patch.SessionContextEnabled != nil {
+		ws.settings.cur.SessionContextEnabled = *patch.SessionContextEnabled
+	}
+	if patch.SessionContextEveryTurn != nil {
+		ws.settings.cur.SessionContextEveryTurn = *patch.SessionContextEveryTurn
+	}
+	if patch.SessionContextRecentCount != nil {
+		ws.settings.cur.SessionContextRecentCount = clampRecent(*patch.SessionContextRecentCount)
+	}
 	paused := ws.settings.cur.PauseAutonomy
 	instructions := ws.settings.cur.Instructions
+	scEnabled := ws.settings.cur.SessionContextEnabled
+	scEvery := ws.settings.cur.SessionContextEveryTurn
+	scRecent := ws.settings.cur.SessionContextRecentCount
 	ws.settings.mu.Unlock()
 
 	if err := ws.saveSettings(); err != nil {
@@ -151,6 +186,18 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if ws.Runtime != nil {
 		ws.Runtime.SetPaused(paused)
 		ws.Runtime.SetInstructions(instructions)
+		ws.Runtime.SetSessionContext(scEnabled, scEvery, scRecent)
 	}
 	return ws, nil
+}
+
+// clampRecent bounds the recent-session count to [1,20] to keep the prompt small.
+func clampRecent(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > 20 {
+		return 20
+	}
+	return n
 }

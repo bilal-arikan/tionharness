@@ -67,6 +67,14 @@ type Runtime struct {
 	// settings), appended to every agent's static system prompt.
 	instructions atomic.Pointer[string]
 
+	// Cross-session awareness config, set from per-workspace settings: whether the
+	// feature is on (gates both the pushed context block and the list_sessions
+	// pull tool), whether to inject every turn (vs only a session's first turn),
+	// and how many past sessions to list.
+	sessionCtxEnabled   atomic.Bool
+	sessionCtxEveryTurn atomic.Bool
+	sessionCtxRecent    atomic.Int64
+
 	// reflecting guards against concurrent auto-reflects for the same agent: a
 	// burst of journaled turns must not spawn overlapping dream cycles. Keyed by
 	// agent id; presence means a reflection is in flight.
@@ -81,6 +89,28 @@ func (r *Runtime) Paused() bool { return r.paused.Load() }
 
 // SetInstructions updates this workspace's agent-wide guidance.
 func (r *Runtime) SetInstructions(s string) { r.instructions.Store(&s) }
+
+// SetSessionContext updates this workspace's cross-session awareness config.
+func (r *Runtime) SetSessionContext(enabled, everyTurn bool, recent int) {
+	r.sessionCtxEnabled.Store(enabled)
+	r.sessionCtxEveryTurn.Store(everyTurn)
+	r.sessionCtxRecent.Store(int64(recent))
+}
+
+// SessionContextEnabled reports whether cross-session awareness is on for this
+// workspace (gates the pushed block and the list_sessions tool).
+func (r *Runtime) SessionContextEnabled() bool { return r.sessionCtxEnabled.Load() }
+
+// SessionContextEveryTurn reports whether the block is injected every turn.
+func (r *Runtime) SessionContextEveryTurn() bool { return r.sessionCtxEveryTurn.Load() }
+
+// SessionContextRecentCount returns how many past sessions to list (default when unset).
+func (r *Runtime) SessionContextRecentCount() int {
+	if n := int(r.sessionCtxRecent.Load()); n > 0 {
+		return n
+	}
+	return DefaultSessionContextRecent
+}
 
 // NewRuntime constructs the runtime. tun carries the process-wide tunables
 // (autonomy pause, title-model override) shared across all workspace runtimes.

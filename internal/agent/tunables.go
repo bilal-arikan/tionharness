@@ -31,10 +31,6 @@ type Tunables struct {
 	delegation    bool // gates the agent→agent `call_agent` tool (off by default)
 	delegMaxDepth int  // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls int  // 0 → DefaultMaxDelegationCalls
-
-	sessionCtx         bool // cross-session context: push block + list_sessions tool
-	sessionCtxEveryTurn bool // inject the block every turn (vs only a session's first turn)
-	sessionCtxRecent    int  // 0 → DefaultSessionContextRecent
 	journalCap    int  // 0 → DefaultJournalCap
 	journalMaxLen int  // 0 → DefaultJournalMaxLen
 
@@ -168,42 +164,6 @@ func (t *Tunables) DelegationMaxCalls() int {
 		return DefaultMaxDelegationCalls
 	}
 	return t.delegMaxCalls
-}
-
-// SetSessionContext configures cross-session awareness: the master toggle (which
-// gates both the pushed context block and the list_sessions pull tool), whether
-// the block is injected every turn (vs only a session's first turn), and how many
-// past sessions to list (0 selects the built-in default).
-func (t *Tunables) SetSessionContext(enabled, everyTurn bool, recent int) {
-	t.mu.Lock()
-	t.sessionCtx = enabled
-	t.sessionCtxEveryTurn = everyTurn
-	t.sessionCtxRecent = recent
-	t.mu.Unlock()
-}
-
-// SessionContextEnabled reports whether cross-session context is on.
-func (t *Tunables) SessionContextEnabled() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.sessionCtx
-}
-
-// SessionContextEveryTurn reports whether the block is injected every turn.
-func (t *Tunables) SessionContextEveryTurn() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.sessionCtxEveryTurn
-}
-
-// SessionContextRecentCount returns how many past sessions to list (default when unset).
-func (t *Tunables) SessionContextRecentCount() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.sessionCtxRecent <= 0 {
-		return DefaultSessionContextRecent
-	}
-	return t.sessionCtxRecent
 }
 
 // SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent)

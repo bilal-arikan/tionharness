@@ -4,6 +4,20 @@
 
 ## Ara özellik — Çapraz-Session Farkındalığı (push block + `list_sessions` tool) ✅ (2026-06-17)
 
+> **Güncelleme (2026-06-17):** Ayar kapsamı **app-global'dan workspace'e özele** taşındı.
+> Artık her workspace kendi `sessionContextEnabled`/`sessionContextEveryTurn`/
+> `sessionContextRecentCount` değerine sahip (`WSSettings` + Ayarlar → **Bu Workspace → Genel**).
+> Backend: `workspace/settings.go` (alanlar + `defaultWSSettings` seed: açık/first-turn/5 +
+> `clampRecent` 1–20) → `loadSettings`/`UpdateSettings` `Runtime.SetSessionContext` push;
+> `Runtime`'da per-workspace atomic state (`sessionCtx*` + getter'lar); `composeTurnRequest`
+> artık `wsp.Settings()` okur; `buildRegistry` tool gating `r.SessionContextEnabled()`.
+> App-global `settings`/`Tunables`/applySettings + frontend app-paneli **kaldırıldı**;
+> `api/workspace_settings.go` DTO + frontend `WorkspacePanel`/`types/workspace.ts`'e eklendi.
+> Testler: `workspace/settings_test.go` (default+clamp), `agent/sessionctx_test.go` (Runtime
+> getter + tool gating). Canlı doğrulandı (izole instance): workspace-settings varsayılan
+> açık/first-turn/5, kapatınca `list_sessions` katalogdan düşer, recent 999→20 clamp, app
+> settings'te artık alan yok.
+
 **İstek:** Ajanlara her oturum başında workspace'in **aktif sessionlarını** ve **geçmiş 5
 sessionunu** kısa bir özet olarak vermek. Kararlar: aktif = `State=="active"`, filtre
 `Kind=="chat"`, mevcut session hariç; geçmiş = aktif-olmayan, `UpdatedAt` desc ilk N; **yeni

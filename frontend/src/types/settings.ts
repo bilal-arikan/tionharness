@@ -66,10 +66,6 @@ export interface AppSettings {
   delegationMaxDepth: number
   delegationMaxCalls: number
 
-  sessionContextEnabled: boolean
-  sessionContextEveryTurn: boolean
-  sessionContextRecentCount: number
-
   logLevel: string
 }
 

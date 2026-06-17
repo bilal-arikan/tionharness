@@ -87,8 +87,8 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	}
 
 	// Cross-session awareness: the list_sessions pull tool (complements the pushed
-	// context block). Gated by the same master toggle.
-	if r.tun.SessionContextEnabled() {
+	// context block). Gated per-workspace by the same master toggle.
+	if r.SessionContextEnabled() {
 		builtins = append(builtins, tools.NewListSessionsTool(r.db))
 	}
 
@@ -148,6 +148,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewUpdateScheduleTool(r.db, agent.ID, r.reloadSchedules),
 			tools.NewDeleteScheduleTool(r.db, agent.ID, r.reloadSchedules),
 			tools.NewListSchedulesTool(r.db, agent.ID),
+			// Tasks (kanban board). Read/create/edit/move/run on any task;
+			// delete only agent-created (provenance).
+			tools.NewListTasksTool(r.db, agent.ID),
+			tools.NewCreateTaskTool(r.db, agent.ID),
+			tools.NewUpdateTaskTool(r.db, agent.ID),
+			tools.NewMoveTaskTool(r.db, agent.ID),
+			tools.NewRunTaskTool(r.db, agent.ID, r.RunTask),
+			tools.NewDeleteTaskTool(r.db, agent.ID),
 			// Artifacts (create/update already provided via the per-turn sink).
 			tools.NewDeleteArtifactTool(r.db, agent.ID),
 			tools.NewListArtifactsTool(r.db, agent.ID),
