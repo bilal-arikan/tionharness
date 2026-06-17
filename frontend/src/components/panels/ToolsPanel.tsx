@@ -1,7 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, Plug, Wrench } from 'lucide-react'
+import { Search, Plug, Wrench, ChevronRight } from 'lucide-react'
 import { api } from '../../api'
 import type { MCPServer, MCPTransport, WorkspaceTool } from '../../types'
+
+// MCP tools are namespaced "<server>__<tool>". These helpers recover a tool's
+// origin from its name when the backend doesn't supply source/server/label
+// (e.g. an older server build), so built-ins always group correctly.
+const NS_SEP = '__'
+
+function toolSource(t: WorkspaceTool): 'builtin' | 'mcp' {
+  if (t.source) return t.source
+  return t.name.includes(NS_SEP) ? 'mcp' : 'builtin'
+}
+
+function toolServer(t: WorkspaceTool): string {
+  if (t.server) return t.server
+  const i = t.name.indexOf(NS_SEP)
+  return i >= 0 ? t.name.slice(0, i) : ''
+}
+
+function toolLabel(t: WorkspaceTool): string {
+  if (t.label) return t.label
+  const i = t.name.indexOf(NS_SEP)
+  return i >= 0 ? t.name.slice(i + NS_SEP.length) : t.name
+}
 
 interface Props {
   onError: (msg: string) => void
@@ -55,6 +77,23 @@ export function ToolsPanel({ onError }: Props) {
   const [savingTool, setSavingTool] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  // Collapsed group labels (accordion). Persisted so the choice sticks.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem('swarmgo.toolsCollapsed') || '[]'))
+    } catch {
+      return new Set<string>()
+    }
+  })
+  const toggleGroup = (label: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      localStorage.setItem('swarmgo.toolsCollapsed', JSON.stringify([...next]))
+      return next
+    })
+  }
 
   const loadServers = useCallback(() => {
     api.listMCPServers().then(setServers).catch((e) => onError(e.message))
@@ -152,19 +191,19 @@ export function ToolsPanel({ onError }: Props) {
     if (!q) return tools
     return tools.filter(
       (t) =>
-        t.label.toLowerCase().includes(q) ||
+        toolLabel(t).toLowerCase().includes(q) ||
         t.name.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q),
+        (t.description ?? '').toLowerCase().includes(q),
     )
   }, [tools, query])
 
   // Group filtered tools by origin: built-ins first, then one group per MCP server.
   const groups = useMemo(() => {
-    const builtins = filtered.filter((t) => t.source === 'builtin')
+    const builtins = filtered.filter((t) => toolSource(t) === 'builtin')
     const byServer = new Map<string, WorkspaceTool[]>()
     for (const t of filtered) {
-      if (t.source !== 'mcp') continue
-      const key = t.server || 'MCP'
+      if (toolSource(t) !== 'mcp') continue
+      const key = toolServer(t) || 'MCP'
       if (!byServer.has(key)) byServer.set(key, [])
       byServer.get(key)!.push(t)
     }
@@ -202,37 +241,51 @@ export function ToolsPanel({ onError }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto py-2">
-          {groups.map((g) => (
-            <div key={g.label} className="mb-2">
-              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                {g.label}
+          {groups.map((g) => {
+            const isCollapsed = collapsed.has(g.label)
+            return (
+              <div key={g.label} className="mb-1">
+                <button
+                  onClick={() => toggleGroup(g.label)}
+                  className="flex w-full items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+                >
+                  <ChevronRight
+                    size={12}
+                    className={`flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                  />
+                  <span className="truncate">{g.label}</span>
+                  <span className="ml-auto font-normal tabular-nums opacity-70">{g.tools.length}</span>
+                </button>
+                {!isCollapsed &&
+                  g.tools.map((t) => {
+                    const active = selectedName === t.name
+                    return (
+                      <button
+                        key={t.name}
+                        onClick={() => setSelectedName(t.name)}
+                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition ${
+                          active
+                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                            : 'hover:bg-[var(--color-surface-2)]'
+                        }`}
+                      >
+                        <span
+                          title={t.enabled ? 'Aktif' : 'Devre dışı'}
+                          className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                            t.enabled ? 'bg-emerald-500' : 'bg-[var(--color-border)]'
+                          }`}
+                        />
+                        <span
+                          className={`min-w-0 truncate ${t.enabled ? '' : 'text-[var(--color-text-dim)]'}`}
+                        >
+                          {toolLabel(t)}
+                        </span>
+                      </button>
+                    )
+                  })}
               </div>
-              {g.tools.map((t) => {
-                const active = selectedName === t.name
-                return (
-                  <button
-                    key={t.name}
-                    onClick={() => setSelectedName(t.name)}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition ${
-                      active
-                        ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                        : 'hover:bg-[var(--color-surface-2)]'
-                    }`}
-                  >
-                    <span
-                      title={t.enabled ? 'Aktif' : 'Devre dışı'}
-                      className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-                        t.enabled ? 'bg-emerald-500' : 'bg-[var(--color-border)]'
-                      }`}
-                    />
-                    <span className={`min-w-0 truncate ${t.enabled ? '' : 'text-[var(--color-text-dim)]'}`}>
-                      {t.label}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          ))}
+            )
+          })}
           {groups.length === 0 && (
             <p className="px-3 py-3 text-sm text-[var(--color-text-dim)]">
               {tools.length === 0 ? 'Henüz araç yok.' : 'Eşleşen araç yok.'}
@@ -299,11 +352,11 @@ function ToolDetail({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Wrench size={18} className="flex-shrink-0 text-[var(--color-text-dim)]" />
-            <h2 className="truncate text-lg font-semibold">{tool.label}</h2>
+            <h2 className="truncate text-lg font-semibold">{toolLabel(tool)}</h2>
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]">
-              {tool.source === 'mcp' ? `MCP · ${tool.server}` : 'Yerleşik'}
+              {toolSource(tool) === 'mcp' ? `MCP · ${toolServer(tool)}` : 'Yerleşik'}
             </span>
             <span
               className={`rounded px-1.5 py-0.5 text-xs ${
@@ -329,7 +382,7 @@ function ToolDetail({
         </button>
       </div>
 
-      {tool.source === 'mcp' && (
+      {toolSource(tool) === 'mcp' && (
         <div>
           <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">{tool.name}</code>
         </div>
