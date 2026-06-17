@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import type { Agent, Memory, MemoryKind } from '../../types'
+import { Markdown } from '../markdown/Markdown'
 
 interface Props {
   agent: Agent | null
@@ -146,7 +147,9 @@ export function MemoryPanel({ agent, onError }: Props) {
             >
               {KIND_LABEL[m.kind]}
             </span>
-            <span className="flex-1 whitespace-pre-wrap">{m.content}</span>
+            <div className="min-w-0 flex-1">
+              <Markdown>{m.content}</Markdown>
+            </div>
             <button
               onClick={() => remove(m)}
               className="flex-shrink-0 text-[var(--color-text-dim)] opacity-0 transition hover:text-red-400 group-hover:opacity-100"
