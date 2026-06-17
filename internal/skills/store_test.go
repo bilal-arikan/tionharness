@@ -221,6 +221,26 @@ func TestStoreSetAccess(t *testing.T) {
 	}
 }
 
+func TestBodyMissingFileSelfHeals(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "ghost", "---\nname: Ghost\ndescription: g\n---\nbody")
+	s := New("", "", dir)
+	if _, ok := s.Get("ghost"); !ok {
+		t.Fatal("ghost should load")
+	}
+	// Delete the file out-of-band, then read: clear error + catalog self-heals.
+	if err := os.RemoveAll(filepath.Join(dir, "ghost")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.Body("ghost")
+	if err == nil || !contains(err.Error(), "no longer available") {
+		t.Fatalf("want self-heal error, got %v", err)
+	}
+	if _, ok := s.Get("ghost"); ok {
+		t.Error("ghost should be dropped after self-heal reload")
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || indexOf(s, sub) >= 0)
 }

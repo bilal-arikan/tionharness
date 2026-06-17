@@ -175,6 +175,12 @@ func (s *Store) Body(slug string) (string, error) {
 	}
 	data, err := os.ReadFile(sk.Path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// The file was deleted/moved out-of-band (the catalog held a stale
+			// path). Refresh so the missing skill drops, and report it clearly.
+			s.Reload()
+			return "", fmt.Errorf("skill %q is no longer available (its file was moved or deleted); catalog refreshed", slug)
+		}
 		return "", fmt.Errorf("read skill %q: %w", slug, err)
 	}
 	_, body := parseFrontmatter(string(data))
@@ -190,6 +196,10 @@ func (s *Store) SetAccess(slug string, shared bool) (Skill, error) {
 	}
 	data, err := os.ReadFile(sk.Path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			s.Reload()
+			return Skill{}, fmt.Errorf("skill %q is no longer available (its file was moved or deleted); catalog refreshed", slug)
+		}
 		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
 	}
 	updated := setFrontmatterAccess(string(data), shared)
