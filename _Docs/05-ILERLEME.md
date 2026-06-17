@@ -2,6 +2,30 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara özellik — URL deep-link routing (uygulama içi URL ile gezme, 2026-06-17)
+
+**İstek:** "uygulama içi url ile gezmeyi etkinleştir, mesela istediğimiz workspace'in istediğimiz session'una, agent'ına, zamanlayıcısına vs gidebilelim."
+
+Uygulama tamamen state-tabanlıydı (URL routing yoktu). Artık navigasyon durumu **URL hash'inde** adreslenir → paylaşılabilir/yenilemede geri yüklenir, ileri/geri tuşları çalışır.
+
+- **Şema:** `#/w/{workspaceId}/{view}[/{entityId}]`. `entityId` görünüme göre: chat→sessionId, agents/memory/tools→agentId, artifacts→artifactId, schedules→scheduleId; diğerleri yok sayar. Hash-tabanlı seçildi: tek-binary serve + Vite dev proxy'de sunucu route config gerektirmez.
+- **Saf yardımcılar** `frontend/src/lib/url.ts`: `parseRoute` (bilinmeyen view→`chat`, malformed→default), `buildRoute`, `routeIdForView`.
+- **Hook** `frontend/src/hooks/useUrlSync.ts`: state→URL (ilk yazım `replaceState`, sonrası `pushState`); URL→state (`popstate`+`hashchange`→`applyRoute`). `pushState`/`replaceState` `hashchange`/`popstate` tetiklemediğinden ve `applyRoute` yalnız fark olunca state'i değiştirdiğinden besleme döngüsü yok.
+- **App.tsx wiring:** modül-yükünde `INITIAL_ROUTE` parse → `setActiveWorkspace` (geçersiz id `useWorkspaces`'te ilk ws'e düşer); workspace-yükleme effect'i `Promise.all([listAgents, listSessions])` sonrası `pendingRouteRef`'i bir kez tüketerek deep-link entity'sini seçer (ilk yük + çapraz-ws nav). `applyRoute` (aynı ws→entity'yi hemen uygula; ws değişimi→`pendingRouteRef`+`switchWorkspace`). `focusAgent` (agent-scoped görünümlerde aktif ajanı, varsayılanı bozmadan seçer).
+- **Kontrollü bileşenler:** `AgentsView` `selectedId`/`onSelectAgent` prop'ları (verilmezse iç state); `Schedules` `focusId` → deep-link satırına scroll + 2.5sn highlight ring.
+
+✅ `tsc -b`/`vite build` yeşil; `url.ts` saf fonksiyonları **25/25** round-trip/parse testinden geçti (geçici tsx test koşuldu+silindi). **Not:** gateway-manager MCP bu oturuma tool olarak gelmediğinden (gateway 9091 + mcp-chrome 12306 ayakta olsa da) canlı Chrome görsel testi yapılmadı — sıraya alındı.
+
+## Bugfix — Zamanlanmış prompt artık gerçek sohbet turu olarak görünür (2026-06-17)
+
+**Şikâyet:** "Saat başına eklediğim bir zamanlayıcı `failure ... (claude CLI failed: exit status 1)` hatası verdi, ve istediğim ui görüntüsü olmamış."
+
+**1) `exit status 1` hatası — geçici (transient):** İnceleme: claude-cli düz headless çağrısı bu ortamda sorunsuz (`exit 0`); otonom (zamanlama) yolu da canlı testte **başarılı** oldu (aynı ajan/prompt). Kök neden: hata anında backend defalarca kapatılıp yeniden derleniyordu (geliştirme); claude-cli süreç ortasında **ctx iptaliyle** kesildiğinde **boş stderr ile `exit status 1`** döner — kullanıcının gördüğü mesaj tam da budur (stderr boş). Yani normal çalışmada kalıcı bir bug değil, kesinti artığı. (Sağlamlaştırma fikri: iptal kaynaklı hataları `context.Canceled` olarak ayırıp "kesildi" diye göstermek — ileride.)
+
+**2) UI görüntüsü — düzeltildi:** `agent/scheduler.go` `deliverPrompt` zamanlanmış cevabı tek bir `"[schedule] …"` **assistant** balonu olarak, üstelik **`AgentID` boş** yazıyordu → schedule oturumunda ajan avatarı/kimliği render olmuyordu ve **gönderilen prompt hiç görünmüyordu** (user mesajı yok). Düzeltme: (a) prompt önce **user mesajı** olarak yazılır (thread gerçek sohbet gibi okunur), (b) cevap **`AgentID` damgalı** + **aktivite izi (`Steps`)** ile yazılır (avatar + thinking/araç adımları normal sohbet turu gibi görünür). Yeni `agent/executor.go` `invokeTraced` (CompleteWithToolsTraced sarmalayıcı) izle birlikte döner; `encodeSteps` ile serileştirilir. `"[schedule]"` ön eki kaldırıldı.
+
+✅ `go build`/`vet` yeşil; commit `127fa5e`. Canlı test: dakikalık test zamanlaması ile schedule oturumunda user+assistant turu, ajan avatarı ve adımlar doğrulanıyor.
+
 ## Sohbet — Tek mesaj silme (2026-06-17)
 
 **İstek:** Bir sohbette tek bir mesajı (ör. hatalı/test mesajı) silebilmek.
