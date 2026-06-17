@@ -19,6 +19,14 @@ const STATUS_COLOR: Record<string, string> = {
   pending: 'text-[var(--color-text-dim)]',
 }
 
+// Cron presets for the "bind to schedule" card action (mirror Schedules.tsx).
+const CRON_PRESETS: { label: string; expr: string }[] = [
+  { label: 'Her 5 dakika', expr: '*/5 * * * *' },
+  { label: 'Saat başı', expr: '0 * * * *' },
+  { label: 'Her gün 09:00', expr: '0 9 * * *' },
+  { label: 'Pazartesi 08:00', expr: '0 8 * * 1' },
+]
+
 interface Props {
   agents: Agent[]
   onError: (msg: string) => void
@@ -33,6 +41,10 @@ export function TaskBoard({ agents, onError }: Props) {
   const [runsFor, setRunsFor] = useState<string | null>(null)
   const [runs, setRuns] = useState<Run[]>([])
   const [dragId, setDragId] = useState<string | null>(null)
+  // Schedule-binding popover: which task's form is open + its chosen cron expr.
+  const [schedFor, setSchedFor] = useState<string | null>(null)
+  const [schedCron, setSchedCron] = useState('*/5 * * * *')
+  const [schedBusy, setSchedBusy] = useState(false)
 
   const reload = () =>
     api.listTasks().then(setTasks).catch((e) => onError(e.message))
@@ -122,6 +134,40 @@ export function TaskBoard({ agents, onError }: Props) {
       setRuns(await api.listTaskRuns(task.id))
     } catch (e) {
       onError((e as Error).message)
+    }
+  }
+
+  // Toggle the cron-binding popover for a task. Requires an owner agent, since a
+  // schedule needs an agent and RunTask delivers to the task's owner.
+  const toggleSched = (task: Task) => {
+    if (schedFor === task.id) {
+      setSchedFor(null)
+      return
+    }
+    if (!task.ownerAgentId) {
+      onError('Zamanlamak için önce göreve bir ajan atayın')
+      return
+    }
+    setSchedCron('*/5 * * * *')
+    setSchedFor(task.id)
+  }
+
+  // Create a cron schedule bound to this task (taskId set → scheduler RunTask).
+  const bindSchedule = async (task: Task) => {
+    if (!schedCron.trim()) return
+    setSchedBusy(true)
+    try {
+      await api.createSchedule({
+        agentId: task.ownerAgentId,
+        taskId: task.id,
+        cronExpr: schedCron.trim(),
+        enabled: true,
+      })
+      setSchedFor(null)
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setSchedBusy(false)
     }
   }
 
@@ -220,6 +266,17 @@ export function TaskBoard({ agents, onError }: Props) {
                         {runningId === t.id ? '…' : '▶ Çalıştır'}
                       </button>
                       <button
+                        onClick={() => toggleSched(t)}
+                        className={`text-xs hover:text-[var(--color-accent)] ${
+                          schedFor === t.id
+                            ? 'text-[var(--color-accent)]'
+                            : 'text-[var(--color-text-dim)]'
+                        }`}
+                        title={t.ownerAgentId ? 'Cron zamanlamasına bağla' : 'Önce ajan ata'}
+                      >
+                        ⏰ Zamanla
+                      </button>
+                      <button
                         onClick={() => showRuns(t)}
                         className="text-xs text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
                       >
@@ -233,6 +290,45 @@ export function TaskBoard({ agents, onError }: Props) {
                         ✕
                       </button>
                     </div>
+                    {schedFor === t.id && (
+                      <div className="mt-2 space-y-2 border-t border-[var(--color-border)] pt-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <select
+                            value={CRON_PRESETS.some((p) => p.expr === schedCron) ? schedCron : ''}
+                            onChange={(e) => e.target.value && setSchedCron(e.target.value)}
+                            className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-xs outline-none"
+                          >
+                            <option value="">Özel…</option>
+                            {CRON_PRESETS.map((p) => (
+                              <option key={p.expr} value={p.expr}>
+                                {p.label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            value={schedCron}
+                            onChange={(e) => setSchedCron(e.target.value)}
+                            placeholder="dk sa gün ay haftagünü"
+                            className="w-28 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 font-mono text-xs outline-none focus:border-[var(--color-accent)]"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => bindSchedule(t)}
+                            disabled={schedBusy}
+                            className="rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40"
+                          >
+                            {schedBusy ? '…' : 'Bağla'}
+                          </button>
+                          <button
+                            onClick={() => setSchedFor(null)}
+                            className="text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+                          >
+                            İptal
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {runsFor === t.id && (
                       <div className="mt-2 space-y-1 border-t border-[var(--color-border)] pt-2">
                         {runs.length === 0 && (
