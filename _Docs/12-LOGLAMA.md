@@ -71,6 +71,12 @@ Loglar iki katmanda üretilir:
 - `skipRequestLog` atlananlar: `/api/logs` (kendi buffer'ını sel etmesin),
   `/api/events` (uzun-ömürlü SSE), `/health`. OPTIONS preflight `withCORS`'ta
   erken döndüğünden loglanmaz.
+- **Akıllı gürültü azaltma** (`shouldLogRequest`, 2026-06-17): **başarılı okuma**
+  istekleri (GET/HEAD + status < 400) **loglanmaz** — bunlar UI'ın yüksek-frekanslı
+  poll'larıydı (sessions/settings/runtime…) ve tamponun ~%95'ini doldurup gerçek
+  olayları ~2 saatte düşürüyordu. **Mutasyonlar** (POST/PUT/DELETE/PATCH) ve
+  **başarısız** istekler (4xx/5xx) **her zaman** loglanır. İş-seviyesi INFO
+  logları (chat/agent/…) bundan etkilenmez.
 
 ### 2. İş-seviyesi (business) loglar
 
@@ -161,8 +167,10 @@ Sınırlar ve güvenlik:
 - Ring buffer **bellek-içi**, 2000 kayıt; restart'ta sıfırlanır. Diske kalıcı log
   yok (stdout hariç).
 - `Debug` seviyesi varsayılan kapalı (`HandlerOptions.Level = LevelInfo`).
-- `/api/logs`, `/api/events`, `/health` access-log'a girmez (kasıtlı gürültü
-  azaltma).
+- `/api/logs`, `/api/events`, `/health` access-log'a girmez; ayrıca **başarılı
+  GET/HEAD** istekleri de loglanmaz (akıllı gürültü azaltma — yukarı bkz.). Bu
+  sayede ~2000'lik tampon artık çoğunlukla mutasyon + hata + iş loglarıyla dolar,
+  retention ciddi uzar.
 - Çok-workspace logları tek akışta karışır; ayırt etmek için iş loglarına ilgili
   id'ler (agent/session/workspace) attr olarak eklenir.
 
