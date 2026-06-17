@@ -9,6 +9,13 @@ const (
 	DefaultAutoReflectThreshold = 30   // journal count that triggers auto-reflect
 )
 
+// Default turn-recovery (A1) bounds, applied to a freshly constructed Tunables so
+// test runtimes (which never call applySettings) get production-sane behaviour.
+const (
+	DefaultMaxTokenRetries    = 3 // resume attempts after the output-token cap
+	DefaultReactiveKeepRecent = 6 // in-flight messages kept verbatim when compacting
+)
+
 // Tunables holds process-wide, settings-driven knobs that cut across every
 // workspace runtime: the global autonomy pause switch and an optional model
 // override for auto-title generation. A single instance is created at boot and
@@ -28,10 +35,25 @@ type Tunables struct {
 
 	autoReflect          bool // run the dream cycle automatically as journals grow
 	autoReflectThreshold int  // 0 → DefaultAutoReflectThreshold
+
+	// Turn recovery (A1) — structural handling of output-token cutoffs and
+	// context overflow inside the native agentic tool loop.
+	reactiveCompact    bool // fold older in-flight history + retry on context overflow
+	maxTokenRetries    int  // resume attempts after the output cap (0 = disabled)
+	reactiveKeepRecent int  // messages kept verbatim when compacting (<2 → default)
 }
 
-// NewTunables constructs an empty (unpaused, no title override) Tunables.
-func NewTunables() *Tunables { return &Tunables{} }
+// NewTunables constructs a Tunables with the recovery knobs at their built-in
+// defaults (the other knobs default to their zero value = off/unset). Production
+// overrides everything from settings via the Set* methods; tests that skip
+// applySettings still get sane recovery behaviour.
+func NewTunables() *Tunables {
+	return &Tunables{
+		reactiveCompact:    true,
+		maxTokenRetries:    DefaultMaxTokenRetries,
+		reactiveKeepRecent: DefaultReactiveKeepRecent,
+	}
+}
 
 // SetAutonomyPaused toggles the global autonomy brake. When paused, autonomous
 // provider calls (heartbeat, scheduler) are rejected before reaching a model;
@@ -196,4 +218,45 @@ func (t *Tunables) AutoReflectThreshold() int {
 		return DefaultAutoReflectThreshold
 	}
 	return t.autoReflectThreshold
+}
+
+// SetRecoveryLimits configures the A1 turn-recovery knobs: whether reactive
+// compaction runs on context overflow, how many times a turn may resume after
+// the output-token cap (0 disables resume), and how many in-flight messages a
+// reactive compaction keeps verbatim.
+func (t *Tunables) SetRecoveryLimits(reactiveCompact bool, maxTokenRetries, keepRecent int) {
+	t.mu.Lock()
+	t.reactiveCompact = reactiveCompact
+	t.maxTokenRetries = maxTokenRetries
+	t.reactiveKeepRecent = keepRecent
+	t.mu.Unlock()
+}
+
+// ReactiveCompact reports whether context-overflow compaction-and-retry is on.
+func (t *Tunables) ReactiveCompact() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.reactiveCompact
+}
+
+// MaxTokenRetries returns the output-cap resume budget. A returned 0 means resume
+// is disabled (a capped answer is surfaced as-is), which is a valid setting.
+func (t *Tunables) MaxTokenRetries() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.maxTokenRetries < 0 {
+		return 0
+	}
+	return t.maxTokenRetries
+}
+
+// ReactiveKeepRecent returns the in-flight compaction tail size (default when <2,
+// since a smaller tail cannot guarantee a safe fold boundary).
+func (t *Tunables) ReactiveKeepRecent() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.reactiveKeepRecent < 2 {
+		return DefaultReactiveKeepRecent
+	}
+	return t.reactiveKeepRecent
 }

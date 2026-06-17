@@ -43,6 +43,11 @@ export interface AppSettings {
   autoReflect: boolean
   autoReflectThreshold: number
 
+  // Turn recovery (A1).
+  reactiveCompact: boolean
+  maxTokenRetries: number
+  reactiveKeepRecent: number
+
   defaultDailyCallLimit: number
   defaultDailyTokenLimit: number
 

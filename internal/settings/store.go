@@ -132,6 +132,12 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	}
 	applyInt(&next.AutoReflectThreshold, p.AutoReflectThreshold)
 
+	if p.ReactiveCompact != nil {
+		next.ReactiveCompact = *p.ReactiveCompact
+	}
+	applyInt(&next.MaxTokenRetries, p.MaxTokenRetries)
+	applyInt(&next.ReactiveKeepRecent, p.ReactiveKeepRecent)
+
 	applyInt(&next.DefaultDailyCallLimit, p.DefaultDailyCallLimit)
 	applyInt(&next.DefaultDailyTokenLimit, p.DefaultDailyTokenLimit)
 
@@ -250,6 +256,20 @@ func normalize(v Settings) Settings {
 	}
 	if v.AutoReflectThreshold > 1000 {
 		v.AutoReflectThreshold = 1000
+	}
+	// Turn recovery (A1): 0 resume attempts is valid (disables resume); clamp the
+	// ceiling. Compaction tail needs ≥2 to guarantee a safe fold boundary.
+	if v.MaxTokenRetries < 0 {
+		v.MaxTokenRetries = 0
+	}
+	if v.MaxTokenRetries > 10 {
+		v.MaxTokenRetries = 10
+	}
+	if v.ReactiveKeepRecent < 2 {
+		v.ReactiveKeepRecent = 2
+	}
+	if v.ReactiveKeepRecent > 50 {
+		v.ReactiveKeepRecent = 50
 	}
 	if v.DefaultDailyCallLimit < 0 {
 		v.DefaultDailyCallLimit = 0

@@ -6,15 +6,6 @@ import (
 	"github.com/bilal/swarmgo/internal/providers"
 )
 
-// maxTokenRetryLimit bounds how many times a single turn may resume after the
-// model hits the output-token cap before the partial answer is surfaced as-is.
-// Mirrors claude-code's MAX_OUTPUT_TOKENS_RECOVERY_LIMIT.
-const maxTokenRetryLimit = 3
-
-// reactiveKeepRecent is how many most-recent in-flight messages reactive
-// compaction preserves verbatim when it folds the older ones into a summary.
-const reactiveKeepRecent = 6
-
 // contReason tags why the loop continued to another iteration (a non-terminal
 // transition). Stored on loopState so tests can assert a recovery path fired
 // without inspecting message contents — the pattern claude-code's query loop
@@ -44,9 +35,17 @@ const (
 // guards make every recovery path fire at most its allotted number of times, so
 // a stuck model can never spin forever inside one turn.
 type loopState struct {
-	maxTokenRetries int        // 0..maxTokenRetryLimit
+	maxTokenRetries int        // 0..cfg.maxTokenLimit
 	compacted       bool       // reactive compaction is one-shot per turn
 	lastContinue    contReason // why the previous iteration continued ("" on first)
+}
+
+// recoveryConfig is the resolved, settings-driven policy the loop hands to
+// decideRecovery each iteration. Kept separate from loopState (the mutable
+// guards) so the decision stays a pure function of (result, guards, policy).
+type recoveryConfig struct {
+	maxTokenLimit   int  // resume budget after the output cap (0 = resume disabled)
+	reactiveCompact bool // whether context-overflow compaction-and-retry is allowed
 }
 
 // decision is the output of the pure recovery analysis: it tells the loop body
@@ -68,20 +67,21 @@ type decision struct {
 // the loop continues (and how) or terminates (and why). It mutates nothing — the
 // caller applies the decision and advances loopState — so it is exhaustively
 // table-testable in isolation from the provider and the message plumbing.
-func decideRecovery(resp *providers.Response, callErr error, st loopState) decision {
+func decideRecovery(resp *providers.Response, callErr error, st loopState, cfg recoveryConfig) decision {
 	if callErr != nil {
 		// Context overflow is recoverable once per turn by compacting the
-		// in-flight history and retrying; any other error is terminal.
-		if isContextOverflow(callErr) && !st.compacted {
+		// in-flight history and retrying — when enabled; any other error
+		// (or a disabled toggle) is terminal.
+		if cfg.reactiveCompact && isContextOverflow(callErr) && !st.compacted {
 			return decision{compact: true, reason: contCompactRetry, err: callErr}
 		}
 		return decision{term: termProviderErr, err: callErr}
 	}
 	// The model stopped because it ran into the output-token cap mid-answer.
-	// Resume it (up to the guard limit) so the full answer is produced across
-	// several capped calls instead of being silently truncated.
+	// Resume it (up to the configured budget) so the full answer is produced
+	// across several capped calls instead of being silently truncated.
 	if resp != nil && resp.StopReason == providers.StopMaxTok {
-		if st.maxTokenRetries < maxTokenRetryLimit {
+		if st.maxTokenRetries < cfg.maxTokenLimit {
 			return decision{cont: true, reason: contMaxTokenResume, inject: resumeMessage()}
 		}
 		return decision{term: termMaxTokenExhausted}

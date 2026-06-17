@@ -64,6 +64,12 @@ type Settings struct {
 	AutoReflect          bool `json:"autoReflect"`
 	AutoReflectThreshold int  `json:"autoReflectThreshold"`
 
+	// Turn recovery (A1): structural handling of output-token cutoffs and context
+	// overflow inside the native agentic tool loop.
+	ReactiveCompact    bool `json:"reactiveCompact"`    // fold older history + retry on context overflow
+	MaxTokenRetries    int  `json:"maxTokenRetries"`    // resume attempts after the output cap (0 = disabled)
+	ReactiveKeepRecent int  `json:"reactiveKeepRecent"` // in-flight messages kept verbatim when compacting
+
 	// Budget defaults applied to newly created agents (0 = unlimited).
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
@@ -115,6 +121,10 @@ func Default() Settings {
 
 		AutoReflect:          true,
 		AutoReflectThreshold: 30,
+
+		ReactiveCompact:    true,
+		MaxTokenRetries:    3,
+		ReactiveKeepRecent: 6,
 
 		DefaultDailyCallLimit:  0,
 		DefaultDailyTokenLimit: 0,
@@ -172,6 +182,10 @@ type DTO struct {
 
 	AutoReflect          bool `json:"autoReflect"`
 	AutoReflectThreshold int  `json:"autoReflectThreshold"`
+
+	ReactiveCompact    bool `json:"reactiveCompact"`
+	MaxTokenRetries    int  `json:"maxTokenRetries"`
+	ReactiveKeepRecent int  `json:"reactiveKeepRecent"`
 
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
@@ -231,6 +245,10 @@ func (s Settings) ToDTO() DTO {
 
 		AutoReflect:          s.AutoReflect,
 		AutoReflectThreshold: s.AutoReflectThreshold,
+
+		ReactiveCompact:    s.ReactiveCompact,
+		MaxTokenRetries:    s.MaxTokenRetries,
+		ReactiveKeepRecent: s.ReactiveKeepRecent,
 
 		DefaultDailyCallLimit:  s.DefaultDailyCallLimit,
 		DefaultDailyTokenLimit: s.DefaultDailyTokenLimit,
@@ -292,6 +310,10 @@ type Patch struct {
 
 	AutoReflect          *bool `json:"autoReflect"`
 	AutoReflectThreshold *int  `json:"autoReflectThreshold"`
+
+	ReactiveCompact    *bool `json:"reactiveCompact"`
+	MaxTokenRetries    *int  `json:"maxTokenRetries"`
+	ReactiveKeepRecent *int  `json:"reactiveKeepRecent"`
 
 	DefaultDailyCallLimit  *int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit *int `json:"defaultDailyTokenLimit"`

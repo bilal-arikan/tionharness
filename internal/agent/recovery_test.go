@@ -11,6 +11,8 @@ func TestDecideRecovery(t *testing.T) {
 	overflow := errors.New("prompt is too long: 250000 tokens > 200000 maximum")
 	other := errors.New("connection refused")
 
+	cfg := recoveryConfig{maxTokenLimit: DefaultMaxTokenRetries, reactiveCompact: true}
+
 	tests := []struct {
 		name        string
 		resp        *providers.Response
@@ -33,7 +35,7 @@ func TestDecideRecovery(t *testing.T) {
 		{
 			name:     "max tokens exhausted surfaces partial",
 			resp:     &providers.Response{StopReason: providers.StopMaxTok},
-			st:       loopState{maxTokenRetries: maxTokenRetryLimit},
+			st:       loopState{maxTokenRetries: DefaultMaxTokenRetries},
 			wantTerm: termMaxTokenExhausted,
 		},
 		{
@@ -65,27 +67,54 @@ func TestDecideRecovery(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			d := decideRecovery(tc.resp, tc.err, tc.st)
-			if d.cont != tc.wantCont {
-				t.Errorf("cont = %v, want %v", d.cont, tc.wantCont)
-			}
-			if d.compact != tc.wantCompact {
-				t.Errorf("compact = %v, want %v", d.compact, tc.wantCompact)
-			}
-			if (tc.wantCont || tc.wantCompact) && d.reason != tc.wantReason {
-				t.Errorf("reason = %q, want %q", d.reason, tc.wantReason)
-			}
-			if (d.inject != nil) != tc.wantInject {
-				t.Errorf("inject present = %v, want %v", d.inject != nil, tc.wantInject)
-			}
-			if !tc.wantCont && !tc.wantCompact && d.term != tc.wantTerm {
-				t.Errorf("term = %q, want %q", d.term, tc.wantTerm)
-			}
-			// A terminal provider error must carry the error through.
-			if tc.wantTerm == termProviderErr && d.err == nil {
-				t.Errorf("provider_error decision dropped the error")
-			}
+			d := decideRecovery(tc.resp, tc.err, tc.st, cfg)
+			assertDecision(t, d, tc.wantCont, tc.wantCompact, tc.wantReason, tc.wantInject, tc.wantTerm)
 		})
+	}
+
+	// Toggle off: a context overflow is terminal even on the first attempt.
+	t.Run("reactive compaction disabled is terminal", func(t *testing.T) {
+		d := decideRecovery(nil, overflow, loopState{}, recoveryConfig{maxTokenLimit: DefaultMaxTokenRetries, reactiveCompact: false})
+		if d.compact {
+			t.Errorf("compact = true with reactiveCompact off, want terminal")
+		}
+		if d.term != termProviderErr {
+			t.Errorf("term = %q, want %q", d.term, termProviderErr)
+		}
+	})
+
+	// Resume budget 0: an output cap surfaces the partial immediately.
+	t.Run("max token retries zero disables resume", func(t *testing.T) {
+		d := decideRecovery(&providers.Response{StopReason: providers.StopMaxTok}, nil, loopState{}, recoveryConfig{maxTokenLimit: 0, reactiveCompact: true})
+		if d.cont {
+			t.Errorf("cont = true with maxTokenLimit 0, want terminal")
+		}
+		if d.term != termMaxTokenExhausted {
+			t.Errorf("term = %q, want %q", d.term, termMaxTokenExhausted)
+		}
+	})
+}
+
+func assertDecision(t *testing.T, d decision, wantCont, wantCompact bool, wantReason contReason, wantInject bool, wantTerm termReason) {
+	t.Helper()
+	if d.cont != wantCont {
+		t.Errorf("cont = %v, want %v", d.cont, wantCont)
+	}
+	if d.compact != wantCompact {
+		t.Errorf("compact = %v, want %v", d.compact, wantCompact)
+	}
+	if (wantCont || wantCompact) && d.reason != wantReason {
+		t.Errorf("reason = %q, want %q", d.reason, wantReason)
+	}
+	if (d.inject != nil) != wantInject {
+		t.Errorf("inject present = %v, want %v", d.inject != nil, wantInject)
+	}
+	if !wantCont && !wantCompact && d.term != wantTerm {
+		t.Errorf("term = %q, want %q", d.term, wantTerm)
+	}
+	// A terminal provider error must carry the error through.
+	if wantTerm == termProviderErr && d.err == nil {
+		t.Errorf("provider_error decision dropped the error")
 	}
 }
 

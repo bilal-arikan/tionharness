@@ -163,8 +163,14 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	var last *providers.Response
 	var steps []TurnStep
 	// ls carries the single-shot recovery guards (A1) across iterations so a
-	// stuck model can never spin forever inside one turn.
+	// stuck model can never spin forever inside one turn; cfg/keepRecent are the
+	// resolved, settings-driven recovery policy for this turn.
 	var ls loopState
+	cfg := recoveryConfig{
+		maxTokenLimit:   r.tun.MaxTokenRetries(),
+		reactiveCompact: r.tun.ReactiveCompact(),
+	}
+	keepRecent := r.tun.ReactiveKeepRecent()
 	// partial accumulates answer text across max-output-token resumes, so the
 	// stitched full answer is returned even though it arrived in capped pieces.
 	var partial strings.Builder
@@ -197,9 +203,9 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			// A1: a context-overflow error is recoverable once per turn by
 			// compacting the in-flight history and retrying; any other error
 			// ends the turn. decideRecovery keeps this policy pure + testable.
-			d := decideRecovery(nil, err, ls)
+			d := decideRecovery(nil, err, ls, cfg)
 			if d.compact {
-				folded, ok, cerr := conversation.CompactInFlightMessages(ctx, provider, agent, req.Messages, reactiveKeepRecent)
+				folded, ok, cerr := conversation.CompactInFlightMessages(ctx, provider, agent, req.Messages, keepRecent)
 				if cerr == nil && ok {
 					req.Messages = folded
 					ls.compacted = true
@@ -217,7 +223,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		if resp.StopReason != providers.StopToolUse || len(resp.ToolCalls) == 0 {
 			// A1: resume an answer cut off by the output-token cap (bounded by
 			// the guard) so the full reply is produced across capped calls.
-			d := decideRecovery(resp, nil, ls)
+			d := decideRecovery(resp, nil, ls, cfg)
 			if d.cont {
 				if resp.Text != "" {
 					partial.WriteString(resp.Text)
