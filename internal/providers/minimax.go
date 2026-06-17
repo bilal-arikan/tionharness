@@ -134,7 +134,7 @@ func (m *Minimax) Complete(ctx context.Context, req Request) (*Response, error) 
 	}
 	return &Response{
 		Text:       parsed.Choices[0].Message.Content,
-		StopReason: StopEndTurn,
+		StopReason: oaiStopReason(parsed.Choices[0].FinishReason),
 		Model:      usedModel,
 		Usage: Usage{
 			InputTokens:  parsed.Usage.PromptTokens,
@@ -181,6 +181,9 @@ func (m *Minimax) Stream(ctx context.Context, req Request, onDelta func(StreamDe
 				sb.WriteString(c)
 				onDelta(StreamDelta{Kind: DeltaText, Text: c})
 			}
+			if fr := ch.Choices[0].FinishReason; fr != "" {
+				out.StopReason = oaiStopReason(fr)
+			}
 		}
 		if ch.Usage != nil {
 			out.Usage.InputTokens = ch.Usage.PromptTokens
@@ -193,6 +196,17 @@ func (m *Minimax) Stream(ctx context.Context, req Request, onDelta func(StreamDe
 	}
 	out.Text = sb.String()
 	return out, nil
+}
+
+// oaiStopReason maps an OpenAI-compatible finish_reason to a provider stop
+// reason. "length" (the model hit max_tokens) becomes StopMaxTok so the agent
+// loop's A1 recovery can resume a capped answer; everything else is a normal
+// end of turn (this provider does not surface tool_use).
+func oaiStopReason(finishReason string) string {
+	if finishReason == "length" {
+		return StopMaxTok
+	}
+	return StopEndTurn
 }
 
 // toOAIMessages converts a provider Request into OpenAI-style messages: the

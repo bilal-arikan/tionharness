@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"strings"
 
+	"github.com/bilal/swarmgo/internal/conversation"
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/tools"
@@ -160,6 +162,12 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 
 	var last *providers.Response
 	var steps []TurnStep
+	// ls carries the single-shot recovery guards (A1) across iterations so a
+	// stuck model can never spin forever inside one turn.
+	var ls loopState
+	// partial accumulates answer text across max-output-token resumes, so the
+	// stitched full answer is returned even though it arrived in capped pieces.
+	var partial strings.Builder
 	// granted remembers tools the user chose "Always allow" for, scoped to this
 	// turn, so the permission gate does not re-prompt for the same tool.
 	granted := map[string]bool{}
@@ -172,7 +180,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	for i := 0; i < maxToolIters; i++ {
 		if autonomous {
 			if err := r.ensureBudget(ctx, agent); err != nil {
-				fail("budget_exceeded", err)
+				fail(string(termBudget), err)
 				return nil, steps, err
 			}
 		}
@@ -186,13 +194,52 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
-			fail("provider_error", err)
+			// A1: a context-overflow error is recoverable once per turn by
+			// compacting the in-flight history and retrying; any other error
+			// ends the turn. decideRecovery keeps this policy pure + testable.
+			d := decideRecovery(nil, err, ls)
+			if d.compact {
+				folded, ok, cerr := conversation.CompactInFlightMessages(ctx, provider, agent, req.Messages, reactiveKeepRecent)
+				if cerr == nil && ok {
+					req.Messages = folded
+					ls.compacted = true
+					ls.lastContinue = d.reason
+					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
+					steps = append(steps, rec)
+					emit(rec)
+					continue
+				}
+			}
+			fail(string(termProviderErr), err)
 			return nil, steps, err
 		}
 		last = resp
 		if resp.StopReason != providers.StopToolUse || len(resp.ToolCalls) == 0 {
+			// A1: resume an answer cut off by the output-token cap (bounded by
+			// the guard) so the full reply is produced across capped calls.
+			d := decideRecovery(resp, nil, ls)
+			if d.cont {
+				if resp.Text != "" {
+					partial.WriteString(resp.Text)
+					req.Messages = append(req.Messages, providers.Message{Role: providers.RoleAssistant, Text: resp.Text})
+				}
+				if d.inject != nil {
+					req.Messages = append(req.Messages, *d.inject)
+				}
+				ls.maxTokenRetries++
+				ls.lastContinue = d.reason
+				rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
+				steps = append(steps, rec)
+				emit(rec)
+				continue
+			}
+			// Stitch any earlier capped fragments onto the final answer.
+			if partial.Len() > 0 {
+				resp.Text = partial.String() + resp.Text
+			}
 			return resp, steps, nil
 		}
+		ls.lastContinue = contToolUse
 
 		// Capture the narration the model produced alongside this tool turn.
 		if resp.Text != "" {
@@ -247,7 +294,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			// Cancellation mid-tool (user stop / timeout): record it and end the
 			// turn cleanly instead of feeding a half-result back to the model.
 			if ctx.Err() != nil {
-				fail("cancelled", ctx.Err())
+				fail(string(termCancelled), ctx.Err())
 				return last, steps, ctx.Err()
 			}
 
@@ -287,7 +334,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	r.logger.Warn("tool loop hit iteration cap", "agent", agent.ID)
 	rec := TurnStep{
 		Kind:   StepRecovery,
-		Reason: "max_tool_iterations",
+		Reason: string(termMaxIters),
 		Text:   "Araç döngüsü iterasyon limitine ulaştı; tur burada sonlandırıldı.",
 	}
 	steps = append(steps, rec)

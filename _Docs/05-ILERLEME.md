@@ -2,6 +2,36 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Faz A1 — Agent loop recovery + `continuationReason` ✅ (2026-06-17)
+
+Native tool döngüsü (`agent/toolloop.go`) "happy-path" odaklıydı; max-token / bağlam-taşması gibi durumlarda yapısal kurtarma yoktu. `observed-behavior`'in gerçek query-loop implementasyonu (`src/query/transitions.ts` + `src/query.ts`) referans alınarak kurtarma yolları yapısal hale getirildi. **Tasarım ilkesi (audit'ten):** kurtarma *kararı* (saf, I/O'suz, test edilebilir) yürütmeden ayrıldı.
+
+**Faz 1 — saf karar katmanı + max-token kurtarma:**
+- **`agent/recovery.go` (yeni):** `loopState` (iterasyonlar arası tek-atımlık guard'lar: `maxTokenRetries`/`compacted`/`lastContinue`) + `decideRecovery(resp, callErr, st) decision` saf fonksiyonu. `contReason`/`termReason` makine etiketleri (audit'in `Continue`/`Terminal` transition'larının Go karşılığı). `lastContinue` State'te tutulur → test mesaj içeriğine bakmadan kurtarma yolunun tetiklendiğini assert eder (audit deseni).
+- **Max-token resume:** model `StopMaxTok` ile yarıda kesilince (guard limit `maxTokenRetryLimit=3`) İngilizce "resume directly" meta-mesajı enjekte edilip tur sürdürülür; ara parçalar `partial strings.Builder` ile birleştirilip tam cevap döndürülür (truncation kaybı yok).
+- **Withhold deseni:** kurtarma turunda ara hata `emit` edilmez — yalnız `StepRecovery` (Adım Türleri ekranı zaten render eder) yayılır; hata sadece guard tükenince yüzeye çıkar.
+- **`providers/minimax.go`:** `finish_reason:"length"` → `StopMaxTok` map'i (`oaiStopReason`, Complete + Stream). Anthropic `stop_reason`'ı zaten ham geçiriyordu.
+
+**Faz 2 — reaktif compaction:**
+- **`conversation/reactive.go` (yeni):** `CompactInFlightMessages(ctx, provider, agent, msgs, keepRecent)` paket-fonksiyonu — DB'ye dokunmadan (in-flight/transient) eski mesajları özetler. **Fold sınırı assistant mesajında** seçilir → summary(user)→assistant tail ile rol-alternasyonu korunur ve hiçbir `tool_use`/`tool_result` çifti bölünmez; güvenli sınır yoksa `ok=false` (no-op, orijinal hata yüzeye çıkar). Katmanlama: `agent → conversation` (cycle yok), `Runtime`'a wiring/arayüz gerekmez.
+- **Döngü entegrasyonu:** provider hatası `isContextOverflow` pattern'ine uyuyor ve `!compacted` ise compaction çağrılır, başarılıysa `reactive_compact_retry` ile tur yeniden denenir; aksi halde `provider_error` terminal.
+
+**Testler:** `agent/recovery_test.go` (6-vakalı `decideRecovery` tablo testi + `isContextOverflow`), `conversation/reactive_test.go` (assistant-sınır fold + güvenli-sınır-yok no-op). ✅ `go build`/`vet`/`test ./...` tümü yeşil.
+
+**Kalan (sonraki adımlar):** A3 ile birleştirme (iptalde yarım `tool_call`'lara sentetik `cancelled` sonucu), max-token escalation merdiveni (8k→64k, provider'a `max_tokens` ayarı gerekir), claude-cli yolu kendi döngüsünü sürdüğünden bu kurtarmaları kullanmaz (SDK parite deseni — not).
+
+## Ara özellik — Kanban yenileme turu: avatar → panel → cron → flow-backed task ⏳ (2026-06-17, son madde COMMITSİZ)
+
+Kanban panosu (Faz 5) bir dizi kademeli iyileştirmeden geçti. İlk dördü commit'lendi, sonuncusu (flow-backed task) kod olarak hazır ama paralel oturumla iç içe olduğu için commit beklemede.
+
+1. **Ajan avatarları** (commit `05742be`): yeni-görev formunda düz `<select>` → avatarlı `AgentPicker`; her kartta owner ajan `AgentAvatar` ikonuyla.
+2. **Karttan cron'a bağlama** (commit `d64f0d0`): kartta **⏰ Zamanla** ile görevi doğrudan bir cron zamanlamasına bağlama (`taskId` set → scheduler `RunTask`).
+3. **Detay paneli** (commit `a97eaed`): karta tıklayınca sağdan açılan `TaskDetailPanel` — başlık/prompt/açıklama/owner/durum görüntüle+düzenle.
+4. **Aksiyonlar panele taşındı** (commit `4139a1b`): kart sade bir özet oldu; ▶ Çalıştır, ⏰ Zamanla, Geçmiş, ⟳ başlık, 🗑 Sil hepsi panele alındı.
+5. **Flow-backed task** (⏳ **commit edilmedi**): chat'teki "flow'u mesajdan tetikleme" mantığının Kanban karşılığı. Göreve opsiyonel `Task.FlowID`; doluysa `RunTask` → `runTaskFlow`, prompt'u ajana göndermek yerine o orchestration akışını koşar (`RunFlow(...,nil)`), düğüm transkriptini (`renderFlowTranscript`) Run çıktısı olarak kaydeder. Owner ajan flow varken zorunlu değil. Tek çalıştırma noktası `RunTask` olduğundan **manuel ▶ / cron / ileride dispatcher hepsi flow'u destekler** — ⏰ Zamanla flow görevini bedavaya periyodik koşar. API `createTask/updateTask` `flowId` alır; frontend: yeni-görev formunda 🔀 Akış seçici, kartta flow rozeti, panelde flow seçici + "▶ Akışı çalıştır".
+   - **Dosyalar:** `db/models_task.go`+`store_task.go` (FlowID), `agent/executor.go` (`runTaskFlow`/`renderFlowTranscript`), `api/tasks.go`, `frontend types/task.ts`+`api/tasks.ts`+`TaskBoard.tsx`+`TaskDetailPanel.tsx`.
+   - **Durum:** `go build` + `go test ./internal/...` + frontend `tsc` yeşil. **Commit beklemede** — çalışma ağacı smart-surge oturumunun "flow attachment + tema refactor" WIP'iyle iç içe; `executor.go` onun 5-arg `RunFlow(...,Observer)` imzasına bağımlı (HEAD'de 4-arg). İki oturum reconcile edilince commit edilecek. (Derlemeyi tıkayan `flows.go` eksik `conversation` import'u eklendi — salt import.)
+
 ## Ara özellik — Sohbetten akış tetikleme + sonucu session'a yazma ✅ (2026-06-17)
 
 Akışlar (flows) artık sohbet composer'ından "/" komutuyla tetiklenebiliyor ve çıktı kalıcı bir sohbet turu olarak session'a yazılıyor.
@@ -1641,6 +1671,16 @@ Kullanıcıyla netleştirilecek:
 ---
 
 ## Oturum Günlüğü
+
+### 2026-06-17 — Tema tutarlılık denetimi (yeni özellikler sonrası)
+Yeni gelen özellikler (Ajanlar/Artifactlar/Sırlar görünümleri, sessions sidebar bölme) tema açısından denetlendi; tespit edilen tutarsızlıklar giderildi (`go build`/`vet` + `tsc -b` temiz; Chrome canlı doğrulandı):
+
+1. **Emoji → lucide-react** (uygulama geneli ikon dili birleştirildi): Ayarlar kategori rayı (`settings/primitives.tsx` — 15 kategori), sohbet adımları (`TextStep`/`DiffCard`/`RecoveryStep`/`SteerStep`/`ErrorStep`/`AskPrompt`/`TodoCard`/`ActivityCard` — ikon + ▾/▸ chevron'lar), `Composer` düşünme çipi (🧠→Brain), `ChatMeters` (⛁/⧉/◷→Database/Layers/Clock), `AgentRoster`/`SessionsSidebar`/`SessionDetailPanel` aksiyon menüleri (⚙/✏️/✨/📋/📂/🗑/↻→Settings/Pencil/Sparkles/ClipboardCopy/FolderOpen/Trash2/Loader2), `Schedules` (▶/✎/✕→Play/Pencil/X), `TaskDetailPanel` (⟳→RefreshCw), `MessageList` (🗑/✕), `PendingTray` (⏱/⏳/✕), `FlowsPanel` node etiketleri, `AgentSettingsForm` (🗑). MenuItem/ActionBtn/CatMeta tipleri `icon: LucideIcon` aldı.
+2. **Yeşil aykırı buton düzeltildi:** `MemoryPanel` "Yansıt" `bg-emerald-600/80` dolgu → accent-outline + Sparkles ikonu (ekrandaki tek yeşil birincil buton sorunu).
+3. **Semantic durum renkleri token'a bağlandı** (`--color-success/warning/danger`): başarı/uyarı/hata renkleri artık sabit Tailwind paleti yerine token kullanır — `TaskBoard`/`TaskDetailPanel` (status), `LogsPanel` (level), `Schedules`, `DiffView`/`DiffCard`/`ActivityCard` (+/−), `ErrorStep`/`RecoveryStep`, `StepKindsPanel`, `ProvidersPanel`, `ToolsPanel`, `ChatMeters`, `PendingTray`, `MemoryPanel`, `FlowsPanel`, `SessionsSidebar` (typing), `WorkspacePanel` (tehlike bölgesi), `App.tsx` (hata rozeti), `MessageList`/`SessionDetailPanel`/`AgentSettingsForm`/`ArtifactCard`/`ArtifactsPanel` (sil). Soft arka planlar `color-mix(... transparent)` ile.
+4. **Elevation + empty state:** NavRail + kanban kartlarına `--shadow-sm`/hover `--shadow-md`; `ArtifactsPanel` boş durumu ikonlu hale getirildi.
+
+> Not: Semantic durum renkleri (kırmızı=hata/yeşil=başarı) palet değişse de **sabit kalır** (status göstergesi) — token'a almak tek-noktadan ayar + tutarlılık içindir, accent paletinden bağımsızdır. Eşzamanlı diğer iş ile aynı ağaçta; commit kullanıcı onayına bırakıldı.
 
 ### 2026-06-16 — tool_delta/tombstone gerçek üreticileri (tool-streaming + iptal)
 `tool_delta` ve `tombstone` artık altyapı değil, **canlı üreticili** (`go build`/`vet`/`test ./...` yeşil):

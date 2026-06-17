@@ -1,0 +1,138 @@
+package agent
+
+import (
+	"strings"
+
+	"github.com/bilal/swarmgo/internal/providers"
+)
+
+// maxTokenRetryLimit bounds how many times a single turn may resume after the
+// model hits the output-token cap before the partial answer is surfaced as-is.
+// Mirrors claude-code's MAX_OUTPUT_TOKENS_RECOVERY_LIMIT.
+const maxTokenRetryLimit = 3
+
+// reactiveKeepRecent is how many most-recent in-flight messages reactive
+// compaction preserves verbatim when it folds the older ones into a summary.
+const reactiveKeepRecent = 6
+
+// contReason tags why the loop continued to another iteration (a non-terminal
+// transition). Stored on loopState so tests can assert a recovery path fired
+// without inspecting message contents — the pattern claude-code's query loop
+// uses with its State.transition field.
+type contReason string
+
+const (
+	contToolUse        contReason = "tool_use"                    // model requested tools
+	contMaxTokenResume contReason = "max_output_tokens_recovery"  // resume after output cap
+	contCompactRetry   contReason = "reactive_compact_retry"      // context overflow → compact → retry
+)
+
+// termReason tags why the loop returned (a terminal transition). Surfaced as the
+// Reason on a StepError/StepRecovery so a persisted trace explains itself.
+type termReason string
+
+const (
+	termCompleted         termReason = "completed"
+	termMaxIters          termReason = "max_tool_iterations"
+	termProviderErr       termReason = "provider_error"
+	termCancelled         termReason = "cancelled"
+	termBudget            termReason = "budget_exceeded"
+	termMaxTokenExhausted termReason = "max_output_tokens_exhausted"
+)
+
+// loopState carries the single-shot recovery guards across loop iterations. The
+// guards make every recovery path fire at most its allotted number of times, so
+// a stuck model can never spin forever inside one turn.
+type loopState struct {
+	maxTokenRetries int        // 0..maxTokenRetryLimit
+	compacted       bool       // reactive compaction is one-shot per turn
+	lastContinue    contReason // why the previous iteration continued ("" on first)
+}
+
+// decision is the output of the pure recovery analysis: it tells the loop body
+// what to do next without performing any side effects itself. Exactly one of the
+// outcomes is meaningful — cont (continue after injecting), compact (fold then
+// retry), or a terminal (term set, optionally err) — keeping the loop's apply
+// step a simple switch.
+type decision struct {
+	cont    bool               // continue to the next iteration as-is/after inject
+	compact bool               // run reactive compaction, then continue
+	reason  contReason         // machine tag for a cont/compact transition
+	inject  *providers.Message // message to append before the next iteration
+	term    termReason         // terminal tag when neither cont nor compact
+	err     error              // non-nil → propagate as the loop's error return
+}
+
+// decideRecovery is the pure heart of A1: given the latest model result (resp)
+// or provider error (callErr) plus the current guard state, it decides whether
+// the loop continues (and how) or terminates (and why). It mutates nothing — the
+// caller applies the decision and advances loopState — so it is exhaustively
+// table-testable in isolation from the provider and the message plumbing.
+func decideRecovery(resp *providers.Response, callErr error, st loopState) decision {
+	if callErr != nil {
+		// Context overflow is recoverable once per turn by compacting the
+		// in-flight history and retrying; any other error is terminal.
+		if isContextOverflow(callErr) && !st.compacted {
+			return decision{compact: true, reason: contCompactRetry, err: callErr}
+		}
+		return decision{term: termProviderErr, err: callErr}
+	}
+	// The model stopped because it ran into the output-token cap mid-answer.
+	// Resume it (up to the guard limit) so the full answer is produced across
+	// several capped calls instead of being silently truncated.
+	if resp != nil && resp.StopReason == providers.StopMaxTok {
+		if st.maxTokenRetries < maxTokenRetryLimit {
+			return decision{cont: true, reason: contMaxTokenResume, inject: resumeMessage()}
+		}
+		return decision{term: termMaxTokenExhausted}
+	}
+	return decision{term: termCompleted}
+}
+
+// resumeMessage is the meta user-turn injected to continue an answer cut off by
+// the output-token cap. Phrased (in English, the model-facing language) to make
+// the model pick up mid-thought without apologising or recapping.
+func resumeMessage() *providers.Message {
+	return &providers.Message{
+		Role: providers.RoleUser,
+		Text: "Output token limit reached. Continue exactly where you left off — " +
+			"no apology, no recap. Pick up mid-thought if that is where the cut " +
+			"happened, and break the remaining work into smaller pieces.",
+	}
+}
+
+// recoveryText is the human-readable (Turkish, UI-facing) explanation shown on a
+// StepRecovery card for a given continuation reason.
+func recoveryText(r contReason) string {
+	switch r {
+	case contMaxTokenResume:
+		return "Çıktı token limitine ulaşıldı; yanıt kaldığı yerden sürdürülüyor."
+	case contCompactRetry:
+		return "Bağlam taşması algılandı; eski mesajlar özetlenip tur yeniden denendi."
+	default:
+		return "Tur kurtarma yoluna girdi."
+	}
+}
+
+// isContextOverflow reports whether a provider error signals the prompt exceeded
+// the model's context window (Anthropic: "prompt is too long: N tokens > …";
+// OpenAI-compatible: "context_length_exceeded"). Matched conservatively so an
+// unrelated failure is never mistaken for a recoverable overflow.
+func isContextOverflow(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "too long"):
+		return true
+	case strings.Contains(msg, "context_length_exceeded"):
+		return true
+	case strings.Contains(msg, "context length"):
+		return true
+	case strings.Contains(msg, "maximum context"):
+		return true
+	default:
+		return false
+	}
+}
