@@ -51,3 +51,24 @@ export function looksLikeDiff(text: string): boolean {
   return /^(@@ |diff --git |--- |\+\+\+ )/m.test(text) ||
     /^[+-].*\n[+-]/m.test(text)
 }
+
+// synthDiff builds a unified-diff-style text from an edit/write tool's INPUT,
+// for tools whose OUTPUT is only a confirmation message (as claude-cli's Edit /
+// Write return — "The file … has been updated", not a diff). Edit → old_string
+// as removed lines + new_string as added lines; Write → the whole content as
+// added lines (a new file). Returns null when the input lacks those fields.
+export function synthDiff(toolBase: string, input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null
+  const o = input as Record<string, unknown>
+  const out: string[] = []
+  const push = (text: string, sign: '+' | '-') => {
+    for (const line of text.replace(/\n$/, '').split('\n')) out.push(sign + line)
+  }
+  if (toolBase === 'write' || toolBase === 'write_file') {
+    if (typeof o.content === 'string' && o.content.length) push(o.content, '+')
+  } else if (toolBase === 'edit' || toolBase === 'edit_file' || toolBase === 'multiedit') {
+    if (typeof o.old_string === 'string' && o.old_string.length) push(o.old_string, '-')
+    if (typeof o.new_string === 'string' && o.new_string.length) push(o.new_string, '+')
+  }
+  return out.length ? out.join('\n') : null
+}

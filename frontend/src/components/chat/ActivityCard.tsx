@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { TurnStep } from '../../types'
-import { toolMeta, isReadTool } from '../../lib/tools'
-import { parseDiff } from '../../lib/diff'
+import { toolMeta, isReadTool, toolBase } from '../../lib/tools'
+import { parseDiff, looksLikeDiff, synthDiff } from '../../lib/diff'
 import { DiffView } from '../markdown/DiffView'
 import { PathText } from './PathText'
 
@@ -15,9 +15,9 @@ interface Props {
 // label in the collapsed header: +added/−removed for diff-producing tools
 // (edit/write) and a line count for file readers — so the at-a-glance card
 // matches the native DiffCard without expanding it.
-function headerBadge(step: TurnStep, isDiff: boolean, output: string): ReactNode {
-  if (isDiff && output) {
-    const { stats } = parseDiff(output)
+function headerBadge(step: TurnStep, diffText: string | null, output: string): ReactNode {
+  if (diffText) {
+    const { stats } = parseDiff(diffText)
     if (stats.added > 0 || stats.removed > 0) {
       return (
         <span className="flex shrink-0 gap-1.5 font-mono">
@@ -42,7 +42,15 @@ export function ActivityCard({ step, onOpenFile }: Props) {
   const [open, setOpen] = useState(false)
   const meta = toolMeta(step.tool || '', step.input)
   const output = step.output || ''
-  const badge = headerBadge(step, meta.isDiff, output)
+  // The diff to show for edit/write tools: a real unified diff in the output if
+  // present, otherwise synthesized from the tool input (claude-cli's Edit/Write
+  // return only a confirmation message, so the +/- must come from old/new/content).
+  const diffText = meta.isDiff
+    ? looksLikeDiff(output)
+      ? output
+      : synthDiff(toolBase(step.tool || ''), step.input)
+    : null
+  const badge = headerBadge(step, diffText, output)
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
@@ -76,14 +84,19 @@ export function ActivityCard({ step, onOpenFile }: Props) {
               </pre>
             </div>
           )}
-          {output && (
+          {diffText ? (
             <div>
               <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                Çıktı
+                Değişiklik
               </div>
-              {meta.isDiff ? (
-                <DiffView text={output} />
-              ) : (
+              <DiffView text={diffText} />
+            </div>
+          ) : (
+            output && (
+              <div>
+                <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                  Çıktı
+                </div>
                 <pre
                   className={`overflow-x-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 ${
                     step.isError ? 'text-red-300' : 'text-[var(--color-text)]'
@@ -91,8 +104,8 @@ export function ActivityCard({ step, onOpenFile }: Props) {
                 >
                   {output.length > 4000 ? output.slice(0, 4000) + '\n… (kırpıldı)' : output}
                 </pre>
-              )}
-            </div>
+              </div>
+            )
           )}
         </div>
       )}
