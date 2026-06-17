@@ -45,6 +45,13 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "sessionId is required")
 		return
 	}
+	// sessionID is interpolated into the on-disk upload path, so it must be a
+	// single traversal-free segment — otherwise a crafted id ("../../…") could
+	// write the file outside the uploads directory.
+	if !safePathSegment(sessionID) {
+		writeError(w, http.StatusBadRequest, "invalid sessionId")
+		return
+	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -58,7 +65,14 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	// Relative path under the sandbox root (DataDir/workspace). Forward slashes so
 	// it matches the agent's read_file path style.
 	rel := "uploads/" + sessionID + "/" + id + "-" + name
+	uploadsRoot := filepath.Join(wsp.DataDir, "workspace", "uploads")
 	abs := filepath.Join(wsp.DataDir, "workspace", filepath.FromSlash(rel))
+	// Defense in depth: the resolved file must stay inside the uploads root even
+	// if some component slipped past the checks above.
+	if !withinDir(uploadsRoot, abs) {
+		writeError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
 
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -133,6 +147,29 @@ func (s *Server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
 	abs := filepath.Join(wsp.DataDir, "workspace", clean)
 	_ = os.Remove(abs) // best-effort: missing file is not an error
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// safePathSegment reports whether s is a single path segment safe to embed in a
+// filesystem path: non-empty, not "."/"..", and free of path separators or any
+// ".." traversal sequence.
+func safePathSegment(s string) bool {
+	if s == "" || s == "." || s == ".." {
+		return false
+	}
+	if strings.ContainsAny(s, `/\`) || strings.Contains(s, "..") {
+		return false
+	}
+	return true
+}
+
+// withinDir reports whether abs resolves to a location inside (or equal to) root
+// after cleaning — used as a final guard against path traversal.
+func withinDir(root, abs string) bool {
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(abs))
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // sanitizeFileName strips any directory components and keeps a safe basename.
