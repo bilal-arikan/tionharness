@@ -199,11 +199,20 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 		})
 	}
 
+	// Strip any <think>…</think> reasoning out of the visible text into a
+	// thinking trace step (MiniMax and some other OpenAI-compat models embed it).
+	text, think := splitThink(choice.Message.Content)
+	var trace []TraceStep
+	if think != "" {
+		trace = []TraceStep{{Kind: "thinking", Text: think}}
+	}
+
 	return &Response{
-		Text:       choice.Message.Content,
+		Text:       text,
 		ToolCalls:  calls,
 		StopReason: oaiStopReason(choice.FinishReason),
 		Model:      usedModel,
+		Trace:      trace,
 		Usage: Usage{
 			InputTokens:  parsed.Usage.PromptTokens,
 			OutputTokens: parsed.Usage.CompletionTokens,
@@ -234,8 +243,20 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 	}
 	headers := map[string]string{"Authorization": "Bearer " + m.apiKey}
 
-	var sb strings.Builder
+	var sb, thinkSB strings.Builder
+	filt := &thinkFilter{}
 	out := &Response{Model: model, StopReason: StopEndTurn}
+
+	emit := func(text, think string) {
+		if text != "" {
+			sb.WriteString(text)
+			onDelta(StreamDelta{Kind: DeltaText, Text: text})
+		}
+		if think != "" {
+			thinkSB.WriteString(think)
+			onDelta(StreamDelta{Kind: DeltaThinking, Text: think})
+		}
+	}
 
 	err := postSSE(ctx, m.client, m.name, m.baseURL+"/chat/completions", headers, body, func(_ string, data []byte) bool {
 		if string(data) == "[DONE]" {
@@ -247,8 +268,8 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 		}
 		if len(ch.Choices) > 0 {
 			if c := ch.Choices[0].Delta.Content; c != "" {
-				sb.WriteString(c)
-				onDelta(StreamDelta{Kind: DeltaText, Text: c})
+				// Route <think>…</think> reasoning to a live thinking block.
+				emit(filt.feed(c))
 			}
 			if fr := ch.Choices[0].FinishReason; fr != "" {
 				out.StopReason = oaiStopReason(fr)
@@ -263,7 +284,11 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 	if err != nil {
 		return nil, err
 	}
+	emit(filt.flush())
 	out.Text = sb.String()
+	if thinkSB.Len() > 0 {
+		out.Trace = []TraceStep{{Kind: "thinking", Text: thinkSB.String()}}
+	}
 	return out, nil
 }
 
