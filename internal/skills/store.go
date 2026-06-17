@@ -169,12 +169,38 @@ func (s *Store) Body(slug string) (string, error) {
 	return strings.TrimSpace(body), nil
 }
 
-// CatalogBlock renders the system-prompt section advertising the available
-// skills. It lists only slug + description + when-to-use (frontmatter only), and
-// instructs the model to call use_skill to load a skill's full instructions.
-// Returns "" when there are no skills.
+// CatalogBlock renders the prompt section advertising EVERY available skill.
 func (s *Store) CatalogBlock() string {
-	list := s.List()
+	return renderCatalog(s.List())
+}
+
+// CatalogBlockFor renders the prompt section for a specific ordered selection of
+// slugs (an agent's chosen skills). Unknown/blank/duplicate slugs are skipped;
+// the given order is preserved. Returns "" when no known skill remains.
+func (s *Store) CatalogBlockFor(slugs []string) string {
+	if len(slugs) == 0 {
+		return ""
+	}
+	picked := make([]Skill, 0, len(slugs))
+	seen := map[string]bool{}
+	for _, slug := range slugs {
+		slug = strings.TrimSpace(slug)
+		if slug == "" || seen[slug] {
+			continue
+		}
+		if sk, ok := s.Get(slug); ok {
+			picked = append(picked, sk)
+			seen[slug] = true
+		}
+	}
+	return renderCatalog(picked)
+}
+
+// renderCatalog builds the "# Available Skills" block from a resolved skill list
+// (already in the desired order). Lists only slug + description + when-to-use
+// (frontmatter), and instructs the model to call use_skill to load the body.
+// Returns "" when the list is empty.
+func renderCatalog(list []Skill) string {
 	if len(list) == 0 {
 		return ""
 	}

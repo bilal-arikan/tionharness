@@ -173,13 +173,29 @@ func projectSkillsDir(workDir string) string {
 // Skills returns this runtime's skill store (never nil after construction).
 func (r *Runtime) Skills() *skills.Store { return r.skills }
 
-// SkillsCatalogBlock renders the Available Skills system-prompt section, or ""
-// when no skills are present. Cheap — frontmatter only.
-func (r *Runtime) SkillsCatalogBlock() string {
+// SkillsCatalogBlockForAgent renders the Available Skills system-prompt section
+// listing ONLY the skills this agent has selected, in the agent's chosen order.
+// Returns "" when the agent has no skills (or the store is empty). Skills are a
+// shared library; agents pick from it — they never own skills.
+func (r *Runtime) SkillsCatalogBlockForAgent(agent db.Agent) string {
 	if r.skills == nil {
 		return ""
 	}
-	return r.skills.CatalogBlock()
+	return r.skills.CatalogBlockFor(agent.Skills)
+}
+
+// agentSkillLib restricts the use_skill tool to an agent's selected slugs, so an
+// agent cannot load a skill it has not been given.
+type agentSkillLib struct {
+	store *skills.Store
+	allow map[string]bool
+}
+
+func (l agentSkillLib) Body(slug string) (string, error) {
+	if !l.allow[slug] {
+		return "", fmt.Errorf("skill %q is not enabled for this agent", slug)
+	}
+	return l.store.Body(slug)
 }
 
 // SetScheduleReloader wires the scheduler's Reload so self-management schedule

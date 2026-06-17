@@ -113,6 +113,35 @@ func TestCatalogBlockAndEmpty(t *testing.T) {
 	}
 }
 
+func TestCatalogBlockFor(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "alpha", "---\nname: Alpha\ndescription: a\n---\nbody")
+	writeSkill(t, dir, "beta", "---\nname: Beta\ndescription: b\n---\nbody")
+	writeSkill(t, dir, "gamma", "---\nname: Gamma\ndescription: g\n---\nbody")
+	s := New("", "", dir)
+
+	// Only selected slugs, in the given order; unknown/dup skipped.
+	block := s.CatalogBlockFor([]string{"gamma", "alpha", "nope", "gamma"})
+	ai := indexOf(block, "`alpha`")
+	gi := indexOf(block, "`gamma`")
+	if gi < 0 || ai < 0 {
+		t.Fatalf("expected alpha+gamma in block:\n%s", block)
+	}
+	if gi > ai {
+		t.Errorf("order not preserved: gamma should precede alpha\n%s", block)
+	}
+	if indexOf(block, "`beta`") >= 0 {
+		t.Errorf("beta should not be listed (not selected)\n%s", block)
+	}
+	if indexOf(block, "nope") >= 0 {
+		t.Errorf("unknown slug leaked into block\n%s", block)
+	}
+
+	if s.CatalogBlockFor(nil) != "" || s.CatalogBlockFor([]string{"nope"}) != "" {
+		t.Error("expected empty block for empty/unknown selection")
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || indexOf(s, sub) >= 0)
 }

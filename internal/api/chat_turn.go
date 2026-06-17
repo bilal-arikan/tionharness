@@ -58,10 +58,10 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	}
 	// Always-on: deliverables (files/documents) should surface as artifacts.
 	system = strings.TrimSpace(system + "\n\n" + artifactDeliverableGuidance)
-	// Advertise available skills (slug + summary only). The full body is loaded
-	// lazily via the use_skill tool. Part of the cached static prefix since the
-	// skill catalog changes rarely.
-	if sb := wsp.Runtime.SkillsCatalogBlock(); sb != "" {
+	// Advertise the skills THIS agent has selected (slug + summary only, in the
+	// agent's chosen order). The full body is loaded lazily via use_skill. Part of
+	// the cached static prefix since an agent's skill selection changes rarely.
+	if sb := wsp.Runtime.SkillsCatalogBlockForAgent(agentRow); sb != "" {
 		system = strings.TrimSpace(system + "\n\n" + sb)
 	}
 

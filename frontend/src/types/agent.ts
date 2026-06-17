@@ -19,6 +19,9 @@ export interface Agent {
   color?: string
   mcpEnabled: boolean
   allowedTools: string
+  // Ordered list of skill slugs enabled for this agent (picked from the shared
+  // skill library; agents never own skills).
+  skills?: string[]
   createdAt: number
   updatedAt: number
 }
@@ -36,6 +39,7 @@ export interface AgentPatch {
   permissionMode?: string
   avatar?: string
   color?: string
+  skills?: string[]
 }
 
 export interface AgentUsage {

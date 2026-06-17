@@ -39,6 +39,12 @@ type Agent struct {
 	MCPEnabled   bool   `json:"mcpEnabled"`
 	AllowedTools string `json:"allowedTools"` // JSON array
 
+	// Skills is the ordered list of skill slugs enabled for this agent. Only
+	// these skills are advertised to the agent (in this order) and loadable via
+	// use_skill. Empty means the agent has no skills. Skills themselves are a
+	// shared library (global/workspace/project tiers) — never agent-owned.
+	Skills []string `json:"skills"`
+
 	// CreatedBy records the ID of the agent that created this agent through a
 	// self-management tool. Empty means it was created by the user (UI/API).
 	// Agents may only edit/delete entities that were created by an agent.

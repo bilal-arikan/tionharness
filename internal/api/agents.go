@@ -123,9 +123,10 @@ type updateAgentReq struct {
 	Model         *string `json:"model"`
 	PlanningMode   *string `json:"planningMode"`
 	ThinkingLevel  *string `json:"thinkingLevel"`
-	PermissionMode *string `json:"permissionMode"`
-	Avatar         *string `json:"avatar"`
-	Color          *string `json:"color"`
+	PermissionMode *string   `json:"permissionMode"`
+	Avatar         *string   `json:"avatar"`
+	Color          *string   `json:"color"`
+	Skills         *[]string `json:"skills"`
 }
 
 func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
@@ -150,6 +151,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		PermissionMode: req.PermissionMode,
 		Avatar:         req.Avatar,
 		Color:          req.Color,
+		Skills:         req.Skills,
 	})
 	if writeDBError(w, err, "agent not found") {
 		return

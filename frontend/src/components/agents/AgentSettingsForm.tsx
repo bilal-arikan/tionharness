@@ -5,6 +5,7 @@ import { AVATAR_COLORS, AVATAR_GLYPHS, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentToolsSection } from './AgentToolsSection'
+import { AgentSkillsSection } from './AgentSkillsSection'
 
 interface Props {
   agent: Agent
@@ -33,6 +34,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [planningMode, setPlanningMode] = useState(agent.planningMode || 'standard')
   const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel ?? '')
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
+  const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
@@ -63,6 +65,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         planningMode,
         thinkingLevel,
         permissionMode,
+        skills,
       })
       setSavedAt((n) => n + 1)
       onSaved?.()
@@ -222,6 +225,8 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
             className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
           />
         </Field>
+
+        <AgentSkillsSection selected={skills} onChange={setSkills} onError={setErr} />
 
         <div className="border-t border-[var(--color-border)] pt-4">
           <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">

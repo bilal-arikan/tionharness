@@ -52,6 +52,9 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	if a.AllowedTools == "" {
 		a.AllowedTools = "[]"
 	}
+	if a.Skills == nil {
+		a.Skills = []string{}
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return a, d.persistAgentLocked(a)
@@ -117,6 +120,9 @@ type AgentProfilePatch struct {
 	PermissionMode *string
 	Avatar         *string
 	Color          *string
+	// Skills is the agent's ordered skill-slug selection. Non-nil replaces the
+	// whole list (an empty slice clears it).
+	Skills *[]string
 }
 
 // UpdateAgent applies a partial profile patch to an existing agent and persists
@@ -152,6 +158,9 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		}
 		if p.Color != nil {
 			a.Color = *p.Color
+		}
+		if p.Skills != nil {
+			a.Skills = *p.Skills
 		}
 	})
 }
