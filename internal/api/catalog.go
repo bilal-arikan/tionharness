@@ -17,6 +17,7 @@ type catalogEntryDTO struct {
 // UI's provider/model pickers can show which providers are ready to use.
 func (s *Server) handleCatalog(w http.ResponseWriter, _ *http.Request) {
 	entries := providers.Catalog()
+	entries = append(entries, s.providers.CustomCatalog()...)
 	out := make([]catalogEntryDTO, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, catalogEntryDTO{CatalogEntry: e, Available: s.providers.Available(e.ID)})

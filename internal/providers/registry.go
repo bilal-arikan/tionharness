@@ -3,8 +3,22 @@ package providers
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 )
+
+// CustomSpec is a user-configured OpenAI- or Anthropic-compatible provider, fed
+// to the registry from settings (Key is the decrypted plaintext). Its ID becomes
+// a selectable provider identifier alongside the built-in kinds.
+type CustomSpec struct {
+	ID           string
+	Label        string
+	Kind         string // "openai" | "anthropic"
+	BaseURL      string
+	DefaultModel string
+	Models       string // optional model-id suggestions (comma/newline)
+	Key          string
+}
 
 // Registry builds providers by name using configured credentials and
 // locally-available CLI tools. Its fields are mutable at runtime so the
@@ -20,6 +34,9 @@ type Registry struct {
 
 	minimaxKey     string // MiniMax (OpenAI-compatible) API key
 	minimaxBaseURL string // MiniMax base URL ("" = public default)
+
+	custom      map[string]CustomSpec // user-added providers, keyed by id
+	customOrder []string              // ids in catalog order
 }
 
 // NewRegistry creates a registry. It auto-detects the claude CLI on PATH.
@@ -73,6 +90,70 @@ func (r *Registry) SetMinimax(key, baseURL string) {
 	r.mu.Unlock()
 }
 
+// SetCustomProviders replaces the set of user-added providers (called from
+// applySettings whenever settings change).
+func (r *Registry) SetCustomProviders(list []CustomSpec) {
+	m := make(map[string]CustomSpec, len(list))
+	order := make([]string, 0, len(list))
+	for _, c := range list {
+		if c.ID == "" {
+			continue
+		}
+		m[c.ID] = c
+		order = append(order, c.ID)
+	}
+	r.mu.Lock()
+	r.custom = m
+	r.customOrder = order
+	r.mu.Unlock()
+}
+
+// CustomCatalog returns catalog entries for the user-added providers, in the
+// order they were registered. Availability is layered on by the API handler.
+func (r *Registry) CustomCatalog() []CatalogEntry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]CatalogEntry, 0, len(r.customOrder))
+	for _, id := range r.customOrder {
+		c := r.custom[id]
+		out = append(out, CatalogEntry{
+			ID:               c.ID,
+			Label:            c.Label,
+			NeedsKey:         true,
+			AllowCustomModel: true,
+			Models:           parseModelList(c.Models),
+		})
+	}
+	return out
+}
+
+// parseModelList turns a comma/newline separated id list into ModelInfo entries
+// (label = id). Blank entries are skipped.
+func parseModelList(s string) []ModelInfo {
+	fields := strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == '\n' || r == '\r' })
+	out := make([]ModelInfo, 0, len(fields))
+	for _, f := range fields {
+		id := strings.TrimSpace(f)
+		if id != "" {
+			out = append(out, ModelInfo{ID: id, Label: id})
+		}
+	}
+	return out
+}
+
+// buildCustom constructs a provider from a CustomSpec, choosing the transport
+// by Kind.
+func buildCustom(c CustomSpec) (Provider, error) {
+	if c.Key == "" {
+		return nil, fmt.Errorf("provider %q not configured (set an API key in Settings)", c.ID)
+	}
+	if c.Kind == "anthropic" {
+		endpoint := strings.TrimRight(strings.TrimSpace(c.BaseURL), "/") + "/messages"
+		return NewAnthropic(c.Key).WithEndpoint(c.ID, endpoint, c.DefaultModel), nil
+	}
+	return NewOpenAICompat(c.ID, c.Key, c.BaseURL, c.DefaultModel), nil
+}
+
 // MinimaxConfigured reports whether a MiniMax key is set.
 func (r *Registry) MinimaxConfigured() bool {
 	r.mu.RLock()
@@ -124,20 +205,28 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 // Available reports whether the provider id is registered and usable with the
 // current configuration (key set / CLI present). Used by the catalog handler.
 func (r *Registry) Available(id string) bool {
-	k, ok := lookupKind(id)
-	if !ok {
-		return false
+	if k, ok := lookupKind(id); ok {
+		return k.Available(r.resolve(id))
 	}
-	return k.Available(r.resolve(id))
+	r.mu.RLock()
+	c, ok := r.custom[id]
+	r.mu.RUnlock()
+	return ok && c.Key != ""
 }
 
 // Get returns a provider for the given name, or an error if unsupported
-// or unconfigured. It dispatches through the registered provider kinds; the
-// empty name maps to the keyless claude-cli default.
+// or unconfigured. It dispatches through the registered provider kinds first,
+// then user-added custom providers; the empty name maps to the keyless
+// claude-cli default.
 func (r *Registry) Get(name string) (Provider, error) {
-	k, ok := lookupKind(name)
-	if !ok {
-		return nil, fmt.Errorf("unknown provider: %q", name)
+	if k, ok := lookupKind(name); ok {
+		return k.Build(r.resolve(name))
 	}
-	return k.Build(r.resolve(name))
+	r.mu.RLock()
+	c, ok := r.custom[name]
+	r.mu.RUnlock()
+	if ok {
+		return buildCustom(c)
+	}
+	return nil, fmt.Errorf("unknown provider: %q", name)
 }

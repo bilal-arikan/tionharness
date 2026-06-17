@@ -11,6 +11,30 @@ const (
 	ThemeSystem = "system"
 )
 
+// CustomProvider is a user-added OpenAI- or Anthropic-compatible endpoint. Its
+// ID is used as a provider identifier (Agent.Provider) and must not collide
+// with a built-in. KeyEnc is AES-GCM and never serialized to the API.
+type CustomProvider struct {
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	Kind         string `json:"kind"`         // "openai" | "anthropic"
+	BaseURL      string `json:"baseUrl"`      // API base (no trailing path)
+	DefaultModel string `json:"defaultModel"` // applied when a request omits one
+	Models       string `json:"models"`       // optional model-id suggestions (comma/newline)
+	KeyEnc       string `json:"keyEnc"`       // AES-GCM, never exposed
+}
+
+// CustomProviderDTO is the masked, client-facing view of a CustomProvider.
+type CustomProviderDTO struct {
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	Kind         string `json:"kind"`
+	BaseURL      string `json:"baseUrl"`
+	DefaultModel string `json:"defaultModel"`
+	Models       string `json:"models"`
+	KeySet       bool   `json:"keySet"`
+}
+
 // Settings is the full, persisted configuration document. The encrypted
 // Anthropic key lives in AnthropicKeyEnc and is never serialized to the API
 // (json tag "-"); clients see only AnthropicKeySet via the DTO.
@@ -33,6 +57,11 @@ type Settings struct {
 	// MiniMax (OpenAI-compatible) provider.
 	MinimaxKeyEnc  string `json:"minimaxKeyEnc"` // AES-GCM, never exposed
 	MinimaxBaseURL string `json:"minimaxBaseUrl"`
+
+	// CustomProviders are user-added OpenAI- or Anthropic-compatible endpoints
+	// (OpenRouter, Gemini, Kimi, Ollama, ...). Each is selectable as a provider
+	// id alongside the built-ins; the key is AES-GCM encrypted like the others.
+	CustomProviders []CustomProvider `json:"customProviders"`
 
 	// Anthropic beta capabilities (anthropic provider only; claude-cli ignores).
 	OneMillionContext   bool `json:"oneMillionContext"`   // 1M-token context window beta
@@ -160,6 +189,8 @@ type DTO struct {
 	MinimaxKeySet         bool   `json:"minimaxKeySet"`
 	MinimaxBaseURL        string `json:"minimaxBaseUrl"`
 
+	CustomProviders []CustomProviderDTO `json:"customProviders"`
+
 	OneMillionContext   bool `json:"oneMillionContext"`
 	ExtendedPromptCache bool `json:"extendedPromptCache"`
 
@@ -222,6 +253,7 @@ func (s Settings) ToDTO() DTO {
 		AnthropicKeySet:       s.AnthropicKeyEnc != "",
 		MinimaxKeySet:         s.MinimaxKeyEnc != "",
 		MinimaxBaseURL:        s.MinimaxBaseURL,
+		CustomProviders:       customProvidersToDTO(s.CustomProviders),
 
 		OneMillionContext:   s.OneMillionContext,
 		ExtendedPromptCache: s.ExtendedPromptCache,
@@ -333,4 +365,21 @@ type Patch struct {
 	DelegationMaxCalls *int  `json:"delegationMaxCalls"`
 
 	LogLevel *string `json:"logLevel"`
+}
+
+// customProvidersToDTO masks the keys of a custom-provider list for the client.
+func customProvidersToDTO(in []CustomProvider) []CustomProviderDTO {
+	out := make([]CustomProviderDTO, 0, len(in))
+	for _, c := range in {
+		out = append(out, CustomProviderDTO{
+			ID:           c.ID,
+			Label:        c.Label,
+			Kind:         c.Kind,
+			BaseURL:      c.BaseURL,
+			DefaultModel: c.DefaultModel,
+			Models:       c.Models,
+			KeySet:       c.KeyEnc != "",
+		})
+	}
+	return out
 }
