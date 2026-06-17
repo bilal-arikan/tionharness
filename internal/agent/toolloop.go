@@ -367,7 +367,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 	if err != nil {
 		return nil, err
 	}
-	r.RecordUsage(ctx, agent.ID, resp.Usage)
+	r.RecordUsage(ctx, agent, resp.Model, resp.Usage)
 	return resp, nil
 }
 
@@ -393,6 +393,6 @@ func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm provide
 	if err != nil {
 		return nil, err
 	}
-	r.RecordUsage(ctx, agent.ID, resp.Usage)
+	r.RecordUsage(ctx, agent, resp.Model, resp.Usage)
 	return resp, nil
 }

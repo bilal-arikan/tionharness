@@ -20,10 +20,12 @@ import { ExecutionsPanel } from './components/panels/ExecutionsPanel'
 import { ArtifactsPanel } from './components/panels/ArtifactsPanel'
 import { SecretsPanel } from './components/panels/SecretsPanel'
 import { SkillsPanel } from './components/panels/SkillsPanel'
+import { BudgetPanel } from './components/panels/BudgetPanel'
 import { ChatMeters } from './components/panels/ChatMeters'
 import { SessionDetailPanel } from './components/sessions/SessionDetailPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { LogsPanel } from './components/panels/LogsPanel'
+import { isTypeEnabled } from './lib/notifyPrefs'
 import { useWorkspaces } from './hooks/useWorkspaces'
 import { useChatStream } from './hooks/useChatStream'
 import { useUrlSync } from './hooks/useUrlSync'
@@ -57,6 +59,7 @@ const VIEW_TITLE: Record<View, string> = {
   artifacts: 'Artifactlar',
   secrets: 'Sırlar',
   skills: 'Beceriler',
+  budget: 'Bütçe',
   logs: 'Loglar',
   settings: 'Ayarlar',
 }
@@ -87,6 +90,7 @@ export default function App() {
     switchWorkspace,
     createWorkspace,
     deleteActiveWorkspace,
+    deleteWorkspace,
     refreshWorkspaces,
   } = useWorkspaces(setError)
 
@@ -347,6 +351,9 @@ export default function App() {
     // its own reply notification); other event types raise a desktop
     // notification that deep-links to the target on click.
     if (e.type === 'chat') return
+    // Raise an OS toast only when the master toggle is on AND this event type is
+    // not muted in Settings (per-type preference, device-local).
+    if (!isTypeEnabled(e.type)) return
     notify(notifyEnabled.current, e.title, e.body, () => {
       const t = e.target || {}
       if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) {
@@ -518,6 +525,7 @@ export default function App() {
         unreadWorkspaceIds={unreadWs}
         onSwitchWorkspace={switchWorkspace}
         onCreateWorkspace={createWorkspace}
+        onDeleteWorkspace={deleteWorkspace}
       />
 
       {/* The agent/session list only applies to agent-scoped views. Board and
@@ -671,6 +679,7 @@ export default function App() {
         )}
         {view === 'secrets' && <SecretsPanel onError={setError} />}
         {view === 'skills' && <SkillsPanel onError={setError} />}
+        {view === 'budget' && <BudgetPanel onError={setError} />}
         {view === 'logs' && <LogsPanel onError={setError} />}
         {view === 'settings' && (
           <SettingsPanel
@@ -679,6 +688,7 @@ export default function App() {
             onWorkspaceChanged={refreshWorkspaces}
             onDeleteWorkspace={deleteActiveWorkspace}
             commands={chat.chatCommands}
+            onNavigate={setView}
           />
         )}
       </main>

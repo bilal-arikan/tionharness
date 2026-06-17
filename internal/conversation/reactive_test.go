@@ -31,7 +31,7 @@ func TestCompactInFlightMessages_FoldsAtAssistantBoundary(t *testing.T) {
 		msg(providers.RoleUser, "u4"), msg(providers.RoleAssistant, "a4"),
 		msg(providers.RoleUser, "u5"), msg(providers.RoleAssistant, "a5"),
 	}
-	out, ok, err := CompactInFlightMessages(context.Background(), stubProvider{summary: "SUM"}, db.Agent{}, msgs, 2)
+	out, ok, err := CompactInFlightMessages(context.Background(), nil, stubProvider{summary: "SUM"}, db.Agent{}, msgs, 2)
 	if err != nil || !ok {
 		t.Fatalf("ok=%v err=%v, want ok=true", ok, err)
 	}
@@ -50,7 +50,7 @@ func TestCompactInFlightMessages_FoldsAtAssistantBoundary(t *testing.T) {
 func TestCompactInFlightMessages_NoSafeBoundary(t *testing.T) {
 	// Too short to fold under keepRecent → no-op, ok=false, slice unchanged.
 	msgs := []providers.Message{msg(providers.RoleUser, "u1"), msg(providers.RoleAssistant, "a1")}
-	out, ok, err := CompactInFlightMessages(context.Background(), stubProvider{summary: "SUM"}, db.Agent{}, msgs, reactiveKeepRecentTest)
+	out, ok, err := CompactInFlightMessages(context.Background(), nil, stubProvider{summary: "SUM"}, db.Agent{}, msgs, reactiveKeepRecentTest)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}

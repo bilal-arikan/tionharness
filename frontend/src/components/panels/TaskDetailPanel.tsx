@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Loader2 } from 'lucide-react'
 import { api } from '../../api'
-import type { Agent, Task, Run, BoardState, Flow } from '../../types'
+import type { Agent, Task, Run, BoardState, Flow, TurnStep } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
+import { TurnSteps } from '../chat/TurnSteps'
+
+// Transient live-stream step kinds not worth rendering in the compact task panel
+// (incremental text/tool chunks, retractions, interactive prompts). The full
+// transcript — including the streamed answer — lands in the Activity view.
+const TRANSIENT_STEPS = new Set(['delta', 'tool_delta', 'tombstone', 'ask', 'steer'])
 
 const BOARD_STATES: { key: BoardState; label: string }[] = [
   { key: 'todo', label: 'Yapılacak' },
@@ -53,6 +59,8 @@ export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDelet
   const [saving, setSaving] = useState(false)
 
   const [running, setRunning] = useState(false)
+  // Live activity steps streamed while a run is in flight (cleared on each run).
+  const [liveSteps, setLiveSteps] = useState<TurnStep[]>([])
   const [retitling, setRetitling] = useState(false)
   const [runs, setRuns] = useState<Run[]>([])
   const [runsLoading, setRunsLoading] = useState(false)
@@ -109,17 +117,27 @@ export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDelet
     }
   }
 
-  // Run the task now; reflect the outcome on the board column + last status.
+  // Run the task now over SSE: stream live activity steps, then reflect the
+  // finished run on the board column + last status and prepend it to history.
   const run = async () => {
     setRunning(true)
+    setLiveSteps([])
     try {
-      const r = await api.runTask(task.id)
-      onSaved({
-        ...task,
-        boardState: r.status === 'success' ? 'done' : 'failed',
-        lastRunStatus: r.status,
+      await api.runTaskStream(task.id, {
+        onStep: (st) => {
+          if (TRANSIENT_STEPS.has(st.kind)) return
+          setLiveSteps((prev) => [...prev, st])
+        },
+        onReply: ({ run: r }) => {
+          onSaved({
+            ...task,
+            boardState: r.status === 'success' ? 'done' : 'failed',
+            lastRunStatus: r.status,
+          })
+          setRuns((prev) => [r, ...prev])
+        },
+        onError: (e) => onError(e),
       })
-      setRuns((prev) => [r, ...prev])
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -304,6 +322,22 @@ export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDelet
             <p className="mt-1 text-[11px] text-[var(--color-warning)]">
               Çalıştırma kayıtlı görevi kullanır — önce Kaydet.
             </p>
+          )}
+
+          {/* Live activity while the run streams. The full transcript (incl. the
+              streamed answer) is viewable in the Activity view. */}
+          {(running || liveSteps.length > 0) && (
+            <div className="mt-3 rounded border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+                {running && <Loader2 size={11} className="animate-spin text-[var(--color-accent)]" />}
+                Canlı etkinlik
+              </div>
+              {liveSteps.length > 0 ? (
+                <TurnSteps steps={liveSteps} />
+              ) : (
+                <p className="text-[11px] text-[var(--color-text-dim)]">Başlatılıyor…</p>
+              )}
+            </div>
           )}
         </Section>
 

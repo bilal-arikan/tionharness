@@ -1,7 +1,8 @@
 package db
 
 // Artifact kinds. The frontend picks a renderer per kind (markdown prose, code
-// with syntax highlighting, sandboxed HTML, raw text, inline SVG/Mermaid).
+// with syntax highlighting, sandboxed HTML, raw text, inline SVG/Mermaid, or a
+// media file rendered from SourcePath: image/video/audio, plus a generic file).
 const (
 	ArtifactMarkdown = "markdown"
 	ArtifactCode     = "code"
@@ -9,6 +10,12 @@ const (
 	ArtifactText     = "text"
 	ArtifactSVG      = "svg"
 	ArtifactMermaid  = "mermaid"
+	// Media/file kinds: the content lives on disk (a workspace-relative upload),
+	// referenced by SourcePath; Content holds an optional caption.
+	ArtifactImage = "image"
+	ArtifactVideo = "video"
+	ArtifactAudio = "audio"
+	ArtifactFile  = "file"
 )
 
 // Artifact is a substantial, self-contained piece of content an agent produced

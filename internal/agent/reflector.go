@@ -136,7 +136,7 @@ func (r *Runtime) reflect(ctx context.Context, agentID string, autonomous bool) 
 
 	// Usage is always recorded via guardedComplete; autonomous auto-reflects are
 	// additionally gated on pause + daily budget.
-	resp, err := r.guardedComplete(ctx, agent, providers.Request{
+	resp, err := r.guardedComplete(WithCallKind(ctx, KindReflect), agent, providers.Request{
 		Model:  agent.Model,
 		System: r.systemPrompt(agent),
 		Messages: []providers.Message{

@@ -80,6 +80,35 @@ export function useWorkspaces(setError: (msg: string) => void) {
     }
   }, [activeWorkspaceId, workspaces, setError])
 
+  // Delete any workspace by id (used by the switcher's per-row trash button).
+  // The backend forbids deleting the last one; if the active workspace is
+  // removed, switch to whatever remains.
+  const deleteWorkspace = useCallback(
+    async (id: string) => {
+      const target = workspaces.find((w) => w.id === id)
+      if (workspaces.length <= 1) {
+        setError('Son workspace silinemez.')
+        return
+      }
+      if (!confirm(`"${target?.name ?? 'Bu workspace'}" ve tüm verisi kalıcı olarak silinsin mi?`)) return
+      try {
+        await api.deleteWorkspace(id)
+        const remaining = workspaces.filter((w) => w.id !== id)
+        setWorkspaces(remaining)
+        if (id === activeWorkspaceId) {
+          const next = remaining[0]?.id ?? null
+          if (next) {
+            setActiveWorkspace(next)
+            setActiveWorkspaceId(next)
+          }
+        }
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [workspaces, activeWorkspaceId, setError],
+  )
+
   // Refresh the workspace list (e.g. after a rename in settings).
   const refreshWorkspaces = useCallback(() => {
     api.listWorkspaces().then(setWorkspaces).catch(() => {})
@@ -93,6 +122,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
     switchWorkspace,
     createWorkspace,
     deleteActiveWorkspace,
+    deleteWorkspace,
     refreshWorkspaces,
   }
 }

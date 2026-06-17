@@ -1,7 +1,20 @@
 // Artifacts — self-contained agent-produced content (documents, code, HTML,
 // diagrams) viewed in a dedicated screen. Not versioned: updates overwrite.
 
-export type ArtifactKind = 'markdown' | 'code' | 'html' | 'text' | 'svg' | 'mermaid'
+export type ArtifactKind =
+  | 'markdown'
+  | 'code'
+  | 'html'
+  | 'text'
+  | 'svg'
+  | 'mermaid'
+  // Media/file kinds: content lives on disk (a workspace-relative upload),
+  // referenced by `sourcePath`, and is rendered inline (image/video/audio) or
+  // shown as a stored-file card (file).
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'file'
 
 export interface Artifact {
   id: string

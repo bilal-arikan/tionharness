@@ -88,7 +88,7 @@ export function MemoryPanel({ agent, onError }: Props) {
     filter === 'all' ? memories : memories.filter((m) => m.kind === filter)
 
   return (
-    <div className="flex h-full flex-col p-4">
+    <div className="flex min-h-0 flex-1 flex-col p-4">
       {/* Add memory + reflect */}
       <div className="mb-3 flex gap-2">
         <input

@@ -365,7 +365,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 	}
 	// Heartbeat is autonomous → enforce the agent's daily budget. Tools run when
 	// the agent has them enabled.
-	resp, err := r.CompleteWithTools(ctx, agent, provider, providers.Request{
+	resp, err := r.CompleteWithTools(WithCallKind(ctx, KindHeartbeat), agent, provider, providers.Request{
 		Model:  agent.Model,
 		System: r.systemPrompt(agent),
 		Messages: []providers.Message{

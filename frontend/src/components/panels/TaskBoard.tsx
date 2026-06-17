@@ -92,7 +92,7 @@ export function TaskBoard({ agents, onError }: Props) {
   const selected = tasks.find((t) => t.id === selectedId) ?? null
 
   return (
-    <div className="flex h-full">
+    <div className="flex min-h-0 flex-1">
       <div className="flex h-full flex-1 flex-col overflow-hidden">
         {/* New task form */}
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">

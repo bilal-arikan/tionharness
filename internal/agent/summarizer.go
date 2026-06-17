@@ -56,7 +56,7 @@ func (r *Runtime) Summarize(ctx context.Context, agentID, kind string) (string, 
 	if override := r.tun.TitleModel(); override != "" {
 		model = override
 	}
-	resp, err := r.guardedComplete(ctx, agent, providers.Request{
+	resp, err := r.guardedComplete(WithCallKind(ctx, KindSummary), agent, providers.Request{
 		Model:  model,
 		System: r.readPrompt("summary"),
 		Messages: []providers.Message{

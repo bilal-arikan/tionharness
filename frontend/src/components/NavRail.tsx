@@ -12,6 +12,7 @@ import {
   KeyRound,
   ScrollText,
   Sparkles,
+  Wallet,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -21,7 +22,7 @@ import type { Workspace } from '../types'
 import { WorkspaceSwitcher } from './workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from './workspace/WorkspaceCreateModal'
 
-export type View = 'chat' | 'executions' | 'agents' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'artifacts' | 'secrets' | 'skills' | 'logs' | 'settings'
+export type View = 'chat' | 'executions' | 'agents' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'artifacts' | 'secrets' | 'skills' | 'budget' | 'logs' | 'settings'
 
 interface Props {
   view: View
@@ -31,6 +32,7 @@ interface Props {
   unreadWorkspaceIds: Set<string>
   onSwitchWorkspace: (id: string) => void
   onCreateWorkspace: (data: NewWorkspaceData) => void
+  onDeleteWorkspace: (id: string) => void
 }
 
 const NAV: { key: View; label: string; icon: LucideIcon }[] = [
@@ -45,6 +47,7 @@ const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'artifacts', label: 'Artifactlar', icon: FileCode },
   { key: 'secrets', label: 'Sırlar', icon: KeyRound },
   { key: 'skills', label: 'Beceriler', icon: Sparkles },
+  { key: 'budget', label: 'Bütçe', icon: Wallet },
   { key: 'logs', label: 'Loglar', icon: ScrollText },
 ]
 
@@ -80,6 +83,7 @@ export function NavRail({
   unreadWorkspaceIds,
   onSwitchWorkspace,
   onCreateWorkspace,
+  onDeleteWorkspace,
 }: Props) {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === '1',
@@ -125,6 +129,7 @@ export function NavRail({
           unreadIds={unreadWorkspaceIds}
           onSwitch={onSwitchWorkspace}
           onCreate={onCreateWorkspace}
+          onDelete={onDeleteWorkspace}
         />
       )}
 

@@ -1,14 +1,28 @@
 // The simple app-global setting categories (form fields only). The stateful
 // categories (providers, commands, step kinds, workspace) live in their own
 // files; these are pure draft+setter forms.
+import { useState } from 'react'
+import { Layers, Database, NotebookPen, LifeBuoy, Bell, type LucideIcon } from 'lucide-react'
 import type { AppSettings } from '../../types'
 import { THEME_PRESETS } from '../../lib/themePresets'
+import { NOTIFY_TYPES, mutedTypes, setTypeEnabled } from '../../lib/notifyPrefs'
 import { Field, Toggle, inputCls, type AppSet } from './primitives'
 
 interface PanelProps {
   draft: AppSettings
   set: AppSet
   setDraft: React.Dispatch<React.SetStateAction<AppSettings | null>>
+}
+
+// SubHead is a small icon + label group header used to organise a settings
+// panel into labelled sections (accent icon, matches the rail/header style).
+function SubHead({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5 pt-1 text-sm font-medium text-[var(--color-text)]">
+      <Icon size={14} className="text-[var(--color-accent)]" />
+      {children}
+    </div>
+  )
 }
 
 export function ProfilePanel({ draft, set }: PanelProps) {
@@ -29,10 +43,30 @@ export function ProfilePanel({ draft, set }: PanelProps) {
 }
 
 export function NotificationsPanel({ draft, set }: PanelProps) {
+  // Per-type toast preferences are device-local (localStorage), so they apply
+  // instantly — independent of the backend-persisted master toggle / Save.
+  const [muted, setMuted] = useState<Set<string>>(() => mutedTypes())
+  const toggleType = (type: string, on: boolean) => {
+    setTypeEnabled(type, on)
+    setMuted((prev) => {
+      const next = new Set(prev)
+      if (on) next.delete(type)
+      else next.add(type)
+      return next
+    })
+  }
   return (
     <>
-      <Toggle label="Masaüstü bildirimleri" hint="Pencere arkadayken asistan cevabı gelince tarayıcı bildirimi gösterir (izin ister)." checked={draft.desktopNotifications} onChange={(v) => set('desktopNotifications', v)} />
+      <Toggle label="Masaüstü bildirimleri" hint="Pencere arkadayken olay gerçekleşince tarayıcı bildirimi gösterir (izin ister)." checked={draft.desktopNotifications} onChange={(v) => set('desktopNotifications', v)} />
       <Toggle label="Ekranı açık tut" hint="Uygulama açıkken ekran uyku moduna geçmez (Wake Lock)." checked={draft.keepAwake} onChange={(v) => set('keepAwake', v)} />
+
+      <SubHead icon={Bell}>Bildirim türleri</SubHead>
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
+        Bir türü kapatınca o olay için masaüstü bildirimi gösterilmez. Bu ayarlar bu cihaza özeldir ve anında uygulanır.
+      </p>
+      {NOTIFY_TYPES.map((t) => (
+        <Toggle key={t.type} label={t.label} hint={t.hint} checked={!muted.has(t.type)} onChange={(v) => toggleType(t.type, v)} />
+      ))}
     </>
   )
 }
@@ -96,19 +130,28 @@ export function AppearancePanel({ draft, set, setDraft }: PanelProps) {
 export function ContextPanel({ draft, set }: PanelProps) {
   return (
     <>
+      <SubHead icon={Layers}>Bağlam penceresi</SubHead>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Maks. bağlam token" hint="Aşılınca eski turlar özetlenir."><input type="number" value={draft.maxContextTokens} onChange={(e) => set('maxContextTokens', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Korunan son mesaj" hint="Her zaman aynen gönderilir."><input type="number" value={draft.keepRecentMsgs} onChange={(e) => set('keepRecentMsgs', Number(e.target.value))} className={inputCls} /></Field>
+      </div>
+
+      <SubHead icon={Database}>Hafıza geri çağırma (recall)</SubHead>
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Recall sonuç sayısı (top-N)"><input type="number" value={draft.recallTopN} onChange={(e) => set('recallTopN', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Recall min skor" hint="0–1 arası benzerlik eşiği."><input type="number" step="0.01" value={draft.recallMinScore} onChange={(e) => set('recallMinScore', Number(e.target.value))} className={inputCls} /></Field>
+      </div>
+
+      <SubHead icon={NotebookPen}>Günlük & yansıma</SubHead>
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Günlük kayıt limiti" hint="Ajan başına saklanan en yeni journal sayısı; eskiler budanır."><input type="number" value={draft.journalCap} onChange={(e) => set('journalCap', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Günlük kayıt uzunluğu" hint="Tek bir journal kaydı için maks. karakter."><input type="number" value={draft.journalMaxLen} onChange={(e) => set('journalMaxLen', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Otomatik yansıma eşiği" hint="Journal sayısı bunu aşınca dream cycle kendiliğinden tetiklenir."><input type="number" value={draft.autoReflectThreshold} onChange={(e) => set('autoReflectThreshold', Number(e.target.value))} className={inputCls} /></Field>
       </div>
       <Toggle label="Otomatik yansıma (dream cycle)" hint="Journal eşiği aşılınca ajan kendi günlüğünü arka planda özetler ve özetlenen kayıtları siler. Otonom çağrı sayılır: duraklatma ve günlük bütçeye saygı gösterir." checked={draft.autoReflect} onChange={(v) => set('autoReflect', v)} />
 
-
-      <div className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+      <SubHead icon={LifeBuoy}>Tur kurtarma & sıkıştırma</SubHead>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
         <span className="font-medium text-[var(--color-text)]">Tur kurtarma (A1).</span> Ajanın araç döngüsü "mutlu yol" dışına çıktığında turu yapısal olarak kurtarır: modelin
         cevabı çıktı-token limitine takılırsa kaldığı yerden <em>sürdürür</em> (parçalar tek cevapta birleştirilir), bağlam penceresi taşarsa eski mesajları
         özetleyip turu <em>yeniden dener</em>. Her kurtarma tek-atımlıktır, sonsuz döngü olmaz. Yalnız native (Anthropic/MiniMax) yolunda etkilidir; claude-cli kendi döngüsünü sürdürür.

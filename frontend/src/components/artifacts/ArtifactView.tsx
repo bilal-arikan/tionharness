@@ -1,17 +1,22 @@
+import { File as FileIcon } from 'lucide-react'
 import type { ArtifactKind } from '../../types'
 import { Markdown } from '../markdown/Markdown'
 import { CodeBlock } from '../markdown/CodeBlock'
+import { fileURL } from '../../lib/attachments'
 
 interface Props {
   kind: ArtifactKind
   language?: string
   content: string
+  // Workspace-relative path for media/file kinds (image/video/audio/file).
+  sourcePath?: string
 }
 
 // ArtifactView renders an artifact's content according to its kind: markdown
 // prose, syntax-highlighted code, sandboxed HTML, inline SVG, a Mermaid source
-// block, or plain text. Used by the artifacts screen and the version preview.
-export function ArtifactView({ kind, language, content }: Props) {
+// block, plain text, or a media file (image/video/audio) served from sourcePath.
+// Used by the artifacts screen and the version preview.
+export function ArtifactView({ kind, language, content, sourcePath }: Props) {
   switch (kind) {
     case 'markdown':
       return <Markdown>{content}</Markdown>
@@ -39,6 +44,56 @@ export function ArtifactView({ kind, language, content }: Props) {
     case 'mermaid':
       // No Mermaid renderer bundled yet — show the source so it's still useful.
       return <CodeBlock code={content} lang="mermaid" />
+    case 'image': {
+      const url = fileURL(sourcePath)
+      return url ? (
+        <div className="flex justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+          <img src={url} alt={content || 'image artifact'} className="max-h-[70vh] max-w-full rounded" />
+        </div>
+      ) : (
+        <MissingMedia />
+      )
+    }
+    case 'video': {
+      const url = fileURL(sourcePath)
+      return url ? (
+        <div className="flex justify-center rounded-lg border border-[var(--color-border)] bg-black p-2">
+          <video src={url} controls className="max-h-[70vh] max-w-full rounded" />
+        </div>
+      ) : (
+        <MissingMedia />
+      )
+    }
+    case 'audio': {
+      const url = fileURL(sourcePath)
+      return url ? (
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+          <audio src={url} controls className="w-full" />
+        </div>
+      ) : (
+        <MissingMedia />
+      )
+    }
+    case 'file': {
+      const url = fileURL(sourcePath)
+      return (
+        <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+          <FileIcon size={28} className="shrink-0 text-[var(--color-text-dim)]" />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium">{content || sourcePath || 'Dosya'}</div>
+            <div className="text-xs text-[var(--color-text-dim)]">
+              {url ? (
+                <a href={url} target="_blank" rel="noreferrer" className="text-[var(--color-accent)] hover:underline">
+                  Aç / indir
+                </a>
+              ) : (
+                'Çalışma alanında saklı dosya'
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    }
     default:
       return (
         <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-sm leading-relaxed">
@@ -46,4 +101,13 @@ export function ArtifactView({ kind, language, content }: Props) {
         </pre>
       )
   }
+}
+
+// MissingMedia is shown when a media artifact has no resolvable source path.
+function MissingMedia() {
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-sm text-[var(--color-text-dim)]">
+      Medya dosyası bulunamadı (kaynak yol eksik).
+    </div>
+  )
 }

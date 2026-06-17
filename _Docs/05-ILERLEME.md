@@ -2,6 +2,79 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Özel sağlayıcılar (data-instance) + `<think>` ayıklama ✅ (2026-06-17)
+
+**(2) `<think>` ayıklama (commit `7273a62`):** MiniMax (ve bazı OpenAI-uyumlu
+modeller) görünür metne `<think>…</think>` gömüyor. Yeni `providers/think.go`
+`thinkFilter` (chunk-sınırı toleranslı durum makinesi) reasoning'i ayırır →
+`Complete`'te thinking TraceStep'e, `Stream`'de `DeltaThinking`'e yönlendirir;
+tag içermeyen modeller değişmeden geçer. `think_test.go` (chunk-bölünmüş tag dahil).
+
+**(1) Özel sağlayıcılar — data-instance modeli (backend commit `35ec373`):**
+Built-in'lere dokunmadan, migration'sız, kullanıcı **OpenAI- veya Anthropic-uyumlu
+herhangi bir ucu** (OpenRouter/Gemini/Kimi/Ollama…) ekleyip ajan sağlayıcısı
+olarak seçebilir. **settings:** `CustomProvider{id,label,kind,baseUrl,defaultModel,
+models,keyEnc}` + maskeli DTO; store CRUD (`UpsertCustomProvider`/`DeleteCustomProvider`/
+`CustomProviderKey`) — id doğrulama (`providerIDRe`), reserved-id guard, write-only
+key. **registry:** `SetCustomProviders` + `Get`/`Available` custom dalı;
+`buildCustom` transport'u kind'a göre seçer (openai→`OpenAICompat`, anthropic→
+`Anthropic.WithEndpoint`); `CustomCatalog` katalogla birleşir. **api:**
+`GET/PUT/DELETE /api/providers` + `customProviderSpecs`; catalog handler merge.
+**Canlı doğrulandı** (registry→custom spec→client) iki kind için MiniMax `/v1` ve
+`/anthropic/v1`'e karşı: tool_use round-trip. Store CRUD birim testi (doğrulama,
+key koruma, reopen kalıcılığı). **server.go wiring (route + applySettings) COMMITSİZ**
+— başka oturum WIP'iyle iç içe; reconcile'da gidecek.
+
+**Frontend (COMMITSİZ — intertwined):** `api/providers.ts` (CRUD client) + barrel;
+`ProvidersPanel`'e **Özel sağlayıcılar** bölümü (liste + ekle/düzenle/sil formu:
+id/label/kind/baseURL/model/models/key) **ve** (önceki tur) API key alanlarında
+Secrets içe-aktarma. `tsc` benim dosyalarımda temiz (`ArtifactsPanel` hatası başka
+oturuma ait). `App.tsx`/`SettingsPanel.tsx`/`ProvidersPanel.tsx` başka WIP ile iç içe
+→ reconcile'a bırakıldı.
+
+**Provider key'leri yalnız Sır kasasından (2026-06-17, frontend COMMITSİZ):** Kullanıcı
+isteğiyle ayarlarda provider anahtarları **artık textfield ile girilemez** — yalnız
+sır kasasından seçilir. Yeni `ProviderKeyField` (seçim-only dropdown + Sil + "Sırlar →"),
+Anthropic/MiniMax için kullanılır; seçim `applyKey`(SettingsPanel, yeni) ile **anında**
+`updateSettings`'e yazılır. Custom provider formunda key alanı da seçim-only (`SecretSource`).
+`keyInput`/`minimaxKeyInput` textfield'ları kaldırıldı. **Canlı (8090, yeni binary):**
+OpenRouter token'ı sır kasasına eklendi (`OPENROUTER_API_KEY`), oradan değer alınıp
+`openrouter` custom provider'ı (`kind=openai`, `openrouter.ai/api/v1`, `gpt-4o-mini`)
+PUT edildi; `test-provider`→`{ok:true, model:gpt-4o-mini, sample:OK}`. Frontend UI
+binary'e gömülü bundle rebuild gerektirir (şu an `ArtifactsPanel` WIP hatası `vite build`'i tıkıyor).
+
+## Faz B3 — Provider/Model Bazlı Kullanım + Ücretlendirme ✅ (2026-06-17)
+
+**İstek:** Bütçe ekranına provider'a göre token kullanımı ve **maliyet hesabı**.
+
+**Veri boşluğu:** Kullanım kayıtları model/provider tutmuyordu. Eklendi:
+- `db.Usage.ByModel map[string]KindStat` — `"<provider>|<model>"` anahtarlı
+  (`db.ModelKey`); `AddUsageKind` artık `provider, model` parametreleri alıyor ve
+  ByKind'in yanında ByModel'i de günceller. `RecordUsage(ctx, agent, model, usage)`
+  (model boşsa `agent.Model`), compaction `recordCompaction` provider+model damgalı.
+- **Fiyat tablosu** `providers/pricing.go`: `Price{InputPerMTok, OutputPerMTok}` (USD),
+  `PriceFor(provider, model)`. anthropic (opus 15/75, sonnet 3/15, haiku 1/5, fable
+  3/15) + minimax (M2.1 0.30/1.20, lightning 0.20/0.80, M2 0.30/1.20); `minimax-anthropic`
+  minimax tablosunu paylaşır. **claude-cli kasıtlı yok** → abonelik (OAuth), token
+  başına ücret yok; `PriceFor` `ok=false` döner → UI "abonelik / fiyatsız" gösterir.
+  Fiyatlar **liste-fiyatı tahmini** (prompt-cache/batch indirimi modellenmez).
+
+**API** (`/api/usage`): yanıt artık `byProvider[]` (provider başına çağrı/token/
+`costUSD`/`priced`), `totals.costUSD`+`totals.priced`, ajan satırında `provider`+
+`costUSD`+`priced`. `priced=false` = harcamanın bir kısmı fiyatsız (abonelik/özel).
+
+**Frontend:** `types/usage.ts` (`ProviderStat`, totals/agent cost alanları);
+`BudgetPanel`: "Tahmini maliyet (bugün)" özet kartı, **"Provider'a göre" tablosu**
+(maliyet veya "abonelik / fiyatsız"), ajan tablosuna **Maliyet** sütunu.
+
+**Doğrulama:** `go build`/`vet`/`test` + `tsc`/`vite` yeşil; `store_usage_test`'e
+ByModel iddiası eklendi. **Canlı API smoke:** anthropic opus 100k/20k → `$3.00`
+(0.1×15 + 0.02×75) doğru hesaplandı; claude-cli → `priced=false` abonelik; toplam +
+byProvider + ajan maliyeti tutarlı.
+
+**Sıradaki:** fiyatların Ayarlar'dan düzenlenebilmesi; TL kuru; model-bazlı detay
+satırı; prompt-cache indirimini modelleme.
+
 ## external-agent incelemesi P0+P1 fix'leri (CG-1…CG-5) ✅ (2026-06-17)
 
 `_Docs/13-CRAFT-AGENTS-INCELEME.md`'deki 4 P0 + 1 P1 boşluğu kapatıldı

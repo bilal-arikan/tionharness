@@ -35,11 +35,18 @@ func (r *Runtime) ensureBudget(ctx context.Context, agent db.Agent) error {
 	return nil
 }
 
-// RecordUsage adds one call and its token usage to the agent's daily counters.
-// Failures are non-fatal and only logged.
-func (r *Runtime) RecordUsage(ctx context.Context, agentID string, u providers.Usage) {
-	if err := r.db.AddUsage(ctx, agentID, 1, u.InputTokens, u.OutputTokens); err != nil {
-		r.logger.Warn("record usage failed", "agent", agentID, "error", err)
+// RecordUsage adds one call and its token usage to the agent's daily counters,
+// attributed to the call origin stamped on ctx (KindChat by default) and the
+// provider+model that served it (for cost). Because every funnel —
+// guardedComplete, recordedComplete, recordedStream — records through here,
+// tagging the context at each entry point is enough to break the whole daily
+// spend down by origin and model. Failures are non-fatal and only logged.
+func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string, u providers.Usage) {
+	if model == "" {
+		model = agent.Model
+	}
+	if err := r.db.AddUsageKind(ctx, agent.ID, string(callKindFrom(ctx)), agent.Provider, model, 1, u.InputTokens, u.OutputTokens); err != nil {
+		r.logger.Warn("record usage failed", "agent", agent.ID, "error", err)
 	}
 }
 
@@ -63,6 +70,6 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 	if err != nil {
 		return nil, err
 	}
-	r.RecordUsage(ctx, agent.ID, resp.Usage)
+	r.RecordUsage(ctx, agent, resp.Model, resp.Usage)
 	return resp, nil
 }

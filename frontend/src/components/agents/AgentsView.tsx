@@ -63,7 +63,7 @@ export function AgentsView({
   }
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex min-h-0 flex-1">
       {/* Left: roster */}
       <div className="flex w-64 shrink-0 flex-col border-r border-[var(--color-border)]">
         <div className="flex items-center justify-between px-4 pt-4 pb-1">

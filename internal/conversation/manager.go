@@ -93,7 +93,7 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	compacted := false
 	if EstimateTokens(summary, pending) > maxTokens && len(pending) > keepRecent {
 		fold := pending[:len(pending)-keepRecent]
-		newSummary, err := m.summarize(ctx, provider, agent, summary, fold)
+		newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
 		if err != nil {
 			return Prepared{}, err
 		}
@@ -131,7 +131,7 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 		return 0, summary, nil // not enough to compact
 	}
 	fold := pending[:len(pending)-keepRecent]
-	newSummary, err := m.summarize(ctx, provider, agent, summary, fold)
+	newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
 	if err != nil {
 		return 0, "", err
 	}
@@ -142,8 +142,11 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	return len(fold), newSummary, nil
 }
 
-// summarize folds messages into the existing summary via the provider.
-func (m *Manager) summarize(ctx context.Context, provider providers.Provider, agent db.Agent, existing string, msgs []db.Message) (string, error) {
+// summarize folds messages into the existing summary via the provider. The
+// compaction call spends real tokens, so its usage is recorded against the
+// agent under UsageKindCompact — otherwise rolling-summary spend would be
+// invisible to the daily meter and budget planning.
+func (m *Manager) summarize(ctx context.Context, database *db.DB, provider providers.Provider, agent db.Agent, existing string, msgs []db.Message) (string, error) {
 	var b strings.Builder
 	for _, msg := range msgs {
 		b.WriteString(msg.Role)
@@ -163,7 +166,19 @@ func (m *Manager) summarize(ctx context.Context, provider providers.Provider, ag
 	if err != nil {
 		return "", err
 	}
+	recordCompaction(ctx, database, agent, resp.Usage)
 	return strings.TrimSpace(resp.Text), nil
+}
+
+// recordCompaction attributes a compaction provider call's token usage to the
+// agent's daily counters under UsageKindCompact, tagged with the agent's
+// provider+model for cost. Nil-safe and non-fatal: a counting failure must
+// never break the turn it was compacting for.
+func recordCompaction(ctx context.Context, database *db.DB, agent db.Agent, u providers.Usage) {
+	if database == nil {
+		return
+	}
+	_ = database.AddUsageKind(ctx, agent.ID, db.UsageKindCompact, agent.Provider, agent.Model, 1, u.InputTokens, u.OutputTokens)
 }
 
 // toProviderMessages maps stored user/assistant turns to provider messages,

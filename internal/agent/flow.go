@@ -30,6 +30,7 @@ func (f flowRunner) RunAgentNode(ctx context.Context, agentID, prompt string) (s
 // completion. Manual runs (autonomous=false) are not budget-gated. obs is an
 // optional progress observer (nil for no live events) used by the streaming path.
 func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous bool, obs orchestration.Observer) (db.FlowRun, error) {
+	ctx = WithCallKind(ctx, KindFlow) // every node's provider call is attributed to orchestration
 	flow, err := r.db.GetFlow(ctx, flowID)
 	if err != nil {
 		return db.FlowRun{}, err

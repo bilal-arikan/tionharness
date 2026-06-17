@@ -23,7 +23,7 @@ import (
 // tool_result. When no safe boundary exists (history too short, or all foldable
 // turns are user turns) it folds nothing and reports ok=false so the caller can
 // fall back to surfacing the original error.
-func CompactInFlightMessages(ctx context.Context, provider providers.Provider, agent db.Agent, msgs []providers.Message, keepRecent int) (out []providers.Message, ok bool, err error) {
+func CompactInFlightMessages(ctx context.Context, database *db.DB, provider providers.Provider, agent db.Agent, msgs []providers.Message, keepRecent int) (out []providers.Message, ok bool, err error) {
 	if keepRecent < 1 {
 		keepRecent = 1
 	}
@@ -41,7 +41,7 @@ func CompactInFlightMessages(ctx context.Context, provider providers.Provider, a
 	if cut <= 0 {
 		return msgs, false, nil
 	}
-	summary, err := summarizeProviderMessages(ctx, provider, agent, msgs[:cut])
+	summary, err := summarizeProviderMessages(ctx, database, provider, agent, msgs[:cut])
 	if err != nil {
 		return nil, false, err
 	}
@@ -57,7 +57,7 @@ func CompactInFlightMessages(ctx context.Context, provider providers.Provider, a
 // summarizeProviderMessages renders provider messages (text plus a terse note of
 // any tool calls/results) into the compact prompt and asks the model for a single
 // rolling summary. Mirrors Manager.summarize but works on provider messages.
-func summarizeProviderMessages(ctx context.Context, provider providers.Provider, agent db.Agent, msgs []providers.Message) (string, error) {
+func summarizeProviderMessages(ctx context.Context, database *db.DB, provider providers.Provider, agent db.Agent, msgs []providers.Message) (string, error) {
 	var b strings.Builder
 	for _, m := range msgs {
 		b.WriteString(m.Role)
@@ -84,5 +84,6 @@ func summarizeProviderMessages(ctx context.Context, provider providers.Provider,
 	if err != nil {
 		return "", err
 	}
+	recordCompaction(ctx, database, agent, resp.Usage)
 	return strings.TrimSpace(resp.Text), nil
 }

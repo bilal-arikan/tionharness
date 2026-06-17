@@ -211,7 +211,7 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	}); err != nil {
 		return session.ID, err
 	}
-	output, steps, err := s.rt.invokeTraced(ctx, agent, sc.Prompt, true) // scheduled = autonomous
+	output, steps, err := s.rt.invokeTraced(WithCallKind(ctx, KindSchedule), agent, sc.Prompt, true) // scheduled = autonomous
 	if err != nil {
 		// Surface the failure inside the schedule thread itself, not just in the
 		// delivery status/logs — otherwise the user opens the session and sees

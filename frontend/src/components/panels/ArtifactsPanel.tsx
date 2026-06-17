@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   FileText, Code2, Globe, Image, GitBranch, FileCode,
+  FileVideo, FileAudio, File as FileIcon, UploadCloud,
   Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -26,6 +27,10 @@ const KIND_ICON: Record<ArtifactKind, LucideIcon> = {
   text: FileText,
   svg: Image,
   mermaid: GitBranch,
+  image: Image,
+  video: FileVideo,
+  audio: FileAudio,
+  file: FileIcon,
 }
 
 const KIND_LABEL: Record<ArtifactKind, string> = {
@@ -35,9 +40,40 @@ const KIND_LABEL: Record<ArtifactKind, string> = {
   text: 'Metin',
   svg: 'SVG',
   mermaid: 'Mermaid',
+  image: 'Görsel',
+  video: 'Video',
+  audio: 'Ses',
+  file: 'Dosya',
 }
 
+// Manually creatable kinds (text-based). Media/file kinds arrive via drag-drop.
 const KINDS: ArtifactKind[] = ['markdown', 'code', 'html', 'text', 'svg', 'mermaid']
+
+// Media/file kinds whose body lives on disk (sourcePath), not in an editable
+// text field — these are added by dropping files, not typed.
+const MEDIA_KINDS = new Set<ArtifactKind>(['image', 'video', 'audio', 'file'])
+const isMediaKind = (k: ArtifactKind) => MEDIA_KINDS.has(k)
+
+// artifactKindForUpload maps an uploaded attachment (coarse backend kind + name)
+// to the artifact kind used to render it. Media stays media; small text/code/
+// markdown gets its native renderer; everything else is a stored file card.
+function artifactKindForUpload(att: { kind: string; name: string; textContent?: string }): ArtifactKind {
+  switch (att.kind) {
+    case 'image':
+      return 'image'
+    case 'video':
+      return 'video'
+    case 'audio':
+      return 'audio'
+  }
+  const lower = att.name.toLowerCase()
+  if (att.textContent) {
+    if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown'
+    if (att.kind === 'code') return 'code'
+    if (att.kind === 'text') return 'text'
+  }
+  return 'file'
+}
 
 // Draft holds the editable fields while creating or editing an artifact.
 interface Draft {
@@ -58,6 +94,11 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // Edit/create state. When `draft` is set the viewer becomes an editor.
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
+  // Drag-and-drop file import state. dragDepth tracks nested dragenter/leave so
+  // the overlay does not flicker when dragging over child elements.
+  const [dragging, setDragging] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const dragDepth = useRef(0)
 
   const reload = useCallback(() => {
     api
@@ -160,13 +201,89 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
     })
   }, [active])
 
+  // Import dropped files: upload each into the workspace, then create an artifact
+  // pointing at it (media renders inline; small text/code keeps its content).
+  const importFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return
+      setImporting(true)
+      let firstId: string | null = null
+      try {
+        for (const file of files) {
+          try {
+            // A fixed "artifacts" bucket — these uploads are not tied to a chat session.
+            const att = await api.uploadFile('artifacts', file)
+            const kind = artifactKindForUpload(att)
+            const created = await api.createArtifact({
+              title: att.name,
+              kind,
+              content: att.textContent ?? '',
+              // Media/file kinds reference the file on disk; text/code embed content.
+              sourcePath: isMediaKind(kind) ? att.relPath : undefined,
+            })
+            if (!firstId) firstId = created.id
+          } catch (e) {
+            onError(`"${file.name}" eklenemedi: ${(e as Error).message}`)
+          }
+        }
+        reload()
+        if (firstId) setActiveId(firstId)
+      } finally {
+        setImporting(false)
+      }
+    },
+    [onError, reload],
+  )
+
+  // Drag-and-drop handlers (depth-counted so nested elements don't flicker).
+  const onDragEnter = useCallback((e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer.types).includes('Files')) return
+    e.preventDefault()
+    dragDepth.current += 1
+    setDragging(true)
+  }, [])
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    if (Array.from(e.dataTransfer.types).includes('Files')) e.preventDefault()
+  }, [])
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer.types).includes('Files')) return
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragging(false)
+  }, [])
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      dragDepth.current = 0
+      setDragging(false)
+      const files = Array.from(e.dataTransfer.files)
+      if (files.length) void importFiles(files)
+    },
+    [importFiles],
+  )
+
   const creator = (a: Artifact) => agents.find((ag) => ag.id === a.agentId) ?? null
 
   const iconBtn =
     'rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div
+      className="relative flex min-h-0 flex-1"
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {/* Drop overlay */}
+      {(dragging || importing) && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 border-2 border-dashed border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_12%,var(--color-bg))]/90 backdrop-blur-sm">
+          <UploadCloud size={40} className="text-[var(--color-accent)]" />
+          <p className="text-sm font-medium text-[var(--color-text)]">
+            {importing ? 'Ekleniyor…' : 'Dosyaları bırak — resim, video, ses veya dosya'}
+          </p>
+        </div>
+      )}
+
       {/* List */}
       <div className="flex w-72 flex-shrink-0 flex-col border-r border-[var(--color-border)]">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
@@ -186,7 +303,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
               <FileCode size={28} className="opacity-40" />
               <p>
-                Henüz artifact yok. Bir oturumda dosya/doküman ürettiğinde otomatik buraya düşer; ya da <strong>Yeni</strong> ile elle ekle.
+                Henüz artifact yok. Bir oturumda dosya/doküman ürettiğinde otomatik buraya düşer; <strong>Yeni</strong> ile elle ekle; ya da <strong>resim/video/ses dosyalarını buraya sürükle-bırak</strong>.
               </p>
             </div>
           )}
@@ -296,17 +413,19 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     placeholder="Başlık"
                     className="min-w-48 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm"
                   />
-                  <select
-                    value={draft.kind}
-                    onChange={(e) => setDraft({ ...draft, kind: e.target.value as ArtifactKind })}
-                    className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
-                  >
-                    {KINDS.map((k) => (
-                      <option key={k} value={k}>
-                        {KIND_LABEL[k]}
-                      </option>
-                    ))}
-                  </select>
+                  {!isMediaKind(draft.kind) && (
+                    <select
+                      value={draft.kind}
+                      onChange={(e) => setDraft({ ...draft, kind: e.target.value as ArtifactKind })}
+                      className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
+                    >
+                      {KINDS.map((k) => (
+                        <option key={k} value={k}>
+                          {KIND_LABEL[k]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   {draft.kind === 'code' && (
                     <input
                       value={draft.language}
@@ -316,20 +435,43 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     />
                   )}
                 </div>
-                <textarea
-                  value={draft.content}
-                  onChange={(e) => setDraft({ ...draft, content: e.target.value })}
-                  placeholder="İçerik…"
-                  spellCheck={false}
-                  className="min-h-[40vh] flex-1 resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed"
-                />
-                <p className="text-[11px] text-[var(--color-text-dim)]">
-                  Kaydedince içerik yerinde güncellenir.
-                </p>
+                {isMediaKind(draft.kind) ? (
+                  <>
+                    <div className="flex-1 overflow-y-auto">
+                      <ArtifactView
+                        kind={active.kind}
+                        language={active.language}
+                        content={active.content}
+                        sourcePath={active.sourcePath}
+                      />
+                    </div>
+                    <p className="text-[11px] text-[var(--color-text-dim)]">
+                      Medya dosyasının içeriği düzenlenemez — yalnız başlığı değiştirebilirsin.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <textarea
+                      value={draft.content}
+                      onChange={(e) => setDraft({ ...draft, content: e.target.value })}
+                      placeholder="İçerik…"
+                      spellCheck={false}
+                      className="min-h-[40vh] flex-1 resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed"
+                    />
+                    <p className="text-[11px] text-[var(--color-text-dim)]">
+                      Kaydedince içerik yerinde güncellenir.
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <ArtifactView kind={active.kind} language={active.language} content={active.content} />
+                <ArtifactView
+                kind={active.kind}
+                language={active.language}
+                content={active.content}
+                sourcePath={active.sourcePath}
+              />
               </div>
             )}
           </>

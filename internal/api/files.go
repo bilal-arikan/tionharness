@@ -7,10 +7,12 @@ import (
 	"strings"
 )
 
-// servableExt is the allowlist of file extensions the chat UI may load inline
-// (images shown in messages). We intentionally do not serve arbitrary files —
-// only media the renderer knows how to display.
+// servableExt is the allowlist of file extensions the chat UI / artifacts screen
+// may load inline (images, video and audio). We intentionally do not serve
+// arbitrary files — only media the renderer knows how to display. http.ServeContent
+// handles HTTP range requests, so <video>/<audio> seeking works out of the box.
 var servableExt = map[string]string{
+	// Images.
 	".png":  "image/png",
 	".jpg":  "image/jpeg",
 	".jpeg": "image/jpeg",
@@ -20,6 +22,21 @@ var servableExt = map[string]string{
 	".bmp":  "image/bmp",
 	".ico":  "image/x-icon",
 	".avif": "image/avif",
+	// Video.
+	".mp4":  "video/mp4",
+	".m4v":  "video/x-m4v",
+	".webm": "video/webm",
+	".ogv":  "video/ogg",
+	".mov":  "video/quicktime",
+	".mkv":  "video/x-matroska",
+	// Audio.
+	".mp3":  "audio/mpeg",
+	".wav":  "audio/wav",
+	".m4a":  "audio/mp4",
+	".oga":  "audio/ogg",
+	".ogg":  "audio/ogg",
+	".flac": "audio/flac",
+	".aac":  "audio/aac",
 }
 
 // handleServeFile streams a local image file referenced by chat content so the

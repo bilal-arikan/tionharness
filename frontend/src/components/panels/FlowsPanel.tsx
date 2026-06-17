@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { api } from '../../api'
+import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../../types'
 
@@ -36,6 +38,9 @@ export function FlowsPanel({ agents, onError }: Props) {
   const [input, setInput] = useState('')
   const [running, setRunning] = useState(false)
   const [run, setRun] = useState<FlowRun | null>(null)
+  // Live per-node progress streamed while the flow runs (one entry per node;
+  // output filled on "done"). Shown until the final persisted run arrives.
+  const [liveNodes, setLiveNodes] = useState<FlowNodeEvent[]>([])
 
   const loadFlows = useCallback(() => {
     api.listFlows().then(setFlows).catch((e) => onError(e.message))
@@ -125,10 +130,23 @@ export function FlowsPanel({ agents, onError }: Props) {
     if (!selectedId) return
     setRunning(true)
     setRun(null)
+    setLiveNodes([])
     try {
       await saveFlow() // persist edits before running
-      const r = await api.runFlow(selectedId, input)
-      setRun(r)
+      await api.runFlowStreamStandalone(selectedId, input, {
+        // Each node: add a pending entry on "start", fill its output on "done".
+        onNode: (ev) =>
+          setLiveNodes((prev) => {
+            if (ev.phase === 'start') return [...prev, ev]
+            const i = prev.findIndex((n) => n.nodeId === ev.nodeId && n.output === undefined)
+            if (i < 0) return [...prev, ev]
+            const next = [...prev]
+            next[i] = ev
+            return next
+          }),
+        onReply: (r) => setRun(r.run),
+        onError: (e) => onError(e),
+      })
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -151,7 +169,7 @@ export function FlowsPanel({ agents, onError }: Props) {
   const agentNodes = nodes.filter((n) => n.type === 'agent')
 
   return (
-    <div className="flex h-full">
+    <div className="flex min-h-0 flex-1">
       {/* Flow list */}
       <div className="w-56 flex-shrink-0 overflow-y-auto border-r border-[var(--color-border)] p-3">
         <button
@@ -441,6 +459,32 @@ export function FlowsPanel({ agents, onError }: Props) {
               >
                 {running ? 'Çalışıyor…' : '▶ Çalıştır'}
               </button>
+
+              {/* Live node progress while running (before the final run lands). */}
+              {!run && liveNodes.length > 0 && (
+                <div className="mt-4 border-t border-[var(--color-border)] pt-3">
+                  <div className="mb-2 text-xs text-[var(--color-text-dim)]">Canlı ilerleme</div>
+                  <ol className="space-y-2">
+                    {liveNodes.map((n, i) => (
+                      <li key={`${n.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
+                        <div className="mb-1 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+                          {n.output === undefined && (
+                            <Loader2 size={12} className="animate-spin text-[var(--color-accent)]" />
+                          )}
+                          {i + 1}. [{n.type}] {n.title}
+                        </div>
+                        {n.output === undefined ? (
+                          <span className="text-xs italic text-[var(--color-text-dim)]">çalışıyor…</span>
+                        ) : n.type === 'branch' ? (
+                          <div className="whitespace-pre-wrap">{n.output}</div>
+                        ) : (
+                          <Markdown>{n.output}</Markdown>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
 
               {run && (
                 <div className="mt-4 border-t border-[var(--color-border)] pt-3">

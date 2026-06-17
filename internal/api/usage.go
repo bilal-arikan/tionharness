@@ -27,6 +27,7 @@ func (s *Server) handleAgentUsage(w http.ResponseWriter, r *http.Request) {
 		"calls":           usage.Calls,
 		"inputTokens":     usage.InputTokens,
 		"outputTokens":    usage.OutputTokens,
+		"byKind":          usage.ByKind, // per-origin breakdown (chat/task/schedule/flow/compact/…)
 		"dailyCallLimit":  agent.DailyCallLimit,
 		"dailyTokenLimit": agent.DailyTokenLimit,
 	})

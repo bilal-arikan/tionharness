@@ -156,7 +156,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
   }
 
   return (
-    <div className="flex h-full flex-col p-4">
+    <div className="flex min-h-0 flex-1 flex-col p-4">
       {/* New schedule form */}
       <div className="mb-4 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div className="flex flex-wrap items-start gap-2">

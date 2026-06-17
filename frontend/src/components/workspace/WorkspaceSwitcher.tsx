@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { ExternalLink, Trash2 } from 'lucide-react'
 import type { Workspace } from '../../types'
+import { buildRoute } from '../../lib/url'
 import { WorkspaceCreateModal, type NewWorkspaceData } from './WorkspaceCreateModal'
 
 interface Props {
@@ -8,9 +10,22 @@ interface Props {
   unreadIds: Set<string>
   onSwitch: (id: string) => void
   onCreate: (data: NewWorkspaceData) => void
+  onDelete: (id: string) => void
 }
 
-export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, onSwitch, onCreate }: Props) {
+// Open a workspace in a fresh browser window via the hash deep-link scheme
+// (#/w/{id}/chat), so the new window boots scoped to that workspace without
+// disturbing this window's selection.
+function openInNewWindow(id: string) {
+  const url = `${window.location.origin}${window.location.pathname}#${buildRoute({
+    workspaceId: id,
+    view: 'chat',
+    id: null,
+  })}`
+  window.open(url, '_blank', 'noopener')
+}
+
+export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, onSwitch, onCreate, onDelete }: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -61,29 +76,48 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, onSwitch, o
       {open && (
         <div className="absolute left-3 right-3 z-10 mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl">
           {workspaces.map((w) => (
-            <button
+            <div
               key={w.id}
-              onClick={() => {
-                onSwitch(w.id)
-                setOpen(false)
-              }}
-              className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition ${
+              className={`group flex w-full items-center gap-1 rounded pr-1 text-sm transition ${
                 w.id === activeId
                   ? 'bg-[var(--color-accent-soft)]'
                   : 'hover:bg-[var(--color-surface-2)]'
               }`}
             >
-              <span
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
-                style={w.color ? { backgroundColor: w.color + '33' } : undefined}
+              <button
+                onClick={() => {
+                  onSwitch(w.id)
+                  setOpen(false)
+                }}
+                className="flex flex-1 items-center gap-2 rounded px-3 py-2 text-left"
               >
-                {w.icon || '⬡'}
-              </span>
-              <span className="flex-1 truncate">{w.name || 'İsimsiz'}</span>
-              {unreadIds.has(w.id) && (
-                <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Yeni etkinlik" />
-              )}
-            </button>
+                <span
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
+                  style={w.color ? { backgroundColor: w.color + '33' } : undefined}
+                >
+                  {w.icon || '⬡'}
+                </span>
+                <span className="flex-1 truncate">{w.name || 'İsimsiz'}</span>
+                {unreadIds.has(w.id) && (
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Yeni etkinlik" />
+                )}
+              </button>
+              <button
+                onClick={() => openInNewWindow(w.id)}
+                title="Ayrı pencerede aç"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--color-text-dim)] opacity-0 transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] focus:opacity-100 group-hover:opacity-100"
+              >
+                <ExternalLink size={14} strokeWidth={2} />
+              </button>
+              <button
+                onClick={() => onDelete(w.id)}
+                disabled={workspaces.length <= 1}
+                title={workspaces.length <= 1 ? 'Son workspace silinemez' : 'Workspace’i sil'}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--color-text-dim)] opacity-0 transition hover:bg-[var(--color-surface)] hover:text-[var(--color-danger)] focus:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <Trash2 size={14} strokeWidth={2} />
+              </button>
+            </div>
           ))}
 
           <div className="my-1 border-t border-[var(--color-border)]" />

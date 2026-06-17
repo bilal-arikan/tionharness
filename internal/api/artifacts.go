@@ -113,12 +113,13 @@ func (s *Server) handleGetArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 type createArtifactReq struct {
-	SessionID string `json:"sessionId"`
-	AgentID   string `json:"agentId"`
-	Title     string `json:"title"`
-	Kind      string `json:"kind"`
-	Language  string `json:"language"`
-	Content   string `json:"content"`
+	SessionID  string `json:"sessionId"`
+	AgentID    string `json:"agentId"`
+	Title      string `json:"title"`
+	Kind       string `json:"kind"`
+	Language   string `json:"language"`
+	Content    string `json:"content"`
+	SourcePath string `json:"sourcePath"` // workspace-relative path for media/file kinds
 }
 
 // handleCreateArtifact creates an artifact manually (from the UI).
@@ -133,12 +134,13 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a, err := ws(r).DB.CreateArtifact(r.Context(), db.Artifact{
-		SessionID: req.SessionID,
-		AgentID:   req.AgentID,
-		Title:     req.Title,
-		Kind:      req.Kind,
-		Language:  req.Language,
-		Content:   req.Content,
+		SessionID:  req.SessionID,
+		AgentID:    req.AgentID,
+		Title:      req.Title,
+		Kind:       req.Kind,
+		Language:   req.Language,
+		Content:    req.Content,
+		SourcePath: req.SourcePath,
 	})
 	if writeDBError(w, err, "") {
 		return

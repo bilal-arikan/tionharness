@@ -55,6 +55,18 @@ export function imageURL(a: Attachment): string | null {
   return `/api/files?rel=${encodeURIComponent(a.relPath)}${wsq}`
 }
 
+// fileURL builds the inline-serving URL for any workspace-relative file path
+// (e.g. an uploaded media artifact). Like imageURL but kind-agnostic — the caller
+// decides how to render it (<img>/<video>/<audio>). The workspace id rides as a
+// query param because media tags cannot send the X-Workspace-Id header. Returns
+// null when there is no path.
+export function fileURL(relPath?: string): string | null {
+  if (!relPath) return null
+  const ws = getActiveWorkspace()
+  const wsq = ws ? `&ws=${encodeURIComponent(ws)}` : ''
+  return `/api/files?rel=${encodeURIComponent(relPath)}${wsq}`
+}
+
 // PASTE_AS_FILE_THRESHOLD: pasted text longer than this becomes a text attachment
 // instead of going into the textarea (Claude.ai-style "pasted text").
 export const PASTE_AS_FILE_THRESHOLD = 2000

@@ -20,13 +20,22 @@ import (
 // It returns the finished Run. A provider error is captured in the Run (status
 // failure) rather than aborting, so the board always reflects the attempt.
 func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, error) {
+	return r.RunTaskStream(ctx, taskID, trigger, nil)
+}
+
+// RunTaskStream is RunTask that additionally streams each activity step to onStep
+// the moment it occurs (for live SSE). onStep may be nil — then it behaves
+// exactly like RunTask. For a flow-backed task, onStep receives a text step per
+// node as the flow advances.
+func (r *Runtime) RunTaskStream(ctx context.Context, taskID, trigger string, onStep func(TurnStep)) (db.Run, error) {
+	ctx = WithCallKind(ctx, KindTask) // attribute every provider call this run makes to the Kanban board
 	task, err := r.db.GetTask(ctx, taskID)
 	if err != nil {
 		return db.Run{}, err
 	}
 	// Flow-backed task: run the orchestration flow instead of a single agent.
 	if task.FlowID != "" {
-		return r.runTaskFlow(ctx, task, trigger)
+		return r.runTaskFlow(ctx, task, trigger, onStep)
 	}
 	if task.OwnerAgentID == "" {
 		return db.Run{}, errors.New("task has no owner agent")
@@ -69,7 +78,7 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 	// Manual run-now is user-initiated; scheduled runs are autonomous and
 	// therefore subject to the agent's daily budget.
 	autonomous := trigger != "manual"
-	output, steps, runErr := r.invokeWithMemoryTraced(ctx, agent, prompt, autonomous)
+	output, steps, runErr := r.invokeWithMemoryStream(ctx, agent, prompt, autonomous, onStep)
 
 	status := db.RunSuccess
 	board := db.BoardDone
@@ -129,7 +138,7 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 // the board to done/failed. No owner agent is required — the flow's nodes carry
 // their own agents. Mirrors RunTask's bookkeeping so flow tasks behave like any
 // other task on the board (history, notifications, scheduling).
-func (r *Runtime) runTaskFlow(ctx context.Context, task db.Task, trigger string) (db.Run, error) {
+func (r *Runtime) runTaskFlow(ctx context.Context, task db.Task, trigger string, onStep func(TurnStep)) (db.Run, error) {
 	input := task.Prompt
 	if input == "" {
 		input = task.Description
@@ -165,9 +174,22 @@ func (r *Runtime) runTaskFlow(ctx context.Context, task db.Task, trigger string)
 	_ = r.db.MoveTask(ctx, task.ID, db.BoardInProgress)
 
 	// Scheduled/dispatcher runs are autonomous (budget-gated per node); a manual
-	// run-now is user-initiated.
+	// run-now is user-initiated. When streaming, surface each node as a step.
 	autonomous := trigger != "manual"
-	flowRun, runErr := r.RunFlow(ctx, task.FlowID, input, autonomous, nil)
+	var obs orchestration.Observer
+	if onStep != nil {
+		obs = func(ev orchestration.NodeEvent) {
+			if ev.Phase != "done" {
+				return
+			}
+			title := ev.Title
+			if title == "" {
+				title = ev.NodeID
+			}
+			onStep(TurnStep{Kind: StepText, Text: "**" + title + "**\n\n" + ev.Output})
+		}
+	}
+	flowRun, runErr := r.RunFlow(ctx, task.FlowID, input, autonomous, obs)
 	output := renderFlowTranscript(flowName, flowRun, runErr)
 
 	status := db.RunSuccess
@@ -260,6 +282,13 @@ func renderFlowTranscript(flowName string, fr db.FlowRun, setupErr error) string
 	return strings.TrimSpace(b.String())
 }
 
+// TaskSession is the exported accessor for a task's transcript session, so the
+// API can resolve the session id up front (e.g. to register a streaming run for
+// the executions feed's live "running" flag).
+func (r *Runtime) TaskSession(ctx context.Context, task db.Task) (db.Session, error) {
+	return r.taskSession(ctx, task)
+}
+
 // taskSession returns (creating if absent) the transcript session that holds a
 // task's run history. Keyed by the task id so every run of the task threads into
 // one conversation, viewable in the same streamable transcript as a chat.
@@ -307,23 +336,24 @@ func (r *Runtime) invoke(ctx context.Context, agent db.Agent, prompt string, aut
 	return r.complete(ctx, agent, r.systemPrompt(agent), "", prompt, autonomous)
 }
 
-// invokeWithMemoryTraced is invokeWithMemory plus the activity trace: it recalls
+// invokeWithMemoryStream is invokeWithMemory plus the activity trace: it recalls
 // relevant memories into the dynamic system suffix and returns the agent's
-// thinking/tool steps so a task run can be persisted as a rich chat turn.
-func (r *Runtime) invokeWithMemoryTraced(ctx context.Context, agent db.Agent, prompt string, autonomous bool) (string, []TurnStep, error) {
+// thinking/tool steps so a task run can be persisted as a rich chat turn. When
+// onStep is non-nil each step is also delivered live (for SSE streaming).
+func (r *Runtime) invokeWithMemoryStream(ctx context.Context, agent db.Agent, prompt string, autonomous bool, onStep func(TurnStep)) (string, []TurnStep, error) {
 	provider, err := r.providers.Get(agent.Provider)
 	if err != nil {
 		return "", nil, err
 	}
 	dynamic := strings.TrimSpace(r.mem.ContextBlock(ctx, agent.ID, prompt, 5))
-	resp, steps, err := r.CompleteWithToolsTraced(ctx, agent, provider, providers.Request{
+	resp, steps, err := r.CompleteWithToolsStream(ctx, agent, provider, providers.Request{
 		Model:         agent.Model,
 		System:        r.systemPrompt(agent),
 		SystemDynamic: dynamic,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: prompt},
 		},
-	}, autonomous)
+	}, autonomous, onStep)
 	if err != nil {
 		return "", nil, err
 	}

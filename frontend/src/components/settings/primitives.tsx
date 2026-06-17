@@ -2,8 +2,8 @@
 // rail button, the read-only prompt viewer and the category taxonomy.
 import { type ReactNode } from 'react'
 import {
-  User, Palette, Bell, KeyRound, Brain, Shield, Bot, Tag, Plug, Command,
-  Blocks, Activity, Info, Boxes, FileText, FolderOpen, Wrench, type LucideIcon,
+  User, Palette, KeyRound, Brain, Shield, Command,
+  Blocks, Info, Boxes, FileText, FolderOpen, Wrench, SlidersHorizontal, type LucideIcon,
 } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '../../types'
 
@@ -11,17 +11,13 @@ import type { AppSettings, PromptInfo, WorkspaceSettings } from '../../types'
 export type Cat =
   | 'profile'
   | 'appearance'
-  | 'notifications'
   | 'providers'
   | 'context'
   | 'budget'
-  | 'autonomy'
-  | 'autotitle'
-  | 'mcp'
   | 'tools'
+  | 'advanced'
   | 'commands'
   | 'stepkinds'
-  | 'diagnostics'
   | 'about'
   | 'workspace'
   | 'wsfiles'
@@ -35,17 +31,14 @@ export interface CatMeta {
 export const APP_CATS: CatMeta[] = [
   { key: 'profile', label: 'Profil', icon: User },
   { key: 'appearance', label: 'Görünüm', icon: Palette },
-  { key: 'notifications', label: 'Bildirimler & Ekran', icon: Bell },
   { key: 'providers', label: 'Sağlayıcılar', icon: KeyRound },
   { key: 'context', label: 'Bağlam & Bellek', icon: Brain },
   { key: 'budget', label: 'Bütçe', icon: Shield },
-  { key: 'autonomy', label: 'Otonomi', icon: Bot },
-  { key: 'autotitle', label: 'Otomatik Başlık', icon: Tag },
-  { key: 'mcp', label: 'MCP & Araçlar', icon: Plug },
   { key: 'tools', label: 'Yetenekler (Araçlar)', icon: Wrench },
+  // Combined screen: notifications, autonomy, auto-title, MCP, diagnostics.
+  { key: 'advanced', label: 'Gelişmiş', icon: SlidersHorizontal },
   { key: 'commands', label: 'Komutlar', icon: Command },
   { key: 'stepkinds', label: 'Adım Türleri', icon: Blocks },
-  { key: 'diagnostics', label: 'Tanılama', icon: Activity },
   { key: 'about', label: 'Hakkında', icon: Info },
 ]
 

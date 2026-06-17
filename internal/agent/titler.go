@@ -38,7 +38,7 @@ func (r *Runtime) GenerateTitle(ctx context.Context, agent db.Agent, source stri
 		model = override
 	}
 
-	resp, err := r.guardedComplete(ctx, agent, providers.Request{
+	resp, err := r.guardedComplete(WithCallKind(ctx, KindTitle), agent, providers.Request{
 		Model:  model,
 		System: r.readPrompt("title"),
 		Messages: []providers.Message{

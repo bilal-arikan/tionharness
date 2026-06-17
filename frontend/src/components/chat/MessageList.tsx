@@ -119,7 +119,7 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
   const showStandalonePending = pending && (!last || last.role === 'user')
 
   return (
-    <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-6 py-6">
+    <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
       <div className="flex w-full flex-col gap-4">
         {messages.map((m, i) => {
           const prev = messages[i - 1]

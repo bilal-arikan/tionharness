@@ -15,6 +15,7 @@ export const artifactApi = {
     content?: string
     sessionId?: string
     agentId?: string
+    sourcePath?: string
   }) =>
     req<Artifact>('/api/artifacts', { method: 'POST', body: JSON.stringify(data) }),
   updateArtifact: (

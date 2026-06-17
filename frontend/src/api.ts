@@ -18,6 +18,7 @@ import { artifactApi } from './api/artifacts'
 import { secretApi } from './api/secrets'
 import { skillApi } from './api/skills'
 import { systemApi } from './api/system'
+import { providerApi } from './api/providers'
 
 export { setActiveWorkspace, getActiveWorkspace }
 export type { ChatStreamHandlers } from './api/chat'
@@ -37,4 +38,5 @@ export const api = {
   ...secretApi,
   ...skillApi,
   ...systemApi,
+  ...providerApi,
 }

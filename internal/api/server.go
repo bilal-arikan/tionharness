@@ -92,6 +92,7 @@ func (s *Server) applySettings() {
 	s.providers.SetDefaultModel(cur.DefaultModel)
 	s.providers.SetAnthropicBetas(cur.OneMillionContext, cur.ExtendedPromptCache)
 	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
+	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
 	s.tun.SetTitleModel(cur.TitleModel)
@@ -160,6 +161,8 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
+	// Fresh-start context preview (assembled system prompt + tool catalog).
+	mux.HandleFunc("GET /api/agents/{id}/context", s.handleAgentContext)
 }
 
 // registerSessionRoutes registers chat sessions + messages + titling.
@@ -212,6 +215,7 @@ func (s *Server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
 	mux.HandleFunc("POST /api/tasks/{id}/title", s.handleGenerateTaskTitle)
 	mux.HandleFunc("POST /api/tasks/{id}/run", s.handleRunTask)
+	mux.HandleFunc("POST /api/tasks/{id}/run-stream", s.handleRunTaskStream)
 	mux.HandleFunc("GET /api/tasks/{id}/runs", s.handleListTaskRuns)
 }
 
@@ -230,6 +234,7 @@ func (s *Server) registerUsageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents/{id}/usage", s.handleAgentUsage)
 	mux.HandleFunc("POST /api/agents/{id}/budget", s.handleSetBudget)
 	mux.HandleFunc("GET /api/sessions/{id}/context", s.handleSessionContext)
+	mux.HandleFunc("GET /api/usage", s.handleWorkspaceUsage)
 }
 
 // registerMCPRoutes registers MCP servers + per-agent tool access (Phase 8).
@@ -280,6 +285,7 @@ func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/skills", s.handleListSkills)
 	mux.HandleFunc("POST /api/skills/reload", s.handleReloadSkills)
 	mux.HandleFunc("GET /api/skills/{slug}", s.handleGetSkill)
+	mux.HandleFunc("PUT /api/skills/{slug}/access", s.handleSetSkillAccess)
 	mux.HandleFunc("POST /api/skills/{slug}/reveal", s.handleRevealSkill)
 }
 
@@ -291,6 +297,10 @@ func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/catalog", s.handleCatalog)
 	mux.HandleFunc("GET /api/prompts", s.handleListPrompts)
 	mux.HandleFunc("POST /api/prompts/reveal", s.handleRevealPrompts)
+	// Custom (user-added) OpenAI/Anthropic-compatible providers.
+	mux.HandleFunc("GET /api/providers", s.handleListProviders)
+	mux.HandleFunc("PUT /api/providers", s.handleUpsertProvider)
+	mux.HandleFunc("DELETE /api/providers/{id}", s.handleDeleteProvider)
 }
 
 // registerMemoryRoutes registers per-agent knowledge (documents, journal,

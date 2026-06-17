@@ -8,6 +8,7 @@ import type {
   PromptsResponse,
   LogEntry,
   AppEvent,
+  WorkspaceUsage,
 } from '../types'
 import { req } from './client'
 
@@ -58,4 +59,8 @@ export const systemApi = {
     const qs = p.toString()
     return req<LogEntry[]>(`/api/logs${qs ? `?${qs}` : ''}`)
   },
+
+  // Workspace-wide budget/usage: today's totals + per-origin breakdown,
+  // per-agent table and a daily trend over the last `days` days.
+  workspaceUsage: (days = 7) => req<WorkspaceUsage>(`/api/usage?days=${days}`),
 }

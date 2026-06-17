@@ -5,10 +5,12 @@ import type {
   AppSettings,
   PromptInfo,
   ProviderTestResult,
+  Secret,
   SettingsPatch,
   SlashCommand,
   WorkspaceSettings,
 } from '../types'
+import type { View } from './NavRail'
 import {
   APP_CATS,
   WS_CATS,
@@ -47,13 +49,16 @@ interface Props {
   // Slash commands available in the chat composer — shown read-only in the
   // "Komutlar" reference category.
   commands?: SlashCommand[]
+  // Navigate the main app to another view (used to jump to the Secrets screen
+  // from the provider key fields).
+  onNavigate?: (v: View) => void
 }
 
 // SettingsPanel is the two-pane configuration screen: a category rail on the
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
 // The per-category forms live in ./settings/*.
-export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWorkspace, commands = [] }: Props) {
+export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWorkspace, commands = [], onNavigate }: Props) {
   const [cat, setCat] = useState<Cat>('profile')
 
   // App-global settings scope.
@@ -62,6 +67,8 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
   const [keyInput, setKeyInput] = useState('')
   const [minimaxKeyInput, setMinimaxKeyInput] = useState('')
   const [test, setTest] = useState<Record<string, ProviderTestResult | 'pending'>>({})
+  // Workspace secret names, offered as an import source for the key fields.
+  const [secrets, setSecrets] = useState<Secret[]>([])
 
   // Per-workspace settings scope.
   const [ws, setWs] = useState<WorkspaceSettings | null>(null)
@@ -79,6 +86,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
     api.getSettings().then((s) => { setDraft(s); setOriginal(s) }).catch((e) => onError((e as Error).message))
     api.getWorkspaceSettings().then((s) => { setWs(s); setWsOrig(s) }).catch((e) => onError((e as Error).message))
     api.getPrompts().then((p) => { setPrompts(p.prompts); setPromptsDir(p.dir) }).catch(() => {})
+    api.listSecrets().then(setSecrets).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -171,6 +179,20 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
     }
   }
 
+  // applyKey persists a provider key immediately (resolved from a vault secret).
+  // Provider keys are never typed — they are only selected from the secret store.
+  const applyKey = async (which: 'anthropic' | 'minimax', value: string) => {
+    if (!value) return
+    try {
+      const updated = await api.updateSettings(
+        which === 'anthropic' ? { anthropicKey: value } : { minimaxKey: value },
+      )
+      setDraft(updated); setOriginal(updated)
+    } catch (e) {
+      onError((e as Error).message)
+    }
+  }
+
   const runTest = async (provider: string) => {
     setTest((t) => ({ ...t, [provider]: 'pending' }))
     try {
@@ -181,7 +203,8 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
     }
   }
 
-  const catLabel = [...APP_CATS, ...WS_CATS].find((c) => c.key === cat)?.label ?? ''
+  const catMeta = [...APP_CATS, ...WS_CATS].find((c) => c.key === cat)
+  const CatIcon = catMeta?.icon
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -204,7 +227,14 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       {/* Right: content for the active category */}
       <div className="flex flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
-          <span className="text-sm font-semibold">{catLabel}</span>
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            {CatIcon && (
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+                <CatIcon size={14} />
+              </span>
+            )}
+            {catMeta?.label ?? ''}
+          </span>
           <div className="flex items-center gap-3">
             <span className="text-xs text-[var(--color-text-dim)]">
               {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
@@ -233,13 +263,13 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
                   draft={draft}
                   set={set}
                   setDraft={setDraft}
-                  keyInput={keyInput}
-                  setKeyInput={setKeyInput}
-                  minimaxKeyInput={minimaxKeyInput}
-                  setMinimaxKeyInput={setMinimaxKeyInput}
                   test={test}
                   runTest={runTest}
                   clearKey={clearKey}
+                  applyKey={applyKey}
+                  secrets={secrets}
+                  onImportSecret={async (name) => (await api.revealSecret(name)).value}
+                  onManageSecrets={() => onNavigate?.('secrets')}
                 />
               )}
               {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}

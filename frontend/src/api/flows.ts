@@ -22,8 +22,52 @@ export interface FlowStreamHandlers {
   onError: (err: string) => void
 }
 
-// streamRunFlow POSTs to the SSE run-flow endpoint and dispatches parsed events
-// (fetch streaming, since EventSource can't POST). Resolves when the stream ends.
+// Handlers for a standalone flow run (FlowsPanel) streamed over SSE: node
+// progress, then the finished run plus the transcript session it produced.
+export interface FlowRunStreamHandlers {
+  onNode: (ev: FlowNodeEvent) => void
+  onReply: (r: { run: FlowRun; sessionId: string }) => void
+  onError: (err: string) => void
+}
+
+// dispatchSSE parses a raw SSE frame ("event:"/"data:" lines) and routes it.
+function dispatchSSE(frame: string, route: (event: string, data: unknown) => void) {
+  let event = 'message'
+  const dataLines: string[] = []
+  for (const line of frame.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+  }
+  if (dataLines.length === 0) return
+  let data: unknown
+  try {
+    data = JSON.parse(dataLines.join('\n'))
+  } catch {
+    return
+  }
+  route(event, data)
+}
+
+// pumpSSE reads a streamed response body frame-by-frame until it ends.
+async function pumpSSE(res: Response, route: (event: string, data: unknown) => void) {
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    let idx: number
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const frame = buf.slice(0, idx)
+      buf = buf.slice(idx + 2)
+      if (frame.trim()) dispatchSSE(frame, route)
+    }
+  }
+}
+
+// streamRunFlow POSTs to the in-session SSE run-flow endpoint and dispatches
+// parsed events (fetch streaming, since EventSource can't POST).
 async function streamRunFlow(
   sessionId: string,
   flowId: string,
@@ -41,24 +85,7 @@ async function streamRunFlow(
     handlers.onError(await errorFromResponse(res))
     return
   }
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buf = ''
-
-  const dispatch = (frame: string) => {
-    let event = 'message'
-    const dataLines: string[] = []
-    for (const line of frame.split('\n')) {
-      if (line.startsWith('event:')) event = line.slice(6).trim()
-      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
-    }
-    if (dataLines.length === 0) return
-    let data: unknown
-    try {
-      data = JSON.parse(dataLines.join('\n'))
-    } catch {
-      return
-    }
+  await pumpSSE(res, (event, data) => {
     switch (event) {
       case 'meta':
         handlers.onMeta?.(data as { userMessage: Message })
@@ -73,19 +100,40 @@ async function streamRunFlow(
         handlers.onError((data as { error: string }).error)
         break
     }
-  }
+  })
+}
 
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buf += decoder.decode(value, { stream: true })
-    let idx: number
-    while ((idx = buf.indexOf('\n\n')) >= 0) {
-      const frame = buf.slice(0, idx)
-      buf = buf.slice(idx + 2)
-      if (frame.trim()) dispatch(frame)
-    }
+// streamRunFlowStandalone POSTs to the standalone SSE run endpoint (FlowsPanel),
+// streaming node progress and ending with the finished run + its session id.
+async function streamRunFlowStandalone(
+  flowId: string,
+  input: string,
+  handlers: FlowRunStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`/api/flows/${flowId}/run-stream`, {
+    method: 'POST',
+    headers: wsHeaders(),
+    body: JSON.stringify({ input }),
+    signal,
+  })
+  if (!res.ok || !res.body) {
+    handlers.onError(await errorFromResponse(res))
+    return
   }
+  await pumpSSE(res, (event, data) => {
+    switch (event) {
+      case 'node':
+        handlers.onNode(data as FlowNodeEvent)
+        break
+      case 'reply':
+        handlers.onReply(data as { run: FlowRun; sessionId: string })
+        break
+      case 'error':
+        handlers.onError((data as { error: string }).error)
+        break
+    }
+  })
 }
 
 export const flowApi = {
@@ -120,4 +168,11 @@ export const flowApi = {
     handlers: FlowStreamHandlers,
     signal?: AbortSignal,
   ): Promise<void> => streamRunFlow(sessionId, flowId, input, handlers, signal),
+  // Run a flow standalone (FlowsPanel) over SSE, streaming node-by-node progress.
+  runFlowStreamStandalone: (
+    flowId: string,
+    input: string,
+    handlers: FlowRunStreamHandlers,
+    signal?: AbortSignal,
+  ): Promise<void> => streamRunFlowStandalone(flowId, input, handlers, signal),
 }
