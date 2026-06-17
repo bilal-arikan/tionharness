@@ -136,13 +136,20 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	}
 }
 
-// globalSkillsDir is the cross-tool skill convention directory (~/.agents/skills).
+// globalSkillsDir is SwarmGo's data-dir-level global skills directory
+// (<DataDir>/skills, default ~/.swarmgo/skills). Deliberately under SwarmGo's
+// OWN data dir — not the cross-tool ~/.agents/skills convention — so SwarmGo's
+// global skills stay isolated from other agent tools that share that directory.
+// Honors SWARMGO_DATA_DIR so a custom data dir is respected (mirrors config).
 func globalSkillsDir() string {
+	if d := os.Getenv("SWARMGO_DATA_DIR"); d != "" {
+		return filepath.Join(d, "skills")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".agents", "skills")
+	return filepath.Join(home, ".swarmgo", "skills")
 }
 
 // workspaceSkillsDir is this workspace's skills directory (<workspace>/skills),
