@@ -57,6 +57,27 @@ func TestDeliverPrompt_RecordsErrorReply(t *testing.T) {
 	}
 }
 
+// TestNotifyLine checks the notification-body condenser: first line only, rune
+// cap with ellipsis, and no mid-character split on Turkish text.
+func TestNotifyLine(t *testing.T) {
+	cases := []struct {
+		name, in string
+		max      int
+		want     string
+	}{
+		{"short passes through", "Günlük özet", 100, "Günlük özet"},
+		{"first line only", "hata oluştu\nikinci satır\nüçüncü", 100, "hata oluştu"},
+		{"trims surrounding space", "   boşluklu   ", 100, "boşluklu"},
+		{"rune cap with ellipsis", "abcdefghij", 5, "abcde…"},
+		{"turkish rune cap not byte cap", "ışĞçöü", 3, "ışĞ…"},
+	}
+	for _, c := range cases {
+		if got := notifyLine(c.in, c.max); got != c.want {
+			t.Errorf("%s: notifyLine(%q,%d) = %q, want %q", c.name, c.in, c.max, got, c.want)
+		}
+	}
+}
+
 type discardWriter struct{}
 
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }

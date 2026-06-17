@@ -143,27 +143,48 @@ func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 	return fireErr
 }
 
-// emitPromptDelivery publishes the outcome of a scheduled prompt: success
-// deep-links to the agent's schedule session, failure to the logs view.
+// emitPromptDelivery publishes the outcome of a scheduled prompt as a desktop
+// notification. Both success and failure now deep-link to the agent's schedule
+// session, since deliverPrompt records the reply (or the error) there as a chat
+// turn — clicking opens the thread with the outcome shown inline. Only when no
+// session was reached does a failure fall back to the logs view.
 func (s *Scheduler) emitPromptDelivery(sc db.Schedule, sessionID string, err error) {
 	name := s.rt.agentName(sc.AgentID)
 	if err != nil {
+		target := map[string]string{"view": "logs", "agentId": sc.AgentID}
+		if sessionID != "" {
+			target = map[string]string{"view": "chat", "sessionId": sessionID}
+		}
 		s.rt.publish(events.Event{
 			Type:   "schedule",
 			Level:  "error",
-			Title:  "Zamanlama hatası: " + name,
-			Body:   err.Error(),
-			Target: map[string]string{"view": "logs", "agentId": sc.AgentID},
+			Title:  "⏰ Zamanlama başarısız — " + name,
+			Body:   notifyLine(err.Error(), 200),
+			Target: target,
 		})
 		return
 	}
 	s.rt.publish(events.Event{
 		Type:   "schedule",
 		Level:  "success",
-		Title:  "Zamanlanmış prompt çalıştı: " + name,
-		Body:   sc.Prompt,
+		Title:  "⏰ Zamanlanmış prompt çalıştı — " + name,
+		Body:   notifyLine(sc.Prompt, 120),
 		Target: map[string]string{"view": "chat", "sessionId": sessionID},
 	})
+}
+
+// notifyLine condenses a string into a single, rune-capped line fit for a
+// desktop notification body: it keeps only the first line and appends an
+// ellipsis when truncated. Rune-based so Turkish characters never get split.
+func notifyLine(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexAny(s, "\r\n"); i >= 0 {
+		s = strings.TrimSpace(s[:i])
+	}
+	if r := []rune(s); len(r) > max {
+		return strings.TrimSpace(string(r[:max])) + "…"
+	}
+	return s
 }
 
 // deliverPrompt sends a standalone scheduled prompt to the agent and logs the
