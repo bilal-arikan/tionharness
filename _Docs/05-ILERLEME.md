@@ -2,6 +2,17 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara özellik — Akış node-node SSE streaming + multimodal flow input ✅ (2026-06-17)
+
+Sohbetten tetiklenen akışlar artık node-node canlı akıyor ve dosya/görsel eki kabul ediyor.
+
+- **SSE streaming:** `orchestration.Engine`'e opsiyonel `Observer` eklendi — her node'un `start`/`done` anında `NodeEvent` yayımlar (paralel çocuklar eşzamanlı; observer concurrency-safe olmalı). `RunFlow(..., obs)` observer'ı geçirir; `driveFlow`/`ResumeRunningFlows` nil ile çağırır. Yeni `POST /api/sessions/{id}/run-flow-stream` (`api/flows.go` `handleSessionRunFlowStream`) akışı SSE üzerinde çalıştırır: `meta` → `node`* → `reply`/`error`. Yazıcı `sync.Mutex` ile korunur (paralel emisyon). Frontend `api.runFlowStream` (chat SSE parser ikizi) + `useChatStream.runFlow` canlı transcript'i node geldikçe kurar — **`nodeId` ile key'lenir** (paralel node'lar aynı execution index'i paylaşır).
+- **Multimodal input:** `conversation.InlineAttachments` (eski `withAttachments` mantığı export edildi) — text/code inline, binary/image `read_file` yoluyla. run-flow endpoint'leri `attachments` alır, flow `{{input}}`'una katlar; agent node'ları ek içeriği görür. `SlashCommand.run(input?, attachments?)` + `Composer.send` "/" flow komutuna composer'daki ekleri geçirir.
+- **Sınırlama:** node-içi token akışı yok (node tamamlanınca çıktısı gelir); granülerlik node düzeyinde. flow_run trace + non-stream `run-flow` endpoint'i korundu.
+- ✅ Curl ile uçtan uca doğrulandı: paralel akış (pros/cons eşzamanlı start→done→conclude→reply); metin attachment'ı boş input'la NEGATIVE sınıflandı (ek `{{input}}`'a ulaştı). `go build` + `tsc --noEmit` yeşil.
+
+> ⚠️ Not: bu oturumda repo'da **eşzamanlı başka bir düzenleme süreci** aktifti (commit `8d54448` "style(ui)…" `git add -A` ile backend dosyalarımı da kapsadı); fonksiyonel olarak tüm değişiklikler HEAD'de ve build yeşil, ancak commit ayrımı ideal değil.
+
 ## Faz A1 — Agent loop recovery + `continuationReason` ✅ (2026-06-17)
 
 Native tool döngüsü (`agent/toolloop.go`) "happy-path" odaklıydı; max-token / bağlam-taşması gibi durumlarda yapısal kurtarma yoktu. `observed-behavior`'in gerçek query-loop implementasyonu (`src/query/transitions.ts` + `src/query.ts`) referans alınarak kurtarma yolları yapısal hale getirildi. **Tasarım ilkesi (audit'ten):** kurtarma *kararı* (saf, I/O'suz, test edilebilir) yürütmeden ayrıldı.
