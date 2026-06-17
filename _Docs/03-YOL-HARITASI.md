@@ -148,6 +148,43 @@ graph LR
 
 ---
 
+## external-agent-oss İncelemesinden (2026-06-17)
+
+> Kaynak: [external-agent-project/external-agent-oss](https://github.com/external-agent-project/external-agent-oss) v0.2.19→v0.10.3 (71 release) analizi. Tam gerekçe + kod-doğrulama (EXISTS/MISSING) + sürüm-sürüm liste: [13-CRAFT-AGENTS-INCELEME.md](13-CRAFT-AGENTS-INCELEME.md). Maddeler SwarmGo koduna karşı doğrulandı.
+
+### 🔴 P0 — Doğrulanmış boşluklar (yüksek etki)
+- [ ] **CG-1 — Tool çıktısı boyut sınırı**: `res.Content` → `TurnStep.Output` → JSONL'e sınırsız akıyor (`toolloop.go:254`). Persistence + modele gönderim öncesi char/byte cap (örn. 100K + "…[truncated]"). OOM + bağlam taşması + JSONL şişmesi önler. *(craft v0.4.4)* — **düşük efor / yüksek değer**
+- [ ] **CG-2 — http_get SSRF koruması**: boyut cap var (64KB) ama IP/host doğrulama yok (`builtin_http.go`). localhost/127.0.0.1, özel ağlar (10/8,172.16/12,192.168/16), link-local 169.254/16, cloud-metadata engeli ekle. *(craft v0.3.2, v0.5.0)*
+- [ ] **CG-3 — Thinking resolver model-sınıf farkındalığı**: `thinkingBudgetForLevel` sabit (`toolloop.go:17`). Registry'ye `requiresAdaptiveThinking` ekle; Fable/Mythos 5 sınıfı `thinking: disabled`'ı reddediyor (API 400) → "off"u low-effort adaptive'e map et. **Fable 5 eklenmeden önce şart.** *(craft v0.10.3)*
+- [ ] **CG-4 — MCP şema normalizasyonu**: dış MCP `InputSchema` ham geçiyor. Provider'a göndermeden `$schema` strip et, `additionalProperties` koru, oneOf/anyOf/allOf ele al. Aksi halde tool parametreleri sessizce kaybolur / çağrı 400. *(craft v0.7.3, v0.7.5, v0.7.12)*
+
+### 🟠 P1 — Çok-ajan mimarisine uyan
+- [ ] **CG-5 — Ajanlar-arası mesajlaşma** (`send_agent_message`): bir oturumun başka aktif oturuma mesaj göndermesi. Orkestrasyon motoruyla (`orchestration`) entegre. *(craft v0.8.8)* — **A2 subagent izolasyonuyla ilişkili**
+- [ ] **CG-6 — Oturum öz-yönetim araçları**: ajana `set_session_labels`/`set_session_status`/`get_session_info`/`list_sessions` built-in tool'ları → kendini-kapatan otomasyon (görev bitince status=done → trigger). *(craft v0.8.3)*
+- [ ] **CG-7 — Hooks + koşullu otomasyon + webhook**: (a) command/prompt hook'ları (olay→shell/prompt), rate limiter + zorla-sonlandırma; (b) otomasyon koşulları (time/state/label gate); (c) webhook action (exp. backoff retry). `events` bus + `scheduler` ile örtüşür. *(craft v0.4.3, v0.7.5, v0.7.7)* — **Faz P4 (Hooks) ile birleştir**
+- [ ] **CG-8 — Otomasyon/flow geçmişi cap + compaction**: `flow_runs` sınırla (örn. 20/flow, 1000 global) + periyodik compaction. *(craft v0.7.8)*
+
+### 🟡 P2 — Sağlamlaştırma (file-based depolama)
+- [ ] **CG-9 — Density-aware token tahmini**: sabit `chars/4` (`tokens.go:8`) base64/yoğun içerikte ~%25 eksik sayıyor → `chars/1.5` dal + tool-result eşiğini context window'a göre dinamik (floor 2K/ceil 15K). *(craft v0.9.1, v0.9.3)*
+- [ ] **CG-10 — Config oto-onarım**: başlangıçta bozuk config/`~/.claude.json` (boş/BOM/invalid) tespit+onarım+backup; Windows file-lock retry. *(craft v0.2.33)*
+- [ ] **CG-11 — Volatile-context kuralını koru**: tarih/saat/session-state eklenirse **yalnız `SystemDynamic`'e veya user-mesaj kuyruğuna** (statik cache prefix'e değil). Mevcut iki-parçalı tasarım zaten doğru — regression'a karşı not. *(craft v0.10.2)* ✅ tasarım uyumlu
+
+### 🟢 P3 — Güvenlik (web UI / remote açılırsa)
+- [ ] **CG-12 — URL şema blocklist**: `Markdown.tsx:58` `javascript:`/`file:`/`data:`'yı `<a href>`'e geçiriyor → blocklist + DOM href sanitization (middle/cmd-click kaçışı dahil). *(craft v0.8.12, v0.9.6)*
+- [ ] **CG-13 — Shell sandbox escape**: `find -exec` vb. engelle (shell açıkken). *(craft v0.5.0)* — **Faz P3 ile birlikte**
+- [ ] **CG-14 — Remote açılırsa**: WebUI auth (argon2id + JWT + rate limiter) · WS TLS zorunlu (`wss://`) · upload/artifact yollarında path-traversal sanitize doğrula · CI'da `go mod verify`. *(craft v0.8.2, v0.7.0, v0.3.2, v0.8.0)*
+
+### 🔵 P4 — UI/UX & ekosistem (opsiyonel)
+- [ ] **CG-15 — Render blokları**: Mermaid native · HTML/PDF/image/markdown preview · datatable/spreadsheet + `transform_data`. Artifact sistemine eklenebilir. *(craft v0.3.0, v0.4.2, v0.4.6, v0.9.6)*
+- [ ] **CG-16 — Cross-session full-text arama** (ripgrep/Go). *(craft v0.3.1)*
+- [ ] **CG-17 — Mini agents** (hafif prompt + hızlı model profili). *(craft v0.3.1)*
+- [ ] **CG-18 — Session labels + auto-label + batch işlemler**. *(craft v0.2.27, v0.4.6)*
+- [ ] **CG-19 — Generic OpenAI-uyumlu custom endpoint** (minimax provider'ı genelleştir) + opsiyonel Gemini/Bedrock/DeepSeek. *(craft v0.7.4, v0.5.0)*
+- [ ] **CG-20 — Doküman araçları** (`markitdown`/`pdf-tool`/`xlsx-tool`) attachment işleme için. *(craft v0.6.0)*
+- [ ] **CG-21 — Messaging gateway** (Telegram/WhatsApp/Lark): response mode enum + subprocess izolasyon + **erişim kontrol** (güvenlik kritik). Not: Connectors fazı kapsam dışıydı. *(craft v0.8.10, v0.9.1)*
+
+---
+
 ## Önceliklendirme Notu
 
 İlk **görünür sonuç** Faz 3'te (çalışan chat UI). Faz 0-3 projenin "iskelet + nabız" aşamasıdır ve en kritik temeli atar; sonraki fazlar bunun üzerine eklenir.
