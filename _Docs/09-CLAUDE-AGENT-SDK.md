@@ -24,7 +24,7 @@
 | Yetenek | Agent SDK | SwarmGo (bugün) | Boşluk |
 |---|---|---|---|
 | Built-in araçlar (file/bash/grep/glob/web) | Kutudan | Sadece `get_current_time` / `http_get` / `memory_recall` | **Var** |
-| Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters=8`) | Yok |
+| Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters=8`) + tur kurtarma (`recovery.go`: max-token resume + reaktif compaction, A1) | Yok |
 | Context yönetimi / compaction | Otomatik | `internal/conversation` (token-bütçeli) | Yok |
 | Prompt caching | İnce ayarlı | Yok (native HTTP) | Küçük |
 | Permission / onay modları | Var (mod + hook) | Yok (native); claude-cli'de `--allowedTools` ile kısmi | **Var** |
