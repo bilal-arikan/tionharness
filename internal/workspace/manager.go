@@ -21,6 +21,7 @@ import (
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal/swarmgo/internal/secrets"
 )
 
 // Meta is the persisted descriptor of a workspace (no live handles). Path, when
@@ -39,6 +40,7 @@ type Workspace struct {
 	DB        *db.DB
 	Runtime   *agent.Runtime
 	Scheduler *agent.Scheduler
+	Secrets   *secrets.Vault
 	DataDir   string
 
 	settings settingsHolder // per-workspace overrides (ws-settings.json)
@@ -49,6 +51,7 @@ type Manager struct {
 	rootDir  string
 	registry *providers.Registry
 	tun      *agent.Tunables
+	cipher   secrets.Cipher
 	bus      *events.Bus
 	logger   *slog.Logger
 
@@ -61,11 +64,12 @@ type Manager struct {
 // at least one default workspace exists. tun is the shared process-wide
 // tunables handed to every workspace runtime; bus is the process-wide event bus
 // each runtime publishes autonomous notifications to.
-func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunables, bus *events.Bus, logger *slog.Logger) (*Manager, error) {
+func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunables, cipher secrets.Cipher, bus *events.Bus, logger *slog.Logger) (*Manager, error) {
 	m := &Manager{
 		rootDir:    rootDir,
 		registry:   registry,
 		tun:        tun,
+		cipher:     cipher,
 		bus:        bus,
 		logger:     logger,
 		workspaces: make(map[string]*Workspace),
@@ -104,12 +108,19 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 
-	database, err := db.Open(filepath.Join(dir, "store"))
+	storeDir := filepath.Join(dir, "store")
+	database, err := db.Open(storeDir)
 	if err != nil {
 		return err
 	}
 
-	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), m.bus, meta.ID, meta.Name, m.logger)
+	// Per-workspace secret vault (AES-GCM encrypted), shared by the secret_* tools.
+	vault, err := secrets.Open(storeDir, m.cipher)
+	if err != nil {
+		return err
+	}
+
+	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), vault, m.bus, meta.ID, meta.Name, m.logger)
 	if err := rt.StartConfigured(context.Background()); err != nil {
 		m.logger.Warn("start configured agents failed", "workspace", meta.ID, "error", err)
 	}
@@ -122,7 +133,7 @@ func (m *Manager) open(meta Meta) error {
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())
 
-	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, DataDir: dir}
+	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, Secrets: vault, DataDir: dir}
 	ws.loadSettings()    // apply persisted per-workspace overrides (e.g. autonomy pause)
 	ws.syncConfigFiles() // seed config/ tree + adopt instructions.md (file is authoritative)
 

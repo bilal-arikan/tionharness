@@ -71,6 +71,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewUpdateArtifactTool(),
 	}
 
+	// Workspace secret vault: let agents discover and fetch stored credentials
+	// (API keys, tokens, passwords) for the tasks they run.
+	if r.vault != nil {
+		builtins = append(builtins,
+			tools.NewSecretListTool(r.vault),
+			tools.NewSecretGetTool(r.vault),
+		)
+	}
+
 	// Workspace-scoped filesystem tools (sandboxed to this workspace's work dir).
 	if sb := tools.NewSandbox(r.workDir); sb.Ready() {
 		builtins = append(builtins,

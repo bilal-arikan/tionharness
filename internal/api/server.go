@@ -120,6 +120,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerArtifactRoutes(mux)
 	s.registerSettingsRoutes(mux)
 	s.registerMemoryRoutes(mux)
+	s.registerSecretRoutes(mux)
 	s.registerMiscRoutes(mux)
 
 	return withCORS(s.withRequestLog(s.withWorkspace(mux)))
@@ -274,6 +275,15 @@ func (s *Server) registerMemoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/agents/{id}/reflect", s.handleReflect)
 	mux.HandleFunc("POST /api/agents/{id}/recall", s.handleRecall)
 	mux.HandleFunc("DELETE /api/memories/{id}", s.handleDeleteMemory)
+}
+
+// registerSecretRoutes registers the per-workspace secret vault (resolved from
+// X-Workspace-Id). Values are write-only except for the explicit reveal action.
+func (s *Server) registerSecretRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/secrets", s.handleListSecrets)
+	mux.HandleFunc("POST /api/secrets", s.handleSetSecret)
+	mux.HandleFunc("GET /api/secrets/{name}/reveal", s.handleRevealSecret)
+	mux.HandleFunc("DELETE /api/secrets/{name}", s.handleDeleteSecret)
 }
 
 // registerMiscRoutes registers inline media serving and the logs feed.

@@ -14,6 +14,7 @@ import { memoryApi } from './api/memory'
 import { mcpApi } from './api/mcp'
 import { flowApi } from './api/flows'
 import { artifactApi } from './api/artifacts'
+import { secretApi } from './api/secrets'
 import { systemApi } from './api/system'
 
 export { setActiveWorkspace, getActiveWorkspace }
@@ -30,5 +31,6 @@ export const api = {
   ...mcpApi,
   ...flowApi,
   ...artifactApi,
+  ...secretApi,
   ...systemApi,
 }

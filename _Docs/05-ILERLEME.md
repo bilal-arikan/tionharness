@@ -2,6 +2,60 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara özellik — Sır Kasası (Secret Vault) ✅ (2026-06-17)
+
+**İstek:** "Uygulamaya secret/şifre tutabileceğimiz bir ekran ekleyelim; workspace'teki
+ajanlar da onlara erişebilsin."
+
+**Çözüm:** Workspace-izolasyonuna uygun, **her workspace'in kendi şifreli kasası**.
+
+- **`internal/secrets`** (yeni paket) — `Vault`: per-workspace `store/secrets.json`,
+  her değer **AES-GCM** ile şifreli (mevcut `config.Secret` cipher'ı `secrets.Cipher`
+  arayüzünü karşılar). `Open/List/Get/Set/Delete` + isim validasyonu
+  (`^[A-Za-z][A-Za-z0-9_.-]*$`, ≤128) + değer ≤64 KiB; atomik (temp+rename) persist.
+  Değer asla düz diske yazılmaz, `List()` (Meta) değeri asla döndürmez. Round-trip +
+  validasyon testleri (`vault_test.go`).
+- **Wiring** — `workspace.Manager` artık `secrets.Cipher` alır (`main.go`'da `config.Secret`
+  geçilir); her `Workspace`'e `Secrets *secrets.Vault` açılır ve `agent.NewRuntime`'a verilir
+  (`Runtime.vault`). nil-güvenli (test/araçsız yol).
+- **Ajan araçları** (`internal/tools/builtin_secret.go`) — `secret_list` (sadece
+  isim+açıklama, değer yok) ve `secret_get` (isimle değeri döner). `buildRegistry`'e
+  eklendi → mevcut workspace/ajan allow-deny sistemine tabi (istenirse kapatılabilir).
+- **API** (`internal/api/secrets.go`, workspace-scoped, X-Workspace-Id):
+  `GET /api/secrets` (maskeli liste), `POST /api/secrets` (`{name,value,description}`,
+  write-only değer), `GET /api/secrets/{name}/reveal` (sahip-tetikli tek değer),
+  `DELETE /api/secrets/{name}`.
+- **UI** — Sol rayda yeni **"Sırlar"** ekranı (`SecretsPanel.tsx`, KeyRound ikonu):
+  ekle/güncelle formu (değer `type=password`), liste (değer `••••` maskeli), göz ikonuyla
+  iste-üzerine göster/gizle, kopyala, düzenle, sil. `types/secret.ts` + `api/secrets.ts`
+  + barrel'lar + `App.tsx`/`NavRail.tsx` view wiring.
+
+**Test:** `go build/vet/test` yeşil; tsc + vite temiz. **Canlı API smoke** (ayrı port 8099,
+geçici data dir): set/list/reveal/delete + invalid-name 400 + **diskte şifreli** (`valueEnc`,
+plaintext yok) doğrulandı; `secret_get`/`secret_list` workspace tool katalogunda görünüyor.
+
+**Güvenlik notu:** Ajanlar `secret_get` ile değerleri okuyabildiğinden, UI'daki reveal
+(sahip aksiyonu) ek bir risk getirmez. Bir workspace'te ajanların sırlara erişmesini
+istemiyorsan **Araçlar** ekranından `secret_get`/`secret_list`'i kapat.
+
+## UI fix — Edit/Write kartında diff +/- input'tan sentezleniyor (2026-06-17)
+
+**Sorun:** `TurnStep` Edit/Write kartlarında yeşil/kırmızı diff değerleri
+gözükmüyordu. Kök neden: claude-cli `Edit`/`Write` araçlarının **çıktısı bir
+diff değil**, sadece onay metni ("The file … has been updated" / "File created
+successfully…"). `parseDiff(output)` +/- bulamadığından rozet de DiffView
+yeşil/kırmızısı da boştu.
+
+**Çözüm:** Diff'i **çıktıdan değil tool input'undan** sentezle. `lib/diff.ts`
+`synthDiff(toolBase, input)`: **Write** → `content` tüm satırları `+` (yeni
+dosya); **Edit** → `old_string` satırları `-`, `new_string` satırları `+`.
+`ActivityCard`: `diffText = output diff gibiyse output, değilse synthDiff(input)`
+→ hem **başlık rozeti** (`+X −Y`) hem gövdedeki **DiffView** (artık "Değişiklik"
+başlığıyla) bunu kullanır. ✅ tsc + vite temiz. **Playwright canlı**: Write kartı
+**+83 −0** (fetch_weather.py), Edit kartı **+1 −4** (CSV son 3 satır silme)
+rozetleri doğru render etti. Native yol zaten `diff` step → `DiffCard` ile gerçek
+sayıları gösteriyordu; bu fix claude-cli (output=onay metni) yolunu eşitledi.
+
 ## Faz A1.2 — Artifact: versiyonlamayı kaldır + dosya çıktısını otomatik yakala ✅ (2026-06-17)
 
 **İstek:** "artifact sisteminden versiyonlamayı kaldır; ve bir session'da dosya çıktısı istediğimde otomatik olarak artifact'a atsın — default olarak yapsın (önceki denememde yapmadı)."
@@ -60,17 +114,20 @@ Uygulama tamamen state-tabanlıydı (URL routing yoktu). Artık navigasyon durum
   (ortadaki mesaj silinir, sıra korunur, reopen sonrası kalıcı, bilinmeyen id →
   ErrNotFound).
 - **Frontend:** `api.deleteMessage(sid, mid)`; `App.tsx` `deleteMessage`
-  (window.confirm onayı → API → `setMessages` filtre → `refreshSessions`);
-  `MessageList` her mesaj satırına **hover'da 🗑** butonu (`group-hover`,
-  user+assistant; akıştaki canlı balon hariç).
+  (API → `setMessages` filtre → `refreshSessions`); `MessageList` her mesaj
+  satırına **hover'da 🗑** butonu (`group-hover`, user+assistant; akıştaki canlı
+  balon hariç). **Onay native dialog değil, inline iki-adımlı**: 🗑 → kırmızı
+  **"Sil" / ✕** belirir → "Sil" siler (`DeleteButton` `armed` state). Bu, akıcı
+  bir UI silme sağlar ve CDP/otomasyonda native confirm'in oto-iptalini de önler.
 
-✅ go build/vet + `delete_message_test` yeşil; **izole portta (8099)** uç
-doğrulandı: `DELETE .../messages/nope` → `{"error":"message not found"}` (404,
-default değil = route kayıtlı). tsc + vite temiz. **Not:** 8090'ı şu an
-kullanıcının kendi `swarmgo-live.exe`'si (eski) tuttuğundan UI'da canlı denenmedi
-ve **commit kullanıcıya bırakıldı** — çalışma ağacında eşzamanlı attachments
-(upload temizliği, `store.go`) + url-sync (`App.tsx`) işi bu değişikliklerle iç
-içe; ayrı temiz commit çıkarılamadı.
+✅ go build/vet + `delete_message_test` yeşil; tsc + vite temiz. **Playwright
+canlı E2E** (8090'a güncel binary alınarak): son mesajın 🗑 → "Sil" → mesaj
+silindi (**28 → 27**, JSONL'e kalıcı, konsol temiz). Test sırasında `MessageList`
+`useState` import eksiği (DeleteButton'da kullanılıyordu ama import yoktu →
+runtime crash) yakalanıp düzeltildi. **Not:** Çalışma ağacında eşzamanlı
+attachments (`store.go` upload temizliği) + url-sync (`App.tsx`) işi bu
+değişikliklerle iç içe → ayrı temiz commit çıkarılamadığından **commit kullanıcıya
+bırakıldı**.
 
 ## Bağlam — Aktif todo listesi sistem promptuna enjekte (2026-06-17)
 

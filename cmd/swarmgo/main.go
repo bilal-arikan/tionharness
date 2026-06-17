@@ -81,7 +81,7 @@ func main() {
 	bus := events.NewBus()
 
 	// Workspace manager: each workspace owns its own DB + agent runtime.
-	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, bus, logger)
+	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, secret, bus, logger)
 	if err != nil {
 		logger.Error("workspace manager init failed", "error", err)
 		os.Exit(1)

@@ -14,6 +14,7 @@ import (
 	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/memory"
 	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal/swarmgo/internal/secrets"
 )
 
 // Runtime owns the lifecycle of all autonomous agent workers.
@@ -27,6 +28,10 @@ type Runtime struct {
 	// workDir is this workspace's sandbox root for built-in filesystem/shell
 	// tools. Every fs/shell tool call is confined to it.
 	workDir string
+
+	// vault is this workspace's secret store, exposed to agents through the
+	// secret_list / secret_get built-in tools. May be nil (no secret tools).
+	vault *secrets.Vault
 
 	// bus + workspace identity let autonomous events (heartbeat/task/schedule)
 	// be published with enough context for the UI to deep-link on click.
@@ -64,14 +69,16 @@ func (r *Runtime) SetInstructions(s string) { r.instructions.Store(&s) }
 // (autonomy pause, title-model override) shared across all workspace runtimes.
 // workDir is the workspace sandbox root for built-in filesystem/shell tools.
 // bus + wsID/wsName let autonomous events be published with workspace context
-// (bus may be nil, in which case publishing is a no-op).
-func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, bus *events.Bus, wsID, wsName string, logger *slog.Logger) *Runtime {
+// (bus may be nil, in which case publishing is a no-op). vault is this
+// workspace's secret store handed to the secret_* tools (may be nil).
+func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, vault *secrets.Vault, bus *events.Bus, wsID, wsName string, logger *slog.Logger) *Runtime {
 	return &Runtime{
 		db:        database,
 		providers: registry,
 		mem:       memory.New(database),
 		tun:       tun,
 		workDir:   workDir,
+		vault:     vault,
 		bus:       bus,
 		wsID:      wsID,
 		wsName:    wsName,
