@@ -3,6 +3,7 @@ import { api } from '../../api'
 import type { Agent, Task, Run, BoardState } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
+import { TaskDetailPanel } from './TaskDetailPanel'
 
 const COLUMNS: { key: BoardState; label: string }[] = [
   { key: 'todo', label: 'Yapılacak' },
@@ -45,6 +46,8 @@ export function TaskBoard({ agents, onError }: Props) {
   const [schedFor, setSchedFor] = useState<string | null>(null)
   const [schedCron, setSchedCron] = useState('*/5 * * * *')
   const [schedBusy, setSchedBusy] = useState(false)
+  // Right-hand detail/editor drawer: which task is currently open (null = closed).
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const reload = () =>
     api.listTasks().then(setTasks).catch((e) => onError(e.message))
@@ -116,12 +119,18 @@ export function TaskBoard({ agents, onError }: Props) {
   const remove = async (task: Task) => {
     if (!confirm(`"${task.title}" silinsin mi?`)) return
     setTasks((prev) => prev.filter((t) => t.id !== task.id))
+    if (selectedId === task.id) setSelectedId(null)
     try {
       await api.deleteTask(task.id)
     } catch (e) {
       onError((e as Error).message)
       reload()
     }
+  }
+
+  // Persist edits from the detail drawer back into the board's task list.
+  const onSaved = (updated: Task) => {
+    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
   }
 
   const showRuns = async (task: Task) => {
@@ -171,8 +180,11 @@ export function TaskBoard({ agents, onError }: Props) {
     }
   }
 
+  const selected = tasks.find((t) => t.id === selectedId) ?? null
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full">
+      <div className="flex h-full flex-1 flex-col overflow-hidden">
       {/* New task form */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
         <input
@@ -228,7 +240,15 @@ export function TaskBoard({ agents, onError }: Props) {
                     className="cursor-grab rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 text-sm active:cursor-grabbing"
                   >
                     <div className="flex items-start justify-between gap-1">
-                      <div className="font-medium">{t.title}</div>
+                      <div
+                        onClick={() => setSelectedId(t.id)}
+                        className={`cursor-pointer font-medium hover:text-[var(--color-accent)] ${
+                          selectedId === t.id ? 'text-[var(--color-accent)]' : ''
+                        }`}
+                        title="Detayı aç / düzenle"
+                      >
+                        {t.title}
+                      </div>
                       <button
                         onClick={() => retitle(t)}
                         disabled={retitlingId === t.id}
@@ -239,7 +259,12 @@ export function TaskBoard({ agents, onError }: Props) {
                       </button>
                     </div>
                     {t.prompt && (
-                      <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]">{t.prompt}</div>
+                      <div
+                        onClick={() => setSelectedId(t.id)}
+                        className="mt-1 line-clamp-2 cursor-pointer text-xs text-[var(--color-text-dim)]"
+                      >
+                        {t.prompt}
+                      </div>
                     )}
                     <div className="mt-2 flex items-center justify-between text-xs">
                       <span className="flex items-center gap-1.5 text-[var(--color-text-dim)]">
@@ -353,6 +378,17 @@ export function TaskBoard({ agents, onError }: Props) {
           )
         })}
       </div>
+      </div>
+
+      {selected && (
+        <TaskDetailPanel
+          task={selected}
+          agents={agents}
+          onClose={() => setSelectedId(null)}
+          onSaved={onSaved}
+          onError={onError}
+        />
+      )}
     </div>
   )
 }
