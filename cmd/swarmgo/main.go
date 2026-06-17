@@ -69,27 +69,30 @@ func main() {
 	// Process-wide tunables (autonomy pause, title-model override) shared by
 	// every workspace runtime and updated from the settings screen.
 	tun := agent.NewTunables()
-	// The built-in `shell` tool is off by default (arbitrary command execution);
-	// opt in via SWARMGO_ENABLE_SHELL until a permission/approval layer lands.
-	if v := os.Getenv("SWARMGO_ENABLE_SHELL"); v == "1" || strings.EqualFold(v, "true") {
-		tun.SetShellEnabled(true)
-		logger.Warn("built-in shell tool ENABLED (SWARMGO_ENABLE_SHELL); agents can run arbitrary commands in their workspace sandbox")
+	// The gated tool capabilities (shell / self-management / agent delegation) are
+	// off by default and now live in the Settings screen (persisted settings.json,
+	// pushed live via applySettings). The legacy SWARMGO_ENABLE_* env vars act as a
+	// one-time boot seed: when set truthy they ENABLE the matching capability in
+	// settings (they never disable), so existing dev workflows keep working while
+	// the Settings toggle is the source of truth thereafter.
+	envOn := func(name string) *bool {
+		if v := os.Getenv(name); v == "1" || strings.EqualFold(v, "true") {
+			b := true
+			return &b
+		}
+		return nil
 	}
-	// The self-management suite (create/edit/delete agents, flows, schedules,
-	// artifacts; add memories; read logs) is off by default — it roughly doubles
-	// the tool catalog and lets agents alter the workspace. Opt in via
-	// SWARMGO_ENABLE_SELFMANAGE. Provenance still protects user-created entities.
-	if v := os.Getenv("SWARMGO_ENABLE_SELFMANAGE"); v == "1" || strings.EqualFold(v, "true") {
-		tun.SetSelfManageEnabled(true)
-		logger.Warn("self-management tools ENABLED (SWARMGO_ENABLE_SELFMANAGE); agents can create/edit/delete workspace entities")
+	seed := settings.Patch{
+		EnableShell:      envOn("SWARMGO_ENABLE_SHELL"),
+		EnableSelfManage: envOn("SWARMGO_ENABLE_SELFMANAGE"),
+		EnableDelegation: envOn("SWARMGO_ENABLE_DELEGATION"),
 	}
-	// Agent→agent delegation (the call_agent tool) is off by default: it runs a
-	// full sub-agent turn per call (token cost) and lets one turn fan out across
-	// agents. Opt in via SWARMGO_ENABLE_DELEGATION; depth/cycle/budget guards still
-	// apply.
-	if v := os.Getenv("SWARMGO_ENABLE_DELEGATION"); v == "1" || strings.EqualFold(v, "true") {
-		tun.SetDelegationEnabled(true)
-		logger.Warn("agent delegation ENABLED (SWARMGO_ENABLE_DELEGATION); agents can summon other agents via call_agent")
+	if seed.EnableShell != nil || seed.EnableSelfManage != nil || seed.EnableDelegation != nil {
+		if _, err := settingsStore.Apply(seed); err != nil {
+			logger.Warn("seed enable-flags from env failed", "error", err)
+		} else {
+			logger.Warn("gated tool capabilities seeded from SWARMGO_ENABLE_* env into settings (Settings screen is now the source of truth)")
+		}
 	}
 
 	// Process-wide event bus: autonomous runtimes publish notifications here and

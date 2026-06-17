@@ -144,6 +144,45 @@ export function McpPanel({ draft, set }: PanelProps) {
   )
 }
 
+export function ToolsPanel({ draft, set }: PanelProps) {
+  return (
+    <>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+        Bu yetenekler varsayılan olarak <b>kapalıdır</b>: her biri ajanların gücünü ve
+        token maliyetini artırır. Değişiklikler tüm workspace'lere canlı uygulanır.
+      </div>
+      <Toggle
+        label="Kabuk (shell) aracı"
+        hint="Built-in `shell`: ajan kendi workspace sandbox'ında keyfi komut çalıştırabilir. Yüksek risk."
+        checked={draft.enableShell}
+        onChange={(v) => set('enableShell', v)}
+      />
+      <Toggle
+        label="Öz-yönetim araç paketi"
+        hint="Ajanların ajan/akış/zamanlama/artifact oluşturup düzenlemesine izin verir. Araç kataloğunu kabaca iki katına çıkarır."
+        checked={draft.enableSelfManage}
+        onChange={(v) => set('enableSelfManage', v)}
+      />
+      <Toggle
+        label="Ajan→ajan delegasyon (call_agent)"
+        hint="Bir ajan başka bir ajana alt-görev devredip cevabını bekleyebilir. Her çağrı tam bir alt-ajan turu koşar (token maliyeti). Yalnızca native/anthropic tool yolunda."
+        checked={draft.enableDelegation}
+        onChange={(v) => set('enableDelegation', v)}
+      />
+      {draft.enableDelegation && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Maks. delegasyon derinliği" hint="Zincirin kaç kat iç içe gidebileceği (1–10). Döngü koruması.">
+            <input type="number" min={1} max={10} value={draft.delegationMaxDepth} onChange={(e) => set('delegationMaxDepth', Number(e.target.value))} className={inputCls} />
+          </Field>
+          <Field label="Tur başına maks. delegasyon" hint="Tek kullanıcı turunda toplam call_agent çağrısı (1–100). Bütçe koruması.">
+            <input type="number" min={1} max={100} value={draft.delegationMaxCalls} onChange={(e) => set('delegationMaxCalls', Number(e.target.value))} className={inputCls} />
+          </Field>
+        </div>
+      )}
+    </>
+  )
+}
+
 export function DiagnosticsPanel({ draft, set }: PanelProps) {
   return (
     <Field label="Log seviyesi" hint="Yeniden başlatınca uygulanır.">

@@ -21,6 +21,8 @@ type Tunables struct {
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
 	selfManage    bool // gates the self-management tool suite (off by default)
 	delegation    bool // gates the agent→agent `call_agent` tool (off by default)
+	delegMaxDepth int  // 0 → DefaultMaxDelegationDepth
+	delegMaxCalls int  // 0 → DefaultMaxDelegationCalls
 	journalCap    int  // 0 → DefaultJournalCap
 	journalMaxLen int  // 0 → DefaultJournalMaxLen
 
@@ -110,6 +112,35 @@ func (t *Tunables) DelegationEnabled() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.delegation
+}
+
+// SetDelegationLimits sets the per-turn delegation guards: max nesting depth and
+// max total delegations per turn. A value of 0 selects the built-in default.
+func (t *Tunables) SetDelegationLimits(maxDepth, maxCalls int) {
+	t.mu.Lock()
+	t.delegMaxDepth = maxDepth
+	t.delegMaxCalls = maxCalls
+	t.mu.Unlock()
+}
+
+// DelegationMaxDepth returns the max delegation nesting depth (default when unset).
+func (t *Tunables) DelegationMaxDepth() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.delegMaxDepth <= 0 {
+		return DefaultMaxDelegationDepth
+	}
+	return t.delegMaxDepth
+}
+
+// DelegationMaxCalls returns the max delegations per turn (default when unset).
+func (t *Tunables) DelegationMaxCalls() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.delegMaxCalls <= 0 {
+		return DefaultMaxDelegationCalls
+	}
+	return t.delegMaxCalls
 }
 
 // SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent)

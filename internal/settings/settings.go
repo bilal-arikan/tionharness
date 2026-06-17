@@ -79,6 +79,13 @@ type Settings struct {
 	// MCP / tools.
 	MCPGatewayURL string `json:"mcpGatewayUrl"`
 
+	// Gated tool capabilities — off by default; each expands agent power/cost.
+	EnableShell        bool `json:"enableShell"`        // built-in shell (arbitrary commands in sandbox)
+	EnableSelfManage   bool `json:"enableSelfManage"`   // self-management suite (create/edit/delete entities)
+	EnableDelegation   bool `json:"enableDelegation"`   // call_agent (agent→agent delegation)
+	DelegationMaxDepth int  `json:"delegationMaxDepth"` // max delegation nesting (0 = default 3)
+	DelegationMaxCalls int  `json:"delegationMaxCalls"` // max delegations per turn (0 = default 8)
+
 	// Diagnostics (informational; applied on restart).
 	LogLevel string `json:"logLevel"` // info | debug | warn | error
 }
@@ -119,6 +126,9 @@ func Default() Settings {
 		TitleModel:       "",
 
 		MCPGatewayURL: "",
+
+		DelegationMaxDepth: 3,
+		DelegationMaxCalls: 8,
 
 		LogLevel: "info",
 	}
@@ -174,6 +184,12 @@ type DTO struct {
 
 	MCPGatewayURL string `json:"mcpGatewayUrl"`
 
+	EnableShell        bool `json:"enableShell"`
+	EnableSelfManage   bool `json:"enableSelfManage"`
+	EnableDelegation   bool `json:"enableDelegation"`
+	DelegationMaxDepth int  `json:"delegationMaxDepth"`
+	DelegationMaxCalls int  `json:"delegationMaxCalls"`
+
 	LogLevel string `json:"logLevel"`
 }
 
@@ -226,6 +242,12 @@ func (s Settings) ToDTO() DTO {
 		TitleModel:       s.TitleModel,
 
 		MCPGatewayURL: s.MCPGatewayURL,
+
+		EnableShell:        s.EnableShell,
+		EnableSelfManage:   s.EnableSelfManage,
+		EnableDelegation:   s.EnableDelegation,
+		DelegationMaxDepth: s.DelegationMaxDepth,
+		DelegationMaxCalls: s.DelegationMaxCalls,
 
 		LogLevel: s.LogLevel,
 	}
@@ -281,6 +303,12 @@ type Patch struct {
 	TitleModel       *string `json:"titleModel"`
 
 	MCPGatewayURL *string `json:"mcpGatewayUrl"`
+
+	EnableShell        *bool `json:"enableShell"`
+	EnableSelfManage   *bool `json:"enableSelfManage"`
+	EnableDelegation   *bool `json:"enableDelegation"`
+	DelegationMaxDepth *int  `json:"delegationMaxDepth"`
+	DelegationMaxCalls *int  `json:"delegationMaxCalls"`
 
 	LogLevel *string `json:"logLevel"`
 }

@@ -1,6 +1,10 @@
 // Shared building blocks for the settings screen: field primitives, the category
 // rail button, the read-only prompt viewer and the category taxonomy.
 import { type ReactNode } from 'react'
+import {
+  User, Palette, Bell, KeyRound, Brain, Shield, Bot, Tag, Plug, Command,
+  Blocks, Activity, Info, Boxes, FileText, FolderOpen, Wrench, type LucideIcon,
+} from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '../../types'
 
 // Category keys: the app-global sections plus the per-workspace section.
@@ -14,6 +18,7 @@ export type Cat =
   | 'autonomy'
   | 'autotitle'
   | 'mcp'
+  | 'tools'
   | 'commands'
   | 'stepkinds'
   | 'diagnostics'
@@ -24,28 +29,29 @@ export type Cat =
 export interface CatMeta {
   key: Cat
   label: string
-  icon: string
+  icon: LucideIcon
 }
 
 export const APP_CATS: CatMeta[] = [
-  { key: 'profile', label: 'Profil', icon: '👤' },
-  { key: 'appearance', label: 'Görünüm', icon: '🎨' },
-  { key: 'notifications', label: 'Bildirimler & Ekran', icon: '🔔' },
-  { key: 'providers', label: 'Sağlayıcılar', icon: '🔑' },
-  { key: 'context', label: 'Bağlam & Bellek', icon: '🧠' },
-  { key: 'budget', label: 'Bütçe', icon: '🛡' },
-  { key: 'autonomy', label: 'Otonomi', icon: '⚙' },
-  { key: 'autotitle', label: 'Otomatik Başlık', icon: '🏷' },
-  { key: 'mcp', label: 'MCP & Araçlar', icon: '🔌' },
-  { key: 'commands', label: 'Komutlar', icon: '⌘' },
-  { key: 'stepkinds', label: 'Adım Türleri', icon: '🧩' },
-  { key: 'diagnostics', label: 'Tanılama', icon: '🩺' },
-  { key: 'about', label: 'Hakkında', icon: 'ℹ️' },
+  { key: 'profile', label: 'Profil', icon: User },
+  { key: 'appearance', label: 'Görünüm', icon: Palette },
+  { key: 'notifications', label: 'Bildirimler & Ekran', icon: Bell },
+  { key: 'providers', label: 'Sağlayıcılar', icon: KeyRound },
+  { key: 'context', label: 'Bağlam & Bellek', icon: Brain },
+  { key: 'budget', label: 'Bütçe', icon: Shield },
+  { key: 'autonomy', label: 'Otonomi', icon: Bot },
+  { key: 'autotitle', label: 'Otomatik Başlık', icon: Tag },
+  { key: 'mcp', label: 'MCP & Araçlar', icon: Plug },
+  { key: 'tools', label: 'Yetenekler (Araçlar)', icon: Wrench },
+  { key: 'commands', label: 'Komutlar', icon: Command },
+  { key: 'stepkinds', label: 'Adım Türleri', icon: Blocks },
+  { key: 'diagnostics', label: 'Tanılama', icon: Activity },
+  { key: 'about', label: 'Hakkında', icon: Info },
 ]
 
 export const WS_CATS: CatMeta[] = [
-  { key: 'workspace', label: 'Genel', icon: '🧩' },
-  { key: 'wsfiles', label: 'Promptlar & Dosyalar', icon: '📝' },
+  { key: 'workspace', label: 'Genel', icon: Boxes },
+  { key: 'wsfiles', label: 'Promptlar & Dosyalar', icon: FileText },
 ]
 
 // Setters threaded into the per-category panels.
@@ -118,7 +124,7 @@ export function CatButton({
         active ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]' : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
       }`}
     >
-      <span className="text-base leading-none">{c.icon}</span>
+      <c.icon size={16} className="shrink-0" />
       <span className="flex-1 truncate">{c.label}</span>
       {dirty && <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" title="Kaydedilmemiş" />}
     </button>
@@ -137,9 +143,9 @@ export function PromptDetails({ p, dir, onReveal }: { p: PromptInfo; dir: string
           onClick={onReveal}
           disabled={!dir}
           title={dir || 'Klasör yolu bilinmiyor'}
-          className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-40"
+          className="flex shrink-0 items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-40"
         >
-          📂 Klasörü aç
+          <FolderOpen size={12} /> Klasörü aç
         </button>
       </div>
       {p.system && (

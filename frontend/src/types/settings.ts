@@ -54,6 +54,13 @@ export interface AppSettings {
 
   mcpGatewayUrl: string
 
+  // Gated tool capabilities (off by default).
+  enableShell: boolean
+  enableSelfManage: boolean
+  enableDelegation: boolean
+  delegationMaxDepth: number
+  delegationMaxCalls: number
+
   logLevel: string
 }
 

@@ -56,14 +56,17 @@ func (r *Runtime) withDelegation(ctx context.Context, caller db.Agent, reqPtr *p
 		ctx = context.WithValue(ctx, delegStateKey{}, cur)
 	}
 
+	maxDepth := r.tun.DelegationMaxDepth()
+	maxCalls := r.tun.DelegationMaxCalls()
+
 	runner := func(rctx context.Context, target, task string) (tools.DelegateResult, error) {
 		// Guard 1 — depth: refuse once the chain is already as deep as allowed.
-		if cur.depth >= DefaultMaxDelegationDepth {
-			return tools.DelegateResult{}, fmt.Errorf("delegation depth limit (%d) reached; answer directly instead of delegating further", DefaultMaxDelegationDepth)
+		if cur.depth >= maxDepth {
+			return tools.DelegateResult{}, fmt.Errorf("delegation depth limit (%d) reached; answer directly instead of delegating further", maxDepth)
 		}
 		// Guard 2 — budget: cap total delegations across the whole turn's tree.
-		if cur.calls != nil && *cur.calls >= DefaultMaxDelegationCalls {
-			return tools.DelegateResult{}, fmt.Errorf("delegation budget (%d calls per turn) exhausted; answer directly", DefaultMaxDelegationCalls)
+		if cur.calls != nil && *cur.calls >= maxCalls {
+			return tools.DelegateResult{}, fmt.Errorf("delegation budget (%d calls per turn) exhausted; answer directly", maxCalls)
 		}
 
 		sub, err := r.resolveAgent(rctx, target)

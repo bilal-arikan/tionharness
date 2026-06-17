@@ -97,6 +97,10 @@ func (s *Server) applySettings() {
 	s.tun.SetTitleModel(cur.TitleModel)
 	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen)
 	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
+	s.tun.SetShellEnabled(cur.EnableShell)
+	s.tun.SetSelfManageEnabled(cur.EnableSelfManage)
+	s.tun.SetDelegationEnabled(cur.EnableDelegation)
+	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 }
 
 // Routes registers all HTTP routes and returns the handler. Registration is

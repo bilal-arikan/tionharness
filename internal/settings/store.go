@@ -146,6 +146,13 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.TitleModel, p.TitleModel)
 
 	applyString(&next.MCPGatewayURL, p.MCPGatewayURL)
+
+	applyBool(&next.EnableShell, p.EnableShell)
+	applyBool(&next.EnableSelfManage, p.EnableSelfManage)
+	applyBool(&next.EnableDelegation, p.EnableDelegation)
+	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)
+	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
+
 	applyString(&next.LogLevel, p.LogLevel)
 
 	applyString(&next.MinimaxBaseURL, p.MinimaxBaseURL)
@@ -252,6 +259,19 @@ func normalize(v Settings) Settings {
 	}
 	if v.DefaultHeartbeatSec < 5 {
 		v.DefaultHeartbeatSec = 5
+	}
+	// Delegation guards: keep at least one level/call; clamp to sane ceilings.
+	if v.DelegationMaxDepth < 1 {
+		v.DelegationMaxDepth = 1
+	}
+	if v.DelegationMaxDepth > 10 {
+		v.DelegationMaxDepth = 10
+	}
+	if v.DelegationMaxCalls < 1 {
+		v.DelegationMaxCalls = 1
+	}
+	if v.DelegationMaxCalls > 100 {
+		v.DelegationMaxCalls = 100
 	}
 	switch v.LogLevel {
 	case "debug", "warn", "error", "info":

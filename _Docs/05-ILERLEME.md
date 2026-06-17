@@ -16,6 +16,34 @@ Akışlar (flows) artık sohbet composer'ından "/" komutuyla tetiklenebiliyor v
 - FlowsPanel'de akış **açıklaması** artık düzenlenebilir (editörde textarea, sol listede ad altında özet); alan API'de zaten saklanıyordu ama UI yüzeyi yoktu.
 - Trace çıktısı artık chat ile aynı `Markdown` bileşeniyle render ediliyor (agent/parallel node'ları; branch düz metin kalır).
 
+## Ara özellik — Gated Yetenekler Ayarlar Ekranına Taşındı ✅ (2026-06-17)
+
+**İstek:** `call_agent` (ve kardeşleri shell / self-manage) yalnızca env değişkeniyle
+açılabiliyordu; **Ayarlar ekranından** yönetilebilsin.
+
+**Çözüm — `applySettings` tek doğruluk kaynağı:**
+- **`settings` paketi:** `Settings`/`DTO`/`Patch`/`Default`/`ToDTO`'ya 5 alan: `EnableShell`,
+  `EnableSelfManage`, `EnableDelegation` (bool) + `DelegationMaxDepth` (vars. 3) /
+  `DelegationMaxCalls` (vars. 8). `store.go` `Apply` (applyBool/applyInt) + `normalize`
+  clamp: depth 1–10, calls 1–100. `Open` mevcut `settings.json`'ı `Default()` üzerine
+  overlay ettiği için eski kurulumlar 3/8 alır (0 sorunu yok).
+- **`agent/tunables.go`:** `SetDelegationLimits` + `DelegationMaxDepth()`/`DelegationMaxCalls()`
+  (0 → `Default*` sabiti). `agent/delegate.go` runner artık sabit yerine `r.tun` limitlerini
+  okur.
+- **`api/server.go` `applySettings`:** `SetShellEnabled`/`SetSelfManageEnabled`/
+  `SetDelegationEnabled`/`SetDelegationLimits` canlı push (boot + her kayıtta).
+- **`main.go`:** `SWARMGO_ENABLE_*` env değişkenleri artık **tek seferlik boot seed**'i —
+  truthy ise ilgili yeteneği settings'e **açar** (asla kapatmaz), sonra Ayarlar tek doğruluk
+  kaynağı. Eski dev akışları çalışmaya devam eder.
+- **Frontend:** `types/settings.ts` (5 alan), yeni **"Yetenekler (Araçlar)"** kategorisi
+  (`primitives.tsx` Cat + `Wrench` ikonu), `appPanels.tsx` `ToolsPanel` (3 toggle + delegation
+  açıkken depth/calls sayı alanları), `SettingsPanel.tsx` wiring + save patch.
+
+**Test:** `internal/settings/store_test.go` (round-trip + clamp + reload + DTO). **Canlı
+doğrulama** (izole instance, port 8099, model çağrısı yok): GET varsayılan 3/8 → PUT enable +
+depth 99→10 / calls 0→1 clamp + persist → `call_agent` **canlı araç kataloğunda belirir**
+(applySettings→tun→buildRegistry) → disable edince **kaybolur**. `go test ./...` + `tsc` yeşil.
+
 ## Ara özellik — Ajan→Ajan Delegasyonu (`call_agent` tool) ✅ (2026-06-17)
 
 **İstek:** Bir sohbet sırasında bir ajanın başka bir ajanı **etiketleyerek/çağırarak**

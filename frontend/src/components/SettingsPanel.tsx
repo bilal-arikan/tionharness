@@ -23,6 +23,7 @@ import {
   AutonomyPanel,
   AutoTitlePanel,
   McpPanel,
+  ToolsPanel,
   DiagnosticsPanel,
   AboutPanel,
 } from './settings/appPanels'
@@ -117,6 +118,9 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       defaultHeartbeatSec: draft.defaultHeartbeatSec, pauseAutonomy: draft.pauseAutonomy,
       autoTitleEnabled: draft.autoTitleEnabled, titleModel: draft.titleModel,
       mcpGatewayUrl: draft.mcpGatewayUrl, logLevel: draft.logLevel,
+      enableShell: draft.enableShell, enableSelfManage: draft.enableSelfManage,
+      enableDelegation: draft.enableDelegation,
+      delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
     }
     if (keyInput) patch.anthropicKey = keyInput
     if (minimaxKeyInput) patch.minimaxKey = minimaxKeyInput
@@ -240,6 +244,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
               {cat === 'autonomy' && <AutonomyPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'autotitle' && <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'mcp' && <McpPanel draft={draft} set={set} setDraft={setDraft} />}
+              {cat === 'tools' && <ToolsPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'commands' && (
                 <CommandsPanel
                   commands={commands}
