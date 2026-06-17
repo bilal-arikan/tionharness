@@ -119,7 +119,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, req.Message, prep)
+	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep)
 
 	// Manual chat is not budget-gated (autonomous=false). When the agent has
 	// tools enabled this drives the agentic loop (native) or CLI delegation;

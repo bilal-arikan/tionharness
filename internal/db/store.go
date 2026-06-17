@@ -259,6 +259,14 @@ func (d *DB) SetSessionTitle(ctx context.Context, sessionID, title string) error
 	})
 }
 
+// SetSessionAgent updates a session's default (main) agent — used when the first
+// message of a fresh session @mentions an agent, pinning the thread to it.
+func (d *DB) SetSessionAgent(ctx context.Context, sessionID, agentID string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.AgentID = agentID
+	})
+}
+
 // MarkSessionRead clears a session's unread flag (without bumping UpdatedAt, so
 // reading a thread never reorders the list).
 func (d *DB) MarkSessionRead(ctx context.Context, sessionID string) error {

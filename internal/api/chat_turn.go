@@ -28,8 +28,28 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // artifacts) that changes every turn and is kept outside the cached prefix.
 //
 // Shared by both the blocking (chat.go) and streaming (chat_stream.go) handlers.
-func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, message string, prep conversation.Prepared) providers.Request {
+func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared) providers.Request {
 	system := buildSystemPrompt(agentRow)
+	// Tell the agent its own name and how @mentions work, so a leading "@Name"
+	// (the UI's agent selector) is understood as the user addressing this agent —
+	// not mistaken for a file, skill, or entity to look up.
+	if n := strings.TrimSpace(agentRow.Name); n != "" {
+		note := "You are the agent named \"" + n + "\". In this chat, the user picks which agent should answer by starting a message with \"@<AgentName>\". So an \"@" + n + "\" at the start of a message means the user is addressing you by name — treat it as being called, not as a file, skill, or entity to look up; just answer the rest of the message."
+		// Multi-agent turn: when the user mentions several agents, each answers the
+		// same message in order and later agents can see the earlier replies.
+		var others []string
+		for _, a := range turnAgents {
+			if a.ID != agentRow.ID {
+				if nm := strings.TrimSpace(a.Name); nm != "" {
+					others = append(others, "@"+nm)
+				}
+			}
+		}
+		if len(others) > 0 {
+			note += " The user also addressed other agents in this message (" + strings.Join(others, ", ") + "); each mentioned agent answers this same message in turn, and later agents can see the earlier agents' replies. Answer only from your own perspective — do not speak for or impersonate the other agents."
+		}
+		system = strings.TrimSpace(note + "\n\n" + system)
+	}
 	if uc := userContextBlock(s.settings.Get()); uc != "" {
 		system = strings.TrimSpace(uc + "\n\n" + system)
 	}
@@ -63,6 +83,27 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		SystemDynamic: dynamic,
 		Messages:      prep.Messages,
 	}
+}
+
+// adoptMentionedAgent makes the first @mentioned agent the session's default
+// (main) agent — but only on a brand-new session (no prior messages), so opening
+// a chat by mentioning @X pins the whole thread to X. mentionIDs are the raw
+// requested agent ids; agents is the resolved, ordered list (agents[0] is the
+// first valid mention). Returns the possibly-updated session.
+func (s *Server) adoptMentionedAgent(ctx context.Context, database *db.DB, session db.Session, mentionIDs []string, agents []db.Agent) db.Session {
+	if session.MessageCount != 0 || len(mentionIDs) == 0 || len(agents) == 0 {
+		return session
+	}
+	want := agents[0].ID
+	if want == "" || want == session.AgentID {
+		return session
+	}
+	if err := database.SetSessionAgent(ctx, session.ID, want); err != nil {
+		s.logger.Warn("adopt mentioned agent failed", "session", session.ID, "error", err)
+		return session
+	}
+	session.AgentID = want
+	return session
 }
 
 // marshalSteps serialises the activity trace for persistence. Best-effort: an
