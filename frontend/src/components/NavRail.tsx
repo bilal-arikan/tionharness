@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   MessageSquare,
+  Activity,
   Users,
   LayoutGrid,
   Clock,
@@ -20,7 +21,7 @@ import type { Workspace } from '../types'
 import { WorkspaceSwitcher } from './workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from './workspace/WorkspaceCreateModal'
 
-export type View = 'chat' | 'agents' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'artifacts' | 'secrets' | 'skills' | 'logs' | 'settings'
+export type View = 'chat' | 'executions' | 'agents' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'artifacts' | 'secrets' | 'skills' | 'logs' | 'settings'
 
 interface Props {
   view: View
@@ -34,6 +35,7 @@ interface Props {
 
 const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
+  { key: 'executions', label: 'Aktivite', icon: Activity },
   { key: 'agents', label: 'Ajanlar', icon: Users },
   { key: 'board', label: 'Görevler', icon: LayoutGrid },
   { key: 'schedules', label: 'Zamanlamalar', icon: Clock },

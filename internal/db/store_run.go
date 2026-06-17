@@ -23,6 +23,21 @@ func (d *DB) CreateRun(ctx context.Context, r Run) (Run, error) {
 	return r, d.persistRunLocked(r)
 }
 
+// SetRunSession links a run to the transcript session (and assistant message)
+// it produced, so the board can deep-link a run straight to its conversation.
+func (d *DB) SetRunSession(ctx context.Context, runID, sessionID, messageID string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	r, ok := d.runs[runID]
+	if !ok {
+		return ErrNotFound
+	}
+	r.SessionID = sessionID
+	r.MessageID = messageID
+	r.UpdatedAt = now()
+	return d.persistRunLocked(r)
+}
+
 // FinishRun records the terminal status, output and error of a run.
 func (d *DB) FinishRun(ctx context.Context, runID, status, output, runErr string) error {
 	d.mu.Lock()

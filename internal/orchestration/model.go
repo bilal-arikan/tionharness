@@ -69,6 +69,10 @@ func (g Graph) node(id string) (Node, bool) {
 	return Node{}, false
 }
 
+// NodeByID is the exported lookup for a node by id (used by callers outside this
+// package, e.g. attributing a flow run's output to a specific node's agent).
+func (g Graph) NodeByID(id string) (Node, bool) { return g.node(id) }
+
 // Validate checks structural integrity: a start node, unique ids, valid
 // references, and agent nodes with an agent assigned.
 func (g Graph) Validate() error {

@@ -243,6 +243,21 @@ func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error
 	return d.createSessionLocked(Session{AgentID: agentID, Kind: kind, Title: title})
 }
 
+// GetOrCreateSourceSession returns (creating if absent) the session that owns a
+// specific source entity's run history, keyed by (kind, sourceID) — e.g. one
+// "task" session per task or one "flow" session per flow. Each run appends a
+// turn, so the entity's whole execution history reads as a single transcript.
+func (d *DB) GetOrCreateSourceSession(ctx context.Context, kind, sourceID, agentID, title string) (Session, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, s := range d.sessions {
+		if s.Kind == kind && s.SourceID == sourceID {
+			return s, nil
+		}
+	}
+	return d.createSessionLocked(Session{AgentID: agentID, Kind: kind, SourceID: sourceID, Title: title})
+}
+
 // SetSessionSummary persists the rolling compaction summary for a session.
 func (d *DB) SetSessionSummary(ctx context.Context, sessionID, summary string, msgCount int) error {
 	return d.mutateSessionLocked(sessionID, func(s *Session) {

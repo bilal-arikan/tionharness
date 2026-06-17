@@ -2,6 +2,53 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Faz U — Birleşik Yürütme/Çıktı Katmanı (Unified Executions) ✅ (2026-06-17)
+
+**İstek:** Uygulamadaki farklı çıktı üreten yolları (Flows, Schedules, Kanban
+görevleri, manuel sessionlar) daha generic hale getirmek — hepsinin çıktısını
+streaming şekilde okuyup hepsini **Session gibi** görebilmek.
+
+**Tasarım kararı:** Tetikleyici yüzeyleri (Board, cron, flow builder, sohbet)
+ayrı kalır; **altlarındaki transkript + akış katmanı birleşir.** Birleştirme
+primitifi: her yürütme çıktısını bir **Session**'a (Message + `TurnStep` izi)
+döker. `TurnStep` zaten hem native hem claude-cli yolunda üretilen evrensel birim
+olduğundan iş çoğunlukla *bağlama*, yeniden yazım değil.
+
+**Faz U1 — Görev koşuları → transkript session'ı:**
+- `db.Session`'a `SourceID` (kaynağa bağlama), `db.Run`'a `SessionID`+`MessageID`.
+- `db.GetOrCreateSourceSession(kind, sourceID, …)` — (kind, sourceID) başına tek
+  session (görev başına bir "task" thread'i, akış başına bir "flow" thread'i).
+- `agent/executor.go`: `RunTask`/`runTaskFlow` artık `invokeWithMemoryTraced` ile
+  iz üreterek her koşuyu task session'ına **user turn (prompt) + assistant turn
+  (aktivite izi)** olarak yazar; `SetRunSession` ile run↔session bağlanır. Tek
+  çalıştırma noktası `RunTask` olduğundan manuel ▶ / cron / dispatcher hepsi
+  bedavaya transkript üretir.
+
+**Faz U2 — Akış koşuları → transkript session'ı + canlı node akışı:**
+- `agent/flow.go`: `flowStateToSteps` (node izi → `TurnStep`), `RunFlowRecorded`
+  (akışı koşup flow session'ına turu yazar), `finalFlowAgentID`/`firstFlowAgentID`.
+- `orchestration.Graph.NodeByID` (exported lookup).
+- API: `handleRunFlow` artık `{run, sessionId}` döner ve flow session'ına kaydeder;
+  yeni `POST /api/flows/{id}/run-stream` (SSE node akışı + transkript kaydı).
+
+**Faz U3 — Birleşik "Aktivite" feed'i:**
+- `GET /api/executions` (`api/executions.go`): tüm ajanların session'larını
+  kind + canlı `running` (akıştaki turlar) + `lastStatus` (task/flow son koşu) ile
+  zenginleştirip döner; `?kind=` filtresi.
+- Frontend: NavRail **"Aktivite"** görünümü (`ExecutionsPanel.tsx`) — master-detail:
+  kind filtre sekmeleri (Tümü/Sohbet/Görev/Akış/Zamanlama/Nabız), canlı durum/okunmadı
+  rozetleri, seçilen yürütmenin **salt-okunur transkripti** (`MessageList` yeniden
+  kullanılır), 5sn poll ile canlı tazeleme. Chat sidebar artık yalnız `kind==='chat'`
+  gösterir (task/flow/schedule transkriptleri Aktivite'de) → sohbet listesi kirlenmez.
+
+**Durum:** `go build`/`vet`/`test` + `tsc -b`/`vite build` yeşil. Yeni testler:
+`db/source_session_test.go` (kaynak-session idempotent + reload), `agent/flow_session_test.go`
+(flowStateToSteps). **Canlı API E2E** (izole instance, gerçek claude-cli):
+görev koşusu → "task" execution + 2-turlu transkript (prompt→PONG); standalone akış
+koşusu → "flow" execution + transkript (go→FLOWPONG); kind filtreleri doğrulandı.
+Not: schedule/heartbeat session'ları zaten Session kullandığından bedavaya feed'de görünür.
+
+
 ## Ara özellik — Çapraz-Session Farkındalığı (push block + `list_sessions` tool) ✅ (2026-06-17)
 
 > **Güncelleme (2026-06-17):** Ayar kapsamı **app-global'dan workspace'e özele** taşındı.
@@ -128,6 +175,7 @@ Kanban panosu (Faz 5) bir dizi kademeli iyileştirmeden geçti. İlk dördü com
 5. **Flow-backed task** (⏳ **commit edilmedi**): chat'teki "flow'u mesajdan tetikleme" mantığının Kanban karşılığı. Göreve opsiyonel `Task.FlowID`; doluysa `RunTask` → `runTaskFlow`, prompt'u ajana göndermek yerine o orchestration akışını koşar (`RunFlow(...,nil)`), düğüm transkriptini (`renderFlowTranscript`) Run çıktısı olarak kaydeder. Owner ajan flow varken zorunlu değil. Tek çalıştırma noktası `RunTask` olduğundan **manuel ▶ / cron / ileride dispatcher hepsi flow'u destekler** — ⏰ Zamanla flow görevini bedavaya periyodik koşar. API `createTask/updateTask` `flowId` alır; frontend: yeni-görev formunda 🔀 Akış seçici, kartta flow rozeti, panelde flow seçici + "▶ Akışı çalıştır".
    - **Dosyalar:** `db/models_task.go`+`store_task.go` (FlowID), `agent/executor.go` (`runTaskFlow`/`renderFlowTranscript`), `api/tasks.go`, `frontend types/task.ts`+`api/tasks.ts`+`TaskBoard.tsx`+`TaskDetailPanel.tsx`.
    - **Durum:** `go build` + `go test ./internal/...` + frontend `tsc` yeşil. **Commit beklemede** — çalışma ağacı smart-surge oturumunun "flow attachment + tema refactor" WIP'iyle iç içe; `executor.go` onun 5-arg `RunFlow(...,Observer)` imzasına bağımlı (HEAD'de 4-arg). İki oturum reconcile edilince commit edilecek. (Derlemeyi tıkayan `flows.go` eksik `conversation` import'u eklendi — salt import.)
+6. **Ajanlar panoyu yönetebiliyor** (⏳ **commit edilmedi**): `internal/tools/builtin_taskmgmt.go` — `SelfManageEnabled` ile gated 6 tool: `list_tasks` (oku), `create_task` (prompt ve/veya `flowId`, `CreatedBy` damgalı), `update_task`, `move_task` (kolon), `run_task` (RunTask, trigger `"agent"`, flow-backed dahil), `delete_task`. **Güvenlik sınırı:** oku/oluştur/düzenle/taşı/çalıştır her görevde serbest; **delete yalnız ajan-oluşturduğu görevde** (`Task.CreatedBy` provenance — schedule/agent/artifact kalıbı). `db.Task` += `CreatedBy`; `toolsetup.go` self-manage bloğuna eklendi. Testler `builtin_taskmgmt_test.go` (createdBy, move doğrulama, delete provenance, flow doğrulama, runner çağrısı) — `go build`+`vet`+`test ./internal/...` yeşil. **Görev dispatcher'ının ön koşulu** (ajan artık todo'yu okuyup `run_task` ile koşabilir).
 
 ## Ara özellik — Sohbetten akış tetikleme + sonucu session'a yazma ✅ (2026-06-17)
 

@@ -102,11 +102,13 @@ export const flowApi = {
     }),
   deleteFlow: (id: string) =>
     req<{ result: string }>(`/api/flows/${id}`, { method: 'DELETE' }),
+  // Run a flow standalone (FlowsPanel). The backend also records the run into
+  // the flow's transcript session; we unwrap to the FlowRun for the panel.
   runFlow: (id: string, input: string) =>
-    req<FlowRun>(`/api/flows/${id}/run`, {
+    req<{ run: FlowRun; sessionId: string }>(`/api/flows/${id}/run`, {
       method: 'POST',
       body: JSON.stringify({ input }),
-    }),
+    }).then((r) => r.run),
   listFlowRuns: (flowId: string) =>
     req<FlowRun[]>(`/api/flow-runs?flowId=${encodeURIComponent(flowId)}`),
   getFlowRun: (id: string) => req<FlowRun>(`/api/flow-runs/${id}`),

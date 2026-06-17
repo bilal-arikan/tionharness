@@ -36,8 +36,12 @@ type Task struct {
 	LastRunID     string `json:"lastRunId"`
 	LastRunStatus string `json:"lastRunStatus"`
 	LastRunAt     int64  `json:"lastRunAt"`
-	CreatedAt     int64  `json:"createdAt"`
-	UpdatedAt     int64  `json:"updatedAt"`
+	// CreatedBy is the ID of the agent that created this task via a
+	// self-management tool ("" = created by the user). Agents may only
+	// delete agent-created tasks (read/edit/move/run are allowed on any task).
+	CreatedBy string `json:"createdBy,omitempty"`
+	CreatedAt int64  `json:"createdAt"`
+	UpdatedAt int64  `json:"updatedAt"`
 }
 
 // Schedule fires on a cron expression and either runs a linked task or delivers
@@ -69,10 +73,18 @@ const (
 )
 
 // Run is a single execution attempt of a task (or a scheduled delivery).
+//
+// SessionID links the run to the task's transcript session (see Session.Kind
+// "task"): each run appends a user turn (the prompt/input) plus an assistant turn
+// (the rich activity trace) to that session, so a board run is viewable in the
+// same streamable transcript as a chat. MessageID is the assistant turn this run
+// produced, for deep-linking straight to it.
 type Run struct {
 	ID        string `json:"id"`
 	TaskID    string `json:"taskId"`
 	AgentID   string `json:"agentId"`
+	SessionID string `json:"sessionId,omitempty"`
+	MessageID string `json:"messageId,omitempty"`
 	Status    string `json:"status"`
 	Trigger   string `json:"trigger"` // manual | schedule | dependency
 	Output    string `json:"output"`

@@ -1,0 +1,253 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  MessageSquare,
+  LayoutGrid,
+  GitBranch,
+  Clock,
+  Heart,
+  Activity,
+  RefreshCw,
+  type LucideIcon,
+} from 'lucide-react'
+import type { Agent, Execution, Message } from '../../types'
+import { api } from '../../api'
+import { MessageList } from '../chat/MessageList'
+import { AgentAvatar } from '../agents/AgentAvatar'
+import { relativeTime } from '../../lib/time'
+
+interface Props {
+  agents: Agent[]
+  onError: (msg: string) => void
+  onOpenFile?: (path: string) => void
+  onOpenArtifact?: (id: string) => void
+}
+
+// Per-kind display metadata: every execution path funnels into a Session tagged
+// with a kind, so the feed renders each uniformly with its own icon + label.
+const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
+  chat: { label: 'Sohbet', icon: MessageSquare },
+  task: { label: 'Görev', icon: LayoutGrid },
+  flow: { label: 'Akış', icon: GitBranch },
+  schedule: { label: 'Zamanlama', icon: Clock },
+  heartbeat: { label: 'Nabız', icon: Heart },
+}
+
+// Filter tabs (in display order). '' is "all".
+const FILTERS: { key: string; label: string }[] = [
+  { key: '', label: 'Tümü' },
+  { key: 'chat', label: 'Sohbet' },
+  { key: 'task', label: 'Görev' },
+  { key: 'flow', label: 'Akış' },
+  { key: 'schedule', label: 'Zamanlama' },
+  { key: 'heartbeat', label: 'Nabız' },
+]
+
+const POLL_MS = 5000
+
+function kindMeta(kind: string) {
+  return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
+}
+
+// StatusPill shows a finished run's pass/fail outcome (task/flow kinds).
+function StatusPill({ status }: { status: string }) {
+  if (status !== 'success' && status !== 'failure') return null
+  const ok = status === 'success'
+  return (
+    <span
+      className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{
+        color: ok ? 'var(--color-success)' : 'var(--color-danger)',
+        backgroundColor: ok
+          ? 'color-mix(in srgb, var(--color-success) 14%, transparent)'
+          : 'color-mix(in srgb, var(--color-danger) 14%, transparent)',
+      }}
+    >
+      {ok ? 'başarılı' : 'hata'}
+    </span>
+  )
+}
+
+// ExecutionsPanel is the unified activity feed: a single list of every execution
+// across chat / task / flow / schedule / heartbeat (each backed by a Session),
+// with live status, plus a read-only transcript viewer for the selected one.
+export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact }: Props) {
+  const [items, setItems] = useState<Execution[]>([])
+  const [filter, setFilter] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loading, setLoading] = useState(false)
+  const selectedRef = useRef<string | null>(null)
+  selectedRef.current = selectedId
+
+  const load = useCallback(
+    (kind: string) => {
+      api
+        .listExecutions(kind || undefined)
+        .then(setItems)
+        .catch((e) => onError((e as Error).message))
+    },
+    [onError],
+  )
+
+  // Initial + filter-change load, then poll so live "running" / status stays fresh.
+  useEffect(() => {
+    load(filter)
+    const t = setInterval(() => load(filter), POLL_MS)
+    return () => clearInterval(t)
+  }, [filter, load])
+
+  // Load the selected execution's transcript.
+  useEffect(() => {
+    if (!selectedId) {
+      setMessages([])
+      return
+    }
+    setLoading(true)
+    api
+      .listMessages(selectedId)
+      .then((m) => {
+        if (selectedRef.current === selectedId) setMessages(m)
+      })
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setLoading(false))
+  }, [selectedId, onError])
+
+  const selected = useMemo(
+    () => items.find((i) => i.sessionId === selectedId) ?? null,
+    [items, selectedId],
+  )
+
+  return (
+    <div className="flex h-full min-h-0">
+      {/* Master: the executions list */}
+      <aside className="flex h-full w-80 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+            Yürütmeler
+          </span>
+          <button
+            onClick={() => load(filter)}
+            title="Yenile"
+            className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
+
+        {/* Kind filter tabs */}
+        <div className="flex flex-wrap gap-1 px-3 pb-2">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`rounded-full px-2.5 py-1 text-[11px] transition ${
+                filter === f.key
+                  ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-2 pb-2">
+          {items.map((it) => {
+            const meta = kindMeta(it.kind)
+            const Icon = meta.icon
+            const owner = agents.find((a) => a.id === it.agentId)
+            const isActive = selectedId === it.sessionId
+            return (
+              <button
+                key={it.sessionId}
+                onClick={() => setSelectedId(it.sessionId)}
+                className={`mb-0.5 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
+                  isActive
+                    ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                    : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+                }`}
+              >
+                {owner ? (
+                  <AgentAvatar agent={owner} size={20} />
+                ) : (
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)]">
+                    <Icon size={12} />
+                  </span>
+                )}
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5">
+                    {it.running ? (
+                      <span className="relative flex h-2 w-2 shrink-0" title="Çalışıyor">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
+                      </span>
+                    ) : (
+                      it.unread && (
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Okunmadı" />
+                      )
+                    )}
+                    <span
+                      className={`min-w-0 flex-1 truncate ${
+                        it.unread || it.running ? 'font-semibold text-[var(--color-text)]' : ''
+                      }`}
+                    >
+                      {it.title || meta.label}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[10px] opacity-70">
+                    <Icon size={11} className="shrink-0" />
+                    <span>{meta.label}</span>
+                    {it.agentName && <span>· {it.agentName}</span>}
+                    <span>· {relativeTime(it.updatedAt)}</span>
+                  </span>
+                </span>
+                {!it.running && <StatusPill status={it.lastStatus ?? ''} />}
+              </button>
+            )
+          })}
+          {items.length === 0 && (
+            <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
+              Henüz yürütme yok. Bir sohbet, görev, akış veya zamanlama çalıştığında burada belirir.
+            </p>
+          )}
+        </div>
+      </aside>
+
+      {/* Detail: the selected execution's transcript (read-only) */}
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        {selected ? (
+          <>
+            <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
+              {(() => {
+                const Icon = kindMeta(selected.kind).icon
+                return <Icon size={16} className="text-[var(--color-text-dim)]" />
+              })()}
+              <span className="truncate text-sm font-semibold">
+                {selected.title || kindMeta(selected.kind).label}
+              </span>
+              <span className="text-xs text-[var(--color-text-dim)]">
+                · {kindMeta(selected.kind).label}
+                {selected.agentName ? ` · ${selected.agentName}` : ''}
+              </span>
+              {selected.running && (
+                <span className="ml-1 text-[11px] font-medium text-[var(--color-success)]">çalışıyor…</span>
+              )}
+            </header>
+            <MessageList
+              messages={messages}
+              pending={loading}
+              agents={agents}
+              onOpenFile={onOpenFile}
+              onOpenArtifact={onOpenArtifact}
+            />
+          </>
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--color-text-dim)]">
+            <Activity size={32} strokeWidth={1.5} />
+            <p className="text-sm">Bir yürütme seç ve transkriptini görüntüle.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

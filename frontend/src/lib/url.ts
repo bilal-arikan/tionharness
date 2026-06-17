@@ -10,7 +10,7 @@
 import type { View } from '../components/NavRail'
 
 const VIEWS: View[] = [
-  'chat', 'agents', 'board', 'schedules', 'memory',
+  'chat', 'executions', 'agents', 'board', 'schedules', 'memory',
   'tools', 'flows', 'artifacts', 'logs', 'settings',
 ]
 

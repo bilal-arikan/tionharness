@@ -13,6 +13,7 @@ import { taskApi } from './api/tasks'
 import { memoryApi } from './api/memory'
 import { mcpApi } from './api/mcp'
 import { flowApi } from './api/flows'
+import { executionApi } from './api/executions'
 import { artifactApi } from './api/artifacts'
 import { secretApi } from './api/secrets'
 import { skillApi } from './api/skills'
@@ -31,6 +32,7 @@ export const api = {
   ...memoryApi,
   ...mcpApi,
   ...flowApi,
+  ...executionApi,
   ...artifactApi,
   ...secretApi,
   ...skillApi,

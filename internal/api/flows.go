@@ -115,18 +115,68 @@ type runFlowReq struct {
 }
 
 // handleRunFlow executes a flow synchronously and returns the finished run
-// (with its trace). Manual runs are user-initiated, so not budget-gated.
+// (with its trace). Manual runs are user-initiated, so not budget-gated. The run
+// is also recorded into the flow's transcript session so it shows up in the
+// unified executions feed and the streamable transcript viewer.
 func (s *Server) handleRunFlow(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req runFlowReq
 	_ = decodeJSON(r, &req)
 
-	run, err := ws(r).Runtime.RunFlow(r.Context(), id, req.Input, false, nil)
+	run, sessionID, err := ws(r).Runtime.RunFlowRecorded(r.Context(), id, req.Input, false, nil)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, run)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"run":       run,
+		"sessionId": sessionID,
+	})
+}
+
+// handleRunFlowStream is the SSE variant of handleRunFlow: it streams each node's
+// start/finish live, records the run into the flow's transcript session, and ends
+// with the session id. Events:
+//
+//	node    → orchestration.NodeEvent   (per node start/done)
+//	reply   → { run, sessionId }        (terminal, success)
+//	error   → { error }                 (terminal, setup failure)
+func (s *Server) handleRunFlowStream(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+	ctx := r.Context()
+
+	var req runFlowReq
+	_ = decodeJSON(r, &req)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "streaming unsupported")
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", "text/event-stream")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "keep-alive")
+	h.Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	var mu sync.Mutex
+	sse := func(event string, data any) {
+		mu.Lock()
+		defer mu.Unlock()
+		b, _ := json.Marshal(data)
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
+		flusher.Flush()
+	}
+
+	obs := func(ev orchestration.NodeEvent) { sse("node", ev) }
+	run, sessionID, err := wsp.Runtime.RunFlowRecorded(ctx, id, req.Input, false, obs)
+	if err != nil {
+		sse("error", map[string]any{"error": err.Error()})
+		return
+	}
+	sse("reply", map[string]any{"run": run, "sessionId": sessionID})
 }
 
 func (s *Server) handleListFlowRuns(w http.ResponseWriter, r *http.Request) {

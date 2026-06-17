@@ -49,10 +49,25 @@ type Agent struct {
 }
 
 // Session is a conversation thread belonging to an agent.
+//
+// Kind is the broad category of what produced the transcript:
+//
+//	chat      manual user conversation (default)
+//	task      a kanban task's run history (one session per task)
+//	flow      an orchestration flow's run history (one session per flow)
+//	schedule  an agent's scheduled-prompt deliveries (one per agent)
+//	heartbeat an agent's autonomous wake turns
+//
+// SourceID links the session back to the entity that owns it (a task or flow id);
+// it is empty for plain chat and for agent-keyed kinds (schedule/heartbeat). This
+// is the unification primitive: every execution path funnels its output into a
+// Session, so a single streamable transcript viewer and the unified "executions"
+// feed can render task runs, flow runs and scheduled deliveries like any chat.
 type Session struct {
 	ID           string `json:"id"`
 	AgentID      string `json:"agentId"`
 	Kind         string `json:"kind"`
+	SourceID     string `json:"sourceId,omitempty"`
 	Title        string `json:"title"`
 	MessageCount int    `json:"messageCount"`
 	State        string `json:"state"`

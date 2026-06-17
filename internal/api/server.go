@@ -122,6 +122,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerUsageRoutes(mux)
 	s.registerMCPRoutes(mux)
 	s.registerFlowRoutes(mux)
+	s.registerExecutionRoutes(mux)
 	s.registerArtifactRoutes(mux)
 	s.registerSkillRoutes(mux)
 	s.registerSettingsRoutes(mux)
@@ -251,8 +252,16 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/flows/{id}", s.handleUpdateFlow)
 	mux.HandleFunc("DELETE /api/flows/{id}", s.handleDeleteFlow)
 	mux.HandleFunc("POST /api/flows/{id}/run", s.handleRunFlow)
+	mux.HandleFunc("POST /api/flows/{id}/run-stream", s.handleRunFlowStream)
 	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
 	mux.HandleFunc("GET /api/flow-runs/{id}", s.handleGetFlowRun)
+}
+
+// registerExecutionRoutes registers the unified executions feed — every run
+// across chat/task/flow/schedule funnels into a Session, so this is the single
+// list that surfaces them all with their kind and live status.
+func (s *Server) registerExecutionRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/executions", s.handleListExecutions)
 }
 
 // registerArtifactRoutes registers the artifact store (versioned agent-produced

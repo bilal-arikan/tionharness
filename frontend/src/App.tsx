@@ -16,6 +16,7 @@ import { Schedules } from './components/panels/Schedules'
 import { MemoryPanel } from './components/panels/MemoryPanel'
 import { ToolsPanel } from './components/panels/ToolsPanel'
 import { FlowsPanel } from './components/panels/FlowsPanel'
+import { ExecutionsPanel } from './components/panels/ExecutionsPanel'
 import { ArtifactsPanel } from './components/panels/ArtifactsPanel'
 import { SecretsPanel } from './components/panels/SecretsPanel'
 import { SkillsPanel } from './components/panels/SkillsPanel'
@@ -31,6 +32,13 @@ import { isImagePath, mediaUrl } from './lib/paths'
 import { applyTheme } from './lib/theme'
 import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clientPrefs'
 
+// isChatKind reports whether a session is a manual chat (shown in the chat
+// sidebar). Task/flow/schedule/heartbeat transcripts are surfaced in the
+// Activity (executions) view instead, so they don't clutter the chat list.
+function isChatKind(kind: string): boolean {
+  return kind === '' || kind === 'chat'
+}
+
 // Parse the deep-link once at module load. If it names a workspace, apply it to
 // the api client immediately so useWorkspaces initialises on the routed
 // workspace (an unknown id is validated away to the first workspace there).
@@ -39,6 +47,7 @@ if (INITIAL_ROUTE.workspaceId) setActiveWorkspace(INITIAL_ROUTE.workspaceId)
 
 const VIEW_TITLE: Record<View, string> = {
   chat: 'Sohbet',
+  executions: 'Aktivite',
   agents: 'Ajanlar',
   board: 'Görevler',
   schedules: 'Zamanlamalar',
@@ -136,9 +145,11 @@ export default function App() {
         if (cancelled) return
         setAgents(ag)
         setSessions(ss)
-        // Default selection: the most recent session.
-        let sid = ss.length > 0 ? ss[0].id : null
-        let aid = ss.length > 0 ? ss[0].agentId : null
+        // Default selection: the most recent chat session (task/flow/schedule
+        // transcripts live in the Activity view, not the chat sidebar).
+        const firstChat = ss.find((s) => isChatKind(s.kind))
+        let sid = firstChat ? firstChat.id : null
+        let aid = firstChat ? firstChat.agentId : null
         // Honor a pending deep link (initial load or cross-workspace nav) once.
         const want = pendingRouteRef.current
         pendingRouteRef.current = null
@@ -456,6 +467,9 @@ export default function App() {
   // transcript). Pinned above the composer and updated as the agent ticks items.
   const currentTodos = useMemo(() => latestTodos(messages), [messages])
 
+  // Manual chats for the chat sidebar (other kinds live in the Activity view).
+  const chatSessions = useMemo(() => sessions.filter((s) => isChatKind(s.kind)), [sessions])
+
   // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
   // the app state. A workspace switch defers entity selection to the
   // workspace-load effect via pendingRouteRef; same-workspace navigation applies
@@ -511,7 +525,7 @@ export default function App() {
       {/* Chat: a sessions-only list (agents now live in their own view). */}
       {view === 'chat' && (
         <SessionsSidebar
-          sessions={sessions}
+          sessions={chatSessions}
           agents={agents}
           activeSessionId={activeSessionId}
           streamingSessionIds={chat.streamingSessions}
@@ -622,6 +636,14 @@ export default function App() {
             onCreateAgent={createAgent}
             onUpdateAgent={updateAgent}
             onDeleteAgent={deleteAgent}
+          />
+        )}
+        {view === 'executions' && (
+          <ExecutionsPanel
+            agents={agents}
+            onError={setError}
+            onOpenFile={openFile}
+            onOpenArtifact={openArtifact}
           />
         )}
         {view === 'board' && <TaskBoard agents={agents} onError={setError} />}

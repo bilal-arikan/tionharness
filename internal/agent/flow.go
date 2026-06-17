@@ -92,6 +92,119 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 	return run
 }
 
+// RunFlowRecorded runs a flow and records the result as a turn in the flow's
+// dedicated transcript session (Session.Kind "flow"), so a standalone flow run —
+// like a task run — is viewable in the unified executions feed and the same
+// streamable transcript as a chat. Returns the flow run, the session id, and any
+// setup error. obs (optional) receives per-node progress for live streaming.
+func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, autonomous bool, obs orchestration.Observer) (db.FlowRun, string, error) {
+	flow, ferr := r.db.GetFlow(ctx, flowID)
+	if ferr != nil {
+		return db.FlowRun{}, "", ferr
+	}
+	run, runErr := r.RunFlow(ctx, flowID, input, autonomous, obs)
+	sessionID := r.recordFlowSessionTurn(ctx, flow, run, input, runErr)
+	return run, sessionID, runErr
+}
+
+// recordFlowSessionTurn appends the input (user turn) and the run transcript
+// (assistant turn with a per-node step trace) to the flow's transcript session,
+// returning the session id. The session is grouped under the flow's first agent;
+// the reply is attributed to the agent that produced the final output.
+func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run db.FlowRun, input string, runErr error) string {
+	owner := firstFlowAgentID(flow)
+	session, err := r.db.GetOrCreateSourceSession(ctx, "flow", flow.ID, owner, flow.Name)
+	if err != nil {
+		r.logger.Warn("flow session create failed", "flow", flow.ID, "error", err)
+		return ""
+	}
+	userText := strings.TrimSpace(input)
+	if userText == "" {
+		userText = "🔀 " + flow.Name
+	}
+	_, _ = r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: userText})
+
+	replyAgent := finalFlowAgentID(flow, run)
+	if replyAgent == "" {
+		replyAgent = owner
+	}
+	text := run.Output
+	if text == "" {
+		text = renderFlowTranscript(flow.Name, run, runErr)
+	}
+	_, _ = r.db.AddMessage(ctx, db.Message{
+		SessionID: session.ID,
+		AgentID:   replyAgent,
+		Role:      "assistant",
+		Text:      text,
+		Steps:     encodeSteps(flowStateToSteps(run, runErr)),
+	})
+	return session.ID
+}
+
+// flowStateToSteps converts a finished flow run's persisted state into a turn
+// trace: one text step per executed node (title + output), plus an error step on
+// setup/run failure. Lets the chat renderer show a flow run's per-node breakdown
+// exactly like a normal turn's activity trace.
+func flowStateToSteps(fr db.FlowRun, setupErr error) []TurnStep {
+	if setupErr != nil {
+		return []TurnStep{{Kind: StepError, Reason: "flow_setup", Text: setupErr.Error()}}
+	}
+	var st orchestration.State
+	if json.Unmarshal([]byte(fr.State), &st) != nil {
+		return nil
+	}
+	steps := make([]TurnStep, 0, len(st.Trace)+1)
+	for _, t := range st.Trace {
+		title := t.Title
+		if title == "" {
+			title = t.NodeID
+		}
+		steps = append(steps, TurnStep{Kind: StepText, Text: "**" + title + "**\n\n" + t.Output})
+	}
+	if fr.Status == db.FlowFailure {
+		steps = append(steps, TurnStep{Kind: StepError, Reason: "flow_failure", Text: fr.Error})
+	}
+	return steps
+}
+
+// firstFlowAgentID returns the agentId of the graph's start node (or first agent
+// node found), used as the flow session's representative owner. Empty if none.
+func firstFlowAgentID(flow db.Flow) string {
+	g, err := orchestration.ParseGraph(flow.Graph)
+	if err != nil {
+		return ""
+	}
+	if n, ok := g.NodeByID(g.Start); ok && n.Type == orchestration.NodeAgent && n.AgentID != "" {
+		return n.AgentID
+	}
+	for _, n := range g.Nodes {
+		if n.Type == orchestration.NodeAgent && n.AgentID != "" {
+			return n.AgentID
+		}
+	}
+	return ""
+}
+
+// finalFlowAgentID returns the agent of the last agent node that executed in the
+// run, so the resulting reply is attributed to whoever produced the final output.
+func finalFlowAgentID(flow db.Flow, run db.FlowRun) string {
+	g, err := orchestration.ParseGraph(flow.Graph)
+	if err != nil {
+		return ""
+	}
+	var st orchestration.State
+	if json.Unmarshal([]byte(run.State), &st) != nil {
+		return ""
+	}
+	for i := len(st.Trace) - 1; i >= 0; i-- {
+		if n, ok := g.NodeByID(st.Trace[i].NodeID); ok && n.Type == orchestration.NodeAgent {
+			return n.AgentID
+		}
+	}
+	return ""
+}
+
 // ResumeRunningFlows continues any flow runs left in the running state (e.g.
 // after a crash/restart) from their persisted state — the restart-safe path.
 func (r *Runtime) ResumeRunningFlows(ctx context.Context) {

@@ -45,12 +45,21 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 		return db.Run{}, fmt.Errorf("owner agent: %w", err)
 	}
 
+	// Funnel the run into the task's transcript session so it reads — and streams —
+	// like any chat. Each run appends a user turn (the prompt) now and an assistant
+	// turn (the activity trace) when it finishes.
+	session, _ := r.taskSession(ctx, task)
+	if session.ID != "" {
+		_, _ = r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: prompt})
+	}
+
 	// Open the run and flip the board to in_progress.
 	run, err := r.db.CreateRun(ctx, db.Run{
-		TaskID:  taskID,
-		AgentID: task.OwnerAgentID,
-		Status:  db.RunRunning,
-		Trigger: trigger,
+		TaskID:    taskID,
+		AgentID:   task.OwnerAgentID,
+		SessionID: session.ID,
+		Status:    db.RunRunning,
+		Trigger:   trigger,
 	})
 	if err != nil {
 		return db.Run{}, err
@@ -60,7 +69,7 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 	// Manual run-now is user-initiated; scheduled runs are autonomous and
 	// therefore subject to the agent's daily budget.
 	autonomous := trigger != "manual"
-	output, runErr := r.invokeWithMemory(ctx, agent, prompt, autonomous)
+	output, steps, runErr := r.invokeWithMemoryTraced(ctx, agent, prompt, autonomous)
 
 	status := db.RunSuccess
 	board := db.BoardDone
@@ -75,8 +84,16 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 			fmt.Sprintf("Task %q → %s", task.Title, output))
 	}
 
+	// Record the assistant turn (with its activity trace) in the transcript.
+	msgID := r.recordRunReply(ctx, session.ID, task.OwnerAgentID, output, errText, steps)
+
 	if err := r.db.FinishRun(ctx, run.ID, status, output, errText); err != nil {
 		r.logger.Warn("finish run failed", "run", run.ID, "error", err)
+	}
+	if session.ID != "" {
+		if err := r.db.SetRunSession(ctx, run.ID, session.ID, msgID); err != nil {
+			r.logger.Warn("link run session failed", "run", run.ID, "error", err)
+		}
 	}
 	if err := r.db.SetTaskLastRun(ctx, taskID, run.ID, status, board); err != nil {
 		r.logger.Warn("set task last run failed", "task", taskID, "error", err)
@@ -85,6 +102,7 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 	run.Status = status
 	run.Output = output
 	run.Error = errText
+	run.MessageID = msgID
 
 	r.logger.Info("task run finished", "task", taskID, "trigger", trigger, "status", status)
 
@@ -123,12 +141,23 @@ func (r *Runtime) runTaskFlow(ctx context.Context, task db.Task, trigger string)
 		flowName = flow.Name
 	}
 
+	// Transcript session for the task: record the flow input as a user turn now.
+	session, _ := r.taskSession(ctx, task)
+	if session.ID != "" {
+		userText := input
+		if userText == "" {
+			userText = "🔀 " + flowName
+		}
+		_, _ = r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: userText})
+	}
+
 	// Open the run and flip the board to in_progress.
 	run, err := r.db.CreateRun(ctx, db.Run{
-		TaskID:  task.ID,
-		AgentID: task.OwnerAgentID, // optional; flows carry their own agents
-		Status:  db.RunRunning,
-		Trigger: trigger,
+		TaskID:    task.ID,
+		AgentID:   task.OwnerAgentID, // optional; flows carry their own agents
+		SessionID: session.ID,
+		Status:    db.RunRunning,
+		Trigger:   trigger,
 	})
 	if err != nil {
 		return db.Run{}, err
@@ -153,8 +182,33 @@ func (r *Runtime) runTaskFlow(ctx context.Context, task db.Task, trigger string)
 			fmt.Sprintf("Flow task %q → %s", task.Title, output))
 	}
 
+	// Assistant turn: the per-node breakdown as a step trace, the rendered
+	// transcript as the message body. Attributed to the flow's final agent.
+	replyAgent := finalFlowAgentID(flow, flowRun)
+	if replyAgent == "" {
+		replyAgent = task.OwnerAgentID
+	}
+	msgID := ""
+	if session.ID != "" {
+		m, merr := r.db.AddMessage(ctx, db.Message{
+			SessionID: session.ID,
+			AgentID:   replyAgent,
+			Role:      "assistant",
+			Text:      output,
+			Steps:     encodeSteps(flowStateToSteps(flowRun, runErr)),
+		})
+		if merr == nil {
+			msgID = m.ID
+		}
+	}
+
 	if err := r.db.FinishRun(ctx, run.ID, status, output, errText); err != nil {
 		r.logger.Warn("finish flow-run failed", "run", run.ID, "error", err)
+	}
+	if session.ID != "" {
+		if err := r.db.SetRunSession(ctx, run.ID, session.ID, msgID); err != nil {
+			r.logger.Warn("link run session failed", "run", run.ID, "error", err)
+		}
 	}
 	if err := r.db.SetTaskLastRun(ctx, task.ID, run.ID, status, board); err != nil {
 		r.logger.Warn("set task last run failed", "task", task.ID, "error", err)
@@ -163,6 +217,7 @@ func (r *Runtime) runTaskFlow(ctx context.Context, task db.Task, trigger string)
 	run.Status = status
 	run.Output = output
 	run.Error = errText
+	run.MessageID = msgID
 
 	r.logger.Info("flow task run finished", "task", task.ID, "flow", task.FlowID, "trigger", trigger, "status", status)
 
@@ -205,9 +260,74 @@ func renderFlowTranscript(flowName string, fr db.FlowRun, setupErr error) string
 	return strings.TrimSpace(b.String())
 }
 
+// taskSession returns (creating if absent) the transcript session that holds a
+// task's run history. Keyed by the task id so every run of the task threads into
+// one conversation, viewable in the same streamable transcript as a chat.
+func (r *Runtime) taskSession(ctx context.Context, task db.Task) (db.Session, error) {
+	title := task.Title
+	if title == "" {
+		title = "Görev"
+	}
+	session, err := r.db.GetOrCreateSourceSession(ctx, "task", task.ID, task.OwnerAgentID, title)
+	if err != nil {
+		r.logger.Warn("task session create failed", "task", task.ID, "error", err)
+	}
+	return session, err
+}
+
+// recordRunReply appends the assistant turn for a finished task run to its
+// transcript session and returns the message id. On failure it records the error
+// text so the transcript explains what went wrong. A no-op (empty id) when the
+// session is unavailable.
+func (r *Runtime) recordRunReply(ctx context.Context, sessionID, agentID, output, errText string, steps []TurnStep) string {
+	if sessionID == "" {
+		return ""
+	}
+	text := output
+	if errText != "" {
+		text = "⚠️ " + errText
+		steps = append(steps, TurnStep{Kind: StepError, Reason: "task_run", Text: errText})
+	}
+	m, err := r.db.AddMessage(ctx, db.Message{
+		SessionID: sessionID,
+		AgentID:   agentID,
+		Role:      "assistant",
+		Text:      text,
+		Steps:     encodeSteps(steps),
+	})
+	if err != nil {
+		r.logger.Warn("record run reply failed", "session", sessionID, "error", err)
+		return ""
+	}
+	return m.ID
+}
+
 // invoke calls the agent's provider with a single user prompt.
 func (r *Runtime) invoke(ctx context.Context, agent db.Agent, prompt string, autonomous bool) (string, error) {
 	return r.complete(ctx, agent, r.systemPrompt(agent), "", prompt, autonomous)
+}
+
+// invokeWithMemoryTraced is invokeWithMemory plus the activity trace: it recalls
+// relevant memories into the dynamic system suffix and returns the agent's
+// thinking/tool steps so a task run can be persisted as a rich chat turn.
+func (r *Runtime) invokeWithMemoryTraced(ctx context.Context, agent db.Agent, prompt string, autonomous bool) (string, []TurnStep, error) {
+	provider, err := r.providers.Get(agent.Provider)
+	if err != nil {
+		return "", nil, err
+	}
+	dynamic := strings.TrimSpace(r.mem.ContextBlock(ctx, agent.ID, prompt, 5))
+	resp, steps, err := r.CompleteWithToolsTraced(ctx, agent, provider, providers.Request{
+		Model:         agent.Model,
+		System:        r.systemPrompt(agent),
+		SystemDynamic: dynamic,
+		Messages: []providers.Message{
+			{Role: providers.RoleUser, Text: prompt},
+		},
+	}, autonomous)
+	if err != nil {
+		return "", nil, err
+	}
+	return resp.Text, steps, nil
 }
 
 // invokeTraced is like invoke but also returns the agent's activity trace
