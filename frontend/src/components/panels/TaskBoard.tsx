@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import type { Agent, Task, Run, BoardState } from '../../types'
+import { AgentPicker } from '../agents/AgentPicker'
+import { AgentAvatar } from '../agents/AgentAvatar'
 
 const COLUMNS: { key: BoardState; label: string }[] = [
   { key: 'todo', label: 'Yapılacak' },
@@ -39,8 +41,6 @@ export function TaskBoard({ agents, onError }: Props) {
     reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? '—'
 
   // Tasks are created from a prompt alone; the backend auto-generates the title.
   const createTask = async () => {
@@ -138,18 +138,12 @@ export function TaskBoard({ agents, onError }: Props) {
           placeholder="Ajana verilecek talimat (prompt) — başlık otomatik oluşturulur"
           className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
         />
-        <select
+        <AgentPicker
+          agents={agents}
           value={ownerAgentId}
-          onChange={(e) => setOwnerAgentId(e.target.value)}
-          className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
-        >
-          <option value="">Ajan seç (opsiyonel)</option>
-          {agents.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
+          onChange={setOwnerAgentId}
+          placeholder="Ajan seç (opsiyonel)"
+        />
         <button
           onClick={createTask}
           className="rounded bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white hover:opacity-90"
@@ -178,7 +172,9 @@ export function TaskBoard({ agents, onError }: Props) {
                 <span className="rounded bg-[var(--color-surface-2)] px-1.5">{colTasks.length}</span>
               </div>
               <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2">
-                {colTasks.map((t) => (
+                {colTasks.map((t) => {
+                  const owner = agents.find((a) => a.id === t.ownerAgentId)
+                  return (
                   <div
                     key={t.id}
                     draggable
@@ -200,7 +196,16 @@ export function TaskBoard({ agents, onError }: Props) {
                       <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]">{t.prompt}</div>
                     )}
                     <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-[var(--color-text-dim)]">{agentName(t.ownerAgentId)}</span>
+                      <span className="flex items-center gap-1.5 text-[var(--color-text-dim)]">
+                        {owner ? (
+                          <>
+                            <AgentAvatar agent={owner} size={16} />
+                            <span className="truncate">{owner.name}</span>
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </span>
                       {t.lastRunStatus && (
                         <span className={STATUS_COLOR[t.lastRunStatus] ?? ''}>● {t.lastRunStatus}</span>
                       )}
@@ -245,7 +250,8 @@ export function TaskBoard({ agents, onError }: Props) {
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )
