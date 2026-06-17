@@ -83,6 +83,14 @@ func main() {
 		tun.SetSelfManageEnabled(true)
 		logger.Warn("self-management tools ENABLED (SWARMGO_ENABLE_SELFMANAGE); agents can create/edit/delete workspace entities")
 	}
+	// Agent→agent delegation (the call_agent tool) is off by default: it runs a
+	// full sub-agent turn per call (token cost) and lets one turn fan out across
+	// agents. Opt in via SWARMGO_ENABLE_DELEGATION; depth/cycle/budget guards still
+	// apply.
+	if v := os.Getenv("SWARMGO_ENABLE_DELEGATION"); v == "1" || strings.EqualFold(v, "true") {
+		tun.SetDelegationEnabled(true)
+		logger.Warn("agent delegation ENABLED (SWARMGO_ENABLE_DELEGATION); agents can summon other agents via call_agent")
+	}
 
 	// Process-wide event bus: autonomous runtimes publish notifications here and
 	// the API streams them to the UI over SSE.

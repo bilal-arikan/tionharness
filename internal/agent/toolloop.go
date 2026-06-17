@@ -147,6 +147,11 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	}
 	req.Tools = reg.Defs(r.toolFilter(ctx, agent))
 
+	// Wire agent→agent delegation for this turn: the call_agent tool reads the
+	// runner (and its loop guards) from the context. &req lets a summoned agent
+	// inherit the conversation exactly as it stands when the tool fires.
+	ctx = r.withDelegation(ctx, agent, &req, autonomous)
+
 	emit := func(s TurnStep) {
 		if onStep != nil {
 			onStep(s)

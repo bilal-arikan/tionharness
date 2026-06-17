@@ -71,6 +71,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewUpdateArtifactTool(),
 	}
 
+	// Agent→agent delegation: the call_agent tool lets this agent hand a sub-task
+	// to another agent and wait for its reply. Gated (off by default) because it
+	// multiplies token cost and lets one turn fan out across several agents; the
+	// runner enforces depth/cycle/budget guards.
+	if r.tun.DelegationEnabled() {
+		builtins = append(builtins, tools.NewCallAgentTool())
+	}
+
 	// Workspace secret vault: let agents discover and fetch stored credentials
 	// (API keys, tokens, passwords) for the tasks they run.
 	if r.vault != nil {

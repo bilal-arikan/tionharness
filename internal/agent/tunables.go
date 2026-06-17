@@ -20,6 +20,7 @@ type Tunables struct {
 	titleModel    string
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
 	selfManage    bool // gates the self-management tool suite (off by default)
+	delegation    bool // gates the agent→agent `call_agent` tool (off by default)
 	journalCap    int  // 0 → DefaultJournalCap
 	journalMaxLen int  // 0 → DefaultJournalMaxLen
 
@@ -92,6 +93,23 @@ func (t *Tunables) SelfManageEnabled() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.selfManage
+}
+
+// SetDelegationEnabled toggles the agent→agent `call_agent` tool. Off by
+// default: delegation multiplies token cost (each call runs another full agent
+// turn) and lets a single turn fan out across agents. The runner still enforces
+// depth, cycle and per-turn call-budget guards when enabled.
+func (t *Tunables) SetDelegationEnabled(enabled bool) {
+	t.mu.Lock()
+	t.delegation = enabled
+	t.mu.Unlock()
+}
+
+// DelegationEnabled reports whether the call_agent tool may be offered.
+func (t *Tunables) DelegationEnabled() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.delegation
 }
 
 // SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent)

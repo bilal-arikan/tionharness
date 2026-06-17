@@ -2,6 +2,47 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara özellik — Ajan→Ajan Delegasyonu (`call_agent` tool) ✅ (2026-06-17)
+
+**İstek:** Bir sohbet sırasında bir ajanın başka bir ajanı **etiketleyerek/çağırarak**
+ona alt-görev devredebilmesi. Beyin fırtınası sonrası kararlar: **senkron** (çağıran
+bekler), **bağlam mirası** (çağrılan ajan, çağıranın gördüğü tüm geçmişi + çağıranın
+yazdıklarını görür), **3 döngü koruması birden**, çağıran sırası **önce kullanıcı→ajan**
+(zaten `@mention` ile mevcut) **sonra ajan→ajan**, mekanizma **tool** (yapılandırılmış,
+güvenli) ama mesaj akışında bozuk görüntü oluşturmadan.
+
+**Tasarım — bir built-in tool olarak (`call_agent`):**
+- **`internal/tools/delegate.go` (yeni):** `CallAgentTool` (`{agent, task}` şeması) +
+  context köprüsü (`WithDelegation`/`DelegationFrom` + `DelegateRunner`/`DelegateResult`).
+  `WithAsker` kalıbını birebir izler — built-in tool, `agent` paketini import etmez
+  (döngü yok); runner context üzerinden enjekte edilir.
+- **`internal/agent/delegate.go` (yeni):** `Runtime.withDelegation` — çağrı-grafı konumunu
+  (`delegState`: depth + visited-set + paylaşılan call-budget sayacı) context'te taşır,
+  runner'ı kurar. Runner **3 korumayı** uygular:
+  1. **Derinlik (depth):** zincir `DefaultMaxDelegationDepth=3`'e ulaştıysa reddeder.
+  2. **Döngü (visited-set):** zincirde zaten olan (veya çağıranın kendisi) bir ajan tekrar
+     çağrılamaz → tüm a→b→a döngüleri kapanır.
+  3. **Bütçe (budget):** tur başına toplam `DefaultMaxDelegationCalls=8` delegasyon.
+- **Bağlam mirası:** `inheritedMessages` çağıranın **canlı** isteğini (`&req`) okur — alt-ajan,
+  araç bağlantısı (tool_use/tool_result) temizlenmiş, okunabilir geçmişi + çağıranın bu turda
+  yazdıklarını + delegasyon görevini görür (dangling tool_use riski yok). Alt-ajan kendi
+  persona/model/araçlarıyla **tam bir tur** koşar (`completeTraced` özyinelemesi).
+- **Wiring:** `toolloop.go` native döngüde `ctx = r.withDelegation(...)`; `toolsetup.go`
+  tool'u **gated** ekler (`r.tun.DelegationEnabled()`); `tunables.go` `DelegationEnabled`;
+  `main.go` `SWARMGO_ENABLE_DELEGATION` env bayrağı (varsayılan kapalı — her çağrı tam bir
+  ajan turu = token maliyeti).
+- **Mesaj akışı:** Delegasyon, çağıranın izinde standart bir **tool kartı** olarak görünür
+  (input=`{agent, task}`, output=alt-ajanın cevabı). Frontend `lib/tools.ts`'e `call_agent`
+  ikonu (🤝) + özet anahtarı eklendi. Akış bozulmaz.
+
+**Kapsam notu:** `call_agent` yalnızca **native tool yolu** (anthropic) için çalışır;
+claude-cli MCP delegasyon yolunda built-in tool'lar SwarmGo tarafından koşulmaz.
+
+**Test:** `internal/agent/delegate_test.go` — gate (açık/kapalı, gerçek registry yolu),
+3 korumanın da reddi (cycle/self, depth, budget), bilinmeyen ajan, `inheritedMessages`
+temizliği. `go build`/`go vet`/`go test ./...` + frontend `tsc --noEmit` yeşil. Gerçek iki-
+ajan E2E (model çağrısı) manuel doğrulamaya bırakıldı (API kredisi + canlı yığın gerekir).
+
 ## Ara özellik — Tur Hatalarını Sohbet Hiyerarşisinde Gösterme ✅ (2026-06-17)
 
 **İstek:** Bir mesaj sonucu hata oluşursa (server taraflı veya client taraflı), bunu

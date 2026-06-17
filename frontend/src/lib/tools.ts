@@ -28,6 +28,7 @@ const ICONS: Record<string, string> = {
   browser: '🧭',
   todo_write: '✅',
   ask_user: '💬',
+  call_agent: '🤝',
 }
 
 /** Strip an MCP namespace prefix (`server__tool`) for display. */
@@ -81,7 +82,7 @@ function summarize(input: unknown): string {
   }
   const o = input as Record<string, unknown>
   const first =
-    o.command ?? o.query ?? o.url ?? o.path ?? o.file_path ?? o.pattern ?? o.q ?? o.input
+    o.command ?? o.query ?? o.url ?? o.path ?? o.file_path ?? o.pattern ?? o.q ?? o.agent ?? o.input
   if (typeof first === 'string') return first
   // Fall back to a compact key list.
   const keys = Object.keys(o)
