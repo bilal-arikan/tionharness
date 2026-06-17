@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { FolderOpen, RefreshCw, Sparkles } from 'lucide-react'
+import { FolderOpen, Globe, Lock, RefreshCw, Sparkles } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
@@ -55,6 +55,7 @@ export function SkillsPanel({ onError }: Props) {
   const [activeSlug, setActiveSlug] = useState<string | null>(null)
   const [active, setActive] = useState<SkillDetail | null>(null)
   const [loadingBody, setLoadingBody] = useState(false)
+  const [accessBusy, setAccessBusy] = useState(false)
 
   const reload = useCallback(() => {
     api
@@ -87,6 +88,21 @@ export function SkillsPanel({ onError }: Props) {
     if (!activeSlug) return
     api.revealSkill(activeSlug).catch((e) => onError((e as Error).message))
   }, [activeSlug, onError])
+
+  // Flip the selected skill between shared (on-demand) and restricted; rewrites
+  // the SKILL.md frontmatter on disk and refreshes the catalog.
+  const toggleAccess = useCallback(() => {
+    if (!active) return
+    setAccessBusy(true)
+    api
+      .setSkillAccess(active.slug, !active.shared)
+      .then((sk) => {
+        setActive((a) => (a ? { ...a, shared: sk.shared } : a))
+        reload()
+      })
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setAccessBusy(false))
+  }, [active, reload, onError])
 
   // Re-scan tiers on disk, then refresh the catalog + current selection.
   const rescan = useCallback(() => {
@@ -194,13 +210,28 @@ export function SkillsPanel({ onError }: Props) {
                   </p>
                 )}
               </div>
-              <button
-                onClick={reveal}
-                title="Skill klasörünü dosya yöneticisinde aç"
-                className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-              >
-                <FolderOpen size={14} /> Klasörü aç
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  onClick={toggleAccess}
+                  disabled={accessBusy}
+                  title={
+                    active.shared
+                      ? 'Kısıtlıya çevir: yalnız atanan ajanlar kullanabilsin'
+                      : 'Paylaşımlı yap: tüm ajanlar gerektiğinde kullanabilsin'
+                  }
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+                >
+                  {active.shared ? <Lock size={14} /> : <Globe size={14} />}
+                  {active.shared ? 'Kısıtla' : 'Paylaş'}
+                </button>
+                <button
+                  onClick={reveal}
+                  title="Skill klasörünü dosya yöneticisinde aç"
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                >
+                  <FolderOpen size={14} /> Klasörü aç
+                </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
               {active.body ? (

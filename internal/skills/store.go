@@ -181,6 +181,26 @@ func (s *Store) Body(slug string) (string, error) {
 	return strings.TrimSpace(body), nil
 }
 
+// SetAccess flips a skill's access mode by rewriting its SKILL.md frontmatter,
+// then reloads the catalog. Returns the updated skill.
+func (s *Store) SetAccess(slug string, shared bool) (Skill, error) {
+	sk, ok := s.Get(slug)
+	if !ok {
+		return Skill{}, fmt.Errorf("skill %q not found", slug)
+	}
+	data, err := os.ReadFile(sk.Path)
+	if err != nil {
+		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
+	}
+	updated := setFrontmatterAccess(string(data), shared)
+	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
+	}
+	s.Reload()
+	out, _ := s.Get(slug)
+	return out, nil
+}
+
 // CatalogBlock renders the prompt section advertising EVERY available skill.
 func (s *Store) CatalogBlock() string {
 	return renderCatalog(s.List())

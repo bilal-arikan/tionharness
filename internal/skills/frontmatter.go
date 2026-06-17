@@ -127,6 +127,50 @@ func parseInlineArray(s string) []string {
 	return out
 }
 
+// setFrontmatterAccess rewrites a SKILL.md's frontmatter so its access mode
+// matches shared. Existing `access:`/`shared:` lines are removed; when shared,
+// a single `access: shared` line is added. All other frontmatter lines and the
+// markdown body are preserved. Newlines are normalised to "\n".
+func setFrontmatterAccess(content string, shared bool) string {
+	norm := strings.ReplaceAll(content, "\r\n", "\n")
+
+	var fmLines []string
+	body := norm
+	hadBlock := false
+	if strings.HasPrefix(norm, "---\n") {
+		rest := norm[len("---\n"):]
+		if end := strings.Index(rest, "\n---"); end >= 0 {
+			hadBlock = true
+			block := rest[:end]
+			body = strings.TrimPrefix(rest[end+len("\n---"):], "\n") // body after fence
+			for _, ln := range strings.Split(block, "\n") {
+				key := ""
+				if i := strings.Index(ln, ":"); i >= 0 {
+					key = strings.ToLower(strings.TrimSpace(ln[:i]))
+				}
+				if key == "access" || key == "shared" {
+					continue // drop any existing access marker
+				}
+				fmLines = append(fmLines, ln)
+			}
+		}
+	}
+	if shared {
+		fmLines = append(fmLines, "access: shared")
+	}
+
+	// No frontmatter needed (no prior block and nothing to add) → leave body as-is.
+	if !hadBlock && len(fmLines) == 0 {
+		return body
+	}
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString(strings.Join(fmLines, "\n"))
+	b.WriteString("\n---\n")
+	b.WriteString(body)
+	return b.String()
+}
+
 // unquote strips a single matching pair of surrounding quotes.
 func unquote(s string) string {
 	if len(s) >= 2 {

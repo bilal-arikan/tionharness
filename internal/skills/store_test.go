@@ -178,6 +178,49 @@ func TestSharedSkills(t *testing.T) {
 	}
 }
 
+func TestSetFrontmatterAccess(t *testing.T) {
+	// Add access to a block that lacks it; preserve other fields + body.
+	in := "---\nname: X\ndescription: d\n---\n\n# Body\ntext"
+	out := setFrontmatterAccess(in, true)
+	if !contains(out, "access: shared") || !contains(out, "name: X") || !contains(out, "# Body") {
+		t.Fatalf("shared rewrite lost content:\n%s", out)
+	}
+	// Toggling back to restricted drops the access line, keeps the rest.
+	back := setFrontmatterAccess(out, false)
+	if contains(back, "access:") {
+		t.Errorf("restricted should drop access line:\n%s", back)
+	}
+	if !contains(back, "name: X") || !contains(back, "# Body") {
+		t.Errorf("restricted rewrite lost content:\n%s", back)
+	}
+	// Re-parsing the rewritten file reflects the new mode.
+	if fm, _ := parseFrontmatter(out); !isShared(fm) {
+		t.Error("rewritten shared file should parse as shared")
+	}
+	if fm, _ := parseFrontmatter(back); isShared(fm) {
+		t.Error("rewritten restricted file should parse as restricted")
+	}
+}
+
+func TestStoreSetAccess(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "doc", "---\nname: Doc\ndescription: d\n---\nbody")
+	s := New("", "", dir)
+	if sk, _ := s.Get("doc"); sk.Shared {
+		t.Fatal("doc should start restricted")
+	}
+	sk, err := s.SetAccess("doc", true)
+	if err != nil || !sk.Shared {
+		t.Fatalf("SetAccess(true) = %+v, %v", sk, err)
+	}
+	if got, _ := s.Get("doc"); !got.Shared {
+		t.Error("store not reloaded after SetAccess")
+	}
+	if body, _ := s.Body("doc"); body != "body" {
+		t.Errorf("body changed by access rewrite: %q", body)
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || indexOf(s, sub) >= 0)
 }

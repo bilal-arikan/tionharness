@@ -62,6 +62,24 @@ func (s *Server) handleRevealSkill(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"path": dir})
 }
 
+// handleSetSkillAccess flips a skill between shared (on-demand) and restricted
+// by rewriting its SKILL.md frontmatter, then returns the updated skill.
+func (s *Server) handleSetSkillAccess(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Shared bool `json:"shared"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	sk, err := ws(r).Runtime.Skills().SetAccess(r.PathValue("slug"), req.Shared)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, sk)
+}
+
 // handleReloadSkills re-scans the skill tiers (after the user edits files on
 // disk) so the catalog and prompt block reflect the change without a restart.
 func (s *Server) handleReloadSkills(w http.ResponseWriter, r *http.Request) {
