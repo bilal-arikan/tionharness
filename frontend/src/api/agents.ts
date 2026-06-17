@@ -1,5 +1,5 @@
 // Agents: CRUD, usage/budget guardrails and per-agent tool access.
-import type { Agent, AgentPatch, AgentUsage, AgentTools } from '../types'
+import type { Agent, AgentPatch, AgentUsage, AgentTools, AgentContextPreview } from '../types'
 import { req } from './client'
 
 export const agentApi = {
@@ -32,6 +32,9 @@ export const agentApi = {
       `/api/agents/${agentId}/budget`,
       { method: 'POST', body: JSON.stringify({ dailyCallLimit, dailyTokenLimit }) },
     ),
+
+  agentContext: (agentId: string) =>
+    req<AgentContextPreview>(`/api/agents/${agentId}/context`),
 
   agentTools: (agentId: string) => req<AgentTools>(`/api/agents/${agentId}/tools`),
   setAgentTools: (agentId: string, mcpEnabled: boolean, allowedTools: string[]) =>

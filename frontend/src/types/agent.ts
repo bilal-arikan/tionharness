@@ -56,3 +56,13 @@ export interface AgentTools {
   allowedTools: string[]
   catalog: ToolDef[]
 }
+
+// Fresh-start context preview: the static system prompt + tool catalog an agent
+// begins each turn with (dynamic memory/summary/artifacts are added per-turn).
+export interface AgentContextPreview {
+  system: string
+  systemTokens: number
+  tools: { name: string; description: string }[]
+  toolTokens: number
+  totalTokens: number
+}

@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Eye, Trash2 } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AVATAR_COLORS, AVATAR_GLYPHS, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentToolsSection } from './AgentToolsSection'
 import { AgentSkillsSection } from './AgentSkillsSection'
+import { AgentContextModal } from './AgentContextModal'
 
 interface Props {
   agent: Agent
@@ -38,6 +39,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   const preview: Pick<Agent, 'id' | 'name' | 'avatar' | 'color'> = {
     id: agent.id,
@@ -89,6 +91,13 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           {savedAt > 0 && !saving && (
             <span className="text-xs text-[var(--color-text-dim)]">Kaydedildi ✓</span>
           )}
+          <button
+            onClick={() => setPreviewOpen(true)}
+            title="Ajanın sıfırdan aldığı bağlamı (sistem promptu + araçlar) önizle"
+            className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+          >
+            <Eye size={14} /> Bağlam
+          </button>
           {onCancel && (
             <button
               onClick={onCancel}
@@ -269,6 +278,14 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
 
         {err && <p className="text-xs text-[var(--color-danger)]">{err}</p>}
       </div>
+
+      {previewOpen && (
+        <AgentContextModal
+          agentId={agent.id}
+          agentName={name || agent.name}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
     </div>
   )
 }
