@@ -67,3 +67,42 @@ func TestGatedToolFlagsRoundTrip(t *testing.T) {
 		t.Fatalf("DTO missing delegation fields: %+v", dto)
 	}
 }
+
+// TestSessionContextRoundTrip verifies the cross-session context settings persist
+// and the recent count is clamped to [1,20].
+func TestSessionContextRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(dir, noopCipher{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	// Default: enabled, first-turn only, 5 recent.
+	cur := store.Get()
+	if !cur.SessionContextEnabled || cur.SessionContextEveryTurn || cur.SessionContextRecentCount != 5 {
+		t.Fatalf("unexpected session-context defaults: %+v", cur)
+	}
+
+	next, err := store.Apply(Patch{
+		SessionContextEveryTurn:   ptrBool(true),
+		SessionContextRecentCount: ptrInt(999), // clamp to 20
+	})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if !next.SessionContextEveryTurn || next.SessionContextRecentCount != 20 {
+		t.Fatalf("session-context apply/clamp failed: %+v", next)
+	}
+
+	// Disabling sticks through reload.
+	if _, err := store.Apply(Patch{SessionContextEnabled: ptrBool(false)}); err != nil {
+		t.Fatalf("apply disable: %v", err)
+	}
+	reopened, err := Open(dir, noopCipher{})
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if reopened.Get().SessionContextEnabled {
+		t.Fatalf("disabled session-context did not persist")
+	}
+}

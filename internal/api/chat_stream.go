@@ -99,6 +99,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	firstTurn := s.isFirstUntitledTurn(session)
+	// Captured before the user message is appended: primes cross-session context
+	// on a fresh session's first turn.
+	freshSession := session.MessageCount == 0
 
 	// Resolve the ordered list of responding agents (default → session agent).
 	agents := s.resolveTurnAgents(ctx, database, session, req.AgentIDs)
@@ -193,7 +196,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep)
+		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession)
 
 		// Attach a per-agent artifact sink so create_artifact / update_artifact
 		// persist content stamped with this session + agent — both on the native

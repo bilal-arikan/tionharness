@@ -73,6 +73,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// chat session means we should auto-generate one from this first message
 	// (only when auto-titling is enabled in settings).
 	firstTurn := s.isFirstUntitledTurn(session)
+	// Capture before the user message is appended: a fresh session (no prior
+	// messages) gets the cross-session context primed on its first turn.
+	freshSession := session.MessageCount == 0
 	agent, err := database.GetAgent(ctx, session.AgentID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "agent not found")
@@ -119,7 +122,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep)
+	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession)
 
 	// Manual chat is not budget-gated (autonomous=false). When the agent has
 	// tools enabled this drives the agentic loop (native) or CLI delegation;

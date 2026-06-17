@@ -107,6 +107,29 @@ export function ContextPanel({ draft, set }: PanelProps) {
       </div>
       <Toggle label="Otomatik yansıma (dream cycle)" hint="Journal eşiği aşılınca ajan kendi günlüğünü arka planda özetler ve özetlenen kayıtları siler. Otonom çağrı sayılır: duraklatma ve günlük bütçeye saygı gösterir." checked={draft.autoReflect} onChange={(v) => set('autoReflect', v)} />
 
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Çapraz-session farkındalığı
+      </div>
+      <Toggle
+        label="Session bağlamı"
+        hint="Ajana workspace'in aktif + son sessionlarının kısa özetini bağlama ekler ve list_sessions aracını sunar. Mevcut başlık/özet kullanılır (yeni LLM çağrısı yok)."
+        checked={draft.sessionContextEnabled}
+        onChange={(v) => set('sessionContextEnabled', v)}
+      />
+      {draft.sessionContextEnabled && (
+        <>
+          <Toggle
+            label="Her turda ver"
+            hint="Açık: özet her turda güncellenir (token maliyeti). Kapalı: yalnızca session'ın ilk turunda verilir (önerilen)."
+            checked={draft.sessionContextEveryTurn}
+            onChange={(v) => set('sessionContextEveryTurn', v)}
+          />
+          <Field label="Listelenecek geçmiş session sayısı" hint="Aktif olmayan, en son güncellenen N session (1–20).">
+            <input type="number" min={1} max={20} value={draft.sessionContextRecentCount} onChange={(e) => set('sessionContextRecentCount', Number(e.target.value))} className={inputCls} />
+          </Field>
+        </>
+      )}
+
       <div className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
         <span className="font-medium text-[var(--color-text)]">Tur kurtarma (A1).</span> Ajanın araç döngüsü "mutlu yol" dışına çıktığında turu yapısal olarak kurtarır: modelin
         cevabı çıktı-token limitine takılırsa kaldığı yerden <em>sürdürür</em> (parçalar tek cevapta birleştirilir), bağlam penceresi taşarsa eski mesajları

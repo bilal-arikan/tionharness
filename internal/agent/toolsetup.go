@@ -86,6 +86,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		builtins = append(builtins, tools.NewCallAgentTool())
 	}
 
+	// Cross-session awareness: the list_sessions pull tool (complements the pushed
+	// context block). Gated by the same master toggle.
+	if r.tun.SessionContextEnabled() {
+		builtins = append(builtins, tools.NewListSessionsTool(r.db))
+	}
+
 	// Workspace secret vault: let agents discover and fetch stored credentials
 	// (API keys, tokens, passwords) for the tasks they run.
 	if r.vault != nil {

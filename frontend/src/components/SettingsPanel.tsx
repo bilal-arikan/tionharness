@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Bell, Bot, Tag, Plug, Activity, type LucideIcon } from 'lucide-react'
 import { api } from '../api'
 import type {
   AppSettings,
@@ -121,6 +122,9 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       enableShell: draft.enableShell, enableSelfManage: draft.enableSelfManage,
       enableDelegation: draft.enableDelegation,
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
+      sessionContextEnabled: draft.sessionContextEnabled,
+      sessionContextEveryTurn: draft.sessionContextEveryTurn,
+      sessionContextRecentCount: draft.sessionContextRecentCount,
     }
     if (keyInput) patch.anthropicKey = keyInput
     if (minimaxKeyInput) patch.minimaxKey = minimaxKeyInput
@@ -180,7 +184,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
   const catLabel = [...APP_CATS, ...WS_CATS].find((c) => c.key === cat)?.label ?? ''
 
   return (
-    <div className="flex h-full">
+    <div className="flex min-h-0 flex-1">
       {/* Left: category rail */}
       <aside className="flex w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2">
         <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
@@ -223,7 +227,6 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
           ) : (
             <>
               {cat === 'profile' && <ProfilePanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'notifications' && <NotificationsPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'appearance' && <AppearancePanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'providers' && (
                 <ProvidersPanel
@@ -241,10 +244,26 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
               )}
               {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'budget' && <BudgetPanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'autonomy' && <AutonomyPanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'autotitle' && <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'mcp' && <McpPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'tools' && <ToolsPanel draft={draft} set={set} setDraft={setDraft} />}
+              {cat === 'advanced' && (
+                <>
+                  <AdvSection title="Bildirimler & Ekran" icon={Bell}>
+                    <NotificationsPanel draft={draft} set={set} setDraft={setDraft} />
+                  </AdvSection>
+                  <AdvSection title="Otonomi" icon={Bot}>
+                    <AutonomyPanel draft={draft} set={set} setDraft={setDraft} />
+                  </AdvSection>
+                  <AdvSection title="Otomatik Başlık" icon={Tag}>
+                    <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />
+                  </AdvSection>
+                  <AdvSection title="MCP & Araçlar" icon={Plug}>
+                    <McpPanel draft={draft} set={set} setDraft={setDraft} />
+                  </AdvSection>
+                  <AdvSection title="Tanılama" icon={Activity}>
+                    <DiagnosticsPanel draft={draft} set={set} setDraft={setDraft} />
+                  </AdvSection>
+                </>
+              )}
               {cat === 'commands' && (
                 <CommandsPanel
                   commands={commands}
@@ -256,7 +275,6 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
                 />
               )}
               {cat === 'stepkinds' && <StepKindsPanel />}
-              {cat === 'diagnostics' && <DiagnosticsPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'about' && <AboutPanel />}
               {cat === 'workspace' && (
                 <WorkspacePanel ws={ws} setWsField={setWsField} onDeleteWorkspace={onDeleteWorkspace} />
@@ -267,5 +285,22 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
         </div>
       </div>
     </div>
+  )
+}
+
+// AdvSection groups one former settings category under a labelled sub-header on
+// the combined "Gelişmiş" screen, with an accent icon badge and a divider
+// between groups.
+function AdvSection({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: ReactNode }) {
+  return (
+    <section className="space-y-4 border-b border-[var(--color-border)] pb-6 last:border-b-0 last:pb-0">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+          <Icon size={14} />
+        </span>
+        {title}
+      </h3>
+      {children}
+    </section>
   )
 }

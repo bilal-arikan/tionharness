@@ -28,7 +28,7 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // artifacts) that changes every turn and is kept outside the cached prefix.
 //
 // Shared by both the blocking (chat.go) and streaming (chat_stream.go) handlers.
-func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared) providers.Request {
+func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession bool) providers.Request {
 	system := buildSystemPrompt(agentRow)
 	// Tell the agent its own name and how @mentions work, so a leading "@Name"
 	// (the UI's agent selector) is understood as the user addressing this agent —
@@ -81,6 +81,14 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// the original todo_write message scrolls out of context / is compacted away.
 	if tb := todoContextBlock(ctx, wsp.DB, session.ID); tb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + tb)
+	}
+	// Cross-session awareness: a short summary of the workspace's active + recent
+	// sessions. Gated by settings; injected every turn or only on a session's
+	// first turn (its "start") depending on the SessionContextEveryTurn toggle.
+	if sc := s.settings.Get(); sc.SessionContextEnabled && (sc.SessionContextEveryTurn || freshSession) {
+		if sb := sessionsContextBlock(ctx, wsp.DB, session.ID, sc.SessionContextRecentCount); sb != "" {
+			dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
+		}
 	}
 
 	return providers.Request{

@@ -92,6 +92,13 @@ type Settings struct {
 	DelegationMaxDepth int  `json:"delegationMaxDepth"` // max delegation nesting (0 = default 3)
 	DelegationMaxCalls int  `json:"delegationMaxCalls"` // max delegations per turn (0 = default 8)
 
+	// Cross-session awareness: inject a short summary of the workspace's active +
+	// recent chat sessions into an agent's dynamic context so it starts aware of
+	// the rest of the work. Also gates the list_sessions pull tool.
+	SessionContextEnabled     bool `json:"sessionContextEnabled"`     // master toggle (push block + pull tool)
+	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`   // false = inject only on a session's first turn
+	SessionContextRecentCount int  `json:"sessionContextRecentCount"` // # of past (non-active) sessions to list (0 = default 5)
+
 	// Diagnostics (informational; applied on restart).
 	LogLevel string `json:"logLevel"` // info | debug | warn | error
 }
@@ -139,6 +146,10 @@ func Default() Settings {
 
 		DelegationMaxDepth: 3,
 		DelegationMaxCalls: 8,
+
+		SessionContextEnabled:     true,
+		SessionContextEveryTurn:   false,
+		SessionContextRecentCount: 5,
 
 		LogLevel: "info",
 	}
@@ -204,6 +215,10 @@ type DTO struct {
 	DelegationMaxDepth int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls int  `json:"delegationMaxCalls"`
 
+	SessionContextEnabled     bool `json:"sessionContextEnabled"`
+	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`
+	SessionContextRecentCount int  `json:"sessionContextRecentCount"`
+
 	LogLevel string `json:"logLevel"`
 }
 
@@ -266,6 +281,10 @@ func (s Settings) ToDTO() DTO {
 		EnableDelegation:   s.EnableDelegation,
 		DelegationMaxDepth: s.DelegationMaxDepth,
 		DelegationMaxCalls: s.DelegationMaxCalls,
+
+		SessionContextEnabled:     s.SessionContextEnabled,
+		SessionContextEveryTurn:   s.SessionContextEveryTurn,
+		SessionContextRecentCount: s.SessionContextRecentCount,
 
 		LogLevel: s.LogLevel,
 	}
@@ -331,6 +350,10 @@ type Patch struct {
 	EnableDelegation   *bool `json:"enableDelegation"`
 	DelegationMaxDepth *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls *int  `json:"delegationMaxCalls"`
+
+	SessionContextEnabled     *bool `json:"sessionContextEnabled"`
+	SessionContextEveryTurn   *bool `json:"sessionContextEveryTurn"`
+	SessionContextRecentCount *int  `json:"sessionContextRecentCount"`
 
 	LogLevel *string `json:"logLevel"`
 }

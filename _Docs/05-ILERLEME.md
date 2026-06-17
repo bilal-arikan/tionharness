@@ -2,6 +2,35 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara özellik — Çapraz-Session Farkındalığı (push block + `list_sessions` tool) ✅ (2026-06-17)
+
+**İstek:** Ajanlara her oturum başında workspace'in **aktif sessionlarını** ve **geçmiş 5
+sessionunu** kısa bir özet olarak vermek. Kararlar: aktif = `State=="active"`, filtre
+`Kind=="chat"`, mevcut session hariç; geçmiş = aktif-olmayan, `UpdatedAt` desc ilk N; **yeni
+LLM çağrısı yok** (mevcut `Title`+`Summary` kullanılır); ilk-tur/her-tur Ayarlar'dan seçilir;
+**`list_sessions` pull tool**'u da eklendi; tümü **Ayarlar toggle**'lı.
+
+**İki kanal — push (enjeksiyon) + pull (tool):**
+- **Push** (`api/sessions_context.go`, yeni): `sessionsContextBlock(ctx, db, currentID, recentCount)`
+  → `ListSessions("")` (ws-geneli, UpdatedAt desc) → `Kind=="chat"` + mevcut hariç → aktif
+  (cap 12) / geçmiş (recentCount) ayrımı → kompakt satır (başlık·mesaj·göreli yaş·özet snippet,
+  kırpmalı). `composeTurnRequest`'in **dinamik** (cache-dışı) suffix'ine eklenir; `freshSession`
+  (ilk tur) bayrağı `chat.go`/`chat_stream.go`'da user-mesajı eklenmeden **önce** yakalanır.
+- **Pull** (`tools/builtin_sessions.go`, yeni): `list_sessions` built-in tool (`{state?:active|all,
+  limit?}`) — ajan ihtiyaç duyunca çeker. `buildRegistry`'de aynı master toggle ile gated.
+
+**Ayarlar (Bağlam & Bellek paneli):** `SessionContextEnabled` (vars. **açık**),
+`SessionContextEveryTurn` (vars. kapalı = yalnız ilk tur), `SessionContextRecentCount`
+(vars. 5, clamp 1–20). `settings`→`applySettings`→`tun.SetSessionContext` canlı push;
+`Tunables.SessionContext*` getter'ları. Frontend `ContextPanel`'e "Çapraz-session farkındalığı"
+bölümü (toggle + everyTurn + sayı, koşullu).
+
+**Test:** `settings/store_test.go` (round-trip+clamp), `api/sessions_context_test.go` (aktif/geçmiş
+ayrımı, mevcut-hariç, chat-only filtre, boş), `tools/builtin_sessions_test.go` (active-only/all/
+chat-only). **Canlı doğrulama** (izole instance, port 8099): varsayılan açık/first-turn/5 →
+`list_sessions` katalogda → disable edince kaybolur → recentCount 999→20 clamp. `go test ./...` +
+`tsc` yeşil.
+
 ## Faz S1 — Skill sistemi (dosya-tabanlı, 3 katman, lazy) ✅ (2026-06-17)
 
 Ajanlara **yeniden kullanılabilir talimat setleri** (skill) eklendi — Claude Code /
@@ -1726,8 +1755,11 @@ Kullanıcıyla netleştirilecek:
 
 ## Oturum Günlüğü
 
+### 2026-06-17 — Ekran yüksekliği/scroll fix (panel kökleri)
+"Adım Türleri" (ve aynı kalıptaki diğer ekranlar) tarayıcı yüksekliğini aşıyordu: `<main>` (flex-col, header + panel) içinde panel kökleri `h-full` (= main'in TAM yüksekliği) kullanıyordu → header yüksekliği kadar taşıyor, iç scroll'un altı ekran dışına itiliyordu. Kök yükseklikleri **`min-h-0 flex-1`**'e çevrildi (yeni Artifacts/Tools/Skills panelleriyle aynı kalıp): `SettingsPanel`, `MemoryPanel`, `LogsPanel`, `FlowsPanel`, `TaskBoard`, `Schedules`, `AgentsView`; `SecretsPanel`+`MessageList`'e `min-h-0` eklendi. Artık header sabit, içerik panel içinde scroll. ✅ `tsc` temiz; Chrome canlı doğrulandı.
+
 ### 2026-06-17 — Ayarlar: "Gelişmiş" birleşik kategori
-Ayarlar kategori rayı sadeleştirildi: **Bildirimler & Ekran + Otonomi + Otomatik Başlık + MCP & Araçlar + Tanılama** ayrı kategorileri tek **"Gelişmiş"** (`advanced`, `SlidersHorizontal` ikonu) alt-ekranında toplandı. `settings/primitives.tsx` `Cat` union + `APP_CATS` güncellendi (5 giriş → 1); `SettingsPanel.tsx` `advanced` branch'i beş paneli (`NotificationsPanel`/`AutonomyPanel`/`AutoTitlePanel`/`McpPanel`/`DiagnosticsPanel`) yeni `AdvSection` (alt-başlık + ayraç) sarmalı içinde dikey istifler; tek "Kaydet" hepsini kaydeder. ✅ `tsc` temiz; Chrome canlı doğrulandı (rail tek "Gelişmiş", ekran 5 bölüm).
+Ayarlar kategori rayı sadeleştirildi: **Bildirimler & Ekran + Otonomi + Otomatik Başlık + MCP & Araçlar + Tanılama** ayrı kategorileri tek **"Gelişmiş"** (`advanced`, `SlidersHorizontal` ikonu) alt-ekranında toplandı. `settings/primitives.tsx` `Cat` union + `APP_CATS` güncellendi (5 giriş → 1); `SettingsPanel.tsx` `advanced` branch'i beş paneli (`NotificationsPanel`/`AutonomyPanel`/`AutoTitlePanel`/`McpPanel`/`DiagnosticsPanel`) yeni `AdvSection` (alt-başlık + ayraç) sarmalı içinde dikey istifler; tek "Kaydet" hepsini kaydeder. Her `AdvSection` başlığında **accent-soft ikon rozeti** (Bell/Bot/Tag/Plug/Activity) — daha canlı görünüm. ✅ `tsc` temiz; Chrome canlı doğrulandı (rail tek "Gelişmiş", ekran 5 ikonlu bölüm).
 
 ### 2026-06-17 — Tema tutarlılık denetimi (yeni özellikler sonrası)
 Yeni gelen özellikler (Ajanlar/Artifactlar/Sırlar görünümleri, sessions sidebar bölme) tema açısından denetlendi; tespit edilen tutarsızlıklar giderildi (`go build`/`vet` + `tsc -b` temiz; Chrome canlı doğrulandı):

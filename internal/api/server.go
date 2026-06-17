@@ -101,6 +101,7 @@ func (s *Server) applySettings() {
 	s.tun.SetSelfManageEnabled(cur.EnableSelfManage)
 	s.tun.SetDelegationEnabled(cur.EnableDelegation)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
+	s.tun.SetSessionContext(cur.SessionContextEnabled, cur.SessionContextEveryTurn, cur.SessionContextRecentCount)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
 }
 
