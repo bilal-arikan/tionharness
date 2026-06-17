@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useState } from 'react'
 import { FolderOpen, Globe, Lock, RefreshCw, Sparkles } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource } from '../../types'
 import { api } from '../../api'
@@ -56,6 +56,37 @@ export function SkillsPanel({ onError }: Props) {
   const [active, setActive] = useState<SkillDetail | null>(null)
   const [loadingBody, setLoadingBody] = useState(false)
   const [accessBusy, setAccessBusy] = useState(false)
+  // Resizable left list width (persisted, clamped). 288px == the old w-72.
+  const [listWidth, setListWidth] = useState(() => {
+    const v = Number(localStorage.getItem('swarmgo.skillsListWidth'))
+    return v >= 200 && v <= 640 ? v : 288
+  })
+  useEffect(() => {
+    localStorage.setItem('swarmgo.skillsListWidth', String(listWidth))
+  }, [listWidth])
+
+  // Drag the divider to resize the list panel; tracks the pointer on document so
+  // the drag continues even when the cursor leaves the thin handle.
+  const startResize = useCallback(
+    (e: ReactMouseEvent) => {
+      e.preventDefault()
+      const startX = e.clientX
+      const startW = listWidth
+      const onMove = (ev: MouseEvent) =>
+        setListWidth(Math.min(640, Math.max(200, startW + ev.clientX - startX)))
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    },
+    [listWidth],
+  )
 
   const reload = useCallback(() => {
     api
@@ -117,8 +148,11 @@ export function SkillsPanel({ onError }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1">
-      {/* List */}
-      <div className="flex w-72 flex-shrink-0 flex-col border-r border-[var(--color-border)]">
+      {/* List (resizable) */}
+      <div
+        className="flex flex-shrink-0 flex-col"
+        style={{ width: listWidth }}
+      >
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
             Beceriler · {list.length}
@@ -169,6 +203,15 @@ export function SkillsPanel({ onError }: Props) {
             )
           })}
         </div>
+      </div>
+
+      {/* Resize handle */}
+      <div
+        onMouseDown={startResize}
+        title="Sürükleyerek genişlet"
+        className="group relative w-1 shrink-0 cursor-col-resize bg-[var(--color-border)] hover:bg-[var(--color-accent)]"
+      >
+        <span className="absolute inset-y-0 -left-1 -right-1" />
       </div>
 
       {/* Detail */}
