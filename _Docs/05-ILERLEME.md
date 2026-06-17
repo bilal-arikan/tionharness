@@ -2,6 +2,38 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara özellik — Workspace Şablonları (Templates) ✅ (2026-06-17)
+
+**İstek:** Yeni workspace'ler boş tek-ajan yerine, belirli bir iş türüne (araştırma,
+yazılım, günlük rutin) hazır gelsin.
+
+**Çözüm:** Workspace oluşturmada **şablon seçimi**. Her şablon; ajan kadrosu + onları
+sırayla bağlayan bir **orchestration akışı** + (opsiyonel) **devre dışı başlangıç
+zamanlamaları** tohumlar.
+
+- **`internal/api/templates.go`** (yeni) — `workspaceTemplates` kayıt defteri (4 şablon):
+  - `blank` (Boş): eski tek "Asistan" davranışı + saatlik devre dışı görev-özeti zamanlaması.
+  - `research` (Bilimsel Araştırma): Literatür Tarayıcı → Metodolog → Analist → Hakem +
+    uçtan uca araştırma akışı.
+  - `software` (Yazılım Geliştirme): Search → Plan → Execute → Verify ajanları + akışı.
+  - `daily` (Günlük Rutin): Planlayıcı/Koç/Hatırlatıcı + sabah(08:00)/akşam(20:00) devre
+    dışı zamanlamalar.
+  - `seedTemplate` ajanları oluşturur (key→gerçek ID eşler), `seedTemplateFlow` ile lineer
+    grafiği kurup `Graph.Validate()` sonrası flow olarak saklar, zamanlamaları **disabled**
+    ekler. Tüm hatalar loglanır ama **non-fatal** (workspace yine kullanılır).
+- **API:** `GET /api/workspace-templates` (katalog: id/ad/açıklama/ikon/ajan sayısı/akış var mı).
+  `POST /api/workspaces` artık `template` alanı alır; bilinmeyen/boş → `blank` fallback
+  (`templateByID`). Eski `seedDefaultAgent`/`seedDefaultSchedule` kaldırıldı, yerini
+  `seedTemplate` aldı (`workspaces.go` sadeleşti).
+- **UI** (`WorkspaceCreateModal.tsx`): ad alanının üstünde **şablon seçici** kart listesi
+  (ikon + ad + "N ajan · akış" rozeti + açıklama). Şablon seçince ikon otomatik adapte olur.
+  `listWorkspaceTemplates()` + `createWorkspace({...template})` (`api/workspaces.ts`),
+  `WorkspaceTemplate` tipi (`types/workspace.ts`), `NewWorkspaceData.template`.
+
+**Test:** `go build ./...` + `go test ./internal/api` yeşil (`templates_test.go`: şablon
+bütünlüğü — benzersiz step id, çözülen ajan key'leri, geçerli grafik; `templateByID`
+fallback). Frontend `tsc --noEmit` temiz.
+
 ## Ara özellik — Sır Kasası (Secret Vault) ✅ (2026-06-17)
 
 **İstek:** "Uygulamaya secret/şifre tutabileceğimiz bir ekran ekleyelim; workspace'teki

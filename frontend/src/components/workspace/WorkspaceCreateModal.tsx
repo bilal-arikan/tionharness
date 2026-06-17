@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
+import type { WorkspaceTemplate } from '../../types'
 
 export interface NewWorkspaceData {
   name: string
   path?: string
   icon?: string
+  template?: string
 }
 
 interface Props {
@@ -23,6 +25,8 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
   const [icon, setIcon] = useState('⬡')
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [templates, setTemplates] = useState<WorkspaceTemplate[]>([])
+  const [templateId, setTemplateId] = useState('blank')
   const nameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -33,6 +37,20 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // Load the available templates for the picker.
+  useEffect(() => {
+    api
+      .listWorkspaceTemplates()
+      .then(setTemplates)
+      .catch(() => {}) // picker just stays empty / blank-only on failure
+  }, [])
+
+  // Selecting a template adopts its icon (unless the user already picked one).
+  const selectTemplate = (t: WorkspaceTemplate) => {
+    setTemplateId(t.id)
+    if (t.icon) setIcon(t.icon)
+  }
 
   const browse = async () => {
     setPicking(true)
@@ -53,7 +71,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
       nameRef.current?.focus()
       return
     }
-    onCreate({ name: name.trim(), path: path.trim() || undefined, icon })
+    onCreate({ name: name.trim(), path: path.trim() || undefined, icon, template: templateId })
   }
 
   return (
@@ -66,6 +84,39 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 text-base font-semibold">Yeni Workspace</h2>
+
+        {/* Template */}
+        {templates.length > 0 && (
+          <>
+            <label className="mb-1 block text-xs text-[var(--color-text-dim)]">Şablon</label>
+            <div className="mb-4 grid max-h-60 grid-cols-1 gap-1.5 overflow-y-auto">
+              {templates.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => selectTemplate(t)}
+                  className={`flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition ${
+                    templateId === t.id
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
+                      : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]'
+                  }`}
+                >
+                  <span className="mt-0.5 text-lg leading-none">{t.icon}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      {t.name}
+                      <span className="text-[10px] font-normal text-[var(--color-text-dim)]">
+                        {t.agentCount} ajan{t.hasFlow ? ' · akış' : ''}
+                      </span>
+                    </span>
+                    <span className="mt-0.5 block text-xs text-[var(--color-text-dim)]">
+                      {t.description}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Name */}
         <label className="mb-1 block text-xs text-[var(--color-text-dim)]">Ad</label>

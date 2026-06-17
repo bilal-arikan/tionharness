@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/workspace"
 )
 
@@ -35,10 +34,11 @@ func (s *Server) handleListWorkspaces(w http.ResponseWriter, _ *http.Request) {
 }
 
 type createWorkspaceReq struct {
-	Name  string `json:"name"`
-	Path  string `json:"path"`  // optional parent folder for the workspace data dir
-	Icon  string `json:"icon"`  // optional emoji identity
-	Color string `json:"color"` // optional hex accent
+	Name     string `json:"name"`
+	Path     string `json:"path"`     // optional parent folder for the workspace data dir
+	Icon     string `json:"icon"`     // optional emoji identity
+	Color    string `json:"color"`    // optional hex accent
+	Template string `json:"template"` // optional workspace template id (default "blank")
 }
 
 func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -67,58 +67,11 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Seed the new workspace with a default agent so it is usable immediately.
-	s.seedDefaultAgent(r, wsNew)
+	// Seed the new workspace from the chosen template (agents + flow + schedules)
+	// so it is usable immediately. Unknown/empty template falls back to "blank".
+	s.seedTemplate(r.Context(), wsNew, templateByID(req.Template))
 
 	writeJSON(w, http.StatusCreated, wsNew.Meta)
-}
-
-// seedDefaultAgent creates a starter agent in a freshly created workspace using
-// the configured provider/model defaults (workspace override → app default →
-// claude-cli last resort), so the roster is never empty.
-func (s *Server) seedDefaultAgent(r *http.Request, wsNew *workspace.Workspace) {
-	cfg := s.settings.Get()
-	wsCfg := wsNew.Settings()
-
-	provider := wsCfg.DefaultProvider
-	if provider == "" {
-		provider = cfg.DefaultProvider
-	}
-	if provider == "" {
-		provider = "claude-cli"
-	}
-	model := wsCfg.DefaultModel
-	if model == "" {
-		model = cfg.DefaultModel
-	}
-
-	agent, err := wsNew.DB.CreateAgent(r.Context(), db.Agent{
-		Name:     "Asistan",
-		Soul:     "You are a helpful assistant.",
-		Provider: provider,
-		Model:    model,
-	})
-	if err != nil {
-		s.logger.Warn("seed default agent failed", "workspace", wsNew.ID, "error", err)
-		return
-	}
-
-	s.seedDefaultSchedule(r, wsNew, agent.ID)
-}
-
-// seedDefaultSchedule adds a starter cron schedule to a freshly created
-// workspace: an hourly job that asks the default agent to report on unfinished
-// tasks. It is created DISABLED so it never fires until the user opts in via the
-// Schedules screen.
-func (s *Server) seedDefaultSchedule(r *http.Request, wsNew *workspace.Workspace, agentID string) {
-	if _, err := wsNew.DB.CreateSchedule(r.Context(), db.Schedule{
-		AgentID:  agentID,
-		CronExpr: "0 * * * *", // hourly
-		Prompt:   "Review the task board for unfinished or stuck tasks and send a notification summarizing them.",
-		Enabled:  false,
-	}); err != nil {
-		s.logger.Warn("seed default schedule failed", "workspace", wsNew.ID, "error", err)
-	}
 }
 
 // pickFolderReq/Resp carry the native folder-picker exchange.

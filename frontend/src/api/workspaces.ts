@@ -2,6 +2,7 @@
 // per-workspace settings (active workspace via X-Workspace-Id header).
 import type {
   Workspace,
+  WorkspaceTemplate,
   WorkspaceSettings,
   WorkspaceSettingsPatch,
   WorkspaceConfig,
@@ -11,7 +12,15 @@ import { req } from './client'
 
 export const workspaceApi = {
   listWorkspaces: () => req<Workspace[]>('/api/workspaces'),
-  createWorkspace: (data: { name: string; path?: string; icon?: string; color?: string }) =>
+  // Available workspace templates (agents/flow blueprints) for the create dialog.
+  listWorkspaceTemplates: () => req<WorkspaceTemplate[]>('/api/workspace-templates'),
+  createWorkspace: (data: {
+    name: string
+    path?: string
+    icon?: string
+    color?: string
+    template?: string
+  }) =>
     req<Workspace>('/api/workspaces', {
       method: 'POST',
       body: JSON.stringify(data),
