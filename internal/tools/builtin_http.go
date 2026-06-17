@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"syscall"
 	"time"
 
 	"github.com/bilal/swarmgo/internal/providers"
@@ -19,9 +22,48 @@ type HTTPGetTool struct {
 	client *http.Client
 }
 
-// NewHTTPGetTool builds the tool with a bounded-timeout client.
+// NewHTTPGetTool builds the tool with a bounded-timeout client whose dialer
+// refuses connections to loopback, private, link-local and other non-public
+// addresses (SSRF guard). The check runs on the *resolved* IP for every dial,
+// so DNS-rebinding and redirect hops to internal hosts are blocked too.
 func NewHTTPGetTool() HTTPGetTool {
-	return HTTPGetTool{client: &http.Client{Timeout: 20 * time.Second}}
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	dialer.Control = func(network, address string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return err
+		}
+		ip := net.ParseIP(host)
+		if ip == nil || isBlockedIP(ip) {
+			return fmt.Errorf("blocked address %q (private/loopback/link-local not allowed)", host)
+		}
+		return nil
+	}
+	transport := &http.Transport{
+		DialContext:           dialer.DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
+	return HTTPGetTool{client: &http.Client{Timeout: 20 * time.Second, Transport: transport}}
+}
+
+// isBlockedIP reports whether ip must not be reached by the http_get tool:
+// loopback, unspecified, link-local (incl. the 169.254.169.254 cloud-metadata
+// endpoint), private RFC1918 / unique-local ranges, and carrier-grade NAT.
+func isBlockedIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsPrivate() || ip.IsMulticast() {
+		return true
+	}
+	// 100.64.0.0/10 (RFC 6598, carrier-grade NAT) is not covered by IsPrivate.
+	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1]&0xc0 == 64 {
+		return true
+	}
+	return false
 }
 
 func (HTTPGetTool) Def() providers.ToolDef {
@@ -46,6 +88,11 @@ func (t HTTPGetTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	}
 	if args.URL == "" {
 		return "", fmt.Errorf("url is required")
+	}
+	if u, err := url.Parse(args.URL); err != nil {
+		return "", fmt.Errorf("invalid url: %w", err)
+	} else if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("unsupported url scheme %q (only http/https)", u.Scheme)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, args.URL, nil)

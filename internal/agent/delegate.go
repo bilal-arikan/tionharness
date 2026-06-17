@@ -118,7 +118,7 @@ func (r *Runtime) withDelegation(ctx context.Context, caller db.Agent, reqPtr *p
 		r.logger.Info("agent delegation",
 			"from", caller.ID, "to", sub.ID, "depth", cur.depth+1, "calls", *cur.calls)
 
-		resp, _, err := r.completeTraced(childCtx, sub, provider, childReq, autonomous, nil)
+		resp, _, err := r.completeTraced(WithCallKind(childCtx, KindDelegate), sub, provider, childReq, autonomous, nil)
 		if err != nil {
 			return tools.DelegateResult{}, fmt.Errorf("agent %q failed: %w", sub.Name, err)
 		}
@@ -126,6 +126,44 @@ func (r *Runtime) withDelegation(ctx context.Context, caller db.Agent, reqPtr *p
 	}
 
 	return tools.WithDelegation(ctx, runner)
+}
+
+// SendAgentMessage delivers an asynchronous message from one agent to another:
+// it resolves the recipient, appends the message to that agent's inbox session
+// (a per-agent "agent-inbox" thread) as a user turn, and wakes the recipient so
+// it processes the message on its next tick. Fire-and-forget — the sender does
+// not block for a reply (that is call_agent's job). Backs the send_agent_message
+// built-in tool.
+func (r *Runtime) SendAgentMessage(ctx context.Context, fromAgentID, target, message string) (tools.SendMessageResult, error) {
+	to, err := r.resolveAgent(ctx, target)
+	if err != nil {
+		return tools.SendMessageResult{}, err
+	}
+
+	// One stable inbox thread per recipient agent (GetOrCreate keyed by sourceID).
+	sess, err := r.db.GetOrCreateSourceSession(ctx, "agent-inbox", "inbox:"+to.ID, to.ID, "Inbox · "+to.Name)
+	if err != nil {
+		return tools.SendMessageResult{}, err
+	}
+
+	// Attribute the sender so the recipient knows who is talking to it.
+	from := "another agent"
+	if a, err := r.db.GetAgent(ctx, fromAgentID); err == nil && strings.TrimSpace(a.Name) != "" {
+		from = a.Name
+	}
+	body := fmt.Sprintf("[message from agent %q]\n\n%s", from, message)
+	if _, err := r.db.AddMessage(ctx, db.Message{
+		SessionID: sess.ID,
+		Role:      "user",
+		Text:      body,
+	}); err != nil {
+		return tools.SendMessageResult{}, err
+	}
+
+	// Best-effort wake: if the recipient isn't running, the message stays queued
+	// in its inbox for whenever it next ticks.
+	_ = r.Wake(to.ID)
+	return tools.SendMessageResult{AgentName: to.Name, SessionID: sess.ID}, nil
 }
 
 // resolveAgent finds a workspace agent by id first, then by case-insensitive

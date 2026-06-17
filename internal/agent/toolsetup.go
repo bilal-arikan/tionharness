@@ -141,6 +141,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewUpdateAgentTool(r.db, agent.ID),
 			tools.NewDeleteAgentTool(r.db, agent.ID, r.Stop),
 			tools.NewListAgentsTool(r.db, agent.ID),
+			// Inter-agent messaging: fire-and-forget hand-off to another agent's
+			// inbox (the async complement to call_agent's synchronous delegation).
+			tools.NewSendAgentMessageTool(agent.ID, r.SendAgentMessage),
 			// Flows.
 			tools.NewCreateFlowTool(r.db, agent.ID),
 			tools.NewUpdateFlowTool(r.db, agent.ID),

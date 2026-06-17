@@ -29,6 +29,19 @@ func thinkingBudgetForLevel(level string) int {
 	}
 }
 
+// resolveThinkingBudget is the model-class-aware resolver. It starts from the
+// agent's ThinkingLevel, but for models that mandate always-on adaptive
+// reasoning (Fable/Mythos 5 class — they reject thinking:disabled with a 400)
+// it floors an "off"/"low" request to a minimal adaptive budget so the request
+// stays valid. Opus/Sonnet/Haiku are unaffected.
+func resolveThinkingBudget(model, level string) int {
+	budget := thinkingBudgetForLevel(level)
+	if providers.RequiresAdaptiveThinking(model) && budget < providers.MinAdaptiveThinkingBudget {
+		return providers.MinAdaptiveThinkingBudget
+	}
+	return budget
+}
+
 // CompleteWithTools runs a completion that may use tools. Behaviour depends on
 // the agent and provider:
 //
@@ -95,7 +108,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		// native tool loop would need to echo signed thinking blocks back, which
 		// the provider abstraction doesn't preserve. Providers without thinking
 		// support (claude-cli, minimax) ignore the budget.
-		req.ThinkingBudget = thinkingBudgetForLevel(agent.ThinkingLevel)
+		req.ThinkingBudget = resolveThinkingBudget(agent.Model, agent.ThinkingLevel)
 
 		// Prefer first-class token streaming when a live sink is present and the
 		// provider supports it (anthropic/minimax). claude-cli is not a Streamer;
@@ -205,7 +218,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			// ends the turn. decideRecovery keeps this policy pure + testable.
 			d := decideRecovery(nil, err, ls, cfg)
 			if d.compact {
-				folded, ok, cerr := conversation.CompactInFlightMessages(ctx, provider, agent, req.Messages, keepRecent)
+				folded, ok, cerr := conversation.CompactInFlightMessages(ctx, r.db, provider, agent, req.Messages, keepRecent)
 				if cerr == nil && ok {
 					req.Messages = folded
 					ls.compacted = true

@@ -82,6 +82,67 @@ func sanitize(s string) string {
 	return b.String()
 }
 
+// NormalizeSchema makes an external MCP tool's JSON Schema safe to send to a
+// provider (Anthropic in particular). It:
+//
+//   - strips every "$schema" key (Anthropic rejects it with a 400),
+//   - removes the JSON Schema draft "$id"/"$ref"/"definitions"/"$defs" plumbing
+//     that the tool-use schema dialect does not accept,
+//   - guarantees a root object schema (some servers omit "type"),
+//
+// while preserving everything else verbatim — notably "additionalProperties",
+// "required" and the "oneOf"/"anyOf"/"allOf" union keywords. Invalid or empty
+// input falls back to a permissive empty object schema so the tool stays usable.
+func NormalizeSchema(raw json.RawMessage) json.RawMessage {
+	emptyObject := json.RawMessage(`{"type":"object","properties":{}}`)
+	if len(raw) == 0 {
+		return emptyObject
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return emptyObject
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return emptyObject
+	}
+	stripSchemaKeys(m)
+	// Tool input is always an object; default a missing/typeless root to object.
+	if _, has := m["type"]; !has {
+		m["type"] = "object"
+	}
+	if m["type"] == "object" {
+		if _, has := m["properties"]; !has {
+			m["properties"] = map[string]any{}
+		}
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return emptyObject
+	}
+	return out
+}
+
+// dropSchemaKeys are JSON Schema meta keys the provider tool-use dialect rejects.
+var dropSchemaKeys = []string{"$schema", "$id", "$ref", "$defs", "definitions"}
+
+// stripSchemaKeys recursively removes draft meta keys from a decoded schema.
+func stripSchemaKeys(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		for _, k := range dropSchemaKeys {
+			delete(t, k)
+		}
+		for _, child := range t {
+			stripSchemaKeys(child)
+		}
+	case []any:
+		for _, child := range t {
+			stripSchemaKeys(child)
+		}
+	}
+}
+
 // CatalogEntry is one tool in the aggregated catalog, tagged with its server.
 type CatalogEntry struct {
 	Server         string `json:"server"`

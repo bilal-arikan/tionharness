@@ -2,6 +2,202 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## external-agent incelemesi P0+P1 fix'leri (CG-1…CG-5) ✅ (2026-06-17)
+
+`_Docs/13-CRAFT-AGENTS-INCELEME.md`'deki 4 P0 + 1 P1 boşluğu kapatıldı
+(davranış-koruyucu, geriye-uyumlu):
+
+- **CG-1 — Tool çıktısı boyut sınırı:** `tools/registry.go` `capToolOutput()`
+  (100K bayt, UTF-8 sınırında trunc + `…[truncated N bytes]`); `Registry.Call`
+  ve `CallStream`'de built-in **ve** MCP tüm başarılı çıktılarına uygulanır →
+  kontrolsüz tool çıktısının bağlam/JSONL şişmesi/OOM riski kapandı.
+- **CG-2 — http_get SSRF:** `builtin_http.go` artık özel `net.Dialer.Control`
+  guard'lı transport kullanır — çözülen IP **her dial'da** denetlenir (loopback,
+  unspecified, link-local, RFC1918 private, ULA `fc00::/7`, CGNAT `100.64/10`,
+  multicast; `169.254.169.254` cloud-metadata link-local'e dahil). Redirect ve
+  DNS-rebind hop'ları da kapsanır; ayrıca http/https dışı şema reddedilir.
+- **CG-3 — Thinking resolver model-sınıf:** `providers.RequiresAdaptiveThinking
+  (model)` (Fable/Mythos 5 sınıfı) + `agent.resolveThinkingBudget(model,level)`;
+  bu modellerde "off"/"low" istek `MinAdaptiveThinkingBudget=1024`'e taban'lanır
+  (aksi halde `thinking:disabled` → API 400). Opus/Sonnet/Haiku değişmez.
+  Native tool-path thinking'i hâlâ kapalı (imzalı blokları echo edemiyor) —
+  resolver yalnız plain path'te uygulanır; Fable 5 eklenince genişletilecek.
+- **CG-4 — MCP şema normalizasyonu:** `mcp.NormalizeSchema()` `Registry.Defs`'te
+  her dış MCP şemasına uygulanır — `$schema`/`$id`/`$ref`/`$defs`/`definitions`
+  recursive strip (Anthropic 400 sebebi), kök object garanti; `additional
+  Properties`/`required`/`oneOf`/`anyOf`/`allOf` korunur.
+- **CG-5 — `send_agent_message` (P1):** `tools/builtin_agentmsg.go` yeni built-in
+  (self-manage gate'li) — hedef ajanın `agent-inbox` oturumuna **user-mesaj**
+  append + `Runtime.Wake` ile uyandırır; **fire-and-forget** (senkron `call_agent`
+  delegasyonunun async tamamlayıcısı). `agent.SendAgentMessage` ismi/id'yi çözer,
+  inbox thread'ini `GetOrCreateSourceSession("agent-inbox","inbox:<id>",…)` ile
+  tek tutar. Native (anthropic/minimax) yolunda; claude-cli kendi döngüsünü sürer.
+
+**Testler:** `registry_cap_test.go`, `builtin_http_test.go`, `normalize_test.go`,
+`thinking_test.go`, `agent/agentmsg_test.go` (resolveThinkingBudget + delivery +
+inbox reuse + unknown-recipient). ✅ `go build`/`vet`/`test ./internal/...` yeşil.
+**Commit edildi** (push yok, kullanıcı tercihi).
+
+## Generic OpenAI-compat tool-use + Ayarlarda Secrets'tan key ✅ (2026-06-17)
+
+**(1) Generic `OpenAICompat` + tool-use (commit `cf7d718`):** `minimax.go`'daki
+`Minimax` tipi generic **`OpenAICompat`**'e dönüştürüldü (name/baseURL/
+defaultModel-parametrik; `NewMinimax` ince alias korundu → testler ve
+`kind_minimax` değişmeden çalışır). **OpenAI-tarzı tool-use** eklendi:
+`Complete` artık `req.Tools`'u `tools` formatında gönderir, asistan `tool_calls`
+ve `tool`-rol sonuçları round-trip eder, `finish_reason:tool_calls`→`StopToolUse`.
+Agent native loop tool turlarını `Complete`'e yönlendirdiğinden MiniMax (ve
+ileride OpenRouter/Gemini/Kimi gibi OpenAI-uyumlu kind'lar) artık **ajan** olur.
+`Stream` metin-only (tool turları akmaz). **Canlı doğrulandı** (MiniMax `/v1`,
+registry→minimax kind→client): r1 `get_weather` tool_use, r2 tool sonucu
+beslenince `end_turn` metin cevap. *Nüans:* MiniMax görünür metne `<think>…</think>`
+gömüyor (mevcut davranış; ayıklama kapsam dışı). *Sıradaki:* OpenRouter/Gemini/Kimi'yi
+**seçilebilir** kılmak için data-instance modeli (per-id credential store) gerekir.
+
+**(2) Ayarlarda API key alanlarında Secrets kaynağı (frontend, COMMITSİZ):**
+Sağlayıcı key alanlarının (Anthropic + MiniMax) altına **`SecretSource`** kontrolü
+eklendi: (a) workspace **sır kasasından seç** dropdown'ı → `revealSecret` ile değeri
+alana içe aktarır (kaydedince settings'e şifreli yazılır), (b) **"Sırları yönet →"**
+butonu `onNavigate('secrets')` ile Sırlar ekranına atlar, (c) mevcut **Sil** korundu.
+`ProvidersPanel` yeni prop'lar (`secrets`/`onImportSecret`/`onManageSecrets`),
+`SettingsPanel` `api.listSecrets()` yükler + `onNavigate` (App `setView`) thread'ler.
+**Mimari not:** settings app-global, secret kasası per-workspace, registry tek paylaşımlı
+→ referans-bazlı çözüm uygun değil; bu yüzden **değeri içe aktarma** (kopya) yaklaşımı
+seçildi. `tsc -b` temiz. **Commit edilmedi:** `App.tsx`+`SettingsPanel.tsx` zaten başka
+oturum WIP'i içeriyor (`ProvidersPanel.tsx` tamamen yeni); reconcile'da gidecek.
+
+## Provider kind/manifest/factory temeli — plugin'e çevrilebilir ✅ (2026-06-17)
+
+**İstek:** ClaudeCli/AnthropicAPI/MinimaxAPI sağlayıcılarını ve Provider/Model
+seçimini daha **generic**, ileride **plugin gibi eklenip çıkarılabilir** yapmak.
+Bu tur kapsamı: mevcut 3 sağlayıcıyı koruyup (davranış/ayar/ID aynı) registry
+switch'ini **self-registering kind katmanı**na taşımak (Katman 2 temeli). Data
+instance UI + migration (Katman 1) ve subprocess plugin (Katman 3) sonraya.
+
+**Değişiklik (`internal/providers`):**
+- `kind.go`: `Manifest` (Kind/Label/NeedsKey/NeedsBaseURL/AllowCustomModel/Order/
+  Models), `ResolvedConfig` (Key/BaseURL/Model/CLIPath/beta bayrakları),
+  `ProviderKind` arayüzü (`Manifest`/`Available`/`Build`), package-level
+  `RegisterKind`/`lookupKind`/`Kinds()` (Order'a göre sıralı).
+- `kind_anthropic.go` / `kind_claudecli.go` / `kind_minimax.go`: 3 built-in,
+  model listeleri buraya taşındı, her biri `init()` ile self-register.
+- `catalog.go`: `Catalog()` artık manifest'lerden türetilir (elle liste gitti).
+- `registry.go`: `Get` switch → `lookupKind`+`resolve(id)`→`kind.Build`; yeni
+  `resolve()` (kimlik→creds eşlemesi, Faz 2'nin tek kalan id-aware dikişi) +
+  generic `Available(id)`. Eski `*Configured`/`ClaudeCLIAvailable` korundu (main.go).
+- `api/catalog.go`: per-id switch → `s.providers.Available(e.ID)`.
+
+**Plugin'e çevrilebilirlik:** 4. transport eklemek = yeni `kind_*.go` + `RegisterKind`;
+registry/catalog/api'ye **dokunmadan**. Manifest, UI'ın da generic render
+edebileceği yetenek tanımı (NeedsKey/NeedsBaseURL şimdiden var, frontend Faz 2).
+
+**Doğrulama:** `go build ./...` + `go vet` + `go test ./internal/...` **yeşil**;
+yeni `kind_test.go` (katalog 3 giriş+sıra, Get kind-dağıtımı + "" → claude-cli,
+bilinmeyen hata, Available gating, unconfigured Build hataları). Commit `7ce50f8`
+(yalnız provider dosyaları; ağaçtaki diğer WIP'e dokunulmadı).
+
+**Faz 0 + MiniMax-Anthropic kind ✅ (aynı gün, commit `5ee514c`):** Gerçek MiniMax
+key ile `/anthropic/v1/messages` canlı smoke yapıldı → uç **yüksek uyumlu**:
+native Messages formatı (`thinking`+signature, `text`, `tool_use` blokları),
+`usage.cache_creation/read_input_tokens` (caching var), `x-api-key` **ve** Bearer
+auth çalışıyor, `anthropic-beta` header + `cache_control` breakpoint **kabul
+ediliyor** (HTTP 200), tool-use **tam çalışıyor** (`stop_reason:tool_use`).
+Bunun üzerine: `anthropic.go` baseURL/defaultModel/name-parametrik yapıldı
+(`WithEndpoint`; varsayılanlar değişmedi) + yeni **`kind_minimax_anthropic.go`**
+(4. self-registering kind, MiniMax key'ini Anthropic transport'undan geçirir →
+OpenAI yolunun veremediği **tool-use + thinking**). `registry.resolve` "minimax-
+anthropic"→MiniMax key. **Uçtan uca canlı doğrulandı**: registry→kind→client→
+`/anthropic` ile `get_weather` tool çağrısı (`stop_reason:tool_use`). Plugin
+temelinin ilk faydası: 4. transport = tek dosya + `RegisterKind`, başka yere
+dokunmadan.
+
+**Sıradaki:** generic `openaicompat` (OpenAI-tarzı tool-use ekleyerek OpenRouter/
+Gemini/Kimi'yi ajan yapmak); ardından data-instance modeli (ProviderConfig
+listesi + migration + frontend instance UI) ve `ThinkingCapable` arayüzü.
+Codex/Gemini **CLI** kapsam dışı (bespoke protokol). **Frontend notu:** yeni kind
+katalogda otomatik görünür (generic render); özel UI gerekmedi.
+
+## Faz B2 — Bütçe Ekranı (Budget Screen) ✅ (2026-06-17)
+
+**İstek:** Faz B'nin ürettiği köken-etiketli kullanım verisini görebileceğimiz bir
+ekran. Önceden bütçe yalnızca sohbet başlığındaki minik `ChatMeters` rozetiydi
+(tek ajan, tek gün, yalnız çağrı sayısı); `byKind` hiçbir yerde görünmüyordu.
+
+**Backend:**
+- `db/store_usage.go`: `Today()` (exported gün), `UsageForDay(day)`,
+  `UsageHistory(sinceDay)` — bellek-içi usage map üzerinden, ek disk okuması yok.
+- `api/budget.go::handleWorkspaceUsage` → `GET /api/usage?days=` (1–90, vars. 7):
+  bugünkü **workspace toplamı + köken kırılımı**, **ajan başına satır** (ajan
+  kimliğiyle join: ad/avatar/renk + limitler), ve **son N gün trendi** döner.
+  Ajanlar token harcamasına göre azalan sıralı. Rota `registerUsageRoutes`'a eklendi.
+
+**Frontend:**
+- `types/usage.ts` (`WorkspaceUsage`/`BudgetAgentRow`/`KindStat`/`BudgetTrendPoint`),
+  `api/system.ts::workspaceUsage(days)`.
+- NavRail yeni **"Bütçe"** görünümü (Wallet ikonu) + `App.tsx` render + `VIEW_TITLE`.
+- `components/panels/BudgetPanel.tsx`: (1) gün seçici (7/30/90) + yenile, (2) 4
+  özet kartı (toplam token, çağrı, girdi, çıktı), (3) **köken kırılımı** yüzde
+  çubukları (her köken sabit renk + TR etiket: Sohbet/Görev/Zamanlama/Akış/Nabız/
+  Delegasyon/Başlık/Özet/Yansıma/**Sıkıştırma**/Diğer), (4) **trend** bar grafiği,
+  (5) **ajan tablosu** — avatar + çağrı/token + token limiti doluluk çubuğu
+  (accent→warning≥%80→danger aşımda) + durum rozeti (Normal/Limit yakın/Aşıldı).
+
+**Doğrulama:** `go build`/`vet`/`test` + `tsc -b`/`vite build` yeşil. **Canlı API
+smoke** (scratch instance): `/api/usage` doğru şekil; ajan-join (ad/avatar/renk/
+limit) doğrulandı; store'a enjekte edilen örnek kullanımla `byKind` (chat/compact/
+task/title) hem ajan satırında hem toplamda hem trendde uçtan uca doğru toplandı.
+(Not: PS 5.1 `Out-File -Encoding utf8` BOM'u JSON yüklemesini bozuyor → testte .NET
+`WriteAllText(UTF8 no-BOM)` kullanıldı; CLAUDE.md uyarısıyla aynı tuzak.) UI'ın
+görsel Playwright testi gateway/Chrome dalgalı olduğundan yapılmadı; derleme yeşil.
+
+**Sıradaki:** maliyet sütunu (model→fiyat tablosu), ajan satırından inline limit
+düzenleme, kind kırılımının `ChatMeters`'a da düşmesi.
+
+## Faz B — Köken-Etiketli Kullanım Muhasebesi (Usage Attribution) ✅ (2026-06-17)
+
+**İstek:** Tüm agent sorgularını tek bir noktadan geçirip daha doğru bağlam
+harcaması ve bütçe planlaması yapmak — schedules/flows/kanban dahil **her kökeni**
+ve **sayılmayan yardımcı çağrıları** (özet, başlık, yansıma, **compaction**)
+kapsayacak şekilde.
+
+**Tespit:** LLM çağrıları aslında üç funnel + iki bypass'tan akıyordu:
+- `agent/budget.go::guardedComplete` (title/summary/reflect) — sayıyor.
+- `agent/toolloop.go::recordedComplete/recordedStream` — chat/task/schedule/flow/
+  heartbeat/delegate **hepsi buraya iner** (fiili tek boğaz) — sayıyor.
+- **Bypass:** `conversation/manager.go::summarize` (rolling summary) +
+  `conversation/reactive.go` (in-flight compaction) doğrudan `provider.Complete`
+  çağırıyordu → **token yakıyor ama hiç sayılmıyordu** (bütçeyi en çok bozan nokta).
+
+**Çözüm — iki katman:**
+1. **Köken etiketi (CallKind, ctx üzerinden):** `agent/callkind.go` — `WithCallKind`/
+   `callKindFrom`; taksonomi tek kaynağı `db.UsageKind*` (chat/task/schedule/flow/
+   heartbeat/delegate/title/summary/reflect/compact/other). `RecordUsage` artık
+   ctx'ten kind okuyup `db.AddUsageKind` ile yazıyor; üç funnel de buradan geçtiği
+   için **damgayı her köken giriş noktasında bir kez basmak yeterli**: `RunTaskStream`
+   (task), `deliverPrompt` (schedule), `RunFlow` (flow), `runHeartbeat` (heartbeat),
+   `delegate` (call_agent), `GenerateTitle`/`Summarize`/`reflect` (meta).
+2. **Bypass'ları sayma:** `db.AddUsageKind` + `db.Usage.ByKind map[string]KindStat`
+   (toplam + kırılım senkron). `conversation` paketi `agent`'ı import edemediğinden
+   compaction çağrıları zaten ellerindeki `*db.DB` ile `recordCompaction(...,
+   UsageKindCompact)` çağırır — `Prepare`/`ForceCompact` imzaları değişmedi (api
+   katmanı dokunulmadı); `CompactInFlightMessages` yalnız `*db.DB` parametresi kazandı
+   (çağıran: `toolloop.go` → `r.db`).
+
+**Yüzey:** `GET /api/agents/{id}/usage` artık `byKind` döner → metre harcamanın
+nereye gittiğini gösterebilir.
+
+**Dosyalar:** `db/store_usage.go` (kind consts + ByKind + AddUsageKind),
+`agent/callkind.go` (yeni), `agent/budget.go`, `titler.go`, `summarizer.go`,
+`reflector.go`, `runtime.go`, `executor.go`, `scheduler.go`, `flow.go`,
+`delegate.go`, `conversation/manager.go`+`reactive.go`, `api/usage.go`.
+Test: `db/store_usage_test.go` (kırılım↔toplam senkron + "other" fallback).
+✅ `go build`/`vet`/`test ./internal/...` yeşil.
+
+**Sıradaki (opsiyonel):** (a) her çağrıda `events.Bus`'a `usage` olayı → canlı
+çapraz-workspace metre; (b) **ön-uçuş token tahmini** (`conversation.EstimateTokens`)
+ile bütçeyi *çağrıdan önce* engelleyen rezervasyon; (c) per-kind bütçe limiti;
+(d) frontend `ChatMeters`'a kind kırılımı (compaction payı uyarısı).
+
 ## Faz U — Birleşik Yürütme/Çıktı Katmanı (Unified Executions) ✅ (2026-06-17)
 
 **İstek:** Uygulamadaki farklı çıktı üreten yolları (Flows, Schedules, Kanban
@@ -47,6 +243,24 @@ olduğundan iş çoğunlukla *bağlama*, yeniden yazım değil.
 görev koşusu → "task" execution + 2-turlu transkript (prompt→PONG); standalone akış
 koşusu → "flow" execution + transkript (go→FLOWPONG); kind filtreleri doğrulandı.
 Not: schedule/heartbeat session'ları zaten Session kullandığından bedavaya feed'de görünür.
+
+> **Güncelleme — Canlı streaming (2026-06-17):** İki yürütme yolu da artık adım-adım
+> canlı akıyor. **Görev koşusu:** `RunTask` → `RunTaskStream(…, onStep)` (eski imza
+> `nil` ile delege eder); plain görev `invokeWithMemoryStream` (= `CompleteWithToolsStream`)
+> ile token/araç adımlarını canlı yayar, flow-backed görev her node'u observer'dan
+> `StepText` olarak yayar. Yeni `POST /api/tasks/{id}/run-stream` (`api/tasks_stream.go`):
+> SSE `meta`/`step`/`reply`/`error`; run, task session id'sine **kaydedilerek `s.runs`'a
+> register edilir** → executions feed'inde canlı `running=true` + iptal edilebilir.
+> `TaskDetailPanel`'in ▶ butonu artık `api.runTaskStream` ile koşar ve canlı adımları
+> `TurnSteps` ile gösterir (geçici delta/tool_delta/tombstone/ask/steer filtrelenir).
+> **Standalone akış:** `RunFlowRecorded` zaten observer alıyordu; `handleRunFlowStream`
+> bağlandı, frontend `api.runFlowStreamStandalone` (`POST /api/flows/{id}/run-stream`,
+> `node`/`reply`/`error`) + `FlowsPanel` `doRun` artık node-node canlı ilerleme gösterir
+> (her node start'ta spinner'lı pending, done'da çıktı dolar; final run gelince kalıcı
+> trace'e geçer). `api/flows.ts`'te ortak `pumpSSE`/`dispatchSSE` yardımcıları çıkarıldı.
+> ✅ build/test + tsc/vite yeşil; **canlı E2E** (izole, claude-cli): task run-stream
+> `meta→reply`, flow run-stream `node×4 (start/done×2)→reply` doğrulandı. (Not: eşzamanlı
+> başka oturum aynı ağaca call-kind attribution + agent Skills WIP'i eklemiş — çakışma yok.)
 
 
 ## Ara özellik — Çapraz-Session Farkındalığı (push block + `list_sessions` tool) ✅ (2026-06-17)
@@ -1821,7 +2035,7 @@ Kullanıcıyla netleştirilecek:
 "Adım Türleri" (ve aynı kalıptaki diğer ekranlar) tarayıcı yüksekliğini aşıyordu: `<main>` (flex-col, header + panel) içinde panel kökleri `h-full` (= main'in TAM yüksekliği) kullanıyordu → header yüksekliği kadar taşıyor, iç scroll'un altı ekran dışına itiliyordu. Kök yükseklikleri **`min-h-0 flex-1`**'e çevrildi (yeni Artifacts/Tools/Skills panelleriyle aynı kalıp): `SettingsPanel`, `MemoryPanel`, `LogsPanel`, `FlowsPanel`, `TaskBoard`, `Schedules`, `AgentsView`; `SecretsPanel`+`MessageList`'e `min-h-0` eklendi. Artık header sabit, içerik panel içinde scroll. ✅ `tsc` temiz; Chrome canlı doğrulandı.
 
 ### 2026-06-17 — Ayarlar: "Gelişmiş" birleşik kategori
-Ayarlar kategori rayı sadeleştirildi: **Bildirimler & Ekran + Otonomi + Otomatik Başlık + MCP & Araçlar + Tanılama** ayrı kategorileri tek **"Gelişmiş"** (`advanced`, `SlidersHorizontal` ikonu) alt-ekranında toplandı. `settings/primitives.tsx` `Cat` union + `APP_CATS` güncellendi (5 giriş → 1); `SettingsPanel.tsx` `advanced` branch'i beş paneli (`NotificationsPanel`/`AutonomyPanel`/`AutoTitlePanel`/`McpPanel`/`DiagnosticsPanel`) yeni `AdvSection` (alt-başlık + ayraç) sarmalı içinde dikey istifler; tek "Kaydet" hepsini kaydeder. Her `AdvSection` başlığında **accent-soft ikon rozeti** (Bell/Bot/Tag/Plug/Activity) — daha canlı görünüm. ✅ `tsc` temiz; Chrome canlı doğrulandı (rail tek "Gelişmiş", ekran 5 ikonlu bölüm).
+Ayarlar kategori rayı sadeleştirildi: **Bildirimler & Ekran + Otonomi + Otomatik Başlık + MCP & Araçlar + Tanılama** ayrı kategorileri tek **"Gelişmiş"** (`advanced`, `SlidersHorizontal` ikonu) alt-ekranında toplandı. `settings/primitives.tsx` `Cat` union + `APP_CATS` güncellendi (5 giriş → 1); `SettingsPanel.tsx` `advanced` branch'i beş paneli (`NotificationsPanel`/`AutonomyPanel`/`AutoTitlePanel`/`McpPanel`/`DiagnosticsPanel`) yeni `AdvSection` (alt-başlık + ayraç) sarmalı içinde dikey istifler; tek "Kaydet" hepsini kaydeder. Her `AdvSection` başlığında **accent-soft ikon rozeti** (Bell/Bot/Tag/Plug/Activity) — daha canlı görünüm. ✅ `tsc` temiz; Chrome canlı doğrulandı (rail tek "Gelişmiş", ekran 5 ikonlu bölüm). (Not: "Bağlam & Bellek" kısa süre Gelişmiş'e taşındı, ardından kullanıcı isteğiyle yine **ayrı sayfaya** alındı — Brain ikonlu standalone kategori.)
 
 ### 2026-06-17 — Tema tutarlılık denetimi (yeni özellikler sonrası)
 Yeni gelen özellikler (Ajanlar/Artifactlar/Sırlar görünümleri, sessions sidebar bölme) tema açısından denetlendi; tespit edilen tutarsızlıklar giderildi (`go build`/`vet` + `tsc -b` temiz; Chrome canlı doğrulandı):

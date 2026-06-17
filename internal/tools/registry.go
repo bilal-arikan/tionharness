@@ -9,10 +9,31 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"unicode/utf8"
 
 	"github.com/bilal/swarmgo/internal/mcp"
 	"github.com/bilal/swarmgo/internal/providers"
 )
+
+// maxToolOutputBytes bounds a tool's output before it is fed back to the model
+// and persisted to the session JSONL. Unbounded output risks context overflow,
+// OOM and runaway transcript files. Tools with their own tighter caps (http /
+// shell / fs) stay well under this ceiling; this is the backstop for everything
+// else — notably MCP tools, whose output size we do not control.
+const maxToolOutputBytes = 100 * 1024
+
+// capToolOutput truncates s to maxToolOutputBytes on a UTF-8 boundary and
+// appends a marker when it overflows, so the model is told output was cut.
+func capToolOutput(s string) string {
+	if len(s) <= maxToolOutputBytes {
+		return s
+	}
+	cut := s[:maxToolOutputBytes]
+	for len(cut) > 0 && !utf8.ValidString(cut) {
+		cut = cut[:len(cut)-1]
+	}
+	return fmt.Sprintf("%s\n…[truncated %d bytes]", cut, len(s)-len(cut))
+}
 
 // Tool is an in-process (built-in) tool.
 type Tool interface {
@@ -72,7 +93,9 @@ func (r *Registry) Defs(allow func(name string) bool) []providers.ToolDef {
 		out = append(out, providers.ToolDef{
 			Name:        e.NamespacedName,
 			Description: e.Tool.Description,
-			InputSchema: e.Tool.InputSchema,
+			// External MCP schemas are normalized before they reach the provider:
+			// $schema/draft plumbing stripped, root object guaranteed (CG-4).
+			InputSchema: mcp.NormalizeSchema(e.Tool.InputSchema),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -108,7 +131,7 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 			res.IsError = true
 			return res
 		}
-		res.Content = out
+		res.Content = capToolOutput(out)
 		return res
 	}
 
@@ -119,7 +142,7 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 			res.IsError = true
 			return res
 		}
-		res.Content = out.Text
+		res.Content = capToolOutput(out.Text)
 		res.IsError = out.IsError
 		return res
 	}
@@ -151,7 +174,7 @@ func (r *Registry) CallStream(ctx context.Context, call providers.ToolCall, onCh
 				res.IsError = true
 				return res
 			}
-			res.Content = out
+			res.Content = capToolOutput(out)
 			return res
 		}
 	}
