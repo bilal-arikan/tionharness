@@ -36,6 +36,8 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
 		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
 	}
+	// Always-on: deliverables (files/documents) should surface as artifacts.
+	system = strings.TrimSpace(system + "\n\n" + artifactDeliverableGuidance)
 
 	var dynamic string
 	if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, message, 5); block != "" {

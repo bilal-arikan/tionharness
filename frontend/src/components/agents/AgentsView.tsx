@@ -7,6 +7,9 @@ import { AgentSettingsForm } from './AgentSettingsForm'
 interface Props {
   agents: Agent[]
   defaultAgentId: string | null
+  /** Controlled selection (deep-link aware); falls back to internal state. */
+  selectedId?: string | null
+  onSelectAgent?: (id: string) => void
   /** Set an agent as the default for new chats. */
   onSetDefault: (id: string) => void
   onCreateAgent: (name: string, soul: string, provider: string, model: string) => void
@@ -19,22 +22,34 @@ interface Props {
 export function AgentsView({
   agents,
   defaultAgentId,
+  selectedId: controlledId,
+  onSelectAgent,
   onSetDefault,
   onCreateAgent,
   onUpdateAgent,
   onDeleteAgent,
 }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [internalId, setInternalId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [soul, setSoul] = useState('')
   const [provider, setProvider] = useState('claude-cli')
   const [model, setModel] = useState('')
 
+  // Selection is controlled by the parent (deep-link aware) when provided,
+  // otherwise tracked internally.
+  const selectedId = controlledId !== undefined ? controlledId : internalId
+  const select = (id: string) => {
+    if (onSelectAgent) onSelectAgent(id)
+    else setInternalId(id)
+  }
+
   // Keep a valid selection: prefer the current one, else the default, else first.
   useEffect(() => {
     if (selectedId && agents.some((a) => a.id === selectedId)) return
-    setSelectedId(defaultAgentId ?? agents[0]?.id ?? null)
+    const fallback = defaultAgentId ?? agents[0]?.id ?? null
+    if (fallback) select(fallback)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agents, defaultAgentId, selectedId])
 
   const selected = agents.find((a) => a.id === selectedId) ?? null
@@ -107,7 +122,7 @@ export function AgentsView({
               }`}
             >
               <button
-                onClick={() => setSelectedId(a.id)}
+                onClick={() => select(a.id)}
                 className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
               >
                 <AgentAvatar agent={a} size={32} active={defaultAgentId === a.id} />
@@ -150,7 +165,7 @@ export function AgentsView({
             onDelete={async () => {
               if (confirm(`"${selected.name}" ajanı ve sahip olduğu oturumlar kalıcı olarak silinsin mi?`)) {
                 await onDeleteAgent(selected.id)
-                setSelectedId(null)
+                if (!onSelectAgent) setInternalId(null)
               }
             }}
           />

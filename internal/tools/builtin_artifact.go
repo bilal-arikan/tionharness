@@ -27,14 +27,13 @@ type createArtifactInput struct {
 type updateArtifactInput struct {
 	ID      string `json:"id"`
 	Content string `json:"content"`
-	Note    string `json:"note"`
 }
 
 // CreateArtifactTool lets the agent save a substantial, self-contained piece of
-// content (a document, code file, HTML page, diagram) as a versioned artifact
-// the user can open in a dedicated screen — rather than burying it in the chat
-// stream. The result is a JSON ref ({id,title,kind,version,action}) the chat UI
-// special-cases into a clickable artifact card.
+// content (a document, code file, HTML page, diagram) as an artifact the user
+// can open in a dedicated screen — rather than burying it in the chat stream.
+// The result is a JSON ref ({id,title,kind,action}) the chat UI special-cases
+// into a clickable artifact card.
 type CreateArtifactTool struct{}
 
 // NewCreateArtifactTool constructs the create_artifact tool.
@@ -92,7 +91,7 @@ func (CreateArtifactTool) Call(ctx context.Context, input json.RawMessage) (stri
 	return encodeArtifactResult(ref, "create")
 }
 
-// UpdateArtifactTool revises an existing artifact, archiving the prior version.
+// UpdateArtifactTool overwrites an existing artifact's content in place.
 type UpdateArtifactTool struct{}
 
 // NewUpdateArtifactTool constructs the update_artifact tool.
@@ -102,14 +101,12 @@ func (UpdateArtifactTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "update_artifact",
 		Description: "Replace the content of an existing artifact (created with create_artifact). " +
-			"The previous version is archived automatically and the version number bumped. " +
 			"Pass the FULL new content, not a diff.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "id": { "type": "string", "description": "The artifact id returned by create_artifact." },
-    "content": { "type": "string", "description": "The full new content (replaces the old)." },
-    "note": { "type": "string", "description": "Optional one-line summary of what changed." }
+    "content": { "type": "string", "description": "The full new content (replaces the old)." }
   },
   "required": ["id", "content"],
   "additionalProperties": false
@@ -133,7 +130,7 @@ func (UpdateArtifactTool) Call(ctx context.Context, input json.RawMessage) (stri
 	if sink == nil {
 		return "", fmt.Errorf("artifacts are not available in this context (only in interactive chat)")
 	}
-	ref, err := sink.UpdateArtifact(ctx, in.ID, in.Content, strings.TrimSpace(in.Note))
+	ref, err := sink.UpdateArtifact(ctx, in.ID, in.Content)
 	if err != nil {
 		return "", fmt.Errorf("update artifact: %w", err)
 	}

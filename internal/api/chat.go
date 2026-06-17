@@ -150,6 +150,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Usage already recorded inside CompleteWithTools; just journal the turn.
 	ws(r).Runtime.Journal(ctx, agent.ID, "Q: "+req.Message+"\nA: "+resp.Text)
 
+	// Auto-capture any files the agent wrote this turn as artifacts.
+	s.captureFileArtifacts(ctx, database, session.ID, agent.ID, steps)
+
 	s.logger.Info("chat turn completed",
 		"session", session.ID, "agent", agent.Name, "provider", agent.Provider,
 		"model", resp.Model, "in", resp.Usage.InputTokens, "out", resp.Usage.OutputTokens,

@@ -16,6 +16,46 @@ interface Props {
   streaming?: boolean
   onOpenFile?: (path: string) => void
   onOpenArtifact?: (id: string) => void
+  // Delete a single message (prune a mistaken/test one). Shown on row hover.
+  onDeleteMessage?: (id: string) => void
+}
+
+// DeleteButton is the small destructive control revealed on message hover. It
+// uses a two-step inline confirm (🗑 → "Sil" / ✕) instead of a blocking native
+// dialog, so deleting a message stays in the UI.
+function DeleteButton({ onClick }: { onClick: () => void }) {
+  const [armed, setArmed] = useState(false)
+  if (armed) {
+    return (
+      <span className="flex shrink-0 items-center gap-1">
+        <button
+          onClick={() => {
+            setArmed(false)
+            onClick()
+          }}
+          className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-red-400 transition hover:bg-red-500/15"
+        >
+          Sil
+        </button>
+        <button
+          onClick={() => setArmed(false)}
+          title="Vazgeç"
+          className="rounded px-1 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
+        >
+          ✕
+        </button>
+      </span>
+    )
+  }
+  return (
+    <button
+      onClick={() => setArmed(true)}
+      title="Mesajı sil"
+      className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+    >
+      🗑
+    </button>
+  )
 }
 
 // Bouncing-dots "working" indicator shown while a turn is in flight.
@@ -29,7 +69,7 @@ function WorkingDots() {
   )
 }
 
-export function MessageList({ messages, pending, agents, streaming, onOpenFile, onOpenArtifact }: Props) {
+export function MessageList({ messages, pending, agents, streaming, onOpenFile, onOpenArtifact, onDeleteMessage }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Whether the user is currently pinned to the bottom of the transcript. When
   // they scroll up to read history we stop auto-scrolling so streaming deltas
@@ -84,16 +124,17 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
           const workedSec =
             m.role === 'assistant' && prev?.role === 'user' ? m.createdAt - prev.createdAt : 0
           return m.role === 'user' ? (
-            <div key={m.id} className="flex flex-col gap-1">
+            <div key={m.id} className="group flex flex-col gap-1">
               <UserBubble text={m.text} agents={agents} attachments={m.attachments} />
-              <div className="flex justify-end pr-1">
+              <div className="flex items-center justify-end gap-2 pr-1">
+                {onDeleteMessage && <DeleteButton onClick={() => onDeleteMessage(m.id)} />}
                 <MessageTime unixSec={m.createdAt} />
               </div>
             </div>
           ) : (
             // Assistant turn: who answered (avatar+name) + activity trace above
             // the final markdown answer — the External Agent chat layout.
-            <div key={m.id} className="flex flex-col gap-1">
+            <div key={m.id} className="group flex flex-col gap-1">
               <div className="flex w-full justify-start">
                 <div className="w-full min-w-0 rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-[var(--color-text)]">
                   {agentById(m.agentId) && (
@@ -119,6 +160,9 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
                   <LiveTimer startUnixSec={m.createdAt} />
                 ) : (
                   <TurnDuration seconds={workedSec} />
+                )}
+                {onDeleteMessage && !isLastLive && (
+                  <DeleteButton onClick={() => onDeleteMessage(m.id)} />
                 )}
               </div>
             </div>

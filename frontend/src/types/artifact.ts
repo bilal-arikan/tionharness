@@ -1,14 +1,7 @@
-// Artifacts — versioned, self-contained agent-produced content (documents,
-// code, HTML, diagrams) viewed in a dedicated screen.
+// Artifacts — self-contained agent-produced content (documents, code, HTML,
+// diagrams) viewed in a dedicated screen. Not versioned: updates overwrite.
 
 export type ArtifactKind = 'markdown' | 'code' | 'html' | 'text' | 'svg' | 'mermaid'
-
-export interface ArtifactRevision {
-  version: number
-  content: string
-  note: string
-  createdAt: number
-}
 
 export interface Artifact {
   id: string
@@ -18,8 +11,8 @@ export interface Artifact {
   kind: ArtifactKind
   language: string
   content: string
-  version: number
-  revisions: ArtifactRevision[]
+  // Set when the artifact was auto-captured from a file the agent wrote.
+  sourcePath?: string
   createdAt: number
   updatedAt: number
 }
@@ -30,6 +23,5 @@ export interface ArtifactRefResult {
   id: string
   title: string
   kind: ArtifactKind
-  version: number
   action: 'create' | 'update'
 }

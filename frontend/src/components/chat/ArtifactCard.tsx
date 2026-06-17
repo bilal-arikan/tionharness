@@ -7,8 +7,8 @@ interface Props {
 }
 
 // parseArtifactResult decodes the JSON result emitted by the create_artifact /
-// update_artifact tools ({id,title,kind,version,action}). Returns null when the
-// tool failed (output is a plain error string).
+// update_artifact tools ({id,title,kind,action}). Returns null when the tool
+// failed (output is a plain error string).
 function parseArtifactResult(output?: string): ArtifactRefResult | null {
   if (!output) return null
   try {
@@ -56,7 +56,7 @@ export function ArtifactCard({ step, onOpenArtifact }: Props) {
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-[var(--color-accent)]">{ref.title}</span>
         <span className="block text-[11px] text-[var(--color-text-dim)]">
-          {KIND_LABEL[ref.kind] ?? ref.kind} · v{ref.version} ·{' '}
+          {KIND_LABEL[ref.kind] ?? ref.kind} ·{' '}
           {ref.action === 'update' ? 'güncellendi' : 'oluşturuldu'}
         </span>
       </span>

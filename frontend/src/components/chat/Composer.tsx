@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Paperclip } from 'lucide-react'
-import type { Agent, Attachment, SlashCommand } from '../../types'
+import { Paperclip, Hash } from 'lucide-react'
+import type { Agent, Artifact, Attachment, SlashCommand } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { AttachmentChip } from './AttachmentChip'
 import { api } from '../../api'
 import { PASTE_AS_FILE_THRESHOLD } from '../../lib/attachments'
+
+// Cap how much of a referenced artifact is inlined into the turn (the artifact
+// itself stays addressable; very large ones are truncated with a note).
+const ARTIFACT_INLINE_CAP = 64 << 10
 
 // PendingAttachment tracks one attachment while composing: its local preview and
 // upload state, plus the server descriptor once the upload resolves.
@@ -39,6 +43,9 @@ interface Props {
   onPermissionModeChange?: (v: string) => void
   agents: Agent[]
   commands: SlashCommand[]
+  // Artifacts in the active session, offered by the "#" picker to include their
+  // content in the next turn.
+  artifacts?: Artifact[]
 }
 
 // Reasoning levels offered in the composer picker. '' defers to the agent's own
@@ -64,13 +71,21 @@ const PERMISSION_OPTIONS: { value: string; label: string; hint: string; icon: st
 // Trigger detection: what (if any) autocomplete menu the caret is currently in.
 type Trigger =
   | { mode: 'agent'; query: string; from: number } // "@..." token start index
+  | { mode: 'artifact'; query: string; from: number } // "#..." token start index
   | { mode: 'command'; query: string }
   | null
 
-// MenuItem is one row in the autocomplete menu: an agent mention or a slash
-// command. Both `agent` and `cmd` are optional so a single array type covers
-// both menu modes.
-type MenuItem = { key: string; label: string; sub?: string; agent?: Agent; cmd?: SlashCommand }
+// MenuItem is one row in the autocomplete menu: an agent mention, a slash command
+// or an artifact reference. The optional fields let a single array type cover all
+// menu modes.
+type MenuItem = {
+  key: string
+  label: string
+  sub?: string
+  agent?: Agent
+  cmd?: SlashCommand
+  artifact?: Artifact
+}
 
 function detectTrigger(value: string, caret: number): Trigger {
   const before = value.slice(0, caret)
@@ -82,6 +97,11 @@ function detectTrigger(value: string, caret: number): Trigger {
   const m = before.match(/(?:^|\s)@([^\s@]*)$/)
   if (m) {
     return { mode: 'agent', query: m[1], from: caret - m[1].length - 1 }
+  }
+  // "#" artifact reference — last token at the caret starting with "#".
+  const a = before.match(/(?:^|\s)#([^\s#]*)$/)
+  if (a) {
+    return { mode: 'artifact', query: a[1], from: caret - a[1].length - 1 }
   }
   return null
 }
@@ -104,6 +124,7 @@ export function Composer({
   onPermissionModeChange,
   agents,
   commands,
+  artifacts = [],
 }: Props) {
   const [text, setText] = useState('')
   const [trigger, setTrigger] = useState<Trigger>(null)
@@ -155,6 +176,28 @@ export function Composer({
     e.target.value = '' // allow re-selecting the same file
   }
 
+  // addArtifact stages an existing session artifact as a text attachment so its
+  // content is included in the next turn. No upload: the content is inlined
+  // directly (capped). De-dupes on the artifact id.
+  const addArtifact = (a: Artifact) => {
+    const localId = `art-${a.id}`
+    if (pending.some((p) => p.localId === localId)) return
+    let content = a.content ?? ''
+    if (content.length > ARTIFACT_INLINE_CAP) {
+      content = content.slice(0, ARTIFACT_INLINE_CAP) + '\n…(truncated)'
+    }
+    const attachment: Attachment = {
+      id: localId,
+      name: a.title || 'artifact',
+      mime: 'text/plain',
+      kind: a.kind === 'code' ? 'code' : 'text',
+      size: content.length,
+      textContent: content,
+      source: 'artifact',
+    }
+    setPending((p) => [...p, { localId, name: attachment.name, uploading: false, attachment }])
+  }
+
   // onPaste: large clipboard text becomes a .txt attachment (Claude.ai-style),
   // and pasted image data (e.g. a screenshot) is uploaded as an image. Plain
   // short text falls through to the textarea's normal paste.
@@ -183,10 +226,15 @@ export function Composer({
         .filter((a) => a.name.toLowerCase().includes(q))
         .map((a): MenuItem => ({ key: a.id, label: a.name, sub: a.provider, agent: a }))
     }
+    if (trigger.mode === 'artifact') {
+      return artifacts
+        .filter((a) => a.title.toLowerCase().includes(q))
+        .map((a): MenuItem => ({ key: a.id, label: a.title || 'İsimsiz', sub: a.kind, artifact: a }))
+    }
     return commands
       .filter((c) => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
       .map((c): MenuItem => ({ key: c.name, label: '/' + c.name, sub: c.description, cmd: c }))
-  }, [trigger, agents, commands])
+  }, [trigger, agents, commands, artifacts])
 
   const updateTrigger = (value: string, caret: number) => {
     const t = detectTrigger(value, caret)
@@ -213,6 +261,13 @@ export function Composer({
         const next = text.slice(0, trigger.from) + mention + text.slice(caret)
         setText(next)
       }
+    } else if (item.artifact) {
+      // Drop the "#query" token and stage the artifact as a content attachment.
+      if (trigger?.mode === 'artifact') {
+        const caret = taRef.current?.selectionStart ?? text.length
+        setText(text.slice(0, trigger.from) + text.slice(caret))
+      }
+      addArtifact(item.artifact)
     } else if (item.cmd) {
       item.cmd.run()
       setText('') // a command consumes the input
@@ -321,7 +376,7 @@ export function Composer({
       {trigger && items.length > 0 && (
         <div className="absolute bottom-full left-6 mb-2 max-h-64 w-80 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
           <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            {trigger.mode === 'agent' ? 'Ajanlar' : 'Komutlar'}
+            {trigger.mode === 'agent' ? 'Ajanlar' : trigger.mode === 'artifact' ? 'Artifactlar' : 'Komutlar'}
           </div>
           {items.map((it, i) => (
             <button
@@ -334,6 +389,10 @@ export function Composer({
             >
               {it.agent ? (
                 <AgentAvatar agent={it.agent} size={22} />
+              ) : it.artifact ? (
+                <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center text-[var(--color-accent)]">
+                  <Hash size={15} />
+                </span>
               ) : (
                 <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center">
                   {it.cmd?.icon ?? '⚡'}
@@ -393,7 +452,7 @@ export function Composer({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           rows={1}
-          placeholder="Mesaj yaz — @ ile ajan, / ile komut, 📎 ile dosya"
+          placeholder="Mesaj yaz — @ ajan, # artifact, / komut, 📎 dosya"
           className="max-h-40 flex-1 resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
         />
         {!streaming ? (

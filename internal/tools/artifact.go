@@ -5,10 +5,9 @@ import "context"
 // ArtifactRef identifies a stored artifact returned to the model after a
 // create/update so the chat UI can render a clickable card linking to it.
 type ArtifactRef struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Kind    string `json:"kind"`
-	Version int    `json:"version"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Kind  string `json:"kind"`
 }
 
 // ArtifactSink persists artifacts created/updated by an agent during a turn. It
@@ -20,7 +19,7 @@ type ArtifactRef struct {
 // without importing those packages (which would cycle).
 type ArtifactSink interface {
 	CreateArtifact(ctx context.Context, title, kind, language, content string) (ArtifactRef, error)
-	UpdateArtifact(ctx context.Context, id, content, note string) (ArtifactRef, error)
+	UpdateArtifact(ctx context.Context, id, content string) (ArtifactRef, error)
 }
 
 type artifactKey struct{}

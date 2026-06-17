@@ -30,9 +30,12 @@ export function AttachmentChip({ attachment, onRemove, previewURL, uploading }: 
         <div className="flex h-[52px] w-[160px] items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5">
           <Icon size={20} className={`shrink-0 ${tint}`} />
           <span className="flex min-w-0 flex-col">
-            <span className="truncate text-xs font-medium text-[var(--color-text)]">{attachment.name}</span>
+            <span className="truncate text-xs font-medium text-[var(--color-text)]">
+              {attachment.source === 'artifact' ? '#' : ''}
+              {attachment.name}
+            </span>
             <span className="truncate text-[10px] text-[var(--color-text-dim)]">
-              {label}
+              {attachment.source === 'artifact' ? 'Artifact' : label}
               {attachment.size > 0 ? ` · ${formatBytes(attachment.size)}` : ''}
             </span>
           </span>

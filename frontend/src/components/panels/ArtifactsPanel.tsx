@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   FileText, Code2, Globe, Image, GitBranch, FileCode,
   Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X,
@@ -45,34 +45,29 @@ interface Draft {
   kind: ArtifactKind
   language: string
   content: string
-  note: string
 }
 
 // ArtifactsPanel is the dedicated artifacts screen: a list of saved artifacts on
-// the left and a viewer/editor on the right with version history, copy, manual
-// editing (creates a new version) and delete.
+// the left and a viewer/editor on the right with copy, manual editing (overwrites
+// in place) and delete. Artifacts are not versioned.
 export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: Props) {
   const [list, setList] = useState<Artifact[]>([])
   const [activeId, setActiveId] = useState<string | null>(selectedId ?? null)
   const [active, setActive] = useState<Artifact | null>(null)
-  const [viewVersion, setViewVersion] = useState<number | null>(null) // null = current
   const [copied, setCopied] = useState(false)
   // Edit/create state. When `draft` is set the viewer becomes an editor.
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const reload = useCallback(
-    (selectId?: string) => {
-      api
-        .listArtifacts()
-        .then((rows) => {
-          setList(rows)
-          setActiveId((cur) => selectId ?? cur ?? rows[0]?.id ?? null)
-        })
-        .catch((e) => onError((e as Error).message))
-    },
-    [onError],
-  )
+  const reload = useCallback(() => {
+    api
+      .listArtifacts()
+      .then((rows) => {
+        setList(rows)
+        setActiveId((cur) => cur ?? rows[0]?.id ?? null)
+      })
+      .catch((e) => onError((e as Error).message))
+  }, [onError])
 
   useEffect(() => reload(), [reload])
 
@@ -81,13 +76,12 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
     if (selectedId) setActiveId(selectedId)
   }, [selectedId])
 
-  // Load the full artifact (with revisions) whenever the selection changes.
+  // Load the full artifact whenever the selection changes.
   useEffect(() => {
     if (!activeId) {
       setActive(null)
       return
     }
-    setViewVersion(null)
     setDraft(null)
     api
       .getArtifact(activeId)
@@ -116,40 +110,31 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       setList((prev) => [a, ...prev])
       setActiveId(a.id)
       setActive(a)
-      setViewVersion(null)
-      setDraft({ title: a.title, kind: a.kind, language: a.language, content: a.content, note: '' })
+      setDraft({ title: a.title, kind: a.kind, language: a.language, content: a.content })
     } catch (e) {
       onError((e as Error).message)
     }
   }, [onError])
 
-  // Enter edit mode for the current artifact (always edits the latest version).
+  // Enter edit mode for the current artifact.
   const startEdit = useCallback(() => {
     if (!active) return
-    setViewVersion(null)
     setDraft({
       title: active.title,
       kind: active.kind,
       language: active.language,
       content: active.content,
-      note: '',
     })
   }, [active])
 
-  // Save the draft: send only changed metadata, and a content revision only when
-  // the body actually changed (so a pure title edit doesn't bump the version).
+  // Save the draft: send only changed fields (a content change overwrites in place).
   const save = useCallback(async () => {
     if (!active || !draft) return
-    const patch: {
-      title?: string; kind?: ArtifactKind; language?: string; content?: string; note?: string
-    } = {}
+    const patch: { title?: string; kind?: ArtifactKind; language?: string; content?: string } = {}
     if (draft.title.trim() && draft.title !== active.title) patch.title = draft.title.trim()
     if (draft.kind !== active.kind) patch.kind = draft.kind
     if (draft.language !== active.language) patch.language = draft.language
-    if (draft.content !== active.content) {
-      patch.content = draft.content
-      patch.note = draft.note.trim() || 'Manuel düzenleme'
-    }
+    if (draft.content !== active.content) patch.content = draft.content
     if (Object.keys(patch).length === 0) {
       setDraft(null)
       return
@@ -167,19 +152,13 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
     }
   }, [active, draft, onError])
 
-  // The content to show: a chosen historical revision, or the current content.
-  const shown = useMemo(() => {
-    if (!active) return ''
-    if (viewVersion == null || viewVersion === active.version) return active.content
-    return active.revisions.find((r) => r.version === viewVersion)?.content ?? active.content
-  }, [active, viewVersion])
-
   const copy = useCallback(() => {
-    navigator.clipboard.writeText(shown).then(() => {
+    if (!active) return
+    navigator.clipboard.writeText(active.content).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
     })
-  }, [shown])
+  }, [active])
 
   const creator = (a: Artifact) => agents.find((ag) => ag.id === a.agentId) ?? null
 
@@ -205,7 +184,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {list.length === 0 && (
             <p className="px-2 py-6 text-center text-sm text-[var(--color-text-dim)]">
-              Henüz artifact yok. Ajanlar <code className="text-[var(--color-accent)]">create_artifact</code> aracıyla içerik kaydedebilir; ya da <strong>Yeni</strong> ile elle ekle.
+              Henüz artifact yok. Bir oturumda dosya/doküman ürettiğinde otomatik buraya düşer; ya da <strong>Yeni</strong> ile elle ekle.
             </p>
           )}
           {list.map((a) => {
@@ -225,7 +204,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{a.title}</span>
                   <span className="mt-0.5 block text-[11px] text-[var(--color-text-dim)]">
-                    {KIND_LABEL[a.kind] ?? a.kind} · v{a.version} · {relativeTime(a.updatedAt)}
+                    {KIND_LABEL[a.kind] ?? a.kind} · {relativeTime(a.updatedAt)}
                   </span>
                 </span>
               </button>
@@ -277,26 +256,6 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                   </>
                 ) : (
                   <>
-                    {/* Version selector when there is history. */}
-                    {active.revisions.length > 0 && (
-                      <select
-                        value={viewVersion ?? active.version}
-                        onChange={(e) => setViewVersion(Number(e.target.value))}
-                        className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
-                        title="Sürüm geçmişi"
-                      >
-                        {[...active.revisions]
-                          .map((r) => r.version)
-                          .concat(active.version)
-                          .sort((a, b) => b - a)
-                          .map((v) => (
-                            <option key={v} value={v}>
-                              v{v}
-                              {v === active.version ? ' (güncel)' : ''}
-                            </option>
-                          ))}
-                      </select>
-                    )}
                     <button onClick={startEdit} title="Düzenle" className={iconBtn}>
                       <Pencil size={15} />
                     </button>
@@ -361,19 +320,13 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                   spellCheck={false}
                   className="min-h-[40vh] flex-1 resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed"
                 />
-                <input
-                  value={draft.note}
-                  onChange={(e) => setDraft({ ...draft, note: e.target.value })}
-                  placeholder="Değişiklik notu (opsiyonel) — yeni sürüm açıklaması"
-                  className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm"
-                />
                 <p className="text-[11px] text-[var(--color-text-dim)]">
-                  İçeriği değiştirip kaydedersen yeni bir <strong>sürüm</strong> oluşur (eski sürüm geçmişte saklanır). Yalnız başlık/tür değişikliği sürüm açmaz.
+                  Kaydedince içerik yerinde güncellenir.
                 </p>
               </div>
             ) : (
               <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <ArtifactView kind={active.kind} language={active.language} content={shown} />
+                <ArtifactView kind={active.kind} language={active.language} content={active.content} />
               </div>
             )}
           </>

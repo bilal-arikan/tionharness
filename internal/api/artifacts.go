@@ -10,6 +10,16 @@ import (
 	"github.com/bilal/swarmgo/internal/tools"
 )
 
+// artifactDeliverableGuidance is the always-on instruction (kept in the static
+// prompt prefix) that makes "produce a file/document" requests surface as
+// artifacts by default — the user expects deliverables to open in the Artifacts
+// screen, not be buried in chat or written only via an ad-hoc script.
+const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
+	"When the user asks you to produce a file, document, dataset, report, spreadsheet, diagram or code module, treat it as a deliverable that must appear in the Artifacts screen:\n" +
+	"- Prefer writing the deliverable to a file with your file-writing tool (write_file / Write). Files written that way are captured as artifacts automatically.\n" +
+	"- If you produce the content directly (not as a file) and have the create_artifact tool, call it with the full content.\n" +
+	"- Do NOT deliver substantial output only as inline chat text, and avoid producing a deliverable solely via an ad-hoc shell/script command (that bypasses artifact capture) — write it out with the file tool instead."
+
 // artifactsContextBlock builds a system-prompt section listing the artifacts a
 // session already has, so the agent can revise them with update_artifact (by id)
 // instead of creating duplicates. Returns "" when the session has none. Kept in
@@ -35,7 +45,7 @@ func artifactsContextBlock(ctx context.Context, database *db.DB, sessionID strin
 		if a.Language != "" {
 			b.WriteString("/" + a.Language)
 		}
-		fmt.Fprintf(&b, " · v%d\n", a.Version)
+		b.WriteString("\n")
 	}
 	return strings.TrimSpace(b.String())
 }
@@ -68,8 +78,8 @@ func (s artifactSink) CreateArtifact(ctx context.Context, title, kind, language,
 	return toArtifactRef(a), nil
 }
 
-func (s artifactSink) UpdateArtifact(ctx context.Context, id, content, note string) (tools.ArtifactRef, error) {
-	a, err := s.db.UpdateArtifactContent(ctx, id, content, note)
+func (s artifactSink) UpdateArtifact(ctx context.Context, id, content string) (tools.ArtifactRef, error) {
+	a, err := s.db.UpdateArtifactContent(ctx, id, content)
 	if err != nil {
 		return tools.ArtifactRef{}, err
 	}
@@ -77,7 +87,7 @@ func (s artifactSink) UpdateArtifact(ctx context.Context, id, content, note stri
 }
 
 func toArtifactRef(a db.Artifact) tools.ArtifactRef {
-	return tools.ArtifactRef{ID: a.ID, Title: a.Title, Kind: a.Kind, Version: a.Version}
+	return tools.ArtifactRef{ID: a.ID, Title: a.Title, Kind: a.Kind}
 }
 
 // ---- HTTP handlers ----
@@ -93,7 +103,7 @@ func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, list)
 }
 
-// handleGetArtifact returns one artifact with its full revision history.
+// handleGetArtifact returns one artifact.
 func (s *Server) handleGetArtifact(w http.ResponseWriter, r *http.Request) {
 	a, err := ws(r).DB.GetArtifact(r.Context(), r.PathValue("id"))
 	if writeDBError(w, err, "artifact not found") {
@@ -137,17 +147,15 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateArtifactReq struct {
-	// Content (when present) creates a new revision; Note is its change summary.
+	// Content (when present) overwrites the body in place.
 	Content *string `json:"content"`
-	Note    string  `json:"note"`
-	// Metadata edits (don't create a revision).
+	// Metadata edits.
 	Title    string `json:"title"`
 	Kind     string `json:"kind"`
 	Language string `json:"language"`
 }
 
-// handleUpdateArtifact revises content (archiving the prior version) and/or
-// edits metadata. Content and metadata may be updated in the same call.
+// handleUpdateArtifact overwrites content and/or edits metadata in place.
 func (s *Server) handleUpdateArtifact(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req updateArtifactReq
@@ -163,7 +171,7 @@ func (s *Server) handleUpdateArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.Content != nil {
-		if _, err := database.UpdateArtifactContent(ctx, id, *req.Content, req.Note); writeDBError(w, err, "artifact not found") {
+		if _, err := database.UpdateArtifactContent(ctx, id, *req.Content); writeDBError(w, err, "artifact not found") {
 			return
 		}
 	}

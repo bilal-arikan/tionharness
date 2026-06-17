@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { api, getActiveWorkspace } from './api'
-import type { Agent, AgentPatch, Session, Message, AppSettings, AppEvent } from './types'
+import { api, getActiveWorkspace, setActiveWorkspace } from './api'
+import type { Agent, AgentPatch, Artifact, Session, Message, AppSettings, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
 import { SessionsSidebar } from './components/sessions/SessionsSidebar'
 import { AgentRoster } from './components/agents/AgentRoster'
@@ -23,9 +23,17 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { LogsPanel } from './components/panels/LogsPanel'
 import { useWorkspaces } from './hooks/useWorkspaces'
 import { useChatStream } from './hooks/useChatStream'
+import { useUrlSync } from './hooks/useUrlSync'
+import { parseRoute, routeIdForView, type Route } from './lib/url'
 import { isImagePath, mediaUrl } from './lib/paths'
 import { applyTheme } from './lib/theme'
 import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clientPrefs'
+
+// Parse the deep-link once at module load. If it names a workspace, apply it to
+// the api client immediately so useWorkspaces initialises on the routed
+// workspace (an unknown id is validated away to the first workspace there).
+const INITIAL_ROUTE: Route = parseRoute(window.location.hash)
+if (INITIAL_ROUTE.workspaceId) setActiveWorkspace(INITIAL_ROUTE.workspaceId)
 
 const VIEW_TITLE: Record<View, string> = {
   chat: 'Sohbet',
@@ -47,8 +55,15 @@ export default function App() {
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [view, setView] = useState<View>('chat')
+  const [view, setView] = useState<View>(INITIAL_ROUTE.view)
   const [meterRefresh, setMeterRefresh] = useState(0)
+  // Deep-link target for the schedules screen (highlights the routed schedule).
+  const [scheduleTarget, setScheduleTarget] = useState<string | null>(
+    INITIAL_ROUTE.view === 'schedules' ? INITIAL_ROUTE.id : null,
+  )
+  // Entity selection carried by an initial/cross-workspace deep link, consumed
+  // once by the workspace-load effect after agents+sessions arrive.
+  const pendingRouteRef = useRef<Route | null>(INITIAL_ROUTE)
   const bumpMeter = useCallback(() => setMeterRefresh((n) => n + 1), [])
 
   const {
@@ -85,7 +100,9 @@ export default function App() {
   const onEventRef = useRef<(e: AppEvent) => void>(() => {})
   // Artifact deep-link target: set when a chat artifact card is clicked, opening
   // the artifacts screen with that artifact pre-selected.
-  const [artifactTarget, setArtifactTarget] = useState<string | null>(null)
+  const [artifactTarget, setArtifactTarget] = useState<string | null>(
+    INITIAL_ROUTE.view === 'artifacts' ? INITIAL_ROUTE.id : null,
+  )
 
   // Apply the client-side preferences carried by app settings.
   const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; themePreset?: string; keepAwake: boolean; desktopNotifications: boolean }) => {
@@ -109,15 +126,39 @@ export default function App() {
     setMessages([])
     setActiveAgentId(null)
     setActiveSessionId(null)
-    api.listAgents().then(setAgents).catch((e) => setError(e.message))
-    api
-      .listSessions()
-      .then((s) => {
-        setSessions(s)
-        setActiveSessionId(s.length > 0 ? s[0].id : null)
-        setActiveAgentId(s.length > 0 ? s[0].agentId : null)
+    let cancelled = false
+    Promise.all([api.listAgents(), api.listSessions()])
+      .then(([ag, ss]) => {
+        if (cancelled) return
+        setAgents(ag)
+        setSessions(ss)
+        // Default selection: the most recent session.
+        let sid = ss.length > 0 ? ss[0].id : null
+        let aid = ss.length > 0 ? ss[0].agentId : null
+        // Honor a pending deep link (initial load or cross-workspace nav) once.
+        const want = pendingRouteRef.current
+        pendingRouteRef.current = null
+        if (want) {
+          if (want.view === 'chat' && want.id && ss.some((s) => s.id === want.id)) {
+            sid = want.id
+            aid = ss.find((s) => s.id === want.id)?.agentId ?? aid
+          } else if (
+            (want.view === 'agents' || want.view === 'memory' || want.view === 'tools') &&
+            want.id &&
+            ag.some((a) => a.id === want.id)
+          ) {
+            aid = want.id
+          }
+        }
+        setActiveSessionId(sid)
+        setActiveAgentId(aid)
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => {
+        if (!cancelled) setError((e as Error).message)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [activeWorkspaceId])
 
   // Keep the default agent (for new sessions) valid: fall back to the first
@@ -153,6 +194,18 @@ export default function App() {
     }
     api.listMessages(activeSessionId).then(setMessages)
   }, [activeSessionId])
+
+  // Artifacts of the active session — offered by the composer's "#" picker so the
+  // user can include an artifact's content in the next turn. Refreshed after each
+  // turn (meterRefresh) since a turn may have created new artifacts.
+  const [sessionArtifacts, setSessionArtifacts] = useState<Artifact[]>([])
+  useEffect(() => {
+    if (!activeSessionId) {
+      setSessionArtifacts([])
+      return
+    }
+    api.listArtifacts(activeSessionId).then(setSessionArtifacts).catch(() => {})
+  }, [activeSessionId, meterRefresh])
 
   // Mirror the active session id into a ref so the once-mounted event handler
   // can tell whether an incoming chat completion belongs to the open transcript.
@@ -225,6 +278,23 @@ export default function App() {
     [activeSessionId],
   )
 
+  // Delete a single message from the open session (prune a mistaken/test one).
+  const deleteMessage = useCallback(
+    async (id: string) => {
+      const sid = activeSessionIdRef.current
+      if (!sid) return
+      // Confirmation is handled inline by the message's DeleteButton (🗑 → Sil).
+      try {
+        await api.deleteMessage(sid, id)
+        setMessages((prev) => prev.filter((m) => m.id !== id))
+        refreshSessions()
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [refreshSessions],
+  )
+
   // Autonomous-event handler: raise a desktop notification whose click deep-links
   // to the event's target (chat session, board, or logs). Refreshed each render
   // so the stable SSE subscription below always sees current closures/state.
@@ -290,6 +360,12 @@ export default function App() {
     },
     [pickDefaultAgent],
   )
+
+  // Focus an agent across agent-scoped views (Agents/Memory/Tools) without
+  // changing which agent is the default for new chats.
+  const focusAgent = useCallback((id: string) => {
+    setActiveAgentId(id)
+  }, [])
 
   const createAgent = useCallback(
     async (name: string, soul: string, provider: string, model?: string) => {
@@ -375,6 +451,44 @@ export default function App() {
   // The active session's current checklist (latest todo_write across the
   // transcript). Pinned above the composer and updated as the agent ticks items.
   const currentTodos = useMemo(() => latestTodos(messages), [messages])
+
+  // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
+  // the app state. A workspace switch defers entity selection to the
+  // workspace-load effect via pendingRouteRef; same-workspace navigation applies
+  // the entity immediately.
+  const applyRoute = useCallback(
+    (r: Route) => {
+      setView(r.view)
+      if (r.workspaceId && r.workspaceId !== getActiveWorkspace()) {
+        pendingRouteRef.current = r
+        switchWorkspace(r.workspaceId)
+        return
+      }
+      if (r.view === 'chat') {
+        if (r.id) selectSession(r.id)
+      } else if (r.view === 'agents' || r.view === 'memory' || r.view === 'tools') {
+        if (r.id) focusAgent(r.id)
+      } else if (r.view === 'artifacts') {
+        setArtifactTarget(r.id)
+      } else if (r.view === 'schedules') {
+        setScheduleTarget(r.id)
+      }
+    },
+    [switchWorkspace, selectSession, focusAgent],
+  )
+
+  // The canonical route for the current state, mirrored to the URL hash.
+  const route: Route = {
+    workspaceId: activeWorkspaceId,
+    view,
+    id: routeIdForView(view, {
+      sessionId: activeSessionId,
+      agentId: activeAgentId,
+      artifactId: artifactTarget,
+      scheduleId: scheduleTarget,
+    }),
+  }
+  useUrlSync(route, !!activeWorkspaceId, applyRoute)
 
   return (
     <div className="flex h-full">
@@ -468,6 +582,7 @@ export default function App() {
               streaming={chat.activeStreaming}
               onOpenFile={openFile}
               onOpenArtifact={openArtifact}
+              onDeleteMessage={deleteMessage}
             />
             {chat.activeAsk && <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />}
             <TodoPanel todos={currentTodos} />
@@ -487,6 +602,7 @@ export default function App() {
               onPermissionModeChange={chat.setPermissionMode}
               agents={agents}
               commands={chat.chatCommands}
+              artifacts={sessionArtifacts}
             />
           </>
         )}
@@ -494,6 +610,8 @@ export default function App() {
           <AgentsView
             agents={agents}
             defaultAgentId={defaultAgentId}
+            selectedId={activeAgentId}
+            onSelectAgent={focusAgent}
             onSetDefault={pickAgent}
             onCreateAgent={createAgent}
             onUpdateAgent={updateAgent}
@@ -501,7 +619,9 @@ export default function App() {
           />
         )}
         {view === 'board' && <TaskBoard agents={agents} onError={setError} />}
-        {view === 'schedules' && <Schedules agents={agents} onError={setError} />}
+        {view === 'schedules' && (
+          <Schedules agents={agents} focusId={scheduleTarget} onError={setError} />
+        )}
         {view === 'memory' && (
           <MemoryPanel
             agent={agents.find((a) => a.id === activeAgentId) ?? null}

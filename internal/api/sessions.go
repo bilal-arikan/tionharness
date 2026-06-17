@@ -162,6 +162,17 @@ func (s *Server) handleActiveSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string][]string{"sessionIds": s.runs.activeSessionIDs()})
 }
 
+// handleDeleteMessage removes a single message from a session (e.g. to prune a
+// mistaken or test message). Rewrites the session's JSONL file.
+func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	msgID := r.PathValue("msgId")
+	if err := ws(r).DB.DeleteMessage(r.Context(), sessionID, msgID); writeDBError(w, err, "message not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"deleted": msgID})
+}
+
 // handleMarkSessionRead clears a session's unread flag.
 func (s *Server) handleMarkSessionRead(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

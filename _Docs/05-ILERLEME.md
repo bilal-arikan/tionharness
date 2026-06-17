@@ -2,6 +2,28 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Faz A1.2 — Artifact: versiyonlamayı kaldır + dosya çıktısını otomatik yakala ✅ (2026-06-17)
+
+**İstek:** "artifact sisteminden versiyonlamayı kaldır; ve bir session'da dosya çıktısı istediğimde otomatik olarak artifact'a atsın — default olarak yapsın (önceki denememde yapmadı)."
+
+**1) Versiyonlama kaldırıldı**
+- `db.Artifact`'tan `Version` + `Revisions[]` çıkarıldı; `ArtifactRevision` silindi. Yeni alan `SourcePath` (otomatik yakalanan dosya yolu, dedup için). Güncelleme artık **yerinde overwrite** (`UpdateArtifactContent(id, content)`), revizyon arşivlemesi yok.
+- Tool: `update_artifact` `note` parametresi kaldırıldı; sonuç ref'i `{id,title,kind,action}` (artık `version` yok). `ArtifactSink.UpdateArtifact(ctx,id,content)`.
+- Frontend: `types/artifact.ts` `version`/`revisions` çıktı + `sourcePath?` eklendi; `ArtifactsPanel` sürüm seçici + not alanı + `viewVersion` kaldırıldı (yalnız Düzenle→overwrite, Kopyala, Kaynağa git, Sil); `ArtifactCard` sürüm satırı kaldırıldı; liste satırı `Kind · zaman`.
+
+**2) Dosya çıktısı → otomatik artifact (varsayılan)**
+- **Tur-sonu trace taraması** (`api/artifacts_auto.go` `captureFileArtifacts`): asistan turu bitince trace'teki dosya-yazan araç çağrıları (`write_file` native + `Write` claude-cli; `{path}`/`{file_path}`+`{content}`) yakalanır → `db.SaveFileArtifact` ile **session+sourcePath'e göre upsert** (tekrar yazımda kopya değil güncelleme). Uzantıdan tür çıkarımı (`.md→markdown`, `.html→html`, `.csv/.txt→text`, kod uzantıları→`code`+dil). `chat.go` + `chat_stream.go` reply sonrası çağrılır. **Sağlayıcıdan bağımsız** (her iki yol da trace üretir).
+- **Varsayılan prompt yönlendirmesi** (`artifactDeliverableGuidance`, statik prefix, `chat_turn.go`): "dosya/doküman/dataset/rapor üretirken dosya-yazma aracıyla yaz (otomatik artifact olur) ya da `create_artifact` çağır; ad-hoc shell/script ile üretip artifact yakalamayı atlama." → ajan python-to-disk yerine Write aracını tercih eder, o da yakalanır.
+
+**CANLI TEST (gerçek claude-cli E2E + unit):**
+- [x] Gerçek tur: ajan `greeting.md`'yi **Write** aracıyla yazdı → otomatik **markdown** artifact oluştu (title=greeting.md, sourcePath dolu, `version` alanı yok). Kullanıcının senaryosu birebir doğrulandı.
+- [x] Dedup: aynı dosyayı 2. turda yeniden yazdırınca artifact **tek kaldı**, içerik güncellendi.
+- [x] Manuel düzenleme: `PUT {content}` yerinde overwrite (`version`/`revisions` alanı yok).
+- [x] Unit: `TestParseFileWrite` (native/cli/non-write/empty), `TestArtifactKindForPath`, `TestCaptureFileArtifacts_DedupByPath` (dedup + errored-write skip), `TestArtifactsContextBlock` — hepsi PASS.
+- [x] `go build/vet/test ./...` + frontend `tsc --noEmit` + `vite build` temiz. UI: panel sürümsüz layout render etti (liste `Kind · zaman`, sürüm seçici yok).
+
+> Not: claude-cli artık Interaction MCP üzerinden `create_artifact`/`update_artifact`'a da erişiyor (paralel iş); native yol context köprüsüyle. İki mekanizma birlikte: model dosya yazarsa otomatik, içerik doğrudan üretirse create_artifact.
+
 ## Ara özellik — URL deep-link routing (uygulama içi URL ile gezme, 2026-06-17)
 
 **İstek:** "uygulama içi url ile gezmeyi etkinleştir, mesela istediğimiz workspace'in istediğimiz session'una, agent'ına, zamanlayıcısına vs gidebilelim."

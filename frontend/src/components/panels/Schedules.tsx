@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
 import type { Agent, Schedule } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 
 interface Props {
   agents: Agent[]
+  /** Deep-link target: scroll to and highlight this schedule once loaded. */
+  focusId?: string | null
   onError: (msg: string) => void
 }
 
@@ -22,8 +24,11 @@ function fmtTime(unix: number): string {
   return new Date(unix * 1000).toLocaleString('tr-TR')
 }
 
-export function Schedules({ agents, onError }: Props) {
+export function Schedules({ agents, focusId, onError }: Props) {
   const [schedules, setSchedules] = useState<Schedule[]>([])
+  // Briefly highlight a deep-linked schedule once it is present in the list.
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const focusRef = useRef<HTMLDivElement | null>(null)
   const [agentId, setAgentId] = useState('')
   const [cronExpr, setCronExpr] = useState('*/5 * * * *')
   const [prompt, setPrompt] = useState('')
@@ -41,6 +46,16 @@ export function Schedules({ agents, onError }: Props) {
     reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // When a deep-link target is present and loaded, scroll it into view and flash
+  // a highlight ring that fades after a moment.
+  useEffect(() => {
+    if (!focusId || !schedules.some((s) => s.id === focusId)) return
+    setHighlightId(focusId)
+    focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const t = setTimeout(() => setHighlightId(null), 2500)
+    return () => clearTimeout(t)
+  }, [focusId, schedules])
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? '—'
 
@@ -217,7 +232,12 @@ export function Schedules({ agents, onError }: Props) {
           ) : (
           <div
             key={s.id}
-            className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
+            ref={s.id === focusId ? focusRef : undefined}
+            className={`flex items-center gap-3 rounded-lg border bg-[var(--color-surface)] px-3 py-2 text-sm transition ${
+              highlightId === s.id
+                ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]'
+                : 'border-[var(--color-border)]'
+            }`}
           >
             <button
               onClick={() => toggle(s)}

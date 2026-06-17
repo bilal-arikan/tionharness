@@ -223,6 +223,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		wsp.Runtime.Journal(ctx, agentRow.ID, "Q: "+req.Message+"\nA: "+resp.Text)
+		// Auto-capture any files the agent wrote this turn as artifacts.
+		s.captureFileArtifacts(ctx, database, session.ID, agentRow.ID, steps)
 		sse("reply", map[string]any{"replyMessage": replyMsg})
 
 		s.logger.Info("chat turn completed",

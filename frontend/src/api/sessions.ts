@@ -45,6 +45,11 @@ export const sessionApi = {
   // Delete a session and its on-disk folder.
   deleteSession: (sessionId: string) =>
     req<{ deleted: string }>(`/api/sessions/${sessionId}`, { method: 'DELETE' }),
+  // Delete a single message from a session (prune a mistaken/test message).
+  deleteMessage: (sessionId: string, messageId: string) =>
+    req<{ deleted: string }>(`/api/sessions/${sessionId}/messages/${messageId}`, {
+      method: 'DELETE',
+    }),
   // Absolute folder holding the session's JSONL file.
   sessionPath: (sessionId: string) =>
     req<{ path: string }>(`/api/sessions/${sessionId}/path`),

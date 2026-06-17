@@ -11,21 +11,12 @@ const (
 	ArtifactMermaid  = "mermaid"
 )
 
-// ArtifactRevision is one historical version of an artifact's content. Revisions
-// are kept inline on the artifact (oldest first) so the full edit history is
-// available without a separate store, matching the file-backed design.
-type ArtifactRevision struct {
-	Version   int    `json:"version"`
-	Content   string `json:"content"`
-	Note      string `json:"note"` // optional change summary
-	CreatedAt int64  `json:"createdAt"`
-}
-
 // Artifact is a substantial, self-contained piece of content an agent produced
-// (a document, code file, HTML page, diagram) worth saving, versioning and
-// viewing apart from the chat stream — SwarmGo's take on Claude.ai artifacts.
-// Workspace-scoped. SessionID/AgentID record where it originated so the chat UI
-// can link back to it.
+// (a document, code file, HTML page, diagram) worth saving and viewing apart
+// from the chat stream — SwarmGo's take on Claude.ai artifacts. Workspace-scoped.
+// SessionID/AgentID record where it originated so the chat UI can link back.
+//
+// Artifacts are NOT versioned: an update overwrites the content in place.
 type Artifact struct {
 	ID        string `json:"id"`
 	SessionID string `json:"sessionId"` // origin session (optional)
@@ -33,12 +24,12 @@ type Artifact struct {
 	Title     string `json:"title"`
 	Kind      string `json:"kind"`     // markdown|code|html|text|svg|mermaid
 	Language  string `json:"language"` // for code kind (e.g. "go", "python")
-	Content   string `json:"content"`  // current content
-	Version   int    `json:"version"`  // current version number (starts at 1)
+	Content   string `json:"content"`
 
-	// Revisions holds the prior versions (oldest first); the current content is
-	// always Content/Version, not duplicated here.
-	Revisions []ArtifactRevision `json:"revisions"`
+	// SourcePath is the file path this artifact mirrors when it was captured
+	// automatically from a file the agent wrote (empty for manual/tool-created
+	// artifacts). It dedups repeated writes of the same file within a session.
+	SourcePath string `json:"sourcePath,omitempty"`
 
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`

@@ -23,4 +23,7 @@ export interface Attachment {
   relPath?: string
   // Inlined content for text/code attachments (capped server-side).
   textContent?: string
+  // Display hint: 'artifact' marks a reference staged via the "#" picker (vs an
+  // uploaded file). Frontend-only; the backend ignores it.
+  source?: 'artifact'
 }

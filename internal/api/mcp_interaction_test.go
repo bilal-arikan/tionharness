@@ -144,11 +144,11 @@ type fakeSink struct{ created, updated int }
 
 func (f *fakeSink) CreateArtifact(_ context.Context, title, kind, language, content string) (tools.ArtifactRef, error) {
 	f.created++
-	return tools.ArtifactRef{ID: "art-1", Title: title, Kind: kind, Version: 1}, nil
+	return tools.ArtifactRef{ID: "art-1", Title: title, Kind: kind}, nil
 }
-func (f *fakeSink) UpdateArtifact(_ context.Context, id, content, note string) (tools.ArtifactRef, error) {
+func (f *fakeSink) UpdateArtifact(_ context.Context, id, content string) (tools.ArtifactRef, error) {
 	f.updated++
-	return tools.ArtifactRef{ID: id, Title: "t", Kind: "markdown", Version: 2}, nil
+	return tools.ArtifactRef{ID: id, Title: "t", Kind: "markdown"}, nil
 }
 
 func TestInteractionBackend_Artifact(t *testing.T) {
