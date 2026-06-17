@@ -2,6 +2,35 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara özellik — Tur Hatalarını Sohbet Hiyerarşisinde Gösterme ✅ (2026-06-17)
+
+**İstek:** Bir mesaj sonucu hata oluşursa (server taraflı veya client taraflı), bunu
+köşedeki bir banner yerine **sohbet mesaj hiyerarşisinde hata detayıyla** gösterelim.
+
+**Önceki davranış:** Hata olunca `onError`/`catch` canlı balonu **ve kullanıcı mesajını
+siliyordu**; yalnızca sol üstte global bir hata banner'ı çıkıyordu (sayfa yenilenince hata
+tamamen kayboluyordu). Backend ise hata anında hiçbir şey kalıcılaştırmıyordu.
+
+**Çözüm — mevcut `StepError` altyapısını hata yoluna bağlama:**
+- **Backend (`internal/api/chat_stream.go`):** Yeni `failTurn(...)` yardımcısı — tur düzeyi
+  her hatada bir `error` adımı (text=detay, reason=makine etiketi) içeren **assistant mesajı
+  kalıcılaştırır** (hiyerarşide görünür + reload'da kalır), sonra `error` SSE event'ini bu
+  mesajla (`replyMessage`) birlikte gönderir. Döngüdeki hata noktaları buna bağlandı:
+  `provider_unavailable`, `history_error`, `compaction_failed`, `provider_error`,
+  `persist_error`.
+- **Frontend (`api/chat.ts`):** `onError(err, replyMessage?)` — `error` event'i artık
+  opsiyonel kalıcı mesajı taşıyor.
+- **Frontend (`hooks/useChatStream.ts`):** `renderTurnError(detail, replyMessage?)` — hatayı
+  transcript'e yazar (banner yerine). Kullanıcı mesajı korunur; canlı (kaydedilmemiş) balon
+  hata balonuyla değişir. Server kalıcı mesaj gönderdiyse o gösterilir; client/transport
+  hatasında yerel bir `error` balonu sentezlenir (`reason: client_error`).
+- Render zaten mevcut `ErrorStep` bileşeniyle yapılıyor (⛔ + detay + reason rozeti).
+
+**Test:** İzole instance'ta (port 8099) bozuk-provider ajanıyla deterministik hata tetiklendi.
+Doğrulandı: SSE `error` event'i `{error, reason, replyMessage}` taşıyor; kalıcı mesajlar
+`[user] 'selam'` + `[assistant] steps=[{kind:error, text:"anthropic provider not configured…",
+reason:"provider_unavailable"}]`. `go build`/`vet` + frontend `tsc`/`vite build` yeşil.
+
 ## Faz SM — Ajan Self-Management Araçları ✅ (2026-06-17)
 
 **İstek:** Ajan, sohbet esnasında SwarmGo'nun kendisini yönetebilsin — yeni ajan/flow/

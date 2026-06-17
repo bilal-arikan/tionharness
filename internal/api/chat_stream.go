@@ -106,6 +106,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
 	}
+	// A fresh session opened by @mentioning an agent adopts it as the main agent.
+	session = s.adoptMentionedAgent(ctx, database, session, req.AgentIDs, agents)
 
 	// Persist the incoming user message once.
 	userMsg, err := database.AddMessage(ctx, db.Message{
@@ -173,7 +175,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 		provider, perr := s.providers.Get(agentRow.Provider)
 		if perr != nil {
-			sse("error", map[string]string{"error": perr.Error()})
+			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "provider_unavailable", perr.Error())
 			return
 		}
 
@@ -181,17 +183,17 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 		history, herr := database.ListMessages(ctx, session.ID)
 		if herr != nil {
-			sse("error", map[string]string{"error": herr.Error()})
+			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "history_error", herr.Error())
 			return
 		}
 		session, _ = database.GetSession(ctx, session.ID)
 		prep, cerr := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 		if cerr != nil {
-			sse("error", map[string]string{"error": "compaction failed: " + cerr.Error()})
+			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "compaction_failed", "compaction failed: "+cerr.Error())
 			return
 		}
 
-		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, req.Message, prep)
+		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep)
 
 		// Attach a per-agent artifact sink so create_artifact / update_artifact
 		// persist content stamped with this session + agent — both on the native
@@ -207,7 +209,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		)
 		if cerr != nil {
 			s.logger.Error("stream completion failed", "error", cerr, "agent", agentRow.ID)
-			sse("error", map[string]string{"error": "provider error: " + cerr.Error()})
+			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "provider_error", "provider error: "+cerr.Error())
 			return
 		}
 
@@ -219,7 +221,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			Steps:     marshalSteps(steps),
 		})
 		if aerr != nil {
-			sse("error", map[string]string{"error": aerr.Error()})
+			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "persist_error", aerr.Error())
 			return
 		}
 		wsp.Runtime.Journal(ctx, agentRow.ID, "Q: "+req.Message+"\nA: "+resp.Text)
@@ -280,4 +282,26 @@ func (s *Server) resolveTurnAgents(ctx context.Context, database *db.DB, session
 		}
 	}
 	return out
+}
+
+// failTurn records a turn-level failure as a persisted assistant message so the
+// error shows up in the chat hierarchy (with its detail) and survives a reload,
+// then notifies the client via the SSE `error` event carrying that message.
+// agentID is the responding agent (may be "" if none was selected yet); reason
+// is a stable machine tag (provider_error, compaction_failed, …) shown as a
+// badge; detail is the human-readable message.
+func (s *Server) failTurn(ctx context.Context, database *db.DB, sse func(string, any), sessionID, agentID, reason, detail string) {
+	step := agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason}
+	payload := map[string]any{"error": detail, "reason": reason}
+	if msg, err := database.AddMessage(ctx, db.Message{
+		SessionID: sessionID,
+		Role:      providers.RoleAssistant,
+		AgentID:   agentID,
+		Steps:     marshalSteps([]agent.TurnStep{step}),
+	}); err != nil {
+		s.logger.Error("persist turn error failed", "session", sessionID, "error", err)
+	} else {
+		payload["replyMessage"] = msg
+	}
+	sse("error", payload)
 }

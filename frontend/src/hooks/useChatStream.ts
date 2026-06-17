@@ -167,6 +167,30 @@ export function useChatStream(deps: ChatStreamDeps) {
       // produce several bubbles, one per agent, in order).
       let liveId = ''
       let liveSteps: TurnStep[] = []
+
+      // Render a turn failure INTO the transcript (not just a top banner) so the
+      // error is visible in the message hierarchy with its detail and survives a
+      // reload when the server persisted it. The user message is kept; the live
+      // (unsaved) bubble is replaced by the error bubble. When the server sent a
+      // persisted error message (replyMessage) we show that; otherwise — a
+      // client-side/transport failure — we synthesize a local error bubble.
+      const renderTurnError = (detail: string, replyMessage?: Message) => {
+        setPendingAsks((p) => withoutKey(p, sid))
+        onSid((prev) => {
+          const base = prev.filter((m) => !m.id.startsWith('live-'))
+          if (replyMessage) return [...base, replyMessage]
+          const local: Message = {
+            id: `err-${Date.now()}`,
+            sessionId: sid,
+            role: 'assistant',
+            agentId: agentIds[0],
+            text: '',
+            steps: JSON.stringify([{ kind: 'error', text: detail, reason: 'client_error' }]),
+            createdAt: Math.floor(Date.now() / 1000),
+          }
+          return [...base, local]
+        })
+      }
       try {
         await api.chatStream(sid, text, agentIds, {
           attachments,
@@ -261,14 +285,14 @@ export function useChatStream(deps: ChatStreamDeps) {
               refreshSessions()
             }
           },
-          onError: (err) => {
-            setError(err)
-            setPendingAsks((p) => withoutKey(p, sid))
-            onSid((prev) =>
-              prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
-            )
-            // Clicking the notification jumps to the logs view to inspect it.
-            notify(notifyEnabled.current, 'SwarmGo — hata', err, () => setView('logs'))
+          onError: (err, replyMessage) => {
+            // Surface the failure inline in the transcript (hierarchy) instead of
+            // a top banner. Clicking the notification jumps to this chat.
+            renderTurnError(err, replyMessage)
+            notify(notifyEnabled.current, 'SwarmGo — hata', err, () => {
+              setView('chat')
+              selectSession(sid)
+            })
           },
         }, ac.signal, thinkingLevel, permissionMode)
       } catch (e) {
@@ -276,11 +300,12 @@ export function useChatStream(deps: ChatStreamDeps) {
         // bubble visible and don't surface it as an error.
         if (!ac.signal.aborted) {
           const msg = (e as Error).message
-          setError(msg)
-          onSid((prev) =>
-            prev.filter((m) => !m.id.startsWith('live-') && m.id !== optimistic.id),
-          )
-          notify(notifyEnabled.current, 'SwarmGo — hata', msg, () => setView('logs'))
+          // Client-side/transport failure: show it inline in the transcript.
+          renderTurnError(msg)
+          notify(notifyEnabled.current, 'SwarmGo — hata', msg, () => {
+            setView('chat')
+            selectSession(sid)
+          })
         }
       } finally {
         // Tear down only THIS session's streaming state. Overlapping turns in

@@ -13,7 +13,10 @@ export interface ChatStreamHandlers {
   onStep: (step: TurnStep) => void
   onReply: (r: { replyMessage: Message }) => void
   onDone: (d: { sessionTitle?: string }) => void
-  onError: (err: string) => void
+  // err is the human message; replyMessage is the server-persisted error message
+  // (an assistant turn carrying an 'error' step) when the failure occurred after
+  // the turn began — absent for pre-flight/transport failures.
+  onError: (err: string, replyMessage?: Message) => void
 }
 
 // streamChat POSTs to the SSE endpoint and dispatches parsed events. Uses fetch
@@ -79,9 +82,11 @@ async function streamChat(
       case 'done':
         handlers.onDone(data as { sessionTitle?: string })
         break
-      case 'error':
-        handlers.onError((data as { error: string }).error)
+      case 'error': {
+        const e = data as { error: string; replyMessage?: Message }
+        handlers.onError(e.error, e.replyMessage)
         break
+      }
     }
   }
 
