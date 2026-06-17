@@ -8,6 +8,16 @@ export interface Workspace {
   color?: string
 }
 
+// A workspace template (agents + flow blueprint) offered in the create dialog.
+export interface WorkspaceTemplate {
+  id: string
+  name: string
+  description: string
+  icon: string
+  agentCount: number
+  hasFlow: boolean
+}
+
 // Per-workspace settings (overrides + rename). Resolved from X-Workspace-Id.
 export interface WorkspaceSettings {
   id: string
@@ -48,10 +58,17 @@ export interface WorkspaceConfigPatch {
 }
 
 // A tool in the workspace-wide tools screen, with its active/inactive state.
+// `source`/`server`/`label` describe the tool's origin (built-in vs a specific
+// MCP server) for grouping and clean labelling; `inputSchema` is the JSON Schema
+// of its arguments, used to render the per-tool detail view.
 export interface WorkspaceTool {
   name: string
+  label: string
   description: string
+  source: 'builtin' | 'mcp'
+  server: string
   enabled: boolean
+  inputSchema?: unknown
 }
 
 export interface WorkspaceTools {

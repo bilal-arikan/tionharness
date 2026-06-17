@@ -1,17 +1,25 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/mcp"
 )
 
 // workspaceTool is one entry in the workspace tools screen: a tool plus whether
-// it is currently active (not in the workspace denylist).
+// it is currently active (not in the workspace denylist). Source/Server/Label
+// let the UI group tools by origin (built-in vs a specific MCP server) and show
+// a clean, un-namespaced label; InputSchema drives the per-tool detail view.
 type workspaceTool struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Enabled     bool   `json:"enabled"`
+	Name        string          `json:"name"`
+	Label       string          `json:"label"`
+	Description string          `json:"description"`
+	Source      string          `json:"source"` // "builtin" | "mcp"
+	Server      string          `json:"server"` // MCP server display name (empty for built-ins)
+	Enabled     bool            `json:"enabled"`
+	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
 }
 
 // handleWorkspaceTools returns the full workspace tool catalog (built-ins + all
@@ -27,14 +35,40 @@ func (s *Server) handleWorkspaceTools(w http.ResponseWriter, r *http.Request) {
 	for _, n := range cfg.DisabledTools {
 		disabled[n] = true
 	}
+
+	// Map each MCP server's sanitized namespace prefix back to its display name
+	// so MCP tools can be grouped/labelled by the human-readable server name.
+	serverByNS := map[string]string{}
+	if servers, err := ws(r).DB.ListEnabledMCPServers(r.Context()); err == nil {
+		for _, m := range servers {
+			if ns, _, ok := mcp.SplitNamespaced(mcp.NamespaceTool(m.Name, "x")); ok {
+				serverByNS[ns] = m.Name
+			}
+		}
+	}
+
 	catalog := ws(r).Runtime.WorkspaceToolCatalog(r.Context())
 	out := make([]workspaceTool, 0, len(catalog))
 	for _, t := range catalog {
-		out = append(out, workspaceTool{
+		wt := workspaceTool{
 			Name:        t.Name,
+			Label:       t.Name,
 			Description: t.Description,
+			Source:      "builtin",
 			Enabled:     !disabled[t.Name],
-		})
+			InputSchema: t.InputSchema,
+		}
+		// MCP tools are namespaced "<server>__<tool>"; recover origin and label.
+		if ns, tool, ok := mcp.SplitNamespaced(t.Name); ok {
+			wt.Source = "mcp"
+			wt.Label = tool
+			if name, found := serverByNS[ns]; found {
+				wt.Server = name
+			} else {
+				wt.Server = ns
+			}
+		}
+		out = append(out, wt)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tools":         out,

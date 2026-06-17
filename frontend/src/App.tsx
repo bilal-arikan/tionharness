@@ -143,7 +143,7 @@ export default function App() {
             sid = want.id
             aid = ss.find((s) => s.id === want.id)?.agentId ?? aid
           } else if (
-            (want.view === 'agents' || want.view === 'memory' || want.view === 'tools') &&
+            (want.view === 'agents' || want.view === 'memory') &&
             want.id &&
             ag.some((a) => a.id === want.id)
           ) {
@@ -466,7 +466,7 @@ export default function App() {
       }
       if (r.view === 'chat') {
         if (r.id) selectSession(r.id)
-      } else if (r.view === 'agents' || r.view === 'memory' || r.view === 'tools') {
+      } else if (r.view === 'agents' || r.view === 'memory') {
         if (r.id) focusAgent(r.id)
       } else if (r.view === 'artifacts') {
         setArtifactTarget(r.id)
@@ -522,8 +522,10 @@ export default function App() {
         />
       )}
 
-      {/* Agent-scoped views need an agent picker; reuse the roster as a sidebar. */}
-      {(view === 'memory' || view === 'tools') && (
+      {/* Agent-scoped views need an agent picker; reuse the roster as a sidebar.
+          Tools is workspace-scoped (no agent), so it has its own master-detail
+          layout and skips the roster. */}
+      {view === 'memory' && (
         <AgentRoster
           agents={agents}
           defaultAgentId={defaultAgentId}
