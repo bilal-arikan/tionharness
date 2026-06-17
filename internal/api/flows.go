@@ -2,11 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/orchestration"
+	"github.com/bilal/swarmgo/internal/providers"
 )
 
 func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
@@ -145,4 +147,120 @@ func (s *Server) handleGetFlowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, run)
+}
+
+type sessionFlowReq struct {
+	FlowID string `json:"flowId"`
+	Input  string `json:"input"`
+}
+
+// handleSessionRunFlow runs a flow and records the result as a turn in the given
+// chat session: a user message (the input) plus an assistant message whose body
+// is the rendered run transcript. Powers triggering flows from the chat composer
+// ("/" command). The flow_run row is still created so the trace lives in history.
+func (s *Server) handleSessionRunFlow(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+	ctx := r.Context()
+
+	session, err := wsp.DB.GetSession(ctx, id)
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+
+	var req sessionFlowReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(req.FlowID) == "" {
+		writeError(w, http.StatusBadRequest, "flowId is required")
+		return
+	}
+
+	flow, err := wsp.DB.GetFlow(ctx, req.FlowID)
+	if writeDBError(w, err, "flow not found") {
+		return
+	}
+
+	// Manual (user-initiated) run: not budget-gated. Setup errors (bad graph) come
+	// back as runErr; execution failures land in run.Status.
+	run, runErr := wsp.Runtime.RunFlow(ctx, req.FlowID, req.Input, false)
+
+	// User message: what the user typed after the command (the flow input).
+	userText := strings.TrimSpace(req.Input)
+	if userText == "" {
+		userText = "🔀 " + flow.Name
+	}
+	userMsg, err := wsp.DB.AddMessage(ctx, db.Message{
+		SessionID: session.ID,
+		Role:      providers.RoleUser,
+		Text:      userText,
+	})
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+
+	agentID := finalAgentID(flow, run)
+	if agentID == "" {
+		agentID = session.AgentID
+	}
+	msg, err := wsp.DB.AddMessage(ctx, db.Message{
+		SessionID: session.ID,
+		Role:      providers.RoleAssistant,
+		AgentID:   agentID,
+		Text:      flowRunMarkdown(flow, run, runErr),
+		Steps:     "[]",
+	})
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"userMessage": userMsg, "replyMessage": msg})
+}
+
+// flowRunMarkdown renders a finished flow run as a chat-ready markdown transcript:
+// a header, one section per executed node (title + output), and a failure note if
+// the run errored.
+func flowRunMarkdown(flow db.Flow, run db.FlowRun, runErr error) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "🔀 **%s** akışı çalıştı\n\n", flow.Name)
+	if runErr != nil {
+		fmt.Fprintf(&b, "⚠️ Akış başlatılamadı: %s", runErr.Error())
+		return b.String()
+	}
+	var st orchestration.State
+	_ = json.Unmarshal([]byte(run.State), &st)
+	for i, t := range st.Trace {
+		title := t.Title
+		if title == "" {
+			title = t.NodeID
+		}
+		fmt.Fprintf(&b, "#### %d. %s\n\n%s\n\n", i+1, title, t.Output)
+	}
+	if run.Status == db.FlowFailure {
+		fmt.Fprintf(&b, "---\n\n⚠️ **Durum: hata** — %s", run.Error)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// finalAgentID returns the agent of the last agent node that executed in the run,
+// so the resulting chat message is attributed to the agent that produced the
+// final output. Empty if it can't be resolved.
+func finalAgentID(flow db.Flow, run db.FlowRun) string {
+	g, err := orchestration.ParseGraph(flow.Graph)
+	if err != nil {
+		return ""
+	}
+	var st orchestration.State
+	if json.Unmarshal([]byte(run.State), &st) != nil {
+		return ""
+	}
+	for i := len(st.Trace) - 1; i >= 0; i-- {
+		for _, n := range g.Nodes {
+			if n.ID == st.Trace[i].NodeID && n.Type == orchestration.NodeAgent {
+				return n.AgentID
+			}
+		}
+	}
+	return ""
 }

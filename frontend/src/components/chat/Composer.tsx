@@ -269,8 +269,14 @@ export function Composer({
       }
       addArtifact(item.artifact)
     } else if (item.cmd) {
-      item.cmd.run()
-      setText('') // a command consumes the input
+      if (item.cmd.takesInput) {
+        // Insert "/name " and wait for the user to type an argument + Enter
+        // (handled in send()), instead of running immediately.
+        setText('/' + item.cmd.name + ' ')
+      } else {
+        item.cmd.run()
+        setText('') // a command consumes the input
+      }
     }
     closeMenu()
     taRef.current?.focus()
@@ -292,6 +298,20 @@ export function Composer({
     const t = text.trim()
     // Block while uploads are still in flight so attachments are never dropped.
     if (disabled || anyUploading || (!t && readyAttachments.length === 0)) return
+    // "/name args…" → run the matching slash command with the trailing text as
+    // its input, instead of sending a literal message. Unknown "/foo" falls
+    // through and is sent as plain text.
+    if (t.startsWith('/')) {
+      const sp = t.indexOf(' ')
+      const name = sp === -1 ? t.slice(1) : t.slice(1, sp)
+      const rest = sp === -1 ? '' : t.slice(sp + 1)
+      const cmd = commands.find((c) => c.name === name)
+      if (cmd) {
+        cmd.run(rest)
+        clearComposer()
+        return
+      }
+    }
     onSend(t, readyAttachments)
     clearComposer()
   }

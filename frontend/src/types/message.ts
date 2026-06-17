@@ -56,7 +56,12 @@ export interface SlashCommand {
   name: string // without the leading slash, e.g. "new"
   description: string
   icon?: string
-  run: () => void
+  // run receives the text typed after the command name when takesInput is set
+  // (e.g. "/myflow some topic" → run("some topic")); otherwise called with none.
+  run: (input?: string) => void
+  // takesInput: selecting from the menu inserts "/name " and waits for the user
+  // to type an argument + Enter, rather than running immediately. Used by flows.
+  takesInput?: boolean
 }
 
 export interface Message {

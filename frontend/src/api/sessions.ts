@@ -39,6 +39,13 @@ export const sessionApi = {
       method: 'POST',
       body: JSON.stringify({ kind }),
     }),
+  // Run a flow and record its result as a turn in this session (user input +
+  // assistant transcript). Powers triggering flows from the chat "/" menu.
+  runFlowInSession: (sessionId: string, flowId: string, input: string) =>
+    req<{ userMessage: Message; replyMessage: Message }>(`/api/sessions/${sessionId}/run-flow`, {
+      method: 'POST',
+      body: JSON.stringify({ flowId, input }),
+    }),
   // Clear a session's unread flag.
   markSessionRead: (sessionId: string) =>
     req<{ id: string }>(`/api/sessions/${sessionId}/read`, { method: 'POST' }),

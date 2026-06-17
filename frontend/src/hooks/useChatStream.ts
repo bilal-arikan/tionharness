@@ -14,7 +14,7 @@ import {
   type SetStateAction,
 } from 'react'
 import { api } from '../api'
-import type { Agent, Attachment, Message, Session, SlashCommand, TurnStep } from '../types'
+import type { Agent, Attachment, Flow, Message, Session, SlashCommand, TurnStep } from '../types'
 import type { View } from '../components/NavRail'
 import type { PendingAsk } from '../components/chat/AskPrompt'
 import type { PendingItem } from '../components/chat/PendingTray'
@@ -42,6 +42,17 @@ function withoutKey<T>(prev: Record<string, T>, key: string): Record<string, T> 
   const n = { ...prev }
   delete n[key]
   return n
+}
+
+// flowSlug turns a flow name into a space-less "/" command token (Turkish chars
+// folded to ASCII), e.g. "Geri Bildirim Yönlendirici" → "geri-bildirim-yonlendirici".
+function flowSlug(name: string): string {
+  const map: Record<string, string> = { ı: 'i', İ: 'i', ş: 's', ğ: 'g', ü: 'u', ö: 'o', ç: 'c' }
+  return name
+    .replace(/[ıİşğüöç]/g, (c) => map[c] ?? c)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 export interface ChatStreamDeps {
@@ -495,7 +506,57 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionId, activeAgentId, setMessages, setError],
   )
 
-  // Slash commands available in the chat composer ("/" menu).
+  // Run a flow from the chat composer: records the result as a turn in the active
+  // session (optimistic user bubble + placeholder, replaced by the persisted
+  // user/assistant pair). Mirrors summarize() but hits the run-flow endpoint.
+  const runFlow = useCallback(
+    (flowId: string, flowName: string, input: string) => {
+      const sid = activeSessionId
+      if (!sid) return
+      const now = Math.floor(Date.now() / 1000)
+      const userTmp = `flow-u-${Date.now()}`
+      const botTmp = `flow-a-${Date.now()}`
+      const userBubble: Message = {
+        id: userTmp,
+        sessionId: sid,
+        role: 'user',
+        text: input.trim() || `🔀 ${flowName}`,
+        createdAt: now,
+      }
+      const placeholder: Message = {
+        id: botTmp,
+        sessionId: sid,
+        role: 'assistant',
+        agentId: activeAgentId ?? undefined,
+        text: `⏳ 🔀 ${flowName} akışı çalışıyor…`,
+        steps: '[]',
+        createdAt: now,
+      }
+      setMessages((prev) => [...prev, userBubble, placeholder])
+      api
+        .runFlowInSession(sid, flowId, input)
+        .then(({ userMessage, replyMessage }) =>
+          setMessages((prev) =>
+            prev.map((m) => (m.id === userTmp ? userMessage : m.id === botTmp ? replyMessage : m)),
+          ),
+        )
+        .catch((e) => {
+          setMessages((prev) => prev.filter((m) => m.id !== userTmp && m.id !== botTmp))
+          setError((e as Error).message)
+        })
+    },
+    [activeSessionId, activeAgentId, setMessages, setError],
+  )
+
+  // Flow list for the "/" command palette (each flow becomes a slash command).
+  // Fetched once on mount; flows change rarely and the menu reads the latest list.
+  const [flows, setFlows] = useState<Flow[]>([])
+  useEffect(() => {
+    api.listFlows().then(setFlows).catch(() => {})
+  }, [])
+
+  // Slash commands available in the chat composer ("/" menu): built-in session
+  // commands plus one entry per flow (🔀, takes the rest of the line as input).
   const chatCommands = useMemo<SlashCommand[]>(
     () => [
       { name: 'reflect', icon: '✦', description: 'Ajana yansıma (dream cycle) ürettir', run: () => summarize('reflect') },
@@ -504,8 +565,17 @@ export function useChatStream(deps: ChatStreamDeps) {
       { name: 'tools', icon: '🔌', description: 'Kullanılabilir araçları listele', run: () => summarize('tools') },
       { name: 'board', icon: '🗂', description: 'Görev panosunu özetle', run: () => summarize('board') },
       { name: 'flows', icon: '🔀', description: 'Akışları özetle', run: () => summarize('flows') },
+      ...flows.map(
+        (f): SlashCommand => ({
+          name: flowSlug(f.name) || f.id.slice(0, 6),
+          icon: '🔀',
+          description: f.description ? `${f.name} — ${f.description}` : `${f.name} akışını çalıştır`,
+          takesInput: true,
+          run: (input?: string) => runFlow(f.id, f.name, input ?? ''),
+        }),
+      ),
     ],
-    [summarize],
+    [summarize, flows, runFlow],
   )
 
   // Derive the active session's view of the per-session streaming state.
