@@ -19,16 +19,7 @@ func (s *Server) handleCatalog(w http.ResponseWriter, _ *http.Request) {
 	entries := providers.Catalog()
 	out := make([]catalogEntryDTO, 0, len(entries))
 	for _, e := range entries {
-		available := false
-		switch e.ID {
-		case "claude-cli":
-			available = s.providers.ClaudeCLIAvailable()
-		case "anthropic":
-			available = s.providers.AnthropicConfigured()
-		case "minimax":
-			available = s.providers.MinimaxConfigured()
-		}
-		out = append(out, catalogEntryDTO{CatalogEntry: e, Available: available})
+		out = append(out, catalogEntryDTO{CatalogEntry: e, Available: s.providers.Available(e.ID)})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

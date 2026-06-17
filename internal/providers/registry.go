@@ -94,39 +94,46 @@ func (r *Registry) AnthropicConfigured() bool {
 	return r.anthropicKey != ""
 }
 
-// Get returns a provider for the given name, or an error if unsupported
-// or unconfigured.
-func (r *Registry) Get(name string) (Provider, error) {
+// resolve assembles the ResolvedConfig a kind needs from the registry's live
+// fields. This per-id mapping of credentials onto the common config is the one
+// remaining id-aware seam; the data-driven instance model (Faz 2) replaces the
+// typed key fields with a generic per-instance credential store and drops it.
+func (r *Registry) resolve(id string) ResolvedConfig {
 	r.mu.RLock()
-	anthropicKey := r.anthropicKey
-	claudeCLIPath := r.claudeCLIPath
-	defaultModel := r.defaultModel
-	oneMContext := r.betaOneMContext
-	extendedCache := r.betaExtendedCache
-	minimaxKey := r.minimaxKey
-	minimaxBaseURL := r.minimaxBaseURL
-	r.mu.RUnlock()
-
-	switch name {
+	defer r.mu.RUnlock()
+	cfg := ResolvedConfig{
+		Model:         r.defaultModel,
+		CLIPath:       r.claudeCLIPath,
+		OneMContext:   r.betaOneMContext,
+		ExtendedCache: r.betaExtendedCache,
+	}
+	switch id {
 	case "anthropic":
-		if anthropicKey == "" {
-			return nil, fmt.Errorf("anthropic provider not configured (set an API key in Settings)")
-		}
-		return NewAnthropic(anthropicKey).WithBetas(oneMContext, extendedCache), nil
-
+		cfg.Key = r.anthropicKey
 	case "minimax":
-		if minimaxKey == "" {
-			return nil, fmt.Errorf("minimax provider not configured (set an API key in Settings)")
-		}
-		return NewMinimax(minimaxKey, minimaxBaseURL), nil
+		cfg.Key = r.minimaxKey
+		cfg.BaseURL = r.minimaxBaseURL
+	}
+	return cfg
+}
 
-	case "claude-cli", "":
-		if claudeCLIPath == "" {
-			return nil, fmt.Errorf("claude CLI not found on PATH (install Claude Code)")
-		}
-		return NewClaudeCLI(claudeCLIPath, defaultModel), nil
+// Available reports whether the provider id is registered and usable with the
+// current configuration (key set / CLI present). Used by the catalog handler.
+func (r *Registry) Available(id string) bool {
+	k, ok := lookupKind(id)
+	if !ok {
+		return false
+	}
+	return k.Available(r.resolve(id))
+}
 
-	default:
+// Get returns a provider for the given name, or an error if unsupported
+// or unconfigured. It dispatches through the registered provider kinds; the
+// empty name maps to the keyless claude-cli default.
+func (r *Registry) Get(name string) (Provider, error) {
+	k, ok := lookupKind(name)
+	if !ok {
 		return nil, fmt.Errorf("unknown provider: %q", name)
 	}
+	return k.Build(r.resolve(name))
 }
