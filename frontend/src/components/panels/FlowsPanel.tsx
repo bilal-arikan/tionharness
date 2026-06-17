@@ -164,13 +164,20 @@ export function FlowsPanel({ agents, onError }: Props) {
             <li key={f.id}>
               <button
                 onClick={() => selectFlow(f)}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${
+                className={`flex w-full items-start justify-between rounded-lg px-3 py-2 text-left text-sm ${
                   selectedId === f.id
                     ? 'bg-[var(--color-surface-2)]'
                     : 'hover:bg-[var(--color-surface-2)]'
                 }`}
               >
-                <span className="truncate">{f.name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{f.name}</span>
+                  {f.description && (
+                    <span className="mt-0.5 block truncate text-xs text-[var(--color-text-dim)]">
+                      {f.description}
+                    </span>
+                  )}
+                </span>
                 <span
                   onClick={(e) => {
                     e.stopPropagation()
@@ -226,6 +233,15 @@ export function FlowsPanel({ agents, onError }: Props) {
                 Kaydet
               </button>
             </div>
+
+            {/* Description */}
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Açıklama — bu akış ne yapar? (isteğe bağlı)"
+              rows={2}
+              className="w-full rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-dim)] outline-none"
+            />
 
             {/* Nodes */}
             <div className="space-y-3">
