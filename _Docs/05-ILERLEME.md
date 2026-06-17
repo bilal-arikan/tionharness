@@ -2,6 +2,20 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Ara özellik — Sohbetten akış tetikleme + sonucu session'a yazma ✅ (2026-06-17)
+
+Akışlar (flows) artık sohbet composer'ından "/" komutuyla tetiklenebiliyor ve çıktı kalıcı bir sohbet turu olarak session'a yazılıyor.
+
+- **Backend:** `POST /api/sessions/{id}/run-flow` (`api/flows.go` `handleSessionRunFlow`) — flow'u çalıştırır (`Runtime.RunFlow`, manuel/bütçesiz), session'a **user mesajı** (input) + **assistant mesajı** ekler. Assistant gövdesi `flowRunMarkdown` ile run trace'inden üretilir (her node = başlık + çıktı bölümü; branch "→ etiket"; hata durumu notu); mesaj **son agent node'unun ajanına** atfedilir (`finalAgentID`). `flow_run` satırı yine oluşur → trace geçmişte kalır. `handleSessionSummary` kalıbının ikizi.
+- **Frontend:** Her flow sohbet "/" menüsünde bir komut olur (🔀 + slug ad, `useChatStream.ts` `flowSlug`+`chatCommands`); seçince composer'a `/slug ` yazılır, satırın geri kalanı flow input'u olur. `SlashCommand` artık `run(input?)` + `takesInput` taşıyor; `Composer.tsx` gönderimde `/ad argüman` ayrıştırıp eşleşen komutu çalıştırır. `runFlow` runner'ı `summarize` gibi optimistic user+placeholder gösterip API sonucuyla değiştirir.
+- **Tasarım kararı:** flow_run trace paneli korundu (anlık teknik görünüm); session turu kalıcı + zengin + devam edilebilir kayıt. Sınırlama: flow'lar sunucuda senkron çalışır → node-node canlı token akışı yok ("⏳ çalışıyor…" → bitince transcript).
+- ✅ Backend curl ile uçtan uca doğrulandı (Geri Bildirim Yönlendirici akışı: NEGATIVE → Özür Dile, assistant agentId = son node). `go build` + frontend `tsc --noEmit` yeşil. (Görsel "/" menü testi mcp-chrome kırılganlığı nedeniyle yapılamadı.)
+
+## Ara özellik — Akış açıklaması + trace markdown render (FlowsPanel) ✅ (2026-06-17)
+
+- FlowsPanel'de akış **açıklaması** artık düzenlenebilir (editörde textarea, sol listede ad altında özet); alan API'de zaten saklanıyordu ama UI yüzeyi yoktu.
+- Trace çıktısı artık chat ile aynı `Markdown` bileşeniyle render ediliyor (agent/parallel node'ları; branch düz metin kalır).
+
 ## Ara özellik — Ajan→Ajan Delegasyonu (`call_agent` tool) ✅ (2026-06-17)
 
 **İstek:** Bir sohbet sırasında bir ajanın başka bir ajanı **etiketleyerek/çağırarak**
