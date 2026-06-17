@@ -120,12 +120,19 @@ Invoke-RestMethod "http://127.0.0.1:8090/api/logs?q=provider"
 
 ## UI: Loglar ekranı
 
-`frontend/src/components/LogsPanel.tsx` (NavRail → "📜 Loglar"):
+`frontend/src/components/panels/LogsPanel.tsx` (NavRail → "📜 Loglar"):
 
 - **Canlı takip:** "Canlı" açıkken 2.5sn'de bir `GET /api/logs` poll'lar; yeni
   satıra otomatik kaydırır.
 - **Seviye chip'leri:** Hepsi / Debug / Info / Warn / Error.
 - **Arama:** mesaj + alan üzerinde anlık filtre (`q`).
+- **Grupla** (varsayılan açık): ardışık **birebir aynı** kayıtları (aynı
+  level + message + attrs) tek satıra katlar, `×N` rozeti + ilk→son zaman
+  aralığı (tooltip) gösterir. Yalnız **ardışık** olanlar gruplanır (kronolojik
+  akış bozulmaz); araya başka log girince yeni grup başlar. Mantık
+  `lib/logGroup.ts` `groupConsecutive` (imza = level+message+sıralı attrs).
+  Başlıkta "N satır · M kayıt" özeti. **Önemli:** bir attr bile farklıysa
+  (ör. `dur=0s` vs `dur=1ms`) grup kırılır — bu kasıtlıdır.
 - Seviye renkleri: ERROR kırmızı, WARN amber, INFO mavi, DEBUG soluk.
 
 ## Dış erişim (harici ajanlar)
@@ -185,5 +192,6 @@ Sınırlar ve güvenlik:
 - `internal/api/middleware_log.go` — HTTP access-log middleware
 - `internal/api/{chat,chat_stream,agents,sessions,tasks,schedules,mcp,memory}.go` — iş logları
 - `internal/agent/{worker,executor,flow,reflector}.go` — otonom/runtime logları
-- `frontend/src/components/LogsPanel.tsx` — Loglar ekranı
+- `frontend/src/components/panels/LogsPanel.tsx` — Loglar ekranı (filtre + gruplama)
+- `frontend/src/lib/logGroup.ts` — ardışık aynı kayıtları katlama (`groupConsecutive`)
 - `cmd/swarmgo/main.go` — logger kurulumu
