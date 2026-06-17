@@ -142,6 +142,42 @@ func TestCatalogBlockFor(t *testing.T) {
 	}
 }
 
+func TestSharedSkills(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "review", "---\nname: Review\ndescription: r\naccess: shared\n---\nbody")
+	writeSkill(t, dir, "deploy", "---\nname: Deploy\ndescription: d\n---\nbody") // restricted (default)
+	writeSkill(t, dir, "notes", "---\nname: Notes\ndescription: n\nshared: true\n---\nbody")
+	s := New("", "", dir)
+
+	if sh := s.SharedList(); len(sh) != 2 {
+		t.Fatalf("want 2 shared, got %d: %+v", len(sh), sh)
+	}
+
+	// An agent with no assignment still sees shared skills + can load them.
+	allow := s.AllowedFor(nil)
+	if !allow["review"] || !allow["notes"] || allow["deploy"] {
+		t.Errorf("AllowedFor(nil) = %v (want review+notes, not deploy)", allow)
+	}
+	block := s.CatalogBlockForAgent(nil)
+	if indexOf(block, "`review`") < 0 || indexOf(block, "`notes`") < 0 {
+		t.Errorf("shared skills missing from no-assignment catalog:\n%s", block)
+	}
+	if indexOf(block, "`deploy`") >= 0 {
+		t.Errorf("restricted skill leaked into no-assignment catalog:\n%s", block)
+	}
+
+	// Assigning the restricted skill makes it visible/usable, and it comes first.
+	allow2 := s.AllowedFor([]string{"deploy"})
+	if !allow2["deploy"] || !allow2["review"] {
+		t.Errorf("AllowedFor([deploy]) = %v (want deploy+shared)", allow2)
+	}
+	b2 := s.CatalogBlockForAgent([]string{"deploy"})
+	di, ri := indexOf(b2, "`deploy`"), indexOf(b2, "`review`")
+	if di < 0 || ri < 0 || di > ri {
+		t.Errorf("assigned skill should precede shared:\n%s", b2)
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || indexOf(s, sub) >= 0)
 }

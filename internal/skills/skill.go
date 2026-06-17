@@ -32,6 +32,11 @@ type Skill struct {
 	WhenToUse   string   `json:"whenToUse,omitempty"`
 	Icon        string   `json:"icon,omitempty"`
 	Color       string   `json:"color,omitempty"`
+	// Shared marks an "on-demand" skill: its summary is advertised to EVERY agent
+	// and any agent may load it via use_skill, without explicit assignment. A
+	// non-shared (restricted) skill is only visible/usable to agents it is
+	// assigned to. Set from frontmatter `access: shared` (default restricted).
+	Shared bool `json:"shared"`
 	// AlwaysAllow lists tool-name patterns a skill expects to be auto-allowed.
 	// Carried for parity / future enforcement; surfaced in the UI today.
 	AlwaysAllow []string `json:"alwaysAllow,omitempty"`

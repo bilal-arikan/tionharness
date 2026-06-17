@@ -13,6 +13,9 @@ export interface Skill {
   color?: string
   alwaysAllow?: string[]
   requiredSources?: string[]
+  // When true the skill is "on-demand": advertised to every agent and usable
+  // without assignment. Otherwise it is restricted to agents it is assigned to.
+  shared?: boolean
   source: SkillSource
 }
 

@@ -71,16 +71,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewUpdateArtifactTool(),
 	}
 
-	// Skills: offer use_skill only for the skills THIS agent has selected (in its
-	// settings). The catalog is advertised in the system prompt; bodies stay on
-	// disk until invoked (lazy). Skills are a shared library — agents pick from
-	// it, they never own skills — so the tool is restricted to the selection.
-	if r.skills != nil && len(agent.Skills) > 0 {
-		allow := make(map[string]bool, len(agent.Skills))
-		for _, slug := range agent.Skills {
-			allow[slug] = true
+	// Skills: an agent may load its ASSIGNED skills plus every SHARED (on-demand)
+	// skill. Their summaries are advertised in the system prompt; bodies stay on
+	// disk until use_skill is called (lazy). The tool is restricted to that set —
+	// a restricted skill is unreachable unless explicitly assigned.
+	if r.skills != nil {
+		if allow := r.skills.AllowedFor(agent.Skills); len(allow) > 0 {
+			builtins = append(builtins, tools.NewUseSkillTool(agentSkillLib{store: r.skills, allow: allow}))
 		}
-		builtins = append(builtins, tools.NewUseSkillTool(agentSkillLib{store: r.skills, allow: allow}))
 	}
 
 	// Agent→agent delegation: the call_agent tool lets this agent hand a sub-task

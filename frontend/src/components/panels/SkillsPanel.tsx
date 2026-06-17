@@ -28,6 +28,26 @@ function SourceBadge({ source }: { source: SkillSource }) {
   )
 }
 
+// AccessBadge shows whether a skill is on-demand (every agent sees + can use it)
+// or restricted (only agents it is assigned to).
+function AccessBadge({ shared }: { shared?: boolean }) {
+  return shared ? (
+    <span
+      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-success)_18%,transparent)] text-[var(--color-success)]"
+      title="Tüm ajanlar gerektiğinde kullanabilir (atama gerekmez)"
+    >
+      Gerektiğinde
+    </span>
+  ) : (
+    <span
+      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
+      title="Yalnız atanan ajanlar kullanabilir"
+    >
+      Atanınca
+    </span>
+  )
+}
+
 // SkillsPanel is the two-panel Skills screen: a list of resolved skills on the
 // left, the selected skill's full instructions (loaded on demand) on the right.
 export function SkillsPanel({ onError }: Props) {
@@ -122,6 +142,7 @@ export function SkillsPanel({ onError }: Props) {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="min-w-0 flex-1 truncate font-medium">{sk.name}</span>
+                    {sk.shared && <AccessBadge shared />}
                     <SourceBadge source={sk.source} />
                   </span>
                   <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
@@ -147,6 +168,7 @@ export function SkillsPanel({ onError }: Props) {
                 <div className="flex items-center gap-2">
                   <span className="text-lg leading-none">{active.icon || '✨'}</span>
                   <h2 className="truncate text-base font-semibold">{active.name}</h2>
+                  <AccessBadge shared={active.shared} />
                   <SourceBadge source={active.source} />
                 </div>
                 <p className="mt-1 text-xs text-[var(--color-text-dim)]">

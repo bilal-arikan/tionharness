@@ -174,14 +174,14 @@ func projectSkillsDir(workDir string) string {
 func (r *Runtime) Skills() *skills.Store { return r.skills }
 
 // SkillsCatalogBlockForAgent renders the Available Skills system-prompt section
-// listing ONLY the skills this agent has selected, in the agent's chosen order.
-// Returns "" when the agent has no skills (or the store is empty). Skills are a
-// shared library; agents pick from it — they never own skills.
+// an agent sees: its assigned skills (in the agent's chosen order) plus every
+// shared (on-demand) skill. Returns "" when neither exists. Skills are a shared
+// library; agents pick from it — they never own skills.
 func (r *Runtime) SkillsCatalogBlockForAgent(agent db.Agent) string {
 	if r.skills == nil {
 		return ""
 	}
-	return r.skills.CatalogBlockFor(agent.Skills)
+	return r.skills.CatalogBlockForAgent(agent.Skills)
 }
 
 // agentSkillLib restricts the use_skill tool to an agent's selected slugs, so an

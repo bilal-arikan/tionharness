@@ -117,11 +117,23 @@ func scanDir(t tier) []Skill {
 			Color:           fm.scalar("color"),
 			AlwaysAllow:     fm.list("alwaysallow", "always_allow"),
 			RequiredSources: fm.list("requiredsources", "required_sources"),
+			Shared:          isShared(fm),
 			Source:          t.source,
 			Path:            path,
 		})
 	}
 	return out
+}
+
+// isShared reports whether a skill's frontmatter marks it as on-demand/shared
+// (visible to every agent). Accepts `access: shared` (or "auto"/"on-demand") and
+// the boolean `shared: true`. Anything else (incl. absent) means restricted.
+func isShared(fm frontmatter) bool {
+	switch strings.ToLower(strings.TrimSpace(fm.scalar("access"))) {
+	case "shared", "auto", "on-demand", "ondemand", "public":
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(fm.scalar("shared")), "true")
 }
 
 // List returns the resolved skills in display order.
@@ -194,6 +206,63 @@ func (s *Store) CatalogBlockFor(slugs []string) string {
 		}
 	}
 	return renderCatalog(picked)
+}
+
+// SharedList returns the shared (on-demand) skills in display order.
+func (s *Store) SharedList() []Skill {
+	out := []Skill{}
+	for _, sk := range s.List() {
+		if sk.Shared {
+			out = append(out, sk)
+		}
+	}
+	return out
+}
+
+// effectiveFor returns the skills visible to an agent: its assigned skills first
+// (in the given order, known + de-duplicated), then any shared skills it has not
+// already assigned. This is the set advertised in the agent's prompt.
+func (s *Store) effectiveFor(assigned []string) []Skill {
+	out := []Skill{}
+	seen := map[string]bool{}
+	for _, slug := range assigned {
+		slug = strings.TrimSpace(slug)
+		if slug == "" || seen[slug] {
+			continue
+		}
+		if sk, ok := s.Get(slug); ok {
+			out = append(out, sk)
+			seen[slug] = true
+		}
+	}
+	for _, sk := range s.SharedList() {
+		if !seen[sk.Slug] {
+			out = append(out, sk)
+			seen[sk.Slug] = true
+		}
+	}
+	return out
+}
+
+// CatalogBlockForAgent renders the Available Skills block an agent sees: its
+// assigned skills (in order) plus all shared (on-demand) skills. "" when neither.
+func (s *Store) CatalogBlockForAgent(assigned []string) string {
+	return renderCatalog(s.effectiveFor(assigned))
+}
+
+// AllowedFor returns the set of skill slugs an agent may load via use_skill: its
+// assigned skills plus every shared skill.
+func (s *Store) AllowedFor(assigned []string) map[string]bool {
+	allow := map[string]bool{}
+	for _, slug := range assigned {
+		if slug = strings.TrimSpace(slug); slug != "" {
+			allow[slug] = true
+		}
+	}
+	for _, sk := range s.SharedList() {
+		allow[sk.Slug] = true
+	}
+	return allow
 }
 
 // renderCatalog builds the "# Available Skills" block from a resolved skill list

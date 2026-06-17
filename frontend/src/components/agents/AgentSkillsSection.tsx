@@ -38,9 +38,11 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
     return m
   }, [all])
 
-  // Available = skills that exist and aren't already selected.
+  // Shared (on-demand) skills are auto-available to every agent — shown as info,
+  // not in the add list. Available-to-assign = restricted skills not yet picked.
+  const shared = useMemo(() => all.filter((s) => s.shared), [all])
   const available = useMemo(
-    () => all.filter((s) => !selected.includes(s.slug)),
+    () => all.filter((s) => !s.shared && !selected.includes(s.slug)),
     [all, selected],
   )
 
@@ -60,9 +62,10 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
         Beceriler (skills)
       </h3>
       <p className="mb-3 text-xs text-[var(--color-text-dim)]">
-        Bu ajana hangi becerilerin verileceğini seç ve sırala. Yalnız seçilenler ajanın sistem
-        promptunda (bu sırayla) görünür ve <code>use_skill</code> ile yüklenebilir. Beceriler ortak
-        havuzdandır — <strong>Beceriler</strong> ekranından yönetilir.
+        Bu ajana hangi <strong>kısıtlı</strong> becerilerin verileceğini seç ve sırala. Atanan beceriler
+        ajanın sistem promptunda (bu sırayla) görünür ve <code>use_skill</code> ile yüklenebilir.
+        <strong> Gerektiğinde</strong> (paylaşımlı) beceriler ise atama gerekmeden tüm ajanlara zaten
+        açıktır. Beceriler ortak havuzdandır — <strong>Beceriler</strong> ekranından yönetilir.
       </p>
 
       {/* Selected (ordered) */}
@@ -144,6 +147,27 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
               <span className="text-[10px] text-[var(--color-text-dim)]">· {SOURCE_LABEL[s.source]}</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Shared (on-demand) skills: auto-available, shown for awareness only. */}
+      {shared.length > 0 && (
+        <div className="mt-3 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2">
+          <p className="mb-1.5 text-[11px] font-medium text-[var(--color-success)]">
+            Gerektiğinde açık (atama gerekmez)
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {shared.map((s) => (
+              <span
+                key={s.slug}
+                title={s.description}
+                className="flex items-center gap-1 rounded-full bg-[var(--color-surface-2)] px-2.5 py-1 text-xs text-[var(--color-text-dim)]"
+              >
+                <span>{s.icon || '✨'}</span>
+                <span>{s.name}</span>
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>
