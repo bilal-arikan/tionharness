@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Paperclip, Hash } from 'lucide-react'
+import { Paperclip, Hash, Brain } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { AttachmentChip } from './AttachmentChip'
@@ -307,7 +307,7 @@ export function Composer({
       const rest = sp === -1 ? '' : t.slice(sp + 1)
       const cmd = commands.find((c) => c.name === name)
       if (cmd) {
-        cmd.run(rest)
+        cmd.run(rest, readyAttachments)
         clearComposer()
         return
       }
@@ -496,7 +496,7 @@ export function Composer({
             <button
               onClick={doInterrupt}
               title="Turu kes ve hemen gönder"
-              className="rounded-xl bg-amber-500/90 px-3 py-3 text-sm font-medium text-white transition hover:opacity-90"
+              className="rounded-xl bg-[var(--color-warning)] px-3 py-3 text-sm font-medium text-white transition hover:opacity-90"
             >
               Kes
             </button>
@@ -513,7 +513,7 @@ export function Composer({
           <button
             onClick={onStop}
             title="Üretimi durdur"
-            className="rounded-xl bg-red-500/90 px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+            className="rounded-xl bg-[var(--color-danger)] px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
           >
             Durdur
           </button>
@@ -558,7 +558,7 @@ function ThinkingPicker({
             : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
         }`}
       >
-        <span>🧠</span>
+        <Brain size={15} />
         <span className="hidden sm:inline">{current.label}</span>
       </button>
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AVATAR_COLORS, AVATAR_GLYPHS, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
@@ -233,16 +234,16 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           <AgentToolsSection agentId={agent.id} onError={setErr} />
         </div>
 
-        {err && <p className="text-xs text-red-500">{err}</p>}
+        {err && <p className="text-xs text-[var(--color-danger)]">{err}</p>}
       </div>
 
       <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] px-5 py-3">
         {onDelete && (
           <button
             onClick={onDelete}
-            className="mr-auto rounded px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+            className="mr-auto flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
           >
-            🗑 Sil
+            <Trash2 size={14} /> Sil
           </button>
         )}
         {savedAt > 0 && !saving && (

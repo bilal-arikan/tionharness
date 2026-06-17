@@ -65,11 +65,11 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       <Toggle label="Bu workspace'te otonomiyi duraklat" hint="Yalnızca bu workspace'in heartbeat/zamanlama çağrılarını bloklar." checked={ws.pauseAutonomy} onChange={(v) => setWsField('pauseAutonomy', v)} />
 
       {onDeleteWorkspace && (
-        <div className="mt-2 flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2">
+        <div className="mt-2 flex items-center justify-between rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_6%,transparent)] px-3 py-2">
           <span className="text-xs text-[var(--color-text-dim)]">Bu workspace'i ve tüm verisini kalıcı olarak sil.</span>
           <button
             onClick={onDeleteWorkspace}
-            className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
+            className="rounded border border-[color-mix(in_srgb,var(--color-danger)_40%,transparent)] px-3 py-1 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
           >
             Workspace'i sil
           </button>

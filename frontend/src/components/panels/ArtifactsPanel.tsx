@@ -183,9 +183,12 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {list.length === 0 && (
-            <p className="px-2 py-6 text-center text-sm text-[var(--color-text-dim)]">
-              Henüz artifact yok. Bir oturumda dosya/doküman ürettiğinde otomatik buraya düşer; ya da <strong>Yeni</strong> ile elle ekle.
-            </p>
+            <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
+              <FileCode size={28} className="opacity-40" />
+              <p>
+                Henüz artifact yok. Bir oturumda dosya/doküman ürettiğinde otomatik buraya düşer; ya da <strong>Yeni</strong> ile elle ekle.
+              </p>
+            </div>
           )}
           {list.map((a) => {
             const Icon = KIND_ICON[a.kind] ?? FileText
@@ -274,7 +277,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     <button
                       onClick={() => remove(active.id)}
                       title="Sil"
-                      className="rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-dim)] hover:bg-red-500/10 hover:text-red-400"
+                      className="rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-dim)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] hover:text-[var(--color-danger)]"
                     >
                       <Trash2 size={15} />
                     </button>

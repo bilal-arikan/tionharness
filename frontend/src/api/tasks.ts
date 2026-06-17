@@ -9,6 +9,7 @@ export const taskApi = {
     prompt?: string
     description?: string
     ownerAgentId?: string
+    flowId?: string
     boardState?: BoardState
   }) =>
     req<Task>('/api/tasks', {
@@ -18,7 +19,7 @@ export const taskApi = {
   // (Re)generate a task title from its prompt.
   generateTaskTitle: (id: string) =>
     req<Task>(`/api/tasks/${id}/title`, { method: 'POST' }),
-  updateTask: (id: string, patch: Partial<Pick<Task, 'title' | 'description' | 'prompt' | 'ownerAgentId' | 'boardState'>>) =>
+  updateTask: (id: string, patch: Partial<Pick<Task, 'title' | 'description' | 'prompt' | 'ownerAgentId' | 'flowId' | 'boardState'>>) =>
     req<Task>(`/api/tasks/${id}`, {
       method: 'PUT',
       body: JSON.stringify(patch),

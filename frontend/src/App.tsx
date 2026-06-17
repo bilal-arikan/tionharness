@@ -570,7 +570,7 @@ export default function App() {
               </button>
             )}
             {error && (
-              <span className="rounded bg-red-500/15 px-2 py-1 text-xs text-red-400">
+              <span className="rounded bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] px-2 py-1 text-xs text-[var(--color-danger)]">
                 {error}
               </span>
             )}

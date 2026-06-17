@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { TurnStep } from '../../types'
 import { toolMeta, isReadTool, toolBase } from '../../lib/tools'
 import { parseDiff, looksLikeDiff, synthDiff } from '../../lib/diff'
@@ -21,8 +22,8 @@ function headerBadge(step: TurnStep, diffText: string | null, output: string): R
     if (stats.added > 0 || stats.removed > 0) {
       return (
         <span className="flex shrink-0 gap-1.5 font-mono">
-          <span className="text-green-400">+{stats.added}</span>
-          <span className="text-red-400">−{stats.removed}</span>
+          <span className="text-[var(--color-success)]">+{stats.added}</span>
+          <span className="text-[var(--color-danger)]">−{stats.removed}</span>
         </span>
       )
     }
@@ -65,9 +66,11 @@ export function ActivityCard({ step, onOpenFile }: Props) {
             <PathText text={meta.summary} onOpenFile={onOpenFile} />
           </span>
         )}
-        {step.isError && <span className="shrink-0 text-red-400">hata</span>}
+        {step.isError && <span className="shrink-0 text-[var(--color-danger)]">hata</span>}
         {badge && <span className="ml-auto">{badge}</span>}
-        <span className={`${badge ? 'ml-1' : 'ml-auto'} shrink-0 opacity-50`}>{open ? '▾' : '▸'}</span>
+        <span className={`${badge ? 'ml-1' : 'ml-auto'} shrink-0 opacity-50`}>
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
       </button>
 
       {open && (
@@ -99,7 +102,7 @@ export function ActivityCard({ step, onOpenFile }: Props) {
                 </div>
                 <pre
                   className={`overflow-x-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 ${
-                    step.isError ? 'text-red-300' : 'text-[var(--color-text)]'
+                    step.isError ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'
                   }`}
                 >
                   {output.length > 4000 ? output.slice(0, 4000) + '\n… (kırpıldı)' : output}

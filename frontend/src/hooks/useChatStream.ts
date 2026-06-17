@@ -506,11 +506,11 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionId, activeAgentId, setMessages, setError],
   )
 
-  // Run a flow from the chat composer: records the result as a turn in the active
-  // session (optimistic user bubble + placeholder, replaced by the persisted
-  // user/assistant pair). Mirrors summarize() but hits the run-flow endpoint.
+  // Run a flow from the chat composer, streaming node-by-node progress over SSE:
+  // an optimistic user bubble + a live assistant bubble whose transcript grows as
+  // each node finishes, replaced by the persisted reply when the run completes.
   const runFlow = useCallback(
-    (flowId: string, flowName: string, input: string) => {
+    (flowId: string, flowName: string, input: string, attachments: Attachment[] = []) => {
       const sid = activeSessionId
       if (!sid) return
       const now = Math.floor(Date.now() / 1000)
@@ -521,6 +521,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         sessionId: sid,
         role: 'user',
         text: input.trim() || `🔀 ${flowName}`,
+        attachments: attachments.length ? attachments : undefined,
         createdAt: now,
       }
       const placeholder: Message = {
@@ -528,18 +529,45 @@ export function useChatStream(deps: ChatStreamDeps) {
         sessionId: sid,
         role: 'assistant',
         agentId: activeAgentId ?? undefined,
-        text: `⏳ 🔀 ${flowName} akışı çalışıyor…`,
+        text: `🔀 **${flowName}**\n\n_⏳ başlatılıyor…_`,
         steps: '[]',
         createdAt: now,
       }
       setMessages((prev) => [...prev, userBubble, placeholder])
+
+      // Live transcript: each node (by execution index) shows a spinner until its
+      // output arrives. Re-assembled on every event into the bubble's markdown.
+      const nodes = new Map<number, { title: string; output?: string }>()
+      const render = () => {
+        let s = `🔀 **${flowName}**\n\n`
+        for (const i of [...nodes.keys()].sort((a, b) => a - b)) {
+          const n = nodes.get(i)!
+          s += `#### ${i}. ${n.title}\n\n${n.output ?? '_⏳ çalışıyor…_'}\n\n`
+        }
+        return s.trim()
+      }
+      const setBotText = (text: string) =>
+        setMessages((prev) => prev.map((m) => (m.id === botTmp ? { ...m, text } : m)))
+
       api
-        .runFlowInSession(sid, flowId, input)
-        .then(({ userMessage, replyMessage }) =>
-          setMessages((prev) =>
-            prev.map((m) => (m.id === userTmp ? userMessage : m.id === botTmp ? replyMessage : m)),
-          ),
-        )
+        .runFlowStream(sid, flowId, input, {
+          attachments,
+          onMeta: ({ userMessage }) =>
+            setMessages((prev) => prev.map((m) => (m.id === userTmp ? userMessage : m))),
+          onNode: (ev) => {
+            const cur = nodes.get(ev.index) ?? { title: ev.title }
+            cur.title = ev.title
+            if (ev.phase === 'done') cur.output = ev.output ?? ''
+            nodes.set(ev.index, cur)
+            setBotText(render())
+          },
+          onReply: ({ replyMessage }) =>
+            setMessages((prev) => prev.map((m) => (m.id === botTmp ? replyMessage : m))),
+          onError: (err) => {
+            setMessages((prev) => prev.filter((m) => m.id !== userTmp && m.id !== botTmp))
+            setError(err)
+          },
+        })
         .catch((e) => {
           setMessages((prev) => prev.filter((m) => m.id !== userTmp && m.id !== botTmp))
           setError((e as Error).message)
@@ -571,7 +599,8 @@ export function useChatStream(deps: ChatStreamDeps) {
           icon: '🔀',
           description: f.description ? `${f.name} — ${f.description}` : `${f.name} akışını çalıştır`,
           takesInput: true,
-          run: (input?: string) => runFlow(f.id, f.name, input ?? ''),
+          run: (input?: string, attachments?: Attachment[]) =>
+            runFlow(f.id, f.name, input ?? '', attachments ?? []),
         }),
       ),
     ],

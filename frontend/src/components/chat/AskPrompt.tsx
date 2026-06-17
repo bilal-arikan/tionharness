@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MessageCircleQuestion } from 'lucide-react'
 
 export interface PendingAsk {
   question: string
@@ -26,7 +27,7 @@ export function AskPrompt({ ask, onAnswer }: Props) {
   return (
     <div className="mx-3 mb-2 rounded-lg border border-[var(--color-accent)] bg-[var(--color-surface)] px-3 py-2.5">
       <div className="mb-2 flex items-start gap-2 text-sm text-[var(--color-text)]">
-        <span className="shrink-0">💬</span>
+        <MessageCircleQuestion size={16} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
         <span className="min-w-0 flex-1 font-medium">{ask.question}</span>
       </div>
 

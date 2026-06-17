@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, type LucideIcon } from 'lucide-react'
 import type { Agent, Session } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '../../lib/time'
@@ -177,8 +178,8 @@ export function SessionsSidebar({
                             // Live turn in progress: a pulsing dot takes precedence
                             // over the unread dot.
                             <span className="relative flex h-2 w-2 shrink-0" title="Yanıt üretiliyor">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
                             </span>
                           ) : (
                             s.unread && (
@@ -190,7 +191,7 @@ export function SessionsSidebar({
                           </span>
                         </span>
                         {isStreaming ? (
-                          <span className="truncate text-[10px] font-medium text-emerald-400">yazıyor…</span>
+                          <span className="truncate text-[10px] font-medium text-[var(--color-success)]">yazıyor…</span>
                         ) : (
                           <span className="truncate text-[10px] opacity-60">
                             {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
@@ -205,14 +206,14 @@ export function SessionsSidebar({
                     title="Oturum ayarları"
                     className="ml-1 shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"
                   >
-                    ⚙
+                    <Settings size={16} />
                   </button>
 
                   {menuId === s.id && (
                     <div className="absolute right-1 top-9 z-20 w-44 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-sm shadow-xl">
-                      <MenuItem icon="✏️" label="Başlığı düzenle" onClick={() => startRename(s)} />
+                      <MenuItem icon={Pencil} label="Başlığı düzenle" onClick={() => startRename(s)} />
                       <MenuItem
-                        icon="✨"
+                        icon={Sparkles}
                         label="AI ile başlık"
                         disabled={s.messageCount === 0}
                         onClick={() => {
@@ -221,7 +222,7 @@ export function SessionsSidebar({
                         }}
                       />
                       <MenuItem
-                        icon="📋"
+                        icon={ClipboardCopy}
                         label="Yolu kopyala"
                         onClick={() => {
                           onCopyPath(s.id)
@@ -229,7 +230,7 @@ export function SessionsSidebar({
                         }}
                       />
                       <MenuItem
-                        icon="📂"
+                        icon={FolderOpen}
                         label="Klasörü aç"
                         onClick={() => {
                           onRevealFolder(s.id)
@@ -238,7 +239,7 @@ export function SessionsSidebar({
                       />
                       <div className="my-1 border-t border-[var(--color-border)]" />
                       <MenuItem
-                        icon="🗑"
+                        icon={Trash2}
                         label="Sil"
                         danger
                         onClick={() => {
@@ -268,13 +269,13 @@ export function SessionsSidebar({
 }
 
 function MenuItem({
-  icon,
+  icon: Icon,
   label,
   onClick,
   disabled,
   danger,
 }: {
-  icon: string
+  icon: LucideIcon
   label: string
   onClick: () => void
   disabled?: boolean
@@ -286,11 +287,11 @@ function MenuItem({
       disabled={disabled}
       className={`flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left transition disabled:opacity-30 ${
         danger
-          ? 'text-red-400 hover:bg-red-500/10'
+          ? 'text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]'
           : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
       }`}
     >
-      <span className="text-xs">{icon}</span>
+      <Icon size={14} className="shrink-0" />
       {label}
     </button>
   )

@@ -1,3 +1,4 @@
+import { TriangleAlert } from 'lucide-react'
 import type { TurnStep } from '../../types'
 
 interface Props {
@@ -10,11 +11,11 @@ interface Props {
 export function RecoveryStep({ step }: Props) {
   const text = step.text?.trim() || step.reason || 'Kurtarma'
   return (
-    <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
-      <span className="shrink-0">⚠️</span>
+    <div className="flex items-center gap-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-3 py-1.5 text-xs text-[var(--color-warning)]">
+      <TriangleAlert size={14} className="shrink-0" />
       <span className="min-w-0 flex-1">{text}</span>
       {step.reason && (
-        <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] opacity-80">
+        <span className="shrink-0 rounded bg-[color-mix(in_srgb,var(--color-warning)_22%,transparent)] px-1.5 py-0.5 font-mono text-[10px] opacity-80">
           {step.reason}
         </span>
       )}

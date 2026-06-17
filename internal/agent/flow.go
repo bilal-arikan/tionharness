@@ -27,8 +27,9 @@ func (f flowRunner) RunAgentNode(ctx context.Context, agentID, prompt string) (s
 }
 
 // RunFlow starts a new run of a flow with the given input and drives it to
-// completion. Manual runs (autonomous=false) are not budget-gated.
-func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous bool) (db.FlowRun, error) {
+// completion. Manual runs (autonomous=false) are not budget-gated. obs is an
+// optional progress observer (nil for no live events) used by the streaming path.
+func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous bool, obs orchestration.Observer) (db.FlowRun, error) {
 	flow, err := r.db.GetFlow(ctx, flowID)
 	if err != nil {
 		return db.FlowRun{}, err
@@ -46,14 +47,18 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 		return db.FlowRun{}, err
 	}
 	r.logger.Info("flow run started", "flow", flowID, "run", run.ID)
-	return r.driveFlow(ctx, run, g, input, orchestration.NewState(g), autonomous), nil
+	return r.driveFlow(ctx, run, g, input, orchestration.NewState(g), autonomous, obs), nil
 }
 
 // driveFlow runs the engine from the given state, persisting after each node,
 // and records the terminal status. It never returns an error: a failure is
 // captured in the returned FlowRun (status=failure) so callers always get a row.
-func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration.Graph, input string, st orchestration.State, autonomous bool) db.FlowRun {
+// obs (optional) receives per-node progress events for live streaming.
+func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration.Graph, input string, st orchestration.State, autonomous bool, obs orchestration.Observer) db.FlowRun {
 	eng := orchestration.NewEngine(flowRunner{rt: r, autonomous: autonomous})
+	if obs != nil {
+		eng.SetObserver(obs)
+	}
 
 	save := func(s orchestration.State) error {
 		data, err := json.Marshal(s)
@@ -112,6 +117,6 @@ func (r *Runtime) ResumeRunningFlows(ctx context.Context) {
 			st = orchestration.NewState(g)
 		}
 		r.logger.Info("resuming flow run", "run", run.ID, "from", st.Current)
-		go r.driveFlow(ctx, run, g, run.Input, st, true)
+		go r.driveFlow(ctx, run, g, run.Input, st, true, nil)
 	}
 }

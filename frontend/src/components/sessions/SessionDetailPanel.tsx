@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionInfo } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
@@ -142,8 +143,13 @@ export function SessionDetailPanel({
               {info.path || '—'}
             </code>
             <div className="mt-2 flex gap-2">
-              <SmallBtn onClick={copyPath}>{copied ? '✓ Kopyalandı' : '📋 Yolu kopyala'}</SmallBtn>
-              <SmallBtn onClick={() => onRevealFolder(sessionId)}>📂 Aç</SmallBtn>
+              <SmallBtn onClick={copyPath}>
+                {copied ? <Check size={13} /> : <ClipboardCopy size={13} />}
+                {copied ? 'Kopyalandı' : 'Yolu kopyala'}
+              </SmallBtn>
+              <SmallBtn onClick={() => onRevealFolder(sessionId)}>
+                <FolderOpen size={13} /> Aç
+              </SmallBtn>
             </div>
           </Section>
 
@@ -222,14 +228,14 @@ export function SessionDetailPanel({
           <Section title="Araçlar">
             <div className="flex flex-col gap-1.5">
               <ActionBtn
-                icon="✨"
+                icon={Sparkles}
                 label={titling ? 'Başlık üretiliyor…' : 'AI ile başlık üret'}
                 onClick={handleTitle}
                 disabled={info.messageCount === 0 || titling}
                 busy={titling}
               />
               <div className="relative">
-                <ActionBtn icon="📝" label="Özet ekle…" onClick={() => setSummaryOpen((v) => !v)} caret />
+                <ActionBtn icon={FileText} label="Özet ekle…" onClick={() => setSummaryOpen((v) => !v)} caret />
                 {summaryOpen && (
                   <div className="mt-1 flex flex-col gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-1">
                     {SUMMARY_KINDS.map((s) => (
@@ -248,7 +254,7 @@ export function SessionDetailPanel({
                 )}
               </div>
               <ActionBtn
-                icon="🗑"
+                icon={Trash2}
                 label="Oturumu sil"
                 danger
                 onClick={() => {
@@ -303,7 +309,7 @@ function SmallBtn({ children, onClick }: { children: React.ReactNode; onClick: (
   return (
     <button
       onClick={onClick}
-      className="flex-1 rounded-lg border border-[var(--color-border)] px-2 py-1.5 text-[11px] text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2 py-1.5 text-[11px] text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
     >
       {children}
     </button>
@@ -311,7 +317,7 @@ function SmallBtn({ children, onClick }: { children: React.ReactNode; onClick: (
 }
 
 function ActionBtn({
-  icon,
+  icon: Icon,
   label,
   onClick,
   disabled,
@@ -319,7 +325,7 @@ function ActionBtn({
   caret,
   busy,
 }: {
-  icon: string
+  icon: LucideIcon
   label: string
   onClick: () => void
   disabled?: boolean
@@ -333,13 +339,13 @@ function ActionBtn({
       disabled={disabled}
       className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition disabled:opacity-30 ${
         danger
-          ? 'text-red-400 hover:bg-red-500/10'
+          ? 'text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]'
           : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
       }`}
     >
-      <span className={busy ? 'inline-block animate-spin' : ''}>{busy ? '↻' : icon}</span>
+      {busy ? <Loader2 size={14} className="shrink-0 animate-spin" /> : <Icon size={14} className="shrink-0" />}
       <span className="flex-1">{label}</span>
-      {caret && <span className="text-[var(--color-text-dim)]">▾</span>}
+      {caret && <ChevronDown size={14} className="text-[var(--color-text-dim)]" />}
     </button>
   )
 }

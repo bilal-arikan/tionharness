@@ -178,6 +178,14 @@ func toProviderMessages(msgs []db.Message) []providers.Message {
 	return out
 }
 
+// InlineAttachments folds an attachment list into a piece of text using the same
+// block format chat turns use (text/code inlined verbatim; binary/image listed by
+// read_file path). Exposed so non-chat callers (e.g. flow runs) can give their
+// agents the same attachment context. Returns text unchanged when atts is empty.
+func InlineAttachments(text string, atts []db.Attachment) string {
+	return withAttachments(db.Message{Text: text, Attachments: atts})
+}
+
 // withAttachments appends an "Attachments" block to a user message's text. Text
 // and code attachments are inlined verbatim (the model reads them directly);
 // binary/image attachments are listed by relative path so an agent with the

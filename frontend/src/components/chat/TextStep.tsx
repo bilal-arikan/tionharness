@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MessageSquare, ChevronDown, ChevronRight } from 'lucide-react'
 import { Markdown } from '../markdown/Markdown'
 
 interface Props {
@@ -20,12 +21,14 @@ export function TextStep({ text, onOpenFile }: Props) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"
       >
-        <span className="shrink-0">💬</span>
+        <MessageSquare size={14} className="shrink-0 text-[var(--color-text-dim)]" />
         <span className="shrink-0 font-medium text-[var(--color-text)]">Düşünce</span>
         {!open && preview && (
           <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">{preview}</span>
         )}
-        <span className="ml-auto shrink-0 opacity-50">{open ? '▾' : '▸'}</span>
+        <span className="ml-auto shrink-0 opacity-50">
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
       </button>
 
       {open && (

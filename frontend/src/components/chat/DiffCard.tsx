@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Pencil, ChevronDown, ChevronRight } from 'lucide-react'
 import type { TurnStep } from '../../types'
 import { DiffView } from '../markdown/DiffView'
 
@@ -34,7 +35,7 @@ export function DiffCard({ step, onOpenFile }: Props) {
           hasPatch ? 'hover:bg-[var(--color-surface-2)]' : 'cursor-default'
         }`}
       >
-        <span className="shrink-0">✏️</span>
+        <Pencil size={14} className="shrink-0 text-[var(--color-text-dim)]" />
         <span className="shrink-0 font-medium text-[var(--color-text)]">{actionLabel(step)}</span>
         {/* Span (not <button>) to avoid an invalid button-in-button: the row
             header itself is a <button>. stopPropagation keeps the path click
@@ -59,9 +60,13 @@ export function DiffCard({ step, onOpenFile }: Props) {
             yeni
           </span>
         )}
-        {added > 0 && <span className="shrink-0 text-green-400">+{added}</span>}
-        {removed > 0 && <span className="shrink-0 text-red-400">−{removed}</span>}
-        {hasPatch && <span className="ml-1 shrink-0 opacity-50">{open ? '▾' : '▸'}</span>}
+        {added > 0 && <span className="shrink-0 text-[var(--color-success)]">+{added}</span>}
+        {removed > 0 && <span className="shrink-0 text-[var(--color-danger)]">−{removed}</span>}
+        {hasPatch && (
+          <span className="ml-1 shrink-0 opacity-50">
+            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </span>
+        )}
       </button>
 
       {open && hasPatch && (

@@ -16,8 +16,10 @@ interface Props {
   onRemove: (id: string) => void
 }
 
+import { CornerDownRight, Hourglass, X } from 'lucide-react'
+
 // PendingTray lists staged queue/steer items above the composer, each removable
-// (✕) before it is processed.
+// before it is processed.
 export function PendingTray({ items, onRemove }: Props) {
   if (items.length === 0) return null
   return (
@@ -31,22 +33,23 @@ export function PendingTray({ items, onRemove }: Props) {
           className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-sm"
         >
           <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+            className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
               it.kind === 'steer'
-                ? 'bg-amber-500/20 text-amber-500'
+                ? 'bg-[color-mix(in_srgb,var(--color-warning)_20%,transparent)] text-[var(--color-warning)]'
                 : 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
             }`}
             title={it.kind === 'steer' ? 'Canlı yönlendirme (birazdan gönderilecek)' : 'Sıradaki mesaj (tur bitince gönderilecek)'}
           >
-            {it.kind === 'steer' ? '⏱ Yönlendir' : '⏳ Sırada'}
+            {it.kind === 'steer' ? <CornerDownRight size={11} /> : <Hourglass size={11} />}
+            {it.kind === 'steer' ? 'Yönlendir' : 'Sırada'}
           </span>
           <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{it.text}</span>
           <button
             onClick={() => onRemove(it.id)}
             title="Sil (işleme alınmadan)"
-            className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-red-400"
+            className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
           >
-            ✕
+            <X size={14} />
           </button>
         </div>
       ))}

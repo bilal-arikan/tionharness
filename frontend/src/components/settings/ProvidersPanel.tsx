@@ -20,9 +20,9 @@ interface Props {
 function testBadge(test: Props['test'], provider: string) {
   const r = test[provider]
   if (!r) return null
-  if (r === 'pending') return <span className="text-xs text-amber-400">test ediliyor…</span>
-  if (r.ok) return <span className="text-xs text-emerald-400">✓ bağlandı{r.model ? ` (${r.model})` : ''}</span>
-  return <span className="text-xs text-red-400">✗ {r.error}</span>
+  if (r === 'pending') return <span className="text-xs text-[var(--color-warning)]">test ediliyor…</span>
+  if (r.ok) return <span className="text-xs text-[var(--color-success)]">✓ bağlandı{r.model ? ` (${r.model})` : ''}</span>
+  return <span className="text-xs text-[var(--color-danger)]">✗ {r.error}</span>
 }
 
 export function ProvidersPanel({
@@ -68,7 +68,7 @@ export function ProvidersPanel({
         <div className="flex items-center gap-2">
           <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder={draft.anthropicKeySet ? '•••••••••• (kayıtlı)' : 'sk-ant-...'} className={`${inputCls} flex-1`} />
           {draft.anthropicKeySet && (
-            <button onClick={() => clearKey('anthropic')} className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs text-red-400 hover:border-red-400">Sil</button>
+            <button onClick={() => clearKey('anthropic')} className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-danger)] hover:border-[var(--color-danger)]">Sil</button>
           )}
         </div>
       </Field>
@@ -81,7 +81,7 @@ export function ProvidersPanel({
         <div className="flex items-center gap-2">
           <input type="password" value={minimaxKeyInput} onChange={(e) => setMinimaxKeyInput(e.target.value)} placeholder={draft.minimaxKeySet ? '•••••••••• (kayıtlı)' : 'MiniMax API key'} className={`${inputCls} flex-1`} />
           {draft.minimaxKeySet && (
-            <button onClick={() => clearKey('minimax')} className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs text-red-400 hover:border-red-400">Sil</button>
+            <button onClick={() => clearKey('minimax')} className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-danger)] hover:border-[var(--color-danger)]">Sil</button>
           )}
         </div>
       </Field>

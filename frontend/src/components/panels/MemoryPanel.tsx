@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Memory, MemoryKind } from '../../types'
 import { Markdown } from '../markdown/Markdown'
@@ -17,7 +18,7 @@ const KIND_LABEL: Record<MemoryKind, string> = {
 const KIND_COLOR: Record<MemoryKind, string> = {
   document: 'bg-[var(--color-accent-soft)] text-[var(--color-text)]',
   journal: 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]',
-  reflection: 'bg-emerald-500/15 text-emerald-400',
+  reflection: 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]',
 }
 
 const FILTERS: { key: MemoryKind | 'all'; label: string }[] = [
@@ -106,10 +107,11 @@ export function MemoryPanel({ agent, onError }: Props) {
         <button
           onClick={reflect}
           disabled={reflecting}
-          className="rounded bg-emerald-600/80 px-3 py-1 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded border border-[var(--color-border)] px-3 py-1 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40"
           title="Günlük üzerine yansıma üret (dream cycle)"
         >
-          {reflecting ? '…' : '✦ Yansıt'}
+          <Sparkles size={14} />
+          {reflecting ? '…' : 'Yansıt'}
         </button>
       </div>
 

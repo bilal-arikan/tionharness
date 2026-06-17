@@ -9,6 +9,7 @@ export interface Task {
   description: string
   prompt: string
   ownerAgentId: string
+  flowId: string
   boardState: BoardState
   dependencies: string
   lastRunId: string

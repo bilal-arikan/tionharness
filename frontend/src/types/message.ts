@@ -57,8 +57,9 @@ export interface SlashCommand {
   description: string
   icon?: string
   // run receives the text typed after the command name when takesInput is set
-  // (e.g. "/myflow some topic" → run("some topic")); otherwise called with none.
-  run: (input?: string) => void
+  // (e.g. "/myflow some topic" → run("some topic")), plus any attachments staged
+  // in the composer; otherwise called with none.
+  run: (input?: string, attachments?: Attachment[]) => void
   // takesInput: selecting from the menu inserts "/name " and waits for the user
   // to type an argument + Enter, rather than running immediately. Used by flows.
   takesInput?: boolean

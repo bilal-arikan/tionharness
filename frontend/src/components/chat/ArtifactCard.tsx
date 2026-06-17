@@ -38,7 +38,7 @@ export function ArtifactCard({ step, onOpenArtifact }: Props) {
 
   if (!ref) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-1.5 text-xs text-red-400">
+      <div className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_6%,transparent)] px-3 py-1.5 text-xs text-[var(--color-danger)]">
         <FileCode size={14} className="shrink-0" />
         <span className="truncate">Artifact kaydedilemedi{step.output ? `: ${step.output}` : ''}</span>
       </div>

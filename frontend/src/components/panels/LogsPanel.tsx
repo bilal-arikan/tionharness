@@ -16,9 +16,9 @@ const LEVEL_LABEL: Record<string, string> = {
 }
 
 const LEVEL_COLOR: Record<string, string> = {
-  ERROR: 'text-red-400',
-  WARN: 'text-amber-400',
-  INFO: 'text-sky-400',
+  ERROR: 'text-[var(--color-danger)]',
+  WARN: 'text-[var(--color-warning)]',
+  INFO: 'text-[var(--color-accent)]',
   DEBUG: 'text-[var(--color-text-dim)]',
 }
 

@@ -9,9 +9,9 @@ interface Props {
 }
 
 const NODE_TYPES: { value: FlowNodeType; label: string }[] = [
-  { value: 'agent', label: '🤖 Ajan' },
-  { value: 'branch', label: '🔀 Dallanma' },
-  { value: 'parallel', label: '⇉ Paralel' },
+  { value: 'agent', label: 'Ajan' },
+  { value: 'branch', label: 'Dallanma' },
+  { value: 'parallel', label: 'Paralel' },
 ]
 
 function newNodeId(existing: FlowNode[]): string {
@@ -184,7 +184,7 @@ export function FlowsPanel({ agents, onError }: Props) {
                     e.stopPropagation()
                     removeFlow(f)
                   }}
-                  className="ml-2 text-xs text-[var(--color-text-dim)] hover:text-red-400"
+                  className="ml-2 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
                 >
                   ✕
                 </span>
@@ -275,7 +275,7 @@ export function FlowsPanel({ agents, onError }: Props) {
                     />
                     <button
                       onClick={() => removeNode(idx)}
-                      className="px-1 text-xs text-red-400 hover:opacity-80"
+                      className="px-1 text-xs text-[var(--color-danger)] hover:opacity-80"
                     >
                       Sil
                     </button>
@@ -346,7 +346,7 @@ export function FlowsPanel({ agents, onError }: Props) {
                               const branches = (node.branches ?? []).filter((_, i) => i !== bi)
                               patchNode(idx, { branches })
                             }}
-                            className="text-xs text-red-400"
+                            className="text-xs text-[var(--color-danger)]"
                           >
                             ✕
                           </button>

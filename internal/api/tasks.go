@@ -24,6 +24,7 @@ type createTaskReq struct {
 	Description  string `json:"description"`
 	Prompt       string `json:"prompt"`
 	OwnerAgentID string `json:"ownerAgentId"`
+	FlowID       string `json:"flowId"`
 	BoardState   string `json:"boardState"`
 }
 
@@ -61,6 +62,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Description:  req.Description,
 		Prompt:       req.Prompt,
 		OwnerAgentID: req.OwnerAgentID,
+		FlowID:       req.FlowID,
 		BoardState:   req.BoardState,
 	})
 	if writeDBError(w, err, "") {
@@ -75,6 +77,7 @@ type updateTaskReq struct {
 	Description  *string `json:"description"`
 	Prompt       *string `json:"prompt"`
 	OwnerAgentID *string `json:"ownerAgentId"`
+	FlowID       *string `json:"flowId"`
 	BoardState   *string `json:"boardState"`
 }
 
@@ -104,6 +107,9 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.OwnerAgentID != nil {
 		task.OwnerAgentID = *req.OwnerAgentID
+	}
+	if req.FlowID != nil {
+		task.FlowID = *req.FlowID
 	}
 	if req.BoardState != nil {
 		if !db.ValidBoardState(*req.BoardState) {

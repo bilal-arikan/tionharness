@@ -26,8 +26,8 @@ export function StepKindsPanel() {
                 <span
                   className={`rounded px-1.5 py-0.5 text-[10px] ${
                     s.status === 'active'
-                      ? 'bg-green-500/15 text-green-400'
-                      : 'bg-amber-500/15 text-amber-400'
+                      ? 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]'
+                      : 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]'
                   }`}
                 >
                   {s.status === 'active' ? 'aktif' : 'altyapı hazır'}

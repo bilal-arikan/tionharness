@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
-import type { Agent, Task, BoardState } from '../../types'
+import type { Agent, Task, BoardState, Flow } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { TaskDetailPanel } from './TaskDetailPanel'
@@ -14,9 +14,9 @@ const COLUMNS: { key: BoardState; label: string }[] = [
 ]
 
 const STATUS_COLOR: Record<string, string> = {
-  success: 'text-emerald-400',
-  failure: 'text-red-400',
-  running: 'text-amber-400',
+  success: 'text-[var(--color-success)]',
+  failure: 'text-[var(--color-danger)]',
+  running: 'text-[var(--color-warning)]',
   pending: 'text-[var(--color-text-dim)]',
 }
 
@@ -27,8 +27,10 @@ interface Props {
 
 export function TaskBoard({ agents, onError }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
+  const [flows, setFlows] = useState<Flow[]>([])
   const [prompt, setPrompt] = useState('')
   const [ownerAgentId, setOwnerAgentId] = useState('')
+  const [newFlowId, setNewFlowId] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
   // Right-hand detail/editor drawer: which task is currently open (null = closed).
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -38,19 +40,26 @@ export function TaskBoard({ agents, onError }: Props) {
 
   useEffect(() => {
     reload()
+    api.listFlows().then(setFlows).catch((e) => onError(e.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Tasks are created from a prompt alone; the backend auto-generates the title.
+  // Tasks are created from a prompt alone (title auto-generated). A flow-backed
+  // task may instead carry just a flow + optional input prompt.
   const createTask = async () => {
-    if (!prompt.trim()) return
+    if (!prompt.trim() && !newFlowId) return
     try {
+      const flow = flows.find((f) => f.id === newFlowId)
       const t = await api.createTask({
-        prompt: prompt.trim(),
+        prompt: prompt.trim() || undefined,
+        // Give flow tasks a title up front since the prompt may be empty.
+        title: !prompt.trim() && flow ? `🔀 ${flow.name}` : undefined,
         ownerAgentId: ownerAgentId || undefined,
+        flowId: newFlowId || undefined,
       })
       setTasks((prev) => [t, ...prev])
       setPrompt('')
+      setNewFlowId('')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -102,6 +111,21 @@ export function TaskBoard({ agents, onError }: Props) {
             onChange={setOwnerAgentId}
             placeholder="Ajan seç (opsiyonel)"
           />
+          {flows.length > 0 && (
+            <select
+              value={newFlowId}
+              onChange={(e) => setNewFlowId(e.target.value)}
+              title="Akış bağla (opsiyonel) — seçilirse görev çalıştırılınca akış koşar"
+              className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
+            >
+              <option value="">🔀 Akış yok</option>
+              {flows.map((f) => (
+                <option key={f.id} value={f.id}>
+                  🔀 {f.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             onClick={createTask}
             className="rounded bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white hover:opacity-90"
@@ -132,6 +156,7 @@ export function TaskBoard({ agents, onError }: Props) {
                 <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2">
                   {colTasks.map((t) => {
                     const owner = agents.find((a) => a.id === t.ownerAgentId)
+                    const flow = t.flowId ? flows.find((f) => f.id === t.flowId) : undefined
                     // Card is a summary: click anywhere to open the detail drawer.
                     return (
                       <div
@@ -139,13 +164,18 @@ export function TaskBoard({ agents, onError }: Props) {
                         draggable
                         onDragStart={() => setDragId(t.id)}
                         onClick={() => setSelectedId(t.id)}
-                        className={`cursor-pointer rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm transition active:cursor-grabbing ${
+                        className={`cursor-pointer rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)] active:cursor-grabbing ${
                           selectedId === t.id
                             ? 'border-[var(--color-accent)]'
                             : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
                         }`}
                       >
                         <div className="font-medium">{t.title}</div>
+                        {t.flowId && (
+                          <div className="mt-1 inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
+                            🔀 {flow?.name ?? 'Akış'}
+                          </div>
+                        )}
                         {t.prompt && (
                           <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]">
                             {t.prompt}
@@ -180,6 +210,7 @@ export function TaskBoard({ agents, onError }: Props) {
         <TaskDetailPanel
           task={selected}
           agents={agents}
+          flows={flows}
           onClose={() => setSelectedId(null)}
           onSaved={onSaved}
           onDeleted={onDeleted}

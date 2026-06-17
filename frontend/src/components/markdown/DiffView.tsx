@@ -5,8 +5,8 @@ interface Props {
 }
 
 const ROW: Record<string, string> = {
-  add: 'bg-green-500/12 text-green-300',
-  del: 'bg-red-500/12 text-red-300',
+  add: 'bg-[color-mix(in_srgb,var(--color-success)_14%,transparent)] text-[var(--color-success)]',
+  del: 'bg-[color-mix(in_srgb,var(--color-danger)_14%,transparent)] text-[var(--color-danger)]',
   hunk: 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]',
   meta: 'text-[var(--color-text-dim)]',
   ctx: 'text-[var(--color-text)]',
@@ -28,8 +28,8 @@ export function DiffView({ text }: Props) {
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
       <div className="flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs">
-        <span className="text-green-400">+{stats.added}</span>
-        <span className="text-red-400">−{stats.removed}</span>
+        <span className="text-[var(--color-success)]">+{stats.added}</span>
+        <span className="text-[var(--color-danger)]">−{stats.removed}</span>
       </div>
       <pre className="overflow-x-auto bg-[var(--color-bg)] py-1 text-xs leading-relaxed">
         <code className="block font-mono">

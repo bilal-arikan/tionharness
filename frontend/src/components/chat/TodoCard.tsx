@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ListChecks, Check, CircleDot, Circle, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react'
 import type { TurnStep, TodoItem } from '../../types'
 
 interface Props {
@@ -6,10 +7,10 @@ interface Props {
 }
 
 // Glyph + colour per todo status.
-const MARK: Record<TodoItem['status'], { icon: string; cls: string }> = {
-  completed: { icon: '✓', cls: 'text-green-400 line-through opacity-70' },
-  in_progress: { icon: '◐', cls: 'text-[var(--color-accent)] font-medium' },
-  pending: { icon: '○', cls: 'text-[var(--color-text-dim)]' },
+const MARK: Record<TodoItem['status'], { icon: LucideIcon; cls: string }> = {
+  completed: { icon: Check, cls: 'text-[var(--color-success)] line-through opacity-70' },
+  in_progress: { icon: CircleDot, cls: 'text-[var(--color-accent)] font-medium' },
+  pending: { icon: Circle, cls: 'text-[var(--color-text-dim)]' },
 }
 
 // Items come from the typed `todos` field (kind 'todo'); fall back to parsing the
@@ -42,20 +43,23 @@ export function TodoCard({ step }: Props) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
       >
-        <span>✅</span>
+        <ListChecks size={14} className="shrink-0" />
         <span className="font-medium text-[var(--color-text)]">Görev Listesi</span>
         <span className="ml-auto tabular-nums">
           {done}/{todos.length}
         </span>
-        <span className="shrink-0 opacity-50">{open ? '▾' : '▸'}</span>
+        <span className="shrink-0 opacity-50">
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
       </button>
       {open && (
         <ul className="flex flex-col gap-0.5 border-t border-[var(--color-border)] px-3 py-2 text-xs">
           {todos.map((t, i) => {
             const m = MARK[t.status] ?? MARK.pending
+            const Icon = m.icon
             return (
               <li key={i} className={`flex items-start gap-2 ${m.cls}`}>
-                <span className="shrink-0 leading-5">{m.icon}</span>
+                <Icon size={13} className="mt-0.5 shrink-0" />
                 <span className="min-w-0 flex-1 leading-5">{t.content}</span>
               </li>
             )

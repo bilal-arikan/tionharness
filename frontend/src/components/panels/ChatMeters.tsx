@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Database, Layers, Clock } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionContext, AgentUsage } from '../../types'
 
@@ -55,28 +56,28 @@ export function ChatMeters({ agentId, sessionId, refreshKey, onError }: Props) {
     <div className="flex items-center gap-2 text-xs">
       {ctx && (
         <span
-          className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-[var(--color-text-dim)]"
+          className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-[var(--color-text-dim)]"
           title={
             ctx.hasSummary
               ? `Bağlam ~${ctx.contextTokens} token · ${ctx.summaryMsgCount} mesaj özetlendi`
               : `Bağlam ~${ctx.contextTokens} token`
           }
         >
-          ⛁ {fmtTokens(ctx.contextTokens)}
-          {ctx.hasSummary && <span className="ml-1 text-[var(--color-accent)]">⧉</span>}
+          <Database size={12} /> {fmtTokens(ctx.contextTokens)}
+          {ctx.hasSummary && <Layers size={12} className="ml-0.5 text-[var(--color-accent)]" />}
         </span>
       )}
       {usage && (
         <button
           onClick={editLimit}
-          className={`rounded px-2 py-0.5 transition hover:opacity-80 ${
+          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 transition hover:opacity-80 ${
             overBudget
-              ? 'bg-red-500/15 text-red-400'
+              ? 'bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] text-[var(--color-danger)]'
               : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
           }`}
           title="Bugünkü otonom çağrılar · tıkla: limit ayarla"
         >
-          ◷ {usage.calls}
+          <Clock size={12} /> {usage.calls}
           {usage.dailyCallLimit > 0 ? `/${usage.dailyCallLimit}` : ''} çağrı
         </button>
       )}

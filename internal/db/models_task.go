@@ -20,12 +20,17 @@ func ValidBoardState(s string) bool {
 
 // Task is a unit of work on the board, optionally owned by an agent. When run,
 // the owner agent is given Prompt and the textual result is stored as a Run.
+// Alternatively, when FlowID is set the task is "flow-backed": running it executes
+// that orchestration flow (with Prompt as the flow input) instead of delivering a
+// prompt to a single agent. Either path funnels through RunTask, so manual runs,
+// cron schedules and any future dispatcher support flows uniformly.
 type Task struct {
 	ID            string `json:"id"`
 	Title         string `json:"title"`
 	Description   string `json:"description"`
 	Prompt        string `json:"prompt"`
 	OwnerAgentID  string `json:"ownerAgentId"`
+	FlowID        string `json:"flowId"` // when set, running the task executes this flow
 	BoardState    string `json:"boardState"`
 	Dependencies  string `json:"dependencies"` // JSON array of task ids
 	LastRunID     string `json:"lastRunId"`

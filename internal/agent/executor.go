@@ -2,12 +2,14 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/events"
+	"github.com/bilal/swarmgo/internal/orchestration"
 	"github.com/bilal/swarmgo/internal/providers"
 )
 
@@ -21,6 +23,10 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 	task, err := r.db.GetTask(ctx, taskID)
 	if err != nil {
 		return db.Run{}, err
+	}
+	// Flow-backed task: run the orchestration flow instead of a single agent.
+	if task.FlowID != "" {
+		return r.runTaskFlow(ctx, task, trigger)
 	}
 	if task.OwnerAgentID == "" {
 		return db.Run{}, errors.New("task has no owner agent")
@@ -98,6 +104,105 @@ func (r *Runtime) RunTask(ctx context.Context, taskID, trigger string) (db.Run, 
 	})
 
 	return run, nil
+}
+
+// runTaskFlow executes a flow-backed task: it runs the task's linked flow with
+// the task prompt as input, records the rendered transcript as a Run, and moves
+// the board to done/failed. No owner agent is required — the flow's nodes carry
+// their own agents. Mirrors RunTask's bookkeeping so flow tasks behave like any
+// other task on the board (history, notifications, scheduling).
+func (r *Runtime) runTaskFlow(ctx context.Context, task db.Task, trigger string) (db.Run, error) {
+	input := task.Prompt
+	if input == "" {
+		input = task.Description
+	}
+
+	flow, ferr := r.db.GetFlow(ctx, task.FlowID)
+	flowName := task.FlowID
+	if ferr == nil {
+		flowName = flow.Name
+	}
+
+	// Open the run and flip the board to in_progress.
+	run, err := r.db.CreateRun(ctx, db.Run{
+		TaskID:  task.ID,
+		AgentID: task.OwnerAgentID, // optional; flows carry their own agents
+		Status:  db.RunRunning,
+		Trigger: trigger,
+	})
+	if err != nil {
+		return db.Run{}, err
+	}
+	_ = r.db.MoveTask(ctx, task.ID, db.BoardInProgress)
+
+	// Scheduled/dispatcher runs are autonomous (budget-gated per node); a manual
+	// run-now is user-initiated.
+	autonomous := trigger != "manual"
+	flowRun, runErr := r.RunFlow(ctx, task.FlowID, input, autonomous, nil)
+	output := renderFlowTranscript(flowName, flowRun, runErr)
+
+	status := db.RunSuccess
+	board := db.BoardDone
+	errText := ""
+	if runErr != nil {
+		status, board, errText = db.RunFailure, db.BoardFailed, runErr.Error()
+	} else if flowRun.Status == db.FlowFailure {
+		status, board, errText = db.RunFailure, db.BoardFailed, flowRun.Error
+	} else {
+		r.Journal(ctx, task.OwnerAgentID,
+			fmt.Sprintf("Flow task %q → %s", task.Title, output))
+	}
+
+	if err := r.db.FinishRun(ctx, run.ID, status, output, errText); err != nil {
+		r.logger.Warn("finish flow-run failed", "run", run.ID, "error", err)
+	}
+	if err := r.db.SetTaskLastRun(ctx, task.ID, run.ID, status, board); err != nil {
+		r.logger.Warn("set task last run failed", "task", task.ID, "error", err)
+	}
+
+	run.Status = status
+	run.Output = output
+	run.Error = errText
+
+	r.logger.Info("flow task run finished", "task", task.ID, "flow", task.FlowID, "trigger", trigger, "status", status)
+
+	level, title, body := "success", "Akış görevi tamamlandı: "+task.Title, output
+	if status == db.RunFailure {
+		level, title, body = "error", "Akış görevi başarısız: "+task.Title, errText
+	}
+	r.publish(events.Event{
+		Type:   "task",
+		Level:  level,
+		Title:  title,
+		Body:   body,
+		Target: map[string]string{"view": "board", "taskId": task.ID},
+	})
+
+	return run, nil
+}
+
+// renderFlowTranscript turns a finished flow run into a plain-text transcript for
+// storage as a task Run output: a header plus one section per executed node.
+func renderFlowTranscript(flowName string, fr db.FlowRun, setupErr error) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "🔀 %s akışı çalıştı\n", flowName)
+	if setupErr != nil {
+		fmt.Fprintf(&b, "\n⚠️ Akış başlatılamadı: %s", setupErr.Error())
+		return strings.TrimSpace(b.String())
+	}
+	var st orchestration.State
+	_ = json.Unmarshal([]byte(fr.State), &st)
+	for i, t := range st.Trace {
+		title := t.Title
+		if title == "" {
+			title = t.NodeID
+		}
+		fmt.Fprintf(&b, "\n%d. %s\n%s\n", i+1, title, t.Output)
+	}
+	if fr.Status == db.FlowFailure {
+		fmt.Fprintf(&b, "\n⚠️ Durum: hata — %s", fr.Error)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // invoke calls the agent's provider with a single user prompt.

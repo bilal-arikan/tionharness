@@ -18,6 +18,22 @@ type AgentRunner interface {
 	RunAgentNode(ctx context.Context, agentID, prompt string) (string, error)
 }
 
+// NodeEvent reports a node's lifecycle to an Observer so a caller can stream
+// progress (e.g. over SSE) as the graph executes. Output is populated on "done".
+type NodeEvent struct {
+	Phase  string `json:"phase"` // "start" | "done"
+	NodeID string `json:"nodeId"`
+	Type   string `json:"type"`
+	Title  string `json:"title"`
+	Index  int    `json:"index"`            // 1-based execution order
+	Output string `json:"output,omitempty"` // on "done"
+}
+
+// Observer receives node lifecycle events during a run. It MAY be called
+// concurrently (parallel-node children run in goroutines), so implementations
+// must be safe for concurrent use.
+type Observer func(NodeEvent)
+
 // TraceEntry records one executed node for display and debugging.
 type TraceEntry struct {
 	NodeID string `json:"nodeId"`
@@ -47,11 +63,28 @@ type SaveFunc func(State) error
 
 // Engine drives a graph to completion using an AgentRunner.
 type Engine struct {
-	runner AgentRunner
+	runner   AgentRunner
+	observer Observer // optional; nil = no progress events
 }
 
 // NewEngine constructs an engine.
 func NewEngine(runner AgentRunner) *Engine { return &Engine{runner: runner} }
+
+// SetObserver registers a progress observer (nil clears it). The observer is
+// notified at each node's start and completion; see Observer for concurrency.
+func (e *Engine) SetObserver(o Observer) { e.observer = o }
+
+// notify reports a node event when an observer is set (title defaults to nodeID).
+func (e *Engine) notify(phase string, node Node, index int, output string) {
+	if e.observer == nil {
+		return
+	}
+	title := node.Title
+	if title == "" {
+		title = node.ID
+	}
+	e.observer(NodeEvent{Phase: phase, NodeID: node.ID, Type: node.Type, Title: title, Index: index, Output: output})
+}
 
 // Run advances the graph from st.Current until it finishes (Current == ""),
 // hits the step cap, or an agent errors. It persists after each node via save.
@@ -72,6 +105,7 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 
 		switch node.Type {
 		case NodeAgent:
+			e.notify("start", node, st.Steps, "")
 			prompt := render(node.Prompt, input, st)
 			out, err := e.runner.RunAgentNode(ctx, node.AgentID, prompt)
 			if err != nil {
@@ -80,11 +114,13 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			st.Outputs[node.ID] = out
 			st.Last = out
 			st.appendTrace(node, out)
+			e.notify("done", node, st.Steps, out)
 			st.Current = node.Next
 
 		case NodeBranch:
 			next, label := evalBranch(node, st.Last)
 			st.appendTrace(node, "→ "+label)
+			e.notify("done", node, st.Steps, "→ "+label)
 			st.Current = next
 
 		case NodeParallel:
@@ -124,6 +160,7 @@ func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input stri
 		if !ok {
 			return "", fmt.Errorf("parallel child %q not found", childID)
 		}
+		e.notify("start", child, st.Steps, "")
 		wg.Add(1)
 		go func(i int, child Node) {
 			defer wg.Done()
@@ -132,6 +169,9 @@ func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input stri
 			title := child.Title
 			if title == "" {
 				title = child.ID
+			}
+			if err == nil {
+				e.notify("done", child, st.Steps, out)
 			}
 			results[i] = res{id: child.ID, title: title, out: out, err: err}
 		}(i, child)

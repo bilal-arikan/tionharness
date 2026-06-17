@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 import { api } from '../../api'
-import type { Agent, Task, Run, BoardState } from '../../types'
+import type { Agent, Task, Run, BoardState, Flow } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 
 const BOARD_STATES: { key: BoardState; label: string }[] = [
@@ -12,9 +13,9 @@ const BOARD_STATES: { key: BoardState; label: string }[] = [
 ]
 
 const STATUS_COLOR: Record<string, string> = {
-  success: 'text-emerald-400',
-  failure: 'text-red-400',
-  running: 'text-amber-400',
+  success: 'text-[var(--color-success)]',
+  failure: 'text-[var(--color-danger)]',
+  running: 'text-[var(--color-warning)]',
   pending: 'text-[var(--color-text-dim)]',
 }
 
@@ -29,6 +30,7 @@ const CRON_PRESETS: { label: string; expr: string }[] = [
 interface Props {
   task: Task
   agents: Agent[]
+  flows: Flow[]
   onClose: () => void
   // Called with the persisted task so the board can update its copy in place.
   onSaved: (task: Task) => void
@@ -41,11 +43,12 @@ interface Props {
 // It both edits the task (title/prompt/description/owner/column) and holds the
 // full action set the card no longer carries: run now, bind to a cron schedule,
 // view run history, regenerate title and delete.
-export function TaskDetailPanel({ task, agents, onClose, onSaved, onDeleted, onError }: Props) {
+export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDeleted, onError }: Props) {
   const [title, setTitle] = useState(task.title)
   const [prompt, setPrompt] = useState(task.prompt)
   const [description, setDescription] = useState(task.description)
   const [ownerAgentId, setOwnerAgentId] = useState(task.ownerAgentId)
+  const [flowId, setFlowId] = useState(task.flowId)
   const [boardState, setBoardState] = useState<BoardState>(task.boardState)
   const [saving, setSaving] = useState(false)
 
@@ -64,6 +67,7 @@ export function TaskDetailPanel({ task, agents, onClose, onSaved, onDeleted, onE
     setPrompt(task.prompt)
     setDescription(task.description)
     setOwnerAgentId(task.ownerAgentId)
+    setFlowId(task.flowId)
     setBoardState(task.boardState)
     setSchedDone(false)
     let alive = true
@@ -83,6 +87,7 @@ export function TaskDetailPanel({ task, agents, onClose, onSaved, onDeleted, onE
     prompt !== task.prompt ||
     description !== task.description ||
     ownerAgentId !== task.ownerAgentId ||
+    flowId !== task.flowId ||
     boardState !== task.boardState
 
   const save = async () => {
@@ -93,6 +98,7 @@ export function TaskDetailPanel({ task, agents, onClose, onSaved, onDeleted, onE
         prompt: prompt.trim(),
         description: description.trim(),
         ownerAgentId,
+        flowId,
         boardState,
       })
       onSaved(updated)
@@ -195,7 +201,7 @@ export function TaskDetailPanel({ task, agents, onClose, onSaved, onDeleted, onE
               title="AI ile başlığı yeniden oluştur"
               className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1.5 text-sm text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-30"
             >
-              {retitling ? '…' : '⟳'}
+              {retitling ? '…' : <RefreshCw size={14} />}
             </button>
           </div>
         </Field>
@@ -227,6 +233,26 @@ export function TaskDetailPanel({ task, agents, onClose, onSaved, onDeleted, onE
           />
         </Field>
 
+        <Field label="Akış (opsiyonel) — seçilirse çalıştırınca akış koşar">
+          <select
+            value={flowId}
+            onChange={(e) => setFlowId(e.target.value)}
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
+          >
+            <option value="">🔀 Akış yok (prompt ajana gider)</option>
+            {flows.map((f) => (
+              <option key={f.id} value={f.id}>
+                🔀 {f.name}
+              </option>
+            ))}
+          </select>
+          {flowId && (
+            <p className="text-[11px] text-[var(--color-text-dim)]">
+              Bu görev çalıştırılınca prompt, akışa girdi olarak verilir.
+            </p>
+          )}
+        </Field>
+
         <Field label="Durum (kolon)">
           <div className="flex flex-wrap gap-1.5">
             {BOARD_STATES.map((s) => (
@@ -254,23 +280,29 @@ export function TaskDetailPanel({ task, agents, onClose, onSaved, onDeleted, onE
             {saving ? 'Kaydediliyor…' : 'Kaydet'}
           </button>
           {dirty && !saving && (
-            <span className="text-[11px] text-amber-400">kaydedilmemiş değişiklik</span>
+            <span className="text-[11px] text-[var(--color-warning)]">kaydedilmemiş değişiklik</span>
           )}
         </div>
 
-        {/* Run now */}
+        {/* Run now — a flow-backed task runs its flow; otherwise the owner agent.
+            Availability/label key off the persisted task, not the unsaved form. */}
         <Section title="Çalıştırma">
           <button
             onClick={run}
-            disabled={!ownerAgentId || running}
+            disabled={(!task.ownerAgentId && !task.flowId) || running}
             className="w-full rounded bg-[var(--color-accent-soft)] px-3 py-1.5 text-sm text-[var(--color-text)] transition hover:opacity-90 disabled:opacity-30"
-            title={ownerAgentId ? 'Görevi şimdi çalıştır' : 'Önce ajan ata'}
+            title={task.flowId ? 'Akışı şimdi çalıştır' : task.ownerAgentId ? 'Görevi şimdi çalıştır' : 'Önce ajan veya akış ata'}
           >
-            {running ? 'Çalışıyor…' : '▶ Şimdi çalıştır'}
+            {running ? 'Çalışıyor…' : task.flowId ? '▶ Akışı çalıştır' : '▶ Şimdi çalıştır'}
           </button>
-          {!ownerAgentId && (
+          {!task.ownerAgentId && !task.flowId && (
             <p className="mt-1 text-[11px] text-[var(--color-text-dim)]">
-              Çalıştırmak için bir ajan atayın.
+              Çalıştırmak için bir ajan ya da akış atayıp kaydedin.
+            </p>
+          )}
+          {dirty && (
+            <p className="mt-1 text-[11px] text-[var(--color-warning)]">
+              Çalıştırma kayıtlı görevi kullanır — önce Kaydet.
             </p>
           )}
         </Section>
@@ -306,7 +338,7 @@ export function TaskDetailPanel({ task, agents, onClose, onSaved, onDeleted, onE
             </button>
           </div>
           {schedDone && (
-            <p className="mt-1 text-[11px] text-emerald-400">
+            <p className="mt-1 text-[11px] text-[var(--color-success)]">
               ✓ Zamanlama oluşturuldu — Zamanlamalar ekranından yönetebilirsin.
             </p>
           )}
@@ -337,7 +369,7 @@ export function TaskDetailPanel({ task, agents, onClose, onSaved, onDeleted, onE
         <div className="mt-auto border-t border-[var(--color-border)] pt-3">
           <button
             onClick={remove}
-            className="w-full rounded px-3 py-1.5 text-sm text-red-400 transition hover:bg-red-500/10"
+            className="w-full rounded px-3 py-1.5 text-sm text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
           >
             🗑 Görevi sil
           </button>

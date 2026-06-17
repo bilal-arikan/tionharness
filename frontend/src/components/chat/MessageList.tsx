@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Trash2, X } from 'lucide-react'
 import type { Agent, Message } from '../../types'
 import { Markdown } from '../markdown/Markdown'
 import { TurnSteps, parseSteps } from './TurnSteps'
@@ -33,7 +34,7 @@ function DeleteButton({ onClick }: { onClick: () => void }) {
             setArmed(false)
             onClick()
           }}
-          className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-red-400 transition hover:bg-red-500/15"
+          className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)]"
         >
           Sil
         </button>
@@ -42,7 +43,7 @@ function DeleteButton({ onClick }: { onClick: () => void }) {
           title="Vazgeç"
           className="rounded px-1 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
         >
-          ✕
+          <X size={12} />
         </button>
       </span>
     )
@@ -51,9 +52,9 @@ function DeleteButton({ onClick }: { onClick: () => void }) {
     <button
       onClick={() => setArmed(true)}
       title="Mesajı sil"
-      className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+      className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-danger)] group-hover:opacity-100"
     >
-      🗑
+      <Trash2 size={14} />
     </button>
   )
 }
@@ -80,6 +81,15 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
   const firstId = messages[0]?.id
   const prevFirstId = useRef(firstId)
   const agentById = (id?: string) => (id ? agents.find((a) => a.id === id) : undefined)
+  // Per-message collapse of the tool-activity trace (the TurnSteps block). Keyed
+  // by message id; a message is shown expanded unless its id is in the set.
+  const [collapsedTools, setCollapsedTools] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleTools = (id: string) =>
+    setCollapsedTools((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
 
   function onScroll() {
     const el = scrollRef.current
@@ -123,6 +133,13 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
           // report idle wall-clock gaps, not real work.
           const workedSec =
             m.role === 'assistant' && prev?.role === 'user' ? m.createdAt - prev.createdAt : 0
+          // Activity trace + how many of its steps are tool usages (for the
+          // per-message collapse toggle label).
+          const steps = m.role === 'assistant' ? parseSteps(m.steps) : []
+          const toolCount = steps.filter((st) =>
+            st.kind === 'tool' || st.kind === 'diff' || st.kind === 'todo',
+          ).length
+          const toolsHidden = collapsedTools.has(m.id)
           return m.role === 'user' ? (
             <div key={m.id} className="group flex flex-col gap-1">
               <UserBubble text={m.text} agents={agents} attachments={m.attachments} />
@@ -146,12 +163,24 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
                     </div>
                   )}
                   {m.reasoningContent && <ThinkingBlock text={m.reasoningContent} />}
-                  <TurnSteps steps={parseSteps(m.steps)} onOpenFile={onOpenFile} onOpenArtifact={onOpenArtifact} />
+                  {/* Per-message toggle to hide/show the tool-activity trace. */}
+                  {steps.length > 0 && (
+                    <button
+                      onClick={() => toggleTools(m.id)}
+                      title={toolsHidden ? 'Araç adımlarını göster' : 'Araç adımlarını gizle'}
+                      className="mb-1.5 flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                    >
+                      <span>🔧</span>
+                      <span>{toolCount > 0 ? `${toolCount} araç` : `${steps.length} adım`}</span>
+                      <span className="opacity-70">{toolsHidden ? '▸ göster' : '▾ gizle'}</span>
+                    </button>
+                  )}
+                  {!toolsHidden && (
+                    <TurnSteps steps={steps} onOpenFile={onOpenFile} onOpenArtifact={onOpenArtifact} />
+                  )}
                   {m.text.trim() && <Markdown onOpenFile={onOpenFile}>{m.text}</Markdown>}
                   {/* Empty live assistant bubble → show the working indicator. */}
-                  {!m.text.trim() &&
-                    !m.reasoningContent &&
-                    parseSteps(m.steps).length === 0 && <WorkingDots />}
+                  {!m.text.trim() && !m.reasoningContent && steps.length === 0 && <WorkingDots />}
                 </div>
               </div>
               <div className="flex items-center gap-2 pl-1">

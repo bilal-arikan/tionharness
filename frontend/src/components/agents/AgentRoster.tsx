@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Settings } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AgentAvatar } from './AgentAvatar'
 import { AgentSettingsModal } from './AgentSettingsModal'
@@ -120,7 +121,7 @@ export function AgentRoster({
               title="Ajan ayarları"
               className="ml-1 shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"
             >
-              ⚙
+              <Settings size={16} />
             </button>
           </div>
         ))}

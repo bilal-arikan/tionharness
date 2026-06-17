@@ -272,7 +272,7 @@ export function ToolsPanel({ onError }: Props) {
                         <span
                           title={t.enabled ? 'Aktif' : 'Devre dışı'}
                           className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-                            t.enabled ? 'bg-emerald-500' : 'bg-[var(--color-border)]'
+                            t.enabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-border)]'
                           }`}
                         />
                         <span
@@ -361,7 +361,7 @@ function ToolDetail({
             <span
               className={`rounded px-1.5 py-0.5 text-xs ${
                 tool.enabled
-                  ? 'bg-emerald-500/10 text-emerald-500'
+                  ? 'bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] text-[var(--color-success)]'
                   : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
               }`}
             >
@@ -411,7 +411,7 @@ function ToolDetail({
                   <code className="text-sm font-medium">{p.name}</code>
                   <span className="text-xs text-[var(--color-text-dim)]">{p.type}</span>
                   {p.required && (
-                    <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
+                    <span className="rounded bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-danger)]">
                       zorunlu
                     </span>
                   )}
@@ -509,7 +509,7 @@ function ServerManagement(props: {
                 </button>
                 <button
                   onClick={() => onRemove(s)}
-                  className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                  className="rounded px-2 py-1 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
                 >
                   Sil
                 </button>

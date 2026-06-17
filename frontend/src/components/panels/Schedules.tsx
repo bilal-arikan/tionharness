@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Play, Hourglass, Pencil, X } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Schedule } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
@@ -282,8 +283,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
                   <span
                     className={
                       s.lastDeliveryStatus === 'success'
-                        ? 'text-emerald-400'
-                        : 'text-red-400'
+                        ? 'text-[var(--color-success)]'
+                        : 'text-[var(--color-danger)]'
                     }
                   >
                     {s.lastDeliveryStatus} {fmtTime(s.lastRunAt)}
@@ -292,31 +293,31 @@ export function Schedules({ agents, focusId, onError }: Props) {
                   '—'
                 )}
                 {s.lastDeliveryError && (
-                  <span className="text-red-400"> ({s.lastDeliveryError})</span>
+                  <span className="text-[var(--color-danger)]"> ({s.lastDeliveryError})</span>
                 )}
               </div>
             </div>
             <button
               onClick={() => runNow(s)}
               disabled={runningId === s.id}
-              className="text-[var(--color-text-dim)] hover:text-emerald-400 disabled:opacity-40"
+              className="text-[var(--color-text-dim)] hover:text-[var(--color-success)] disabled:opacity-40"
               title="Şimdi çalıştır"
             >
-              {runningId === s.id ? '⏳' : '▶'}
+              {runningId === s.id ? <Hourglass size={15} /> : <Play size={15} />}
             </button>
             <button
               onClick={() => startEdit(s)}
               className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
               title="Düzenle"
             >
-              ✎
+              <Pencil size={15} />
             </button>
             <button
               onClick={() => remove(s)}
-              className="text-[var(--color-text-dim)] hover:text-red-400"
+              className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
               title="Sil"
             >
-              ✕
+              <X size={15} />
             </button>
           </div>
           ),

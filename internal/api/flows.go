@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
+	"github.com/bilal/swarmgo/internal/conversation"
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/orchestration"
 	"github.com/bilal/swarmgo/internal/providers"
@@ -119,7 +121,7 @@ func (s *Server) handleRunFlow(w http.ResponseWriter, r *http.Request) {
 	var req runFlowReq
 	_ = decodeJSON(r, &req)
 
-	run, err := ws(r).Runtime.RunFlow(r.Context(), id, req.Input, false)
+	run, err := ws(r).Runtime.RunFlow(r.Context(), id, req.Input, false, nil)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -150,8 +152,9 @@ func (s *Server) handleGetFlowRun(w http.ResponseWriter, r *http.Request) {
 }
 
 type sessionFlowReq struct {
-	FlowID string `json:"flowId"`
-	Input  string `json:"input"`
+	FlowID      string          `json:"flowId"`
+	Input       string          `json:"input"`
+	Attachments []db.Attachment `json:"attachments"`
 }
 
 // handleSessionRunFlow runs a flow and records the result as a turn in the given
@@ -183,19 +186,25 @@ func (s *Server) handleSessionRunFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fold any attachments into the flow input (same block format chat uses), so
+	// the flow's agent nodes see attached text/files via {{input}}.
+	flowInput := conversation.InlineAttachments(req.Input, req.Attachments)
+
 	// Manual (user-initiated) run: not budget-gated. Setup errors (bad graph) come
 	// back as runErr; execution failures land in run.Status.
-	run, runErr := wsp.Runtime.RunFlow(ctx, req.FlowID, req.Input, false)
+	run, runErr := wsp.Runtime.RunFlow(ctx, req.FlowID, flowInput, false, nil)
 
-	// User message: what the user typed after the command (the flow input).
+	// User message: what the user typed after the command (the flow input). The
+	// raw text + attachment chips are stored; the folded text only seeds the flow.
 	userText := strings.TrimSpace(req.Input)
 	if userText == "" {
 		userText = "🔀 " + flow.Name
 	}
 	userMsg, err := wsp.DB.AddMessage(ctx, db.Message{
-		SessionID: session.ID,
-		Role:      providers.RoleUser,
-		Text:      userText,
+		SessionID:   session.ID,
+		Role:        providers.RoleUser,
+		Text:        userText,
+		Attachments: req.Attachments,
 	})
 	if writeDBError(w, err, "session not found") {
 		return
@@ -263,4 +272,96 @@ func finalAgentID(flow db.Flow, run db.FlowRun) string {
 		}
 	}
 	return ""
+}
+
+// handleSessionRunFlowStream is the SSE variant of handleSessionRunFlow: it runs
+// the flow with a per-node observer so the client sees each node start/finish
+// live, then persists + returns the same user/assistant turn. Events:
+//
+//	meta  → { userMessage }           (once)
+//	node  → orchestration.NodeEvent   (per node start/done)
+//	reply → { replyMessage }          (terminal, success)
+//	error → { error }                 (terminal, setup failure)
+func (s *Server) handleSessionRunFlowStream(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+	ctx := r.Context()
+
+	session, err := wsp.DB.GetSession(ctx, id)
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+	var req sessionFlowReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(req.FlowID) == "" {
+		writeError(w, http.StatusBadRequest, "flowId is required")
+		return
+	}
+	flow, err := wsp.DB.GetFlow(ctx, req.FlowID)
+	if writeDBError(w, err, "flow not found") {
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "streaming unsupported")
+		return
+	}
+
+	// Persist the user message (raw text + attachment chips) before streaming.
+	userText := strings.TrimSpace(req.Input)
+	if userText == "" {
+		userText = "🔀 " + flow.Name
+	}
+	userMsg, err := wsp.DB.AddMessage(ctx, db.Message{
+		SessionID:   session.ID,
+		Role:        providers.RoleUser,
+		Text:        userText,
+		Attachments: req.Attachments,
+	})
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+
+	h := w.Header()
+	h.Set("Content-Type", "text/event-stream")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "keep-alive")
+	h.Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	// The observer may fire concurrently (parallel children), so guard the writer.
+	var mu sync.Mutex
+	sse := func(event string, data any) {
+		mu.Lock()
+		defer mu.Unlock()
+		b, _ := json.Marshal(data)
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
+		flusher.Flush()
+	}
+
+	sse("meta", map[string]any{"userMessage": userMsg})
+
+	flowInput := conversation.InlineAttachments(req.Input, req.Attachments)
+	obs := func(ev orchestration.NodeEvent) { sse("node", ev) }
+	run, runErr := wsp.Runtime.RunFlow(ctx, req.FlowID, flowInput, false, obs)
+
+	agentID := finalAgentID(flow, run)
+	if agentID == "" {
+		agentID = session.AgentID
+	}
+	msg, aerr := wsp.DB.AddMessage(ctx, db.Message{
+		SessionID: session.ID,
+		Role:      providers.RoleAssistant,
+		AgentID:   agentID,
+		Text:      flowRunMarkdown(flow, run, runErr),
+		Steps:     "[]",
+	})
+	if aerr != nil {
+		sse("error", map[string]any{"error": aerr.Error()})
+		return
+	}
+	sse("reply", map[string]any{"replyMessage": msg})
 }
