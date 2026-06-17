@@ -18,6 +18,7 @@ import { ToolsPanel } from './components/panels/ToolsPanel'
 import { FlowsPanel } from './components/panels/FlowsPanel'
 import { ArtifactsPanel } from './components/panels/ArtifactsPanel'
 import { SecretsPanel } from './components/panels/SecretsPanel'
+import { SkillsPanel } from './components/panels/SkillsPanel'
 import { ChatMeters } from './components/panels/ChatMeters'
 import { SessionDetailPanel } from './components/sessions/SessionDetailPanel'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -46,6 +47,7 @@ const VIEW_TITLE: Record<View, string> = {
   flows: 'Akışlar',
   artifacts: 'Artifactlar',
   secrets: 'Sırlar',
+  skills: 'Beceriler',
   logs: 'Loglar',
   settings: 'Ayarlar',
 }
@@ -646,6 +648,7 @@ export default function App() {
           />
         )}
         {view === 'secrets' && <SecretsPanel onError={setError} />}
+        {view === 'skills' && <SkillsPanel onError={setError} />}
         {view === 'logs' && <LogsPanel onError={setError} />}
         {view === 'settings' && (
           <SettingsPanel

@@ -123,6 +123,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerMCPRoutes(mux)
 	s.registerFlowRoutes(mux)
 	s.registerArtifactRoutes(mux)
+	s.registerSkillRoutes(mux)
 	s.registerSettingsRoutes(mux)
 	s.registerMemoryRoutes(mux)
 	s.registerSecretRoutes(mux)
@@ -262,6 +263,14 @@ func (s *Server) registerArtifactRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/artifacts/{id}", s.handleGetArtifact)
 	mux.HandleFunc("PUT /api/artifacts/{id}", s.handleUpdateArtifact)
 	mux.HandleFunc("DELETE /api/artifacts/{id}", s.handleDeleteArtifact)
+}
+
+// registerSkillRoutes registers the file-based skill catalog (reusable agent
+// instruction sets resolved from global/workspace/project tiers).
+func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/skills", s.handleListSkills)
+	mux.HandleFunc("POST /api/skills/reload", s.handleReloadSkills)
+	mux.HandleFunc("GET /api/skills/{slug}", s.handleGetSkill)
 }
 
 // registerSettingsRoutes registers the global application settings document.

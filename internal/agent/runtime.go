@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +18,7 @@ import (
 	"github.com/bilal/swarmgo/internal/memory"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/secrets"
+	"github.com/bilal/swarmgo/internal/skills"
 )
 
 // Runtime owns the lifecycle of all autonomous agent workers.
@@ -43,6 +46,10 @@ type Runtime struct {
 	// logs is the process-wide ring buffer of captured log entries, exposed to
 	// agents through the read_logs self-management tool. May be nil.
 	logs *logbuf.Buffer
+
+	// skills resolves reusable skill instruction sets (global/workspace/project
+	// tiers) and backs the use_skill tool + the Available Skills prompt block.
+	skills *skills.Store
 
 	// reloadSched re-reads schedules into the cron scheduler after an agent
 	// creates/edits/deletes one via a self-management tool. Wired by the
@@ -94,8 +101,48 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		wsName:    wsName,
 		logs:      logs,
 		logger:    logger,
+		skills:    skills.New(globalSkillsDir(), workspaceSkillsDir(workDir), projectSkillsDir(workDir)),
 		workers:   make(map[string]*worker),
 	}
+}
+
+// globalSkillsDir is the cross-tool skill convention directory (~/.agents/skills).
+func globalSkillsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".agents", "skills")
+}
+
+// workspaceSkillsDir is this workspace's skills directory (<workspace>/skills),
+// a sibling of store/, config/ and workspace/. Empty when workDir is unknown.
+func workspaceSkillsDir(workDir string) string {
+	if workDir == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(workDir), "skills")
+}
+
+// projectSkillsDir is the agent sandbox's project-level skills directory
+// (<workDir>/.agents/skills) — the highest-priority tier. Empty when unknown.
+func projectSkillsDir(workDir string) string {
+	if workDir == "" {
+		return ""
+	}
+	return filepath.Join(workDir, ".agents", "skills")
+}
+
+// Skills returns this runtime's skill store (never nil after construction).
+func (r *Runtime) Skills() *skills.Store { return r.skills }
+
+// SkillsCatalogBlock renders the Available Skills system-prompt section, or ""
+// when no skills are present. Cheap — frontmatter only.
+func (r *Runtime) SkillsCatalogBlock() string {
+	if r.skills == nil {
+		return ""
+	}
+	return r.skills.CatalogBlock()
 }
 
 // SetScheduleReloader wires the scheduler's Reload so self-management schedule

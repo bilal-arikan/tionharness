@@ -71,6 +71,13 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewUpdateArtifactTool(),
 	}
 
+	// Skills: when the workspace has any skill, offer use_skill so the agent can
+	// load a skill's full instructions on demand (the catalog is advertised in
+	// the system prompt; bodies stay on disk until invoked — lazy loading).
+	if r.skills != nil && !r.skills.Empty() {
+		builtins = append(builtins, tools.NewUseSkillTool(r.skills))
+	}
+
 	// Agent→agent delegation: the call_agent tool lets this agent hand a sub-task
 	// to another agent and wait for its reply. Gated (off by default) because it
 	// multiplies token cost and lets one turn fan out across several agents; the

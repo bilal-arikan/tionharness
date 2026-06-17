@@ -15,6 +15,7 @@ import { mcpApi } from './api/mcp'
 import { flowApi } from './api/flows'
 import { artifactApi } from './api/artifacts'
 import { secretApi } from './api/secrets'
+import { skillApi } from './api/skills'
 import { systemApi } from './api/system'
 
 export { setActiveWorkspace, getActiveWorkspace }
@@ -32,5 +33,6 @@ export const api = {
   ...flowApi,
   ...artifactApi,
   ...secretApi,
+  ...skillApi,
   ...systemApi,
 }

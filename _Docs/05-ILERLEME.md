@@ -2,6 +2,47 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Faz S1 — Skill sistemi (dosya-tabanlı, 3 katman, lazy) ✅ (2026-06-17)
+
+Ajanlara **yeniden kullanılabilir talimat setleri** (skill) eklendi — Claude Code /
+external-agent-oss desenleri incelenip SwarmGo'ya uyarlandı. **Sub-skill yok:**
+craft-oss'ta zaten yoktu; Claude Code'daki `context:fork`/`agent:` icra modelinin
+çözdüğü delegasyon SwarmGo'da `call_agent` ile zaten karşılanıyor — bu yüzden
+sadece **flat skill + 3 katman + lazy gövde** alındı.
+
+**Format:** klasör-başına `<slug>/SKILL.md` (YAML-ish frontmatter + markdown gövde).
+Frontmatter alanları: `name`, `description`, `when_to_use`, `icon`, `color`,
+`alwaysAllow[]`, `requiredSources[]`. Bağımlılıksız küçük frontmatter parser
+(`internal/skills/frontmatter.go`) — go.mod minimal kalsın diye yaml lib yok.
+
+**3 katman (öncelik: proje > workspace > global):**
+- global: `~/.agents/skills/` (cross-tool konvansiyon)
+- workspace: `<workspace>/skills/` (store/·config/·workspace/ kardeşi)
+- project: `<workDir>/.agents/skills/` (ajan sandbox kökü)
+Aynı slug üst katmanda override eder (`internal/skills/store.go`, `New`+`Reload`+`List`).
+
+**Lazy:** katalog taranırken **sadece frontmatter** okunur (token-dostu). Tam gövde
+diskte kalır; ajan `use_skill(slug)` çağırınca `Store.Body` ile okunur. Katalog
+(slug+özet+ne-zaman) **statik sistem promptuna** "# Available Skills" bloğu olarak
+girer (`SkillsCatalogBlock` → `composeTurnRequest`). `use_skill` tool'u sadece
+workspace'te ≥1 skill varken kaydedilir (`builtin_skill.go`, `toolsetup.go`).
+
+**API:** `GET /api/skills` (katalog), `GET /api/skills/{slug}` (+gövde, lazy),
+`POST /api/skills/reload` (diskten yeniden tara) — `internal/api/skills.go`,
+`registerSkillRoutes`. **Frontend:** NavRail "✨ Beceriler" → `SkillsPanel.tsx`
+(iki panel: solda liste + tier rozeti, sağda gövde markdown render + meta);
+`types/skill.ts`, `api/skills.ts`.
+
+✅ `go build`/`vet`/`test` + `tsc -b`/`vite build` yeşil. Yeni testler:
+`skills/store_test.go` (frontmatter parse, tier override, catalog block).
+**Canlı API testi** (scratch instance :8099, temp data dir): global `code-review`
+skill'i `/api/skills` katalogda frontmatter-only, `/api/skills/{slug}` gövdeyi lazy
+döndü, `/api/skills/reload` ok, Türkçe karakterler round-trip. Demo skill
+`~/.agents/skills/code-review/` bırakıldı (özellik anında görünür). **Not:**
+mcp-chrome bu oturumda bağlı olmadığından Playwright görsel testi yapılamadı.
+**Kalan (v2):** namespacing (`parent:child`), `paths:` koşullu otomatik aktivasyon,
+skill'in `alwaysAllow`/`requiredSources` alanlarının runtime'da enforce edilmesi.
+
 ## Ara özellik — Akış node-node SSE streaming + multimodal flow input ✅ (2026-06-17)
 
 Sohbetten tetiklenen akışlar artık node-node canlı akıyor ve dosya/görsel eki kabul ediyor.
@@ -1684,6 +1725,9 @@ Kullanıcıyla netleştirilecek:
 ---
 
 ## Oturum Günlüğü
+
+### 2026-06-17 — Ayarlar: "Gelişmiş" birleşik kategori
+Ayarlar kategori rayı sadeleştirildi: **Bildirimler & Ekran + Otonomi + Otomatik Başlık + MCP & Araçlar + Tanılama** ayrı kategorileri tek **"Gelişmiş"** (`advanced`, `SlidersHorizontal` ikonu) alt-ekranında toplandı. `settings/primitives.tsx` `Cat` union + `APP_CATS` güncellendi (5 giriş → 1); `SettingsPanel.tsx` `advanced` branch'i beş paneli (`NotificationsPanel`/`AutonomyPanel`/`AutoTitlePanel`/`McpPanel`/`DiagnosticsPanel`) yeni `AdvSection` (alt-başlık + ayraç) sarmalı içinde dikey istifler; tek "Kaydet" hepsini kaydeder. ✅ `tsc` temiz; Chrome canlı doğrulandı (rail tek "Gelişmiş", ekran 5 bölüm).
 
 ### 2026-06-17 — Tema tutarlılık denetimi (yeni özellikler sonrası)
 Yeni gelen özellikler (Ajanlar/Artifactlar/Sırlar görünümleri, sessions sidebar bölme) tema açısından denetlendi; tespit edilen tutarsızlıklar giderildi (`go build`/`vet` + `tsc -b` temiz; Chrome canlı doğrulandı):
