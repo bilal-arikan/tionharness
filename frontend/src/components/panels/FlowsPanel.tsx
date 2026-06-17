@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api'
+import { Markdown } from '../markdown/Markdown'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../../types'
 
 interface Props {
@@ -456,7 +457,11 @@ export function FlowsPanel({ agents, onError }: Props) {
                         <div className="mb-1 text-xs text-[var(--color-text-dim)]">
                           {i + 1}. [{t.type}] {t.title}
                         </div>
-                        <div className="whitespace-pre-wrap">{t.output}</div>
+                        {t.type === 'branch' ? (
+                          <div className="whitespace-pre-wrap">{t.output}</div>
+                        ) : (
+                          <Markdown>{t.output}</Markdown>
+                        )}
                       </li>
                     ))}
                   </ol>
