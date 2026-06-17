@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -191,7 +192,26 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	}
 	output, steps, err := s.rt.invokeTraced(ctx, agent, sc.Prompt, true) // scheduled = autonomous
 	if err != nil {
+		// Surface the failure inside the schedule thread itself, not just in the
+		// delivery status/logs — otherwise the user opens the session and sees
+		// their prompt with no reply and no clue what went wrong. Persist the
+		// error as an assistant turn so the chat reads the failure inline.
+		if _, addErr := s.db.AddMessage(ctx, db.Message{
+			SessionID: session.ID,
+			AgentID:   sc.AgentID,
+			Role:      "assistant",
+			Text:      "⚠️ Zamanlanmış prompt çalıştırılamadı:\n\n" + err.Error(),
+			Steps:     encodeSteps(steps),
+		}); addErr != nil {
+			s.logger.Warn("schedule: failed to record error reply", "schedule", sc.ID, "error", addErr)
+		}
 		return session.ID, err
+	}
+	// A successful provider call that yields no text still leaves the thread
+	// looking unanswered; make the empty turn explicit so it never reads as a
+	// silent no-reply.
+	if strings.TrimSpace(output) == "" {
+		output = "ℹ️ Ajan bu zamanlanmış prompt için boş yanıt döndürdü."
 	}
 	// Stamp the reply with the agent id (so its avatar/identity renders) and its
 	// activity trace (so tool/thinking steps show like a normal chat turn).
