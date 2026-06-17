@@ -2,6 +2,48 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
 
+## Faz SM — Ajan Self-Management Araçları ✅ (2026-06-17)
+
+**İstek:** Ajan, sohbet esnasında SwarmGo'nun kendisini yönetebilsin — yeni ajan/flow/
+schedule/artifact oluştur-sil-düzenle, hafızaya ekle, logları oku. (Built-in in-process
+tool olarak; MCP/REST katmanı **değil** — tek binary felsefesi + bedava workspace izolasyonu.)
+
+**Temel İlke — "kim oluşturdu" tag sistemi:** Ajan yalnızca **bir ajan tarafından
+oluşturulmuş** kaynakları silebilir/düzenleyebilir; kullanıcının elle yaptıklarına dokunamaz.
+- `db.Agent`/`db.Flow`/`db.Schedule`'a yeni `CreatedBy string` alanı (`omitempty`, geriye
+  uyumlu — eski JSON'da yok = boş). `Artifact` ve `KnowledgeSource` zaten `AgentID` taşıyor.
+- `CreatedBy == ""` → kullanıcı/sistem (korumalı). `CreatedBy != ""` → ajan-oluşturma
+  (değer = oluşturan ajan ID). Guard hatası: "created by the user and cannot be edited…".
+
+**Araçlar (16 yeni, `internal/tools/`):**
+- `builtin_agentmgmt.go` — `create_agent` / `update_agent` / `delete_agent` / `list_agents`
+  (delete kendini reddeder; create heartbeat'li ajanın worker'ını anında başlatır).
+- `builtin_flowmgmt.go` — `create_flow` / `update_flow` / `delete_flow` / `list_flows`
+  (graph JSON doğrulaması).
+- `builtin_schedulemgmt.go` — `create_schedule` / `update_schedule` / `delete_schedule` /
+  `list_schedules` (her değişimde `Scheduler.Reload` → cron anında etkili).
+- `builtin_artifactmgmt.go` — `delete_artifact` / `list_artifacts` (create/update zaten
+  per-turn sink ile var).
+- `builtin_memory_add.go` — `memory_add` (document/reflection; ajanın kendi belleğine yazar).
+- `builtin_logs.go` — `read_logs` (logbuf ring buffer'dan, level/q filtresi).
+
+**Wiring:** Kimlik `buildRegistry(ctx, agent)`'ten gelir (`agent.ID`) — context bridge yok.
+`Runtime`'a `logs *logbuf.Buffer` + `reloadSched` callback (`SetScheduleReloader`, manager
+`sched.Reload`'u bağlar) eklendi. `NewRuntime`/`NewManager` imzaları + `main.go` güncellendi.
+
+**Gate:** Self-management paketi native kataloğu **19 → 35**'e çıkarır (~+2000 tok/tur), ve
+ajanın workspace'i değiştirmesine izin verir → **varsayılan KAPALI**, `SWARMGO_ENABLE_SELFMANAGE=1`
+ile açılır (shell gate deseni; `Tunables.SelfManageEnabled`). Per-agent allowlist + workspace
+denylist yine geçerli.
+
+**Test:** `builtin_selfmanage_test.go` (provenance damgalama, user-created reddi, self-delete
+reddi, schedule reload çağrısı, flow graph doğrulama, memory_add, artifact guard) ✅.
+**Canlı smoke** (`/api/workspace-tools`): gate açık → 35 araç/16 self-manage; kapalı → 19/0
+doğrulandı. `go build`/`vet`/`test ./...` yeşil.
+
+**Kalan (v2):** Settings UI toggle (şu an env-var, shell ile aynı), UI'da "ajan oluşturdu"
+rozeti, `request_confirmation` ile riskli işlemlere onay gate'i.
+
 ## Ara özellik — Workspace Şablonları (Templates) ✅ (2026-06-17)
 
 **İstek:** Yeni workspace'ler boş tek-ajan yerine, belirli bir iş türüne (araştırma,

@@ -106,6 +106,36 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		)
 	}
 
+	// Self-management suite (gated, off by default): let an agent create/edit/
+	// delete agents, flows and schedules, manage artifacts, add memories and read
+	// logs. Provenance is enforced — agents only touch agent-created entities.
+	// This roughly doubles the tool catalog, so it is opt-in per workspace.
+	if r.tun.SelfManageEnabled() {
+		builtins = append(builtins,
+			// Agents.
+			tools.NewCreateAgentTool(r.db, agent.ID, r.Start),
+			tools.NewUpdateAgentTool(r.db, agent.ID),
+			tools.NewDeleteAgentTool(r.db, agent.ID, r.Stop),
+			tools.NewListAgentsTool(r.db, agent.ID),
+			// Flows.
+			tools.NewCreateFlowTool(r.db, agent.ID),
+			tools.NewUpdateFlowTool(r.db, agent.ID),
+			tools.NewDeleteFlowTool(r.db, agent.ID),
+			tools.NewListFlowsTool(r.db, agent.ID),
+			// Schedules (routines).
+			tools.NewCreateScheduleTool(r.db, agent.ID, r.reloadSchedules),
+			tools.NewUpdateScheduleTool(r.db, agent.ID, r.reloadSchedules),
+			tools.NewDeleteScheduleTool(r.db, agent.ID, r.reloadSchedules),
+			tools.NewListSchedulesTool(r.db, agent.ID),
+			// Artifacts (create/update already provided via the per-turn sink).
+			tools.NewDeleteArtifactTool(r.db, agent.ID),
+			tools.NewListArtifactsTool(r.db, agent.ID),
+			// Memory (recall already provided above) + logs.
+			tools.NewMemoryAddTool(r.mem, agent.ID),
+			tools.NewReadLogsTool(r.logs),
+		)
+	}
+
 	reg := tools.NewRegistry(builtins...)
 
 	servers, err := r.db.ListEnabledMCPServers(ctx)

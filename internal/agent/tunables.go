@@ -19,6 +19,7 @@ type Tunables struct {
 	pauseAutonomy bool
 	titleModel    string
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
+	selfManage    bool // gates the self-management tool suite (off by default)
 	journalCap    int  // 0 → DefaultJournalCap
 	journalMaxLen int  // 0 → DefaultJournalMaxLen
 
@@ -74,6 +75,23 @@ func (t *Tunables) ShellEnabled() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.shellEnabled
+}
+
+// SetSelfManageEnabled toggles the self-management tool suite (create/edit/
+// delete agents, flows, schedules, artifacts; add memories; read logs). Off by
+// default: the suite roughly doubles the tool catalog (token cost per turn) and
+// lets agents alter the workspace, so it is opt-in per workspace settings.
+func (t *Tunables) SetSelfManageEnabled(enabled bool) {
+	t.mu.Lock()
+	t.selfManage = enabled
+	t.mu.Unlock()
+}
+
+// SelfManageEnabled reports whether the self-management tool suite may be offered.
+func (t *Tunables) SelfManageEnabled() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.selfManage
 }
 
 // SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent)

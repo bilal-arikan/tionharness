@@ -14,8 +14,12 @@ type Flow struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Graph       string `json:"graph"` // JSON
-	CreatedAt   int64  `json:"createdAt"`
-	UpdatedAt   int64  `json:"updatedAt"`
+	// CreatedBy is the ID of the agent that created this flow via a
+	// self-management tool ("" = created by the user). Agents may only
+	// edit/delete agent-created flows.
+	CreatedBy string `json:"createdBy,omitempty"`
+	CreatedAt int64  `json:"createdAt"`
+	UpdatedAt int64  `json:"updatedAt"`
 }
 
 // FlowRun is one execution instance of a flow. State is the restart-safe JSON

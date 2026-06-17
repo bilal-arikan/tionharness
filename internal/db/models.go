@@ -39,6 +39,11 @@ type Agent struct {
 	MCPEnabled   bool   `json:"mcpEnabled"`
 	AllowedTools string `json:"allowedTools"` // JSON array
 
+	// CreatedBy records the ID of the agent that created this agent through a
+	// self-management tool. Empty means it was created by the user (UI/API).
+	// Agents may only edit/delete entities that were created by an agent.
+	CreatedBy string `json:"createdBy,omitempty"`
+
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
 }

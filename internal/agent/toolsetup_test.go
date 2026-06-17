@@ -25,7 +25,7 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	t.Cleanup(func() { _ = database.Close() })
 	tun := NewTunables()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	rt := NewRuntime(database, providers.NewRegistry(""), tun, workDir, nil, nil, "", "", logger)
+	rt := NewRuntime(database, providers.NewRegistry(""), tun, workDir, nil, nil, "", "", nil, logger)
 	return rt, tun
 }
 

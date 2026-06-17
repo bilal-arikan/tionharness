@@ -20,6 +20,7 @@ import (
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/events"
+	"github.com/bilal/swarmgo/internal/logbuf"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/secrets"
 )
@@ -53,6 +54,7 @@ type Manager struct {
 	tun      *agent.Tunables
 	cipher   secrets.Cipher
 	bus      *events.Bus
+	logs     *logbuf.Buffer
 	logger   *slog.Logger
 
 	mu         sync.RWMutex
@@ -64,13 +66,14 @@ type Manager struct {
 // at least one default workspace exists. tun is the shared process-wide
 // tunables handed to every workspace runtime; bus is the process-wide event bus
 // each runtime publishes autonomous notifications to.
-func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunables, cipher secrets.Cipher, bus *events.Bus, logger *slog.Logger) (*Manager, error) {
+func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunables, cipher secrets.Cipher, bus *events.Bus, logs *logbuf.Buffer, logger *slog.Logger) (*Manager, error) {
 	m := &Manager{
 		rootDir:    rootDir,
 		registry:   registry,
 		tun:        tun,
 		cipher:     cipher,
 		bus:        bus,
+		logs:       logs,
 		logger:     logger,
 		workspaces: make(map[string]*Workspace),
 	}
@@ -120,12 +123,14 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 
-	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), vault, m.bus, meta.ID, meta.Name, m.logger)
+	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), vault, m.bus, meta.ID, meta.Name, m.logs, m.logger)
 	if err := rt.StartConfigured(context.Background()); err != nil {
 		m.logger.Warn("start configured agents failed", "workspace", meta.ID, "error", err)
 	}
 
 	sched := agent.NewScheduler(database, rt, m.logger)
+	// Let self-management schedule tools reload the cron scheduler immediately.
+	rt.SetScheduleReloader(sched.Reload)
 	if err := sched.Start(context.Background()); err != nil {
 		m.logger.Warn("start scheduler failed", "workspace", meta.ID, "error", err)
 	}

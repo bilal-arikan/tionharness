@@ -82,6 +82,15 @@ graph TD
   `SWARMGO_ENABLE_SHELL=1` ile açılır. Permission katmanı (P3) gelene dek opt-in kalır.
 - [ ] `web_fetch` → mevcut `http_get`'in üstüne içerik özetleme (henüz yok).
 
+### Faz SM — Self-Management Araçları ✅ (2026-06-17)
+- [x] Ajanın **kendi runtime'ını yönetmesi**: `create/update/delete/list_agent`,
+  `…_flow`, `…_schedule`, `delete/list_artifact`, `memory_add`, `read_logs` (16 araç,
+  `internal/tools/builtin_*mgmt.go` + `builtin_memory_add.go` + `builtin_logs.go`).
+- [x] **Provenance:** `db.Agent/Flow/Schedule.CreatedBy` (Artifact/Memory zaten `AgentID`);
+  ajan yalnız agent-created kaynakları siler/düzenler, kullanıcınınkine dokunamaz.
+- [x] **Varsayılan KAPALI** (`Tunables.SelfManageEnabled`); `SWARMGO_ENABLE_SELFMANAGE=1`
+  ile açılır (shell gate deseni — katalog 19→35, token maliyeti opt-in).
+
 > **Yürütme yolu:** Built-in araçlar **native** tool-use döngüsünde (`agent/toolloop.go`
 > + `tools.Registry`) çalışır. claude-cli yolu kendi döngüsünü `--mcp-config` ile sürdüğü
 > ve kendi dosya/bash araçları olduğu için bu built-in'leri kullanmaz. Sandbox kökü her

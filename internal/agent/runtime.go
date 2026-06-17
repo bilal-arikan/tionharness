@@ -12,6 +12,7 @@ import (
 
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/events"
+	"github.com/bilal/swarmgo/internal/logbuf"
 	"github.com/bilal/swarmgo/internal/memory"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/secrets"
@@ -38,6 +39,15 @@ type Runtime struct {
 	bus    *events.Bus
 	wsID   string
 	wsName string
+
+	// logs is the process-wide ring buffer of captured log entries, exposed to
+	// agents through the read_logs self-management tool. May be nil.
+	logs *logbuf.Buffer
+
+	// reloadSched re-reads schedules into the cron scheduler after an agent
+	// creates/edits/deletes one via a self-management tool. Wired by the
+	// workspace manager once the scheduler exists; nil before then (no-op).
+	reloadSched func(context.Context) error
 
 	mu      sync.Mutex
 	workers map[string]*worker
@@ -71,7 +81,7 @@ func (r *Runtime) SetInstructions(s string) { r.instructions.Store(&s) }
 // bus + wsID/wsName let autonomous events be published with workspace context
 // (bus may be nil, in which case publishing is a no-op). vault is this
 // workspace's secret store handed to the secret_* tools (may be nil).
-func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, vault *secrets.Vault, bus *events.Bus, wsID, wsName string, logger *slog.Logger) *Runtime {
+func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, vault *secrets.Vault, bus *events.Bus, wsID, wsName string, logs *logbuf.Buffer, logger *slog.Logger) *Runtime {
 	return &Runtime{
 		db:        database,
 		providers: registry,
@@ -82,9 +92,23 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		bus:       bus,
 		wsID:      wsID,
 		wsName:    wsName,
+		logs:      logs,
 		logger:    logger,
 		workers:   make(map[string]*worker),
 	}
+}
+
+// SetScheduleReloader wires the scheduler's Reload so self-management schedule
+// tools take effect immediately. Called by the workspace manager after the
+// scheduler is constructed.
+func (r *Runtime) SetScheduleReloader(fn func(context.Context) error) { r.reloadSched = fn }
+
+// reloadSchedules re-reads schedules into the cron scheduler (nil-safe).
+func (r *Runtime) reloadSchedules(ctx context.Context) error {
+	if r.reloadSched == nil {
+		return nil
+	}
+	return r.reloadSched(ctx)
 }
 
 // publish stamps the workspace identity onto an event and pushes it to the bus.

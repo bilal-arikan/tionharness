@@ -75,13 +75,21 @@ func main() {
 		tun.SetShellEnabled(true)
 		logger.Warn("built-in shell tool ENABLED (SWARMGO_ENABLE_SHELL); agents can run arbitrary commands in their workspace sandbox")
 	}
+	// The self-management suite (create/edit/delete agents, flows, schedules,
+	// artifacts; add memories; read logs) is off by default — it roughly doubles
+	// the tool catalog and lets agents alter the workspace. Opt in via
+	// SWARMGO_ENABLE_SELFMANAGE. Provenance still protects user-created entities.
+	if v := os.Getenv("SWARMGO_ENABLE_SELFMANAGE"); v == "1" || strings.EqualFold(v, "true") {
+		tun.SetSelfManageEnabled(true)
+		logger.Warn("self-management tools ENABLED (SWARMGO_ENABLE_SELFMANAGE); agents can create/edit/delete workspace entities")
+	}
 
 	// Process-wide event bus: autonomous runtimes publish notifications here and
 	// the API streams them to the UI over SSE.
 	bus := events.NewBus()
 
 	// Workspace manager: each workspace owns its own DB + agent runtime.
-	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, secret, bus, logger)
+	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, secret, bus, logs, logger)
 	if err != nil {
 		logger.Error("workspace manager init failed", "error", err)
 		os.Exit(1)

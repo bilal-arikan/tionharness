@@ -48,7 +48,11 @@ type Schedule struct {
 	LastDeliveryStatus string `json:"lastDeliveryStatus"`
 	LastDeliveryError  string `json:"lastDeliveryError"`
 	Enabled            bool   `json:"enabled"`
-	CreatedAt          int64  `json:"createdAt"`
+	// CreatedBy is the ID of the agent that created this schedule via a
+	// self-management tool ("" = created by the user). Agents may only
+	// edit/delete agent-created schedules.
+	CreatedBy string `json:"createdBy,omitempty"`
+	CreatedAt int64  `json:"createdAt"`
 }
 
 // Run statuses.
