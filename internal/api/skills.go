@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"os/exec"
+	"path/filepath"
 
 	"github.com/bilal/swarmgo/internal/skills"
 )
@@ -40,6 +42,24 @@ func (s *Server) handleGetSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, skillDetail{Skill: sk, Body: body})
+}
+
+// handleRevealSkill opens the skill's folder in the OS file manager on the
+// machine running the backend (local desktop app). Windows: Explorer.
+func (s *Server) handleRevealSkill(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	sk, ok := ws(r).Runtime.Skills().Get(slug)
+	if !ok || sk.Path == "" {
+		writeError(w, http.StatusNotFound, "skill not found")
+		return
+	}
+	dir := filepath.Dir(sk.Path)
+	if err := exec.CommandContext(r.Context(), "explorer.exe", dir).Start(); err != nil {
+		// explorer.exe returns a non-zero exit code even on success; only a
+		// failure to *start* the process is a real error.
+		s.logger.Warn("reveal skill folder failed", "slug", slug, "error", err)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"path": dir})
 }
 
 // handleReloadSkills re-scans the skill tiers (after the user edits files on

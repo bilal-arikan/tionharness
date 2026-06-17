@@ -271,6 +271,7 @@ func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/skills", s.handleListSkills)
 	mux.HandleFunc("POST /api/skills/reload", s.handleReloadSkills)
 	mux.HandleFunc("GET /api/skills/{slug}", s.handleGetSkill)
+	mux.HandleFunc("POST /api/skills/{slug}/reveal", s.handleRevealSkill)
 }
 
 // registerSettingsRoutes registers the global application settings document.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Sparkles } from 'lucide-react'
+import { FolderOpen, RefreshCw, Sparkles } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
@@ -60,6 +60,12 @@ export function SkillsPanel({ onError }: Props) {
       .then(setActive)
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoadingBody(false))
+  }, [activeSlug, onError])
+
+  // Open the selected skill's folder in the OS file manager (local desktop app).
+  const reveal = useCallback(() => {
+    if (!activeSlug) return
+    api.revealSkill(activeSlug).catch((e) => onError((e as Error).message))
   }, [activeSlug, onError])
 
   // Re-scan tiers on disk, then refresh the catalog + current selection.
@@ -166,6 +172,13 @@ export function SkillsPanel({ onError }: Props) {
                   </p>
                 )}
               </div>
+              <button
+                onClick={reveal}
+                title="Skill klasörünü dosya yöneticisinde aç"
+                className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+              >
+                <FolderOpen size={14} /> Klasörü aç
+              </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
               {active.body ? (
