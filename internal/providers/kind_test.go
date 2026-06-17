@@ -6,10 +6,10 @@ import "testing"
 // kinds in Order and carries the expected built-in trio.
 func TestCatalogDerivedFromKinds(t *testing.T) {
 	cat := Catalog()
-	if len(cat) != 3 {
-		t.Fatalf("catalog: want 3 entries, got %d", len(cat))
+	if len(cat) != 4 {
+		t.Fatalf("catalog: want 4 entries, got %d", len(cat))
 	}
-	wantOrder := []string{"claude-cli", "anthropic", "minimax"}
+	wantOrder := []string{"claude-cli", "anthropic", "minimax", "minimax-anthropic"}
 	for i, id := range wantOrder {
 		if cat[i].ID != id {
 			t.Errorf("catalog[%d].ID = %q, want %q", i, cat[i].ID, id)
@@ -33,6 +33,7 @@ func TestRegistryGetDispatchesByKind(t *testing.T) {
 	}{
 		{"anthropic", "anthropic"},
 		{"minimax", "minimax"},
+		{"minimax-anthropic", "minimax-anthropic"}, // reuses MiniMax key, Anthropic transport
 		{"claude-cli", "claude-cli"},
 		{"", "claude-cli"}, // empty normalizes to the CLI default
 	}

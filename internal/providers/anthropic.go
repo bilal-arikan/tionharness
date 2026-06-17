@@ -25,20 +25,50 @@ const (
 
 // Anthropic is a thin client for the Anthropic Messages API.
 // It avoids the official SDK to stay dependency-light and version-stable.
+//
+// The endpoint, default model and provider name are configurable (via
+// WithEndpoint) so the same client can drive any Anthropic-compatible host —
+// e.g. MiniMax's /anthropic/v1, which accepts the same request shape (tool-use,
+// thinking, cache_control, x-api-key auth) and returns native Messages format.
 type Anthropic struct {
-	apiKey string
-	client *http.Client
+	apiKey       string
+	client       *http.Client
+	baseURL      string // full /messages endpoint
+	defaultModel string // model applied when a request omits one
+	name         string // provider identity reported by Name()
 
 	oneMContext   bool // 1M-token context window beta
 	extendedCache bool // 1h extended prompt cache TTL beta
 }
 
-// NewAnthropic creates a client with the given API key.
+// NewAnthropic creates a client with the given API key, defaulting to the
+// official Anthropic endpoint and model.
 func NewAnthropic(apiKey string) *Anthropic {
 	return &Anthropic{
-		apiKey: apiKey,
-		client: &http.Client{Timeout: requestTimeoutSecs * time.Second},
+		apiKey:       apiKey,
+		client:       &http.Client{Timeout: requestTimeoutSecs * time.Second},
+		baseURL:      anthropicURL,
+		defaultModel: DefaultModel,
+		name:         "anthropic",
 	}
+}
+
+// WithEndpoint points the client at an Anthropic-compatible host. Empty
+// arguments keep the current value, so callers can override only what differs.
+// messagesURL is the full /messages endpoint (e.g.
+// "https://api.minimax.io/anthropic/v1/messages"). Returns the client for
+// chaining.
+func (a *Anthropic) WithEndpoint(name, messagesURL, defaultModel string) *Anthropic {
+	if name != "" {
+		a.name = name
+	}
+	if messagesURL != "" {
+		a.baseURL = messagesURL
+	}
+	if defaultModel != "" {
+		a.defaultModel = defaultModel
+	}
+	return a
 }
 
 // WithBetas enables optional Anthropic beta capabilities and returns the client
@@ -50,7 +80,7 @@ func (a *Anthropic) WithBetas(oneMContext, extendedCache bool) *Anthropic {
 }
 
 // Name implements Provider.
-func (a *Anthropic) Name() string { return "anthropic" }
+func (a *Anthropic) Name() string { return a.name }
 
 // anthropicReq mirrors the Messages API request body.
 type anthropicReq struct {
@@ -154,7 +184,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 
 	model := req.Model
 	if model == "" {
-		model = DefaultModel
+		model = a.defaultModel
 	}
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
@@ -180,7 +210,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	}
 
 	var parsed anthropicResp
-	status, raw, err := postJSON(ctx, a.client, "anthropic", anthropicURL, headers, body, &parsed)
+	status, raw, err := postJSON(ctx, a.client, a.name, a.baseURL, headers, body, &parsed)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +265,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 	}
 	model := req.Model
 	if model == "" {
-		model = DefaultModel
+		model = a.defaultModel
 	}
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
@@ -264,7 +294,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 	out := &Response{Model: model, StopReason: StopEndTurn}
 	parseErr := error(nil)
 
-	err := postSSE(ctx, a.client, "anthropic", anthropicURL, headers, body, func(event string, data []byte) bool {
+	err := postSSE(ctx, a.client, a.name, a.baseURL, headers, body, func(event string, data []byte) bool {
 		switch event {
 		case "message_start":
 			var ev struct {

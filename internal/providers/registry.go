@@ -113,6 +113,10 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 	case "minimax":
 		cfg.Key = r.minimaxKey
 		cfg.BaseURL = r.minimaxBaseURL
+	case "minimax-anthropic":
+		// Reuses the MiniMax key but the Anthropic-compatible endpoint; the kind
+		// supplies its own base URL (minimaxBaseURL is the OpenAI base, N/A here).
+		cfg.Key = r.minimaxKey
 	}
 	return cfg
 }
