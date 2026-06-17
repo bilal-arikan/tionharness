@@ -929,6 +929,30 @@ ajanı** var ve `@` ile başka ajanlar aynı sohbete dahil edilebiliyor.
   listede avatarlarıyla, mesajlar 🤖 Reminder / ST StepTest başlıklarıyla; `@Rem`+Enter →
   `@Reminder ` eklendi. `go build` + `tsc` temiz.
 
+#### Tamamlama — @mention farkındalığı + HEAD onarımı ✅ (2026-06-17)
+
+Önceki turda `chat_stream.go` çoklu-ajan döngüsü commit'lenmiş ama destekleyen
+tanımlar commit dışı kalmıştı → **HEAD derlenmiyordu** (commit `013a16a`,
+`adoptMentionedAgent`/`SetSessionAgent`/7-arg `composeTurnRequest` çağrılıyor ama
+tanımları yok). Eksik parçalar tamamlanıp commit'lendi (`7127aef`):
+
+- `db.SetSessionAgent` — oturumun varsayılan ajanını yeniden sabitler.
+- `adoptMentionedAgent` — **yeni** bir oturum `@X` ile açılınca tüm thread'i X'e
+  sabitler (`MessageCount==0` + mention varsa; yerleşik/mention'sız turlarda no-op,
+  zaten varsayılansa gereksiz yazma yok). `chat_stream.go:110`'dan çağrılır.
+- `composeTurnRequest(... turnAgents []db.Agent ...)` — her ajana **kendi adını** ve
+  `@mention` mekaniğini anlatan sistem-prompt notu (baştaki `@Ad` = ajanı çağırma,
+  dosya/skill değil); çok-ajanlı turda diğer adreslenmiş ajanları da bildirir
+  ("sırayla yanıtlıyorsunuz, başkası adına konuşma").
+- `chat.go` (blocking yol) tek-ajan dilimi `[]db.Agent{agent}` geçirir.
+- Testler: `chat_turn_test.go::TestResolveTurnAgents` (sıra/dedup/fallback) +
+  `TestAdoptMentionedAgent` (adopt/yerleşik-no-op/mention'sız/zaten-varsayılan).
+
+✅ `go build`/`vet`/`test` + frontend `tsc -b`/`vite build` yeşil. Frontend tarafı
+(Composer `@` menüsü, `useChatStream` mention→`agentIds[]` çözümü, çoklu balon) zaten
+commit'liydi. **Kalan:** iki gerçek ajan + canlı provider gerektiren uçtan uca
+çoklu-ajan Playwright testi (sunucu+frontend ayağa kalkmalı) sıraya alındı.
+
 ### Detaylı model etiketleri + ajan thinking seviyesi ✅ (2026-06-16)
 
 - [x] **Detaylı model isimleri** (`internal/providers/catalog.go`): her modele açıklayıcı `Label` (ör. "Claude Opus 4.8 — en yetenekli") + `Description` (tek satır not). `ProviderModelSelect` seçili modelin açıklamasını dropdown altında ipucu olarak gösterir.
