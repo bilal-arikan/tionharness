@@ -78,12 +78,40 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header with live avatar preview. */}
+      {/* Header with live avatar preview + actions (delete / save). */}
       <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-5 py-4">
         <AgentAvatar agent={preview} size={44} />
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">{name || 'Ajan'}</h2>
           <p className="text-xs text-[var(--color-text-dim)]">Ajan ayarları</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {savedAt > 0 && !saving && (
+            <span className="text-xs text-[var(--color-text-dim)]">Kaydedildi ✓</span>
+          )}
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+            >
+              {cancelLabel}
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
+            >
+              <Trash2 size={14} /> Sil
+            </button>
+          )}
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          </button>
         </div>
       </div>
 
@@ -240,35 +268,6 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         </div>
 
         {err && <p className="text-xs text-[var(--color-danger)]">{err}</p>}
-      </div>
-
-      <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] px-5 py-3">
-        {onDelete && (
-          <button
-            onClick={onDelete}
-            className="mr-auto flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
-          >
-            <Trash2 size={14} /> Sil
-          </button>
-        )}
-        {savedAt > 0 && !saving && (
-          <span className={`text-xs text-[var(--color-text-dim)] ${onDelete ? '' : 'mr-auto'}`}>Kaydedildi ✓</span>
-        )}
-        {onCancel && (
-          <button
-            onClick={onCancel}
-            className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
-          >
-            {cancelLabel}
-          </button>
-        )}
-        <button
-          onClick={save}
-          disabled={saving}
-          className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-        >
-          {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
       </div>
     </div>
   )
