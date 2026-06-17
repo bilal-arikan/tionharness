@@ -94,22 +94,36 @@ func (s *Scheduler) syncNextRunLocked(ctx context.Context) {
 	}
 }
 
-// fire executes a schedule: run its task or deliver its prompt to the agent.
+// fire executes a schedule on its cron tick: it owns its own timeout context so
+// the run survives even if nothing else holds one.
 func (s *Scheduler) fire(scheduleID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), scheduleTimeout)
 	defer cancel()
+	_ = s.run(ctx, scheduleID, "schedule")
+}
 
+// RunNow fires a schedule immediately on demand (manual "Run" button), regardless
+// of whether it is enabled, and returns any execution error. The attempt's
+// outcome is persisted on the schedule (lastDeliveryStatus/error) just like a
+// cron tick, so the UI reflects it after a reload.
+func (s *Scheduler) RunNow(ctx context.Context, scheduleID string) error {
+	return s.run(ctx, scheduleID, "manual")
+}
+
+// run executes a schedule: run its task or deliver its prompt to the agent, then
+// record the outcome. trigger labels what initiated it (schedule | manual).
+func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 	sc, err := s.db.GetSchedule(ctx, scheduleID)
 	if err != nil {
 		s.logger.Warn("schedule fire: lookup failed", "schedule", scheduleID, "error", err)
-		return
+		return err
 	}
 
 	var fireErr error
 	var sessionID string
 	if sc.TaskID != "" {
 		// Task runs publish their own outcome event via RunTask.
-		_, fireErr = s.rt.RunTask(ctx, sc.TaskID, "schedule")
+		_, fireErr = s.rt.RunTask(ctx, sc.TaskID, trigger)
 	} else {
 		sessionID, fireErr = s.deliverPrompt(ctx, sc)
 		s.emitPromptDelivery(sc, sessionID, fireErr)
@@ -124,7 +138,8 @@ func (s *Scheduler) fire(scheduleID string) {
 
 	next := s.nextRun(scheduleID)
 	_ = s.db.SetScheduleDelivery(ctx, scheduleID, status, errText, next)
-	s.logger.Info("schedule fired", "schedule", scheduleID, "status", status)
+	s.logger.Info("schedule fired", "schedule", scheduleID, "status", status, "trigger", trigger)
+	return fireErr
 }
 
 // emitPromptDelivery publishes the outcome of a scheduled prompt: success

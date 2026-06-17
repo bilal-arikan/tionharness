@@ -39,6 +39,9 @@ export function Schedules({ agents, focusId, onError }: Props) {
   const [editCronExpr, setEditCronExpr] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
 
+  // Id of the schedule currently being run manually (disables its Run button).
+  const [runningId, setRunningId] = useState<string | null>(null)
+
   const reload = () =>
     api.listSchedules().then(setSchedules).catch((e) => onError(e.message))
 
@@ -122,6 +125,21 @@ export function Schedules({ agents, focusId, onError }: Props) {
       setEditId(null)
     } catch (e) {
       onError((e as Error).message)
+    }
+  }
+
+  const runNow = async (s: Schedule) => {
+    setRunningId(s.id)
+    try {
+      const updated = await api.runSchedule(s.id)
+      setSchedules((prev) => prev.map((x) => (x.id === s.id ? updated : x)))
+      if (updated.lastDeliveryStatus === 'failure') {
+        onError(`Çalıştırma başarısız: ${updated.lastDeliveryError || 'bilinmeyen hata'}`)
+      }
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setRunningId(null)
     }
   }
 
@@ -278,6 +296,14 @@ export function Schedules({ agents, focusId, onError }: Props) {
                 )}
               </div>
             </div>
+            <button
+              onClick={() => runNow(s)}
+              disabled={runningId === s.id}
+              className="text-[var(--color-text-dim)] hover:text-emerald-400 disabled:opacity-40"
+              title="Şimdi çalıştır"
+            >
+              {runningId === s.id ? '⏳' : '▶'}
+            </button>
             <button
               onClick={() => startEdit(s)}
               className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"

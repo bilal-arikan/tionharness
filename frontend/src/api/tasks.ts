@@ -55,6 +55,9 @@ export const taskApi = {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     }),
+  // Fire a schedule immediately ("Run" button), regardless of enabled state.
+  runSchedule: (id: string) =>
+    req<Schedule>(`/api/schedules/${id}/run`, { method: 'POST' }),
   deleteSchedule: (id: string) =>
     req<{ result: string }>(`/api/schedules/${id}`, { method: 'DELETE' }),
 }

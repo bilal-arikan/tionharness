@@ -147,6 +147,31 @@ func (s *Server) handleToggleSchedule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "enabled": req.Enabled})
 }
 
+// handleRunSchedule fires a schedule immediately ("Run" button), regardless of
+// its enabled state, and returns the updated row (carrying the delivery outcome).
+func (s *Server) handleRunSchedule(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+
+	if _, err := wsp.DB.GetSchedule(r.Context(), id); err != nil {
+		writeDBError(w, err, "schedule not found")
+		return
+	}
+	// Run synchronously like task "run now"; the attempt is recorded on the
+	// schedule even when it fails, so we always return the updated row.
+	runErr := wsp.Scheduler.RunNow(r.Context(), id)
+	sc, err := wsp.DB.GetSchedule(r.Context(), id)
+	if writeDBError(w, err, "schedule not found") {
+		return
+	}
+	if runErr != nil {
+		s.logger.Warn("schedule manual run failed", "id", id, "error", runErr)
+	} else {
+		s.logger.Info("schedule manual run", "id", id)
+	}
+	writeJSON(w, http.StatusOK, sc)
+}
+
 func (s *Server) handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)

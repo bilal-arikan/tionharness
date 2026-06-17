@@ -130,6 +130,8 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspaces", s.handleListWorkspaces)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
 	mux.HandleFunc("DELETE /api/workspaces/{id}", s.handleDeleteWorkspace)
+	// Workspace templates catalog (agents/flow blueprints for new workspaces).
+	mux.HandleFunc("GET /api/workspace-templates", s.handleListWorkspaceTemplates)
 	// Native folder picker (local desktop) for choosing a workspace data dir.
 	mux.HandleFunc("POST /api/pick-folder", s.handlePickFolder)
 
@@ -209,6 +211,7 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/schedules", s.handleCreateSchedule)
 	mux.HandleFunc("PUT /api/schedules/{id}", s.handleUpdateSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/toggle", s.handleToggleSchedule)
+	mux.HandleFunc("POST /api/schedules/{id}/run", s.handleRunSchedule)
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
 }
 
