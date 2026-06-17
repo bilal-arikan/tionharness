@@ -129,8 +129,6 @@ graph LR
 ### Araç & yetki katmanı
 - [ ] **B1** — Tool sözleşmesi v2: `ReadOnly()`/`ConcurrencySafe()`/`ValidateInput()` + `BaseTool` varsayılanları
 - [ ] **B4** — Paralel tool yürütme (read-only'leri `errgroup`) + büyük çıktı için disk-spill + referans
-- [ ] **B2** — İzin modeli (`allow/ask/deny`, arg-bazlı desen eşleme `Bash(git *)`) — `ask_user` altyapısını yeniden kullanır
-- [ ] **Faz P3** — Permission/onay modu (`auto`/`ask`/`read-only`); shell'i UI onayıyla aç
 - [ ] **Faz P4** — Hooks (`PreToolUse`/`PostToolUse`, subprocess JSON I/O)
 
 ### Bağlam, bellek, trace
@@ -180,6 +178,17 @@ graph LR
 - [ ] **CG-19 — Generic OpenAI-uyumlu custom endpoint** (minimax provider'ı genelleştir) + opsiyonel Gemini/Bedrock/DeepSeek. *(craft v0.7.4, v0.5.0)*
 - [ ] **CG-20 — Doküman araçları** (`markitdown`/`pdf-tool`/`xlsx-tool`) attachment işleme için. *(craft v0.6.0)*
 - [ ] **CG-21 — Messaging gateway** (Telegram/WhatsApp/Lark): response mode enum + subprocess izolasyon + **erişim kontrol** (güvenlik kritik). Not: Connectors fazı kapsam dışıydı. *(craft v0.8.10, v0.9.1)*
+
+---
+
+## En Sona Ertelenenler (en düşük öncelik)
+
+> Kullanıcı talebiyle (2026-06-17) bilinçli olarak en sona alındı. Diğer tüm backlog maddelerinden sonra ele alınacak.
+
+- [ ] **B2** — İzin modeli (`allow/ask/deny`, arg-bazlı desen eşleme `Bash(git *)`) — `ask_user` altyapısını yeniden kullanır
+- [ ] **Faz P3** — Permission/onay modu (`auto`/`ask`/`read-only`); shell'i UI onayıyla aç
+
+> Not: temel `PermissionMode` gate'i (`toolloop.go` `permGate`) zaten mevcut; bu maddeler arg-bazlı desen eşleme + UI onay akışı gibi gelişmiş katmanı kapsar.
 
 ---
 
