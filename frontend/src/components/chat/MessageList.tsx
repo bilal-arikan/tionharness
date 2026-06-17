@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Agent, Message } from '../../types'
 import { Markdown } from '../markdown/Markdown'
 import { TurnSteps, parseSteps } from './TurnSteps'
