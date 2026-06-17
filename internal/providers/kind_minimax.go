@@ -3,9 +3,9 @@ package providers
 import "fmt"
 
 // minimaxKind is the MiniMax (OpenAI-compatible Chat Completions) transport.
-// The underlying client works against any OpenAI-compatible endpoint via a
-// custom base URL, so this kind doubles as a generic OpenAI-style provider.
-// Text completion only — no tool-use (see minimax.go).
+// The underlying OpenAICompat client works against any OpenAI-compatible
+// endpoint via a custom base URL and now supports tool-use (OpenAI
+// tools/tool_calls), so MiniMax models can drive the native agentic loop.
 type minimaxKind struct{}
 
 func (minimaxKind) Manifest() Manifest {
