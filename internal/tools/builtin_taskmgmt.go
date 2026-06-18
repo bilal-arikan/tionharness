@@ -11,27 +11,20 @@ import (
 )
 
 // Task (kanban board) self-management tools let an agent read the board and
-// create, edit, move, run and delete tasks in its workspace — the basis for an
-// agent operating the board (e.g. picking up a todo task, running it, moving it
-// to done). Safety boundary: read/create/edit/move/run are allowed on ANY task
-// (that is the point — agents act on the user's board), but delete is restricted
-// to tasks the agent itself created (provenance via Task.CreatedBy), so an agent
-// can never throw away the user's work.
-
-// runTaskFn runs a task by id with a trigger label and returns the finished run.
-type runTaskFn func(ctx context.Context, taskID, trigger string) (db.Run, error)
+// create, edit, move and delete tasks in its workspace — so an agent can track
+// and update work as a passive status board (e.g. moving a task it finished to
+// "done"). The board never executes tasks; flows, schedules and agent sessions
+// do the work and reflect status here. Safety boundary: read/create/edit/move
+// are allowed on ANY task (agents act on the user's board), but delete is
+// restricted to tasks the agent itself created (provenance via Task.CreatedBy),
+// so an agent can never throw away the user's work.
 
 type taskDeps struct {
 	db      *db.DB
 	actorID string
-	run     runTaskFn
 }
 
-// taskRunTrigger labels agent-initiated task runs (autonomous → budget-gated in
-// RunTask, and distinguishable from "manual"/"schedule" in run history).
-const taskRunTrigger = "agent"
-
-// truncateForTool caps long task output so a tool result stays compact.
+// truncateForTool caps long text so a tool result stays compact.
 func truncateForTool(s string, max int) string {
 	if len(s) <= max {
 		return s
@@ -302,57 +295,6 @@ func (t MoveTaskTool) Call(ctx context.Context, input json.RawMessage) (string, 
 		return "", fmt.Errorf("move task: %w", err)
 	}
 	b, _ := json.Marshal(map[string]string{"id": in.ID, "boardState": in.BoardState, "action": "moved"})
-	return string(b), nil
-}
-
-// ---- run_task ----
-
-// RunTaskTool executes a task now (its owner agent, or its flow when flow-backed).
-type RunTaskTool struct{ d taskDeps }
-
-// NewRunTaskTool constructs run_task.
-func NewRunTaskTool(database *db.DB, actorID string, run runTaskFn) RunTaskTool {
-	return RunTaskTool{d: taskDeps{db: database, actorID: actorID, run: run}}
-}
-
-func (RunTaskTool) Def() providers.ToolDef {
-	return providers.ToolDef{
-		Name: "run_task",
-		Description: "Run a task now: its owner agent executes the prompt, or — when the task is flow-backed — its flow runs. Records a run on the board and returns the status and (truncated) output. Allowed on any task.",
-		InputSchema: json.RawMessage(`{
-			"type":"object",
-			"properties":{"id":{"type":"string","description":"The task id (see list_tasks)"}},
-			"required":["id"],
-			"additionalProperties":false
-		}`),
-	}
-}
-
-func (t RunTaskTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
-	var in struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
-	}
-	in.ID = strings.TrimSpace(in.ID)
-	if in.ID == "" {
-		return "", fmt.Errorf("id is required")
-	}
-	if t.d.run == nil {
-		return "", fmt.Errorf("run_task is not wired in this context")
-	}
-	run, err := t.d.run(ctx, in.ID, taskRunTrigger)
-	if err != nil {
-		return "", fmt.Errorf("run task: %w", err)
-	}
-	b, _ := json.Marshal(map[string]string{
-		"id":     in.ID,
-		"runId":  run.ID,
-		"status": run.Status,
-		"output": truncateForTool(run.Output, 2000),
-		"error":  truncateForTool(run.Error, 500),
-	})
 	return string(b), nil
 }
 

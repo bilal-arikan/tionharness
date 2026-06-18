@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -37,10 +36,11 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req.Title = strings.TrimSpace(req.Title)
 	req.Prompt = strings.TrimSpace(req.Prompt)
-	// On the board, a task is created from a prompt alone; the title is
-	// auto-generated when omitted. Require at least one of the two.
-	if req.Title == "" && req.Prompt == "" {
-		writeError(w, http.StatusBadRequest, "prompt or title is required")
+	req.Description = strings.TrimSpace(req.Description)
+	// On the board, a task is created from a description (or prompt); the title is
+	// auto-generated when omitted. Require at least one source of content.
+	if req.Title == "" && req.Description == "" && req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "title, description or prompt is required")
 		return
 	}
 	if req.BoardState != "" && !db.ValidBoardState(req.BoardState) {
@@ -50,7 +50,12 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	title := req.Title
 	if title == "" {
-		gen, err := ws(r).Runtime.TitleFor(ctx, req.OwnerAgentID, req.Prompt)
+		// Generate the title from the description (board) or prompt (legacy/agents).
+		source := req.Description
+		if source == "" {
+			source = req.Prompt
+		}
+		gen, err := ws(r).Runtime.TitleFor(ctx, req.OwnerAgentID, source)
 		if err != nil {
 			s.logger.Warn("task title generation degraded", "error", err)
 		}
@@ -166,32 +171,4 @@ func (s *Server) handleGenerateTaskTitle(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
-}
-
-// handleRunTask executes a task immediately ("run now") with its owner agent.
-func (s *Server) handleRunTask(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	wsp := ws(r)
-
-	run, err := wsp.Runtime.RunTask(r.Context(), id, "manual")
-	if errors.Is(err, db.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "task not found")
-		return
-	} else if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, run)
-}
-
-// handleListTaskRuns returns the run history for a task.
-func (s *Server) handleListTaskRuns(w http.ResponseWriter, r *http.Request) {
-	runs, err := ws(r).DB.ListRuns(r.Context(), r.PathValue("id"))
-	if writeDBError(w, err, "") {
-		return
-	}
-	if runs == nil {
-		runs = []db.Run{}
-	}
-	writeJSON(w, http.StatusOK, runs)
 }

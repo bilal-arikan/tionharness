@@ -66,15 +66,17 @@ graph LR
 - [x] `internal/agent/scheduler.go`: `robfig/cron` (workspace başına)
 - [x] UI: Task board + Schedules ekranı
 - **Çıktı:** Zamanlanmış görev/prompt teslimi. ✅
-- **Kanban iyileştirme turu (2026-06-17):** ajan avatarları, karttan cron'a bağlama,
-  sağ detay/düzenleme paneli (aksiyonlar panele taşındı), **flow-backed task** (göreve
-  `flowId`; çalıştırınca akış koşar), **ajan görev tool ailesi** (`builtin_taskmgmt.go`:
-  list/create/update/move/run/delete_task). İlk dördü commit'li; flow-backed + tool ailesi
-  commit beklemede (smart-surge oturumuyla iç içe). Detay: `05-ILERLEME.md`.
-- [ ] **Görev dispatcher'ı (bekliyor):** `todo` kolonundaki, sahibi olan görevi ajanın
-  heartbeat tick'inde otomatik claim edip (`in_progress`'e taşı) `RunTask` ile koşması.
-  Tüm yapı taşları hazır (heartbeat, `RunTask`, `list_tasks`/`run_task`, flow-backed);
-  kalan: `runHeartbeat` içinde tara→claim→çalıştır döngüsü + `EnableDispatch` ayarı (vars. kapalı).
+- **Kanban iyileştirme turu (2026-06-17):** ajan avatarları, sağ detay/düzenleme paneli
+  (sürükle-genişlet), ajan görev tool ailesi (`builtin_taskmgmt.go`). Detay: `05-ILERLEME.md`.
+- **⚠️ Pivot — Pasif durum panosu (2026-06-18):** pano artık **iş çalıştırmaz**, sadece
+  durum yansıtır; iş flow/schedule/agent oturumunda yapılır. Karttan çalıştırma, cron bağlama,
+  geçmiş, prompt kaldırıldı; oluşturma **açıklama** ile (başlık otomatik), Ajan/Flow opsiyonel
+  bilgi etiketi. Backend temizliği: `run_task` agent tool + schedule↔task (karttan-cron) bağı
+  **silindi**; ajan görev tool ailesi 5 araca indi (list/create/update/move/delete). Yetim run yolu
+  da temizlendi: `RunTask`/`RunTaskStream`/`runTaskFlow` + `/run`·`/run-stream`·`/runs` uçları +
+  ölü DB metotları silindi (`db.Run` + `ListRunningRuns` korundu — activity/executions feed). Detay: `05-ILERLEME.md`.
+- [~] **Görev dispatcher'ı:** pivot sonrası **kapsam dışı** — pano pasif olduğundan
+  "ajan todo'yu otomatik koşar" akışı artık hedef değil. Otomasyon flow/schedule katmanında.
 
 ## Faz 6 — Memory ✅
 - [x] `internal/memory`: doküman + journal + reflection

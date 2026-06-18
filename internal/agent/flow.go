@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/orchestration"
 )
 
@@ -118,7 +119,43 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 	}
 	run, runErr := r.RunFlow(ctx, flowID, input, autonomous, obs)
 	sessionID := r.recordFlowSessionTurn(ctx, flow, run, input, runErr)
+	// Autonomous (background) runs raise a desktop notification deep-linking to
+	// the run's transcript in the executions feed. Interactive runs are skipped:
+	// the caller is already watching the stream.
+	if autonomous && sessionID != "" {
+		r.emitFlowDelivery(flow, run, sessionID, runErr)
+	}
 	return run, sessionID, runErr
+}
+
+// emitFlowDelivery publishes the outcome of an autonomous flow run as a desktop
+// notification that deep-links to the run's transcript in the executions feed
+// (Session.Kind "flow"), so clicking opens the per-node transcript inline.
+func (r *Runtime) emitFlowDelivery(flow db.Flow, run db.FlowRun, sessionID string, runErr error) {
+	target := map[string]string{"view": "executions", "sessionId": sessionID}
+	if runErr != nil || run.Status == db.FlowFailure {
+		body := ""
+		if runErr != nil {
+			body = notifyLine(runErr.Error(), 200)
+		} else if run.Error != "" {
+			body = notifyLine(run.Error, 200)
+		}
+		r.publish(events.Event{
+			Type:   "flow",
+			Level:  "error",
+			Title:  "🔀 Akış başarısız — " + flow.Name,
+			Body:   body,
+			Target: target,
+		})
+		return
+	}
+	r.publish(events.Event{
+		Type:   "flow",
+		Level:  "success",
+		Title:  "🔀 Akış tamamlandı — " + flow.Name,
+		Body:   notifyLine(run.Output, 120),
+		Target: target,
+	})
 }
 
 // recordFlowSessionTurn appends the input (user turn) and the run transcript

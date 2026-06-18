@@ -7,6 +7,7 @@ import {
   Heart,
   Activity,
   RefreshCw,
+  Copy,
   type LucideIcon,
 } from 'lucide-react'
 import type { Agent, Execution, Message } from '../../types'
@@ -22,6 +23,10 @@ interface Props {
   onOpenArtifact?: (id: string) => void
   // Jump to the Flows screen on this flow's run history (flow executions only).
   onOpenFlowRun?: (flowId: string) => void
+  // Deep-link: pre-select this execution (sessionId) on mount/route change.
+  focusId?: string | null
+  // Report the active selection up so the URL hash stays in sync.
+  onSelectExecution?: (sessionId: string) => void
 }
 
 // Per-kind display metadata: every execution path funnels into a Session tagged
@@ -50,6 +55,12 @@ function kindMeta(kind: string) {
   return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
 }
 
+// shortId trims a session id to a compact, recognisable suffix for list rows
+// (the full id is shown — and copyable — in the detail header).
+function shortId(id: string) {
+  return id.length > 8 ? id.slice(-8) : id
+}
+
 // StatusPill shows a finished run's pass/fail outcome (task/flow kinds).
 function StatusPill({ status }: { status: string }) {
   if (status !== 'success' && status !== 'failure') return null
@@ -72,14 +83,29 @@ function StatusPill({ status }: { status: string }) {
 // ExecutionsPanel is the unified activity feed: a single list of every execution
 // across chat / task / flow / schedule / heartbeat (each backed by a Session),
 // with live status, plus a read-only transcript viewer for the selected one.
-export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, onOpenFlowRun }: Props) {
+export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, onOpenFlowRun, focusId, onSelectExecution }: Props) {
   const [items, setItems] = useState<Execution[]>([])
   const [filter, setFilter] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(focusId ?? null)
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const selectedRef = useRef<string | null>(null)
   selectedRef.current = selectedId
+
+  // Select an execution and mirror it to the URL (deep-link aware).
+  const select = useCallback(
+    (sessionId: string) => {
+      setSelectedId(sessionId)
+      onSelectExecution?.(sessionId)
+    },
+    [onSelectExecution],
+  )
+
+  // Honor an incoming deep-link (schedule/flow notification click): switch the
+  // selection to the routed run when focusId changes.
+  useEffect(() => {
+    if (focusId) setSelectedId(focusId)
+  }, [focusId])
 
   const load = useCallback(
     (kind: string) => {
@@ -162,7 +188,7 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
             return (
               <button
                 key={it.sessionId}
-                onClick={() => setSelectedId(it.sessionId)}
+                onClick={() => select(it.sessionId)}
                 className={`mb-0.5 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
                   isActive
                     ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
@@ -202,6 +228,9 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
                     {it.agentName && <span>· {it.agentName}</span>}
                     <span>· {relativeTime(it.updatedAt)}</span>
                   </span>
+                  <span className="font-mono text-[10px] text-[var(--color-text-dim)] opacity-60">
+                    #{shortId(it.sessionId)}
+                  </span>
                 </span>
                 {!it.running && <StatusPill status={it.lastStatus ?? ''} />}
               </button>
@@ -231,6 +260,14 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
                 · {kindMeta(selected.kind).label}
                 {selected.agentName ? ` · ${selected.agentName}` : ''}
               </span>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(selected.sessionId).catch(() => {})}
+                title={`Kimliği kopyala: ${selected.sessionId}`}
+                className="flex items-center gap-1 rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              >
+                <Copy size={10} /> #{shortId(selected.sessionId)}
+              </button>
               {selected.running && (
                 <span className="ml-1 text-[11px] font-medium text-[var(--color-success)]">çalışıyor…</span>
               )}

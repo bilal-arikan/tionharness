@@ -38,7 +38,6 @@ export interface Run {
 export interface Schedule {
   id: string
   agentId: string
-  taskId: string
   cronExpr: string
   prompt: string
   nextRunAt: number

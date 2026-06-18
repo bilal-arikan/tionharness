@@ -16,7 +16,6 @@ erDiagram
     agents ||--o{ tasks : "sahip/atanan"
     agents ||--o{ schedules : "tetikler"
     tasks ||--o{ runs : "uretir"
-    schedules ||--o{ runs : "tetikler"
     agents ||--o{ knowledge_sources : "hafiza"
     agents ||--o{ agent_usage : "kullanim"
     flows ||--o{ flow_runs : "uretir"
@@ -91,7 +90,6 @@ erDiagram
     schedules {
         text id PK
         text agent_id FK
-        text task_id FK
         text cron_expr
         text prompt
         int  next_run_at
@@ -175,7 +173,7 @@ erDiagram
 | `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`); **`agent_id`** = turu üreten ajan (çok-ajanlı oturumda mesaj başına ajan) |
 | `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — bütçe guardrail'i için |
 | `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar. **`flow_id`** dolu ise görev "flow-backed" — çalıştırılınca ajana prompt yerine o orchestration akışı koşar. **`created_by`** = görevi oluşturan ajan ("" = kullanıcı; ajan yalnız kendi oluşturduğunu silebilir) |
-| `schedules` | Cron zamanlama; bağlı görev (`task_id`) **veya** doğrudan `prompt`; sonraki/son çalışma + teslim durumu; etkin mi |
+| `schedules` | Cron zamanlama; ajana doğrudan `prompt` teslimi (panodan bağımsız — görev çalıştırmaz); sonraki/son çalışma + teslim durumu; etkin mi |
 | `runs` | Yürütme kaydı: durum, tetikleyici (`trigger`), ajan çıktısı (`output`), hata |
 | `knowledge_sources` | Doküman, journal, reflection notları + embedding |
 | `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace) |

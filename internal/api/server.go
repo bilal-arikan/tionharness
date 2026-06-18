@@ -221,9 +221,6 @@ func (s *Server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/tasks/{id}", s.handleUpdateTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
 	mux.HandleFunc("POST /api/tasks/{id}/title", s.handleGenerateTaskTitle)
-	mux.HandleFunc("POST /api/tasks/{id}/run", s.handleRunTask)
-	mux.HandleFunc("POST /api/tasks/{id}/run-stream", s.handleRunTaskStream)
-	mux.HandleFunc("GET /api/tasks/{id}/runs", s.handleListTaskRuns)
 }
 
 // registerScheduleRoutes registers cron schedules.

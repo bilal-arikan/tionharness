@@ -86,14 +86,13 @@ graph TD
 - [x] Ajanın **kendi runtime'ını yönetmesi**: `create/update/delete/list_agent`,
   `…_flow`, `…_schedule`, `delete/list_artifact`, `memory_add`, `read_logs` (16 araç,
   `internal/tools/builtin_*mgmt.go` + `builtin_memory_add.go` + `builtin_logs.go`).
-- [x] **Kanban panosu yönetimi (2026-06-17, COMMITSİZ):** `list_tasks`, `create_task`
-  (prompt ve/veya `flowId`), `update_task`, `move_task`, `run_task`, `delete_task`
-  (`builtin_taskmgmt.go`, 6 araç) — ajanın panoyu okuyup işlemesinin temeli (görev
-  dispatcher'ı ön koşulu). `run_task`, `RunTask`'a `"agent"` trigger'ıyla bağlanır;
-  flow-backed görevler dahil.
+- [x] **Kanban panosu yönetimi (2026-06-18, COMMITSİZ):** `list_tasks`, `create_task`
+  (açıklama; başlık otomatik), `update_task`, `move_task`, `delete_task`
+  (`builtin_taskmgmt.go`, **5 araç** — pano pasif bir durum panosudur, **`run_task` YOK**:
+  ajan görevi çalıştırmaz, yalnız durumu okur/günceller; iş flow/schedule/agent oturumunda yapılır).
 - [x] **Provenance:** `db.Agent/Flow/Schedule/Task.CreatedBy` (Artifact/Memory zaten `AgentID`);
   ajan yalnız agent-created kaynakları siler, kullanıcınınkine dokunamaz. **Görevde sınır
-  gevşek:** oku/oluştur/düzenle/taşı/çalıştır her görevde serbest (ajan panoyu yönetsin
+  gevşek:** oku/oluştur/düzenle/taşı her görevde serbest (ajan panoyu yönetsin
   diye), yalnız **silme** provenance-kısıtlı.
 - [x] **Varsayılan KAPALI** (`Tunables.SelfManageEnabled`); `SWARMGO_ENABLE_SELFMANAGE=1`
   ile açılır (shell gate deseni — katalog 19→35, token maliyeti opt-in).

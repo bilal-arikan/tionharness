@@ -68,7 +68,6 @@ func (d *DB) UpdateSchedule(ctx context.Context, sc Schedule) error {
 	}
 	cur.AgentID = sc.AgentID
 	cur.CronExpr = sc.CronExpr
-	cur.TaskID = sc.TaskID
 	cur.Prompt = sc.Prompt
 	return d.persistScheduleLocked(cur)
 }

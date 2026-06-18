@@ -83,22 +83,6 @@ func (d *DB) MoveTask(ctx context.Context, id, boardState string) error {
 	return d.persistTaskLocked(t)
 }
 
-// SetTaskLastRun records the outcome of the latest run on the task.
-func (d *DB) SetTaskLastRun(ctx context.Context, taskID, runID, status string, boardState string) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	t, ok := d.tasks[taskID]
-	if !ok {
-		return ErrNotFound
-	}
-	t.LastRunID = runID
-	t.LastRunStatus = status
-	t.LastRunAt = now()
-	t.BoardState = boardState
-	t.UpdatedAt = now()
-	return d.persistTaskLocked(t)
-}
-
 // DeleteTask removes a task and all of its runs.
 func (d *DB) DeleteTask(ctx context.Context, id string) error {
 	d.mu.Lock()

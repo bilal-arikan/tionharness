@@ -5,6 +5,10 @@ import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { TaskDetailPanel } from './TaskDetailPanel'
 
+// Current unix time in seconds, matching the backend's task timestamps — used
+// for optimistic createdAt/updatedAt so cards sort consistently before reload.
+const nowSec = () => Math.floor(Date.now() / 1000)
+
 const COLUMNS: { key: BoardState; label: string }[] = [
   { key: 'todo', label: 'Yapılacak' },
   { key: 'in_progress', label: 'Devam Eden' },
@@ -12,13 +16,6 @@ const COLUMNS: { key: BoardState; label: string }[] = [
   { key: 'done', label: 'Bitti' },
   { key: 'failed', label: 'Başarısız' },
 ]
-
-const STATUS_COLOR: Record<string, string> = {
-  success: 'text-[var(--color-success)]',
-  failure: 'text-[var(--color-danger)]',
-  running: 'text-[var(--color-warning)]',
-  pending: 'text-[var(--color-text-dim)]',
-}
 
 interface Props {
   agents: Agent[]
@@ -28,7 +25,7 @@ interface Props {
 export function TaskBoard({ agents, onError }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
-  const [prompt, setPrompt] = useState('')
+  const [description, setDescription] = useState('')
   const [ownerAgentId, setOwnerAgentId] = useState('')
   const [newFlowId, setNewFlowId] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
@@ -44,31 +41,60 @@ export function TaskBoard({ agents, onError }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Tasks are created from a prompt alone (title auto-generated). A flow-backed
-  // task may instead carry just a flow + optional input prompt.
+  // A task is a passive board item: created from a description (title is
+  // auto-generated from it). Agent and flow are optional informational tags;
+  // the board itself never runs anything — flows/schedules/agent sessions read
+  // and update tasks from outside.
+  //
+  // The backend generates the title (an AI call) before returning, so we insert
+  // an optimistic card immediately (description as a placeholder title) and swap
+  // it for the persisted task on success — the click registers instantly.
   const createTask = async () => {
-    if (!prompt.trim() && !newFlowId) return
+    const desc = description.trim()
+    if (!desc) return
+    const tempId = `temp-${Date.now()}`
+    const owner = ownerAgentId
+    const flow = newFlowId
+    const optimistic: Task = {
+      id: tempId,
+      title: desc.length > 60 ? desc.slice(0, 60) + '…' : desc,
+      description: desc,
+      prompt: '',
+      ownerAgentId: owner,
+      flowId: flow,
+      boardState: 'todo',
+      dependencies: '[]',
+      lastRunId: '',
+      lastRunStatus: '',
+      lastRunAt: 0,
+      createdAt: nowSec(),
+      updatedAt: nowSec(),
+    }
+    setTasks((prev) => [optimistic, ...prev])
+    setDescription('')
+    setNewFlowId('')
     try {
-      const flow = flows.find((f) => f.id === newFlowId)
       const t = await api.createTask({
-        prompt: prompt.trim() || undefined,
-        // Give flow tasks a title up front since the prompt may be empty.
-        title: !prompt.trim() && flow ? `🔀 ${flow.name}` : undefined,
-        ownerAgentId: ownerAgentId || undefined,
-        flowId: newFlowId || undefined,
+        description: desc,
+        ownerAgentId: owner || undefined,
+        flowId: flow || undefined,
       })
-      setTasks((prev) => [t, ...prev])
-      setPrompt('')
-      setNewFlowId('')
+      // Swap the placeholder for the persisted task (real id + AI title).
+      setTasks((prev) => prev.map((x) => (x.id === tempId ? t : x)))
     } catch (e) {
+      setTasks((prev) => prev.filter((x) => x.id !== tempId))
       onError((e as Error).message)
     }
   }
 
   const move = async (task: Task, boardState: BoardState) => {
     if (task.boardState === boardState) return
+    // Bump updatedAt locally so the moved card sorts to the top of the column
+    // immediately (the backend bumps it too on persist).
     setTasks((prev) =>
-      prev.map((t) => (t.id === task.id ? { ...t, boardState } : t)),
+      prev.map((t) =>
+        t.id === task.id ? { ...t, boardState, updatedAt: nowSec() } : t,
+      ),
     )
     try {
       await api.updateTask(task.id, { boardState })
@@ -97,25 +123,25 @@ export function TaskBoard({ agents, onError }: Props) {
         {/* New task form */}
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
           <input
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') createTask()
             }}
-            placeholder="Ajana verilecek talimat (prompt) — başlık otomatik oluşturulur"
+            placeholder="Görev açıklaması — başlık otomatik oluşturulur"
             className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
           />
           <AgentPicker
             agents={agents}
             value={ownerAgentId}
             onChange={setOwnerAgentId}
-            placeholder="Ajan seç (opsiyonel)"
+            placeholder="Ajan (opsiyonel, bilgi)"
           />
           {flows.length > 0 && (
             <select
               value={newFlowId}
               onChange={(e) => setNewFlowId(e.target.value)}
-              title="Akış bağla (opsiyonel) — seçilirse görev çalıştırılınca akış koşar"
+              title="Akış etiketi (opsiyonel, bilgi amaçlı)"
               className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
             >
               <option value="">🔀 Akış yok</option>
@@ -137,7 +163,12 @@ export function TaskBoard({ agents, onError }: Props) {
         {/* Board */}
         <div className="flex flex-1 gap-3 overflow-x-auto p-4">
           {COLUMNS.map((col) => {
-            const colTasks = tasks.filter((t) => t.boardState === col.key)
+            // Within a column, most-recently-updated first — so a card that moves
+            // here (by drag or by an agent's move_task, both bump updatedAt) lands
+            // at the top.
+            const colTasks = tasks
+              .filter((t) => t.boardState === col.key)
+              .sort((a, b) => b.updatedAt - a.updatedAt)
             return (
               <div
                 key={col.key}
@@ -157,45 +188,53 @@ export function TaskBoard({ agents, onError }: Props) {
                   {colTasks.map((t) => {
                     const owner = agents.find((a) => a.id === t.ownerAgentId)
                     const flow = t.flowId ? flows.find((f) => f.id === t.flowId) : undefined
-                    // Card is a summary: click anywhere to open the detail drawer.
+                    // An optimistic (not-yet-persisted) card while its title is
+                    // being generated server-side; not clickable/draggable yet.
+                    const pending = t.id.startsWith('temp-')
+                    // Card is a summary: click anywhere to open the detail drawer;
+                    // clicking the already-selected card toggles it closed.
                     return (
                       <div
                         key={t.id}
-                        draggable
-                        onDragStart={() => setDragId(t.id)}
-                        onClick={() => setSelectedId(t.id)}
-                        className={`cursor-pointer rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)] active:cursor-grabbing ${
-                          selectedId === t.id
-                            ? 'border-[var(--color-accent)]'
-                            : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
+                        draggable={!pending}
+                        onDragStart={() => !pending && setDragId(t.id)}
+                        onClick={() => !pending && setSelectedId((cur) => (cur === t.id ? null : t.id))}
+                        className={`rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
+                          pending
+                            ? 'animate-pulse cursor-default border-[var(--color-border)] opacity-70'
+                            : `cursor-pointer hover:shadow-[var(--shadow-md)] active:cursor-grabbing ${
+                                selectedId === t.id
+                                  ? 'border-[var(--color-accent)]'
+                                  : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
+                              }`
                         }`}
                       >
                         <div className="font-medium">{t.title}</div>
-                        {t.flowId && (
-                          <div className="mt-1 inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
-                            🔀 {flow?.name ?? 'Akış'}
-                          </div>
+                        {pending ? (
+                          <div className="mt-1 text-[11px] text-[var(--color-text-dim)]">başlık üretiliyor…</div>
+                        ) : (
+                          t.description && (
+                            <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]">
+                              {t.description}
+                            </div>
+                          )
                         )}
-                        {t.prompt && (
-                          <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]">
-                            {t.prompt}
-                          </div>
-                        )}
-                        <div className="mt-2 flex items-center justify-between text-xs">
-                          <span className="flex items-center gap-1.5 text-[var(--color-text-dim)]">
-                            {owner ? (
-                              <>
+                        {/* Optional informational tags: owner agent + flow. */}
+                        {(owner || t.flowId) && (
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+                            {owner && (
+                              <span className="flex items-center gap-1.5">
                                 <AgentAvatar agent={owner} size={16} />
                                 <span className="truncate">{owner.name}</span>
-                              </>
-                            ) : (
-                              '—'
+                              </span>
                             )}
-                          </span>
-                          {t.lastRunStatus && (
-                            <span className={STATUS_COLOR[t.lastRunStatus] ?? ''}>● {t.lastRunStatus}</span>
-                          )}
-                        </div>
+                            {t.flowId && (
+                              <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
+                                🔀 {flow?.name ?? 'Akış'}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )
                   })}

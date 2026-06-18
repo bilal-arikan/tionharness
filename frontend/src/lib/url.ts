@@ -5,9 +5,9 @@
 // Scheme: #/w/{workspaceId}/{view}[/{entityId}]
 //   - workspaceId scopes the request to an isolated backend database.
 //   - view is one of the NavRail views.
-//   - entityId is meaningful per view: chat→sessionId, agents/memory→agentId,
-//     artifacts→artifactId, schedules→scheduleId, settings→category key. Other
-//     views ignore it.
+//   - entityId is meaningful per view: chat→sessionId, executions→sessionId,
+//     agents/memory→agentId, artifacts→artifactId, schedules→scheduleId,
+//     settings→category key. Other views ignore it.
 import type { View } from '../components/NavRail'
 
 const VIEWS: View[] = [
@@ -58,7 +58,7 @@ export function routeFromEvent(e: {
   if (!t || !isView(t.view)) return null
   const view = t.view
   let id: string | null = null
-  if (view === 'chat') id = t.sessionId ?? null
+  if (view === 'chat' || view === 'executions') id = t.sessionId ?? null
   else if (view === 'agents' || view === 'memory') id = t.agentId ?? null
   return { workspaceId: e.workspaceId ?? null, view, id }
 }
@@ -83,11 +83,14 @@ export function routeIdForView(
     artifactId: string | null
     scheduleId: string | null
     settingsCat: string | null
+    executionId: string | null
   },
 ): string | null {
   switch (view) {
     case 'chat':
       return state.sessionId
+    case 'executions':
+      return state.executionId
     case 'agents':
     case 'memory':
       return state.agentId

@@ -94,27 +94,3 @@ func TestUpdateTaskFlowValidation(t *testing.T) {
 	}
 }
 
-// TestRunTaskInvokesRunner verifies run_task calls the wired runner with the
-// agent trigger and surfaces the run status.
-func TestRunTaskInvokesRunner(t *testing.T) {
-	ctx := context.Background()
-	d := openTestDB(t)
-	tk, _ := d.CreateTask(ctx, db.Task{Title: "T", Prompt: "p"})
-
-	var gotTrigger string
-	runner := func(_ context.Context, id, trigger string) (db.Run, error) {
-		gotTrigger = trigger
-		return db.Run{ID: "run-1", TaskID: id, Status: db.RunSuccess, Output: "ok"}, nil
-	}
-	run := NewRunTaskTool(d, "actor-1", runner)
-	out, err := run.Call(ctx, json.RawMessage(`{"id":"`+tk.ID+`"}`))
-	if err != nil {
-		t.Fatalf("run_task: %v", err)
-	}
-	if gotTrigger != taskRunTrigger {
-		t.Fatalf("trigger = %q, want %q", gotTrigger, taskRunTrigger)
-	}
-	if !strings.Contains(out, db.RunSuccess) {
-		t.Fatalf("output missing status: %s", out)
-	}
-}
