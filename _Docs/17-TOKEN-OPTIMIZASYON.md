@@ -52,13 +52,21 @@ orijinali verir).
 - **Bayt kırpma:** `MaxBytes` aşılırsa baş (2/3) + son (1/3) korunarak ortaya `… [çıktı N bayt kırpıldı] …`;
   kesim **rune sınırında** yapılır (UTF-8 bozulmaz — Türkçe karakterler güvenli).
 - `Stats{BeforeBytes, AfterBytes, Applied}` + `Saved()` — log ve tasarruf ölçümü.
+- **Kalıcı tasarruf sayacı:** `Stats.Saved()` (Sistem A'nın kazandırdığı bayt) `compactToolResult` içinde
+  `db.AddCompactionSavings(agentID, bytes)` ile günlük usage rollup'una yazılır →
+  `Usage.CompactSavedBytes` (ajan+gün başına, `compactSavedBytes` JSON). LLM çağrısı/token sayaçlarından
+  **bağımsız** bir ölçer (maliyet etkisi yok). Henüz UI'da gösterilmiyor (Bütçe ekranı bağlama işi sonraya bırakıldı).
 
 ## Sistem B — `agent/compactor.go`
 
 - `compactToolResult(ctx, agent, toolName, input, res)` — A'yı uygular, sonra B eşiğini kontrol eder.
   `IsError` veya boş sonuçlar **hiç dokunulmadan** geçer.
-- `summarizeToolOutput(...)` — `guardedComplete` + `WithCallKind(ctx, KindCompact)`. Model: başlık-modeli
-  override → yoksa ajan modeli. **Niyet** = tool adı + (varsa) input özeti (`intentInputRunes=300`).
+- `summarizeToolOutput(...)` — `guardedComplete` + `WithCallKind(ctx, KindCompact)`.
+  **Model çözüm zinciri:** adanmış sıkıştırma modeli (`CompactModel`) → yoksa başlık modeli (`TitleModel`)
+  → yoksa ajanın kendi modeli. **Sağlayıcı her zaman ajanın sağlayıcısıdır** (`guardedComplete`
+  `r.providers.Get(agent.Provider)` ile çözer — ayrı seçilemez). `CompactModel` yalnızca bir model-id'dir;
+  o yüzden ajanın sağlayıcısıyla uyumlu, ucuz bir model (ör. `claude-haiku-4-5`) verilmelidir.
+  **Niyet** = tool adı + (varsa) input özeti (`intentInputRunes=300`).
   Sistem prompt: olguları (yol/kimlik/hata/sayı/sonuç) koru, uydurma yapma, sadece sonucu döndür.
 - Bütçeyi **gate'lemez** (autonomous=false) — titler/summary/reflect ile aynı politika; usage yine işlenir.
 - Yalnız **native döngüde** (Anthropic/MiniMax) etkilidir; claude-cli delegasyonu kendi döngüsünü sürdürür
@@ -75,10 +83,22 @@ orijinali verir).
 | `compactMaxBytes` | A bayt sınırı | `12288` | 0 (=default) – 262144 |
 | `compactLlmSummary` | B aç/kapa | `false` | — |
 | `compactLlmThreshold` | B eşik (bayt) | `8192` | 0 (=default) – 262144 |
+| `compactModel` | B model-id | `""` | trim'lenir; boş = TitleModel → ajan modeli |
 
 Canlı push: `api/server.go::applySettings` → `Tunables.SetToolCompaction(...)`. 0 değerleri Tunables
 getter'larında built-in default'a (`DefaultCompact*`) çevrilir. UI: **Ayarlar → Bağlam** içinde iki
 ayrı bölüm (`frontend/.../settings/appPanels.tsx` `ContextPanel`).
+
+## Harici araç tespiti (presence-only)
+
+Ayarlar → **Tanılama** ekranındaki "Kurulu mu kontrol et" butonu, bu cihazda isteğe bağlı harici
+token araçlarının (`rtk`, `sqz`) **kurulu olup olmadığını** gösterir.
+
+- Backend: `GET /api/external-tools` (`api/external_tools.go`) → `exec.LookPath` ile PATH'te arar.
+  **Araçları kurmaz, çalıştırmaz, değiştirmez** (Windows'ta PATHEXT'e saygılı). Dönüş: `[{name,desc,url,found,path}]`.
+- Frontend: `systemApi.externalTools()` + `DiagnosticsPanel` butonu; her araç için ✓ kurulu / — bulunamadı + repo linki.
+- Bu yalnızca **bilgilendirme**dir; SwarmGo bu araçları otomatik kullanmaz (Sistem A/B native'dir). Kullanıcı
+  isterse manuel entegrasyon için varlığı görür.
 
 ## Sınırlar / Notlar
 

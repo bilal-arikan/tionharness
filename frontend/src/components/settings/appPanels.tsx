@@ -2,10 +2,11 @@
 // categories (providers, commands, step kinds, workspace) live in their own
 // files; these are pure draft+setter forms.
 import { useState } from 'react'
-import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, type LucideIcon } from 'lucide-react'
-import type { AppSettings } from '../../types'
+import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, ScanSearch, type LucideIcon } from 'lucide-react'
+import type { AppSettings, ExternalToolStatus } from '../../types'
 import { THEME_PRESETS } from '../../lib/themePresets'
 import { NOTIFY_TYPES, mutedTypes, setTypeEnabled } from '../../lib/notifyPrefs'
+import { systemApi } from '../../api/system'
 import { Field, Toggle, inputCls, type AppSet } from './primitives'
 
 interface PanelProps {
@@ -181,6 +182,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
       <Toggle label="LLM intent-aware özet (Sistem B)" hint="Eşik üstü araç çıktılarını ucuz modelle özetler. Maliyetlidir; kullanım 'compact' türünde sayaca işlenir." checked={draft.compactLlmSummary} onChange={(v) => set('compactLlmSummary', v)} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Özet eşiği (bayt)" hint="Sistem A sonrası bu boyutu aşan çıktılar özetlenir."><input type="number" value={draft.compactLlmThreshold} onChange={(e) => set('compactLlmThreshold', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Özet modeli" hint="Sistem B'nin kullanacağı model. Boşsa: Başlık modeli → o da boşsa ajanın kendi modeli. Sağlayıcı her zaman ajanın sağlayıcısıdır. Ucuz bir model (ör. claude-haiku-4-5) önerilir."><input type="text" value={draft.compactModel} placeholder="boş = başlık modeli / ajan modeli" onChange={(e) => set('compactModel', e.target.value)} className={inputCls} /></Field>
       </div>
     </>
   )
@@ -260,15 +262,69 @@ export function ToolsPanel({ draft, set }: PanelProps) {
 }
 
 export function DiagnosticsPanel({ draft, set }: PanelProps) {
+  const [tools, setTools] = useState<ExternalToolStatus[] | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const checkTools = async () => {
+    setChecking(true)
+    setErr(null)
+    try {
+      setTools(await systemApi.externalTools())
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setChecking(false)
+    }
+  }
+
   return (
-    <Field label="Log seviyesi" hint="Yeniden başlatınca uygulanır.">
-      <select value={draft.logLevel} onChange={(e) => set('logLevel', e.target.value)} className={inputCls}>
-        <option value="debug">debug</option>
-        <option value="info">info</option>
-        <option value="warn">warn</option>
-        <option value="error">error</option>
-      </select>
-    </Field>
+    <>
+      <Field label="Log seviyesi" hint="Yeniden başlatınca uygulanır.">
+        <select value={draft.logLevel} onChange={(e) => set('logLevel', e.target.value)} className={inputCls}>
+          <option value="debug">debug</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+        </select>
+      </Field>
+
+      <SubHead icon={ScanSearch}>Harici token araçları</SubHead>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+        Bu cihazda isteğe bağlı token-optimizasyon araçlarının <span className="font-medium text-[var(--color-text)]">kurulu olup olmadığını</span> kontrol eder.
+        Yalnız PATH'te aranır — araçlar <span className="font-medium text-[var(--color-text)]">kurulmaz, çalıştırılmaz, değiştirilmez</span>.
+      </div>
+      <button
+        type="button"
+        onClick={checkTools}
+        disabled={checking}
+        className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] disabled:opacity-50"
+      >
+        <ScanSearch size={14} className="text-[var(--color-accent)]" />
+        {checking ? 'Kontrol ediliyor…' : 'Kurulu mu kontrol et'}
+      </button>
+      {err && <p className="text-xs text-[var(--color-warning)]">{err}</p>}
+      {tools && (
+        <div className="flex flex-col gap-1.5">
+          {tools.map((t) => (
+            <div key={t.name} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm">
+                  <code className="rounded bg-[var(--color-surface-2)] px-1 font-medium">{t.name}</code>
+                  {t.found ? (
+                    <span className="text-[var(--color-success)]">✓ kurulu</span>
+                  ) : (
+                    <span className="text-[var(--color-text-dim)]">— bulunamadı</span>
+                  )}
+                </div>
+                <div className="truncate text-xs text-[var(--color-text-dim)]">{t.found ? t.path : t.desc}</div>
+              </div>
+              <a href={t.url} target="_blank" rel="noreferrer" className="shrink-0 text-xs text-[var(--color-accent)] hover:underline">repo ↗</a>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 

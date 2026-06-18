@@ -54,6 +54,7 @@ export interface AppSettings {
   compactMaxBytes: number
   compactLlmSummary: boolean   // System B: LLM intent-aware summary (costs a call)
   compactLlmThreshold: number
+  compactModel: string         // System B model id; "" → title model, then agent's model
 
   defaultDailyCallLimit: number
   defaultDailyTokenLimit: number
@@ -105,6 +106,16 @@ export interface CatalogEntry {
   allowCustomModel: boolean
   available: boolean
   models: CatalogModel[]
+}
+
+// Detection result for an optional external token-optimization tool (rtk, sqz).
+// Presence-only: the backend looks the executable up on PATH, never runs it.
+export interface ExternalToolStatus {
+  name: string
+  desc: string
+  url: string
+  found: boolean
+  path?: string
 }
 
 // A built-in runtime prompt (summary/reflect/title), shown read-only in the
