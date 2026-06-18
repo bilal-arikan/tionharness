@@ -263,7 +263,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           />
         </Field>
 
-        <AgentSkillsSection selected={skills} onChange={setSkills} onError={setErr} />
+        <AgentSkillsSection selected={skills} onChange={setSkills} onError={setErr} agentId={agent.id} />
 
         <div className="border-t border-[var(--color-border)] pt-4">
           <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
