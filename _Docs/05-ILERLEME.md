@@ -27,8 +27,12 @@ provider hatası ve `RunTask`'taki başarısızlık hiç loglanmıyordu.
   heartbeat tüm yollar bedavaya kapsanır.
 - Test: `scheduler_test.go` `TestRun_LogsFailureAtErrorLevel` (capturingHandler ile
   Error-seviyeli kaydın varlığını doğrular) — regresyon koruması.
+- **Tamamlayıcı (commit `122ba2a`):** `agent/budget.go` `guardedComplete` — tool'suz
+  otonom çağrıların (reflect/summary/title) huni noktası. Provider resolve / `Complete`
+  hatası artık burada da `Warn` ile (agent/provider/model/callKind) loglanıyor;
+  `recordedComplete` desenini aynalar, sessiz yukarı-yayılma kapandı.
 
-✅ `go build ./...` + `go test ./internal/...` yeşil. Commit edildi (push edilmedi).
+✅ `go build ./...` + `go test ./internal/agent/` yeşil. Commit edildi (push edilmedi).
 
 ## Özel sağlayıcılar (data-instance) + `<think>` ayıklama ✅ (2026-06-17)
 
