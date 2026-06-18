@@ -3,7 +3,7 @@ import { Eye, Trash2 } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AVATAR_COLORS, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
-import { EmojiPicker } from './EmojiPicker'
+import { EmojiField } from '../common/EmojiField'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentToolsSection } from './AgentToolsSection'
 import { AgentSkillsSection } from './AgentSkillsSection'
@@ -41,7 +41,6 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
 
   const preview: Pick<Agent, 'id' | 'name' | 'avatar' | 'color'> = {
     id: agent.id,
@@ -136,31 +135,11 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         </Field>
 
         <Field label="Görsel (emoji)">
-          <div className="relative inline-block">
-            <button
-              type="button"
-              onClick={() => setEmojiPickerOpen((o) => !o)}
-              className="flex items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm hover:border-[var(--color-accent)]"
-              title="Emoji seç"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-lg leading-none">
-                {avatar || 'Aa'}
-              </span>
-              <span className="text-[var(--color-text-dim)]">
-                {avatar ? 'Emojiyi değiştir' : 'Emoji seç (varsayılan: baş harf)'}
-              </span>
-            </button>
-            {emojiPickerOpen && (
-              <EmojiPicker
-                value={avatar}
-                onSelect={(emoji) => {
-                  setAvatar(emoji)
-                  setEmojiPickerOpen(false)
-                }}
-                onClose={() => setEmojiPickerOpen(false)}
-              />
-            )}
-          </div>
+          <EmojiField
+            value={avatar}
+            onChange={setAvatar}
+            label={(v) => (v ? 'Emojiyi değiştir' : 'Emoji seç (varsayılan: baş harf)')}
+          />
         </Field>
 
         <Field label="Renk">
