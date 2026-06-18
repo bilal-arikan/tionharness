@@ -14,6 +14,22 @@ function parseDeps(raw: string): string[] {
   }
 }
 
+// Returns true if targetId is reachable from startId via the dependency graph
+// (i.e. adding startId as a dep of targetId would form a cycle).
+function hasCycle(startId: string, targetId: string, allTasks: Task[]): boolean {
+  const visited = new Set<string>()
+  const stack = [startId]
+  while (stack.length > 0) {
+    const cur = stack.pop()!
+    if (cur === targetId) return true
+    if (visited.has(cur)) continue
+    visited.add(cur)
+    const t = allTasks.find((x) => x.id === cur)
+    if (t) stack.push(...parseDeps(t.dependencies))
+  }
+  return false
+}
+
 interface Props {
   task: Task
   agents: Agent[]
@@ -55,7 +71,9 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
   const [retitling, setRetitling] = useState(false)
   // Drag-and-drop state for the dependency drop zone.
   const [isDragOver, setIsDragOver] = useState(false)
+  const [cycleWarning, setCycleWarning] = useState(false)
   const dropZoneRef = useRef<HTMLDivElement>(null)
+  const cycleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Reseed the form when the selected card changes (panel stays mounted).
   useEffect(() => {
@@ -127,6 +145,13 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
     const taskId = e.dataTransfer.getData('application/x-swarmgo-task')
     if (!taskId || taskId === task.id || depIds.includes(taskId)) return
     if (!tasks.find((t) => t.id === taskId)) return
+    // Detect cycle: would the dropped task eventually depend on this task?
+    if (hasCycle(taskId, task.id, tasks)) {
+      if (cycleTimerRef.current) clearTimeout(cycleTimerRef.current)
+      setCycleWarning(true)
+      cycleTimerRef.current = setTimeout(() => setCycleWarning(false), 3000)
+      return
+    }
     setDepIds((prev) => [...prev, taskId])
   }
 
@@ -216,11 +241,11 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
             onDragOver={(e) => {
               e.preventDefault()
               e.dataTransfer.dropEffect = 'link'
-              setIsDragOver(true)
+              if (!cycleWarning) setIsDragOver(true)
             }}
             onDragEnter={(e) => {
               e.preventDefault()
-              setIsDragOver(true)
+              if (!cycleWarning) setIsDragOver(true)
             }}
             onDragLeave={(e) => {
               if (!dropZoneRef.current?.contains(e.relatedTarget as Node)) {
@@ -229,12 +254,18 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
             }}
             onDrop={handleDepDrop}
             className={`flex min-h-[52px] items-center justify-center rounded border-2 border-dashed text-xs transition-colors select-none ${
-              isDragOver
+              cycleWarning
+                ? 'border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_8%,transparent)] text-[var(--color-danger)]'
+                : isDragOver
                 ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
                 : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
             }`}
           >
-            {isDragOver ? '✓ Bırak — bağımlılık olarak ekle' : '🔗 Kartı buraya sürükle'}
+            {cycleWarning
+              ? '🔄 Döngü — bu görev zaten sizi bekliyor'
+              : isDragOver
+              ? '✓ Bırak — bağımlılık olarak ekle'
+              : '🔗 Kartı buraya sürükle'}
           </div>
           {/* Dependency chips: click to navigate, × to remove. */}
           {depIds.length > 0 && (

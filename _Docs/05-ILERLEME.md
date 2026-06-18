@@ -157,6 +157,18 @@
 
 **Doğrulama:** `tsc --noEmit` yeşil. Playwright canlı: "Sürükle Bırak Testi" kartından drop zone'a drag simüle edildi → `⏳ Sürükle Bırak Testi` chip'i ve `×` butonu detay panelinde göründü ✅.
 
+## Dependency döngüsü uyarısı ✅ (2026-06-18)
+
+**İstek:** A→B→C zincirinde C'ye A'yı sürükleyince döngü engellenip uyarı gösterilsin.
+
+**Değişiklikler (`frontend/src/components/panels/TaskDetailPanel.tsx`):**
+- `hasCycle(startId, targetId, allTasks)` helper: DFS ile bağımlılık grafiğini dolaşarak döngü varlığını kontrol eder (visited set ile sonsuz döngü korumalı).
+- `cycleWarning: boolean` state + `cycleTimerRef` — drop sonrası 3 saniye kırmızı uyarı, sonra otomatik sıfır.
+- `handleDepDrop`: ekleme öncesi `hasCycle` çağrılır; döngü varsa uyarı gösterilip erken dönülür.
+- Drop zone: üç durum — normal (kesik çizgi), hover (accent mavi), cycle (kırmızı `🔄 Döngü — bu görev zaten sizi bekliyor`).
+
+**Doğrulama:** `tsc --noEmit` yeşil. Playwright evaluate: `Temel → İkinci → Üçüncü` zincirinde "Üçüncü iş" kartı "Temel görev" detay paneline drop edildi → zone metni `🔄 Döngü — bu görev zaten sizi bekliyor`, `color-danger` class true, bağımlılık chip'i eklenmedi ✅.
+
 ---
 
 ## Board sütun düzenleme (BoardColumnEditor) ✅ (2026-06-18)
