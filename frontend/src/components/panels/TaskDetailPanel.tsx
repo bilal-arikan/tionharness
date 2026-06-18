@@ -274,14 +274,21 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
                 const dep = tasks.find((t) => t.id === depId)
                 if (!dep) return null
                 const done = dep.boardState === 'done'
+                const depColColor = columns.find((c) => c.key === dep.boardState)?.color ?? null
+                const chipStyle = !done && depColColor
+                  ? { backgroundColor: depColColor + '22', color: depColColor }
+                  : undefined
                 return (
                   <span
                     key={depId}
                     className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] ${
                       done
                         ? 'bg-green-500/15 text-green-400'
+                        : depColColor
+                        ? ''
                         : 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
                     }`}
+                    style={chipStyle}
                   >
                     <button
                       onClick={() => onSelectTask?.(depId)}
