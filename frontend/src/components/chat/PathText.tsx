@@ -1,4 +1,4 @@
-import { splitPaths } from '../../lib/paths'
+import { displayPath, splitPaths } from '../../lib/paths'
 
 interface Props {
   text: string
@@ -34,7 +34,7 @@ export function PathText({ text, onOpenFile }: Props) {
             }}
             className="cursor-pointer break-all font-mono text-[0.92em] text-[var(--color-accent)] underline decoration-dotted underline-offset-2 hover:opacity-80"
           >
-            {seg.text}
+            {displayPath(seg.text)}
           </span>
         ) : (
           <span key={i}>{seg.text}</span>

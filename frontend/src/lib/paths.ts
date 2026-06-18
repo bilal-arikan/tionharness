@@ -42,9 +42,20 @@ export function splitPaths(text: string): PathSegment[] {
   return out
 }
 
+/** Replace the current user's home directory prefix with ~ for display. */
+const WIN_HOME_RE = /^[A-Za-z]:\\Users\\[^\\]+\\/i
+const POSIX_HOME_RE = /^\/(?:home|Users)\/[^/]+\//
+
+export function displayPath(p: string): string {
+  if (WIN_HOME_RE.test(p)) return '~\\' + p.replace(WIN_HOME_RE, '')
+  if (POSIX_HOME_RE.test(p)) return '~/' + p.replace(POSIX_HOME_RE, '')
+  return p
+}
+
 /** A short, tail-end display form for long paths (…/dir/file.ext). */
 export function shortPath(p: string, segments = 3): string {
-  const parts = p.split(/[\\/]/).filter(Boolean)
-  if (parts.length <= segments) return p
+  const tilde = displayPath(p)
+  const parts = tilde.split(/[\\/]/).filter(Boolean)
+  if (parts.length <= segments) return tilde
   return '…/' + parts.slice(-segments).join('/')
 }
