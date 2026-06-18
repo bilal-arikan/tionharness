@@ -9,8 +9,8 @@ export default defineConfig({
     proxy: {
       // 127.0.0.1 (not "localhost") so the proxy hits the IPv4 address the Go
       // backend binds — on Windows "localhost" resolves to ::1 first and 502s.
-      '/api': 'http://127.0.0.1:8090',
-      '/health': 'http://127.0.0.1:8090',
+      '/api': 'http://127.0.0.1:8080',
+      '/health': 'http://127.0.0.1:8080',
     },
   },
   build: {

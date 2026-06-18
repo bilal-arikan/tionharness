@@ -769,6 +769,7 @@ export default function App() {
           onCopyPath={copySessionPath}
           onRevealFolder={revealSession}
           onGenerateTitle={regenerateSessionTitle}
+          onRename={renameSession}
           onSummarize={(_, kind) => chat.summarize(kind as 'memory' | 'board' | 'flows' | 'tools')}
           onDeleteSession={deleteSession}
         />
