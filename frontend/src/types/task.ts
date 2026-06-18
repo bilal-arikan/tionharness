@@ -48,4 +48,7 @@ export interface Schedule {
   lastDeliveryError: string
   enabled: boolean
   createdAt: number
+  // One-shot fields (user-created single-run schedules).
+  oneShot?: boolean
+  fireAt?: number
 }
