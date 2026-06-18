@@ -1,0 +1,28 @@
+/* Dark-themed overrides for React Flow's default Controls + MiniMap chrome so
+   the zoom/fit buttons and minimap blend with SwarmGo's surfaces. */
+
+.react-flow__controls {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--color-bg);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__minimap {
+  background: #0b0e14;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}

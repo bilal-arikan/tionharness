@@ -1,4 +1,5 @@
 import type { Agent, FlowNode, FlowNodeType } from '../../types'
+import { AgentPicker } from '../agents/AgentPicker'
 
 interface Props {
   node: FlowNode
@@ -69,29 +70,23 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
 
       {node.type === 'agent' && (
         <>
-          <label className="block">
+          <div className="block">
             <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Ajan</span>
-            <select
+            <AgentPicker
+              agents={agents}
               value={node.agentId ?? ''}
-              onChange={(e) => onPatch({ agentId: e.target.value })}
-              className={input}
-            >
-              <option value="">— ajan seç —</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(id) => onPatch({ agentId: id })}
+              placeholder="— ajan seç —"
+            />
+          </div>
           <label className="block">
             <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Prompt</span>
             <textarea
               value={node.prompt ?? ''}
               onChange={(e) => onPatch({ prompt: e.target.value })}
               placeholder="{{input}}, {{last}}, {{node.<id>}}"
-              rows={4}
-              className={input}
+              rows={10}
+              className={`${input} min-h-48 resize-y font-mono`}
             />
           </label>
         </>

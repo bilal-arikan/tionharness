@@ -20,10 +20,10 @@ interface Props {
   onError: (msg: string) => void
 }
 
-const NODE_TYPES: { value: FlowNodeType; label: string }[] = [
-  { value: 'agent', label: 'Ajan' },
-  { value: 'branch', label: 'Dallanma' },
-  { value: 'parallel', label: 'Paralel' },
+const NODE_TYPES: { value: FlowNodeType; label: string; icon: string }[] = [
+  { value: 'agent', label: 'Ajan', icon: '🤖' },
+  { value: 'branch', label: 'Dallanma', icon: '🔀' },
+  { value: 'parallel', label: 'Paralel', icon: '⚡' },
 ]
 
 // FlowsPanel is the visual protocol builder: pick a flow, edit it on a drag-and-
@@ -269,32 +269,45 @@ export function FlowsPanel({ agents, onError }: Props) {
         </div>
       ) : (
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Meta toolbar */}
+          {/* Meta toolbar: name + description side by side */}
           <div className="flex items-center gap-2 border-b border-[var(--color-border)] p-3">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium outline-none"
+              placeholder="Akış adı"
+              className="w-56 flex-shrink-0 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium outline-none"
             />
-            {NODE_TYPES.map((t) => (
-              <button
-                key={t.value}
-                onClick={() => addNode(t.value)}
-                className="rounded-lg bg-[var(--color-surface-2)] px-3 py-1.5 text-xs hover:opacity-90"
-              >
-                + {t.label}
-              </button>
-            ))}
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Açıklama — bu akış ne yapar? (isteğe bağlı)"
+              className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-dim)] outline-none"
+            />
             <button
               onClick={saveFlow}
-              className="rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+              className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
             >
               Kaydet
             </button>
           </div>
 
-          {/* Canvas + inspector */}
+          {/* Node palette + canvas + inspector */}
           <div className="flex min-h-0 flex-1">
+            <div className="w-32 flex-shrink-0 space-y-2 overflow-y-auto border-r border-[var(--color-border)] p-2">
+              <div className="px-1 text-xs font-semibold text-[var(--color-text-dim)]">
+                Node ekle
+              </div>
+              {NODE_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => addNode(t.value)}
+                  className="flex w-full items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-left text-xs hover:border-[var(--color-accent)]"
+                >
+                  <span className="text-base">{t.icon}</span>
+                  <span>{t.label}</span>
+                </button>
+              ))}
+            </div>
             <div className="min-w-0 flex-1">
               <FlowCanvas
                 agents={agents}
@@ -325,15 +338,8 @@ export function FlowsPanel({ agents, onError }: Props) {
             </div>
           </div>
 
-          {/* Description + run */}
+          {/* Run */}
           <div className="max-h-[40%] overflow-y-auto border-t border-[var(--color-border)] p-4">
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Açıklama — bu akış ne yapar? (isteğe bağlı)"
-              rows={1}
-              className="mb-3 w-full rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-dim)] outline-none"
-            />
             <h3 className="mb-2 text-sm font-semibold">Çalıştır</h3>
             <div className="flex gap-2">
               <textarea

@@ -14,6 +14,7 @@ import {
   type OnSelectionChangeParams,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import './flowCanvas.css'
 import type { Agent } from '../../types'
 import type { FlowRFNode } from '../../lib/flowGraph'
 import { AgentsContext, chromeFor } from './nodeStyles'
@@ -92,6 +93,8 @@ export function FlowCanvas({
           <MiniMap
             pannable
             zoomable
+            bgColor="#0b0e14"
+            maskColor="rgba(0, 0, 0, 0.6)"
             nodeColor={(n) => chromeFor(n.type ?? 'agent').accent}
           />
         </ReactFlow>
