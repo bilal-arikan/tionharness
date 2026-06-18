@@ -11,6 +11,7 @@ import { FLOW_TEMPLATES, type FlowTemplate } from '../../lib/flowTemplates'
 import {
   graphToReactFlow,
   reactFlowToGraph,
+  autoLayout,
   blankNode,
   nextNodeId,
   type FlowRFNode,
@@ -188,20 +189,52 @@ export function FlowsPanel({ agents, onError }: Props) {
     }
   }
 
-  const makeStart = () => {
-    if (!selectedNodeId) return
-    setStart(selectedNodeId)
-    setNodes((prev) =>
-      prev.map((rn) => ({ ...rn, data: { ...rn.data, isStart: rn.id === selectedNodeId } })),
-    )
+  // Node actions are id-based so both the inspector (on the selected node) and
+  // each node's NodeToolbar can invoke them.
+  const makeStartNode = (id: string) => {
+    setStart(id)
+    setNodes((prev) => prev.map((rn) => ({ ...rn, data: { ...rn.data, isStart: rn.id === id } })))
   }
 
+  const deleteNode = (id: string) => {
+    setNodes((prev) => prev.filter((rn) => rn.id !== id))
+    setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id))
+    if (start === id) setStart('')
+    if (selectedNodeId === id) setSelectedNodeId(null)
+  }
+
+  // duplicateNode clones a node (new id, offset position, not start) without its
+  // connections — the copy starts unwired.
+  const duplicateNode = (id: string) => {
+    setNodes((prev) => {
+      const src = prev.find((rn) => rn.id === id)
+      if (!src) return prev
+      const newId = nextNodeId(prev.map((rn) => rn.data.node))
+      const copy: FlowRFNode = {
+        id: newId,
+        type: src.type,
+        position: { x: src.position.x + 40, y: src.position.y + 40 },
+        data: { node: { ...src.data.node, id: newId }, isStart: false },
+      }
+      return [...prev, copy]
+    })
+  }
+
+  const makeStart = () => {
+    if (selectedNodeId) makeStartNode(selectedNodeId)
+  }
   const deleteSelected = () => {
-    if (!selectedNodeId) return
-    setNodes((prev) => prev.filter((rn) => rn.id !== selectedNodeId))
-    setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId))
-    if (start === selectedNodeId) setStart('')
-    setSelectedNodeId(null)
+    if (selectedNodeId) deleteNode(selectedNodeId)
+  }
+
+  // autoArrange re-lays-out the graph with the layered grid algorithm and
+  // applies the computed positions to the canvas nodes.
+  const autoArrange = () => {
+    const graph = reactFlowToGraph(nodes, edges, start)
+    const pos = autoLayout(graph)
+    setNodes((prev) =>
+      prev.map((rn) => (pos[rn.id] ? { ...rn, position: { x: pos[rn.id].x, y: pos[rn.id].y } } : rn)),
+    )
   }
 
   const saveFlow = async () => {
@@ -473,6 +506,12 @@ export function FlowsPanel({ agents, onError }: Props) {
                 onEdgesChange={onEdgesChange}
                 setEdges={setEdges}
                 onSelect={setSelectedNodeId}
+                onAutoLayout={autoArrange}
+                nodeActions={{
+                  onMakeStart: makeStartNode,
+                  onDuplicate: duplicateNode,
+                  onDelete: deleteNode,
+                }}
               />
             </div>
             <div className="w-72 flex-shrink-0 overflow-y-auto border-l border-[var(--color-border)] p-3">

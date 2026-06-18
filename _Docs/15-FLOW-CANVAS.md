@@ -127,6 +127,23 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   sınıfı taşımaz (5 node/4 edge render); instantiate sonrası API'de 5 node + `animated=true` +
   agent node'lar atanmış. (Not: backend değişmedi — yalnız frontend; `tsc -b` + `vite build` yeşil.)
 
+## Canvas etkileşim özellikleri (2026-06-18)
+
+- **Ok uçları:** tüm kenarlara `markerEnd: ArrowClosed` (yön netliği) — `FlowCanvas.styledEdges`
+  + `defaultEdgeOptions`.
+- **Canvas araç çubuğu** (`FlowCanvas` içinde `<Panel position="top-right">` → `CanvasTools`,
+  `useReactFlow` ile): **⊕ Ortala** (`fitView({padding,duration})`) ve **▦ Otomatik diz**
+  (parent `onAutoLayout` → `autoArrange`: `reactFlowToGraph`→`autoLayout`→`setNodes`, sonra
+  yeniden ortala). Read-only önizlemede "Otomatik diz" gizli.
+- **NodeToolbar** (seçili node üstünde, `NodeShell` + `NodeActionsContext`): **▶ Başlangıç yap**
+  (başlangıç değilse), **⧉ Çoğalt** (yeni id + offset, bağlantısız kopya), **✕ Sil**. Aksiyonlar
+  id-bazlı (`makeStartNode`/`duplicateNode`/`deleteNode`), `FlowsPanel`'den
+  `nodeActions` prop'u ile sağlanır; inspector aynı çekirdeği kullanır. Read-only'de provider null
+  → toolbar yok.
+- **Doğrulama (Playwright):** edge `marker-end=url(#…arrowclosed…)`; panelde "⊕ Ortala"/"▦ Otomatik
+  diz"; node seçilince toolbar "▶ Başlangıç ⧉ Çoğalt ✕ Sil"; Çoğalt 4→5 node; Otomatik diz
+  pozisyonları ızgaraya dizdi (0,0 → 280,0 → 280,140).
+
 ## Notlar / sıradaki adımlar
 
 - SwarmClaw'daki gibi şablonları **kategorilere** ayırma / arama eklenebilir.

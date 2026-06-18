@@ -11,7 +11,7 @@ export function AgentNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const agent = useAgent(node.agentId)
   const isEnd = useIsEndNode(id)
   return (
-    <NodeShell type="agent" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
+    <NodeShell id={id} type="agent" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
       <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="flex items-center gap-1.5 text-xs font-medium">
         {agent ? (

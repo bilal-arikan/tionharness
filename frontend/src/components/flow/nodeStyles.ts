@@ -19,6 +19,16 @@ export const END_TINT = 'color-mix(in srgb, #3b82f6 14%, var(--color-surface))'
 // without threading agents through every node's data.
 export const AgentsContext = createContext<Agent[]>([])
 
+// NodeActions are the per-node toolbar actions, provided by the editor and
+// invoked from a node's NodeToolbar. Null in read-only previews.
+export interface NodeActions {
+  onMakeStart: (id: string) => void
+  onDuplicate: (id: string) => void
+  onDelete: (id: string) => void
+}
+
+export const NodeActionsContext = createContext<NodeActions | null>(null)
+
 export function useAgent(agentId?: string): Agent | undefined {
   const agents = useContext(AgentsContext)
   return agents.find((a) => a.id === agentId)

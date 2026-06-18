@@ -11,7 +11,7 @@ export function ParallelNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const count = (node.parallel ?? []).length
   const isEnd = useIsEndNode(id)
   return (
-    <NodeShell type="parallel" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
+    <NodeShell id={id} type="parallel" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
       <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="text-[11px] text-[var(--color-text-dim)]">
         {count} eşzamanlı dal · join →

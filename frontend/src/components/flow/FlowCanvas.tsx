@@ -5,6 +5,9 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
+  MarkerType,
+  useReactFlow,
   addEdge,
   type Connection,
   type Edge,
@@ -17,10 +20,39 @@ import '@xyflow/react/dist/style.css'
 import './flowCanvas.css'
 import type { Agent } from '../../types'
 import type { FlowRFNode } from '../../lib/flowGraph'
-import { AgentsContext, chromeFor } from './nodeStyles'
+import { AgentsContext, NodeActionsContext, chromeFor, type NodeActions } from './nodeStyles'
 import { AgentNode } from './AgentNode'
 import { BranchNode } from './BranchNode'
 import { ParallelNode } from './ParallelNode'
+
+// CanvasTools is a small in-canvas toolbar (top-right Panel). It lives inside
+// ReactFlowProvider so it can use the programmatic viewport API. "Otomatik diz"
+// asks the parent to re-layout, then re-centers once positions settle.
+function CanvasTools({ onAutoLayout }: { onAutoLayout?: () => void }) {
+  const { fitView } = useReactFlow()
+  const center = () => fitView({ padding: 0.2, duration: 300 })
+  return (
+    <Panel position="top-right">
+      <div className="flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-xs shadow-lg">
+        <button onClick={center} className="rounded px-2 py-1 hover:bg-[var(--color-surface-2)]" title="Akışı ortala">
+          ⊕ Ortala
+        </button>
+        {onAutoLayout && (
+          <button
+            onClick={() => {
+              onAutoLayout()
+              setTimeout(center, 60)
+            }}
+            className="rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
+            title="Düğümleri otomatik diz"
+          >
+            ▦ Otomatik diz
+          </button>
+        )}
+      </div>
+    </Panel>
+  )
+}
 
 const nodeTypes: NodeTypes = {
   agent: AgentNode,
@@ -44,6 +76,10 @@ interface Props {
   // Read-only preview (template gallery): disable dragging, connecting and
   // selection so the graph can only be viewed, not edited.
   readOnly?: boolean
+  // Re-layout the graph (parent recomputes node positions). Hidden if absent.
+  onAutoLayout?: () => void
+  // Per-node toolbar actions (make-start / duplicate / delete). Null = none.
+  nodeActions?: NodeActions | null
 }
 
 // FlowCanvas renders the interactive node graph. Connecting from a source
@@ -60,11 +96,19 @@ export function FlowCanvas({
   setEdges,
   onSelect,
   readOnly = false,
+  onAutoLayout,
+  nodeActions = null,
 }: Props) {
-  // Apply the chosen path style + animation to every edge for display. These
-  // are cosmetic flow-level presentation hints; the labels/handles are kept.
+  // Apply the chosen path style + animation + arrowhead to every edge for
+  // display. These are cosmetic flow-level presentation hints; labels are kept.
   const styledEdges = useMemo(
-    () => edges.map((e) => ({ ...e, type: edgeStyle, animated })),
+    () =>
+      edges.map((e) => ({
+        ...e,
+        type: edgeStyle,
+        animated,
+        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+      })),
     [edges, edgeStyle, animated],
   )
   const onConnect = useCallback(
@@ -93,12 +137,17 @@ export function FlowCanvas({
 
   return (
     <AgentsContext.Provider value={agents}>
+      <NodeActionsContext.Provider value={nodeActions}>
       <ReactFlowProvider>
         <ReactFlow
           nodes={nodes}
           edges={styledEdges}
           nodeTypes={nodeTypes}
-          defaultEdgeOptions={{ type: edgeStyle, animated }}
+          defaultEdgeOptions={{
+            type: edgeStyle,
+            animated,
+            markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+          }}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={readOnly ? undefined : onConnect}
@@ -111,6 +160,7 @@ export function FlowCanvas({
         >
           <Background />
           <Controls />
+          <CanvasTools onAutoLayout={readOnly ? undefined : onAutoLayout} />
           <MiniMap
             pannable
             zoomable
@@ -120,6 +170,7 @@ export function FlowCanvas({
           />
         </ReactFlow>
       </ReactFlowProvider>
+      </NodeActionsContext.Provider>
     </AgentsContext.Provider>
   )
 }
