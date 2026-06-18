@@ -103,6 +103,14 @@
 
 **Doğrulama:** `go build`/`vet`/`test ./internal/api,db,agent` + frontend `tsc --noEmit` yeşil. **API E2E** (izole 8090 instance, gerçek backend): session oluştur → `PUT goal` → `/info` goal round-trip ✅, "goal" filler `/info`'da görünür ✅, boş body ile temizleme ✅. **Playwright canlı test** (5174 → 8090): detay panelinde Hedef bölümü render ✅, boş-durum CTA → textarea → metin yaz → Kaydet → metin paragraf olarak görünür + "Hedefi düzenle"ye döner ✅, ↻ sonrası bağlam metresinde "Hedef: ~107" bucket'ı çıkar ✅ (enjeksiyon kanıtı).
 
+### Hedef "tamamlandı" durumu ✅ (2026-06-18, ek dilim)
+
+Claude `/goal` **checker yakınsaması**: hedef tamamlanınca metni korunur ama **context enjeksiyonu durur** (achieved → artık turları yönlendirmez); yeniden açılabilir.
+
+- **Backend:** `db.Session.GoalDone` (+`SetSessionGoal(ctx,id,goal,done)` — boş hedefte done daima false). `goalContextBlock(goal, done)` ve `heartbeatGoalBlock(goal, done)` done iken `""` döner → ne chat ne heartbeat turuna enjekte edilir. `PUT /api/sessions/{id}/goal` artık `{goal, done}` alır (boş hedefte done normalize edilir); `/info` `goalDone` döner ve done iken "Hedef" filler'ı düşer.
+- **Frontend:** `SessionInfo.goalDone`, `api.setSessionGoal(id, goal, done=false)`. `SessionDetailPanel`: tamamlanmış hedef üstü-çizili + yeşil tonlu kutu + "Tamamlandı · enjekte edilmiyor" rozeti; **Tamamlandı / Yeniden aç** toggle butonu (`CheckCircle2`/`Circle`); hedef metni düzenlemek hedefi **yeniden açar** (done=false). Toggle sonrası metre yenilenir (bucket düşer/geri gelir).
+- **Doğrulama:** `go build`/`test` + `tsc` yeşil. **API E2E** (izole 8091 instance): aktif→enjekte ✅, tamamlandı→enjekte yok + metin korunur ✅, yeniden aç→enjekte ✅, boş hedefte done=false'a normalize ✅. UI: tsc + temel akışın Playwright ile zaten doğrulanmış render/handler kalıbı (toggle aynı kalıp).
+
 ---
 
 ## Sağlayıcı/model seçimi + emoji picker standardizasyonu ✅ (2026-06-18)

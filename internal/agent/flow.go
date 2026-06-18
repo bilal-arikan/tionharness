@@ -119,10 +119,12 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 	}
 	run, runErr := r.RunFlow(ctx, flowID, input, autonomous, obs)
 	sessionID := r.recordFlowSessionTurn(ctx, flow, run, input, runErr)
-	// Autonomous (background) runs raise a desktop notification deep-linking to
-	// the run's transcript in the executions feed. Interactive runs are skipped:
-	// the caller is already watching the stream.
-	if autonomous && sessionID != "" {
+	// Every recorded flow run raises a desktop notification that deep-links to the
+	// run's transcript in the executions feed. This covers both autonomous
+	// (background) runs and interactive runs the user started then switched away
+	// from: the client-side notify() only shows a toast when the window is
+	// backgrounded, so a user actively watching the live stream is never spammed.
+	if sessionID != "" {
 		r.emitFlowDelivery(flow, run, sessionID, runErr)
 	}
 	return run, sessionID, runErr

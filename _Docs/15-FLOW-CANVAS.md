@@ -170,6 +170,22 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   olmadığından ring'siz — beklenen); yeni başlatılan koşu poll ile listeye otomatik düştü.
   readOnly canvas'ta "Otomatik diz" gizli, "⊕ Ortala" var.
 
+## Masaüstü bildirimleri — flow sonuçları (2026-06-18)
+
+- Her **kaydedilen** flow koşusu (`RunFlowRecorded`) tamamlanınca `emitFlowDelivery`
+  bir `flow` event'i yayınlar (`Type:"flow"`, `Target:{view:"executions", sessionId}`).
+  Önceden yalnız **otonom** (zamanlanmış / `run_flow` aracı) koşular bildiriyordu; artık
+  **interaktif** (UI'dan başlatılan) koşular da bildiriyor. Spam riski yok: istemcideki
+  `notify()` yalnızca pencere **arka plandayken** toast gösterir — canlı stream'i izleyen
+  kullanıcı rahatsız edilmez.
+- Bildirime tıklayınca App.tsx global handler'ı `routeFromEvent` → `executions` view'ına
+  deep-link yapar; flow koşusunun **salt-okunur transkripti (RunView)** açılır.
+- **Ayar:** `flow` artık `NOTIFY_TYPES`'ta ("Akışlar") → Settings'ten tip bazında
+  susturulabilir (varsayılan açık; master toggle `desktopNotifications` hepsini kapsar).
+- **Sohbet sonuçları** zaten bildiriyor (`useChatStream.onReply/onError` → `notify`,
+  tıklayınca ilgili sohbet oturumu açılır); chat tipi tasarımca `NOTIFY_TYPES` dışında
+  (yanıt oturum içinde de görünür) ve her zaman açık.
+
 ## Yeni mantıksal node tipleri (2026-06-18)
 
 Motora iki yeni node tipi eklendi (delay + transform) ve **branch genişletildi**
