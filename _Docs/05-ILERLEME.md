@@ -63,6 +63,24 @@ loglara/logbuf'a yansımıyordu. Goroutine köklerine recover + log eklendi:
 
 ✅ `go build ./...` + `go test ./internal/...` yeşil. Commit edildi (push edilmedi).
 
+### Devamı — sıralı node panic + node "error" olayı (commit `d7931c1`, 2026-06-18)
+
+Panic-güvenliği ve gözlemlenebilirlik flow motorunda tamamlandı:
+- `orchestration/engine.go` — sıralı agent node'lar artık ortak `runAgentNodeSafe`
+  üzerinden koşar (paralel yolla paylaşımlı): node panic'i süreç çökmesi yerine
+  normal flow hatasına çevrilir.
+- **Yeni `error` Observer fazı** (`NodeEvent.Error`): hem sıralı hem paralel yol
+  node başarısız olunca yayar → canlı UI spinner'ı durdurup nedenini gösterir
+  (önceden "done" gelmediği için sonsuza kadar pending kalıyordu).
+- Frontend: `FlowNodeEvent`'e `error` fazı + alanı; chat-tetiklemeli flow transcript
+  (`useChatStream`) node hatasını satır içinde gösterir. (`FlowsPanel.tsx` canvas
+  hata-halkası + canlı hata satırı eş-zamanlı "animated edges" WIP'iyle aynı
+  dosyada iç içe olduğundan reconcile'a bırakıldı; `NodeStatus`/`statusRing`
+  zaten 'error'ü destekliyordu.)
+- Testler: `engine_test.go` sıralı panic kurtarma + error-olay yayımı.
+
+✅ `go build ./...` + `go test ./internal/orchestration/` + frontend `tsc -b` yeşil.
+
 ## Scheduler hata loglama düzeltmesi ✅ (2026-06-18)
 
 **Sorun (kullanıcı raporu):** Zamanlamadan (scheduler) gelen bir mesaj
