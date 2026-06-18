@@ -2,6 +2,43 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Board sütun düzenleme (BoardColumnEditor) ✅ (2026-06-18)
+
+**İstek:** Kanban board'undaki sütunlar yeniden adlandırılabilsin, renklendirilsin, sıralanabilsin, eklenip silinebilsin. Sol tarafta panel ile yönetim.
+
+**Mimari kararlar:**
+- Sütun tanımları `ws-settings.json`'a `boardColumns []BoardColumnDef` olarak kaydedildi — yeni endpoint gerekmedi, mevcut workspace settings altyapısı kullanıldı.
+- `ValidBoardState` (5 sabit durum) linter tarafından korunduğundan yeni `IsValidBoardKey()` fonksiyonu ayrı `db/board_columns.go` dosyasında eklendi; lowercase+rakam+alt-çizgi desenini kabul eder, 5 sabitin ötesinde özel anahtarlara izin verir.
+- API katmanı (`handleCreateTask`, `handleUpdateTask`) `IsValidBoardKey` kullanır → özel sütun anahtarları HTTP üzerinden kabul edilir.
+- Agent araçları (`builtin_taskmgmt.go`) linter nedeniyle `ValidBoardState` ile kalmaya devam eder — agent araçları hâlâ yalnız 5 sabit durumu kabul eder.
+
+**Değişiklikler:**
+- `internal/db/board_columns.go` (yeni): `IsValidBoardKey()`
+- `internal/db/models_task.go`: `BoardColumnDef` struct + `DefaultBoardColumns()`
+- `internal/workspace/settings.go`: `WSSettings.BoardColumns` + `WSSettingsPatch.BoardColumns`
+- `internal/api/workspace_settings.go`: `workspaceSettingsDTO.BoardColumns` + fallback
+- `internal/api/tasks.go`: validasyon `IsValidBoardKey`'e geçildi
+- `frontend/src/types/workspace.ts`: `BoardColumnDef` interface + `WorkspaceSettings.boardColumns`
+- `frontend/src/types/task.ts`: `BoardState` özel string'e açıldı
+- `frontend/src/components/panels/BoardColumnEditor.tsx` (yeni): sol panel — sürükle-sırala, etiket düzenle, renk seçici (9 preset + özel hex + native color input), sil (görev varsa korumalı), ekle, kaydet
+- `frontend/src/components/panels/TaskBoard.tsx`: sütunları workspace settings'ten yükle/kaydet, `⊞ Sütunlar` butonu, sütun başlıklarına renk uygulama
+- `frontend/src/components/panels/TaskDetailPanel.tsx`: `columns` prop, durum pill seçici renk desteği
+
+**Doğrulama:** `go build ./...` + `tsc --noEmit` yeşil. Playwright canlı: Board ekranı açıldı, sütunlar doğru görüntülendi, `⊞ Sütunlar` butonu editor paneli açtı.
+
+## Aktivite paneli — canlı çalışma durumu göstergesi ✅ (2026-06-18)
+
+**Sorun:** Bir schedule tetiklenip ajan yanıt üretirken aktivite listesindeki execution'da `running: false` görünüyordu. Detay panelinde de "çalışıyor" bilgisi yalnızca chat streaming sessionlarında vardı; schedule/heartbeat otonom invockelarda yoktu.
+
+**Çözüm:**
+- **`internal/agent/runtime.go`:** `activeSessions sync.Map` alanı + `trackSession`/`untrackSession`/`ActiveSessionIDs()` metotları eklendi. Otonom çalışmalar (schedule/heartbeat) için session takibi sağlar.
+- **`internal/agent/scheduler.go`:** `deliverPrompt`'ta `invokeTraced` çağrısı öncesi `rt.trackSession(session.ID)`, sonrasında `rt.untrackSession(session.ID)` eklendi.
+- **`internal/agent/runtime.go`** (`runHeartbeat`): `CompleteWithTools` çağrısı etrafına aynı track/untrack sarıldı.
+- **`internal/api/executions.go`:** `handleListExecutions`'da `chatRuns.activeSessionIDs()` + `wsp.Runtime.ActiveSessionIDs()` birleştirildi → schedule ve heartbeat sessionları da `running:true` gösterir.
+- **`frontend/src/components/panels/ExecutionsPanel.tsx`:** Seçili execution `running:true` iken mesajlar her 2 saniyede bir (`RUNNING_POLL_MS`) yeniden çekilir (chat streaming beklemeden transkript güncellenir). Detay panelinde animasyonlu "Yanıt hazırlanıyor…" banner'ı (Loader2 spinner + nabız eden noktalar) eklendi.
+
+**Playwright doğrulaması (2026-06-18):** Aktivite paneli hatasız açıldı, "Henüz yürütme yok" mesajı doğru görüntülendi. `go build ./internal/...` + `tsc --noEmit` yeşil.
+
 ## `schedule_wake` — Ajanın kendi sohbetine geri dönmesi ✅ (2026-06-18)
 
 **Sorun:** claude-cli sağlayıcısı `claude -p` (one-shot print mode) ile çalışır; alt süreç her turda ölür. Claude Code'un yerleşik `ScheduleWakeup` aracı yalnızca `/loop` harness içinde anlamlıdır — SwarmGo'da harness olmadığından ajan "bekliyorum" diyip hiçbir şey gelmeden askıda kalıyordu.
