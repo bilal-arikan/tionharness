@@ -20,12 +20,16 @@ var PermissionOptions = []string{PermAllowOnce, PermAllowAlways, PermDeny}
 
 // NormalizePermission maps a clicked or typed answer onto a canonical decision:
 // "always" | "allow" | "deny". Anything not clearly an approval is a denial.
+// The Turkish dotted capital "İ" is normalised to "i" first because strings.
+// ToLower maps it to "i̇" (i + combining dot), which would break the "izin"
+// match. "always"/"her zaman" is checked before "izin" since "Her zaman izin
+// ver" contains both.
 func NormalizePermission(ans string) string {
-	a := strings.ToLower(strings.TrimSpace(ans))
+	a := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(ans, "İ", "i")))
 	switch {
 	case strings.Contains(a, "always") || strings.Contains(a, "her zaman"):
 		return "always"
-	case strings.HasPrefix(a, "allow") || strings.HasPrefix(a, "izin") ||
+	case strings.Contains(a, "allow") || strings.Contains(a, "izin") ||
 		strings.HasPrefix(a, "yes") || strings.HasPrefix(a, "evet") || a == "y":
 		return "allow"
 	default:
