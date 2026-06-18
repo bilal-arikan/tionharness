@@ -2,6 +2,26 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Reconcile durumu — "COMMITSİZ" notları çözüldü ✅ (2026-06-18)
+
+> Aşağıdaki günlük girdilerinde **COMMITSİZ / iç içe / reconcile'a bırakıldı** olarak
+> işaretlenmiş işlerin tümü artık `main` HEAD'inde commitli. Tarihli girdiler o anki
+> durumu yansıttığı için olduğu gibi bırakıldı; güncel gerçek durum:
+
+- **Özel sağlayıcılar (data-instance) — backend wiring:** ✅ Commitli. `server.go`
+  `SetCustomProviders` (applySettings) + `GET/PUT/DELETE /api/providers` rotaları +
+  `customProviderSpecs` HEAD'de mevcut (commit `35ec373` / `79da15d`).
+- **Özel sağlayıcılar — frontend:** ✅ Commitli. `api/providers.ts` (CRUD client) +
+  `ProvidersPanel` "Özel sağlayıcılar" bölümü (`CustomProviders` bileşeni) HEAD'de.
+- **Provider key'leri yalnız Sır kasasından (frontend):** ✅ `ProviderKeyField`
+  seçim-only akışı HEAD'de.
+- **Kanban flow-backed task (executor):** ✅ Reconcile tamam — `RunFlow`/`RunFlowRecorded`
+  artık 5-arg `Observer` imzasında (`flow.go:32`), beklenen reconcile gerçekleşti.
+
+- **Frontend build (`ArtifactsPanel` WIP):** ✅ Çözüldü. `frontend` dizininde
+  `npx tsc -b` + `npx vite build` (2026-06-18) temiz geçiyor; önceki günlük girdilerinde
+  derlemeyi tıkadığı belirtilen `ArtifactsPanel` hatası artık yok.
+
 ## Scheduler hata loglama düzeltmesi ✅ (2026-06-18)
 
 **Sorun (kullanıcı raporu):** Zamanlamadan (scheduler) gelen bir mesaj
