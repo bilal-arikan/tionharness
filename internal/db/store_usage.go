@@ -17,6 +17,7 @@ const (
 	UsageKindFlow      = "flow"
 	UsageKindHeartbeat = "heartbeat"
 	UsageKindDelegate  = "delegate"
+	UsageKindSpawn     = "spawned"
 	UsageKindTitle     = "title"
 	UsageKindSummary   = "summary"
 	UsageKindReflect   = "reflect"

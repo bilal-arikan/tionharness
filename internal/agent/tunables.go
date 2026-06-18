@@ -17,6 +17,14 @@ const (
 	DefaultReactiveKeepRecent = 6 // in-flight messages kept verbatim when compacting
 )
 
+// Default spawn guards. They bound the fire-and-forget spawn_session surface so a
+// burst of spawns can neither pin unbounded goroutines nor fan a single turn out
+// into a spawn storm.
+const (
+	DefaultSpawnMaxConcurrent = 16 // max simultaneously-running spawned sessions
+	DefaultSpawnMaxPerTurn    = 4  // max spawns one agent turn may launch
+)
+
 // Default tool-output compaction bounds. System A (deterministic) trims every
 // tool result; System B (LLM intent-aware summary) only fires past its byte
 // threshold. Both default to sane values used by test runtimes.
@@ -40,6 +48,9 @@ type Tunables struct {
 	delegation    bool // gates the agent→agent `call_agent` tool (off by default)
 	delegMaxDepth int  // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls int  // 0 → DefaultMaxDelegationCalls
+
+	spawnMaxConcurrent int // 0 → DefaultSpawnMaxConcurrent
+	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
 	journalCap    int  // 0 → DefaultJournalCap
 	journalMaxLen int  // 0 → DefaultJournalMaxLen
 
@@ -183,6 +194,38 @@ func (t *Tunables) DelegationMaxCalls() int {
 		return DefaultMaxDelegationCalls
 	}
 	return t.delegMaxCalls
+}
+
+// SetSpawnLimits sets the fire-and-forget spawn guards: the max number of
+// simultaneously-running spawned sessions and the max spawns a single agent turn
+// may launch. A value of 0 selects the built-in default.
+func (t *Tunables) SetSpawnLimits(maxConcurrent, maxPerTurn int) {
+	t.mu.Lock()
+	t.spawnMaxConcurrent = maxConcurrent
+	t.spawnMaxPerTurn = maxPerTurn
+	t.mu.Unlock()
+}
+
+// SpawnMaxConcurrent returns the cap on simultaneously-running spawned sessions
+// (default when unset).
+func (t *Tunables) SpawnMaxConcurrent() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.spawnMaxConcurrent <= 0 {
+		return DefaultSpawnMaxConcurrent
+	}
+	return t.spawnMaxConcurrent
+}
+
+// SpawnMaxPerTurn returns the cap on spawns launched by a single agent turn
+// (default when unset).
+func (t *Tunables) SpawnMaxPerTurn() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.spawnMaxPerTurn <= 0 {
+		return DefaultSpawnMaxPerTurn
+	}
+	return t.spawnMaxPerTurn
 }
 
 // SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent)

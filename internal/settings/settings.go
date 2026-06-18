@@ -132,6 +132,10 @@ type Settings struct {
 	DelegationMaxDepth int  `json:"delegationMaxDepth"` // max delegation nesting (0 = default 3)
 	DelegationMaxCalls int  `json:"delegationMaxCalls"` // max delegations per turn (0 = default 8)
 
+	// Spawn guards — fire-and-forget spawn_session / spawn surface.
+	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"` // max concurrent spawned sessions (0 = default 16)
+	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`    // max spawns per agent turn (0 = default 4)
+
 	// Diagnostics (informational; applied on restart).
 	LogLevel string `json:"logLevel"` // info | debug | warn | error
 }
@@ -187,6 +191,9 @@ func Default() Settings {
 
 		DelegationMaxDepth: 3,
 		DelegationMaxCalls: 8,
+
+		SpawnMaxConcurrent: 16,
+		SpawnMaxPerTurn:    4,
 
 		LogLevel: "info",
 	}
@@ -261,6 +268,9 @@ type DTO struct {
 	DelegationMaxDepth int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls int  `json:"delegationMaxCalls"`
 
+	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"`
+	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`
+
 	LogLevel string `json:"logLevel"`
 }
 
@@ -331,6 +341,9 @@ func (s Settings) ToDTO() DTO {
 		EnableDelegation:   s.EnableDelegation,
 		DelegationMaxDepth: s.DelegationMaxDepth,
 		DelegationMaxCalls: s.DelegationMaxCalls,
+
+		SpawnMaxConcurrent: s.SpawnMaxConcurrent,
+		SpawnMaxPerTurn:    s.SpawnMaxPerTurn,
 
 		LogLevel: s.LogLevel,
 	}
@@ -403,6 +416,9 @@ type Patch struct {
 	EnableDelegation   *bool `json:"enableDelegation"`
 	DelegationMaxDepth *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls *int  `json:"delegationMaxCalls"`
+
+	SpawnMaxConcurrent *int `json:"spawnMaxConcurrent"`
+	SpawnMaxPerTurn    *int `json:"spawnMaxPerTurn"`
 
 	LogLevel *string `json:"logLevel"`
 }

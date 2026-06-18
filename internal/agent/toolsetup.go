@@ -150,6 +150,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			// Inter-agent messaging: fire-and-forget hand-off to another agent's
 			// inbox (the async complement to call_agent's synchronous delegation).
 			tools.NewSendAgentMessageTool(agent.ID, r.SendAgentMessage),
+			// Spawn: launch a NEW independent session for another agent and walk
+			// away (fire-and-forget parallel worker — the "swarm" primitive).
+			tools.NewSpawnSessionTool(agent.ID, r.tun.SpawnMaxPerTurn(), func(ctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
+				res, err := r.SpawnSession(ctx, target, prompt, SpawnOptions{ModelOverride: modelOverride, CreatedBy: agent.ID})
+				return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
+			}),
 			// Flows.
 			tools.NewCreateFlowTool(r.db, agent.ID),
 			tools.NewUpdateFlowTool(r.db, agent.ID),

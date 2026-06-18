@@ -2,6 +2,22 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Spawn Session — fire-and-forget paralel işçi ✅ (2026-06-18)
+
+**İstek:** the external agent project/SwarmClaw'daki `spawn_session` benzeri: bir prompt'tan **yeni, bağımsız bir oturum** başlatıp **beklemeden** bırakmak (paralel otonom işçi). Mevcut tetiklemeler (flow/schedule/`call_agent`/`send_agent_message`) bunu karşılamıyordu — spawn, FRESH bir oturum açıp turu arka planda koşar. Çıktı Faz U Aktivite feed'inde canlı görünür. Tasarım: `_Docs/18-SPAWN-SESSION.md`.
+
+**Mimari (iki katman):**
+- **Çekirdek `Runtime.SpawnSession` (`internal/agent/spawn.go`, yeni):** `scheduler.deliverPrompt` kalıbını genelleştirir — `resolveAgent` (id/isim, workspace-scoped) → `kind:"spawned"` + taze `sourceID` ile **bağımsız** session (GetOrCreate değil) → `AddMessage(user)` → **fire-and-forget goroutine** (`runSpawn`): `trackSession` (feed'de canlı "running") → `invokeTraced(KindSpawn, autonomous=true)` → `AddMessage(assistant, steps)` → tamamlanma event'i. Çağıranın ctx'i goroutine'i iptal etmez (`context.WithoutCancel`+10dk timeout) — HTTP/tur kapanınca spawn ölmesin. `SpawnOptions{ModelOverride,Title,CreatedBy}`.
+- **Guard'lar:** eşzamanlı spawned-session üst sınırı (`spawnActive` atomik sayaç, `Tunables.SpawnMaxConcurrent` vars. 16) + tur başına spawn sayısı (`SpawnMaxPerTurn` vars. 4, tool örneği başına sayaç). Otonomi günlük bütçesi `invokeTraced(autonomous)` ile geçerli. Yeni `db.UsageKindSpawn`/`agent.KindSpawn`.
+
+**Yüzeyler:**
+- **HTTP:** `POST /api/sessions/spawn` (`internal/api/spawn.go`, yeni) — body `{agentId,prompt,modelOverride?}` → `{sessionId,agentName}`; `registerSessionRoutes`'a eklendi.
+- **Ajan aracı:** `spawn_session` (`internal/tools/builtin_spawn.go`, yeni) — built-in, **`SelfManageEnabled`** ile gated (self-manage suite, lazy); `agent`/`prompt`/`modelOverride?` parametreleri, per-tur budget + provenance (`CreatedBy`). `toolsetup.go` self-manage bloğuna kaydedildi (send_agent_message yanına).
+- **Ayarlar:** `settings.SpawnMaxConcurrent`/`SpawnMaxPerTurn` (DTO+Patch+defaults+clamp 1–128 / 1–64) → `applySettings`→`tun.SetSpawnLimits`.
+- **UI:** `ExecutionsPanel` `spawned` kind metadata (✨ "Spawn") + filtre sekmesi + başlıkta **"✨ Başlat"** butonu → `SpawnSessionModal.tsx` (yeni: AgentPicker + prompt + opsiyonel model); başarıda spawned filtresine geçer + yeni yürütmeyi seçer. `api.spawnSession`.
+
+**Durum:** `go build`/`go vet`/`go test ./internal/...` + frontend `tsc`/`vite build` yeşil. Yeni testler `internal/agent/spawn_test.go` (bağımsız session + isimle çözümleme + boş-prompt reddi + eşzamanlılık cap). **Canlı API E2E** (izole instance, gerçek claude-cli): spawn anında `sessionId` döndü → feed'de `spawned` yürütmesi (✨ başlık, SpawnWorker ajanı) → arka plan turu koştu, asistan "PONG" yanıtı ~2s'de transkripte düştü. Not: Playwright UI smoke yapılamadı (8080 portunu Unity MCP işgal ediyor, dev proxy backend'e ulaşamıyor); UI build-doğrulandı.
+
 ## Uygulama İçi Market — tasarım + MVP ilk dilim ✅ (2026-06-18)
 
 **İstek:** Uygulama içi bir market sistemi: Skiller, Agentlar, Providerlar ve Flow taslakları paylaşılıp kurulabilsin. Büyük özellik → önce kapsamlı tasarım, sonra MVP'nin ilk dikey dilimi (yerel skill listeleme/içe aktarma).

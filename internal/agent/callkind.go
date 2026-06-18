@@ -20,6 +20,7 @@ const (
 	KindFlow      CallKind = db.UsageKindFlow
 	KindHeartbeat CallKind = db.UsageKindHeartbeat
 	KindDelegate  CallKind = db.UsageKindDelegate
+	KindSpawn     CallKind = db.UsageKindSpawn
 	KindTitle     CallKind = db.UsageKindTitle
 	KindSummary   CallKind = db.UsageKindSummary
 	KindReflect   CallKind = db.UsageKindReflect

@@ -9,12 +9,14 @@ import {
   RefreshCw,
   Copy,
   Loader2,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import type { Agent, Execution, Message } from '../../types'
 import { api } from '../../api'
 import { MessageList } from '../chat/MessageList'
 import { AgentAvatar } from '../agents/AgentAvatar'
+import { SpawnSessionModal } from '../sessions/SpawnSessionModal'
 import { relativeTime } from '../../lib/time'
 
 interface Props {
@@ -38,6 +40,7 @@ const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   flow: { label: 'Akış', icon: GitBranch },
   schedule: { label: 'Zamanlama', icon: Clock },
   heartbeat: { label: 'Nabız', icon: Heart },
+  spawned: { label: 'Spawn', icon: Sparkles },
 }
 
 // Filter tabs (in display order). '' is "all".
@@ -46,6 +49,7 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'chat', label: 'Sohbet' },
   { key: 'task', label: 'Görev' },
   { key: 'flow', label: 'Akış' },
+  { key: 'spawned', label: 'Spawn' },
   { key: 'schedule', label: 'Zamanlama' },
   { key: 'heartbeat', label: 'Nabız' },
 ]
@@ -92,6 +96,7 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   const [selectedId, setSelectedId] = useState<string | null>(focusId ?? null)
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
+  const [spawnOpen, setSpawnOpen] = useState(false)
   const selectedRef = useRef<string | null>(null)
   selectedRef.current = selectedId
 
@@ -172,13 +177,22 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
             Yürütmeler
           </span>
-          <button
-            onClick={() => load(filter)}
-            title="Yenile"
-            className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-          >
-            <RefreshCw size={14} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSpawnOpen(true)}
+              title="Yeni oturum başlat (spawn)"
+              className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-0.5 text-[11px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            >
+              <Sparkles size={12} /> Başlat
+            </button>
+            <button
+              onClick={() => load(filter)}
+              title="Yenile"
+              className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
         </div>
 
         {/* Kind filter tabs */}
@@ -335,6 +349,21 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
           </div>
         )}
       </div>
+
+      {spawnOpen && (
+        <SpawnSessionModal
+          agents={agents}
+          onClose={() => setSpawnOpen(false)}
+          onError={onError}
+          onSpawned={(sessionId) => {
+            setSpawnOpen(false)
+            setFilter('spawned')
+            select(sessionId)
+            // Refresh the list so the new spawn appears immediately.
+            setTimeout(() => load('spawned'), 100)
+          }}
+        />
+      )}
     </div>
   )
 }

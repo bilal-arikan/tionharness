@@ -18,6 +18,14 @@ export const sessionApi = {
       method: 'POST',
       body: JSON.stringify({ agentId, title }),
     }),
+  // Spawn a new independent session and run the agent's turn in the background
+  // (fire-and-forget). Returns the new session id, which surfaces live in the
+  // executions feed. modelOverride swaps only the model (provider unchanged).
+  spawnSession: (agentId: string, prompt: string, modelOverride = '') =>
+    req<{ sessionId: string; agentName: string }>('/api/sessions/spawn', {
+      method: 'POST',
+      body: JSON.stringify({ agentId, prompt, modelOverride }),
+    }),
   listMessages: (sessionId: string) =>
     req<Message[]>(`/api/sessions/${sessionId}/messages`),
   // (Re)generate a session title — from its conversation, or an explicit source.

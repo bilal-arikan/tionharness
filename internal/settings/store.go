@@ -295,6 +295,8 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyBool(&next.EnableDelegation, p.EnableDelegation)
 	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
+	applyInt(&next.SpawnMaxConcurrent, p.SpawnMaxConcurrent)
+	applyInt(&next.SpawnMaxPerTurn, p.SpawnMaxPerTurn)
 
 	applyString(&next.LogLevel, p.LogLevel)
 
@@ -450,6 +452,19 @@ func normalize(v Settings) Settings {
 	}
 	if v.DelegationMaxCalls > 100 {
 		v.DelegationMaxCalls = 100
+	}
+	// Spawn guards: keep at least one; clamp to sane ceilings.
+	if v.SpawnMaxConcurrent < 1 {
+		v.SpawnMaxConcurrent = 1
+	}
+	if v.SpawnMaxConcurrent > 128 {
+		v.SpawnMaxConcurrent = 128
+	}
+	if v.SpawnMaxPerTurn < 1 {
+		v.SpawnMaxPerTurn = 1
+	}
+	if v.SpawnMaxPerTurn > 64 {
+		v.SpawnMaxPerTurn = 64
 	}
 	switch v.LogLevel {
 	case "debug", "warn", "error", "info":

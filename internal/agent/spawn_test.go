@@ -1,0 +1,107 @@
+package agent
+
+import (
+	"context"
+	"path/filepath"
+	"testing"
+
+	"github.com/bilal/swarmgo/internal/db"
+)
+
+// TestSpawnSession_OpensIndependentSession verifies the synchronous part of a
+// spawn: a fresh "spawned"-kind session is created with the prompt recorded as
+// the opening user turn, and the result carries the new session id + agent name.
+// (The background turn fails — no provider key — but that is asynchronous and not
+// asserted here.)
+func TestSpawnSession_OpensIndependentSession(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Worker", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	res, err := rt.SpawnSession(ctx, agent.ID, "Do the thing", SpawnOptions{CreatedBy: agent.ID})
+	if err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	if res.SessionID == "" {
+		t.Fatal("expected a session id")
+	}
+	if res.AgentName != "Worker" {
+		t.Errorf("agent name = %q, want Worker", res.AgentName)
+	}
+
+	sess, err := rt.db.GetSession(ctx, res.SessionID)
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	if sess.Kind != "spawned" {
+		t.Errorf("session kind = %q, want spawned", sess.Kind)
+	}
+	if sess.SourceID == "" {
+		t.Error("spawned session should carry a unique sourceID")
+	}
+
+	msgs, err := rt.db.ListMessages(ctx, res.SessionID)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(msgs) == 0 || msgs[0].Role != "user" || msgs[0].Text != "Do the thing" {
+		t.Fatalf("first message should be the user prompt, got %+v", msgs)
+	}
+}
+
+// TestSpawnSession_ResolvesByName confirms a spawn target may be given by display
+// name (not just id), and that two spawns produce two distinct sessions.
+func TestSpawnSession_ResolvesByNameAndIsIndependent(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Scout", Provider: "anthropic", Model: "m"}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	a, err := rt.SpawnSession(ctx, "Scout", "task A", SpawnOptions{})
+	if err != nil {
+		t.Fatalf("spawn A: %v", err)
+	}
+	b, err := rt.SpawnSession(ctx, "Scout", "task B", SpawnOptions{})
+	if err != nil {
+		t.Fatalf("spawn B: %v", err)
+	}
+	if a.SessionID == b.SessionID {
+		t.Fatal("each spawn must open its own independent session")
+	}
+}
+
+// TestSpawnSession_RejectsEmptyPrompt guards the precondition.
+func TestSpawnSession_RejectsEmptyPrompt(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "W", Provider: "anthropic", Model: "m"}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	if _, err := rt.SpawnSession(ctx, "W", "   ", SpawnOptions{}); err == nil {
+		t.Fatal("expected an error for an empty prompt")
+	}
+}
+
+// TestSpawnConcurrencyCap verifies the spawn-storm brake: the slot counter
+// refuses acquisitions past the configured concurrency cap, and a release frees
+// a slot again.
+func TestSpawnConcurrencyCap(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	rt.tun.SetSpawnLimits(2, 0)
+
+	if !rt.acquireSpawnSlot() || !rt.acquireSpawnSlot() {
+		t.Fatal("first two slots should be available")
+	}
+	if rt.acquireSpawnSlot() {
+		t.Fatal("third slot must be refused (cap = 2)")
+	}
+	rt.releaseSpawnSlot()
+	if !rt.acquireSpawnSlot() {
+		t.Fatal("a slot should be available again after a release")
+	}
+}
