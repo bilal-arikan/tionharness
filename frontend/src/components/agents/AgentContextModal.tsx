@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Copy, X } from 'lucide-react'
 import type { AgentContextPreview } from '../../types'
 import { api } from '../../api'
+import { Markdown } from '../markdown/Markdown'
 
 interface Props {
   agentId: string
@@ -17,6 +18,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
   const [data, setData] = useState<AgentContextPreview | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [raw, setRaw] = useState(false)
 
   useEffect(() => {
     api
@@ -84,12 +86,39 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
           {!err && !data && <p className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>}
           {data && (
             <>
-              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                Sistem promptu
-              </h3>
-              <pre className="mb-5 whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
-                {data.system || '(boş)'}
-              </pre>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                  Sistem promptu
+                </h3>
+                <div className="flex items-center overflow-hidden rounded-md border border-[var(--color-border)] text-[11px]">
+                  {(['Markdown', 'Ham'] as const).map((mode) => {
+                    const isRaw = mode === 'Ham'
+                    const activeMode = raw === isRaw
+                    return (
+                      <button
+                        key={mode}
+                        onClick={() => setRaw(isRaw)}
+                        className={`px-2 py-0.5 ${
+                          activeMode
+                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                            : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              {raw ? (
+                <pre className="mb-5 whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
+                  {data.system || '(boş)'}
+                </pre>
+              ) : (
+                <div className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
+                  <Markdown>{data.system || '(boş)'}</Markdown>
+                </div>
+              )}
 
               <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
                 Araçlar · {data.tools.length}
