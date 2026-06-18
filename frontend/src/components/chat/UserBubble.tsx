@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import type { Agent, Attachment } from '../../types'
+import type { Agent, Artifact, Attachment } from '../../types'
 import { resolveColor } from '../../lib/avatar'
 import { AttachmentChip } from './AttachmentChip'
 import { imageURL } from '../../lib/attachments'
@@ -105,11 +105,13 @@ export function UserBubble({
   text,
   agents,
   attachments,
+  artifacts,
   onOpenArtifact,
 }: {
   text: string
   agents: Agent[]
   attachments?: Attachment[]
+  artifacts?: Artifact[]
   onOpenArtifact?: (id: string) => void
 }) {
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
@@ -121,18 +123,24 @@ export function UserBubble({
   MENTION_RE.lastIndex = 0
   const isCommand = !quotedCmd && /^\/\S/.test(text.trim())
 
-  // Attachment chips rendered under the bubble (image thumbnails / file cards).
-  // Artifact-sourced chips open the artifact viewer; image chips open an
-  // in-app lightbox; other attachments are not yet clickable.
+  // Every chat attachment is captured server-side as a session artifact (origin
+  // "chat", keyed by sourcePath === relPath). Clicking a chip opens that artifact
+  // in the viewer. Fallbacks: artifact-sourced chips (added via "#") carry the id
+  // directly; an image not yet captured opens in an in-app lightbox.
   const chips = attachments && attachments.length > 0 && (
     <div className="mt-1.5 flex flex-wrap justify-end gap-2">
       {attachments.map((a) => {
         let onClick: (() => void) | undefined
         if (a.source === 'artifact' && onOpenArtifact) {
           onClick = () => onOpenArtifact(a.id.startsWith('art-') ? a.id.slice(4) : a.id)
-        } else if (a.kind === 'image') {
-          const url = imageURL(a)
-          if (url) onClick = () => setLightbox({ url, name: a.name })
+        } else {
+          const art = a.relPath ? artifacts?.find((x) => x.sourcePath === a.relPath) : undefined
+          if (art && onOpenArtifact) {
+            onClick = () => onOpenArtifact(art.id)
+          } else if (a.kind === 'image') {
+            const url = imageURL(a)
+            if (url) onClick = () => setLightbox({ url, name: a.name })
+          }
         }
         return <AttachmentChip key={a.id} attachment={a} onClick={onClick} />
       })}

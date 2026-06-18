@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Trash2, X } from 'lucide-react'
-import type { Agent, Message } from '../../types'
+import type { Agent, Artifact, Message } from '../../types'
 import { Markdown } from '../markdown/Markdown'
 import { TurnSteps, parseSteps } from './TurnSteps'
 import { ThinkingBlock } from './ThinkingBlock'
@@ -12,6 +12,10 @@ interface Props {
   messages: Message[]
   pending: boolean
   agents: Agent[]
+  // Session artifacts, used to resolve an attachment chip to its captured
+  // artifact (matched by sourcePath === attachment.relPath) so clicking it opens
+  // the artifact viewer.
+  artifacts?: Artifact[]
   // True when the open session has a turn currently streaming — drives the live
   // elapsed timer on the last (in-flight) assistant bubble.
   streaming?: boolean
@@ -70,7 +74,7 @@ function WorkingDots() {
   )
 }
 
-export function MessageList({ messages, pending, agents, streaming, onOpenFile, onOpenArtifact, onDeleteMessage }: Props) {
+export function MessageList({ messages, pending, agents, artifacts, streaming, onOpenFile, onOpenArtifact, onDeleteMessage }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Whether the user is currently pinned to the bottom of the transcript. When
   // they scroll up to read history we stop auto-scrolling so streaming deltas
@@ -142,7 +146,7 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
           const toolsHidden = collapsedTools.has(m.id)
           return m.role === 'user' ? (
             <div key={m.id} className="group flex flex-col gap-1">
-              <UserBubble text={m.text} agents={agents} attachments={m.attachments} onOpenArtifact={onOpenArtifact} />
+              <UserBubble text={m.text} agents={agents} attachments={m.attachments} artifacts={artifacts} onOpenArtifact={onOpenArtifact} />
               <div className="flex items-center justify-end gap-2 pr-1">
                 {onDeleteMessage && <DeleteButton onClick={() => onDeleteMessage(m.id)} />}
                 <MessageTime unixSec={m.createdAt} />

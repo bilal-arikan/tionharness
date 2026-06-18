@@ -655,6 +655,7 @@ export default function App() {
               messages={messages}
               pending={chat.activePending}
               agents={agents}
+              artifacts={sessionArtifacts}
               streaming={chat.activeStreaming}
               onOpenFile={openFile}
               onOpenArtifact={openArtifact}
