@@ -29,19 +29,14 @@ func DefaultBoardColumns() []BoardColumnDef {
 	}
 }
 
-// ValidBoardState reports whether s is a safe board column key.
-// Accepts lowercase letters, digits and underscores. The five built-in
-// constants all match, and custom column keys must use the same pattern.
+// ValidBoardState reports whether s is one of the five board column keys.
 func ValidBoardState(s string) bool {
-	if s == "" {
+	switch s {
+	case BoardTodo, BoardInProgress, BoardReview, BoardDone, BoardFailed:
+		return true
+	default:
 		return false
 	}
-	for _, c := range s {
-		if !('a' <= c && c <= 'z' || '0' <= c && c <= '9' || c == '_') {
-			return false
-		}
-	}
-	return true
 }
 
 // Task is a unit of work on the board, optionally owned by an agent. When run,
