@@ -27,28 +27,24 @@ import { ParallelNode } from './ParallelNode'
 
 // CanvasTools is a small in-canvas toolbar (top-right Panel). It lives inside
 // ReactFlowProvider so it can use the programmatic viewport API. "Otomatik diz"
-// asks the parent to re-layout, then re-centers once positions settle.
+// asks the parent to re-layout, then re-centers once positions settle. (Fit/zoom
+// already live in the bottom-left Controls, so there's no separate center button.)
 function CanvasTools({ onAutoLayout }: { onAutoLayout?: () => void }) {
   const { fitView } = useReactFlow()
-  const center = () => fitView({ padding: 0.2, duration: 300 })
+  if (!onAutoLayout) return null
   return (
     <Panel position="top-right">
       <div className="flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-xs shadow-lg">
-        <button onClick={center} className="rounded px-2 py-1 hover:bg-[var(--color-surface-2)]" title="Akışı ortala">
-          ⊕ Ortala
+        <button
+          onClick={() => {
+            onAutoLayout()
+            setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 60)
+          }}
+          className="rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
+          title="Düğümleri otomatik diz"
+        >
+          ▦ Otomatik diz
         </button>
-        {onAutoLayout && (
-          <button
-            onClick={() => {
-              onAutoLayout()
-              setTimeout(center, 60)
-            }}
-            className="rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
-            title="Düğümleri otomatik diz"
-          >
-            ▦ Otomatik diz
-          </button>
-        )}
       </div>
     </Panel>
   )

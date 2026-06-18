@@ -132,17 +132,19 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
 - **Ok uçları:** tüm kenarlara `markerEnd: ArrowClosed` (yön netliği) — `FlowCanvas.styledEdges`
   + `defaultEdgeOptions`.
 - **Canvas araç çubuğu** (`FlowCanvas` içinde `<Panel position="top-right">` → `CanvasTools`,
-  `useReactFlow` ile): **⊕ Ortala** (`fitView({padding,duration})`) ve **▦ Otomatik diz**
-  (parent `onAutoLayout` → `autoArrange`: `reactFlowToGraph`→`autoLayout`→`setNodes`, sonra
-  yeniden ortala). Read-only önizlemede "Otomatik diz" gizli.
+  `useReactFlow` ile): **▦ Otomatik diz** (parent `onAutoLayout` → `autoArrange`:
+  `reactFlowToGraph`→`autoLayout`→`setNodes`, sonra `fitView` ile ortalar). Ortala/zoom zaten
+  sol-alt `Controls`'ta (Fit View + +/−) olduğundan ayrı "Ortala" butonu yok. Read-only
+  önizlemede panel hiç render edilmez (`onAutoLayout` yok).
 - **NodeToolbar** (seçili node üstünde, `NodeShell` + `NodeActionsContext`): **▶ Başlangıç yap**
   (başlangıç değilse), **⧉ Çoğalt** (yeni id + offset, bağlantısız kopya), **✕ Sil**. Aksiyonlar
   id-bazlı (`makeStartNode`/`duplicateNode`/`deleteNode`), `FlowsPanel`'den
   `nodeActions` prop'u ile sağlanır; inspector aynı çekirdeği kullanır. Read-only'de provider null
   → toolbar yok.
-- **Doğrulama (Playwright):** edge `marker-end=url(#…arrowclosed…)`; panelde "⊕ Ortala"/"▦ Otomatik
+- **Doğrulama (Playwright):** edge `marker-end=url(#…arrowclosed…)`; panelde "▦ Otomatik
   diz"; node seçilince toolbar "▶ Başlangıç ⧉ Çoğalt ✕ Sil"; Çoğalt 4→5 node; Otomatik diz
-  pozisyonları ızgaraya dizdi (0,0 → 280,0 → 280,140).
+  pozisyonları ızgaraya dizdi (0,0 → 280,0 → 280,140). (Ortala butonu sonradan kaldırıldı —
+  Controls'ta zaten Fit View var.)
 
 ## Koşular sekmesi — salt-okunur koşu izleme (2026-06-18)
 
