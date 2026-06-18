@@ -234,24 +234,25 @@ export function SessionDetailPanel({
                 disabled={info.messageCount === 0 || titling}
                 busy={titling}
               />
-              <div className="relative">
-                <ActionBtn icon={FileText} label="Özet ekle…" onClick={() => setSummaryOpen((v) => !v)} caret />
-                {summaryOpen && (
-                  <div className="mt-1 flex flex-col gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-1">
-                    {SUMMARY_KINDS.map((s) => (
-                      <button
-                        key={s.kind}
-                        onClick={() => {
-                          setSummaryOpen(false)
-                          onSummarize(sessionId, s.kind)
-                        }}
-                        className="rounded px-2 py-1 text-left text-xs text-[var(--color-text)] transition hover:bg-[var(--color-surface-2)]"
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              {/* Summary kinds rendered as direct buttons (no dropdown): one
+                  tap fires the summarize action for that context bucket. */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 px-0.5 text-xs text-[var(--color-text-dim)]">
+                  <FileText size={14} className="shrink-0" />
+                  <span>Özete çevir</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {SUMMARY_KINDS.map((s) => (
+                    <button
+                      key={s.kind}
+                      onClick={() => onSummarize(sessionId, s.kind)}
+                      title={`${s.label} özeti ekle`}
+                      className="rounded-lg border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <ActionBtn
                 icon={Trash2}
