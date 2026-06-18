@@ -283,6 +283,15 @@ func (d *DB) SetSessionTitle(ctx context.Context, sessionID, title string) error
 	})
 }
 
+// SetSessionGoal persists a session's persistent objective ("north star"). An
+// empty string clears the goal. Does not bump UpdatedAt so editing the goal
+// never reorders the session list.
+func (d *DB) SetSessionGoal(ctx context.Context, sessionID, goal string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Goal = goal
+	})
+}
+
 // SetSessionAgent updates a session's default (main) agent — used when the first
 // message of a fresh session @mentions an agent, pinning the thread to it.
 func (d *DB) SetSessionAgent(ctx context.Context, sessionID, agentID string) error {

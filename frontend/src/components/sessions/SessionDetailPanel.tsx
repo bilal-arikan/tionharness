@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, type LucideIcon } from 'lucide-react'
+import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionInfo } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
@@ -14,6 +14,7 @@ interface Props {
   onCopyPath: (id: string) => void
   onRevealFolder: (id: string) => void
   onGenerateTitle: (id: string) => void | Promise<void>
+  onRename: (id: string, title: string) => void | Promise<void>
   onSummarize: (id: string, kind: string) => void
   onDeleteSession: (id: string) => void
 }
@@ -35,14 +36,23 @@ export function SessionDetailPanel({
   onCopyPath,
   onRevealFolder,
   onGenerateTitle,
+  onRename,
   onSummarize,
   onDeleteSession,
 }: Props) {
   const [info, setInfo] = useState<SessionInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [summaryOpen, setSummaryOpen] = useState(false)
   const [titling, setTitling] = useState(false)
+  // Manual rename: when editing, hold the draft text; saving persists verbatim.
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [savingTitle, setSavingTitle] = useState(false)
+  // Persistent goal ("north star"): when editing, hold the draft text; saving
+  // persists verbatim (empty clears the goal).
+  const [editingGoal, setEditingGoal] = useState(false)
+  const [goalDraft, setGoalDraft] = useState('')
+  const [savingGoal, setSavingGoal] = useState(false)
   // Manual-refresh nonce: bumped by the refresh button (and after a title
   // regeneration) to re-fetch without touching the parent's refreshKey.
   const [localRefresh, setLocalRefresh] = useState(0)
@@ -70,6 +80,56 @@ export function SessionDetailPanel({
       setLocalRefresh((n) => n + 1)
     } finally {
       setTitling(false)
+    }
+  }
+
+  // Open the inline title editor seeded with the current title.
+  const startEditTitle = () => {
+    setTitleDraft(info?.title ?? '')
+    setEditingTitle(true)
+  }
+
+  // Persist the manually edited title verbatim, then reflect it locally.
+  const commitTitle = async () => {
+    const t = titleDraft.trim()
+    if (!t || t === info?.title) {
+      setEditingTitle(false)
+      return
+    }
+    setSavingTitle(true)
+    try {
+      await onRename(sessionId, t)
+      setInfo((prev) => (prev ? { ...prev, title: t } : prev))
+      setEditingTitle(false)
+    } finally {
+      setSavingTitle(false)
+    }
+  }
+
+  // Open the goal editor seeded with the current goal.
+  const startEditGoal = () => {
+    setGoalDraft(info?.goal ?? '')
+    setEditingGoal(true)
+  }
+
+  // Persist the goal verbatim (empty clears it), then reflect it locally.
+  const commitGoal = async () => {
+    const g = goalDraft.trim()
+    if (g === (info?.goal ?? '').trim()) {
+      setEditingGoal(false)
+      return
+    }
+    setSavingGoal(true)
+    try {
+      await api.setSessionGoal(sessionId, g)
+      setInfo((prev) => (prev ? { ...prev, goal: g } : prev))
+      setEditingGoal(false)
+      // Re-fetch so the context meter reflects the goal's new footprint.
+      setLocalRefresh((n) => n + 1)
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setSavingGoal(false)
     }
   }
 
@@ -119,15 +179,124 @@ export function SessionDetailPanel({
         <div className="flex flex-col gap-5 px-4 py-4">
           {/* Title + status */}
           <div>
-            <h3 className="truncate text-sm font-semibold text-[var(--color-text)]" title={info.title}>
-              {info.title || 'Yeni sohbet'}
-            </h3>
+            {editingTitle ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitTitle()
+                    else if (e.key === 'Escape') setEditingTitle(false)
+                  }}
+                  disabled={savingTitle}
+                  placeholder="Sohbet başlığı"
+                  className="min-w-0 flex-1 rounded border border-[var(--color-accent)] bg-[var(--color-bg)] px-2 py-1 text-sm font-semibold text-[var(--color-text)] outline-none disabled:opacity-50"
+                />
+                <button
+                  onClick={commitTitle}
+                  disabled={savingTitle}
+                  title="Kaydet"
+                  className="rounded p-1 text-[var(--color-accent)] transition hover:opacity-80 disabled:opacity-40"
+                >
+                  {savingTitle ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                </button>
+                <button
+                  onClick={() => setEditingTitle(false)}
+                  disabled={savingTitle}
+                  title="İptal"
+                  className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-text)] disabled:opacity-40"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            ) : (
+              <div className="group flex items-center gap-1.5">
+                <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--color-text)]" title={info.title}>
+                  {info.title || 'Yeni sohbet'}
+                </h3>
+                <button
+                  onClick={startEditTitle}
+                  title="Başlığı düzenle"
+                  className="shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"
+                >
+                  <Pencil size={13} />
+                </button>
+              </div>
+            )}
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {info.state && <Pill>{info.state}</Pill>}
               {info.kind && <Pill>{info.kind}</Pill>}
               {info.unread && <Pill accent>okunmadı</Pill>}
             </div>
           </div>
+
+          {/* Goal ("north star") — persistent objective injected into context */}
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+                <Target size={12} className="shrink-0" />
+                <span>Hedef</span>
+              </div>
+              {!editingGoal && (
+                <button
+                  onClick={startEditGoal}
+                  title={info.goal ? 'Hedefi düzenle' : 'Hedef belirle'}
+                  className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                >
+                  <Pencil size={13} />
+                </button>
+              )}
+            </div>
+            {editingGoal ? (
+              <div className="flex flex-col gap-1.5">
+                <textarea
+                  autoFocus
+                  value={goalDraft}
+                  onChange={(e) => setGoalDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) commitGoal()
+                    else if (e.key === 'Escape') setEditingGoal(false)
+                  }}
+                  disabled={savingGoal}
+                  rows={4}
+                  maxLength={2000}
+                  placeholder="Bu sohbet için kalıcı bir hedef yaz — ajan her turda buna göre ilerler. Örn: 'X özelliğini test ederek bitir ve PR aç.'"
+                  className="w-full resize-y rounded border border-[var(--color-accent)] bg-[var(--color-bg)] px-2 py-1.5 text-xs text-[var(--color-text)] outline-none disabled:opacity-50"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={commitGoal}
+                    disabled={savingGoal}
+                    className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:opacity-90 disabled:opacity-40"
+                  >
+                    {savingGoal ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    Kaydet
+                  </button>
+                  <button
+                    onClick={() => setEditingGoal(false)}
+                    disabled={savingGoal}
+                    className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[11px] text-[var(--color-text-dim)] transition hover:text-[var(--color-text)] disabled:opacity-40"
+                  >
+                    İptal
+                  </button>
+                  <span className="ml-auto text-[10px] text-[var(--color-text-dim)]">⌘/Ctrl+Enter</span>
+                </div>
+              </div>
+            ) : info.goal ? (
+              <p className="whitespace-pre-wrap rounded-lg border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] px-2.5 py-2 text-xs leading-relaxed text-[var(--color-text)]">
+                {info.goal}
+              </p>
+            ) : (
+              <button
+                onClick={startEditGoal}
+                className="flex w-full items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-2.5 py-2 text-left text-[11px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              >
+                <Target size={13} className="shrink-0" />
+                Bu sohbet için bir hedef belirle
+              </button>
+            )}
+          </section>
 
           {/* Meta */}
           <Section title="Genel">
@@ -391,6 +560,8 @@ function fillerColor(role: string): string {
       return '#a855f7' // purple — tool/MCP schemas (always-sent catalog)
     case 'artifacts':
       return '#ec4899' // pink — session artifact context block
+    case 'goal':
+      return '#f43f5e' // rose — persistent session goal block
     case 'system':
       return '#64748b' // slate
     default:

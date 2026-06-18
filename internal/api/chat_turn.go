@@ -72,8 +72,13 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	}
 
 	var dynamic string
+	// The session's persistent goal leads the dynamic context — it is the agent's
+	// north star and should be the first thing it reads after the static persona.
+	if gb := goalContextBlock(session.Goal); gb != "" {
+		dynamic = gb
+	}
 	if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, message, 5); block != "" {
-		dynamic = block
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + block)
 	}
 	if prep.Summary != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n## Conversation summary so far\n" + prep.Summary)

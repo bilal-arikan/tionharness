@@ -32,6 +32,12 @@ export const sessionApi = {
       method: 'POST',
       body: JSON.stringify({ title }),
     }),
+  // Set (or clear, when empty) the session's persistent goal ("north star").
+  setSessionGoal: (sessionId: string, goal: string) =>
+    req<{ id: string; goal: string }>(`/api/sessions/${sessionId}/goal`, {
+      method: 'PUT',
+      body: JSON.stringify({ goal }),
+    }),
   // On-demand summary/listing posted as an assistant message in the session.
   // kind: 'memory' | 'board' | 'flows' | 'tools'. Returns the new message.
   summarizeSession: (sessionId: string, kind: string) =>

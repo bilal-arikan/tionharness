@@ -74,6 +74,9 @@ export interface SessionInfo {
   agentName: string
   messageCount: number
   unread: boolean
+  // Persistent session objective ("north star") injected into every turn's
+  // context. Empty when none is set.
+  goal: string
   createdAt: number
   updatedAt: number
 

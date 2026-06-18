@@ -25,6 +25,7 @@ type sessionInfoResp struct {
 	AgentName    string `json:"agentName"`
 	MessageCount int    `json:"messageCount"`
 	Unread       bool   `json:"unread"`
+	Goal         string `json:"goal"`
 	CreatedAt    int64  `json:"createdAt"`
 	UpdatedAt    int64  `json:"updatedAt"`
 
@@ -105,6 +106,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		AgentID:         session.AgentID,
 		MessageCount:    session.MessageCount,
 		Unread:          session.Unread,
+		Goal:            session.Goal,
 		CreatedAt:       session.CreatedAt,
 		UpdatedAt:       session.UpdatedAt,
 		HasSummary:      session.Summary != "",
@@ -232,6 +234,12 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 	// Tool catalog (built-in + MCP) exactly as the agent receives it.
 	if cat := wsp.Runtime.ToolCatalog(ctx, agentRow); len(cat) > 0 {
 		out = append(out, contextFiller{Label: "Araçlar", Role: "tools", Tokens: estimateToolCatalog(cat), Count: len(cat)})
+	}
+
+	// Session goal block (dynamic suffix) — the persistent objective injected on
+	// every turn.
+	if gb := goalContextBlock(session.Goal); gb != "" {
+		out = append(out, contextFiller{Label: "Hedef", Role: "goal", Tokens: conversation.EstimateText(gb), Count: 1})
 	}
 
 	// Session artifact context block (dynamic suffix).

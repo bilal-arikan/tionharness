@@ -1,0 +1,64 @@
+package api
+
+import (
+	"net/http"
+	"strings"
+
+	"github.com/bilal/swarmgo/internal/db"
+)
+
+// maxGoalLen bounds a session goal so it can never blow up the context window;
+// the UI mirrors this. Goals are meant to be a short objective, not a document.
+const maxGoalLen = 2000
+
+// goalContextBlock renders a session's persistent objective as a system-prompt
+// section. Inspired by Claude Code's /goal: a single durable "north star" the
+// agent should keep steering toward across turns. Kept in the dynamic (uncached)
+// suffix and placed first so it leads the volatile context. Returns "" when no
+// goal is set.
+func goalContextBlock(goal string) string {
+	goal = strings.TrimSpace(goal)
+	if goal == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Session goal (north star)\n")
+	b.WriteString("The user has set a persistent goal for this conversation. Treat it as the overriding objective: keep every reply aligned with it, make steady progress toward it, and call out when it is achieved or blocked. It persists across turns even after earlier messages scroll out of context.\n\n")
+	b.WriteString(goal)
+	return strings.TrimSpace(b.String())
+}
+
+type setGoalReq struct {
+	Goal string `json:"goal"`
+}
+
+// handleSetSessionGoal sets (or clears, when empty) a session's persistent goal.
+func (s *Server) handleSetSessionGoal(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req setGoalReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	goal := strings.TrimSpace(req.Goal)
+	if len([]rune(goal)) > maxGoalLen {
+		writeError(w, http.StatusBadRequest, "goal too long")
+		return
+	}
+
+	ctx := r.Context()
+	database := ws(r).DB
+	if _, err := database.GetSession(ctx, id); writeDBError(w, err, "session not found") {
+		return
+	}
+	if err := database.SetSessionGoal(ctx, id, goal); writeDBError(w, err, "") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "goal": goal})
+}
+
+// sessionGoal returns the goal stored on a session, trimmed. Helper kept here so
+// the goal feature lives in one file.
+func sessionGoal(sess db.Session) string {
+	return strings.TrimSpace(sess.Goal)
+}
