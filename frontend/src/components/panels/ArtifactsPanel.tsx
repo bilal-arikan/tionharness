@@ -429,10 +429,10 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     <button onClick={startEdit} title="Düzenle" className={iconBtn}>
                       <Pencil size={15} />
                     </button>
-                    <button onClick={copy} title="Kopyala" className={iconBtn}>
+                    <button onClick={copy} title="İçeriği kopyala" className={iconBtn}>
                       {copied ? <Check size={15} /> : <Copy size={15} />}
                     </button>
-                    <CopyPathButton path={activePath} />
+                    <CopyPathButton path={activePath} title="Yolu kopyala" />
                     <button
                       onClick={reveal}
                       disabled={!activePath}

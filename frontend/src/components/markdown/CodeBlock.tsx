@@ -43,6 +43,7 @@ export function CodeBlock({ code, lang }: Props) {
         <span>{lang || 'text'}</span>
         <button
           onClick={copy}
+          title={copied ? 'Kopyalandı' : 'Kodu kopyala'}
           className="rounded px-1.5 py-0.5 opacity-0 transition hover:bg-[var(--color-surface-2)] group-hover:opacity-100"
         >
           {copied ? 'Copied' : 'Copy'}
