@@ -1,6 +1,6 @@
 // Orchestration flows: graph definition, persisted run state and run history (Phase 7).
 
-export type FlowNodeType = 'agent' | 'branch' | 'parallel'
+export type FlowNodeType = 'agent' | 'branch' | 'parallel' | 'switch' | 'delay' | 'transform'
 
 export interface FlowBranch {
   contains: string // case-insensitive substring; "" = default
@@ -14,9 +14,11 @@ export interface FlowNode {
   agentId?: string
   prompt?: string
   next?: string
-  branches?: FlowBranch[]
+  branches?: FlowBranch[] // branch (substring) + switch (exact match) arms
   parallel?: string[]
   joinNext?: string
+  delayMs?: number // delay node: ms to wait
+  template?: string // transform node: rendered output template
   // Cosmetic canvas layout (persisted; ignored by the engine).
   x?: number
   y?: number

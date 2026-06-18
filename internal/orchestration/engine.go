@@ -12,6 +12,10 @@ import (
 // can never run forever.
 const maxSteps = 50
 
+// maxDelayMs caps a delay node's wait so a misconfiguration can't block a run
+// indefinitely (5 minutes).
+const maxDelayMs = 5 * 60 * 1000
+
 // AgentRunner executes one agent node. The runtime implements this; the engine
 // stays free of any LLM/provider dependency.
 type AgentRunner interface {
@@ -277,6 +281,48 @@ func evalBranch(node Node, value string) (string, string) {
 		}
 	}
 	return "", "no match"
+}
+
+// evalSwitch picks the arm whose Contains exactly equals the incoming value
+// (case-insensitive, trimmed). An empty Contains is the default arm. Unlike
+// evalBranch (substring), this is an exact match — good for label routing where
+// an agent replies with exactly one of a known set. Returns (nextID, label).
+func evalSwitch(node Node, value string) (string, string) {
+	v := strings.ToLower(strings.TrimSpace(value))
+	var def *Branch
+	for i := range node.Branches {
+		b := node.Branches[i]
+		if b.Contains == "" {
+			def = &node.Branches[i]
+			continue
+		}
+		if v == strings.ToLower(strings.TrimSpace(b.Contains)) {
+			return b.Next, b.Contains
+		}
+	}
+	if def != nil {
+		return def.Next, "default"
+	}
+	return "", "no match"
+}
+
+// sleepCtx waits ms milliseconds or until the context is cancelled. The wait is
+// capped so a misconfigured delay can't block a run indefinitely.
+func sleepCtx(ctx context.Context, ms int) error {
+	if ms <= 0 {
+		return nil
+	}
+	if ms > maxDelayMs {
+		ms = maxDelayMs
+	}
+	t := time.NewTimer(time.Duration(ms) * time.Millisecond)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 // render substitutes template placeholders in a prompt:
