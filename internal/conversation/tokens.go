@@ -1,6 +1,10 @@
 package conversation
 
-import "github.com/bilal/swarmgo/internal/db"
+import (
+	"unicode/utf8"
+
+	"github.com/bilal/swarmgo/internal/db"
+)
 
 // charsPerToken is a rough heuristic: ~4 characters per token for mixed
 // English/Turkish text. This avoids a tokenizer dependency; it is used only for
@@ -12,7 +16,8 @@ const msgOverhead = 4
 
 // estimateText approximates the token count of a string.
 func estimateText(s string) int {
-	return len([]rune(s))/charsPerToken + 1
+	// utf8.RuneCountInString avoids allocating a []rune just to count runes.
+	return utf8.RuneCountInString(s)/charsPerToken + 1
 }
 
 // EstimateText is the exported approximation of a single string's token count.

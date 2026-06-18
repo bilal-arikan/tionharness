@@ -12,15 +12,16 @@ export function ParallelNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const isEnd = useIsEndNode(id)
   return (
     <NodeShell type="parallel" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="text-[11px] text-[var(--color-text-dim)]">
         {count} eşzamanlı dal · join →
       </div>
-      <Handle type="source" position={Position.Bottom} id="fan" />
+      <Handle type="source" position={Position.Bottom} id="fan" title="Paralel dallar (eşzamanlı çalışır)" />
       <Handle
         type="source"
         position={Position.Right}
         id="join"
+        title="Join → tüm dallar bitince çalışır"
         style={{ background: '#7c3aed' }}
       />
     </NodeShell>

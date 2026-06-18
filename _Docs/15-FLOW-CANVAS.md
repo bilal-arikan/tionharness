@@ -60,13 +60,35 @@ Canvas ile bir kez kaydedilince `x/y` kalıcılaşır; sonraki açılışlarda k
 - `package.json` — `@xyflow/react`.
 
 **Backend**
-- `internal/orchestration/model.go` — `Node` += `X,Y` (kozmetik).
+- `internal/orchestration/model.go` — `Node` += `X,Y` (kozmetik) + `Graph` += `EdgeStyle`/`Animated`.
+
+## UX cilası (2026-06-18)
+
+- **Başlangıç/bitiş tonlaması:** başlangıç node'u hafif yeşil + "başlangıç" rozeti, terminal
+  node'lar (giden kenarı yok) hafif mavi + "bitiş" rozeti. Bitiş tespiti `useIsEndNode` ile
+  React Flow store'undan canlı okunur (`START_TINT`/`END_TINT`, `nodeStyles.ts`).
+- **Düzen:** açıklama üst toolbar'da ad'ın yanında; node'lar **sol palet**ten tıklanarak eklenir
+  (ikonlu liste); inspector'da ajan seçimi avatarlı `AgentPicker`, prompt alanı yüksek + monospace.
+- **Node üzerinde ajan avatarı** (`AgentAvatar`).
+- **Bağlantı noktaları (handle):** 12px, accent dolgu (`flowCanvas.css`); hover'da
+  **tooltip** (`title`): "Giriş" / "Çıkış → sonraki node" / "Dal → <koşul>" / "Paralel dallar" / "Join".
+- **Kablo (edge) sunumu — akış bazında kalıcı:** `Graph.EdgeStyle` (Eğri=default / Yumuşak=smoothstep /
+  Basamak=step / Düz=straight) + `Graph.Animated` (animasyonlu akış). Toolbar'da "Kablo" seçici +
+  "Animasyon" toggle; `FlowsPanel.saveFlow` graf'a yazar, `selectFlow` graf'tan okur (localStorage
+  yalnız yeni/akışta-yok durumunda varsayılan edge stili için). `FlowCanvas` `styledEdges` ile
+  her kenara `type`+`animated` uygular. Motor/Validate bu alanları yok sayar.
+- **Controls + MiniMap koyulaştırıldı** (`flowCanvas.css`, MiniMap `bgColor=#0b0e14`).
+- **Dev proxy düzeltmesi:** `vite.config.ts` proxy hedefi `localhost` → `127.0.0.1` (Windows'ta
+  `localhost` önce IPv6 `::1`'e çözülüp Go backend'in IPv4 bind'ine 502 veriyordu).
+
+Yeni/değişen dosyalar: `flow/NodeShell.tsx`, `flow/flowCanvas.css`, `agents/AgentPicker` & `AgentAvatar`
+(yeniden kullanım), `types/flow.ts` (`FlowGraph.edgeStyle`/`animated`), `vite.config.ts`.
 
 ## Canlı koşu
 
 `runFlowStreamStandalone` SSE `onNode`: `start` → node `data.status='running'` (parlama),
-`done` → `status='done'` (yeşil ring). Kalıcı trace yine altta node-node liste olarak gösterilir
-(mevcut davranış korunur).
+`done` → `status='done'` (yeşil ring), `error` → kırmızı ring + canlı listede `⚠️` satırı.
+Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış korunur).
 
 ## Doğrulama (2026-06-18)
 
@@ -79,9 +101,18 @@ Canvas ile bir kez kaydedilince `x/y` kalıcılaşır; sonraki açılışlarda k
 - **Pozisyon kalıcılığı:** API'den doğrulandı — akış canvas ile kaydedilince 4/4 node `x/y`
   taşıyor; kaydedilmemiş akışlar `x/y`'siz (auto-layout devrede).
 
+## Doğrulama (UX cilası, 2026-06-18)
+
+- `go build` + `tsc -b` yeşil. **Playwright canlı test:** edge stili "Basamak" + "Animasyon"
+  açık kaydedildi → API'de `edgeStyle=step, animated=true` (yalnız o akışta; diğerleri boş),
+  DOM'da edge sınıfı `react-flow__edge-step ... animated`, handle `title="Giriş"`, handle
+  boyutu 12px. Başka akışa geçip dönünce UI graf'tan `step`+animasyonu yeniden yükledi
+  (akış-bazlı kalıcılık uçtan uca).
+
 ## Notlar / sıradaki adımlar
 
 - Bundle büyüdü; ileride React Flow'u dinamik `import()` ile code-split etmek düşünülebilir.
 - SwarmClaw'daki salt-okunur "şablon görüntüleyici" modu ileride eklenebilir.
 - Paperclip-tarzı statik "ajan ilişki haritası" (call_agent/send_agent_message kenarları)
   ayrı bir ekran olarak değerlendirilebilir.
+- MiniMap arka planı sabit `#0b0e14` (temaya duyarlı değil) — istenirse tema değişkenine bağlanır.

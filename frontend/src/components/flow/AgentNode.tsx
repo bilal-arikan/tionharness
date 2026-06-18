@@ -12,7 +12,7 @@ export function AgentNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const isEnd = useIsEndNode(id)
   return (
     <NodeShell type="agent" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="flex items-center gap-1.5 text-xs font-medium">
         {agent ? (
           <AgentAvatar agent={agent} size={18} />
@@ -26,7 +26,7 @@ export function AgentNode({ id, data, selected }: NodeProps<FlowRFNode>) {
           {node.prompt}
         </div>
       )}
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Bottom} title="Çıkış → sonraki node" />
     </NodeShell>
   )
 }

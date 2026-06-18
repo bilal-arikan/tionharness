@@ -19,6 +19,11 @@ const (
 type Graph struct {
 	Start string `json:"start"` // entry node id
 	Nodes []Node `json:"nodes"`
+
+	// Presentation hints for the visual canvas builder (cosmetic only — ignored
+	// by the engine and Validate). Persisted so a flow keeps its look.
+	EdgeStyle string `json:"edgeStyle,omitempty"` // default|smoothstep|step|straight
+	Animated  bool   `json:"animated,omitempty"`  // animate edge flow
 }
 
 // Node is a single step. Fields are interpreted per Type.

@@ -117,6 +117,9 @@ func main() {
 		Addr:              cfg.Addr,
 		Handler:           server.Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
+		// IdleTimeout reaps idle keep-alive connections. WriteTimeout is left
+		// unset on purpose: it would abort long-lived SSE streams.
+		IdleTimeout: 120 * time.Second,
 	}
 
 	go func() {

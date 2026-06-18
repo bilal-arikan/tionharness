@@ -7,8 +7,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8090',
-      '/health': 'http://localhost:8090',
+      // 127.0.0.1 (not "localhost") so the proxy hits the IPv4 address the Go
+      // backend binds — on Windows "localhost" resolves to ::1 first and 502s.
+      '/api': 'http://127.0.0.1:8090',
+      '/health': 'http://127.0.0.1:8090',
     },
   },
   build: {

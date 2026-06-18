@@ -11,6 +11,7 @@ import (
 	"math"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // minTokenLen drops 1-character tokens, which carry little signal.
@@ -38,7 +39,7 @@ func tokenize(text string) []string {
 	})
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {
-		if len([]rune(f)) < minTokenLen || stopwords[f] {
+		if utf8.RuneCountInString(f) < minTokenLen || stopwords[f] {
 			continue
 		}
 		out = append(out, f)
@@ -60,7 +61,13 @@ func buildVector(text string) vector {
 
 // cosine returns the cosine similarity of two term vectors in [0,1].
 func cosine(a, b vector) float64 {
-	if len(a) == 0 || len(b) == 0 {
+	return cosineNorm(a, b, norm(a))
+}
+
+// cosineNorm is cosine with the first vector's precomputed norm. Recall passes
+// the query norm computed once, so it isn't recomputed for every candidate.
+func cosineNorm(a, b vector, anorm float64) float64 {
+	if len(a) == 0 || len(b) == 0 || anorm == 0 {
 		return 0
 	}
 	// Iterate the smaller map for the dot product.
@@ -77,7 +84,7 @@ func cosine(a, b vector) float64 {
 	if dot == 0 {
 		return 0
 	}
-	return dot / (norm(a) * norm(b))
+	return dot / (anorm * norm(b))
 }
 
 func norm(v vector) float64 {

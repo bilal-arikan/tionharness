@@ -12,7 +12,7 @@ export function BranchNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const isEnd = useIsEndNode(id)
   return (
     <NodeShell type="branch" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Top} title="Giriş" />
       <ul className="space-y-1">
         {arms.map((b, i) => (
           <li key={i} className="relative pr-3 text-[11px]">
@@ -21,6 +21,7 @@ export function BranchNode({ id, data, selected }: NodeProps<FlowRFNode>) {
               type="source"
               position={Position.Right}
               id={`b${i}`}
+              title={`Dal → ${b.contains || 'varsayılan'}`}
               style={{ position: 'absolute', right: -6, top: '50%', transform: 'translateY(-50%)' }}
             />
           </li>

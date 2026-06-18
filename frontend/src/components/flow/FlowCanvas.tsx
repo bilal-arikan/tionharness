@@ -36,6 +36,7 @@ interface Props {
   nodes: FlowRFNode[]
   edges: Edge[]
   edgeStyle: EdgeStyle
+  animated: boolean
   onNodesChange: (c: NodeChange<FlowRFNode>[]) => void
   onEdgesChange: (c: EdgeChange[]) => void
   setEdges: (updater: (e: Edge[]) => Edge[]) => void
@@ -50,16 +51,17 @@ export function FlowCanvas({
   nodes,
   edges,
   edgeStyle,
+  animated,
   onNodesChange,
   onEdgesChange,
   setEdges,
   onSelect,
 }: Props) {
-  // Apply the chosen path style to every edge for display (cosmetic; not part
-  // of the persisted graph). Existing labels/handles are preserved.
+  // Apply the chosen path style + animation to every edge for display. These
+  // are cosmetic flow-level presentation hints; the labels/handles are kept.
   const styledEdges = useMemo(
-    () => edges.map((e) => ({ ...e, type: edgeStyle })),
-    [edges, edgeStyle],
+    () => edges.map((e) => ({ ...e, type: edgeStyle, animated })),
+    [edges, edgeStyle, animated],
   )
   const onConnect = useCallback(
     (conn: Connection) => {
@@ -92,7 +94,7 @@ export function FlowCanvas({
           nodes={nodes}
           edges={styledEdges}
           nodeTypes={nodeTypes}
-          defaultEdgeOptions={{ type: edgeStyle }}
+          defaultEdgeOptions={{ type: edgeStyle, animated }}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}

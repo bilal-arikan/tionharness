@@ -97,6 +97,7 @@ func (s *Store) Recall(ctx context.Context, agentID, query string, limit int, ki
 	if len(qv) == 0 {
 		return nil, nil
 	}
+	qnorm := norm(qv) // constant across candidates; compute once
 
 	hits := make([]Hit, 0, len(sources))
 	for _, src := range sources {
@@ -104,7 +105,7 @@ func (s *Store) Recall(ctx context.Context, agentID, query string, limit int, ki
 		if vec == nil {
 			vec = buildVector(src.Content) // backfill for rows without a cached vector
 		}
-		score := cosine(qv, vec)
+		score := cosineNorm(qv, vec, qnorm)
 		if score >= minScore {
 			hits = append(hits, Hit{Source: src, Score: score})
 		}

@@ -25,6 +25,9 @@ export interface FlowNode {
 export interface FlowGraph {
   start: string
   nodes: FlowNode[]
+  // Cosmetic canvas presentation (persisted; ignored by the engine).
+  edgeStyle?: string // default | smoothstep | step | straight
+  animated?: boolean
 }
 
 export interface Flow {

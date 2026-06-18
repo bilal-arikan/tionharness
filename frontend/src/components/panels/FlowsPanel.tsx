@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, XCircle } from 'lucide-react'
 import { api } from '../../api'
 import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
@@ -47,10 +47,12 @@ export function FlowsPanel({ agents, onError }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowRFNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  // Edge path style (cosmetic, device-local preference).
+  // Edge presentation (cosmetic). Stored per-flow in the graph; localStorage
+  // holds the last-used edge style as the default for flows that have none.
   const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>(
     () => (localStorage.getItem('swarmgo.flowEdgeStyle') as EdgeStyle) || 'default',
   )
+  const [animated, setAnimated] = useState(false)
   const changeEdgeStyle = (s: EdgeStyle) => {
     setEdgeStyle(s)
     localStorage.setItem('swarmgo.flowEdgeStyle', s)
@@ -86,10 +88,16 @@ export function FlowsPanel({ agents, onError }: Props) {
         setNodes(rn)
         setEdges(re)
         setStart(g.start ?? '')
+        setEdgeStyle(
+          (g.edgeStyle as EdgeStyle) ||
+            ((localStorage.getItem('swarmgo.flowEdgeStyle') as EdgeStyle) || 'default'),
+        )
+        setAnimated(!!g.animated)
       } catch {
         setNodes([])
         setEdges([])
         setStart('')
+        setAnimated(false)
       }
     },
     [setNodes, setEdges],
@@ -169,6 +177,8 @@ export function FlowsPanel({ agents, onError }: Props) {
     if (!selectedId) return
     try {
       const graph = reactFlowToGraph(nodes, edges, start)
+      graph.edgeStyle = edgeStyle
+      graph.animated = animated
       const f = await api.updateFlow(selectedId, name, description, graph)
       setFlows((prev) => prev.map((x) => (x.id === f.id ? f : x)))
       onError('') // clear
@@ -188,8 +198,9 @@ export function FlowsPanel({ agents, onError }: Props) {
     }
   }
 
-  // setNodeStatus paints a node's live run state (running glow / done ring).
-  const setNodeStatus = (nodeId: string, status: 'running' | 'done' | undefined) => {
+  // setNodeStatus paints a node's live run state (running glow / done ring /
+  // error ring).
+  const setNodeStatus = (nodeId: string, status: 'running' | 'done' | 'error' | undefined) => {
     setNodes((prev) =>
       prev.map((rn) => (rn.id === nodeId ? { ...rn, data: { ...rn.data, status } } : rn)),
     )
@@ -205,10 +216,12 @@ export function FlowsPanel({ agents, onError }: Props) {
       await saveFlow() // persist edits before running
       await api.runFlowStreamStandalone(selectedId, input, {
         onNode: (ev) => {
-          setNodeStatus(ev.nodeId, ev.phase === 'start' ? 'running' : 'done')
+          const status = ev.phase === 'start' ? 'running' : ev.phase === 'error' ? 'error' : 'done'
+          setNodeStatus(ev.nodeId, status)
           setLiveNodes((prev) => {
             if (ev.phase === 'start') return [...prev, ev]
-            const i = prev.findIndex((n) => n.nodeId === ev.nodeId && n.output === undefined)
+            // done/error: replace the pending entry for this node (still running).
+            const i = prev.findIndex((n) => n.nodeId === ev.nodeId && n.output === undefined && n.error === undefined)
             if (i < 0) return [...prev, ev]
             const next = [...prev]
             next[i] = ev
@@ -312,6 +325,14 @@ export function FlowsPanel({ agents, onError }: Props) {
                 ))}
               </select>
             </label>
+            <label className="flex flex-shrink-0 cursor-pointer items-center gap-1 text-xs text-[var(--color-text-dim)]">
+              <input
+                type="checkbox"
+                checked={animated}
+                onChange={(e) => setAnimated(e.target.checked)}
+              />
+              Animasyon
+            </label>
             <button
               onClick={saveFlow}
               className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
@@ -343,6 +364,7 @@ export function FlowsPanel({ agents, onError }: Props) {
                 nodes={nodes}
                 edges={edges}
                 edgeStyle={edgeStyle}
+                animated={animated}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 setEdges={setEdges}
@@ -396,12 +418,16 @@ export function FlowsPanel({ agents, onError }: Props) {
                   {liveNodes.map((n, i) => (
                     <li key={`${n.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
                       <div className="mb-1 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-                        {n.output === undefined && (
+                        {n.error !== undefined ? (
+                          <XCircle size={12} className="text-[var(--color-danger)]" />
+                        ) : n.output === undefined ? (
                           <Loader2 size={12} className="animate-spin text-[var(--color-accent)]" />
-                        )}
+                        ) : null}
                         {i + 1}. [{n.type}] {n.title}
                       </div>
-                      {n.output === undefined ? (
+                      {n.error !== undefined ? (
+                        <span className="text-xs whitespace-pre-wrap text-[var(--color-danger)]">⚠️ {n.error}</span>
+                      ) : n.output === undefined ? (
                         <span className="text-xs italic text-[var(--color-text-dim)]">çalışıyor…</span>
                       ) : n.type === 'branch' ? (
                         <div className="whitespace-pre-wrap">{n.output}</div>
