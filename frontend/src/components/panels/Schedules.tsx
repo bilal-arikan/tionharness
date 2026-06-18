@@ -71,6 +71,22 @@ function fmtTime(unix: number): string {
   return new Date(unix * 1000).toLocaleString('tr-TR')
 }
 
+// Convert a unix-seconds timestamp to the "YYYY-MM-DDTHH:mm" string a
+// datetime-local input expects (in local time). 0/undefined → empty string.
+function unixToLocalInput(unix?: number): string {
+  if (!unix) return ''
+  const d = new Date(unix * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// Parse a datetime-local input string back to unix seconds. Empty → 0.
+function localInputToUnix(s: string): number {
+  if (!s) return 0
+  const ms = new Date(s).getTime()
+  return isNaN(ms) ? 0 : Math.floor(ms / 1000)
+}
+
 export function Schedules({ agents, focusId, onError }: Props) {
   const [schedules, setSchedules] = useState<Schedule[]>([])
   // Briefly highlight a deep-linked schedule once it is present in the list.
@@ -79,12 +95,15 @@ export function Schedules({ agents, focusId, onError }: Props) {
   const [agentId, setAgentId] = useState('')
   const [cronExpr, setCronExpr] = useState('*/5 * * * *')
   const [prompt, setPrompt] = useState('')
+  // Optional end date for the new schedule (datetime-local string; '' = none).
+  const [expiresAt, setExpiresAt] = useState('')
 
   // Inline edit state (one schedule edited at a time).
   const [editId, setEditId] = useState<string | null>(null)
   const [editAgentId, setEditAgentId] = useState('')
   const [editCronExpr, setEditCronExpr] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
+  const [editExpiresAt, setEditExpiresAt] = useState('')
 
   // Id of the schedule currently being run manually (disables its Run button).
   const [runningId, setRunningId] = useState<string | null>(null)
@@ -118,15 +137,22 @@ export function Schedules({ agents, focusId, onError }: Props) {
       onError('Prompt zorunlu')
       return
     }
+    const expUnix = localInputToUnix(expiresAt)
+    if (expUnix && expUnix <= Math.floor(Date.now() / 1000)) {
+      onError('Son tarih gelecekte olmalı')
+      return
+    }
     try {
       const s = await api.createSchedule({
         agentId,
         cronExpr: cronExpr.trim(),
         prompt: prompt.trim(),
         enabled: true,
+        expiresAt: expUnix,
       })
       setSchedules((prev) => [s, ...prev])
       setPrompt('')
+      setExpiresAt('')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -149,6 +175,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
     setEditAgentId(s.agentId)
     setEditCronExpr(s.cronExpr)
     setEditPrompt(s.prompt)
+    setEditExpiresAt(unixToLocalInput(s.expiresAt))
   }
 
   const cancelEdit = () => setEditId(null)
@@ -162,11 +189,17 @@ export function Schedules({ agents, focusId, onError }: Props) {
       onError('Prompt zorunlu')
       return
     }
+    const expUnix = localInputToUnix(editExpiresAt)
+    if (expUnix && expUnix <= Math.floor(Date.now() / 1000)) {
+      onError('Son tarih gelecekte olmalı')
+      return
+    }
     try {
       const updated = await api.updateSchedule(s.id, {
         agentId: editAgentId,
         cronExpr: editCronExpr.trim(),
         prompt: editPrompt.trim(),
+        expiresAt: expUnix,
       })
       setSchedules((prev) => prev.map((x) => (x.id === s.id ? updated : x)))
       setEditId(null)
@@ -228,6 +261,26 @@ export function Schedules({ agents, focusId, onError }: Props) {
             placeholder="cron: dk sa gün ay haftagünü"
             className="w-44 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
           />
+          <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+            Son tarih (ops.):
+            <input
+              type="datetime-local"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+              title="Bu tarihten sonra zamanlama çalışmaz (opsiyonel)"
+            />
+            {expiresAt && (
+              <button
+                onClick={() => setExpiresAt('')}
+                className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
+                title="Son tarihi temizle"
+                type="button"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </label>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <input
@@ -280,6 +333,26 @@ export function Schedules({ agents, focusId, onError }: Props) {
                   placeholder="cron: dk sa gün ay haftagünü"
                   className="w-44 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
                 />
+                <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+                  Son tarih (ops.):
+                  <input
+                    type="datetime-local"
+                    value={editExpiresAt}
+                    onChange={(e) => setEditExpiresAt(e.target.value)}
+                    className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+                    title="Bu tarihten sonra zamanlama çalışmaz (opsiyonel)"
+                  />
+                  {editExpiresAt && (
+                    <button
+                      onClick={() => setEditExpiresAt('')}
+                      className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
+                      title="Son tarihi temizle"
+                      type="button"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </label>
               </div>
               <div className="flex flex-wrap items-end gap-2">
                 <input
@@ -358,6 +431,21 @@ export function Schedules({ agents, focusId, onError }: Props) {
                   <span className="text-[var(--color-danger)]"> ({s.lastDeliveryError})</span>
                 )}
               </div>
+              {s.expiresAt ? (
+                <div className="text-xs text-[var(--color-text-dim)]">
+                  Son tarih:{' '}
+                  <span
+                    className={
+                      s.expiresAt <= Math.floor(Date.now() / 1000)
+                        ? 'text-[var(--color-danger)]'
+                        : ''
+                    }
+                  >
+                    {fmtTime(s.expiresAt)}
+                    {s.expiresAt <= Math.floor(Date.now() / 1000) && ' (süresi doldu)'}
+                  </span>
+                </div>
+              ) : null}
             </div>
             <button
               onClick={() => runNow(s)}

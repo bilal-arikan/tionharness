@@ -77,6 +77,10 @@ type Schedule struct {
 	LastDeliveryStatus string `json:"lastDeliveryStatus"`
 	LastDeliveryError  string `json:"lastDeliveryError"`
 	Enabled            bool   `json:"enabled"`
+	// ExpiresAt is an optional end date (unix seconds). When > 0 the schedule
+	// stops firing once the time passes — the next due cron tick is skipped and
+	// the schedule is auto-disabled. 0 means "no end date" (runs indefinitely).
+	ExpiresAt int64 `json:"expiresAt,omitempty"`
 	// CreatedBy is the ID of the agent that created this schedule via a
 	// self-management tool ("" = created by the user). Agents may only
 	// edit/delete agent-created schedules.

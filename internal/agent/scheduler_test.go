@@ -7,9 +7,63 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/bilal/swarmgo/internal/db"
 )
+
+// TestScheduleExpired checks the optional end-date guard: 0 never expires, a
+// future date is still live, a past date is expired.
+func TestScheduleExpired(t *testing.T) {
+	now := time.Now().Unix()
+	cases := []struct {
+		name      string
+		expiresAt int64
+		want      bool
+	}{
+		{"no end date", 0, false},
+		{"future", now + 3600, false},
+		{"past", now - 3600, true},
+	}
+	for _, c := range cases {
+		if got := scheduleExpired(db.Schedule{ExpiresAt: c.expiresAt}); got != c.want {
+			t.Errorf("%s: scheduleExpired(%d) = %v, want %v", c.name, c.expiresAt, got, c.want)
+		}
+	}
+}
+
+// TestExpiredScheduleSkippedOnReload verifies an already-expired schedule is
+// auto-disabled and not armed when the scheduler rebuilds its cron table.
+func TestExpiredScheduleSkippedOnReload(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	sched := NewScheduler(rt.db, rt, slog.New(slog.NewTextHandler(discardWriter{}, nil)))
+	ctx := context.Background()
+
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "X", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	sc, err := rt.db.CreateSchedule(ctx, db.Schedule{
+		AgentID: agent.ID, Prompt: "p", CronExpr: "0 * * * *",
+		Enabled: true, ExpiresAt: time.Now().Unix() - 60,
+	})
+	if err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+
+	if err := sched.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer sched.Stop()
+
+	got, err := rt.db.GetSchedule(ctx, sc.ID)
+	if err != nil {
+		t.Fatalf("get schedule: %v", err)
+	}
+	if got.Enabled {
+		t.Error("expired schedule should be auto-disabled on reload")
+	}
+}
 
 // TestDeliverPrompt_RecordsErrorReply verifies that a failed scheduled prompt
 // surfaces the failure as an assistant turn inside the schedule session, instead

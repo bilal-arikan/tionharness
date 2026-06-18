@@ -28,6 +28,8 @@ type createScheduleReq struct {
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
 	Enabled  bool   `json:"enabled"`
+	// ExpiresAt is an optional end date (unix seconds); 0 = no end date.
+	ExpiresAt int64 `json:"expiresAt"`
 }
 
 func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
@@ -56,10 +58,11 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	schedule, err := wsp.DB.CreateSchedule(r.Context(), db.Schedule{
-		AgentID:  req.AgentID,
-		CronExpr: req.CronExpr,
-		Prompt:   req.Prompt,
-		Enabled:  req.Enabled,
+		AgentID:   req.AgentID,
+		CronExpr:  req.CronExpr,
+		Prompt:    req.Prompt,
+		Enabled:   req.Enabled,
+		ExpiresAt: req.ExpiresAt,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -75,6 +78,8 @@ type updateScheduleReq struct {
 	AgentID  string `json:"agentId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
+	// ExpiresAt is an optional end date (unix seconds); 0 = no end date.
+	ExpiresAt int64 `json:"expiresAt"`
 }
 
 // handleUpdateSchedule edits a schedule's agent/cron/task/prompt and reloads cron.
@@ -105,10 +110,11 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := wsp.DB.UpdateSchedule(r.Context(), db.Schedule{
-		ID:       id,
-		AgentID:  req.AgentID,
-		CronExpr: req.CronExpr,
-		Prompt:   req.Prompt,
+		ID:        id,
+		AgentID:   req.AgentID,
+		CronExpr:  req.CronExpr,
+		Prompt:    req.Prompt,
+		ExpiresAt: req.ExpiresAt,
 	})
 	if writeDBError(w, err, "schedule not found") {
 		return

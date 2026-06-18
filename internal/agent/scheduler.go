@@ -85,6 +85,15 @@ func (s *Scheduler) rebuildLocked(ctx context.Context) error {
 			s.armWakeLocked(sc)
 			continue
 		}
+		// Past its optional end date: auto-disable so it leaves the cron table for
+		// good, and skip adding a timer.
+		if scheduleExpired(sc) {
+			if err := s.db.SetScheduleEnabled(ctx, sc.ID, false); err != nil {
+				s.logger.Warn("expired schedule disable failed", "schedule", sc.ID, "error", err)
+			}
+			s.logger.Info("schedule expired; auto-disabled", "schedule", sc.ID, "expiresAt", sc.ExpiresAt)
+			continue
+		}
 		id := sc.ID // capture for the closure
 		entryID, err := s.cron.AddFunc(sc.CronExpr, func() { s.fire(id) })
 		if err != nil {
@@ -111,11 +120,27 @@ func (s *Scheduler) syncNextRunLocked(ctx context.Context) {
 	}
 }
 
+// scheduleExpired reports whether a schedule's optional end date has passed.
+// A zero ExpiresAt means "no end date" (never expires).
+func scheduleExpired(sc db.Schedule) bool {
+	return sc.ExpiresAt > 0 && time.Now().Unix() >= sc.ExpiresAt
+}
+
 // fire executes a schedule on its cron tick: it owns its own timeout context so
-// the run survives even if nothing else holds one.
+// the run survives even if nothing else holds one. A cron tick that lands after
+// the schedule's end date is skipped and the schedule is auto-disabled (a reload
+// then drops it from the cron table).
 func (s *Scheduler) fire(scheduleID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), scheduleTimeout)
 	defer cancel()
+	if sc, err := s.db.GetSchedule(ctx, scheduleID); err == nil && scheduleExpired(sc) {
+		if err := s.db.SetScheduleEnabled(ctx, scheduleID, false); err != nil {
+			s.logger.Warn("expired schedule disable failed", "schedule", scheduleID, "error", err)
+		}
+		s.logger.Info("schedule expired; skipping fire", "schedule", scheduleID, "expiresAt", sc.ExpiresAt)
+		go func() { _ = s.Reload(context.Background()) }()
+		return
+	}
 	_ = s.run(ctx, scheduleID, "schedule")
 }
 

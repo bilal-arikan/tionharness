@@ -36,6 +36,7 @@ export const taskApi = {
     cronExpr: string
     prompt?: string
     enabled?: boolean
+    expiresAt?: number
   }) =>
     req<Schedule>('/api/schedules', {
       method: 'POST',
@@ -43,7 +44,7 @@ export const taskApi = {
     }),
   updateSchedule: (
     id: string,
-    data: { agentId: string; cronExpr: string; prompt?: string },
+    data: { agentId: string; cronExpr: string; prompt?: string; expiresAt?: number },
   ) =>
     req<Schedule>(`/api/schedules/${id}`, {
       method: 'PUT',

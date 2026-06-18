@@ -48,4 +48,6 @@ export interface Schedule {
   lastDeliveryError: string
   enabled: boolean
   createdAt: number
+  // Optional end date (unix seconds); 0/undefined = no end date.
+  expiresAt?: number
 }
