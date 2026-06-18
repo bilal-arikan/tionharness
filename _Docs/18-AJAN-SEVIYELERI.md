@@ -1,6 +1,6 @@
 # 18 — Ajan Seviyeleri ve Dinamik Geçişler (Tasarım Notu)
 
-> **Durum:** Tasarım — henüz uygulanmadı  
+> **Durum:** Faz T1 **uygulandı** (backend yeşil; commit eşzamanlı WIP reconcile sonrası) — T2/T3 beklemede  
 > **Tarih:** 2026-06-18  
 > **İlgili dosyalar:** `internal/settings/settings.go`, `internal/db/models.go`,
 > `internal/agent/toolloop.go`, `internal/tools/delegate.go`, `internal/providers/kind.go`
@@ -284,12 +284,38 @@ Frontend bu olayı alır → chat başlık çubuğunda geçici rozet + trace kar
 
 ## 8. Uygulama Fazları
 
-### Faz T1 — Veri Modeli + Konfigürasyon (Temel)
+### Faz T1 — Veri Modeli + Konfigürasyon (Temel) — ✅ UYGULANDI (2026-06-18)
 
-Değiştirilen dosyalar: `settings.go`, `db/models.go`, `agent/tunables.go`  
-Eklenen: `resolveEffectiveProvider`, DTO alanları, `seedDefaultAgent` tier desteği  
-Frontend: WorkspacePanel "Ajan Seviyeleri" bölümü, AgentSettingsForm tier dropdown  
-**Sonuç:** Ajanlar tier'a göre oluşturulabilir ve doğru provider/model ile çalışır.
+**Backend:**
+- `settings.AgentTierConfig` (provider/model/systemBoost) + `Settings.TierCheap/Medium/Smart` + `DefaultTier`;
+  `Default()` varsayılanları (cheap→claude-cli, medium→haiku, smart→sonnet, defaultTier="" ), DTO + Patch + Apply
+  + `normalize` (slot trim + DefaultTier enum doğrulama) — `settings.go`, `store.go`.
+- `db.Agent.Tier` alanı + `AgentProfilePatch.Tier` (kısmi patch) — `db/models.go`, `db/store.go`.
+- `agent.TierSlot` tipi + `Tunables.SetTierConfig/TierSlot` (canlı push) — `tunables.go`.
+- **Çözüm seam'i** `agent/tier.go`: `resolveTier` (tier varsa+slot doluysa provider/model döner, yoksa
+  ajanın kendi alanlarına düşer) + `effectiveProvider` (Provider örneği + model) + exported `ResolveTier`.
+- Çağrı noktaları seam'e geçirildi: heartbeat (`runtime.go`), flow/task (`executor.go`), delegasyon
+  (`delegate.go`), reflect/summary/title/compact funnel'i (`budget.go::guardedComplete` — açık model
+  override'ı korunur), chat (`api/chat.go`, `chat_stream.go`, `chat_turn.go` → `ResolveTier`).
+- `applySettings` → `SetTierConfig` push (`api/server.go`); `POST/PUT /api/agents` `tier` alanı + create'te
+  `DefaultTier` seed (`api/agents.go`).
+
+**Frontend:**
+- `types/settings.ts` `AgentTierConfig`/`AgentTier` + 4 alan; `types/agent.ts` `Agent.tier`/`AgentPatch.tier`;
+  `api/agents.ts` createAgent `tier`.
+- `AgentSettingsForm`: "Seviye" dropdown'u (Özel/Ucuz/Orta/Zeki) — Özel'de ProviderModelSelect görünür,
+  tier'da workspace ayarından geldiği notu.
+- `settings/ProvidersPanel`: "Ajan Seviyeleri" bölümü (3 slot için ProviderModelSelect + "Yeni ajan varsayılan
+  seviyesi" seçici); `SettingsPanel` save patch'ine tier alanları eklendi.
+
+**Test/Build:** `agent/tier_test.go` (4 senaryo: tiersiz fallback, tier override, ayarsız tier fallback,
+bilinmeyen tier fallback). `go build`/`vet`/`test ./internal/...` **yeşil**. Frontend: tier kodu `tsc` temiz
+(ağaçtaki 2 hata eşzamanlı `market`/`hooks` WIP'inden — bu çalışmadan bağımsız).
+
+**Not — commit:** çalışma ağacı eşzamanlı bir oturumun WIP'iyle iç içe (`runtime.go`'da
+`heartbeatGoalBlock`+`GoalDone` değişikliği benim tier hunk'ımla aynı bölgede; frontend `App.tsx`/`HooksPanel`
+WIP'i derlemiyor). Bu yüzden T1 kodu **commitsiz** — iki oturum reconcile edilince commit'lenecek (bu projede
+yerleşik kalıp). Bu doküman güncellemesi ayrı commit'lenir.
 
 ### Faz T2 — `escalate_tier` Aracı
 
