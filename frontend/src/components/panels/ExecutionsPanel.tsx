@@ -314,8 +314,15 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
                 </button>
               )}
             </header>
+            <MessageList
+              messages={messages}
+              pending={loading}
+              agents={agents}
+              onOpenFile={onOpenFile}
+              onOpenArtifact={onOpenArtifact}
+            />
             {selected.running && (
-              <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-6 py-2">
+              <div className="flex items-center gap-2 border-t border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-6 py-2">
                 <Loader2
                   size={14}
                   className="shrink-0 animate-spin text-[var(--color-success)]"
@@ -334,13 +341,6 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
                 </span>
               </div>
             )}
-            <MessageList
-              messages={messages}
-              pending={loading}
-              agents={agents}
-              onOpenFile={onOpenFile}
-              onOpenArtifact={onOpenArtifact}
-            />
           </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--color-text-dim)]">
