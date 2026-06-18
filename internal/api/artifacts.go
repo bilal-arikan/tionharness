@@ -74,6 +74,7 @@ func (s artifactSink) CreateArtifact(ctx context.Context, title, kind, language,
 		Kind:      kind,
 		Language:  language,
 		Content:   content,
+		Origin:    "tool",
 	})
 	if err != nil {
 		return tools.ArtifactRef{}, err
@@ -91,6 +92,40 @@ func (s artifactSink) UpdateArtifact(ctx context.Context, id, content string) (t
 
 func toArtifactRef(a db.Artifact) tools.ArtifactRef {
 	return tools.ArtifactRef{ID: a.ID, Title: a.Title, Kind: a.Kind}
+}
+
+// attachmentArtifactKind maps a chat attachment's coarse kind to an artifact
+// kind so the right renderer is used in the Artifacts screen.
+func attachmentArtifactKind(k string) string {
+	switch k {
+	case "image":
+		return db.ArtifactImage
+	case "video":
+		return db.ArtifactVideo
+	case "audio":
+		return db.ArtifactAudio
+	case "code":
+		return db.ArtifactCode
+	case "text":
+		return db.ArtifactText
+	default: // pdf | office | archive | file | unknown
+		return db.ArtifactFile
+	}
+}
+
+// captureAttachmentArtifacts records each chat attachment as an artifact so every
+// file added to a session lands in the Artifacts screen (origin "chat"), tagged
+// with its origin session. Deduped by relPath; best-effort (never breaks a turn).
+func (s *Server) captureAttachmentArtifacts(ctx context.Context, database *db.DB, sessionID, agentID string, atts []db.Attachment) {
+	for _, a := range atts {
+		if a.RelPath == "" {
+			continue
+		}
+		kind := attachmentArtifactKind(a.Kind)
+		if _, err := database.UpsertAttachmentArtifact(ctx, sessionID, agentID, a.RelPath, a.Name, kind); err != nil {
+			s.logger.Warn("attachment artifact capture failed", "name", a.Name, "error", err)
+		}
+	}
 }
 
 // ---- HTTP handlers ----
@@ -123,6 +158,7 @@ type createArtifactReq struct {
 	Language   string `json:"language"`
 	Content    string `json:"content"`
 	SourcePath string `json:"sourcePath"` // workspace-relative path for media/file kinds
+	Origin     string `json:"origin"`     // chat | manual | agent | tool
 }
 
 // handleCreateArtifact creates an artifact manually (from the UI).
@@ -136,6 +172,10 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
+	origin := req.Origin
+	if origin == "" {
+		origin = "manual"
+	}
 	a, err := ws(r).DB.CreateArtifact(r.Context(), db.Artifact{
 		SessionID:  req.SessionID,
 		AgentID:    req.AgentID,
@@ -144,6 +184,7 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 		Language:   req.Language,
 		Content:    req.Content,
 		SourcePath: req.SourcePath,
+		Origin:     origin,
 	})
 	if writeDBError(w, err, "") {
 		return

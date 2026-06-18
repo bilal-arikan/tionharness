@@ -8,11 +8,21 @@ import (
 // ---- Artifacts ----
 
 func (d *DB) persistArtifactLocked(a *Artifact) error {
-	// Externalise a text artifact's body to a real file under workspace/artifacts/
-	// so the JSON only references it; media kinds keep their SourcePath as-is.
-	if isTextArtifact(a.Kind) && a.Content != "" {
-		if err := d.writeArtifactContent(a); err != nil {
-			return err
+	// A text artifact's body lives in a real file under workspace/artifacts/, so
+	// the JSON only references it. Two cases:
+	//   - content supplied (tool/manual create) → write a new content file.
+	//   - no content but an already-uploaded text file (chat attachment / manual
+	//     upload) → use that file directly as the content file (no duplicate).
+	// Media kinds keep their SourcePath binary as-is.
+	if isTextArtifact(a.Kind) && a.ContentFile == "" {
+		switch {
+		case a.Content != "":
+			if err := d.writeArtifactContent(a); err != nil {
+				return err
+			}
+		case a.SourcePath != "":
+			a.ContentFile = a.SourcePath
+			d.readArtifactContent(a)
 		}
 	}
 	d.artifacts[a.ID] = *a // in-memory keeps the full content
@@ -102,7 +112,7 @@ func (d *DB) UpdateArtifactMeta(ctx context.Context, id, title, kind, language s
 // already exists for the same session + source path it is overwritten in place,
 // otherwise a new one is created. This dedups repeated writes of the same file
 // within a session so the Artifacts screen shows the latest content once.
-func (d *DB) SaveFileArtifact(ctx context.Context, sessionID, agentID, sourcePath, title, kind, language, content string) (Artifact, error) {
+func (d *DB) SaveFileArtifact(ctx context.Context, sessionID, agentID, sourcePath, title, kind, language, content, origin string) (Artifact, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for _, a := range d.artifacts {
@@ -111,6 +121,9 @@ func (d *DB) SaveFileArtifact(ctx context.Context, sessionID, agentID, sourcePat
 			a.Title = title
 			a.Kind = kind
 			a.Language = language
+			if origin != "" {
+				a.Origin = origin
+			}
 			a.UpdatedAt = now()
 			return a, d.persistArtifactLocked(&a)
 		}
@@ -124,9 +137,45 @@ func (d *DB) SaveFileArtifact(ctx context.Context, sessionID, agentID, sourcePat
 		Language:   language,
 		Content:    content,
 		SourcePath: sourcePath,
+		Origin:     origin,
 		CreatedAt:  now(),
 		UpdatedAt:  now(),
 	}
+	return a, d.persistArtifactLocked(&a)
+}
+
+// UpsertAttachmentArtifact records a chat attachment as an artifact so every file
+// added to a session appears in the Artifacts screen, tagged with its origin
+// session. The uploaded file IS the artifact's file: media kinds reference it via
+// SourcePath; text kinds also use it as the ContentFile (no duplicate written).
+// Deduped by session + relPath — re-sending the same file is a no-op.
+func (d *DB) UpsertAttachmentArtifact(ctx context.Context, sessionID, agentID, relPath, name, kind string) (Artifact, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.upsertAttachmentArtifactLocked(sessionID, agentID, relPath, name, kind)
+}
+
+// upsertAttachmentArtifactLocked is the lock-free core of UpsertAttachmentArtifact
+// (caller holds d.mu, or runs single-threaded during Open).
+func (d *DB) upsertAttachmentArtifactLocked(sessionID, agentID, relPath, name, kind string) (Artifact, error) {
+	for _, a := range d.artifacts {
+		if a.SessionID == sessionID && a.SourcePath != "" && a.SourcePath == relPath {
+			return a, nil // already captured
+		}
+	}
+	a := Artifact{
+		ID:         newID(),
+		SessionID:  sessionID,
+		AgentID:    agentID,
+		Title:      name,
+		Kind:       kind,
+		SourcePath: relPath,
+		Origin:     "chat",
+		CreatedAt:  now(),
+		UpdatedAt:  now(),
+	}
+	// persistArtifactLocked uses the uploaded file (SourcePath) as the content
+	// file for text kinds and renders media from SourcePath — no duplicate write.
 	return a, d.persistArtifactLocked(&a)
 }
 

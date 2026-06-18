@@ -241,15 +241,17 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       try {
         for (const file of files) {
           try {
-            // A fixed "artifacts" bucket — these uploads are not tied to a chat session.
-            const att = await api.uploadFile('artifacts', file)
+            // Sessionless manual uploads share the "_shared" bucket under artifacts/.
+            const att = await api.uploadFile('_shared', file)
             const kind = artifactKindForUpload(att)
             const created = await api.createArtifact({
               title: att.name,
               kind,
               content: att.textContent ?? '',
-              // Media/file kinds reference the file on disk; text/code embed content.
-              sourcePath: isMediaKind(kind) ? att.relPath : undefined,
+              // Every kind now references its uploaded file on disk; text/code also
+              // keep their content inline for the editor.
+              sourcePath: att.relPath,
+              origin: 'manual',
             })
             if (!firstId) firstId = created.id
           } catch (e) {

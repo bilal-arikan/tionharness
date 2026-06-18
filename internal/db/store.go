@@ -77,7 +77,7 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 		if s.AgentID == id {
 			delete(d.sessions, sid)
 			delete(d.messages, sid)
-			_ = os.RemoveAll(d.sessionUploadsDir(sid))
+			d.deleteSessionFilesLocked(sid)
 			_ = os.RemoveAll(d.dir(dirSessions, sid))
 		}
 	}
@@ -310,15 +310,22 @@ func (d *DB) DeleteSession(ctx context.Context, sessionID string) error {
 	}
 	delete(d.sessions, sessionID)
 	delete(d.messages, sessionID)
-	_ = os.RemoveAll(d.sessionUploadsDir(sessionID))
+	d.deleteSessionFilesLocked(sessionID)
 	return os.RemoveAll(d.dir(dirSessions, sessionID))
 }
 
-// sessionUploadsDir returns the attachment-upload folder for a session. Uploads
-// live in the workspace sandbox (workspace/uploads/<sid>), a sibling of the
-// store root (store/), so they are removed together with the session.
-func (d *DB) sessionUploadsDir(sessionID string) string {
-	return filepath.Join(filepath.Dir(d.root), "workspace", "uploads", sessionID)
+// deleteSessionFilesLocked removes a session's artifacts when the session is
+// deleted: every artifact entity (JSON) belonging to it and the per-session file
+// folder (workspace/artifacts/<sid>/) that holds their content/uploads, so the
+// files don't outlive the session. Caller holds d.mu.
+func (d *DB) deleteSessionFilesLocked(sessionID string) {
+	for id, a := range d.artifacts {
+		if a.SessionID == sessionID {
+			delete(d.artifacts, id)
+			_ = removeFile(d.dir(dirArtifacts, id+".json"))
+		}
+	}
+	_ = os.RemoveAll(d.ArtifactsDir(sessionID))
 }
 
 // SessionDir returns the absolute folder holding a session's JSONL file.

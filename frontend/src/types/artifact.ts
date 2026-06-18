@@ -26,6 +26,9 @@ export interface Artifact {
   content: string
   // Set when the artifact was auto-captured from a file the agent wrote.
   sourcePath?: string
+  // How the artifact entered the workspace: chat attachment, manual drop, an
+  // agent-written file, or a create_artifact tool call.
+  origin?: 'chat' | 'manual' | 'agent' | 'tool'
   createdAt: number
   updatedAt: number
 }

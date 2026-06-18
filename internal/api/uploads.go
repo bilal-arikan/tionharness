@@ -62,14 +62,16 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	name := sanitizeFileName(header.Filename)
 	id := uuid.NewString()[:8]
-	// Relative path under the sandbox root (DataDir/workspace). Forward slashes so
-	// it matches the agent's read_file path style.
-	rel := "uploads/" + sessionID + "/" + id + "-" + name
-	uploadsRoot := filepath.Join(wsp.DataDir, "workspace", "uploads")
+	// Relative path under the sandbox root (DataDir/workspace). All of a session's
+	// files (chat attachments, manual uploads, artifact content) are collected in
+	// one per-session folder: artifacts/<sessionId>/. Forward slashes match the
+	// agent's read_file path style.
+	rel := "artifacts/" + sessionID + "/" + id + "-" + name
+	artifactsRoot := filepath.Join(wsp.DataDir, "workspace", "artifacts")
 	abs := filepath.Join(wsp.DataDir, "workspace", filepath.FromSlash(rel))
-	// Defense in depth: the resolved file must stay inside the uploads root even
+	// Defense in depth: the resolved file must stay inside the artifacts root even
 	// if some component slipped past the checks above.
-	if !withinDir(uploadsRoot, abs) {
+	if !withinDir(artifactsRoot, abs) {
 		writeError(w, http.StatusBadRequest, "invalid path")
 		return
 	}

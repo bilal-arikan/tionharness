@@ -261,7 +261,13 @@ func (d *DB) load() error {
 	if err := d.loadToolConfig(); err != nil {
 		return err
 	}
-	return d.loadSessions()
+	if err := d.loadSessions(); err != nil {
+		return err
+	}
+	// Consolidate any pre-unification files into the per-session artifacts layout
+	// and back existing chat attachments with artifacts (idempotent, best-effort).
+	d.migrateUnifiedLayout()
+	return nil
 }
 
 // ---- context is accepted for API parity but not used by the file store ----

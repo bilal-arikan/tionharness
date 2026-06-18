@@ -26,11 +26,12 @@ func TestArtifactContentExternalised(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	// 1) The content file exists under workspace/artifacts/<id>.md with the body.
-	if a.ContentFile != "artifacts/"+a.ID+".md" {
+	// 1) The content file exists under workspace/artifacts/_shared/<id>.md (no
+	// session → the _shared bucket) with the body.
+	if a.ContentFile != "artifacts/_shared/"+a.ID+".md" {
 		t.Fatalf("unexpected ContentFile: %q", a.ContentFile)
 	}
-	contentPath := filepath.Join(root, "workspace", "artifacts", a.ID+".md")
+	contentPath := filepath.Join(root, "workspace", "artifacts", "_shared", a.ID+".md")
 	body, err := os.ReadFile(contentPath)
 	if err != nil {
 		t.Fatalf("content file missing: %v", err)
@@ -104,7 +105,7 @@ func TestArtifactLegacyMigration(t *testing.T) {
 	if got.ContentFile == "" {
 		t.Errorf("legacy artifact should have been migrated to a content file")
 	}
-	if _, err := os.Stat(filepath.Join(root, "workspace", "artifacts", "leg1.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "workspace", "artifacts", "_shared", "leg1.md")); err != nil {
 		t.Errorf("migrated content file missing: %v", err)
 	}
 }

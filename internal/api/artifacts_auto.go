@@ -103,7 +103,7 @@ func (s *Server) captureFileArtifacts(ctx context.Context, database *db.DB, sess
 		}
 		seen[fp] = true
 		kind, lang := artifactKindForPath(fp)
-		if _, err := database.SaveFileArtifact(ctx, sessionID, agentID, fp, baseName(fp), kind, lang, content); err != nil {
+		if _, err := database.SaveFileArtifact(ctx, sessionID, agentID, fp, baseName(fp), kind, lang, content, "agent"); err != nil {
 			s.logger.Warn("auto artifact capture failed", "path", fp, "error", err)
 		}
 	}

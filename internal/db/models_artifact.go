@@ -33,6 +33,12 @@ type Artifact struct {
 	Language  string `json:"language"` // for code kind (e.g. "go", "python")
 	Content   string `json:"content"`
 
+	// Origin records how this artifact entered the workspace: "chat" (a chat
+	// attachment), "manual" (dropped into the Artifacts screen), "agent" (a file
+	// the agent wrote, auto-captured) or "tool" (create_artifact). Empty for
+	// legacy rows. Surfaced in the UI as "where it came from".
+	Origin string `json:"origin,omitempty"`
+
 	// SourcePath is the file path this artifact mirrors when it was captured
 	// automatically from a file the agent wrote (empty for manual/tool-created
 	// artifacts). It dedups repeated writes of the same file within a session.

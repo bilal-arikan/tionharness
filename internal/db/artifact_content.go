@@ -57,15 +57,31 @@ func artifactExt(a Artifact) string {
 }
 
 // workspaceDir is the workspace sandbox root (sibling of the store root), where
-// artifact content files live under artifacts/.
+// all artifact files live under artifacts/<sessionDir>/.
 func (d *DB) workspaceDir() string {
 	return filepath.Join(filepath.Dir(d.root), "workspace")
 }
 
+// artifactSessionDir is the per-session folder segment that collects an
+// artifact's files. Session-scoped artifacts group under their session id;
+// sessionless ones (e.g. manual uploads) share a "_shared" bucket.
+func artifactSessionDir(sessionID string) string {
+	if sessionID == "" {
+		return "_shared"
+	}
+	return sessionID
+}
+
+// ArtifactsDir returns the absolute folder that holds a session's artifact files
+// (content + uploads). Used by cleanup on session delete.
+func (d *DB) ArtifactsDir(sessionID string) string {
+	return filepath.Join(d.workspaceDir(), "artifacts", artifactSessionDir(sessionID))
+}
+
 // writeArtifactContent writes a text artifact's body to its content file under
-// <workspace>/artifacts/ and records the workspace-relative path in ContentFile.
+// <workspace>/artifacts/<sessionDir>/ and records the relative path in ContentFile.
 func (d *DB) writeArtifactContent(a *Artifact) error {
-	rel := "artifacts/" + a.ID + artifactExt(*a)
+	rel := "artifacts/" + artifactSessionDir(a.SessionID) + "/" + a.ID + artifactExt(*a)
 	abs := filepath.Join(d.workspaceDir(), filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return err
