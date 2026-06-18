@@ -1,8 +1,8 @@
 // Package skills implements a lightweight, file-based skill system: reusable
 // instruction sets an agent can load on demand. Each skill is a directory
 // containing a SKILL.md file (YAML-ish frontmatter + a markdown body). Skills
-// are resolved from three tiers (global → workspace → project); a skill with the
-// same slug in a higher tier overrides the lower one.
+// are resolved from two tiers (global → workspace); a skill with the same slug
+// in the workspace tier overrides the global one.
 //
 // Loading is deliberately LAZY: scanning parses only the frontmatter (name,
 // description, when-to-use) so the per-turn catalog stays cheap. The full body
@@ -10,8 +10,8 @@
 // sits in the context window until it is actually needed.
 package skills
 
-// Source identifies which tier a skill was resolved from. Higher tiers override
-// lower ones when slugs collide (project beats workspace beats global).
+// Source identifies which tier a skill was resolved from. The workspace tier
+// overrides the global tier when slugs collide (workspace beats global).
 type Source string
 
 const (

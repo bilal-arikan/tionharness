@@ -708,24 +708,21 @@ chat-only). **Canlı doğrulama** (izole instance, port 8099): varsayılan açı
 `list_sessions` katalogda → disable edince kaybolur → recentCount 999→20 clamp. `go test ./...` +
 `tsc` yeşil.
 
-## Faz S1 — Skill sistemi (dosya-tabanlı, 3 katman, lazy) ✅ (2026-06-17)
+## Faz S1 — Skill sistemi (dosya-tabanlı, 2 katman, lazy, subskills, varsayılan seeding) ✅ (2026-06-17 → 2026-06-18)
 
 Ajanlara **yeniden kullanılabilir talimat setleri** (skill) eklendi — Claude Code /
-external-agent-oss desenleri incelenip SwarmGo'ya uyarlandı. **Sub-skill yok:**
-craft-oss'ta zaten yoktu; Claude Code'daki `context:fork`/`agent:` icra modelinin
-çözdüğü delegasyon SwarmGo'da `call_agent` ile zaten karşılanıyor — bu yüzden
-sadece **flat skill + 3 katman + lazy gövde** alındı.
+external-agent-oss desenleri incelenip SwarmGo'ya uyarlandı. **flat skill + 2 katman +
+lazy gövde + subskills (aşamalı yükleme) + varsayılan skill seeding** ile tamamlandı.
 
 **Format:** klasör-başına `<slug>/SKILL.md` (YAML-ish frontmatter + markdown gövde).
 Frontmatter alanları: `name`, `description`, `when_to_use`, `icon`, `color`,
-`alwaysAllow[]`, `requiredSources[]`. Bağımlılıksız küçük frontmatter parser
-(`internal/skills/frontmatter.go`) — go.mod minimal kalsın diye yaml lib yok.
+`alwaysAllow[]`, `requiredSources[]`, `subskills[]`. Bağımlılıksız küçük frontmatter
+parser (`internal/skills/frontmatter.go`) — go.mod minimal kalsın diye yaml lib yok.
 
-**3 katman (öncelik: proje > workspace > global):**
-- global: `~/.agents/skills/` (cross-tool konvansiyon)
+**2 katman (öncelik: workspace > global):**
+- global: `~/.swarmgo/skills/` (SwarmGo'nun kendi data dizini — `SWARMGO_DATA_DIR` onurlandırır)
 - workspace: `<workspace>/skills/` (store/·config/·workspace/ kardeşi)
-- project: `<workDir>/.agents/skills/` (ajan sandbox kökü)
-Aynı slug üst katmanda override eder (`internal/skills/store.go`, `New`+`Reload`+`List`).
+Aynı slug workspace'te override eder (`internal/skills/store.go`, `New`+`Reload`+`List`).
 
 **Lazy:** katalog taranırken **sadece frontmatter** okunur (token-dostu). Tam gövde
 diskte kalır; ajan `use_skill(slug)` çağırınca `Store.Body` ile okunur. Katalog
@@ -776,6 +773,16 @@ Yukarıdaki ilk sürüm üzerine yapılan değişiklikler (skill sistemi son hal
   net hata döner (kriptik OS hatası yerine).
 - **Örnek skill'ler (son):** `commit` (global), `swarmgo-project` + `web-research` (workspace;
   `web-research` `access: shared`). Eski `~/.agents/skills` ve proje-tier demo'ları temizlendi.
+- **`subskills:` frontmatter alanı (aşamalı yükleme):** Skill `subskills: [slug1, slug2]` ile daha
+  ayrıntılı alt-skill'lere işaret edebilir. `use_skill` çağrıldığında gövde sonuna "## Related skills"
+  footer'ı eklenir — ajan bilgi derinleştirme yolu olarak `use_skill` ile alt-skill'i yükleyebilir.
+  `internal/skills/store.go` → `UseSkillBody` + `subskillFooter`. Frontend `SkillsPanel.tsx` detail
+  header'ında alt-skill chip'leri (bilinene tıklanabilir, bilinmeyene strikethrough).
+- **Varsayılan skill seeding (`EnsureDefaults`):** Her `NewRuntime` başlangıcında SwarmGo'nun kendi
+  kılavuz skill'leri `~/.swarmgo/skills`'e **idempotent** olarak kopyalanır (mevcut olanı asla ezmez).
+  `internal/skills/defaults.go` (`//go:embed defaults`); seeded skill'ler: `swarmgo-guide` (genel
+  bakış, `access: shared`) + `swarmgo-flows` (orkestrasyon detayı, `access: shared`, `swarmgo-guide`
+  subskill'i olarak işaret eder).
 - ✅ build/vet/test + tsc/vite yeşil; **canlı :8090 restart** ile uçtan uca doğrulandı.
 
 ## Ara özellik — Ajan bağlam önizleme (fresh-start context) ✅ (2026-06-17/18)

@@ -28,7 +28,7 @@ graph TD
 
 ### 2. API Katmanı (`internal/api`)
 - HTTP router: **stdlib `net/http` ServeMux** (Go 1.22+ method+path pattern → Chi/Echo gerekmedi). Rotalar domain-bazlı `register*Routes` yardımcılarına bölünmüştür (`server.go`).
-- REST uçları: `/api/agents`, `/api/sessions`, `/api/chat`, `/api/tasks`, `/api/schedules`, `/api/flows`, `/api/mcp-servers`, `/api/artifacts`, `/api/settings`, `/api/workspaces`, `/api/logs`, `/api/events` (tam liste için `server.go` ve SKILL API tablosu).
+- REST uçları: `/api/agents`, `/api/sessions`, `/api/chat`, `/api/tasks`, `/api/schedules`, `/api/flows`, `/api/mcp-servers`, `/api/artifacts`, `/api/skills`, `/api/settings`, `/api/workspaces`, `/api/logs`, `/api/events` (tam liste için `server.go`).
 - Canlı akış: kalıcı WebSocket hub'ı yerine **SSE** (`POST /api/chat/stream`) — sohbet turu adım adım UI'a akar (bkz. `07-CHAT-UX.md`).
 
 ### 3. Agent Runtime (`internal/agent`)
@@ -50,6 +50,8 @@ graph LR
 - Heartbeat = `time.Ticker`; zamanlama = `robfig/cron`.
 - 10 ardışık hatada exponential backoff + otomatik devre dışı.
 - Paralel yürütme = düz goroutine + `sync` (orchestration parallel node). `errgroup` planlanmıştı ama gerekmedi; `go.mod`'da yalnızca `google/uuid` + `robfig/cron/v3` var.
+- **Skill sistemi:** `internal/skills` — 2 katmanlı (global + workspace), frontmatter-only katalog sistem promptuna girer, `use_skill` ile lazy body yüklenir, `subskills` ile aşamalı yükleme.
+- **Lazy tool loading:** Self-management suite + MCP araçları şemaları tura girmez; sistem promptunda özet katalog yayımlanır, `activate_tools` ile istenince tam şema gelir (`internal/tools/activetools.go`, `builtin_activate.go`).
 
 ### 4. Orchestration (`internal/orchestration`)
 - Yapılandırılmış oturumlar: dallanma (branch), döngü (loop), paralel birleşme (join).
@@ -96,7 +98,8 @@ SwarmGo/
 │   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go)
 │   ├── orchestration/           # akış graf motoru (model.go, engine.go)
 │   ├── mcp/                     # SDK'sız stdio JSON-RPC istemci (client.go, manager.go)
-│   ├── tools/                   # built-in (fs/shell akan + todo_write/ask_user + artifact) + MCP birleşik registry (registry.go StreamingTool, builtin_*.go, sandbox.go, ask.go, artifact.go)
+│   ├── tools/                   # built-in (fs/shell akan + todo_write/ask_user + artifact + lazy-load meta) + MCP birleşik registry (registry.go, builtin_*.go, activetools.go, builtin_activate.go)
+│   ├── skills/                  # dosya-tabanlı skill sistemi (2 katman: global ~/.swarmgo/skills + workspace/skills); frontmatter-only katalog, lazy body; subskills; varsayılan seeding (defaults/)
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
 │   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs (bkz. 12-LOGLAMA.md)
 │   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE

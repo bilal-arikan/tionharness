@@ -15,9 +15,9 @@ type tier struct {
 	source Source
 }
 
-// Store resolves and caches skills from the three tiers. It is safe for
-// concurrent use. The cache holds only frontmatter metadata; bodies are read
-// from disk on demand so edits are always picked up and the context stays lean.
+// Store resolves and caches skills from the two tiers (global + workspace). It
+// is safe for concurrent use. The cache holds only frontmatter metadata; bodies
+// are read from disk on demand so edits are always picked up and the context stays lean.
 type Store struct {
 	tiers []tier
 

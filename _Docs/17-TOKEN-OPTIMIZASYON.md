@@ -106,3 +106,9 @@ token araçlarının (`rtk`, `sqz`, `headroom`) **kurulu olup olmadığını** g
   uygulanır → kullanıcı, modelin gördüğü çıktıyı görür (tutarlılık).
 - Komut-özel akıllı kısaltıcılar (git/test/grep'e özgü) henüz yok; A jeneriktir. Gelecek iş.
 - claude-cli delegasyon yolu kapsam dışıdır (yukarıdaki sebep).
+
+## Ayrıca Bakınız
+
+- **[19-LAZY-TOOL-LOADING.md](19-LAZY-TOOL-LOADING.md)** — Araç şemalarının talep üzerine yüklenmesi
+  (sistem promptundan araç token yükü azaltmanın tamamlayıcı yolu): self-management + MCP araçları
+  katalog özetiyle yayımlanır, `activate_tools` çağrılınca tam şema gelir.
