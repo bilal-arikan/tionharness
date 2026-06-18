@@ -173,7 +173,7 @@ erDiagram
 | `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`); **`agent_id`** = turu üreten ajan (çok-ajanlı oturumda mesaj başına ajan) |
 | `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — bütçe guardrail'i için |
 | `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar. **`flow_id`** dolu ise görev "flow-backed" — çalıştırılınca ajana prompt yerine o orchestration akışı koşar. **`created_by`** = görevi oluşturan ajan ("" = kullanıcı; ajan yalnız kendi oluşturduğunu silebilir) |
-| `schedules` | Cron zamanlama; ajana doğrudan `prompt` teslimi (panodan bağımsız — görev çalıştırmaz); sonraki/son çalışma + teslim durumu; etkin mi |
+| `schedules` | Cron zamanlama; ajana doğrudan `prompt` teslimi (panodan bağımsız — görev çalıştırmaz); sonraki/son çalışma + teslim durumu; etkin mi. **`expires_at`** dolu ise (opsiyonel son tarih, unix saniye) o tarihten sonra zamanlama çalışmaz ve otomatik pasifleşir (0 = süresiz) |
 | `runs` | Yürütme kaydı: durum, tetikleyici (`trigger`), ajan çıktısı (`output`), hata |
 | `knowledge_sources` | Doküman, journal, reflection notları + embedding |
 | `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace) |

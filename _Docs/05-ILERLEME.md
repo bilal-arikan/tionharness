@@ -1,6 +1,12 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-19**
+
+## Zamanlamalara opsiyonel son tarih (`expiresAt`) ✅ (2026-06-19)
+
+**İstek:** Schedules ekranına opsiyonel bir "son tarih" seçimi eklensin.
+
+**Yapılan:** Tekrarlayan cron zamanlamalarına opsiyonel `Schedule.ExpiresAt` (unix saniye, `0` = süresiz) eklendi. Son tarih geçince o ana denk gelen cron tick'i **atlanır**, zamanlama **otomatik pasifleşir** ve bir `Reload` ile cron tablosundan düşer; scheduler yeniden kurulurken süresi geçmiş satır hiç eklenmez (restart-safe). **Manuel "▶ Çalıştır" etkilenmez** — kullanıcı süresi dolmuş bir zamanlamayı elle bir kez daha koşturabilir. Saf karar katmanı `scheduleExpired(sc)` hem `rebuildLocked` hem `fire` tarafından kullanılır. API `POST/PUT /api/schedules` `expiresAt` alır; `UpdateSchedule` `ExpiresAt`'i persist eder (ama `enabled`'a dokunmaz → süresi dolmuşu tekrar açmak: düzenle→kaydet→toggle). Frontend `Schedules.tsx` oluşturma+düzenleme formlarında **"Son tarih (ops.)"** `datetime-local` alanı (✕ temizleme + gelecekte-olma doğrulaması); liste satırı son tarihi gösterir, geçmişse kırmızı **"(süresi doldu)"**. Test: `TestScheduleExpired` + `TestExpiredScheduleSkippedOnReload`. Detay: `_Docs/20-SCHEDULE-WAKE.md` ("Tekrarlayan Zamanlamalarda Son Tarih"). `go build/test ./internal/...` + frontend `tsc` yeşil.
 
 ## Market — dört türde kurulum + 20 örnek paket ✅ (2026-06-18)
 

@@ -99,3 +99,72 @@ Playwright ile doğrulandı:
 - `ScheduleWakeup` (Claude Code harness aracı) devre dışı bırakıldı. Model bazen hâlâ bu aracı çağırmayı dener; disallowed listesi sayesinde araç çağrısı reddedilir, model `schedule_wake`'e yönelir.
 - Sohbet oturumu `ListSchedules` ve `list_schedules` aracından filtrelenir — yalnız aktif (henüz tetiklenmemiş) wake satırları gözükür ve bunlar da UI'da gösterilmez.
 - Çok uzun gecikmeler (1h+) clamp edilir; kullanıcıya araç çağrısı yanıtında belirtilir.
+
+---
+
+# Tekrarlayan Zamanlamalarda Son Tarih (`expires_at`)
+
+> Bu bölüm **one-shot wake**'ten ayrıdır. `schedule_wake` tek seferlik bir
+> timer'dır; burada anlatılan ise **tekrarlayan cron zamanlamalarına** eklenen
+> opsiyonel bir bitiş tarihidir.
+
+## Neden gerekti?
+
+Kullanıcı bir cron zamanlamasını yalnızca belirli bir tarihe kadar çalıştırmak
+isteyebilir (ör. "her sabah 09:00, ama yalnız bu ayın sonuna kadar"). Önceden
+zamanlamalar süresizdi; kullanıcının elle pasifleştirmesi gerekiyordu.
+
+## Davranış
+
+- `Schedule.ExpiresAt` (unix saniye, `json:"expiresAt,omitempty"`) **opsiyonel**
+  bir son tarihtir. `0` = son tarih yok (süresiz çalışır).
+- Son tarih **geçtikten sonra**:
+  - O ana denk gelen cron tick'i **atlanır** (ajana prompt teslim edilmez),
+  - Zamanlama **otomatik pasifleşir** (`enabled=false`),
+  - Bir `Reload` ile cron tablosundan tamamen düşürülür.
+- Scheduler **yeniden kurulurken** (boot / `Reload`) süresi çoktan geçmiş bir
+  zamanlama hiç eklenmez ve aynı şekilde pasifleştirilir — restart sonrası
+  süresi dolmuş bir zamanlama asla bir kez daha tetiklenmez.
+- **Manuel "▶ Çalıştır"** son tarihten etkilenmez: kullanıcı isterse süresi
+  dolmuş bir zamanlamayı elle bir kez daha koşturabilir (`RunNow` → trigger
+  `manual`). Son tarih yalnızca otomatik cron tetiklemesini durdurur.
+
+## Karar katmanı
+
+`scheduleExpired(sc)` saf bir yardımcı: `sc.ExpiresAt > 0 && now >= sc.ExpiresAt`.
+Hem `rebuildLocked` (kurulumda) hem `fire` (tick anında) bunu kullanır — tek
+doğruluk kaynağı.
+
+## API
+
+- `POST /api/schedules` ve `PUT /api/schedules/:id` gövdesinde opsiyonel
+  `expiresAt` (unix saniye) alanı kabul edilir; `0`/eksik = son tarih yok.
+- `UpdateSchedule` `ExpiresAt`'i de günceller. **Not:** update `enabled`
+  bayrağına dokunmaz — süresi dolup pasifleşmiş bir zamanlamanın son tarihini
+  ileri çekip tekrar çalıştırmak için düzenle → kaydet → toggle ile etkinleştir.
+
+## Frontend
+
+`Schedules.tsx` oluşturma ve düzenleme formlarında **"Son tarih (ops.)"**
+`datetime-local` alanı (✕ ile temizlenebilir, gelecekte olma doğrulaması).
+Liste satırı son tarihi gösterir; geçmişse kırmızı **"(süresi doldu)"** etiketi.
+
+## Dosyalar
+
+| Dosya | Değişiklik |
+|---|---|
+| `internal/db/models_task.go` | `Schedule.ExpiresAt int64` |
+| `internal/db/store_schedule.go` | `UpdateSchedule` `ExpiresAt`'i persist eder |
+| `internal/agent/scheduler.go` | `scheduleExpired()`; `rebuildLocked` + `fire` expiry guard'ı |
+| `internal/api/schedules.go` | create/update `expiresAt` alanı |
+| `frontend/src/types/task.ts` | `Schedule.expiresAt?` |
+| `frontend/src/api/tasks.ts` | `createSchedule`/`updateSchedule` `expiresAt` |
+| `frontend/src/components/panels/Schedules.tsx` | son tarih input + liste gösterimi |
+
+## Testler
+
+```
+internal/agent/scheduler_test.go
+  TestScheduleExpired                  — 0 süresiz, gelecek canlı, geçmiş süresi dolmuş
+  TestExpiredScheduleSkippedOnReload   — süresi dolmuş zamanlama Start'ta otomatik pasifleşir
+```
