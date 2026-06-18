@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   FileText, Code2, Globe, Image, GitBranch, FileCode,
   FileVideo, FileAudio, File as FileIcon, UploadCloud,
-  Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X,
+  Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X, FolderOpen,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Artifact, ArtifactKind } from '../../types'
 import { ArtifactView } from '../artifacts/ArtifactView'
+import { CopyPathButton } from '../CopyPathButton'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
 
@@ -91,6 +92,9 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   const [activeId, setActiveId] = useState<string | null>(selectedId ?? null)
   const [active, setActive] = useState<Artifact | null>(null)
   const [copied, setCopied] = useState(false)
+  // On-disk path of the active artifact (its source file, or its store JSON),
+  // loaded lazily so the copy-path / open-folder actions have a target.
+  const [activePath, setActivePath] = useState<string>('')
   // Edit/create state. When `draft` is set the viewer becomes an editor.
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
@@ -128,6 +132,32 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       .getArtifact(activeId)
       .then(setActive)
       .catch((e) => onError((e as Error).message))
+  }, [activeId, onError])
+
+  // Resolve the active artifact's on-disk path for the copy/open-folder actions.
+  useEffect(() => {
+    if (!activeId) {
+      setActivePath('')
+      return
+    }
+    let cancelled = false
+    api
+      .artifactPath(activeId)
+      .then((r) => {
+        if (!cancelled) setActivePath(r.path)
+      })
+      .catch(() => {
+        if (!cancelled) setActivePath('')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeId])
+
+  // Open the active artifact's folder in the OS file manager (local desktop app).
+  const reveal = useCallback(() => {
+    if (!activeId) return
+    api.revealArtifact(activeId).catch((e) => onError((e as Error).message))
   }, [activeId, onError])
 
   const remove = useCallback(
@@ -381,6 +411,15 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     </button>
                     <button onClick={copy} title="Kopyala" className={iconBtn}>
                       {copied ? <Check size={15} /> : <Copy size={15} />}
+                    </button>
+                    <CopyPathButton path={activePath} />
+                    <button
+                      onClick={reveal}
+                      disabled={!activePath}
+                      title="Klasörü aç"
+                      className={iconBtn}
+                    >
+                      <FolderOpen size={15} />
                     </button>
                     {active.sessionId && onOpenSession && (
                       <button

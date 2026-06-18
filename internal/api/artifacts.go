@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal/swarmgo/internal/workspace"
 )
 
 // artifactDeliverableGuidance is the always-on instruction (kept in the static
@@ -190,4 +193,51 @@ func (s *Server) handleDeleteArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// artifactDiskPath returns the absolute on-disk path an artifact maps to: the
+// source file it mirrors (media/file kinds, resolved under the workspace sandbox
+// when relative), otherwise the artifact's own store JSON.
+func artifactDiskPath(wsp *workspace.Workspace, a db.Artifact) string {
+	if a.SourcePath != "" {
+		if filepath.IsAbs(a.SourcePath) {
+			return a.SourcePath
+		}
+		return filepath.Join(wsp.DataDir, "workspace", filepath.FromSlash(a.SourcePath))
+	}
+	return filepath.Join(wsp.DataDir, "store", "artifacts", a.ID+".json")
+}
+
+// handleArtifactPath returns the artifact's on-disk path and its containing
+// folder, without side effects (used by the copy-path button).
+//
+// GET /api/artifacts/{id}/path
+func (s *Server) handleArtifactPath(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	a, err := wsp.DB.GetArtifact(r.Context(), r.PathValue("id"))
+	if writeDBError(w, err, "artifact not found") {
+		return
+	}
+	path := artifactDiskPath(wsp, a)
+	writeJSON(w, http.StatusOK, map[string]string{"path": path, "dir": filepath.Dir(path)})
+}
+
+// handleRevealArtifact opens the folder containing the artifact's file in the OS
+// file manager (Windows: Explorer) and returns the file path.
+//
+// POST /api/artifacts/{id}/reveal
+func (s *Server) handleRevealArtifact(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	a, err := wsp.DB.GetArtifact(r.Context(), r.PathValue("id"))
+	if writeDBError(w, err, "artifact not found") {
+		return
+	}
+	path := artifactDiskPath(wsp, a)
+	dir := filepath.Dir(path)
+	if err := exec.CommandContext(r.Context(), "explorer.exe", dir).Start(); err != nil {
+		// explorer.exe returns a non-zero exit code even on success; only a
+		// failure to *start* the process is a real error.
+		s.logger.Warn("reveal artifact folder failed", "id", a.ID, "error", err)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"path": path, "dir": dir})
 }
