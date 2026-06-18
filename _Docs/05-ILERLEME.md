@@ -2,6 +2,17 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## swarmclaw provider incelemesi → gelecek plan (2026-06-18)
+
+[bilal-arikan/swarmclaw](https://github.com/bilal-arikan/swarmclaw)'un ~70 provider'ı
+nasıl düşük eforla eklediği incelendi: **"metadata'yı protokolden ayır"** deseni — ~25
+OpenAI-uyumlu API tek `streamOpenAiChat` handler'ını paylaşıyor (fark sadece baseURL),
+~30 CLI 4'lü diziden üretilip tek `streamGenericCliChat`'i kullanıyor, yalnız ~10 yapısal
+CLI bespoke parser alıyor. Tam analiz + SwarmGo çıkarımları yeni dokümanda:
+[14-SWARMCLAW-PROVIDER-INCELEME.md](14-SWARMCLAW-PROVIDER-INCELEME.md). Yol haritasına iki
+plan maddesi eklendi: **SC-1** (built-in API preset kataloğu — düşük efor) ve **SC-2**
+(generic CLI factory — CLI fazı). **Yalnız plan; uygulamaya geçilmedi.**
+
 ## Reconcile durumu — "COMMITSİZ" notları çözüldü ✅ (2026-06-18)
 
 > Aşağıdaki günlük girdilerinde **COMMITSİZ / iç içe / reconcile'a bırakıldı** olarak
