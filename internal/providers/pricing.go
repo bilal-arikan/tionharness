@@ -78,3 +78,20 @@ func PriceFor(provider, model string) (Price, bool) {
 	p, ok := models[model]
 	return p, ok
 }
+
+// EstimateFor returns an equivalent-API cost estimate for subscription providers
+// where there is no direct per-token billing. For claude-cli the Anthropic list
+// price for the same model is returned so the budget screen can display an
+// "estimated equivalent API cost" figure clearly labelled as non-billable.
+// Returns ok=false when the model has no equivalent list price.
+func EstimateFor(provider, model string) (Price, bool) {
+	switch provider {
+	case "claude-cli":
+		// claude-cli runs via OAuth/subscription; reuse the Anthropic list price for
+		// the same model id as an informational estimate.
+		if p, ok := priceTable["anthropic"][model]; ok {
+			return p, true
+		}
+	}
+	return Price{}, false
+}

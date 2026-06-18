@@ -67,11 +67,17 @@ function tokensOf(s: KindStat): number {
   return s.inputTokens + s.outputTokens
 }
 
-// costText renders a cost cell honoring the priced flag (subscription/custom
-// spend shows "abonelik / fiyatsız" or a "~" estimate when partly priced).
-function costText(costUSD: number, priced: boolean): React.ReactNode {
+// costText renders a cost cell honoring the priced/estimated flags.
+// Subscription providers (claude-cli) have an estimated equivalent-API cost
+// shown with a "~" prefix and a tooltip explaining it is not real billing.
+function costText(costUSD: number, priced: boolean, estimated?: boolean): React.ReactNode {
   if (priced) return usd(costUSD)
-  if (costUSD > 0) return <span title="Bir kısmı fiyatsız (abonelik/özel model)">~{usd(costUSD)}</span>
+  if (costUSD > 0) {
+    const title = estimated
+      ? 'Abonelik (claude-cli) — eşdeğer API maliyeti tahmini; gerçek faturalandırma değil'
+      : 'Bir kısmı fiyatsız (abonelik/özel model)'
+    return <span title={title}>~{usd(costUSD)}</span>
+  }
   return <span className="text-[var(--color-text-dim)]">abonelik / fiyatsız</span>
 }
 
@@ -128,7 +134,7 @@ function FragmentRows({
         <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
           {p.savingsUSD > 0 ? <span style={{ color: 'var(--color-success)' }}>{usd(p.savingsUSD)}</span> : '—'}
         </td>
-        <td className="px-4 py-2.5 text-[var(--color-text)]">{costText(p.costUSD, p.priced)}</td>
+        <td className="px-4 py-2.5 text-[var(--color-text)]">{costText(p.costUSD, p.priced, p.estimated)}</td>
       </tr>
       {open &&
         p.models.map((m) => (
@@ -145,7 +151,7 @@ function FragmentRows({
             <td className="px-4 py-2 text-xs text-[var(--color-text-dim)]">
               {m.savingsUSD > 0 ? <span style={{ color: 'var(--color-success)' }}>{usd(m.savingsUSD)}</span> : '—'}
             </td>
-            <td className="px-4 py-2 text-xs text-[var(--color-text)]">{costText(m.costUSD, m.priced)}</td>
+            <td className="px-4 py-2 text-xs text-[var(--color-text)]">{costText(m.costUSD, m.priced, m.estimated)}</td>
           </tr>
         ))}
     </>
@@ -290,7 +296,13 @@ export function BudgetPanel({ onError }: Props) {
               icon={<DollarSign size={12} />}
               label="Tahmini maliyet (bugün)"
               value={`${usage.totals.priced ? '' : '~'}${usd(usage.totals.costUSD)}`}
-              sub={usage.totals.priced ? 'liste fiyatı tahmini' : 'bir kısmı abonelik/fiyatsız'}
+              sub={
+                usage.totals.priced
+                  ? 'liste fiyatı tahmini'
+                  : usage.totals.estimated
+                    ? 'claude-cli: eşdeğer API maliyeti dahil'
+                    : 'bir kısmı abonelik/fiyatsız'
+              }
             />
           </div>
 
@@ -450,7 +462,7 @@ export function BudgetPanel({ onError }: Props) {
                           </span>
                         </td>
                         <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
-                          {a.priced ? usd(a.costUSD) : a.costUSD > 0 ? `~${usd(a.costUSD)}` : '—'}
+                          {costText(a.costUSD, a.priced, a.estimated)}
                         </td>
                         <td className="px-4 py-2.5">
                           {a.dailyTokenLimit > 0 ? (

@@ -19,6 +19,7 @@ export interface ModelStat {
   costUSD: number
   savingsUSD: number
   priced: boolean
+  estimated?: boolean // equivalent-API estimate for subscription providers (e.g. claude-cli)
 }
 
 export interface BudgetAgentRow {
@@ -33,6 +34,7 @@ export interface BudgetAgentRow {
   byKind?: Record<string, KindStat>
   costUSD: number
   priced: boolean
+  estimated?: boolean // equivalent-API estimate for subscription providers (e.g. claude-cli)
   dailyCallLimit: number
   dailyTokenLimit: number
 }
@@ -47,6 +49,7 @@ export interface ProviderStat {
   costUSD: number
   savingsUSD: number
   priced: boolean
+  estimated?: boolean // equivalent-API estimate for subscription providers (e.g. claude-cli)
   models: ModelStat[]
 }
 
@@ -69,6 +72,7 @@ export interface WorkspaceUsage {
     costUSD: number
     savingsUSD: number
     priced: boolean
+    estimated?: boolean // true when cost includes equivalent-API estimates (e.g. claude-cli)
   }
   byProvider: ProviderStat[]
   agents: BudgetAgentRow[]

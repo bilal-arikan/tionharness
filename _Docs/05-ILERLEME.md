@@ -2,6 +2,30 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## claude-cli için bütçe/maliyet tahmini ✅ (2026-06-18)
+
+**İstek:** Bütçe ekranında `claude-cli` (AnthropicCli) sağlayıcısı için de maliyet hesaplaması yapılsın — mevcut `anthropic` ile aynı model fiyat tablosu kullanılarak eşdeğer API maliyeti tahmin edilsin; "abonelik / fiyatsız" yerine `~$X.XX` gösterilsin.
+
+**Token kaydı:** `claudecli.go` zaten `cliUsage.InputTokens/OutputTokens`'ı stream-json olaylarından yakalıyordu; `RecordUsage` bunları `provider="claude-cli"` + model adıyla `ByModel` haritasına yazıyordu. Veri mevcut, yalnızca fiyatlandırma eksikti.
+
+**Backend (`internal/providers/pricing.go`):**
+- `EstimateFor(provider, model string) (Price, bool)` eklendi: `claude-cli` için anthropic fiyat tablosundan aynı model id'si ile liste fiyatı döndürür (abonelik/OAuth sağlayıcısı için "eşdeğer API maliyeti" tahmini). `PriceFor` değişmedi — `claude-cli` hâlâ `ok=false` döndürür (gerçek faturalandırma yok).
+
+**Backend (`internal/api/budget.go`):**
+- `modelStat`, `providerStat`, `agentBudgetRow` tiplerine `Estimated bool` alanı eklendi.
+- `costOf` artık 3 değer döndürüyor: `(cost, priced, estimated)`. `PriceFor` başarısız olunca `EstimateFor` denenir; bulunursa maliyet hesaplanır, `estimated=true` işaretlenir.
+- Provider ve model detay döngüsü de `EstimateFor` yolu eklendi.
+- `totals` yanıt nesnesine `estimated` bayrağı eklendi.
+
+**Frontend (`frontend/src/types/usage.ts`):** `ModelStat`, `ProviderStat`, `BudgetAgentRow` ve `totals` tipine `estimated?: boolean` alanı eklendi.
+
+**Frontend (`frontend/src/components/panels/BudgetPanel.tsx`):**
+- `costText(costUSD, priced, estimated?)` imzası genişletildi; `estimated=true` olan girişlerde tooltip "Abonelik (claude-cli) — eşdeğer API maliyeti tahmini; gerçek faturalandırma değil" olarak güncellendi.
+- Agent tablosundaki maliyet hücresi `costText` kullanımına geçirildi (önceki satır-içi `~` mantığı kaldırıldı).
+- Summary card sub-metni: `priced=false, estimated=true` durumunda "claude-cli: eşdeğer API maliyeti dahil".
+
+**Test:** `TestEstimateFor_ClaudeCLI` (`pricing_test.go`): bilinen model `ok=true` + doğru fiyat, bilinmeyen model `ok=false`, metered `anthropic` sağlayıcısı `ok=false`. `go test ./internal/...` tam yeşil. **Playwright canlı doğrulama** (MINIMAX workspace, 8090+5174): Summary card `~$4.24` + "claude-cli: eşdeğer API maliyeti dahil", Claude CLI satırı `~$4.16`, Reminder `~$2.42`, StepTest `~$1.75`. Commit: bkz. git log.
+
 ## Beceri yazımı — UI'dan oluştur/düzenle/sil + emoji ikon ✅ (2026-06-18)
 
 **İstek:** Beceri (skill) ikonlarını değiştirebilelim; ayrıca **yeni skill ekleyip mevcutları düzenleyebilelim**. Önceki Beceriler ekranı salt-okunurdu (yalnız paylaş/kısıtla, klasörü aç, diskten tara).
