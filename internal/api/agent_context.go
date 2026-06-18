@@ -20,6 +20,10 @@ type agentContextPreview struct {
 	SystemTokens int           `json:"systemTokens"`
 	Tools        []toolSummary `json:"tools"`
 	ToolTokens   int           `json:"toolTokens"`
+	// LazyTools are the on-demand tools whose schemas are NOT shipped at turn start.
+	// Their names+descriptions live in the system prompt's load-on-demand catalog
+	// block (counted under SystemTokens). Activated via activate_tools.
+	LazyTools []toolSummary `json:"lazyTools"`
 	// Dynamic is the per-turn suffix simulated for the optional ?message= sample:
 	// recalled memory (for that message) + the cross-session block (when enabled).
 	// Session-only parts (summary, artifacts, todos) need a live session and are
@@ -54,6 +58,12 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 	for _, d := range defs {
 		tools = append(tools, toolSummary{Name: d.Name, Description: d.Description})
 	}
+	// Lazy tools: name+description only (schemas not shipped; tokens already in sysTok).
+	lazyDefs := wsp.Runtime.LazyToolCatalog(ctx, agent)
+	lazyTools := make([]toolSummary, 0, len(lazyDefs))
+	for _, d := range lazyDefs {
+		lazyTools = append(lazyTools, toolSummary{Name: d.Name, Description: d.Description})
+	}
 	// Optional sample message → simulate the message-dependent dynamic suffix.
 	dynamic := buildAgentDynamicPrompt(ctx, wsp, agent, r.URL.Query().Get("message"))
 
@@ -65,6 +75,7 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 		SystemTokens:  sysTok,
 		Tools:         tools,
 		ToolTokens:    toolTok,
+		LazyTools:     lazyTools,
 		Dynamic:       dynamic,
 		DynamicTokens: dynTok,
 		TotalTokens:   sysTok + toolTok + dynTok,

@@ -9,6 +9,10 @@ export interface Agent {
   identity: string
   provider: string
   model: string
+  // Optional quality tier ("cheap"|"medium"|"smart"). When set, the effective
+  // provider/model is resolved from the workspace tier config; provider/model
+  // above remain the fallback. Empty = use provider/model directly.
+  tier?: string
   planningMode: string
   thinkingLevel?: string
   // Tool-use permission gate: "read-only" | "ask" | "auto". Empty = auto.
@@ -34,6 +38,7 @@ export interface AgentPatch {
   identity?: string
   provider?: string
   model?: string
+  tier?: string
   planningMode?: string
   thinkingLevel?: string
   permissionMode?: string
@@ -64,6 +69,9 @@ export interface AgentContextPreview {
   systemTokens: number
   tools: { name: string; description: string }[]
   toolTokens: number
+  // Lazy (on-demand) tools: schemas NOT shipped at turn start; name+desc only.
+  // Their token cost is already included in systemTokens (catalog block).
+  lazyTools: { name: string; description: string }[]
   // Simulated per-turn dynamic suffix for the optional sample message (recalled
   // memory + cross-session block). Empty when no message / cross-session off.
   dynamic: string

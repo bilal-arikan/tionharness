@@ -82,7 +82,10 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-5 py-2 text-xs">
             <Stat label="Toplam" value={data.totalTokens} accent />
             <Stat label="Sistem promptu" value={data.systemTokens} />
-            <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
+            <Stat label={`Şema araçlar (${data.tools.length})`} value={data.toolTokens} />
+            {data.lazyTools.length > 0 && (
+              <Stat label={`Talep-üzerine (${data.lazyTools.length})`} value={0} dim />
+            )}
             <Stat label="Dinamik" value={data.dynamicTokens} />
             <span className="text-[var(--color-text-dim)]">~token tahmini</span>
           </div>
@@ -168,19 +171,15 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
               )}
 
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                Araçlar — her tur gönderilen · {data.tools.length}
+                Araçlar — her tur şema gönderilen · {data.tools.length}
               </h3>
               <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
-                Bunların tam şeması her tura girer. Talep-üzerine (lazy) araçlar — self-management ve
-                MCP — yalnızca sistem promptundaki{' '}
-                <code className="rounded bg-[var(--color-surface-2)] px-1">Available Tools (load on demand)</code>{' '}
-                bölümünde özetle durur; ajan <code className="rounded bg-[var(--color-surface-2)] px-1">activate_tools</code>{' '}
-                ile yükler.
+                Tam şema her tura girer; token maliyeti yukarıdaki "Şema araçlar" sayacına yansır.
               </p>
               {data.tools.length === 0 ? (
-                <p className="text-xs text-[var(--color-text-dim)]">Bu ajana araç sunulmuyor.</p>
+                <p className="mb-5 text-xs text-[var(--color-text-dim)]">Bu ajana şema gönderilen araç yok.</p>
               ) : (
-                <ul className="space-y-1">
+                <ul className="mb-5 space-y-1">
                   {data.tools.map((t) => (
                     <li
                       key={t.name}
@@ -192,6 +191,32 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                   ))}
                 </ul>
               )}
+
+              {data.lazyTools.length > 0 && (
+                <>
+                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                    Araçlar — talep üzerine (lazy) · {data.lazyTools.length}
+                  </h3>
+                  <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
+                    Şema tura girmez — yalnızca ad+özet sistem promptundaki{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1">Available Tools (load on demand)</code>{' '}
+                    bölümünde durur. Ajan{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1">activate_tools</code>{' '}
+                    ile istediğini bir sonraki adımda etkinleştirir.
+                  </p>
+                  <ul className="space-y-1">
+                    {data.lazyTools.map((t) => (
+                      <li
+                        key={t.name}
+                        className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 opacity-75"
+                      >
+                        <code className="text-xs font-medium text-[var(--color-text-dim)]">{t.name}</code>
+                        <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">{t.description}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </>
           )}
         </div>
@@ -200,16 +225,23 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
   )
 }
 
-function Stat({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
+function Stat({
+  label,
+  value,
+  accent,
+  dim,
+}: {
+  label: string
+  value: number
+  accent?: boolean
+  dim?: boolean
+}) {
+  const cls = accent
+    ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+    : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
   return (
-    <span
-      className={`rounded-md px-2 py-1 ${
-        accent
-          ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-          : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
-      }`}
-    >
-      {label}: <strong>{value.toLocaleString()}</strong>
+    <span className={`rounded-md px-2 py-1 ${cls} ${dim ? 'opacity-60' : ''}`}>
+      {dim ? label : <>{label}: <strong>{value.toLocaleString()}</strong></>}
     </span>
   )
 }

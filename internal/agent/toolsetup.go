@@ -187,6 +187,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewMemoryAddTool(r.mem, agent.ID),
 			tools.NewReadLogsTool(r.logs),
 		)
+		// Application-wide settings: read + live-apply the settings.json document
+		// behind the Settings screen. Only offered when the bridge is wired (the
+		// api server provides it), since changes affect every workspace.
+		if r.settingsBridge != nil {
+			builtins = append(builtins,
+				tools.NewGetSettingsTool(r.settingsBridge),
+				tools.NewUpdateSettingsTool(r.settingsBridge),
+			)
+		}
 	}
 
 	reg := tools.NewRegistry(builtins...)
@@ -275,6 +284,13 @@ func (r *Runtime) ToolCatalog(ctx context.Context, agent db.Agent) []providers.T
 // activate_tools. Used by the context preview for an honest token split.
 func (r *Runtime) ShippedToolCatalog(ctx context.Context, agent db.Agent) []providers.ToolDef {
 	return r.buildRegistry(ctx, agent).ActiveDefs(r.toolFilter(ctx, agent), nil)
+}
+
+// LazyToolCatalog returns name+description for every lazy (on-demand) tool the
+// agent may activate: self-management + MCP, minus its denylist. Their schemas
+// are NOT shipped at turn start; they live in the system prompt catalog block.
+func (r *Runtime) LazyToolCatalog(ctx context.Context, agent db.Agent) []providers.ToolDef {
+	return r.buildRegistry(ctx, agent).LazyCatalog(r.toolFilter(ctx, agent))
 }
 
 // LazyToolsCatalogBlock renders the "Available Tools (load on demand)" system-
