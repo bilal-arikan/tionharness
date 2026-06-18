@@ -38,6 +38,11 @@ type Node struct {
 	// parallel
 	Parallel []string `json:"parallel,omitempty"` // agent node ids to run concurrently
 	JoinNext string   `json:"joinNext,omitempty"` // node after the join ("" = end)
+
+	// layout (cosmetic only — ignored by the engine and Validate). Persisted so
+	// the visual canvas builder can restore node positions across reloads.
+	X float64 `json:"x,omitempty"`
+	Y float64 `json:"y,omitempty"`
 }
 
 // Branch is one routing rule of a branch node. An empty Contains is the default

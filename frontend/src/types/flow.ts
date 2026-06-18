@@ -17,6 +17,9 @@ export interface FlowNode {
   branches?: FlowBranch[]
   parallel?: string[]
   joinNext?: string
+  // Cosmetic canvas layout (persisted; ignored by the engine).
+  x?: number
+  y?: number
 }
 
 export interface FlowGraph {

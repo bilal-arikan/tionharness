@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
 import { Loader2 } from 'lucide-react'
 import { api } from '../../api'
 import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
+import { FlowCanvas } from '../flow/FlowCanvas'
+import { NodeInspector } from '../flow/NodeInspector'
+import {
+  graphToReactFlow,
+  reactFlowToGraph,
+  blankNode,
+  nextNodeId,
+  type FlowRFNode,
+} from '../../lib/flowGraph'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../../types'
 
 interface Props {
@@ -16,14 +26,9 @@ const NODE_TYPES: { value: FlowNodeType; label: string }[] = [
   { value: 'parallel', label: 'Paralel' },
 ]
 
-function newNodeId(existing: FlowNode[]): string {
-  let i = 1
-  while (existing.some((n) => n.id === `n${i}`)) i++
-  return `n${i}`
-}
-
-// FlowsPanel is the visual protocol builder: pick a flow, edit its nodes
-// (agent / branch / parallel), save, run with an input, and inspect the trace.
+// FlowsPanel is the visual protocol builder: pick a flow, edit it on a drag-and-
+// drop node canvas (React Flow), save, run with an input, and watch per-node
+// progress stream live on the canvas and in the trace below.
 export function FlowsPanel({ agents, onError }: Props) {
   const [flows, setFlows] = useState<Flow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -32,14 +37,14 @@ export function FlowsPanel({ agents, onError }: Props) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [start, setStart] = useState('')
-  const [nodes, setNodes] = useState<FlowNode[]>([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowRFNode>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
 
   // Run state.
   const [input, setInput] = useState('')
   const [running, setRunning] = useState(false)
   const [run, setRun] = useState<FlowRun | null>(null)
-  // Live per-node progress streamed while the flow runs (one entry per node;
-  // output filled on "done"). Shown until the final persisted run arrives.
   const [liveNodes, setLiveNodes] = useState<FlowNodeEvent[]>([])
 
   const loadFlows = useCallback(() => {
@@ -55,16 +60,24 @@ export function FlowsPanel({ agents, onError }: Props) {
       setDescription(f.description)
       setRun(null)
       setInput('')
+      setLiveNodes([])
+      setSelectedNodeId(null)
       try {
         const g = f.graph ? JSON.parse(f.graph) : { start: '', nodes: [] }
-        setNodes(Array.isArray(g.nodes) ? g.nodes : [])
+        const { nodes: rn, edges: re } = graphToReactFlow({
+          start: g.start ?? '',
+          nodes: Array.isArray(g.nodes) ? g.nodes : [],
+        })
+        setNodes(rn)
+        setEdges(re)
         setStart(g.start ?? '')
       } catch {
         setNodes([])
+        setEdges([])
         setStart('')
       }
     },
-    [],
+    [setNodes, setEdges],
   )
 
   const createFlow = async () => {
@@ -79,35 +92,69 @@ export function FlowsPanel({ agents, onError }: Props) {
     }
   }
 
+  // addNode appends a blank node of the given type near the canvas origin and
+  // makes it the start node if none is set yet.
   const addNode = (type: FlowNodeType) => {
-    const id = newNodeId(nodes)
-    const node: FlowNode = { id, type, title: '' }
-    if (type === 'agent') {
-      node.agentId = agents[0]?.id ?? ''
-      node.prompt = '{{input}}'
-      node.next = ''
-    } else if (type === 'branch') {
-      node.branches = [{ contains: '', next: '' }]
-    } else {
-      node.parallel = []
-      node.joinNext = ''
+    const existing = nodes.map((n) => n.data.node)
+    const id = nextNodeId(existing)
+    const node = blankNode(id, type, agents[0]?.id ?? '')
+    const offset = nodes.length * 30
+    const rf: FlowRFNode = {
+      id,
+      type,
+      position: { x: 80 + offset, y: 80 + offset },
+      data: { node, isStart: !start },
     }
-    setNodes((prev) => [...prev, node])
+    setNodes((prev) => [...prev, rf])
     if (!start) setStart(id)
   }
 
-  const patchNode = (idx: number, patch: Partial<FlowNode>) => {
-    setNodes((prev) => prev.map((n, i) => (i === idx ? { ...n, ...patch } : n)))
+  // patchSelected updates the selected node's intrinsic fields. A type change or
+  // a shrunk branch list prunes now-invalid outgoing edges so the graph stays
+  // consistent on save.
+  const patchSelected = (patch: Partial<FlowNode>) => {
+    if (!selectedNodeId) return
+    let prune = false
+    setNodes((prev) =>
+      prev.map((rn) => {
+        if (rn.id !== selectedNodeId) return rn
+        const before = rn.data.node
+        const merged = { ...before, ...patch }
+        if (patch.type && patch.type !== before.type) prune = true
+        if (
+          patch.branches &&
+          patch.branches.length < (before.branches?.length ?? 0)
+        )
+          prune = true
+        return { ...rn, type: merged.type, data: { ...rn.data, node: merged } }
+      }),
+    )
+    if (prune) {
+      setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId))
+    }
   }
 
-  const removeNode = (idx: number) => {
-    setNodes((prev) => prev.filter((_, i) => i !== idx))
+  const makeStart = () => {
+    if (!selectedNodeId) return
+    setStart(selectedNodeId)
+    setNodes((prev) =>
+      prev.map((rn) => ({ ...rn, data: { ...rn.data, isStart: rn.id === selectedNodeId } })),
+    )
+  }
+
+  const deleteSelected = () => {
+    if (!selectedNodeId) return
+    setNodes((prev) => prev.filter((rn) => rn.id !== selectedNodeId))
+    setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId))
+    if (start === selectedNodeId) setStart('')
+    setSelectedNodeId(null)
   }
 
   const saveFlow = async () => {
     if (!selectedId) return
     try {
-      const f = await api.updateFlow(selectedId, name, description, { start, nodes })
+      const graph = reactFlowToGraph(nodes, edges, start)
+      const f = await api.updateFlow(selectedId, name, description, graph)
       setFlows((prev) => prev.map((x) => (x.id === f.id ? f : x)))
       onError('') // clear
     } catch (e) {
@@ -126,16 +173,24 @@ export function FlowsPanel({ agents, onError }: Props) {
     }
   }
 
+  // setNodeStatus paints a node's live run state (running glow / done ring).
+  const setNodeStatus = (nodeId: string, status: 'running' | 'done' | undefined) => {
+    setNodes((prev) =>
+      prev.map((rn) => (rn.id === nodeId ? { ...rn, data: { ...rn.data, status } } : rn)),
+    )
+  }
+
   const doRun = async () => {
     if (!selectedId) return
     setRunning(true)
     setRun(null)
     setLiveNodes([])
+    setNodes((prev) => prev.map((rn) => ({ ...rn, data: { ...rn.data, status: undefined } })))
     try {
       await saveFlow() // persist edits before running
       await api.runFlowStreamStandalone(selectedId, input, {
-        // Each node: add a pending entry on "start", fill its output on "done".
-        onNode: (ev) =>
+        onNode: (ev) => {
+          setNodeStatus(ev.nodeId, ev.phase === 'start' ? 'running' : 'done')
           setLiveNodes((prev) => {
             if (ev.phase === 'start') return [...prev, ev]
             const i = prev.findIndex((n) => n.nodeId === ev.nodeId && n.output === undefined)
@@ -143,7 +198,8 @@ export function FlowsPanel({ agents, onError }: Props) {
             const next = [...prev]
             next[i] = ev
             return next
-          }),
+          })
+        },
         onReply: (r) => setRun(r.run),
         onError: (e) => onError(e),
       })
@@ -154,19 +210,8 @@ export function FlowsPanel({ agents, onError }: Props) {
     }
   }
 
-  const nodeOptions = (
-    <>
-      <option value="">(bitiş)</option>
-      {nodes.map((n) => (
-        <option key={n.id} value={n.id}>
-          {n.id} · {n.title || n.type}
-        </option>
-      ))}
-    </>
-  )
-
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId)?.data.node ?? null
   const trace: FlowState | null = run?.state ? safeParse(run.state) : null
-  const agentNodes = nodes.filter((n) => n.type === 'agent')
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -216,305 +261,151 @@ export function FlowsPanel({ agents, onError }: Props) {
       </div>
 
       {/* Editor + run */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {!selectedId ? (
+      {!selectedId ? (
+        <div className="flex-1 p-6">
           <p className="text-sm text-[var(--color-text-dim)]">
             Soldan bir akış seçin veya yeni bir akış oluşturun.
           </p>
-        ) : (
-          <div className="mx-auto max-w-3xl space-y-5">
-            {/* Meta */}
-            <div className="flex items-center gap-2">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium outline-none"
-              />
-              <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
-                Başlangıç:
-                <select
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
-                  className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none"
-                >
-                  <option value="">—</option>
-                  {nodes.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
+        </div>
+      ) : (
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Meta toolbar */}
+          <div className="flex items-center gap-2 border-b border-[var(--color-border)] p-3">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium outline-none"
+            />
+            {NODE_TYPES.map((t) => (
               <button
-                onClick={saveFlow}
-                className="rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                key={t.value}
+                onClick={() => addNode(t.value)}
+                className="rounded-lg bg-[var(--color-surface-2)] px-3 py-1.5 text-xs hover:opacity-90"
               >
-                Kaydet
+                + {t.label}
               </button>
-            </div>
+            ))}
+            <button
+              onClick={saveFlow}
+              className="rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              Kaydet
+            </button>
+          </div>
 
-            {/* Description */}
+          {/* Canvas + inspector */}
+          <div className="flex min-h-0 flex-1">
+            <div className="min-w-0 flex-1">
+              <FlowCanvas
+                agents={agents}
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                setEdges={setEdges}
+                onSelect={setSelectedNodeId}
+              />
+            </div>
+            <div className="w-72 flex-shrink-0 overflow-y-auto border-l border-[var(--color-border)] p-3">
+              {selectedNode ? (
+                <NodeInspector
+                  node={selectedNode}
+                  agents={agents}
+                  isStart={start === selectedNode.id}
+                  onPatch={patchSelected}
+                  onMakeStart={makeStart}
+                  onDelete={deleteSelected}
+                />
+              ) : (
+                <p className="text-xs text-[var(--color-text-dim)]">
+                  Düzenlemek için bir node seçin. Bağlantı için bir node'un tutamağından
+                  diğerine sürükleyin.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Description + run */}
+          <div className="max-h-[40%] overflow-y-auto border-t border-[var(--color-border)] p-4">
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Açıklama — bu akış ne yapar? (isteğe bağlı)"
-              rows={2}
-              className="w-full rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-dim)] outline-none"
+              rows={1}
+              className="mb-3 w-full rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-dim)] outline-none"
             />
-
-            {/* Nodes */}
-            <div className="space-y-3">
-              {nodes.map((node, idx) => (
-                <div
-                  key={node.id}
-                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">
-                      {node.id}
-                      {start === node.id && ' ▶'}
-                    </span>
-                    <select
-                      value={node.type}
-                      onChange={(e) => patchNode(idx, { type: e.target.value as FlowNodeType })}
-                      className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none"
-                    >
-                      {NODE_TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      value={node.title ?? ''}
-                      onChange={(e) => patchNode(idx, { title: e.target.value })}
-                      placeholder="başlık"
-                      className="flex-1 rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none"
-                    />
-                    <button
-                      onClick={() => removeNode(idx)}
-                      className="px-1 text-xs text-[var(--color-danger)] hover:opacity-80"
-                    >
-                      Sil
-                    </button>
-                  </div>
-
-                  {node.type === 'agent' && (
-                    <div className="space-y-2">
-                      <select
-                        value={node.agentId ?? ''}
-                        onChange={(e) => patchNode(idx, { agentId: e.target.value })}
-                        className="w-full rounded bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none"
-                      >
-                        <option value="">— ajan seç —</option>
-                        {agents.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
-                      </select>
-                      <textarea
-                        value={node.prompt ?? ''}
-                        onChange={(e) => patchNode(idx, { prompt: e.target.value })}
-                        placeholder="Prompt — {{input}}, {{last}}, {{node.<id>}} kullanılabilir"
-                        rows={2}
-                        className="w-full rounded bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none"
-                      />
-                      <label className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-                        Sonraki:
-                        <select
-                          value={node.next ?? ''}
-                          onChange={(e) => patchNode(idx, { next: e.target.value })}
-                          className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none"
-                        >
-                          {nodeOptions}
-                        </select>
-                      </label>
-                    </div>
-                  )}
-
-                  {node.type === 'branch' && (
-                    <div className="space-y-2">
-                      {(node.branches ?? []).map((b, bi) => (
-                        <div key={bi} className="flex items-center gap-2">
-                          <input
-                            value={b.contains}
-                            onChange={(e) => {
-                              const branches = [...(node.branches ?? [])]
-                              branches[bi] = { ...b, contains: e.target.value }
-                              patchNode(idx, { branches })
-                            }}
-                            placeholder="içeriyorsa… (boş = varsayılan)"
-                            className="flex-1 rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none"
-                          />
-                          <span className="text-xs text-[var(--color-text-dim)]">→</span>
-                          <select
-                            value={b.next}
-                            onChange={(e) => {
-                              const branches = [...(node.branches ?? [])]
-                              branches[bi] = { ...b, next: e.target.value }
-                              patchNode(idx, { branches })
-                            }}
-                            className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none"
-                          >
-                            {nodeOptions}
-                          </select>
-                          <button
-                            onClick={() => {
-                              const branches = (node.branches ?? []).filter((_, i) => i !== bi)
-                              patchNode(idx, { branches })
-                            }}
-                            className="text-xs text-[var(--color-danger)]"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        onClick={() =>
-                          patchNode(idx, { branches: [...(node.branches ?? []), { contains: '', next: '' }] })
-                        }
-                        className="text-xs text-[var(--color-accent)]"
-                      >
-                        + dal ekle
-                      </button>
-                    </div>
-                  )}
-
-                  {node.type === 'parallel' && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-[var(--color-text-dim)]">
-                        Eşzamanlı çalışacak ajan node'ları:
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {agentNodes
-                          .filter((an) => an.id !== node.id)
-                          .map((an) => {
-                            const checked = (node.parallel ?? []).includes(an.id)
-                            return (
-                              <label key={an.id} className="flex items-center gap-1 text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    const set = new Set(node.parallel ?? [])
-                                    if (e.target.checked) set.add(an.id)
-                                    else set.delete(an.id)
-                                    patchNode(idx, { parallel: [...set] })
-                                  }}
-                                />
-                                {an.id}
-                              </label>
-                            )
-                          })}
-                        {agentNodes.filter((an) => an.id !== node.id).length === 0 && (
-                          <span className="text-xs text-[var(--color-text-dim)]">
-                            Önce ajan node'ları ekleyin.
-                          </span>
-                        )}
-                      </div>
-                      <label className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-                        Join sonrası:
-                        <select
-                          value={node.joinNext ?? ''}
-                          onChange={(e) => patchNode(idx, { joinNext: e.target.value })}
-                          className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none"
-                        >
-                          {nodeOptions}
-                        </select>
-                      </label>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Add node */}
+            <h3 className="mb-2 text-sm font-semibold">Çalıştır</h3>
             <div className="flex gap-2">
-              {NODE_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  onClick={() => addNode(t.value)}
-                  className="rounded-lg bg-[var(--color-surface-2)] px-3 py-1.5 text-xs hover:opacity-90"
-                >
-                  + {t.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Run */}
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <h3 className="mb-2 text-sm font-semibold">Çalıştır</h3>
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Girdi (akışa {{input}} olarak geçer)"
-                rows={2}
-                className="w-full rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
+                rows={1}
+                className="flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               />
               <button
                 onClick={doRun}
                 disabled={running}
-                className="mt-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
                 {running ? 'Çalışıyor…' : '▶ Çalıştır'}
               </button>
-
-              {/* Live node progress while running (before the final run lands). */}
-              {!run && liveNodes.length > 0 && (
-                <div className="mt-4 border-t border-[var(--color-border)] pt-3">
-                  <div className="mb-2 text-xs text-[var(--color-text-dim)]">Canlı ilerleme</div>
-                  <ol className="space-y-2">
-                    {liveNodes.map((n, i) => (
-                      <li key={`${n.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
-                        <div className="mb-1 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-                          {n.output === undefined && (
-                            <Loader2 size={12} className="animate-spin text-[var(--color-accent)]" />
-                          )}
-                          {i + 1}. [{n.type}] {n.title}
-                        </div>
-                        {n.output === undefined ? (
-                          <span className="text-xs italic text-[var(--color-text-dim)]">çalışıyor…</span>
-                        ) : n.type === 'branch' ? (
-                          <div className="whitespace-pre-wrap">{n.output}</div>
-                        ) : (
-                          <Markdown>{n.output}</Markdown>
-                        )}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-
-              {run && (
-                <div className="mt-4 border-t border-[var(--color-border)] pt-3">
-                  <div className="mb-2 text-xs">
-                    Durum:{' '}
-                    <span className={run.status === 'success' ? 'text-green-400' : 'text-red-400'}>
-                      {run.status}
-                    </span>
-                    {run.error && <span className="ml-2 text-red-400">· {run.error}</span>}
-                  </div>
-                  <ol className="space-y-2">
-                    {(trace?.trace ?? []).map((t, i) => (
-                      <li key={i} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
-                        <div className="mb-1 text-xs text-[var(--color-text-dim)]">
-                          {i + 1}. [{t.type}] {t.title}
-                        </div>
-                        {t.type === 'branch' ? (
-                          <div className="whitespace-pre-wrap">{t.output}</div>
-                        ) : (
-                          <Markdown>{t.output}</Markdown>
-                        )}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
             </div>
+
+            {/* Live node progress while running (before the final run lands). */}
+            {!run && liveNodes.length > 0 && (
+              <div className="mt-4 border-t border-[var(--color-border)] pt-3">
+                <div className="mb-2 text-xs text-[var(--color-text-dim)]">Canlı ilerleme</div>
+                <ol className="space-y-2">
+                  {liveNodes.map((n, i) => (
+                    <li key={`${n.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
+                      <div className="mb-1 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+                        {n.output === undefined && (
+                          <Loader2 size={12} className="animate-spin text-[var(--color-accent)]" />
+                        )}
+                        {i + 1}. [{n.type}] {n.title}
+                      </div>
+                      {n.output === undefined ? (
+                        <span className="text-xs italic text-[var(--color-text-dim)]">çalışıyor…</span>
+                      ) : n.type === 'branch' ? (
+                        <div className="whitespace-pre-wrap">{n.output}</div>
+                      ) : (
+                        <Markdown>{n.output}</Markdown>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {run && (
+              <div className="mt-4 border-t border-[var(--color-border)] pt-3">
+                <div className="mb-2 text-xs">
+                  Durum:{' '}
+                  <span className={run.status === 'success' ? 'text-green-400' : 'text-red-400'}>
+                    {run.status}
+                  </span>
+                  {run.error && <span className="ml-2 text-red-400">· {run.error}</span>}
+                </div>
+                <ol className="space-y-2">
+                  {(trace?.trace ?? []).map((t, i) => (
+                    <li key={i} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
+                      <div className="mb-1 text-xs text-[var(--color-text-dim)]">
+                        {i + 1}. [{t.type}] {t.title}
+                      </div>
+                      {t.type === 'branch' ? (
+                        <div className="whitespace-pre-wrap">{t.output}</div>
+                      ) : (
+                        <Markdown>{t.output}</Markdown>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
