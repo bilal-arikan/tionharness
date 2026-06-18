@@ -2,6 +2,24 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Faz P4 — Hooks (PreToolUse / PostToolUse) (2026-06-18)
+
+**İstek:** "Projeye Pre-Post hookları ekleyeceğiz (yapılacaklar listesinde mevcuttu) nasıl ekleyebiliriz" + "https://github.com/ojuschugh1/sqz bunu kullanabilmek için pre-post hook mu gerekiyor".
+
+Kullanıcı-tanımlı dış komutların **native (anthropic/minimax) araç döngüsünde** her araç çağrısının etrafında çalışması. **Claude Code hook sözleşmesi** (stdin JSON → stdout JSON, `exit 2`=engelle) ile uyumlu — aynı script'ler (ör. **sqz**) değişmeden çalışır.
+
+- **PreToolUse:** araç öncesi — girdiyi yeniden yazar (`updatedInput`), otomatik onaylar (izin kapısını atlar) veya engeller.
+- **PostToolUse:** araç + token sıkıştırması sonrası — çıktıyı dönüştürür (`updatedOutput`, dış sıkıştırma), bağlam ekler (`additionalContext`) veya engeller.
+- **Kapsam:** yalnız native yol. claude-cli kendi `~/.claude/settings.json` hook'larını okur (P3 CLI-vs-native deseni). **sqz cevabı:** sqz'in kendisi bir PreToolUse hook'tur; claude-cli ajanlarında `sqz init --global` yeterli (SwarmGo'da bir şey gerekmez), native ajanlarda SwarmGo PostToolUse hook'u olarak `sqz` tanımlanır.
+- **Veri:** `db.Hook` (`models_hook.go`/`store_hook.go`, per-ws `store/hooks/*.json`, `ListEnabledHooksByEvent`).
+- **Motor:** `agent/hooks.go` — `runPreToolHooks`/`runPostToolHooks`/`execHook` (subprocess timeout 30s clamp 1–120 + 64KB çıktı cap + **fail-open**; matcher=araç-adı glob, boş=hepsi; oluşturma sırası zincir, ilk block kazanır).
+- **Entegrasyon:** `toolloop.go` → Pre (permGate öncesi) + Post (compactToolResult sonrası); iz kartı `StepHook` (`trace.go`).
+- **API:** `GET/POST/PUT/DELETE/toggle /api/hooks` (`api/hooks.go` + `server.go` route).
+- **Frontend:** Ayarlar → **Hooks** (`settings/HooksPanel.tsx`), sohbet `chat/HookStep.tsx` (🪝), `types/hook.ts`+`api/hooks.ts`+`stepKinds.ts`.
+- **Test:** `store_hook_test.go` (CRUD+reopen), `hooks_test.go` (matcher+execHook block/modify/allow).
+
+✅ `go build/vet/test` + `tsc -b`/`vite build` yeşil. **Canlı API round-trip** (izole instance, port 8099): create (type/createdAt varsayılanları) → geçersiz event/boş komut 400 → update → toggle → kalıcı liste → delete uçtan uca doğrulandı. Detay: **`_Docs/18-HOOKS.md`**. **Kalan (ops.):** gerçek sağlayıcılı uçtan uca tur testi; claude-cli için `settings.json` hook üretimi.
+
 ## NavRail canlı iş belirteçleri (busy indicators) (2026-06-18)
 
 **İstek:** "Sohbet/Görevler/Zamanlamalar/Akışlar ekranında bir iş devam ediyorsa soldaki navbar'da bunu belirten bir belirteç ekleyebilir miyiz?"

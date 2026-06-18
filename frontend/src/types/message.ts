@@ -20,6 +20,7 @@ export type StepKind =
   | 'tool_delta'
   | 'tombstone'
   | 'diff'
+  | 'hook'
 
 export interface TodoItem {
   content: string

@@ -9,6 +9,7 @@ import { SteerStep } from './SteerStep'
 import { ToolDeltaStep } from './ToolDeltaStep'
 import { ArtifactCard } from './ArtifactCard'
 import { DiffCard } from './DiffCard'
+import { HookStep } from './HookStep'
 
 interface Props {
   steps: TurnStep[]
@@ -34,6 +35,7 @@ export function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
         if (step.kind === 'recovery') return <RecoveryStep key={i} step={step} />
         if (step.kind === 'error') return <ErrorStep key={i} step={step} />
         if (step.kind === 'steer') return <SteerStep key={i} step={step} />
+        if (step.kind === 'hook') return <HookStep key={i} step={step} />
         if (step.kind === 'tool_delta') return <ToolDeltaStep key={i} step={step} />
         // 'tombstone' is a control signal handled before render (App.onStep); skip.
         if (step.kind === 'tombstone') return null

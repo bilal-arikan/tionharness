@@ -63,6 +63,12 @@ const (
 	// running (allowed) or a permission_denied StepError (denied). Tool names the
 	// gated tool, Reason carries its risk tier, Options the answer choices.
 	StepPermission StepKind = "permission"
+	// StepHook is an audit card for a user-defined PreToolUse/PostToolUse hook
+	// firing around a tool call: Tool names the gated tool, Reason carries the
+	// machine decision tag (hook_block / hook_modify / hook_allow / hook_context),
+	// Text the human explanation and Output the hook's reason/detail. Persisted so
+	// the trace shows why a call was blocked or its input/output rewritten.
+	StepHook StepKind = "hook"
 	// StepDiff is a file mutation (write_file / edit_file) rendered as a diff card
 	// — path plus added/removed line counts and an optional unified patch — rather
 	// than a generic tool row. The payload lives in Path/Added/Removed/Patch.

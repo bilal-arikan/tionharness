@@ -35,6 +35,7 @@ import { CommandsPanel } from './settings/CommandsPanel'
 import { StepKindsPanel } from './settings/StepKindsPanel'
 import { WorkspacePanel } from './settings/WorkspacePanel'
 import { WorkspaceFilesPanel } from './settings/WorkspaceFilesPanel'
+import { HooksPanel } from './settings/HooksPanel'
 
 interface Props {
   onError: (msg: string) => void
@@ -52,14 +53,29 @@ interface Props {
   // Navigate the main app to another view (used to jump to the Secrets screen
   // from the provider key fields).
   onNavigate?: (v: View) => void
+  // Controlled active category (deep-link aware). When onCatChange is provided
+  // the category is fully controlled by the parent (URL-synced); otherwise it is
+  // tracked internally.
+  cat?: string | null
+  onCatChange?: (c: Cat) => void
+}
+
+const ALL_CATS: Cat[] = [...APP_CATS, ...WS_CATS].map((c) => c.key)
+function isCat(v: string | null | undefined): v is Cat {
+  return !!v && (ALL_CATS as string[]).includes(v)
 }
 
 // SettingsPanel is the two-pane configuration screen: a category rail on the
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
 // The per-category forms live in ./settings/*.
-export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWorkspace, commands = [], onNavigate }: Props) {
-  const [cat, setCat] = useState<Cat>('profile')
+export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWorkspace, commands = [], onNavigate, cat: catProp, onCatChange }: Props) {
+  // Category is controlled by the parent (URL deep-link) when onCatChange is
+  // given; an unknown/empty routed category falls back to 'profile'.
+  const [catState, setCatState] = useState<Cat>('profile')
+  const controlled = onCatChange !== undefined
+  const cat: Cat = controlled ? (isCat(catProp) ? catProp : 'profile') : catState
+  const setCat = (c: Cat) => (onCatChange ? onCatChange(c) : setCatState(c))
 
   // App-global settings scope.
   const [draft, setDraft] = useState<AppSettings | null>(null)
@@ -239,7 +255,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
             <span className="text-xs text-[var(--color-text-dim)]">
               {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
             </span>
-            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'wsfiles' && (
+            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'wsfiles' && cat !== 'hooks' && (
               <button
                 onClick={save}
                 disabled={!dirty || saving}
@@ -275,6 +291,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
               {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'budget' && <BudgetPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'tools' && <ToolsPanel draft={draft} set={set} setDraft={setDraft} />}
+              {cat === 'hooks' && <HooksPanel onError={onError} />}
               {cat === 'advanced' && (
                 <>
                   <AdvSection title="Bildirimler & Ekran" icon={Bell}>

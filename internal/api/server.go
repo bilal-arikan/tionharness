@@ -125,6 +125,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerScheduleRoutes(mux)
 	s.registerUsageRoutes(mux)
 	s.registerMCPRoutes(mux)
+	s.registerHookRoutes(mux)
 	s.registerFlowRoutes(mux)
 	s.registerExecutionRoutes(mux)
 	s.registerArtifactRoutes(mux)
@@ -256,6 +257,15 @@ func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/workspace-tools", s.handleSetWorkspaceTools)
 }
 
+// registerHookRoutes registers PreToolUse/PostToolUse hooks (Phase P4).
+func (s *Server) registerHookRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/hooks", s.handleListHooks)
+	mux.HandleFunc("POST /api/hooks", s.handleCreateHook)
+	mux.HandleFunc("PUT /api/hooks/{id}", s.handleUpdateHook)
+	mux.HandleFunc("POST /api/hooks/{id}/toggle", s.handleToggleHook)
+	mux.HandleFunc("DELETE /api/hooks/{id}", s.handleDeleteHook)
+}
+
 // registerFlowRoutes registers orchestration flows + runs (Phase 7).
 func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flows", s.handleListFlows)
@@ -348,6 +358,9 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/logs", s.handleClientLog)
 	// Autonomous event feed (heartbeat/task/schedule) — SSE, global.
 	mux.HandleFunc("GET /api/events", s.handleEvents)
+	// Detect optional external token-optimization tools on PATH (presence-only,
+	// never installs/runs them) — surfaced by the Settings diagnostics panel.
+	mux.HandleFunc("GET /api/external-tools", s.handleExternalTools)
 }
 
 // withWorkspace resolves the active workspace from the X-Workspace-Id header

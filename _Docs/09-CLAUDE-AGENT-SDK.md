@@ -28,7 +28,7 @@
 | Context yönetimi / compaction | Otomatik | `internal/conversation` (token-bütçeli) | Yok |
 | Prompt caching | İnce ayarlı | Yok (native HTTP) | Küçük |
 | Permission / onay modları | Var (mod + hook) | Yok (native); claude-cli'de `--allowedTools` ile kısmi | **Var** |
-| Hooks (PreToolUse / PostToolUse) | Var | Yok | **Var** |
+| Hooks (PreToolUse / PostToolUse) | Var | **Var** (Faz P4, native yol; `internal/agent/hooks.go`) | ✅ |
 | Subagents | Var | `internal/orchestration` graf motoru | Kısmi |
 | MCP | Var | `internal/mcp` (stdio JSON-RPC) | Yok |
 | Anthropic ile güncel kalma | Bakım Anthropic'te | Bakım bizde | Yapısal |
@@ -86,8 +86,15 @@ graph TD
 - [x] Ajanın **kendi runtime'ını yönetmesi**: `create/update/delete/list_agent`,
   `…_flow`, `…_schedule`, `delete/list_artifact`, `memory_add`, `read_logs` (16 araç,
   `internal/tools/builtin_*mgmt.go` + `builtin_memory_add.go` + `builtin_logs.go`).
-- [x] **Provenance:** `db.Agent/Flow/Schedule.CreatedBy` (Artifact/Memory zaten `AgentID`);
-  ajan yalnız agent-created kaynakları siler/düzenler, kullanıcınınkine dokunamaz.
+- [x] **Kanban panosu yönetimi (2026-06-17, COMMITSİZ):** `list_tasks`, `create_task`
+  (prompt ve/veya `flowId`), `update_task`, `move_task`, `run_task`, `delete_task`
+  (`builtin_taskmgmt.go`, 6 araç) — ajanın panoyu okuyup işlemesinin temeli (görev
+  dispatcher'ı ön koşulu). `run_task`, `RunTask`'a `"agent"` trigger'ıyla bağlanır;
+  flow-backed görevler dahil.
+- [x] **Provenance:** `db.Agent/Flow/Schedule/Task.CreatedBy` (Artifact/Memory zaten `AgentID`);
+  ajan yalnız agent-created kaynakları siler, kullanıcınınkine dokunamaz. **Görevde sınır
+  gevşek:** oku/oluştur/düzenle/taşı/çalıştır her görevde serbest (ajan panoyu yönetsin
+  diye), yalnız **silme** provenance-kısıtlı.
 - [x] **Varsayılan KAPALI** (`Tunables.SelfManageEnabled`); `SWARMGO_ENABLE_SELFMANAGE=1`
   ile açılır (shell gate deseni — katalog 19→35, token maliyeti opt-in).
 
@@ -101,9 +108,11 @@ graph TD
 - Mod: `auto` | `ask` | `read-only`. Ajan başına ayar (`agents` tablosuna kolon).
 - Yazma/shell araçlarında UI onay diyaloğu (ask_user altyapısını yeniden kullanır).
 
-### Faz P4 — Hooks
-- `PreToolUse` / `PostToolUse` kancaları: `internal/agent/hooks.go`.
-- Kullanım: audit log, araç çağrısını engelleme/değiştirme, otomatik onay kuralları.
+### Faz P4 — Hooks ✅ (TAMAMLANDI 2026-06-18)
+- `PreToolUse` / `PostToolUse` kancaları: `internal/agent/hooks.go` (subprocess JSON I/O, Claude Code sözleşmesi).
+- Kullanım: audit log, araç çağrısını engelleme/değiştirme, otomatik onay kuralları, dış çıktı sıkıştırma (sqz).
+- Yalnız native (anthropic/minimax) yol; claude-cli kendi `~/.claude/settings.json` hook'larını okur.
+- Detay: **`_Docs/18-HOOKS.md`**.
 
 ## Bağlı / İlgili Dokümanlar
 - `01-MIMARI.md` — provider soyutlaması, CGO-free kararı

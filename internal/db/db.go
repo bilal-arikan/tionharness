@@ -45,6 +45,7 @@ type DB struct {
 	flows     map[string]Flow
 	flowRuns  map[string]FlowRun
 	artifacts map[string]Artifact
+	hooks     map[string]Hook
 	usage     map[string]Usage // keyed by agentID + "|" + day
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
@@ -66,6 +67,7 @@ func Open(path string) (*DB, error) {
 		flows:     map[string]Flow{},
 		flowRuns:  map[string]FlowRun{},
 		artifacts: map[string]Artifact{},
+		hooks:     map[string]Hook{},
 		usage:     map[string]Usage{},
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
@@ -97,6 +99,7 @@ const (
 	dirFlows     = "flows"
 	dirFlowRuns  = "flow-runs"
 	dirArtifacts = "artifacts"
+	dirHooks     = "hooks"
 	dirUsage     = "usage"
 )
 
@@ -250,6 +253,14 @@ func (d *DB) load() error {
 		if err := d.persistArtifactLocked(&a); err != nil {
 			return err
 		}
+	}
+
+	hooks, err := loadJSONDir[Hook](d.dir(dirHooks))
+	if err != nil {
+		return err
+	}
+	for _, h := range hooks {
+		d.hooks[h.ID] = h
 	}
 
 	if err := d.loadKnowledge(); err != nil {

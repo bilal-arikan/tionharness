@@ -276,10 +276,33 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		for _, call := range resp.ToolCalls {
 			r.logger.Info("tool call", "agent", agent.ID, "tool", call.Name)
 
+			// PreToolUse hooks (Faz P4): user-defined commands may rewrite the
+			// tool input, auto-approve the call (bypassing the permission gate) or
+			// block it. A blocked call becomes an error result fed back to the
+			// model. Runs before the permission gate so a hook can veto first.
+			pre := r.runPreToolHooks(ctx, "", call)
+			for _, st := range pre.steps {
+				steps = append(steps, st)
+				emit(st)
+			}
+			if len(pre.input) > 0 {
+				call.Input = pre.input
+			}
+			if pre.block {
+				r.logger.Info("tool blocked by hook", "agent", agent.ID, "tool", call.Name)
+				results = append(results, providers.ToolResult{CallID: call.ID, Content: pre.denyMsg, IsError: true})
+				continue
+			}
+
 			// Permission gate: under read-only/ask the call may be blocked or need
 			// user approval before it runs. A blocked call becomes an error result
-			// fed back to the model (so it can adapt) instead of executing.
-			if allowed, denyMsg := permGate(ctx, agent.PermissionMode, call); !allowed {
+			// fed back to the model (so it can adapt) instead of executing. A hook
+			// that explicitly approved the call short-circuits the gate.
+			allowed, denyMsg := true, ""
+			if !pre.autoAllow {
+				allowed, denyMsg = permGate(ctx, agent.PermissionMode, call)
+			}
+			if !allowed {
 				r.logger.Info("tool blocked", "agent", agent.ID, "tool", call.Name, "mode", agent.PermissionMode)
 				results = append(results, providers.ToolResult{CallID: call.ID, Content: denyMsg, IsError: true})
 				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "permission_denied", Text: denyMsg, IsError: true}
@@ -319,6 +342,27 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			// Token optimization: shrink the result before it re-enters context
 			// (and the persisted step) via the two independent compaction systems.
 			res = r.compactToolResult(ctx, agent, call.Name, call.Input, res)
+
+			// PostToolUse hooks (Faz P4): user-defined commands may rewrite the
+			// output (e.g. external compression like sqz), append extra context, or
+			// block the result. Runs after compaction so a hook sees the final text.
+			post := r.runPostToolHooks(ctx, "", call, res)
+			for _, st := range post.steps {
+				steps = append(steps, st)
+				emit(st)
+			}
+			if post.output != nil {
+				res.Content = *post.output
+			}
+			if post.block {
+				res.IsError = true
+				if post.denyMsg != "" {
+					res.Content = post.denyMsg
+				}
+			}
+			if post.extra != "" {
+				res.Content = strings.TrimSpace(res.Content + "\n\n" + post.extra)
+			}
 
 			results = append(results, res)
 			st := TurnStep{

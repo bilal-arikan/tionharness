@@ -129,4 +129,13 @@ export const STEP_KINDS: StepKindInfo[] = [
     description:
       'write_file / edit_file ile yapılan dosya değişikliği; yol + eklenen/silinen satır sayısı ve açılabilir birleşik diff (patch) olarak gösterilir.',
   },
+  {
+    kind: 'hook',
+    label: 'Hook',
+    icon: '🪝',
+    persisted: true,
+    status: 'active',
+    description:
+      'Kullanıcı-tanımlı PreToolUse/PostToolUse hook bir araç çağrısının etrafında çalıştı: girdiyi/çıktıyı değiştirdi, otomatik onayladı, ek bağlam ekledi ya da çağrıyı engelledi. Reason makine kararını taşır (hook_block / hook_modify / hook_allow / hook_context). Yalnız native (anthropic/minimax) yolda.',
+  },
 ]

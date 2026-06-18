@@ -12,6 +12,7 @@ import { uploadsApi } from './api/uploads'
 import { taskApi } from './api/tasks'
 import { memoryApi } from './api/memory'
 import { mcpApi } from './api/mcp'
+import { hookApi } from './api/hooks'
 import { flowApi } from './api/flows'
 import { executionApi } from './api/executions'
 import { artifactApi } from './api/artifacts'
@@ -32,6 +33,7 @@ export const api = {
   ...taskApi,
   ...memoryApi,
   ...mcpApi,
+  ...hookApi,
   ...flowApi,
   ...executionApi,
   ...artifactApi,
