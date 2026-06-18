@@ -116,6 +116,7 @@ func scanDir(t tier) []Skill {
 			RequiredSources: fm.list("requiredsources", "required_sources"),
 			SubSkills:       fm.list("subskills", "sub_skills", "related"),
 			Shared:          isShared(fm),
+			AutoSummary:     isAutoSummary(fm),
 			Source:          t.source,
 			Path:            path,
 		})
@@ -132,6 +133,17 @@ func isShared(fm frontmatter) bool {
 		return true
 	}
 	return strings.EqualFold(strings.TrimSpace(fm.scalar("shared")), "true")
+}
+
+// isAutoSummary reports whether a skill's one-line summary should be auto-injected
+// into every agent's prompt. Defaults to TRUE (absent key → enabled); only an
+// explicit `auto_summary: false` (or no/off/0) disables it.
+func isAutoSummary(fm frontmatter) bool {
+	switch strings.ToLower(strings.TrimSpace(fm.scalar("auto_summary", "autosummary", "auto_include", "autoinclude"))) {
+	case "false", "no", "off", "0":
+		return false
+	}
+	return true
 }
 
 // List returns the resolved skills in display order.
@@ -256,6 +268,31 @@ func (s *Store) SetAccess(slug string, shared bool) (Skill, error) {
 		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
 	}
 	updated := setFrontmatterAccess(string(data), shared)
+	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
+	}
+	s.Reload()
+	out, _ := s.Get(slug)
+	return out, nil
+}
+
+// SetAutoSummary toggles whether a skill's summary is auto-injected into every
+// agent's prompt, by rewriting its SKILL.md frontmatter, then reloads the
+// catalog. Returns the updated skill.
+func (s *Store) SetAutoSummary(slug string, on bool) (Skill, error) {
+	sk, ok := s.Get(slug)
+	if !ok {
+		return Skill{}, fmt.Errorf("skill %q not found", slug)
+	}
+	data, err := os.ReadFile(sk.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.Reload()
+			return Skill{}, fmt.Errorf("skill %q is no longer available (its file was moved or deleted); catalog refreshed", slug)
+		}
+		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
+	}
+	updated := setFrontmatterAutoSummary(string(data), on)
 	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
 		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
 	}
@@ -494,6 +531,12 @@ func (s *Store) effectiveFor(assigned []string) []Skill {
 		}
 	}
 	for _, sk := range s.SharedList() {
+		// A shared skill with auto-summary turned off is NOT advertised
+		// automatically — it only reaches an agent via explicit assignment
+		// (handled by the assigned loop above, which already ran).
+		if !sk.AutoSummary {
+			continue
+		}
 		if !seen[sk.Slug] {
 			out = append(out, sk)
 			seen[sk.Slug] = true

@@ -19,6 +19,11 @@ export const skillApi = {
       method: 'PUT',
       body: JSON.stringify({ shared }),
     }),
+  setSkillAutoSummary: (slug: string, autoSummary: boolean) =>
+    req<Skill>(`/api/skills/${encodeURIComponent(slug)}/auto-summary`, {
+      method: 'PUT',
+      body: JSON.stringify({ autoSummary }),
+    }),
   revealSkill: (slug: string) =>
     req<{ path: string }>(`/api/skills/${encodeURIComponent(slug)}/reveal`, { method: 'POST' }),
 }

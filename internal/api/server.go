@@ -312,6 +312,7 @@ func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/skills/{slug}", s.handleUpdateSkill)
 	mux.HandleFunc("DELETE /api/skills/{slug}", s.handleDeleteSkill)
 	mux.HandleFunc("PUT /api/skills/{slug}/access", s.handleSetSkillAccess)
+	mux.HandleFunc("PUT /api/skills/{slug}/auto-summary", s.handleSetSkillAutoSummary)
 	mux.HandleFunc("POST /api/skills/{slug}/reveal", s.handleRevealSkill)
 }
 

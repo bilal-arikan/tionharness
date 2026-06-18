@@ -35,6 +35,12 @@ type Skill struct {
 	// non-shared (restricted) skill is only visible/usable to agents it is
 	// assigned to. Set from frontmatter `access: shared` (default restricted).
 	Shared bool `json:"shared"`
+	// AutoSummary controls whether this skill's one-line summary is AUTO-injected
+	// into every agent's "# Available Skills" prompt block. Defaults to true. When
+	// false, a shared skill is no longer advertised automatically (it stops
+	// bloating every prompt) — it can still be assigned to an agent explicitly,
+	// which always advertises it. Set from frontmatter `auto_summary: false`.
+	AutoSummary bool `json:"autoSummary"`
 	// AlwaysAllow lists tool-name patterns a skill expects to be auto-allowed.
 	// Carried for parity / future enforcement; surfaced in the UI today.
 	AlwaysAllow []string `json:"alwaysAllow,omitempty"`

@@ -1,5 +1,5 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useState } from 'react'
-import { FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
@@ -43,6 +43,19 @@ function RestrictedBadge() {
   )
 }
 
+// SummaryOffBadge marks a skill whose summary is NOT auto-injected into every
+// agent's prompt (auto-summary disabled). The skill still works when assigned.
+function SummaryOffBadge() {
+  return (
+    <span
+      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-warning,#d97706)_18%,transparent)] text-[var(--color-warning,#d97706)]"
+      title="Özeti her oturuma otomatik eklenmez (yalnızca atanan ajana görünür)"
+    >
+      Özetsiz
+    </span>
+  )
+}
+
 // SkillsPanel is the two-panel Skills screen: a list of resolved skills on the
 // left, the selected skill's full instructions (loaded on demand) on the right.
 export function SkillsPanel({ onError }: Props) {
@@ -51,6 +64,7 @@ export function SkillsPanel({ onError }: Props) {
   const [active, setActive] = useState<SkillDetail | null>(null)
   const [loadingBody, setLoadingBody] = useState(false)
   const [accessBusy, setAccessBusy] = useState(false)
+  const [summaryBusy, setSummaryBusy] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
@@ -131,6 +145,21 @@ export function SkillsPanel({ onError }: Props) {
       })
       .catch((e) => onError((e as Error).message))
       .finally(() => setAccessBusy(false))
+  }, [active, reload, onError])
+
+  // Toggle whether the selected skill's summary is auto-injected into every
+  // agent's prompt; rewrites the SKILL.md frontmatter on disk + refreshes.
+  const toggleAutoSummary = useCallback(() => {
+    if (!active) return
+    setSummaryBusy(true)
+    api
+      .setSkillAutoSummary(active.slug, active.autoSummary === false)
+      .then((sk) => {
+        setActive((a) => (a ? { ...a, autoSummary: sk.autoSummary } : a))
+        reload()
+      })
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setSummaryBusy(false))
   }, [active, reload, onError])
 
   // After the editor saves, refresh the list and focus the saved skill.
@@ -229,6 +258,7 @@ export function SkillsPanel({ onError }: Props) {
                   <span className="flex items-center gap-1.5">
                     <span className="min-w-0 flex-1 truncate font-medium">{sk.name}</span>
                     {!sk.shared && <RestrictedBadge />}
+                    {sk.autoSummary === false && <SummaryOffBadge />}
                     <SourceBadge source={sk.source} />
                   </span>
                   <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
@@ -264,6 +294,7 @@ export function SkillsPanel({ onError }: Props) {
                   <span className="text-lg leading-none">{active.icon || '✨'}</span>
                   <h2 className="truncate text-base font-semibold">{active.name}</h2>
                   {!active.shared && <RestrictedBadge />}
+                  {active.autoSummary === false && <SummaryOffBadge />}
                   <SourceBadge source={active.source} />
                 </div>
                 <p className="mt-1 text-xs text-[var(--color-text-dim)]">
@@ -334,6 +365,19 @@ export function SkillsPanel({ onError }: Props) {
                 >
                   {active.shared ? <Lock size={14} /> : <Globe size={14} />}
                   {active.shared ? 'Kısıtla' : 'Paylaş'}
+                </button>
+                <button
+                  onClick={toggleAutoSummary}
+                  disabled={summaryBusy}
+                  title={
+                    active.autoSummary === false
+                      ? 'Özeti her oturuma ekle: ajanların sistem promptunda otomatik görünsün'
+                      : 'Özeti her oturumdan çıkar: otomatik prompta eklenmesin (atanan ajana yine görünür)'
+                  }
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+                >
+                  {active.autoSummary === false ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {active.autoSummary === false ? 'Özeti aç' : 'Özeti kapat'}
                 </button>
                 <CopyPathButton path={active.dir} />
                 <button

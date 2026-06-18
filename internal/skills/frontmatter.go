@@ -171,6 +171,51 @@ func setFrontmatterAccess(content string, shared bool) string {
 	return b.String()
 }
 
+// setFrontmatterAutoSummary rewrites a SKILL.md's frontmatter so its auto-summary
+// mode matches on. Auto-summary defaults to ON, so an enabled skill carries NO
+// marker: any existing `auto_summary:` (and aliases) line is removed, and only
+// when on is false a single `auto_summary: false` line is added. All other
+// frontmatter lines and the markdown body are preserved.
+func setFrontmatterAutoSummary(content string, on bool) string {
+	norm := strings.ReplaceAll(content, "\r\n", "\n")
+
+	var fmLines []string
+	body := norm
+	hadBlock := false
+	if strings.HasPrefix(norm, "---\n") {
+		rest := norm[len("---\n"):]
+		if end := strings.Index(rest, "\n---"); end >= 0 {
+			hadBlock = true
+			block := rest[:end]
+			body = strings.TrimPrefix(rest[end+len("\n---"):], "\n")
+			for _, ln := range strings.Split(block, "\n") {
+				key := ""
+				if i := strings.Index(ln, ":"); i >= 0 {
+					key = strings.ToLower(strings.TrimSpace(ln[:i]))
+				}
+				switch key {
+				case "auto_summary", "autosummary", "auto_include", "autoinclude":
+					continue // drop any existing auto-summary marker
+				}
+				fmLines = append(fmLines, ln)
+			}
+		}
+	}
+	if !on {
+		fmLines = append(fmLines, "auto_summary: false")
+	}
+
+	if !hadBlock && len(fmLines) == 0 {
+		return body
+	}
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString(strings.Join(fmLines, "\n"))
+	b.WriteString("\n---\n")
+	b.WriteString(body)
+	return b.String()
+}
+
 // fmField is one ordered frontmatter scalar to write. An empty Val removes the
 // key (used by setFrontmatterFields).
 type fmField struct{ Key, Val string }

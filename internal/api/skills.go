@@ -165,6 +165,25 @@ func (s *Server) handleSetSkillAccess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sk)
 }
 
+// handleSetSkillAutoSummary toggles whether a skill's summary is auto-injected
+// into every agent's prompt, by rewriting its SKILL.md frontmatter, then returns
+// the updated skill.
+func (s *Server) handleSetSkillAutoSummary(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AutoSummary bool `json:"autoSummary"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	sk, err := ws(r).Runtime.Skills().SetAutoSummary(r.PathValue("slug"), req.AutoSummary)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, sk)
+}
+
 // handleReloadSkills re-scans the skill tiers (after the user edits files on
 // disk) so the catalog and prompt block reflect the change without a restart.
 func (s *Server) handleReloadSkills(w http.ResponseWriter, r *http.Request) {

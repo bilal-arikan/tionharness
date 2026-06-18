@@ -19,6 +19,10 @@ export interface Skill {
   // When true the skill is "on-demand": advertised to every agent and usable
   // without assignment. Otherwise it is restricted to agents it is assigned to.
   shared?: boolean
+  // When false, the skill's one-line summary is NOT auto-injected into every
+  // agent's prompt (it stops bloating every session). Defaults to true. A skill
+  // assigned explicitly to an agent is always advertised regardless.
+  autoSummary?: boolean
   source: SkillSource
 }
 
