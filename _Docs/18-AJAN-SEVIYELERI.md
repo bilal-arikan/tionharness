@@ -1,9 +1,30 @@
 # 18 — Ajan Seviyeleri ve Dinamik Geçişler (Tasarım Notu)
 
-> **Durum:** Faz T1 + T2 + T3 **uygulandı** (backend yeşil; commit eşzamanlı WIP reconcile sonrası) — T4 (ops.) beklemede  
-> **Tarih:** 2026-06-18  
-> **İlgili dosyalar:** `internal/settings/settings.go`, `internal/db/models.go`,
-> `internal/agent/toolloop.go`, `internal/tools/delegate.go`, `internal/providers/kind.go`
+> **Durum:** **UYGULANDI (basitleştirilmiş model)** — backend yeşil; commit eşzamanlı WIP reconcile sonrası  
+> **Tarih:** 2026-06-18 (revize: 2026-06-19)  
+> **İlgili dosyalar:** `internal/db/models.go` (`Agent.Tier`), `internal/agent/delegate.go`,
+> `internal/tools/delegate.go`, `internal/api/agents.go`, `frontend/.../AgentSettingsForm.tsx`
+
+---
+
+## 0. REVİZYON (2026-06-19) — tier = saf etiket
+
+İlk tasarım (aşağıdaki §4'ün eski hali) **workspace düzeyinde Ucuz/Orta/Zeki provider+model
+konfigürasyonu** + ajanın efektif modelini bu konfigürasyondan çözme + `escalate_tier` ile
+session-içi model yükseltme öneriyordu. Kullanıcı geri bildirimiyle bu **kaldırıldı**.
+
+**Yeni (uygulanan) model — çok daha basit:**
+
+- `Agent.Tier` sadece bir **etiket**tir (`cheap`/`medium`/`smart` veya boş) — ajanın
+  **sağlayıcı/modelini DEĞİŞTİRMEZ**. Her ajan her zaman kendi `Provider`/`Model`'iyle çalışır.
+- Workspace'te ayrı tier provider/model konfigürasyonu **yok** (Settings'ten kaldırıldı).
+- `escalate_tier` aracı, session `TierOverride`, `StepTier` ve tüm model-çözüm katmanı **kaldırıldı**.
+- Etiketin tek işlevi **delegasyon yönlendirmesi**: `call_agent(tier:"smart")` → "smart" etiketli
+  bir ajana görevi devreder (orijinal hedef: "session içinde ajanlar arası görev aktarımı").
+
+> Aşağıdaki §4.1 (workspace config), §4.2 (efektif provider çözümü), §4.3 (escalate_tier /
+> session override) bölümleri **artık geçersiz** — tarihsel bağlam için bırakıldı. Geçerli olan:
+> §4.4 (call_agent tier delegasyonu, etiket-bazlı) + §11 (Güncel Uygulama).
 
 ---
 
@@ -282,122 +303,68 @@ Frontend bu olayı alır → chat başlık çubuğunda geçici rozet + trace kar
 
 ---
 
-## 8. Uygulama Fazları
+## 8. Uygulama Fazları (eski plan — yalnız tarihsel)
 
-### Faz T1 — Veri Modeli + Konfigürasyon (Temel) — ✅ UYGULANDI (2026-06-18)
+> ⚠️ Aşağıdaki T1/T2/T3 eski (provider/model konfigürasyonlu) tasarımı anlatır ve **uygulanıp
+> sonra geri alındı**. Güncel, yürürlükteki uygulama için **§11**'e bak.
 
-**Backend:**
-- `settings.AgentTierConfig` (provider/model/systemBoost) + `Settings.TierCheap/Medium/Smart` + `DefaultTier`;
-  `Default()` varsayılanları (cheap→claude-cli, medium→haiku, smart→sonnet, defaultTier="" ), DTO + Patch + Apply
-  + `normalize` (slot trim + DefaultTier enum doğrulama) — `settings.go`, `store.go`.
-- `db.Agent.Tier` alanı + `AgentProfilePatch.Tier` (kısmi patch) — `db/models.go`, `db/store.go`.
-- `agent.TierSlot` tipi + `Tunables.SetTierConfig/TierSlot` (canlı push) — `tunables.go`.
-- **Çözüm seam'i** `agent/tier.go`: `resolveTier` (tier varsa+slot doluysa provider/model döner, yoksa
-  ajanın kendi alanlarına düşer) + `effectiveProvider` (Provider örneği + model) + exported `ResolveTier`.
-- Çağrı noktaları seam'e geçirildi: heartbeat (`runtime.go`), flow/task (`executor.go`), delegasyon
-  (`delegate.go`), reflect/summary/title/compact funnel'i (`budget.go::guardedComplete` — açık model
-  override'ı korunur), chat (`api/chat.go`, `chat_stream.go`, `chat_turn.go` → `ResolveTier`).
-- `applySettings` → `SetTierConfig` push (`api/server.go`); `POST/PUT /api/agents` `tier` alanı + create'te
-  `DefaultTier` seed (`api/agents.go`).
-
-**Frontend:**
-- `types/settings.ts` `AgentTierConfig`/`AgentTier` + 4 alan; `types/agent.ts` `Agent.tier`/`AgentPatch.tier`;
-  `api/agents.ts` createAgent `tier`.
-- `AgentSettingsForm`: "Seviye" dropdown'u (Özel/Ucuz/Orta/Zeki) — Özel'de ProviderModelSelect görünür,
-  tier'da workspace ayarından geldiği notu.
-- `settings/ProvidersPanel`: "Ajan Seviyeleri" bölümü (3 slot için ProviderModelSelect + "Yeni ajan varsayılan
-  seviyesi" seçici); `SettingsPanel` save patch'ine tier alanları eklendi.
-
-**Test/Build:** `agent/tier_test.go` (4 senaryo: tiersiz fallback, tier override, ayarsız tier fallback,
-bilinmeyen tier fallback). `go build`/`vet`/`test ./internal/...` **yeşil**. Frontend: tier kodu `tsc` temiz
-(ağaçtaki 2 hata eşzamanlı `market`/`hooks` WIP'inden — bu çalışmadan bağımsız).
-
-**Not — commit:** çalışma ağacı eşzamanlı bir oturumun WIP'iyle iç içe (`runtime.go`'da
-`heartbeatGoalBlock`+`GoalDone` değişikliği benim tier hunk'ımla aynı bölgede; frontend `App.tsx`/`HooksPanel`
-WIP'i derlemiyor). Bu yüzden T1 kodu **commitsiz** — iki oturum reconcile edilince commit'lenecek (bu projede
-yerleşik kalıp). Bu doküman güncellemesi ayrı commit'lenir.
-
-### Faz T2 — `escalate_tier` Aracı — ✅ UYGULANDI (2026-06-18)
-
-Tasarımdan sapma: context-key yerine **session-kalıcı override** (`db.Session.TierOverride`) tercih edildi —
-restart'a dayanıklı ve sonraki turlara taşınır (tasarımın §4.3.3 B seçeneğinin daha temiz hali). SSE'ye ayrı
-`tier_escalation` olayı eklemek yerine **`StepTier`** trace adımı kullanıldı (mevcut `step` SSE akışıyla
-bedavaya UI'ya gider).
-
-**Backend:**
-- `db.Session.TierOverride` alanı + `SetSessionTierOverride` (UpdatedAt'ı bozmaz) — `db/models.go`, `db/store.go`.
-- `tools/escalate.go`: `TierEscalator` context köprüsü (`WithTierEscalation`/`TierEscalationFrom`) +
-  `EscalateTierTool` (`to` enum medium/smart, sadece yukarı; native-only no-op dışı).
-- `agent/tier.go`: `tierRank` + `resolveTierWith(agent, override)` (override > agent tier > ajan alanları) +
-  `ResolveTierWith` export + `NewTierEscalator(agent, sessionID)` (yukarı-doğrulama, slot-konfigüre kontrolü,
-  session'a persist, sonuç+log).
-- `toolsetup.go`: araç delegasyon gate'i altında kayıtlı. `toolloop.go`: `escalate_tier` adımı `StepTier`'a
-  promote (todo/diff kalıbı). `trace.go`: `StepTier` kind.
-- Chat handlerları escalator'ı per-tur wire eder (`chat.go`, `chat_stream.go`); provider/model çözümü artık
-  `ResolveTierWith(agent, session.TierOverride)` (chat.go/chat_stream.go/chat_turn.go).
-
-**Frontend:** `types/message.ts` `StepKind` += `'tier'`; `chat/TierStep.tsx` (accent kart) + `TurnSteps`
-yönlendirmesi; `lib/stepKinds.ts` "Seviye yükseltme" referansı.
-
-**Test/Build:** `agent/tier_test.go` += escalator senaryoları (yukarı-persist, sideways-reddet,
-ayarsız-tier-reddet, session-override-kazanır). `go build`/`vet`/`test ./internal/...` **yeşil**; frontend tier
-kodu `tsc` temiz (ağaçtaki 2 hata yine `market`/`hooks` WIP'inden).
-
-**Kapsam notu:** Yükseltme **bir sonraki turdan** itibaren geçerli (mevcut turun provider'ı tur başında
-çözülür). Araç cevabı modele "turu bitir, sonraki tur yükseltilmiş modelle çalışacak" der. Tur-içi anında
-swap T4'e bırakıldı.
-
-### Faz T3 — `call_agent` Tier Delegasyonu — ✅ UYGULANDI (2026-06-19)
-
-**Backend:**
-- `tools/delegate.go`: `DelegateRunner` imzası `(ctx, target, tier, task)`; `callAgentInput` += `Tier`;
-  Def açıklaması + şema (`tier` enum cheap/medium/smart, `agent` opsiyonel, yalnız `task` zorunlu); `Call`
-  doğrulaması (agent VEYA tier zorunlu, tier enum kontrolü).
-- `agent/delegate.go`: runner tier alır; yeni `resolveDelegateTarget(caller, target, tier, visited)` —
-  isimli hedef → `resolveAgent`; tier → o tier'a **atanmış** ilk uygun ajan (caller/visited hariç), yoksa
-  **ephemeral ajan** (caller persona'sı + `Tier=tier` → `effectiveProvider` tier slot'una çözer; sentetik
-  `tier:<t>` id ile visited/cycle guard tutarlı). Tier slot konfigüre değilse hata.
-- Mevcut depth/budget/cycle guard'ları ve `effectiveProvider(sub)` (T1) değişmeden tier'a da uygulanır.
-
-**Frontend:** Değişiklik yok — `call_agent` çağrısının `tier` alanı mevcut `ActivityCard` JSON girdisinde
-görünür (ayrı kart gerekmedi).
-
-**Test/Build:** `delegate_test.go` += "unconfigured tier" guard + `TestResolveDelegateTarget` (ephemeral
-çözüm + gerçek tier-ajanı tercihi); mevcut guard testleri yeni imzaya güncellendi. `go build`/`vet`/`test
-./internal/...` **yeşil** (16 paket ok).
-
-### Faz T4 (Opsiyonel) — Otomatik Yükseltme
-
-`toolloop.go` içinde N ardışık hata veya boş cevap → otomatik `escalate_tier("medium")`.  
-Ayarlar: `AutoEscalateOnFailure bool`, `AutoEscalateThreshold int`.
+Eski plan: T1 = workspace tier config + efektif provider çözümü; T2 = `escalate_tier` (session
+model yükseltme); T3 = `call_agent` tier delegasyonu (ephemeral ajan dahil). T1+T2 ve T3'ün
+ephemeral kısmı **geri alındı** (kullanıcı geri bildirimi — bkz §0).
 
 ---
 
 ## 9. Alternatifler ve Değiş-Tokuşlar
 
-### A. "Her ajan kendi modeline sahip" (mevcut durum)
-Artısı: Basit. Eksisi: Dinamik uyum yok.
+### A. "Her ajan kendi modeline sahip" + tier etiketi (UYGULANAN)
+Artısı: Çok basit, anlaşılır; ajanın modeli tek yerde (kendi alanı). Etiket sadece yönlendirme.  
+Eksisi: Tek bir ajan kendi modelini dinamik değiştiremez (ama farklı modeldeki bir ajana delege edebilir).
 
-### B. Session içi model swap (bu tasarım, §4.3)
-Artısı: Context korunur, kullanıcı kesintiye uğramaz.  
-Eksisi: Yükseltme sonrası "ucuz" geçmişi "akıllı" modele görünür → akıllı modelin verimliliği
-biraz düşebilir. Kabul edilebilir: akıllı modeller büyük context'i zaten iyi yönetir.
+### B. Workspace tier config + session içi model swap (ESKİ, GERİ ALINDI)
+Artısı: Tek ajan model yükseltebilir.  
+Eksisi: İki yerde model kaynağı (ajan + tier config) → kafa karıştırıcı; kullanıcı reddetti.
 
-### C. Tam agent değişimi (call_agent ile)
-Artısı: Temiz ayrışım, uzmanlaşmış persona.  
-Eksisi: Context kopyalanmaz; delegated ajan soruyu kısa bir `task` ile alır.  
-**Öneri:** İki yaklaşım birlikte kullanılabilir: `escalate_tier` (session swap) basit
-durum için, `call_agent(tier=...)` (delegation) uzmanlaşmış iş bölümü için.
+### C. call_agent ile agent değişimi (UYGULANAN — etiket bazlı)
+Etiketli ajana delege: temiz ayrışım, uzmanlaşmış persona, "session içinde ajanlar arası görev
+aktarımı" hedefini doğrudan karşılar.
 
-### D. Tier'ı sadece katalog metaverisi olarak tut (kod değişikliği en az)
-Sadece `Agent.Tier` etiket olarak UI'da görünür, runtime'da etki etmez.  
-Eksisi: Asıl değeri (dinamik geçiş) sunmaz.
+---
+
+## 11. Güncel Uygulama (yürürlükteki) — ✅ 2026-06-19
+
+**Model:** `Agent.Tier` saf bir **etiket** (`cheap`/`medium`/`smart`/boş). Ajanın provider/model'ini
+değiştirmez. Tek işlevi: `call_agent(tier:"…")` ile etiketli ajana delegasyon yönlendirmesi.
+
+**Backend:**
+- `db.Agent.Tier` (etiket) + `AgentProfilePatch.Tier` (kısmi patch) — `db/models.go`, `db/store.go`.
+- `tools/delegate.go`: `DelegateRunner` imzası `(ctx, target, tier, task)`; `callAgentInput` += `Tier`;
+  şema (`tier` enum cheap/medium/smart, `agent` opsiyonel, yalnız `task` zorunlu); `Call` doğrulaması
+  (agent **veya** tier).
+- `agent/delegate.go` `resolveDelegateTarget`: isimli hedef → `resolveAgent`; tier → o etikete sahip ilk
+  uygun ajan (caller/visited hariç), kendi provider/model'iyle koşar; hiç etiketli ajan yoksa açık hata.
+  Mevcut depth/budget/cycle guard'ları değişmeden uygulanır.
+- `POST/PUT /api/agents` `tier` alanını kabul eder (etiket).
+
+**Frontend:**
+- `types/agent.ts` `Agent.tier`/`AgentPatch.tier`; `types/settings.ts` `AgentTier` tipi; `api/agents.ts`
+  createAgent `tier`.
+- `AgentSettingsForm`: ProviderModelSelect **her zaman** görünür + ayrı **"Seviye etiketi"** dropdown'u
+  (Etiket yok / Ucuz / Orta / Zeki) + "yalnız etiket, modeli değiştirmez" notu.
+
+**Kaldırılanlar (eski tasarımdan):** `settings` tier config (TierCheap/Medium/Smart/DefaultTier),
+`Tunables.SetTierConfig/TierSlot`, `agent/tier.go` (resolveTier/effectiveProvider/escalator),
+`tools/escalate.go` (`escalate_tier`), `db.Session.TierOverride`, `StepTier`+`TierStep.tsx`,
+ProvidersPanel "Ajan Seviyeleri" bölümü.
+
+**Test/Build:** `delegate_test.go` (etiketli-ajan yönlendirme + "no agent tagged" hata + guard'lar yeni
+imzaya). `go build`/`vet`/`test ./internal/...` **yeşil** (16 paket ok); frontend tier kodu `tsc` temiz
+(ağaçtaki 2 hata `market`/`hooks` WIP'inden — bağımsız).
 
 ---
 
 ## 10. Sıradaki Adımlar
 
-1. `Settings.TierConfig` + `db.Agent.Tier` + `resolveEffectiveProvider` → **Faz T1**
-2. UI'da WorkspacePanel + AgentSettingsForm güncellemeleri
-3. `escalate_tier` tool + SSE olay → **Faz T2**
-4. `call_agent` tier delegasyonu → **Faz T3**
+1. **Canlı test** — gateway/Chrome bağlanınca: ajana "smart" etiketi ata → başka ajandan
+   `call_agent(tier:"smart")` ile delegasyonu uçtan uca doğrula.
+2. **Reconcile + commit** — eşzamanlı WIP çözülünce tier-etiket kodunu commitle.
+3. (Ops.) Roster/chat'te ajan adı yanında küçük tier rozeti (🟢/🟡/🔴) — kozmetik.
