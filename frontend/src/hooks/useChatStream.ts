@@ -63,6 +63,9 @@ export interface ChatStreamDeps {
   // Ref to the active session id so the detached SSE callbacks can tell whether
   // an update belongs to the session currently on screen.
   activeSessionIdRef: RefObject<string | null>
+  // Live view of the open transcript, so retry can find the user prompt behind a
+  // failed turn without re-binding callbacks on every message change.
+  messagesRef: RefObject<Message[]>
   // Live desktop-notification preference (read without re-binding callbacks).
   notifyEnabled: RefObject<boolean>
   setMessages: Dispatch<SetStateAction<Message[]>>
@@ -81,6 +84,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     activeSessionId,
     activeAgentId,
     activeSessionIdRef,
+    messagesRef,
     notifyEnabled,
     setMessages,
     setError,
@@ -292,7 +296,7 @@ export function useChatStream(deps: ChatStreamDeps) {
             notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', r.replyMessage.text, () => {
               setView('chat')
               selectSession(sid)
-            })
+            }, `chat-reply:${sid}:${r.replyMessage.id}`)
           },
           onDone: (d) => {
             void d
@@ -313,7 +317,7 @@ export function useChatStream(deps: ChatStreamDeps) {
             notify(notifyEnabled.current, 'SwarmGo — hata', err, () => {
               setView('chat')
               selectSession(sid)
-            })
+            }, `chat-error:${sid}:${liveId}`)
           },
         }, ac.signal, thinkingLevel, permissionMode)
       } catch (e) {
@@ -326,7 +330,7 @@ export function useChatStream(deps: ChatStreamDeps) {
           notify(notifyEnabled.current, 'SwarmGo — hata', msg, () => {
             setView('chat')
             selectSession(sid)
-          })
+          }, `chat-error:${sid}:${liveId}`)
         }
       } finally {
         // Tear down only THIS session's streaming state. Overlapping turns in
@@ -347,6 +351,45 @@ export function useChatStream(deps: ChatStreamDeps) {
   useEffect(() => {
     sendMessageRef.current = sendMessage
   }, [sendMessage])
+
+  // retryMessage re-runs the turn behind a failed assistant bubble. It finds the
+  // user message that triggered the failure, removes the failed pair (locally and
+  // server-side if it was persisted), and re-sends the same text + attachments.
+  // Deleting the old pair first keeps history clean (no duplicate user bubble).
+  const retryMessage = useCallback(
+    async (failedId: string) => {
+      const sid = activeSessionIdRef.current
+      if (!sid) return
+      const msgs = messagesRef.current ?? []
+      const failedIdx = msgs.findIndex((m) => m.id === failedId)
+      if (failedIdx < 0) return
+      // Walk back from the failed assistant bubble to its triggering user message.
+      let userIdx = -1
+      for (let i = failedIdx; i >= 0; i--) {
+        if (msgs[i].role === 'user') {
+          userIdx = i
+          break
+        }
+      }
+      if (userIdx < 0) return
+      const userMsg = msgs[userIdx]
+      const text = userMsg.text
+      const attachments = userMsg.attachments ?? []
+
+      // A local-only bubble (optimistic/synthesized) has a client-side id prefix
+      // and was never persisted, so it only needs removing from view.
+      const isLocal = (id: string) =>
+        id.startsWith('tmp-') || id.startsWith('err-') || id.startsWith('live-')
+      const removeIds = [failedId, userMsg.id]
+      setMessages((prev) => prev.filter((m) => !removeIds.includes(m.id)))
+      for (const id of removeIds) {
+        if (!isLocal(id)) await api.deleteMessage(sid, id).catch(() => {})
+      }
+
+      await sendMessageRef.current(text, sid, attachments)
+    },
+    [activeSessionIdRef, messagesRef, setMessages],
+  )
 
   // When a session's turn ends, drop any of ITS still-pending steers (their
   // target run is gone) and cancel their grace timers.
@@ -638,6 +681,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     permissionMode,
     setPermissionMode: setPermissionModePersist,
     sendMessage,
+    retryMessage,
     stopTurn,
     answerAsk,
     interruptTurn,

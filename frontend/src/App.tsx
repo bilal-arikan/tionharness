@@ -15,11 +15,14 @@ import { latestTodos } from './lib/todos'
 import { TaskBoard } from './components/panels/TaskBoard'
 import { Schedules } from './components/panels/Schedules'
 import { MemoryPanel } from './components/panels/MemoryPanel'
-import { ToolsPanel } from './components/panels/ToolsPanel'
 // Code-split: the Flows panel pulls in React Flow (~300KB), loaded only when
 // the user opens the Akışlar view.
 const FlowsPanel = lazy(() =>
   import('./components/panels/FlowsPanel').then((m) => ({ default: m.FlowsPanel })),
+)
+// The collaboration network panel also pulls in React Flow — load it on demand.
+const NetworkPanel = lazy(() =>
+  import('./components/panels/NetworkPanel').then((m) => ({ default: m.NetworkPanel })),
 )
 import { ExecutionsPanel } from './components/panels/ExecutionsPanel'
 import { ArtifactsPanel } from './components/panels/ArtifactsPanel'
@@ -58,16 +61,17 @@ const VIEW_TITLE: Record<View, string> = {
   chat: 'Sohbet',
   executions: 'Aktivite',
   agents: 'Ajanlar',
+  network: 'Ağ',
   board: 'Görevler',
   schedules: 'Zamanlamalar',
   memory: 'Hafıza',
-  tools: 'Araçlar',
   flows: 'Akışlar',
   artifacts: 'Artifactlar',
   secrets: 'Sırlar',
   skills: 'Beceriler',
   budget: 'Bütçe',
   logs: 'Loglar',
+  market: 'Market',
   settings: 'Ayarlar',
 }
 
@@ -88,6 +92,9 @@ export default function App() {
   const [settingsCat, setSettingsCat] = useState<string | null>(
     INITIAL_ROUTE.view === 'settings' ? INITIAL_ROUTE.id : null,
   )
+  // Bumped whenever an agent changes app settings (the `settings` SSE event), so
+  // an open Settings screen reloads to reflect the change.
+  const [settingsNonce, setSettingsNonce] = useState(0)
   // Entity selection carried by an initial/cross-workspace deep link, consumed
   // once by the workspace-load effect after agents+sessions arrive.
   const pendingRouteRef = useRef<Route | null>(INITIAL_ROUTE)
@@ -265,6 +272,12 @@ export default function App() {
     activeSessionIdRef.current = activeSessionId
   }, [activeSessionId])
 
+  // Mirror the open transcript into a ref so the chat hook's retry can read the
+  // current messages (to find the user prompt behind a failed turn) without
+  // re-binding its callbacks on every message update.
+  const messagesRef = useRef<Message[]>(messages)
+  messagesRef.current = messages
+
   // Reload the session list (fresh order, updated times, unread flags).
   const refreshSessions = useCallback(() => {
     api.listSessions().then(setSessions).catch(() => {})
@@ -350,6 +363,15 @@ export default function App() {
   // to the event's target (chat session, board, or logs). Refreshed each render
   // so the stable SSE subscription below always sees current closures/state.
   onEventRef.current = (e: AppEvent) => {
+    // Application settings changed elsewhere — by an agent (update_settings) or
+    // by another open window's Settings save: re-apply the client-side prefs
+    // (theme/accent/notifications) live and signal the open Settings screen to
+    // reload. App-global → no workspace badge, no toast.
+    if (e.type === 'settings') {
+      api.getSettings().then(applyClientPrefs).catch(() => {})
+      setSettingsNonce((n) => n + 1)
+      return
+    }
     // Badge any non-active workspace that produced activity (incl. completed
     // chats), so the switcher shows where to look. markWorkspaceUnread persists
     // the badge so every other open window picks it up via its storage listener.
@@ -392,6 +414,10 @@ export default function App() {
     // Raise an OS toast only when the master toggle is on AND this event type is
     // not muted in Settings (per-type preference, device-local).
     if (!isTypeEnabled(e.type)) return
+    // Tag the toast with the event identity so multiple open tabs/windows
+    // (each receiving the same SSE event) collapse into a single OS toast
+    // instead of one per tab.
+    const tag = `${e.workspaceId ?? ''}:${e.type}:${e.target?.sessionId ?? e.target?.agentId ?? ''}:${e.time}`
     notify(notifyEnabled.current, e.title, e.body, () => {
       // Navigate via the deep-link URL: setting the hash drives the URL→state
       // machinery (useUrlSync → applyRoute), which switches workspace and
@@ -399,7 +425,7 @@ export default function App() {
       // already focused the window.
       const r = routeFromEvent(e)
       if (r) window.location.hash = buildRoute(r)
-    })
+    }, tag)
   }
 
   // Subscribe once to the global autonomous-event feed (heartbeat/task/schedule).
@@ -491,6 +517,7 @@ export default function App() {
     activeSessionId,
     activeAgentId,
     activeSessionIdRef,
+    messagesRef,
     notifyEnabled,
     setMessages,
     setError,
@@ -596,9 +623,7 @@ export default function App() {
         />
       )}
 
-      {/* Agent-scoped views need an agent picker; reuse the roster as a sidebar.
-          Tools is workspace-scoped (no agent), so it has its own master-detail
-          layout and skips the roster. */}
+      {/* Agent-scoped views need an agent picker; reuse the roster as a sidebar. */}
       {view === 'memory' && (
         <AgentRoster
           agents={agents}
@@ -660,6 +685,7 @@ export default function App() {
               onOpenFile={openFile}
               onOpenArtifact={openArtifact}
               onDeleteMessage={deleteMessage}
+              onRetry={chat.retryMessage}
             />
             {chat.activeAsk &&
               (chat.activeAsk.kind === 'permission' ? (
@@ -713,6 +739,15 @@ export default function App() {
             onSelectExecution={setExecutionTarget}
           />
         )}
+        {view === 'network' && (
+          <Suspense
+            fallback={
+              <div className="flex-1 p-6 text-sm text-[var(--color-text-dim)]">Ağ yükleniyor…</div>
+            }
+          >
+            <NetworkPanel onError={setError} />
+          </Suspense>
+        )}
         {view === 'board' && <TaskBoard agents={agents} onError={setError} />}
         {view === 'schedules' && (
           <Schedules agents={agents} focusId={scheduleTarget} onError={setError} />
@@ -723,7 +758,6 @@ export default function App() {
             onError={setError}
           />
         )}
-        {view === 'tools' && <ToolsPanel onError={setError} />}
         {view === 'flows' && (
           <Suspense
             fallback={
@@ -770,6 +804,7 @@ export default function App() {
             onNavigate={setView}
             cat={settingsCat}
             onCatChange={setSettingsCat}
+            reloadNonce={settingsNonce}
           />
         )}
       </main>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Trash2, X } from 'lucide-react'
+import { Trash2, X, RotateCcw } from 'lucide-react'
 import type { Agent, Artifact, Message } from '../../types'
 import { Markdown } from '../markdown/Markdown'
 import { TurnSteps, parseSteps } from './TurnSteps'
@@ -23,6 +23,8 @@ interface Props {
   onOpenArtifact?: (id: string) => void
   // Delete a single message (prune a mistaken/test one). Shown on row hover.
   onDeleteMessage?: (id: string) => void
+  // Retry the failed turn behind an assistant bubble that errored.
+  onRetry?: (id: string) => void
 }
 
 // DeleteButton is the small destructive control revealed on message hover. It
@@ -74,7 +76,7 @@ function WorkingDots() {
   )
 }
 
-export function MessageList({ messages, pending, agents, artifacts, streaming, onOpenFile, onOpenArtifact, onDeleteMessage }: Props) {
+export function MessageList({ messages, pending, agents, artifacts, streaming, onOpenFile, onOpenArtifact, onDeleteMessage, onRetry }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Whether the user is currently pinned to the bottom of the transcript. When
   // they scroll up to read history we stop auto-scrolling so streaming deltas
@@ -144,6 +146,10 @@ export function MessageList({ messages, pending, agents, artifacts, streaming, o
             st.kind === 'tool' || st.kind === 'diff' || st.kind === 'todo',
           ).length
           const toolsHidden = collapsedTools.has(m.id)
+          // A turn that ended in an error step can be retried (resends the
+          // triggering user message). Not offered while still streaming.
+          const hasError = steps.some((st) => st.kind === 'error')
+          const canRetry = !!onRetry && hasError && !isLastLive
           return m.role === 'user' ? (
             <div key={m.id} className="group flex flex-col gap-1">
               <UserBubble text={m.text} agents={agents} attachments={m.attachments} artifacts={artifacts} onOpenArtifact={onOpenArtifact} />
@@ -200,6 +206,16 @@ export function MessageList({ messages, pending, agents, artifacts, streaming, o
                   <LiveTimer startUnixSec={m.createdAt} />
                 ) : (
                   <TurnDuration seconds={workedSec} />
+                )}
+                {canRetry && (
+                  <button
+                    onClick={() => onRetry!(m.id)}
+                    title="Bu turu yeniden dene"
+                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)]"
+                  >
+                    <RotateCcw size={12} />
+                    Yeniden dene
+                  </button>
                 )}
                 {onDeleteMessage && !isLastLive && (
                   <DeleteButton onClick={() => onDeleteMessage(m.id)} />
