@@ -16,7 +16,13 @@ export function ParallelNode({ id, data, selected }: NodeProps<FlowRFNode>) {
       <div className="text-[11px] text-[var(--color-text-dim)]">
         {count} eşzamanlı dal · join →
       </div>
-      <Handle type="source" position={Position.Bottom} id="fan" title="Paralel dallar (eşzamanlı çalışır)" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="fan"
+        title="Paralel dallar (eşzamanlı çalışır)"
+        style={{ background: '#0ea5e9' }}
+      />
       <Handle
         type="source"
         position={Position.Right}

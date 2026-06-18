@@ -131,6 +131,11 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
 
 - **Ok uçları:** tüm kenarlara `markerEnd: ArrowClosed` (yön netliği) — `FlowCanvas.styledEdges`
   + `defaultEdgeOptions`.
+- **Paralel kenar renkleri:** `FlowCanvas.edgeColor(sourceHandle)` ile paralel node'un çıkışları
+  ayırt edilir — **fan** kenarları (eşzamanlı çocuklar) sky `#0ea5e9`, **join** kenarı violet
+  `#7c3aed` (paralel node aksanı + join tutamağıyla aynı). Kenar çizgisi **ve** ok ucu aynı renkte;
+  `ParallelNode` fan tutamağı sky, join tutamağı violet. Yüklemede ve canlı bağlamada
+  `sourceHandle`'a göre tek noktadan uygulanır. (agent/branch kenarları varsayılan renkte.)
 - **Canvas araç çubuğu** (`FlowCanvas` içinde `<Panel position="top-right">` → `CanvasTools`,
   `useReactFlow` ile): **▦ Otomatik diz** (parent `onAutoLayout` → `autoArrange`:
   `reactFlowToGraph`→`autoLayout`→`setNodes`, sonra `fitView` ile ortalar). Ortala/zoom zaten

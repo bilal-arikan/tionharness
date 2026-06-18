@@ -56,6 +56,20 @@ const nodeTypes: NodeTypes = {
   parallel: ParallelNode,
 }
 
+// Parallel-node edge colors so the two outgoing roles read at a glance: the
+// fan-out edges (concurrent children) vs the single join edge (runs after all
+// children finish; matches the parallel node's violet accent + join handle).
+const FAN_EDGE_COLOR = '#0ea5e9' // sky — concurrent fan-out
+const JOIN_EDGE_COLOR = '#7c3aed' // violet — join
+
+// edgeColor returns the stroke color for an edge by its source handle, or
+// undefined to use the default edge color (agent next / branch arms).
+function edgeColor(sourceHandle: string | null | undefined): string | undefined {
+  if (sourceHandle === 'fan') return FAN_EDGE_COLOR
+  if (sourceHandle === 'join') return JOIN_EDGE_COLOR
+  return undefined
+}
+
 // Built-in React Flow edge path styles the user can switch between.
 export type EdgeStyle = 'default' | 'smoothstep' | 'step' | 'straight'
 
@@ -99,12 +113,21 @@ export function FlowCanvas({
   // display. These are cosmetic flow-level presentation hints; labels are kept.
   const styledEdges = useMemo(
     () =>
-      edges.map((e) => ({
-        ...e,
-        type: edgeStyle,
-        animated,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
-      })),
+      edges.map((e) => {
+        const color = edgeColor(e.sourceHandle)
+        return {
+          ...e,
+          type: edgeStyle,
+          animated,
+          style: color ? { ...e.style, stroke: color } : e.style,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 18,
+            height: 18,
+            ...(color ? { color } : {}),
+          },
+        }
+      }),
     [edges, edgeStyle, animated],
   )
   const onConnect = useCallback(
