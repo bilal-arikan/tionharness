@@ -745,7 +745,18 @@ export default function App() {
         )}
         {view === 'secrets' && <SecretsPanel onError={setError} />}
         {view === 'skills' && <SkillsPanel onError={setError} />}
-        {view === 'market' && <MarketPanel onError={setError} onManageSecrets={() => setView('secrets')} />}
+        {view === 'market' && (
+          <MarketPanel
+            onError={setError}
+            onManageSecrets={() => setView('secrets')}
+            onInstalled={(kind) => {
+              // Refresh the App-level agents list so a freshly installed agent
+              // shows on the Agents screen without a manual reload. Flows/skills/
+              // providers panels reload on their own mount.
+              if (kind === 'agent') api.listAgents().then(setAgents).catch(() => {})
+            }}
+          />
+        )}
         {view === 'budget' && <BudgetPanel onError={setError} />}
         {view === 'logs' && <LogsPanel onError={setError} />}
         {view === 'settings' && (

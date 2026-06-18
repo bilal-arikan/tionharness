@@ -116,6 +116,11 @@ func (s *Server) installAgentPack(w http.ResponseWriter, r *http.Request, wsp *w
 		writeError(w, http.StatusBadRequest, "agent pack is missing its payload")
 		return
 	}
+	// Skip if an agent with the same name already exists (don't create duplicates).
+	if existing, _ := wsp.DB.ListAgents(r.Context()); nameExists(ap.Name, agentNames(existing)) {
+		writeError(w, http.StatusConflict, "\""+ap.Name+"\" adlı ajan zaten kurulu")
+		return
+	}
 	skillStore := wsp.Runtime.Skills()
 	known := make([]string, 0, len(ap.Skills))
 	for _, slug := range ap.Skills {
@@ -157,6 +162,15 @@ func (s *Server) installFlowPack(w http.ResponseWriter, r *http.Request, wsp *wo
 	fp := pack.Payload.Flow
 	if fp == nil || fp.Graph == "" {
 		writeError(w, http.StatusBadRequest, "flow pack is missing its graph")
+		return
+	}
+	wantName := fp.Name
+	if wantName == "" {
+		wantName = pack.Name
+	}
+	// Skip if a flow with the same name already exists (don't create duplicates).
+	if existing, _ := wsp.DB.ListFlows(r.Context()); nameExists(wantName, flowNames(existing)) {
+		writeError(w, http.StatusConflict, "\""+wantName+"\" adlı akış zaten kurulu")
 		return
 	}
 	graph := fp.Graph
@@ -231,6 +245,34 @@ func providerIDFromPack(pack market.Pack) string {
 		id = pack.ID
 	}
 	return id
+}
+
+// nameExists reports whether want matches any name in the set, case-insensitively
+// and trimmed — the dedup test used to avoid creating a second copy of an entity.
+func nameExists(want string, names []string) bool {
+	want = strings.ToLower(strings.TrimSpace(want))
+	for _, n := range names {
+		if strings.ToLower(strings.TrimSpace(n)) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func agentNames(in []db.Agent) []string {
+	out := make([]string, len(in))
+	for i, a := range in {
+		out[i] = a.Name
+	}
+	return out
+}
+
+func flowNames(in []db.Flow) []string {
+	out := make([]string, len(in))
+	for i, f := range in {
+		out[i] = f.Name
+	}
+	return out
 }
 
 // publishRequest packages an existing workspace entity into the local registry.

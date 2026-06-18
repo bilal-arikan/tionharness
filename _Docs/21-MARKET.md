@@ -173,6 +173,11 @@ paketini db/settings bağımlılığından uzak tutar (publish'in `BuildSkillPac
   şifrelenir; boşsa yine kurulur (kullanıcı sonra Ayarlar'dan girer). Provider id =
   pack id'den (`provider.<slug>` → `<slug>`).
 
+**Tekrar-kurulum koruması (dedup):** agent/flow kurulumu, aynı **ada** sahip bir varlık
+zaten varsa **409** döner (`nameExists` + `agentNames`/`flowNames`) — kullanıcının işini
+çoğaltmaz. skill zaten dosya çakışmasında 409 verir (overwrite guard). provider id-keyed
+(`Upsert`) olduğundan tekrar kurulum **çoğaltmaz, günceller**.
+
 ### 3.4 Publish (paketleme) — `publish.go`
 
 `PublishSkill(slug)`, `PublishAgent(id)`, `PublishProvider(id)`, `PublishFlow(id)`
@@ -217,6 +222,14 @@ ile workspace tier'a yazar. Sanitize = secret/ID/CreatedBy temizliği (§1.2).
   `apiKey` olarak gider (UI'da plaintext tutulmaz/gösterilmez). "Sırlar →" butonu
   (`onManageSecrets` prop'u, App'te `setView('secrets')`) Sırlar ekranına atlar.
   Sır yoksa anahtarsız kurulur (sonra Ayarlar'dan girilebilir).
+- **Zaten kurulu işareti:** panel açılışta mevcut skill/agent/flow/provider'ları çeker
+  (`loadExisting`); bir paketin hedefi varsa kartta "Kuruldu" rozeti + detayda buton
+  **disabled "Zaten kurulu"** (provider'da "Güncelle"). `packTargetKey`: skill→slug,
+  agent/flow→ad, provider→id.
+- **Kurulum sonrası tazeleme:** `onInstalled(kind)` prop'u host'a haber verir; App
+  `kind==='agent'` olunca `listAgents()`→`setAgents` ile App-state ajan listesini yeniler
+  → yeni ajan **Ajanlar ekranında manuel yenileme olmadan** görünür (flow/skill/provider
+  panelleri zaten mount'ta yüklenir).
 
 ### 5.1 Kurulum akışı (UML)
 

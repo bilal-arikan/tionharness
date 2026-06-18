@@ -9,6 +9,9 @@ interface Props {
   // Jump to the Secrets screen to manage vault entries (provider keys live in
   // the vault, never typed as plaintext — mirrors the Settings providers panel).
   onManageSecrets?: () => void
+  // Called after a successful install so the host can refresh the matching
+  // collection (e.g. App-level agents state) without a full page reload.
+  onInstalled?: (kind: PackKind) => void
 }
 
 // Kind tabs. Only "skill" is installable in the MVP; the others list (when
@@ -124,12 +127,46 @@ function KindBadge({ kind }: { kind: PackKind }) {
   )
 }
 
-export function MarketPanel({ onError, onManageSecrets }: Props) {
+// existingKeys holds, per kind, the identifiers of entities already present in
+// the workspace, so the market can mark a pack as already installed and block a
+// duplicate. Keys: skill→slug, agent→lowercased name, flow→lowercased name,
+// provider→id.
+interface ExistingKeys {
+  skills: Set<string>
+  agents: Set<string>
+  flows: Set<string>
+  providers: Set<string>
+}
+
+const emptyExisting = (): ExistingKeys => ({
+  skills: new Set(),
+  agents: new Set(),
+  flows: new Set(),
+  providers: new Set(),
+})
+
+// packTargetKey returns the identifier a pack would occupy once installed, in
+// the same shape as ExistingKeys, so we can test "already installed".
+function packTargetKey(pack: Pack): { set: keyof ExistingKeys; key: string } {
+  switch (pack.kind) {
+    case 'skill':
+      return { set: 'skills', key: pack.id.replace(/^skill\./, '') }
+    case 'provider':
+      return { set: 'providers', key: pack.id.replace(/^provider\./, '') }
+    case 'agent':
+      return { set: 'agents', key: pack.name.trim().toLowerCase() }
+    case 'flow':
+      return { set: 'flows', key: pack.name.trim().toLowerCase() }
+  }
+}
+
+export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   const [packs, setPacks] = useState<Pack[]>([])
   const [tab, setTab] = useState<PackKind | 'all'>('all')
   const [selected, setSelected] = useState<Pack | null>(null)
   const [busy, setBusy] = useState(false)
   const [installed, setInstalled] = useState<Set<string>>(new Set())
+  const [existing, setExisting] = useState<ExistingKeys>(emptyExisting)
   // Provider key, resolved from the secret vault (never typed). pickedSecret is
   // the chosen secret's name (for display); apiKey holds its revealed value.
   const [secrets, setSecrets] = useState<Secret[]>([])
@@ -152,10 +189,41 @@ export function MarketPanel({ onError, onManageSecrets }: Props) {
     }
   }, [])
 
+  // loadExisting snapshots the workspace's current skills/agents/flows/providers
+  // so the catalog can flag packs that are already installed.
+  const loadExisting = useCallback(async () => {
+    try {
+      const [skills, agents, flows, providers] = await Promise.all([
+        api.listSkills(),
+        api.listAgents(),
+        api.listFlows(),
+        api.listCustomProviders(),
+      ])
+      setExisting({
+        skills: new Set(skills.map((s) => s.slug)),
+        agents: new Set(agents.map((a) => a.name.trim().toLowerCase())),
+        flows: new Set(flows.map((f) => f.name.trim().toLowerCase())),
+        providers: new Set(providers.map((p) => p.id)),
+      })
+    } catch {
+      // Non-fatal: without this snapshot, packs simply aren't pre-marked.
+    }
+  }, [])
+
   useEffect(() => {
     void load()
     void loadSecrets()
-  }, [load, loadSecrets])
+    void loadExisting()
+  }, [load, loadSecrets, loadExisting])
+
+  // isInstalled reports whether the entity a pack would create already exists.
+  const isInstalled = useCallback(
+    (pack: Pack) => {
+      const { set, key } = packTargetKey(pack)
+      return existing[set].has(key)
+    },
+    [existing],
+  )
 
   // Resolve a chosen secret to its plaintext value (revealed on demand) and stage
   // it as the provider key for the next install.
@@ -214,13 +282,15 @@ export function MarketPanel({ onError, onManageSecrets }: Props) {
         const res = await api.installPack(pack.id, body)
         setInstalled((prev) => new Set(prev).add(pack.id))
         onError(`✓ ${res.message}`)
+        await loadExisting() // re-mark the catalog (this pack is now installed)
+        onInstalled?.(pack.kind) // let the host refresh its matching collection
       } catch (e) {
         onError(e instanceof Error ? e.message : 'Kurulum başarısız')
       } finally {
         setBusy(false)
       }
     },
-    [onError, apiKey],
+    [onError, apiKey, loadExisting, onInstalled],
   )
 
   return (
@@ -265,7 +335,7 @@ export function MarketPanel({ onError, onManageSecrets }: Props) {
             </p>
           )}
           {visible.map((p) => {
-            const done = installed.has(p.id)
+            const done = installed.has(p.id) || isInstalled(p)
             return (
               <button
                 key={p.id}
@@ -365,13 +435,27 @@ export function MarketPanel({ onError, onManageSecrets }: Props) {
                 </p>
               </div>
             )}
-            <button
-              onClick={() => void install(selected)}
-              disabled={busy}
-              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-            >
-              <Download size={13} /> {INSTALL_LABEL[selected.kind]}
-            </button>
+            {(() => {
+              const here = isInstalled(selected)
+              // Providers are id-keyed (Upsert) so re-installing just updates the
+              // config/key — allowed and labelled "Güncelle". Other kinds would
+              // create a duplicate, so they are blocked once present.
+              const blocked = here && selected.kind !== 'provider'
+              const label = blocked
+                ? 'Zaten kurulu'
+                : here && selected.kind === 'provider'
+                  ? 'Güncelle'
+                  : INSTALL_LABEL[selected.kind]
+              return (
+                <button
+                  onClick={() => void install(selected)}
+                  disabled={busy || blocked}
+                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  {blocked ? <Check size={13} /> : <Download size={13} />} {label}
+                </button>
+              )
+            })()}
           </div>
 
           {/* Payload preview — kind-specific */}
