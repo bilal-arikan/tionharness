@@ -142,7 +142,7 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
           const toolsHidden = collapsedTools.has(m.id)
           return m.role === 'user' ? (
             <div key={m.id} className="group flex flex-col gap-1">
-              <UserBubble text={m.text} agents={agents} attachments={m.attachments} />
+              <UserBubble text={m.text} agents={agents} attachments={m.attachments} onOpenArtifact={onOpenArtifact} />
               <div className="flex items-center justify-end gap-2 pr-1">
                 {onDeleteMessage && <DeleteButton onClick={() => onDeleteMessage(m.id)} />}
                 <MessageTime unixSec={m.createdAt} />

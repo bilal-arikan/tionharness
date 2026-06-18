@@ -12,22 +12,30 @@ interface Props {
   previewURL?: string
   // While true, a subtle pulsing overlay marks the upload as in-flight.
   uploading?: boolean
+  // When set, the chip is rendered as a button and calls this on click.
+  onClick?: () => void
 }
 
 // AttachmentChip renders one attachment as either an image thumbnail or a compact
 // file card (icon + name + size). Shared by the composer tray and the user bubble.
-export function AttachmentChip({ attachment, onRemove, previewURL, uploading }: Props) {
+export function AttachmentChip({ attachment, onRemove, previewURL, uploading, onClick }: Props) {
   const { Icon, label, tint } = attachmentMeta(attachment.kind)
   const img = previewURL ?? imageURL(attachment)
 
+  const Tag = onClick ? 'button' : 'div'
+  const clickProps = onClick ? { type: 'button' as const, onClick, title: 'Artifactı aç' } : {}
+
   return (
-    <div className="group relative shrink-0">
+    <Tag
+      {...clickProps}
+      className={`group relative shrink-0${onClick ? ' cursor-pointer' : ''}`}
+    >
       {img ? (
         <div className="h-[52px] w-[52px] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
           <img src={img} alt={attachment.name} className="h-full w-full object-cover" />
         </div>
       ) : (
-        <div className="flex h-[52px] w-[160px] items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5">
+        <div className={`flex h-[52px] w-[160px] items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 transition${onClick ? ' hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]' : ''}`}>
           <Icon size={20} className={`shrink-0 ${tint}`} />
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-xs font-medium text-[var(--color-text)]">
@@ -58,6 +66,6 @@ export function AttachmentChip({ attachment, onRemove, previewURL, uploading }: 
           <X size={12} />
         </button>
       )}
-    </div>
+    </Tag>
   )
 }

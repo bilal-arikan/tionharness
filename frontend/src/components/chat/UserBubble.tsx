@@ -70,10 +70,12 @@ export function UserBubble({
   text,
   agents,
   attachments,
+  onOpenArtifact,
 }: {
   text: string
   agents: Agent[]
   attachments?: Attachment[]
+  onOpenArtifact?: (id: string) => void
 }) {
   // A quote-wrapped command is an explicit escape → render the inner text as a
   // plain bubble (no command style).
@@ -83,11 +85,16 @@ export function UserBubble({
   const isCommand = !quotedCmd && /^\/\S/.test(text.trim())
 
   // Attachment chips rendered under the bubble (image thumbnails / file cards).
+  // Artifact-sourced chips are clickable: id format is "art-<artifactId>".
   const chips = attachments && attachments.length > 0 && (
     <div className="mt-1.5 flex flex-wrap justify-end gap-2">
-      {attachments.map((a) => (
-        <AttachmentChip key={a.id} attachment={a} />
-      ))}
+      {attachments.map((a) => {
+        const artifactClick =
+          a.source === 'artifact' && onOpenArtifact
+            ? () => onOpenArtifact(a.id.startsWith('art-') ? a.id.slice(4) : a.id)
+            : undefined
+        return <AttachmentChip key={a.id} attachment={a} onClick={artifactClick} />
+      })}
     </div>
   )
 
