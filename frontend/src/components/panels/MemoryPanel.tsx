@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Memory, MemoryKind } from '../../types'
 import { Markdown } from '../markdown/Markdown'
@@ -33,6 +33,17 @@ export function MemoryPanel({ agent, onError }: Props) {
   const [content, setContent] = useState('')
   const [filter, setFilter] = useState<MemoryKind | 'all'>('all')
   const [reflecting, setReflecting] = useState(false)
+  // Cards render collapsed (a 4-line plain-text preview) by default; this tracks
+  // which ids the user has expanded into the full markdown view.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const reload = (agentId: string) =>
     api.listMemories(agentId).then(setMemories).catch((e) => onError(e.message))
@@ -139,28 +150,56 @@ export function MemoryPanel({ agent, onError }: Props) {
             Bu kategoride hafıza yok.
           </p>
         )}
-        {shown.map((m) => (
-          <div
-            key={m.id}
-            className="group flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
-          >
-            <span
-              className={`mt-0.5 flex-shrink-0 rounded px-1.5 py-0.5 text-xs ${KIND_COLOR[m.kind]}`}
+        {shown.map((m) => {
+          const isOpen = expanded.has(m.id)
+          // Show the expand toggle only when the content is long enough to be
+          // clipped by the 4-line collapsed preview.
+          const lineCount = (m.content.match(/\n/g)?.length ?? 0) + 1
+          const isLong = lineCount > 4 || m.content.length > 200
+          return (
+            <div
+              key={m.id}
+              className="group flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
             >
-              {KIND_LABEL[m.kind]}
-            </span>
-            <div className="min-w-0 flex-1">
-              <Markdown>{m.content}</Markdown>
+              <span
+                className={`mt-0.5 flex-shrink-0 rounded px-1.5 py-0.5 text-xs ${KIND_COLOR[m.kind]}`}
+              >
+                {KIND_LABEL[m.kind]}
+              </span>
+              <div className="min-w-0 flex-1">
+                {isOpen ? (
+                  <Markdown>{m.content}</Markdown>
+                ) : (
+                  <p
+                    className={`line-clamp-4 whitespace-pre-wrap break-words text-[var(--color-text)] ${
+                      isLong ? 'cursor-pointer' : ''
+                    }`}
+                    onClick={() => isLong && toggleExpanded(m.id)}
+                    title={isLong ? 'Genişletmek için tıkla' : undefined}
+                  >
+                    {m.content}
+                  </p>
+                )}
+                {isLong && (
+                  <button
+                    onClick={() => toggleExpanded(m.id)}
+                    className="mt-1 flex items-center gap-0.5 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                  >
+                    {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    {isOpen ? 'Daha az' : 'Daha fazla'}
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => remove(m)}
+                className="flex-shrink-0 text-[var(--color-text-dim)] opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                title="Sil"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              onClick={() => remove(m)}
-              className="flex-shrink-0 text-[var(--color-text-dim)] opacity-0 transition hover:text-red-400 group-hover:opacity-100"
-              title="Sil"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
