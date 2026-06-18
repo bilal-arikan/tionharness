@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/orchestration"
 	"github.com/bilal/swarmgo/internal/providers"
 )
 
@@ -38,17 +39,23 @@ func (d flowDeps) requireFlowCreatedByAgent(ctx context.Context, id string) (db.
 	return f, nil
 }
 
-// validGraphJSON ensures the supplied graph string is valid JSON (the engine
-// parses it into an orchestration.Graph). An empty string is allowed (defaults
-// to an empty graph).
+// validGraphJSON ensures the supplied graph string is a structurally valid
+// orchestration graph: it parses into an orchestration.Graph AND passes the
+// engine's Validate (start node present, unique ids, resolvable references,
+// agent nodes assigned). This rejects broken graphs at create/update time
+// instead of letting them fail only when run. An empty string is allowed and
+// defaults to an empty graph.
 func validGraphJSON(graph string) error {
 	graph = strings.TrimSpace(graph)
 	if graph == "" {
 		return nil
 	}
-	var v any
-	if err := json.Unmarshal([]byte(graph), &v); err != nil {
+	g, err := orchestration.ParseGraph(graph)
+	if err != nil {
 		return fmt.Errorf("graph must be valid JSON: %w", err)
+	}
+	if err := g.Validate(); err != nil {
+		return fmt.Errorf("invalid graph: %w", err)
 	}
 	return nil
 }

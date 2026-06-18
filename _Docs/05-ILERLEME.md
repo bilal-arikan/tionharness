@@ -951,9 +951,14 @@ oluşturulmuş** kaynakları silebilir/düzenleyebilir; kullanıcının elle yap
 - `builtin_agentmgmt.go` — `create_agent` / `update_agent` / `delete_agent` / `list_agents`
   (delete kendini reddeder; create heartbeat'li ajanın worker'ını anında başlatır).
 - `builtin_flowmgmt.go` — `create_flow` / `update_flow` / `delete_flow` / `list_flows` /
-  `run_flow` (graph JSON doğrulaması). `run_flow` herhangi bir akışı `{{input}}` ile çalıştırır
+  `get_flow` / `run_flow`. Graph doğrulaması artık **derin**: `validGraphJSON` boş olmayan
+  grafiği `orchestration.ParseGraph` + `Graph.Validate` ile geçirir (start node, benzersiz id,
+  çözülebilir referanslar, atanmış agent node) → bozuk grafik create/update anında reddedilir
+  (eskiden yalnız "geçerli JSON mu" bakılıyordu, hata çalışınca patlıyordu). `get_flow` flow'u
+  **graph dahil** tam döndürür (list_flows graph'ı atlar) → ajan grafiği okuyup düzenleyip
+  update_flow ile geri yazabilir. `run_flow` herhangi bir akışı `{{input}}` ile çalıştırır
   (otonom, bütçe-kapılı), `RunFlowRecorded` üzerinden çalıştırmalar akışına kaydeder; edit/delete
-  provenance-kapılı (yalnız ajan-yapımı), `run_flow` ise kapısız (çalıştırma yıkıcı değil).
+  provenance-kapılı (yalnız ajan-yapımı), get/run ise kapısız (okuma/çalıştırma yıkıcı değil).
 - `builtin_schedulemgmt.go` — `create_schedule` / `update_schedule` / `delete_schedule` /
   `list_schedules` (her değişimde `Scheduler.Reload` → cron anında etkili).
 - `builtin_artifactmgmt.go` — `delete_artifact` / `list_artifacts` (create/update zaten
@@ -965,7 +970,7 @@ oluşturulmuş** kaynakları silebilir/düzenleyebilir; kullanıcının elle yap
 `Runtime`'a `logs *logbuf.Buffer` + `reloadSched` callback (`SetScheduleReloader`, manager
 `sched.Reload`'u bağlar) eklendi. `NewRuntime`/`NewManager` imzaları + `main.go` güncellendi.
 
-**Gate:** Self-management paketi native kataloğu **19 → 36**'ya çıkarır (~+2000 tok/tur), ve
+**Gate:** Self-management paketi native kataloğu **19 → 37**'ye çıkarır (~+2000 tok/tur), ve
 ajanın workspace'i değiştirmesine izin verir → **varsayılan KAPALI**, `SWARMGO_ENABLE_SELFMANAGE=1`
 ile açılır (shell gate deseni; `Tunables.SelfManageEnabled`). Per-agent allowlist + workspace
 denylist yine geçerli.
