@@ -86,8 +86,11 @@ export function MemoryPanel({ agent, onError }: Props) {
   const reflect = async () => {
     setReflecting(true)
     try {
-      const r = await api.reflect(agent.id)
-      setMemories((prev) => [r, ...prev])
+      await api.reflect(agent.id)
+      // Reflection consumes (deletes) the journals it consolidated, so a full
+      // reload is required: prepending the new reflection alone would leave the
+      // now-deleted journals stale on screen.
+      await reload(agent.id)
     } catch (e) {
       onError((e as Error).message)
     } finally {
