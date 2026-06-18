@@ -9,8 +9,8 @@ interface Props {
   onError: (msg: string) => void
 }
 
-// Tier badge styling — project (highest priority) is accented, then workspace,
-// then global. Mirrors the override order on the backend.
+// Tier badge styling — workspace (higher priority) is accented, global is muted.
+// Mirrors the override order on the backend (workspace > global).
 const SOURCE_LABEL: Record<SkillSource, string> = {
   global: 'Global',
   workspace: 'Workspace',
@@ -250,6 +250,31 @@ export function SkillsPanel({ onError }: Props) {
                         {tool}
                       </code>
                     ))}
+                  </p>
+                )}
+                {active.subSkills && active.subSkills.length > 0 && (
+                  <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
+                    <span className="font-medium" title="use_skill ile gerektiğinde yüklenen daha ayrıntılı beceriler">
+                      Alt beceriler:
+                    </span>
+                    {active.subSkills.map((sub) => {
+                      const known = list.some((s) => s.slug === sub)
+                      return (
+                        <button
+                          key={sub}
+                          onClick={() => known && setActiveSlug(sub)}
+                          disabled={!known}
+                          title={known ? `${sub} becerisine git` : `${sub} bulunamadı`}
+                          className={`rounded px-1 py-0.5 ${
+                            known
+                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:underline'
+                              : 'bg-[var(--color-surface-2)] line-through opacity-60'
+                          }`}
+                        >
+                          {sub}
+                        </button>
+                      )
+                    })}
                   </p>
                 )}
               </div>

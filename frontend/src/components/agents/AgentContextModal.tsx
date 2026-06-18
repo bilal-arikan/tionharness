@@ -167,9 +167,16 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                 </p>
               )}
 
-              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                Araçlar · {data.tools.length}
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                Araçlar — her tur gönderilen · {data.tools.length}
               </h3>
+              <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
+                Bunların tam şeması her tura girer. Talep-üzerine (lazy) araçlar — self-management ve
+                MCP — yalnızca sistem promptundaki{' '}
+                <code className="rounded bg-[var(--color-surface-2)] px-1">Available Tools (load on demand)</code>{' '}
+                bölümünde özetle durur; ajan <code className="rounded bg-[var(--color-surface-2)] px-1">activate_tools</code>{' '}
+                ile yükler.
+              </p>
               {data.tools.length === 0 ? (
                 <p className="text-xs text-[var(--color-text-dim)]">Bu ajana araç sunulmuyor.</p>
               ) : (
