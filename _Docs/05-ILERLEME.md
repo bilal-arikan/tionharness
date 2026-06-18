@@ -2,6 +2,20 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Ara özellik — Tur-içi crash kurtarma (inflight sidecar) (2026-06-18)
+
+**İstek:** "bu sessionda network-error hatası verdi … büyük ihtimalle SwarmGo yeniden başladı, ve ekranı yenileyince agentın yarım konuşması kayboldu" → **restart-dayanıklılığını çöz.**
+
+**Teşhis:** Asistan yanıtı `session.jsonl`'e yalnızca stream **bitince** (`chat_stream.go` AddMessage) persist ediliyordu. Süreç tam stream sırasında ölünce (dev rebuild/OOM) yanıt hiç yazılmamış oluyor → yenilemede tur kayboluyordu. Mevcut "detach from client" koruması yalnız **sayfa yenilemesini** kurtarıyordu, **süreç restart'ını değil**.
+
+**Çözüm — inflight sidecar:** Her stream'lenen tur, oturum dizinine throttle'lı (~600ms) atomik `inflight.json` anlık görüntüsü yazar (kısmi metin + kalıcı iz). Normal her çıkışta silinir (`ClearInflight` defer + persist sonrası); yalnız gerçek crash sidecar'ı bırakır. Boot'ta `recoverInflight` orphan sidecar'ı `Interrupted=true` asistan mesajı olarak materialize eder — `MessageID` paylaşımı ile **idempotent**.
+
+- **Backend:** `db/inflight.go` (`InflightTurn`/`WriteInflight`/`ClearInflight`/`recoverInflight`), `db.Message.Interrupted`, `AddMessage` boş olmayan ID'yi korur, `db.go` load() → recovery, `api/chat_stream.go` tur başına snapshot closure + temizlik.
+- **Frontend:** `types/message.ts` `interrupted?`, `chat/MessageList.tsx` ⚠ "Bu yanıt yarıda kesildi" banner'ı.
+- **Test:** `db/inflight_test.go` (materialize + idempotent + already-persisted skip) ✅.
+
+✅ `go build/vet` + `go test ./internal/db ./internal/api` + frontend `tsc --noEmit` yeşil. **Canlı E2E** (izole instance, gerçek binary + HTTP API, port 18099): session oluştur → diske `inflight.json` yaz (crash simülasyonu) → süreç öldür → restart → `GET messages` `interrupted:true` kurtarılmış mesajı döndü + sidecar temizlendi. Detay: **`_Docs/08-DEPOLAMA.md`** (Tur-içi crash kurtarma). **Kalan (ops.):** gerçek sağlayıcılı canlı turda stream sırasında crash + UI banner'ının görsel (Playwright) doğrulaması.
+
 ## Faz P4 — Hooks (PreToolUse / PostToolUse) (2026-06-18)
 
 **İstek:** "Projeye Pre-Post hookları ekleyeceğiz (yapılacaklar listesinde mevcuttu) nasıl ekleyebiliriz" + "https://github.com/ojuschugh1/sqz bunu kullanabilmek için pre-post hook mu gerekiyor".

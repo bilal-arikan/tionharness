@@ -180,7 +180,14 @@ export function MessageList({ messages, pending, agents, streaming, onOpenFile, 
                   )}
                   {m.text.trim() && <Markdown onOpenFile={onOpenFile}>{m.text}</Markdown>}
                   {/* Empty live assistant bubble → show the working indicator. */}
-                  {!m.text.trim() && !m.reasoningContent && steps.length === 0 && <WorkingDots />}
+                  {!m.text.trim() && !m.reasoningContent && steps.length === 0 && !m.interrupted && <WorkingDots />}
+                  {/* Reply recovered from a mid-stream server crash: flag it as cut off. */}
+                  {m.interrupted && (
+                    <div className="mt-2 flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#d97706)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#d97706)_12%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+                      <span>⚠</span>
+                      <span>Bu yanıt yarıda kesildi (sunucu yeniden başladı). İçerik eksik olabilir.</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 pl-1">

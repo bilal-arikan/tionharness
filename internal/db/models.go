@@ -105,6 +105,10 @@ type Message struct {
 	// thinking, intermediate text and tool calls behind this turn. Empty for
 	// plain (non-tool) replies. Drives the rich chat turn renderer.
 	Steps string `json:"steps"`
+	// Interrupted marks an assistant reply that was reconstructed from a crash
+	// sidecar (the process died mid-stream): the text/trace are partial and the UI
+	// flags the turn as cut off. Empty/false for normal turns.
+	Interrupted bool `json:"interrupted,omitempty"`
 	// Attachments are user-supplied files (or pasted long text) sent with this
 	// message. Stored on user turns; empty for assistant/system. The files live
 	// under the workspace's uploads/ directory so agents can read them via their

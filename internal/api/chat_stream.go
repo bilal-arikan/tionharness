@@ -74,6 +74,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 	wsp := ws(r)
 	database := wsp.DB
+	// Drop any crash-recovery sidecar when the turn returns by any normal path
+	// (success, handled failure, client abort): only a true mid-turn process
+	// death must leave it behind for the next boot to reclaim.
+	defer database.ClearInflight(req.SessionID)
 
 	// Ensure a terminal chat event fires even when generation fails after the
 	// turn has begun: the frontend uses it to clear the post-reload "thinking"
@@ -229,8 +233,42 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		turnCtx := tools.WithArtifacts(ctx, sink)
 
 		agentStart := time.Now()
+		// Pre-allocate the reply id so the streaming crash sidecar and the final
+		// persisted message share one identity (recovery is then idempotent).
+		replyID := uuid.NewString()
+		// Snapshot the in-flight reply to disk on a throttle: the partial answer
+		// text (accumulated from streaming deltas) plus the persistable trace so
+		// far. A mid-turn process death leaves this sidecar for boot to reclaim.
+		var partial strings.Builder
+		var kept []agent.TurnStep
+		var lastSnap time.Time
+		snapshot := func() {
+			if time.Since(lastSnap) < 600*time.Millisecond {
+				return
+			}
+			lastSnap = time.Now()
+			_ = database.WriteInflight(db.InflightTurn{
+				MessageID: replyID,
+				SessionID: session.ID,
+				AgentID:   agentRow.ID,
+				StartedAt: agentStart.Unix(),
+				Text:      partial.String(),
+				Steps:     marshalSteps(kept),
+			})
+		}
 		resp, steps, cerr := wsp.Runtime.CompleteWithToolsStream(turnCtx, agentRow, provider, llmReq, false,
-			func(st agent.TurnStep) { sse("step", st) },
+			func(st agent.TurnStep) {
+				sse("step", st)
+				switch st.Kind {
+				case agent.StepDelta:
+					partial.WriteString(st.Text)
+				case agent.StepAsk, agent.StepToolDelta, agent.StepTombstone, agent.StepPermission:
+					// Transient (live-UI only) — never part of the persisted trace.
+				default:
+					kept = append(kept, st)
+				}
+				snapshot()
+			},
 		)
 		if cerr != nil {
 			s.logger.Error("stream completion failed", "error", cerr, "agent", agentRow.ID)
@@ -239,6 +277,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 
 		replyMsg, aerr := database.AddMessage(ctx, db.Message{
+			ID:        replyID,
 			SessionID: session.ID,
 			Role:      providers.RoleAssistant,
 			AgentID:   agentRow.ID,
@@ -249,6 +288,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "persist_error", aerr.Error())
 			return
 		}
+		// Reply is durable now; drop this agent's sidecar before the next agent
+		// (the top-level defer is the catch-all for early-return paths).
+		_ = database.ClearInflight(session.ID)
 		wsp.Runtime.Journal(ctx, agentRow.ID, "Q: "+req.Message+"\nA: "+resp.Text)
 		// Auto-capture any files the agent wrote this turn as artifacts.
 		s.captureFileArtifacts(ctx, database, session.ID, agentRow.ID, steps)

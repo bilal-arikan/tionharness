@@ -37,6 +37,7 @@ Her workspace fiziksel olarak izole; kökü `{dataDir}/workspaces/{wsID}/store/`
 store/
 ├── agents/{id}.json
 ├── sessions/{id}/session.jsonl      # satır 1: oturum header'ı, satır 2+: mesajlar
+│   └── inflight.json                 # (geçici) stream'lenen asistan turu — crash kurtarma sidecar'ı
 ├── tasks/{id}.json
 ├── runs/{id}.json
 ├── schedules/{id}.json
@@ -67,6 +68,31 @@ boot'ta mesaj satırlarından **yeniden hesaplanır** ve bir sonraki tam yeniden
 yazımda (başlık/özet değişimi) tazelenir. Header'ı değiştiren işlemler
 (`SetSessionTitle`, `SetSessionSummary`, oturum oluşturma) hâlâ atomik tam
 yeniden yazım yapar.
+
+## Tur-içi crash kurtarma (inflight sidecar)
+
+Asistan yanıtı `session.jsonl`'e yalnızca **stream tamamen bitince** eklenir
+(O(1) append). Süreç tam o anda ölürse (dev rebuild, OOM, elektrik kesintisi)
+stream'lenmiş ama henüz persist edilmemiş yanıt kaybolurdu — yenilemede tur
+"buharlaşmış" görünürdü. Bunu önlemek için her stream'lenen tur, oturum dizininde
+**`inflight.json`** adlı bir sidecar'a throttle'lı (≤ ~600ms'de bir) **atomik**
+(`*.tmp`→`rename`) anlık görüntü yazar: kısmi cevap metni (stream delta'larından
+biriktirilir) + o ana kadarki kalıcı iz (`TurnStep[]`).
+
+- **Yazma yolu hot path'i bozmaz:** ayrı dosya, store kilidi gerektirmez (`db.WriteInflight`).
+- **Normal her çıkışta silinir** (`db.ClearInflight`): başarı, ele alınan hata,
+  istemci kopması — hepsi sidecar'ı kaldırır (`chat_stream.go`'da tur başına
+  `defer` + yanıt persist edilince anında). Yalnızca **gerçek süreç ölümü**
+  sidecar'ı geride bırakır.
+- **Boot'ta kurtarma** (`db.recoverInflight`, `loadSessions`'tan sonra): orphan
+  bir `inflight.json` varsa → mesaj zaten persist edilmişse (append ile clear
+  arasındaki minik pencerede çökme) dosya düşürülür; değilse kısmi yanıt
+  `Interrupted=true` asistan mesajı olarak `session.jsonl`'e eklenir. **Idempotent**:
+  sidecar'ın `MessageID`'si nihai mesajla paylaşılır (`AddMessage` boş olmayan
+  ID'yi korur), böylece tekrar boot'larda kopya oluşmaz.
+- Frontend `Message.interrupted` → asistan balonunda "Bu yanıt yarıda kesildi
+  (sunucu yeniden başladı)" uyarı banner'ı.
+- Testler: `db/inflight_test.go` (materialize + idempotent + already-persisted skip).
 
 Boot'ta `loadSessions` her `session.jsonl`'i okuyup header + mesaj satırlarını
 ayrıştırır. Append modeli gereği bir çökme **yarım bir son satır** bırakabilir;

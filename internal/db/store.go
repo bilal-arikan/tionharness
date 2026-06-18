@@ -368,7 +368,11 @@ func (d *DB) ListSessions(ctx context.Context, agentID string) ([]Session, error
 
 // AddMessage appends a message to a session and bumps the session counter.
 func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
-	m.ID = newID()
+	// Respect a caller-supplied ID (used so a streamed reply and its crash sidecar
+	// share one identity, making recovery idempotent); otherwise allocate one.
+	if m.ID == "" {
+		m.ID = newID()
+	}
 	m.CreatedAt = now()
 	if m.ToolCalls == "" {
 		m.ToolCalls = "[]"

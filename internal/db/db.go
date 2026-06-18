@@ -275,6 +275,11 @@ func (d *DB) load() error {
 	if err := d.loadSessions(); err != nil {
 		return err
 	}
+	// Reclaim any assistant turn that was streaming when the process last died,
+	// so a mid-turn crash leaves a partial-but-saved reply instead of nothing.
+	if err := d.recoverInflight(); err != nil {
+		return err
+	}
 	// Consolidate any pre-unification files into the per-session artifacts layout
 	// and back existing chat attachments with artifacts (idempotent, best-effort).
 	d.migrateUnifiedLayout()

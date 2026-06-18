@@ -78,6 +78,10 @@ export interface Message {
   // JSON-encoded TurnStep[] as persisted by the backend (empty "[]" for plain
   // replies). Parsed lazily by the renderer.
   steps?: string
+  // True when this assistant reply was reconstructed from a crash sidecar (the
+  // server died mid-stream): text/trace are partial and the UI flags it as cut
+  // off. See backend db.InflightTurn / recoverInflight.
+  interrupted?: boolean
   reasoningContent?: string
   // User-supplied files / pasted long text sent with this turn (user role only).
   attachments?: Attachment[]
