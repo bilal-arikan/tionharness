@@ -66,6 +66,15 @@ graph LR
 - [x] `internal/agent/scheduler.go`: `robfig/cron` (workspace başına)
 - [x] UI: Task board + Schedules ekranı
 - **Çıktı:** Zamanlanmış görev/prompt teslimi. ✅
+- **Kanban iyileştirme turu (2026-06-17):** ajan avatarları, karttan cron'a bağlama,
+  sağ detay/düzenleme paneli (aksiyonlar panele taşındı), **flow-backed task** (göreve
+  `flowId`; çalıştırınca akış koşar), **ajan görev tool ailesi** (`builtin_taskmgmt.go`:
+  list/create/update/move/run/delete_task). İlk dördü commit'li; flow-backed + tool ailesi
+  commit beklemede (smart-surge oturumuyla iç içe). Detay: `05-ILERLEME.md`.
+- [ ] **Görev dispatcher'ı (bekliyor):** `todo` kolonundaki, sahibi olan görevi ajanın
+  heartbeat tick'inde otomatik claim edip (`in_progress`'e taşı) `RunTask` ile koşması.
+  Tüm yapı taşları hazır (heartbeat, `RunTask`, `list_tasks`/`run_task`, flow-backed);
+  kalan: `runHeartbeat` içinde tara→claim→çalıştır döngüsü + `EnableDispatch` ayarı (vars. kapalı).
 
 ## Faz 6 — Memory ✅
 - [x] `internal/memory`: doküman + journal + reflection
@@ -149,14 +158,14 @@ graph LR
 > Kaynak: [external-agent-project/external-agent-oss](https://github.com/external-agent-project/external-agent-oss) v0.2.19→v0.10.3 (71 release) analizi. Tam gerekçe + kod-doğrulama (EXISTS/MISSING) + sürüm-sürüm liste: [13-CRAFT-AGENTS-INCELEME.md](13-CRAFT-AGENTS-INCELEME.md). Maddeler SwarmGo koduna karşı doğrulandı.
 
 ### 🔴 P0 — Doğrulanmış boşluklar (yüksek etki)
-- [ ] **CG-1 — Tool çıktısı boyut sınırı**: `res.Content` → `TurnStep.Output` → JSONL'e sınırsız akıyor (`toolloop.go:254`). Persistence + modele gönderim öncesi char/byte cap (örn. 100K + "…[truncated]"). OOM + bağlam taşması + JSONL şişmesi önler. *(craft v0.4.4)* — **düşük efor / yüksek değer**
-- [ ] **CG-2 — http_get SSRF koruması**: boyut cap var (64KB) ama IP/host doğrulama yok (`builtin_http.go`). localhost/127.0.0.1, özel ağlar (10/8,172.16/12,192.168/16), link-local 169.254/16, cloud-metadata engeli ekle. *(craft v0.3.2, v0.5.0)*
-- [ ] **CG-3 — Thinking resolver model-sınıf farkındalığı**: `thinkingBudgetForLevel` sabit (`toolloop.go:17`). Registry'ye `requiresAdaptiveThinking` ekle; Fable/Mythos 5 sınıfı `thinking: disabled`'ı reddediyor (API 400) → "off"u low-effort adaptive'e map et. **Fable 5 eklenmeden önce şart.** *(craft v0.10.3)*
-- [ ] **CG-4 — MCP şema normalizasyonu**: dış MCP `InputSchema` ham geçiyor. Provider'a göndermeden `$schema` strip et, `additionalProperties` koru, oneOf/anyOf/allOf ele al. Aksi halde tool parametreleri sessizce kaybolur / çağrı 400. *(craft v0.7.3, v0.7.5, v0.7.12)*
+- [x] **CG-1 — Tool çıktısı boyut sınırı** ✅ **YAPILDI** (commit `69601ab`, 2026-06-17): `tools/registry.go` `capToolOutput()` (100K bayt, UTF-8 sınırında trunc + `…[truncated N bytes]`) `Registry.Call`/`CallStream`'de built-in + MCP tüm başarılı çıktılara uygulanır. `registry_cap_test.go`. *(craft v0.4.4)*
+- [x] **CG-2 — http_get SSRF koruması** ✅ **YAPILDI** (commit `69601ab`, 2026-06-17): `builtin_http.go` özel `net.Dialer.Control` guard'ı çözülen IP'yi her dial'da denetler (loopback/unspecified/link-local/private/ULA/CGNAT + 169.254.169.254 metadata reddedilir; redirect/DNS-rebind kapsanır) + http/https şema kontrolü. `builtin_http_test.go`. *(craft v0.3.2, v0.5.0)*
+- [x] **CG-3 — Thinking resolver model-sınıf farkındalığı** ✅ **YAPILDI** (commit `69601ab`, 2026-06-17): `providers.RequiresAdaptiveThinking(model)` + `agent.resolveThinkingBudget`; Fable/Mythos 5'te "off"/"low" → `MinAdaptiveThinkingBudget=1024`, Opus/Sonnet/Haiku değişmez. `thinking_test.go`. *(craft v0.10.3)*
+- [x] **CG-4 — MCP şema normalizasyonu** ✅ **YAPILDI** (commit `69601ab`, 2026-06-17): `mcp.NormalizeSchema()` `Registry.Defs`'te her MCP şemasına uygulanır — `$schema`/`$id`/`$ref`/`$defs`/`definitions` recursive strip, kök object garanti; `additionalProperties`/`required`/`oneOf`/`anyOf`/`allOf` korunur. `normalize_test.go`. *(craft v0.7.3, v0.7.5, v0.7.12)*
 
 ### 🟠 P1 — Çok-ajan mimarisine uyan
-- [ ] **CG-5 — Ajanlar-arası mesajlaşma** (`send_agent_message`): bir oturumun başka aktif oturuma mesaj göndermesi. Orkestrasyon motoruyla (`orchestration`) entegre. *(craft v0.8.8)* — **A2 subagent izolasyonuyla ilişkili**
-- [ ] **CG-6 — Oturum öz-yönetim araçları**: ajana `set_session_labels`/`set_session_status`/`get_session_info`/`list_sessions` built-in tool'ları → kendini-kapatan otomasyon (görev bitince status=done → trigger). *(craft v0.8.3)*
+- [x] **CG-5 — Ajanlar-arası mesajlaşma** (`send_agent_message`) ✅ **YAPILDI** (commit `69601ab`, 2026-06-17): `tools/builtin_agentmsg.go` self-manage gate'li — hedef ajanın `agent-inbox` oturumuna user-mesaj append + `Runtime.Wake` (fire-and-forget; `call_agent` senkron delegasyonun async tamamlayıcısı). `agentmsg_test.go`. Native yolunda. *(craft v0.8.8)*
+- [~] **CG-6 — Oturum öz-yönetim araçları** *(kısmî)*: **`list_sessions`** built-in tool'u **var** (`tools/builtin_sessions.go`, cross-session farkındalık, commit `54ab736`). **Kalan:** `set_session_labels`/`set_session_status`/`get_session_info` → kendini-kapatan otomasyon (görev bitince status=done → trigger). *(craft v0.8.3)*
 - [ ] **CG-7 — Hooks + koşullu otomasyon + webhook**: (a) command/prompt hook'ları (olay→shell/prompt), rate limiter + zorla-sonlandırma; (b) otomasyon koşulları (time/state/label gate); (c) webhook action (exp. backoff retry). `events` bus + `scheduler` ile örtüşür. *(craft v0.4.3, v0.7.5, v0.7.7)* — **Faz P4 (Hooks) ile birleştir**
 - [ ] **CG-8 — Otomasyon/flow geçmişi cap + compaction**: `flow_runs` sınırla (örn. 20/flow, 1000 global) + periyodik compaction. *(craft v0.7.8)*
 
@@ -196,10 +205,10 @@ graph LR
 
 > Kullanıcı talebiyle (2026-06-17) bilinçli olarak en sona alındı. Diğer tüm backlog maddelerinden sonra ele alınacak.
 
-- [ ] **B2** — İzin modeli (`allow/ask/deny`, arg-bazlı desen eşleme `Bash(git *)`) — `ask_user` altyapısını yeniden kullanır
-- [ ] **Faz P3** — Permission/onay modu (`auto`/`ask`/`read-only`); shell'i UI onayıyla aç
+- [ ] **B2** — İzin modeli (`allow/ask/deny`, **arg-bazlı desen eşleme** `Bash(git *)`) — `ask_user` altyapısını yeniden kullanır. *(Temel mod gate'i yapıldı; kalan = arg-bazlı desen.)*
+- [~] **Faz P3** — Permission/onay modu (`auto`/`ask`/`read-only`) *(Aşama 1-3 ✅ YAPILDI, 2026-06-17)*: claude-cli mod bayrakları (`permission.go`/`claudecli.go`), native risk-sınıflı gate (`tools/classify.go` read/write/exec + `agent/permission.go permGate` + `AskPrompt` onayı), UI (ajan formu + composer 🛡 Shift+Tab + Settings varsayılanı). `permission_test.go`. **Kalan:** Aşama 4 — claude-cli "ask" → Interaction MCP permission-prompt + ops. `StepPermission` kartı + oturum-ömürlü "Always allow".
 
-> Not: temel `PermissionMode` gate'i (`toolloop.go` `permGate`) zaten mevcut; bu maddeler arg-bazlı desen eşleme + UI onay akışı gibi gelişmiş katmanı kapsar.
+> Not: temel `PermissionMode` gate'i (`agent/permission.go permGate` + `tools/classify.go`) **uygulandı**; bu bölümde kalan yalnız B2'nin arg-bazlı desen eşlemesi ve P3 Aşama 4'tür.
 
 ---
 
