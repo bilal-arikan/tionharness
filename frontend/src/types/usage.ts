@@ -5,6 +5,20 @@ export interface KindStat {
   calls: number
   inputTokens: number
   outputTokens: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+}
+
+export interface ModelStat {
+  model: string
+  calls: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  costUSD: number
+  savingsUSD: number
+  priced: boolean
 }
 
 export interface BudgetAgentRow {
@@ -28,8 +42,12 @@ export interface ProviderStat {
   calls: number
   inputTokens: number
   outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
   costUSD: number
+  savingsUSD: number
   priced: boolean
+  models: ModelStat[]
 }
 
 export interface BudgetTrendPoint {
@@ -45,8 +63,11 @@ export interface WorkspaceUsage {
     calls: number
     inputTokens: number
     outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
     byKind: Record<string, KindStat>
     costUSD: number
+    savingsUSD: number
     priced: boolean
   }
   byProvider: ProviderStat[]

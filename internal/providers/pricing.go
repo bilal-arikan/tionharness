@@ -6,9 +6,36 @@ type Price struct {
 	OutputPerMTok float64 `json:"outputPerMTok"`
 }
 
-// Cost returns the USD cost of a given input/output token count at this price.
+// Prompt-cache price multipliers relative to the base input price. Cache reads
+// are ~10× cheaper than fresh input; cache writes carry a modest premium. These
+// match Anthropic's standard (5-minute) cache tier; the 1-hour extended tier
+// writes at 2× — not separately modelled here (treated as the standard premium).
+const (
+	CacheReadMult  = 0.10
+	CacheWriteMult = 1.25
+)
+
+// Cost returns the USD cost of a plain input/output token count at this price
+// (no caching). Equivalent to CostDetailed(in, out, 0, 0).
 func (p Price) Cost(inputTokens, outputTokens int) float64 {
-	return float64(inputTokens)/1_000_000*p.InputPerMTok + float64(outputTokens)/1_000_000*p.OutputPerMTok
+	return p.CostDetailed(inputTokens, outputTokens, 0, 0)
+}
+
+// CostDetailed returns the USD cost including prompt-cache tiers: fresh input at
+// the base rate, cache reads at CacheReadMult, cache writes at CacheWriteMult,
+// and output at the output rate.
+func (p Price) CostDetailed(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) float64 {
+	in := float64(inputTokens) * p.InputPerMTok
+	cr := float64(cacheReadTokens) * p.InputPerMTok * CacheReadMult
+	cw := float64(cacheWriteTokens) * p.InputPerMTok * CacheWriteMult
+	out := float64(outputTokens) * p.OutputPerMTok
+	return (in + cr + cw + out) / 1_000_000
+}
+
+// CacheSavings returns the USD saved by serving cacheReadTokens from cache
+// instead of paying the full input rate for them (the cache discount realised).
+func (p Price) CacheSavings(cacheReadTokens int) float64 {
+	return float64(cacheReadTokens) * p.InputPerMTok * (1 - CacheReadMult) / 1_000_000
 }
 
 // priceTable holds APPROXIMATE list prices (USD per 1M tokens) for the metered

@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Wallet, RefreshCw, Coins, Hash, ArrowDownToLine, DollarSign } from 'lucide-react'
+import {
+  Wallet,
+  RefreshCw,
+  Coins,
+  Hash,
+  ArrowDownToLine,
+  DollarSign,
+  ChevronRight,
+  ChevronDown,
+} from 'lucide-react'
 import { api } from '../../api'
-import type { WorkspaceUsage, KindStat } from '../../types'
+import type { WorkspaceUsage, KindStat, ProviderStat } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
 
 interface Props {
@@ -58,6 +67,91 @@ function tokensOf(s: KindStat): number {
   return s.inputTokens + s.outputTokens
 }
 
+// costText renders a cost cell honoring the priced flag (subscription/custom
+// spend shows "abonelik / fiyatsız" or a "~" estimate when partly priced).
+function costText(costUSD: number, priced: boolean): React.ReactNode {
+  if (priced) return usd(costUSD)
+  if (costUSD > 0) return <span title="Bir kısmı fiyatsız (abonelik/özel model)">~{usd(costUSD)}</span>
+  return <span className="text-[var(--color-text-dim)]">abonelik / fiyatsız</span>
+}
+
+// cacheText renders the "read/write" cache token pair, dimmed when zero.
+function cacheText(read: number, write: number): React.ReactNode {
+  if (read === 0 && write === 0) return <span className="text-[var(--color-text-dim)]">—</span>
+  return (
+    <span className="text-[var(--color-text-dim)]">
+      {fmt(read)}/{fmt(write)}
+    </span>
+  )
+}
+
+// FragmentRows renders a provider summary row plus, when expanded, one detail
+// row per model under it. A provider with a single model still expands so the
+// model id is visible.
+function FragmentRows({
+  open,
+  onToggle,
+  provider: p,
+}: {
+  open: boolean
+  onToggle: () => void
+  provider: ProviderStat
+}) {
+  return (
+    <>
+      <tr
+        className="cursor-pointer border-t border-[var(--color-border)] hover:bg-[var(--color-surface)]"
+        onClick={onToggle}
+      >
+        <td className="px-4 py-2.5 text-[var(--color-text)]">
+          <span className="flex items-center gap-1.5">
+            {p.models.length > 0 ? (
+              open ? (
+                <ChevronDown size={13} className="text-[var(--color-text-dim)]" />
+              ) : (
+                <ChevronRight size={13} className="text-[var(--color-text-dim)]" />
+              )
+            ) : (
+              <span className="w-[13px]" />
+            )}
+            {providerLabel(p.provider)}
+          </span>
+        </td>
+        <td className="px-4 py-2.5 text-[var(--color-text-dim)]">{p.calls}</td>
+        <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
+          {fmt(p.inputTokens + p.outputTokens)}{' '}
+          <span className="opacity-60">
+            ({fmt(p.inputTokens)}/{fmt(p.outputTokens)})
+          </span>
+        </td>
+        <td className="px-4 py-2.5">{cacheText(p.cacheReadTokens, p.cacheWriteTokens)}</td>
+        <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
+          {p.savingsUSD > 0 ? <span style={{ color: 'var(--color-success)' }}>{usd(p.savingsUSD)}</span> : '—'}
+        </td>
+        <td className="px-4 py-2.5 text-[var(--color-text)]">{costText(p.costUSD, p.priced)}</td>
+      </tr>
+      {open &&
+        p.models.map((m) => (
+          <tr key={m.model} className="border-t border-[var(--color-border)] bg-[var(--color-surface)]">
+            <td className="py-2 pl-11 pr-4 text-xs text-[var(--color-text-dim)]">{m.model || '(varsayılan)'}</td>
+            <td className="px-4 py-2 text-xs text-[var(--color-text-dim)]">{m.calls}</td>
+            <td className="px-4 py-2 text-xs text-[var(--color-text-dim)]">
+              {fmt(m.inputTokens + m.outputTokens)}{' '}
+              <span className="opacity-60">
+                ({fmt(m.inputTokens)}/{fmt(m.outputTokens)})
+              </span>
+            </td>
+            <td className="px-4 py-2 text-xs">{cacheText(m.cacheReadTokens, m.cacheWriteTokens)}</td>
+            <td className="px-4 py-2 text-xs text-[var(--color-text-dim)]">
+              {m.savingsUSD > 0 ? <span style={{ color: 'var(--color-success)' }}>{usd(m.savingsUSD)}</span> : '—'}
+            </td>
+            <td className="px-4 py-2 text-xs text-[var(--color-text)]">{costText(m.costUSD, m.priced)}</td>
+          </tr>
+        ))}
+    </>
+  )
+}
+
 // SummaryCard is one headline metric at the top of the screen.
 function SummaryCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
   return (
@@ -79,6 +173,15 @@ export function BudgetPanel({ onError }: Props) {
   const [usage, setUsage] = useState<WorkspaceUsage | null>(null)
   const [days, setDays] = useState(7)
   const [loading, setLoading] = useState(false)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const toggleProvider = (p: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(p)) next.delete(p)
+      else next.add(p)
+      return next
+    })
 
   const load = (d = days) => {
     setLoading(true)
@@ -247,10 +350,22 @@ export function BudgetPanel({ onError }: Props) {
             </div>
           </div>
 
-          {/* Per-provider breakdown */}
+          {/* Per-provider breakdown (expandable to per-model detail) */}
           <div className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)]">
-            <div className="border-b border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-text)]">
-              Provider'a göre (bugün)
+            <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
+              <span className="text-sm font-medium text-[var(--color-text)]">Provider / model (bugün)</span>
+              {usage.totals.savingsUSD > 0 && (
+                <span
+                  className="rounded px-2 py-0.5 text-xs"
+                  style={{
+                    background: 'color-mix(in srgb, var(--color-success) 15%, transparent)',
+                    color: 'var(--color-success)',
+                  }}
+                  title="Prompt-cache okumalarının tam girdi fiyatına kıyasla sağladığı tasarruf"
+                >
+                  cache tasarrufu {usd(usage.totals.savingsUSD)}
+                </span>
+              )}
             </div>
             {usage.byProvider.length === 0 ? (
               <div className="px-4 py-3 text-xs text-[var(--color-text-dim)]">
@@ -261,34 +376,26 @@ export function BudgetPanel({ onError }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-[var(--color-text-dim)]">
-                    <th className="px-4 py-2 font-medium">Provider</th>
+                    <th className="px-4 py-2 font-medium">Provider / Model</th>
                     <th className="px-4 py-2 font-medium">Çağrı</th>
                     <th className="px-4 py-2 font-medium">Token (G/Ç)</th>
-                    <th className="px-4 py-2 font-medium">Tahmini maliyet</th>
+                    <th className="px-4 py-2 font-medium">Cache (oku/yaz)</th>
+                    <th className="px-4 py-2 font-medium">Tasarruf</th>
+                    <th className="px-4 py-2 font-medium">Maliyet</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {usage.byProvider.map((p) => (
-                    <tr key={p.provider} className="border-t border-[var(--color-border)]">
-                      <td className="px-4 py-2.5 text-[var(--color-text)]">{providerLabel(p.provider)}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-text-dim)]">{p.calls}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
-                        {fmt(p.inputTokens + p.outputTokens)}{' '}
-                        <span className="opacity-60">
-                          ({fmt(p.inputTokens)}/{fmt(p.outputTokens)})
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--color-text)]">
-                        {p.priced ? (
-                          usd(p.costUSD)
-                        ) : p.costUSD > 0 ? (
-                          <span title="Bir kısmı fiyatsız (abonelik/özel model)">~{usd(p.costUSD)}</span>
-                        ) : (
-                          <span className="text-[var(--color-text-dim)]">abonelik / fiyatsız</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {usage.byProvider.map((p) => {
+                    const open = expanded.has(p.provider)
+                    return (
+                      <FragmentRows
+                        key={p.provider}
+                        open={open}
+                        onToggle={() => toggleProvider(p.provider)}
+                        provider={p}
+                      />
+                    )
+                  })}
                 </tbody>
               </table>
             )}

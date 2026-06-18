@@ -20,10 +20,16 @@ export function useUrlSync(route: Route, ready: boolean, onRoute: (r: Route) => 
   // state → URL
   useEffect(() => {
     if (!ready) return
+    // The first sync after the app is ready only *canonicalises* the URL the user
+    // loaded (e.g. fills in the default session) — it must not push a history
+    // entry. Flip the flag on that first ready run regardless of whether a write
+    // was needed, so a later genuine navigation never replaceState-clobbers a
+    // real history entry the browser already created.
+    const isFirst = firstWrite.current
+    firstWrite.current = false
     const target = '#' + buildRoute(route)
     if (window.location.hash === target) return
-    if (firstWrite.current) {
-      firstWrite.current = false
+    if (isFirst) {
       window.history.replaceState(null, '', target)
     } else {
       window.history.pushState(null, '', target)

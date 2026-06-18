@@ -151,6 +151,31 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			e.notify("done", node, st.Steps, "→ "+label)
 			st.Current = next
 
+		case NodeSwitch:
+			next, label := evalSwitch(node, st.Last)
+			st.appendTrace(node, "→ "+label)
+			e.notify("done", node, st.Steps, "→ "+label)
+			st.Current = next
+
+		case NodeDelay:
+			e.notify("start", node, st.Steps, "")
+			if err := sleepCtx(ctx, node.DelayMs); err != nil {
+				e.notifyError(node, st.Steps, err)
+				return st, fmt.Errorf("node %q (delay): %w", node.ID, err)
+			}
+			out := fmt.Sprintf("waited %dms", node.DelayMs)
+			st.appendTrace(node, out)
+			e.notify("done", node, st.Steps, out)
+			st.Current = node.Next
+
+		case NodeTransform:
+			out := render(node.Template, input, st)
+			st.Outputs[node.ID] = out
+			st.Last = out
+			st.appendTrace(node, out)
+			e.notify("done", node, st.Steps, out)
+			st.Current = node.Next
+
 		case NodeParallel:
 			combined, err := e.runParallel(ctx, g, node, input, st)
 			if err != nil {

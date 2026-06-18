@@ -49,6 +49,10 @@ func (r *Runtime) compactToolResult(ctx context.Context, agent db.Agent, toolNam
 			r.logger.Debug("tool output compacted (A)",
 				"agent", agent.ID, "tool", toolName,
 				"before", st.BeforeBytes, "after", st.AfterBytes, "saved", st.Saved())
+			// Persist the free savings into today's usage rollup (standalone meter).
+			if err := r.db.AddCompactionSavings(ctx, agent.ID, st.Saved()); err != nil {
+				r.logger.Warn("record compaction savings failed", "agent", agent.ID, "error", err)
+			}
 		}
 		content = out
 	}
@@ -80,9 +84,15 @@ func (r *Runtime) compactToolResult(ctx context.Context, agent db.Agent, toolNam
 // KindCompact for usage accounting; never gates the daily budget (mirrors the
 // other auxiliary calls — titling, summaries, reflection).
 func (r *Runtime) summarizeToolOutput(ctx context.Context, agent db.Agent, toolName string, input json.RawMessage, output string) (string, error) {
+	// Model resolution chain: dedicated compaction model → title model → the
+	// agent's own model. The dedicated knob lets the user pin a cheap model for
+	// summaries without affecting auto-titling. Provider is always the agent's.
 	model := agent.Model
-	if override := r.tun.TitleModel(); override != "" {
-		model = override
+	if title := r.tun.TitleModel(); title != "" {
+		model = title
+	}
+	if cm := r.tun.CompactModel(); cm != "" {
+		model = cm
 	}
 
 	intent := toolName

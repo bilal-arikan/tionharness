@@ -36,28 +36,48 @@ type agentBudgetRow struct {
 	DailyTokenLimit int                 `json:"dailyTokenLimit"`
 }
 
-// providerStat is one provider's slice of the workspace's spend, with the USD
-// cost where the models are priced. Unpriced is the token count that carries no
-// list price (claude-cli subscription, or a custom/unknown model).
-type providerStat struct {
-	Provider     string  `json:"provider"`
-	Calls        int     `json:"calls"`
-	InputTokens  int     `json:"inputTokens"`
-	OutputTokens int     `json:"outputTokens"`
-	CostUSD      float64 `json:"costUSD"`
-	Priced       bool    `json:"priced"`
+// modelStat is one provider+model's slice of the spend — the detail row under a
+// provider. CacheRead/Write are the prompt-cache token tiers, SavingsUSD the
+// amount cache reads saved versus paying full input price.
+type modelStat struct {
+	Model            string  `json:"model"`
+	Calls            int     `json:"calls"`
+	InputTokens      int     `json:"inputTokens"`
+	OutputTokens     int     `json:"outputTokens"`
+	CacheReadTokens  int     `json:"cacheReadTokens"`
+	CacheWriteTokens int     `json:"cacheWriteTokens"`
+	CostUSD          float64 `json:"costUSD"`
+	SavingsUSD       float64 `json:"savingsUSD"`
+	Priced           bool    `json:"priced"`
 }
 
-// costOf sums the USD cost of a usage rollup's per-model breakdown and reports
-// whether every model in it was priced. Tokens with no list price contribute 0
-// to cost and flip priced to false (so the UI can show "kısmen/abonelik").
+// providerStat is one provider's slice of the workspace's spend, with the USD
+// cost where the models are priced and a per-model detail list. Priced is false
+// when any of the provider's spend carries no list price (claude-cli
+// subscription, or a custom/unknown model).
+type providerStat struct {
+	Provider         string      `json:"provider"`
+	Calls            int         `json:"calls"`
+	InputTokens      int         `json:"inputTokens"`
+	OutputTokens     int         `json:"outputTokens"`
+	CacheReadTokens  int         `json:"cacheReadTokens"`
+	CacheWriteTokens int         `json:"cacheWriteTokens"`
+	CostUSD          float64     `json:"costUSD"`
+	SavingsUSD       float64     `json:"savingsUSD"`
+	Priced           bool        `json:"priced"`
+	Models           []modelStat `json:"models"`
+}
+
+// costOf sums the USD cost (including cache tiers) of a usage rollup's per-model
+// breakdown and reports whether every model in it was priced. Tokens with no
+// list price contribute 0 to cost and flip priced to false.
 func costOf(byModel map[string]db.KindStat) (cost float64, priced bool) {
 	priced = true
 	for key, st := range byModel {
 		provider, model, _ := strings.Cut(key, "|")
 		if p, ok := providers.PriceFor(provider, model); ok {
-			cost += p.Cost(st.InputTokens, st.OutputTokens)
-		} else if st.InputTokens+st.OutputTokens > 0 {
+			cost += p.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
+		} else if st.InputTokens+st.OutputTokens+st.CacheReadTokens+st.CacheWriteTokens > 0 {
 			priced = false
 		}
 	}
@@ -97,7 +117,10 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	totals := kindStat{}
 	byKind := map[string]kindStat{}
 	byProvider := map[string]*providerStat{}
-	var totalCost float64
+	// provider -> model -> accumulating detail row.
+	byModel := map[string]map[string]*modelStat{}
+	var totalCost, totalSavings float64
+	var totalCacheRead, totalCacheWrite int
 	totalPriced := true
 	rows := make([]agentBudgetRow, 0, len(agents))
 
@@ -132,9 +155,17 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 				byKind[k] = agg
 			}
 		}
-		// Aggregate this agent's per-model rows up to per-provider totals + cost.
+		// Aggregate this agent's per-model rows up to per-provider totals + cost,
+		// and into the per-model detail grouped under each provider.
 		for key, st := range u.ByModel {
 			provider, model, _ := strings.Cut(key, "|")
+			price, ok := providers.PriceFor(provider, model)
+			var mCost, mSave float64
+			if ok {
+				mCost = price.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
+				mSave = price.CacheSavings(st.CacheReadTokens)
+			}
+
 			ps := byProvider[provider]
 			if ps == nil {
 				ps = &providerStat{Provider: provider, Priced: true}
@@ -143,11 +174,38 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			ps.Calls += st.Calls
 			ps.InputTokens += st.InputTokens
 			ps.OutputTokens += st.OutputTokens
-			if p, ok := providers.PriceFor(provider, model); ok {
-				ps.CostUSD += p.Cost(st.InputTokens, st.OutputTokens)
-			} else if st.InputTokens+st.OutputTokens > 0 {
+			ps.CacheReadTokens += st.CacheReadTokens
+			ps.CacheWriteTokens += st.CacheWriteTokens
+			ps.CostUSD += mCost
+			ps.SavingsUSD += mSave
+			if !ok && st.InputTokens+st.OutputTokens+st.CacheReadTokens+st.CacheWriteTokens > 0 {
 				ps.Priced = false
 			}
+
+			mm := byModel[provider]
+			if mm == nil {
+				mm = map[string]*modelStat{}
+				byModel[provider] = mm
+			}
+			ms := mm[model]
+			if ms == nil {
+				ms = &modelStat{Model: model, Priced: ok}
+				mm[model] = ms
+			}
+			ms.Calls += st.Calls
+			ms.InputTokens += st.InputTokens
+			ms.OutputTokens += st.OutputTokens
+			ms.CacheReadTokens += st.CacheReadTokens
+			ms.CacheWriteTokens += st.CacheWriteTokens
+			ms.CostUSD += mCost
+			ms.SavingsUSD += mSave
+			if !ok && st.InputTokens+st.OutputTokens+st.CacheReadTokens+st.CacheWriteTokens > 0 {
+				ms.Priced = false
+			}
+
+			totalSavings += mSave
+			totalCacheRead += st.CacheReadTokens
+			totalCacheWrite += st.CacheWriteTokens
 		}
 		totals.Calls += u.Calls
 		totals.InputTokens += u.InputTokens
@@ -164,9 +222,19 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		return rows[i].InputTokens+rows[i].OutputTokens > rows[j].InputTokens+rows[j].OutputTokens
 	})
 
-	// Providers as a slice, costliest first.
+	// Providers as a slice, costliest first, each carrying its model detail rows
+	// (also costliest first).
 	providerRows := make([]providerStat, 0, len(byProvider))
-	for _, ps := range byProvider {
+	for name, ps := range byProvider {
+		for _, ms := range byModel[name] {
+			ps.Models = append(ps.Models, *ms)
+		}
+		sort.SliceStable(ps.Models, func(i, j int) bool {
+			if ps.Models[i].CostUSD != ps.Models[j].CostUSD {
+				return ps.Models[i].CostUSD > ps.Models[j].CostUSD
+			}
+			return ps.Models[i].InputTokens+ps.Models[i].OutputTokens > ps.Models[j].InputTokens+ps.Models[j].OutputTokens
+		})
 		providerRows = append(providerRows, *ps)
 	}
 	sort.SliceStable(providerRows, func(i, j int) bool {
@@ -202,12 +270,15 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"day": today,
 		"totals": map[string]any{
-			"calls":        totals.Calls,
-			"inputTokens":  totals.InputTokens,
-			"outputTokens": totals.OutputTokens,
-			"byKind":       byKind,
-			"costUSD":      totalCost,
-			"priced":       totalPriced, // false when some spend is unpriced (subscription/custom)
+			"calls":            totals.Calls,
+			"inputTokens":      totals.InputTokens,
+			"outputTokens":     totals.OutputTokens,
+			"cacheReadTokens":  totalCacheRead,
+			"cacheWriteTokens": totalCacheWrite,
+			"byKind":           byKind,
+			"costUSD":          totalCost,
+			"savingsUSD":       totalSavings, // saved by prompt-cache reads vs full input price
+			"priced":           totalPriced,  // false when some spend is unpriced (subscription/custom)
 		},
 		"byProvider": providerRows,
 		"agents":     rows,

@@ -24,11 +24,34 @@ const (
 	UsageKindOther     = "other"
 )
 
-// KindStat is the per-kind slice of an agent's daily consumption.
+// KindStat is the per-kind/per-model slice of an agent's daily consumption.
+// Cache counters are tracked separately from InputTokens so cost can apply the
+// cheaper cache-read / pricier cache-write tiers.
 type KindStat struct {
-	Calls        int `json:"calls"`
-	InputTokens  int `json:"inputTokens"`
-	OutputTokens int `json:"outputTokens"`
+	Calls            int `json:"calls"`
+	InputTokens      int `json:"inputTokens"`
+	OutputTokens     int `json:"outputTokens"`
+	CacheReadTokens  int `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens int `json:"cacheWriteTokens,omitempty"`
+}
+
+// UsageDelta is one call's consumption, recorded via AddUsageKind. Bundling the
+// counters keeps the recording signature stable as new token classes are added.
+type UsageDelta struct {
+	Calls            int
+	InputTokens      int
+	OutputTokens     int
+	CacheReadTokens  int
+	CacheWriteTokens int
+}
+
+// add folds a delta into a KindStat.
+func (k *KindStat) add(d UsageDelta) {
+	k.Calls += d.Calls
+	k.InputTokens += d.InputTokens
+	k.OutputTokens += d.OutputTokens
+	k.CacheReadTokens += d.CacheReadTokens
+	k.CacheWriteTokens += d.CacheWriteTokens
 }
 
 // Usage is a per-day rollup of an agent's LLM consumption. The top-level
@@ -38,13 +61,19 @@ type KindStat struct {
 // what it would cost. ByModel is keyed by "<provider>|<model>" (model may be
 // empty, e.g. claude-cli's session default).
 type Usage struct {
-	AgentID      string              `json:"agentId"`
-	Day          string              `json:"day"`
-	Calls        int                 `json:"calls"`
-	InputTokens  int                 `json:"inputTokens"`
-	OutputTokens int                 `json:"outputTokens"`
-	ByKind       map[string]KindStat `json:"byKind,omitempty"`
-	ByModel      map[string]KindStat `json:"byModel,omitempty"`
+	AgentID          string              `json:"agentId"`
+	Day              string              `json:"day"`
+	Calls            int                 `json:"calls"`
+	InputTokens      int                 `json:"inputTokens"`
+	OutputTokens     int                 `json:"outputTokens"`
+	CacheReadTokens  int                 `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens int                 `json:"cacheWriteTokens,omitempty"`
+	ByKind           map[string]KindStat `json:"byKind,omitempty"`
+	ByModel          map[string]KindStat `json:"byModel,omitempty"`
+	// CompactSavedBytes is the cumulative byte count removed from tool output by
+	// System A (deterministic compaction) for this agent on this day. It is a
+	// standalone savings meter, not tied to any LLM call (no token/cost impact).
+	CompactSavedBytes int `json:"compactSavedBytes,omitempty"`
 }
 
 // ModelKey builds the ByModel map key from a provider and model id.
@@ -82,15 +111,17 @@ func (d *DB) persistUsageLocked(u Usage) error {
 // the call under UsageKindOther with no provider/model. Prefer AddUsageKind so
 // spend is attributed by origin and model.
 func (d *DB) AddUsage(ctx context.Context, agentID string, calls, inputTokens, outputTokens int) error {
-	return d.AddUsageKind(ctx, agentID, UsageKindOther, "", "", calls, inputTokens, outputTokens)
+	return d.AddUsageKind(ctx, agentID, UsageKindOther, "", "", UsageDelta{
+		Calls: calls, InputTokens: inputTokens, OutputTokens: outputTokens,
+	})
 }
 
 // AddUsageKind increments today's usage counters for an agent (upsert) plus the
 // matching per-origin (ByKind) and per-model (ByModel) sub-counters, so the same
 // totals are broken down both by where the call came from and by which
-// provider+model served it (for cost). An empty kind is recorded as
-// UsageKindOther; an empty provider skips the model breakdown.
-func (d *DB) AddUsageKind(ctx context.Context, agentID, kind, provider, model string, calls, inputTokens, outputTokens int) error {
+// provider+model served it (for cost, including cache tiers). An empty kind is
+// recorded as UsageKindOther; an empty provider skips the model breakdown.
+func (d *DB) AddUsageKind(ctx context.Context, agentID, kind, provider, model string, delta UsageDelta) error {
 	if kind == "" {
 		kind = UsageKindOther
 	}
@@ -101,16 +132,16 @@ func (d *DB) AddUsageKind(ctx context.Context, agentID, kind, provider, model st
 	if !ok {
 		u = Usage{AgentID: agentID, Day: day}
 	}
-	u.Calls += calls
-	u.InputTokens += inputTokens
-	u.OutputTokens += outputTokens
+	u.Calls += delta.Calls
+	u.InputTokens += delta.InputTokens
+	u.OutputTokens += delta.OutputTokens
+	u.CacheReadTokens += delta.CacheReadTokens
+	u.CacheWriteTokens += delta.CacheWriteTokens
 	if u.ByKind == nil {
 		u.ByKind = map[string]KindStat{}
 	}
 	k := u.ByKind[kind]
-	k.Calls += calls
-	k.InputTokens += inputTokens
-	k.OutputTokens += outputTokens
+	k.add(delta)
 	u.ByKind[kind] = k
 	if provider != "" {
 		if u.ByModel == nil {
@@ -118,11 +149,28 @@ func (d *DB) AddUsageKind(ctx context.Context, agentID, kind, provider, model st
 		}
 		mk := ModelKey(provider, model)
 		m := u.ByModel[mk]
-		m.Calls += calls
-		m.InputTokens += inputTokens
-		m.OutputTokens += outputTokens
+		m.add(delta)
 		u.ByModel[mk] = m
 	}
+	return d.persistUsageLocked(u)
+}
+
+// AddCompactionSavings folds bytes removed by System A (deterministic tool-output
+// compaction) into today's per-agent rollup (upsert). It is a standalone counter
+// — no LLM call, no token/cost attribution — so the savings can be surfaced
+// independently of spend. A non-positive delta is a no-op.
+func (d *DB) AddCompactionSavings(ctx context.Context, agentID string, bytes int) error {
+	if bytes <= 0 {
+		return nil
+	}
+	day := today()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	u, ok := d.usage[usageKey(agentID, day)]
+	if !ok {
+		u = Usage{AgentID: agentID, Day: day}
+	}
+	u.CompactSavedBytes += bytes
 	return d.persistUsageLocked(u)
 }
 

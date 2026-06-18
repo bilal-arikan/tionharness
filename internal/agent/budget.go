@@ -50,7 +50,14 @@ func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string,
 	if model == "" {
 		model = agent.Model
 	}
-	if err := r.db.AddUsageKind(ctx, agent.ID, string(callKindFrom(ctx)), agent.Provider, model, 1, u.InputTokens, u.OutputTokens); err != nil {
+	delta := db.UsageDelta{
+		Calls:            1,
+		InputTokens:      u.InputTokens,
+		OutputTokens:     u.OutputTokens,
+		CacheReadTokens:  u.CacheReadTokens,
+		CacheWriteTokens: u.CacheWriteTokens,
+	}
+	if err := r.db.AddUsageKind(ctx, agent.ID, string(callKindFrom(ctx)), agent.Provider, model, delta); err != nil {
 		r.logger.Warn("record usage failed", "agent", agent.ID, "error", err)
 	}
 }

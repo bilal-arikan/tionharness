@@ -58,8 +58,9 @@ type Tunables struct {
 	compactMaxLines      int  // 0 → DefaultCompactMaxLines
 	compactMaxBytes      int  // 0 → DefaultCompactMaxBytes
 	// System B: LLM intent-aware summary (costs a cheap model call, gated by size).
-	compactLLM          bool // master switch for System B
-	compactLLMThreshold int  // 0 → DefaultCompactLLMThreshold
+	compactLLM          bool   // master switch for System B
+	compactLLMThreshold int    // 0 → DefaultCompactLLMThreshold
+	compactModel        string // model id for System B; "" → titleModel, then agent's own model
 }
 
 // NewTunables constructs a Tunables with the recovery knobs at their built-in
@@ -284,13 +285,14 @@ func (t *Tunables) ReactiveKeepRecent() int {
 // systems. System A (deterministic) and System B (LLM summary) are toggled
 // separately and may run in parallel (A first, then B on whatever remains over
 // its threshold). A value of 0 selects the built-in default for each limit.
-func (t *Tunables) SetToolCompaction(deterministic bool, maxLines, maxBytes int, llm bool, llmThreshold int) {
+func (t *Tunables) SetToolCompaction(deterministic bool, maxLines, maxBytes int, llm bool, llmThreshold int, model string) {
 	t.mu.Lock()
 	t.compactDeterministic = deterministic
 	t.compactMaxLines = maxLines
 	t.compactMaxBytes = maxBytes
 	t.compactLLM = llm
 	t.compactLLMThreshold = llmThreshold
+	t.compactModel = model
 	t.mu.Unlock()
 }
 
@@ -337,4 +339,12 @@ func (t *Tunables) CompactLLMThreshold() int {
 		return DefaultCompactLLMThreshold
 	}
 	return t.compactLLMThreshold
+}
+
+// CompactModel returns the dedicated model id for System B's summary, or "" when
+// unset (callers then fall back to the title model, then the agent's own model).
+func (t *Tunables) CompactModel() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.compactModel
 }

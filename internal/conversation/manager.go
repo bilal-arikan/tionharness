@@ -178,7 +178,13 @@ func recordCompaction(ctx context.Context, database *db.DB, agent db.Agent, u pr
 	if database == nil {
 		return
 	}
-	_ = database.AddUsageKind(ctx, agent.ID, db.UsageKindCompact, agent.Provider, agent.Model, 1, u.InputTokens, u.OutputTokens)
+	_ = database.AddUsageKind(ctx, agent.ID, db.UsageKindCompact, agent.Provider, agent.Model, db.UsageDelta{
+		Calls:            1,
+		InputTokens:      u.InputTokens,
+		OutputTokens:     u.OutputTokens,
+		CacheReadTokens:  u.CacheReadTokens,
+		CacheWriteTokens: u.CacheWriteTokens,
+	})
 }
 
 // toProviderMessages maps stored user/assistant turns to provider messages,

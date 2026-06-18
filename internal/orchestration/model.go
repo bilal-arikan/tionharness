@@ -10,9 +10,12 @@ import (
 
 // Node types.
 const (
-	NodeAgent    = "agent"    // run an agent with a (templated) prompt, then go to Next
-	NodeBranch   = "branch"   // route to a branch based on the last output
-	NodeParallel = "parallel" // run several agent nodes concurrently, then JoinNext
+	NodeAgent     = "agent"     // run an agent with a (templated) prompt, then go to Next
+	NodeBranch    = "branch"    // route by case-insensitive substring of the last output
+	NodeParallel  = "parallel"  // run several agent nodes concurrently, then JoinNext
+	NodeSwitch    = "switch"    // route by exact (case-insensitive) match of the last output
+	NodeDelay     = "delay"     // wait DelayMs, then go to Next (no LLM)
+	NodeTransform = "transform" // emit a rendered template as output, then Next (no LLM)
 )
 
 // Graph is a reusable orchestration protocol.
@@ -37,12 +40,19 @@ type Node struct {
 	Prompt  string `json:"prompt,omitempty"` // template: {{input}}, {{last}}, {{node.<id>}}
 	Next    string `json:"next,omitempty"`   // next node id ("" = end)
 
-	// branch
+	// branch + switch (switch reuses Branches; Contains is the exact value to
+	// match for a switch, an empty Contains is the default arm for both).
 	Branches []Branch `json:"branches,omitempty"`
 
 	// parallel
 	Parallel []string `json:"parallel,omitempty"` // agent node ids to run concurrently
 	JoinNext string   `json:"joinNext,omitempty"` // node after the join ("" = end)
+
+	// delay
+	DelayMs int `json:"delayMs,omitempty"` // milliseconds to wait before Next
+
+	// transform — a template rendered as the node's output (no LLM).
+	Template string `json:"template,omitempty"` // {{input}}, {{last}}, {{node.<id>}}
 
 	// layout (cosmetic only — ignored by the engine and Validate). Persisted so
 	// the visual canvas builder can restore node positions across reloads.
@@ -122,14 +132,18 @@ func (g Graph) Validate() error {
 			if err := ref(n.Next, "node "+n.ID); err != nil {
 				return err
 			}
-		case NodeBranch:
+		case NodeBranch, NodeSwitch:
 			if len(n.Branches) == 0 {
-				return fmt.Errorf("branch node %q has no branches", n.ID)
+				return fmt.Errorf("%s node %q has no branches", n.Type, n.ID)
 			}
 			for _, b := range n.Branches {
-				if err := ref(b.Next, "branch in "+n.ID); err != nil {
+				if err := ref(b.Next, n.Type+" in "+n.ID); err != nil {
 					return err
 				}
+			}
+		case NodeDelay, NodeTransform:
+			if err := ref(n.Next, "node "+n.ID); err != nil {
+				return err
 			}
 		case NodeParallel:
 			if len(n.Parallel) == 0 {

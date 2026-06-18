@@ -87,10 +87,16 @@ type Request struct {
 	OnEvent func(TraceStep)
 }
 
-// Usage reports token consumption.
+// Usage reports token consumption. For providers with prompt caching, the cache
+// counters are reported SEPARATELY from InputTokens (Anthropic's input_tokens
+// already excludes cached tokens), so the true prompt size is InputTokens +
+// CacheReadTokens + CacheWriteTokens. Cache reads are ~10× cheaper and cache
+// writes a slight premium over fresh input — see providers.Price.
 type Usage struct {
-	InputTokens  int `json:"inputTokens"`
-	OutputTokens int `json:"outputTokens"`
+	InputTokens      int `json:"inputTokens"`
+	OutputTokens     int `json:"outputTokens"`
+	CacheReadTokens  int `json:"cacheReadTokens,omitempty"`  // prompt tokens served from cache (cheap)
+	CacheWriteTokens int `json:"cacheWriteTokens,omitempty"` // prompt tokens written to cache (premium)
 }
 
 // TraceStep is one entry in a provider-produced activity trace (intermediate

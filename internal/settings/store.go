@@ -270,6 +270,10 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.CompactLLMSummary = *p.CompactLLMSummary
 	}
 	applyInt(&next.CompactLLMThreshold, p.CompactLLMThreshold)
+	if p.CompactModel != nil {
+		// Trim: a model id with surrounding spaces would break provider resolution.
+		next.CompactModel = strings.TrimSpace(*p.CompactModel)
+	}
 
 	applyInt(&next.DefaultDailyCallLimit, p.DefaultDailyCallLimit)
 	applyInt(&next.DefaultDailyTokenLimit, p.DefaultDailyTokenLimit)

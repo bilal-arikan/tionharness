@@ -5,13 +5,15 @@
 // Scheme: #/w/{workspaceId}/{view}[/{entityId}]
 //   - workspaceId scopes the request to an isolated backend database.
 //   - view is one of the NavRail views.
-//   - entityId is meaningful per view: chat→sessionId, agents/memory/tools→agentId,
-//     artifacts→artifactId, schedules→scheduleId. Other views ignore it.
+//   - entityId is meaningful per view: chat→sessionId, agents/memory→agentId,
+//     artifacts→artifactId, schedules→scheduleId, settings→category key. Other
+//     views ignore it.
 import type { View } from '../components/NavRail'
 
 const VIEWS: View[] = [
   'chat', 'executions', 'agents', 'board', 'schedules', 'memory',
-  'tools', 'flows', 'artifacts', 'logs', 'settings',
+  'tools', 'flows', 'artifacts', 'secrets', 'skills', 'budget',
+  'logs', 'settings',
 ]
 
 export interface Route {
@@ -38,6 +40,29 @@ export function parseRoute(hash: string): Route {
   return { workspaceId, view, id }
 }
 
+// isView reports whether a string is a known NavRail view.
+export function isView(v: string | null | undefined): v is View {
+  return !!v && (VIEWS as string[]).includes(v)
+}
+
+// routeFromEvent derives a deep-link Route from an autonomous AppEvent's target
+// hints (view + sessionId/agentId/...). Returns null when the event carries no
+// usable view, so callers can no-op. Used to navigate on notification click:
+// the click sets the URL hash to this route and the URL→state machinery does the
+// rest (including a workspace switch).
+export function routeFromEvent(e: {
+  workspaceId?: string
+  target?: Record<string, string>
+}): Route | null {
+  const t = e.target
+  if (!t || !isView(t.view)) return null
+  const view = t.view
+  let id: string | null = null
+  if (view === 'chat') id = t.sessionId ?? null
+  else if (view === 'agents' || view === 'memory') id = t.agentId ?? null
+  return { workspaceId: e.workspaceId ?? null, view, id }
+}
+
 // buildRoute serialises a Route back into a hash path (without the leading '#').
 export function buildRoute(r: Route): string {
   const segs: string[] = []
@@ -57,6 +82,7 @@ export function routeIdForView(
     agentId: string | null
     artifactId: string | null
     scheduleId: string | null
+    settingsCat: string | null
   },
 ): string | null {
   switch (view) {
@@ -64,12 +90,13 @@ export function routeIdForView(
       return state.sessionId
     case 'agents':
     case 'memory':
-    case 'tools':
       return state.agentId
     case 'artifacts':
       return state.artifactId
     case 'schedules':
       return state.scheduleId
+    case 'settings':
+      return state.settingsCat
     default:
       return null
   }

@@ -106,8 +106,9 @@ type Settings struct {
 	CompactMaxLines    int  `json:"compactMaxLines"`    // lines kept before middle elision (0 = default)
 	CompactMaxBytes    int  `json:"compactMaxBytes"`    // hard byte cap after line work (0 = default)
 	// System B: LLM intent-aware summary (costs a cheap model call, size-gated).
-	CompactLLMSummary   bool `json:"compactLlmSummary"`   // System B master switch
-	CompactLLMThreshold int  `json:"compactLlmThreshold"` // only summarize output larger than this (bytes, 0 = default)
+	CompactLLMSummary   bool   `json:"compactLlmSummary"`   // System B master switch
+	CompactLLMThreshold int    `json:"compactLlmThreshold"` // only summarize output larger than this (bytes, 0 = default)
+	CompactModel        string `json:"compactModel"`        // model id for System B; "" → TitleModel, then agent's own model
 
 	// Budget defaults applied to newly created agents (0 = unlimited).
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
@@ -171,6 +172,7 @@ func Default() Settings {
 		CompactMaxBytes:     12288,
 		CompactLLMSummary:   false,
 		CompactLLMThreshold: 8192,
+		CompactModel:        "",
 
 		DefaultDailyCallLimit:  0,
 		DefaultDailyTokenLimit: 0,
@@ -235,11 +237,12 @@ type DTO struct {
 	MaxTokenRetries    int  `json:"maxTokenRetries"`
 	ReactiveKeepRecent int  `json:"reactiveKeepRecent"`
 
-	CompactToolOutput   bool `json:"compactToolOutput"`
-	CompactMaxLines     int  `json:"compactMaxLines"`
-	CompactMaxBytes     int  `json:"compactMaxBytes"`
-	CompactLLMSummary   bool `json:"compactLlmSummary"`
-	CompactLLMThreshold int  `json:"compactLlmThreshold"`
+	CompactToolOutput   bool   `json:"compactToolOutput"`
+	CompactMaxLines     int    `json:"compactMaxLines"`
+	CompactMaxBytes     int    `json:"compactMaxBytes"`
+	CompactLLMSummary   bool   `json:"compactLlmSummary"`
+	CompactLLMThreshold int    `json:"compactLlmThreshold"`
+	CompactModel        string `json:"compactModel"`
 
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
@@ -310,6 +313,7 @@ func (s Settings) ToDTO() DTO {
 		CompactMaxBytes:     s.CompactMaxBytes,
 		CompactLLMSummary:   s.CompactLLMSummary,
 		CompactLLMThreshold: s.CompactLLMThreshold,
+		CompactModel:        s.CompactModel,
 
 		DefaultDailyCallLimit:  s.DefaultDailyCallLimit,
 		DefaultDailyTokenLimit: s.DefaultDailyTokenLimit,
@@ -376,11 +380,12 @@ type Patch struct {
 	MaxTokenRetries    *int  `json:"maxTokenRetries"`
 	ReactiveKeepRecent *int  `json:"reactiveKeepRecent"`
 
-	CompactToolOutput   *bool `json:"compactToolOutput"`
-	CompactMaxLines     *int  `json:"compactMaxLines"`
-	CompactMaxBytes     *int  `json:"compactMaxBytes"`
-	CompactLLMSummary   *bool `json:"compactLlmSummary"`
-	CompactLLMThreshold *int  `json:"compactLlmThreshold"`
+	CompactToolOutput   *bool   `json:"compactToolOutput"`
+	CompactMaxLines     *int    `json:"compactMaxLines"`
+	CompactMaxBytes     *int    `json:"compactMaxBytes"`
+	CompactLLMSummary   *bool   `json:"compactLlmSummary"`
+	CompactLLMThreshold *int    `json:"compactLlmThreshold"`
+	CompactModel        *string `json:"compactModel"`
 
 	DefaultDailyCallLimit  *int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit *int `json:"defaultDailyTokenLimit"`

@@ -167,8 +167,10 @@ type anthropicResp struct {
 	StopReason string `json:"stop_reason"`
 	Model      string `json:"model"`
 	Usage      struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
+		InputTokens              int `json:"input_tokens"`
+		OutputTokens             int `json:"output_tokens"`
+		CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+		CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 	} `json:"usage"`
 	Error *struct {
 		Type    string `json:"type"`
@@ -246,8 +248,10 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		Model:      parsed.Model,
 		Trace:      trace,
 		Usage: Usage{
-			InputTokens:  parsed.Usage.InputTokens,
-			OutputTokens: parsed.Usage.OutputTokens,
+			InputTokens:      parsed.Usage.InputTokens,
+			OutputTokens:     parsed.Usage.OutputTokens,
+			CacheWriteTokens: parsed.Usage.CacheCreationInputTokens,
+			CacheReadTokens:  parsed.Usage.CacheReadInputTokens,
 		},
 	}, nil
 }
@@ -300,12 +304,16 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 			var ev struct {
 				Message struct {
 					Usage struct {
-						InputTokens int `json:"input_tokens"`
+						InputTokens              int `json:"input_tokens"`
+						CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+						CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 					} `json:"usage"`
 				} `json:"message"`
 			}
 			if json.Unmarshal(data, &ev) == nil {
 				out.Usage.InputTokens = ev.Message.Usage.InputTokens
+				out.Usage.CacheWriteTokens = ev.Message.Usage.CacheCreationInputTokens
+				out.Usage.CacheReadTokens = ev.Message.Usage.CacheReadInputTokens
 			}
 		case "content_block_delta":
 			var ev struct {
