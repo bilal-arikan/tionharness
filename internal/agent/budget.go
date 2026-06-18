@@ -64,10 +64,19 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 	}
 	provider, err := r.providers.Get(agent.Provider)
 	if err != nil {
+		r.logger.Warn("provider resolve failed",
+			"agent", agent.ID, "provider", agent.Provider,
+			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
 	resp, err := provider.Complete(ctx, req)
 	if err != nil {
+		// Mirror recordedComplete's logging: guardedComplete is the funnel for the
+		// non-tool autonomous calls (reflect/summary/title), so a provider failure
+		// here must surface in the logs too — not just propagate up silently.
+		r.logger.Warn("provider complete failed",
+			"agent", agent.ID, "provider", agent.Provider, "model", req.Model,
+			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage)
