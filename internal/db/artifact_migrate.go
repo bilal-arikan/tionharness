@@ -1,9 +1,11 @@
 package db
 
 import (
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -104,5 +106,64 @@ func (d *DB) migrateUnifiedLayout() {
 				_ = d.writeSessionFileLocked(s)
 			}
 		}
+	}
+
+	// 4) Remove orphan files left behind in the legacy uploads/ tree — anything no
+	// longer referenced by a message attachment or an artifact. A file whose move
+	// failed (still referenced via an uploads/ path) is kept, so nothing live is
+	// lost. Then prune the emptied directories.
+	d.cleanupOrphanUploads()
+}
+
+// cleanupOrphanUploads deletes files under workspace/uploads/ that are not
+// referenced by any current message attachment (relPath) or artifact
+// (SourcePath/ContentFile), then removes the now-empty directories. Safe: only
+// unreferenced files are touched.
+func (d *DB) cleanupOrphanUploads() {
+	uploadsDir := filepath.Join(d.workspaceDir(), "uploads")
+	if _, err := os.Stat(uploadsDir); err != nil {
+		return
+	}
+	referenced := map[string]bool{}
+	mark := func(rel string) {
+		if rel != "" {
+			referenced[filepath.ToSlash(rel)] = true
+		}
+	}
+	for _, a := range d.artifacts {
+		mark(a.SourcePath)
+		mark(a.ContentFile)
+	}
+	for _, msgs := range d.messages {
+		for _, m := range msgs {
+			for _, at := range m.Attachments {
+				mark(at.RelPath)
+			}
+		}
+	}
+
+	var dirs []string
+	_ = filepath.WalkDir(uploadsDir, func(p string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if e.IsDir() {
+			dirs = append(dirs, p)
+			return nil
+		}
+		rel, rerr := filepath.Rel(d.workspaceDir(), p)
+		if rerr != nil {
+			return nil
+		}
+		if !referenced[filepath.ToSlash(rel)] {
+			_ = os.Remove(p)
+		}
+		return nil
+	})
+	// Remove directories deepest-first; os.Remove only succeeds when empty, so any
+	// folder still holding a referenced file is preserved.
+	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i]) > len(dirs[j]) })
+	for _, dir := range dirs {
+		_ = os.Remove(dir)
 	}
 }

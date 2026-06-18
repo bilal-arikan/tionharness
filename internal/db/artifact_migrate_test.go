@@ -41,6 +41,15 @@ func TestMigrateUnifiedLayout(t *testing.T) {
 		t.Fatalf("add message: %v", err)
 	}
 
+	// An unreferenced orphan file left in uploads/ — cleanup must delete it.
+	orphan := filepath.Join(wsDir, "uploads", "orphan", "dead.bin")
+	if err := os.MkdirAll(filepath.Dir(orphan), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(orphan, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	// Reopen → migration runs.
 	d2, err := Open(storeDir)
 	if err != nil {
@@ -75,5 +84,13 @@ func TestMigrateUnifiedLayout(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("no backing chat artifact created; got %+v", arts)
+	}
+
+	// 4) The orphan file (and the whole emptied uploads/ tree) is gone.
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Errorf("orphan upload should be deleted, stat err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(wsDir, "uploads")); !os.IsNotExist(err) {
+		t.Errorf("emptied uploads/ dir should be pruned, stat err = %v", err)
 	}
 }
