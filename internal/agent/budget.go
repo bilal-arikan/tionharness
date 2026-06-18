@@ -24,6 +24,11 @@ func (r *Runtime) ensureBudget(ctx context.Context, agent db.Agent) error {
 	}
 	u, err := r.db.GetUsageToday(ctx, agent.ID)
 	if err != nil {
+		// A usage-lookup failure here silently blocks the autonomous call (it
+		// propagates up as the call's error). Log it so a budget-gate failure is
+		// distinguishable from a real ErrBudgetExceeded in the logs view.
+		r.logger.Warn("budget check failed",
+			"agent", agent.ID, "callKind", callKindFrom(ctx), "error", err)
 		return err
 	}
 	if agent.DailyCallLimit > 0 && u.Calls >= agent.DailyCallLimit {
