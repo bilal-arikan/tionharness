@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FileText, Code2, Globe, Image, GitBranch, FileCode,
   FileVideo, FileAudio, File as FileIcon, UploadCloud,
-  Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X, FolderOpen,
+  Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X, FolderOpen, Search,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { api } from '../../api'
@@ -119,6 +119,18 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   const [dragging, setDragging] = useState(false)
   const [importing, setImporting] = useState(false)
   const dragDepth = useRef(0)
+  // List filters: free-text title search + an origin facet (Tümü / chat / manual /
+  // agent / tool).
+  const [query, setQuery] = useState('')
+  const [originFilter, setOriginFilter] = useState<'all' | 'chat' | 'manual' | 'agent' | 'tool'>('all')
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return list.filter((a) => {
+      if (originFilter !== 'all' && (a.origin ?? '') !== originFilter) return false
+      if (q && !a.title.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [list, query, originFilter])
 
   const reload = useCallback(() => {
     api
@@ -336,7 +348,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       <div className="flex w-72 flex-shrink-0 flex-col border-r border-[var(--color-border)]">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            Artifactlar · {list.length}
+            Artifactlar · {filtered.length === list.length ? list.length : `${filtered.length}/${list.length}`}
           </span>
           <button
             onClick={createNew}
@@ -346,6 +358,50 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             <Plus size={13} /> Yeni
           </button>
         </div>
+
+        {/* Filters: title search + origin facet. */}
+        <div className="flex flex-col gap-2 border-b border-[var(--color-border)] px-3 py-2">
+          <div className="relative">
+            <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-dim)]" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Başlıkta ara…"
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-7 pr-7 text-xs outline-none focus:border-[var(--color-accent)]"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                title="Temizle"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {([
+              ['all', 'Tümü'],
+              ['chat', 'Sohbet eki'],
+              ['manual', 'Manuel'],
+              ['agent', 'Ajan'],
+              ['tool', 'Tool'],
+            ] as const).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setOriginFilter(val)}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition ${
+                  originFilter === val
+                    ? 'bg-[var(--color-accent)] text-white'
+                    : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {list.length === 0 && (
             <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
@@ -355,7 +411,12 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
               </p>
             </div>
           )}
-          {list.map((a) => {
+          {list.length > 0 && filtered.length === 0 && (
+            <div className="px-4 py-8 text-center text-sm text-[var(--color-text-dim)]">
+              Filtreyle eşleşen artifact yok.
+            </div>
+          )}
+          {filtered.map((a) => {
             const Icon = KIND_ICON[a.kind] ?? FileText
             const isActive = a.id === activeId
             return (
