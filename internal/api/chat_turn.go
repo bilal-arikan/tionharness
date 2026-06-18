@@ -74,7 +74,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	var dynamic string
 	// The session's persistent goal leads the dynamic context — it is the agent's
 	// north star and should be the first thing it reads after the static persona.
-	if gb := goalContextBlock(session.Goal); gb != "" {
+	if gb := goalContextBlock(session.Goal, session.GoalDone); gb != "" {
 		dynamic = gb
 	}
 	if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, message, 5); block != "" {

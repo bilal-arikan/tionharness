@@ -41,10 +41,11 @@ export const sessionApi = {
       body: JSON.stringify({ title }),
     }),
   // Set (or clear, when empty) the session's persistent goal ("north star").
-  setSessionGoal: (sessionId: string, goal: string) =>
-    req<{ id: string; goal: string }>(`/api/sessions/${sessionId}/goal`, {
+  // done marks it achieved (kept visible, no longer injected into context).
+  setSessionGoal: (sessionId: string, goal: string, done = false) =>
+    req<{ id: string; goal: string; goalDone: boolean }>(`/api/sessions/${sessionId}/goal`, {
       method: 'PUT',
-      body: JSON.stringify({ goal }),
+      body: JSON.stringify({ goal, done }),
     }),
   // On-demand summary/listing posted as an assistant message in the session.
   // kind: 'memory' | 'board' | 'flows' | 'tools'. Returns the new message.

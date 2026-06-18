@@ -26,6 +26,7 @@ type sessionInfoResp struct {
 	MessageCount int    `json:"messageCount"`
 	Unread       bool   `json:"unread"`
 	Goal         string `json:"goal"`
+	GoalDone     bool   `json:"goalDone"`
 	CreatedAt    int64  `json:"createdAt"`
 	UpdatedAt    int64  `json:"updatedAt"`
 
@@ -107,6 +108,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		MessageCount:    session.MessageCount,
 		Unread:          session.Unread,
 		Goal:            session.Goal,
+		GoalDone:        session.GoalDone,
 		CreatedAt:       session.CreatedAt,
 		UpdatedAt:       session.UpdatedAt,
 		HasSummary:      session.Summary != "",
@@ -237,8 +239,8 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 	}
 
 	// Session goal block (dynamic suffix) — the persistent objective injected on
-	// every turn.
-	if gb := goalContextBlock(session.Goal); gb != "" {
+	// every turn (skipped once the goal is marked done).
+	if gb := goalContextBlock(session.Goal, session.GoalDone); gb != "" {
 		out = append(out, contextFiller{Label: "Hedef", Role: "goal", Tokens: conversation.EstimateText(gb), Count: 1})
 	}
 

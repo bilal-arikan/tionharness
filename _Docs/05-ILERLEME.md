@@ -2,6 +2,20 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Market — dört türde kurulum + 20 örnek paket ✅ (2026-06-18)
+
+**İstek:** Markete daha çok örnek (≈20, farklı türlerde) ekle.
+
+**Yapılan (örneklerin gerçekten işe yaraması için kurulum da tamamlandı):**
+- **20 yeni gömülü örnek paket** (toplam 23): 10 skill (web-research, code-review + technical-writing, data-analysis, debugging, prompt-engineering, sql-expert, git-workflow, api-design, summarization), 5 agent (researcher/coder/editor/planner/support), 4 provider (openrouter/groq/ollama/deepseek), 4 flow (research-synthesis/review-and-fix/parallel-brainstorm/draft-edit-finalize). Üreteç: `internal/market/gen_examples.py` (in-tree authoring helper; ürettiği JSON'lar `//go:embed` ile gömülür).
+- **Dört türde de install** (önce yalnız skill, diğerleri 501'di): `api/market.go`'ya `installAgentPack` (`db.CreateAgent`, bilinmeyen skill slug'ları elenir, CreatedBy=""), `installFlowPack` (`db.CreateFlow`; agent-agnostik graph'ın boş `agentId` slotları workspace'in ilk ajanına atanır → hemen çalışır), `installProviderPack` (`settings.UpsertCustomProvider` + `applySettings` canlı push; API key gövdeden gelir, AES-GCM, pakette taşınmaz; provider id = `provider.<slug>`→`<slug>`) eklendi. Skill yolu market paketinde (dosya), agent/provider/flow API handler'ında (db/settings) — market paketini db/settings bağımlılığından uzak tutar.
+- **Frontend MarketPanel**: artık her tür için "Kur" butonu (provider'da API-key input'u), tür-özel önizleme `PackPreview` (skill→markdown, agent→persona+sağlayıcı/model/beceriler, provider→baseUrl+modeller, flow→düğüm listesi). `types/market.ts` agent/provider/flow payload tipleriyle genişletildi.
+- **Test güncellemesi:** `store_test.go` artık çok-türlü bundled set'i doğrular (her paketin bilinen bir kind'ı var; kind-listeleri toplamı = toplam).
+
+**Durum:** `go build/vet` + `go test ./internal/market/... ./internal/api/...` + frontend `tsc` yeşil. **Canlı API E2E** (port 8090, gerçek workspace): agent→CreateAgent (UUID döndü), flow→CreateFlow (2 düğüm, ilk-ajan otomatik atandı), provider→Upsert (`keySet:true` AES-GCM key ile), skill→workspace+reload — dördü de 200. Test sırasında kullanıcının workspace'ine eklenen örnekler sonrasında temizlendi (market kataloğundaki 23 paket kalıcı). **Boot notu:** ilk seed-boot'unda EnsureDefaults dosyaları yazarken katalog tek seferlik 2 paket önbellekleyebilir; `reload`/yeniden başlatma çözer (skills sistemiyle aynı kalıp, diskte kalıcı).
+
+**Zombi süreç temizliği:** 8090'ı tutan eski `swarmgo-dev.exe` (başka oturumdan) ve takılı `go run`/`vite` süreçleri sonlandırıldı; taze `swarmgo.exe` (8090) + tek `vite` (5173) çalışır durumda.
+
 ## claude-cli için bütçe/maliyet tahmini ✅ (2026-06-18)
 
 **İstek:** Bütçe ekranında `claude-cli` (AnthropicCli) sağlayıcısı için de maliyet hesaplaması yapılsın — mevcut `anthropic` ile aynı model fiyat tablosu kullanılarak eşdeğer API maliyeti tahmin edilsin; "abonelik / fiyatsız" yerine `~$X.XX` gösterilsin.

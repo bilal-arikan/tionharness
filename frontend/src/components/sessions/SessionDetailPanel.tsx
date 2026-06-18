@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, type LucideIcon } from 'lucide-react'
+import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, CheckCircle2, Circle, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionInfo } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
@@ -112,19 +112,38 @@ export function SessionDetailPanel({
     setEditingGoal(true)
   }
 
-  // Persist the goal verbatim (empty clears it), then reflect it locally.
+  // Persist the goal verbatim (empty clears it), then reflect it locally. Saving
+  // always reopens the goal (done=false) — an edited objective is active again.
   const commitGoal = async () => {
     const g = goalDraft.trim()
-    if (g === (info?.goal ?? '').trim()) {
+    if (g === (info?.goal ?? '').trim() && !info?.goalDone) {
       setEditingGoal(false)
       return
     }
     setSavingGoal(true)
     try {
-      await api.setSessionGoal(sessionId, g)
-      setInfo((prev) => (prev ? { ...prev, goal: g } : prev))
+      await api.setSessionGoal(sessionId, g, false)
+      setInfo((prev) => (prev ? { ...prev, goal: g, goalDone: false } : prev))
       setEditingGoal(false)
       // Re-fetch so the context meter reflects the goal's new footprint.
+      setLocalRefresh((n) => n + 1)
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setSavingGoal(false)
+    }
+  }
+
+  // Toggle the goal's done state: completing it keeps the text but stops the
+  // context injection; reopening resumes it.
+  const toggleGoalDone = async () => {
+    if (!info?.goal || savingGoal) return
+    const next = !info.goalDone
+    setSavingGoal(true)
+    try {
+      await api.setSessionGoal(sessionId, info.goal, next)
+      setInfo((prev) => (prev ? { ...prev, goalDone: next } : prev))
+      // Re-fetch so the context meter drops/restores the goal bucket.
       setLocalRefresh((n) => n + 1)
     } catch (e) {
       onError((e as Error).message)
@@ -284,9 +303,43 @@ export function SessionDetailPanel({
                 </div>
               </div>
             ) : info.goal ? (
-              <p className="whitespace-pre-wrap rounded-lg border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] px-2.5 py-2 text-xs leading-relaxed text-[var(--color-text)]">
-                {info.goal}
-              </p>
+              <div className="flex flex-col gap-1.5">
+                <p
+                  className={`whitespace-pre-wrap rounded-lg border px-2.5 py-2 text-xs leading-relaxed ${
+                    info.goalDone
+                      ? 'border-[var(--color-border)] bg-[color-mix(in_srgb,#10b981_8%,transparent)] text-[var(--color-text-dim)] line-through decoration-[var(--color-text-dim)]/60'
+                      : 'border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] text-[var(--color-text)]'
+                  }`}
+                >
+                  {info.goal}
+                </p>
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={toggleGoalDone}
+                    disabled={savingGoal}
+                    title={info.goalDone ? 'Hedefi yeniden aç (context\'e tekrar enjekte edilir)' : 'Tamamlandı olarak işaretle (context enjeksiyonu durur)'}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition disabled:opacity-40 ${
+                      info.goalDone
+                        ? 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                        : 'border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10'
+                    }`}
+                  >
+                    {savingGoal ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : info.goalDone ? (
+                      <Circle size={13} />
+                    ) : (
+                      <CheckCircle2 size={13} />
+                    )}
+                    {info.goalDone ? 'Yeniden aç' : 'Tamamlandı'}
+                  </button>
+                  {info.goalDone && (
+                    <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-500">
+                      <CheckCircle2 size={12} /> Tamamlandı · enjekte edilmiyor
+                    </span>
+                  )}
+                </div>
+              </div>
             ) : (
               <button
                 onClick={startEditGoal}

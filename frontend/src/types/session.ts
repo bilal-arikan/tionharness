@@ -77,6 +77,9 @@ export interface SessionInfo {
   // Persistent session objective ("north star") injected into every turn's
   // context. Empty when none is set.
   goal: string
+  // True when the goal is marked done: it stays visible but is no longer
+  // injected into context.
+  goalDone: boolean
   createdAt: number
   updatedAt: number
 

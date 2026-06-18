@@ -3,8 +3,6 @@ package api
 import (
 	"net/http"
 	"strings"
-
-	"github.com/bilal/swarmgo/internal/db"
 )
 
 // maxGoalLen bounds a session goal so it can never blow up the context window;
@@ -15,10 +13,11 @@ const maxGoalLen = 2000
 // section. Inspired by Claude Code's /goal: a single durable "north star" the
 // agent should keep steering toward across turns. Kept in the dynamic (uncached)
 // suffix and placed first so it leads the volatile context. Returns "" when no
-// goal is set.
-func goalContextBlock(goal string) string {
+// goal is set OR when the goal is marked done (a completed objective stops
+// steering future turns — the /goal checker convergence: once achieved, drop it).
+func goalContextBlock(goal string, done bool) string {
 	goal = strings.TrimSpace(goal)
-	if goal == "" {
+	if goal == "" || done {
 		return ""
 	}
 	var b strings.Builder
@@ -30,9 +29,14 @@ func goalContextBlock(goal string) string {
 
 type setGoalReq struct {
 	Goal string `json:"goal"`
+	// Done marks the goal as achieved: it stays visible (so the user can review
+	// or reopen it) but stops being injected into context. Editing the goal text
+	// reopens it (the client sends done=false on a text edit).
+	Done bool `json:"done"`
 }
 
-// handleSetSessionGoal sets (or clears, when empty) a session's persistent goal.
+// handleSetSessionGoal sets (or clears, when empty) a session's persistent goal
+// and its done state.
 func (s *Server) handleSetSessionGoal(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req setGoalReq
@@ -45,20 +49,16 @@ func (s *Server) handleSetSessionGoal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "goal too long")
 		return
 	}
+	// A cleared goal can't be "done".
+	done := req.Done && goal != ""
 
 	ctx := r.Context()
 	database := ws(r).DB
 	if _, err := database.GetSession(ctx, id); writeDBError(w, err, "session not found") {
 		return
 	}
-	if err := database.SetSessionGoal(ctx, id, goal); writeDBError(w, err, "") {
+	if err := database.SetSessionGoal(ctx, id, goal, done); writeDBError(w, err, "") {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "goal": goal})
-}
-
-// sessionGoal returns the goal stored on a session, trimmed. Helper kept here so
-// the goal feature lives in one file.
-func sessionGoal(sess db.Session) string {
-	return strings.TrimSpace(sess.Goal)
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "goal": goal, "goalDone": done})
 }

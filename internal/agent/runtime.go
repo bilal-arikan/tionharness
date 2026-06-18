@@ -474,7 +474,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 	resp, err := r.CompleteWithTools(WithCallKind(ctx, KindHeartbeat), agent, provider, providers.Request{
 		Model:         agent.Model,
 		System:        r.systemPrompt(agent),
-		SystemDynamic: heartbeatGoalBlock(session.Goal),
+		SystemDynamic: heartbeatGoalBlock(session.Goal, session.GoalDone),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: agent.HeartbeatPrompt},
 		},
@@ -495,9 +495,9 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 // heartbeatGoalBlock renders a session's persistent goal for the autonomous
 // heartbeat turn, mirroring the chat path's goalContextBlock (api package).
 // Returns "" when no goal is set.
-func heartbeatGoalBlock(goal string) string {
+func heartbeatGoalBlock(goal string, done bool) string {
 	goal = strings.TrimSpace(goal)
-	if goal == "" {
+	if goal == "" || done {
 		return ""
 	}
 	return "## Session goal (north star)\n" +
