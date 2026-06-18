@@ -2,6 +2,31 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Performans sağlamlaştırma turu — Go best-practice incelemesi sonrası (2026-06-18)
+
+Go performans araştırması (Go 1.26 GC, JSON kütüphaneleri, RWMutex vs sync.Map, SSE,
+allocation) sonrası **davranış-korumalı** 4 düzeltme uygulandı (commit `ad36ee9` —
+not: bir auto-commit, bu hunk'ları eşzamanlı flows WIP'iyle aynı commit'e topladı):
+
+1. **HTTP `IdleTimeout: 120s`** (`cmd/swarmgo/main.go`) — boşta keep-alive bağlantıları
+   reap edilir. `WriteTimeout` **bilerek** koyulmadı (SSE akışlarını keserdi).
+2. **`estimateText` → `utf8.RuneCountInString`** (`conversation/tokens.go`) ve
+   **`tokenize` uzunluk kontrolü** (`memory/vector.go`) — niyet netliği + ufak hız
+   (not: Go derleyicisi `len([]rune(s))` kalıbını zaten 0-alloc'a optimize ediyordu,
+   dolayısıyla allocation kazancı değil, mikro hız + okunabilirlik).
+3. **Recall query-norm tek hesap** (`memory/memory.go` + `vector.go`) — `cosine` artık
+   `cosineNorm(a,b,anorm)` üzerine kurulu; `Recall` `norm(qv)`'i döngü öncesi **bir kez**
+   hesaplar (eskiden her aday için yeniden). Her sohbet turu + her görevde çalışan sıcak
+   yol. Eski `cosine` wrapper olarak korundu (davranış özdeş).
+4. **RWMutex korundu** — incelemede `sync.Map`'e geçiş bilinçli olarak reddedildi
+   (mixed read/write + sık yeni-key senaryosunda `map+RWMutex` daha hızlı).
+
+**SSE'de değişiklik yok:** `events/chat_stream/tasks_stream/flows` handler'ları zaten
+her event'te `Flush()` + `X-Accel-Buffering: no` + ping ticker ile doğru kurulmuş.
+✅ `go build`/`vet` + `go test ./internal/...` yeşil. **Sıradaki (opsiyonel):** recall
+vektör+norm bellek cache'i (`unmarshalVector` JSON parse'ı her recall'da tekrar ediyor);
+pprof'u `SWARMGO_PPROF=1` env-gate ile ekleyip gerçek yük altında baseline profil.
+
 ## swarmclaw provider incelemesi → gelecek plan (2026-06-18)
 
 [bilal-arikan/swarmclaw](https://github.com/bilal-arikan/swarmclaw)'un ~70 provider'ı
