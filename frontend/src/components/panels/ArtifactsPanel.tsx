@@ -47,6 +47,22 @@ const KIND_LABEL: Record<ArtifactKind, string> = {
   file: 'Dosya',
 }
 
+// Origin badge: where the artifact came from. Tinted to read at a glance.
+const ORIGIN_META: Record<string, { label: string; cls: string }> = {
+  chat: { label: 'Sohbet eki', cls: 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]' },
+  manual: { label: 'Manuel', cls: 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]' },
+  agent: { label: 'Ajan', cls: 'bg-[color-mix(in_srgb,var(--color-success)_18%,transparent)] text-[var(--color-success)]' },
+  tool: { label: 'Tool', cls: 'bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] text-[var(--color-warning)]' },
+}
+
+function OriginBadge({ origin }: { origin?: string }) {
+  const meta = origin ? ORIGIN_META[origin] : undefined
+  if (!meta) return null
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${meta.cls}`}>{meta.label}</span>
+  )
+}
+
 // Manually creatable kinds (text-based). Media/file kinds arrive via drag-drop.
 const KINDS: ArtifactKind[] = ['markdown', 'code', 'html', 'text', 'svg', 'mermaid']
 
@@ -355,8 +371,9 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 <Icon size={16} className="mt-0.5 shrink-0" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{a.title}</span>
-                  <span className="mt-0.5 block text-[11px] text-[var(--color-text-dim)]">
-                    {KIND_LABEL[a.kind] ?? a.kind} · {relativeTime(a.updatedAt)}
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
+                    <OriginBadge origin={a.origin} />
+                    <span>{KIND_LABEL[a.kind] ?? a.kind} · {relativeTime(a.updatedAt)}</span>
                   </span>
                 </span>
               </button>
@@ -378,7 +395,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 <FileCode size={16} className="shrink-0 text-[var(--color-accent)]" />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">{active.title}</div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
+                    <OriginBadge origin={active.origin} />
                     <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
                       {KIND_LABEL[active.kind] ?? active.kind}
                       {active.language ? ` · ${active.language}` : ''}
