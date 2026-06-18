@@ -3,6 +3,7 @@ package skills
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -249,4 +250,65 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+func TestUseSkillBodySubskillFooter(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "overview", `---
+name: Overview
+description: high-level
+subskills: [deep, missing, overview]
+---
+# Overview
+Body text.`)
+	writeSkill(t, dir, "deep", `---
+name: Deep
+description: detailed steps
+---
+# Deep`)
+
+	s := New("", dir)
+
+	// allow=nil → known sub-skills surface, unknown/self are dropped.
+	body, err := s.UseSkillBody("overview", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "Body text.") {
+		t.Errorf("missing original body: %q", body)
+	}
+	if !strings.Contains(body, "Related skills") || !strings.Contains(body, "`deep` — detailed steps") {
+		t.Errorf("missing sub-skill footer: %q", body)
+	}
+	if strings.Contains(body, "missing") || strings.Contains(body, "`overview`") {
+		t.Errorf("footer should drop unknown/self slugs: %q", body)
+	}
+
+	// allow set excluding "deep" → no footer at all.
+	body2, _ := s.UseSkillBody("overview", map[string]bool{"overview": true})
+	if strings.Contains(body2, "Related skills") {
+		t.Errorf("disallowed sub-skill should be hidden: %q", body2)
+	}
+}
+
+func TestEnsureDefaultsSeeds(t *testing.T) {
+	dir := t.TempDir()
+	if err := EnsureDefaults(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "swarmgo-guide", "SKILL.md")); err != nil {
+		t.Errorf("swarmgo-guide not seeded: %v", err)
+	}
+	// Idempotent + non-overwriting: edit a default, re-seed, edit survives.
+	guide := filepath.Join(dir, "swarmgo-guide", "SKILL.md")
+	if err := os.WriteFile(guide, []byte("edited"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureDefaults(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(guide)
+	if string(got) != "edited" {
+		t.Errorf("EnsureDefaults overwrote a user edit: %q", got)
+	}
 }

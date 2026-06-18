@@ -2,6 +2,19 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Kanban → pasif durum panosu dönüşümü (2026-06-18, COMMITSİZ)
+
+Pano artık bir **çalıştırma yüzeyi değil**, pasif bir durum/bilgi panosu. İş flow/schedule/agent oturumlarında yapılır; kartlar yalnızca durumu yansıtır.
+
+- **Karttan kaldırılanlar (UI):** ▶ çalıştırma, ⏰ cron bağlama, çalıştırma geçmişi, canlı etkinlik ve **prompt** alanı. Kartta artık çıktı/son-durum rozeti yok.
+- **Oluşturma:** prompt yerine **açıklama**; başlık açıklamadan otomatik üretilir (`handleCreateTask` artık `description || prompt`'tan üretir). Ajan + Flow kart üstünde **opsiyonel, bilgi amaçlı** etiket.
+- **Panel:** başlık (⟳ açıklamadan), açıklama (birincil), ajan (info), flow (info), durum (kolon), sil. Sürükle-genişlet (resize) `useResizableWidth` hook'u + localStorage.
+- **Backend temizliği (`kaldır temizle`):**
+  - **`run_task` agent tool kaldırıldı** — `builtin_taskmgmt.go` artık 5 araç (list/create/update/move/delete); ajan görevi çalıştırmaz, durumu günceller. `toolsetup.go` kaydı + `TestRunTaskInvokesRunner` silindi.
+  - **Schedule↔task (karttan-cron) bağlama kaldırıldı** — `db.Schedule.TaskID` alanı, `scheduler.run`'ın `if sc.TaskID != "" { RunTask }` dalı, `api/schedules.go` `taskId` alanları/validasyonu (artık `prompt` zorunlu), `store_schedule.go` kopyalaması, frontend `Schedule.taskId` + `createSchedule/updateSchedule` `taskId` paramı. Schedule artık yalnız prompt teslim eder.
+- **Kasıtlı bırakılanlar (yetim):** `RunTask`/`RunTaskStream`/`runTaskFlow` çekirdeği + `POST /api/tasks/{id}/run`·`/run-stream` uçları + frontend `runTask/runTaskStream/listTaskRuns` artık UI'dan çağrılmıyor (pano pasif). Ayrı bir karar olduğu için silinmedi — istenirse sonraki turda temizlenir.
+- **Durum:** `go build`/`go test ./internal/...` + frontend `tsc` yeşil. **Commit beklemede** (smart-surge reconcile).
+
 ## Ayarlar yeniden düzenleme — bölüm taşımaları (2026-06-18)
 İki ayar bölümü daha mantıksal olarak ait oldukları ekrana taşındı:
 - **"Anthropic beta"** (1M token bağlam + uzatılmış prompt cache) → **Sağlayıcılar**'dan **Bağlam & Bellek**'e alındı (`appPanels.tsx ContextPanel`, `FlaskConical` başlık ikonu). Bu seçenekler bağlam penceresi/cache davranışını etkilediği için Bağlam ekranıyla daha uyumlu. `ProvidersPanel` artık `Toggle`/`FlaskConical` kullanmıyor (import temizlendi).
@@ -2498,6 +2511,15 @@ Kullanıcıyla netleştirilecek:
 ---
 
 ## Oturum Günlüğü
+
+### 2026-06-18 — Skill `subskills` (progressive disclosure) + default app-flow skiller
+Skill sistemine üç ekleme yapıldı:
+- **`subskills:` frontmatter alanı** (`skill.go` `SubSkills`, `store.go` `scanDir` parse). Bir skill, daha detaylı alt skill'lerin slug'larını listeleyebiliyor. `use_skill` ile gövde yüklenince sonuna **"Related skills"** footer'ı ekleniyor (`Store.UseSkillBody` + `subskillFooter`): bilinmeyen/öz-referans/izinsiz slug'lar elenir, model gerektiğinde alt skill'i ayrıca `use_skill` ile yükler. Ham detay görünümü (`Body`) değişmeden kaldı; footer yalnızca araç yolunda. `agentSkillLib.Body` artık `UseSkillBody(slug, allow)` çağırıyor.
+- **Default skill seeding** (`defaults.go` + `//go:embed defaults`): SwarmGo ile gelen baseline skill'ler global dizine (`~/.swarmgo/skills`) açılışta yazılıyor — `EnsureDefaults` idempotent, mevcut dosyayı **ezmez** (kullanıcı düzenlemesi ve access toggle korunur; silinen default bir sonraki başlangıçta geri gelir). `NewRuntime` içinde çağrılıyor → her workspace miras alır.
+- **İki built-in skill**: `swarmgo-guide` (tüm uygulama akışı — agents/sessions/tasks/flows/schedules/skills/memory/MCP/secrets; `access: shared`, `subskills: [swarmgo-flows]`) ve `swarmgo-flows` (orkestrasyon detayları, shared). Progressive disclosure örneği: önce genel rehber, gerektiğinde flows detayı.
+- Frontend `skill.ts`'e `subSkills?: string[]` eklendi.
+- Testler: `TestUseSkillBodySubskillFooter`, `TestEnsureDefaultsSeeds` (ezme-yok + idempotent). `go build ./...` + `go test ./internal/skills/...` temiz; :8090 yeniden derlenip başlatıldı, `/api/skills` doğrulandı (guide: `shared=true`, `subSkills=[swarmgo-flows]`).
+- **Plan**: built-in/MCP araçları için lazy yükleme tasarımı `19-LAZY-TOOL-LOADING.md`'ye yazıldı (skill progressive-disclosure deseninin araç karşılığı: hafif katalog + `activate_tools`).
 
 ### 2026-06-17 — Ekran yüksekliği/scroll fix (panel kökleri)
 "Adım Türleri" (ve aynı kalıptaki diğer ekranlar) tarayıcı yüksekliğini aşıyordu: `<main>` (flex-col, header + panel) içinde panel kökleri `h-full` (= main'in TAM yüksekliği) kullanıyordu → header yüksekliği kadar taşıyor, iç scroll'un altı ekran dışına itiliyordu. Kök yükseklikleri **`min-h-0 flex-1`**'e çevrildi (yeni Artifacts/Tools/Skills panelleriyle aynı kalıp): `SettingsPanel`, `MemoryPanel`, `LogsPanel`, `FlowsPanel`, `TaskBoard`, `Schedules`, `AgentsView`; `SecretsPanel`+`MessageList`'e `min-h-0` eklendi. Artık header sabit, içerik panel içinde scroll. ✅ `tsc` temiz; Chrome canlı doğrulandı.

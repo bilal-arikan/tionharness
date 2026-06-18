@@ -119,6 +119,9 @@ func (r *Runtime) SessionContextRecentCount() int {
 // (bus may be nil, in which case publishing is a no-op). vault is this
 // workspace's secret store handed to the secret_* tools (may be nil).
 func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, vault *secrets.Vault, bus *events.Bus, wsID, wsName string, logs *logbuf.Buffer, logger *slog.Logger) *Runtime {
+	// Seed the shipped default skills into the global dir (idempotent, never
+	// overwrites) so every workspace inherits the SwarmGo guide skills.
+	_ = skills.EnsureDefaults(globalSkillsDir())
 	return &Runtime{
 		db:        database,
 		providers: registry,
@@ -186,7 +189,7 @@ func (l agentSkillLib) Body(slug string) (string, error) {
 	if !l.allow[slug] {
 		return "", fmt.Errorf("skill %q is not enabled for this agent", slug)
 	}
-	return l.store.Body(slug)
+	return l.store.UseSkillBody(slug, l.allow)
 }
 
 // SetScheduleReloader wires the scheduler's Reload so self-management schedule

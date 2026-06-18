@@ -114,6 +114,7 @@ func scanDir(t tier) []Skill {
 			Color:           fm.scalar("color"),
 			AlwaysAllow:     fm.list("alwaysallow", "always_allow"),
 			RequiredSources: fm.list("requiredsources", "required_sources"),
+			SubSkills:       fm.list("subskills", "sub_skills", "related"),
 			Shared:          isShared(fm),
 			Source:          t.source,
 			Path:            path,
@@ -182,6 +183,61 @@ func (s *Store) Body(slug string) (string, error) {
 	}
 	_, body := parseFrontmatter(string(data))
 	return strings.TrimSpace(body), nil
+}
+
+// UseSkillBody returns a skill's body for the use_skill tool: its markdown
+// instructions plus a footer advertising any sub-skills the model may load next
+// (progressive disclosure). When allow is non-nil, sub-skills outside that set
+// are omitted (the agent could not load them anyway); a nil allow lists all
+// known sub-skills. The plain Body method is left untouched for the raw detail
+// view — only the tool path appends the footer.
+func (s *Store) UseSkillBody(slug string, allow map[string]bool) (string, error) {
+	body, err := s.Body(slug)
+	if err != nil {
+		return "", err
+	}
+	sk, _ := s.Get(slug)
+	if footer := s.subskillFooter(sk, allow); footer != "" {
+		body = strings.TrimSpace(body) + "\n\n" + footer
+	}
+	return body, nil
+}
+
+// subskillFooter renders the "Related skills" block for a skill's declared
+// sub-skills, skipping unknown, self-referential and (when allow is set)
+// disallowed slugs. Returns "" when nothing remains to advertise.
+func (s *Store) subskillFooter(sk Skill, allow map[string]bool) string {
+	if len(sk.SubSkills) == 0 {
+		return ""
+	}
+	var items []string
+	seen := map[string]bool{sk.Slug: true}
+	for _, sub := range sk.SubSkills {
+		sub = strings.TrimSpace(sub)
+		if sub == "" || seen[sub] {
+			continue
+		}
+		seen[sub] = true
+		if allow != nil && !allow[sub] {
+			continue
+		}
+		child, ok := s.Get(sub)
+		if !ok {
+			continue
+		}
+		if child.Description != "" {
+			items = append(items, fmt.Sprintf("- `%s` — %s", sub, child.Description))
+		} else {
+			items = append(items, fmt.Sprintf("- `%s`", sub))
+		}
+	}
+	if len(items) == 0 {
+		return ""
+	}
+	return "---\n## Related skills\n" +
+		"This skill builds on more detailed skills. When the task needs them, call " +
+		"`use_skill` with the slug to load their full instructions:\n" +
+		strings.Join(items, "\n")
 }
 
 // SetAccess flips a skill's access mode by rewriting its SKILL.md frontmatter,

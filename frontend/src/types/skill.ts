@@ -13,6 +13,9 @@ export interface Skill {
   color?: string
   alwaysAllow?: string[]
   requiredSources?: string[]
+  // Slugs of more detailed skills this one builds on (progressive disclosure).
+  // Advertised in a footer when the body loads via use_skill.
+  subSkills?: string[]
   // When true the skill is "on-demand": advertised to every agent and usable
   // without assignment. Otherwise it is restricted to agents it is assigned to.
   shared?: boolean

@@ -41,6 +41,11 @@ type Skill struct {
 	// RequiredSources lists source slugs the skill leans on (parity with the
 	// craft convention; informational today).
 	RequiredSources []string `json:"requiredSources,omitempty"`
+	// SubSkills lists slugs of more detailed skills this one builds on. They are
+	// advertised in a footer when the body is loaded via use_skill, so the model
+	// can progressively load deeper instructions on demand (e.g. an overview skill
+	// pointing at a detailed per-feature skill). Set from frontmatter `subskills:`.
+	SubSkills []string `json:"subSkills,omitempty"`
 	// Source is the tier this skill was resolved from.
 	Source Source `json:"source"`
 	// Path is the absolute path of the backing SKILL.md (not serialised; the
