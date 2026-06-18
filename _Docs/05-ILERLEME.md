@@ -654,6 +654,52 @@ mcp-chrome bu oturumda bağlı olmadığından Playwright görsel testi yapılam
 **Kalan (v2):** namespacing (`parent:child`), `paths:` koşullu otomatik aktivasyon,
 skill'in `alwaysAllow`/`requiredSources` alanlarının runtime'da enforce edilmesi.
 
+### Faz S1 — Güncellemeler (2026-06-18)
+
+Yukarıdaki ilk sürüm üzerine yapılan değişiklikler (skill sistemi son hali):
+
+- **Global tier izole edildi:** cross-tool `~/.agents/skills` yerine **`<DataDir>/skills`**
+  (varsayılan `~/.swarmgo/skills`, `SWARMGO_DATA_DIR`'a saygılı). Sebep: ilk sürümde global
+  skill'ler External Agent gibi `~/.agents/skills` okuyan diğer araçlara **sızıyordu**. `globalSkillsDir`
+  artık SwarmGo'nun kendi data dizinine bakar.
+- **Proje katmanı KALDIRILDI → 2 katman (workspace > global):** SwarmGo'da `workDir` zaten
+  workspace'e ait tek sandbox olduğundan `<workDir>/.agents/skills` "proje" tier'ı workspace
+  tier'la örtüşüyordu. `SourceProject` + `projectSkillsDir` silindi; `skills.New(global, workspace)`.
+  Frontend `SkillSource` → `'global' | 'workspace'`; rozetler/label/boş-durum güncellendi.
+- **Per-agent seçim + sıralama:** Skill'ler **paylaşımlı havuz**; ajan **yazmaz, seçer**.
+  `db.Agent.Skills []string` (sıralı slug listesi), ajan ayarlarından çoklu seçim + ↑/↓
+  (`AgentSkillsSection.tsx`, `PUT /api/agents/{id}` `skills`). Ajanın gördüğü katalog = atanmışlar
+  (sırasıyla) + tüm shared'ler. `use_skill` `agentSkillLib` ile bu kümeye kısıtlı; `composeTurnRequest`
+  artık `SkillsCatalogBlockForAgent(agent)` çağırır.
+- **Erişim modu `access: shared` (gerektiğinde) vs restricted (atanınca):** shared skill'ler atama
+  gerekmeden **tüm** ajanların promptunda görünür/kullanılır (`Shared` alanı, `SharedList`/`AllowedFor`/
+  `CatalogBlockForAgent`). SkillsPanel'de **Gerektiğinde/Atanınca** rozeti + **Paylaş/Kısıtla** toggle
+  (`PUT /api/skills/{slug}/access` → `setFrontmatterAccess` frontmatter'ı yeniden yazar).
+- **UI iyileştirmeleri:** `POST /api/skills/{slug}/reveal` (Klasörü aç), SkillsPanel sol liste
+  **sürükle-genişlet** (localStorage'da kalıcı genişlik).
+- **Sağlamlaştırma:** dosya dışarıdan silinince `Body`/`SetAccess` katalogu **self-heal** reload edip
+  net hata döner (kriptik OS hatası yerine).
+- **Örnek skill'ler (son):** `commit` (global), `swarmgo-project` + `web-research` (workspace;
+  `web-research` `access: shared`). Eski `~/.agents/skills` ve proje-tier demo'ları temizlendi.
+- ✅ build/vet/test + tsc/vite yeşil; **canlı :8090 restart** ile uçtan uca doğrulandı.
+
+## Ara özellik — Ajan bağlam önizleme (fresh-start context) ✅ (2026-06-17/18)
+
+Ajan ayarlarında (sağ üst, **👁 Bağlam**) bir pencere açıp ajanın **bir tura sıfırdan
+başlarken aldığı bağlamı** gösterir. `GET /api/agents/{id}/context[?message=...]`
+(`internal/api/agent_context.go`):
+- **Statik sistem promptu** (`buildAgentStaticPrompt`, `composeTurnRequest` statik yarısının
+  aynası): ajan-adı notu + kullanıcı profili + persona/soul/identity + workspace yönergeleri +
+  deliverable rehberi + ajanın gördüğü beceri kataloğu.
+- **Araç kataloğu** (`ToolCatalog`) ad+açıklama + token tahmini.
+- **Dinamik kısım (opsiyonel `?message=`)**: o mesaj için **hafıza recall** + **çapraz-oturum
+  bloğu** (`buildAgentDynamicPrompt`). Oturuma özel parçalar (özet/artifact/todo) canlı oturum
+  gerektirdiğinden hariç (notla belirtilir). Token özeti: Toplam = Sistem + Araçlar + Dinamik.
+- **Frontend:** `AgentContextModal.tsx` — sistem promptu **markdown render** (Markdown/Ham toggle),
+  örnek-mesaj input'u, dinamik bölüm, kopyala. `api.agentContext(id, message?)`, `AgentContextPreview`.
+  Ayrıca ajan formundaki **Sil/Kaydet** aksiyonları panel **footer'ından sağ-üst başlığa** taşındı.
+- ✅ build/tsc/vite yeşil; canlı :8090 (68 araç, çapraz-oturum bloğu dinamikte göründü).
+
 ## Ara özellik — Akış node-node SSE streaming + multimodal flow input ✅ (2026-06-17)
 
 Sohbetten tetiklenen akışlar artık node-node canlı akıyor ve dosya/görsel eki kabul ediyor.
