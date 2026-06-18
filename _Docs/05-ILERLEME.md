@@ -31,8 +31,12 @@ provider hatası ve `RunTask`'taki başarısızlık hiç loglanmıyordu.
   otonom çağrıların (reflect/summary/title) huni noktası. Provider resolve / `Complete`
   hatası artık burada da `Warn` ile (agent/provider/model/callKind) loglanıyor;
   `recordedComplete` desenini aynalar, sessiz yukarı-yayılma kapandı.
+- **Tamamlayıcı (commit `a04fc57`):** `api/summary.go` `handleSessionSummary` — talep-üzerine
+  özet üretimi başarısız olunca 500 dönerken **loglama yoktu**; title endpoint'leri
+  (`sessions.go`/`tasks.go`) "degraded" `Warn`'ı her zaman yazarken bu yol sessizdi.
+  Artık 500 öncesi `Warn("summary generation failed", session/kind/error)`.
 
-✅ `go build ./...` + `go test ./internal/agent/` yeşil. Commit edildi (push edilmedi).
+✅ `go build ./...` + `go test ./internal/agent/` + `go vet ./internal/api/` yeşil. Commit edildi (push edilmedi).
 
 ## Özel sağlayıcılar (data-instance) + `<think>` ayıklama ✅ (2026-06-17)
 
