@@ -131,6 +131,13 @@ export default function App() {
   const [artifactTarget, setArtifactTarget] = useState<string | null>(
     INITIAL_ROUTE.view === 'artifacts' ? INITIAL_ROUTE.id : null,
   )
+  // Flow deep-link target: set when an Activity flow execution links to its flow,
+  // opening the Flows screen on that flow's run history.
+  const [flowTarget, setFlowTarget] = useState<string | null>(null)
+  const openFlowRun = useCallback((flowId: string) => {
+    setFlowTarget(flowId)
+    setView('flows')
+  }, [])
 
   // Apply the client-side preferences carried by app settings.
   const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; themePreset?: string; keepAwake: boolean; desktopNotifications: boolean }) => {
@@ -674,6 +681,7 @@ export default function App() {
             onError={setError}
             onOpenFile={openFile}
             onOpenArtifact={openArtifact}
+            onOpenFlowRun={openFlowRun}
           />
         )}
         {view === 'board' && <TaskBoard agents={agents} onError={setError} />}
@@ -693,7 +701,7 @@ export default function App() {
               <div className="flex-1 p-6 text-sm text-[var(--color-text-dim)]">Akışlar yükleniyor…</div>
             }
           >
-            <FlowsPanel agents={agents} onError={setError} />
+            <FlowsPanel agents={agents} onError={setError} openFlowId={flowTarget} />
           </Suspense>
         )}
         {view === 'artifacts' && (

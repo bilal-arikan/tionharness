@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, type LucideIcon } from 'lucide-react'
+import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, type LucideIcon } from 'lucide-react'
 import type { Agent, Session } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '../../lib/time'
@@ -42,6 +42,7 @@ export function SessionsSidebar({
   const [menuId, setMenuId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
+  const [query, setQuery] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
 
   // Draggable width (persisted), matching the old sidebar behaviour.
@@ -88,17 +89,20 @@ export function SessionsSidebar({
     return () => document.removeEventListener('mousedown', onDown)
   }, [menuId])
 
-  // Group the (already newest-first) sessions into recency buckets, preserving order.
+  // Group the (already newest-first) sessions into recency buckets, preserving
+  // order. A title search narrows the list first.
   const groups = useMemo(() => {
+    const q = query.trim().toLowerCase()
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
+      if (q && !(s.title || 'Yeni sohbet').toLowerCase().includes(q)) continue
       const b = bucketOf(s.updatedAt)
       const arr = map.get(b) ?? []
       arr.push(s)
       map.set(b, arr)
     }
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
-  }, [sessions])
+  }, [sessions, query])
 
   const startRename = (s: Session) => {
     setRenamingId(s.id)
@@ -129,6 +133,26 @@ export function SessionsSidebar({
         >
           +
         </button>
+      </div>
+
+      {/* Title search */}
+      <div className="relative px-3 pb-2 pt-1">
+        <Search size={13} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[var(--color-text-dim)]" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Oturum ara…"
+          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-7 pr-7 text-xs outline-none focus:border-[var(--color-accent)]"
+        />
+        {query && (
+          <button
+            onClick={() => setQuery('')}
+            title="Temizle"
+            className="absolute right-4 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+          >
+            <X size={13} />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -256,6 +280,9 @@ export function SessionsSidebar({
         ))}
         {sessions.length === 0 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">Oturum yok. + ile başlat.</p>
+        )}
+        {sessions.length > 0 && groups.length === 0 && (
+          <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">Aramayla eşleşen oturum yok.</p>
         )}
       </div>
 

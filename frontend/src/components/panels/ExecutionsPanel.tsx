@@ -20,6 +20,8 @@ interface Props {
   onError: (msg: string) => void
   onOpenFile?: (path: string) => void
   onOpenArtifact?: (id: string) => void
+  // Jump to the Flows screen on this flow's run history (flow executions only).
+  onOpenFlowRun?: (flowId: string) => void
 }
 
 // Per-kind display metadata: every execution path funnels into a Session tagged
@@ -70,7 +72,7 @@ function StatusPill({ status }: { status: string }) {
 // ExecutionsPanel is the unified activity feed: a single list of every execution
 // across chat / task / flow / schedule / heartbeat (each backed by a Session),
 // with live status, plus a read-only transcript viewer for the selected one.
-export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact }: Props) {
+export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, onOpenFlowRun }: Props) {
   const [items, setItems] = useState<Execution[]>([])
   const [filter, setFilter] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -231,6 +233,15 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact }:
               </span>
               {selected.running && (
                 <span className="ml-1 text-[11px] font-medium text-[var(--color-success)]">çalışıyor…</span>
+              )}
+              {selected.kind === 'flow' && selected.sourceId && onOpenFlowRun && (
+                <button
+                  onClick={() => onOpenFlowRun(selected.sourceId!)}
+                  title="Bu akışın koşularını Akışlar ekranında aç"
+                  className="ml-auto flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                >
+                  <GitBranch size={13} /> Akış görünümü
+                </button>
               )}
             </header>
             <MessageList

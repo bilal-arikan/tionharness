@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
 import { Loader2, XCircle } from 'lucide-react'
 import { api } from '../../api'
@@ -22,6 +22,8 @@ import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '..
 interface Props {
   agents: Agent[]
   onError: (msg: string) => void
+  // Deep-link: when set, open this flow's run history (from the Activity screen).
+  openFlowId?: string | null
 }
 
 const NODE_TYPES: { value: FlowNodeType; label: string; icon: string }[] = [
@@ -42,7 +44,7 @@ const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [
 // FlowsPanel is the visual protocol builder: pick a flow, edit it on a drag-and-
 // drop node canvas (React Flow), save, run with an input, and watch per-node
 // progress stream live on the canvas and in the trace below.
-export function FlowsPanel({ agents, onError }: Props) {
+export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   const [flows, setFlows] = useState<Flow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Left-column tab: own flows, read-only template gallery, or run history.
@@ -51,6 +53,9 @@ export function FlowsPanel({ agents, onError }: Props) {
   // Run history (all flows, newest first) + the selected run for the read-only viewer.
   const [runs, setRuns] = useState<FlowRun[]>([])
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  // Left-list search (adapts to the active tab: flow/template name, or a run's
+  // flow name).
+  const [q, setQ] = useState('')
 
   // Editor state for the selected flow.
   const [name, setName] = useState('')
@@ -100,6 +105,22 @@ export function FlowsPanel({ agents, onError }: Props) {
       clearInterval(id)
     }
   }, [tab])
+
+  // Deep-link from the Activity screen: open this flow's run history and select
+  // its latest run (runs are newest-first). Consumed once per target so polling
+  // doesn't keep re-selecting.
+  const consumedFlowTarget = useRef<string | null>(null)
+  useEffect(() => {
+    if (openFlowId) setTab('runs')
+  }, [openFlowId])
+  useEffect(() => {
+    if (!openFlowId || tab !== 'runs' || consumedFlowTarget.current === openFlowId) return
+    const latest = runs.find((r) => r.flowId === openFlowId)
+    if (latest) {
+      setSelectedRunId(latest.id)
+      consumedFlowTarget.current = openFlowId
+    }
+  }, [openFlowId, tab, runs])
 
   const selectFlow = useCallback(
     (f: Flow) => {
@@ -352,9 +373,17 @@ export function FlowsPanel({ agents, onError }: Props) {
           ))}
         </div>
 
+        {/* Search (filters the active tab's list). */}
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={tab === 'runs' ? 'Koşu ara (akış adı)…' : tab === 'templates' ? 'Şablon ara…' : 'Akış ara…'}
+          className="mb-2 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
+        />
+
         {tab === 'templates' ? (
           <ul className="space-y-1">
-            {FLOW_TEMPLATES.map((t) => (
+            {FLOW_TEMPLATES.filter((t) => t.name.toLowerCase().includes(q.trim().toLowerCase())).map((t) => (
               <li key={t.id}>
                 <button
                   onClick={() => setTemplateId(t.id)}
@@ -374,7 +403,13 @@ export function FlowsPanel({ agents, onError }: Props) {
           </ul>
         ) : tab === 'runs' ? (
           <ul className="space-y-1">
-            {runs.map((rn) => {
+            {runs
+              .filter((rn) => {
+                const qq = q.trim().toLowerCase()
+                if (!qq) return true
+                return (flows.find((f) => f.id === rn.flowId)?.name ?? '').toLowerCase().includes(qq)
+              })
+              .map((rn) => {
               const fname = flows.find((f) => f.id === rn.flowId)?.name ?? '（silinmiş akış）'
               const badge =
                 rn.status === 'success' ? '✓' : rn.status === 'failure' ? '✕' : '▶'
@@ -418,7 +453,7 @@ export function FlowsPanel({ agents, onError }: Props) {
           + Yeni akış
         </button>
         <ul className="space-y-1">
-          {flows.map((f) => (
+          {flows.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase())).map((f) => (
             <li key={f.id}>
               <button
                 onClick={() => selectFlow(f)}
