@@ -33,11 +33,9 @@ export const taskApi = {
   listSchedules: () => req<Schedule[]>('/api/schedules'),
   createSchedule: (data: {
     agentId: string
-    cronExpr?: string
+    cronExpr: string
     prompt?: string
     enabled?: boolean
-    oneShot?: boolean
-    fireAt?: number
   }) =>
     req<Schedule>('/api/schedules', {
       method: 'POST',

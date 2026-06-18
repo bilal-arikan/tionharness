@@ -11,11 +11,11 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
-	// Hide schedule_wake one-shots (tied to a chat session) from the routine list;
-	// user-created one-shots (SessionID == "") are shown so they can be deleted.
+	// Hide one-shot wakes (schedule_wake) from the routine list: they are transient,
+	// single-use timers tied to a chat turn, not user-managed recurring routines.
 	schedules := make([]db.Schedule, 0, len(all))
 	for _, sc := range all {
-		if sc.OneShot && sc.SessionID != "" {
+		if sc.OneShot {
 			continue
 		}
 		schedules = append(schedules, sc)
@@ -28,10 +28,6 @@ type createScheduleReq struct {
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
 	Enabled  bool   `json:"enabled"`
-	// One-shot fields: when OneShot is true, CronExpr may be empty and FireAt
-	// must be a positive unix timestamp. The schedule fires once then is deleted.
-	OneShot bool  `json:"oneShot"`
-	FireAt  int64 `json:"fireAt"`
 }
 
 func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
@@ -46,20 +42,13 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "agentId is required")
 		return
 	}
+	if req.CronExpr == "" {
+		writeError(w, http.StatusBadRequest, "cronExpr is required")
+		return
+	}
 	if req.Prompt == "" {
 		writeError(w, http.StatusBadRequest, "prompt is required")
 		return
-	}
-	if req.OneShot {
-		if req.FireAt <= 0 {
-			writeError(w, http.StatusBadRequest, "fireAt (unix seconds) is required for one-shot schedules")
-			return
-		}
-	} else {
-		if req.CronExpr == "" {
-			writeError(w, http.StatusBadRequest, "cronExpr is required")
-			return
-		}
 	}
 	if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
 		writeError(w, http.StatusBadRequest, "unknown agent")
@@ -71,8 +60,6 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 		CronExpr: req.CronExpr,
 		Prompt:   req.Prompt,
 		Enabled:  req.Enabled,
-		OneShot:  req.OneShot,
-		FireAt:   req.FireAt,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -80,7 +67,7 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	if err := wsp.Scheduler.Reload(r.Context()); err != nil {
 		s.logger.Warn("scheduler reload failed", "error", err)
 	}
-	s.logger.Info("schedule created", "id", schedule.ID, "agent", req.AgentID, "cron", req.CronExpr, "oneShot", req.OneShot)
+	s.logger.Info("schedule created", "id", schedule.ID, "agent", req.AgentID, "cron", req.CronExpr)
 	writeJSON(w, http.StatusCreated, schedule)
 }
 
