@@ -13,6 +13,9 @@ import (
 type skillDetail struct {
 	skills.Skill
 	Body string `json:"body"`
+	// Dir is the folder containing this skill's SKILL.md, surfaced so the UI can
+	// copy the path (Skill.Path itself stays json:"-"). Empty if unknown.
+	Dir string `json:"dir"`
 }
 
 // handleListSkills returns the resolved skill catalog (frontmatter only) for the
@@ -41,7 +44,11 @@ func (s *Server) handleGetSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, skillDetail{Skill: sk, Body: body})
+	dir := ""
+	if sk.Path != "" {
+		dir = filepath.Dir(sk.Path)
+	}
+	writeJSON(w, http.StatusOK, skillDetail{Skill: sk, Body: body, Dir: dir})
 }
 
 // handleRevealSkill opens the skill's folder in the OS file manager on the

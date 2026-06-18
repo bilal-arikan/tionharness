@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
 import type { WorkspaceConfig, WorkspaceConfigPatch } from '../../types'
 import { Field, inputCls } from './primitives'
+import { CopyPathButton } from '../CopyPathButton'
 
 interface Props {
   onError: (msg: string) => void
@@ -86,12 +87,15 @@ export function WorkspaceFilesPanel({ onError }: Props) {
         <span className="text-xs text-[var(--color-text-dim)]">
           Bu dosyalar <code className="rounded bg-[var(--color-bg)] px-1">{config.dir}</code> altında. Hem buradan hem doğrudan diskten düzenleyebilirsin.
         </span>
-        <button
-          onClick={reveal}
-          className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1 text-[11px] hover:border-[var(--color-accent)]"
-        >
-          📂 Klasörü aç
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <CopyPathButton path={config.dir} />
+          <button
+            onClick={reveal}
+            className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1 text-[11px] hover:border-[var(--color-accent)]"
+          >
+            📂 Klasörü aç
+          </button>
+        </div>
       </div>
 
       <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Runtime promptları</div>

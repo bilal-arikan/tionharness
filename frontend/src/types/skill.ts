@@ -22,4 +22,6 @@ export interface Skill {
 export interface SkillDetail extends Skill {
   // Full markdown instructions (frontmatter stripped), loaded lazily.
   body: string
+  // Folder containing the skill's SKILL.md (for copy-path / reveal). May be "".
+  dir: string
 }

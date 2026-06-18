@@ -88,6 +88,29 @@ penceresinde/sekmesinde eşzamanlı açılabilir** (paylaşılan localStorage'a 
 > penceresi/sekmesi demektir. Görev çubuğunda bağımsız uygulama penceresi istenirse
 > ileride Electron/Tauri sarmalayıcı veya tarayıcının PWA modu gerekir.
 
+### Çapraz-pencere "okunmadı" rozet senkronu
+
+Workspace etkinlik rozetleri (`unreadWs`) **tüm pencereler arasında paylaşılır**
+(`localStorage` anahtarı `swarmgo.unreadWs` + `storage` event). SwarmGo tek-kullanıcılı
+olduğundan ilke: **"herhangi bir pencerede görüldü = her yerde okundu"**.
+
+- `hooks/useWorkspaces.ts` paylaşılan ham seti `localStorage`'da tutar; her yazımda
+  (`writeSharedUnread`) diğer pencereler `storage` event'iyle anında senkron olur
+  (`storage` yazan dökümanda tetiklenmez, yalnız diğerlerinde → yazım/okuma döngüsü yok).
+- `markWorkspaceUnread(id)` rozet ekler (kendi aktif workspace'i hariç),
+  `markWorkspaceRead(id)` her yerden temizler. `App.tsx` olay feed'inde: başka
+  workspace'te etkinlik → `markWorkspaceUnread`; **aktif workspace'te canlı etkinlik veya
+  o workspace'e geçiş** → `markWorkspaceRead` (görüldü kabul edilir).
+- **Görüntülenen** set her pencerede ham setten **kendi aktif workspace'i çıkarılarak**
+  türetilir (aktif olan asla rozetlenmez). Aktif-workspace değişiminde bir effect onu
+  paylaşılan setten de siler → yeni açılan pencere mevcut rozetleri **devralır** ve
+  baktığı workspace'i her yerde okundu işaretler.
+
+**Playwright doğrulaması (2026-06-18):** 3 workspace (X/Y/Z), 2 pencere (aktif X, aktif Y).
+Paylaşılan set `[X,Y,Z]` yazıldığında pencere-X `{Y,Z}`, pencere-Y `{X,Z}` gösterdi
+(her biri kendi aktifini filtreledi) ✅. Pencere-X Z'ye geçince Z her iki pencereden
+düştü ✅. Z'siz durumda açılan **yeni** pencere (aktif Y) `{X}` rozetini devraldı ✅.
+
 ## API Uçları
 
 | Metod | Yol | Açıklama |

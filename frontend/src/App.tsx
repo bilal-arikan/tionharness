@@ -86,7 +86,8 @@ export default function App() {
     workspaces,
     activeWorkspaceId,
     unreadWs,
-    setUnreadWs,
+    markWorkspaceUnread,
+    markWorkspaceRead,
     switchWorkspace,
     createWorkspace,
     deleteActiveWorkspace,
@@ -319,18 +320,17 @@ export default function App() {
   // so the stable SSE subscription below always sees current closures/state.
   onEventRef.current = (e: AppEvent) => {
     // Badge any non-active workspace that produced activity (incl. completed
-    // chats), so the switcher shows where to look.
+    // chats), so the switcher shows where to look. markWorkspaceUnread persists
+    // the badge so every other open window picks it up via its storage listener.
     if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) {
-      setUnreadWs((prev) => {
-        if (prev.has(e.workspaceId)) return prev
-        const next = new Set(prev)
-        next.add(e.workspaceId)
-        return next
-      })
+      markWorkspaceUnread(e.workspaceId)
     }
     // Same-workspace activity (chat/heartbeat/schedule) updates the session list
     // so unread dots, ordering and times stay live without a manual refresh.
     if (!e.workspaceId || e.workspaceId === getActiveWorkspace()) {
+      // This window is live-viewing the workspace → the activity has been seen;
+      // clear its badge across all windows (a different window may have set it).
+      if (e.workspaceId) markWorkspaceRead(e.workspaceId)
       refreshSessions()
       // A chat reply that completed server-side after the SSE stream closed
       // (e.g. the user refreshed mid-turn and the detached turn finished) is not

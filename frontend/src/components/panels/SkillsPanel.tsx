@@ -3,6 +3,7 @@ import { FolderOpen, Globe, Lock, RefreshCw, Sparkles } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
+import { CopyPathButton } from '../CopyPathButton'
 
 interface Props {
   onError: (msg: string) => void
@@ -267,6 +268,7 @@ export function SkillsPanel({ onError }: Props) {
                   {active.shared ? <Lock size={14} /> : <Globe size={14} />}
                   {active.shared ? 'Kısıtla' : 'Paylaş'}
                 </button>
+                <CopyPathButton path={active.dir} />
                 <button
                   onClick={reveal}
                   title="Skill klasörünü dosya yöneticisinde aç"
