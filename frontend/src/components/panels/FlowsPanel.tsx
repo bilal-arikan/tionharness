@@ -6,6 +6,7 @@ import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
 import { FlowCanvas, type EdgeStyle } from '../flow/FlowCanvas'
 import { TemplatePreview } from '../flow/TemplatePreview'
+import { RunView } from '../flow/RunView'
 import { NodeInspector } from '../flow/NodeInspector'
 import { FLOW_TEMPLATES, type FlowTemplate } from '../../lib/flowTemplates'
 import {
@@ -42,9 +43,12 @@ const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [
 export function FlowsPanel({ agents, onError }: Props) {
   const [flows, setFlows] = useState<Flow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  // Left-column tab: the user's own flows vs the read-only template gallery.
-  const [tab, setTab] = useState<'flows' | 'templates'>('flows')
+  // Left-column tab: own flows, read-only template gallery, or run history.
+  const [tab, setTab] = useState<'flows' | 'templates' | 'runs'>('flows')
   const [templateId, setTemplateId] = useState<string | null>(null)
+  // Run history (all flows, newest first) + the selected run for the read-only viewer.
+  const [runs, setRuns] = useState<FlowRun[]>([])
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
 
   // Editor state for the selected flow.
   const [name, setName] = useState('')
@@ -75,6 +79,25 @@ export function FlowsPanel({ agents, onError }: Props) {
   }, [onError])
 
   useEffect(() => loadFlows(), [loadFlows])
+
+  // While the Koşular tab is open, load all flow runs and poll every 3s so
+  // in-progress runs advance live. Polling stops when leaving the tab.
+  useEffect(() => {
+    if (tab !== 'runs') return
+    let alive = true
+    const tick = () => {
+      api
+        .listAllFlowRuns()
+        .then((rs) => alive && setRuns(rs))
+        .catch(() => {})
+    }
+    tick()
+    const id = setInterval(tick, 3000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [tab])
 
   const selectFlow = useCallback(
     (f: Flow) => {
@@ -305,6 +328,8 @@ export function FlowsPanel({ agents, onError }: Props) {
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)?.data.node ?? null
   const trace: FlowState | null = run?.state ? safeParse(run.state) : null
   const selectedTemplate = FLOW_TEMPLATES.find((t) => t.id === templateId) ?? null
+  // Derived from the polled `runs` list, so the selected run refreshes live.
+  const selectedRun = runs.find((r) => r.id === selectedRunId) ?? null
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -312,15 +337,15 @@ export function FlowsPanel({ agents, onError }: Props) {
       <div className="w-56 flex-shrink-0 overflow-y-auto border-r border-[var(--color-border)] p-3">
         {/* Tab switch */}
         <div className="mb-3 flex gap-1 rounded-lg bg-[var(--color-surface-2)] p-1 text-xs">
-          {(['flows', 'templates'] as const).map((t) => (
+          {(['flows', 'templates', 'runs'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 rounded-md px-2 py-1 ${
+              className={`flex-1 rounded-md px-1.5 py-1 ${
                 tab === t ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
               }`}
             >
-              {t === 'flows' ? 'Akışlarım' : 'Şablonlar'}
+              {t === 'flows' ? 'Akışlarım' : t === 'templates' ? 'Şablonlar' : 'Koşular'}
             </button>
           ))}
         </div>
@@ -344,6 +369,43 @@ export function FlowsPanel({ agents, onError }: Props) {
                 </button>
               </li>
             ))}
+          </ul>
+        ) : tab === 'runs' ? (
+          <ul className="space-y-1">
+            {runs.map((rn) => {
+              const fname = flows.find((f) => f.id === rn.flowId)?.name ?? '（silinmiş akış）'
+              const badge =
+                rn.status === 'success' ? '✓' : rn.status === 'failure' ? '✕' : '▶'
+              const badgeColor =
+                rn.status === 'success'
+                  ? 'text-green-400'
+                  : rn.status === 'failure'
+                    ? 'text-red-400'
+                    : 'text-[var(--color-accent)]'
+              return (
+                <li key={rn.id}>
+                  <button
+                    onClick={() => setSelectedRunId(rn.id)}
+                    className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm ${
+                      selectedRunId === rn.id
+                        ? 'bg-[var(--color-surface-2)]'
+                        : 'hover:bg-[var(--color-surface-2)]'
+                    }`}
+                  >
+                    <span className={`mt-0.5 text-xs ${badgeColor}`}>{badge}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{fname}</span>
+                      <span className="mt-0.5 block truncate text-xs text-[var(--color-text-dim)]">
+                        {new Date(rn.createdAt * 1000).toLocaleString()}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+            {runs.length === 0 && (
+              <li className="text-sm text-[var(--color-text-dim)]">Henüz koşu yok.</li>
+            )}
           </ul>
         ) : (
           <>
@@ -426,6 +488,21 @@ export function FlowsPanel({ agents, onError }: Props) {
             </>
           )}
         </div>
+      ) : tab === 'runs' ? (
+        !selectedRun ? (
+          <div className="flex-1 p-6">
+            <p className="text-sm text-[var(--color-text-dim)]">
+              Soldan bir koşu seçin — akışın hangi aşamada olduğunu, node çıktılarını ve
+              hataları salt-okunur görün.
+            </p>
+          </div>
+        ) : (
+          <RunView
+            run={selectedRun}
+            flow={flows.find((f) => f.id === selectedRun.flowId)}
+            agents={agents}
+          />
+        )
       ) : !selectedId ? (
         <div className="flex-1 p-6">
           <p className="text-sm text-[var(--color-text-dim)]">

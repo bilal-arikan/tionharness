@@ -144,9 +144,29 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   diz"; node seçilince toolbar "▶ Başlangıç ⧉ Çoğalt ✕ Sil"; Çoğalt 4→5 node; Otomatik diz
   pozisyonları ızgaraya dizdi (0,0 → 280,0 → 280,140).
 
+## Koşular sekmesi — salt-okunur koşu izleme (2026-06-18)
+
+- `FlowsPanel` sol kolonuna **Koşular** (3. sekme) eklendi: tüm flow koşuları (devam eden + bitmiş)
+  yeni→eski listelenir. `api.listAllFlowRuns()` (`GET /api/flow-runs`, flowId'siz — **backend
+  değişmedi**) ile yüklenir ve sekme açıkken **3sn'de bir poll** edilir (devam eden koşular canlı
+  ilerler; sekmeden çıkınca interval temizlenir).
+- Liste öğesi: durum rozeti (▶ devam ediyor / ✓ başarılı / ✕ hata) + akış adı (flowId→`flows`
+  map; silinmişse "（silinmiş akış）") + zaman.
+- Seçilince **`flow/RunView.tsx`** (salt-okunur): başlık (ad + durum + girdi + `run.error` ⚠️),
+  **aşama göstergeli canvas** (`FlowCanvas readOnly` + `graphToReactFlow`; node `data.status`
+  `nodeStatuses(run,state)` ile türetilir: `trace`'tekiler `done`, `state.current` çalışırken
+  `running` / hata ise `error`), ve **adım izi** listesi (node çıktıları `Markdown`, branch düz
+  metin). Seçili koşu `runs` listesinden türetildiği için poll ile canlı tazelenir.
+- **Doğrulama (Playwright):** geçmiş koşular listelendi (✓/✕ rozet); hata koşusu → ⚠️
+  `node "classify" … anthropic provider not configured` + boş trace + classify `error` ring;
+  başarılı koşu → çalışan node'larda `done` ring + trace çıktıları (paralel çocuklar trace'te
+  olmadığından ring'siz — beklenen); yeni başlatılan koşu poll ile listeye otomatik düştü.
+  readOnly canvas'ta "Otomatik diz" gizli, "⊕ Ortala" var.
+
 ## Notlar / sıradaki adımlar
 
 - SwarmClaw'daki gibi şablonları **kategorilere** ayırma / arama eklenebilir.
+- Koşu **silme / temizleme (cap)** ve koşudan **yeniden çalıştır** ileride eklenebilir.
 - Paperclip-tarzı statik "ajan ilişki haritası" (call_agent/send_agent_message kenarları)
   ayrı bir ekran olarak değerlendirilebilir.
 - MiniMap arka planı sabit `#0b0e14` (temaya duyarlı değil) — istenirse tema değişkenine bağlanır.

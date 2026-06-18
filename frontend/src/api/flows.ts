@@ -161,6 +161,9 @@ export const flowApi = {
     }).then((r) => r.run),
   listFlowRuns: (flowId: string) =>
     req<FlowRun[]>(`/api/flow-runs?flowId=${encodeURIComponent(flowId)}`),
+  // All flow runs across flows (newest first) — backend returns everything when
+  // no flowId is given. Used by the FlowsPanel "Koşular" tab.
+  listAllFlowRuns: () => req<FlowRun[]>('/api/flow-runs'),
   getFlowRun: (id: string) => req<FlowRun>(`/api/flow-runs/${id}`),
   // Run a flow inside a session over SSE, streaming each node's progress.
   runFlowStream: (
