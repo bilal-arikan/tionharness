@@ -35,6 +35,7 @@ type Server struct {
 	logs       *logbuf.Buffer
 	bus        *events.Bus // autonomous notifications streamed to the UI over SSE
 	runs       *chatRuns   // in-flight streaming turns (stop/steer control)
+	grants     *permGrantStore // per-session "Always allow" permission grants
 	logger     *slog.Logger
 
 	// selfURL is this server's own loopback base URL (e.g. http://127.0.0.1:8090),
@@ -58,6 +59,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		logs:       logs,
 		bus:        bus,
 		runs:       newChatRuns(),
+		grants:     newPermGrantStore(),
 		logger:     logger,
 	}
 	// Interaction MCP: lets CLI agents (claude-cli, ...) reach SwarmGo's
@@ -103,7 +105,7 @@ func (s *Server) applySettings() {
 	s.tun.SetDelegationEnabled(cur.EnableDelegation)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
-	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold)
+	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold, cur.CompactModel)
 }
 
 // Routes registers all HTTP routes and returns the handler. Registration is

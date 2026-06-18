@@ -33,6 +33,22 @@ var toolRisk = map[string]Risk{
 	"edit_file":  RiskWrite,
 	// Arbitrary execution.
 	"shell": RiskExec,
+
+	// Claude Code (claude-cli) built-in tool names, classified for the CLI
+	// permission-prompt tool (the CLI reports its own tool names, not SwarmGo's).
+	"Read":         RiskRead,
+	"Glob":         RiskRead,
+	"Grep":         RiskRead,
+	"LS":           RiskRead,
+	"NotebookRead": RiskRead,
+	"WebFetch":     RiskRead,
+	"WebSearch":    RiskRead,
+	"TodoWrite":    RiskRead,
+	"Edit":         RiskWrite,
+	"Write":        RiskWrite,
+	"MultiEdit":    RiskWrite,
+	"NotebookEdit": RiskWrite,
+	"Bash":         RiskExec,
 }
 
 // Classify returns the risk tier for a tool name. Unknown tools — including

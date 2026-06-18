@@ -46,7 +46,9 @@ Deep-link routing (bkz. aşağıdaki *URL deep-link routing* girdisi), araya ekl
 - **Sistem A — Deterministik compactor (`internal/tools/compact`):** Bağımsız, dep-siz, ücretsiz.
   Ardışık tekrar satırlarını `(×N)` ile birleştirir, boş satır bloklarını sadeleştirir, satır/bayt
   sınırını aşan çıktının ortasını UTF-8 güvenli kırpar (baş+son korunur). `Compact(output, Options)`
-  → `(string, Stats)`. Tablo testleri (`compact_test.go`). Varsayılan **açık**.
+  → `(string, Stats)`. Tablo testleri (`compact_test.go`). Varsayılan **açık**. **Tasarruf kalıcı (2026-06-18):**
+  `Stats.Saved()` → `db.AddCompactionSavings` → `Usage.CompactSavedBytes` (ajan+gün, token/maliyetten bağımsız
+  ölçer; UI bağlama sonraya). `store_usage_test.go::TestAddCompactionSavings` (reload dahil).
 - **Sistem B — LLM intent-aware özet (`agent/compactor.go`):** Bağımsız. A sonrası çıktı hâlâ eşik
   üstündeyse niyet-farkında özetler. **Model çözüm zinciri:** adanmış `CompactModel` → başlık modeli →
   ajan modeli; **sağlayıcı daima ajanın sağlayıcısı** (ayrı seçilemez). Özet modeli (`compactModel`)
@@ -1425,9 +1427,39 @@ mod şu an API ile (`permissionMode`) ayarlanır — composer mod seçici Aşama
 İzin modu seçici+açıklama (Part A ✓), Composer 🛡 seçici (Part B ✓), kaydetme backend'e gitti.
 Settings paneli tarayıcı aracı kararsızlığıyla bu turda görsel doğrulanamadı (kod/tsc doğrulandı).
 
-**Kalan:** Aşama 4 — claude-cli "ask" için Interaction MCP permission-prompt aracı
-(`acceptEdits` yerine gerçek tur-içi onay); (ops.) ayrı `StepPermission` kartı + oturum-ömürlü
-"Always allow" kalıcılığı (şu an tur-ömürlü).
+**Aşama 4 — claude-cli gerçek onay + StepPermission kartı + oturum-ömürlü grants (2026-06-18):**
+1. **CLI permission-prompt aracı** — claude-cli "ask" modunda artık `acceptEdits` (sessiz
+   onay) yerine **gerçek tur-içi onay** sorar. `mcp_interaction.go` `callPermission`: CLI'nin
+   `--permission-prompt-tool` sözleşmesini uygular (tool_name+input → risk sınıfla; read +
+   "Always allow" otomatik izin; aksi halde `StepPermission` kartı yayıp `run.answer`'da
+   bloklar) → `{"behavior":"allow","updatedInput":..}` / `{"behavior":"deny","message":..}`
+   döner. `climcp.go` `permission_prompt`'u interaction araçlarına + `permissionPromptToolID`
+   ekler; `promptToolForMode(mode,inter)` yalnız ask+endpoint varken döndürür. `claudecli.go`
+   `ConfigureMCP`'ye `permissionPromptTool` param; set ise `--permission-prompt-tool` + default
+   mod (yoksa eski `--permission-mode` eşlemesi). `toolloop.go` çağrıya geçirir. **Not:** flag
+   v2.1.181'de `--help`'te gizli ama **çalışıyor** (ampirik doğrulandı, exit 0). `classify.go`'ya
+   CLI yerleşik araç adları eklendi (Edit/Write/MultiEdit→write, Bash→exec, Read/Glob/Grep/LS/
+   WebFetch→read) — CLI kendi tool adlarını gönderdiği için.
+2. **Ayrı `StepPermission` kartı** — `agent/trace.go` yeni `permission` kind. Native gate
+   (Aşama 2) artık `StepAsk` yerine bunu yayar: `tools/permission.go` `PermissionFunc` +
+   `WithPermissionPrompter` köprüsü; `chat_stream.go` prompter'ı `StepPermission` (tool+risk+
+   options) yayıp `run.answer`'da bekler. Frontend: `types` `permission` kind, `PendingAsk`'e
+   kind/tool/risk, yeni `PermissionPrompt.tsx` (amber kart: araç+risk + İzin ver/Her zaman/
+   Reddet, kırmızı Reddet), `useChatStream` `permission` adımını ayrı state'e koyar, `App.tsx`
+   kind'a göre `PermissionPrompt` vs `AskPrompt`, `lib/stepKinds.ts` açıklaması.
+3. **Oturum-ömürlü "Always allow"** — `tools/grants.go` `PermissionGrants` (sessiz, mutex,
+   `WithGrants`/`GrantsFrom` köprüsü); `api/permgrants.go` `permGrantStore` (session→grants,
+   Server alanı). Native gate (`agent/permission.go`) tur-ömürlü harita yerine `GrantsFrom(ctx)`
+   kullanır; CLI `callPermission` `run.grantStore()` kullanır — **ikisi aynı per-session
+   instance'ı paylaşır** (chat.go + chat_stream.go `WithGrants`; run'a `setGrants`). "Her zaman
+   izin ver" oturum boyunca hatırlanır (sunucu restart'ında sıfırlanır). Ortak sabitler/normalize
+   `tools/permission.go`'da (`PermissionOptions`, `NormalizePermission` → always/allow/deny;
+   TR+EN kabul).
+
+✅ `go build`/`vet`/`test ./internal/...` (tümü) + frontend `tsc`/`vite build` yeşil. `claude
+--permission-prompt-tool` ampirik kabul testi geçti. **Kalan canlı test:** backend restart +
+claude-cli ask-mode ajanla bir Edit tetikleyip onay kartını tıklamak (running backend eski binary;
+restart kullanıcıya bırakıldı). **Faz P3 (4 aşama) TAMAMLANDI.**
 
 ## Kararlar (2026-06-15)
 - **İlk LLM sağlayıcısı:** Anthropic (Claude) ✅

@@ -35,6 +35,22 @@ type chatRun struct {
 	mu        sync.Mutex
 	write     func(event string, data any) // installed by the stream handler; nil once the turn ends
 	artifacts tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
+	grants    *tools.PermissionGrants      // session "Always allow" set, for the CLI permission-prompt tool
+}
+
+// setGrants installs the session's permission grants so the Interaction MCP
+// permission-prompt tool can honour "Always allow" across turns.
+func (r *chatRun) setGrants(g *tools.PermissionGrants) {
+	r.mu.Lock()
+	r.grants = g
+	r.mu.Unlock()
+}
+
+// grantStore returns the session's permission grants (nil if none installed).
+func (r *chatRun) grantStore() *tools.PermissionGrants {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.grants
 }
 
 // setArtifacts installs the artifact sink for the currently responding agent so

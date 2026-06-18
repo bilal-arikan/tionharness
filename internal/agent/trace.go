@@ -57,6 +57,12 @@ const (
 	// remove a previously emitted live step: Ref names the target step's ID. Used
 	// to retract a stale/cancelled live step without resending the whole trace.
 	StepTombstone StepKind = "tombstone"
+	// StepPermission is a transient interactive approval prompt: a write/exec tool
+	// is blocked under "ask" mode waiting for the user to approve or deny it. Like
+	// StepAsk it is live-only (never persisted); the outcome surfaces as the tool
+	// running (allowed) or a permission_denied StepError (denied). Tool names the
+	// gated tool, Reason carries its risk tier, Options the answer choices.
+	StepPermission StepKind = "permission"
 	// StepDiff is a file mutation (write_file / edit_file) rendered as a diff card
 	// — path plus added/removed line counts and an optional unified patch — rather
 	// than a generic tool row. The payload lives in Path/Added/Removed/Patch.

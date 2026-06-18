@@ -233,7 +233,17 @@ export function useChatStream(deps: ChatStreamDeps) {
             // question (transient — not added to the persisted trace); the user's
             // answer resumes the turn over the same stream.
             if (st.kind === 'ask') {
-              setPendingAsks((p) => ({ ...p, [sid]: { question: st.text || '', options: st.options } }))
+              setPendingAsks((p) => ({ ...p, [sid]: { question: st.text || '', options: st.options, kind: 'ask' } }))
+              return
+            }
+            // Permission gate: the agent paused waiting for approval of a
+            // write/exec tool. Surface the approval card (transient); the user's
+            // decision resumes the turn over the same answer channel as ask_user.
+            if (st.kind === 'permission') {
+              setPendingAsks((p) => ({
+                ...p,
+                [sid]: { question: '', options: st.options, kind: 'permission', tool: st.tool, risk: st.reason },
+              }))
               return
             }
             // Streaming providers emit incremental "delta" steps: append the

@@ -37,6 +37,23 @@ var interactionToolNames = []string{
 	"request_confirmation",
 	"create_artifact",
 	"update_artifact",
+	"permission_prompt",
+}
+
+// permissionPromptToolID is the namespaced Interaction MCP tool the claude CLI is
+// pointed at via --permission-prompt-tool (only in "ask" mode) so risky tools are
+// gated through SwarmGo's approval UI instead of auto-approved.
+const permissionPromptToolID = "mcp__" + interactionServerKey + "__permission_prompt"
+
+// promptToolForMode returns the permission-prompt tool id to hand the CLI, but
+// only in "ask" mode with a live Interaction endpoint. Empty otherwise:
+// read-only uses CLI plan mode and auto uses bypass — neither needs a per-tool
+// prompt.
+func promptToolForMode(mode string, inter tools.InteractionEndpoint) string {
+	if mode == "ask" && inter.URL != "" {
+		return permissionPromptToolID
+	}
+	return ""
 }
 
 // writeCLIMCPConfig renders the claude --mcp-config file for one turn and returns

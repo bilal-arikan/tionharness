@@ -142,7 +142,9 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			r.logger.Warn("cli mcp config failed", "error", err)
 		} else if path != "" {
 			defer cleanup()
-			cli.ConfigureMCP(path, allowed, disallowed)
+			// In "ask" mode route risky CLI tools through the Interaction MCP
+			// permission-prompt tool (real per-tool approval) instead of acceptEdits.
+			cli.ConfigureMCP(path, allowed, disallowed, promptToolForMode(agent.PermissionMode, inter))
 		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
@@ -187,9 +189,6 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	// partial accumulates answer text across max-output-token resumes, so the
 	// stitched full answer is returned even though it arrived in capped pieces.
 	var partial strings.Builder
-	// granted remembers tools the user chose "Always allow" for, scoped to this
-	// turn, so the permission gate does not re-prompt for the same tool.
-	granted := map[string]bool{}
 	// fail records a turn-level error as an inline step before the loop returns.
 	fail := func(reason string, err error) {
 		st := TurnStep{Kind: StepError, Reason: reason, Text: err.Error(), IsError: true}
@@ -280,7 +279,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			// Permission gate: under read-only/ask the call may be blocked or need
 			// user approval before it runs. A blocked call becomes an error result
 			// fed back to the model (so it can adapt) instead of executing.
-			if allowed, denyMsg := permGate(ctx, agent.PermissionMode, call, granted); !allowed {
+			if allowed, denyMsg := permGate(ctx, agent.PermissionMode, call); !allowed {
 				r.logger.Info("tool blocked", "agent", agent.ID, "tool", call.Name, "mode", agent.PermissionMode)
 				results = append(results, providers.ToolResult{CallID: call.ID, Content: denyMsg, IsError: true})
 				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "permission_denied", Text: denyMsg, IsError: true}

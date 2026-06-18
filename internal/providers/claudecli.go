@@ -27,6 +27,10 @@ type ClaudeCLI struct {
 	mcpConfigPath   string
 	allowedTools    []string
 	disallowedTools []string // CLI built-ins to suppress (e.g. AskUserQuestion, TodoWrite)
+	// permissionPromptTool, when set, is handed to --permission-prompt-tool so the
+	// CLI routes tools needing approval through that MCP tool (used in "ask" mode
+	// instead of acceptEdits). Empty → fall back to the --permission-mode flag.
+	permissionPromptTool string
 }
 
 // NewClaudeCLI creates a provider that invokes the given claude binary.
@@ -39,10 +43,11 @@ func NewClaudeCLI(binPath, model string) *ClaudeCLI {
 // list of tool identifiers the CLI may use (e.g. "mcp__filesystem");
 // disallowedTools suppresses conflicting CLI built-ins (e.g. AskUserQuestion,
 // TodoWrite) so the SwarmGo Interaction MCP equivalents are used instead.
-func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools, disallowedTools []string) {
+func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools, disallowedTools []string, permissionPromptTool string) {
 	c.mcpConfigPath = configPath
 	c.allowedTools = allowedTools
 	c.disallowedTools = disallowedTools
+	c.permissionPromptTool = permissionPromptTool
 }
 
 // Name implements Provider.
@@ -139,10 +144,16 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	if model != "" {
 		args = append(args, "--model", model)
 	}
-	// Headless (-p) mode cannot prompt for approval, so the CLI's default
-	// permission mode refuses Edit/Write/Bash. Set an explicit mode derived from
-	// the agent's permission setting so file edits are not silently blocked.
-	args = append(args, permissionModeArgs(req.PermissionMode)...)
+	// Permission handling. In "ask" mode with a permission-prompt tool wired, route
+	// tools that need approval through it (CLI default mode + --permission-prompt-
+	// tool → real per-tool approval in the SwarmGo UI). Otherwise map the mode to a
+	// CLI permission flag (plan / acceptEdits / bypass) so headless edits aren't
+	// silently refused.
+	if c.permissionPromptTool != "" {
+		args = append(args, "--permission-prompt-tool", c.permissionPromptTool)
+	} else {
+		args = append(args, permissionModeArgs(req.PermissionMode)...)
+	}
 	// The CLI has no prompt-cache breakpoint, so the static prefix and dynamic
 	// suffix are merged into one appended system prompt.
 	sys := strings.TrimSpace(strings.TrimSpace(req.System) + "\n\n" + strings.TrimSpace(req.SystemDynamic))

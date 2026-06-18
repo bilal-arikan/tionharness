@@ -126,6 +126,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// The turn is now committed (user message persisted); arm the terminal-event
 	// guard so a later failure still notifies the frontend.
 	turnStarted = true
+	// Every file attached to a chat turn becomes a session artifact (origin chat).
+	s.captureAttachmentArtifacts(ctx, database, session.ID, agents[0].ID, req.Attachments)
 
 	// Begin the event stream.
 	h := w.Header()
@@ -160,6 +162,26 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			// The user navigated away; no one can answer. Surface an error so the
 			// model proceeds on its own instead of blocking the detached turn
 			// forever (and leaking this goroutine).
+			return "", clientGone.Err()
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	})
+
+	// Session-scoped permission grants + the approval prompter for write/exec
+	// tools under "ask" mode. The prompter emits a dedicated StepPermission card
+	// and blocks on the same answer channel as ask_user; "Always allow" is
+	// recorded in the session grants so it isn't re-asked. Also wired onto the run
+	// so the CLI permission-prompt tool shares the same grant set.
+	grants := s.grants.forSession(session.ID)
+	run.setGrants(grants)
+	ctx = tools.WithGrants(ctx, grants)
+	ctx = tools.WithPermissionPrompter(ctx, func(ctx context.Context, tool, risk string, options []string) (string, error) {
+		sse("step", agent.TurnStep{Kind: agent.StepPermission, Tool: tool, Reason: risk, Options: options})
+		select {
+		case ans := <-run.answer:
+			return ans, nil
+		case <-clientGone.Done():
 			return "", clientGone.Err()
 		case <-ctx.Done():
 			return "", ctx.Err()

@@ -42,10 +42,18 @@ func (b *interactionBackend) Tools() []interaction.ToolSpec {
 		tools.NewCreateArtifactTool().Def(),
 		tools.NewUpdateArtifactTool().Def(),
 	}
-	specs := make([]interaction.ToolSpec, 0, len(defs))
+	specs := make([]interaction.ToolSpec, 0, len(defs)+1)
 	for _, d := range defs {
 		specs = append(specs, interaction.ToolSpec{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
 	}
+	// permission_prompt is CLI-only (the claude CLI calls it via
+	// --permission-prompt-tool before running a tool that needs permission). It
+	// has no native built-in counterpart, so its spec is declared inline.
+	specs = append(specs, interaction.ToolSpec{
+		Name:        "permission_prompt",
+		Description: "Internal permission handler: the CLI calls this before running a tool that requires approval; it returns an allow/deny decision.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"tool_name":{"type":"string"},"input":{"type":"object"}},"required":["tool_name"]}`),
+	})
 	return specs
 }
 
@@ -66,6 +74,8 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callAsk(ctx, run, args)
 	case "request_confirmation":
 		return b.callConfirm(ctx, run, args)
+	case "permission_prompt":
+		return b.callPermission(ctx, run, args)
 	case "todo_write":
 		return b.callTodo(args)
 	case "create_artifact", "update_artifact":
@@ -120,6 +130,60 @@ func (b *interactionBackend) blockForAnswer(ctx context.Context, run *chatRun, q
 	case <-time.After(askTimeout):
 		return interaction.CallResult{Text: "no answer within the time limit; proceed on your own", IsError: true}, nil
 	}
+}
+
+// callPermission implements the claude CLI's --permission-prompt-tool contract:
+// the CLI calls it before running a tool that needs approval. It classifies the
+// tool by risk, auto-allows reads and already-granted tools, and otherwise emits
+// a StepPermission card and blocks for the user's decision. It returns the JSON
+// the CLI expects: {"behavior":"allow","updatedInput":..} or {"behavior":"deny"}.
+// Only wired in "ask" mode (read-only uses CLI plan mode, auto uses bypass).
+func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	var in struct {
+		ToolName string          `json:"tool_name"`
+		Input    json.RawMessage `json:"input"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return interaction.CallResult{Text: permDecision(false, in.Input, "invalid permission request: "+err.Error())}, nil
+	}
+	risk := tools.Classify(in.ToolName)
+	if risk == tools.RiskRead || run.grantStore().Granted(in.ToolName) {
+		return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
+	}
+	run.emit("step", agent.TurnStep{Kind: agent.StepPermission, Tool: in.ToolName, Reason: string(risk), Options: tools.PermissionOptions})
+	select {
+	case ans := <-run.answer:
+		switch tools.NormalizePermission(ans) {
+		case "always":
+			run.grantStore().Grant(in.ToolName)
+			return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
+		case "allow":
+			return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
+		default:
+			return interaction.CallResult{Text: permDecision(false, in.Input, "denied by the user")}, nil
+		}
+	case <-run.done:
+		return interaction.CallResult{Text: permDecision(false, in.Input, "the turn ended before approval")}, nil
+	case <-ctx.Done():
+		return interaction.CallResult{}, ctx.Err()
+	case <-time.After(askTimeout):
+		return interaction.CallResult{Text: permDecision(false, in.Input, "no approval within the time limit")}, nil
+	}
+}
+
+// permDecision builds the JSON result the claude CLI permission-prompt tool must
+// return. allow echoes the (unchanged) input as updatedInput; deny carries a
+// message the model sees.
+func permDecision(allow bool, input json.RawMessage, message string) string {
+	if allow {
+		if len(input) == 0 {
+			input = json.RawMessage("{}")
+		}
+		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": input})
+		return string(b)
+	}
+	b, _ := json.Marshal(map[string]any{"behavior": "deny", "message": message})
+	return string(b)
 }
 
 // callTodo validates the checklist (reusing the canonical tool) and returns the

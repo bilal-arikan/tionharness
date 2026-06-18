@@ -8,6 +8,7 @@ import { AgentsView } from './components/agents/AgentsView'
 import { MessageList } from './components/chat/MessageList'
 import { Composer } from './components/chat/Composer'
 import { AskPrompt } from './components/chat/AskPrompt'
+import { PermissionPrompt } from './components/chat/PermissionPrompt'
 import { PendingTray } from './components/chat/PendingTray'
 import { TodoPanel } from './components/chat/TodoPanel'
 import { latestTodos } from './lib/todos'
@@ -628,7 +629,12 @@ export default function App() {
               onOpenArtifact={openArtifact}
               onDeleteMessage={deleteMessage}
             />
-            {chat.activeAsk && <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />}
+            {chat.activeAsk &&
+              (chat.activeAsk.kind === 'permission' ? (
+                <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+              ) : (
+                <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+              ))}
             <TodoPanel todos={currentTodos} />
             <PendingTray items={chat.activeQueued} onRemove={chat.removePending} />
             <Composer

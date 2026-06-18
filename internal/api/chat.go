@@ -106,6 +106,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Every file attached to a chat turn becomes a session artifact (origin chat).
+	s.captureAttachmentArtifacts(ctx, database, session.ID, agent.ID, req.Attachments)
 
 	// Build conversation history, then budget it to the context window
 	// (compacting older turns into the session summary when oversized).
@@ -128,6 +130,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// tools enabled this drives the agentic loop (native) or CLI delegation;
 	// usage is recorded inside CompleteWithTools. Attach an artifact sink so
 	// create_artifact / update_artifact can persist content this turn.
+	ctx = tools.WithGrants(ctx, s.grants.forSession(session.ID))
 	ctx = tools.WithArtifacts(ctx, newArtifactSink(database, session.ID, agent.ID))
 	resp, steps, err := ws(r).Runtime.CompleteWithToolsTraced(ctx, agent, provider, llmReq, false)
 	if err != nil {

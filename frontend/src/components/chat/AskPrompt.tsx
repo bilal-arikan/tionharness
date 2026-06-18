@@ -4,6 +4,11 @@ import { MessageCircleQuestion } from 'lucide-react'
 export interface PendingAsk {
   question: string
   options?: string[]
+  // 'permission' renders the approval card (PermissionPrompt) instead of the
+  // plain question card; tool/risk describe the gated tool.
+  kind?: 'ask' | 'permission'
+  tool?: string
+  risk?: string
 }
 
 interface Props {

@@ -12,6 +12,7 @@ export type StepKind =
   | 'tool'
   | 'delta'
   | 'ask'
+  | 'permission'
   | 'todo'
   | 'recovery'
   | 'error'

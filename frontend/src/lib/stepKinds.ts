@@ -60,6 +60,15 @@ export const STEP_KINDS: StepKindInfo[] = [
       'ask_user aracı kullanıcıya soru sorup yanıt bekler (tur askıya alınır). Geçici; yanıt gelince araç adımı kalıcılaşır.',
   },
   {
+    kind: 'permission',
+    label: 'İzin onayı',
+    icon: '🛡️',
+    persisted: false,
+    status: 'active',
+    description:
+      'İzin kapısı (ask modu): yazma/komut aracı için kullanıcıdan onay bekler (İzin ver / Her zaman izin ver / Reddet). Geçici; karar verilince araç çalışır ya da permission_denied hatası yazılır. Hem native hem claude-cli (permission-prompt) yolunda.',
+  },
+  {
     kind: 'todo',
     label: 'Görev listesi',
     icon: '✅',
