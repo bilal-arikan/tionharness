@@ -3,14 +3,16 @@ import type { Attachment, Flow, FlowGraph, FlowRun, Message } from '../types'
 import { req, wsHeaders, errorFromResponse } from './client'
 
 // One node lifecycle event streamed while a flow runs (mirrors
-// orchestration.NodeEvent): phase "start" before a node runs, "done" after.
+// orchestration.NodeEvent): phase "start" before a node runs, "done" after a
+// success, "error" when the node fails (so a live spinner can stop and show why).
 export interface FlowNodeEvent {
-  phase: 'start' | 'done'
+  phase: 'start' | 'done' | 'error'
   nodeId: string
   type: string
   title: string
   index: number
   output?: string
+  error?: string
 }
 
 // Handlers invoked as a streamed flow run dispatches parsed SSE events.

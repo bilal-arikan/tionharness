@@ -21,12 +21,13 @@ type AgentRunner interface {
 // NodeEvent reports a node's lifecycle to an Observer so a caller can stream
 // progress (e.g. over SSE) as the graph executes. Output is populated on "done".
 type NodeEvent struct {
-	Phase  string `json:"phase"` // "start" | "done"
+	Phase  string `json:"phase"` // "start" | "done" | "error"
 	NodeID string `json:"nodeId"`
 	Type   string `json:"type"`
 	Title  string `json:"title"`
 	Index  int    `json:"index"`            // 1-based execution order
 	Output string `json:"output,omitempty"` // on "done"
+	Error  string `json:"error,omitempty"`  // on "error"
 }
 
 // Observer receives node lifecycle events during a run. It MAY be called
@@ -86,6 +87,32 @@ func (e *Engine) notify(phase string, node Node, index int, output string) {
 	e.observer(NodeEvent{Phase: phase, NodeID: node.ID, Type: node.Type, Title: title, Index: index, Output: output})
 }
 
+// notifyError reports a node failure ("error" phase) so a live observer can stop
+// a node's spinner and show why it failed, instead of leaving it pending forever.
+func (e *Engine) notifyError(node Node, index int, err error) {
+	if e.observer == nil {
+		return
+	}
+	title := node.Title
+	if title == "" {
+		title = node.ID
+	}
+	e.observer(NodeEvent{Phase: "error", NodeID: node.ID, Type: node.Type, Title: title, Index: index, Error: err.Error()})
+}
+
+// runAgentNodeSafe runs one agent node and converts a panic into an error so a
+// crashing node (or a tool/provider panic beneath it) ends the flow cleanly
+// instead of taking down the whole process. Used by both the sequential and
+// parallel paths.
+func (e *Engine) runAgentNodeSafe(ctx context.Context, node Node, prompt string) (out string, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("agent node %q panicked: %v", node.ID, p)
+		}
+	}()
+	return e.runner.RunAgentNode(ctx, node.AgentID, prompt)
+}
+
 // Run advances the graph from st.Current until it finishes (Current == ""),
 // hits the step cap, or an agent errors. It persists after each node via save.
 // The returned State is terminal; the final output is State.Last.
@@ -107,8 +134,9 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 		case NodeAgent:
 			e.notify("start", node, st.Steps, "")
 			prompt := render(node.Prompt, input, st)
-			out, err := e.runner.RunAgentNode(ctx, node.AgentID, prompt)
+			out, err := e.runAgentNodeSafe(ctx, node, prompt)
 			if err != nil {
+				e.notifyError(node, st.Steps, err)
 				return st, fmt.Errorf("node %q (agent): %w", node.ID, err)
 			}
 			st.Outputs[node.ID] = out
@@ -168,18 +196,15 @@ func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input stri
 			if title == "" {
 				title = child.ID
 			}
-			// Recover a panic inside a parallel child so one node's crash becomes a
-			// normal flow failure (propagated via res.err) instead of taking down
-			// the whole process — every flow runs in its own goroutine, and an
-			// unrecovered panic here would crash all workspaces.
-			defer func() {
-				if p := recover(); p != nil {
-					results[i] = res{id: child.ID, title: title, err: fmt.Errorf("parallel child %q panicked: %v", child.ID, p)}
-				}
-			}()
+			// runAgentNodeSafe converts a panicking child into an error (every flow
+			// runs in its own goroutine, so an unrecovered panic here would crash
+			// all workspaces). On failure emit an "error" event so the child's live
+			// spinner stops instead of hanging pending forever.
 			prompt := render(child.Prompt, input, st)
-			out, err := e.runner.RunAgentNode(ctx, child.AgentID, prompt)
-			if err == nil {
+			out, err := e.runAgentNodeSafe(ctx, child, prompt)
+			if err != nil {
+				e.notifyError(child, st.Steps, err)
+			} else {
 				e.notify("done", child, st.Steps, out)
 			}
 			results[i] = res{id: child.ID, title: title, out: out, err: err}

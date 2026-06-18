@@ -539,13 +539,14 @@ export function useChatStream(deps: ChatStreamDeps) {
       // re-assembled on every event into the bubble's markdown. Keyed by nodeId
       // (parallel children share an execution index, so index can't be the key);
       // ordered by arrival so parallel nodes list in a stable order.
-      const nodes = new Map<string, { title: string; output?: string }>()
+      const nodes = new Map<string, { title: string; output?: string; error?: string }>()
       const render = () => {
         let s = `🔀 **${flowName}**\n\n`
         let i = 0
         for (const n of nodes.values()) {
           i++
-          s += `#### ${i}. ${n.title}\n\n${n.output ?? '_⏳ çalışıyor…_'}\n\n`
+          const body = n.error !== undefined ? `⚠️ ${n.error}` : (n.output ?? '_⏳ çalışıyor…_')
+          s += `#### ${i}. ${n.title}\n\n${body}\n\n`
         }
         return s.trim()
       }
@@ -561,6 +562,7 @@ export function useChatStream(deps: ChatStreamDeps) {
             const cur = nodes.get(ev.nodeId) ?? { title: ev.title }
             cur.title = ev.title
             if (ev.phase === 'done') cur.output = ev.output ?? ''
+            else if (ev.phase === 'error') cur.error = ev.error ?? 'hata'
             nodes.set(ev.nodeId, cur)
             setBotText(render())
           },

@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -18,6 +19,62 @@ type okRunner struct{}
 
 func (okRunner) RunAgentNode(_ context.Context, _ string, prompt string) (string, error) {
 	return "out:" + prompt, nil
+}
+
+// errRunner always fails, for verifying error events + clean propagation.
+type errRunner struct{}
+
+func (errRunner) RunAgentNode(context.Context, string, string) (string, error) {
+	return "", errors.New("kaboom")
+}
+
+// TestRunSequential_RecoversNodePanic verifies a panic in a sequential agent
+// node becomes a normal flow error (and an "error" observer event) instead of
+// crashing the process.
+func TestRunSequential_RecoversNodePanic(t *testing.T) {
+	g := Graph{
+		Start: "a",
+		Nodes: []Node{{ID: "a", Type: NodeAgent, AgentID: "a1", Prompt: "x"}},
+	}
+	eng := NewEngine(panicRunner{})
+	var errored []string
+	eng.SetObserver(func(ev NodeEvent) {
+		if ev.Phase == "error" {
+			errored = append(errored, ev.NodeID)
+		}
+	})
+
+	_, err := eng.Run(context.Background(), g, "input", NewState(g), nil)
+	if err == nil || !strings.Contains(err.Error(), "panicked") {
+		t.Fatalf("expected a panic-derived error, got %v", err)
+	}
+	if len(errored) != 1 || errored[0] != "a" {
+		t.Errorf("expected one 'error' event for node a, got %v", errored)
+	}
+}
+
+// TestRun_EmitsErrorEventOnNodeFailure verifies a failing (non-panic) node emits
+// an "error" lifecycle event carrying the message, so a live UI can stop its
+// spinner and show why.
+func TestRun_EmitsErrorEventOnNodeFailure(t *testing.T) {
+	g := Graph{
+		Start: "a",
+		Nodes: []Node{{ID: "a", Type: NodeAgent, AgentID: "a1", Prompt: "x"}},
+	}
+	eng := NewEngine(errRunner{})
+	var got NodeEvent
+	eng.SetObserver(func(ev NodeEvent) {
+		if ev.Phase == "error" {
+			got = ev
+		}
+	})
+
+	if _, err := eng.Run(context.Background(), g, "in", NewState(g), nil); err == nil {
+		t.Fatal("expected node failure to propagate as an error")
+	}
+	if got.Phase != "error" || got.NodeID != "a" || !strings.Contains(got.Error, "kaboom") {
+		t.Errorf("expected an 'error' event with the message, got %+v", got)
+	}
 }
 
 // TestRunParallel_RecoversChildPanic verifies a panic inside a parallel child is
