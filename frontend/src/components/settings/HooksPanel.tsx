@@ -2,9 +2,10 @@
 // and lets the user add/edit/toggle/delete them. Self-contained (own load/save),
 // exempt from the global Save bar — like WorkspaceFilesPanel.
 import { useEffect, useState } from 'react'
-import { Webhook, Trash2, Pencil, Plus } from 'lucide-react'
+import { Webhook, Trash2, Pencil, Plus, ScanSearch } from 'lucide-react'
 import { api } from '../../api'
-import type { Hook, HookEvent } from '../../types'
+import { systemApi } from '../../api/system'
+import type { Hook, HookEvent, ExternalToolStatus } from '../../types'
 import type { HookInput } from '../../api/hooks'
 import { Field, Toggle, inputCls } from './primitives'
 
@@ -27,6 +28,24 @@ export function HooksPanel({ onError }: Props) {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState<HookInput>(EMPTY)
   const [busy, setBusy] = useState(false)
+
+  // External token-tool detector: checks whether optional CLI tools used by hook
+  // commands (e.g. `sqz`) are present on PATH. Read-only — nothing is installed.
+  const [tools, setTools] = useState<ExternalToolStatus[] | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [toolsErr, setToolsErr] = useState<string | null>(null)
+
+  const checkTools = async () => {
+    setChecking(true)
+    setToolsErr(null)
+    try {
+      setTools(await systemApi.externalTools())
+    } catch (e) {
+      setToolsErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setChecking(false)
+    }
+  }
 
   const load = () =>
     api
@@ -211,6 +230,47 @@ export function HooksPanel({ onError }: Props) {
           )}
         </>
       )}
+
+      <div className="space-y-3 border-t border-[var(--color-border)] pt-4">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
+          <ScanSearch size={14} className="text-[var(--color-accent)]" /> Harici token araçları
+        </p>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+          Hook komutlarında kullanılabilecek isteğe bağlı token-optimizasyon araçlarının (ör. <code>sqz</code>) bu cihazda{' '}
+          <span className="font-medium text-[var(--color-text)]">kurulu olup olmadığını</span> kontrol eder.
+          Yalnız PATH'te aranır — araçlar <span className="font-medium text-[var(--color-text)]">kurulmaz, çalıştırılmaz, değiştirilmez</span>.
+        </div>
+        <button
+          type="button"
+          onClick={checkTools}
+          disabled={checking}
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] disabled:opacity-50"
+        >
+          <ScanSearch size={14} className="text-[var(--color-accent)]" />
+          {checking ? 'Kontrol ediliyor…' : 'Kurulu mu kontrol et'}
+        </button>
+        {toolsErr && <p className="text-xs text-[var(--color-warning)]">{toolsErr}</p>}
+        {tools && (
+          <div className="flex flex-col gap-1.5">
+            {tools.map((t) => (
+              <div key={t.name} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm">
+                    <code className="rounded bg-[var(--color-surface-2)] px-1 font-medium">{t.name}</code>
+                    {t.found ? (
+                      <span className="text-[var(--color-success)]">✓ kurulu</span>
+                    ) : (
+                      <span className="text-[var(--color-text-dim)]">— bulunamadı</span>
+                    )}
+                  </div>
+                  <div className="truncate text-xs text-[var(--color-text-dim)]">{t.found ? t.path : t.desc}</div>
+                </div>
+                <a href={t.url} target="_blank" rel="noreferrer" className="shrink-0 text-xs text-[var(--color-accent)] hover:underline">repo ↗</a>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

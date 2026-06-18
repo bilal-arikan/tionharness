@@ -1,12 +1,13 @@
 // Providers category: default provider/model picker, Anthropic + MiniMax keys,
-// custom (user-added) providers, connection test and Anthropic beta toggles.
+// custom (user-added) providers and connection test. (Anthropic beta toggles
+// now live under the "Bağlam & Bellek" category.)
 import { useEffect, useState } from 'react'
-import { Server, Sparkles, Zap, FlaskConical, KeyRound, Boxes, Plus, Trash2 } from 'lucide-react'
+import { Server, Sparkles, Zap, KeyRound, Boxes, Plus, Trash2 } from 'lucide-react'
 import { api } from '../../api'
 import type { AppSettings, ProviderTestResult, Secret } from '../../types'
 import type { CustomProvider, UpsertProviderInput } from '../../api/providers'
 import { ProviderModelSelect } from '../agents/ProviderModelSelect'
-import { Field, Toggle, inputCls, type AppSet } from './primitives'
+import { Field, inputCls, type AppSet } from './primitives'
 
 interface Props {
   draft: AppSettings
@@ -306,12 +307,6 @@ export function ProvidersPanel({
       </div>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">OpenAI- veya Anthropic-uyumlu herhangi bir uç (OpenRouter, Gemini, Kimi, Ollama…). Eklenince ajan oluştururken sağlayıcı olarak seçilebilir. Değişiklikler anında kaydedilir (üstteki Kaydet'ten bağımsız).</p>
       <CustomProviders secrets={secrets} onImportSecret={onImportSecret} onManageSecrets={onManageSecrets} />
-
-      <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        <FlaskConical size={13} className="text-[var(--color-accent)]" /> Anthropic beta (yalnız anthropic sağlayıcı)
-      </div>
-      <Toggle label="1 milyon token bağlam" hint="Anthropic 1M context penceresi beta'sı (anthropic-beta başlığı). claude-cli'da etkisizdir." checked={draft.oneMillionContext} onChange={(v) => set('oneMillionContext', v)} />
-      <Toggle label="Uzatılmış prompt cache (1 saat)" hint="Sistem promptunu 1 saatlik cache_control ile önbelleğe alır — tekrar eden büyük persona/bağlam ucuzlar." checked={draft.extendedPromptCache} onChange={(v) => set('extendedPromptCache', v)} />
     </>
   )
 }

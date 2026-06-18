@@ -2,6 +2,13 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Ayarlar yeniden düzenleme — bölüm taşımaları (2026-06-18)
+İki ayar bölümü daha mantıksal olarak ait oldukları ekrana taşındı:
+- **"Anthropic beta"** (1M token bağlam + uzatılmış prompt cache) → **Sağlayıcılar**'dan **Bağlam & Bellek**'e alındı (`appPanels.tsx ContextPanel`, `FlaskConical` başlık ikonu). Bu seçenekler bağlam penceresi/cache davranışını etkilediği için Bağlam ekranıyla daha uyumlu. `ProvidersPanel` artık `Toggle`/`FlaskConical` kullanmıyor (import temizlendi).
+- **"Harici token araçları"** (PATH'te token-optimizasyon CLI'ları tespiti) → **Gelişmiş → Tanılama**'dan **Hooks**'a alındı (`HooksPanel.tsx`, kendi `tools/checking/toolsErr` state'i + `systemApi.externalTools`). Bu araçlar (ör. `sqz`) hook komutlarında kullanıldığı için Hooks ekranıyla daha alakalı. `DiagnosticsPanel` artık yalnız "Log seviyesi" alanını içeriyor.
+
+✅ `tsc -b` yeşil. (Chrome canlı testi gateway bağlantısı kopuk olduğundan bu turda yapılamadı; sunucular sağlıklı, Vite HMR yansıtır.)
+
 ## Ara özellik — Tur-içi crash kurtarma (inflight sidecar) (2026-06-18)
 
 **İstek:** "bu sessionda network-error hatası verdi … büyük ihtimalle SwarmGo yeniden başladı, ve ekranı yenileyince agentın yarım konuşması kayboldu" → **restart-dayanıklılığını çöz.**
