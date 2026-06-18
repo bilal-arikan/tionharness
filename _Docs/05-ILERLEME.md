@@ -2,6 +2,23 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Sağlayıcı/model seçimi + emoji picker standardizasyonu ✅ (2026-06-18)
+
+**İstek:** Workspace ayar ekranındaki model/sağlayıcı seçimi standart değildi (her yerde farklı UI). `ProviderModelSelect` bileşeni her yerde tutarlı kullanılsın; ikon seçiminde emoji listesinden seçilebilsin (emoji picker).
+
+**Tutarsızlıklar (önce):**
+- `WorkspacePanel` (workspace ayarları): sağlayıcı için elle yazılmış `<select>` (yalnız claude-cli + anthropic — **minimax ve özel sağlayıcılar eksik**) + model için düz metin input. Diğer her yer (`AgentSettingsForm`, `AgentRoster`/sidebar, `ProvidersPanel`) zaten katalog-temelli `ProviderModelSelect` kullanıyordu.
+- Emoji/ikon seçimi 3 yerde 3 farklı yöntem: agent avatarı sabit glyph listesi, workspace create sabit 10-emoji satırı, workspace ayarları düz metin input.
+
+**Değişiklikler:**
+- `ProviderModelSelect.tsx`: opsiyonel `allowInherit` modu eklendi — boş sağlayıcı = "(uygulama varsayılanı)"; bu modda model serbest metin alanı olur. Workspace override formu artık aynı katalog-temelli picker'ı kullanır (minimax + özel sağlayıcılar seçilebilir).
+- `lib/emojiData.ts` + `agents/EmojiPicker.tsx`: bağımlılıksız (emoji-mart yok), kategorili + aranabilir, paylaşılan emoji seçici (agent avatar editörü buna geçirildi).
+- `common/EmojiField.tsx` (yeni): kendi tetik butonu olan, `EmojiPicker` popover'ını saran tek-satırlık yeniden kullanılabilir kontrol.
+- `WorkspacePanel.tsx`: sağlayıcı/model → `ProviderModelSelect allowInherit`; ikon → `EmojiField`.
+- `WorkspaceCreateModal.tsx`: sabit ikon satırı → `EmojiField`.
+
+**Durum:** `tsc -b` benim dosyalarımda temiz (kalan tek hata paralel oturumun ilgisiz `HooksPanel` WIP'inde). Commit `e29d725` (7 dosya). Push yok. Not: oturumda paralel başka bir SwarmGo session'ı aktif (session-goals + market WIP) — yalnız bu özelliğin dosyaları seçilerek commit edildi; canlı E2E, çoklu vite instance + 110+ sekme ortam gürültüsü nedeniyle yapılmadı.
+
 ## Board arası görev bağımlılığı (Task Dependencies) ✅ (2026-06-18)
 
 **İstek:** Görevler arasında "önce şu tamamlanmalı" bağımlılığı tanımlanabilsin; kart oluşturma/güncelleme bu bilgiyi kabul etsin; kart detay panelinde bağımlılık chip'lerine tıklayınca ilgili göreve geçilsin; Board ekranında bağımlılık sırasına göre kartları sıralayan buton eklensin.
