@@ -136,21 +136,32 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
           <strong>Beceriler</strong> ekranından ekle.
         </p>
       )}
+      {/* Restricted (must-be-assigned) skills: NOT available unless explicitly
+          assigned to the agent. Clicking adds to the list. */}
       {available.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {available.map((s) => (
-            <button
-              key={s.slug}
-              onClick={() => add(s.slug)}
-              title={s.description}
-              className="flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
-            >
-              <Plus size={12} className="text-[var(--color-text-dim)]" />
-              <span>{s.icon || '✨'}</span>
-              <span>{s.name}</span>
-              <span className="text-[10px] text-[var(--color-text-dim)]">· {SOURCE_LABEL[s.source]}</span>
-            </button>
-          ))}
+        <div className="mt-3 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2">
+          <p className="mb-1 text-[11px] font-medium text-[var(--color-accent)]">
+            Atama gerektirir (atanmadan çalışmaz)
+          </p>
+          <p className="mb-1.5 text-[10px] text-[var(--color-text-dim)]">
+            Bu beceriler yalnızca atandıkları ajanlara açıktır. Eklemeden ajan bu beceriyi
+            <code className="mx-0.5">use_skill</code> ile yükleyemez.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {available.map((s) => (
+              <button
+                key={s.slug}
+                onClick={() => add(s.slug)}
+                title={`${s.description} · Atanmadan ajan bu beceriyi kullanamaz`}
+                className="flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
+              >
+                <Plus size={12} className="text-[var(--color-text-dim)]" />
+                <span>{s.icon || '✨'}</span>
+                <span>{s.name}</span>
+                <span className="text-[10px] text-[var(--color-text-dim)]">· {SOURCE_LABEL[s.source]}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
