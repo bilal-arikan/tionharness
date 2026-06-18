@@ -1,15 +1,17 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import type { FlowRFNode } from '../../lib/flowGraph'
 import { NodeShell } from './NodeShell'
+import { useIsEndNode } from './nodeStyles'
 
 // BranchNode: one inbound (top) handle + one outbound (right) handle per arm,
 // stacked vertically. Each arm's source handle id is `b<index>` so the adapter
 // can re-target the matching branch.
-export function BranchNode({ data, selected }: NodeProps<FlowRFNode>) {
+export function BranchNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const { node, isStart, status } = data
   const arms = node.branches ?? []
+  const isEnd = useIsEndNode(id)
   return (
-    <NodeShell type="branch" title={node.title} isStart={isStart} selected={selected} status={status}>
+    <NodeShell type="branch" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
       <Handle type="target" position={Position.Top} />
       <ul className="space-y-1">
         {arms.map((b, i) => (

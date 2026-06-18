@@ -1,15 +1,16 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import type { FlowRFNode } from '../../lib/flowGraph'
 import { NodeShell } from './NodeShell'
-import { useAgent } from './nodeStyles'
+import { useAgent, useIsEndNode } from './nodeStyles'
 
 // AgentNode: one inbound (top) + one outbound (bottom) handle. The body shows
 // the assigned agent and a prompt preview.
-export function AgentNode({ data, selected }: NodeProps<FlowRFNode>) {
+export function AgentNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const { node, isStart, status } = data
   const agent = useAgent(node.agentId)
+  const isEnd = useIsEndNode(id)
   return (
-    <NodeShell type="agent" title={node.title} isStart={isStart} selected={selected} status={status}>
+    <NodeShell type="agent" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
       <Handle type="target" position={Position.Top} />
       <div className="text-xs font-medium">{agent?.name ?? '— ajan seçilmedi —'}</div>
       {node.prompt && (
