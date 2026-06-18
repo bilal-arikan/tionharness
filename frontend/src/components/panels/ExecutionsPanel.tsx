@@ -8,6 +8,7 @@ import {
   Activity,
   RefreshCw,
   Copy,
+  Loader2,
   type LucideIcon,
 } from 'lucide-react'
 import type { Agent, Execution, Message } from '../../types'
@@ -50,6 +51,8 @@ const FILTERS: { key: string; label: string }[] = [
 ]
 
 const POLL_MS = 5000
+// Faster polling interval used when the selected execution is still running.
+const RUNNING_POLL_MS = 2000
 
 function kindMeta(kind: string) {
   return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
@@ -124,7 +127,7 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
     return () => clearInterval(t)
   }, [filter, load])
 
-  // Load the selected execution's transcript.
+  // Load the selected execution's transcript on selection change.
   useEffect(() => {
     if (!selectedId) {
       setMessages([])
@@ -144,6 +147,22 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
     () => items.find((i) => i.sessionId === selectedId) ?? null,
     [items, selectedId],
   )
+
+  // While the selected execution is running, re-fetch messages at a faster rate
+  // so new turns appear in the transcript without waiting for the next list poll.
+  const selectedRunning = selected?.running ?? false
+  useEffect(() => {
+    if (!selectedId || !selectedRunning) return
+    const t = setInterval(() => {
+      api
+        .listMessages(selectedId)
+        .then((m) => {
+          if (selectedRef.current === selectedId) setMessages(m)
+        })
+        .catch(() => { /* best-effort */ })
+    }, RUNNING_POLL_MS)
+    return () => clearInterval(t)
+  }, [selectedId, selectedRunning])
 
   return (
     <div className="flex h-full min-h-0">
@@ -281,6 +300,26 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
                 </button>
               )}
             </header>
+            {selected.running && (
+              <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-6 py-2">
+                <Loader2
+                  size={14}
+                  className="shrink-0 animate-spin text-[var(--color-success)]"
+                />
+                <span className="text-xs font-medium text-[var(--color-success)]">
+                  Yanıt hazırlanıyor…
+                </span>
+                <span className="ml-auto flex gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-success)]"
+                      style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }}
+                    />
+                  ))}
+                </span>
+              </div>
+            )}
             <MessageList
               messages={messages}
               pending={loading}

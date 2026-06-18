@@ -42,9 +42,12 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Process-wide set of sessions with an in-flight streaming turn.
+	// Merge chat streaming sessions and autonomous (schedule/heartbeat) sessions.
 	running := map[string]bool{}
 	for _, id := range s.runs.activeSessionIDs() {
+		running[id] = true
+	}
+	for _, id := range wsp.Runtime.ActiveSessionIDs() {
 		running[id] = true
 	}
 

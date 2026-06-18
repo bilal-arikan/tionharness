@@ -370,7 +370,9 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	}); err != nil {
 		return session.ID, err
 	}
+	s.rt.trackSession(session.ID)
 	output, steps, err := s.rt.invokeTraced(WithCallKind(ctx, KindSchedule), agent, sc.Prompt, true) // scheduled = autonomous
+	s.rt.untrackSession(session.ID)
 	if err != nil {
 		// Log the provider/tool-loop failure with the agent + its provider/model,
 		// so the logs view pinpoints what failed (e.g. missing key, model error)

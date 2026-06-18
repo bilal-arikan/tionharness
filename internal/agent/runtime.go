@@ -79,6 +79,28 @@ type Runtime struct {
 	// burst of journaled turns must not spawn overlapping dream cycles. Keyed by
 	// agent id; presence means a reflection is in flight.
 	reflecting sync.Map
+
+	// activeSessions tracks sessions currently executing an autonomous invoke
+	// (schedule / heartbeat). Keyed by session id; value is struct{}.
+	// Used by the executions feed to show a live "running" indicator for
+	// autonomous runs that aren't chat-streaming turns.
+	activeSessions sync.Map
+}
+
+// trackSession marks a session as actively running an autonomous invoke.
+func (r *Runtime) trackSession(id string) { r.activeSessions.Store(id, struct{}{}) }
+
+// untrackSession removes the running marker when an invoke finishes.
+func (r *Runtime) untrackSession(id string) { r.activeSessions.Delete(id) }
+
+// ActiveSessionIDs returns the session ids currently running autonomous invokes.
+func (r *Runtime) ActiveSessionIDs() []string {
+	var ids []string
+	r.activeSessions.Range(func(k, _ any) bool {
+		ids = append(ids, k.(string))
+		return true
+	})
+	return ids
 }
 
 // SetPaused toggles this workspace's autonomy brake.
@@ -404,6 +426,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 	}
 	// Heartbeat is autonomous → enforce the agent's daily budget. Tools run when
 	// the agent has them enabled.
+	r.trackSession(session.ID)
 	resp, err := r.CompleteWithTools(WithCallKind(ctx, KindHeartbeat), agent, provider, providers.Request{
 		Model:  agent.Model,
 		System: r.systemPrompt(agent),
@@ -411,6 +434,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 			{Role: providers.RoleUser, Text: agent.HeartbeatPrompt},
 		},
 	}, true)
+	r.untrackSession(session.ID)
 	if err != nil {
 		return err
 	}
