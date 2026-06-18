@@ -1,6 +1,6 @@
 # 18 — Ajan Seviyeleri ve Dinamik Geçişler (Tasarım Notu)
 
-> **Durum:** Faz T1 **uygulandı** (backend yeşil; commit eşzamanlı WIP reconcile sonrası) — T2/T3 beklemede  
+> **Durum:** Faz T1 + T2 **uygulandı** (backend yeşil; commit eşzamanlı WIP reconcile sonrası) — T3 beklemede  
 > **Tarih:** 2026-06-18  
 > **İlgili dosyalar:** `internal/settings/settings.go`, `internal/db/models.go`,
 > `internal/agent/toolloop.go`, `internal/tools/delegate.go`, `internal/providers/kind.go`
@@ -317,12 +317,35 @@ bilinmeyen tier fallback). `go build`/`vet`/`test ./internal/...` **yeşil**. Fr
 WIP'i derlemiyor). Bu yüzden T1 kodu **commitsiz** — iki oturum reconcile edilince commit'lenecek (bu projede
 yerleşik kalıp). Bu doküman güncellemesi ayrı commit'lenir.
 
-### Faz T2 — `escalate_tier` Aracı
+### Faz T2 — `escalate_tier` Aracı — ✅ UYGULANDI (2026-06-18)
 
-Değiştirilen: `internal/tools/` (yeni `builtin_tiertool.go`), `toolsetup.go`, `chat_stream.go`  
-Eklenen: `sessionTierOverride` context key, SSE `tier_escalation` olayı  
-Frontend: TurnSteps tier eskalasyon kartı, chat başlık rozeti  
-**Sonuç:** Ajan, session içinde kendini akıllı tier'a yükseltebilir.
+Tasarımdan sapma: context-key yerine **session-kalıcı override** (`db.Session.TierOverride`) tercih edildi —
+restart'a dayanıklı ve sonraki turlara taşınır (tasarımın §4.3.3 B seçeneğinin daha temiz hali). SSE'ye ayrı
+`tier_escalation` olayı eklemek yerine **`StepTier`** trace adımı kullanıldı (mevcut `step` SSE akışıyla
+bedavaya UI'ya gider).
+
+**Backend:**
+- `db.Session.TierOverride` alanı + `SetSessionTierOverride` (UpdatedAt'ı bozmaz) — `db/models.go`, `db/store.go`.
+- `tools/escalate.go`: `TierEscalator` context köprüsü (`WithTierEscalation`/`TierEscalationFrom`) +
+  `EscalateTierTool` (`to` enum medium/smart, sadece yukarı; native-only no-op dışı).
+- `agent/tier.go`: `tierRank` + `resolveTierWith(agent, override)` (override > agent tier > ajan alanları) +
+  `ResolveTierWith` export + `NewTierEscalator(agent, sessionID)` (yukarı-doğrulama, slot-konfigüre kontrolü,
+  session'a persist, sonuç+log).
+- `toolsetup.go`: araç delegasyon gate'i altında kayıtlı. `toolloop.go`: `escalate_tier` adımı `StepTier`'a
+  promote (todo/diff kalıbı). `trace.go`: `StepTier` kind.
+- Chat handlerları escalator'ı per-tur wire eder (`chat.go`, `chat_stream.go`); provider/model çözümü artık
+  `ResolveTierWith(agent, session.TierOverride)` (chat.go/chat_stream.go/chat_turn.go).
+
+**Frontend:** `types/message.ts` `StepKind` += `'tier'`; `chat/TierStep.tsx` (accent kart) + `TurnSteps`
+yönlendirmesi; `lib/stepKinds.ts` "Seviye yükseltme" referansı.
+
+**Test/Build:** `agent/tier_test.go` += escalator senaryoları (yukarı-persist, sideways-reddet,
+ayarsız-tier-reddet, session-override-kazanır). `go build`/`vet`/`test ./internal/...` **yeşil**; frontend tier
+kodu `tsc` temiz (ağaçtaki 2 hata yine `market`/`hooks` WIP'inden).
+
+**Kapsam notu:** Yükseltme **bir sonraki turdan** itibaren geçerli (mevcut turun provider'ı tur başında
+çözülür). Araç cevabı modele "turu bitir, sonraki tur yükseltilmiş modelle çalışacak" der. Tur-içi anında
+swap T4'e bırakıldı.
 
 ### Faz T3 — `call_agent` Tier Delegasyonu
 
