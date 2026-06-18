@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
@@ -56,6 +57,18 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 // captured in the returned FlowRun (status=failure) so callers always get a row.
 // obs (optional) receives per-node progress events for live streaming.
 func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration.Graph, input string, st orchestration.State, autonomous bool, obs orchestration.Observer) db.FlowRun {
+	// A flow can run in its own goroutine (ResumeRunningFlows) or under the
+	// scheduler; an unrecovered panic in a node would otherwise crash the whole
+	// process. Recover it, log it, and mark the run failed so the UI/feed reflects
+	// the crash instead of a run stuck forever in "running".
+	defer func() {
+		if p := recover(); p != nil {
+			r.logger.Error("flow run panicked", "flow", run.FlowID, "run", run.ID, "panic", p)
+			if err := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", fmt.Sprintf("panic: %v", p)); err != nil {
+				r.logger.Warn("finish panicked flow run failed", "run", run.ID, "error", err)
+			}
+		}
+	}()
 	eng := orchestration.NewEngine(flowRunner{rt: r, autonomous: autonomous})
 	if obs != nil {
 		eng.SetObserver(obs)
@@ -123,7 +136,9 @@ func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run d
 	if userText == "" {
 		userText = "🔀 " + flow.Name
 	}
-	_, _ = r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: userText})
+	if _, err := r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: userText}); err != nil {
+		r.logger.Warn("flow transcript: record input failed", "flow", flow.ID, "session", session.ID, "error", err)
+	}
 
 	replyAgent := finalFlowAgentID(flow, run)
 	if replyAgent == "" {
@@ -133,13 +148,15 @@ func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run d
 	if text == "" {
 		text = renderFlowTranscript(flow.Name, run, runErr)
 	}
-	_, _ = r.db.AddMessage(ctx, db.Message{
+	if _, err := r.db.AddMessage(ctx, db.Message{
 		SessionID: session.ID,
 		AgentID:   replyAgent,
 		Role:      "assistant",
 		Text:      text,
 		Steps:     encodeSteps(flowStateToSteps(run, runErr)),
-	})
+	}); err != nil {
+		r.logger.Warn("flow transcript: record reply failed", "flow", flow.ID, "session", session.ID, "error", err)
+	}
 	return session.ID
 }
 
@@ -218,16 +235,24 @@ func (r *Runtime) ResumeRunningFlows(ctx context.Context) {
 		flow, err := r.db.GetFlow(ctx, run.FlowID)
 		if err != nil {
 			r.logger.Warn("resume: flow missing", "run", run.ID, "error", err)
-			_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "flow deleted")
+			if ferr := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "flow deleted"); ferr != nil {
+				r.logger.Warn("resume: finish missing-flow run failed", "run", run.ID, "error", ferr)
+			}
 			continue
 		}
 		g, err := orchestration.ParseGraph(flow.Graph)
 		if err != nil {
-			_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", err.Error())
+			r.logger.Warn("resume: flow graph parse failed", "run", run.ID, "flow", run.FlowID, "error", err)
+			if ferr := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", err.Error()); ferr != nil {
+				r.logger.Warn("resume: finish failed run failed", "run", run.ID, "error", ferr)
+			}
 			continue
 		}
 		var st orchestration.State
 		if err := json.Unmarshal([]byte(run.State), &st); err != nil || st.Outputs == nil {
+			if err != nil {
+				r.logger.Warn("resume: flow state restore failed, restarting from scratch", "run", run.ID, "error", err)
+			}
 			st = orchestration.NewState(g)
 		}
 		r.logger.Info("resuming flow run", "run", run.ID, "from", st.Current)

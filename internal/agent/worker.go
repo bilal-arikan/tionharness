@@ -5,6 +5,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -92,7 +93,20 @@ func (w *worker) tick(trigger string) {
 		s.TickCount++
 	})
 
-	err := w.rt.runHeartbeat(ctx, w.agentID, trigger)
+	// A panic in the heartbeat (e.g. inside a tool or provider call) would
+	// otherwise crash the whole process and take every agent/workspace down.
+	// Recover it, log it, and treat it as a tick failure so the backoff/
+	// auto-disable machinery handles it like any other error.
+	var err error
+	func() {
+		defer func() {
+			if p := recover(); p != nil {
+				w.rt.logger.Error("agent heartbeat panicked", "agent", w.agentID, "trigger", trigger, "panic", p)
+				err = fmt.Errorf("panic: %v", p)
+			}
+		}()
+		err = w.rt.runHeartbeat(ctx, w.agentID, trigger)
+	}()
 
 	w.mark(func(s *WorkerStatus) {
 		if err != nil {

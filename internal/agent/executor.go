@@ -59,7 +59,9 @@ func (r *Runtime) RunTaskStream(ctx context.Context, taskID, trigger string, onS
 	// turn (the activity trace) when it finishes.
 	session, _ := r.taskSession(ctx, task)
 	if session.ID != "" {
-		_, _ = r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: prompt})
+		if _, err := r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: prompt}); err != nil {
+			r.logger.Warn("task transcript: record prompt failed", "task", taskID, "session", session.ID, "error", err)
+		}
 	}
 
 	// Open the run and flip the board to in_progress.
@@ -73,7 +75,9 @@ func (r *Runtime) RunTaskStream(ctx context.Context, taskID, trigger string, onS
 	if err != nil {
 		return db.Run{}, err
 	}
-	_ = r.db.MoveTask(ctx, taskID, db.BoardInProgress)
+	if err := r.db.MoveTask(ctx, taskID, db.BoardInProgress); err != nil {
+		r.logger.Warn("task board move to in_progress failed", "task", taskID, "error", err)
+	}
 
 	// Manual run-now is user-initiated; scheduled runs are autonomous and
 	// therefore subject to the agent's daily budget.
@@ -168,7 +172,9 @@ func (r *Runtime) runTaskFlow(ctx context.Context, task db.Task, trigger string,
 		if userText == "" {
 			userText = "🔀 " + flowName
 		}
-		_, _ = r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: userText})
+		if _, err := r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: userText}); err != nil {
+			r.logger.Warn("flow task transcript: record input failed", "task", task.ID, "session", session.ID, "error", err)
+		}
 	}
 
 	// Open the run and flip the board to in_progress.
@@ -182,7 +188,9 @@ func (r *Runtime) runTaskFlow(ctx context.Context, task db.Task, trigger string,
 	if err != nil {
 		return db.Run{}, err
 	}
-	_ = r.db.MoveTask(ctx, task.ID, db.BoardInProgress)
+	if err := r.db.MoveTask(ctx, task.ID, db.BoardInProgress); err != nil {
+		r.logger.Warn("flow task board move to in_progress failed", "task", task.ID, "error", err)
+	}
 
 	// Scheduled/dispatcher runs are autonomous (budget-gated per node); a manual
 	// run-now is user-initiated. When streaming, surface each node as a step.

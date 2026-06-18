@@ -164,12 +164,21 @@ func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input stri
 		wg.Add(1)
 		go func(i int, child Node) {
 			defer wg.Done()
-			prompt := render(child.Prompt, input, st)
-			out, err := e.runner.RunAgentNode(ctx, child.AgentID, prompt)
 			title := child.Title
 			if title == "" {
 				title = child.ID
 			}
+			// Recover a panic inside a parallel child so one node's crash becomes a
+			// normal flow failure (propagated via res.err) instead of taking down
+			// the whole process — every flow runs in its own goroutine, and an
+			// unrecovered panic here would crash all workspaces.
+			defer func() {
+				if p := recover(); p != nil {
+					results[i] = res{id: child.ID, title: title, err: fmt.Errorf("parallel child %q panicked: %v", child.ID, p)}
+				}
+			}()
+			prompt := render(child.Prompt, input, st)
+			out, err := e.runner.RunAgentNode(ctx, child.AgentID, prompt)
 			if err == nil {
 				e.notify("done", child, st.Steps, out)
 			}
