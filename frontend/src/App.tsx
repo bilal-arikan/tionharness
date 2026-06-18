@@ -138,6 +138,16 @@ export default function App() {
     setFlowTarget(flowId)
     setView('flows')
   }, [])
+  // Executions deep-link target (sessionId): set when a schedule/flow notification
+  // is clicked, opening the Activity feed with that run pre-selected.
+  const [executionTarget, setExecutionTarget] = useState<string | null>(
+    INITIAL_ROUTE.view === 'executions' ? INITIAL_ROUTE.id : null,
+  )
+  // Open a specific run on the Activity screen (used by the agent activity rail).
+  const openExecution = useCallback((sessionId: string) => {
+    setExecutionTarget(sessionId)
+    setView('executions')
+  }, [])
 
   // Apply the client-side preferences carried by app settings.
   const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; themePreset?: string; keepAwake: boolean; desktopNotifications: boolean }) => {
@@ -185,6 +195,9 @@ export default function App() {
             ag.some((a) => a.id === want.id)
           ) {
             aid = want.id
+          } else if (want.view === 'executions') {
+            // The Activity feed loads its own list; just hand it the run to select.
+            setExecutionTarget(want.id)
           }
         }
         setActiveSessionId(sid)
@@ -355,10 +368,17 @@ export default function App() {
       // reload its messages so the reply appears without a manual reselect.
       const sid = e.target?.sessionId
       if (e.type === 'chat' && sid) {
-        // The turn ended (success or failure) — drop any post-reload "thinking"
-        // indicator we restored for it, and refresh the open transcript so the
-        // reply (if any) appears without a manual reselect.
-        chat.clearPending(sid)
+        // A self-wake (schedule_wake) brackets its run with phase=start/done chat
+        // events so an OPEN session screen continues live on its own: phase=start
+        // raises the thinking indicator (a server-driven turn just began with no
+        // local run handle); any other chat event (incl. phase=done) means the
+        // turn ended, so clear it. Either way reload the transcript so the new
+        // user prompt / reply appears without a manual reselect.
+        if (e.target?.phase === 'start') {
+          chat.markPending([sid])
+        } else {
+          chat.clearPending(sid)
+        }
         if (sid === activeSessionIdRef.current) {
           api.listMessages(sid).then(setMessages).catch(() => {})
         }
@@ -517,6 +537,8 @@ export default function App() {
         setArtifactTarget(r.id)
       } else if (r.view === 'schedules') {
         setScheduleTarget(r.id)
+      } else if (r.view === 'executions') {
+        setExecutionTarget(r.id)
       } else if (r.view === 'settings') {
         setSettingsCat(r.id)
       }
@@ -534,6 +556,7 @@ export default function App() {
       artifactId: artifactTarget,
       scheduleId: scheduleTarget,
       settingsCat,
+      executionId: executionTarget,
     }),
   }
   useUrlSync(route, !!activeWorkspaceId, applyRoute)
@@ -673,6 +696,8 @@ export default function App() {
             onCreateAgent={createAgent}
             onUpdateAgent={updateAgent}
             onDeleteAgent={deleteAgent}
+            onError={setError}
+            onOpenExecution={openExecution}
           />
         )}
         {view === 'executions' && (
@@ -682,6 +707,8 @@ export default function App() {
             onOpenFile={openFile}
             onOpenArtifact={openArtifact}
             onOpenFlowRun={openFlowRun}
+            focusId={executionTarget}
+            onSelectExecution={setExecutionTarget}
           />
         )}
         {view === 'board' && <TaskBoard agents={agents} onError={setError} />}

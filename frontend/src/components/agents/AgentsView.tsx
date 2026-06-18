@@ -3,6 +3,7 @@ import type { Agent, AgentPatch } from '../../types'
 import { AgentAvatar } from './AgentAvatar'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentSettingsForm } from './AgentSettingsForm'
+import { AgentActivityPanel } from './AgentActivityPanel'
 
 interface Props {
   agents: Agent[]
@@ -15,6 +16,10 @@ interface Props {
   onCreateAgent: (name: string, soul: string, provider: string, model: string) => void
   onUpdateAgent: (id: string, patch: AgentPatch) => Promise<void>
   onDeleteAgent: (id: string) => Promise<void>
+  /** Surface errors (e.g. activity feed load failures) to the app banner. */
+  onError?: (msg: string) => void
+  /** Open a run on the Activity screen with it pre-selected. */
+  onOpenExecution?: (sessionId: string) => void
 }
 
 // AgentsView is the two-pane "Ajanlar" screen: a roster on the left, and the
@@ -28,6 +33,8 @@ export function AgentsView({
   onCreateAgent,
   onUpdateAgent,
   onDeleteAgent,
+  onError,
+  onOpenExecution,
 }: Props) {
   const [internalId, setInternalId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -155,7 +162,7 @@ export function AgentsView({
         </div>
       </div>
 
-      {/* Right: selected agent's settings */}
+      {/* Middle: selected agent's settings */}
       <div className="min-w-0 flex-1">
         {selected ? (
           <AgentSettingsForm
@@ -175,6 +182,13 @@ export function AgentsView({
           </div>
         )}
       </div>
+
+      {/* Right: selected agent's live activity feed */}
+      <AgentActivityPanel
+        agentId={selected?.id ?? null}
+        onError={onError ?? (() => {})}
+        onOpenExecution={onOpenExecution}
+      />
     </div>
   )
 }
