@@ -115,6 +115,7 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", s.handleHealth)
+	mux.HandleFunc("GET /api/version", s.handleVersion)
 
 	s.registerWorkspaceRoutes(mux)
 	s.registerAgentRoutes(mux)

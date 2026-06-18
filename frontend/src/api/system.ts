@@ -10,6 +10,7 @@ import type {
   AppEvent,
   WorkspaceUsage,
   ExternalToolStatus,
+  VersionInfo,
 } from '../types'
 import { req } from './client'
 
@@ -73,4 +74,8 @@ export const systemApi = {
   // Detect optional external token-optimization tools (rtk, sqz) on the host
   // PATH. Presence-only — the backend never runs or installs them.
   externalTools: () => req<ExternalToolStatus[]>('/api/external-tools'),
+
+  // Build / version info (injected via ldflags at build time; falls back to
+  // "dev" for local development builds without explicit versioning).
+  getVersion: () => req<VersionInfo>('/api/version'),
 }

@@ -108,6 +108,16 @@ export interface CatalogEntry {
   models: CatalogModel[]
 }
 
+// Build / version metadata returned by GET /api/version.
+// All fields fall back to "dev" when the binary is built without -ldflags.
+export interface VersionInfo {
+  version: string
+  commit: string
+  buildDate: string
+  goVersion: string
+  module: string
+}
+
 // Detection result for an optional external token-optimization tool (rtk, sqz).
 // Presence-only: the backend looks the executable up on PATH, never runs it.
 export interface ExternalToolStatus {
