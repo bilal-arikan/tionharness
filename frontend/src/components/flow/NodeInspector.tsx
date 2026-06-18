@@ -14,6 +14,9 @@ const TYPES: { value: FlowNodeType; label: string }[] = [
   { value: 'agent', label: 'Ajan' },
   { value: 'branch', label: 'Dallanma' },
   { value: 'parallel', label: 'Paralel' },
+  { value: 'switch', label: 'Switch' },
+  { value: 'delay', label: 'Bekle' },
+  { value: 'transform', label: 'Dönüştür' },
 ]
 
 const input =
@@ -92,10 +95,12 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
         </>
       )}
 
-      {node.type === 'branch' && (
+      {(node.type === 'branch' || node.type === 'switch') && (
         <div className="space-y-2">
           <span className="block text-xs text-[var(--color-text-dim)]">
-            Dallar (koşul; hedef için kenar çiz)
+            {node.type === 'switch'
+              ? 'Case’ler (tam eşleşme; hedef için kenar çiz)'
+              : 'Dallar (içerir; hedef için kenar çiz)'}
           </span>
           {(node.branches ?? []).map((b, bi) => (
             <div key={bi} className="flex items-center gap-2">
@@ -106,7 +111,11 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
                   branches[bi] = { ...b, contains: e.target.value }
                   onPatch({ branches })
                 }}
-                placeholder="içeriyorsa… (boş = varsayılan)"
+                placeholder={
+                  node.type === 'switch'
+                    ? 'eşittir… (boş = varsayılan)'
+                    : 'içeriyorsa… (boş = varsayılan)'
+                }
                 className={input}
               />
               <button
@@ -126,7 +135,7 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
             }
             className="text-xs text-[var(--color-accent)]"
           >
-            + dal ekle
+            {node.type === 'switch' ? '+ case ekle' : '+ dal ekle'}
           </button>
         </div>
       )}
@@ -136,6 +145,38 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
           Eşzamanlı ajan node'larını alttaki <b>fan</b> tutamağından, join hedefini sağdaki{' '}
           <b>join</b> tutamağından kenar çizerek bağla.
         </p>
+      )}
+
+      {node.type === 'delay' && (
+        <label className="block">
+          <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Bekleme (saniye)</span>
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={(node.delayMs ?? 0) / 1000}
+            onChange={(e) =>
+              onPatch({ delayMs: Math.max(0, Math.round((Number(e.target.value) || 0) * 1000)) })
+            }
+            className={input}
+          />
+          <span className="mt-1 block text-[11px] text-[var(--color-text-dim)]">
+            Bekledikten sonra sonraki node'a geçer (en çok 5 dk).
+          </span>
+        </label>
+      )}
+
+      {node.type === 'transform' && (
+        <label className="block">
+          <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Şablon (çıktı)</span>
+          <textarea
+            value={node.template ?? ''}
+            onChange={(e) => onPatch({ template: e.target.value })}
+            placeholder="{{input}}, {{last}}, {{node.<id>}} — LLM çağırmadan çıktı üretir"
+            rows={8}
+            className={`${input} min-h-32 resize-y font-mono`}
+          />
+        </label>
       )}
     </div>
   )

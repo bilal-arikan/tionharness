@@ -170,6 +170,35 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   olmadığından ring'siz — beklenen); yeni başlatılan koşu poll ile listeye otomatik düştü.
   readOnly canvas'ta "Otomatik diz" gizli, "⊕ Ortala" var.
 
+## Yeni mantıksal node tipleri (2026-06-18)
+
+Motora üç yeni node tipi eklendi (önceki agent/branch/parallel'e ek):
+
+- **switch** (`🔢`, çok-yollu, tam eşleşme): branch'in substring'i yerine son çıktının **tam
+  eşleşmesiyle** (case-insensitive, trim) yönlendirir; boş case = varsayılan. Etiket-tabanlı
+  yönlendirme için ideal (ajan "A"/"B"/"C" yanıtlarken "ABC" yanlış eşleşmesini önler).
+  `Branches` alanını yeniden kullanır (Contains = eşleşilecek değer), `b<i>` handle'ları branch
+  ile aynı. Motor: `evalSwitch`.
+- **delay** (`⏱️`, LLM'siz): `DelayMs` kadar bekler, sonra `next`. `sleepCtx` ctx-iptaline saygı
+  duyar, en çok 5 dk (`maxDelayMs`). Çıktıyı (`Last`) değiştirmez, trace'e "waited Nms" yazar.
+- **transform** (`🔧`, LLM'siz): `Template`'i (`{{input}}/{{last}}/{{node.<id>}}`) render edip
+  **çıktı** olarak yayar (`Last` + `Outputs[id]`), sonra `next`. Token harcamadan birleştirme/
+  biçimlendirme. Motor: mevcut `render` kullanılır.
+
+**Backend:** `orchestration` `NodeSwitch/NodeDelay/NodeTransform` consts + `Node.DelayMs`/`Template`
+(switch `Branches`'i paylaşır), `engine.go` Run case'leri + `evalSwitch`/`sleepCtx`, `Validate`.
+**Frontend:** `types/flow.ts` union + alanlar; `flowGraph.ts` adapter (switch=branch-gibi `b<i>`
+kenarlar, delay/transform=agent-gibi tek `next`); `nodeStyles.chromeFor` (switch sarı/delay
+cyan/transform yeşil); `flow/{SwitchNode,DelayNode,TransformNode}.tsx`; `FlowCanvas` nodeTypes;
+`NodeInspector` (switch case editörü "eşittir", delay saniye input, transform şablon textarea);
+`FlowsPanel` palet 6 tip.
+
+**Doğrulama:** `go build/vet` + `tsc` yeşil. **API E2E** (LLM'siz, izole flow): seed(transform
+`{{input}}`)→switch(yes/default)→win|lose(transform)→wait(delay 300ms). input=`yes` → `seed→sw→win→wait`,
+çıktı `EVET dali`; input=`no` → `seed→sw→lose→wait`, çıktı `HAYIR dali` (her ikisi success).
+**Playwright:** palet 6 tip; transform/delay/switch node'ları canvas'ta doğru ikon+içerikle render
+(🔧 `{{last}}`, ⏱️ "1 sn bekle", 🔢 "varsayılan").
+
 ## Notlar / sıradaki adımlar
 
 - SwarmClaw'daki gibi şablonları **kategorilere** ayırma / arama eklenebilir.

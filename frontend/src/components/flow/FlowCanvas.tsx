@@ -24,6 +24,9 @@ import { AgentsContext, NodeActionsContext, chromeFor, type NodeActions } from '
 import { AgentNode } from './AgentNode'
 import { BranchNode } from './BranchNode'
 import { ParallelNode } from './ParallelNode'
+import { SwitchNode } from './SwitchNode'
+import { DelayNode } from './DelayNode'
+import { TransformNode } from './TransformNode'
 
 // CanvasTools is a small in-canvas toolbar (top-right Panel). It lives inside
 // ReactFlowProvider so it can use the programmatic viewport API. "Otomatik diz"
@@ -54,6 +57,9 @@ const nodeTypes: NodeTypes = {
   agent: AgentNode,
   branch: BranchNode,
   parallel: ParallelNode,
+  switch: SwitchNode,
+  delay: DelayNode,
+  transform: TransformNode,
 }
 
 // Parallel-node edge colors so the two outgoing roles read at a glance: the
