@@ -116,9 +116,19 @@ func (s *Scheduler) RunNow(ctx context.Context, scheduleID string) error {
 func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 	sc, err := s.db.GetSchedule(ctx, scheduleID)
 	if err != nil {
-		s.logger.Warn("schedule fire: lookup failed", "schedule", scheduleID, "error", err)
+		s.logger.Warn("schedule fire: lookup failed", "schedule", scheduleID, "trigger", trigger, "error", err)
 		return err
 	}
+
+	// Log the start of every fire so a run is traceable even if it later hangs
+	// or the process dies mid-flight — the previous code only logged on success.
+	kind := "prompt"
+	if sc.TaskID != "" {
+		kind = "task"
+	}
+	s.logger.Info("schedule fire: begin",
+		"schedule", scheduleID, "trigger", trigger, "kind", kind,
+		"agent", sc.AgentID, "task", sc.TaskID, "cron", sc.CronExpr)
 
 	var fireErr error
 	var sessionID string
@@ -138,8 +148,24 @@ func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 	}
 
 	next := s.nextRun(scheduleID)
-	_ = s.db.SetScheduleDelivery(ctx, scheduleID, status, errText, next)
-	s.logger.Info("schedule fired", "schedule", scheduleID, "status", status, "trigger", trigger)
+	if err := s.db.SetScheduleDelivery(ctx, scheduleID, status, errText, next); err != nil {
+		s.logger.Warn("schedule fire: persist delivery failed",
+			"schedule", scheduleID, "trigger", trigger, "error", err)
+	}
+
+	// Log the outcome at a level that matches it: a failure is an Error with the
+	// full message + the affected agent/task/session, so the logs view actually
+	// explains what the desktop notification only hinted at. Successes stay Info.
+	if fireErr != nil {
+		s.logger.Error("schedule fire: failed",
+			"schedule", scheduleID, "trigger", trigger, "kind", kind,
+			"agent", sc.AgentID, "task", sc.TaskID, "session", sessionID,
+			"error", fireErr)
+	} else {
+		s.logger.Info("schedule fire: ok",
+			"schedule", scheduleID, "trigger", trigger, "kind", kind,
+			"agent", sc.AgentID, "session", sessionID)
+	}
 	return fireErr
 }
 
@@ -196,10 +222,14 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	}
 	agent, err := s.db.GetAgent(ctx, sc.AgentID)
 	if err != nil {
+		s.logger.Warn("schedule deliver: agent lookup failed",
+			"schedule", sc.ID, "agent", sc.AgentID, "error", err)
 		return "", err
 	}
 	session, err := s.db.GetOrCreateKindSession(ctx, sc.AgentID, "schedule", "⏰ Schedule")
 	if err != nil {
+		s.logger.Warn("schedule deliver: session open failed",
+			"schedule", sc.ID, "agent", sc.AgentID, "error", err)
 		return "", err
 	}
 	// Record the scheduled prompt as a user turn first, so the schedule thread
@@ -213,6 +243,12 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	}
 	output, steps, err := s.rt.invokeTraced(WithCallKind(ctx, KindSchedule), agent, sc.Prompt, true) // scheduled = autonomous
 	if err != nil {
+		// Log the provider/tool-loop failure with the agent + its provider/model,
+		// so the logs view pinpoints what failed (e.g. missing key, model error)
+		// rather than leaving only a notification behind.
+		s.logger.Error("schedule deliver: agent invoke failed",
+			"schedule", sc.ID, "agent", sc.AgentID, "session", session.ID,
+			"provider", agent.Provider, "model", agent.Model, "error", err)
 		// Surface the failure inside the schedule thread itself, not just in the
 		// delivery status/logs — otherwise the user opens the session and sees
 		// their prompt with no reply and no clue what went wrong. Persist the

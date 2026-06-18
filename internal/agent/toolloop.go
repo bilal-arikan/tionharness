@@ -361,10 +361,17 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	return last, steps, nil
 }
 
-// recordedComplete calls the provider once and records token usage.
+// recordedComplete calls the provider once and records token usage. Every
+// tool-loop path (native, claude-cli, streaming fallback) funnels its provider
+// call through here, so logging the failure once at this choke point guarantees
+// a provider error is recorded regardless of which caller (chat, task,
+// schedule, heartbeat) triggered it.
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
 	resp, err := provider.Complete(ctx, req)
 	if err != nil {
+		r.logger.Warn("provider complete failed",
+			"agent", agent.ID, "provider", agent.Provider, "model", req.Model,
+			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage)

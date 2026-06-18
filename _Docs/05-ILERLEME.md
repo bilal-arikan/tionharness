@@ -1,6 +1,34 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-17**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
+
+## Scheduler hata loglama düzeltmesi ✅ (2026-06-18)
+
+**Sorun (kullanıcı raporu):** Zamanlamadan (scheduler) gelen bir mesaj
+başarısız olduğunda masaüstü bildirimi + oturum içi hata mesajı görünüyor ama
+**loglar boş kalıyordu**. Kök neden: `scheduler.go` `run()` sonunda tek log
+satırı `Info("schedule fired", status)` idi — yani başarısızlıkta bile **Info**
+seviyesinde ve **hata metnini içermeden** yazılıyordu; `deliverPrompt`'taki
+provider hatası ve `RunTask`'taki başarısızlık hiç loglanmıyordu.
+
+**Düzeltme (davranış-korumalı, yalnız gözlemlenebilirlik):**
+- `agent/scheduler.go` — `run()`: her tetiklemenin başında `Info("schedule fire: begin")`
+  (schedule/trigger/kind/agent/task/cron); sonuçta seviye eşleşmeli loglama →
+  başarısızlıkta `Error("schedule fire: failed")` **tam hata + agent/task/session**
+  ile, başarıda `Info("schedule fire: ok")`. `SetScheduleDelivery` hatası da artık
+  loglanıyor. `deliverPrompt`: agent lookup / session open hataları `Warn`'la,
+  provider invoke hatası `Error("schedule deliver: agent invoke failed")`
+  (provider/model dahil) ile loglanıyor.
+- `agent/executor.go` — `RunTask`: sonuç logu seviye eşleşmeli; başarısızlıkta
+  `Error("task run failed")` tam hata + provider/model ile.
+- `agent/toolloop.go` — `recordedComplete` (tüm tool-loop yollarının tek geçtiği
+  provider çağrı noktası): provider hatası `Warn("provider complete failed")` ile
+  agent/provider/model/**callKind** etiketleriyle loglanıyor → chat/task/schedule/
+  heartbeat tüm yollar bedavaya kapsanır.
+- Test: `scheduler_test.go` `TestRun_LogsFailureAtErrorLevel` (capturingHandler ile
+  Error-seviyeli kaydın varlığını doğrular) — regresyon koruması.
+
+✅ `go build ./...` + `go test ./internal/...` yeşil. Commit edildi (push edilmedi).
 
 ## Özel sağlayıcılar (data-instance) + `<think>` ayıklama ✅ (2026-06-17)
 

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/bilal/swarmgo/internal/db"
@@ -55,6 +56,62 @@ func TestDeliverPrompt_RecordsErrorReply(t *testing.T) {
 	if !strings.Contains(reply.Text, "çalıştırılamadı") || !strings.Contains(reply.Text, fireErr.Error()) {
 		t.Errorf("error reply must contain the failure reason, got %q", reply.Text)
 	}
+}
+
+// TestRun_LogsFailureAtErrorLevel guards the "error notification shows but the
+// logs view is empty" report: a failed scheduled fire must emit an Error-level
+// log record carrying the failure reason, not just a notification + inline reply.
+func TestRun_LogsFailureAtErrorLevel(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	var cap capturingHandler
+	sched := NewScheduler(rt.db, rt, slog.New(&cap))
+	ctx := context.Background()
+
+	// Anthropic agent with no API key → invokeTraced fails inside run().
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Özetçi", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	sc, err := rt.db.CreateSchedule(ctx, db.Schedule{AgentID: agent.ID, Prompt: "Günlük özet ver", CronExpr: "0 * * * *", Enabled: true})
+	if err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+
+	if err := sched.run(ctx, sc.ID, "manual"); err == nil {
+		t.Fatal("expected run to fail with unconfigured provider")
+	}
+
+	var found bool
+	for _, r := range cap.records() {
+		if r.Level == slog.LevelError && strings.Contains(r.Message, "schedule fire: failed") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected an Error-level 'schedule fire: failed' log record, got %+v", cap.records())
+	}
+}
+
+// capturingHandler is a minimal slog.Handler that retains every record, so tests
+// can assert on what was logged (level + message).
+type capturingHandler struct {
+	mu   sync.Mutex
+	recs []slog.Record
+}
+
+func (h *capturingHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *capturingHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.recs = append(h.recs, r)
+	return nil
+}
+func (h *capturingHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *capturingHandler) WithGroup(string) slog.Handler      { return h }
+func (h *capturingHandler) records() []slog.Record {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]slog.Record(nil), h.recs...)
 }
 
 // TestNotifyLine checks the notification-body condenser: first line only, rune

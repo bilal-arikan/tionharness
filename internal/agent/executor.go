@@ -113,7 +113,18 @@ func (r *Runtime) RunTaskStream(ctx context.Context, taskID, trigger string, onS
 	run.Error = errText
 	run.MessageID = msgID
 
-	r.logger.Info("task run finished", "task", taskID, "trigger", trigger, "status", status)
+	// Match the log level to the outcome and always carry the error text on
+	// failure, so a scheduled (or manual) task that fails is explained in the
+	// logs view instead of only in the desktop notification.
+	if runErr != nil {
+		r.logger.Error("task run failed",
+			"task", taskID, "run", run.ID, "agent", task.OwnerAgentID,
+			"trigger", trigger, "provider", agent.Provider, "model", agent.Model,
+			"error", runErr)
+	} else {
+		r.logger.Info("task run finished",
+			"task", taskID, "run", run.ID, "trigger", trigger, "status", status)
+	}
 
 	// Notify on the outcome; clicking deep-links to the board. The frontend
 	// suppresses the desktop notification while its tab is focused, so a manual
