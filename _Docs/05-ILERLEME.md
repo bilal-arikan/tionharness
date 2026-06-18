@@ -33,6 +33,36 @@ plan maddesi eklendi: **SC-1** (built-in API preset kataloğu — düşük efor)
   `npx tsc -b` + `npx vite build` (2026-06-18) temiz geçiyor; önceki günlük girdilerinde
   derlemeyi tıkadığı belirtilen `ArtifactsPanel` hatası artık yok.
 
+## Sessizce yutulan hata denetimi + panic kurtarma ✅ (2026-06-18)
+
+Scheduler loglama düzeltmesinin devamı olarak kod tabanı "sessizce yutulan
+hatalar" için tarandı (Explore ajanı + elle inceleme). İki sınıf ele alındı
+(commit `a128362`):
+
+**1) Loglanmadan yutulan hatalar → artık `Warn`:**
+- `agent/executor.go` — task transcript prompt yazımı + panoyu `in_progress`'e taşıma
+  (her ikisi `_, _ =` / `_ =` ile yutuluyordu). Not: `taskSession`/`recordRunReply`
+  zaten içeride logluyordu, dokunulmadı.
+- `agent/flow.go` — flow transcript input/reply yazımları; **resume yolundaki
+  `ParseGraph` ve state-restore hataları** (öncesi: hiç log yok, sessizce flow'u
+  failed işaretliyor veya sıfırdan başlatıyordu).
+
+**2) Panic güvenliği (yeni):** Bir node panic ederse tüm SwarmGo süreci (tüm
+workspace'ler) çöküyor ve yalnız stderr'e Go stack trace düşüyordu — uygulama-içi
+loglara/logbuf'a yansımıyordu. Goroutine köklerine recover + log eklendi:
+- `orchestration/engine.go` — paralel child panic'i normal flow hatasına çevrilir
+  (goroutine/süreç çökmez); `engine_test.go` (yeni: panic kurtarma + happy-path).
+- `agent/flow.go` `driveFlow` — recover + `Error("flow run panicked")` + run'ı
+  failed işaretle (UI'da "running"da asılı kalmaz).
+- `agent/worker.go` `tick` — heartbeat panic'i recover + `Error` + tick hatası
+  sayılır (backoff/auto-disable normal işler).
+
+> Bilerek dokunulmayanlar (gürültü/tasarım): `json.Marshal` (string struct'ları —
+> pratikte hata vermez), `mcp/client.go` non-JSON satır atlama (MCP sunucuları
+> stdout'a log basar), `os.RemoveAll`/`os.Remove` best-effort temizlikler.
+
+✅ `go build ./...` + `go test ./internal/...` yeşil. Commit edildi (push edilmedi).
+
 ## Scheduler hata loglama düzeltmesi ✅ (2026-06-18)
 
 **Sorun (kullanıcı raporu):** Zamanlamadan (scheduler) gelen bir mesaj
