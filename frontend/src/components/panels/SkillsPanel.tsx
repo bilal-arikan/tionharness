@@ -29,22 +29,16 @@ function SourceBadge({ source }: { source: SkillSource }) {
   )
 }
 
-// AccessBadge shows whether a skill is on-demand (every agent sees + can use it)
-// or restricted (only agents it is assigned to).
-function AccessBadge({ shared }: { shared?: boolean }) {
-  return shared ? (
-    <span
-      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-success)_18%,transparent)] text-[var(--color-success)]"
-      title="Tüm ajanlar gerektiğinde kullanabilir (atama gerekmez)"
-    >
-      Gerektiğinde
-    </span>
-  ) : (
+// RestrictedBadge marks a skill that is NOT on-demand: only agents it is
+// explicitly assigned to can see/use it. On-demand (shared) skills are the
+// default case and carry no badge.
+function RestrictedBadge() {
+  return (
     <span
       className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
-      title="Yalnız atanan ajanlar kullanabilir"
+      title="Yalnız atanan ajanlar kullanabilir (atama gerekir)"
     >
-      Atanınca
+      Kısıtlı
     </span>
   )
 }
@@ -234,7 +228,7 @@ export function SkillsPanel({ onError }: Props) {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="min-w-0 flex-1 truncate font-medium">{sk.name}</span>
-                    {sk.shared && <AccessBadge shared />}
+                    {!sk.shared && <RestrictedBadge />}
                     <SourceBadge source={sk.source} />
                   </span>
                   <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
@@ -269,7 +263,7 @@ export function SkillsPanel({ onError }: Props) {
                 <div className="flex items-center gap-2">
                   <span className="text-lg leading-none">{active.icon || '✨'}</span>
                   <h2 className="truncate text-base font-semibold">{active.name}</h2>
-                  <AccessBadge shared={active.shared} />
+                  {!active.shared && <RestrictedBadge />}
                   <SourceBadge source={active.source} />
                 </div>
                 <p className="mt-1 text-xs text-[var(--color-text-dim)]">
