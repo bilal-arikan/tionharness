@@ -63,4 +63,9 @@ export const systemApi = {
   // Workspace-wide budget/usage: today's totals + per-origin breakdown,
   // per-agent table and a daily trend over the last `days` days.
   workspaceUsage: (days = 7) => req<WorkspaceUsage>(`/api/usage?days=${days}`),
+
+  // Per-view "work in progress" flags for the left-nav busy indicators
+  // (chat stream / running task / running flow / schedule-triggered run).
+  getActivity: () =>
+    req<{ chat: boolean; task: boolean; flow: boolean; schedule: boolean }>('/api/activity'),
 }

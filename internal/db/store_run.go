@@ -67,6 +67,23 @@ func (d *DB) ListRuns(ctx context.Context, taskID string) ([]Run, error) {
 	return out, nil
 }
 
+// ListRunningRuns returns every run currently in the running state, across all
+// tasks, oldest first. A running run means a task is executing on the board; its
+// Trigger distinguishes manual/dependency/schedule-initiated work. Used by the
+// activity endpoint to light the board/schedules nav indicators.
+func (d *DB) ListRunningRuns(ctx context.Context) ([]Run, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	out := make([]Run, 0)
+	for _, r := range d.runs {
+		if r.Status == RunRunning {
+			out = append(out, r)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
+	return out, nil
+}
+
 // GetRun loads a run by id.
 func (d *DB) GetRun(ctx context.Context, id string) (Run, error) {
 	d.mu.RLock()

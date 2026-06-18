@@ -271,6 +271,8 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 // list that surfaces them all with their kind and live status.
 func (s *Server) registerExecutionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/executions", s.handleListExecutions)
+	// Per-view "work in progress" flags for the left-nav busy indicators.
+	mux.HandleFunc("GET /api/activity", s.handleActivity)
 }
 
 // registerArtifactRoutes registers the artifact store (versioned agent-produced

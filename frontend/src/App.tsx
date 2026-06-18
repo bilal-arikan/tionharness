@@ -27,6 +27,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { LogsPanel } from './components/panels/LogsPanel'
 import { isTypeEnabled } from './lib/notifyPrefs'
 import { useWorkspaces } from './hooks/useWorkspaces'
+import { useActivity } from './hooks/useActivity'
 import { useChatStream } from './hooks/useChatStream'
 import { useUrlSync } from './hooks/useUrlSync'
 import { parseRoute, routeIdForView, type Route } from './lib/url'
@@ -477,6 +478,9 @@ export default function App() {
   // Manual chats for the chat sidebar (other kinds live in the Activity view).
   const chatSessions = useMemo(() => sessions.filter((s) => isChatKind(s.kind)), [sessions])
 
+  // Per-view "work in progress" flags for the nav-rail busy indicators.
+  const busyViews = useActivity(activeWorkspaceId, chat.streamingSessions.size > 0)
+
   // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
   // the app state. A workspace switch defers entity selection to the
   // workspace-load effect via pendingRouteRef; same-workspace navigation applies
@@ -523,6 +527,7 @@ export default function App() {
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         unreadWorkspaceIds={unreadWs}
+        busyViews={busyViews}
         onSwitchWorkspace={switchWorkspace}
         onCreateWorkspace={createWorkspace}
         onDeleteWorkspace={deleteWorkspace}

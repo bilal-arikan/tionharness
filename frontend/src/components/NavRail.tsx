@@ -30,6 +30,9 @@ interface Props {
   workspaces: Workspace[]
   activeWorkspaceId: string | null
   unreadWorkspaceIds: Set<string>
+  // Views with work currently in progress (chat/board/schedules/flows) — shown
+  // with a pulsing accent indicator on the nav item.
+  busyViews?: Set<View>
   onSwitchWorkspace: (id: string) => void
   onCreateWorkspace: (data: NewWorkspaceData) => void
   onDeleteWorkspace: (id: string) => void
@@ -81,6 +84,7 @@ export function NavRail({
   workspaces,
   activeWorkspaceId,
   unreadWorkspaceIds,
+  busyViews,
   onSwitchWorkspace,
   onCreateWorkspace,
   onDeleteWorkspace,
@@ -138,16 +142,26 @@ export function NavRail({
         {NAV.map((item) => {
           const Icon = item.icon
           const isActive = view === item.key
+          const busy = busyViews?.has(item.key) ?? false
           return (
             <button
               key={item.key}
               onClick={() => onSelectView(item.key)}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? `${item.label}${busy ? ' · işlem sürüyor' : ''}` : undefined}
               className={navItemClass(isActive, collapsed)}
             >
               {isActive && <ActiveBar />}
               <Icon size={18} strokeWidth={2} className="shrink-0" />
               {!collapsed && <span>{item.label}</span>}
+              {busy &&
+                (collapsed ? (
+                  <span className="absolute right-1 top-1 h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface)]" />
+                ) : (
+                  <span
+                    className="ml-auto h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]"
+                    title="İşlem sürüyor"
+                  />
+                ))}
             </button>
           )
         })}

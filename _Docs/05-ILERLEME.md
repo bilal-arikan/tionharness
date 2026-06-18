@@ -2,6 +2,41 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## NavRail canlı iş belirteçleri (busy indicators) (2026-06-18)
+
+**İstek:** "Sohbet/Görevler/Zamanlamalar/Akışlar ekranında bir iş devam ediyorsa soldaki navbar'da bunu belirten bir belirteç ekleyebilir miyiz?"
+
+Sol nav item'larında o görünümde **canlı iş** varsa nabız atan (animate-pulse) accent nokta gösterilir.
+
+- **Backend:** yeni `GET /api/activity` (`internal/api/activity.go`) → `{chat,task,flow,schedule}` boolean'ları. Kaynaklar kalıcı durumdan türetilir: chat = in-flight streaming turn (chat-kind session, `chatRuns.activeSessionIDs`), task = çalışan run (`db.ListRunningRuns` — yeni; her trigger), flow = çalışan flow run (`db.ListRunningFlowRuns`), schedule = trigger==schedule olan çalışan run. Hem otonom (heartbeat/cron) hem interaktif koşuları kapsar.
+- **Frontend:** `hooks/useActivity.ts` 3sn'de bir poll → `Set<View>` (chat/board/flows/schedules); bu pencerenin canlı chat stream'i (`chat.streamingSessions`) anlık merge edilir (poll gecikmesi yok). `NavRail` `busyViews` prop'u ile item'a nabız noktası basar (daraltılmış rail'de köşe noktası).
+
+✅ `go build`/`go vet`/`go test ./internal/...` + `tsc -b` yeşil. **Playwright canlı (izole 8091 backend + test vite):** `/api/activity` baseline hepsi-false → gerçek task koşarken `task=true` → bitince false (lastRunStatus=success); fetch-override ile `task/flow=true` döndüğünde Görevler+Akışlar item'larında nokta render doğrulandı.
+
+## URL routing — bildirim tıklaması deep-link'e bağlandı (2026-06-18)
+
+**İstek:** "Deep-link URL'lerini bildirim tıklamalarına bağlamayı ekleyebilir misin."
+
+Otonom olay (task/schedule/heartbeat) masaüstü bildirimine tıklayınca artık **deep-link URL'ine** gidilir.
+
+- Yeni `lib/url.ts` `routeFromEvent(e)`: olay `target` hint'lerini (`view` + `sessionId`/`agentId`) `Route`'a çevirir (`chat`→sessionId, `agents/memory`→agentId, diğerleri view-level; geçerli view yoksa `null`). + `isView` helper.
+- `App.tsx` `notify(... onClick)` artık `window.location.hash = buildRoute(routeFromEvent(e))` yapar. Eski elle `switchWorkspace`+`setView`+`selectSession` üçlüsü **kaldırıldı** — çapraz-workspace'te eski ws'in oturum listesine bakıp ajanı yanlış set ediyordu. Hash ataması → `useUrlSync` hashchange → `applyRoute` zinciri workspace geçişini (`pendingRouteRef`) ve entity seçimini doğru yürütür.
+
+✅ `tsc -b`/`vite build` yeşil; `routeFromEvent` **14/14** birim testi (tsx, koşuldu+silindi). **Playwright canlı:** `window.location.hash` ataması (tıklama handler'ının birebir eylemi) chat→board geçişini doğru yaptı.
+
+## URL routing — yeni ekranlar + ayarlar alt panelleri (2026-06-18)
+
+**İstek:** "yeni ekranlar ve ayarlar ekranında alt paneller geldi, onlara da [URL routing] ekleyebilir misin."
+
+Deep-link routing (bkz. aşağıdaki *URL deep-link routing* girdisi), araya eklenen ekranları ve ayarlar kategorilerini de kapsayacak şekilde genişletildi.
+
+- **Yeni görünümler** (`lib/url.ts` `VIEWS`): `executions`/Aktivite, `secrets`/Sırlar, `skills`/Beceriler, `budget`/Bütçe eklendi — yoksa `parseRoute` bunları `chat`'e düşürüyordu. Hepsi `#/w/{ws}/{view}` ile adreslenir.
+- **Ayarlar alt panelleri**: `#/w/{ws}/settings/{kategori}` (ör. `settings/providers`, `settings/context`). `routeIdForView` `settings`→`settingsCat` döndürür; App `settingsCat` state + `applyRoute` `settings` dalı. `SettingsPanel` **kontrollü kategori** kazandı (`cat`/`onCatChange`, `ALL_CATS`/`isCat` doğrulaması, bilinmeyen→`profile`). Kategori tıklaması URL'i günceller; URL ilgili kategoriyi açar.
+- **Geri/ileri düzeltmesi** (`useUrlSync`): `firstWrite` artık ilk *yazımda* değil, app hazır olduktan sonraki **ilk effect koşusunda** koşulsuz kapanır. Önceki davranışta ilk gerçek yazım (kategori tıklaması) `replaceState` ile gerçek bir geçmiş girdisini eziyor, geri tuşu yanlış sayfaya atlıyordu.
+- `tools` görünümü artık entity taşımaz (workspace-scoped — ajan değil).
+
+✅ `tsc -b`/`vite build` yeşil. **Playwright canlı test geçti:** `settings/providers` + `budget` deep-link'leri doğru render; "Bağlam & Bellek" tıklaması → `settings/context`; geri tuşu → `settings/providers` + providers içeriği (replaceState fix doğrulandı).
+
 ## Ara özellik — Araç Çıktısı Token Optimizasyonu (2 bağımsız sistem) ✅ (2026-06-18)
 
 **İstek:** Ajan araç çıktıları (shell/dosya/MCP) modele dönmeden önce küçültülsün; iki yöntem
@@ -13,7 +48,9 @@
   sınırını aşan çıktının ortasını UTF-8 güvenli kırpar (baş+son korunur). `Compact(output, Options)`
   → `(string, Stats)`. Tablo testleri (`compact_test.go`). Varsayılan **açık**.
 - **Sistem B — LLM intent-aware özet (`agent/compactor.go`):** Bağımsız. A sonrası çıktı hâlâ eşik
-  üstündeyse ucuz modelle (başlık-modeli override → yoksa ajan modeli) niyet-farkında özetler.
+  üstündeyse niyet-farkında özetler. **Model çözüm zinciri:** adanmış `CompactModel` → başlık modeli →
+  ajan modeli; **sağlayıcı daima ajanın sağlayıcısı** (ayrı seçilemez). Özet modeli (`compactModel`)
+  Ayarlar → Bağlam'dan girilebilir (boşsa zincire düşer, trim'lenir).
   `KindCompact` ile usage'a işlenir; bütçeyi gate'lemez (titler/summary/reflect ile aynı). Hata/boş
   dönüşte A çıktısına düşer (tur asla bozulmaz). Maliyetli → varsayılan **kapalı** (opt-in).
 - **Entegrasyon (tek nokta):** `agent/toolloop.go` — `res` üretilip iptal kontrolünden sonra
