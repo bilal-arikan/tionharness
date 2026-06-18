@@ -33,8 +33,12 @@ export const agentApi = {
       { method: 'POST', body: JSON.stringify({ dailyCallLimit, dailyTokenLimit }) },
     ),
 
-  agentContext: (agentId: string) =>
-    req<AgentContextPreview>(`/api/agents/${agentId}/context`),
+  agentContext: (agentId: string, message?: string) =>
+    req<AgentContextPreview>(
+      `/api/agents/${agentId}/context${
+        message ? `?message=${encodeURIComponent(message)}` : ''
+      }`,
+    ),
 
   agentTools: (agentId: string) => req<AgentTools>(`/api/agents/${agentId}/tools`),
   setAgentTools: (agentId: string, mcpEnabled: boolean, allowedTools: string[]) =>

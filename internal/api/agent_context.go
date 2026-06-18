@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -15,11 +16,17 @@ import (
 // list, cross-session context) is added per-turn and depends on the message, so
 // it is intentionally not part of this "from scratch" preview.
 type agentContextPreview struct {
-	System       string         `json:"system"`
-	SystemTokens int            `json:"systemTokens"`
-	Tools        []toolSummary  `json:"tools"`
-	ToolTokens   int            `json:"toolTokens"`
-	TotalTokens  int            `json:"totalTokens"`
+	System       string        `json:"system"`
+	SystemTokens int           `json:"systemTokens"`
+	Tools        []toolSummary `json:"tools"`
+	ToolTokens   int           `json:"toolTokens"`
+	// Dynamic is the per-turn suffix simulated for the optional ?message= sample:
+	// recalled memory (for that message) + the cross-session block (when enabled).
+	// Session-only parts (summary, artifacts, todos) need a live session and are
+	// omitted. Empty when no message was given and cross-session is off.
+	Dynamic       string `json:"dynamic"`
+	DynamicTokens int    `json:"dynamicTokens"`
+	TotalTokens   int    `json:"totalTokens"`
 }
 
 // toolSummary is one offered tool, name + description (schema omitted for the
@@ -44,15 +51,41 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 	for _, d := range defs {
 		tools = append(tools, toolSummary{Name: d.Name, Description: d.Description})
 	}
+	// Optional sample message → simulate the message-dependent dynamic suffix.
+	dynamic := buildAgentDynamicPrompt(ctx, wsp, agent, r.URL.Query().Get("message"))
+
 	sysTok := conversation.EstimateText(system)
 	toolTok := estimateToolCatalog(defs)
+	dynTok := conversation.EstimateText(dynamic)
 	writeJSON(w, http.StatusOK, agentContextPreview{
-		System:       system,
-		SystemTokens: sysTok,
-		Tools:        tools,
-		ToolTokens:   toolTok,
-		TotalTokens:  sysTok + toolTok,
+		System:        system,
+		SystemTokens:  sysTok,
+		Tools:         tools,
+		ToolTokens:    toolTok,
+		Dynamic:       dynamic,
+		DynamicTokens: dynTok,
+		TotalTokens:   sysTok + toolTok + dynTok,
 	})
+}
+
+// buildAgentDynamicPrompt simulates the per-turn dynamic suffix for a fresh
+// agent: memory recalled for the sample message (when given) plus the
+// cross-session block (when that feature is enabled). Mirrors the message-
+// independent half of composeTurnRequest's dynamic assembly; session-scoped
+// parts (summary/artifacts/todos) are intentionally excluded (no live session).
+func buildAgentDynamicPrompt(ctx context.Context, wsp *workspace.Workspace, agent db.Agent, message string) string {
+	var dynamic string
+	if message = strings.TrimSpace(message); message != "" {
+		if block := wsp.Runtime.Memory().ContextBlock(ctx, agent.ID, message, 5); block != "" {
+			dynamic = block
+		}
+	}
+	if wsp.Runtime.SessionContextEnabled() {
+		if sb := sessionsContextBlock(ctx, wsp.DB, "", wsp.Runtime.SessionContextRecentCount()); sb != "" {
+			dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
+		}
+	}
+	return strings.TrimSpace(dynamic)
 }
 
 // buildAgentStaticPrompt mirrors the STATIC half of composeTurnRequest for a

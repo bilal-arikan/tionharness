@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Copy, X } from 'lucide-react'
 import type { AgentContextPreview } from '../../types'
 import { api } from '../../api'
@@ -10,22 +10,31 @@ interface Props {
   onClose: () => void
 }
 
-// AgentContextModal previews the exact context an agent starts a fresh turn with:
-// the assembled static system prompt and the tool catalog it is offered. The
-// dynamic suffix (memory recall, running summary, session artifacts) is added
-// per-turn from the conversation, so it is not shown here.
+// AgentContextModal previews the context an agent starts a turn with: the static
+// system prompt + the tool catalog. With an optional sample message it also
+// simulates the message-dependent dynamic suffix (recalled memory + cross-session
+// block); session-only parts (summary/artifacts/todos) need a live session.
 export function AgentContextModal({ agentId, agentName, onClose }: Props) {
   const [data, setData] = useState<AgentContextPreview | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [raw, setRaw] = useState(false)
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    api
-      .agentContext(agentId)
-      .then(setData)
-      .catch((e) => setErr((e as Error).message))
-  }, [agentId])
+  const load = useCallback(
+    (msg: string) => {
+      setLoading(true)
+      api
+        .agentContext(agentId, msg.trim() || undefined)
+        .then(setData)
+        .catch((e) => setErr((e as Error).message))
+        .finally(() => setLoading(false))
+    },
+    [agentId],
+  )
+
+  useEffect(() => load(''), [load])
 
   const copy = () => {
     if (!data) return
@@ -74,11 +83,28 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
             <Stat label="Toplam" value={data.totalTokens} accent />
             <Stat label="Sistem promptu" value={data.systemTokens} />
             <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
-            <span className="text-[var(--color-text-dim)]">
-              ~token tahmini · dinamik kısım (hafıza/özet/artifact) tur anında eklenir
-            </span>
+            <Stat label="Dinamik" value={data.dynamicTokens} />
+            <span className="text-[var(--color-text-dim)]">~token tahmini</span>
           </div>
         )}
+
+        {/* Sample message → simulate the dynamic suffix */}
+        <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-2">
+          <input
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && load(message)}
+            placeholder="Örnek mesaj yaz → bu mesaj için hafıza recall + çapraz-oturum bağlamı simüle edilir"
+            className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
+          />
+          <button
+            onClick={() => load(message)}
+            disabled={loading}
+            className="shrink-0 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {loading ? '…' : 'Simüle et'}
+          </button>
+        </div>
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -118,6 +144,27 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                 <div className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
                   <Markdown>{data.system || '(boş)'}</Markdown>
                 </div>
+              )}
+
+              {/* Dynamic suffix (simulated). */}
+              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                Dinamik bağlam {message.trim() ? '(örnek mesaja göre)' : ''}
+              </h3>
+              {data.dynamic ? (
+                raw ? (
+                  <pre className="mb-5 whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
+                    {data.dynamic}
+                  </pre>
+                ) : (
+                  <div className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
+                    <Markdown>{data.dynamic}</Markdown>
+                  </div>
+                )
+              ) : (
+                <p className="mb-5 text-xs text-[var(--color-text-dim)]">
+                  Bu mesaj için recall yok. Özet · oturum artifact'ları · todo listesi gerçek bir
+                  oturumda, tur anında eklenir (burada simüle edilmez).
+                </p>
               )}
 
               <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">

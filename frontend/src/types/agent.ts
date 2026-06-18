@@ -64,5 +64,9 @@ export interface AgentContextPreview {
   systemTokens: number
   tools: { name: string; description: string }[]
   toolTokens: number
+  // Simulated per-turn dynamic suffix for the optional sample message (recalled
+  // memory + cross-session block). Empty when no message / cross-session off.
+  dynamic: string
+  dynamicTokens: number
   totalTokens: number
 }
