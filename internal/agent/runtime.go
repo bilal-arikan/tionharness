@@ -15,6 +15,7 @@ import (
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/logbuf"
+	"github.com/bilal/swarmgo/internal/market"
 	"github.com/bilal/swarmgo/internal/memory"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/secrets"
@@ -51,6 +52,10 @@ type Runtime struct {
 	// tiers) and backs the use_skill tool + the Available Skills prompt block.
 	skills *skills.Store
 
+	// market is the in-app marketplace: a file-based registry of shareable packs
+	// (skill/agent/provider/flow) that can be browsed, installed and published.
+	market *market.Store
+
 	// reloadSched re-reads schedules into the cron scheduler after an agent
 	// creates/edits/deletes one via a self-management tool. Wired by the
 	// workspace manager once the scheduler exists; nil before then (no-op).
@@ -81,10 +86,14 @@ type Runtime struct {
 	reflecting sync.Map
 
 	// activeSessions tracks sessions currently executing an autonomous invoke
-	// (schedule / heartbeat). Keyed by session id; value is struct{}.
+	// (schedule / heartbeat / spawn). Keyed by session id; value is struct{}.
 	// Used by the executions feed to show a live "running" indicator for
 	// autonomous runs that aren't chat-streaming turns.
 	activeSessions sync.Map
+
+	// spawnActive counts the spawned sessions currently running their background
+	// turn — the fire-and-forget concurrency guard (capped by SpawnMaxConcurrent).
+	spawnActive atomic.Int64
 }
 
 // trackSession marks a session as actively running an autonomous invoke.
@@ -144,6 +153,9 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	// Seed the shipped default skills into the global dir (idempotent, never
 	// overwrites) so every workspace inherits the SwarmGo guide skills.
 	_ = skills.EnsureDefaults(globalSkillsDir())
+	// Seed the bundled marketplace starter packs into the global market dir
+	// (idempotent, never overwrites) so every workspace can browse them.
+	_ = market.EnsureDefaults(marketGlobalDir())
 	return &Runtime{
 		db:        database,
 		providers: registry,
@@ -157,6 +169,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		logs:      logs,
 		logger:    logger,
 		skills:    skills.New(globalSkillsDir(), workspaceSkillsDir(workDir)),
+		market:    market.New(marketGlobalDir(), workspaceMarketDir(workDir)),
 		workers:   make(map[string]*worker),
 	}
 }
@@ -188,6 +201,35 @@ func workspaceSkillsDir(workDir string) string {
 
 // Skills returns this runtime's skill store (never nil after construction).
 func (r *Runtime) Skills() *skills.Store { return r.skills }
+
+// Market returns this runtime's marketplace store (never nil after construction).
+func (r *Runtime) Market() *market.Store { return r.market }
+
+// WorkspaceSkillsDir is the workspace's skills directory, where the market
+// installs skill packs. Exposed so the API layer can pass it to InstallSkill.
+func (r *Runtime) WorkspaceSkillsDir() string { return workspaceSkillsDir(r.workDir) }
+
+// marketGlobalDir is SwarmGo's data-dir-level global market directory
+// (<DataDir>/market, default ~/.swarmgo/market). Mirrors globalSkillsDir.
+func marketGlobalDir() string {
+	if d := os.Getenv("SWARMGO_DATA_DIR"); d != "" {
+		return filepath.Join(d, "market")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".swarmgo", "market")
+}
+
+// workspaceMarketDir is this workspace's market directory (<workspace>/market),
+// a sibling of store/, skills/ and config/. Empty when workDir is unknown.
+func workspaceMarketDir(workDir string) string {
+	if workDir == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(workDir), "market")
+}
 
 // SkillsCatalogBlockForAgent renders the Available Skills system-prompt section
 // an agent sees: its assigned skills (in the agent's chosen order) plus every
@@ -427,9 +469,12 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 	// Heartbeat is autonomous → enforce the agent's daily budget. Tools run when
 	// the agent has them enabled.
 	r.trackSession(session.ID)
+	// A goal set on the heartbeat session steers the autonomous loop too: inject
+	// it into the dynamic suffix so the agent's wake action stays on-objective.
 	resp, err := r.CompleteWithTools(WithCallKind(ctx, KindHeartbeat), agent, provider, providers.Request{
-		Model:  agent.Model,
-		System: r.systemPrompt(agent),
+		Model:         agent.Model,
+		System:        r.systemPrompt(agent),
+		SystemDynamic: heartbeatGoalBlock(session.Goal),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: agent.HeartbeatPrompt},
 		},
@@ -445,6 +490,18 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 		Text:      fmt.Sprintf("[%s] %s", trigger, resp.Text),
 	})
 	return err
+}
+
+// heartbeatGoalBlock renders a session's persistent goal for the autonomous
+// heartbeat turn, mirroring the chat path's goalContextBlock (api package).
+// Returns "" when no goal is set.
+func heartbeatGoalBlock(goal string) string {
+	goal = strings.TrimSpace(goal)
+	if goal == "" {
+		return ""
+	}
+	return "## Session goal (north star)\n" +
+		"This session has a persistent goal. Treat it as the overriding objective for your wake action: make progress toward it and stay aligned with it.\n\n" + goal
 }
 
 // buildSystemPrompt composes the agent's persona from soul + identity.

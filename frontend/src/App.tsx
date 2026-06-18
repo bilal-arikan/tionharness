@@ -25,6 +25,7 @@ import { ExecutionsPanel } from './components/panels/ExecutionsPanel'
 import { ArtifactsPanel } from './components/panels/ArtifactsPanel'
 import { SecretsPanel } from './components/panels/SecretsPanel'
 import { SkillsPanel } from './components/panels/SkillsPanel'
+import { MarketPanel } from './components/panels/MarketPanel'
 import { BudgetPanel } from './components/panels/BudgetPanel'
 import { ChatMeters } from './components/panels/ChatMeters'
 import { SessionDetailPanel } from './components/sessions/SessionDetailPanel'
@@ -744,6 +745,7 @@ export default function App() {
         )}
         {view === 'secrets' && <SecretsPanel onError={setError} />}
         {view === 'skills' && <SkillsPanel onError={setError} />}
+        {view === 'market' && <MarketPanel onError={setError} />}
         {view === 'budget' && <BudgetPanel onError={setError} />}
         {view === 'logs' && <LogsPanel onError={setError} />}
         {view === 'settings' && (

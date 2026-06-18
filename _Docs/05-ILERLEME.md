@@ -2,6 +2,53 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Uygulama İçi Market — tasarım + MVP ilk dilim ✅ (2026-06-18)
+
+**İstek:** Uygulama içi bir market sistemi: Skiller, Agentlar, Providerlar ve Flow taslakları paylaşılıp kurulabilsin. Büyük özellik → önce kapsamlı tasarım, sonra MVP'nin ilk dikey dilimi (yerel skill listeleme/içe aktarma).
+
+**Tasarım dokümanı:** `_Docs/21-MARKET.md` — paket formatı (**SwarmPack v1**: manifest zarfı + tür-özel payload), çok-katmanlı (bundled→global→workspace) dosya-tabanlı registry (`skills.Store` kardeşi), tür-başına install/publish/sanitize akışı, API yüzeyi, UI sekmeleri, MVP kapsamı ve sonraki adımlar.
+
+**Mimari kararlar:**
+- **Dosya-tabanlı, bağımlılıksız registry** — `*.swarmpack.json` dosyaları; manifest ucuz taranır, payload yalnız detay/kurulum anında lazy okunur (skills body-lazy kalıbı).
+- **Sır sızdırmaz** — provider paketi `keyEnc` taşımaz (kurulumda kullanıcı kendi anahtarını girer); agent paketi ID/CreatedBy/secret taşımaz; flow/agent paketleri agent-agnostik.
+- **Üç katman** — bundled (`//go:embed defaults`) → global (`<DataDir>/market`) → workspace (`<workspace>/market`); workspace > global > bundled çakışmada kazanır. Publish workspace tier'a yazar.
+
+**MVP dikey dilim (skill türü uçtan uca):**
+- **Backend `internal/market` (yeni):** `pack.go` (SwarmPack + 4 tür payload tipi, schema sabitleri), `store.go` (tier tarama + lazy `Get` + `Publish`/`Import` + `ListKind`), `install.go` (`InstallSkill`: SKILL.md'yi workspace skills dizinine yazar, overwrite guard), `publish.go` (`BuildSkillPack`), `defaults.go` (`//go:embed defaults` + `EnsureDefaults`, skills aynası), `defaults/` (2 gömülü başlangıç paketi: web-research, code-review), `store_test.go` (defaults→list→get→install→conflict→overwrite→publish E2E).
+- **`agent/runtime.go`:** `market *market.Store` alanı + `Market()`/`WorkspaceSkillsDir()` accessor'ları + `marketGlobalDir()`/`workspaceMarketDir()` dizin yardımcıları + boot'ta `market.EnsureDefaults`.
+- **API `internal/api/market.go` (yeni):** `GET /api/market` (`?kind=` filtresi, manifestler), `GET /api/market/{id}` (payload dâhil), `POST /api/market/{id}/install` (skill → workspace + skills.Reload; diğer türler 501), `POST /api/market/publish` (skill slug → ham SKILL.md kayıpsız paketlenir), `POST /api/market/import` (ham JSON), `POST /api/market/reload`.
+- **Frontend:** `types/market.ts` (Pack/Payload/InstallResult), `api/market.ts` (`marketApi`, barrel'a eklendi), NavRail `market` görünümü (Store ikonu), `components/panels/MarketPanel.tsx` (tür sekmeleri Tümü/Beceri/Ajan/Sağlayıcı/Akış + kart ızgarası + detay çekmecesi: skill body markdown önizleme + "Bu workspace'e kur"; diğer türler "yakında" rozetli), `App.tsx` wiring.
+
+**Durum:** `go build ./...` + `go vet` + `go test ./internal/market/... ./internal/api/... ./internal/agent/...` + frontend `tsc`/`vite build` yeşil. **Canlı API E2E** (izole instance): list→get(payload lazy)→install→skiller arasında görünür, publish→workspace tier dosyası yazıldı, re-install çakışması 409 / overwrite 200 doğrulandı. Sonraki dilimler: agent/provider/flow install+publish, import/export UI, Playwright UI smoke.
+
+## Sohbete Hedef (Goal) mekanizması ✅ (2026-06-18)
+
+**İstek:** Sohbet/oturum detay ekranına kalıcı bir **Hedef (Goal)** alanı eklensin; ajanlar ve context bunu kullanabilsin. Claude Code'un `/goal` mekanizması (kalıcı, ölçülebilir bir "kuzey yıldızı" hedefi; her turda korunur) örnek alındı — otonom döngü/checker kısmı kapsam dışı, yalnız **kalıcı-hedef-enjeksiyonu** uyarlandı.
+
+**Mimari kararlar:**
+- Hedef **oturum-kapsamlı** (`db.Session.Goal`), ajan-kapsamlı değil — her sohbet kendi hedefini taşır.
+- Enjeksiyon noktası `composeTurnRequest` **dinamik (cache'siz) suffix'inin EN BAŞI** — hedef, statik persona'dan hemen sonra okunan ilk şey (memory/summary/artifact bloklarından önce). Tek kaynak: `goalContextBlock` (`api/goal.go`).
+- `UpdatedAt` bump edilmez → hedef düzenlemek oturum listesini yeniden sıralamaz (başlık `SetSessionTitle` aksine, ama `MarkSessionRead` kalıbı gibi).
+- Otonom **heartbeat** turu da hedefi kullanır: `runtime.runHeartbeat` heartbeat oturumunun `Goal`'ını `SystemDynamic`'e enjekte eder (`heartbeatGoalBlock`; `api` paketine import bağımlılığı olmadan yerel ayna). Böylece "ajanlar bunu kullanabilsin" hem manuel hem otonom yolda sağlanır.
+
+**Değişiklikler (backend):**
+- `internal/db/models.go`: `Session.Goal string` (`json:"goal,omitempty"`).
+- `internal/db/store.go`: `SetSessionGoal(ctx, id, goal)` (`mutateSessionLocked`, UpdatedAt bump yok, boş = temizler).
+- `internal/api/goal.go` (yeni): `goalContextBlock` (north-star prompt bloğu, ≤`maxGoalLen=2000`), `handleSetSessionGoal` (`PUT /api/sessions/{id}/goal`, trim + uzunluk guard + 404).
+- `internal/api/chat_turn.go`: `composeTurnRequest` dynamic suffix'ine hedef bloğu **en başa** eklendi (chat + chat_stream ortak).
+- `internal/api/session_info.go`: `sessionInfoResp.Goal` + `systemFillers`'a `role:"goal"` ("Hedef") filler'ı → bağlam metresi hedefin token ayak izini gösterir.
+- `internal/api/server.go`: `PUT /api/sessions/{id}/goal` rotası.
+- `internal/agent/runtime.go`: `runHeartbeat` `SystemDynamic: heartbeatGoalBlock(session.Goal)` + `heartbeatGoalBlock` helper.
+
+**Değişiklikler (frontend):**
+- `types/session.ts`: `SessionInfo.goal`.
+- `api/sessions.ts`: `setSessionGoal(id, goal)` (`PUT`).
+- `components/sessions/SessionDetailPanel.tsx`: başlık altında **Hedef** bölümü — boş durumda "Bu sohbet için bir hedef belirle" CTA, dolu durumda accent kutuda metin, `Target` ikonu + kalem düzenle; `textarea` editör (⌘/Ctrl+Enter kaydet, Esc iptal, maxLength 2000); kaydedince local `info.goal` günceller + `localRefresh` bump (metre anında yenilenir). Bağlam metresi lejandına `goal` rengi (rose `#f43f5e`).
+
+**Doğrulama:** `go build`/`vet`/`test ./internal/api,db,agent` + frontend `tsc --noEmit` yeşil. **API E2E** (izole 8090 instance, gerçek backend): session oluştur → `PUT goal` → `/info` goal round-trip ✅, "goal" filler `/info`'da görünür ✅, boş body ile temizleme ✅. **Playwright canlı test** (5174 → 8090): detay panelinde Hedef bölümü render ✅, boş-durum CTA → textarea → metin yaz → Kaydet → metin paragraf olarak görünür + "Hedefi düzenle"ye döner ✅, ↻ sonrası bağlam metresinde "Hedef: ~107" bucket'ı çıkar ✅ (enjeksiyon kanıtı).
+
+---
+
 ## Sağlayıcı/model seçimi + emoji picker standardizasyonu ✅ (2026-06-18)
 
 **İstek:** Workspace ayar ekranındaki model/sağlayıcı seçimi standart değildi (her yerde farklı UI). `ProviderModelSelect` bileşeni her yerde tutarlı kullanılsın; ikon seçiminde emoji listesinden seçilebilsin (emoji picker).

@@ -18,6 +18,7 @@ import { executionApi } from './api/executions'
 import { artifactApi } from './api/artifacts'
 import { secretApi } from './api/secrets'
 import { skillApi } from './api/skills'
+import { marketApi } from './api/market'
 import { systemApi } from './api/system'
 import { providerApi } from './api/providers'
 
@@ -39,6 +40,7 @@ export const api = {
   ...artifactApi,
   ...secretApi,
   ...skillApi,
+  ...marketApi,
   ...systemApi,
   ...providerApi,
 }
