@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Eye, Trash2 } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
-import { AVATAR_COLORS, AVATAR_GLYPHS, resolveColor } from '../../lib/avatar'
+import { AVATAR_COLORS, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
+import { EmojiPicker } from './EmojiPicker'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentToolsSection } from './AgentToolsSection'
 import { AgentSkillsSection } from './AgentSkillsSection'
@@ -40,6 +41,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
 
   const preview: Pick<Agent, 'id' | 'name' | 'avatar' | 'color'> = {
     id: agent.id,
@@ -134,31 +136,30 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         </Field>
 
         <Field label="Görsel (emoji)">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="relative inline-block">
             <button
-              onClick={() => setAvatar('')}
-              className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs ${
-                avatar === ''
-                  ? 'border-[var(--color-accent)] text-[var(--color-text)]'
-                  : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
-              }`}
-              title="Otomatik (baş harf)"
+              type="button"
+              onClick={() => setEmojiPickerOpen((o) => !o)}
+              className="flex items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm hover:border-[var(--color-accent)]"
+              title="Emoji seç"
             >
-              Aa
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-lg leading-none">
+                {avatar || 'Aa'}
+              </span>
+              <span className="text-[var(--color-text-dim)]">
+                {avatar ? 'Emojiyi değiştir' : 'Emoji seç (varsayılan: baş harf)'}
+              </span>
             </button>
-            {AVATAR_GLYPHS.map((g) => (
-              <button
-                key={g}
-                onClick={() => setAvatar(g)}
-                className={`flex h-8 w-8 items-center justify-center rounded-full border text-base ${
-                  avatar === g
-                    ? 'border-[var(--color-accent)]'
-                    : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
-                }`}
-              >
-                {g}
-              </button>
-            ))}
+            {emojiPickerOpen && (
+              <EmojiPicker
+                value={avatar}
+                onSelect={(emoji) => {
+                  setAvatar(emoji)
+                  setEmojiPickerOpen(false)
+                }}
+                onClose={() => setEmojiPickerOpen(false)}
+              />
+            )}
           </div>
         </Field>
 

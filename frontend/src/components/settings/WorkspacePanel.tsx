@@ -2,6 +2,8 @@
 // provider/model overrides, autonomy pause and the delete danger zone.
 import type { WorkspaceSettings } from '../../types'
 import { Field, Toggle, inputCls, type WsSet } from './primitives'
+import { ProviderModelSelect } from '../agents/ProviderModelSelect'
+import { EmojiField } from '../common/EmojiField'
 
 interface Props {
   ws: WorkspaceSettings
@@ -33,7 +35,7 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
 
       <div className="flex items-end gap-3">
         <Field label="İkon (emoji)">
-          <input value={ws.icon} onChange={(e) => setWsField('icon', e.target.value)} placeholder="🧩" maxLength={4} className={`${inputCls} w-20 text-center text-lg`} />
+          <EmojiField value={ws.icon} onChange={(e) => setWsField('icon', e)} clearLabel="⬡" />
         </Field>
         <Field label="Renk">
           <div className="flex items-center gap-2">
@@ -54,14 +56,19 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
         <span className="font-medium text-[var(--color-text)]"> “Promptlar &amp; Dosyalar”</span> sekmesinden,
         düzenlenebilir dosyalar (<code className="rounded bg-[var(--color-bg)] px-1">config/</code>) olarak yönetilir.
       </div>
-      <Field label="Varsayılan sağlayıcı (bu workspace)" hint="Boş = uygulama varsayılanı.">
-        <select value={ws.defaultProvider} onChange={(e) => setWsField('defaultProvider', e.target.value)} className={inputCls}>
-          <option value="">(uygulama varsayılanı)</option>
-          <option value="claude-cli">claude-cli (abonelik)</option>
-          <option value="anthropic">anthropic (API key)</option>
-        </select>
-      </Field>
-      <Field label="Varsayılan model (bu workspace)" hint="Boş = uygulama varsayılanı."><input value={ws.defaultModel} onChange={(e) => setWsField('defaultModel', e.target.value)} placeholder="(uygulama varsayılanı)" className={inputCls} /></Field>
+      <div className="space-y-1">
+        <span className="text-sm font-medium">Varsayılan sağlayıcı + model (bu workspace)</span>
+        <ProviderModelSelect
+          allowInherit
+          provider={ws.defaultProvider}
+          model={ws.defaultModel}
+          onChange={(p, m) => {
+            setWsField('defaultProvider', p)
+            setWsField('defaultModel', m)
+          }}
+        />
+        <span className="text-xs text-[var(--color-text-dim)]">Boş = uygulama varsayılanı.</span>
+      </div>
       <Toggle label="Bu workspace'te otonomiyi duraklat" hint="Yalnızca bu workspace'in heartbeat/zamanlama çağrılarını bloklar." checked={ws.pauseAutonomy} onChange={(v) => setWsField('pauseAutonomy', v)} />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">

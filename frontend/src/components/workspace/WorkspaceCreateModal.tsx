@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
 import type { WorkspaceTemplate } from '../../types'
+import { EmojiField } from '../common/EmojiField'
 
 export interface NewWorkspaceData {
   name: string
@@ -13,9 +14,6 @@ interface Props {
   onCreate: (data: NewWorkspaceData) => void
   onClose: () => void
 }
-
-// A small palette of starter emojis for the workspace identity.
-const ICONS = ['⬡', '🚀', '🧪', '📦', '🛠', '🎯', '🌙', '🔬', '🏗', '🧠']
 
 // WorkspaceCreateModal is the popup dialog for creating a new workspace: name,
 // an optional data folder (native picker or manual path), and an emoji identity.
@@ -131,20 +129,8 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
 
         {/* Icon */}
         <label className="mb-1 block text-xs text-[var(--color-text-dim)]">Simge</label>
-        <div className="mb-4 flex flex-wrap gap-1">
-          {ICONS.map((ic) => (
-            <button
-              key={ic}
-              onClick={() => setIcon(ic)}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border text-base transition ${
-                icon === ic
-                  ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
-                  : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]'
-              }`}
-            >
-              {ic}
-            </button>
-          ))}
+        <div className="mb-4">
+          <EmojiField value={icon} onChange={setIcon} clearLabel="⬡" />
         </div>
 
         {/* Folder */}
