@@ -45,6 +45,32 @@ Pano artık bir **çalıştırma yüzeyi değil**, pasif bir durum/bilgi panosu.
   - **frontend:** `api/tasks.ts`'den `runTask/runTaskStream/streamRunTask/listTaskRuns/TaskStreamHandlers` + `prompt` paramları kaldırıldı; import'lar sadeleşti.
 - **Durum:** `go build`/`go test ./internal/...` + frontend `tsc`/`npm run build` yeşil. **Commit beklemede** (smart-surge reconcile).
 
+## Executions ekranı — session ID gösterimi + bildirim deep-link'leri (2026-06-18)
+
+**İstek:** Her yürütme satırında session ID göster; zamanlama ve akış bildirimlerine tıklanınca Executions ekranında ilgili oturum açılsın.
+
+### Session ID görünürlüğü (`ExecutionsPanel.tsx`)
+- **Liste satırı:** Her öğenin altına `#shortId(sessionId)` — son 8 karakter, `font-mono text-[10px] opacity-60`.
+- **Detay başlığı:** Tıklanabilir kopyalama butonu `<Copy size={10} /> #shortId(sessionId)` — hover'da accent rengi, `navigator.clipboard.writeText(fullId)` tam ID'yi panoya yazar.
+- **`shortId` yardımcısı:** Kompakt liste görünümü için; tam ID detay başlığında (title attribute) ve clipboard'da mevcut.
+- **Deep-link props:** `focusId?: string | null` (route'dan gelen sessionId) + `onSelectExecution?: (sessionId: string) => void` (URL sync için yukarı bildirir). `useEffect` focusId değişince selectedId'yi günceller.
+
+### Zamanlama bildirimleri → Executions (`scheduler.go`)
+- `emitPromptDelivery` her iki yol (başarı + oturumlu-hata) `{"view": "chat"}` → `{"view": "executions", "sessionId": sessionID}` olarak değiştirildi.
+- Artık zamanlamadan tetiklenen oturumun transkribi bildirime tıklayınca Executions ekranında doğrudan açılır. (Session'sız hata fallback'i `{"view": "logs", "agentId": ...}` olarak korundu.)
+
+### Akış bildirimleri → Executions (`flow.go`)
+- `RunFlowRecorded`'a `autonomous` parametresi guard'ı + `emitFlowDelivery` yeni metodu eklendi.
+- Akışlar önceden **hiç bildirim göndermiyordu**; artık otonom çalıştırmalarda başarı veya hata bildirimi gönderilir.
+- Her iki bildirim `{"view": "executions", "sessionId": sessionID}` hedefler → tıklama Executions'ta ilgili akış oturumunu açar.
+
+### URL routing (`url.ts`, `App.tsx`)
+- `routeFromEvent`: `view === 'executions'` → `t.sessionId` işlendi (yalnız `chat` işleniyordu).
+- `routeIdForView`: `executionId: string | null` state parametresi + `case 'executions': return state.executionId`.
+- `App.tsx`: `executionTarget` state + `applyRoute` `executions` dalı + `pendingRouteRef` workspace-yükleme handler'ı; `ExecutionsPanel`'e `focusId={executionTarget}` + `onSelectExecution={setExecutionTarget}`.
+
+✅ `go build ./...` + `npx tsc -b` yeşil. Chrome canlı testi bu turda gateway bağlantısı kopuk olduğundan yapılamadı; sunucular sağlıklı (Go + Vite HMR).
+
 ## Ayarlar yeniden düzenleme — bölüm taşımaları (2026-06-18)
 İki ayar bölümü daha mantıksal olarak ait oldukları ekrana taşındı:
 - **"Anthropic beta"** (1M token bağlam + uzatılmış prompt cache) → **Sağlayıcılar**'dan **Bağlam & Bellek**'e alındı (`appPanels.tsx ContextPanel`, `FlaskConical` başlık ikonu). Bu seçenekler bağlam penceresi/cache davranışını etkilediği için Bağlam ekranıyla daha uyumlu. `ProvidersPanel` artık `Toggle`/`FlaskConical` kullanmıyor (import temizlendi).
