@@ -363,18 +363,33 @@ export function TaskBoard({ agents, onError }: Props) {
                                 🔀 {flow?.name ?? 'Akış'}
                               </span>
                             )}
-                            {depIds.length > 0 && (
+                            {depIds.length > 0 && (() => {
+                              // Color the chip based on the column of the first unmet dependency.
+                              const firstUnmetTask = unmetDeps.length > 0
+                                ? tasks.find((x) => x.id === unmetDeps[0])
+                                : null
+                              const unmetColColor = firstUnmetTask
+                                ? (columns.find((c) => c.key === firstUnmetTask.boardState)?.color ?? null)
+                                : null
+                              const chipStyle = unmetDeps.length > 0 && unmetColColor
+                                ? { backgroundColor: unmetColColor + '22', color: unmetColColor }
+                                : undefined
+                              return (
                               <span
                                 className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${
-                                  unmetDeps.length > 0
+                                  unmetDeps.length > 0 && !unmetColColor
                                     ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
+                                    : unmetDeps.length > 0
+                                    ? ''
                                     : 'bg-green-500/10 text-green-400'
                                 }`}
+                                style={chipStyle}
                                 title={unmetDeps.length > 0 ? `${unmetDeps.length} bağımlılık tamamlanmadı` : 'Tüm bağımlılıklar tamamlandı'}
                               >
                                 🔗 {depIds.length}
                               </span>
-                            )}
+                              )
+                            })()}
                           </div>
                         )}
                       </div>
