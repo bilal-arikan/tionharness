@@ -55,7 +55,38 @@ DATA_DIR/
 2. Hiç workspace yoksa **"Varsayılan"** otomatik oluşturulur.
 3. Her HTTP isteği `X-Workspace-Id` header'ı taşır; `withWorkspace` middleware'i doğru workspace'i çözüp context'e koyar.
 4. Handler'lar `ws(r).DB` ve `ws(r).Runtime` ile yalnızca o workspace'in verisine erişir.
-5. Frontend aktif workspace id'sini `localStorage`'da tutar; switcher'dan geçince tüm liste (ajan/oturum/mesaj) sıfırlanıp yeniden yüklenir.
+5. Frontend aktif workspace id'sini **URL hash'inde** (`#/w/{id}/{view}`) kaynak-doğru olarak tutar; `localStorage` yalnızca hash'siz açılışta tohum (fallback) olarak okunur. Switcher'dan geçince tüm liste (ajan/oturum/mesaj) sıfırlanıp yeniden yüklenir.
+
+## Çoklu Pencere / Derin Bağlantı (Deep-Link)
+
+Tüm navigasyon durumu URL hash'inde adreslenir → **her workspace ayrı bir tarayıcı
+penceresinde/sekmesinde eşzamanlı açılabilir** (paylaşılan localStorage'a rağmen
+çapraz-sızıntı yok).
+
+```
+#/w/{workspaceId}/{view}[/{entityId}]
+   workspaceId → isteği izole backend DB'sine kapsar (X-Workspace-Id header'ına dönüşür)
+   view        → NavRail görünümü (chat/board/agents/…)
+   entityId    → görünüme göre: chat→sessionId, agents/memory/tools→agentId,
+                 artifacts→artifactId, schedules→scheduleId
+```
+
+**Nasıl çalışır:**
+- `lib/url.ts` (`parseRoute`/`buildRoute`/`routeIdForView`) + `hooks/useUrlSync.ts`
+  (state↔URL iki-yönlü senkron: ilk yazım `replaceState`, sonrası `pushState` →
+  geri/ileri tuşları çalışır).
+- `App.tsx` modül yüklenirken `INITIAL_ROUTE = parseRoute(hash)`'i okur; hash bir
+  workspace adresliyorsa **hemen** `setActiveWorkspace` ile api istemcisine pinler.
+- Aktif workspace `api/client.ts`'te **modül-düzeyi değişkende** tutulur; runtime'da
+  yalnızca buradan okunur (localStorage runtime'da yeniden okunmaz). Her pencere kendi
+  JS realm'ine sahip olduğundan, bir penceredeki workspace değişimi diğerini etkilemez.
+- **WorkspaceSwitcher** her satırda **"Ayrı pencerede aç"** (↗ `ExternalLink`) butonu
+  sunar → `window.open(origin+pathname+#/w/{id}/chat)` ile o workspace'e pinli yeni
+  pencere açar; mevcut pencerenin seçimini bozmaz.
+
+> Not: Bu bir **web uygulaması** (Electron/native değil) — "ayrı pencere" tarayıcı
+> penceresi/sekmesi demektir. Görev çubuğunda bağımsız uygulama penceresi istenirse
+> ileride Electron/Tauri sarmalayıcı veya tarayıcının PWA modu gerekir.
 
 ## API Uçları
 
@@ -73,6 +104,14 @@ Diğer tüm uçlar (`/api/agents`, `/api/chat`, `/api/runtime` ...) `X-Workspace
 - WS2 "İş" → sadece Ajan-B görüyor ✅
 - Ayrı klasör + ayrı `store/` dizinleri ✅
 - UI switcher ile geçiş: liste anında o workspace'e göre değişiyor ✅
+
+### Çoklu pencere doğrulaması (2026-06-18, Playwright)
+
+- İki sekme iki farklı workspace hash'iyle açıldı (`#/w/A/chat`, `#/w/B/chat`) → her
+  biri kendi workspace adını + oturum listesini gösterdi ✅
+- Tab B yüklenince paylaşılan `localStorage` B'ye döndü; **Tab A'ya geri dönüldüğünde
+  hâlâ A workspace'inde** (hash A, ad "Varsayilan") → çapraz-sızıntı yok ✅
+- Sonuç: pencere-başına workspace izolasyonu URL pinning ile uçtan uca çalışıyor.
 
 ## Workspace Ayarları (`ws-settings.json`)
 
