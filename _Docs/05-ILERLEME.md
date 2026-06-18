@@ -2,6 +2,22 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Takip edilmeyen hataları yakalama — son savunma hattı ✅ (commit sonrası, 2026-06-18)
+
+"Kimsenin takip etmediği hataları yakalayan bir sistem var mı?" sorusu üzerine
+iki eksik güvenlik ağı eklendi (detay: `_Docs/12-LOGLAMA.md`):
+- **HTTP panic recovery** (`api/middleware_recover.go` `withRecover`): handler
+  panic'i artık stderr yerine log akışına (`Error` + stack) yazılır + temiz 500
+  döner. Zincire `withRequestLog → withRecover → withWorkspace` olarak eklendi.
+- **Frontend hata köprüsü**: `POST /api/logs` (`handleClientLog`) + `lib/reportError.ts`
+  (`window.onerror`/`unhandledrejection` + throttle/keepalive) + `ErrorBoundary.tsx`
+  (render çökmesi → rapor + kurtarılabilir fallback), `main.tsx`'te kurulu. Beyaz
+  ekran ve sessiz JS hataları artık Loglar ekranında görünür.
+- Testler: `middleware_recover_test.go` (panic→500+log, passthrough, client-log
+  kayıt/boş-düşürme). `12-LOGLAMA.md` "Gelecek" madde 2 ✅ işaretlendi.
+
+✅ `go build ./...` + `go test ./internal/...` + frontend `tsc -b`/`vite build` yeşil.
+
 ## Performans sağlamlaştırma turu — Go best-practice incelemesi sonrası (2026-06-18)
 
 Go performans araştırması (Go 1.26 GC, JSON kütüphaneleri, RWMutex vs sync.Map, SSE,

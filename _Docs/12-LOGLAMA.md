@@ -1,8 +1,29 @@
 # SwarmGo — Loglama Sistemi
 
-> Son güncelleme: **2026-06-17**
+> Son güncelleme: **2026-06-18**
 > Uygulama logları tek bir **bellek-içi ring buffer**'a yakalanır, stdout'a da
 > yazılır ve `GET /api/logs` ile UI'a + dış araçlara sunulur.
+
+## Takip edilmeyen hataları yakalama (son savunma hattı, 2026-06-18)
+
+Açıkça `logger.Warn/Error` ile loglanmayan hataların da kaydı tutulur:
+
+- **HTTP handler panic recovery** (`internal/api/middleware_recover.go`):
+  `withRecover` her handler'ı sarar; bir panic'i yakalar, `Error("http handler
+  panicked", method/path/panic/stack)` ile log akışına yazar ve istemciye temiz
+  **500** döner. Önceden bu panic'ler yalnız net/http'nin per-request recover'ına
+  düşüp **stderr**'de kalıyordu (logbuf'a/Loglar ekranına gelmiyordu).
+  `http.ErrAbortHandler` yeniden panic'lenir (kasıtlı SSE abort'ları korunur).
+  Zincir: `withCORS → withRequestLog → withRecover → withWorkspace → mux`.
+- **Goroutine panic recovery**: `agent/worker.go` `tick` (heartbeat),
+  `agent/flow.go` `driveFlow`, `orchestration/engine.go` paralel+sıralı node'lar
+  — node panic'i süreç çökmesi yerine loglanan flow hatasına dönüşür.
+- **Frontend hata köprüsü**: `POST /api/logs` (`handleClientLog`) istemci
+  hatalarını aynı slog akışına yazar. Frontend `lib/reportError.ts`
+  (`reportClientError` throttle'lı+keepalive'li + `installGlobalErrorHandlers`:
+  `window.onerror` + `unhandledrejection`) ve `components/ErrorBoundary.tsx`
+  (React render çökmesi → rapor + kurtarılabilir fallback) `main.tsx`'te kurulur.
+  Böylece beyaz-ekran çökmeleri ve sessiz JS hataları da Loglar ekranında görünür.
 
 ## Genel Bakış
 
@@ -188,16 +209,20 @@ Sınırlar ve güvenlik:
 
 1. **Canlı hata SSE:** `/api/events`'e `error` olay türü → dış ajan poll'suz
    hata yakalar.
-2. **Frontend hata köprüsü:** `window.onerror`/console error → `POST /api/logs`
-   → UI hataları da merkezî tampona girer.
+2. ~~**Frontend hata köprüsü**~~ ✅ **Yapıldı (2026-06-18)** — `POST /api/logs` +
+   `ErrorBoundary` + global handler'lar (bkz. yukarıdaki "Takip edilmeyen
+   hataları yakalama" bölümü).
 3. **Kalıcı rotating log dosyası:** restart sonrası geçmiş korunur.
 4. **Bearer auth + ağ bind:** gerçek uzak-ajan erişimi için token'lı koruma.
 
 ## İlgili dosyalar
 
 - `internal/logbuf/logbuf.go` — ring buffer + tee'li slog handler
-- `internal/api/logs.go` — `GET /api/logs` (filtre: limit/level/q)
+- `internal/api/logs.go` — `GET /api/logs` (filtre: limit/level/q) + `POST /api/logs` (frontend hata köprüsü)
 - `internal/api/middleware_log.go` — HTTP access-log middleware
+- `internal/api/middleware_recover.go` — HTTP panic-recovery middleware (son savunma hattı)
+- `frontend/src/lib/reportError.ts` — istemci hata raporlayıcı + global handler kurulumu
+- `frontend/src/components/ErrorBoundary.tsx` — React render çökmesi yakalayıcı
 - `internal/api/{chat,chat_stream,agents,sessions,tasks,schedules,mcp,memory}.go` — iş logları
 - `internal/agent/{worker,executor,flow,reflector}.go` — otonom/runtime logları
 - `frontend/src/components/panels/LogsPanel.tsx` — Loglar ekranı (filtre + gruplama)
