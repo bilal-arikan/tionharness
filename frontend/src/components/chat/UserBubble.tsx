@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
+import { X } from 'lucide-react'
 import type { Agent, Attachment } from '../../types'
 import { resolveColor } from '../../lib/avatar'
 import { AttachmentChip } from './AttachmentChip'
@@ -64,6 +65,39 @@ function renderWithMentions(text: string, agents: Agent[]): ReactNode[] {
   return out
 }
 
+// ImageLightbox shows a full-screen overlay with a single image. Closes on
+// backdrop click, close button, or Escape key.
+function ImageLightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        title="Kapat"
+        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+      >
+        <X size={18} />
+      </button>
+      <img
+        src={url}
+        alt={name}
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+      />
+      <span className="absolute bottom-4 text-xs text-white/50">{name}</span>
+    </div>
+  )
+}
+
 // UserBubble renders a user chat message. Plain messages keep the accent bubble;
 // messages that mention agents (@) get highlighted chips + a ring, and messages
 // typed as a command (leading "/") render in a distinct monospaced command style.
@@ -78,6 +112,8 @@ export function UserBubble({
   attachments?: Attachment[]
   onOpenArtifact?: (id: string) => void
 }) {
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
+
   // A quote-wrapped command is an explicit escape → render the inner text as a
   // plain bubble (no command style).
   const quotedCmd = quotedCommand(text)
@@ -86,8 +122,8 @@ export function UserBubble({
   const isCommand = !quotedCmd && /^\/\S/.test(text.trim())
 
   // Attachment chips rendered under the bubble (image thumbnails / file cards).
-  // Artifact-sourced chips open the artifact viewer; image chips open the
-  // full-size image in a new tab; other attachments are not yet clickable.
+  // Artifact-sourced chips open the artifact viewer; image chips open an
+  // in-app lightbox; other attachments are not yet clickable.
   const chips = attachments && attachments.length > 0 && (
     <div className="mt-1.5 flex flex-wrap justify-end gap-2">
       {attachments.map((a) => {
@@ -96,7 +132,7 @@ export function UserBubble({
           onClick = () => onOpenArtifact(a.id.startsWith('art-') ? a.id.slice(4) : a.id)
         } else if (a.kind === 'image') {
           const url = imageURL(a)
-          if (url) onClick = () => window.open(url, '_blank')
+          if (url) onClick = () => setLightbox({ url, name: a.name })
         }
         return <AttachmentChip key={a.id} attachment={a} onClick={onClick} />
       })}
@@ -105,28 +141,34 @@ export function UserBubble({
 
   if (isCommand) {
     return (
-      <div className="flex flex-col items-end">
-        <div className="flex max-w-[80%] min-w-0 items-center gap-2 rounded-2xl border border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] px-4 py-2.5 font-mono text-sm break-words text-[var(--color-text)]">
-          <span className="text-[var(--color-accent)]">⌘</span>
-          <span className="min-w-0 break-words">{text}</span>
+      <>
+        {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
+        <div className="flex flex-col items-end">
+          <div className="flex max-w-[80%] min-w-0 items-center gap-2 rounded-2xl border border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] px-4 py-2.5 font-mono text-sm break-words text-[var(--color-text)]">
+            <span className="text-[var(--color-accent)]">⌘</span>
+            <span className="min-w-0 break-words">{text}</span>
+          </div>
+          {chips}
         </div>
-        {chips}
-      </div>
+      </>
     )
   }
 
   return (
-    <div className="flex flex-col items-end">
-      {text.trim() && (
-        <div
-          className={`max-w-[80%] min-w-0 whitespace-pre-wrap break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-white ${
-            hasMention ? 'ring-1 ring-white/40' : ''
-          }`}
-        >
-          {quotedCmd ? quotedCmd : hasMention ? renderWithMentions(text, agents) : text}
-        </div>
-      )}
-      {chips}
-    </div>
+    <>
+      {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
+      <div className="flex flex-col items-end">
+        {text.trim() && (
+          <div
+            className={`max-w-[80%] min-w-0 whitespace-pre-wrap break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-white ${
+              hasMention ? 'ring-1 ring-white/40' : ''
+            }`}
+          >
+            {quotedCmd ? quotedCmd : hasMention ? renderWithMentions(text, agents) : text}
+          </div>
+        )}
+        {chips}
+      </div>
+    </>
   )
 }
