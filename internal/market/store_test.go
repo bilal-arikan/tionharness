@@ -25,8 +25,16 @@ func TestDefaultsAndInstall(t *testing.T) {
 			t.Errorf("catalog pack %q should not carry payload", p.ID)
 		}
 	}
-	if got := st.ListKind(KindSkill); len(got) != len(list) {
-		t.Errorf("ListKind(skill)=%d, want %d (all bundled are skills)", len(got), len(list))
+	// The bundled set spans multiple kinds; each kind list must be a subset and
+	// at least the skills must be non-empty.
+	skills := st.ListKind(KindSkill)
+	if len(skills) == 0 {
+		t.Error("ListKind(skill) returned nothing")
+	}
+	total := len(st.ListKind(KindSkill)) + len(st.ListKind(KindAgent)) +
+		len(st.ListKind(KindProvider)) + len(st.ListKind(KindFlow))
+	if total != len(list) {
+		t.Errorf("kind lists sum to %d, want %d (every pack has a known kind)", total, len(list))
 	}
 
 	// Get loads the payload lazily.

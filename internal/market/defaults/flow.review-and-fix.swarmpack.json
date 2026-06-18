@@ -1,0 +1,22 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "flow.review-and-fix",
+  "kind": "flow",
+  "name": "Review → Fix",
+  "description": "Review a change, branch on whether issues were found, then fix or approve.",
+  "version": "1.0.0",
+  "author": "swarmgo",
+  "icon": "🔬",
+  "color": "#f59e0b",
+  "tags": [
+    "flow",
+    "orchestration"
+  ],
+  "payload": {
+    "flow": {
+      "name": "Review → Fix",
+      "description": "Review a change, branch on whether issues were found, then fix or approve.",
+      "graph": "{\"start\": \"review\", \"nodes\": [{\"id\": \"review\", \"type\": \"agent\", \"title\": \"Review\", \"agentId\": \"\", \"prompt\": \"Review this change. If you find blocking issues, start your reply with ISSUES; otherwise start with CLEAN.\\n{{input}}\", \"next\": \"route\", \"x\": 100, \"y\": 60}, {\"id\": \"route\", \"type\": \"branch\", \"title\": \"Route\", \"matchMode\": \"contains\", \"branches\": [{\"contains\": \"ISSUES\", \"next\": \"fix\"}, {\"contains\": \"\", \"next\": \"approve\"}], \"x\": 100, \"y\": 240}, {\"id\": \"fix\", \"type\": \"agent\", \"title\": \"Fix\", \"agentId\": \"\", \"prompt\": \"Apply concrete fixes for the issues raised:\\n{{last}}\", \"next\": \"\", \"x\": 360, \"y\": 170}, {\"id\": \"approve\", \"type\": \"agent\", \"title\": \"Approve\", \"agentId\": \"\", \"prompt\": \"Write a short approval note summarising why this is good to merge.\", \"next\": \"\", \"x\": 360, \"y\": 320}]}"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "skill.data-analysis",
+  "kind": "skill",
+  "name": "Data Analysis",
+  "description": "Turn a dataset into a defensible answer: frame, clean, explore, validate, summarise.",
+  "version": "1.0.0",
+  "author": "swarmgo",
+  "icon": "📊",
+  "color": "#22c55e",
+  "tags": [
+    "data",
+    "analysis"
+  ],
+  "payload": {
+    "skill": {
+      "slug": "data-analysis",
+      "body": "---\nname: \"Data Analysis\"\ndescription: \"Turn a dataset into a defensible answer: frame, clean, explore, validate, summarise.\"\nwhen_to_use: \"When analysing data, computing metrics, or answering a quantitative question\"\nicon: \"📊\"\ncolor: \"#22c55e\"\naccess: shared\n---\n# Data Analysis\n\n## Workflow\n\n1. **Frame** — restate the question and the metric that answers it.\n2. **Inspect** — shape, types, missing values, obvious outliers.\n3. **Clean** — handle nulls/dupes explicitly; record every transformation.\n4. **Explore** — distributions and relationships before conclusions.\n5. **Validate** — sanity-check against a known total or a second method.\n6. **Summarise** — answer first, then the supporting numbers and caveats.\n\n## Pitfalls\n\n- Correlation is not causation — say so.\n- Averages hide skew; report spread too.\n- State sample size and time window for every figure.\n"
+    }
+  }
+}

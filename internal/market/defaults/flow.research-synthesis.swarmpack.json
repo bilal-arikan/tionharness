@@ -1,0 +1,22 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "flow.research-synthesis",
+  "kind": "flow",
+  "name": "Research → Synthesis",
+  "description": "Gather findings, then synthesise a cited, decision-ready brief.",
+  "version": "1.0.0",
+  "author": "swarmgo",
+  "icon": "🔎",
+  "color": "#0ea5e9",
+  "tags": [
+    "flow",
+    "orchestration"
+  ],
+  "payload": {
+    "flow": {
+      "name": "Research → Synthesis",
+      "description": "Gather findings, then synthesise a cited, decision-ready brief.",
+      "graph": "{\"start\": \"research\", \"edgeStyle\": \"smoothstep\", \"nodes\": [{\"id\": \"research\", \"type\": \"agent\", \"title\": \"Research\", \"agentId\": \"\", \"prompt\": \"Research this thoroughly and list key findings with sources:\\n{{input}}\", \"next\": \"synthesize\", \"x\": 100, \"y\": 60}, {\"id\": \"synthesize\", \"type\": \"agent\", \"title\": \"Synthesize\", \"agentId\": \"\", \"prompt\": \"Synthesise these findings into a decision-ready brief with citations:\\n{{last}}\", \"next\": \"\", \"x\": 100, \"y\": 240}]}"
+    }
+  }
+}

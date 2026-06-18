@@ -25,6 +25,94 @@ const KIND_LABEL: Record<PackKind, string> = {
   flow: 'Akış',
 }
 
+const INSTALL_LABEL: Record<PackKind, string> = {
+  skill: "Bu workspace'e kur",
+  agent: 'Ajanı oluştur',
+  provider: 'Sağlayıcıyı ekle',
+  flow: 'Akışı içe aktar',
+}
+
+// Row is a small labelled key/value line used in the agent/provider preview.
+function Row({ k, v }: { k: string; v?: string }) {
+  if (!v) return null
+  return (
+    <div className="flex gap-2 text-xs">
+      <span className="w-24 shrink-0 text-[var(--color-text-dim)]">{k}</span>
+      <span className="min-w-0 break-words">{v}</span>
+    </div>
+  )
+}
+
+// PackPreview renders a kind-appropriate preview of the selected pack's payload.
+function PackPreview({ pack }: { pack: Pack }) {
+  const p = pack.payload
+  if (pack.kind === 'skill' && p?.skill?.body) {
+    return <Markdown>{stripFrontmatter(p.skill.body)}</Markdown>
+  }
+  if (pack.kind === 'agent' && p?.agent) {
+    const a = p.agent
+    return (
+      <div className="space-y-3">
+        {a.soul && <p className="text-xs leading-relaxed text-[var(--color-text)]">{a.soul}</p>}
+        <div className="space-y-1">
+          <Row k="Sağlayıcı" v={a.provider} />
+          <Row k="Model" v={a.model || '(varsayılan)'} />
+          <Row k="Düşünme" v={a.thinkingLevel} />
+          <Row k="İzin modu" v={a.permissionMode} />
+          <Row k="Beceriler" v={a.skills?.join(', ')} />
+        </div>
+      </div>
+    )
+  }
+  if (pack.kind === 'provider' && p?.provider) {
+    const pr = p.provider
+    return (
+      <div className="space-y-1">
+        <Row k="Tür" v={pr.kind} />
+        <Row k="Base URL" v={pr.baseUrl} />
+        <Row k="Varsayılan model" v={pr.defaultModel} />
+        {pr.models && (
+          <div className="pt-1">
+            <span className="text-xs text-[var(--color-text-dim)]">Modeller</span>
+            <pre className="mt-1 whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-[11px]">{pr.models}</pre>
+          </div>
+        )}
+      </div>
+    )
+  }
+  if (pack.kind === 'flow' && p?.flow) {
+    const nodes = flowNodeSummary(p.flow.graph)
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-[var(--color-text-dim)]">{nodes.length} düğüm:</p>
+        <ul className="space-y-1">
+          {nodes.map((n, i) => (
+            <li key={i} className="flex gap-2 text-xs">
+              <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--color-text-dim)]">{n.type}</span>
+              <span>{n.title || n.id}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="pt-1 text-[11px] text-[var(--color-text-dim)]">
+          İçe aktarınca boş ajan slotları ilk ajana atanır; Akışlar ekranından düzenleyebilirsin.
+        </p>
+      </div>
+    )
+  }
+  return <p className="text-xs text-[var(--color-text-dim)]">Önizleme yok.</p>
+}
+
+// flowNodeSummary safely parses a flow graph JSON string into a node list for
+// the preview. Returns [] on any parse error.
+function flowNodeSummary(graph: string): { id: string; type: string; title?: string }[] {
+  try {
+    const g = JSON.parse(graph) as { nodes?: { id: string; type: string; title?: string }[] }
+    return g.nodes ?? []
+  } catch {
+    return []
+  }
+}
+
 function KindBadge({ kind }: { kind: PackKind }) {
   return (
     <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
@@ -39,6 +127,7 @@ export function MarketPanel({ onError }: Props) {
   const [selected, setSelected] = useState<Pack | null>(null)
   const [busy, setBusy] = useState(false)
   const [installed, setInstalled] = useState<Set<string>>(new Set())
+  const [apiKey, setApiKey] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -59,6 +148,7 @@ export function MarketPanel({ onError }: Props) {
 
   const openDetail = useCallback(
     async (pack: Pack) => {
+      setApiKey('')
       try {
         setSelected(await api.getPack(pack.id))
       } catch (e) {
@@ -82,7 +172,9 @@ export function MarketPanel({ onError }: Props) {
     async (pack: Pack, overwrite = false) => {
       setBusy(true)
       try {
-        const res = await api.installPack(pack.id, { overwrite })
+        const body: { overwrite?: boolean; apiKey?: string } = { overwrite }
+        if (pack.kind === 'provider' && apiKey.trim()) body.apiKey = apiKey.trim()
+        const res = await api.installPack(pack.id, body)
         setInstalled((prev) => new Set(prev).add(pack.id))
         onError(`✓ ${res.message}`)
       } catch (e) {
@@ -91,7 +183,7 @@ export function MarketPanel({ onError }: Props) {
         setBusy(false)
       }
     },
-    [onError],
+    [onError, apiKey],
   )
 
   return (
@@ -201,28 +293,27 @@ export function MarketPanel({ onError }: Props) {
 
           <div className="border-b border-[var(--color-border)] p-4">
             <p className="text-xs text-[var(--color-text-dim)]">{selected.description}</p>
-            {selected.kind === 'skill' ? (
-              <button
-                onClick={() => void install(selected)}
-                disabled={busy}
-                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-              >
-                <Download size={13} /> Bu workspace'e kur
-              </button>
-            ) : (
-              <p className="mt-3 rounded bg-[var(--color-surface-2)] px-3 py-1.5 text-center text-xs text-[var(--color-text-dim)]">
-                {KIND_LABEL[selected.kind]} kurulumu yakında
-              </p>
+            {selected.kind === 'provider' && (
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="API anahtarı (opsiyonel — sonra Ayarlar'dan da girilebilir)"
+                className="mt-3 w-full rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-xs"
+              />
             )}
+            <button
+              onClick={() => void install(selected)}
+              disabled={busy}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              <Download size={13} /> {INSTALL_LABEL[selected.kind]}
+            </button>
           </div>
 
-          {/* Payload preview — skill body as rendered markdown */}
+          {/* Payload preview — kind-specific */}
           <div className="flex-1 overflow-y-auto p-4">
-            {selected.payload?.skill?.body ? (
-              <Markdown>{stripFrontmatter(selected.payload.skill.body)}</Markdown>
-            ) : (
-              <p className="text-xs text-[var(--color-text-dim)]">Önizleme yok.</p>
-            )}
+            <PackPreview pack={selected} />
           </div>
         </aside>
       )}

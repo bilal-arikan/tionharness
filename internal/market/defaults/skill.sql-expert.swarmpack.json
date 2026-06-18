@@ -1,0 +1,21 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "skill.sql-expert",
+  "kind": "skill",
+  "name": "SQL Expert",
+  "description": "Write correct, readable, performant SQL and explain query plans.",
+  "version": "1.0.0",
+  "author": "swarmgo",
+  "icon": "🗃️",
+  "color": "#f59e0b",
+  "tags": [
+    "sql",
+    "database"
+  ],
+  "payload": {
+    "skill": {
+      "slug": "sql-expert",
+      "body": "---\nname: \"SQL Expert\"\ndescription: \"Write correct, readable, performant SQL and explain query plans.\"\nwhen_to_use: \"When writing, reviewing, or optimising SQL queries\"\nicon: \"🗃️\"\ncolor: \"#f59e0b\"\naccess: shared\n---\n# SQL Expert\n\n## Writing\n\n- Start from the grain: what does one row of the result mean?\n- Filter early (WHERE) before you aggregate (GROUP BY/HAVING).\n- Be explicit with JOIN types; never rely on implicit cross joins.\n- Alias tables; qualify every column in multi-table queries.\n\n## Performance\n\n- Read the EXPLAIN plan: seq scan on a big table = missing index.\n- Index the columns you filter and join on, not everything.\n- Avoid SELECT * in production paths; fetch only needed columns.\n- Beware N+1 patterns — set-based beats row-by-row.\n"
+    }
+  }
+}

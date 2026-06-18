@@ -1,8 +1,16 @@
 # 21 — Uygulama İçi Market Sistemi (Marketplace)
 
-> **Durum:** Tasarım + MVP ilk dikey dilim (yerel skill listeleme/yayınlama/içe aktarma).
+> **Durum:** Tasarım + **dört türde de kurulum çalışır** (skill/agent/provider/flow install).
+> Yayınlama (publish) şimdilik yalnız skill için; agent/provider/flow publish + import/export UI sonraki dilim.
 > **Hedef:** Skiller, Agentlar, Sağlayıcılar (Providers) ve Flow taslakları uygulama
 > içinden paketlenip (publish), gözatılıp (browse) ve kurulabilsin (install).
+>
+> **Gömülü örnekler (23 paket):** 10 skill (web-research, code-review, technical-writing,
+> data-analysis, debugging, prompt-engineering, sql-expert, git-workflow, api-design,
+> summarization), 5 agent (researcher/coder/editor/planner/support), 4 provider
+> (openrouter/groq/ollama/deepseek), 4 flow (research-synthesis/review-and-fix/
+> parallel-brainstorm/draft-edit-finalize). Üreteç: `internal/market/gen_examples.py`
+> (in-tree authoring helper; ürettiği JSON'lar `//go:embed` ile gömülür).
 
 ---
 
@@ -145,17 +153,25 @@ func (s *Store) Reload()
 func (s *Store) Publish(p Pack) error           // workspace tier'a yazar
 ```
 
-### 3.3 Install (kurulum) — `install.go`
+### 3.3 Install (kurulum) — ✅ dört tür de çalışır
 
-Tek giriş: `Install(ctx, pack, opts) (InstallResult, error)` türü `switch`'ler:
+`market.InstallSkill` dosya işidir (market paketinde); agent/provider/flow ise db/
+settings gerektirdiğinden **API handler'ında** (`api/market.go`) yapılır — market
+paketini db/settings bağımlılığından uzak tutar (publish'in `BuildSkillPack` kalıbı).
+`handleInstallMarketPack` türe göre `switch`'ler:
 
-- **skill** → `<workspace skills>/<slug>/SKILL.md` yaz, `skillStore.Reload()`.
-  Çakışma: `?overwrite=false` ise hata, true ise üzerine yaz.
-- **flow** → graph'taki agentId'leri boşalt, `db.CreateFlow` (CreatedBy="").
-- **agent** → bilinmeyen skill slug'larını ele, `db.CreateAgent`. Provider/model
-  yoksa varsayılana düş.
-- **provider** → `opts.APIKey` ile `settings.Upsert` (key AES-GCM şifrelenir).
-  Anahtar boşsa yine kurulur (kullanıcı sonra Ayarlar'dan girer).
+- **skill** → `market.InstallSkill`: `<workspace skills>/<slug>/SKILL.md` yaz +
+  `skillStore.Reload()`. Çakışma: `overwrite=false` ise 409, true ise üzerine yaz.
+- **agent** → `installAgentPack`: bilinmeyen skill slug'ları elenir (workspace'te
+  çözülemeyen skill kurulumu bloklamaz), `db.CreateAgent` (CreatedBy=""). Provider/
+  model boşsa db varsayılanlarına düşer.
+- **flow** → `installFlowPack`: `db.CreateFlow`. Graph agent-agnostik (boş agentId);
+  **hemen çalışsın diye** boş slotlar workspace'in ilk ajanına atanır (motor boş
+  agentId'yi reddeder — `flowTemplates` `instantiateTemplate` kuralının aynısı).
+- **provider** → `installProviderPack`: `settings.UpsertCustomProvider` + `applySettings()`
+  (canlı registry push). Key (pakette **yok**) gövdedeki `apiKey`'den gelir, AES-GCM
+  şifrelenir; boşsa yine kurulur (kullanıcı sonra Ayarlar'dan girer). Provider id =
+  pack id'den (`provider.<slug>` → `<slug>`).
 
 ### 3.4 Publish (paketleme) — `publish.go`
 
@@ -215,20 +231,23 @@ sequenceDiagram
 
 ---
 
-## 6. MVP — bu oturumun dikey dilimi
+## 6. Gerçekleşen kapsam
 
-Uçtan uca kanıtlamak için **yalnız skill türü** çalışır hâle getirilir:
+**Dilim 1 (skill MVP):** pack.go + store.go + skill install/publish + 2 gömülü
+paket + testler; API list/get/install/publish/import/reload; MarketPanel + NavRail.
 
-- `internal/market`: pack.go + store.go + skill install + skill publish + 2-3
-  gömülü başlangıç skill paketi + testler.
-- API: list / get / install / publish / reload (skill yolu).
-- Frontend: MarketPanel (skill sekmesi işlevsel; diğer türler "yakında" rozetli),
-  NavRail girişi, api/market.ts, types/market.ts.
-- Doğrulama: `go build` + `go test ./internal/market/...` + frontend `tsc`/build;
-  mümkünse Playwright ile "skill paketi kur → Beceriler ekranında görünür".
+**Dilim 2 (bu oturum):** **dört türde de kurulum** + **20 yeni örnek paket**:
+- `api/market.go`: `installAgentPack`/`installFlowPack`/`installProviderPack` (§3.3).
+- 23 gömülü örnek (`gen_examples.py` üreteci): 10 skill / 5 agent / 4 provider / 4 flow.
+- Frontend: MarketPanel artık her tür için "Kur" gösterir (provider'da API-key
+  girişi), tür-özel önizleme (`PackPreview`: skill→markdown, agent→persona+alanlar,
+  provider→baseUrl+modeller, flow→düğüm listesi).
+- **Doğrulama:** `go build/vet/test` + `tsc` yeşil; **canlı API E2E** (port 8090):
+  agent→`CreateAgent`, flow→`CreateFlow`(ilk-ajan otomatik atama), provider→`Upsert`+
+  AES-GCM key (`keySet:true`), skill→workspace+reload — dördü de 200 + entity oluştu.
 
-Agent / provider / flow install+publish ve import/export, sonraki dilimlerde
-additive olarak eklenir (§3.3, §3.4, §4 zaten imzaları tanımlıyor).
+**Sonraki dilim:** agent/provider/flow **publish** (sanitize), import/export UI,
+Playwright UI smoke, uzak registry (§7).
 
 ---
 

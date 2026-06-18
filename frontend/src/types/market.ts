@@ -11,9 +11,42 @@ export interface SkillPayload {
   body: string
 }
 
+export interface AgentPayload {
+  name: string
+  soul?: string
+  identity?: string
+  provider?: string
+  model?: string
+  capabilities?: string
+  planningMode?: string
+  thinkingLevel?: string
+  permissionMode?: string
+  avatar?: string
+  color?: string
+  mcpEnabled?: boolean
+  allowedTools?: string
+  skills?: string[]
+}
+
+export interface ProviderPayload {
+  label: string
+  kind: string
+  baseUrl: string
+  defaultModel?: string
+  models?: string
+}
+
+export interface FlowPayload {
+  name: string
+  description?: string
+  graph: string
+}
+
 export interface PackPayload {
   skill?: SkillPayload
-  // agent / provider / flow payloads land in later slices.
+  agent?: AgentPayload
+  provider?: ProviderPayload
+  flow?: FlowPayload
 }
 
 export interface Pack {

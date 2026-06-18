@@ -1,0 +1,24 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "provider.ollama",
+  "kind": "provider",
+  "name": "Ollama (Local)",
+  "description": "Run open models locally via Ollama's OpenAI-compatible endpoint. No key needed.",
+  "version": "1.0.0",
+  "author": "swarmgo",
+  "icon": "🦙",
+  "color": "#64748b",
+  "tags": [
+    "provider",
+    "llm"
+  ],
+  "payload": {
+    "provider": {
+      "label": "Ollama (Local)",
+      "kind": "openai",
+      "baseUrl": "http://localhost:11434/v1",
+      "defaultModel": "llama3.1",
+      "models": "llama3.1\nqwen2.5\nmistral\nphi3"
+    }
+  }
+}

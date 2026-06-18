@@ -1,0 +1,21 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "skill.git-workflow",
+  "kind": "skill",
+  "name": "Git Workflow",
+  "description": "Clean commits, sane branches, and safe history operations.",
+  "version": "1.0.0",
+  "author": "swarmgo",
+  "icon": "🌿",
+  "color": "#f97316",
+  "tags": [
+    "git",
+    "vcs"
+  ],
+  "payload": {
+    "skill": {
+      "slug": "git-workflow",
+      "body": "---\nname: \"Git Workflow\"\ndescription: \"Clean commits, sane branches, and safe history operations.\"\nwhen_to_use: \"When committing, branching, rebasing, or resolving Git trouble\"\nicon: \"🌿\"\ncolor: \"#f97316\"\naccess: shared\n---\n# Git Workflow\n\n## Commits\n\n- One logical change per commit; imperative subject (\"Add X\", not \"Added\").\n- Subject ≤ 50 chars; body explains WHY, not what the diff already shows.\n- Never commit secrets, generated files, or unrelated churn.\n\n## Branches\n\n- Short-lived feature branches off an up-to-date main.\n- Rebase to keep a linear history; merge for shared long-lived branches.\n\n## Safety\n\n- Before `reset --hard` / `push --force`, check there's no safer option.\n- `git reflog` recovers almost anything — don't panic.\n- Force-push only your own branches, never shared ones.\n"
+    }
+  }
+}

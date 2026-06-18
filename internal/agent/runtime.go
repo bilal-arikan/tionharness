@@ -462,7 +462,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 		return err
 	}
 
-	provider, err := r.providers.Get(agent.Provider)
+	provider, model, err := r.effectiveProvider(agent)
 	if err != nil {
 		return err
 	}
@@ -472,7 +472,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 	// A goal set on the heartbeat session steers the autonomous loop too: inject
 	// it into the dynamic suffix so the agent's wake action stays on-objective.
 	resp, err := r.CompleteWithTools(WithCallKind(ctx, KindHeartbeat), agent, provider, providers.Request{
-		Model:         agent.Model,
+		Model:         model,
 		System:        r.systemPrompt(agent),
 		SystemDynamic: heartbeatGoalBlock(session.Goal, session.GoalDone),
 		Messages: []providers.Message{
