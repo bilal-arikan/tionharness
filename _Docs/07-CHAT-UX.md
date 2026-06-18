@@ -34,6 +34,12 @@ sohbet ekranı gibi.
   bkz. `_Docs/08-DEPOLAMA.md` — eski SQLite `0007_message_steps.sql` migration'ının yerini bu alan aldı.)
 - `db.Message.Steps` alanı + `AddMessage`/`ListMessages` güncellendi.
 - `internal/api/chat.go`: yanıt `steps` alanı döndürür ve izi mesaja yazar.
+- **Tur-içi crash kurtarma:** asistan yanıtı yalnız stream bitince persist edildiğinden,
+  süreç stream sırasında ölünce tur kaybolurdu. `chat_stream.go` artık her turu
+  throttle'lı `inflight.json` sidecar'ına snapshot'lar; boot'ta `db.recoverInflight`
+  yarım yanıtı `Message.Interrupted=true` olarak kurtarır → frontend asistan
+  balonunda **"Bu yanıt yarıda kesildi (sunucu yeniden başladı)"** banner'ı
+  (`MessageList.tsx`). Mekanizma + external-agent karşılaştırması: `_Docs/08-DEPOLAMA.md`.
 
 ### Inline görsel sunucu
 - `internal/api/files.go` — `GET /api/files?path=<yol>`: sohbet içeriğinde

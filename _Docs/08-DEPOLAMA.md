@@ -94,6 +94,30 @@ biriktirilir) + o ana kadarki kalıcı iz (`TurnStep[]`).
   (sunucu yeniden başladı)" uyarı banner'ı.
 - Testler: `db/inflight_test.go` (materialize + idempotent + already-persisted skip).
 
+### external-agent-oss ile karşılaştırma (ilham kaynağı)
+
+`external-agent-oss` (Electron + Pi/Claude Agent SDK; runtime sunucu, renderer ince
+istemci) aynı sorunu **çok-katmanlı** çözer. İlginç olan, aynı **`session.jsonl`
+(header + satırlar) + atomik `tmp→rename`** desenini kullanmasıdır:
+
+| Konu | external-agent-oss | SwarmGo |
+|------|------------------|---------|
+| Artımlı persist | Her olay sınırında (`text_complete`/`tool_*`/`error`) **tüm oturumu** debounce'lı (500ms) yeniden yazar (`SessionPersistenceQueue`) | Final mesaj O(1) append; tur-içi durum ayrı **sidecar**'a snapshot |
+| Stream'lenen kısmi metin | ❌ Yalnız bellekte (`streamingText`), `text_complete`'e dek diske yazılmaz | ✅ `delta`'lar sidecar'a birikir (biraz daha granüler) |
+| Kurtarma yeri | Ağırlıklı **istemci** (reconnect replay + stale-watchdog + sunucudan tazele) | **Sunucu boot** (`recoverInflight`) |
+| Kullanıcı mesajı | ack öncesi senkron `flushSession` (regression eb81086e) | Stream öncesi senkron append (bu açık SwarmGo'da hiç yoktu) |
+
+Neden farklı: external-agent sunucusu oturumları RAM'de tutar → asıl risk istemci↔sunucu
+desenkronu; SwarmGo tek binary → asıl risk sürecin tamamen ölmesi (boot recovery mantıklı).
+
+### Gelecek iş (external-agent'tan devşirilebilecek, henüz YOK)
+
+1. **Stale-session watchdog** — backend ölmeden tek bir SSE olayı düşerse frontend
+   "düşünüyor…"da takılabilir. external-agent'taki `useStaleSessionRecovery` gibi
+   periyodik "X sn'dir olay yok → sunucudan tazele" güvenlik ağı SwarmGo'da yok.
+2. **`preserved_stale_messages` kuralı** — oturum yeniden yüklenirken sunucu listesi
+   istemcidekinden kısa olsa bile istemcideki mesajları **silmeme** garantisi.
+
 Boot'ta `loadSessions` her `session.jsonl`'i okuyup header + mesaj satırlarını
 ayrıştırır. Append modeli gereği bir çökme **yarım bir son satır** bırakabilir;
 `readSessionFile` yalnızca **son** satır ayrıştırılamazsa onu sessizce atar
