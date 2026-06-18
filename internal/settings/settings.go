@@ -99,6 +99,16 @@ type Settings struct {
 	MaxTokenRetries    int  `json:"maxTokenRetries"`    // resume attempts after the output cap (0 = disabled)
 	ReactiveKeepRecent int  `json:"reactiveKeepRecent"` // in-flight messages kept verbatim when compacting
 
+	// Tool-output token optimization — two independent, parallel systems applied
+	// to tool results before they re-enter the model context.
+	// System A: deterministic, free, rule-based (dedupe/group/truncate).
+	CompactToolOutput  bool `json:"compactToolOutput"`  // System A master switch
+	CompactMaxLines    int  `json:"compactMaxLines"`    // lines kept before middle elision (0 = default)
+	CompactMaxBytes    int  `json:"compactMaxBytes"`    // hard byte cap after line work (0 = default)
+	// System B: LLM intent-aware summary (costs a cheap model call, size-gated).
+	CompactLLMSummary   bool `json:"compactLlmSummary"`   // System B master switch
+	CompactLLMThreshold int  `json:"compactLlmThreshold"` // only summarize output larger than this (bytes, 0 = default)
+
 	// Budget defaults applied to newly created agents (0 = unlimited).
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
@@ -154,6 +164,13 @@ func Default() Settings {
 		ReactiveCompact:    true,
 		MaxTokenRetries:    3,
 		ReactiveKeepRecent: 6,
+
+		// System A on by default (free); System B opt-in (costs a model call).
+		CompactToolOutput:   true,
+		CompactMaxLines:     200,
+		CompactMaxBytes:     12288,
+		CompactLLMSummary:   false,
+		CompactLLMThreshold: 8192,
 
 		DefaultDailyCallLimit:  0,
 		DefaultDailyTokenLimit: 0,
@@ -217,6 +234,12 @@ type DTO struct {
 	ReactiveCompact    bool `json:"reactiveCompact"`
 	MaxTokenRetries    int  `json:"maxTokenRetries"`
 	ReactiveKeepRecent int  `json:"reactiveKeepRecent"`
+
+	CompactToolOutput   bool `json:"compactToolOutput"`
+	CompactMaxLines     int  `json:"compactMaxLines"`
+	CompactMaxBytes     int  `json:"compactMaxBytes"`
+	CompactLLMSummary   bool `json:"compactLlmSummary"`
+	CompactLLMThreshold int  `json:"compactLlmThreshold"`
 
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
@@ -282,6 +305,12 @@ func (s Settings) ToDTO() DTO {
 		MaxTokenRetries:    s.MaxTokenRetries,
 		ReactiveKeepRecent: s.ReactiveKeepRecent,
 
+		CompactToolOutput:   s.CompactToolOutput,
+		CompactMaxLines:     s.CompactMaxLines,
+		CompactMaxBytes:     s.CompactMaxBytes,
+		CompactLLMSummary:   s.CompactLLMSummary,
+		CompactLLMThreshold: s.CompactLLMThreshold,
+
 		DefaultDailyCallLimit:  s.DefaultDailyCallLimit,
 		DefaultDailyTokenLimit: s.DefaultDailyTokenLimit,
 
@@ -346,6 +375,12 @@ type Patch struct {
 	ReactiveCompact    *bool `json:"reactiveCompact"`
 	MaxTokenRetries    *int  `json:"maxTokenRetries"`
 	ReactiveKeepRecent *int  `json:"reactiveKeepRecent"`
+
+	CompactToolOutput   *bool `json:"compactToolOutput"`
+	CompactMaxLines     *int  `json:"compactMaxLines"`
+	CompactMaxBytes     *int  `json:"compactMaxBytes"`
+	CompactLLMSummary   *bool `json:"compactLlmSummary"`
+	CompactLLMThreshold *int  `json:"compactLlmThreshold"`
 
 	DefaultDailyCallLimit  *int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit *int `json:"defaultDailyTokenLimit"`

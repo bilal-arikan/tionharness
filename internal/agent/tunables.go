@@ -17,6 +17,15 @@ const (
 	DefaultReactiveKeepRecent = 6 // in-flight messages kept verbatim when compacting
 )
 
+// Default tool-output compaction bounds. System A (deterministic) trims every
+// tool result; System B (LLM intent-aware summary) only fires past its byte
+// threshold. Both default to sane values used by test runtimes.
+const (
+	DefaultCompactMaxLines     = 200   // System A: lines kept before middle elision
+	DefaultCompactMaxBytes     = 12288 // System A: hard byte cap after line work
+	DefaultCompactLLMThreshold = 8192  // System B: only summarize output larger than this
+)
+
 // Tunables holds process-wide, settings-driven knobs that cut across every
 // workspace runtime: the global autonomy pause switch and an optional model
 // override for auto-title generation. A single instance is created at boot and
@@ -42,6 +51,15 @@ type Tunables struct {
 	reactiveCompact    bool // fold older in-flight history + retry on context overflow
 	maxTokenRetries    int  // resume attempts after the output cap (0 = disabled)
 	reactiveKeepRecent int  // messages kept verbatim when compacting (<2 → default)
+
+	// Tool-output token optimization — two independent, parallel systems.
+	// System A: deterministic compaction (free, rule-based, every result).
+	compactDeterministic bool // master switch for System A
+	compactMaxLines      int  // 0 → DefaultCompactMaxLines
+	compactMaxBytes      int  // 0 → DefaultCompactMaxBytes
+	// System B: LLM intent-aware summary (costs a cheap model call, gated by size).
+	compactLLM          bool // master switch for System B
+	compactLLMThreshold int  // 0 → DefaultCompactLLMThreshold
 }
 
 // NewTunables constructs a Tunables with the recovery knobs at their built-in
@@ -260,4 +278,63 @@ func (t *Tunables) ReactiveKeepRecent() int {
 		return DefaultReactiveKeepRecent
 	}
 	return t.reactiveKeepRecent
+}
+
+// SetToolCompaction configures the two independent tool-output optimization
+// systems. System A (deterministic) and System B (LLM summary) are toggled
+// separately and may run in parallel (A first, then B on whatever remains over
+// its threshold). A value of 0 selects the built-in default for each limit.
+func (t *Tunables) SetToolCompaction(deterministic bool, maxLines, maxBytes int, llm bool, llmThreshold int) {
+	t.mu.Lock()
+	t.compactDeterministic = deterministic
+	t.compactMaxLines = maxLines
+	t.compactMaxBytes = maxBytes
+	t.compactLLM = llm
+	t.compactLLMThreshold = llmThreshold
+	t.mu.Unlock()
+}
+
+// CompactDeterministic reports whether System A (deterministic compaction) is on.
+func (t *Tunables) CompactDeterministic() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.compactDeterministic
+}
+
+// CompactMaxLines returns System A's line cap before middle elision (default when unset).
+func (t *Tunables) CompactMaxLines() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.compactMaxLines <= 0 {
+		return DefaultCompactMaxLines
+	}
+	return t.compactMaxLines
+}
+
+// CompactMaxBytes returns System A's hard byte cap (default when unset).
+func (t *Tunables) CompactMaxBytes() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.compactMaxBytes <= 0 {
+		return DefaultCompactMaxBytes
+	}
+	return t.compactMaxBytes
+}
+
+// CompactLLM reports whether System B (LLM intent-aware summary) is on.
+func (t *Tunables) CompactLLM() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.compactLLM
+}
+
+// CompactLLMThreshold returns the byte size above which System B summarizes a
+// tool result (default when unset).
+func (t *Tunables) CompactLLMThreshold() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.compactLLMThreshold <= 0 {
+		return DefaultCompactLLMThreshold
+	}
+	return t.compactLLMThreshold
 }

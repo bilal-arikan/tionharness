@@ -317,6 +317,10 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 				return last, steps, ctx.Err()
 			}
 
+			// Token optimization: shrink the result before it re-enters context
+			// (and the persisted step) via the two independent compaction systems.
+			res = r.compactToolResult(ctx, agent, call.Name, call.Input, res)
+
 			results = append(results, res)
 			st := TurnStep{
 				Kind:    StepTool,

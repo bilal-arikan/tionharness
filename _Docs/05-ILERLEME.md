@@ -2,6 +2,29 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Ara özellik — Araç Çıktısı Token Optimizasyonu (2 bağımsız sistem) ✅ (2026-06-18)
+
+**İstek:** Ajan araç çıktıları (shell/dosya/MCP) modele dönmeden önce küçültülsün; iki yöntem
+**bağımsız + paralel** çalışabilsin ve Ayarlar'dan konfigüre edilebilsin. İlham: `rtk-ai/rtk`
+(deterministik) + `external-agent-oss` Large Response Handling (LLM özeti). Detay: `_Docs\17-TOKEN-OPTIMIZASYON.md`.
+
+- **Sistem A — Deterministik compactor (`internal/tools/compact`):** Bağımsız, dep-siz, ücretsiz.
+  Ardışık tekrar satırlarını `(×N)` ile birleştirir, boş satır bloklarını sadeleştirir, satır/bayt
+  sınırını aşan çıktının ortasını UTF-8 güvenli kırpar (baş+son korunur). `Compact(output, Options)`
+  → `(string, Stats)`. Tablo testleri (`compact_test.go`). Varsayılan **açık**.
+- **Sistem B — LLM intent-aware özet (`agent/compactor.go`):** Bağımsız. A sonrası çıktı hâlâ eşik
+  üstündeyse ucuz modelle (başlık-modeli override → yoksa ajan modeli) niyet-farkında özetler.
+  `KindCompact` ile usage'a işlenir; bütçeyi gate'lemez (titler/summary/reflect ile aynı). Hata/boş
+  dönüşte A çıktısına düşer (tur asla bozulmaz). Maliyetli → varsayılan **kapalı** (opt-in).
+- **Entegrasyon (tek nokta):** `agent/toolloop.go` — `res` üretilip iptal kontrolünden sonra
+  `r.compactToolResult(...)`; tüm araçları (built-in + MCP) kapsar. Hata sonuçları sıkıştırılmaz.
+- **Ayarlar (canlı):** `settings` → `CompactToolOutput`/`CompactMaxLines`/`CompactMaxBytes` (Sistem A),
+  `CompactLLMSummary`/`CompactLLMThreshold` (Sistem B), clamp'li; `applySettings`→`SetToolCompaction`,
+  `Tunables` get/set. UI: Ayarlar → **Bağlam** → "Araç çıktısı sıkıştırma (Sistem A)" + "Araç çıktısı
+  özeti (Sistem B)" bölümleri.
+- **Doğrulama:** `go build`/`vet`/`test ./...` yeşil; canlı smoke — `/api/settings` yeni alanları doğru
+  varsayılanlarla döndü (A açık, B kapalı), PUT round-trip + clamp doğrulandı (`9999999`→`262144`, `-5`→`0`).
+
 ## Faz B4 — Model Detayı + Prompt-Cache Maliyet Modellemesi ✅ (2026-06-18)
 
 **İstek:** Bütçe ekranına model-bazlı detay satırı + prompt-cache indirimini maliyete katma.

@@ -48,6 +48,13 @@ export interface AppSettings {
   maxTokenRetries: number
   reactiveKeepRecent: number
 
+  // Tool-output token optimization — two independent, parallel systems.
+  compactToolOutput: boolean   // System A: deterministic (free)
+  compactMaxLines: number
+  compactMaxBytes: number
+  compactLlmSummary: boolean   // System B: LLM intent-aware summary (costs a call)
+  compactLlmThreshold: number
+
   defaultDailyCallLimit: number
   defaultDailyTokenLimit: number
 
