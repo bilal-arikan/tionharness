@@ -1,6 +1,6 @@
 # 18 — Ajan Seviyeleri ve Dinamik Geçişler (Tasarım Notu)
 
-> **Durum:** Faz T1 + T2 **uygulandı** (backend yeşil; commit eşzamanlı WIP reconcile sonrası) — T3 beklemede  
+> **Durum:** Faz T1 + T2 + T3 **uygulandı** (backend yeşil; commit eşzamanlı WIP reconcile sonrası) — T4 (ops.) beklemede  
 > **Tarih:** 2026-06-18  
 > **İlgili dosyalar:** `internal/settings/settings.go`, `internal/db/models.go`,
 > `internal/agent/toolloop.go`, `internal/tools/delegate.go`, `internal/providers/kind.go`
@@ -347,12 +347,24 @@ kodu `tsc` temiz (ağaçtaki 2 hata yine `market`/`hooks` WIP'inden).
 çözülür). Araç cevabı modele "turu bitir, sonraki tur yükseltilmiş modelle çalışacak" der. Tur-içi anında
 swap T4'e bırakıldı.
 
-### Faz T3 — `call_agent` Tier Delegasyonu
+### Faz T3 — `call_agent` Tier Delegasyonu — ✅ UYGULANDI (2026-06-19)
 
-Değiştirilen: `internal/tools/delegate.go`, `internal/agent/runtime.go` (DelegateRunner)  
-Eklenen: Tier-bazlı ajan çözümü + ephemeral çağrı  
-Frontend: `call_agent` araç kartında tier bilgisi  
-**Sonuç:** Ajan, `call_agent(tier="smart", task="...")` ile doğrudan tier'a delege edebilir.
+**Backend:**
+- `tools/delegate.go`: `DelegateRunner` imzası `(ctx, target, tier, task)`; `callAgentInput` += `Tier`;
+  Def açıklaması + şema (`tier` enum cheap/medium/smart, `agent` opsiyonel, yalnız `task` zorunlu); `Call`
+  doğrulaması (agent VEYA tier zorunlu, tier enum kontrolü).
+- `agent/delegate.go`: runner tier alır; yeni `resolveDelegateTarget(caller, target, tier, visited)` —
+  isimli hedef → `resolveAgent`; tier → o tier'a **atanmış** ilk uygun ajan (caller/visited hariç), yoksa
+  **ephemeral ajan** (caller persona'sı + `Tier=tier` → `effectiveProvider` tier slot'una çözer; sentetik
+  `tier:<t>` id ile visited/cycle guard tutarlı). Tier slot konfigüre değilse hata.
+- Mevcut depth/budget/cycle guard'ları ve `effectiveProvider(sub)` (T1) değişmeden tier'a da uygulanır.
+
+**Frontend:** Değişiklik yok — `call_agent` çağrısının `tier` alanı mevcut `ActivityCard` JSON girdisinde
+görünür (ayrı kart gerekmedi).
+
+**Test/Build:** `delegate_test.go` += "unconfigured tier" guard + `TestResolveDelegateTarget` (ephemeral
+çözüm + gerçek tier-ajanı tercihi); mevcut guard testleri yeni imzaya güncellendi. `go build`/`vet`/`test
+./internal/...` **yeşil** (16 paket ok).
 
 ### Faz T4 (Opsiyonel) — Otomatik Yükseltme
 
