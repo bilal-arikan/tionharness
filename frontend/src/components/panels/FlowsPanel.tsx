@@ -28,7 +28,6 @@ const NODE_TYPES: { value: FlowNodeType; label: string; icon: string }[] = [
   { value: 'agent', label: 'Ajan', icon: '🤖' },
   { value: 'branch', label: 'Dallanma', icon: '🔀' },
   { value: 'parallel', label: 'Paralel', icon: '⚡' },
-  { value: 'switch', label: 'Switch', icon: '🔢' },
   { value: 'delay', label: 'Bekle', icon: '⏱️' },
   { value: 'transform', label: 'Dönüştür', icon: '🔧' },
 ]

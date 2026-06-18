@@ -11,9 +11,8 @@ import (
 // Node types.
 const (
 	NodeAgent     = "agent"     // run an agent with a (templated) prompt, then go to Next
-	NodeBranch    = "branch"    // route by case-insensitive substring of the last output
+	NodeBranch    = "branch"    // route by matching the last output (see MatchMode)
 	NodeParallel  = "parallel"  // run several agent nodes concurrently, then JoinNext
-	NodeSwitch    = "switch"    // route by exact (case-insensitive) match of the last output
 	NodeDelay     = "delay"     // wait DelayMs, then go to Next (no LLM)
 	NodeTransform = "transform" // emit a rendered template as output, then Next (no LLM)
 )
@@ -40,9 +39,12 @@ type Node struct {
 	Prompt  string `json:"prompt,omitempty"` // template: {{input}}, {{last}}, {{node.<id>}}
 	Next    string `json:"next,omitempty"`   // next node id ("" = end)
 
-	// branch + switch (switch reuses Branches; Contains is the exact value to
-	// match for a switch, an empty Contains is the default arm for both).
-	Branches []Branch `json:"branches,omitempty"`
+	// branch — Branches are the routing arms; an empty Contains is the default
+	// arm. MatchMode decides how Contains is compared to the last output:
+	// "" / "contains" (case-insensitive substring), "equals" (case-insensitive,
+	// trimmed exact), or "regex" (Go regexp on the raw output).
+	Branches  []Branch `json:"branches,omitempty"`
+	MatchMode string   `json:"matchMode,omitempty"`
 
 	// parallel
 	Parallel []string `json:"parallel,omitempty"` // agent node ids to run concurrently
@@ -132,12 +134,12 @@ func (g Graph) Validate() error {
 			if err := ref(n.Next, "node "+n.ID); err != nil {
 				return err
 			}
-		case NodeBranch, NodeSwitch:
+		case NodeBranch:
 			if len(n.Branches) == 0 {
-				return fmt.Errorf("%s node %q has no branches", n.Type, n.ID)
+				return fmt.Errorf("branch node %q has no branches", n.ID)
 			}
 			for _, b := range n.Branches {
-				if err := ref(b.Next, n.Type+" in "+n.ID); err != nil {
+				if err := ref(b.Next, "branch in "+n.ID); err != nil {
 					return err
 				}
 			}

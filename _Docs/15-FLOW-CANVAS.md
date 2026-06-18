@@ -172,13 +172,15 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
 
 ## Yeni mantıksal node tipleri (2026-06-18)
 
-Motora üç yeni node tipi eklendi (önceki agent/branch/parallel'e ek):
+Motora iki yeni node tipi eklendi (delay + transform) ve **branch genişletildi**
+(önceki agent/branch/parallel'e ek):
 
-- **switch** (`🔢`, çok-yollu, tam eşleşme): branch'in substring'i yerine son çıktının **tam
-  eşleşmesiyle** (case-insensitive, trim) yönlendirir; boş case = varsayılan. Etiket-tabanlı
-  yönlendirme için ideal (ajan "A"/"B"/"C" yanıtlarken "ABC" yanlış eşleşmesini önler).
-  `Branches` alanını yeniden kullanır (Contains = eşleşilecek değer), `b<i>` handle'ları branch
-  ile aynı. Motor: `evalSwitch`.
+- **branch + `matchMode`** (birleşik): branch artık `Node.MatchMode` ile üç eşleşme modu
+  destekler — **contains** (varsayılan, case-insensitive substring), **equals** (case-insensitive
+  trim tam eşleşme), **regex** (Go regexp, ham çıktı). Boş Contains = varsayılan arm (konumdan
+  bağımsız, en son değerlendirilir). Motor `evalBranch` + `branchArmMatches`. _(Not: önce ayrı
+  bir `switch` node'u eklenmişti; "equals branch ile aynı" geri bildirimi üzerine **branch'e
+  matchMode olarak birleştirildi**; switch tipi kaldırıldı.)_ Inspector'da "Eşleşme" dropdown'u.
 - **delay** (`⏱️`, LLM'siz): `DelayMs` kadar bekler, sonra `next`. `sleepCtx` ctx-iptaline saygı
   duyar, en çok 5 dk (`maxDelayMs`). Çıktıyı (`Last`) değiştirmez, trace'e "waited Nms" yazar.
 - **transform** (`🔧`, LLM'siz): `Template`'i (`{{input}}/{{last}}/{{node.<id>}}`) render edip
@@ -193,11 +195,11 @@ cyan/transform yeşil); `flow/{SwitchNode,DelayNode,TransformNode}.tsx`; `FlowCa
 `NodeInspector` (switch case editörü "eşittir", delay saniye input, transform şablon textarea);
 `FlowsPanel` palet 6 tip.
 
-**Doğrulama:** `go build/vet` + `tsc` yeşil. **API E2E** (LLM'siz, izole flow): seed(transform
-`{{input}}`)→switch(yes/default)→win|lose(transform)→wait(delay 300ms). input=`yes` → `seed→sw→win→wait`,
-çıktı `EVET dali`; input=`no` → `seed→sw→lose→wait`, çıktı `HAYIR dali` (her ikisi success).
-**Playwright:** palet 6 tip; transform/delay/switch node'ları canvas'ta doğru ikon+içerikle render
-(🔧 `{{last}}`, ⏱️ "1 sn bekle", 🔢 "varsayılan").
+**Doğrulama:** `go build/vet` + `tsc` yeşil. **API E2E** (LLM'siz): branch `matchMode` —
+contains: "now is good"+"no"→MATCHED; equals: "now is good"+"no"→DEFAULT, "no"+"no"→MATCHED;
+regex: "error 503"+"^err"→MATCHED, "all ok"→DEFAULT. (Ayrıca transform `{{input}}` render +
+delay wait doğrulandı.) **Playwright:** palet 5 tip (Switch yok); branch inspector "Eşleşme"
+dropdown'u (İçerir/Eşittir/Regex); transform/delay node'ları canvas'ta doğru render.
 
 ## Notlar / sıradaki adımlar
 

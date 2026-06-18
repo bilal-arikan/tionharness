@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -155,12 +156,6 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			e.notify("done", node, st.Steps, "→ "+label)
 			st.Current = next
 
-		case NodeSwitch:
-			next, label := evalSwitch(node, st.Last)
-			st.appendTrace(node, "→ "+label)
-			e.notify("done", node, st.Steps, "→ "+label)
-			st.Current = next
-
 		case NodeDelay:
 			e.notify("start", node, st.Steps, "")
 			if err := sleepCtx(ctx, node.DelayMs); err != nil {
@@ -268,27 +263,16 @@ func (st *State) appendTrace(node Node, output string) {
 	})
 }
 
-// evalBranch picks the first matching branch (case-insensitive substring of the
-// incoming value). An empty Contains is the default arm. Returns (nextID, label).
+// evalBranch routes by matching the incoming value against each arm's Contains
+// using node.MatchMode. An empty Contains is the default arm, taken only when no
+// other arm matches (evaluated regardless of its position). Returns (nextID, label).
+//
+//	contains (default) — case-insensitive substring
+//	equals             — case-insensitive, trimmed exact match
+//	regex              — Go regexp on the raw value (invalid patterns never match)
 func evalBranch(node Node, value string) (string, string) {
 	lower := strings.ToLower(value)
-	for _, b := range node.Branches {
-		if b.Contains == "" {
-			return b.Next, "default"
-		}
-		if strings.Contains(lower, strings.ToLower(b.Contains)) {
-			return b.Next, b.Contains
-		}
-	}
-	return "", "no match"
-}
-
-// evalSwitch picks the arm whose Contains exactly equals the incoming value
-// (case-insensitive, trimmed). An empty Contains is the default arm. Unlike
-// evalBranch (substring), this is an exact match — good for label routing where
-// an agent replies with exactly one of a known set. Returns (nextID, label).
-func evalSwitch(node Node, value string) (string, string) {
-	v := strings.ToLower(strings.TrimSpace(value))
+	trimmed := strings.ToLower(strings.TrimSpace(value))
 	var def *Branch
 	for i := range node.Branches {
 		b := node.Branches[i]
@@ -296,7 +280,7 @@ func evalSwitch(node Node, value string) (string, string) {
 			def = &node.Branches[i]
 			continue
 		}
-		if v == strings.ToLower(strings.TrimSpace(b.Contains)) {
+		if branchArmMatches(node.MatchMode, b.Contains, value, lower, trimmed) {
 			return b.Next, b.Contains
 		}
 	}
@@ -304,6 +288,20 @@ func evalSwitch(node Node, value string) (string, string) {
 		return def.Next, "default"
 	}
 	return "", "no match"
+}
+
+// branchArmMatches reports whether one arm's pattern matches the value under the
+// given match mode.
+func branchArmMatches(mode, pattern, raw, lower, trimmed string) bool {
+	switch mode {
+	case "equals":
+		return trimmed == strings.ToLower(strings.TrimSpace(pattern))
+	case "regex":
+		ok, err := regexp.MatchString(pattern, raw)
+		return err == nil && ok
+	default: // "" or "contains"
+		return strings.Contains(lower, strings.ToLower(pattern))
+	}
 }
 
 // sleepCtx waits ms milliseconds or until the context is cancelled. The wait is

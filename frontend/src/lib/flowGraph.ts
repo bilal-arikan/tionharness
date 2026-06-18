@@ -44,7 +44,6 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
         add(n.id, n.next ?? '')
         break
       case 'branch':
-      case 'switch':
         (n.branches ?? []).forEach((b, i) =>
           add(n.id, b.next, {
             slot: `b${i}`,
@@ -81,8 +80,7 @@ export function reactFlowToGraph(
       case 'transform':
         base.next = outgoing[0]?.target ?? ''
         break
-      case 'branch':
-      case 'switch': {
+      case 'branch': {
         // Keep existing arm conditions, re-target by branch slot order.
         const arms = base.branches ?? []
         base.branches = arms.map((b, i) => {
@@ -151,7 +149,6 @@ function successors(n: FlowNode | undefined): string[] {
     case 'transform':
       return [n.next ?? '']
     case 'branch':
-    case 'switch':
       return (n.branches ?? []).map((b) => b.next)
     case 'parallel':
       return [...(n.parallel ?? []), n.joinNext ?? '']
@@ -178,8 +175,9 @@ export function blankNode(id: string, type: FlowNodeType, defaultAgentId = ''): 
     node.agentId = defaultAgentId
     node.prompt = '{{input}}'
     node.next = ''
-  } else if (type === 'branch' || type === 'switch') {
+  } else if (type === 'branch') {
     node.branches = [{ contains: '', next: '' }]
+    node.matchMode = 'contains'
   } else if (type === 'delay') {
     node.delayMs = 1000
     node.next = ''

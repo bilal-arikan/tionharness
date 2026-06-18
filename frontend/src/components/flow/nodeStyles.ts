@@ -44,7 +44,6 @@ const CHROME: Record<string, NodeChrome> = {
   agent: { accent: 'var(--color-accent)', label: 'Ajan', icon: '🤖' },
   branch: { accent: '#d97706', label: 'Dallanma', icon: '🔀' },
   parallel: { accent: '#7c3aed', label: 'Paralel', icon: '⚡' },
-  switch: { accent: '#ca8a04', label: 'Switch', icon: '🔢' },
   delay: { accent: '#0891b2', label: 'Bekle', icon: '⏱️' },
   transform: { accent: '#059669', label: 'Dönüştür', icon: '🔧' },
 }

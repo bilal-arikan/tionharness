@@ -1,6 +1,8 @@
 // Orchestration flows: graph definition, persisted run state and run history (Phase 7).
 
-export type FlowNodeType = 'agent' | 'branch' | 'parallel' | 'switch' | 'delay' | 'transform'
+export type FlowNodeType = 'agent' | 'branch' | 'parallel' | 'delay' | 'transform'
+
+export type BranchMatchMode = 'contains' | 'equals' | 'regex'
 
 export interface FlowBranch {
   contains: string // case-insensitive substring; "" = default
@@ -14,7 +16,8 @@ export interface FlowNode {
   agentId?: string
   prompt?: string
   next?: string
-  branches?: FlowBranch[] // branch (substring) + switch (exact match) arms
+  branches?: FlowBranch[] // branch routing arms ("" contains = default)
+  matchMode?: BranchMatchMode // branch: how arm values match (default: contains)
   parallel?: string[]
   joinNext?: string
   delayMs?: number // delay node: ms to wait

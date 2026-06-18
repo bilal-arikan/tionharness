@@ -1,4 +1,4 @@
-import type { Agent, FlowNode, FlowNodeType } from '../../types'
+import type { Agent, BranchMatchMode, FlowNode, FlowNodeType } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 
 interface Props {
@@ -14,7 +14,6 @@ const TYPES: { value: FlowNodeType; label: string }[] = [
   { value: 'agent', label: 'Ajan' },
   { value: 'branch', label: 'Dallanma' },
   { value: 'parallel', label: 'Paralel' },
-  { value: 'switch', label: 'Switch' },
   { value: 'delay', label: 'Bekle' },
   { value: 'transform', label: 'Dönüştür' },
 ]
@@ -95,12 +94,22 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
         </>
       )}
 
-      {(node.type === 'branch' || node.type === 'switch') && (
+      {node.type === 'branch' && (
         <div className="space-y-2">
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Eşleşme</span>
+            <select
+              value={node.matchMode ?? 'contains'}
+              onChange={(e) => onPatch({ matchMode: e.target.value as BranchMatchMode })}
+              className={input}
+            >
+              <option value="contains">İçerir (substring)</option>
+              <option value="equals">Eşittir (tam)</option>
+              <option value="regex">Regex</option>
+            </select>
+          </label>
           <span className="block text-xs text-[var(--color-text-dim)]">
-            {node.type === 'switch'
-              ? 'Case’ler (tam eşleşme; hedef için kenar çiz)'
-              : 'Dallar (içerir; hedef için kenar çiz)'}
+            Dallar (hedef için kenar çiz)
           </span>
           {(node.branches ?? []).map((b, bi) => (
             <div key={bi} className="flex items-center gap-2">
@@ -112,9 +121,11 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
                   onPatch({ branches })
                 }}
                 placeholder={
-                  node.type === 'switch'
+                  (node.matchMode ?? 'contains') === 'equals'
                     ? 'eşittir… (boş = varsayılan)'
-                    : 'içeriyorsa… (boş = varsayılan)'
+                    : (node.matchMode ?? 'contains') === 'regex'
+                      ? 'regex… (boş = varsayılan)'
+                      : 'içeriyorsa… (boş = varsayılan)'
                 }
                 className={input}
               />
@@ -135,7 +146,7 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
             }
             className="text-xs text-[var(--color-accent)]"
           >
-            {node.type === 'switch' ? '+ case ekle' : '+ dal ekle'}
+            + dal ekle
           </button>
         </div>
       )}
