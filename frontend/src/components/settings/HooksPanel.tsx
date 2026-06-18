@@ -8,6 +8,7 @@ import { systemApi } from '../../api/system'
 import type { Hook, HookEvent, ExternalToolStatus } from '../../types'
 import type { HookInput } from '../../api/hooks'
 import { Field, Toggle, inputCls } from './primitives'
+import { displayPath } from '../../lib/paths'
 
 interface Props {
   onError: (msg: string) => void
@@ -263,7 +264,7 @@ export function HooksPanel({ onError }: Props) {
                       <span className="text-[var(--color-text-dim)]">— bulunamadı</span>
                     )}
                   </div>
-                  <div className="truncate text-xs text-[var(--color-text-dim)]">{t.found ? t.path : t.desc}</div>
+                  <div className="truncate text-xs text-[var(--color-text-dim)]">{t.found ? displayPath(t.path) : t.desc}</div>
                 </div>
                 <a href={t.url} target="_blank" rel="noreferrer" className="shrink-0 text-xs text-[var(--color-accent)] hover:underline">repo ↗</a>
               </div>

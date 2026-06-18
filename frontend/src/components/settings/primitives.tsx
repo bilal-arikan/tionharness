@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '../../types'
 import { CopyPathButton } from '../CopyPathButton'
+import { displayPath } from '../../lib/paths'
 
 // Category keys: the app-global sections plus the per-workspace section.
 export type Cat =
@@ -140,7 +141,7 @@ export function PromptDetails({ p, dir, onReveal }: { p: PromptInfo; dir: string
           <button
             onClick={onReveal}
             disabled={!dir}
-            title={dir || 'Klasör yolu bilinmiyor'}
+            title={dir ? displayPath(dir) : 'Klasör yolu bilinmiyor'}
             className="flex shrink-0 items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-40"
           >
             <FolderOpen size={12} /> Klasörü aç

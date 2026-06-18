@@ -7,6 +7,7 @@ import { api } from '../../api'
 import type { WorkspaceConfig, WorkspaceConfigPatch } from '../../types'
 import { Field, inputCls } from './primitives'
 import { CopyPathButton } from '../CopyPathButton'
+import { displayPath } from '../../lib/paths'
 
 interface Props {
   onError: (msg: string) => void
@@ -85,7 +86,7 @@ export function WorkspaceFilesPanel({ onError }: Props) {
     <>
       <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
         <span className="text-xs text-[var(--color-text-dim)]">
-          Bu dosyalar <code className="rounded bg-[var(--color-bg)] px-1">{config.dir}</code> altında. Hem buradan hem doğrudan diskten düzenleyebilirsin.
+          Bu dosyalar <code className="rounded bg-[var(--color-bg)] px-1">{displayPath(config.dir)}</code> altında. Hem buradan hem doğrudan diskten düzenleyebilirsin.
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <CopyPathButton path={config.dir} />
