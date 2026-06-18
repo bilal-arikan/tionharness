@@ -109,10 +109,29 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   boyutu 12px. Başka akışa geçip dönünce UI graf'tan `step`+animasyonu yeniden yükledi
   (akış-bazlı kalıcılık uçtan uca).
 
+## Code-split + Şablon galerisi (2026-06-18)
+
+- **Code-split:** `FlowsPanel` artık `App.tsx`'te `React.lazy(() => import(...))` + `<Suspense>`
+  ile tembel yüklenir. React Flow yalnızca **Akışlar** görünümü açılınca iner. Sonuç:
+  ana bundle `~988KB → ~811KB`, ayrı `FlowsPanel-*.js` (~202KB) + `FlowsPanel-*.css` (~16KB) chunk'ı.
+- **Salt-okunur şablon galerisi:** `lib/flowTemplates.ts` 6 agent-bağımsız şablon
+  (Sıralı Hat, Duygu Yönlendirici, Artı-Eksi, Eleştir-Düzelt, Planla-Uygula, Çoklu Uzman+Sentez).
+  `FlowsPanel` sol kolonunda **Akışlarım / Şablonlar** sekme geçişi; şablon seçilince
+  `flow/TemplatePreview.tsx` salt-okunur canvas (`FlowCanvas readOnly` — `nodesDraggable`/
+  `nodesConnectable`/`elementsSelectable` kapalı, `onConnect` yok) yapıyı önizler.
+- **Şablondan oluşturma:** "Bu şablondan akış oluştur" → `instantiateTemplate` graf'ı kopyalar,
+  **agent node'lara varsayılan ajanı (ilk ajan) atar** (backend `Validate` boş `agentId`'yi
+  reddeder), `api.createFlow(name, desc, graph)` ile yeni akış kurar, "Akışlarım"a geçip açar.
+  Şablonun `edgeStyle`/`animated` sunumu da kopyalanır.
+- **Doğrulama (Playwright):** 6 şablon listelenir; read-only önizlemede node'lar `draggable`
+  sınıfı taşımaz (5 node/4 edge render); instantiate sonrası API'de 5 node + `animated=true` +
+  agent node'lar atanmış. (Not: backend değişmedi — yalnız frontend; `tsc -b` + `vite build` yeşil.)
+
 ## Notlar / sıradaki adımlar
 
-- Bundle büyüdü; ileride React Flow'u dinamik `import()` ile code-split etmek düşünülebilir.
-- SwarmClaw'daki salt-okunur "şablon görüntüleyici" modu ileride eklenebilir.
+- SwarmClaw'daki gibi şablonları **kategorilere** ayırma / arama eklenebilir.
 - Paperclip-tarzı statik "ajan ilişki haritası" (call_agent/send_agent_message kenarları)
   ayrı bir ekran olarak değerlendirilebilir.
 - MiniMap arka planı sabit `#0b0e14` (temaya duyarlı değil) — istenirse tema değişkenine bağlanır.
+- Şablon `instantiateTemplate` varsayılan olarak ilk ajanı atıyor; ileride "ajan eşleme" adımı
+  (her şablon node'u için ajan seçtirme) eklenebilir.

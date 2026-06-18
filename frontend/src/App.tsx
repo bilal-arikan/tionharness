@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { api, getActiveWorkspace, setActiveWorkspace } from './api'
 import type { Agent, AgentPatch, Artifact, Session, Message, AppSettings, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
@@ -15,7 +15,11 @@ import { TaskBoard } from './components/panels/TaskBoard'
 import { Schedules } from './components/panels/Schedules'
 import { MemoryPanel } from './components/panels/MemoryPanel'
 import { ToolsPanel } from './components/panels/ToolsPanel'
-import { FlowsPanel } from './components/panels/FlowsPanel'
+// Code-split: the Flows panel pulls in React Flow (~300KB), loaded only when
+// the user opens the Akışlar view.
+const FlowsPanel = lazy(() =>
+  import('./components/panels/FlowsPanel').then((m) => ({ default: m.FlowsPanel })),
+)
 import { ExecutionsPanel } from './components/panels/ExecutionsPanel'
 import { ArtifactsPanel } from './components/panels/ArtifactsPanel'
 import { SecretsPanel } from './components/panels/SecretsPanel'
@@ -30,7 +34,7 @@ import { useWorkspaces } from './hooks/useWorkspaces'
 import { useActivity } from './hooks/useActivity'
 import { useChatStream } from './hooks/useChatStream'
 import { useUrlSync } from './hooks/useUrlSync'
-import { parseRoute, routeIdForView, type Route } from './lib/url'
+import { parseRoute, routeIdForView, routeFromEvent, buildRoute, type Route } from './lib/url'
 import { isImagePath, mediaUrl } from './lib/paths'
 import { applyTheme } from './lib/theme'
 import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clientPrefs'
@@ -77,6 +81,10 @@ export default function App() {
   // Deep-link target for the schedules screen (highlights the routed schedule).
   const [scheduleTarget, setScheduleTarget] = useState<string | null>(
     INITIAL_ROUTE.view === 'schedules' ? INITIAL_ROUTE.id : null,
+  )
+  // Active settings category (deep-link aware): #/w/{ws}/settings/{category}.
+  const [settingsCat, setSettingsCat] = useState<string | null>(
+    INITIAL_ROUTE.view === 'settings' ? INITIAL_ROUTE.id : null,
   )
   // Entity selection carried by an initial/cross-workspace deep link, consumed
   // once by the workspace-load effect after agents+sessions arrive.
@@ -356,12 +364,12 @@ export default function App() {
     // not muted in Settings (per-type preference, device-local).
     if (!isTypeEnabled(e.type)) return
     notify(notifyEnabled.current, e.title, e.body, () => {
-      const t = e.target || {}
-      if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) {
-        switchWorkspace(e.workspaceId)
-      }
-      if (t.view) setView(t.view as View)
-      if (t.sessionId) selectSession(t.sessionId)
+      // Navigate via the deep-link URL: setting the hash drives the URL→state
+      // machinery (useUrlSync → applyRoute), which switches workspace and
+      // selects the entity correctly even across workspaces. notify() has
+      // already focused the window.
+      const r = routeFromEvent(e)
+      if (r) window.location.hash = buildRoute(r)
     })
   }
 
@@ -501,6 +509,8 @@ export default function App() {
         setArtifactTarget(r.id)
       } else if (r.view === 'schedules') {
         setScheduleTarget(r.id)
+      } else if (r.view === 'settings') {
+        setSettingsCat(r.id)
       }
     },
     [switchWorkspace, selectSession, focusAgent],
@@ -515,6 +525,7 @@ export default function App() {
       agentId: activeAgentId,
       artifactId: artifactTarget,
       scheduleId: scheduleTarget,
+      settingsCat,
     }),
   }
   useUrlSync(route, !!activeWorkspaceId, applyRoute)
@@ -670,7 +681,15 @@ export default function App() {
           />
         )}
         {view === 'tools' && <ToolsPanel onError={setError} />}
-        {view === 'flows' && <FlowsPanel agents={agents} onError={setError} />}
+        {view === 'flows' && (
+          <Suspense
+            fallback={
+              <div className="flex-1 p-6 text-sm text-[var(--color-text-dim)]">Akışlar yükleniyor…</div>
+            }
+          >
+            <FlowsPanel agents={agents} onError={setError} />
+          </Suspense>
+        )}
         {view === 'artifacts' && (
           <ArtifactsPanel
             onError={setError}
@@ -694,6 +713,8 @@ export default function App() {
             onDeleteWorkspace={deleteActiveWorkspace}
             commands={chat.chatCommands}
             onNavigate={setView}
+            cat={settingsCat}
+            onCatChange={setSettingsCat}
           />
         )}
       </main>

@@ -5,7 +5,9 @@ import { api } from '../../api'
 import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
 import { FlowCanvas, type EdgeStyle } from '../flow/FlowCanvas'
+import { TemplatePreview } from '../flow/TemplatePreview'
 import { NodeInspector } from '../flow/NodeInspector'
+import { FLOW_TEMPLATES, type FlowTemplate } from '../../lib/flowTemplates'
 import {
   graphToReactFlow,
   reactFlowToGraph,
@@ -39,6 +41,9 @@ const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [
 export function FlowsPanel({ agents, onError }: Props) {
   const [flows, setFlows] = useState<Flow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Left-column tab: the user's own flows vs the read-only template gallery.
+  const [tab, setTab] = useState<'flows' | 'templates'>('flows')
+  const [templateId, setTemplateId] = useState<string | null>(null)
 
   // Editor state for the selected flow.
   const [name, setName] = useState('')
@@ -109,6 +114,32 @@ export function FlowsPanel({ agents, onError }: Props) {
     try {
       const f = await api.createFlow(n)
       setFlows((prev) => [f, ...prev])
+      selectFlow(f)
+    } catch (e) {
+      onError((e as Error).message)
+    }
+  }
+
+  // instantiateTemplate creates a new editable flow from a template's graph,
+  // then switches to it for editing. Template agent nodes are unassigned; the
+  // backend requires every agent node to have an agentId, so we seed each with
+  // the first available agent as a placeholder for the user to reassign.
+  const instantiateTemplate = async (t: FlowTemplate) => {
+    const defaultAgent = agents[0]?.id
+    if (!defaultAgent) {
+      onError('Şablondan akış oluşturmak için önce en az bir ajan oluşturun.')
+      return
+    }
+    const graph = {
+      ...t.graph,
+      nodes: t.graph.nodes.map((n) =>
+        n.type === 'agent' && !n.agentId ? { ...n, agentId: defaultAgent } : n,
+      ),
+    }
+    try {
+      const f = await api.createFlow(t.name, t.description, graph)
+      setFlows((prev) => [f, ...prev])
+      setTab('flows')
       selectFlow(f)
     } catch (e) {
       onError((e as Error).message)
@@ -240,11 +271,49 @@ export function FlowsPanel({ agents, onError }: Props) {
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)?.data.node ?? null
   const trace: FlowState | null = run?.state ? safeParse(run.state) : null
+  const selectedTemplate = FLOW_TEMPLATES.find((t) => t.id === templateId) ?? null
 
   return (
     <div className="flex min-h-0 flex-1">
-      {/* Flow list */}
+      {/* Flow list / template gallery */}
       <div className="w-56 flex-shrink-0 overflow-y-auto border-r border-[var(--color-border)] p-3">
+        {/* Tab switch */}
+        <div className="mb-3 flex gap-1 rounded-lg bg-[var(--color-surface-2)] p-1 text-xs">
+          {(['flows', 'templates'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 rounded-md px-2 py-1 ${
+                tab === t ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
+              }`}
+            >
+              {t === 'flows' ? 'Akışlarım' : 'Şablonlar'}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'templates' ? (
+          <ul className="space-y-1">
+            {FLOW_TEMPLATES.map((t) => (
+              <li key={t.id}>
+                <button
+                  onClick={() => setTemplateId(t.id)}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
+                    templateId === t.id
+                      ? 'bg-[var(--color-surface-2)]'
+                      : 'hover:bg-[var(--color-surface-2)]'
+                  }`}
+                >
+                  <span className="block truncate">{t.name}</span>
+                  <span className="mt-0.5 block truncate text-xs text-[var(--color-text-dim)]">
+                    {t.description}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <>
         <button
           onClick={createFlow}
           className="mb-3 w-full rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
@@ -286,10 +355,45 @@ export function FlowsPanel({ agents, onError }: Props) {
             <li className="text-sm text-[var(--color-text-dim)]">Henüz akış yok.</li>
           )}
         </ul>
+          </>
+        )}
       </div>
 
-      {/* Editor + run */}
-      {!selectedId ? (
+      {/* Main: template preview or flow editor */}
+      {tab === 'templates' ? (
+        <div className="flex min-w-0 flex-1 flex-col">
+          {!selectedTemplate ? (
+            <div className="flex-1 p-6">
+              <p className="text-sm text-[var(--color-text-dim)]">
+                Soldan bir şablon seçin — yapısını önizleyin, sonra "Bu şablondan akış oluştur" deyin.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 border-b border-[var(--color-border)] p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{selectedTemplate.name}</div>
+                  <div className="truncate text-xs text-[var(--color-text-dim)]">
+                    {selectedTemplate.description}
+                  </div>
+                </div>
+                <span className="flex-shrink-0 text-xs text-[var(--color-text-dim)]">
+                  salt-okunur önizleme
+                </span>
+                <button
+                  onClick={() => instantiateTemplate(selectedTemplate)}
+                  className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                >
+                  + Bu şablondan akış oluştur
+                </button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <TemplatePreview graph={selectedTemplate.graph} agents={agents} />
+              </div>
+            </>
+          )}
+        </div>
+      ) : !selectedId ? (
         <div className="flex-1 p-6">
           <p className="text-sm text-[var(--color-text-dim)]">
             Soldan bir akış seçin veya yeni bir akış oluşturun.

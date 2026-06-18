@@ -41,6 +41,9 @@ interface Props {
   onEdgesChange: (c: EdgeChange[]) => void
   setEdges: (updater: (e: Edge[]) => Edge[]) => void
   onSelect: (id: string | null) => void
+  // Read-only preview (template gallery): disable dragging, connecting and
+  // selection so the graph can only be viewed, not edited.
+  readOnly?: boolean
 }
 
 // FlowCanvas renders the interactive node graph. Connecting from a source
@@ -56,6 +59,7 @@ export function FlowCanvas({
   onEdgesChange,
   setEdges,
   onSelect,
+  readOnly = false,
 }: Props) {
   // Apply the chosen path style + animation to every edge for display. These
   // are cosmetic flow-level presentation hints; the labels/handles are kept.
@@ -97,8 +101,11 @@ export function FlowCanvas({
           defaultEdgeOptions={{ type: edgeStyle, animated }}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
+          onConnect={readOnly ? undefined : onConnect}
           onSelectionChange={onSelectionChange}
+          nodesDraggable={!readOnly}
+          nodesConnectable={!readOnly}
+          elementsSelectable={!readOnly}
           fitView
           proOptions={{ hideAttribution: true }}
         >
