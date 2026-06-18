@@ -37,9 +37,14 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
     return m
   }, [all])
 
-  // Shared (on-demand) skills are auto-available to every agent — shown as info,
-  // not in the add list. Available-to-assign = restricted skills not yet picked.
-  const shared = useMemo(() => all.filter((s) => s.shared), [all])
+  // Shared (on-demand) skills are auto-available to every agent. They can still
+  // be explicitly assigned (to pin them in the prompt in a chosen order); once
+  // assigned they move into the selected list, so only the not-yet-picked ones
+  // are offered here. Available-to-assign = restricted skills not yet picked.
+  const shared = useMemo(
+    () => all.filter((s) => s.shared && !selected.includes(s.slug)),
+    [all, selected],
+  )
   const available = useMemo(
     () => all.filter((s) => !s.shared && !selected.includes(s.slug)),
     [all, selected],
@@ -149,22 +154,29 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
         </div>
       )}
 
-      {/* Shared (on-demand) skills: auto-available, shown for awareness only. */}
+      {/* Shared (on-demand) skills: auto-available, but can still be explicitly
+          assigned to pin them in the prompt order. Clicking adds to the list. */}
       {shared.length > 0 && (
         <div className="mt-3 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2">
-          <p className="mb-1.5 text-[11px] font-medium text-[var(--color-success)]">
+          <p className="mb-1 text-[11px] font-medium text-[var(--color-success)]">
             Gerektiğinde açık (atama gerekmez)
+          </p>
+          <p className="mb-1.5 text-[10px] text-[var(--color-text-dim)]">
+            Bu beceriler atama olmadan zaten açık. Yine de ekleyerek ajanın sistem promptunda
+            sabitleyip sıralayabilirsin.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {shared.map((s) => (
-              <span
+              <button
                 key={s.slug}
-                title={s.description}
-                className="flex items-center gap-1 rounded-full bg-[var(--color-surface-2)] px-2.5 py-1 text-xs text-[var(--color-text-dim)]"
+                onClick={() => add(s.slug)}
+                title={`${s.description} · Atayarak prompt sırasına sabitle`}
+                className="flex items-center gap-1 rounded-full border border-[var(--color-success)]/40 bg-[var(--color-surface-2)] px-2.5 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-success)] hover:bg-[var(--color-bg)]"
               >
+                <Plus size={12} className="text-[var(--color-success)]" />
                 <span>{s.icon || '✨'}</span>
                 <span>{s.name}</span>
-              </span>
+              </button>
             ))}
           </div>
         </div>
