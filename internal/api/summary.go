@@ -75,6 +75,10 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 		header = h
 		summary, serr := wsp.Runtime.Summarize(ctx, session.AgentID, kind)
 		if serr != nil {
+			// Log before returning the 500: the funnel logs provider errors, but a
+			// data-gathering failure would otherwise leave only the HTTP response —
+			// match the title endpoints, which always log a degraded result.
+			s.logger.Warn("summary generation failed", "session", session.ID, "kind", kind, "error", serr)
 			writeError(w, http.StatusInternalServerError, "summary failed: "+serr.Error())
 			return
 		}
