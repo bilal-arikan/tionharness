@@ -2,6 +2,22 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Beceri yazımı — UI'dan oluştur/düzenle/sil + emoji ikon ✅ (2026-06-18)
+
+**İstek:** Beceri (skill) ikonlarını değiştirebilelim; ayrıca **yeni skill ekleyip mevcutları düzenleyebilelim**. Önceki Beceriler ekranı salt-okunurdu (yalnız paylaş/kısıtla, klasörü aç, diskten tara).
+
+**Backend (`internal/skills`):**
+- `frontmatter.go`: `setFrontmatterFields` + `quoteYAML` — sıralı, genel frontmatter yazıcısı: skaler anahtarları upsert/siler, yönetilmeyen anahtarları + blok listeleri (subskills vb.) **yerinde korur**, opsiyonel olarak gövdeyi değiştirir. İki nokta/YAML göstergesi içeren değerler güvenle tırnaklanır (`hasYAMLIndicatorPrefix`).
+- `store.go`: `Store.Create` (workspace tier'a yazar; slug addan türetilir, **Türkçe harf transliterasyonu** ile), `Store.Update` (yerinde yeniden yazım, slug değişmez), `Store.Delete` (bilinen tier dizini altında guard'lı `RemoveAll`). `SkillInput`, `slugify`, `oneLine` yardımcıları.
+- API (`skills.go`+`server.go`): `POST /api/skills`, `PUT /api/skills/{slug}`, `DELETE /api/skills/{slug}`; create/update beceriyi **gövdesiyle** döndürür → UI tek round-trip'te yenilenir.
+
+**Frontend:**
+- `api/skills.ts`: `createSkill`/`updateSkill`/`deleteSkill` + `SkillInput` tipi.
+- `panels/SkillEditor.tsx` (yeni): oluştur+düzenle diyaloğu; **ikon için ortak `EmojiField`** (merkezi emoji seçici), ad, slug (yalnız oluşturmada), açıklama, ne-zaman, paylaşımlı toggle, Markdown gövde.
+- `panels/SkillsPanel.tsx`: list başlığında **Yeni** butonu, detayda **Düzenle**/**Sil** (onaylı), editör bağlantısı + kaydetme sonrası listeyi/seçimi yeniler.
+
+**Doğrulama:** `go test ./internal/skills,api` + `go build ./...` yeşil; yeni testler `store_test.go` (Create/Update/Delete round-trip, `slugify`, `setFrontmatterFields` koruma/tırnak). **API E2E** (canlı 8090): create→get→update→delete (açıklamadaki iki nokta round-trip, ikon **UTF-8 emoji** olarak `icon: 🧠` diske doğru yazılır, silme sonrası 404). **Playwright** (5173→8090): editör açılır, ortak `EmojiField` picker render olur, oluşturma workspace becerisi ekler (liste 3→4, slug `ui-test-beceri`, workspace badge). Not: curl/Git Bash emojiyi `??`'e bozuyordu (shell UTF-8 artefaktı, backend değil) — Python/fetch yolu emojiyi düzgün saklar. Commit `6dcbbb2` (9 dosya). Push yok. Frontend tsc kalan hataları paralel oturum WIP'i (App.tsx `market`, TaskDetailPanel, HooksPanel) — bu özellikle ilgisiz.
+
 ## Spawn Session — fire-and-forget paralel işçi ✅ (2026-06-18)
 
 **İstek:** the external agent project/SwarmClaw'daki `spawn_session` benzeri: bir prompt'tan **yeni, bağımsız bir oturum** başlatıp **beklemeden** bırakmak (paralel otonom işçi). Mevcut tetiklemeler (flow/schedule/`call_agent`/`send_agent_message`) bunu karşılamıyordu — spawn, FRESH bir oturum açıp turu arka planda koşar. Çıktı Faz U Aktivite feed'inde canlı görünür. Tasarım: `_Docs/18-SPAWN-SESSION.md`.
