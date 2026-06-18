@@ -69,12 +69,13 @@ func (AskUserTool) Def() providers.ToolDef {
 }
 
 func (AskUserTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
-	// Bail early in autonomous/flow runs — avoids surfacing a JSON parse error
-	// when the model passes a malformed payload that would never be answered anyway.
-	ask := askerFrom(ctx)
-	if ask == nil {
+	// Bail early in autonomous/flow runs before touching the payload. IsAutonomous
+	// is the fast path (set by WithCallKind for every non-chat entry point);
+	// askerFrom falls back for contexts that were not stamped with WithCallKind.
+	if IsAutonomous(ctx) || askerFrom(ctx) == nil {
 		return "", fmt.Errorf("ask_user is only available in interactive chat sessions; proceed without asking")
 	}
+	ask := askerFrom(ctx)
 	var in askInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("invalid ask_user input: %w", err)

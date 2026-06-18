@@ -27,3 +27,23 @@ func askerFrom(ctx context.Context) AskFunc {
 // the agent package) reuse the interactive ask channel to prompt for tool
 // approval. Returns nil on autonomous runs with no open client connection.
 func AskerFrom(ctx context.Context) AskFunc { return askerFrom(ctx) }
+
+// autonomousKey marks a context as belonging to a non-interactive (autonomous)
+// run — heartbeat, schedule, flow, delegate, etc.
+type autonomousKey struct{}
+
+// WithAutonomous stamps ctx as autonomous (no interactive user present). The
+// agent runtime calls this once at every non-chat entry point via WithCallKind
+// so tools can detect the run kind before touching the input payload.
+func WithAutonomous(ctx context.Context) context.Context {
+	return context.WithValue(ctx, autonomousKey{}, true)
+}
+
+// IsAutonomous reports whether ctx was stamped as autonomous. Interactive-only
+// tools (ask_user, request_confirmation) check this before unmarshalling input
+// so a malformed or array-vs-string payload in a non-interactive run never
+// surfaces a JSON error to the model.
+func IsAutonomous(ctx context.Context) bool {
+	v, _ := ctx.Value(autonomousKey{}).(bool)
+	return v
+}

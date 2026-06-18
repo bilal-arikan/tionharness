@@ -46,11 +46,12 @@ func (RequestConfirmationTool) Def() providers.ToolDef {
 }
 
 func (RequestConfirmationTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
-	// Bail early in autonomous/flow runs before touching the payload.
-	ask := askerFrom(ctx)
-	if ask == nil {
+	// Bail early in autonomous/flow runs before touching the payload. IsAutonomous
+	// is the fast path; askerFrom falls back for unstamped contexts.
+	if IsAutonomous(ctx) || askerFrom(ctx) == nil {
 		return "", fmt.Errorf("request_confirmation is only available in interactive chat sessions; do not take the risky action")
 	}
+	ask := askerFrom(ctx)
 	var in confirmInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("invalid request_confirmation input: %w", err)

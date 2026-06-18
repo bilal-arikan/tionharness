@@ -119,3 +119,35 @@ func TestRequestConfirmationAutonomous(t *testing.T) {
 		t.Fatalf("expected graceful no-asker message, got: %v", err)
 	}
 }
+
+// TestIsAutonomousFlag verifies that WithAutonomous stamps the context and
+// IsAutonomous reads it back correctly.
+func TestIsAutonomousFlag(t *testing.T) {
+	if IsAutonomous(context.Background()) {
+		t.Fatal("fresh context should not be autonomous")
+	}
+	ctx := WithAutonomous(context.Background())
+	if !IsAutonomous(ctx) {
+		t.Fatal("stamped context should be autonomous")
+	}
+}
+
+// TestAskUserIsAutonomousShortCircuits verifies that when the context is
+// stamped autonomous the tool bails before JSON parsing, even with a valid
+// asker wired in (the asker would never be called in autonomous mode).
+func TestAskUserIsAutonomousShortCircuits(t *testing.T) {
+	tool := NewAskUserTool()
+	ctx := WithAutonomous(context.Background())
+	// Wire an asker so the ONLY reason for the error is the autonomous flag.
+	ctx = WithAsker(ctx, func(_ context.Context, _ string, _ []string) (string, error) {
+		t.Fatal("asker must not be called in autonomous mode")
+		return "", nil
+	})
+	_, err := tool.Call(ctx, json.RawMessage(`{"question":"proceed?"}`))
+	if err == nil {
+		t.Fatal("expected error in autonomous context")
+	}
+	if !strings.Contains(err.Error(), "interactive chat") {
+		t.Fatalf("expected graceful message, got: %v", err)
+	}
+}

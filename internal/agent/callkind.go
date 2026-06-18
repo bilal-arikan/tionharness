@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/tools"
 )
 
 // CallKind tags a provider call by its origin so usage can be attributed across
@@ -31,8 +32,16 @@ type callKindKey struct{}
 // downstream — including the inner tool-loop iterations and any context
 // compaction triggered mid-turn — is attributed to this kind. Stamp it once at
 // each origin entry point; the default (unstamped) kind is KindChat.
+//
+// Non-chat kinds also stamp the context as autonomous so interactive-only tools
+// (ask_user, request_confirmation) can bail out immediately without parsing
+// the input payload.
 func WithCallKind(ctx context.Context, kind CallKind) context.Context {
-	return context.WithValue(ctx, callKindKey{}, kind)
+	ctx = context.WithValue(ctx, callKindKey{}, kind)
+	if kind != KindChat {
+		ctx = tools.WithAutonomous(ctx)
+	}
+	return ctx
 }
 
 // callKindFrom returns the call origin stamped on the context, defaulting to
