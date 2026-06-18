@@ -16,6 +16,15 @@
 
 **Zombi süreç temizliği:** 8090'ı tutan eski `swarmgo-dev.exe` (başka oturumdan) ve takılı `go run`/`vite` süreçleri sonlandırıldı; taze `swarmgo.exe` (8090) + tek `vite` (5173) çalışır durumda.
 
+### Market — provider API anahtarı secret vault'tan seçim (commit `6e96e87`)
+Provider kurulumunda API anahtarı artık **serbest metin değil**, Ayarlar→Sağlayıcılar paneliyle aynı politikayla **secret kasasından seçilir**: `MarketPanel` provider detayında `listSecrets` dropdown'u gösterir, seçilince `revealSecret(name)` ile değer çözülüp install gövdesine `apiKey` olarak gider (UI'da plaintext tutulmaz). "Sırlar →" butonu (`onManageSecrets` prop'u, App `setView('secrets')`) Sırlar ekranına atlar; sır yoksa anahtarsız kurulur. Playwright ile doğrulandı (Groq → `GROQ_API_KEY` seç → kur → `keySet:true`).
+
+### Market — dedup + kurulum sonrası tazeleme (commit `29d1123`)
+İki UX düzeltmesi: **(1) Tekrar ekleme koruması:** agent/flow kurulumu aynı **ada** sahip varlık varsa **409** + net mesaj (`nameExists`+`agentNames`/`flowNames`); skill dosya çakışmasında 409; provider id-keyed olduğundan çoğaltmaz, günceller. UI: kart "Kuruldu" rozeti + detay butonu disabled "Zaten kurulu" (provider'da "Güncelle"), `loadExisting`+`packTargetKey` ile hesaplanır. **(2) Tazeleme:** `MarketPanel onInstalled(kind)` → App `kind==='agent'` olunca `listAgents()`→`setAgents`, yeni ajan **Ajanlar ekranında manuel yenileme olmadan** görünür (flow/skill/provider panelleri zaten mount'ta yüklenir). Playwright: Coder kur→buton "Zaten kurulu", Ajanlar'da yenilemesiz göründü; ikinci API install→409.
+
+### Market — veri kaybı tanısı (kod değişikliği yok)
+"Marketten agent ekleyince eski agentler silindi" raporu araştırıldı. **Bulgu: market install ajan SİLMEZ** — `installAgentPack` yalnız `db.CreateAgent` çağırır; reproduction (2 mevcut ajan + market ajanı kur = üçü de sağ kaldı) ve kod bunu doğrular. Backend access-log'u silmenin install'dan **15 sn sonra gelen ayrı bir `DELETE /api/agents/{id}`** olduğunu gösterdi; bu uç yalnızca UI "Sil" butonundan (confirm'li) ya da agent `delete_agent` tool'undan (yalnız ajan-oluşturduğu ajanlar — kullanıcı ajanı korumalı) tetiklenir. Sonuç: silme açık bir delete eyleminden kaynaklandı, install'dan değil. Olası UX tuzağı: kurulum sonrası Ajanlar ekranında **yanlış (eski) ajan seçiliyken** "Sil"e basılması. Öneri (beklemede): kurulan ajanı otomatik seç / ad yazdırarak silme onayı / soft-delete.
+
 ## claude-cli için bütçe/maliyet tahmini ✅ (2026-06-18)
 
 **İstek:** Bütçe ekranında `claude-cli` (AnthropicCli) sağlayıcısı için de maliyet hesaplaması yapılsın — mevcut `anthropic` ile aynı model fiyat tablosu kullanılarak eşdeğer API maliyeti tahmin edilsin; "abonelik / fiyatsız" yerine `~$X.XX` gösterilsin.
