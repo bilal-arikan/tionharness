@@ -92,7 +92,7 @@ ayrı bölüm (`frontend/.../settings/appPanels.tsx` `ContextPanel`).
 ## Harici araç tespiti (presence-only)
 
 Ayarlar → **Tanılama** ekranındaki "Kurulu mu kontrol et" butonu, bu cihazda isteğe bağlı harici
-token araçlarının (`rtk`, `sqz`) **kurulu olup olmadığını** gösterir.
+token araçlarının (`rtk`, `sqz`, `headroom`) **kurulu olup olmadığını** gösterir.
 
 - Backend: `GET /api/external-tools` (`api/external_tools.go`) → `exec.LookPath` ile PATH'te arar.
   **Araçları kurmaz, çalıştırmaz, değiştirmez** (Windows'ta PATHEXT'e saygılı). Dönüş: `[{name,desc,url,found,path}]`.

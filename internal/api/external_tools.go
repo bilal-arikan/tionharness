@@ -16,6 +16,7 @@ var knownExternalTools = []struct {
 }{
 	{"rtk", "Rust Token Killer — komut çıktısı sıkıştırma CLI proxy'si", "https://github.com/rtk-ai/rtk"},
 	{"sqz", "LLM bağlam sıkıştırma (PreToolUse hook)", "https://github.com/ojuschugh1/sqz"},
+	{"headroom", "LLM bağlam sıkıştırma katmanı (kütüphane/proxy/MCP server)", "https://github.com/chopratejas/headroom"},
 }
 
 // externalToolStatus is one tool's detection result for the Settings panel.
