@@ -14,6 +14,10 @@ import (
 // forever calling tools.
 const maxToolIters = 8
 
+// activeToolMaxIdle is how many iterations a lazily-activated tool may go unused
+// before it is pruned from the shipped schema set (Phase 3 of lazy tool loading).
+const activeToolMaxIdle = 3
+
 // thinkingBudgetForLevel maps an agent's ThinkingLevel to a provider thinking
 // token budget (0 = off). Providers without thinking support ignore it.
 func thinkingBudgetForLevel(level string) int {
@@ -157,12 +161,19 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	// Native agentic loop (providers that return structured tool_use). OnEvent
 	// is not used here — we emit each step ourselves as the loop progresses.
 	req.OnEvent = nil
+	// Lazy tool loading: a per-turn active set tracks which on-demand (lazy) tools
+	// the model has activated. buildRegistry wires the activate_tools meta-tools to
+	// this same set (via ctx); req.Tools is recomputed each iteration so a freshly
+	// activated tool's schema is shipped on the next step.
+	active := tools.NewActiveTools()
+	ctx = withActiveTools(ctx, active)
 	reg := r.buildRegistry(ctx, agent)
 	if reg.Empty() {
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		return resp, nil, err
 	}
-	req.Tools = reg.Defs(r.toolFilter(ctx, agent))
+	toolFilter := r.toolFilter(ctx, agent)
+	req.Tools = reg.ActiveDefs(toolFilter, active.Snapshot())
 
 	// Wire agent→agent delegation for this turn: the call_agent tool reads the
 	// runner (and its loop guards) from the context. &req lets a summoned agent
@@ -210,6 +221,11 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			steps = append(steps, st)
 			emit(st)
 		}
+		// Recompute the shipped tool schemas for this step: eager tools plus any
+		// lazy tools activated so far. Cheap; reflects activate/deactivate calls
+		// from the previous iteration.
+		active.SetIter(i)
+		req.Tools = reg.ActiveDefs(toolFilter, active.Snapshot())
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
 			// A1: a context-overflow error is recoverable once per turn by
@@ -275,6 +291,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		results := make([]providers.ToolResult, 0, len(resp.ToolCalls))
 		for _, call := range resp.ToolCalls {
 			r.logger.Info("tool call", "agent", agent.ID, "tool", call.Name)
+			active.MarkUsed(call.Name) // reset idle age for pruning (Phase 3)
 
 			// PreToolUse hooks (Faz P4): user-defined commands may rewrite the
 			// tool input, auto-approve the call (bypassing the permission gate) or
@@ -396,6 +413,11 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			Role:        providers.RoleUser,
 			ToolResults: results,
 		})
+		// Phase 3: drop lazy tools activated but left unused for a while, so a long
+		// turn does not keep shipping schemas the model is no longer reaching for.
+		if pruned := active.Prune(activeToolMaxIdle); len(pruned) > 0 {
+			r.logger.Info("pruned idle lazy tools", "agent", agent.ID, "tools", pruned)
+		}
 	}
 	r.logger.Warn("tool loop hit iteration cap", "agent", agent.ID)
 	rec := TurnStep{

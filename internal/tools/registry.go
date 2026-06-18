@@ -53,6 +53,10 @@ type StreamingTool interface {
 // Registry aggregates built-in tools and an MCP catalog for one agent context.
 type Registry struct {
 	builtins map[string]Tool
+	// lazy is the set of tool names whose schema is loaded on demand (see
+	// ToolDef.Lazy). Lazy tools are omitted from ActiveDefs until activated, but
+	// always listed by LazyCatalog and always returned by Defs (full catalog).
+	lazy map[string]bool
 
 	mcpEntries     []mcp.CatalogEntry
 	mcpCfgByServer map[string]mcp.ServerConfig
@@ -62,6 +66,7 @@ type Registry struct {
 func NewRegistry(builtins ...Tool) *Registry {
 	r := &Registry{
 		builtins:       map[string]Tool{},
+		lazy:           map[string]bool{},
 		mcpCfgByServer: map[string]mcp.ServerConfig{},
 	}
 	for _, t := range builtins {
@@ -70,11 +75,34 @@ func NewRegistry(builtins ...Tool) *Registry {
 	return r
 }
 
+// Add registers extra built-in tools after construction (e.g. the activate_tools
+// meta-tool, which needs the lazy catalog assembled from earlier tools + MCP).
+func (r *Registry) Add(extra ...Tool) {
+	for _, t := range extra {
+		r.builtins[t.Def().Name] = t
+	}
+}
+
+// MarkLazy flags the named tools as lazy (loaded on demand via activate_tools).
+func (r *Registry) MarkLazy(names ...string) {
+	for _, n := range names {
+		r.lazy[n] = true
+	}
+}
+
+// IsLazy reports whether a tool is lazy.
+func (r *Registry) IsLazy(name string) bool { return r.lazy[name] }
+
 // AttachMCP records the MCP catalog and per-server configs so the registry can
-// advertise and dispatch namespaced MCP tools.
+// advertise and dispatch namespaced MCP tools. Every MCP tool is marked lazy:
+// external servers can expose hundreds of tools, so their schemas are loaded on
+// demand rather than shipped every turn.
 func (r *Registry) AttachMCP(entries []mcp.CatalogEntry, cfgByServer map[string]mcp.ServerConfig) {
 	r.mcpEntries = entries
 	r.mcpCfgByServer = cfgByServer
+	for _, e := range entries {
+		r.lazy[e.NamespacedName] = true
+	}
 }
 
 // Defs returns the tool schemas to offer the model. If allow is non-nil, only
@@ -97,6 +125,58 @@ func (r *Registry) Defs(allow func(name string) bool) []providers.ToolDef {
 			// $schema/draft plumbing stripped, root object guaranteed (CG-4).
 			InputSchema: mcp.NormalizeSchema(e.Tool.InputSchema),
 		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// ActiveDefs returns the tool schemas to ship to the model for a turn: every
+// EAGER tool (not lazy) plus the lazy tools the model has ACTIVATED (active set).
+// allow filters by name as in Defs (nil = allow all). This is the request-time
+// counterpart of Defs, which always returns the full catalog.
+func (r *Registry) ActiveDefs(allow func(name string) bool, active map[string]bool) []providers.ToolDef {
+	keep := func(name string) bool {
+		if allow != nil && !allow(name) {
+			return false
+		}
+		return !r.lazy[name] || active[name]
+	}
+	var out []providers.ToolDef
+	for name, t := range r.builtins {
+		if keep(name) {
+			out = append(out, t.Def())
+		}
+	}
+	for _, e := range r.mcpEntries {
+		if keep(e.NamespacedName) {
+			out = append(out, providers.ToolDef{
+				Name:        e.NamespacedName,
+				Description: e.Tool.Description,
+				InputSchema: mcp.NormalizeSchema(e.Tool.InputSchema),
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// LazyCatalog returns the lazy tools (name + description only) for the
+// load-on-demand prompt block. allow filters by name (nil = allow all).
+func (r *Registry) LazyCatalog(allow func(name string) bool) []providers.ToolDef {
+	keep := func(name string) bool {
+		return r.lazy[name] && (allow == nil || allow(name))
+	}
+	var out []providers.ToolDef
+	for name, t := range r.builtins {
+		if keep(name) {
+			d := t.Def()
+			out = append(out, providers.ToolDef{Name: d.Name, Description: d.Description})
+		}
+	}
+	for _, e := range r.mcpEntries {
+		if keep(e.NamespacedName) {
+			out = append(out, providers.ToolDef{Name: e.NamespacedName, Description: e.Tool.Description})
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

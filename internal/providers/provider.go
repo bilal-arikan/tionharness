@@ -27,6 +27,11 @@ type ToolDef struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"inputSchema"`
+	// Lazy marks a tool whose full schema is NOT shipped to the model up front:
+	// only its name+description appear in a lightweight catalog, and the model
+	// pulls the real schema on demand via activate_tools (progressive disclosure).
+	// Not serialised to providers — it only informs catalog/request assembly.
+	Lazy bool `json:"-"`
 }
 
 // ToolCall is a model request to run a tool. Input holds the raw JSON args.

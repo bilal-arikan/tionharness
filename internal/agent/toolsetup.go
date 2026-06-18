@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
@@ -134,6 +135,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// delete agents, flows and schedules, manage artifacts, add memories and read
 	// logs. Provenance is enforced — agents only touch agent-created entities.
 	// This roughly doubles the tool catalog, so it is opt-in per workspace.
+	selfManageStart := len(builtins)
 	if r.tun.SelfManageEnabled() {
 		builtins = append(builtins,
 			// Agents.
@@ -161,13 +163,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewUpdateScheduleTool(r.db, agent.ID, r.reloadSchedules),
 			tools.NewDeleteScheduleTool(r.db, agent.ID, r.reloadSchedules),
 			tools.NewListSchedulesTool(r.db, agent.ID),
-			// Tasks (kanban board). Read/create/edit/move/run on any task;
-			// delete only agent-created (provenance).
+			// Tasks (kanban board). Read/create/edit/move on any task; delete only
+			// agent-created (provenance). The board is passive — no run tool.
 			tools.NewListTasksTool(r.db, agent.ID),
 			tools.NewCreateTaskTool(r.db, agent.ID),
 			tools.NewUpdateTaskTool(r.db, agent.ID),
 			tools.NewMoveTaskTool(r.db, agent.ID),
-			tools.NewRunTaskTool(r.db, agent.ID, r.RunTask),
 			tools.NewDeleteTaskTool(r.db, agent.ID),
 			// Artifacts (create/update already provided via the per-turn sink).
 			tools.NewDeleteArtifactTool(r.db, agent.ID),
@@ -180,30 +181,43 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 
 	reg := tools.NewRegistry(builtins...)
 
-	servers, err := r.db.ListEnabledMCPServers(ctx)
-	if err != nil {
+	// Lazy tool loading: the self-management suite is large and used in a minority
+	// of turns, so its schemas are loaded on demand (activate_tools) rather than
+	// shipped every turn. MCP tools are marked lazy inside AttachMCP.
+	for _, t := range builtins[selfManageStart:] {
+		reg.MarkLazy(t.Def().Name)
+	}
+
+	if servers, err := r.db.ListEnabledMCPServers(ctx); err != nil {
 		r.logger.Warn("list mcp servers failed", "error", err)
-		return reg
-	}
-	if len(servers) == 0 {
-		return reg
+	} else if len(servers) > 0 {
+		cfgs := make([]mcp.ServerConfig, 0, len(servers))
+		cfgByServer := map[string]mcp.ServerConfig{}
+		for _, m := range servers {
+			cfg := toServerConfig(m)
+			cfgs = append(cfgs, cfg)
+			// Key by the sanitized name used in namespacing.
+			srv, _, _ := mcp.SplitNamespaced(mcp.NamespaceTool(cfg.Name, "x"))
+			cfgByServer[srv] = cfg
+		}
+		entries, errs := mcp.BuildCatalog(ctx, cfgs)
+		for name, e := range errs {
+			r.logger.Warn("mcp catalog build failed", "server", name, "error", e)
+		}
+		reg.AttachMCP(entries, cfgByServer)
 	}
 
-	cfgs := make([]mcp.ServerConfig, 0, len(servers))
-	cfgByServer := map[string]mcp.ServerConfig{}
-	for _, m := range servers {
-		cfg := toServerConfig(m)
-		cfgs = append(cfgs, cfg)
-		// Key by the sanitized name used in namespacing.
-		srv, _, _ := mcp.SplitNamespaced(mcp.NamespaceTool(cfg.Name, "x"))
-		cfgByServer[srv] = cfg
+	// Wire the lazy-loading meta-tools once the full lazy catalog (self-management
+	// + MCP) is known. They are eager (always shipped) so the model can always
+	// discover and activate on-demand tools. Skipped when nothing is lazy.
+	if lazyCat := reg.LazyCatalog(nil); len(lazyCat) > 0 {
+		active := activeToolsFromCtx(ctx) // nil for catalog/preview calls (no-op meta-tools)
+		reg.Add(
+			tools.NewActivateToolsTool(active, lazyCat),
+			tools.NewDeactivateToolsTool(active),
+			tools.NewFindToolsTool(lazyCat),
+		)
 	}
-
-	entries, errs := mcp.BuildCatalog(ctx, cfgs)
-	for name, e := range errs {
-		r.logger.Warn("mcp catalog build failed", "server", name, "error", e)
-	}
-	reg.AttachMCP(entries, cfgByServer)
 	return reg
 }
 
@@ -243,6 +257,41 @@ func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) b
 // AND permitted by the agent's allowlist) — the tools it actually receives.
 func (r *Runtime) ToolCatalog(ctx context.Context, agent db.Agent) []providers.ToolDef {
 	return r.buildRegistry(ctx, agent).Defs(r.toolFilter(ctx, agent))
+}
+
+// ShippedToolCatalog returns the tools whose full schemas are actually sent at
+// the START of a turn: the agent's eager (non-lazy) tools. Lazy tools are not
+// here — they live in the load-on-demand catalog block and are pulled via
+// activate_tools. Used by the context preview for an honest token split.
+func (r *Runtime) ShippedToolCatalog(ctx context.Context, agent db.Agent) []providers.ToolDef {
+	return r.buildRegistry(ctx, agent).ActiveDefs(r.toolFilter(ctx, agent), nil)
+}
+
+// LazyToolsCatalogBlock renders the "Available Tools (load on demand)" system-
+// prompt section for an agent: the name + summary of every lazy tool it may
+// activate (self-management + MCP, minus its denylist). Returns "" when none.
+// Part of the cached static prefix (stable per agent/workspace tool config).
+func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) string {
+	lazy := r.buildRegistry(ctx, agent).LazyCatalog(r.toolFilter(ctx, agent))
+	return renderLazyToolCatalog(lazy)
+}
+
+// renderLazyToolCatalog builds the load-on-demand tool catalog block from a list
+// of lazy tool defs (name + description). Returns "" for an empty list.
+func renderLazyToolCatalog(lazy []providers.ToolDef) string {
+	if len(lazy) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("# Available Tools (load on demand)\n")
+	b.WriteString("These tools are NOT loaded yet — only their names and summaries are shown. " +
+		"To use one, first call `activate_tools` with its exact name(s); its full schema becomes " +
+		"available on your next step. Use `find_tools` to search this list by keyword. Activate " +
+		"everything you expect to need for a task in one call.\n")
+	for _, d := range lazy {
+		fmt.Fprintf(&b, "- `%s` — %s\n", d.Name, d.Description)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // WorkspaceToolCatalog returns the full, unfiltered tool catalog (every built-in

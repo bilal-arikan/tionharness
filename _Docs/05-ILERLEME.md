@@ -12,8 +12,12 @@ Pano artık bir **çalıştırma yüzeyi değil**, pasif bir durum/bilgi panosu.
 - **Backend temizliği (`kaldır temizle`):**
   - **`run_task` agent tool kaldırıldı** — `builtin_taskmgmt.go` artık 5 araç (list/create/update/move/delete); ajan görevi çalıştırmaz, durumu günceller. `toolsetup.go` kaydı + `TestRunTaskInvokesRunner` silindi.
   - **Schedule↔task (karttan-cron) bağlama kaldırıldı** — `db.Schedule.TaskID` alanı, `scheduler.run`'ın `if sc.TaskID != "" { RunTask }` dalı, `api/schedules.go` `taskId` alanları/validasyonu (artık `prompt` zorunlu), `store_schedule.go` kopyalaması, frontend `Schedule.taskId` + `createSchedule/updateSchedule` `taskId` paramı. Schedule artık yalnız prompt teslim eder.
-- **Kasıtlı bırakılanlar (yetim):** `RunTask`/`RunTaskStream`/`runTaskFlow` çekirdeği + `POST /api/tasks/{id}/run`·`/run-stream` uçları + frontend `runTask/runTaskStream/listTaskRuns` artık UI'dan çağrılmıyor (pano pasif). Ayrı bir karar olduğu için silinmedi — istenirse sonraki turda temizlenir.
-- **Durum:** `go build`/`go test ./internal/...` + frontend `tsc` yeşil. **Commit beklemede** (smart-surge reconcile).
+- **Yetim run yolu da temizlendi (2026-06-18):** pano pasif olduğundan tüm görev-çalıştırma yolu kaldırıldı —
+  - **executor.go:** `RunTask`/`RunTaskStream`/`runTaskFlow` + yalnız bunların kullandığı `invoke`/`invokeWithMemory`/`invokeWithMemoryStream`/`recordRunReply`/`taskSession`/`TaskSession` silindi. Kalan: `renderFlowTranscript` (flow.go kullanıyor), `invokeTraced` (scheduler), `complete` (flow.go). `errors`+`events` import'ları düştü.
+  - **api:** `handleRunTask` + `handleListTaskRuns` (tasks.go) + `tasks_stream.go` dosyası tamamen silindi; `server.go`'dan `/run`·`/run-stream`·`/runs` rotaları kaldırıldı.
+  - **db:** `store_run.go` yalnız `ListRunningRuns`'a indi (activity.go kullanıyor); `CreateRun/FinishRun/SetRunSession/ListRuns/GetRun/persistRunLocked` + `store_task.go SetTaskLastRun` silindi. `db.Run` modeli + `Task.LastRun*` korundu (executions feed + `list_tasks` okuyor).
+  - **frontend:** `api/tasks.ts`'den `runTask/runTaskStream/streamRunTask/listTaskRuns/TaskStreamHandlers` + `prompt` paramları kaldırıldı; import'lar sadeleşti.
+- **Durum:** `go build`/`go test ./internal/...` + frontend `tsc`/`npm run build` yeşil. **Commit beklemede** (smart-surge reconcile).
 
 ## Ayarlar yeniden düzenleme — bölüm taşımaları (2026-06-18)
 İki ayar bölümü daha mantıksal olarak ait oldukları ekrana taşındı:
@@ -2511,6 +2515,14 @@ Kullanıcıyla netleştirilecek:
 ---
 
 ## Oturum Günlüğü
+
+### 2026-06-18 — Lazy tool loading (3 faz: katalog + activate_tools + prune)
+Araç şemalarına skill `subskills` deseninin araç karşılığı uygulandı (bkz. `19-LAZY-TOOL-LOADING.md`):
+- **Faz 1** — `providers.ToolDef.Lazy` alanı; `tools.Registry` lazy seti (`MarkLazy`, `Add`, `ActiveDefs`, `LazyCatalog`). **Self-management suite + tüm MCP araçları lazy** (`AttachMCP` MCP'yi otomatik lazy işaretler), çekirdek araçlar eager. Sistem promptuna **"Available Tools (load on demand)"** bloğu (`Runtime.LazyToolsCatalogBlock`, `chat_turn.go`'da skills'ten sonra enjekte). Eager meta-araç **`activate_tools`** + per-turn **aktif set** (`tools.ActiveTools`, context ile `buildRegistry`'ye taşınır). Tool loop her iterasyonda `ActiveDefs(filter, active.Snapshot())` ile gönderilen şemayı yeniden hesaplar.
+- **Faz 2** — **`deactivate_tools`** + **`find_tools`** (katalog anahtar-kelime arama). `internal/tools/builtin_activate.go`.
+- **Faz 3** — `ActiveTools.Prune` + `activeToolMaxIdle=3`: kullanılmayan aktif araçlar uzun turda düşürülür (loop `MarkUsed`/`Prune` çağırır).
+- Bağlam önizlemesi: gönderilen araçlar artık eager (`ShippedToolCatalog`); lazy'ler sistem bloğunda → dürüst token ayrımı.
+- Testler: `lazyload_test.go` (`ActiveDefs`/`LazyCatalog`/`Prune`/`activate_tools`/`find_tools`). `go build ./...` + `go test ./...` temiz. `:8090` doğrulandı: agent context'te MCP araçları lazy blokta, eager listede yalnızca çekirdek + meta-araçlar (24 araç).
 
 ### 2026-06-18 — Skill `subskills` (progressive disclosure) + default app-flow skiller
 Skill sistemine üç ekleme yapıldı:

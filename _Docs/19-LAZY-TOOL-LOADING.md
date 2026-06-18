@@ -1,7 +1,27 @@
-# 19 — Lazy Tool Loading (Tasarım / Plan)
+# 19 — Lazy Tool Loading (Tasarım + Uygulama)
 
-> Durum: **PLAN** (henüz uygulanmadı). Skill sisteminin "progressive disclosure"
-> yaklaşımını built-in + MCP araçlarına taşıma tasarımı.
+> Durum: **UYGULANDI** (2026-06-18) — 3 fazın tamamı. Skill sisteminin
+> "progressive disclosure" yaklaşımı built-in + MCP araçlarına taşındı.
+
+## Uygulanan davranış (özet)
+
+- `ToolDef.Lazy` alanı; `Registry` lazy seti tutar. **Self-management suite +
+  tüm MCP araçları lazy**; çekirdek araçlar (read/write/edit/grep/glob, memory,
+  todo, artifacts, use_skill, secrets, config, http, time) **eager**.
+- Sistem promptuna **"Available Tools (load on demand)"** bloğu eklenir
+  (`Runtime.LazyToolsCatalogBlock` → `renderLazyToolCatalog`), yalnızca ad+özet.
+- Üç eager meta-araç: **`activate_tools`** (şema yükle), **`deactivate_tools`**,
+  **`find_tools`** (katalogda anahtar kelime arama). `internal/tools/builtin_activate.go`.
+- Per-turn **aktif set** (`internal/tools/activetools.go`, context üzerinden
+  `buildRegistry`'ye taşınır). Tool loop her iterasyonda
+  `reg.ActiveDefs(filter, active.Snapshot())` ile gönderilen şemayı yeniden
+  hesaplar → aktive edilen aracın şeması bir sonraki adımda gelir.
+- **Faz 3 prune**: `ActiveTools.Prune` — `activeToolMaxIdle=3` iterasyon
+  kullanılmayan aktif araç düşürülür (uzun turda şema yükünü düşük tutar).
+- Bağlam önizlemesi (`agent_context.go`): gönderilen araçlar = eager
+  (`ShippedToolCatalog`); lazy'ler sistem bloğunda sayılır → dürüst token ayrımı.
+- Doğrulama: `/api/agents/{id}/context` — MCP araçları lazy blokta, eager listede
+  yalnızca çekirdek + meta-araçlar.
 
 ## Sorun
 

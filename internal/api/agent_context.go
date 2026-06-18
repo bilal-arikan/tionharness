@@ -45,8 +45,11 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "agent not found") {
 		return
 	}
-	system := s.buildAgentStaticPrompt(wsp, agent)
-	defs := wsp.Runtime.ToolCatalog(ctx, agent)
+	system := s.buildAgentStaticPrompt(ctx, wsp, agent)
+	// Eager tools only: these are the schemas actually shipped at turn start. Lazy
+	// (on-demand) tools live in the system prompt's load-on-demand catalog block
+	// and are counted under SystemTokens, not here.
+	defs := wsp.Runtime.ShippedToolCatalog(ctx, agent)
 	tools := make([]toolSummary, 0, len(defs))
 	for _, d := range defs {
 		tools = append(tools, toolSummary{Name: d.Name, Description: d.Description})
@@ -91,7 +94,7 @@ func buildAgentDynamicPrompt(ctx context.Context, wsp *workspace.Workspace, agen
 // buildAgentStaticPrompt mirrors the STATIC half of composeTurnRequest for a
 // single agent with no session, so the preview matches what is actually sent.
 // Keep in sync with composeTurnRequest's static-prefix assembly.
-func (s *Server) buildAgentStaticPrompt(wsp *workspace.Workspace, agent db.Agent) string {
+func (s *Server) buildAgentStaticPrompt(ctx context.Context, wsp *workspace.Workspace, agent db.Agent) string {
 	system := buildSystemPrompt(agent)
 	if n := strings.TrimSpace(agent.Name); n != "" {
 		note := "You are the agent named \"" + n + "\". In this chat, the user picks which agent should answer by starting a message with \"@<AgentName>\". So an \"@" + n + "\" at the start of a message means the user is addressing you by name — treat it as being called, not as a file, skill, or entity to look up; just answer the rest of the message."
@@ -106,6 +109,9 @@ func (s *Server) buildAgentStaticPrompt(wsp *workspace.Workspace, agent db.Agent
 	system = strings.TrimSpace(system + "\n\n" + artifactDeliverableGuidance)
 	if sb := wsp.Runtime.SkillsCatalogBlockForAgent(agent); sb != "" {
 		system = strings.TrimSpace(system + "\n\n" + sb)
+	}
+	if tb := wsp.Runtime.LazyToolsCatalogBlock(ctx, agent); tb != "" {
+		system = strings.TrimSpace(system + "\n\n" + tb)
 	}
 	return system
 }

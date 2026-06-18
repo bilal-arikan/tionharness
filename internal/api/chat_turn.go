@@ -64,6 +64,12 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if sb := wsp.Runtime.SkillsCatalogBlockForAgent(agentRow); sb != "" {
 		system = strings.TrimSpace(system + "\n\n" + sb)
 	}
+	// Advertise the agent's LAZY tools (self-management + MCP) as a lightweight
+	// load-on-demand catalog; full schemas are pulled via activate_tools. Part of
+	// the cached static prefix since the lazy set is stable per agent/workspace.
+	if tb := wsp.Runtime.LazyToolsCatalogBlock(ctx, agentRow); tb != "" {
+		system = strings.TrimSpace(system + "\n\n" + tb)
+	}
 
 	var dynamic string
 	if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, message, 5); block != "" {
