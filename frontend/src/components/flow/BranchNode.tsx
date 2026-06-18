@@ -21,7 +21,7 @@ export function BranchNode({ id, data, selected }: NodeProps<FlowRFNode>) {
               type="source"
               position={Position.Right}
               id={`b${i}`}
-              style={{ position: 'absolute', right: -8, top: '50%', transform: 'translateY(-50%)' }}
+              style={{ position: 'absolute', right: -6, top: '50%', transform: 'translateY(-50%)' }}
             />
           </li>
         ))}

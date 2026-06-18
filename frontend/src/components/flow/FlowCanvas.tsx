@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -28,10 +28,14 @@ const nodeTypes: NodeTypes = {
   parallel: ParallelNode,
 }
 
+// Built-in React Flow edge path styles the user can switch between.
+export type EdgeStyle = 'default' | 'smoothstep' | 'step' | 'straight'
+
 interface Props {
   agents: Agent[]
   nodes: FlowRFNode[]
   edges: Edge[]
+  edgeStyle: EdgeStyle
   onNodesChange: (c: NodeChange<FlowRFNode>[]) => void
   onEdgesChange: (c: EdgeChange[]) => void
   setEdges: (updater: (e: Edge[]) => Edge[]) => void
@@ -45,11 +49,18 @@ export function FlowCanvas({
   agents,
   nodes,
   edges,
+  edgeStyle,
   onNodesChange,
   onEdgesChange,
   setEdges,
   onSelect,
 }: Props) {
+  // Apply the chosen path style to every edge for display (cosmetic; not part
+  // of the persisted graph). Existing labels/handles are preserved.
+  const styledEdges = useMemo(
+    () => edges.map((e) => ({ ...e, type: edgeStyle })),
+    [edges, edgeStyle],
+  )
   const onConnect = useCallback(
     (conn: Connection) => {
       setEdges((eds) => {
@@ -79,8 +90,9 @@ export function FlowCanvas({
       <ReactFlowProvider>
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={styledEdges}
           nodeTypes={nodeTypes}
+          defaultEdgeOptions={{ type: edgeStyle }}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}

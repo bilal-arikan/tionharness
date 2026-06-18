@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { api } from '../../api'
 import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
-import { FlowCanvas } from '../flow/FlowCanvas'
+import { FlowCanvas, type EdgeStyle } from '../flow/FlowCanvas'
 import { NodeInspector } from '../flow/NodeInspector'
 import {
   graphToReactFlow,
@@ -26,6 +26,13 @@ const NODE_TYPES: { value: FlowNodeType; label: string; icon: string }[] = [
   { value: 'parallel', label: 'Paralel', icon: '⚡' },
 ]
 
+const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [
+  { value: 'default', label: 'Eğri' },
+  { value: 'smoothstep', label: 'Yumuşak' },
+  { value: 'step', label: 'Basamak' },
+  { value: 'straight', label: 'Düz' },
+]
+
 // FlowsPanel is the visual protocol builder: pick a flow, edit it on a drag-and-
 // drop node canvas (React Flow), save, run with an input, and watch per-node
 // progress stream live on the canvas and in the trace below.
@@ -40,6 +47,14 @@ export function FlowsPanel({ agents, onError }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowRFNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  // Edge path style (cosmetic, device-local preference).
+  const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>(
+    () => (localStorage.getItem('swarmgo.flowEdgeStyle') as EdgeStyle) || 'default',
+  )
+  const changeEdgeStyle = (s: EdgeStyle) => {
+    setEdgeStyle(s)
+    localStorage.setItem('swarmgo.flowEdgeStyle', s)
+  }
 
   // Run state.
   const [input, setInput] = useState('')
@@ -283,6 +298,20 @@ export function FlowsPanel({ agents, onError }: Props) {
               placeholder="Açıklama — bu akış ne yapar? (isteğe bağlı)"
               className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-dim)] outline-none"
             />
+            <label className="flex flex-shrink-0 items-center gap-1 text-xs text-[var(--color-text-dim)]">
+              Kablo:
+              <select
+                value={edgeStyle}
+                onChange={(e) => changeEdgeStyle(e.target.value as EdgeStyle)}
+                className="rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-xs outline-none"
+              >
+                {EDGE_STYLES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               onClick={saveFlow}
               className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
@@ -313,6 +342,7 @@ export function FlowsPanel({ agents, onError }: Props) {
                 agents={agents}
                 nodes={nodes}
                 edges={edges}
+                edgeStyle={edgeStyle}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 setEdges={setEdges}
