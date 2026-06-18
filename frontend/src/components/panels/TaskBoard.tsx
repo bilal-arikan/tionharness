@@ -240,7 +240,10 @@ export function TaskBoard({ agents, onError }: Props) {
             + Görev
           </button>
           <button
-            onClick={() => setDepSort((v) => !v)}
+            onClick={() => {
+              if (!depSort && !confirm('Görevler bağımlılık sırasına göre yeniden dizilecek. Devam edilsin mi?')) return
+              setDepSort((v) => !v)
+            }}
             title={depSort ? 'Bağımlılık sıralamasını kapat' : 'Bağımlılığa göre sırala — önce bağımlısı olmayanlar'}
             className={`rounded border px-2 py-1 text-xs transition ${
               depSort
