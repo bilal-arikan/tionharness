@@ -316,7 +316,12 @@ export function TaskBoard({ agents, onError }: Props) {
                       <div
                         key={t.id}
                         draggable={!pending}
-                        onDragStart={() => !pending && setDragId(t.id)}
+                        onDragStart={(e) => {
+                          if (pending) return
+                          setDragId(t.id)
+                          e.dataTransfer.setData('application/x-swarmgo-task', t.id)
+                          e.dataTransfer.effectAllowed = 'link'
+                        }}
                         onClick={() =>
                           !pending && setSelectedId((cur) => (cur === t.id ? null : t.id))
                         }

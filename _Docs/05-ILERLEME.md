@@ -103,6 +103,20 @@
 
 **Doğrulama:** `go build ./...` + `tsc --noEmit` yeşil. Playwright canlı testi: dependency chip click-to-navigate ✅, DependencyPicker checkbox seçimi ✅, kart rozeti ✅, "🔗 Sırala" butonu görünür ✅.
 
+## Bağımlılık ekleme → Sürükle-Bırak (drag-drop) ✅ (2026-06-18)
+
+**İstek:** Detay panelinde checkbox listesi yerine, kartı sürükleyip detay paneline bırakarak bağımlılık eklenebilsin.
+
+**Değişiklikler:**
+- `frontend/src/components/panels/TaskBoard.tsx`: `onDragStart` handler'a `e.dataTransfer.setData('application/x-swarmgo-task', t.id)` + `effectAllowed = 'link'` eklendi — kartlar artık task ID'lerini taşır.
+- `frontend/src/components/panels/TaskDetailPanel.tsx`:
+  - `DependencyPicker` (checkbox liste) kaldırıldı; yerine kesik-çizgili **drag-drop zone** eklendi (`🔗 Kartı buraya sürükle`).
+  - Drop sırasında `dataTransfer.getData('application/x-swarmgo-task')` okunup `depIds`'e ekleniyor (self-dep, duplicate ve geçersiz ID koruması mevcut).
+  - `onDragEnter`/`onDragLeave` (currentTarget.contains guard ile) → accent rengi hover feedback.
+  - Dependency chip'lerine `×` kaldırma butonu eklendi — tıklama hâlâ navigate ediyor, × kaldırıyor.
+
+**Doğrulama:** `tsc --noEmit` yeşil. Playwright canlı: "Sürükle Bırak Testi" kartından drop zone'a drag simüle edildi → `⏳ Sürükle Bırak Testi` chip'i ve `×` butonu detay panelinde göründü ✅.
+
 ---
 
 ## Board sütun düzenleme (BoardColumnEditor) ✅ (2026-06-18)

@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Task, Flow, BoardState, BoardColumnDef } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
-import { DependencyPicker } from './DependencyPicker'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 
 function parseDeps(raw: string): string[] {
@@ -54,6 +53,9 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
   const [depIds, setDepIds] = useState<string[]>(() => parseDeps(task.dependencies))
   const [saving, setSaving] = useState(false)
   const [retitling, setRetitling] = useState(false)
+  // Drag-and-drop state for the dependency drop zone.
+  const [isDragOver, setIsDragOver] = useState(false)
+  const dropZoneRef = useRef<HTMLDivElement>(null)
 
   // Reseed the form when the selected card changes (panel stays mounted).
   useEffect(() => {
@@ -118,8 +120,15 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
     }
   }
 
-  // Tasks available as dependencies: all tasks except the current one.
-  const depCandidates = tasks.filter((t) => t.id !== task.id)
+  // Drop handler: read task ID from dataTransfer and add as dependency.
+  const handleDepDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const taskId = e.dataTransfer.getData('application/x-swarmgo-task')
+    if (!taskId || taskId === task.id || depIds.includes(taskId)) return
+    if (!tasks.find((t) => t.id === taskId)) return
+    setDepIds((prev) => [...prev, taskId])
+  }
 
   return (
     <aside
@@ -199,13 +208,35 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
           </select>
         </Field>
 
-        {/* Dependencies: tasks that must complete before this one. */}
+        {/* Dependencies: drag a card from the board onto the drop zone to add it. */}
         <Field label="Bağımlılıklar — önce tamamlanması gereken görevler">
-          <DependencyPicker
-            tasks={depCandidates}
-            value={depIds}
-            onChange={setDepIds}
-          />
+          {/* Drop zone — accepts kanban cards dragged from the board. */}
+          <div
+            ref={dropZoneRef}
+            onDragOver={(e) => {
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'link'
+              setIsDragOver(true)
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault()
+              setIsDragOver(true)
+            }}
+            onDragLeave={(e) => {
+              if (!dropZoneRef.current?.contains(e.relatedTarget as Node)) {
+                setIsDragOver(false)
+              }
+            }}
+            onDrop={handleDepDrop}
+            className={`flex min-h-[52px] items-center justify-center rounded border-2 border-dashed text-xs transition-colors select-none ${
+              isDragOver
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
+            }`}
+          >
+            {isDragOver ? '✓ Bırak — bağımlılık olarak ekle' : '🔗 Kartı buraya sürükle'}
+          </div>
+          {/* Dependency chips: click to navigate, × to remove. */}
           {depIds.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {depIds.map((depId) => {
@@ -213,19 +244,30 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
                 if (!dep) return null
                 const done = dep.boardState === 'done'
                 return (
-                  <button
+                  <span
                     key={depId}
-                    onClick={() => onSelectTask?.(depId)}
-                    title="Bu göreve git"
-                    className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition hover:opacity-75 ${
+                    className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] ${
                       done
                         ? 'bg-green-500/15 text-green-400'
                         : 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
                     }`}
                   >
-                    {done ? '✓' : '⏳'}{' '}
-                    {dep.title || dep.description || 'Görev'}
-                  </button>
+                    <button
+                      onClick={() => onSelectTask?.(depId)}
+                      title="Bu göreve git"
+                      className="transition hover:opacity-75"
+                    >
+                      {done ? '✓' : '⏳'}{' '}
+                      {dep.title || dep.description || 'Görev'}
+                    </button>
+                    <button
+                      onClick={() => setDepIds((prev) => prev.filter((id) => id !== depId))}
+                      title="Bağımlılığı kaldır"
+                      className="ml-0.5 opacity-50 transition hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </span>
                 )
               })}
             </div>
