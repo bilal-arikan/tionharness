@@ -131,7 +131,10 @@ func (s *Server) Routes() http.Handler {
 	s.registerSecretRoutes(mux)
 	s.registerMiscRoutes(mux)
 
-	return withCORS(s.withRequestLog(s.withWorkspace(mux)))
+	// withRecover sits inside withRequestLog so a recovered panic's 500 is also
+	// reflected in the access log, and outside withWorkspace so a panic in any
+	// workspace-scoped handler is caught.
+	return withCORS(s.withRequestLog(s.withRecover(s.withWorkspace(mux))))
 }
 
 // registerWorkspaceRoutes registers workspace management (not workspace-scoped).
@@ -332,6 +335,9 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/uploads", s.handleDeleteUpload)
 	// Application + workspace logs (global ring buffer).
 	mux.HandleFunc("GET /api/logs", s.handleListLogs)
+	// Frontend error bridge: client-side crashes/rejections funnel into the log
+	// stream so they surface in the Logs screen, not just the browser console.
+	mux.HandleFunc("POST /api/logs", s.handleClientLog)
 	// Autonomous event feed (heartbeat/task/schedule) — SSE, global.
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 }

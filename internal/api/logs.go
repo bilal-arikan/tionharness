@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -39,6 +40,63 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 		filtered = filtered[len(filtered)-limit:]
 	}
 	writeJSON(w, http.StatusOK, filtered)
+}
+
+// clientLogReport is a single error/diagnostic forwarded from the frontend
+// (ErrorBoundary, window.onerror, unhandledrejection). Bridging these into the
+// same slog stream means a white-screen React crash or an unhandled promise
+// rejection shows up in the Logs screen instead of staying in the browser
+// console where nobody is watching.
+type clientLogReport struct {
+	Level   string `json:"level"`   // "error" (default) | "warn" | "info"
+	Source  string `json:"source"`  // e.g. "error-boundary" | "window.onerror" | "unhandledrejection"
+	Message string `json:"message"` // error message / description
+	Stack   string `json:"stack"`   // optional stack trace / component stack
+	URL     string `json:"url"`     // page URL where it happened
+}
+
+// handleClientLog records a frontend-reported error into the app log stream. It
+// is intentionally lenient: a malformed body is dropped (HTTP 204) rather than
+// erroring, so the reporter never needs error handling of its own.
+func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
+	var rep clientLogReport
+	if err := decodeJSON(r, &rep); err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	msg := strings.TrimSpace(rep.Message)
+	if msg == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	// Cap attribute sizes so a runaway client payload can't dominate the buffer.
+	level := slog.LevelError
+	switch strings.ToLower(strings.TrimSpace(rep.Level)) {
+	case "warn", "warning":
+		level = slog.LevelWarn
+	case "info":
+		level = slog.LevelInfo
+	}
+	source := rep.Source
+	if source == "" {
+		source = "client"
+	}
+	s.logger.LogAttrs(r.Context(), level, "client error",
+		slog.String("source", capRune(source, 64)),
+		slog.String("message", capRune(msg, 1000)),
+		slog.String("url", capRune(rep.URL, 300)),
+		slog.String("stack", capRune(rep.Stack, 4000)),
+	)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// capRune truncates s to at most max runes (UTF-8 safe), appending an ellipsis
+// when cut, so Turkish characters are never split mid-rune.
+func capRune(s string, max int) string {
+	if r := []rune(s); len(r) > max {
+		return string(r[:max]) + "…"
+	}
+	return s
 }
 
 // levelRank maps a slog level name to an ordered rank for min-level filtering.
