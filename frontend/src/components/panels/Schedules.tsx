@@ -3,6 +3,7 @@ import { Play, Hourglass, Pencil, X } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Schedule } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
+import { AgentAvatar } from '../agents/AgentAvatar'
 
 interface Props {
   agents: Agent[]
@@ -324,10 +325,18 @@ export function Schedules({ agents, focusId, onError }: Props) {
                 }`}
               />
             </button>
+            {(() => {
+              const owner = agents.find((a) => a.id === s.agentId)
+              return owner ? (
+                <AgentAvatar agent={owner} size={28} />
+              ) : (
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-dim)]">?</span>
+              )
+            })()}
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[var(--color-accent)]">{s.cronExpr}</span>
-                <span className="text-[var(--color-text-dim)]">→ {agentName(s.agentId)}</span>
+                <span className="text-xs text-[var(--color-text-dim)]">{agentName(s.agentId)}</span>
               </div>
               <div className="text-xs text-[var(--color-text-dim)]">Prompt: {s.prompt}</div>
               <div className="text-xs text-[var(--color-text-dim)]">
