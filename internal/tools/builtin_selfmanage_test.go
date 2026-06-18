@@ -120,8 +120,9 @@ func TestScheduleCreateAndGuard(t *testing.T) {
 	}
 }
 
-// TestFlowCreateValidatesGraph verifies create_flow rejects invalid graph JSON
-// and stamps provenance on success.
+// TestFlowCreateValidatesGraph verifies create_flow rejects invalid graph JSON,
+// rejects structurally-invalid (but well-formed JSON) graphs via deep
+// validation, and stamps provenance on a valid graph.
 func TestFlowCreateValidatesGraph(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
@@ -131,7 +132,13 @@ func TestFlowCreateValidatesGraph(t *testing.T) {
 	if _, err := create.Call(ctx, json.RawMessage(`{"name":"Bad","graph":"{not json"}`)); err == nil {
 		t.Fatal("expected invalid graph JSON to be rejected")
 	}
-	out, err := create.Call(ctx, json.RawMessage(`{"name":"Good","graph":"{\"nodes\":[]}"}`))
+	// Well-formed JSON but no start node → deep validation (ParseGraph+Validate)
+	// must reject it at create time, not only at run time.
+	if _, err := create.Call(ctx, json.RawMessage(`{"name":"Empty","graph":"{\"nodes\":[]}"}`)); err == nil {
+		t.Fatal("expected structurally-invalid graph (no start node) to be rejected")
+	}
+	const validGraph = `{\"start\":\"n1\",\"nodes\":[{\"id\":\"n1\",\"type\":\"agent\",\"agentId\":\"a1\"}]}`
+	out, err := create.Call(ctx, json.RawMessage(`{"name":"Good","graph":"`+validGraph+`"}`))
 	if err != nil {
 		t.Fatalf("create_flow: %v", err)
 	}

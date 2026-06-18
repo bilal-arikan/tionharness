@@ -259,6 +259,57 @@ func (t ListFlowsTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 	return string(b), nil
 }
 
+// ---- get_flow ----
+
+// GetFlowTool returns one flow in full, including its graph JSON, so an agent
+// can read the current graph, modify it, and write it back via update_flow.
+// list_flows intentionally omits the (potentially large) graph; get_flow is the
+// way to fetch it. Read-only, allowed on any flow.
+type GetFlowTool struct{ d flowDeps }
+
+// NewGetFlowTool constructs get_flow.
+func NewGetFlowTool(database *db.DB, actorID string) GetFlowTool {
+	return GetFlowTool{d: flowDeps{db: database, actorID: actorID}}
+}
+
+func (GetFlowTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name: "get_flow",
+		Description: "Get one orchestration flow in full, including its graph JSON (the node graph). Use this to read a flow's current graph before editing it with update_flow. Returns id, name, description, graph and whether it was created by an agent. Allowed on any flow.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{"id":{"type":"string","description":"The flow id (see list_flows)"}},
+			"required":["id"],
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t GetFlowTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	in.ID = strings.TrimSpace(in.ID)
+	if in.ID == "" {
+		return "", fmt.Errorf("id is required")
+	}
+	f, err := t.d.db.GetFlow(ctx, in.ID)
+	if err != nil {
+		return "", fmt.Errorf("no flow with id %q (use list_flows)", in.ID)
+	}
+	b, _ := json.Marshal(map[string]any{
+		"id":             f.ID,
+		"name":           f.Name,
+		"description":    f.Description,
+		"graph":          f.Graph,
+		"createdByAgent": f.CreatedBy != "",
+	})
+	return string(b), nil
+}
+
 // ---- run_flow ----
 
 // RunFlowTool executes a flow now with a given input (allowed on any flow).
