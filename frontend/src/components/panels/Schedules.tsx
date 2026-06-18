@@ -104,6 +104,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
   const [mode, setMode] = useState<'cron' | 'oneshot'>('cron')
   // For one-shot: either a preset-computed timestamp or custom datetime string.
   const [oneShotFireAt, setOneShotFireAt] = useState<number>(0)
+  const [oneShotPresetLabel, setOneShotPresetLabel] = useState<string>('')
   const [oneShotCustom, setOneShotCustom] = useState('')
 
   // Inline edit state (one schedule edited at a time).
@@ -154,7 +155,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
       try {
         const s = await api.createSchedule({ agentId, prompt: prompt.trim(), oneShot: true, fireAt, enabled: true })
         setSchedules((prev) => [s, ...prev])
-        setPrompt(''); setOneShotFireAt(0); setOneShotCustom('')
+        setPrompt(''); setOneShotFireAt(0); setOneShotPresetLabel(''); setOneShotCustom('')
       } catch (e) { onError((e as Error).message) }
       return
     }
@@ -286,12 +287,15 @@ export function Schedules({ agents, focusId, onError }: Props) {
           ) : (
             <div className="flex flex-wrap gap-1">
               {ONE_SHOT_PRESETS.map((p) => {
-                const fireAt = p.fireAt()
-                const active = oneShotFireAt === fireAt && !oneShotCustom
+                const active = oneShotPresetLabel === p.label && !oneShotCustom
                 return (
                   <button
                     key={p.label}
-                    onClick={() => { setOneShotFireAt(fireAt); setOneShotCustom('') }}
+                    onClick={() => {
+                      setOneShotFireAt(p.fireAt())
+                      setOneShotPresetLabel(p.label)
+                      setOneShotCustom('')
+                    }}
                     className={`rounded px-2 py-0.5 text-xs ${active ? 'bg-[var(--color-accent)] text-white' : 'border border-[var(--color-border)] hover:bg-[var(--color-bg)]'}`}
                   >
                     {p.label}
@@ -301,7 +305,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
               <input
                 type="datetime-local"
                 value={oneShotCustom}
-                onChange={(e) => { setOneShotCustom(e.target.value); setOneShotFireAt(0) }}
+                onChange={(e) => { setOneShotCustom(e.target.value); setOneShotFireAt(0); setOneShotPresetLabel('') }}
                 className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-0.5 text-xs outline-none focus:border-[var(--color-accent)]"
                 title="Özel tarih/saat"
               />
