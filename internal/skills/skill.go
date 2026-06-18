@@ -15,12 +15,10 @@ package skills
 type Source string
 
 const (
-	// SourceGlobal is the cross-tool convention dir (~/.agents/skills).
+	// SourceGlobal is SwarmGo's data-dir global skills dir (<DataDir>/skills).
 	SourceGlobal Source = "global"
 	// SourceWorkspace is this workspace's skills dir (<workspace>/skills).
 	SourceWorkspace Source = "workspace"
-	// SourceProject is the agent sandbox's project dir (<workDir>/.agents/skills).
-	SourceProject Source = "project"
 )
 
 // Skill is one resolved skill. Only the frontmatter metadata is held in memory;

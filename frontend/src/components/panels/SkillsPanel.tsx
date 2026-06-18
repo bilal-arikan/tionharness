@@ -14,12 +14,11 @@ interface Props {
 const SOURCE_LABEL: Record<SkillSource, string> = {
   global: 'Global',
   workspace: 'Workspace',
-  project: 'Proje',
 }
 
 function SourceBadge({ source }: { source: SkillSource }) {
   const tone =
-    source === 'project'
+    source === 'workspace'
       ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
       : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
   return (
@@ -172,8 +171,8 @@ export function SkillsPanel({ onError }: Props) {
               <Sparkles size={28} className="opacity-40" />
               <p>
                 Henüz beceri yok. <code>SKILL.md</code> içeren bir klasörü{' '}
-                <code>~/.agents/skills/</code>, workspace <code>skills/</code> ya da proje{' '}
-                <code>.agents/skills/</code> altına koyup <strong>Tara</strong>'ya bas.
+                <code>~/.swarmgo/skills/</code> (global) ya da workspace{' '}
+                <code>skills/</code> altına koyup <strong>Tara</strong>'ya bas.
               </p>
             </div>
           )}

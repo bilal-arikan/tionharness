@@ -131,7 +131,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		wsName:    wsName,
 		logs:      logs,
 		logger:    logger,
-		skills:    skills.New(globalSkillsDir(), workspaceSkillsDir(workDir), projectSkillsDir(workDir)),
+		skills:    skills.New(globalSkillsDir(), workspaceSkillsDir(workDir)),
 		workers:   make(map[string]*worker),
 	}
 }
@@ -159,15 +159,6 @@ func workspaceSkillsDir(workDir string) string {
 		return ""
 	}
 	return filepath.Join(filepath.Dir(workDir), "skills")
-}
-
-// projectSkillsDir is the agent sandbox's project-level skills directory
-// (<workDir>/.agents/skills) — the highest-priority tier. Empty when unknown.
-func projectSkillsDir(workDir string) string {
-	if workDir == "" {
-		return ""
-	}
-	return filepath.Join(workDir, ".agents", "skills")
 }
 
 // Skills returns this runtime's skill store (never nil after construction).

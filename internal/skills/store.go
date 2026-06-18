@@ -27,19 +27,16 @@ type Store struct {
 	order  []string         // slugs, display order (sorted by name)
 }
 
-// New builds a store over the three skill tiers. Any dir may be empty/missing;
-// missing dirs are simply skipped. Priority is project > workspace > global, so
-// they are scanned in ascending priority and later tiers overwrite earlier ones.
-func New(globalDir, workspaceDir, projectDir string) *Store {
+// New builds a store over the two skill tiers. Any dir may be empty/missing;
+// missing dirs are simply skipped. Priority is workspace > global, so they are
+// scanned in ascending priority and the workspace tier overrides the global one.
+func New(globalDir, workspaceDir string) *Store {
 	var tiers []tier
 	if globalDir != "" {
 		tiers = append(tiers, tier{globalDir, SourceGlobal})
 	}
 	if workspaceDir != "" {
 		tiers = append(tiers, tier{workspaceDir, SourceWorkspace})
-	}
-	if projectDir != "" {
-		tiers = append(tiers, tier{projectDir, SourceProject})
 	}
 	return &Store{tiers: tiers, bySlug: map[string]Skill{}}
 }

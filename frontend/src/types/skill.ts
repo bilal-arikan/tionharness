@@ -2,7 +2,7 @@
 // (global / workspace / project). The catalog carries frontmatter only; the
 // markdown body is fetched on demand via the detail endpoint.
 
-export type SkillSource = 'global' | 'workspace' | 'project'
+export type SkillSource = 'global' | 'workspace'
 
 export interface Skill {
   slug: string

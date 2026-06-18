@@ -54,16 +54,13 @@ Hello world.`)
 func TestStoreTierOverride(t *testing.T) {
 	global := t.TempDir()
 	ws := t.TempDir()
-	proj := t.TempDir()
 
 	writeSkill(t, global, "commit", "---\nname: Global Commit\ndescription: global\n---\nGLOBAL BODY")
 	writeSkill(t, global, "only-global", "---\nname: Only Global\ndescription: g\n---\nbody")
 	// Same slug in workspace overrides global.
 	writeSkill(t, ws, "commit", "---\nname: WS Commit\ndescription: ws\n---\nWS BODY")
-	// Same slug in project overrides everything.
-	writeSkill(t, proj, "commit", "---\nname: Proj Commit\ndescription: proj\n---\nPROJECT BODY")
 
-	s := New(global, ws, proj)
+	s := New(global, ws)
 
 	list := s.List()
 	if len(list) != 2 {
@@ -74,15 +71,15 @@ func TestStoreTierOverride(t *testing.T) {
 	if !ok {
 		t.Fatal("commit not found")
 	}
-	if sk.Source != SourceProject || sk.Name != "Proj Commit" {
+	if sk.Source != SourceWorkspace || sk.Name != "WS Commit" {
 		t.Errorf("override failed: source=%s name=%q", sk.Source, sk.Name)
 	}
 	body, err := s.Body("commit")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if body != "PROJECT BODY" {
-		t.Errorf("body = %q (want project tier)", body)
+	if body != "WS BODY" {
+		t.Errorf("body = %q (want workspace tier)", body)
 	}
 
 	if og, _ := s.Get("only-global"); og.Source != SourceGlobal {
@@ -91,7 +88,7 @@ func TestStoreTierOverride(t *testing.T) {
 }
 
 func TestCatalogBlockAndEmpty(t *testing.T) {
-	empty := New("", "", t.TempDir())
+	empty := New("", t.TempDir())
 	if !empty.Empty() {
 		t.Error("expected empty store")
 	}
@@ -101,7 +98,7 @@ func TestCatalogBlockAndEmpty(t *testing.T) {
 
 	dir := t.TempDir()
 	writeSkill(t, dir, "triage", "---\nname: Triage\ndescription: sort issues\nwhen_to_use: on new issues\n---\nbody")
-	s := New("", "", dir)
+	s := New("", dir)
 	block := s.CatalogBlock()
 	if block == "" {
 		t.Fatal("expected non-empty catalog block")
@@ -118,7 +115,7 @@ func TestCatalogBlockFor(t *testing.T) {
 	writeSkill(t, dir, "alpha", "---\nname: Alpha\ndescription: a\n---\nbody")
 	writeSkill(t, dir, "beta", "---\nname: Beta\ndescription: b\n---\nbody")
 	writeSkill(t, dir, "gamma", "---\nname: Gamma\ndescription: g\n---\nbody")
-	s := New("", "", dir)
+	s := New("", dir)
 
 	// Only selected slugs, in the given order; unknown/dup skipped.
 	block := s.CatalogBlockFor([]string{"gamma", "alpha", "nope", "gamma"})
@@ -147,7 +144,7 @@ func TestSharedSkills(t *testing.T) {
 	writeSkill(t, dir, "review", "---\nname: Review\ndescription: r\naccess: shared\n---\nbody")
 	writeSkill(t, dir, "deploy", "---\nname: Deploy\ndescription: d\n---\nbody") // restricted (default)
 	writeSkill(t, dir, "notes", "---\nname: Notes\ndescription: n\nshared: true\n---\nbody")
-	s := New("", "", dir)
+	s := New("", dir)
 
 	if sh := s.SharedList(); len(sh) != 2 {
 		t.Fatalf("want 2 shared, got %d: %+v", len(sh), sh)
@@ -205,7 +202,7 @@ func TestSetFrontmatterAccess(t *testing.T) {
 func TestStoreSetAccess(t *testing.T) {
 	dir := t.TempDir()
 	writeSkill(t, dir, "doc", "---\nname: Doc\ndescription: d\n---\nbody")
-	s := New("", "", dir)
+	s := New("", dir)
 	if sk, _ := s.Get("doc"); sk.Shared {
 		t.Fatal("doc should start restricted")
 	}
@@ -224,7 +221,7 @@ func TestStoreSetAccess(t *testing.T) {
 func TestBodyMissingFileSelfHeals(t *testing.T) {
 	dir := t.TempDir()
 	writeSkill(t, dir, "ghost", "---\nname: Ghost\ndescription: g\n---\nbody")
-	s := New("", "", dir)
+	s := New("", dir)
 	if _, ok := s.Get("ghost"); !ok {
 		t.Fatal("ghost should load")
 	}

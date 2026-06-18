@@ -13,7 +13,6 @@ interface Props {
 const SOURCE_LABEL: Record<SkillSource, string> = {
   global: 'Global',
   workspace: 'Workspace',
-  project: 'Proje',
 }
 
 // AgentSkillsSection lets the user pick which shared skills an agent gets and in
