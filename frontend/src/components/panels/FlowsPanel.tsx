@@ -29,7 +29,7 @@ const NODE_TYPES: { value: FlowNodeType; label: string; icon: string }[] = [
   { value: 'branch', label: 'Dallanma', icon: '🔀' },
   { value: 'parallel', label: 'Paralel', icon: '⚡' },
   { value: 'delay', label: 'Bekle', icon: '⏱️' },
-  { value: 'transform', label: 'Dönüştür', icon: '🔧' },
+  { value: 'transform', label: 'Birleştir', icon: '🧩' },
 ]
 
 const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [

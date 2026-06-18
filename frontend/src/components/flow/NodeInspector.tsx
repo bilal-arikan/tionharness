@@ -15,7 +15,7 @@ const TYPES: { value: FlowNodeType; label: string }[] = [
   { value: 'branch', label: 'Dallanma' },
   { value: 'parallel', label: 'Paralel' },
   { value: 'delay', label: 'Bekle' },
-  { value: 'transform', label: 'Dönüştür' },
+  { value: 'transform', label: 'Birleştir' },
 ]
 
 const input =

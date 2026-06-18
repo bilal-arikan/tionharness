@@ -183,7 +183,7 @@ Motora iki yeni node tipi eklendi (delay + transform) ve **branch genişletildi*
   matchMode olarak birleştirildi**; switch tipi kaldırıldı.)_ Inspector'da "Eşleşme" dropdown'u.
 - **delay** (`⏱️`, LLM'siz): `DelayMs` kadar bekler, sonra `next`. `sleepCtx` ctx-iptaline saygı
   duyar, en çok 5 dk (`maxDelayMs`). Çıktıyı (`Last`) değiştirmez, trace'e "waited Nms" yazar.
-- **transform** (`🔧`, LLM'siz): `Template`'i (`{{input}}/{{last}}/{{node.<id>}}`) render edip
+- **transform** (UI'da **Birleştir** `🧩`, LLM'siz; tip kimliği `transform` kalır): `Template`'i (`{{input}}/{{last}}/{{node.<id>}}`) render edip
   **çıktı** olarak yayar (`Last` + `Outputs[id]`), sonra `next`. Token harcamadan birleştirme/
   biçimlendirme. Motor: mevcut `render` kullanılır.
 

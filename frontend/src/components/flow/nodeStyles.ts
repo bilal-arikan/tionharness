@@ -45,7 +45,7 @@ const CHROME: Record<string, NodeChrome> = {
   branch: { accent: '#d97706', label: 'Dallanma', icon: '🔀' },
   parallel: { accent: '#7c3aed', label: 'Paralel', icon: '⚡' },
   delay: { accent: '#0891b2', label: 'Bekle', icon: '⏱️' },
-  transform: { accent: '#059669', label: 'Dönüştür', icon: '🔧' },
+  transform: { accent: '#059669', label: 'Birleştir', icon: '🧩' },
 }
 
 export function chromeFor(type: string): NodeChrome {
