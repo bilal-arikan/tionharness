@@ -38,6 +38,7 @@ var interactionToolNames = []string{
 	"create_artifact",
 	"update_artifact",
 	"permission_prompt",
+	"schedule_wake",
 }
 
 // permissionPromptToolID is the namespaced Interaction MCP tool the claude CLI is
@@ -102,8 +103,11 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		for _, t := range interactionToolNames {
 			allowed = append(allowed, "mcp__"+interactionServerKey+"__"+t)
 		}
-		// Suppress the CLI's own equivalents, which can't be answered in -p mode.
-		disallowed = append(disallowed, "AskUserQuestion", "TodoWrite")
+		// Suppress the CLI's own equivalents, which can't be answered/honored in
+		// one-shot -p mode: AskUserQuestion/TodoWrite have no live client, and
+		// ScheduleWakeup schedules a wake the CLI subprocess never lives to fire —
+		// SwarmGo's own schedule_wake (above) replaces it with a real timer.
+		disallowed = append(disallowed, "AskUserQuestion", "TodoWrite", "ScheduleWakeup")
 	}
 
 	if len(cfg.MCPServers) == 0 {

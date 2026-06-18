@@ -44,12 +44,11 @@ type Task struct {
 	UpdatedAt int64  `json:"updatedAt"`
 }
 
-// Schedule fires on a cron expression and either runs a linked task or delivers
-// a standalone prompt to its agent.
+// Schedule fires on a cron expression and delivers a standalone prompt to its
+// agent. (Schedules are decoupled from the board: they do not run tasks.)
 type Schedule struct {
 	ID                 string `json:"id"`
 	AgentID            string `json:"agentId"`
-	TaskID             string `json:"taskId"` // empty for standalone prompt schedules
 	CronExpr           string `json:"cronExpr"`
 	Prompt             string `json:"prompt"`
 	NextRunAt          int64  `json:"nextRunAt"`
@@ -62,6 +61,17 @@ type Schedule struct {
 	// edit/delete agent-created schedules.
 	CreatedBy string `json:"createdBy,omitempty"`
 	CreatedAt int64  `json:"createdAt"`
+
+	// One-shot wake fields. When OneShot is true the schedule is NOT driven by a
+	// cron expression; it fires exactly once at FireAt (unix seconds) and is then
+	// removed. A wake re-delivers Prompt into SessionID (the originating chat
+	// session) so the conversation visibly continues on its own — this backs the
+	// schedule_wake tool (see _Docs/18-SCHEDULE-WAKE.md). Reason is the agent's
+	// stated purpose, shown for context.
+	OneShot   bool   `json:"oneShot,omitempty"`
+	FireAt    int64  `json:"fireAt,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 // Run statuses.

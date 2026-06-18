@@ -36,6 +36,22 @@ type chatRun struct {
 	write     func(event string, data any) // installed by the stream handler; nil once the turn ends
 	artifacts tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
 	grants    *tools.PermissionGrants      // session "Always allow" set, for the CLI permission-prompt tool
+	wake      tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
+}
+
+// setWakeScheduler installs the self-wake scheduler for the currently responding
+// agent so the Interaction MCP schedule_wake tool (CLI path) can arm a wake.
+func (r *chatRun) setWakeScheduler(fn tools.WakeFunc) {
+	r.mu.Lock()
+	r.wake = fn
+	r.mu.Unlock()
+}
+
+// wakeScheduler returns the current self-wake scheduler (nil if none installed).
+func (r *chatRun) wakeScheduler() tools.WakeFunc {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.wake
 }
 
 // setGrants installs the session's permission grants so the Interaction MCP

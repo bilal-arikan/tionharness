@@ -7,19 +7,24 @@ import (
 )
 
 func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
-	schedules, err := ws(r).DB.ListSchedules(r.Context())
+	all, err := ws(r).DB.ListSchedules(r.Context())
 	if writeDBError(w, err, "") {
 		return
 	}
-	if schedules == nil {
-		schedules = []db.Schedule{}
+	// Hide one-shot wakes (schedule_wake) from the routine list: they are transient,
+	// single-use timers tied to a chat turn, not user-managed recurring routines.
+	schedules := make([]db.Schedule, 0, len(all))
+	for _, sc := range all {
+		if sc.OneShot {
+			continue
+		}
+		schedules = append(schedules, sc)
 	}
 	writeJSON(w, http.StatusOK, schedules)
 }
 
 type createScheduleReq struct {
 	AgentID  string `json:"agentId"`
-	TaskID   string `json:"taskId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
 	Enabled  bool   `json:"enabled"`
@@ -41,8 +46,8 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "cronExpr is required")
 		return
 	}
-	if req.TaskID == "" && req.Prompt == "" {
-		writeError(w, http.StatusBadRequest, "either taskId or prompt is required")
+	if req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "prompt is required")
 		return
 	}
 	if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
@@ -52,7 +57,6 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	schedule, err := wsp.DB.CreateSchedule(r.Context(), db.Schedule{
 		AgentID:  req.AgentID,
-		TaskID:   req.TaskID,
 		CronExpr: req.CronExpr,
 		Prompt:   req.Prompt,
 		Enabled:  req.Enabled,
@@ -69,7 +73,6 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 
 type updateScheduleReq struct {
 	AgentID  string `json:"agentId"`
-	TaskID   string `json:"taskId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
 }
@@ -92,8 +95,8 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "cronExpr is required")
 		return
 	}
-	if req.TaskID == "" && req.Prompt == "" {
-		writeError(w, http.StatusBadRequest, "either taskId or prompt is required")
+	if req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "prompt is required")
 		return
 	}
 	if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
@@ -105,7 +108,6 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		ID:       id,
 		AgentID:  req.AgentID,
 		CronExpr: req.CronExpr,
-		TaskID:   req.TaskID,
 		Prompt:   req.Prompt,
 	})
 	if writeDBError(w, err, "schedule not found") {

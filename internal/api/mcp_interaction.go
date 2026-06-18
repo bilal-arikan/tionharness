@@ -41,6 +41,10 @@ func (b *interactionBackend) Tools() []interaction.ToolSpec {
 		tools.NewRequestConfirmationTool().Def(),
 		tools.NewCreateArtifactTool().Def(),
 		tools.NewUpdateArtifactTool().Def(),
+		// schedule_wake replaces the CLI's native ScheduleWakeup (which SwarmGo
+		// disallows): the CLI runs one-shot, so its built-in wake never fires —
+		// ours arms a real SwarmGo timer that re-delivers into this session.
+		tools.NewScheduleWakeTool().Def(),
 	}
 	specs := make([]interaction.ToolSpec, 0, len(defs)+1)
 	for _, d := range defs {
@@ -78,6 +82,8 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callPermission(ctx, run, args)
 	case "todo_write":
 		return b.callTodo(args)
+	case "schedule_wake":
+		return b.callWake(ctx, run, args)
 	case "create_artifact", "update_artifact":
 		return b.callArtifact(run, bareToolName(name), args)
 	default:
@@ -195,6 +201,29 @@ func (b *interactionBackend) callTodo(args json.RawMessage) (interaction.CallRes
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}
 	return interaction.CallResult{Text: text}, nil
+}
+
+// callWake arms a one-shot self-wake for the responding agent (CLI path). It
+// reaches the wake scheduler installed on the run by the stream handler, which
+// knows the session + responding agent. No blocking — returns immediately.
+func (b *interactionBackend) callWake(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	fn := run.wakeScheduler()
+	if fn == nil {
+		return interaction.CallResult{Text: "schedule_wake is not available for this turn", IsError: true}, nil
+	}
+	var in struct {
+		DelaySeconds int    `json:"delaySeconds"`
+		Prompt       string `json:"prompt"`
+		Reason       string `json:"reason"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return interaction.CallResult{Text: "invalid schedule_wake input: " + err.Error(), IsError: true}, nil
+	}
+	out, err := fn(ctx, in.DelaySeconds, in.Prompt, in.Reason)
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: out}, nil
 }
 
 // callArtifact creates or updates a versioned artifact through the run's sink. The

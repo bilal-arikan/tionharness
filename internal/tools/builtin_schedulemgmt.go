@@ -248,6 +248,10 @@ func (t ListSchedulesTool) Call(ctx context.Context, _ json.RawMessage) (string,
 	}
 	out := make([]row, 0, len(schedules))
 	for _, sc := range schedules {
+		// One-shot wakes (schedule_wake) are transient, not routines — hide them.
+		if sc.OneShot {
+			continue
+		}
 		out = append(out, row{
 			ID:             sc.ID,
 			AgentID:        sc.AgentID,

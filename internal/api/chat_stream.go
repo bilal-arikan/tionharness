@@ -232,6 +232,18 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		run.setArtifacts(sink)
 		turnCtx := tools.WithArtifacts(ctx, sink)
 
+		// Wire the self-wake scheduler for THIS agent + session, on both tool paths:
+		// the native built-in reads it from the context; the CLI path reaches it via
+		// the run (used by the Interaction MCP schedule_wake dispatch). A wake arms a
+		// one-shot schedule that re-delivers a prompt into this session as a fresh
+		// turn, so the conversation continues on its own.
+		respondingID := agentRow.ID
+		wakeFn := func(wctx context.Context, delaySeconds int, prompt, reason string) (string, error) {
+			return wsp.Runtime.ScheduleWake(wctx, session.ID, respondingID, prompt, reason, delaySeconds)
+		}
+		turnCtx = tools.WithWakeScheduler(turnCtx, wakeFn)
+		run.setWakeScheduler(wakeFn)
+
 		agentStart := time.Now()
 		// Pre-allocate the reply id so the streaming crash sidecar and the final
 		// persisted message share one identity (recovery is then idempotent).

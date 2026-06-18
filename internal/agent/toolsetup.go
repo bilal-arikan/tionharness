@@ -66,6 +66,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewTodoWriteTool(),
 		tools.NewAskUserTool(),
 		tools.NewRequestConfirmationTool(),
+		// schedule_wake: pause and have the agent re-invoked after a delay to
+		// continue the conversation (no-op outside interactive chat — the wake
+		// scheduler is only wired onto a chat turn's context).
+		tools.NewScheduleWakeTool(),
 		// Artifact tools: save/revise substantial content as a versioned artifact
 		// the user can open in a dedicated viewer (no-op outside interactive chat).
 		tools.NewCreateArtifactTool(),

@@ -2,6 +2,32 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## `schedule_wake` — Ajanın kendi sohbetine geri dönmesi ✅ (2026-06-18)
+
+**Sorun:** claude-cli sağlayıcısı `claude -p` (one-shot print mode) ile çalışır; alt süreç her turda ölür. Claude Code'un yerleşik `ScheduleWakeup` aracı yalnızca `/loop` harness içinde anlamlıdır — SwarmGo'da harness olmadığından ajan "bekliyorum" diyip hiçbir şey gelmeden askıda kalıyordu.
+
+**Çözüm — SwarmGo'ya özel `schedule_wake`:**
+- **`internal/db/models_task.go`:** `Schedule` struct'ına `OneShot`, `FireAt`, `SessionID`, `Reason` alanları eklendi.
+- **`internal/agent/scheduler.go`:** `wakeTimers map[string]*time.Timer` alanı; `rebuildLocked` one-shot satırları cron tablosuna eklemiyor, bunun yerine `armWakeLocked` ile zamanlıyor; `fireWake` → `deliverWake` → orijinal sohbet oturumuna prompt enjeksiyonu; `emitWakeEvent` → frontend'e `phase=start/done` gönderir; `Stop()` timer'ları iptal eder. `maxWakeDelay = 1 saat`.
+- **`internal/agent/runtime.go`:** `ScheduleWake(ctx, sessionID, agentID, prompt, reason string, delaySeconds int)` — one-shot schedule satırı oluşturur, `reloadSchedules`'ı tetikler, 5–3600s sıkıştırır.
+- **`internal/tools/builtin_wake.go`** (yeni): `WakeFunc` tipi, `WithWakeScheduler`/`wakeFrom` context bağlantısı, `ScheduleWakeTool` (araç adı: `schedule_wake`).
+- **`internal/agent/toolsetup.go`:** `NewScheduleWakeTool()` built-in listesine eklendi (her ajanda, ask_user/todo_write ile aynı seviyede).
+- **`internal/api/chat_stream.go`:** Her yanıt turunda `wakeFn` closure oluşturulup `tools.WithWakeScheduler(turnCtx, wakeFn)` ve `run.setWakeScheduler(wakeFn)` ile bağlandı.
+- **`internal/api/chat_control.go`:** `chatRun`'a `wake WakeFunc` alanı + `setWakeScheduler`/`wakeScheduler` metotları.
+- **`internal/api/mcp_interaction.go`:** `schedule_wake` Interaction MCP araç listesine eklendi; `callWake` dispatch handler; claude-cli'ın kırık yerleşik `ScheduleWakeup`'u devre dışı listesine alındı (`climcp.go`).
+- **`internal/api/schedules.go` + `internal/tools/builtin_schedulemgmt.go`:** One-shot wake satırları liste endpointlerinden filtrelendi (UI'da gereksiz gürültü önlenir).
+- **`frontend/src/App.tsx`:** `chat` tipi event'lerde `phase=start` → `markPending([sid])`, `phase=done` → `clearPending(sid)` — wake beklerken thinking göstergesi.
+- **Test:** `internal/agent/wake_test.go` — 3 test: `TestScheduleWake_ArmsOneShot` (DB satırı + delay sıkıştırma), `TestDeliverWake_TargetsOriginalSession` (wake orijinal sohbet oturumuna enjekte edilir), `TestScheduler_StartSkipsOneShotCron` (cron tablosuna eklenmez, timer kurulur).
+
+**Canlı doğrulama (Playwright, 2026-06-18):**
+1. SwarmGo arayüzünde yeni oturum açıldı.
+2. Ajana "10 saniyede `schedule_wake` kullan" mesajı gönderildi.
+3. Agent `mcp__swarmgo_interaction__schedule_wake` çağırdı, "kurdum, bekliyorum" yanıtı verdi.
+4. **10 saniye sonra** wake prompt (`Wake up! Say hello...`) **aynı sohbet oturumuna** otomatik enjekte edildi.
+5. Agent yeniden yanıt verdi — sohbet akışı ekranda görünür şekilde devam etti. ✅
+
+✅ `go test ./internal/agent/ ./internal/db/ ./internal/api/` + `go vet ./internal/...` + `npm run build` yeşil. Detay: **`_Docs/20-SCHEDULE-WAKE.md`**.
+
 ## Kanban → pasif durum panosu dönüşümü (2026-06-18, COMMITSİZ)
 
 Pano artık bir **çalıştırma yüzeyi değil**, pasif bir durum/bilgi panosu. İş flow/schedule/agent oturumlarında yapılır; kartlar yalnızca durumu yansıtır.

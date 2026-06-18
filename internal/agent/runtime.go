@@ -205,6 +205,51 @@ func (r *Runtime) reloadSchedules(ctx context.Context) error {
 	return r.reloadSched(ctx)
 }
 
+// Wake delay bounds (seconds): a wake fires no sooner than this many seconds and
+// no later than the cap, mirroring the scheduler's own clamp.
+const (
+	MinWakeDelaySec = 5
+	MaxWakeDelaySec = 3600
+)
+
+// ScheduleWake arms a one-shot self-wake: after delaySeconds the agent is
+// re-invoked with prompt inside sessionID (the originating chat session), so the
+// conversation continues on its own. It persists a one-shot schedule and reloads
+// the scheduler to arm the timer. Returns a short confirmation for the tool.
+// reason is the agent's stated purpose (stored for context, surfaced in events).
+func (r *Runtime) ScheduleWake(ctx context.Context, sessionID, agentID, prompt, reason string, delaySeconds int) (string, error) {
+	if sessionID == "" {
+		return "", fmt.Errorf("schedule_wake is only available during an interactive chat turn")
+	}
+	if strings.TrimSpace(prompt) == "" {
+		return "", fmt.Errorf("prompt is required (what to do when you wake)")
+	}
+	if delaySeconds < MinWakeDelaySec {
+		delaySeconds = MinWakeDelaySec
+	}
+	if delaySeconds > MaxWakeDelaySec {
+		delaySeconds = MaxWakeDelaySec
+	}
+	fireAt := time.Now().Add(time.Duration(delaySeconds) * time.Second).Unix()
+	sc, err := r.db.CreateSchedule(ctx, db.Schedule{
+		AgentID:   agentID,
+		Prompt:    prompt,
+		Reason:    reason,
+		SessionID: sessionID,
+		OneShot:   true,
+		FireAt:    fireAt,
+		Enabled:   true,
+		CreatedBy: agentID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("schedule wake: %w", err)
+	}
+	if err := r.reloadSchedules(ctx); err != nil {
+		return "", fmt.Errorf("wake saved (%s) but arming failed: %w", sc.ID, err)
+	}
+	return fmt.Sprintf("Wake armed: in %ds I will continue this conversation on my own. Nothing more to do this turn.", delaySeconds), nil
+}
+
 // publish stamps the workspace identity onto an event and pushes it to the bus.
 func (r *Runtime) publish(e events.Event) {
 	e.WorkspaceID = r.wsID
