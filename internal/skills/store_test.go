@@ -291,6 +291,132 @@ description: detailed steps
 	}
 }
 
+func TestStoreCreateUpdateDelete(t *testing.T) {
+	global := t.TempDir()
+	wsDir := t.TempDir()
+	writeSkill(t, global, "g", "---\nname: G\ndescription: g\n---\nbody")
+	s := New(global, wsDir)
+
+	// Create derives a kebab slug from the (Turkish) name and writes to the
+	// workspace tier.
+	sk, err := s.Create("", SkillInput{
+		Name:        "Görev Planlayıcı",
+		Description: "Plans tasks: end to end",
+		Icon:        "🗂️",
+		Shared:      true,
+		Body:        "# Planner\nDo the thing.",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if sk.Slug != "gorev-planlayici" {
+		t.Errorf("slug = %q, want gorev-planlayici", sk.Slug)
+	}
+	if sk.Source != SourceWorkspace || sk.Icon != "🗂️" || !sk.Shared {
+		t.Errorf("created skill = %+v", sk)
+	}
+	if body, _ := s.Body(sk.Slug); !strings.Contains(body, "Do the thing.") {
+		t.Errorf("body = %q", body)
+	}
+	// Description with a colon must round-trip (quoting).
+	if got, _ := s.Get(sk.Slug); got.Description != "Plans tasks: end to end" {
+		t.Errorf("description = %q", got.Description)
+	}
+
+	// Duplicate slug rejected.
+	if _, err := s.Create("gorev-planlayici", SkillInput{Name: "Dup"}); err == nil {
+		t.Error("expected duplicate-slug error")
+	}
+	// Empty name rejected.
+	if _, err := s.Create("", SkillInput{Name: "  "}); err == nil {
+		t.Error("expected empty-name error")
+	}
+
+	// Update changes metadata + body, flips access off, preserves the slug.
+	up, err := s.Update("gorev-planlayici", SkillInput{
+		Name:        "Planner v2",
+		Description: "updated",
+		Icon:        "📋",
+		Shared:      false,
+		Body:        "# v2\nNew body.",
+	})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if up.Name != "Planner v2" || up.Icon != "📋" || up.Shared {
+		t.Errorf("updated skill = %+v", up)
+	}
+	if body, _ := s.Body("gorev-planlayici"); !strings.Contains(body, "New body.") || strings.Contains(body, "Do the thing.") {
+		t.Errorf("body not replaced: %q", body)
+	}
+
+	// Update cannot target the global tier's slug into creating; missing slug errors.
+	if _, err := s.Update("nope", SkillInput{Name: "x"}); err == nil {
+		t.Error("expected not-found error on Update")
+	}
+
+	// Delete removes the folder and drops it from the catalog.
+	if err := s.Delete("gorev-planlayici"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, ok := s.Get("gorev-planlayici"); ok {
+		t.Error("skill still present after delete")
+	}
+	if _, err := os.Stat(filepath.Join(wsDir, "gorev-planlayici")); !os.IsNotExist(err) {
+		t.Errorf("folder not removed: %v", err)
+	}
+}
+
+func TestCreateWithoutWorkspaceTier(t *testing.T) {
+	s := New(t.TempDir(), "") // global only
+	if _, err := s.Create("x", SkillInput{Name: "X"}); err == nil {
+		t.Error("expected error creating without a workspace tier")
+	}
+}
+
+func TestSetFrontmatterFields(t *testing.T) {
+	in := "---\nname: Old\ndescription: old\nsubskills:\n  - a\n  - b\n---\n\n# Body\ntext"
+	body := "# New body"
+	out := setFrontmatterFields(in, []fmField{
+		{"name", "New"},
+		{"description", "has: colon"},
+		{"icon", "🎯"},
+	}, &body)
+
+	fm, gotBody := parseFrontmatter(out)
+	if fm.scalar("name") != "New" {
+		t.Errorf("name = %q", fm.scalar("name"))
+	}
+	if fm.scalar("description") != "has: colon" {
+		t.Errorf("description = %q (quoting failed)", fm.scalar("description"))
+	}
+	if fm.scalar("icon") != "🎯" {
+		t.Errorf("icon = %q", fm.scalar("icon"))
+	}
+	// Unmanaged block list preserved.
+	if got := fm.list("subskills"); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("subskills not preserved: %v", got)
+	}
+	if strings.TrimSpace(gotBody) != "# New body" {
+		t.Errorf("body = %q", gotBody)
+	}
+}
+
+func TestSlugify(t *testing.T) {
+	cases := map[string]string{
+		"Görev Planlayıcı": "gorev-planlayici",
+		"  Hello World!  ":  "hello-world",
+		"a/b.c_d":           "a-b-c-d",
+		"---":               "",
+		"ÇÖŞ":               "cos",
+	}
+	for in, want := range cases {
+		if got := slugify(in); got != want {
+			t.Errorf("slugify(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestEnsureDefaultsSeeds(t *testing.T) {
 	dir := t.TempDir()
 	if err := EnsureDefaults(dir); err != nil {

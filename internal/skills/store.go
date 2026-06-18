@@ -264,6 +264,181 @@ func (s *Store) SetAccess(slug string, shared bool) (Skill, error) {
 	return out, nil
 }
 
+// SkillInput carries the editable fields used to create or update a skill. It
+// maps onto the SKILL.md frontmatter (plus the markdown body).
+type SkillInput struct {
+	Name        string
+	Description string
+	WhenToUse   string
+	Icon        string
+	Color       string
+	Shared      bool
+	Body        string
+}
+
+// fields renders the input's frontmatter as an ordered scalar list. Descriptions
+// and when-to-use are collapsed to a single line (the parser is line-based).
+func (in SkillInput) fields() []fmField {
+	access := ""
+	if in.Shared {
+		access = "shared"
+	}
+	return []fmField{
+		{"name", strings.TrimSpace(in.Name)},
+		{"description", oneLine(in.Description)},
+		{"when_to_use", oneLine(in.WhenToUse)},
+		{"icon", strings.TrimSpace(in.Icon)},
+		{"color", strings.TrimSpace(in.Color)},
+		{"access", access},
+	}
+}
+
+// workspaceDir returns the workspace tier directory (where new skills are
+// created). Errors when this store has no workspace tier (e.g. unknown workdir).
+func (s *Store) workspaceDir() (string, error) {
+	for _, t := range s.tiers {
+		if t.source == SourceWorkspace && t.dir != "" {
+			return t.dir, nil
+		}
+	}
+	return "", fmt.Errorf("no workspace skills directory is configured")
+}
+
+// Create writes a new skill into the workspace tier and reloads the catalog.
+// When slug is empty it is derived from the name. Fails if the slug already
+// resolves (in any tier) or its folder exists.
+func (s *Store) Create(slug string, in SkillInput) (Skill, error) {
+	if strings.TrimSpace(in.Name) == "" {
+		return Skill{}, fmt.Errorf("skill name is required")
+	}
+	dir, err := s.workspaceDir()
+	if err != nil {
+		return Skill{}, err
+	}
+	slug = slugify(slug)
+	if slug == "" {
+		slug = slugify(in.Name)
+	}
+	if slug == "" {
+		return Skill{}, fmt.Errorf("could not derive a slug from the name; provide an explicit slug")
+	}
+	if _, exists := s.Get(slug); exists {
+		return Skill{}, fmt.Errorf("a skill with slug %q already exists", slug)
+	}
+	skillDir := filepath.Join(dir, slug)
+	if _, statErr := os.Stat(skillDir); statErr == nil {
+		return Skill{}, fmt.Errorf("a folder named %q already exists in the workspace skills dir", slug)
+	}
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		return Skill{}, fmt.Errorf("create skill folder: %w", err)
+	}
+	body := in.Body
+	if strings.TrimSpace(body) == "" {
+		body = "# " + strings.TrimSpace(in.Name) + "\n\nWrite the skill instructions here."
+	}
+	content := setFrontmatterFields("", in.fields(), &body)
+	path := filepath.Join(skillDir, "SKILL.md")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write SKILL.md: %w", err)
+	}
+	s.Reload()
+	out, _ := s.Get(slug)
+	return out, nil
+}
+
+// Update rewrites an existing skill's SKILL.md (frontmatter + body) in place,
+// preserving any unmanaged frontmatter keys, then reloads the catalog. The slug
+// (folder name) is immutable.
+func (s *Store) Update(slug string, in SkillInput) (Skill, error) {
+	if strings.TrimSpace(in.Name) == "" {
+		return Skill{}, fmt.Errorf("skill name is required")
+	}
+	sk, ok := s.Get(slug)
+	if !ok {
+		return Skill{}, fmt.Errorf("skill %q not found", slug)
+	}
+	data, err := os.ReadFile(sk.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.Reload()
+			return Skill{}, fmt.Errorf("skill %q is no longer available (its file was moved or deleted); catalog refreshed", slug)
+		}
+		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
+	}
+	body := in.Body
+	content := setFrontmatterFields(string(data), in.fields(), &body)
+	if err := os.WriteFile(sk.Path, []byte(content), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
+	}
+	s.Reload()
+	out, _ := s.Get(slug)
+	return out, nil
+}
+
+// Delete removes a skill's backing folder (and SKILL.md) from disk, then reloads
+// the catalog. Guarded so it only ever removes a direct child of a known tier
+// directory — never a tier root or anything outside it.
+func (s *Store) Delete(slug string) error {
+	sk, ok := s.Get(slug)
+	if !ok {
+		return fmt.Errorf("skill %q not found", slug)
+	}
+	if sk.Path == "" {
+		return fmt.Errorf("skill %q has no backing file", slug)
+	}
+	skillDir := filepath.Dir(sk.Path)
+	parent := filepath.Dir(skillDir)
+	safe := false
+	for _, t := range s.tiers {
+		if t.dir != "" && filepath.Clean(parent) == filepath.Clean(t.dir) {
+			safe = true
+			break
+		}
+	}
+	if !safe || filepath.Base(skillDir) == "" {
+		return fmt.Errorf("refusing to delete %q: not inside a known skills directory", slug)
+	}
+	if err := os.RemoveAll(skillDir); err != nil {
+		return fmt.Errorf("delete skill %q: %w", slug, err)
+	}
+	s.Reload()
+	return nil
+}
+
+// slugify converts a free-form name into a lowercase kebab-case slug. Common
+// Turkish letters are transliterated; other non-ASCII characters are dropped.
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	repl := strings.NewReplacer(
+		"ç", "c", "ğ", "g", "ı", "i", "ö", "o", "ş", "s", "ü", "u", "İ", "i",
+	)
+	s = repl.Replace(s)
+	var b strings.Builder
+	prevDash := false
+	for _, r := range s {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevDash = false
+		case r == '-' || r == '_' || r == ' ' || r == '.' || r == '/':
+			if b.Len() > 0 && !prevDash {
+				b.WriteByte('-')
+				prevDash = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+// oneLine collapses internal newlines/tabs to single spaces and trims — keeping
+// a scalar frontmatter value on one line.
+func oneLine(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\t", " ")
+	return strings.Join(strings.Fields(s), " ")
+}
+
 // CatalogBlock renders the prompt section advertising EVERY available skill.
 func (s *Store) CatalogBlock() string {
 	return renderCatalog(s.List())

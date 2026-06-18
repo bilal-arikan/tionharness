@@ -1,9 +1,10 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useState } from 'react'
-import { FolderOpen, Globe, Lock, RefreshCw, Sparkles } from 'lucide-react'
+import { FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
 import { CopyPathButton } from '../CopyPathButton'
+import { SkillEditor } from './SkillEditor'
 
 interface Props {
   onError: (msg: string) => void
@@ -56,6 +57,9 @@ export function SkillsPanel({ onError }: Props) {
   const [active, setActive] = useState<SkillDetail | null>(null)
   const [loadingBody, setLoadingBody] = useState(false)
   const [accessBusy, setAccessBusy] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
+  const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
   // Resizable left list width (persisted, clamped). 288px == the old w-72.
   const [listWidth, setListWidth] = useState(() => {
     const v = Number(localStorage.getItem('swarmgo.skillsListWidth'))
@@ -135,6 +139,35 @@ export function SkillsPanel({ onError }: Props) {
       .finally(() => setAccessBusy(false))
   }, [active, reload, onError])
 
+  // After the editor saves, refresh the list and focus the saved skill.
+  const onEditorSaved = useCallback(
+    (saved: SkillDetail) => {
+      setEditor(null)
+      setActive(saved)
+      setActiveSlug(saved.slug)
+      reload()
+    },
+    [reload],
+  )
+
+  // Delete the selected skill (confirm first), then refresh + clear selection.
+  const removeActive = useCallback(() => {
+    if (!active) return
+    if (!window.confirm(`"${active.name}" becerisini silmek istediğine emin misin? Bu, klasörünü diskten kaldırır.`)) {
+      return
+    }
+    setDeleteBusy(true)
+    api
+      .deleteSkill(active.slug)
+      .then(() => {
+        setActive(null)
+        setActiveSlug(null)
+        reload()
+      })
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setDeleteBusy(false))
+  }, [active, reload, onError])
+
   // Re-scan tiers on disk, then refresh the catalog + current selection.
   const rescan = useCallback(() => {
     api
@@ -157,13 +190,22 @@ export function SkillsPanel({ onError }: Props) {
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
             Beceriler · {list.length}
           </span>
-          <button
-            onClick={rescan}
-            title="Diskten yeniden tara"
-            className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          >
-            <RefreshCw size={13} /> Tara
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setEditor({ mode: 'create' })}
+              title="Yeni beceri oluştur"
+              className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            >
+              <Plus size={13} /> Yeni
+            </button>
+            <button
+              onClick={rescan}
+              title="Diskten yeniden tara"
+              className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            >
+              <RefreshCw size={13} /> Tara
+            </button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {list.length === 0 && (
@@ -280,6 +322,13 @@ export function SkillsPanel({ onError }: Props) {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button
+                  onClick={() => setEditor({ mode: 'edit', initial: active })}
+                  title="Bu beceriyi düzenle (ad, simge, açıklama, içerik)"
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                >
+                  <Pencil size={14} /> Düzenle
+                </button>
+                <button
                   onClick={toggleAccess}
                   disabled={accessBusy}
                   title={
@@ -300,6 +349,14 @@ export function SkillsPanel({ onError }: Props) {
                 >
                   <FolderOpen size={14} /> Klasörü aç
                 </button>
+                <button
+                  onClick={removeActive}
+                  disabled={deleteBusy}
+                  title="Bu beceriyi sil (klasörünü diskten kaldırır)"
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
+                >
+                  <Trash2 size={14} /> Sil
+                </button>
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -312,6 +369,15 @@ export function SkillsPanel({ onError }: Props) {
           </>
         )}
       </div>
+
+      {editor && (
+        <SkillEditor
+          mode={editor.mode}
+          initial={editor.initial}
+          onClose={() => setEditor(null)}
+          onSaved={onEditorSaved}
+        />
+      )}
     </div>
   )
 }

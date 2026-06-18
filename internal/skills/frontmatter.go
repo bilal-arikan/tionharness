@@ -171,6 +171,108 @@ func setFrontmatterAccess(content string, shared bool) string {
 	return b.String()
 }
 
+// fmField is one ordered frontmatter scalar to write. An empty Val removes the
+// key (used by setFrontmatterFields).
+type fmField struct{ Key, Val string }
+
+// setFrontmatterFields rewrites a SKILL.md's frontmatter, applying the given
+// scalar field updates (in order) and optionally replacing the markdown body.
+// A field with an empty Val removes that key; a non-empty Val upserts it. Keys
+// are matched case-insensitively. Existing block-list lines (e.g. subskills) and
+// any keys not listed are preserved in place; managed keys are re-emitted at the
+// end in the given order. When body is non-nil it replaces the body. Newlines
+// are normalised to "\n".
+func setFrontmatterFields(content string, fields []fmField, body *string) string {
+	norm := strings.ReplaceAll(content, "\r\n", "\n")
+
+	managed := make(map[string]bool, len(fields))
+	for _, f := range fields {
+		managed[strings.ToLower(strings.TrimSpace(f.Key))] = true
+	}
+
+	var kept []string
+	curBody := norm
+	if strings.HasPrefix(norm, "---\n") {
+		rest := norm[len("---\n"):]
+		if end := strings.Index(rest, "\n---"); end >= 0 {
+			block := rest[:end]
+			curBody = strings.TrimPrefix(rest[end+len("\n---"):], "\n")
+			skipList := false // dropping block-list items of a managed key
+			for _, ln := range strings.Split(block, "\n") {
+				if strings.HasPrefix(strings.TrimSpace(ln), "- ") {
+					if !skipList {
+						kept = append(kept, ln)
+					}
+					continue
+				}
+				skipList = false
+				key := ""
+				if i := strings.Index(ln, ":"); i >= 0 {
+					key = strings.ToLower(strings.TrimSpace(ln[:i]))
+				}
+				if key != "" && managed[key] {
+					skipList = true // also drop any items that belonged to it
+					continue
+				}
+				kept = append(kept, ln)
+			}
+		}
+	}
+	if body != nil {
+		curBody = *body
+	}
+
+	out := append([]string(nil), kept...)
+	for _, f := range fields {
+		if strings.TrimSpace(f.Val) == "" {
+			continue
+		}
+		out = append(out, f.Key+": "+quoteYAML(f.Val))
+	}
+
+	bodyText := strings.TrimLeft(curBody, "\n")
+	if len(out) == 0 {
+		// No frontmatter to write — return the body alone.
+		return bodyText
+	}
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString(strings.Join(out, "\n"))
+	b.WriteString("\n---\n\n")
+	b.WriteString(bodyText)
+	return b.String()
+}
+
+// quoteYAML wraps a scalar in double quotes when it could otherwise be misread
+// by the minimal frontmatter parser (contains a colon/hash, leading/trailing
+// space, or a YAML indicator at the start). Embedded double quotes are swapped
+// for single quotes since the parser's unquote does not handle escapes.
+func quoteYAML(v string) string {
+	if v == "" {
+		return `""`
+	}
+	needs := strings.ContainsAny(v, ":#\n\"'") ||
+		v != strings.TrimSpace(v) ||
+		hasYAMLIndicatorPrefix(v)
+	if !needs {
+		return v
+	}
+	return `"` + strings.ReplaceAll(v, `"`, `'`) + `"`
+}
+
+// hasYAMLIndicatorPrefix reports whether v starts with a YAML indicator char
+// that would change how the parser reads the line.
+func hasYAMLIndicatorPrefix(v string) bool {
+	if v == "" {
+		return false
+	}
+	switch v[0] {
+	case '[', '{', '&', '*', '!', '@', '`', '|', '>', '%', '-', '?':
+		return true
+	}
+	return false
+}
+
 // unquote strips a single matching pair of surrounding quotes.
 func unquote(s string) string {
 	if len(s) >= 2 {

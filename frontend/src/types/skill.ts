@@ -28,3 +28,15 @@ export interface SkillDetail extends Skill {
   // Folder containing the skill's SKILL.md (for copy-path / reveal). May be "".
   dir: string
 }
+
+// SkillInput is the editable payload sent when creating or updating a skill.
+// Create may also include an optional `slug`; on update the slug is immutable.
+export interface SkillInput {
+  name: string
+  description: string
+  whenToUse: string
+  icon: string
+  color: string
+  shared: boolean
+  body: string
+}
