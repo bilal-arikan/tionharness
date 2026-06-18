@@ -75,3 +75,47 @@ func TestAskUserRequiresQuestion(t *testing.T) {
 		t.Fatal("expected error for blank question")
 	}
 }
+
+// TestAskUserOptionsAsString verifies that the tool accepts options encoded as a
+// plain JSON string (model emit error) instead of the documented array form.
+func TestAskUserOptionsAsString(t *testing.T) {
+	tool := NewAskUserTool()
+	var gotOpts []string
+	ctx := WithAsker(context.Background(), func(_ context.Context, _ string, opts []string) (string, error) {
+		gotOpts = opts
+		return "yes", nil
+	})
+	_, err := tool.Call(ctx, json.RawMessage(`{"question":"proceed?","options":"yes"}`))
+	if err != nil {
+		t.Fatalf("unexpected error with string options: %v", err)
+	}
+	if len(gotOpts) != 1 || gotOpts[0] != "yes" {
+		t.Fatalf("expected [yes], got %v", gotOpts)
+	}
+}
+
+// TestAskUserAutonomousMalformedPayload confirms that a malformed payload in an
+// autonomous session (no asker) returns the graceful no-asker message rather than
+// a JSON parse error.
+func TestAskUserAutonomousMalformedPayload(t *testing.T) {
+	tool := NewAskUserTool()
+	// Bad payload: options is an array but if struct were string this would panic.
+	_, err := tool.Call(context.Background(), json.RawMessage(`{"question":"q","options":["a","b"]}`))
+	if err == nil {
+		t.Fatal("expected error when no asker")
+	}
+	if !strings.Contains(err.Error(), "interactive chat") {
+		t.Fatalf("expected graceful no-asker message, got: %v", err)
+	}
+}
+
+func TestRequestConfirmationAutonomous(t *testing.T) {
+	tool := NewRequestConfirmationTool()
+	_, err := tool.Call(context.Background(), json.RawMessage(`{"question":"delete?"}`))
+	if err == nil {
+		t.Fatal("expected error in autonomous context")
+	}
+	if !strings.Contains(err.Error(), "interactive chat") {
+		t.Fatalf("expected graceful no-asker message, got: %v", err)
+	}
+}

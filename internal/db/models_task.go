@@ -1,6 +1,6 @@
 package db
 
-// Board states for a task. These drive the kanban columns in the UI.
+// Board states for a task. These drive the default kanban columns in the UI.
 const (
 	BoardTodo       = "todo"
 	BoardInProgress = "in_progress"
@@ -9,13 +9,39 @@ const (
 	BoardFailed     = "failed"
 )
 
-// ValidBoardState reports whether s is a recognised board column.
-func ValidBoardState(s string) bool {
-	switch s {
-	case BoardTodo, BoardInProgress, BoardReview, BoardDone, BoardFailed:
-		return true
+// BoardColumnDef defines a kanban column with a display label and optional
+// accent color. Key is the persistent string stored on tasks (boardState).
+type BoardColumnDef struct {
+	Key   string `json:"key"`   // unique slug: lowercase letters, digits, underscores
+	Label string `json:"label"` // human-readable column name
+	Color string `json:"color"` // hex accent (e.g. "#4f8cff") or "" for default
+}
+
+// DefaultBoardColumns returns the built-in column set used when a workspace
+// has no custom column configuration.
+func DefaultBoardColumns() []BoardColumnDef {
+	return []BoardColumnDef{
+		{Key: BoardTodo, Label: "Yapılacak", Color: ""},
+		{Key: BoardInProgress, Label: "Devam Eden", Color: ""},
+		{Key: BoardReview, Label: "İnceleme", Color: ""},
+		{Key: BoardDone, Label: "Bitti", Color: ""},
+		{Key: BoardFailed, Label: "Başarısız", Color: ""},
 	}
-	return false
+}
+
+// ValidBoardState reports whether s is a safe board column key.
+// Accepts lowercase letters, digits and underscores. The five built-in
+// constants all match, and custom column keys must use the same pattern.
+func ValidBoardState(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if !('a' <= c && c <= 'z' || '0' <= c && c <= '9' || c == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 // Task is a unit of work on the board, optionally owned by an agent. When run,

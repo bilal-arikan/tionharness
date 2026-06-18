@@ -46,16 +46,17 @@ func (RequestConfirmationTool) Def() providers.ToolDef {
 }
 
 func (RequestConfirmationTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	// Bail early in autonomous/flow runs before touching the payload.
+	ask := askerFrom(ctx)
+	if ask == nil {
+		return "", fmt.Errorf("request_confirmation is only available in interactive chat sessions; do not take the risky action")
+	}
 	var in confirmInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("invalid request_confirmation input: %w", err)
 	}
 	if strings.TrimSpace(in.Question) == "" {
 		return "", fmt.Errorf("question is required")
-	}
-	ask := askerFrom(ctx)
-	if ask == nil {
-		return "", fmt.Errorf("request_confirmation is only available in interactive chat sessions; do not take the risky action")
 	}
 	answer, err := ask(ctx, in.Question, ConfirmOptions)
 	if err != nil {
