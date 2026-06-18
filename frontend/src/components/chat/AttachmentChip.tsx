@@ -23,7 +23,8 @@ export function AttachmentChip({ attachment, onRemove, previewURL, uploading, on
   const img = previewURL ?? imageURL(attachment)
 
   const Tag = onClick ? 'button' : 'div'
-  const clickProps = onClick ? { type: 'button' as const, onClick, title: 'Artifactı aç' } : {}
+  const clickTitle = attachment.source === 'artifact' ? 'Artifactı aç' : attachment.kind === 'image' ? 'Görseli aç' : 'Dosyayı aç'
+  const clickProps = onClick ? { type: 'button' as const, onClick, title: clickTitle } : {}
 
   return (
     <Tag
@@ -31,7 +32,7 @@ export function AttachmentChip({ attachment, onRemove, previewURL, uploading, on
       className={`group relative shrink-0${onClick ? ' cursor-pointer' : ''}`}
     >
       {img ? (
-        <div className="h-[52px] w-[52px] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+        <div className={`h-[52px] w-[52px] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] transition${onClick ? ' hover:opacity-80 hover:border-[var(--color-accent)]' : ''}`}>
           <img src={img} alt={attachment.name} className="h-full w-full object-cover" />
         </div>
       ) : (

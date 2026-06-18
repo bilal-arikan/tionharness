@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { Agent, Attachment } from '../../types'
 import { resolveColor } from '../../lib/avatar'
 import { AttachmentChip } from './AttachmentChip'
+import { imageURL } from '../../lib/attachments'
 
 // MENTION_RE matches an "@token" the way the composer inserts mentions: "@" then
 // non-space, non-"@" characters.
@@ -85,15 +86,19 @@ export function UserBubble({
   const isCommand = !quotedCmd && /^\/\S/.test(text.trim())
 
   // Attachment chips rendered under the bubble (image thumbnails / file cards).
-  // Artifact-sourced chips are clickable: id format is "art-<artifactId>".
+  // Artifact-sourced chips open the artifact viewer; image chips open the
+  // full-size image in a new tab; other attachments are not yet clickable.
   const chips = attachments && attachments.length > 0 && (
     <div className="mt-1.5 flex flex-wrap justify-end gap-2">
       {attachments.map((a) => {
-        const artifactClick =
-          a.source === 'artifact' && onOpenArtifact
-            ? () => onOpenArtifact(a.id.startsWith('art-') ? a.id.slice(4) : a.id)
-            : undefined
-        return <AttachmentChip key={a.id} attachment={a} onClick={artifactClick} />
+        let onClick: (() => void) | undefined
+        if (a.source === 'artifact' && onOpenArtifact) {
+          onClick = () => onOpenArtifact(a.id.startsWith('art-') ? a.id.slice(4) : a.id)
+        } else if (a.kind === 'image') {
+          const url = imageURL(a)
+          if (url) onClick = () => window.open(url, '_blank')
+        }
+        return <AttachmentChip key={a.id} attachment={a} onClick={onClick} />
       })}
     </div>
   )
