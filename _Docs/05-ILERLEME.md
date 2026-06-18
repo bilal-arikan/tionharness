@@ -950,8 +950,10 @@ oluşturulmuş** kaynakları silebilir/düzenleyebilir; kullanıcının elle yap
 **Araçlar (16 yeni, `internal/tools/`):**
 - `builtin_agentmgmt.go` — `create_agent` / `update_agent` / `delete_agent` / `list_agents`
   (delete kendini reddeder; create heartbeat'li ajanın worker'ını anında başlatır).
-- `builtin_flowmgmt.go` — `create_flow` / `update_flow` / `delete_flow` / `list_flows`
-  (graph JSON doğrulaması).
+- `builtin_flowmgmt.go` — `create_flow` / `update_flow` / `delete_flow` / `list_flows` /
+  `run_flow` (graph JSON doğrulaması). `run_flow` herhangi bir akışı `{{input}}` ile çalıştırır
+  (otonom, bütçe-kapılı), `RunFlowRecorded` üzerinden çalıştırmalar akışına kaydeder; edit/delete
+  provenance-kapılı (yalnız ajan-yapımı), `run_flow` ise kapısız (çalıştırma yıkıcı değil).
 - `builtin_schedulemgmt.go` — `create_schedule` / `update_schedule` / `delete_schedule` /
   `list_schedules` (her değişimde `Scheduler.Reload` → cron anında etkili).
 - `builtin_artifactmgmt.go` — `delete_artifact` / `list_artifacts` (create/update zaten
@@ -963,7 +965,7 @@ oluşturulmuş** kaynakları silebilir/düzenleyebilir; kullanıcının elle yap
 `Runtime`'a `logs *logbuf.Buffer` + `reloadSched` callback (`SetScheduleReloader`, manager
 `sched.Reload`'u bağlar) eklendi. `NewRuntime`/`NewManager` imzaları + `main.go` güncellendi.
 
-**Gate:** Self-management paketi native kataloğu **19 → 35**'e çıkarır (~+2000 tok/tur), ve
+**Gate:** Self-management paketi native kataloğu **19 → 36**'ya çıkarır (~+2000 tok/tur), ve
 ajanın workspace'i değiştirmesine izin verir → **varsayılan KAPALI**, `SWARMGO_ENABLE_SELFMANAGE=1`
 ile açılır (shell gate deseni; `Tunables.SelfManageEnabled`). Per-agent allowlist + workspace
 denylist yine geçerli.

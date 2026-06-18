@@ -149,6 +149,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewUpdateFlowTool(r.db, agent.ID),
 			tools.NewDeleteFlowTool(r.db, agent.ID),
 			tools.NewListFlowsTool(r.db, agent.ID),
+			// run_flow drives a flow to completion (autonomous, budget-gated) and
+			// records it in the executions feed, like run_task.
+			tools.NewRunFlowTool(r.db, agent.ID, func(ctx context.Context, flowID, input string) (db.FlowRun, error) {
+				run, _, err := r.RunFlowRecorded(ctx, flowID, input, true, nil)
+				return run, err
+			}),
 			// Schedules (routines).
 			tools.NewCreateScheduleTool(r.db, agent.ID, r.reloadSchedules),
 			tools.NewUpdateScheduleTool(r.db, agent.ID, r.reloadSchedules),

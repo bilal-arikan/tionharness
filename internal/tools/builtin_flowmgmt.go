@@ -18,9 +18,13 @@ import (
 // a set of nodes (agent / branch / parallel) wired by edges, with template
 // placeholders like {{input}} / {{last}} / {{node.id}}.
 
+// runFlowFn runs a flow by id with the given input and returns the finished run.
+type runFlowFn func(ctx context.Context, flowID, input string) (db.FlowRun, error)
+
 type flowDeps struct {
 	db      *db.DB
 	actorID string
+	run     runFlowFn
 }
 
 func (d flowDeps) requireFlowCreatedByAgent(ctx context.Context, id string) (db.Flow, error) {
@@ -245,5 +249,66 @@ func (t ListFlowsTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 		})
 	}
 	b, _ := json.Marshal(out)
+	return string(b), nil
+}
+
+// ---- run_flow ----
+
+// RunFlowTool executes a flow now with a given input (allowed on any flow).
+// Running is non-destructive, so — unlike edit/delete — it is not provenance
+// gated: an agent may run user-made flows too. The run is recorded in the
+// executions feed like a task run.
+type RunFlowTool struct{ d flowDeps }
+
+// NewRunFlowTool constructs run_flow.
+func NewRunFlowTool(database *db.DB, actorID string, run runFlowFn) RunFlowTool {
+	return RunFlowTool{d: flowDeps{db: database, actorID: actorID, run: run}}
+}
+
+func (RunFlowTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name: "run_flow",
+		Description: "Run an orchestration flow now with the given input (the value bound to {{input}} in the graph). Drives the flow to completion, records a run in the executions feed, and returns the status and (truncated) final output. Allowed on any flow.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"id":{"type":"string","description":"The flow id (see list_flows)"},
+				"input":{"type":"string","description":"Input bound to {{input}} in the flow graph"}
+			},
+			"required":["id"],
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t RunFlowTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		ID    string `json:"id"`
+		Input string `json:"input"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	in.ID = strings.TrimSpace(in.ID)
+	if in.ID == "" {
+		return "", fmt.Errorf("id is required")
+	}
+	if t.d.run == nil {
+		return "", fmt.Errorf("run_flow is not wired in this context")
+	}
+	if _, err := t.d.db.GetFlow(ctx, in.ID); err != nil {
+		return "", fmt.Errorf("no flow with id %q (use list_flows)", in.ID)
+	}
+	run, err := t.d.run(ctx, in.ID, in.Input)
+	if err != nil {
+		return "", fmt.Errorf("run flow: %w", err)
+	}
+	b, _ := json.Marshal(map[string]string{
+		"id":     in.ID,
+		"runId":  run.ID,
+		"status": run.Status,
+		"output": truncateForTool(run.Output, 2000),
+		"error":  truncateForTool(run.Error, 500),
+	})
 	return string(b), nil
 }
