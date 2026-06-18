@@ -2,6 +2,43 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Faz B4 — Model Detayı + Prompt-Cache Maliyet Modellemesi ✅ (2026-06-18)
+
+**İstek:** Bütçe ekranına model-bazlı detay satırı + prompt-cache indirimini maliyete katma.
+
+**Prompt-cache token yakalama (provider katmanı):**
+- `providers.Usage` += `CacheReadTokens`, `CacheWriteTokens` (Anthropic'in `input_tokens`'ı
+  cache'i HARİÇ tutar → gerçek girdi = input + cacheRead + cacheWrite).
+- `anthropic.go`: hem `Complete` hem `Stream` (`message_start`) yolunda
+  `cache_creation_input_tokens` (write) + `cache_read_input_tokens` (read) parse edilir.
+  Cache zaten aktifti (statik prefix'te 1h ephemeral breakpoint).
+
+**Fiyatlama (`providers/pricing.go`):** cache çarpanları `CacheReadMult=0.10`,
+`CacheWriteMult=1.25`. `Price.CostDetailed(in,out,cacheRead,cacheWrite)` her sınıfı
+doğru oranla fiyatlar; `Price.CacheSavings(cacheRead)` cache okumanın tam girdi
+fiyatına kıyasla sağladığı tasarrufu (×0.90) verir.
+
+**Depolama:** `db.KindStat`+`db.Usage` += cache sayaçları; param patlamasını önlemek
+için `db.UsageDelta` struct'ı eklendi, `AddUsageKind(...,delta)` imzasına geçildi.
+`RecordUsage` + `recordCompaction` cache token'larını da geçirir.
+
+**API (`/api/usage`):** `byProvider[]` artık her provider altında **`models[]`**
+detayı taşır (model, çağrı, token, cache oku/yaz, maliyet, tasarruf, priced) +
+provider düzeyinde cache/tasarruf; `totals` += `cacheReadTokens/cacheWriteTokens/
+savingsUSD`. Maliyet `CostDetailed` ile cache-bilinçli hesaplanır.
+
+**Frontend (`BudgetPanel`):** "Provider / model" tablosu artık **açılır satırlı**
+(chevron → model detayı), **Cache (oku/yaz)** + **Tasarruf** sütunları, başlıkta
+yeşil "cache tasarrufu $X" rozeti.
+
+**Doğrulama:** `go build`/`vet`/`test` + `tsc`/`vite` yeşil; `providers/pricing_test.go`
+(cache katman maliyeti + tasarruf + abonelik). **Canlı API smoke:** opus
+(100k girdi + 500k cache-oku + 50k cache-yaz + 20k çıktı) → **$4.6875**, tasarruf
+**$6.75**; haiku → **$0.40**; provider toplamı **$5.0875** — hepsi tam doğru.
+
+**Sıradaki:** fiyatların Ayarlar'dan düzenlenmesi; 1h cache TTL için write çarpanı
+(şu an 1.25; 1h = 2.0); TL kuru.
+
 ## Takip edilmeyen hataları yakalama — son savunma hattı ✅ (commit sonrası, 2026-06-18)
 
 "Kimsenin takip etmediği hataları yakalayan bir sistem var mı?" sorusu üzerine
@@ -17,6 +54,18 @@ iki eksik güvenlik ağı eklendi (detay: `_Docs/12-LOGLAMA.md`):
   kayıt/boş-düşürme). `12-LOGLAMA.md` "Gelecek" madde 2 ✅ işaretlendi.
 
 ✅ `go build ./...` + `go test ./internal/...` + frontend `tsc -b`/`vite build` yeşil.
+
+## Profilleme altyapısı — pprof (env-gate'li, loopback-only) (2026-06-18)
+
+`net/http/pprof` ile profilleme eklendi: **varsayılan kapalı**, `SWARMGO_PPROF=1` ile
+açılır, yalnız loopback dinler (`SWARMGO_PPROF_ADDR`, vars. `127.0.0.1:6060`). Uçlar
+`http.DefaultServeMux`'ta yayınlanır; ana sunucu kendi mux'ını (`server.Routes()`)
+kullandığından profiler uygulama rotalarından **tamamen izole**. Wiring: yeni
+`cmd/swarmgo/pprof.go` (`startPprof`) + `main.go`'da config sonrası çağrı.
+✅ `go build`/`vet` yeşil; **canlı smoke** (izole veri dizini, port 6061): `/debug/pprof/`
+ve `/debug/pprof/heap` HTTP 200, log "pprof profiling server enabled" doğrulandı.
+Kullanım rehberi (heap/CPU/goroutine toplama, `go tool pprof` komutları, sıcak-yol
+adayları, before/after karşılaştırma): yeni doküman [16-PROFILLEME.md](16-PROFILLEME.md).
 
 ## Performans sağlamlaştırma turu — Go best-practice incelemesi sonrası (2026-06-18)
 

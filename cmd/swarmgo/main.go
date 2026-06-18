@@ -40,6 +40,9 @@ func main() {
 	}
 	logger.Info("config loaded", "data_dir", cfg.DataDir, "addr", cfg.Addr)
 
+	// Optional profiling server (loopback-only, off by default; SWARMGO_PPROF=1).
+	startPprof(logger)
+
 	secret, err := config.LoadSecret(cfg.DataDir)
 	if err != nil {
 		logger.Error("secret load failed", "error", err)
