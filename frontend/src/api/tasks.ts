@@ -12,6 +12,7 @@ export const taskApi = {
     ownerAgentId?: string
     flowId?: string
     boardState?: BoardState
+    dependencies?: string
   }) =>
     req<Task>('/api/tasks', {
       method: 'POST',
@@ -20,7 +21,7 @@ export const taskApi = {
   // (Re)generate a task title from its description.
   generateTaskTitle: (id: string) =>
     req<Task>(`/api/tasks/${id}/title`, { method: 'POST' }),
-  updateTask: (id: string, patch: Partial<Pick<Task, 'title' | 'description' | 'ownerAgentId' | 'flowId' | 'boardState'>>) =>
+  updateTask: (id: string, patch: Partial<Pick<Task, 'title' | 'description' | 'ownerAgentId' | 'flowId' | 'boardState' | 'dependencies'>>) =>
     req<Task>(`/api/tasks/${id}`, {
       method: 'PUT',
       body: JSON.stringify(patch),
