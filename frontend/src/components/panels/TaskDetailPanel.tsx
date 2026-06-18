@@ -1,36 +1,44 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { api } from '../../api'
-import type { Agent, Task, BoardState, Flow } from '../../types'
+import type { Agent, Task, Flow, BoardState, BoardColumnDef } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
+import { DependencyPicker } from './DependencyPicker'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 
-const BOARD_STATES: { key: BoardState; label: string }[] = [
-  { key: 'todo', label: 'Yapılacak' },
-  { key: 'in_progress', label: 'Devam Eden' },
-  { key: 'review', label: 'İnceleme' },
-  { key: 'done', label: 'Bitti' },
-  { key: 'failed', label: 'Başarısız' },
-]
+function parseDeps(raw: string): string[] {
+  try {
+    const arr = JSON.parse(raw || '[]')
+    return Array.isArray(arr) ? (arr as string[]) : []
+  } catch {
+    return []
+  }
+}
 
 interface Props {
   task: Task
   agents: Agent[]
   flows: Flow[]
+  // Workspace column definitions — drives the status pill selector.
+  columns: BoardColumnDef[]
+  // All board tasks — used for the dependency picker and chip navigation.
+  tasks?: Task[]
   onClose: () => void
   // Called with the persisted task so the board can update its copy in place.
   onSaved: (task: Task) => void
   // Called after a successful delete so the board can drop the card.
   onDeleted: (id: string) => void
   onError: (msg: string) => void
+  // Open another task's detail panel (dependency chip click).
+  onSelectTask?: (id: string) => void
 }
 
 // TaskDetailPanel is the right-hand inspector/editor for a single Kanban card.
 // The board is a passive status surface: a task is described, columned, and
 // optionally tagged with an agent and a flow (informational). It is never run
 // from here — flows, schedules and agent sessions read and update tasks from
-// outside. So this panel only edits title/description/owner/flow/column.
-export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDeleted, onError }: Props) {
+// outside. So this panel only edits title/description/owner/flow/column/deps.
+export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onClose, onSaved, onDeleted, onError, onSelectTask }: Props) {
   // Drag-to-resize width (left-edge handle, right-docked panel), persisted.
   const { width, dragging, onHandleDown } = useResizableWidth({
     storageKey: 'taskDetailPanelWidth',
@@ -43,6 +51,7 @@ export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDelet
   const [ownerAgentId, setOwnerAgentId] = useState(task.ownerAgentId)
   const [flowId, setFlowId] = useState(task.flowId)
   const [boardState, setBoardState] = useState<BoardState>(task.boardState)
+  const [depIds, setDepIds] = useState<string[]>(() => parseDeps(task.dependencies))
   const [saving, setSaving] = useState(false)
   const [retitling, setRetitling] = useState(false)
 
@@ -53,14 +62,19 @@ export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDelet
     setOwnerAgentId(task.ownerAgentId)
     setFlowId(task.flowId)
     setBoardState(task.boardState)
+    setDepIds(parseDeps(task.dependencies))
   }, [task])
+
+  const currentDepsJSON = JSON.stringify(depIds.slice().sort())
+  const savedDepsJSON = JSON.stringify(parseDeps(task.dependencies).slice().sort())
 
   const dirty =
     title !== task.title ||
     description !== task.description ||
     ownerAgentId !== task.ownerAgentId ||
     flowId !== task.flowId ||
-    boardState !== task.boardState
+    boardState !== task.boardState ||
+    currentDepsJSON !== savedDepsJSON
 
   const save = async () => {
     setSaving(true)
@@ -71,6 +85,7 @@ export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDelet
         ownerAgentId,
         flowId,
         boardState,
+        dependencies: JSON.stringify(depIds),
       })
       onSaved(updated)
     } catch (e) {
@@ -102,6 +117,9 @@ export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDelet
       onError((e as Error).message)
     }
   }
+
+  // Tasks available as dependencies: all tasks except the current one.
+  const depCandidates = tasks.filter((t) => t.id !== task.id)
 
   return (
     <aside
@@ -181,21 +199,64 @@ export function TaskDetailPanel({ task, agents, flows, onClose, onSaved, onDelet
           </select>
         </Field>
 
+        {/* Dependencies: tasks that must complete before this one. */}
+        <Field label="Bağımlılıklar — önce tamamlanması gereken görevler">
+          <DependencyPicker
+            tasks={depCandidates}
+            value={depIds}
+            onChange={setDepIds}
+          />
+          {depIds.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {depIds.map((depId) => {
+                const dep = tasks.find((t) => t.id === depId)
+                if (!dep) return null
+                const done = dep.boardState === 'done'
+                return (
+                  <button
+                    key={depId}
+                    onClick={() => onSelectTask?.(depId)}
+                    title="Bu göreve git"
+                    className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition hover:opacity-75 ${
+                      done
+                        ? 'bg-green-500/15 text-green-400'
+                        : 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
+                    }`}
+                  >
+                    {done ? '✓' : '⏳'}{' '}
+                    {dep.title || dep.description || 'Görev'}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </Field>
+
         <Field label="Durum (kolon)">
           <div className="flex flex-wrap gap-1.5">
-            {BOARD_STATES.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => setBoardState(s.key)}
-                className={`rounded-full px-2.5 py-1 text-xs transition ${
-                  boardState === s.key
-                    ? 'bg-[var(--color-accent)] text-white'
-                    : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+            {columns.map((col) => {
+              const active = boardState === col.key
+              return (
+                <button
+                  key={col.key}
+                  onClick={() => setBoardState(col.key as BoardState)}
+                  className={`rounded-full px-2.5 py-1 text-xs transition ${
+                    active
+                      ? 'text-white'
+                      : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                  }`}
+                  style={
+                    active
+                      ? { backgroundColor: col.color || 'var(--color-accent)' }
+                      : col.color
+                      ? { borderLeft: `3px solid ${col.color}`, paddingLeft: '6px' }
+                      : undefined
+                  }
+                >
+                  {col.label}
+                </button>
+              )
+            })}
           </div>
         </Field>
 

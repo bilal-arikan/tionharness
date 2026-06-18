@@ -25,6 +25,7 @@ type createTaskReq struct {
 	OwnerAgentID string `json:"ownerAgentId"`
 	FlowID       string `json:"flowId"`
 	BoardState   string `json:"boardState"`
+	Dependencies string `json:"dependencies"` // JSON array of task IDs
 }
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +44,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "title, description or prompt is required")
 		return
 	}
-	if req.BoardState != "" && !db.ValidBoardState(req.BoardState) {
+	if req.BoardState != "" && !db.IsValidBoardKey(req.BoardState) {
 		writeError(w, http.StatusBadRequest, "invalid board state")
 		return
 	}
@@ -69,6 +70,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		OwnerAgentID: req.OwnerAgentID,
 		FlowID:       req.FlowID,
 		BoardState:   req.BoardState,
+		Dependencies: req.Dependencies,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -84,6 +86,7 @@ type updateTaskReq struct {
 	OwnerAgentID *string `json:"ownerAgentId"`
 	FlowID       *string `json:"flowId"`
 	BoardState   *string `json:"boardState"`
+	Dependencies *string `json:"dependencies"` // JSON array of task IDs
 }
 
 // handleUpdateTask edits any subset of a task's mutable fields (PATCH-like PUT).
@@ -117,11 +120,14 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		task.FlowID = *req.FlowID
 	}
 	if req.BoardState != nil {
-		if !db.ValidBoardState(*req.BoardState) {
+		if !db.IsValidBoardKey(*req.BoardState) {
 			writeError(w, http.StatusBadRequest, "invalid board state")
 			return
 		}
 		task.BoardState = *req.BoardState
+	}
+	if req.Dependencies != nil {
+		task.Dependencies = *req.Dependencies
 	}
 
 	if err := wsp.DB.UpdateTask(r.Context(), task); writeDBError(w, err, "task not found") {

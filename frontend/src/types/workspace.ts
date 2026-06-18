@@ -1,5 +1,13 @@
 // Workspace identity, per-workspace settings and workspace-wide tool config.
 
+// A single kanban column definition: key is stored on tasks, label is shown,
+// color is an optional hex accent for the column header.
+export interface BoardColumnDef {
+  key: string
+  label: string
+  color: string
+}
+
 export interface Workspace {
   id: string
   name: string
@@ -31,6 +39,7 @@ export interface WorkspaceSettings {
   sessionContextEnabled: boolean
   sessionContextEveryTurn: boolean
   sessionContextRecentCount: number
+  boardColumns: BoardColumnDef[]
   createdAt: number
   agentCount: number
   sessionCount: number
@@ -50,6 +59,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'sessionContextEnabled'
     | 'sessionContextEveryTurn'
     | 'sessionContextRecentCount'
+    | 'boardColumns'
   >
 >
 

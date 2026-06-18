@@ -1,7 +1,9 @@
 // Tasks (kanban), their run history and cron schedules.
 
-// Kanban board column states (mirror db.Board* constants).
-export type BoardState = 'todo' | 'in_progress' | 'review' | 'done' | 'failed'
+// Kanban board column state: stored as a string on tasks and matched against
+// the workspace's BoardColumnDef list. The five built-in values are kept for
+// type-hinting; custom column keys are also valid (lowercase + underscores).
+export type BoardState = 'todo' | 'in_progress' | 'review' | 'done' | 'failed' | (string & {})
 
 export interface Task {
   id: string

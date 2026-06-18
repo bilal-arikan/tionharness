@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/workspace"
 )
 
@@ -24,6 +25,10 @@ type workspaceSettingsDTO struct {
 	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`
 	SessionContextRecentCount int  `json:"sessionContextRecentCount"`
 
+	// BoardColumns is the ordered column set for this workspace's kanban board.
+	// Always non-nil: falls back to db.DefaultBoardColumns() when unconfigured.
+	BoardColumns []db.BoardColumnDef `json:"boardColumns"`
+
 	AgentCount   int `json:"agentCount"`
 	SessionCount int `json:"sessionCount"`
 	TaskCount    int `json:"taskCount"`
@@ -31,6 +36,10 @@ type workspaceSettingsDTO struct {
 
 func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspaceSettingsDTO {
 	s := w.Settings()
+	cols := s.BoardColumns
+	if len(cols) == 0 {
+		cols = db.DefaultBoardColumns()
+	}
 	dto := workspaceSettingsDTO{
 		ID:              w.ID,
 		Name:            w.Name,
@@ -45,6 +54,8 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		SessionContextEnabled:     s.SessionContextEnabled,
 		SessionContextEveryTurn:   s.SessionContextEveryTurn,
 		SessionContextRecentCount: s.SessionContextRecentCount,
+
+		BoardColumns: cols,
 	}
 	if agents, err := w.DB.ListAgents(ctx); err == nil {
 		dto.AgentCount = len(agents)

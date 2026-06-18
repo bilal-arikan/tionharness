@@ -1,21 +1,54 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
-import type { Agent, Task, BoardState, Flow } from '../../types'
+import type { Agent, Task, Flow, BoardColumnDef } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { TaskDetailPanel } from './TaskDetailPanel'
+import { BoardColumnEditor } from './BoardColumnEditor'
+
+// Fallback columns used until workspace settings are loaded.
+const DEFAULT_COLUMNS: BoardColumnDef[] = [
+  { key: 'todo', label: 'Yapılacak', color: '' },
+  { key: 'in_progress', label: 'Devam Eden', color: '' },
+  { key: 'review', label: 'İnceleme', color: '' },
+  { key: 'done', label: 'Bitti', color: '' },
+  { key: 'failed', label: 'Başarısız', color: '' },
+]
 
 // Current unix time in seconds, matching the backend's task timestamps — used
 // for optimistic createdAt/updatedAt so cards sort consistently before reload.
 const nowSec = () => Math.floor(Date.now() / 1000)
 
-const COLUMNS: { key: BoardState; label: string }[] = [
-  { key: 'todo', label: 'Yapılacak' },
-  { key: 'in_progress', label: 'Devam Eden' },
-  { key: 'review', label: 'İnceleme' },
-  { key: 'done', label: 'Bitti' },
-  { key: 'failed', label: 'Başarısız' },
-]
+// Parse a task's dependencies JSON string into an array of task IDs.
+function parseDeps(raw: string): string[] {
+  try {
+    const arr = JSON.parse(raw || '[]')
+    return Array.isArray(arr) ? (arr as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+// Compute topological levels so tasks with no blockers sort first (level 0).
+// Cycles are broken by assigning level 0 to the repeated node.
+function topoLevels(tasks: Task[]): Map<string, number> {
+  const depsOf = new Map<string, string[]>()
+  for (const t of tasks) depsOf.set(t.id, parseDeps(t.dependencies))
+  const levels = new Map<string, number>()
+  const visiting = new Set<string>()
+  function level(id: string): number {
+    if (levels.has(id)) return levels.get(id)!
+    if (visiting.has(id)) return 0
+    visiting.add(id)
+    const deps = depsOf.get(id) ?? []
+    const l = deps.length === 0 ? 0 : Math.max(...deps.map((d) => level(d) + 1))
+    visiting.delete(id)
+    levels.set(id, l)
+    return l
+  }
+  for (const t of tasks) level(t.id)
+  return levels
+}
 
 interface Props {
   agents: Agent[]
@@ -25,36 +58,57 @@ interface Props {
 export function TaskBoard({ agents, onError }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
+  const [columns, setColumns] = useState<BoardColumnDef[]>(DEFAULT_COLUMNS)
   const [description, setDescription] = useState('')
   const [ownerAgentId, setOwnerAgentId] = useState('')
   const [newFlowId, setNewFlowId] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
   // Right-hand detail/editor drawer: which task is currently open (null = closed).
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Left-side column editor panel.
+  const [editorOpen, setEditorOpen] = useState(false)
+  // When true, cards sort by topological dependency order (no-blocker tasks first).
+  const [depSort, setDepSort] = useState(false)
 
   const reload = () =>
     api.listTasks().then(setTasks).catch((e) => onError(e.message))
 
+  const loadColumns = () =>
+    api
+      .getWorkspaceSettings()
+      .then((s) => {
+        if (s.boardColumns && s.boardColumns.length > 0) {
+          setColumns(s.boardColumns)
+        }
+      })
+      .catch(() => {
+        // non-fatal: keep defaults
+      })
+
   useEffect(() => {
     reload()
+    loadColumns()
     api.listFlows().then(setFlows).catch((e) => onError(e.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const saveColumns = async (cols: BoardColumnDef[]) => {
+    const updated = await api.updateWorkspaceSettings({ boardColumns: cols })
+    setColumns(updated.boardColumns ?? cols)
+    setEditorOpen(false)
+  }
 
   // A task is a passive board item: created from a description (title is
   // auto-generated from it). Agent and flow are optional informational tags;
   // the board itself never runs anything — flows/schedules/agent sessions read
   // and update tasks from outside.
-  //
-  // The backend generates the title (an AI call) before returning, so we insert
-  // an optimistic card immediately (description as a placeholder title) and swap
-  // it for the persisted task on success — the click registers instantly.
   const createTask = async () => {
     const desc = description.trim()
     if (!desc) return
     const tempId = `temp-${Date.now()}`
     const owner = ownerAgentId
     const flow = newFlowId
+    const defaultCol = columns[0]?.key ?? 'todo'
     const optimistic: Task = {
       id: tempId,
       title: desc.length > 60 ? desc.slice(0, 60) + '…' : desc,
@@ -62,7 +116,7 @@ export function TaskBoard({ agents, onError }: Props) {
       prompt: '',
       ownerAgentId: owner,
       flowId: flow,
-      boardState: 'todo',
+      boardState: defaultCol,
       dependencies: '[]',
       lastRunId: '',
       lastRunStatus: '',
@@ -87,10 +141,8 @@ export function TaskBoard({ agents, onError }: Props) {
     }
   }
 
-  const move = async (task: Task, boardState: BoardState) => {
+  const move = async (task: Task, boardState: string) => {
     if (task.boardState === boardState) return
-    // Bump updatedAt locally so the moved card sorts to the top of the column
-    // immediately (the backend bumps it too on persist).
     setTasks((prev) =>
       prev.map((t) =>
         t.id === task.id ? { ...t, boardState, updatedAt: nowSec() } : t,
@@ -104,12 +156,10 @@ export function TaskBoard({ agents, onError }: Props) {
     }
   }
 
-  // Persist edits/run-outcomes from the detail drawer back into the board list.
   const onSaved = (updated: Task) => {
     setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
   }
 
-  // Drop a deleted task from the board and close the drawer if it was open.
   const onDeleted = (id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id))
     if (selectedId === id) setSelectedId(null)
@@ -117,11 +167,42 @@ export function TaskBoard({ agents, onError }: Props) {
 
   const selected = tasks.find((t) => t.id === selectedId) ?? null
 
+  // Task count per column key — used by the editor to guard against deleting
+  // non-empty columns.
+  const taskCountByColumn: Record<string, number> = {}
+  for (const t of tasks) {
+    taskCountByColumn[t.boardState] = (taskCountByColumn[t.boardState] ?? 0) + 1
+  }
+
+  // Precompute topo levels once when dep-sort is active.
+  const levels = depSort ? topoLevels(tasks) : null
+
   return (
     <div className="flex min-h-0 flex-1">
+      {/* Left: column editor panel */}
+      {editorOpen && (
+        <BoardColumnEditor
+          columns={columns}
+          taskCountByColumn={taskCountByColumn}
+          onSave={saveColumns}
+          onClose={() => setEditorOpen(false)}
+        />
+      )}
+
       <div className="flex h-full flex-1 flex-col overflow-hidden">
         {/* New task form */}
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
+          <button
+            onClick={() => setEditorOpen((v) => !v)}
+            title="Sütunları düzenle"
+            className={`flex-shrink-0 rounded border px-2 py-1 text-xs transition ${
+              editorOpen
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
+            }`}
+          >
+            ⊞ Sütunlar
+          </button>
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -158,17 +239,32 @@ export function TaskBoard({ agents, onError }: Props) {
           >
             + Görev
           </button>
+          <button
+            onClick={() => setDepSort((v) => !v)}
+            title={depSort ? 'Bağımlılık sıralamasını kapat' : 'Bağımlılığa göre sırala — önce bağımlısı olmayanlar'}
+            className={`rounded border px-2 py-1 text-xs transition ${
+              depSort
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
+            }`}
+          >
+            🔗 Sırala
+          </button>
         </div>
 
         {/* Board */}
         <div className="flex flex-1 gap-3 overflow-x-auto p-4">
-          {COLUMNS.map((col) => {
-            // Within a column, most-recently-updated first — so a card that moves
-            // here (by drag or by an agent's move_task, both bump updatedAt) lands
-            // at the top.
-            const colTasks = tasks
-              .filter((t) => t.boardState === col.key)
-              .sort((a, b) => b.updatedAt - a.updatedAt)
+          {columns.map((col) => {
+            const colTasksRaw = tasks.filter((t) => t.boardState === col.key)
+            const colTasks = depSort && levels
+              ? [...colTasksRaw].sort((a, b) => {
+                  const la = levels.get(a.id) ?? 0
+                  const lb = levels.get(b.id) ?? 0
+                  if (la !== lb) return la - lb
+                  return b.updatedAt - a.updatedAt
+                })
+              : [...colTasksRaw].sort((a, b) => b.updatedAt - a.updatedAt)
+
             return (
               <div
                 key={col.key}
@@ -180,25 +276,50 @@ export function TaskBoard({ agents, onError }: Props) {
                 }}
                 className="flex w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
               >
-                <div className="flex items-center justify-between px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-                  <span>{col.label}</span>
-                  <span className="rounded bg-[var(--color-surface-2)] px-1.5">{colTasks.length}</span>
+                <div
+                  className="flex items-center justify-between rounded-t-lg px-3 py-2 text-xs font-medium uppercase tracking-wide"
+                  style={
+                    col.color
+                      ? {
+                          backgroundColor: col.color + '22',
+                          color: col.color,
+                          borderBottom: `2px solid ${col.color}44`,
+                        }
+                      : undefined
+                  }
+                >
+                  <span className={col.color ? '' : 'text-[var(--color-text-dim)]'}>
+                    {col.label}
+                  </span>
+                  <span
+                    className="rounded px-1.5"
+                    style={
+                      col.color
+                        ? { backgroundColor: col.color + '33' }
+                        : { backgroundColor: 'var(--color-surface-2)' }
+                    }
+                  >
+                    {colTasks.length}
+                  </span>
                 </div>
-                <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2">
+                <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2 pt-2">
                   {colTasks.map((t) => {
                     const owner = agents.find((a) => a.id === t.ownerAgentId)
                     const flow = t.flowId ? flows.find((f) => f.id === t.flowId) : undefined
-                    // An optimistic (not-yet-persisted) card while its title is
-                    // being generated server-side; not clickable/draggable yet.
                     const pending = t.id.startsWith('temp-')
-                    // Card is a summary: click anywhere to open the detail drawer;
-                    // clicking the already-selected card toggles it closed.
+                    const depIds = parseDeps(t.dependencies)
+                    const unmetDeps = depIds.filter((id) => {
+                      const dep = tasks.find((x) => x.id === id)
+                      return dep && dep.boardState !== 'done'
+                    })
                     return (
                       <div
                         key={t.id}
                         draggable={!pending}
                         onDragStart={() => !pending && setDragId(t.id)}
-                        onClick={() => !pending && setSelectedId((cur) => (cur === t.id ? null : t.id))}
+                        onClick={() =>
+                          !pending && setSelectedId((cur) => (cur === t.id ? null : t.id))
+                        }
                         className={`rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
                           pending
                             ? 'animate-pulse cursor-default border-[var(--color-border)] opacity-70'
@@ -211,7 +332,9 @@ export function TaskBoard({ agents, onError }: Props) {
                       >
                         <div className="font-medium">{t.title}</div>
                         {pending ? (
-                          <div className="mt-1 text-[11px] text-[var(--color-text-dim)]">başlık üretiliyor…</div>
+                          <div className="mt-1 text-[11px] text-[var(--color-text-dim)]">
+                            başlık üretiliyor…
+                          </div>
                         ) : (
                           t.description && (
                             <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]">
@@ -219,8 +342,7 @@ export function TaskBoard({ agents, onError }: Props) {
                             </div>
                           )
                         )}
-                        {/* Optional informational tags: owner agent + flow. */}
-                        {(owner || t.flowId) && (
+                        {(owner || t.flowId || depIds.length > 0) && (
                           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
                             {owner && (
                               <span className="flex items-center gap-1.5">
@@ -231,6 +353,18 @@ export function TaskBoard({ agents, onError }: Props) {
                             {t.flowId && (
                               <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
                                 🔀 {flow?.name ?? 'Akış'}
+                              </span>
+                            )}
+                            {depIds.length > 0 && (
+                              <span
+                                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${
+                                  unmetDeps.length > 0
+                                    ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
+                                    : 'bg-green-500/10 text-green-400'
+                                }`}
+                                title={unmetDeps.length > 0 ? `${unmetDeps.length} bağımlılık tamamlanmadı` : 'Tüm bağımlılıklar tamamlandı'}
+                              >
+                                🔗 {depIds.length}
                               </span>
                             )}
                           </div>
@@ -250,10 +384,13 @@ export function TaskBoard({ agents, onError }: Props) {
           task={selected}
           agents={agents}
           flows={flows}
+          columns={columns}
+          tasks={tasks}
           onClose={() => setSelectedId(null)}
           onSaved={onSaved}
           onDeleted={onDeleted}
           onError={onError}
+          onSelectTask={(id) => setSelectedId(id)}
         />
       )}
     </div>

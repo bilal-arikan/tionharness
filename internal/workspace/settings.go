@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/bilal/swarmgo/internal/db"
 )
 
 // wsSettingsFile is the per-workspace settings document inside the workspace dir.
@@ -31,6 +33,10 @@ type WSSettings struct {
 	SessionContextEnabled     bool `json:"sessionContextEnabled"`
 	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`   // false = only a session's first turn
 	SessionContextRecentCount int  `json:"sessionContextRecentCount"` // past sessions listed (0 = default 5)
+
+	// BoardColumns overrides the default kanban column set for this workspace.
+	// Empty/nil means "use db.DefaultBoardColumns()".
+	BoardColumns []db.BoardColumnDef `json:"boardColumns,omitempty"`
 }
 
 // defaultWSSettings is the seed used before overlaying a persisted ws-settings
@@ -58,6 +64,8 @@ type WSSettingsPatch struct {
 	SessionContextEnabled     *bool `json:"sessionContextEnabled"`
 	SessionContextEveryTurn   *bool `json:"sessionContextEveryTurn"`
 	SessionContextRecentCount *int  `json:"sessionContextRecentCount"`
+
+	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
 }
 
 // settingsHolder is embedded in Workspace to guard concurrent settings access.
@@ -167,6 +175,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	if patch.SessionContextRecentCount != nil {
 		ws.settings.cur.SessionContextRecentCount = clampRecent(*patch.SessionContextRecentCount)
+	}
+	if patch.BoardColumns != nil {
+		ws.settings.cur.BoardColumns = *patch.BoardColumns
 	}
 	paused := ws.settings.cur.PauseAutonomy
 	instructions := ws.settings.cur.Instructions
