@@ -2,6 +2,27 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-18**
 
+## Board arası görev bağımlılığı (Task Dependencies) ✅ (2026-06-18)
+
+**İstek:** Görevler arasında "önce şu tamamlanmalı" bağımlılığı tanımlanabilsin; kart oluşturma/güncelleme bu bilgiyi kabul etsin; kart detay panelinde bağımlılık chip'lerine tıklayınca ilgili göreve geçilsin; Board ekranında bağımlılık sırasına göre kartları sıralayan buton eklensin.
+
+**Mimari kararlar:**
+- `Task.Dependencies` alanı modelde zaten mevcuttu (JSON string array of task IDs); yalnız API/UI katmanlarına açılması gerekiyordu.
+- Sıralama için topological sort (`topoLevels`): bağımlısı olmayan görevler level-0 (en üste), zincirleme bağımlılıklar artan level. Döngüler cycle guard ile kırılıyor (tekrar edilen node'a level-0 atanır).
+- `DependencyPicker` ayrı component dosyasında — `TaskDetailPanel`'den bağımsız, yeniden kullanılabilir.
+
+**Değişiklikler:**
+- `internal/api/tasks.go`: `createTaskReq.Dependencies` + `updateTaskReq.Dependencies` alanları eklendi; `handleCreateTask`/`handleUpdateTask` bu alanı okuyup `db.Task.Dependencies`'e yazar.
+- `internal/tools/builtin_taskmgmt.go`: `create_task`/`update_task` agent araçlarına `dependencies` alanı schema'ya eklendi; `Call()` metotlarında işleniyor.
+- `frontend/src/api/tasks.ts`: `createTask` params'a `dependencies?: string`, `updateTask` Pick tipine `'dependencies'` eklendi.
+- `frontend/src/components/panels/DependencyPicker.tsx` (yeni): Checkbox listesi — tüm görevleri gösterir, seçilenler bağımlılık olur, `boardState` renk kodu (done=yeşil).
+- `frontend/src/components/panels/TaskDetailPanel.tsx`: `tasks?: Task[]` + `onSelectTask?: (id: string) => void` props; `DependencyPicker` entegrasyonu; bağımlılık chip'leri (done=yeşil, pending=turuncu) tıklayınca `onSelectTask` çağrılır; kaydet `dependencies: JSON.stringify(depIds)` gönderir.
+- `frontend/src/components/panels/TaskBoard.tsx`: `parseDeps()` + `topoLevels()` helper fonksiyonları; `depSort` state + "🔗 Sırala" toggle butonu; kolon içi topological sıralama; kart üstünde `🔗 N` rozeti (tamamlanmamış bağımlılık varsa turuncu, hepsi bittiyse yeşil); `TaskDetailPanel`'e `tasks` ve `onSelectTask` props iletiliyor.
+
+**Doğrulama:** `go build ./...` + `tsc --noEmit` yeşil. Playwright canlı testi: dependency chip click-to-navigate ✅, DependencyPicker checkbox seçimi ✅, kart rozeti ✅, "🔗 Sırala" butonu görünür ✅.
+
+---
+
 ## Board sütun düzenleme (BoardColumnEditor) ✅ (2026-06-18)
 
 **İstek:** Kanban board'undaki sütunlar yeniden adlandırılabilsin, renklendirilsin, sıralanabilsin, eklenip silinebilsin. Sol tarafta panel ile yönetim.
