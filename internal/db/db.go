@@ -229,8 +229,27 @@ func (d *DB) load() error {
 	if err != nil {
 		return err
 	}
+	var migrate []Artifact
 	for _, a := range artifacts {
-		d.artifacts[a.ID] = a
+		switch {
+		case isTextArtifact(a.Kind) && a.Content == "" && a.ContentFile != "":
+			// Body lives in a content file — read it back into memory.
+			d.readArtifactContent(&a)
+			d.artifacts[a.ID] = a
+		case isTextArtifact(a.Kind) && a.Content != "" && a.ContentFile == "":
+			// Legacy artifact with an embedded body: move it to a content file.
+			d.artifacts[a.ID] = a
+			migrate = append(migrate, a)
+		default:
+			d.artifacts[a.ID] = a
+		}
+	}
+	// One-time migration of legacy embedded bodies → files (idempotent: once a
+	// ContentFile is set the artifact takes the read-back branch on next boot).
+	for _, a := range migrate {
+		if err := d.persistArtifactLocked(&a); err != nil {
+			return err
+		}
 	}
 
 	if err := d.loadKnowledge(); err != nil {

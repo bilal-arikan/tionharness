@@ -7,9 +7,21 @@ import (
 
 // ---- Artifacts ----
 
-func (d *DB) persistArtifactLocked(a Artifact) error {
-	d.artifacts[a.ID] = a
-	return atomicWriteJSON(d.dir(dirArtifacts, a.ID+".json"), a)
+func (d *DB) persistArtifactLocked(a *Artifact) error {
+	// Externalise a text artifact's body to a real file under workspace/artifacts/
+	// so the JSON only references it; media kinds keep their SourcePath as-is.
+	if isTextArtifact(a.Kind) && a.Content != "" {
+		if err := d.writeArtifactContent(a); err != nil {
+			return err
+		}
+	}
+	d.artifacts[a.ID] = *a // in-memory keeps the full content
+	// The on-disk JSON omits the body when it lives in a content file.
+	stored := *a
+	if stored.ContentFile != "" {
+		stored.Content = ""
+	}
+	return atomicWriteJSON(d.dir(dirArtifacts, a.ID+".json"), stored)
 }
 
 // CreateArtifact inserts a new artifact and returns the stored row.
@@ -22,7 +34,7 @@ func (d *DB) CreateArtifact(ctx context.Context, a Artifact) (Artifact, error) {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return a, d.persistArtifactLocked(a)
+	return a, d.persistArtifactLocked(&a)
 }
 
 // GetArtifact loads an artifact by id.
@@ -61,7 +73,7 @@ func (d *DB) UpdateArtifactContent(ctx context.Context, id, content string) (Art
 	}
 	a.Content = content
 	a.UpdatedAt = now()
-	return a, d.persistArtifactLocked(a)
+	return a, d.persistArtifactLocked(&a)
 }
 
 // UpdateArtifactMeta edits an artifact's title/kind/language. Empty fields are
@@ -83,7 +95,7 @@ func (d *DB) UpdateArtifactMeta(ctx context.Context, id, title, kind, language s
 		a.Language = language
 	}
 	a.UpdatedAt = now()
-	return a, d.persistArtifactLocked(a)
+	return a, d.persistArtifactLocked(&a)
 }
 
 // SaveFileArtifact upserts an artifact mirroring a file the agent wrote: if one
@@ -100,7 +112,7 @@ func (d *DB) SaveFileArtifact(ctx context.Context, sessionID, agentID, sourcePat
 			a.Kind = kind
 			a.Language = language
 			a.UpdatedAt = now()
-			return a, d.persistArtifactLocked(a)
+			return a, d.persistArtifactLocked(&a)
 		}
 	}
 	a := Artifact{
@@ -115,7 +127,7 @@ func (d *DB) SaveFileArtifact(ctx context.Context, sessionID, agentID, sourcePat
 		CreatedAt:  now(),
 		UpdatedAt:  now(),
 	}
-	return a, d.persistArtifactLocked(a)
+	return a, d.persistArtifactLocked(&a)
 }
 
 // DeleteArtifact removes an artifact.
@@ -125,6 +137,8 @@ func (d *DB) DeleteArtifact(ctx context.Context, id string) error {
 	if _, ok := d.artifacts[id]; !ok {
 		return ErrNotFound
 	}
+	a := d.artifacts[id]
 	delete(d.artifacts, id)
+	d.removeArtifactContent(a) // drop the externalised body file (text kinds)
 	return removeFile(d.dir(dirArtifacts, id+".json"))
 }

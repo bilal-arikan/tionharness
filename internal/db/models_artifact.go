@@ -38,6 +38,12 @@ type Artifact struct {
 	// artifacts). It dedups repeated writes of the same file within a session.
 	SourcePath string `json:"sourcePath,omitempty"`
 
+	// ContentFile is the workspace-relative path (artifacts/<id><ext>) of the
+	// real file holding a text artifact's body. When set, the body lives on disk
+	// (not embedded in this JSON) and is read back into Content on load. Empty for
+	// media kinds (their bytes live at SourcePath).
+	ContentFile string `json:"contentFile,omitempty"`
+
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
 }

@@ -199,11 +199,17 @@ func (s *Server) handleDeleteArtifact(w http.ResponseWriter, r *http.Request) {
 // source file it mirrors (media/file kinds, resolved under the workspace sandbox
 // when relative), otherwise the artifact's own store JSON.
 func artifactDiskPath(wsp *workspace.Workspace, a db.Artifact) string {
-	if a.SourcePath != "" {
-		if filepath.IsAbs(a.SourcePath) {
-			return a.SourcePath
+	// Prefer the externalised content file (text kinds), then the mirrored source
+	// file (media), then the artifact's own store JSON.
+	rel := a.ContentFile
+	if rel == "" {
+		rel = a.SourcePath
+	}
+	if rel != "" {
+		if filepath.IsAbs(rel) {
+			return rel
 		}
-		return filepath.Join(wsp.DataDir, "workspace", filepath.FromSlash(a.SourcePath))
+		return filepath.Join(wsp.DataDir, "workspace", filepath.FromSlash(rel))
 	}
 	return filepath.Join(wsp.DataDir, "store", "artifacts", a.ID+".json")
 }
