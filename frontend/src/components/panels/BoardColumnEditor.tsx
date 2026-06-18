@@ -188,7 +188,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                     }}
                   />
                   {isOpen && (
-                    <div className="absolute left-0 top-8 z-20 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
+                    <div className="absolute right-0 top-8 z-20 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
                       <div className="mb-2 grid grid-cols-3 gap-1.5">
                         {COLOR_PRESETS.map((preset) => (
                           <button
