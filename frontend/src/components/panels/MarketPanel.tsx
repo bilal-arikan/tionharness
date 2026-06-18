@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, RefreshCw, Store, Check } from 'lucide-react'
-import type { Pack, PackKind } from '../../types'
+import { Download, RefreshCw, Store, Check, KeyRound } from 'lucide-react'
+import type { Pack, PackKind, Secret } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
 
 interface Props {
   onError: (msg: string) => void
+  // Jump to the Secrets screen to manage vault entries (provider keys live in
+  // the vault, never typed as plaintext — mirrors the Settings providers panel).
+  onManageSecrets?: () => void
 }
 
 // Kind tabs. Only "skill" is installable in the MVP; the others list (when
@@ -121,12 +124,16 @@ function KindBadge({ kind }: { kind: PackKind }) {
   )
 }
 
-export function MarketPanel({ onError }: Props) {
+export function MarketPanel({ onError, onManageSecrets }: Props) {
   const [packs, setPacks] = useState<Pack[]>([])
   const [tab, setTab] = useState<PackKind | 'all'>('all')
   const [selected, setSelected] = useState<Pack | null>(null)
   const [busy, setBusy] = useState(false)
   const [installed, setInstalled] = useState<Set<string>>(new Set())
+  // Provider key, resolved from the secret vault (never typed). pickedSecret is
+  // the chosen secret's name (for display); apiKey holds its revealed value.
+  const [secrets, setSecrets] = useState<Secret[]>([])
+  const [pickedSecret, setPickedSecret] = useState('')
   const [apiKey, setApiKey] = useState('')
 
   const load = useCallback(async () => {
@@ -137,9 +144,38 @@ export function MarketPanel({ onError }: Props) {
     }
   }, [onError])
 
+  const loadSecrets = useCallback(async () => {
+    try {
+      setSecrets(await api.listSecrets())
+    } catch {
+      // Secrets are optional; a load failure just means the picker is empty.
+    }
+  }, [])
+
   useEffect(() => {
     void load()
-  }, [load])
+    void loadSecrets()
+  }, [load, loadSecrets])
+
+  // Resolve a chosen secret to its plaintext value (revealed on demand) and stage
+  // it as the provider key for the next install.
+  const pickSecret = useCallback(
+    async (name: string) => {
+      if (!name) {
+        setPickedSecret('')
+        setApiKey('')
+        return
+      }
+      try {
+        const { value } = await api.revealSecret(name)
+        setPickedSecret(name)
+        setApiKey(value)
+      } catch (e) {
+        onError(e instanceof Error ? e.message : 'Sır çözülemedi')
+      }
+    },
+    [onError],
+  )
 
   const visible = useMemo(
     () => (tab === 'all' ? packs : packs.filter((p) => p.kind === tab)),
@@ -149,6 +185,7 @@ export function MarketPanel({ onError }: Props) {
   const openDetail = useCallback(
     async (pack: Pack) => {
       setApiKey('')
+      setPickedSecret('')
       try {
         setSelected(await api.getPack(pack.id))
       } catch (e) {
@@ -294,13 +331,39 @@ export function MarketPanel({ onError }: Props) {
           <div className="border-b border-[var(--color-border)] p-4">
             <p className="text-xs text-[var(--color-text-dim)]">{selected.description}</p>
             {selected.kind === 'provider' && (
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="API anahtarı (opsiyonel — sonra Ayarlar'dan da girilebilir)"
-                className="mt-3 w-full rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-xs"
-              />
+              <div className="mt-3">
+                <label className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                  API anahtarı (sırlardan)
+                </label>
+                <div className="mt-1 flex items-center gap-2">
+                  <select
+                    value={pickedSecret}
+                    onChange={(e) => void pickSecret(e.target.value)}
+                    disabled={secrets.length === 0}
+                    className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-xs"
+                  >
+                    <option value="">
+                      {secrets.length ? '🔑 Sırdan seç… (opsiyonel)' : 'Sır yok — önce ekle'}
+                    </option>
+                    {secrets.map((s) => (
+                      <option key={s.name} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
+                  {onManageSecrets && (
+                    <button
+                      onClick={onManageSecrets}
+                      className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                    >
+                      <KeyRound size={12} /> Sırlar →
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
+                  {pickedSecret
+                    ? `🔑 "${pickedSecret}" kullanılacak`
+                    : "Anahtarsız da kurulabilir; sonra Ayarlar → Sağlayıcılar'dan girilebilir."}
+                </p>
+              </div>
             )}
             <button
               onClick={() => void install(selected)}

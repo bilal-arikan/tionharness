@@ -745,7 +745,7 @@ export default function App() {
         )}
         {view === 'secrets' && <SecretsPanel onError={setError} />}
         {view === 'skills' && <SkillsPanel onError={setError} />}
-        {view === 'market' && <MarketPanel onError={setError} />}
+        {view === 'market' && <MarketPanel onError={setError} onManageSecrets={() => setView('secrets')} />}
         {view === 'budget' && <BudgetPanel onError={setError} />}
         {view === 'logs' && <LogsPanel onError={setError} />}
         {view === 'settings' && (

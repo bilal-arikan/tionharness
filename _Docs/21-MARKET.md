@@ -211,6 +211,12 @@ ile workspace tier'a yazar. Sanitize = secret/ID/CreatedBy temizliği (§1.2).
 - **`api/market.ts`** + **`types/market.ts`**: Pack/PackDetail tipleri, list/get/
   install/publish/import çağrıları.
 - Kurulum sonrası ilgili panel verisi tazelenir (skill listesi, flows, agents).
+- **Provider API anahtarı = secret vault'tan seçim** (serbest metin değil — Ayarlar →
+  Sağlayıcılar paneliyle aynı politika): provider detayında `listSecrets` ile dolu bir
+  dropdown; seçilince `revealSecret(name)` ile değer çözülür ve install gövdesine
+  `apiKey` olarak gider (UI'da plaintext tutulmaz/gösterilmez). "Sırlar →" butonu
+  (`onManageSecrets` prop'u, App'te `setView('secrets')`) Sırlar ekranına atlar.
+  Sır yoksa anahtarsız kurulur (sonra Ayarlar'dan girilebilir).
 
 ### 5.1 Kurulum akışı (UML)
 
