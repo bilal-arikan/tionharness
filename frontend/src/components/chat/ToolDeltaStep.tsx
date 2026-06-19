@@ -9,8 +9,8 @@ interface Props {
 // persisted trace arrives.
 export function ToolDeltaStep({ step }: Props) {
   return (
-    <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
-      <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-[var(--color-text-dim)]">
+    <div className="overflow-hidden rounded-md">
+      <div className="flex items-center gap-2 px-3 py-1 text-xs text-[var(--color-text-dim)]">
         <span>📟</span>
         <span className="font-medium text-[var(--color-text)]">{step.tool || 'Araç'}</span>
         <span className="ml-auto animate-pulse">çalışıyor…</span>

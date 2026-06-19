@@ -129,4 +129,12 @@ export const chatApi = {
       method: 'POST',
       body: JSON.stringify({ runId, action, text }),
     }),
+
+  // Disarm a pending one-shot self-wake (schedule_wake) for a session — the user
+  // pressed "Durdur" on the waiting banner before the wake fired.
+  cancelWake: (sessionId: string) =>
+    req<{ result: string; cancelled: number }>('/api/chat/wake/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }),
 }

@@ -3,7 +3,7 @@
 
 // A node in the workspace collaboration network. `id` is type-prefixed by the
 // backend ("agent:…" / "task:…" / "flow:…").
-export type WorkspaceNodeType = 'agent' | 'task' | 'flow' | 'skill' | 'mcp'
+export type WorkspaceNodeType = 'agent' | 'task' | 'flow' | 'skill' | 'mcp' | 'run'
 
 export interface WorkspaceGraphNode {
   id: string
@@ -17,7 +17,7 @@ export interface WorkspaceGraphNode {
   desc?: string // longer description (task tooltip)
   // Live activity (agents): in-flight run right now + what it's running.
   running?: boolean
-  runKind?: string // task | flow | chat | schedule | heartbeat
+  runKind?: string // task | flow | chat | schedule
   runTarget?: string // type-prefixed id of the running task/flow (or empty)
 }
 

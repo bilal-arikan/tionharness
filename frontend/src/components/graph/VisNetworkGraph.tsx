@@ -98,10 +98,10 @@ export function VisNetworkGraph({ nodes, edges, mode = 'relation', density = 1, 
     }
   }, [])
 
-  // Incremental data sync: remove gone ids, upsert the rest. Existing nodes keep
-  // their physics-computed positions (we never set x/y except fixed anchors), so
-  // changes animate. Only the first population auto-fits — later live refreshes
-  // leave the viewport where the user left it.
+  // Incremental data sync: remove gone ids, upsert the rest. New nodes are added
+  // with their full data (including the x/y seed for the physics-immune anchors);
+  // EXISTING nodes are updated WITHOUT x/y so a refresh never snaps a node — most
+  // importantly a user-dragged anchor — back to its seed position.
   useEffect(() => {
     const nds = nodesDSRef.current
     const eds = edgesDSRef.current
@@ -112,7 +112,20 @@ export function VisNetworkGraph({ nodes, edges, mode = 'relation', density = 1, 
     ;(nds.getIds() as string[]).forEach((id) => {
       if (!nodeIds.has(id)) nds.remove(id)
     })
-    nds.update(nodes)
+    const existing = new Set(nds.getIds() as string[])
+    const toAdd: Node[] = []
+    const toUpdate: Node[] = []
+    for (const n of nodes) {
+      if (existing.has(n.id as string)) {
+        // Preserve current position (physics result or user drag): drop x/y.
+        const { x: _x, y: _y, ...rest } = n as Node & { x?: number; y?: number }
+        toUpdate.push(rest as Node)
+      } else {
+        toAdd.push(n)
+      }
+    }
+    if (toAdd.length) nds.add(toAdd)
+    if (toUpdate.length) nds.update(toUpdate)
 
     const edgeIds = new Set(edges.map((e) => e.id as string))
     ;(eds.getIds() as string[]).forEach((id) => {

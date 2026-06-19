@@ -11,6 +11,11 @@ import { AgentAvatar } from '../agents/AgentAvatar'
 interface Props {
   messages: Message[]
   pending: boolean
+  // When the standalone "working" bubble shows (no live assistant message yet),
+  // attribute it to this agent — renders its avatar+name header like a real
+  // assistant turn. Used by polled views (executions/flows) that have no live
+  // streaming placeholder; the chat leaves it unset (it injects a live message).
+  pendingAgentId?: string
   agents: Agent[]
   // Session artifacts, used to resolve an attachment chip to its captured
   // artifact (matched by sourcePath === attachment.relPath) so clicking it opens
@@ -76,7 +81,7 @@ function WorkingDots() {
   )
 }
 
-export function MessageList({ messages, pending, agents, artifacts, streaming, onOpenFile, onOpenArtifact, onDeleteMessage, onRetry }: Props) {
+export function MessageList({ messages, pending, pendingAgentId, agents, artifacts, streaming, onOpenFile, onOpenArtifact, onDeleteMessage, onRetry }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Whether the user is currently pinned to the bottom of the transcript. When
   // they scroll up to read history we stop auto-scrolling so streaming deltas
@@ -163,7 +168,7 @@ export function MessageList({ messages, pending, agents, artifacts, streaming, o
             // the final markdown answer — the External Agent chat layout.
             <div key={m.id} className="group flex flex-col gap-1">
               <div className="flex w-full justify-start">
-                <div className="w-full min-w-0 rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-[var(--color-text)]">
+                <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3 text-[var(--color-text)]">
                   {agentById(m.agentId) && (
                     <div className="mb-1.5 flex items-center gap-2">
                       <AgentAvatar agent={agentById(m.agentId)!} size={20} />
@@ -226,10 +231,27 @@ export function MessageList({ messages, pending, agents, artifacts, streaming, o
         })}
 
         {showStandalonePending && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-sm">
-              <WorkingDots />
+          <div className="group flex flex-col gap-1">
+            <div className="flex w-full justify-start">
+              <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3">
+                {agentById(pendingAgentId) && (
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <AgentAvatar agent={agentById(pendingAgentId)!} size={20} />
+                    <span className="text-xs font-medium text-[var(--color-text-dim)]">
+                      {agentById(pendingAgentId)!.name}
+                    </span>
+                  </div>
+                )}
+                <WorkingDots />
+              </div>
             </div>
+            {/* Turn started at the triggering (last) message; count up from it. */}
+            {last && (
+              <div className="flex items-center gap-2 pl-1">
+                <MessageTime unixSec={last.createdAt} />
+                <LiveTimer startUnixSec={last.createdAt} />
+              </div>
+            )}
           </div>
         )}
 

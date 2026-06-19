@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AgentAvatar } from './AgentAvatar'
 import { ProviderModelSelect } from './ProviderModelSelect'
@@ -16,6 +17,8 @@ interface Props {
   onCreateAgent: (name: string, soul: string, provider: string, model: string) => void
   onUpdateAgent: (id: string, patch: AgentPatch) => Promise<void>
   onDeleteAgent: (id: string) => Promise<void>
+  /** Re-fetch the agent roster from the server. */
+  onRefresh?: () => void | Promise<void>
   /** Surface errors (e.g. activity feed load failures) to the app banner. */
   onError?: (msg: string) => void
   /** Open a run on the Activity screen with it pre-selected. */
@@ -33,11 +36,23 @@ export function AgentsView({
   onCreateAgent,
   onUpdateAgent,
   onDeleteAgent,
+  onRefresh,
   onError,
   onOpenExecution,
 }: Props) {
   const [internalId, setInternalId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const doRefresh = async () => {
+    if (!onRefresh || refreshing) return
+    setRefreshing(true)
+    try {
+      await onRefresh()
+    } finally {
+      setRefreshing(false)
+    }
+  }
   const [name, setName] = useState('')
   const [soul, setSoul] = useState('')
   const [provider, setProvider] = useState('claude-cli')
@@ -77,13 +92,25 @@ export function AgentsView({
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
             Ajanlar
           </span>
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
-            title="Yeni ajan"
-          >
-            +
-          </button>
+          <div className="flex items-center gap-1.5">
+            {onRefresh && (
+              <button
+                onClick={doRefresh}
+                disabled={refreshing}
+                className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-50"
+                title="Listeyi yenile"
+              >
+                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+              </button>
+            )}
+            <button
+              onClick={() => setShowForm((v) => !v)}
+              className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+              title="Yeni ajan"
+            >
+              +
+            </button>
+          </div>
         </div>
 
         {showForm && (

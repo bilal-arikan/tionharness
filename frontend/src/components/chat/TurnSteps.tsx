@@ -10,6 +10,7 @@ import { ToolDeltaStep } from './ToolDeltaStep'
 import { ArtifactCard } from './ArtifactCard'
 import { DiffCard } from './DiffCard'
 import { HookStep } from './HookStep'
+import { SubagentStep } from './SubagentStep'
 
 interface Props {
   steps: TurnStep[]
@@ -27,11 +28,20 @@ const ARTIFACT_TOOLS = new Set(['create_artifact', 'update_artifact'])
 export function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
   if (!steps.length) return null
   return (
-    <div className="mb-2 flex flex-col gap-0.5">
+    <div className="mb-2 flex flex-col">
       {steps.map((step, i) => {
         if (step.kind === 'thinking') return <ThinkingBlock key={i} text={step.text || ''} />
         if (step.kind === 'todo') return <TodoCard key={i} step={step} />
         if (step.kind === 'diff') return <DiffCard key={i} step={step} onOpenFile={onOpenFile} />
+        if (step.kind === 'subagent')
+          return (
+            <SubagentStep
+              key={i}
+              step={step}
+              onOpenFile={onOpenFile}
+              onOpenArtifact={onOpenArtifact}
+            />
+          )
         if (step.kind === 'recovery') return <RecoveryStep key={i} step={step} />
         if (step.kind === 'error') return <ErrorStep key={i} step={step} />
         if (step.kind === 'steer') return <SteerStep key={i} step={step} />

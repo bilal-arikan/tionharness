@@ -4,10 +4,10 @@ export interface Session {
   id: string
   agentId: string
   // Broad category of what produced the transcript: chat | task | flow |
-  // schedule | heartbeat. Drives the executions feed's kind badge.
+  // schedule. Drives the executions feed's kind badge.
   kind: string
   // Links the session to the entity that owns it (a task or flow id); empty for
-  // plain chat and agent-keyed kinds (schedule/heartbeat).
+  // plain chat and agent-keyed kinds (schedule).
   sourceId?: string
   title: string
   messageCount: number

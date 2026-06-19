@@ -33,7 +33,22 @@ export const NODE_LAYERS: { type: WorkspaceNodeType; label: string; color: strin
   { type: 'flow', label: 'Akışlar', color: '#7c3aed' },
   { type: 'skill', label: 'Beceriler', color: '#eab308' },
   { type: 'mcp', label: 'MCP', color: '#14b8a6' },
+  { type: 'run', label: 'Geçmiş', color: '#52525b' },
 ]
+
+// Completed-run node colors by execution kind (live "Geçmiş" archive).
+const RUN_KIND_COLOR: Record<string, string> = {
+  chat: '#3b82f6', // blue
+  task: '#64748b', // slate
+  flow: '#7c3aed', // violet
+  schedule: '#0891b2', // cyan
+}
+const RUN_KIND_LABEL: Record<string, string> = {
+  chat: 'Sohbet',
+  task: 'Görev çalıştırması',
+  flow: 'Akış çalıştırması',
+  schedule: 'Zamanlama teslimi',
+}
 
 // Memory-kind tints for the knowledge-graph nodes.
 export const MEMORY_KIND_COLOR: Record<string, string> = {
@@ -108,7 +123,11 @@ const COL_PREFIX = 'col:'
 const COL_GAP = 360 // horizontal spacing between column anchors
 const COL_Y = -380 // anchors sit at the top of the canvas
 const IDLE_ID = 'idle' // lobby anchor that taskless agents drift to
-const IDLE_Y = 420 // bottom of the canvas, opposite the columns
+const IDLE_X = -320 // bottom-left
+const IDLE_Y = 440 // bottom of the canvas, opposite the columns
+const HIST_ID = 'history' // archive anchor that completed runs pile up at
+const HIST_X = 620 // bottom-right, separated from the idle lobby
+const HIST_Y = 440
 
 // nodeFor builds the vis node for one workspace graph entity (shared by both
 // modes).
@@ -160,6 +179,21 @@ function nodeFor(n: WorkspaceGraph['nodes'][number]): Node {
         font: { color: '#99f6e4', size: 11 },
       }
     }
+    if (n.type === 'run') {
+      // Completed run (archive): a titled card like the Activity/kanban entries —
+      // a kind-colored bordered box showing the run title; kind + agent on hover.
+      const c = RUN_KIND_COLOR[n.runKind ?? ''] ?? '#52525b'
+      return {
+        id: n.id,
+        label: truncate(n.label, 26),
+        title: tip(n.label, [RUN_KIND_LABEL[n.runKind ?? ''] ?? 'Çalıştırma', n.sub ? `Ajan: ${n.sub}` : undefined]),
+        shape: 'box',
+        color: { background: 'rgba(24,24,27,0.95)', border: c, highlight: { background: '#27272a', border: c } },
+        font: { color: '#d4d4d8', size: 11 },
+        shapeProperties: { borderRadius: 6 },
+        margin: { top: 5, bottom: 5, left: 9, right: 9 } as Node['margin'],
+      }
+    }
     // task: a status-colored square with the title below; the full description
     // (and status) shows on hover via a rich tooltip.
     const sc = STATUS_COLOR[n.status ?? ''] ?? '#64748b'
@@ -201,6 +235,7 @@ export function workspaceToVis(
   // Visibility: agents always; tasks always in live; flow/skill/mcp by toggle.
   const show = (t: WorkspaceNodeType): boolean => {
     if (t === 'agent') return true
+    if (t === 'run') return live && (!visible || visible.has('run')) // archive: live only
     if (live && t === 'task') return true
     return !visible || visible.has(t)
   }
@@ -226,7 +261,8 @@ export function workspaceToVis(
         shape: 'box',
         x,
         y: COL_Y,
-        fixed: { x: true, y: true },
+        // physics:false (without `fixed`) → the solver never moves it, but the
+        // user can still drag it and it stays put.
         physics: false,
         color: { background: 'rgba(30,39,51,0.9)', border: col.color },
         font: { color: col.color, size: 15, bold: { color: col.color } } as Node['font'],
@@ -249,20 +285,52 @@ export function workspaceToVis(
         smooth: false,
       } as Edge)
     }
-    // Idle lobby anchor at the bottom — taskless agents drift here.
+    // Idle lobby anchor (bottom-left) — taskless agents drift here.
     nodes.push({
       id: IDLE_ID,
       label: 'Boşta',
       shape: 'box',
-      x: 0,
+      x: IDLE_X,
       y: IDLE_Y,
-      fixed: { x: true, y: true },
-      physics: false,
+      physics: false, // immune to forces, but user-draggable
+
       color: { background: 'rgba(30,39,51,0.7)', border: '#475569' },
       font: { color: '#94a3b8', size: 13 } as Node['font'],
       margin: { top: 6, bottom: 6, left: 14, right: 14 } as Node['margin'],
       widthConstraint: { minimum: 90 } as Node['widthConstraint'],
     })
+
+    // History/archive anchor (bottom-right) — completed runs pile up here.
+    const hasRuns = nodes.some((nd) => (nd.id as string).startsWith('run:'))
+    if (hasRuns) {
+      nodes.push({
+        id: HIST_ID,
+        label: 'Geçmiş',
+        shape: 'box',
+        x: HIST_X,
+        y: HIST_Y,
+        physics: false, // immune to forces, but user-draggable
+
+        color: { background: 'rgba(30,39,51,0.7)', border: '#52525b' },
+        font: { color: '#a1a1aa', size: 13 } as Node['font'],
+        margin: { top: 6, bottom: 6, left: 14, right: 14 } as Node['margin'],
+        widthConstraint: { minimum: 90 } as Node['widthConstraint'],
+      })
+      // Each completed run springs to the archive anchor.
+      for (const n of graph.nodes) {
+        if (n.type !== 'run' || !shownIds.has(n.id)) continue
+        edges.push({
+          id: edgeId('hist', n.id, HIST_ID),
+          from: n.id,
+          to: HIST_ID,
+          color: { color: '#3f3f46', opacity: 0.4 },
+          width: 0.8,
+          length: 120,
+          dashes: true,
+          smooth: false,
+        } as Edge)
+      }
+    }
 
     // Active bonds come from two signals: a live in-flight run (agent.running +
     // runTarget — the strongest "doing it right now") and, as a fallback, owning
@@ -341,18 +409,42 @@ export function workspaceToVis(
   return { nodes, edges }
 }
 
-// memoryToVis maps each memory to a kind-colored dot sized by its similarity
-// degree (hubs read larger) and each similarity pair to an undirected edge whose
-// width/opacity scales with the cosine score.
+const MEMORY_KIND_LABEL: Record<string, string> = {
+  document: 'Belge',
+  journal: 'Günlük',
+  reflection: 'Yansıma',
+}
+
+// fmtDate formats a unix-seconds timestamp as a short tr-TR date+time (app
+// context, so Date is available). Empty when missing.
+function fmtDate(sec: number): string {
+  if (!sec) return ''
+  try {
+    return new Date(sec * 1000).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })
+  } catch {
+    return ''
+  }
+}
+
+// memoryToVis maps each memory to a node carrying a short content preview label
+// (so memories are tellable apart at a glance) + a rich hover tooltip (kind +
+// content + date). Shape/size encode kind & importance: reflections (high-level
+// summaries) are larger stars, documents/journals are discs sized by their
+// similarity degree (hubs read bigger). Edges scale width/opacity with the
+// cosine score.
 export function memoryToVis(graph: MemoryGraph): VisData {
   const nodes: Node[] = graph.nodes.map((n) => {
     const c = MEMORY_KIND_COLOR[n.kind] ?? '#64748b'
+    const reflection = n.kind === 'reflection'
+    const base = reflection ? 16 : n.kind === 'document' ? 13 : 10
     return {
       id: n.id,
-      title: n.content,
-      shape: 'dot',
-      size: 8 + Math.min(20, n.degree * 3),
-      color: { background: c, border: c, highlight: { background: c, border: '#fff' } },
+      label: truncate(n.content, 22),
+      title: tip(truncate(n.content, 70), [MEMORY_KIND_LABEL[n.kind] ?? n.kind, fmtDate(n.createdAt)]),
+      shape: reflection ? 'star' : 'dot',
+      size: base + Math.min(16, n.degree * 2),
+      color: { background: c, border: reflection ? '#fff' : c, highlight: { background: c, border: '#fff' } },
+      font: { color: '#cbd5e1', size: 11 },
     }
   })
 
@@ -360,7 +452,8 @@ export function memoryToVis(graph: MemoryGraph): VisData {
     id: `m${i}`,
     from: e.source,
     to: e.target,
-    color: { color: '#8b5cf6', opacity: Math.min(0.9, 0.25 + e.score) },
+    title: `benzerlik: ${(e.score * 100).toFixed(0)}%`,
+    color: { color: '#8b5cf6', highlight: '#c4b5fd', opacity: Math.min(0.9, 0.25 + e.score) },
     width: 0.6 + e.score * 3,
     smooth: { enabled: true, type: 'continuous', roundness: 0.5 },
   }))

@@ -138,4 +138,13 @@ export const STEP_KINDS: StepKindInfo[] = [
     description:
       'Kullanıcı-tanımlı PreToolUse/PostToolUse hook bir araç çağrısının etrafında çalıştı: girdiyi/çıktıyı değiştirdi, otomatik onayladı, ek bağlam ekledi ya da çağrıyı engelledi. Reason makine kararını taşır (hook_block / hook_modify / hook_allow / hook_context). Yalnız native (anthropic/minimax) yolda.',
   },
+  {
+    kind: 'subagent',
+    label: 'Alt-ajan',
+    icon: '🤖',
+    persisted: true,
+    status: 'active',
+    description:
+      'run_subagent ile başlatılan izole alt-ajan: kendi temiz bağlamında bir görevi yürütüp yalnız final sonucunu döndürür (ana bağlam kirlenmez). Katlanabilir kart; açılınca alt-ajanın kendi iz ağacı (SubSteps) iç içe gösterilir. Tek turda birden çok çağrı paralel koşar.',
+  },
 ]

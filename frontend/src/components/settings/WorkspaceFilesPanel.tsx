@@ -85,6 +85,24 @@ export function WorkspaceFilesPanel({ onError }: Props) {
 
   return (
     <>
+      {/* Header styled like the agent "profile" screen: title on the left,
+          Save (+ status) on the right; sticky so it stays reachable while the
+          long prompt/file editors scroll. */}
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-6 py-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">Promptlar &amp; Dosyalar</h2>
+          <p className="text-xs text-[var(--color-text-dim)]">Workspace config dosyaları</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-xs text-[var(--color-text-dim)]">
+            {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
+          </span>
+          <Button onClick={save} disabled={!dirty || saving}>
+            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          </Button>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
         <span className="text-xs text-[var(--color-text-dim)]">
           Bu dosyalar <code className="rounded bg-[var(--color-bg)] px-1">{displayPath(config.dir)}</code> altında. Hem buradan hem doğrudan diskten düzenleyebilirsin.
@@ -145,12 +163,6 @@ export function WorkspaceFilesPanel({ onError }: Props) {
         />
       </Field>
 
-      <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-[var(--color-border)] bg-[var(--color-bg)] py-2">
-        <span className="text-xs text-[var(--color-text-dim)]">{dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}</span>
-        <Button onClick={save} disabled={!dirty || saving}>
-          {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </Button>
-      </div>
     </>
   )
 }

@@ -13,7 +13,6 @@ export const KIND_COLORS: Record<string, string> = {
   task: '#0ea5e9',
   schedule: '#14b8a6',
   flow: '#a855f7',
-  heartbeat: '#f59e0b',
   delegate: '#ec4899',
   title: '#84cc16',
   summary: '#22c55e',

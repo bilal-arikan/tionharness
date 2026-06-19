@@ -54,7 +54,6 @@ const KIND_LABELS: Record<string, string> = {
   task: 'Görev',
   schedule: 'Zamanlama',
   flow: 'Akış',
-  heartbeat: 'Nabız',
   delegate: 'Delegasyon',
   title: 'Başlık',
   summary: 'Özet',

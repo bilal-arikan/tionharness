@@ -120,8 +120,9 @@ export function HooksPanel({ onError }: Props) {
           komut çalıştırır. <strong>PreToolUse</strong> girdiyi değiştirebilir, çağrıyı onaylayabilir
           veya engelleyebilir; <strong>PostToolUse</strong> çıktıyı dönüştürebilir (ör. sıkıştırma) ya
           da bağlam ekleyebilir. Komut, JSON'u stdin'den alır, JSON'u stdout'a döner; <code>exit 2</code>{' '}
-          engelle demektir (Claude Code sözleşmesi). <em>claude-cli ajanları kendi hook'larını{' '}
-          <code>~/.claude/settings.json</code>'dan okur — bunlar oraya değil SwarmGo'ya kayıtlıdır.</em>
+          engelle demektir (Claude Code sözleşmesi). <em>claude-cli ajanlarında bu hook'lar, "Hook'ları{' '}
+          claude-cli'ye geçir" ayarı açıkken <code>--settings</code> ile CLI'nin kendi tool döngüsüne de{' '}
+          uygulanır; ancak CLI hook'ları CLI'nin kendi shell'inde koşar (Windows PowerShell uyumsuzluğuna dikkat).</em>
         </p>
       </div>
 

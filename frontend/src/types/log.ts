@@ -13,7 +13,7 @@ export interface LogEntry {
 // `target` carries navigation hints used to deep-link on notification click
 // (keys: view, sessionId, taskId, agentId).
 export interface AppEvent {
-  type: string // task | schedule | heartbeat | agent
+  type: string // task | schedule | agent
   level: 'info' | 'success' | 'error'
   workspaceId: string
   workspaceName?: string

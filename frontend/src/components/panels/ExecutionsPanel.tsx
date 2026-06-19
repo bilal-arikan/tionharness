@@ -4,11 +4,9 @@ import {
   LayoutGrid,
   GitBranch,
   Clock,
-  Heart,
   Activity,
   RefreshCw,
   Copy,
-  Loader2,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react'
@@ -38,7 +36,6 @@ const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   task: { label: 'Görev', icon: LayoutGrid },
   flow: { label: 'Akış', icon: GitBranch },
   schedule: { label: 'Zamanlama', icon: Clock },
-  heartbeat: { label: 'Nabız', icon: Heart },
   spawned: { label: 'Spawn', icon: Sparkles },
 }
 
@@ -50,7 +47,6 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'flow', label: 'Akış' },
   { key: 'spawned', label: 'Spawn' },
   { key: 'schedule', label: 'Zamanlama' },
-  { key: 'heartbeat', label: 'Nabız' },
 ]
 
 const POLL_MS = 5000
@@ -87,7 +83,7 @@ function StatusPill({ status }: { status: string }) {
 }
 
 // ExecutionsPanel is the unified activity feed: a single list of every execution
-// across chat / task / flow / schedule / heartbeat (each backed by a Session),
+// across chat / task / flow / schedule (each backed by a Session),
 // with live status, plus a read-only transcript viewer for the selected one.
 export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, onOpenFlowRun, focusId, onSelectExecution }: Props) {
   const [items, setItems] = useState<Execution[]>([])
@@ -305,31 +301,12 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
             </header>
             <MessageList
               messages={messages}
-              pending={loading}
+              pending={loading || selected.running}
+              pendingAgentId={selected.agentId}
               agents={agents}
               onOpenFile={onOpenFile}
               onOpenArtifact={onOpenArtifact}
             />
-            {selected.running && (
-              <div className="flex items-center gap-2 border-t border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-6 py-2">
-                <Loader2
-                  size={14}
-                  className="shrink-0 animate-spin text-[var(--color-success)]"
-                />
-                <span className="text-xs font-medium text-[var(--color-success)]">
-                  Yanıt hazırlanıyor…
-                </span>
-                <span className="ml-auto flex gap-1">
-                  {[0, 1, 2].map((i) => (
-                    <span
-                      key={i}
-                      className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-success)]"
-                      style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }}
-                    />
-                  ))}
-                </span>
-              </div>
-            )}
           </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--color-text-dim)]">

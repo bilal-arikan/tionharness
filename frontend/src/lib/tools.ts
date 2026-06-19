@@ -28,7 +28,7 @@ const ICONS: Record<string, string> = {
   browser: '🧭',
   todo_write: '✅',
   ask_user: '💬',
-  call_agent: '🤝',
+  run_subagent: '🤖',
 }
 
 /** Strip an MCP namespace prefix (`server__tool`) for display. */

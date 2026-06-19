@@ -6,7 +6,7 @@ import { req } from './client'
 
 export const executionApi = {
   // List executions across all agents, newest-updated first. Optional kind
-  // filters to a single category (chat | task | flow | schedule | heartbeat).
+  // filters to a single category (chat | task | flow | schedule).
   listExecutions: (kind?: string) =>
     req<Execution[]>(
       kind ? `/api/executions?kind=${encodeURIComponent(kind)}` : '/api/executions',

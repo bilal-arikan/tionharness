@@ -36,10 +36,10 @@ export const systemApi = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
-  testProvider: (provider: string) =>
+  testProvider: (provider: string, model?: string) =>
     req<ProviderTestResult>('/api/settings/test-provider', {
       method: 'POST',
-      body: JSON.stringify({ provider }),
+      body: JSON.stringify({ provider, model: model ?? '' }),
     }),
 
   // Provider/model catalog (for agent + settings pickers).
@@ -49,7 +49,7 @@ export const systemApi = {
   getPrompts: () => req<PromptsResponse>('/api/prompts'),
   revealPrompts: () => req<{ path: string }>('/api/prompts/reveal', { method: 'POST' }),
 
-  // Autonomous event feed (heartbeat/task/schedule) — global SSE stream.
+  // Autonomous event feed (task/schedule) — global SSE stream.
   subscribeEvents,
 
   // Application + workspace logs (global ring buffer).

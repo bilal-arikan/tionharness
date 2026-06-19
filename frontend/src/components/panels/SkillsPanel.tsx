@@ -35,7 +35,7 @@ function SourceBadge({ source }: { source: SkillSource }) {
 function RestrictedBadge() {
   return (
     <span
-      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
+      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-danger)_18%,transparent)] text-[var(--color-danger)]"
       title="Yalnız atanan ajanlar kullanabilir (atama gerekir)"
     >
       Kısıtlı

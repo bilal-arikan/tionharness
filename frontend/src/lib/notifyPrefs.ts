@@ -16,7 +16,6 @@ export const NOTIFY_TYPES: NotifTypeMeta[] = [
   { type: 'task', label: 'Görevler', hint: 'Görev tamamlandı / başarısız oldu.' },
   { type: 'flow', label: 'Akışlar', hint: 'Akış (flow) çalışması tamamlandı / başarısız oldu.' },
   { type: 'schedule', label: 'Zamanlamalar', hint: 'Zamanlanmış prompt çalıştı / başarısız oldu.' },
-  { type: 'heartbeat', label: 'Otonom döngü', hint: 'Heartbeat hatası veya ajanın otomatik devre dışı kalması.' },
   { type: 'agent', label: 'Ajan', hint: 'Genel ajan bildirimleri.' },
 ]
 

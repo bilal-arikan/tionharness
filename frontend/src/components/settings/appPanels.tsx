@@ -207,8 +207,7 @@ export function BudgetPanel({ draft, set }: PanelProps) {
 export function AutonomyPanel({ draft, set }: PanelProps) {
   return (
     <>
-      <Toggle label="Tüm otonomiyi duraklat (uygulama geneli)" hint="Heartbeat ve zamanlanmış çağrılar modele gitmeden bloklanır. Manuel sohbet etkilenmez." checked={draft.pauseAutonomy} onChange={(v) => set('pauseAutonomy', v)} />
-      <Field label="Varsayılan heartbeat aralığı (sn)"><input type="number" value={draft.defaultHeartbeatSec} onChange={(e) => set('defaultHeartbeatSec', Number(e.target.value))} className={inputCls} /></Field>
+      <Toggle label="Tüm otonomiyi duraklat (uygulama geneli)" hint="Zamanlanmış çağrılar modele gitmeden bloklanır. Manuel sohbet etkilenmez." checked={draft.pauseAutonomy} onChange={(v) => set('pauseAutonomy', v)} />
     </>
   )
 }
@@ -237,7 +236,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
       </div>
       <Toggle
         label="Kabuk (shell) aracı"
-        hint="Built-in `shell`: ajan kendi workspace sandbox'ında keyfi komut çalıştırabilir. Yüksek risk."
+        hint="Built-in `shell`: ajan workspace sandbox'ında komut çalıştırır (Windows'ta PowerShell). claude-cli ajanlarında bu araç köprülenir ve CLI'nin native `Bash`'i bastırılır — tüm komutlar SwarmGo shell'inden geçer. Yüksek risk."
         checked={draft.enableShell}
         onChange={(v) => set('enableShell', v)}
       />
@@ -246,6 +245,12 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         hint="Ajanların ajan/akış/zamanlama/artifact oluşturup düzenlemesine izin verir. Araç kataloğunu kabaca iki katına çıkarır."
         checked={draft.enableSelfManage}
         onChange={(v) => set('enableSelfManage', v)}
+      />
+      <Toggle
+        label="Hook'ları claude-cli'ye geçir"
+        hint="Açıkken workspace PreToolUse/PostToolUse hook'ları claude-cli ajanlarına da `--settings` ile uygulanır (yalnız native değil). Uyarı: CLI hook'ları CLI'nin kendi shell'inde koşar; SwarmGo shell'i (PowerShell) için yazılmış bir hook uyumsuz olabilir — sorun çıkarsa kapatın."
+        checked={draft.enableCliHooks}
+        onChange={(v) => set('enableCliHooks', v)}
       />
       <Toggle
         label="Ajan→ajan delegasyon (call_agent)"

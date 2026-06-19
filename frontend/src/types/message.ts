@@ -21,6 +21,7 @@ export type StepKind =
   | 'tombstone'
   | 'diff'
   | 'hook'
+  | 'subagent'
 
 export interface TodoItem {
   content: string
@@ -51,6 +52,9 @@ export interface TurnStep {
   removed?: number
   patch?: string
   created?: boolean
+  // Nested activity trace of a 'subagent' step — the subagent's own tool calls /
+  // thinking, captured in its isolated context.
+  subSteps?: TurnStep[]
 }
 
 // A slash command surfaced in the chat composer ("/" menu).

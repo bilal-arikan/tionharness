@@ -10,6 +10,7 @@ import { Composer } from './components/chat/Composer'
 import { AskPrompt } from './components/chat/AskPrompt'
 import { PermissionPrompt } from './components/chat/PermissionPrompt'
 import { PendingTray } from './components/chat/PendingTray'
+import { WakeWaitBanner } from './components/chat/WakeWaitBanner'
 import { TodoPanel } from './components/chat/TodoPanel'
 import { latestTodos } from './lib/todos'
 import { TaskBoard } from './components/panels/TaskBoard'
@@ -45,7 +46,7 @@ import { applyTheme } from './lib/theme'
 import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clientPrefs'
 
 // isChatKind reports whether a session is a manual chat (shown in the chat
-// sidebar). Task/flow/schedule/heartbeat transcripts are surfaced in the
+// sidebar). Task/flow/schedule transcripts are surfaced in the
 // Activity (executions) view instead, so they don't clutter the chat list.
 function isChatKind(kind: string): boolean {
   return kind === '' || kind === 'chat'
@@ -372,13 +373,20 @@ export default function App() {
       setSettingsNonce((n) => n + 1)
       return
     }
+    // The set of workspaces changed elsewhere — an agent created/renamed/deleted
+    // one (list/create/rename/delete_workspace). Refresh the switcher list live.
+    // App-global → no workspace badge, no toast.
+    if (e.type === 'workspaces') {
+      refreshWorkspaces()
+      return
+    }
     // Badge any non-active workspace that produced activity (incl. completed
     // chats), so the switcher shows where to look. markWorkspaceUnread persists
     // the badge so every other open window picks it up via its storage listener.
     if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) {
       markWorkspaceUnread(e.workspaceId)
     }
-    // Same-workspace activity (chat/heartbeat/schedule) updates the session list
+    // Same-workspace activity (chat/schedule) updates the session list
     // so unread dots, ordering and times stay live without a manual refresh.
     if (!e.workspaceId || e.workspaceId === getActiveWorkspace()) {
       // This window is live-viewing the workspace → the activity has been seen;
@@ -391,15 +399,25 @@ export default function App() {
       // reload its messages so the reply appears without a manual reselect.
       const sid = e.target?.sessionId
       if (e.type === 'chat' && sid) {
-        // A self-wake (schedule_wake) brackets its run with phase=start/done chat
-        // events so an OPEN session screen continues live on its own: phase=start
-        // raises the thinking indicator (a server-driven turn just began with no
-        // local run handle); any other chat event (incl. phase=done) means the
-        // turn ended, so clear it. Either way reload the transcript so the new
-        // user prompt / reply appears without a manual reselect.
-        if (e.target?.phase === 'start') {
+        // A self-wake (schedule_wake) has a lifecycle expressed via phase:
+        //  - armed     → the turn ended into a WAITING state; raise the waiting
+        //                banner (reason + fireAt) so the session doesn't look done.
+        //  - start     → the wake fired; a server-driven turn began with no local
+        //                run handle → drop the banner, raise the thinking indicator.
+        //  - cancelled → the wake was disarmed → clear the banner.
+        //  - done/other→ the turn ended → clear both.
+        // Either way reload the transcript so the new prompt / reply appears.
+        const phase = e.target?.phase
+        if (phase === 'armed') {
+          const fireAt = Number(e.target?.fireAt ?? 0) || 0
+          chat.setWakeWait(sid, e.target?.reason ?? '', fireAt)
+          chat.clearPending(sid)
+        } else if (phase === 'start') {
+          chat.clearWakeWait(sid)
           chat.markPending([sid])
         } else {
+          // done | cancelled | any other chat event → the turn is no longer active.
+          chat.clearWakeWait(sid)
           chat.clearPending(sid)
         }
         if (sid === activeSessionIdRef.current) {
@@ -428,7 +446,7 @@ export default function App() {
     }, tag)
   }
 
-  // Subscribe once to the global autonomous-event feed (heartbeat/task/schedule).
+  // Subscribe once to the global autonomous-event feed (task/schedule).
   useEffect(() => api.subscribeEvents((e) => onEventRef.current(e)), [])
 
   // Pick the default agent for NEW sessions (from the roster).
@@ -634,7 +652,14 @@ export default function App() {
         />
       )}
 
-      <main className="flex h-full min-w-0 flex-1 flex-col">
+      {/* Key the view subtree by the active workspace so switching (or creating
+          and switching into) a workspace REMOUNTS every panel. The panels here
+          fetch their own workspace-scoped data on mount (flows, tasks, schedules,
+          executions, network, artifacts, secrets, skills, market, budget, logs,
+          memory), so without a remount they would keep showing the previous
+          workspace's data until a manual page refresh. App-level agents/sessions
+          are reset+refetched by the activeWorkspaceId effect above. */}
+      <main key={activeWorkspaceId ?? 'none'} className="flex h-full min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">{VIEW_TITLE[view]}</span>
@@ -696,6 +721,13 @@ export default function App() {
               ))}
             <TodoPanel todos={currentTodos} />
             <PendingTray items={chat.activeQueued} onRemove={chat.removePending} />
+            {chat.activeWakeWait && (
+              <WakeWaitBanner
+                reason={chat.activeWakeWait.reason}
+                fireAt={chat.activeWakeWait.fireAt}
+                onCancel={chat.cancelWake}
+              />
+            )}
             <Composer
               disabled={!activeSessionId}
               sessionId={activeSessionId ?? undefined}
@@ -725,6 +757,12 @@ export default function App() {
             onCreateAgent={createAgent}
             onUpdateAgent={updateAgent}
             onDeleteAgent={deleteAgent}
+            onRefresh={() =>
+              api
+                .listAgents()
+                .then(setAgents)
+                .catch((e) => setError((e as Error).message))
+            }
             onError={setError}
             onOpenExecution={openExecution}
           />

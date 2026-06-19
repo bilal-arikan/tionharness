@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   MessageSquare,
   LayoutGrid,
   GitBranch,
   Clock,
-  Heart,
   Activity,
   RefreshCw,
   ChevronRight,
@@ -29,7 +28,6 @@ const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   task: { label: 'Görev', icon: LayoutGrid },
   flow: { label: 'Akış', icon: GitBranch },
   schedule: { label: 'Zamanlama', icon: Clock },
-  heartbeat: { label: 'Nabız', icon: Heart },
 }
 
 const POLL_MS = 5000
@@ -40,13 +38,44 @@ function kindMeta(kind: string) {
 
 // AgentActivityPanel is the right-hand rail on the Ajanlar screen: a compact,
 // live-polled feed of the selected agent's executions (chat / task / flow /
-// schedule / heartbeat). It reuses GET /api/executions and filters by agentId,
+// schedule). It reuses GET /api/executions and filters by agentId,
 // so no backend work is needed — every run path already funnels into a Session
 // tagged with its owner agent. Clicking a row opens the full transcript on the
 // Activity screen.
 export function AgentActivityPanel({ agentId, onError, onOpenExecution }: Props) {
   const [items, setItems] = useState<Execution[]>([])
   const [loading, setLoading] = useState(false)
+
+  // Resizable width (persisted, clamped). 320px == the old w-80. Drag the handle
+  // on the panel's LEFT edge: moving it left widens the panel.
+  const [width, setWidth] = useState(() => {
+    const v = Number(localStorage.getItem('swarmgo.agentActivityWidth'))
+    return v >= 240 && v <= 720 ? v : 320
+  })
+  useEffect(() => {
+    localStorage.setItem('swarmgo.agentActivityWidth', String(width))
+  }, [width])
+
+  const startResize = useCallback(
+    (e: ReactMouseEvent) => {
+      e.preventDefault()
+      const startX = e.clientX
+      const startW = width
+      const onMove = (ev: MouseEvent) =>
+        setWidth(Math.min(720, Math.max(240, startW + (startX - ev.clientX))))
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    },
+    [width],
+  )
 
   // Poll the unified feed and keep only this agent's rows (newest-updated first,
   // matching the backend's sort).
@@ -86,7 +115,16 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution }: Props)
   const runningCount = useMemo(() => items.filter((i) => i.running).length, [items])
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+    <aside
+      style={{ width }}
+      className="relative flex shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]"
+    >
+      {/* Drag handle on the left edge — widen the panel by dragging left. */}
+      <div
+        onMouseDown={startResize}
+        title="Sürükleyerek genişlet"
+        className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize transition hover:bg-[color-mix(in_srgb,var(--color-accent)_50%,transparent)]"
+      />
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
           <Activity size={13} /> Aktivite

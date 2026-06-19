@@ -69,7 +69,7 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
         />
         <span className="text-xs text-[var(--color-text-dim)]">Boş = uygulama varsayılanı.</span>
       </div>
-      <Toggle label="Bu workspace'te otonomiyi duraklat" hint="Yalnızca bu workspace'in heartbeat/zamanlama çağrılarını bloklar." checked={ws.pauseAutonomy} onChange={(v) => setWsField('pauseAutonomy', v)} />
+      <Toggle label="Bu workspace'te otonomiyi duraklat" hint="Yalnızca bu workspace'in zamanlama çağrılarını bloklar." checked={ws.pauseAutonomy} onChange={(v) => setWsField('pauseAutonomy', v)} />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Çapraz-session farkındalığı

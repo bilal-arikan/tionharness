@@ -45,6 +45,15 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
     })
   }
 
+  // Tools whose name already appears inside the previewed Context (the system
+  // prompt) are not re-listed separately below: the lazy "Available Tools (load
+  // on demand)" block already names them in the prompt, so a second list just
+  // duplicates the Context. Schema tools (sent via the API tools field, not the
+  // prompt text) normally aren't in it, so they stay listed.
+  const inContext = (name: string) => !!data && data.system.includes(name)
+  const shownTools = data ? data.tools.filter((t) => !inContext(t.name)) : []
+  const shownLazyTools = data ? data.lazyTools.filter((t) => !inContext(t.name)) : []
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
@@ -173,11 +182,11 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
               <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
                 Tam şema her tura girer; token maliyeti yukarıdaki "Şema araçlar" sayacına yansır.
               </p>
-              {data.tools.length === 0 ? (
+              {shownTools.length === 0 ? (
                 <p className="mb-5 text-xs text-[var(--color-text-dim)]">Bu ajana şema gönderilen araç yok.</p>
               ) : (
                 <ul className="mb-5 space-y-1">
-                  {data.tools.map((t) => (
+                  {shownTools.map((t) => (
                     <li
                       key={t.name}
                       className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5"
@@ -189,10 +198,10 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                 </ul>
               )}
 
-              {data.lazyTools.length > 0 && (
+              {shownLazyTools.length > 0 && (
                 <>
                   <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                    Araçlar — talep üzerine (lazy) · {data.lazyTools.length}
+                    Araçlar — talep üzerine (lazy) · {shownLazyTools.length}
                   </h3>
                   <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
                     Şema tura girmez — yalnızca ad+özet sistem promptundaki{' '}
@@ -202,7 +211,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                     ile istediğini bir sonraki adımda etkinleştirir.
                   </p>
                   <ul className="space-y-1">
-                    {data.lazyTools.map((t) => (
+                    {shownLazyTools.map((t) => (
                       <li
                         key={t.name}
                         className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 opacity-75"

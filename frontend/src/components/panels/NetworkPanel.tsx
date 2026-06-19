@@ -22,7 +22,7 @@ export function NetworkPanel({ onError }: Props) {
   // Visible node layers (agents are always shown). Skills/MCP start hidden to
   // keep the default view focused on the agent/task/flow collaboration core.
   const [visible, setVisible] = useState<Set<WorkspaceNodeType>>(
-    () => new Set<WorkspaceNodeType>(['task', 'flow']),
+    () => new Set<WorkspaceNodeType>(['task', 'flow', 'run']),
   )
 
   const toggleLayer = (t: WorkspaceNodeType) =>
@@ -45,8 +45,8 @@ export function NetworkPanel({ onError }: Props) {
     load()
   }, [load])
 
-  // Live mode: re-fetch the graph when an autonomous event (task run, schedule,
-  // heartbeat) lands, so the flow animates as agents pick up / finish work. A
+  // Live mode: re-fetch the graph when an autonomous event (task run, schedule)
+  // lands, so the flow animates as agents pick up / finish work. A
   // short debounce coalesces bursts. The incremental DataSet update in
   // VisNetworkGraph means the physics engine glides nodes to their new bonds.
   const debounceRef = useRef<number | null>(null)
@@ -71,8 +71,8 @@ export function NetworkPanel({ onError }: Props) {
   // user-toggleable (an agent's flows, skills and MCP servers drift with it).
   const layers =
     mode === 'live'
-      ? NODE_LAYERS.filter((l) => l.type === 'flow' || l.type === 'skill' || l.type === 'mcp')
-      : NODE_LAYERS
+      ? NODE_LAYERS.filter((l) => l.type === 'flow' || l.type === 'skill' || l.type === 'mcp' || l.type === 'run')
+      : NODE_LAYERS.filter((l) => l.type !== 'run') // 'run' is a live-only archive layer
 
   const isEmpty = graph && graph.nodes.length === 0
 

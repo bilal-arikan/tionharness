@@ -19,6 +19,8 @@ export interface AppSettings {
   anthropicKeySet: boolean
   minimaxKeySet: boolean
   minimaxBaseUrl: string
+  openrouterKeySet: boolean
+  openrouterBaseUrl: string
 
   oneMillionContext: boolean
   extendedPromptCache: boolean
@@ -59,7 +61,6 @@ export interface AppSettings {
   defaultDailyCallLimit: number
   defaultDailyTokenLimit: number
 
-  defaultHeartbeatSec: number
   pauseAutonomy: boolean
 
   autoTitleEnabled: boolean
@@ -70,6 +71,7 @@ export interface AppSettings {
   // Gated tool capabilities (off by default).
   enableShell: boolean
   enableSelfManage: boolean
+  enableCliHooks: boolean
   enableDelegation: boolean
   delegationMaxDepth: number
   delegationMaxCalls: number
@@ -77,11 +79,12 @@ export interface AppSettings {
   logLevel: string
 }
 
-// Partial update. anthropicKey/minimaxKey are write-only: "" clears, non-empty sets.
+// Partial update. anthropicKey/minimaxKey/openrouterKey are write-only: "" clears, non-empty sets.
 export type SettingsPatch = Partial<
-  Omit<AppSettings, 'anthropicKeySet' | 'minimaxKeySet'> & {
+  Omit<AppSettings, 'anthropicKeySet' | 'minimaxKeySet' | 'openrouterKeySet'> & {
     anthropicKey: string
     minimaxKey: string
+    openrouterKey: string
   }
 >
 

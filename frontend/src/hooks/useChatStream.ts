@@ -129,6 +129,12 @@ export function useChatStream(deps: ChatStreamDeps) {
   // not show its prompt while the user is viewing another.
   const [pendingAsks, setPendingAsks] = useState<Record<string, PendingAsk>>({})
 
+  // Pending self-wakes: schedule_wake armed a turn to auto-resume after a delay.
+  // Tracked PER SESSION (with the agent's reason + fire time) so the "waiting to
+  // auto-resume" banner + its Durdur (cancel) control show on the right session.
+  // The turn that armed it has ENDED, so without this the session looks finished.
+  const [wakeWaits, setWakeWaits] = useState<Record<string, { reason: string; fireAt: number }>>({})
+
   const sendMessage = useCallback(
     // `targetSid` lets a queued-message flush (or interrupt) send to a specific
     // session even if the user has since switched away; defaults to the active
@@ -173,6 +179,9 @@ export function useChatStream(deps: ChatStreamDeps) {
         setMessages((prev) => (activeSessionIdRef.current === sid ? updater(prev) : prev))
 
       onSid((prev) => [...prev, optimistic])
+      // The user is taking over with a fresh message; any pending self-wake for
+      // this session is now moot — drop its waiting banner.
+      setWakeWaits((p) => withoutKey(p, sid))
       setPendingSessions((p) => withAdded(p, sid))
       const ac = new AbortController()
       runsRef.current.set(sid, { runId: '', ac })
@@ -483,6 +492,28 @@ export function useChatStream(deps: ChatStreamDeps) {
     setPendingSessions((p) => withRemoved(p, sid))
   }, [])
 
+  // ---- self-wake (schedule_wake) waiting state ----
+
+  // Arm the waiting banner: a schedule_wake event (phase=armed) said this session
+  // will auto-resume after a delay. reason/fireAt come from the event target.
+  const setWakeWait = useCallback((sid: string, reason: string, fireAt: number) => {
+    setWakeWaits((p) => ({ ...p, [sid]: { reason, fireAt } }))
+  }, [])
+
+  // Clear the waiting banner (wake fired, was cancelled, or the turn ended).
+  const clearWakeWait = useCallback((sid: string) => {
+    setWakeWaits((p) => withoutKey(p, sid))
+  }, [])
+
+  // Durdur: disarm the active session's pending self-wake. Optimistically clear
+  // the banner, then POST; the server also emits phase=cancelled which clears it.
+  const cancelWake = useCallback(() => {
+    const sid = activeSessionId
+    if (!sid) return
+    setWakeWaits((p) => withoutKey(p, sid))
+    api.cancelWake(sid).catch((e) => setError((e as Error).message))
+  }, [activeSessionId, setError])
+
   // Stable id for a pending item (no crypto needed — display/dedup only).
   const pendingId = () => `p-${Date.now()}-${Math.round(Math.random() * 1e6)}`
 
@@ -669,6 +700,7 @@ export function useChatStream(deps: ChatStreamDeps) {
   const activeStreaming = activeSessionId ? streamingSessions.has(activeSessionId) : false
   const activePending = activeSessionId ? pendingSessions.has(activeSessionId) : false
   const activeAsk = activeSessionId ? pendingAsks[activeSessionId] ?? null : null
+  const activeWakeWait = activeSessionId ? wakeWaits[activeSessionId] ?? null : null
   const activeQueued = useMemo(
     () => (activeSessionId ? queuedItems.filter((p) => p.sid === activeSessionId) : []),
     [queuedItems, activeSessionId],
@@ -690,11 +722,15 @@ export function useChatStream(deps: ChatStreamDeps) {
     removePending,
     markPending,
     clearPending,
+    setWakeWait,
+    clearWakeWait,
+    cancelWake,
     summarize,
     chatCommands,
     activeStreaming,
     activePending,
     activeAsk,
+    activeWakeWait,
     activeQueued,
   }
 }

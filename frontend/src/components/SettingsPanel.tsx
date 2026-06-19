@@ -90,6 +90,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
   const [original, setOriginal] = useState<AppSettings | null>(null)
   const [keyInput, setKeyInput] = useState('')
   const [minimaxKeyInput, setMinimaxKeyInput] = useState('')
+  const [openrouterKeyInput, setOpenrouterKeyInput] = useState('')
   const [test, setTest] = useState<Record<string, ProviderTestResult | 'pending'>>({})
   // Workspace secret names, offered as an import source for the key fields.
   const [secrets, setSecrets] = useState<Secret[]>([])
@@ -119,8 +120,9 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
     () =>
       (draft && original && JSON.stringify(draft) !== JSON.stringify(original)) ||
       keyInput.length > 0 ||
-      minimaxKeyInput.length > 0,
-    [draft, original, keyInput, minimaxKeyInput],
+      minimaxKeyInput.length > 0 ||
+      openrouterKeyInput.length > 0,
+    [draft, original, keyInput, minimaxKeyInput, openrouterKeyInput],
   )
   const dirtyWs = useMemo(
     () => ws && wsOrig && JSON.stringify(ws) !== JSON.stringify(wsOrig),
@@ -149,6 +151,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       theme: draft.theme, accent: draft.accent, themePreset: draft.themePreset, language: draft.language,
       defaultProvider: draft.defaultProvider, defaultModel: draft.defaultModel, claudeCliPath: draft.claudeCliPath,
       minimaxBaseUrl: draft.minimaxBaseUrl,
+      openrouterBaseUrl: draft.openrouterBaseUrl,
       oneMillionContext: draft.oneMillionContext, extendedPromptCache: draft.extendedPromptCache,
       desktopNotifications: draft.desktopNotifications, keepAwake: draft.keepAwake,
       userName: draft.userName, userTimezone: draft.userTimezone, userCity: draft.userCity,
@@ -158,17 +161,19 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       journalCap: draft.journalCap, journalMaxLen: draft.journalMaxLen,
       autoReflect: draft.autoReflect, autoReflectThreshold: draft.autoReflectThreshold,
       defaultDailyCallLimit: draft.defaultDailyCallLimit, defaultDailyTokenLimit: draft.defaultDailyTokenLimit,
-      defaultHeartbeatSec: draft.defaultHeartbeatSec, pauseAutonomy: draft.pauseAutonomy,
+      pauseAutonomy: draft.pauseAutonomy,
       autoTitleEnabled: draft.autoTitleEnabled, titleModel: draft.titleModel,
       mcpGatewayUrl: draft.mcpGatewayUrl, logLevel: draft.logLevel,
       enableShell: draft.enableShell, enableSelfManage: draft.enableSelfManage,
+      enableCliHooks: draft.enableCliHooks,
       enableDelegation: draft.enableDelegation,
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
     }
     if (keyInput) patch.anthropicKey = keyInput
     if (minimaxKeyInput) patch.minimaxKey = minimaxKeyInput
+    if (openrouterKeyInput) patch.openrouterKey = openrouterKeyInput
     const updated = await api.updateSettings(patch)
-    setDraft(updated); setOriginal(updated); setKeyInput(''); setMinimaxKeyInput('')
+    setDraft(updated); setOriginal(updated); setKeyInput(''); setMinimaxKeyInput(''); setOpenrouterKeyInput('')
     onSaved(updated)
   }
 
@@ -200,14 +205,21 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
     }
   }
 
-  const clearKey = async (which: 'anthropic' | 'minimax') => {
+  // keyPatch builds a write-only key patch for the named provider ("" = clear).
+  const keyPatch = (which: 'anthropic' | 'minimax' | 'openrouter', value: string): SettingsPatch =>
+    which === 'anthropic'
+      ? { anthropicKey: value }
+      : which === 'minimax'
+        ? { minimaxKey: value }
+        : { openrouterKey: value }
+
+  const clearKey = async (which: 'anthropic' | 'minimax' | 'openrouter') => {
     try {
-      const updated = await api.updateSettings(
-        which === 'anthropic' ? { anthropicKey: '' } : { minimaxKey: '' },
-      )
+      const updated = await api.updateSettings(keyPatch(which, ''))
       setDraft(updated); setOriginal(updated)
       if (which === 'anthropic') setKeyInput('')
-      else setMinimaxKeyInput('')
+      else if (which === 'minimax') setMinimaxKeyInput('')
+      else setOpenrouterKeyInput('')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -215,22 +227,20 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
 
   // applyKey persists a provider key immediately (resolved from a vault secret).
   // Provider keys are never typed — they are only selected from the secret store.
-  const applyKey = async (which: 'anthropic' | 'minimax', value: string) => {
+  const applyKey = async (which: 'anthropic' | 'minimax' | 'openrouter', value: string) => {
     if (!value) return
     try {
-      const updated = await api.updateSettings(
-        which === 'anthropic' ? { anthropicKey: value } : { minimaxKey: value },
-      )
+      const updated = await api.updateSettings(keyPatch(which, value))
       setDraft(updated); setOriginal(updated)
     } catch (e) {
       onError((e as Error).message)
     }
   }
 
-  const runTest = async (provider: string) => {
+  const runTest = async (provider: string, model?: string) => {
     setTest((t) => ({ ...t, [provider]: 'pending' }))
     try {
-      const r = await api.testProvider(provider)
+      const r = await api.testProvider(provider, model)
       setTest((t) => ({ ...t, [provider]: r }))
     } catch (e) {
       setTest((t) => ({ ...t, [provider]: { ok: false, error: (e as Error).message } }))

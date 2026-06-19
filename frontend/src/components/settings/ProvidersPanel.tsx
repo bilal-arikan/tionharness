@@ -1,8 +1,8 @@
-// Providers category: default provider/model picker, Anthropic + MiniMax keys,
-// custom (user-added) providers and connection test. (Anthropic beta toggles
-// now live under the "Bağlam & Bellek" category.)
+// Providers category: default provider/model picker, Anthropic + MiniMax +
+// OpenRouter keys, custom (user-added) providers and connection test. (Anthropic
+// beta toggles now live under the "Bağlam & Bellek" category.)
 import { useEffect, useState } from 'react'
-import { Server, Sparkles, Zap, KeyRound, Boxes, Plus, Trash2 } from 'lucide-react'
+import { Server, Sparkles, Zap, KeyRound, Boxes, Plus, Trash2, Network } from 'lucide-react'
 import { api } from '../../api'
 import type { AppSettings, ProviderTestResult, Secret } from '../../types'
 import type { CustomProvider, UpsertProviderInput } from '../../api/providers'
@@ -14,11 +14,11 @@ interface Props {
   set: AppSet
   setDraft: React.Dispatch<React.SetStateAction<AppSettings | null>>
   test: Record<string, ProviderTestResult | 'pending'>
-  runTest: (provider: string) => void
-  clearKey: (which: 'anthropic' | 'minimax') => void
+  runTest: (provider: string, model?: string) => void
+  clearKey: (which: 'anthropic' | 'minimax' | 'openrouter') => void
   // Apply a provider key immediately (resolved from a vault secret). Provider
   // keys are never typed — only selected from the secret store.
-  applyKey: (which: 'anthropic' | 'minimax', value: string) => void | Promise<void>
+  applyKey: (which: 'anthropic' | 'minimax' | 'openrouter', value: string) => void | Promise<void>
   // Secrets vault (this workspace), reveal a value to import as a key, and a
   // jump to the Secrets screen for managing them.
   secrets: Secret[]
@@ -32,6 +32,41 @@ function testBadge(test: Props['test'], provider: string) {
   if (r === 'pending') return <span className="text-xs text-[var(--color-warning)]">test ediliyor…</span>
   if (r.ok) return <span className="text-xs text-[var(--color-success)]">✓ bağlandı{r.model ? ` (${r.model})` : ''}</span>
   return <span className="text-xs text-[var(--color-danger)]">✗ {r.error}</span>
+}
+
+// TestConnection is a reusable "test the connection" row for a provider section.
+// It probes the given provider id (optionally with a representative model, since
+// the global default model usually belongs to a different provider) and shows
+// the live result badge. Disabled until the provider has a key configured.
+function TestConnection({
+  test,
+  runTest,
+  provider,
+  model,
+  disabled,
+  disabledHint,
+}: {
+  test: Props['test']
+  runTest: Props['runTest']
+  provider: string
+  model?: string
+  disabled?: boolean
+  disabledHint?: string
+}) {
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      <button
+        onClick={() => runTest(provider, model)}
+        disabled={disabled}
+        className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)] disabled:opacity-40 disabled:hover:border-[var(--color-border)]"
+      >
+        Bağlantıyı test et
+      </button>
+      {disabled
+        ? <span className="text-xs text-[var(--color-text-dim)]">{disabledHint ?? 'önce anahtar ekle'}</span>
+        : testBadge(test, provider)}
+    </div>
+  )
 }
 
 // SecretSource lets the user fill a key field from the workspace secret vault
@@ -285,6 +320,13 @@ export function ProvidersPanel({
       <Field label="claude CLI yolu" hint="Boş = PATH üzerinden otomatik tespit.">
         <input value={draft.claudeCliPath} onChange={(e) => set('claudeCliPath', e.target.value)} placeholder="otomatik" className={inputCls} />
       </Field>
+      <TestConnection
+        test={test}
+        runTest={runTest}
+        provider="anthropic"
+        disabled={!draft.anthropicKeySet}
+        disabledHint="önce Anthropic anahtarı ekle"
+      />
 
       <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         <Zap size={13} className="text-[var(--color-accent)]" /> MiniMax (OpenAI-uyumlu)
@@ -301,6 +343,38 @@ export function ProvidersPanel({
       <Field label="MiniMax base URL" hint="Boş = https://api.minimax.io/v1 (OpenAI-uyumlu uç).">
         <input value={draft.minimaxBaseUrl} onChange={(e) => set('minimaxBaseUrl', e.target.value)} placeholder="https://api.minimax.io/v1" className={inputCls} />
       </Field>
+      <TestConnection
+        test={test}
+        runTest={runTest}
+        provider="minimax"
+        model="MiniMax-M3"
+        disabled={!draft.minimaxKeySet}
+        disabledHint="önce MiniMax anahtarı ekle"
+      />
+
+      <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        <Network size={13} className="text-[var(--color-accent)]" /> OpenRouter (OpenAI-uyumlu)
+      </div>
+      <ProviderKeyField
+        label="OpenRouter API anahtarı"
+        isSet={draft.openrouterKeySet}
+        requiredHint="OpenRouter modelleri için gerekli (tek anahtar, yüzlerce model)."
+        secrets={secrets}
+        onPick={async (n) => applyKey('openrouter', await onImportSecret(n))}
+        onClear={() => clearKey('openrouter')}
+        onManage={onManageSecrets}
+      />
+      <Field label="OpenRouter base URL" hint="Boş = https://openrouter.ai/api/v1 (OpenAI-uyumlu uç).">
+        <input value={draft.openrouterBaseUrl} onChange={(e) => set('openrouterBaseUrl', e.target.value)} placeholder="https://openrouter.ai/api/v1" className={inputCls} />
+      </Field>
+      <TestConnection
+        test={test}
+        runTest={runTest}
+        provider="openrouter"
+        model="anthropic/claude-sonnet-4.6"
+        disabled={!draft.openrouterKeySet}
+        disabledHint="önce OpenRouter anahtarı ekle"
+      />
 
       <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         <Boxes size={13} className="text-[var(--color-accent)]" /> Özel sağlayıcılar
