@@ -64,7 +64,7 @@ Her madde SwarmGo kaynak koduna karşı kontrol edildi. **Durum** = şu anki Swa
 - **Session branching/fork** (v0.6.0).
 - **Messaging gateway** (v0.8.10+): Telegram/WhatsApp/Lark — response mode enum (`progress`/`streaming`/`final_only`) + subprocess izolasyon + **erişim kontrol** (v0.9.1, güvenlik kritik).
 - **i18n** (v0.8.5): erken kurulursa migration ucuz.
-- **Model çeşitliliği**: OpenAI-uyumlu generic custom endpoint (v0.7.4) — SwarmGo'nun minimax provider'ı genelleştirilebilir; Gemini/Bedrock/DeepSeek/external CLI agent opsiyonel.
+- **Model çeşitliliği**: OpenAI-uyumlu generic custom endpoint (v0.7.4) — SwarmGo'nun minimax provider'ı genelleştirilebilir; Gemini/Bedrock/DeepSeek/external CLI agent opsiyonel. **Not (2026-06-19):** `openrouter` kind (`internal/providers/kind_openrouter.go`) eklendi; OpenRouter üzerinden yüzlerce modele tek key ile erişim sağlanıyor. Bu, SC-1 önerisinin (preset katalog) ilk somut adımıdır.
 
 ---
 

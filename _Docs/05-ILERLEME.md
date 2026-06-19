@@ -2,6 +2,143 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-19**
 
+## Faz A2 — Generic ajan yürütme çekirdeği + alt-ajan izolasyonu ✅ (2026-06-19)
+
+**Hedef:** Ana bağlamı kirletmeden izole, tipli, paralel alt-ajanlar başlatabilmek;
+eski çok-primitifli yapıyı tek generic çekirdeğe indirmek.
+
+Yapılan (A2.0 → A2.4 tamamlandı):
+
+- **`run_subagent` aracı** (`internal/tools/subagent.go`) — tek generic agent-to-agent
+  primitifi. Parametreler: `target` (profil id ya da mevcut ajan adı/id), `task`,
+  `wait` (`"sync"` varsayılan | `"async"` detached), `context` (`"isolated"` varsayılan |
+  `"inherited"`), `model` (opsiyonel). `enableDelegation` ile gated; native-only (CLI
+  ajanları async için köprülenmiş `SpawnSession` kullanır).
+- **Profiller** — `explore` (salt-okunur arama), `coder` (kod yaz/düzenle), `reviewer`
+  (salt-okunur inceleme). Ephemeral geçici worker; kalıcı session açmaz.
+- **Paralel fan-out** — tek turda birden çok `run_subagent` çağrısı goroutine + WaitGroup
+  ile eşzamanlı koşar; ortak atomik bütçe sayacı ve eşzamanlılık slotları paylaşılır.
+- **`subagent` StepKind + UI** — `agent/trace.go`'da `StepSubagent`; `TurnStep.SubSteps`
+  ile alt-ajan izi parent'a gömülü; `SubagentStep.tsx` katlanabilir iç içe ajan kartı.
+- **Birleştirme/temizlik (A2.4):**
+  - `call_agent` aracı **kaldırıldı**; işlevselliği `run_subagent` (`wait:sync,
+    context:inherited`) ile karşılanır.
+  - `send_agent_message` aracı + `SendAgentMessage` metodu **tamamen kaldırıldı**
+    (heartbeat gidince inbox'ı işleyecek mekanizma kalmamıştı → ölü mektup).
+  - `spawn_session` **native ajan tool'u olarak kaldırıldı** (yerine `run_subagent`
+    `wait:async`); `SpawnSession` runtime metodu + `POST /api/sessions/spawn` HTTP
+    uç noktası + Interaction MCP CLI köprüsü + UI "Başlat" butonu **korundu**.
+  - Heartbeat kaldırılmasının doküman izleri temizlendi (`24-SELF-MANAGEMENT`,
+    `22-SPAWN-SESSION`, skill'ler).
+- **Guard'lar:** depth (varsayılan 3), tur-başı bütçe (varsayılan 8), cycle/visited,
+  eşzamanlılık (`SpawnMaxConcurrent`).
+- `go build`/`go vet`/`go test ./...` + frontend `tsc -b` yeşil. Detay: `_Docs/25-SUBAGENT-ISOLATION.md`.
+
+## Heartbeat (ajan-başına otonom wake ticker) tamamen kaldırıldı ✅ (2026-06-19)
+
+Heartbeat alt sistemi **schedules** (cron) ile fazlalık olduğu için uygulamadan
+tamamen çıkarıldı. `internal/agent/worker.go` (worker/WorkerStatus/tick/`runHeartbeat`
+döngüsü) ve `internal/api/runtime.go` (worker status/wake/heartbeat endpoint'leri)
+**silindi**; `Runtime.Start/Stop/Wake/Status/StartConfigured/StopAll`,
+`emitHeartbeatFailure`, `KindHeartbeat`, `UsageKindHeartbeat`, `db.UpdateHeartbeat`,
+`GetOrCreateHeartbeatSession`, `Agent.Heartbeat*` alanları, `settings.DefaultHeartbeatSec`
+ve `create_agent` heartbeat girdileri kaldırıldı. `delegate.go`'daki best-effort
+`r.Wake` dürtme çağrısı düştü (mesaj inbox'ta sıraya kalır). Frontend: relation-graph /
+execution / budget / notify kind'leri ve "Nabız"/"heartbeat" etiketleri sadeleşti;
+`defaultHeartbeatSec` ayarı UI'dan çıkarıldı. **Korunanlar:** schedules (cron),
+`schedule_wake` (sohbet-içi self-wake), `send_agent_message`/inbox, `pauseAutonomy`
+(artık yalnız zamanlamalara işaret eder). DB güvenliği: diskteki ajan JSON'larında kalan
+`heartbeat*` alanları zararsız (bilinmeyen alanlar unmarshal'da yok sayılır, migrasyon
+gerekmez). Kapılar: `go build`/`go vet`/`go test`/`tsc --noEmit` hepsi yeşil.
+
+## schedule_wake UX: bekleme banner'ı + async ask_user + iterasyon limiti ✅ (2026-06-19)
+
+**İstek:** "ScheduleWake denerken agent beklerken UI işlemi bitmiş gibi görünüyor —
+Durdur/Sıraya al/Steer gibi komutlar gözükse iyi olur. Ayrıca agent `ask_user` denerken
+'only available in interactive chat sessions' hatası alıyor. Araç döngüsü limitini 3 katına çıkaralım."
+
+Üç değişiklik (backend `go build`+testler yeşil, frontend `tsc -b` yeşil):
+
+1. **Bekleme durumu UI'ı + Durdur** — `schedule_wake` arming sonrası `Runtime.ScheduleWake`
+   artık `phase=armed` (`reason`+`fireAt` taşıyan) bir `chat` olayı yayar; frontend bir
+   **bekleme banner'ı** (canlı geri sayım) + **Durdur** kontrolü gösterir → oturum artık
+   "bitti" gibi görünmez. Durdur `POST /api/chat/wake/cancel` → `Runtime.CancelWake` bekleyen
+   one-shot satırı siler, timer'ı iptal eder, `phase=cancelled` yayar. Yaşam döngüsü:
+   armed→start→done / cancelled. (Bekleme sırasında çalışan tur olmadığından steer/queue
+   uygulanmaz; kullanıcı mesaj yazarsa yeni tur olur, banner düşer.)
+   Yeni: `WakeWaitBanner.tsx`, `useChatStream` `wakeWaits`/`cancelWake`, `emitWakePhase`/`CancelWake`.
+2. **Async sohbette `ask_user`/`request_confirmation`** — wake turu `tools.WithAsyncChat` ile
+   işaretlenir; bu araçlar artık "proceed without asking" yerine modele **"sorunu yanıtın olarak
+   yaz, turu bitir; kullanıcı sohbette yanıtlar"** der. Headless koşular eski davranışı korur.
+   (`tools/ask.go` `WithAsyncChat`/`IsAsyncChat`, `builtin_ask.go`, `builtin_confirm.go`, `scheduler.go`.)
+3. **Araç döngüsü limiti 8 → 24** (3 kat) — `toolloop.go` `maxToolIters`; `SWARMGO_MAX_TOOL_ITERS`
+   env ile override edilebilir.
+
+Detay: `_Docs\20-SCHEDULE-WAKE.md`.
+
+## Tasarım tutarlılığı turu — tema token'ları + DRY (4 faz) ✅ (2026-06-19)
+
+**İstek:** "Uygulamaya birçok yeni feature eklendi; tema tutarlılığı ve tasarım kodunu daha düzenli yapabileceğin yerleri tara, hepsini adım adım yap."
+
+İki Explore ajanıyla frontend denetlendi; bulgular 4 faza bölünüp uygulandı (her faz ayrı commit, yalnız ilgili dosyalar — eşzamanlı WIP'e dokunulmadı):
+
+- **Faz 1 — Semantik durum renkleri token'a çekildi** (`b94e16d`): Sabit Tailwind sınıfları (`text-green-400`/`red-400`/`amber-500`/`emerald-500` vb.) `var(--color-success/danger/warning)`'a çevrildi → açık tema dahil doğru re-theme. 12 dosya (RunView, FlowsPanel, TaskDetailPanel, TaskBoard, DependencyPicker, PermissionPrompt, SessionDetailPanel, appPanels, SecretsPanel, MemoryPanel, BoardColumnEditor, WorkspaceCreateModal). Kasıtlı kontrast/içerik `white`/`black` kullanımları bilerek bırakıldı.
+- **Faz 2 — Ortak UI bileşenleri** (`62570a3`): `components/common/` eklendi — `Button` (primary/secondary/danger × sm/md/lg), `IconButton`, `Card`, `Badge` (tone-eşlemeli pill), `SectionHead`, `EmptyState`. İlk adoption: MemoryPanel + SecretsPanel. Geniş adoption kademeli.
+- **Faz 3 — Kategorik renkler `lib/palette.ts`'te toplandı** (`36762b8`): Dağınık "kategori → renk" haritaları (Budget çağrı-türü, oturum bağlam-rolü) tek dosyaya alındı. Bunlar tema-bağımsız *veri* renkleri. `relationGraph` renkleri eşzamanlı WIP olduğundan dokunulmadı.
+- **Faz 4 — Büyük panellerden ayrıştırma** (`13dfcfe`): Kendi kendine yeten parçalar ayrı dosyaya alındı — ArtifactsPanel meta/yardımcılar → `artifactMeta.tsx` (602→532), ToolsPanel ad-çözümleme/şema-düzleştirme → `toolMeta.ts` (580→534). FlowsPanel/Composer'ın derin yapısal bölünmesi (state çözme + görsel QA gerektirir) ertelendi.
+
+✅ Her faz `tsc -b` + `vite build` yeşil. (Görsel Chrome testi bu turda yapılamadı.)
+
+## Workspace WS-prefix + eski UUID migration aracı ✅ (2026-06-19)
+
+İnsan-okunabilir kimlik şemasının devamı (aynı gün, ikinci tur):
+
+- **Workspace ID → `WS<n>`** (`internal/workspace/manager.go` + yeni `id.go`).
+  Yeni workspace'ler `WS1`/`WS2` alır. Sayaç `dataDir/ws-counter.json`'da kalıcı;
+  `NewManager` sayaç + mevcut `WS<n>` maks'ını alıp rewind'i önler. ID dizin
+  adıdır, entity'lere gömülü değildir (izolasyon). `uuid` importu kaldırıldı.
+- **Migration aracı `cmd/migrate-ids`** (4 dosya: main/scan/rewrite/ws). Tek-seferlik,
+  idempotent. **Token-replacement** stratejisi: eski→yeni ID haritası kurar, tüm
+  metin dosyalarında birebir değiştirir (Flow.Graph gömülü ID'leri, Dependencies,
+  content-file yolları dahil — alan-alan saymadan), sonra ID'li dosya/klasörleri
+  (entity JSON, session klasörleri, artifact içerik dosyaları, uploads, usage)
+  yeniden adlandırır, `counters.json`/`ws-counter.json`'ı ileri taşır.
+  **Varsayılan dry-run**, `-apply` ile uygular (önce tam yedek). Mesaj + task Run
+  ID'leri UUID kalır; referansları yine düzeltilir. Detay: `_Docs\08-DEPOLAMA.md`.
+- **Geriye uyum:** araç çalıştırılmadan da eski UUID kayıtlar çalışmaya devam eder
+  (opak string lookup). Araç istendiğinde tek seferde tümünü yeni şemaya çevirir.
+- **UI/URL:** frontend ID formatı varsayımı **yok** (ID'ler opak) → kısa kodlar
+  otomatik görünür; ekstra değişiklik gerekmedi.
+- **Gerçek veride uygulandı (2026-06-19):** `~/.swarmgo` (4 workspace) migrate edildi
+  → `WS1:MINIMAX`, `WS2:DenemeBilimsel`, `WS3:SwarmGo`, `WS4:OtonomOps`; toplam
+  130 entity. Yedek: `~/.swarmgo-idbackup` (junction içeriği hariç). **Bulgu:**
+  `OtonomOps` workspace'inin `workspace/` dizini `Desktop\Projects\url-shortener`'a
+  bir **junction**'dı → araç junction-güvenli yapıldı (yedek atlar, rewrite yalnız
+  `store/`). Çalıştırma için **uygulama kapatıldı**, sonra tek-binary build başlatıldı.
+- **Doğrulama:** sentetik fixture'da dry-run+apply+idempotent re-run; gerçek veride
+  her store `db.Open` ile temiz yüklendi, referans bütünlüğü tam (yetim ref=0,
+  kalan UUID ref=0, 160+ mesaj tutarlı). `go build`/`go test ./...` yeşil.
+
+## İnsan-okunabilir kimlik (ID) şeması — prefix + artan sayı ✅ (2026-06-19)
+
+**İstek:** UUID yerine `D24` gibi harf-prefix + artan sayı kimlik mekanizması.
+
+**Yapılan:** `internal/db` kimlik üretimi UUID'den **prefix'li monoton sayaca** geçti.
+Yeni entity'ler `AGT3`/`SES42`/`TSK17`/`FLW5`/`RUN128`/`ART9`/`MEM88`/`MCP4`/`HOK2`/`SCH7`
+biçiminde kimlik alır (prefix haritası + mekanik: `_Docs\08-DEPOLAMA.md`).
+- **Merkez:** `DB.nextID(prefix)` (`db.go`) — prefix-başına sayaç, her tahsiste
+  `counters.json`'a atomik yazılır; kendi mutex'i (`countersMu`) sayesinde hem
+  `mu` öncesi hem de `mu` tutulurken güvenli.
+- **Tekrar-kullanımsız:** sayaç yalnız artar; silme/restart numarayı geri vermez
+  (`load()`→`loadCounters()`).
+- **Geriye uyum:** eski UUID kimlikler dokunulmadan çalışır (opak string lookup,
+  iki şema yan yana). Eski id'ler taranmaz; prefix'li id'ler bir UUID ile çakışamaz.
+- **İstisna:** mesajlar + task `Run` ID'leri UUID'de kaldı (hot-path / legacy,
+  UI'da görünmez); geçici tanımlayıcılar (chat runID/replyID, spawn SourceID,
+  upload) de UUID. (Workspace ID'leri sonraki turda `WS<n>`'e geçti — yukarı bakın.)
+- **Test:** `internal/db/id_test.go` (`TestNextIDMonotonicAndNoReuse`) — monotonluk +
+  sil/yeniden-aç sonrası reuse olmadığını doğrular. `go build`/`go test ./internal/db ./internal/tools` yeşil.
+
 ## Tek binary — frontend `//go:embed` ile gömüldü ✅ (2026-06-19)
 
 Proje artık **tek executable** olarak dağıtılabiliyor (projenin "tek binary, çapraz
@@ -68,6 +205,68 @@ ajanların `Skills` listesindeki slug referansı duruyordu.
   (artık DB taşır) skill silindikten sonra `RemoveSkillFromAgents` çağırır.
 - **Testler (yeni):** `db/delete_cascade_test.go` — agent silmede schedule/task/run
   cascade + başka ajanın kayıtlarının korunması; `RemoveSkillFromAgents` slug strip.
+
+## Düzeltme — workspace değişiminde panellerin bayat veri göstermesi ✅ (2026-06-19)
+
+**Bug:** Sol üstten workspace değiştirince (veya yeni workspace oluşturup ona
+geçince) Flows/Tasks/Schedules/Executions/Network/Artifacts/Memory/Secrets/Skills/
+Market/Budget/Logs panelleri **eski workspace'in verisini** gösteriyordu; sayfa
+yenileyince düzeliyordu.
+
+**Kök neden:** Bu paneller verisini **mount anında** çekiyor (`useEffect([])`).
+Workspace değişince `activeWorkspaceId` değişiyor ama `view` aynı kaldığından panel
+remount olmuyor → mount-effect tekrar çalışmıyor → bayat veri. (App seviyesindeki
+agents/sessions zaten `activeWorkspaceId` effect'iyle yenileniyordu; sorun yalnız
+kendi verisini çeken panellerde.)
+
+**Çözüm (`App.tsx`):** `<main>` öğesine `key={activeWorkspaceId}` verildi → workspace
+değişince tüm panel ağacı **remount** olur ve verisini yeni workspace başlığıyla
+yeniden çeker. Mevcut "paneller kendi mount'unda yüklenir" tasarımıyla uyumlu;
+gelecekteki workspace-scoped panelleri de otomatik kapsar. `tsc`/`vite build` yeşil.
+
+## Sağlayıcılar — her sağlayıcıya bağlantı testi butonu ✅ (2026-06-19)
+
+**İstek:** Bağlantı testi butonlarını ekle (önce yalnız varsayılan sağlayıcıda vardı).
+
+**Yapılan (`go build` + `tsc`/`vite build` yeşil):**
+- **Per-provider test:** `ProvidersPanel`'de Anthropic, MiniMax ve OpenRouter
+  bölümlerinin her birine "Bağlantıyı test et" butonu + canlı sonuç rozeti
+  (yeniden kullanılabilir `TestConnection` bileşeni). Anahtar yoksa buton pasif.
+- **Doğru model ile prob:** `test-provider` ucu artık opsiyonel `model` alır
+  (`testProviderReq.Model`); boşsa global `DefaultModel`'e düşer. Per-provider
+  butonlar temsilî bir model gönderir (MiniMax → `MiniMax-M3`, OpenRouter →
+  `anthropic/claude-sonnet-4.6`) çünkü global varsayılan model genelde başka bir
+  sağlayıcıya aittir (Anthropic id'si MiniMax/OpenRouter'ı test edemez).
+- **Frontend:** `api.testProvider(provider, model?)`, `SettingsPanel.runTest`
+  imzası model parametresiyle genişletildi; varsayılan sağlayıcı butonu aynen çalışır.
+
+## Sağlayıcılar — OpenRouter built-in + MiniMax model listesi genişletildi ✅ (2026-06-19)
+
+**İstek:** Ajan ayarlarında model seçerken MiniMax modelleri eksik; OpenRouter
+hiç yok. OpenRouter'ı ekle (~25 güncel popüler model yeterli).
+
+**Yapılan (`go build`/`vet`/`test ./...` + `tsc`/`vite build` yeşil):**
+- **OpenRouter yeni built-in kind** (`internal/providers/kind_openrouter.go`):
+  plugin desenini izleyen self-registering `kind_*.go` (Order 4). OpenAI-uyumlu
+  `OpenAICompat` istemcisini `https://openrouter.ai/api/v1` ile sarar → tool-use +
+  streaming + native ajan döngüsü. **25 küratörlü model** (Claude Opus 4.8/4.7,
+  Sonnet 4.6, GPT-5.5, Gemini 3.5 Flash, DeepSeek V4, Grok 4.3, Kimi K2.6, Qwen3.7,
+  Nemotron 3 Ultra, GLM 5.2, MiniMax M3, MiMo V2.5 …) — OpenRouter'ın canlı
+  `/models` kataloğuna karşı **doğrulanmış** slug'lar. `AllowCustomModel=true`.
+- **Kendi API anahtarı:** `settings` (`openrouterKeyEnc` AES-GCM + `openrouterBaseUrl`),
+  DTO (`openrouterKeySet`), Patch (`openrouterKey` write-only), `store.go` Apply +
+  `OpenRouterKey()` getter, `registry.go` (`openrouterKey`/`SetOpenRouter`/`resolve`),
+  `api applySettings` → `SetOpenRouter`. `reservedProviderIDs`'e `openrouter` eklendi.
+- **MiniMax listesi genişletildi** (`kind_minimax.go` + `kind_minimax_anthropic.go`):
+  güncel **M3 (amiral)**, M2.7(+highspeed), M2.5(+highspeed) eklendi; M2.1/M2 korundu.
+- **Frontend:** `ProvidersPanel`'e OpenRouter anahtar + base URL bölümü; `SettingsPanel`
+  state/dirty/save + `clearKey`/`applyKey` union'ları `'openrouter'` ile genişletildi;
+  `types/settings.ts` DTO+Patch alanları. Model seçici katalog-tabanlı → OpenRouter
+  otomatik görünür.
+- **Testler:** `kind_test.go` (4→5 entry + sıra), `customprovider_test.go` (id
+  çakışması: `openrouter`→`myrouter`) güncellendi.
+- **Doküman:** `swarmgo-settings` skill (yeni alanlar), `swarmgo-project` referans
+  skill (sağlayıcı satırı).
 
 ## Ajan kontrol-yüzeyi — workspace CRUD araçları ✅ (2026-06-19)
 

@@ -242,21 +242,22 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `request_confirmation` (evet/hayır) | bloklayan | Faz 2 |
 | `schedule_wake` | bloklamayan | Faz 2 |
 | `use_skill` | bloklamayan (skill gövdesi döndürür) | Faz 4 |
-| `spawn_session` | bloklamayan (fire-and-forget) | Faz 4 |
+| `spawn_session` (CLI köprüsü) | bloklamayan (fire-and-forget) | Faz 4 |
 | `notify` (masaüstü bildirim) | bloklamayan | Faz 3 |
 | workspace/oturum etkileşimleri | — | Faz 3+ |
 
 Yeni tool eklemek = `tools.Registry`'de tek tanım → her iki adaptöre (native +
 MCP) otomatik yansır (tek şema kuralı, §2).
 
-**`spawn_session` (Faz 4, 2026-06-19):** Bir self-management aracı olduğundan CLI
-yolunda **yalnızca self-manage açıkken** ilan edilir (`interactionBackend.tun.
-SelfManageEnabled()`), native yoldaki `buildRegistry` gating'ini birebir yansıtır.
-Tur başına spawn bütçesi (`SpawnMaxPerTurn`) için, stream handler her ajan turunda
-`chatRun`'a taze bir `*tools.SpawnSessionTool` örneği kurar (`setSpawnTool`);
-native yoldaki per-turn tool örneğiyle aynı sıfırlama davranışı. `Call()` dispatch
-bu örneğe `spawn_session` adıyla yönlendirir. Böylece claude-cli ajanları (Coder,
-Fasty …) de bağımsız oturum başlatabilir — canlı doğrulandı.
+**`spawn_session` — CLI köprüsünde korunuyor (Faz 4, 2026-06-19):** Native ajan
+tool listesinden kaldırıldı (native ajanlar artık `run_subagent` ile arka plan çalışması
+yapar). Ancak claude-cli ajanlarının **Interaction MCP köprüsünde** aktif olmaya devam
+eder: CLI kendi native döngüsüyle çalıştığından `run_subagent`'a erişimi yoktur;
+`spawn_session` bu yolun tek arka plan primitifidir. Bir self-management aracı olduğundan
+yalnızca `SelfManageEnabled()` açıkken ilan edilir (`interactionBackend.tun`). Stream
+handler her ajan turunda `chatRun`'a taze bir `*tools.SpawnSessionTool` örneği kurar
+(`setSpawnTool`); `Call()` dispatch bu örneğe `spawn_session` adıyla yönlendirir.
+Böylece claude-cli ajanları (Coder, Fasty …) bağımsız oturum başlatabilir — canlı doğrulandı.
 
 **`use_skill` (Faz 4, 2026-06-19):** claude-cli ajanları sistem promptunda
 `# Available Skills` kataloğunu **görüyordu** ama gövdeyi yükleyecek araçları
@@ -502,6 +503,78 @@ create_artifact" promptu → SSE'de TodoCard `[in_progress,pending]`, ASK
 `GET /api/artifacts` → `('Faz2 Test','markdown',1)` kalıcı. Tool adları izde
 namespace'siz. `go build`/`vet`/`test` yeşil (yeni testler: confirm normalize,
 artifact dispatch, todo no-emit).
+
+## Faz: Shell köprüsü + native araç bastırma (2026-06-19)
+
+**Sorun:** Bir claude-cli ajanı (özellikle scheduled koşuda) SwarmGo skill'ini
+yükleyemiyor ("Unknown skill") ve `ConvertFrom-Json` gibi PowerShell sözdizimini
+POSIX bash'e verince hata alıyordu. Kök neden: CLI ajanı SwarmGo'nun köprülenen
+`use_skill`/`shell` araçları yerine **kendi native `Skill`/`Bash`** araçlarını
+seçiyordu; ayrıca `shell` hiç köprülenmiyordu (eager olduğu için bridge dışı).
+
+**Eklenenler (CLI yolu):**
+- **`shell` köprüsü:** Interaction MCP spec'ine `shell` eklendi (yalnız
+  `ShellEnabled` iken — native shell gate'iyle aynı). `chatRun`'a per-agent
+  **shell runner** (`setShellRunner`/`shellRunnerFor`) eklendi; chat_stream her
+  ajan turunda `Runtime.NewShellRunner()` ile workspace-sandbox'lı, **PowerShell**
+  (Windows) shell'i kurar. Backend dispatch: `callShell` → SwarmGo'nun
+  `ShellTool`'u (sandbox + timeout + permission_prompt ask modunda). Tek kaynak:
+  `interactionToolSpecs`.
+- **Native araç bastırma (`climcp.go`):** interaction mevcutken `disallowed`
+  listesine `Skill` **her zaman** (köprülenen `use_skill` doğru yol), `Bash` ise
+  **yalnız `ShellEnabled` iken** (köprülenen `shell` yerini aldığı için) eklendi.
+  Shell kapalıysa Bash'e dokunulmaz (yoksa ajan kabuğu tamamen kaybeder).
+
+**Kapsam sınırı (Faz 1):** Bu köprü yalnız **sohbet** turunda devrede; otonom
+koşular için bkz. aşağıdaki Faz 2.
+
+## Faz 2: Otonom koşulara Interaction wiring (2026-06-19)
+
+**Sorun:** `WithInteractionEndpoint` yalnız `chat_stream.go`'da çağrılıyordu;
+scheduler/spawn/flow CLI ajanları endpoint almıyor → `use_skill`/`shell`
+köprüsü yok, skill kataloğu enjekte edilmiyor. Ekrandaki "Unknown skill"
+scheduled hatasının asıl kök nedeni buydu.
+
+**Eklenenler:**
+- **Otonom interaction kancası:** `agent.Runtime`'a `AutonomousInteraction`
+  tipi + `SetAutonomousInteraction` + `autoInteract` alanı. `toolloop.completeTraced`
+  otonom + CLI + endpoint-yok durumunda kancayı çağırır (ctx'e endpoint enjekte
+  eder, `defer cleanup`). sessionID ctx'ten (`WithSessionID`/`SessionIDFrom`,
+  `callkind.go`); call-site'lar (scheduler ×2, spawn) damgalar.
+- **api factory (`autonomous_interaction.go`):** `Server.autonomousInteraction(rt)`
+  → headless tur için bir `chatRun` (token) kaydeder, skill loader + shell runner +
+  spawn + wake + self-manage bridge kurar (chat ile birebir), endpoint'i ctx'e yazar,
+  cleanup'ta run'ı düşürür. `Manager.SetAutonomousInteraction` factory'yi her
+  runtime'a (mevcut + sonra açılan) dağıtır; `NewServer` bağlar.
+- **Skill kataloğu otonom koşuya:** `Runtime.autonomousSystemPrompt` =
+  systemPrompt + Available Skills; `invokeTraced` bunu kullanır
+  (önceden katalog yoktu → scheduled ajan skill'lerini bilmiyordu).
+- **Otonom ask bail:** `chatRun.autonomous` bayrağı; `blockForAnswer` headless
+  turda `ask_user`/`request_confirmation`'ı 15dk beklemeden hemen hata döner.
+
+Sonuç: scheduled/spawn CLI ajanları artık `use_skill` (slug) + `shell`
+(PowerShell) köprüsünü ve skill kataloğunu alıyor; Faz 1'deki native `Skill`/`Bash`
+disallow'u da bu turlarda etkin (endpoint mevcut olduğundan).
+
+## Faz 3: `--settings` (permission deny + CLI-path hooks) (2026-06-19)
+
+**Eklenenler:**
+- **`writeCLISettings` (`climcp.go`):** Tur başına bir claude `--settings`
+  dosyası üretir: (a) `permissions.deny` = disallowed listesi (bayrak bir CLI
+  sürümünde yok sayılırsa bile bypass modda blok için defense-in-depth, pattern
+  destekli), (b) `hooks` = workspace'in etkin PreToolUse/PostToolUse hook'ları →
+  CLI'nin **kendi tool döngüsü** de aynı hook'ları tetikler (eksik olan CLI-path
+  hook). Yazacak bir şey yoksa boş döner.
+- **`claudecli.go`:** `ConfigureMCP` imzasına `settingsPath` eklendi; `Complete`
+  MCP yolunda `--settings <path>` geçiriyor (yalnız MCP yolunda — stale path plain
+  yola sızmasın). `toolloop.go` cliMCP bloğu settings'i yazıp geçirir + cleanup.
+
+**Uyarı:** CLI hook'ları CLI'nin kendi hook runner/shell'inde koşar; bu,
+SwarmGo'nun `execHook`'undan (Windows'ta PowerShell) farklı olabilir — SwarmGo
+shell'i için yazılmış bir hook komutu burada uyarlama gerektirebilir.
+
+**Test:** `go build`/`vet`/`go test ./...` yeşil; yeni test:
+otonom ask_user bail (`TestInteractionBackend_AutonomousAskBails`).
 
 ## İlgili dokümanlar
 - `09-CLAUDE-AGENT-SDK.md` — SDK paritesi ADR (native vs CLI yol ayrımı)

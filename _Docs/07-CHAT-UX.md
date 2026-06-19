@@ -157,6 +157,18 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   satırında **nabız atan nokta** (`animate-ping`, **`emerald-400`**) + **"yazıyor…"** etiketi
   gösterir (başlık kalın); gösterge oturum değişse de akıştaki oturumda kalır.
 
+### Hata kurtarma ve yeniden deneme
+
+- **Hata adımı:** Bir tur ağ/sağlayıcı hatasıyla sonuçlanırsa `useChatStream` asistan
+  balonuna `{ kind: "error", text: ..., reason: "client_error" }` adımlı bir sentez mesajı
+  ekler (`useChatStream.ts` satır ~203). Kalıcı bir `TurnStep` olarak değil, yalnız o
+  oturumun canlı görünümüne yerel mesaj olarak eklenir.
+- **"Yeniden dene" butonu:** Asistan balonunda en az bir `kind === "error"` adımı varsa ve
+  akış sürmüyorsa `MessageList.tsx` balonun altında kırmızı **Yeniden dene** butonu gösterir
+  (`canRetry` mantığı). Tıklanınca `onRetry(m.id)` → `useChatStream.retryMessage` çağrılır:
+  başarısız tur + tetikleyen kullanıcı mesajı çifti (kalıcıysa sunucudan da) silinir, ardından
+  aynı metin yeniden gönderilir. Akış sürerken (`isLastLive`) buton gösterilmez.
+
 ### Yerleşim
 - Sohbet **tam genişlik** kullanır (`MessageList`/`Composer`'daki `max-w-3xl` kaldırıldı).
 - `Sidebar` (Ajanlar + Oturumlar) **sürüklenerek yeniden boyutlandırılır**: sağ kenardaki
@@ -204,7 +216,7 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
     **merge** eder, tool_delta deseni). Tam thinking metni ayrıca `Response.Trace`'e konur →
     `traceToSteps` ile **kalıcı** `StepThinking` olarak mesaja yazılır (reload sonrası kalır).
   - **Native non-streaming** (`anthropic.Complete`): `thinking` content-block'u `Response.Trace`'e
-    bir `thinking` adımı olarak parse edilir (otonom/heartbeat turları dâhil).
+    bir `thinking` adımı olarak parse edilir (otonom turlar dâhil).
   - **claude-cli**: CLI stream-json `thinking` bloğunu zaten yayınlar.
   Not: native **tool** döngüsünde thinking kapalı tutulur — imzalı thinking bloklarını geri
   beslemek gerekir, provider soyutlaması bunu korumaz (bkz. `toolloop.go`).

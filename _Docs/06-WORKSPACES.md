@@ -29,10 +29,11 @@ graph TD
 
 ```
 DATA_DIR/
-├── workspaces.json              # [{id, name, createdAt}] kayıt defteri
+├── workspaces.json              # [{id, name, createdAt}] kayıt defteri (id artık WS<n>)
+├── ws-counter.json              # workspace id sayacı ({"n":N}) — tekrar-kullanımsız
 ├── credential-secret            # global şifreleme anahtarı
 └── workspaces/
-    ├── {id-1}/
+    ├── {id-1}/                   # örn. WS1/ (eski kayıtlar UUID kalabilir; bkz. cmd/migrate-ids)
     │   ├── store/               # Workspace 1'in TÜM verisi (JSON/JSONL dosyaları)
     │   ├── config/              # Editlenebilir config: prompts/*.md, instructions.md, README.md
     │   ├── ws-settings.json     # Workspace ayarları (override + instructions)
@@ -146,7 +147,7 @@ override'larını `store/` yanındaki `ws-settings.json` dosyasında tutar
 |------|----------|
 | `icon`, `color` | Switcher/rail'de görsel kimlik |
 | `defaultProvider`, `defaultModel` | Boş = uygulama varsayılanı |
-| `pauseAutonomy` | Sadece bu workspace'in otonomisini (heartbeat + scheduler) durdurur |
+| `pauseAutonomy` | Sadece bu workspace'in otonomisini (scheduler) durdurur |
 | `instructions` | **Bu workspace'teki tüm agent'lara eklenen serbest metin yönergeler** |
 
 ### Instructions enjeksiyonu
@@ -156,12 +157,12 @@ sonra) `# Workspace Instructions` başlığıyla eklenir. Statik prefix'te kald�
 prompt cache'i bozmaz.
 
 - **İnteraktif chat:** `internal/api/chat.go` ve `chat_stream.go` → `ws(r).Settings().Instructions`
-- **Otonom yollar** (heartbeat / task / flow / reflection): `internal/agent/runtime.go` →
+- **Otonom yollar** (schedule / task / flow / reflection): `internal/agent/runtime.go` →
   `Runtime.systemPrompt(agent)`. Runtime, değeri `SetInstructions` ile ayarlardan
   senkron tutar (ilk yükleme `loadSettings`, sonraki güncellemeler `UpdateSettings`).
 
 ## Notlar / Gelecek
 
-- **Runtime izolasyonu:** Her workspace'in kendi agent runtime'ı var → bir workspace'in otonom ajanları diğerini etkilemez. Tüm workspace'lerin heartbeat'leri paralel çalışır.
+- **Runtime izolasyonu:** Her workspace'in kendi agent runtime'ı var → bir workspace'in otonom ajanları diğerini etkilemez. Tüm workspace'lerin zamanlayıcıları paralel çalışır.
 - **Silme koruması:** En az bir workspace her zaman kalır.
 - **Gelecek:** Workspace yeniden adlandırma, dışa/içe aktarma (export/import), workspace başına ayrı tema.

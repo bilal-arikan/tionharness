@@ -221,7 +221,7 @@ dropdown'u (İçerir/Eşittir/Regex); transform/delay node'ları canvas'ta doğr
 
 - SwarmClaw'daki gibi şablonları **kategorilere** ayırma / arama eklenebilir.
 - Koşu **silme / temizleme (cap)** ve koşudan **yeniden çalıştır** ileride eklenebilir.
-- Paperclip-tarzı statik "ajan ilişki haritası" (call_agent/send_agent_message kenarları)
+- Paperclip-tarzı statik "ajan ilişki haritası" (run_subagent kenarları)
   ayrı bir ekran olarak değerlendirilebilir.
 - MiniMap arka planı sabit `#0b0e14` (temaya duyarlı değil) — istenirse tema değişkenine bağlanır.
 - Şablon `instantiateTemplate` varsayılan olarak ilk ajanı atıyor; ileride "ajan eşleme" adımı

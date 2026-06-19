@@ -20,8 +20,8 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | Bileşen | SwarmClaw | SwarmGo |
 |---------|-----------|---------|
 | Dil | TypeScript / Node.js 22 | Go 1.26+ |
-| Masaüstü kabuk | Electron | Wails v2 |
-| Web framework | Next.js | Bağımsız frontend + Go API |
+| Masaüstü kabuk | Electron | Wails v2 (Faz 9, opsiyonel) |
+| Web framework | Next.js | Bağımsız frontend + Go API; `dist/` binary'e `go:embed` ile gömülü |
 | Depolama | better-sqlite3 | Dosya sistemi — JSON/JSONL, DB yok (bkz. `08-DEPOLAMA.md`) |
 | Orkestrasyon | LangGraph | Kendi state-machine + goroutine/channel |
 | Boyut | ~100-150 MB | ~10-20 MB hedef |
@@ -33,7 +33,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 - **Session (Oturum):** Mesaj geçmişini ve bağlamı koruyan konuşma dizisi.
 - **Memory (Hafıza):** Hibrit hatırlama — dokümanlar, günlük (journal), yansıtma (reflection) notları.
 - **Task (Görev):** Yürütme politikaları, retry mantığı ve bağımlılıkları olan pano-tabanlı iş kuyruğu.
-- **Provider (Sağlayıcı):** LLM uç noktası soyutlaması (Anthropic, claude-cli, MiniMax...).
+- **Provider (Sağlayıcı):** LLM uç noktası soyutlaması (5 kind: `anthropic`, `claude-cli`, `minimax`, `minimax-anthropic`, `openrouter`).
 
 ## Doküman Dizini
 
@@ -59,7 +59,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 - ✅ Node.js v24 + npm 11
 - ⏳ Wails v2 (Faz 9'da kurulacak)
 
-## Proje Durumu (2026-06-15)
+## Proje Durumu (2026-06-19)
 
-✅ **Faz 0–8 tamamlandı** ve Chrome'da canlı test edildi: İskelet · DB/Config · Provider+Chat (anahtarsız claude-cli) · React Web UI · Agent Runtime · Workspace İzolasyonu · Tasks+Schedules · Memory · Sağlamlaştırma (compaction + bütçe guardrail) · Tool-use+MCP · Orchestration (akışlar). (Faz 8, kullanıcı talebiyle Faz 7'den önce yapıldı.)
+✅ **Faz 0–8 + kapsamlı backlog tamamlandı** ve Chrome'da canlı test edildi: İskelet · DB/Config · Provider+Chat (5 kind: anthropic/claude-cli/minimax/minimax-anthropic/openrouter) · React Web UI · Agent Runtime · Workspace İzolasyonu · Tasks+Schedules · Memory · Sağlamlaştırma (compaction + bütçe guardrail) · Tool-use+MCP · Orchestration (akışlar) · Lazy tool yükleme · Prefix'li insan-okunabilir ID'ler (WS/AGT/SES, `cmd/migrate-ids`) · İlişki grafiği · Self-management suite · Hooks · İzin modeli.
 ➡️ **Sıradaki: Faz 9 — Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Detay: [05-ILERLEME.md](05-ILERLEME.md).

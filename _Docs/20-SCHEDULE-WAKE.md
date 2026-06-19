@@ -94,6 +94,67 @@ Playwright ile doğrulandı:
 3. 10 saniye sonra wake prompt aynı sohbet oturumuna otomatik enjekte edildi
 4. Agent yeniden yanıt verdi — sohbet ekranda görünür şekilde devam etti
 
+## Bekleme durumu UI'ı + iptal (2026-06-19)
+
+`schedule_wake` çağıran turun **bittiğini** ama oturumun **otomatik devam etmeyi
+beklediğini** kullanıcıya göstermek için bir yaşam-döngüsü eklendi. Önceden tur
+bitince oturum "tamamlanmış" gibi görünüyordu; artık bir **bekleme banner'ı** +
+**Durdur** kontrolü çıkar.
+
+**Olay yaşam döngüsü** (`chat` event, `target.phase`):
+
+| phase | Ne zaman | Frontend |
+|---|---|---|
+| `armed` | `Runtime.ScheduleWake` arming sonrası | Bekleme banner'ı (reason + canlı geri sayım) + Durdur |
+| `start` | Wake tetiklendi (`deliverWake` başında) | Banner kalkar, "düşünüyor" göstergesi yükselir |
+| `done` | Wake yanıtı yazıldı | Her şey temizlenir |
+| `cancelled` | Kullanıcı Durdur'a bastı (`CancelWake`) | Banner temizlenir |
+
+`armed`/`cancelled` olayları `Runtime.emitWakePhase` ile yayılır; `target` içinde
+`reason` ve `fireAt` (unix sn) taşınır. `start`/`done` hâlâ `scheduler.emitWakeEvent`'ten gelir.
+
+**İptal yolu:** `POST /api/chat/wake/cancel {sessionId}` → `Runtime.CancelWake`
+oturuma ait bekleyen one-shot satır(lar)ı siler, scheduler'ı yeniden kurar
+(timer iptal) ve `phase=cancelled` yayar.
+
+**Steer/Sıraya alma:** Bekleme sırasında çalışan bir tur olmadığından canlı
+steer/queue uygulanmaz; kullanıcı normal bir mesaj yazarsa bu yeni bir tur olur ve
+bekleyen wake otomatik düşürülür (`sendMessage` banner'ı temizler).
+
+| Dosya | Değişiklik |
+|---|---|
+| `internal/agent/runtime.go` | `emitWakePhase`, `CancelWake`; `ScheduleWake` armed yayar |
+| `internal/api/chat_control.go` | `handleCancelWake` |
+| `internal/api/server.go` | `POST /api/chat/wake/cancel` route |
+| `frontend/src/api/chat.ts` | `cancelWake(sessionId)` |
+| `frontend/src/hooks/useChatStream.ts` | `wakeWaits` durumu, `setWakeWait`/`clearWakeWait`/`cancelWake`, `activeWakeWait` |
+| `frontend/src/components/chat/WakeWaitBanner.tsx` | bekleme banner'ı + geri sayım + Durdur |
+| `frontend/src/App.tsx` | `phase` armed/start/cancelled/done dallanması + banner render |
+
+## Async sohbette `ask_user` / `request_confirmation` (2026-06-19)
+
+Wake ile teslim edilen tur `KindSchedule` (autonomous) bağlamında koşar; bu yüzden
+`ask_user` eskiden `"...proceed without asking"` hatası veriyordu — oysa kullanıcı
+**asenkron olarak orada** (sohbette okuyup yanıtlayabilir). `deliverWake`'in turu
+artık `tools.WithAsyncChat` ile işaretlenir; `ask_user`/`request_confirmation` bu
+durumda modele **"sorunu normal yanıtın olarak yaz ve turu bitir; kullanıcı sohbette
+yanıtlar"** yönergesini döndürür (tahmine zorlamak yerine). Tam headless koşular
+(flow) eski "proceed without asking" davranışını korur.
+
+| Dosya | Değişiklik |
+|---|---|
+| `internal/tools/ask.go` | `WithAsyncChat`/`IsAsyncChat` marker |
+| `internal/tools/builtin_ask.go` | async-chat dalında yönlendirici mesaj |
+| `internal/tools/builtin_confirm.go` | async-chat dalında yönlendirici mesaj |
+| `internal/agent/scheduler.go` | `deliverWake` turu `WithAsyncChat` ile damgalanır |
+
+## Araç döngüsü iterasyon limiti (2026-06-19)
+
+Native tool döngüsü sınırı `maxToolIters` **8 → 24** (3 kat) yükseltildi —
+schedule_wake güdümlü çok-adımlı async akışlar limit'e takılmadan tamamlansın
+diye. `SWARMGO_MAX_TOOL_ITERS` env değişkeniyle (pozitif tamsayı) override edilebilir
+(`internal/agent/toolloop.go`).
+
 ## Bilinen davranışlar
 
 - `ScheduleWakeup` (Claude Code harness aracı) devre dışı bırakıldı. Model bazen hâlâ bu aracı çağırmayı dener; disallowed listesi sayesinde araç çağrısı reddedilir, model `schedule_wake`'e yönelir.

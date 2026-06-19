@@ -15,8 +15,8 @@ Açıkça `logger.Warn/Error` ile loglanmayan hataların da kaydı tutulur:
   düşüp **stderr**'de kalıyordu (logbuf'a/Loglar ekranına gelmiyordu).
   `http.ErrAbortHandler` yeniden panic'lenir (kasıtlı SSE abort'ları korunur).
   Zincir: `withCORS → withRequestLog → withRecover → withWorkspace → mux`.
-- **Goroutine panic recovery**: `agent/worker.go` `tick` (heartbeat),
-  `agent/flow.go` `driveFlow`, `orchestration/engine.go` paralel+sıralı node'lar
+- **Goroutine panic recovery**: `agent/flow.go` `driveFlow`,
+  `orchestration/engine.go` paralel+sıralı node'lar
   — node panic'i süreç çökmesi yerine loglanan flow hatasına dönüşür.
 - **Frontend hata köprüsü**: `POST /api/logs` (`handleClientLog`) istemci
   hatalarını aynı slog akışına yazar. Frontend `lib/reportError.ts`
@@ -113,7 +113,6 @@ Loglar iki katmanda üretilir:
 | `schedule created` / `toggled` | `api/schedules.go` | id, agent, cron, enabled |
 | `mcp server toggled` / `tested` | `api/mcp.go` | server, tools (test başarısız → WARN) |
 | `memory added` | `api/memory.go` | agent, kind, id |
-| `agent tick` | `agent/worker.go` | agent, trigger, failures, ok (heartbeat) |
 | `flow run started` / `finished` | `agent/flow.go` | flow, run, status, steps |
 | `agent reflected` | `agent/reflector.go` | agent, journals |
 

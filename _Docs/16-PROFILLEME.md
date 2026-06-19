@@ -33,7 +33,7 @@ Tarayıcıdan kontrol: <http://127.0.0.1:6060/debug/pprof/>
 ## Profil toplama
 
 Önce uygulamayı **gerçek bir iş yükü altına** sok (birkaç ajan + bir flow koşusu +
-heartbeat birkaç dakika), sonra profilleri al.
+birkaç zamanlanmış çağrı), sonra profilleri al.
 
 ### Heap / allocation (bellek)
 

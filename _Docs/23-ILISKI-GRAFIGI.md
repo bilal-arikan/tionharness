@@ -63,16 +63,32 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
   **ve** görev `in_progress` ise. Parlak accent kenar + gölge. Görev durum değişince
   (board'da taşınınca) bağ kopar, ajan serbest kalır; başka görev `in_progress`
   olunca yeni bağ kurulur. Skill/MCP bağları ajanla kalır (onunla sürüklenir).
-- **Gerçek zamanlı:** Canlı modda panel `/api/events` SSE'ye abone olur; görev/zamanlama/
-  heartbeat olaylarında grafiği yeniden çeker. `VisNetworkGraph` DataSet'i **artımlı**
+- **Gerçek zamanlı:** Canlı modda panel `/api/events` SSE'ye abone olur; görev/zamanlama
+  olaylarında grafiği yeniden çeker. `VisNetworkGraph` DataSet'i **artımlı**
   (diff ekle/güncelle/sil, konum sıfırlamadan) güncellediği için fizik motoru ajanı yeni
   bağına **kaydırarak animasyon** yapar — "canlı akış" hissi buradan gelir.
-- **Boşta (idle) lobi:** alt-ortada sabit bir "Boşta" çekirdeği; aktif görevi olmayan
+- **Sabit alanlar sürüklenebilir:** Sütun başlıkları, "Boşta" ve "Geçmiş" çekirdekleri
+  `physics:false` (fizik solver'ı onları **hareket ettirmez**) ama `fixed` **kullanılmaz**
+  → kullanıcı **sürükleyebilir** ve bıraktığı yerde kalır. Artımlı güncelleme mevcut
+  node'ların x/y'sini koruduğu için (yalnız yeni node'a konum verilir) canlı yenileme
+  sürüklenen konumu **eski yerine sıçratmaz**.
+- **Boşta (idle) lobi:** alt-soldaki "Boşta" çekirdeği; aktif görevi olmayan
   her ajan zayıf bir yayla buraya çekilir. Görev `in_progress` olunca güçlü aktif bağ
   ajanı kartına çeker (idle yayını ezer), görev bitince ajan lobiye geri döner.
 - **Ajanın akışı/skill/MCP'si:** Canlı modda `uses` (akış→ajan), `skill` ve `mcp`
   bağları korunur → ajanın bağlı olduğu akış/beceri/sunucu onunla birlikte sürüklenir.
   Görev/sütun yapısaldır; flow/skill/MCP katmanları chip'lerle açılıp kapatılır.
+- **Geçmiş (arşiv) çekim noktası:** Sağ-alttaki sabit "Geçmiş" çekirdeği; **Aktivite
+  (executions) ekranının birebir aynısı** — çalışmayan **tüm** oturumlar
+  (chat/task/flow/schedule) buraya toplanır. Her run **başlıklı kart** olarak
+  gösterilir (kanban kartı gibi, tür-renkli kenar: chat=mavi, flow=mor, schedule=cyan,
+  task=slate; hover'da tür+ajan). Backend `graphNode` tip `run` olarak
+  son ~30 bitmiş oturumu döndürür (`runKind`+başlık+ajan adı; **agent zorunlu değil** —
+  ajansız flow oturumları da dahil, executions feed'iyle aynı). Yalnız Canlı modda
+  görünür ("Geçmiş" katman chip'i). Çalışan run aktif bağ alır, bitince "Geçmiş"e kart
+  olarak düşer — iş akışı görünür biçimde arşive akar.
+  > Doğrulandı: MINIMAX'te `/api/executions` (non-running)=13 ↔ graph `run` node=13
+  > (schedule 2 / chat 7 / flow 4) — birebir eşleşme.
 - **Canlı run / "şu an çalışıyor":** Backend `/api/graph` ajan düğümüne `running`+
   `runKind`+`runTarget` ekler (process-wide çalışan oturum kümesi `s.runs.activeSessionIDs()`
   → bu workspace'in oturumlarına join). Canlı modda: çalışan ajan **parlak "live"
@@ -94,9 +110,13 @@ benzerliği **eşik** üstündeki çiftler bağlanır.
 - Hafıza ekranında **Liste / Ağ** geçişi (Ağ sekmesi vis-network'ü lazy yükler).
 - Yerleşim: vis-network `forceAtlas2Based` fizik — benzer hafızalar birbirini çeker,
   loose hafızalar eşit yayılır.
-- Düğüm rengi hafıza türü (belge mavi / günlük slate / yansıma yeşil); boyut bağ
-  derecesi (degree) ile ölçeklenir → hub'lar büyük görünür.
-- Kenar kalınlığı/opaklığı benzerlik skoruyla orantılı.
+- **İçerik etiketi:** her düğüm kısa bir içerik önizlemesi gösterir (hangi hafıza
+  olduğu bir bakışta okunur) — eskiden etiketsiz gri noktalardı.
+- **Zengin tooltip:** tür rozeti + içerik + tarih (`tip()` HTMLElement).
+- **Türe göre şekil/boyut:** yansıma (üst-düzey özet) = **yıldız + büyük**;
+  belge/günlük = disk; boyut ayrıca bağ derecesiyle (degree) ölçeklenir → hub'lar büyük.
+- Düğüm rengi hafıza türü (belge mavi / günlük slate / yansıma yeşil).
+- Kenar kalınlığı/opaklığı benzerlik skoruyla orantılı; kenar hover'da "benzerlik: %X".
 - **Benzerlik eşiği** kaydırıcısı (0.05–0.60): yoğun ağdan yalnız en güçlü bağlara süzme.
 
 ## Backend

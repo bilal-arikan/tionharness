@@ -4,9 +4,17 @@
 > bağımsız bir oturum** başlatıp **beklemeden** bırakmak. Çıktı, Faz U "Birleşik
 > Yürütme/Aktivite" feed'inde canlı görünür.
 
-## Amaç ve Konum
+> **2026-06-19 güncel durumu:** `spawn_session` native ajan aracı olarak **kaldırıldı**.
+> Yerine geçen: `run_subagent` (tek generic agent-to-agent primitifi; `wait:"async"`
+> modu SpawnSession altyapısını kullanır). `SpawnSession` runtime metodu ve
+> `POST /api/sessions/spawn` HTTP uç noktası **korunuyor** — (a) UI "Başlat" butonu,
+> (b) claude-cli ajanlarının Interaction MCP köprüsü, (c) `run_subagent` async
+> modunun iç motoru olarak aktif. Bu doküman orijinal tasarımı ve CLI köprü
+> wiring'ini tarihsel kayıt olarak tutar.
 
-Zaten elimizde üç tetikleme yolu var:
+## Amaç ve Konum (tarihsel tasarım bağlamı)
+
+Tasarım sırasında elimizde üç tetikleme yolu vardı:
 
 | Yol | Doğası | Çekirdek |
 |-----|--------|----------|
@@ -14,7 +22,10 @@ Zaten elimizde üç tetikleme yolu var:
 | `call_agent` | **senkron**, aynı tur (delegasyon) | `delegate.go::withDelegation` |
 | `send_agent_message` | async inbox mesajı (mevcut ajana kuyruk) | `delegate.go::SendAgentMessage` |
 
-**Spawn bunlardan farklı:** elle (kullanıcı/ajan) **yeni bağımsız bir oturum**
+> **Sonraki durum:** `call_agent` ve `send_agent_message` kaldırıldı; ikisi de
+> `run_subagent` altında birleşti (sırasıyla `wait:sync` ve `wait:async` modu).
+
+**Spawn bunlardan farklıydı:** elle (kullanıcı/ajan) **yeni bağımsız bir oturum**
 açar, ajan turunu **arka planda** koşar ve `sessionID`'yi hemen döndürür —
 çağıran beklemez. Bu, "swarm" (otonom işçi filosu) yeteneğinin temel taşıdır.
 
@@ -62,7 +73,7 @@ Akış:
 > **Neden streaming değil de `invokeTraced`?** Aktivite feed'i mesajları poll
 > eder ve canlı "running" bayrağını `ActiveSessionIDs()`'ten alır; ara adımlar
 > ancak asistan mesajı persist edilince görünür hale gelir (canlı SSE tüketicisi
-> yok). Bu yüzden schedule/heartbeat ile **aynı** kanıtlanmış kalıbı kullanırız:
+> yok). Bu yüzden schedule ile **aynı** kanıtlanmış kalıbı kullanırız:
 > `trackSession` + `invokeTraced`. Running rozeti goroutine boyunca yanar,
 > transkript bitince dolar.
 
@@ -72,14 +83,12 @@ Akış:
 - Body: `{agentId, prompt, modelOverride?}` → `{sessionId, agentName}`.
 - `registerSessionRoutes`'a eklenir. UI "Yeni oturum başlat" butonu bunu çağırır.
 
-**b) Ajan aracı — `spawn_session`** (`internal/tools/builtin_spawn.go`)
-- Built-in, **`SelfManageEnabled`** ile gated (self-manage suite içinde, lazy).
-- Parametre: `agent` (hedef ajan id/isim), `prompt`, `modelOverride?`.
-- **Per-tur guard:** tur başına en fazla `Tunables.SpawnMaxPerTurn` (vars. 4)
-  spawn — tool örneği başına sayaç (registry her turda yeniden kurulur).
-- Provenance: `CreatedBy = <çağıran ajan id>`.
-- Otonom "swarm": bir ajan, alt görevleri paralel işçilere dağıtıp beklemeden
-  devam edebilir (call_agent senkron beklerken bu etmez).
+**b) Ajan aracı — (kaldırıldı)**
+- `spawn_session` built-in tool'u **native ajan yüzeyinden kaldırıldı** (2026-06-19).
+- Yerine geçen: `run_subagent` ile `wait:"async"` — aynı `SpawnSession` altyapısını
+  kullanır, ama `enableDelegation` ile gated ve profil/agent target destekler.
+- claude-cli ajanları async arka plan çalışması için Interaction MCP köprüsünden
+  `run_subagent` kullanabilir.
 
 **c) UI**
 - `ExecutionsPanel`: `spawned` kind metadata (✨ "Spawn") + filtre sekmesi;

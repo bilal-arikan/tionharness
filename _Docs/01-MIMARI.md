@@ -4,26 +4,28 @@
 
 ```mermaid
 graph TD
-    UI[Frontend - Web UI<br/>kendi tasarimimiz] -->|HTTP + WebSocket| API[API Katmani<br/>internal/api]
+    UI[Frontend - Web UI<br/>kendi tasarimimiz] -->|HTTP + SSE| API[API Katmani<br/>internal/api]
     API --> RT[Agent Runtime<br/>internal/agent]
     API --> ORC[Orchestration<br/>internal/orchestration]
     API --> TASK[Task Board<br/>internal/tasks]
     RT --> MEM[Memory<br/>internal/memory]
-    RT --> PROV[Providers<br/>internal/providers]
+    RT --> PROV[Providers<br/>internal/providers<br/>5 kind]
     RT --> MCP[MCP Istemci<br/>internal/mcp]
     MEM --> DB[Dosya Store<br/>JSON/JSONL<br/>internal/db]
     TASK --> DB
     RT --> DB
     ORC --> DB
-    WAILS[Wails Masaustu Kabugu] -.sarar.-> UI
+    EMBED[internal/web<br/>go:embed all:dist] -.SPA binary icinde.-> UI
+    WAILS[Wails Masaustu Kabugu<br/>Faz 9 opsiyonel] -.sarar.-> UI
 ```
 
 ## Katmanlar
 
 ### 1. Sunum Katmanı (Frontend)
-- Bağımsız geliştirilen web UI (React + Tailwind + shadcn/ui önerilir).
-- Backend ile yalnızca **JSON API + WebSocket** üzerinden konuşur.
-- Wails, build çıktısını binary'ye gömer → tek `.exe`.
+- Bağımsız geliştirilen web UI (React + Vite + TS + Tailwind v4, kendi bileşenlerimiz).
+- Backend ile yalnızca **JSON API + SSE** üzerinden konuşur.
+- Frontend `dist/` çıktısı `go:embed all:dist` ile Go binary'sine gömülür (`internal/web/embed.go`) → tek çalıştırılabilir dosya, ayrı statik sunucu gerekmez.
+- Wails (Faz 9) opsiyonel native pencere sarmalayıcısı olarak eklenecek.
 - UI/UX SwarmClaw'a benzer ama tamamen kendi tasarım dilimiz.
 
 ### 2. API Katmanı (`internal/api`)
@@ -36,7 +38,7 @@ Sistemin kalbi. Her ajan bir **goroutine** olarak çalışır.
 
 ```mermaid
 graph LR
-    W[Wake Signal<br/>heartbeat/mesaj/orchestrator] --> CTX[Context Assembly<br/>gecmis + hafiza + gorevler]
+    W[Wake Signal<br/>zamanlama/mesaj/orchestrator] --> CTX[Context Assembly<br/>gecmis + hafiza + gorevler]
     CTX --> CALL[Provider Call<br/>LLM cagrisi]
     CALL --> TOOL[Tool Loop<br/>arac calistirma]
     TOOL --> OUT[Outcome Classification<br/>basari/hata + backoff]
@@ -47,8 +49,7 @@ graph LR
 
 **Anahtar mekanizmalar:**
 - Her ajan = goroutine; ajanlar arası mesaj = channel.
-- Heartbeat = `time.Ticker`; zamanlama = `robfig/cron`.
-- 10 ardışık hatada exponential backoff + otomatik devre dışı.
+- Zamanlama = `robfig/cron` (cron + tek seferlik wake timer'ları).
 - Paralel yürütme = düz goroutine + `sync` (orchestration parallel node). `errgroup` planlanmıştı ama gerekmedi; `go.mod`'da yalnızca `google/uuid` + `robfig/cron/v3` var.
 - **Skill sistemi:** `internal/skills` — 2 katmanlı (global + workspace), frontmatter-only katalog sistem promptuna girer, `use_skill` ile lazy body yüklenir, `subskills` ile aşamalı yükleme.
 - **Lazy tool loading:** Self-management suite + MCP araçları şemaları tura girmez; sistem promptunda özet katalog yayımlanır, `activate_tools` ile istenince tam şema gelir (`internal/tools/activetools.go`, `builtin_activate.go`).
@@ -67,12 +68,12 @@ graph LR
 - Token-bütçeli **compaction**: oturum geçmişi eşiği aşınca eski turlar rolling summary'ye katlanır; sadece özet + son N tur gönderilir → uzun sohbetlerde context taşması yok.
 
 ### 5c. Bütçe Guardrail (`agent/budget.go`)
-- `guardedComplete`: tüm runtime provider çağrılarının tek hunisi. Otonom çağrılarda (heartbeat/scheduler) ajan başına günlük limit (`agent_usage`) uygulanır; manuel chat muaf.
+- `guardedComplete`: tüm runtime provider çağrılarının tek hunisi. Otonom çağrılarda (scheduler) ajan başına günlük limit (`agent_usage`) uygulanır; manuel chat muaf.
 
 ### 6. Providers (`internal/providers`)
 - Ortak `Provider` arayüzü; her LLM için ayrı implementasyon.
-- **Mevcut:** `anthropic` (ince HTTP istemci, SDK yok), `claude-cli` (anahtarsız, OAuth/abonelik), `minimax` (OpenAI-uyumlu — herhangi bir OpenAI-stili uca da uyar). Ortak HTTP iskeleti `transport.go` (`postJSON`).
-- OpenAI/Ollama/Gemini gibi ekler aynı `Provider` arayüzü arkasına takılabilir.
+- **Mevcut (5 kind):** `anthropic` (ince HTTP istemci, SDK yok), `claude-cli` (anahtarsız, OAuth/abonelik), `minimax` (OpenAI-uyumlu), `minimax-anthropic` (Anthropic uyumlu MiniMax ucu), `openrouter` (OpenAI-uyumlu proxy, yüzlerce model — `kind_openrouter.go`). Ortak HTTP iskeleti `transport.go` (`postJSON`).
+- Her kind `init()` içinde `RegisterKind` ile kaydolur; yeni transport = yeni `kind_*.go` dosyası, başka hiçbir yere dokunulmaz.
 - **Streaming birinci sınıf:** opsiyonel `Streamer` arayüzü (`Stream(ctx, req, onDelta)`); `anthropic` + `minimax` native token akışı yapar, claude-cli kendi stream-json izini yayınlar. UI'a SSE ile akar (bkz. `07-CHAT-UX.md`).
 
 ### 7. Diğer Modüller
@@ -80,6 +81,8 @@ graph LR
 - **Tasks (`internal/tasks`):** Pano, atama, delegasyon, yürütme politikası.
 - **DB (`internal/db`):** Dosya-tabanlı store — entity-başına JSON + oturum-başına JSONL, bellek-içi maps + atomik diske yazma (SQLite yok). Bkz. `_Docs/08-DEPOLAMA.md`.
 - **Config (`internal/config`):** Ortam değişkenleri, şifreli kimlik bilgileri (credential secret).
+- **Web (`internal/web`):** `embed.go` — `//go:embed all:dist` ile derleme anında `frontend/dist/` SPA'sini binary'ye gömer; `Handler()` ile SPA + fallback to `index.html` sunar. Ayrı statik sunum/CDN gerekmez.
+- **Prefix'li ID'ler (`internal/workspace/id.go`):** Workspace'ler `WS<n>`, ajan ve oturum kayıtları `AGT<n>`/`SES<n>` biçiminde monoton insan-okunabilir ID'ler alır; `ws-counter.json` ile yeniden başlamada sayaç korunur. Tek seferlik migrasyon: `cmd/migrate-ids/`.
 
 ## Dizin Yapısı
 
@@ -88,11 +91,14 @@ graph LR
 ```
 SwarmGo/
 ├── _Docs/                       # Plan ve tasarim dokumanlari (Turkce)
-├── cmd/swarmgo/main.go          # Giris: Manager + API server + graceful shutdown
+├── cmd/
+│   ├── swarmgo/main.go          # Giris: Manager + API server + graceful shutdown
+│   └── migrate-ids/             # Tek-seferlik WS/AGT/SES prefix'li ID migrasyon araci
 ├── internal/
 │   ├── config/                  # env + AES-GCM secret
 │   ├── db/                      # Dosya store (JSON/JSONL, DB yok): db.go (maps+load+atomik yaz) + store_*.go (agent/session/task/run/schedule/memory/usage/mcp/flow)
-│   ├── providers/               # provider arayüzü (+Streamer), anthropic, claudecli, minimax, catalog, transport, registry
+│   ├── providers/               # provider arayüzü (+Streamer), anthropic, claudecli, minimax, minimax-anthropic, openrouter, catalog, transport, registry
+│   ├── web/                     # embed.go — go:embed all:dist → frontend SPA'yi binary'ye gömer, http.Handler sunar
 │   ├── agent/                   # runtime, worker, executor (RunTask), scheduler (cron), reflector, budget, titler, toolloop, toolsetup, climcp (claude-cli --mcp-config), trace (aktivite izi/StepKind), tunables, flow
 │   ├── memory/                  # vector.go (lexical cosine), memory.go (Store)
 │   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go)
@@ -103,9 +109,9 @@ SwarmGo/
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
 │   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs (bkz. 12-LOGLAMA.md)
 │   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE
-│   ├── workspace/               # workspace başına DB + Runtime + Scheduler (manager.go)
+│   ├── workspace/               # workspace başına DB + Runtime + Scheduler (manager.go); prefix'li ID'ler (id.go, ws-counter.json)
 │   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat(+stream/control)/files/runtime/tasks/schedules/memory/usage/mcp/agent_tools/flows/artifacts/settings/workspaces/logs/events
-├── frontend/                    # React + Vite + TS + Tailwind v4
+├── frontend/                    # React + Vite + TS + Tailwind v4; vis-network + vis-data (ilişki grafiği), @xyflow/react (flow canvas), lucide-react (ikonlar), @fontsource-variable/inter + jetbrains-mono
 └── go.mod
 ```
 

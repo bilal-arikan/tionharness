@@ -73,6 +73,11 @@ birleşiyor; UI, model-discovery, health-check, kimlik bilgisi eşleme aynı `id
 
 ### SC-1 — Built-in API provider preset kataloğu (CLI değil)
 
+> **Durum (2026-06-19): Kısmen hayata geçirildi.** `internal/providers/kind_openrouter.go`
+> eklendi: `openrouter` kind, OpenRouter'ın OpenAI-uyumlu ucu üzerinden yüzlerce modeli
+> tek API key ile sunar; ~25 model önerisi kataloğa dahil. Bu, aşağıdaki planın ilk
+> somut adımıdır.
+
 **Fikir:** `OpenAICompat` handler'ı zaten hazır. swarmclaw'un `PROVIDERS` map'indeki
 OpenAI-uyumlu girişleri (DeepSeek, Groq, Together, xAI, Fireworks, Nebius, DeepInfra,
 OpenRouter, Mistral, Google-compat…) SwarmGo'da **önceden-tanımlı preset katalog** girişi

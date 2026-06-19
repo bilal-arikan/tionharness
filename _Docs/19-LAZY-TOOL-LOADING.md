@@ -37,8 +37,10 @@
   düşürülür — read-only ajanda yazma zaten onaylanmaz, şemayı her tur göndermek
   israf. "ask"/"auto" ajanlar bunları eager tutar. Test:
   `TestReadOnlyAgentDemotesWriteTools`.
-- **call_agent (2026-06-19):** senkron delegasyon (gate'li) artık lazy — turların
-  azında kullanılıyor; native'de `activate_tools` ile gelir, CLI'ye köprülenmez.
+- **call_agent (2026-06-19, tarihsel):** senkron delegasyon tool'u o tarihte lazy
+  hale getirilmişti — ancak A2 refactor'u (2026-06-19) kapsamında `run_subagent`'a
+  birleştirildi ve `call_agent` aracı **kaldırıldı**. `run_subagent` delegation
+  gate'li ve eagerly yüklenir.
 - **input_examples (2026-06-19):** `ToolDef.Examples []json.RawMessage` — şemanın
   ifade edemediği kullanım konvansiyonlarını (tarih/cron formatı, ID deseni, hangi
   opsiyonel alanın birlikte geldiği) gösteren somut örnek çağrılar. Anthropic
@@ -59,8 +61,8 @@
   - **3. dalga — edit/create araçları (2026-06-19):** `update_flow` (graph string +
     kısmi güncelleme), `update_schedule` (cron + kısmi), `update_task`
     (`dependencies` escaped JSON array + `flowId:""`=unlink + kısmi), `create_agent`
-    (provider/model eşleşmesi — claude-cli modelsiz, anthropic model ister +
-    heartbeat alanları birlikte). **Silme araçları aday değil** (girdi yalnız
+    (provider/model eşleşmesi — claude-cli modelsiz, anthropic model ister).
+    **Silme araçları aday değil** (girdi yalnız
     `{id}` — belirsizlik yok); `move_task` da değil (`boardState` zaten `enum`).
     Edit aracında örnek ana faydası **kısmi-güncelleme konvansiyonunu** öğretmek
     (id + yalnız değişen alan; `""`=temizle).
@@ -106,7 +108,7 @@ graph LR
 
 ### 1. Araç meta katmanı
 Her `Tool`/`ToolDef` için zaten `Name` + `Description` var. Eklenecek:
-- `Tier` / `Lazy bool` — araç "her zaman açık" mı yoksa "lazy" mı.
+- `Lazy bool` — araç "her zaman açık" mı yoksa "lazy" mı. (`providers.ToolDef.Lazy`, JSON serileşmez: `json:"-"`)
 - Çekirdek, sık kullanılan araçlar (read_file, write_file, time, memory_recall,
   todo_write…) **eager** kalır — şemaları hep yüklü.
 - Geri kalan built-in'ler (self-management suite) ve **tüm MCP araçları** **lazy**
@@ -142,7 +144,7 @@ arama. Küçük kataloglarda gerekmez; MCP-ağır workspace'lerde değerli.
 | `internal/tools/registry.go` | `Defs()` lazy filtre + `LazyCatalog()` üretimi |
 | `internal/tools/builtin_activate.go` (yeni) | `activate_tools` / `deactivate_tools` |
 | `internal/agent/toolsetup.go` | lazy işaretleme; MCP araçlarını lazy yap |
-| `internal/agent/chat_turn.go` / worker | aktif-set durumu + `Defs()` filtresine bağla |
+| `internal/agent/activetools_ctx.go` + `worker.go` | aktif-set context bağlantısı + `Defs()` filtresine bağla |
 | `internal/api/agent_context.go` | önizlemede lazy katalog + token ayrımı |
 | `_Docs/17-TOKEN-OPTIMIZASYON.md` | çapraz bağlantı |
 

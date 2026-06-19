@@ -37,18 +37,19 @@ Bu tablo başlangıç planıydı. Faz 0–8 sonunda gerçekte kullanılan kararl
 | Depolama | modernc.org/sqlite | **dosya sistemi (JSON/JSONL, DB yok)** | bellek-içi maps + atomik diske yazma; bkz. `08-DEPOLAMA.md` |
 | Migration | golang-migrate | **yok (şema yok)** | dosya-store'da migration kavramı yok |
 | SQL üretimi | sqlc | **elle yazılmış store** | `internal/db/store_*.go` (artık SQL değil, dosya I/O) |
-| Anthropic | resmi SDK | **ince HTTP istemci (SDK yok)** | Tam kontrol; ayrıca **claude-cli** (anahtarsız) |
+| Anthropic | resmi SDK | **ince HTTP istemci (SDK yok)** | Tam kontrol; ayrıca **claude-cli** (anahtarsız), **minimax-anthropic**, **openrouter** (toplam 5 kind: `kind_*.go` dosyaları) |
+| Web dağıtımı | ayrı statik sunum | **`go:embed all:dist`** (`internal/web/embed.go`) | `frontend/dist/` derleme anında binary'ye gömülür; tek çalıştırılabilir dosya, CDN/statik sunucu gerekmez |
 | Zamanlama | robfig/cron | ✅ **robfig/cron/v3** | Workspace başına scheduler |
 | WebSocket/streaming | coder/websocket | ✅ **SSE** (`POST /api/chat/stream`); WebSocket yok | SSE adım-adım akış kuruldu (bkz. `07-CHAT-UX.md`); kalıcı WebSocket hub'ı gerekmedi |
-| Frontend bileşen | shadcn/ui | **kendi Tailwind v4 bileşenleri** | Bileşen framework'ü yok; yalnız `lucide-react` (ikon) + `@fontsource-variable/inter`·`jetbrains-mono` (font) eklendi |
-| Tema | tek koyu tema | **token-tabanlı + 8 hazır palet** | `var(--color-*)` token seti; preset `<html>` inline style'a basılır (`lib/themePresets.ts` + `lib/theme.ts`); backend `settings.ThemePreset` ile kalıcı |
+| Frontend bileşen | shadcn/ui | **kendi Tailwind v4 bileşenleri** | Bileşen framework'ü yok; yalnız `lucide-react` (ikon) + `@fontsource-variable/inter`·`jetbrains-mono` (font) + `vis-network` v10.1.0 + `vis-data` (ilişki grafiği) + `@xyflow/react` (flow canvas) eklendi |
+| Tema | tek koyu tema | **token-tabanlı + 8 hazır palet** | `var(--color-*)` semantic token seti; preset `<html>` inline style'a basılır (`lib/themePresets.ts` — 8 preset: midnight-violet/slate/emerald/rose/amber/nord/daylight/solarized-light); paylaşılan UI primitifleri `components/common/Button.tsx`; kategorik palet `lib/palette.ts`; backend `settings.ThemePreset` ile kalıcı |
 | Frontend state | Zustand/TanStack | **düz React `useState`** | Yeterli; ileride eklenebilir |
 | Recall/embedding | embedding tabanlı | **saf Go lexical cosine** | Anahtarsız/çevrimdışı; embedding ileride |
 | UUID / log / şifreleme | google/uuid · slog · crypto/aes | ✅ hepsi kullanıldı | — |
 | MCP istemci | mark3labs/mcp-go | **SDK'sız elle JSON-RPC 2.0** (stdio) | Bağımlılıksız felsefe; SSE/HTTP henüz yok (Faz 8 ✅) |
 | OTel (gözlemlenebilirlik) | otel | ⏳ ileride | Henüz eklenmedi |
 
-> İlke: bağımlılığı ancak gerçekten gerektiğinde ekle. Depolama dosya sistemine taşındıktan sonra `go.mod`'da yalnızca `google/uuid` ve `robfig/cron/v3` kaldı (`modernc.org/sqlite` + ~8 dolaylı bağımlılık kaldırıldı).
+> İlke: bağımlılığı ancak gerçekten gerektiğinde ekle. Depolama dosya sistemine taşındıktan sonra `go.mod`'da yalnızca `github.com/google/uuid v1.6.0` ve `github.com/robfig/cron/v3 v3.0.1` kaldı (`modernc.org/sqlite` + ~8 dolaylı bağımlılık kaldırıldı). Go backend ikinci bir harici bağımlılık taşımaz; kalan her şey stdlib üzerinde.
 
 ## Masaüstü Kabuk
 

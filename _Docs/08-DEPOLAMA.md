@@ -1,6 +1,6 @@
 # SwarmGo — Depolama Katmanı (Dosya Sistemi)
 
-> Son güncelleme: **2026-06-15**
+> Son güncelleme: **2026-06-19**
 > SwarmGo'nun kalıcılık katmanı **SQLite'tan tamamen dosya sistemine** taşındı.
 > SQLite (`modernc.org/sqlite`), migration runner ve `.sql` dosyaları kaldırıldı.
 
@@ -45,8 +45,82 @@ store/
 ├── mcp-servers/{id}.json
 ├── flows/{id}.json
 ├── flow-runs/{id}.json
-└── usage/{agentID}__{YYYY-MM-DD}.json
+├── usage/{agentID}__{YYYY-MM-DD}.json
+└── counters.json                      # entity-başına insan-okunabilir id sayacı
 ```
+
+## Kimlik (ID) şeması — insan-okunabilir + tekrar-kullanımsız
+
+> 2026-06-19'dan itibaren yeni entity'ler **kısa, prefix'li** kimlik alır
+> (örn. `TSK7`, `AGT3`). Eski UUID kimlikler **dokunulmadan** çalışmaya devam
+> eder (lookup'lar opak string üzerinden; iki şema yan yana yaşar). Kimlik aynı
+> zamanda dosya/klasör adıdır → diskte göz gezdirmek artık çok daha okunabilir.
+
+**Prefix haritası (İngilizce mnemonik, `internal/db/db.go`):**
+
+| Entity | Prefix | Örnek |
+|--------|--------|-------|
+| Workspace | `WS` | `WS1` |
+| Agent | `AGT` | `AGT3` |
+| Session | `SES` | `SES42` |
+| Task | `TSK` | `TSK17` |
+| Flow | `FLW` | `FLW5` |
+| Flow Run | `RUN` | `RUN128` |
+| Artifact | `ART` | `ART9` |
+| Knowledge/Memory | `MEM` | `MEM88` |
+| MCP Server | `MCP` | `MCP4` |
+| Hook | `HOK` | `HOK2` |
+| Schedule | `SCH` | `SCH7` |
+
+> **Mesajlar** hâlâ UUID kullanır (yüksek hacimli hot-path + UI'da görünmez).
+> Task `Run` ID'leri de UUID'de kalır (legacy, artık üretilmiyor). Merkez-dışı
+> geçici tanımlayıcılar (chat `runID`/`replyID`, spawn `SourceID`, upload dosya
+> adı) de UUID'de kalır. Workspace ID'leri ise ayrıca `WS<n>`'e geçti (aşağıda).
+
+**Mekanik (`DB.nextID(prefix)`):**
+- Prefix-başına monoton sayaç; `counters.json`'da tutulur (`{"TSK":17,...}`),
+  her tahsiste **atomik** (`*.tmp`→`rename`) yazılır.
+- **Tekrar kullanım yok:** sayaç yalnız artar; silme bir numarayı serbest
+  bırakmaz, restart bir numarayı yeniden vermez (`load()` → `loadCounters()`).
+- Eski UUID'ler **taranmaz/dikkate alınmaz**; prefix'li id'ler saf harf+rakam
+  olduğundan bir UUID ile asla çakışamaz.
+- Kendi mutex'i (`countersMu`) vardır → hem `mu` alınmadan (çoğu `Create*`)
+  hem de `mu` tutulurken (örn. `createSessionLocked`) güvenle çağrılabilir.
+
+**Workspace kimlikleri (`WS<n>`):** db dışında, `internal/workspace/manager.go`'da
+üretilir. Sayaç `{dataDir}/ws-counter.json`'da tutulur; `NewManager` boot'ta
+sayaç dosyası + mevcut `WS<n>` metalarının maks'ını alarak rewind'i önler
+(`internal/workspace/id.go`). Workspace ID'si dizin adıdır (`workspaces/<id>/`);
+entity dosyalarının **içine gömülü değildir** (workspace'ler izole).
+
+### Eski UUID → yeni şema migration aracı (`cmd/migrate-ids`)
+
+Tek-seferlik, **idempotent** dönüştürücü. Strateji: her UUID global benzersiz bir
+token olduğundan, (1) tüm migratable entity'ler için eski→yeni ID haritası kurar,
+(2) bu token'ları workspace ağacındaki **tüm metin dosyalarında** birebir değiştirir
+— her cross-reference'ı (AgentID, SessionID, OwnerAgentID, `Task.Dependencies`,
+`Flow.Graph` düğüm ID'leri, içerik-dosyası yolları…) alan-alan saymadan yakalar —
+ve (3) ID ile adlandırılmış dosya/klasörleri yeniden adlandırır (entity JSON,
+session klasörleri, artifact içerik dosyaları, upload klasörleri, usage dosyaları).
+Sayaç dosyalarını (`counters.json` / `ws-counter.json`) ileri taşır → çalışan
+uygulama numaralamaya kaldığı yerden devam eder.
+
+- **Varsayılan dry-run** (hiçbir şey değişmez); `-apply` ile uygulanır ve önce
+  tüm `dataDir` zaman damgalı yedeklenir (`-backup=false` ile atlanır).
+- **Junction/symlink güvenli:** içerik-rewrite yalnız `store/` üzerinde çalışır
+  (tüm ID referansları orada); workspace içerik dizini (artifacts/uploads) bir
+  reparse-point (junction) ise — örn. sandbox gerçek bir projeye bağlıyken —
+  ona dalınmaz, yedekleme de junction'ları atlar (uyarı basar). Junctioned
+  workspace'in `artifacts/uploads` alt-klasörleri yine sığ olarak yeniden adlanır.
+- **Uygulama KAPALIYKEN çalıştırın** (write-through dosyalar değişeceğinden).
+- Mesaj (`msg`) ve task `Run` ID'leri UUID'de kalır (migrate edilmez); onlara
+  yapılan referanslar yine token-replacement ile düzeltilir.
+- Kullanım:
+  ```powershell
+  go run ./cmd/migrate-ids                          # dry-run (~/.swarmgo)
+  go run ./cmd/migrate-ids -apply                   # uygula (önce yedek)
+  go run ./cmd/migrate-ids -data D:\sg -apply -workspaces=false
+  ```
 
 > Eski yol `{wsID}/swarmgo.db` idi; artık `{wsID}/store/` dizini.
 
@@ -137,7 +211,20 @@ saklanır.
   cosine vektör cache'i restart'ta korunur (yoksa `memory.Recall` içerikten yeniden
   hesaplar — geriye dönük güvenli).
 - **Usage:** gün-bazlı dosya (`{agentID}__{gün}.json`), read-modify-write upsert.
-- **Cascade silme:** `DeleteTask`/`DeleteFlow` ilgili run dosyalarını da siler.
+- **Cascade silme:**
+  - `DeleteTask` → task'ın run'ları; `DeleteFlow` → flow'un `flow_runs`'ı.
+  - `DeleteSession` → oturum mesajları + oturuma ait artifact kayıtları + upload
+    klasörü (`workspace/artifacts/<sid>/`).
+  - `DeleteAgent` → ajanın sahip olduğu **session'lar** (yukarıdaki kaskadla),
+    ajana bağlı **schedule'lar** (`AgentID`), ajanın sahip olduğu **task'lar**
+    (`OwnerAgentID`) + bu task'ların **run'ları**. Hook/Flow'da doğrudan `AgentID`
+    alanı olmadığından (flow ajanları graph içinde referanslanır) bunlar silinmez.
+    DB yalnızca kalıcı satırları temizler; canlı cron registry'si için çağıran
+    katman (`api.handleDeleteAgent` / `delete_agent` tool'u) ayrıca
+    `Scheduler.Reload` çağırır.
+  - `RemoveSkillFromAgents(slug)` → bir skill silindiğinde slug'ı her ajanın
+    `Skills` listesinden düşürür (dangling skill referansı kalmaz);
+    `api.handleDeleteSkill` ve `delete_skill` tool'u çağırır.
 - **Restart-safe flow:** `flow_runs` durumu her node sonrası dosyaya yazılır;
   boot'ta `ListRunningFlowRuns` `running` kalanları diskten devam ettirir.
 

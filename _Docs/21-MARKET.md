@@ -207,6 +207,10 @@ ile workspace tier'a yazar. Sanitize = secret/ID/CreatedBy temizliği (§1.2).
 
 ## 5. Frontend
 
+- **Paylaşılan `Button` primitifi:** Market paneli, uygulamanın ortak `Button`
+  bileşenini (`components/common/Button.tsx`, `variant: primary|secondary|danger`,
+  `size: sm|md|lg`) benimser. Aynı bileşen uygulama genelinde ~15 panelde kullanılır;
+  renk ve boyut tutarlılığı tek noktadan sağlanır.
 - **NavRail**: yeni görünüm `market` — `{ key:'market', label:'Market', icon: Store }`.
 - **`components/panels/MarketPanel.tsx`**: tür sekmeleri (Tümü / Beceri / Ajan /
   Sağlayıcı / Akış), kart ızgarası (ikon + ad + açıklama + sürüm + yazar + "Kur"),

@@ -31,9 +31,6 @@ erDiagram
         text planning_mode
         text avatar
         text color
-        int  heartbeat_enabled
-        int  heartbeat_interval_sec
-        text heartbeat_prompt
         int  daily_call_limit
         int  daily_token_limit
         int  mcp_enabled
@@ -168,7 +165,7 @@ erDiagram
 
 | Tablo | Sorumluluk |
 |-------|-----------|
-| `agents` | Ajan tanımı: soul, kimlik, sağlayıcı, model, planlama modu; **heartbeat** ayarları; **günlük bütçe limitleri** (`daily_call_limit`/`daily_token_limit`); **araç ayarları** (`mcp_enabled`/`allowed_tools` allowlist) |
+| `agents` | Ajan tanımı: soul, kimlik, sağlayıcı, model, planlama modu; **günlük bütçe limitleri** (`daily_call_limit`/`daily_token_limit`); **araç ayarları** (`mcp_enabled`/`allowed_tools` allowlist) |
 | `sessions` | Oturum: ajan ilişkisi, başlık, mesaj sayısı, durum; **compaction** özeti (`summary` + `summary_msg_count`) |
 | `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`); **`agent_id`** = turu üreten ajan (çok-ajanlı oturumda mesaj başına ajan) |
 | `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — bütçe guardrail'i için |
@@ -183,11 +180,13 @@ erDiagram
 
 > **Köken (provenance) konvansiyonu — `created_by`:** Self-management ile ajan
 > tarafından oluşturulabilen entity'ler (`agents`, `tasks`, `schedules`, `flows`,
-> `hooks`, `mcp_servers`) ortak bir `created_by` alanı taşır: **boş** = kullanıcı
-> tarafından (UI/API) oluşturulmuş, **korumalı**; **ajan id'si** = o ajan
-> tarafından bir self-management tool'u ile oluşturulmuş. Guard kuralı: bir ajan
-> yalnızca **ajan-oluşturduğu** (`created_by` dolu) entity'leri silebilir/düzenleyebilir;
-> kullanıcı varlıklarına dokunamaz.
+> `hooks`, `mcp_servers`, **`workspaces`** — `workspaces.json` `createdBy`) ortak bir
+> `created_by` alanı taşır: **boş** = kullanıcı tarafından (UI/API) oluşturulmuş,
+> **korumalı**; **ajan id'si** = o ajan tarafından bir self-management tool'u ile
+> oluşturulmuş. Guard kuralı: bir ajan yalnızca **ajan-oluşturduğu** (`created_by`
+> dolu) entity'leri silebilir/düzenleyebilir; kullanıcı varlıklarına dokunamaz.
+> (Workspace silmede ek olarak **mevcut çalıştığı** ve **son kalan** workspace de
+> korumalıdır.)
 
 ## Güvenlik / Şifreleme
 
@@ -218,7 +217,6 @@ erDiagram
 
 - **Ana entity'ler** (eski `0001_init`): agents, sessions, session_messages, tasks,
   schedules, runs, knowledge_sources, mcp_servers — `models*.go`.
-- **Heartbeat** (eski `0002`): `Agent.Heartbeat*` alanları.
 - **Tasks/Schedules** (eski `0003`): `Task.Prompt/LastRun*`, `Schedule.TaskID/Prompt`, `Run.Output/Trigger`.
 - **Context/Budget** (eski `0004`): `Session.Summary*`, `Agent.Daily*Limit`, `Usage` (gün-bazlı dosya).
 - **MCP/Tools** (eski `0005`): `MCPServer.Command/Args/URL/Enabled/Scope`, `Agent.MCPEnabled/AllowedTools`.

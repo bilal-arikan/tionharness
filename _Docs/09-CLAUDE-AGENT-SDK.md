@@ -24,7 +24,7 @@
 | Yetenek | Agent SDK | SwarmGo (bugün) | Boşluk |
 |---|---|---|---|
 | Built-in araçlar (file/bash/grep/glob/web) | Kutudan | Sadece `get_current_time` / `http_get` / `memory_recall` | **Var** |
-| Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters=8`) + tur kurtarma (`recovery.go`: max-token resume + reaktif compaction, A1) | Yok |
+| Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters` varsayılan 24, `SWARMGO_MAX_TOOL_ITERS` ile override) + tur kurtarma (`recovery.go`: max-token resume + reaktif compaction, A1) | Yok |
 | Context yönetimi / compaction | Otomatik | `internal/conversation` (token-bütçeli) | Yok |
 | Prompt caching | İnce ayarlı | Yok (native HTTP) | Küçük |
 | Permission / onay modları | Var (mod + hook) | Yok (native); claude-cli'de `--allowedTools` ile kısmi | **Var** |
@@ -99,8 +99,11 @@ graph TD
 
 > **Yürütme yolu:** Built-in araçlar **native** tool-use döngüsünde (`agent/toolloop.go`
 > + `tools.Registry`) çalışır. claude-cli yolu kendi döngüsünü `--mcp-config` ile sürdüğü
-> ve kendi dosya/bash araçları olduğu için bu built-in'leri kullanmaz. Sandbox kökü her
-> workspace'in `workspace/` alt dizinidir (`Runtime.workDir`). Detay: `05-ILERLEME.md` (Faz P2).
+> ve kendi dosya/bash araçları olduğu için **fs/shell built-in'leri kullanmaz**. Ancak
+> `spawn_session` (2026-06-19 itibarıyla) ve `schedule_wake` **Interaction MCP köprüsü**
+> (`internal/api/mcp_interaction.go`) üzerinden claude-cli ajanlarına da sunulmaktadır —
+> her iki ajan türü de bu araçlara erişir. Sandbox kökü her workspace'in `workspace/`
+> alt dizinidir (`Runtime.workDir`). Detay: `05-ILERLEME.md` (Faz P2), `22-SPAWN-SESSION.md` §CLI köprüsü.
 
 ### Faz P3 — Permission / Onay Katmanı
 - Araç çalıştırmadan önce risk sınıflandırması (read-only / yazma / shell).
