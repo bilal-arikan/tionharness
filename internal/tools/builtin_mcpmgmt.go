@@ -94,6 +94,14 @@ func (CreateMCPServerTool) Def() providers.ToolDef {
 			"required":["name","transport"],
 			"additionalProperties":false
 		}`),
+		Examples: []json.RawMessage{
+			// stdio: command + args is a JSON ARRAY STRING (escaped).
+			json.RawMessage(`{"name":"filesystem","transport":"stdio","command":"npx","args":"[\"-y\",\"@modelcontextprotocol/server-filesystem\",\"/data\"]"}`),
+			// remote endpoint: set url instead of command.
+			json.RawMessage(`{"name":"my-api","transport":"http","url":"https://mcp.example.com/sse"}`),
+			// stdio with env (a JSON OBJECT STRING).
+			json.RawMessage(`{"name":"github","transport":"stdio","command":"npx","args":"[\"-y\",\"@modelcontextprotocol/server-github\"]","env":"{\"GITHUB_TOKEN\":\"ghp_xxx\"}"}`),
+		},
 	}
 }
 

@@ -178,10 +178,13 @@ func TestExamplesFoldIntoSchemaNotCatalog(t *testing.T) {
 	}
 }
 
-// TestPilotToolExamplesAreValid checks the create_schedule / create_flow examples
-// are valid JSON objects (and, for the flow, that the stringified graph parses).
+// TestPilotToolExamplesAreValid checks every tool that ships input_examples: each
+// example is a valid JSON object, and any field that is itself a STRINGIFIED JSON
+// payload (flow graph, mcp args/env) parses as valid JSON too.
 func TestPilotToolExamplesAreValid(t *testing.T) {
-	check := func(name string, defs []json.RawMessage, graphField bool) {
+	// check validates examples; stringFields names properties whose value must be a
+	// JSON string containing valid JSON (the escaped-JSON-string convention).
+	check := func(name string, defs []json.RawMessage, stringFields ...string) {
 		if len(defs) == 0 {
 			t.Fatalf("%s has no examples", name)
 		}
@@ -191,20 +194,25 @@ func TestPilotToolExamplesAreValid(t *testing.T) {
 				t.Errorf("%s example %d invalid JSON: %v", name, i, err)
 				continue
 			}
-			if graphField {
-				if g, ok := obj["graph"]; ok {
-					var gs string
-					if err := json.Unmarshal(g, &gs); err != nil {
-						t.Errorf("%s example %d graph not a JSON string: %v", name, i, err)
-					} else if !json.Valid([]byte(gs)) {
-						t.Errorf("%s example %d graph string is not valid JSON: %s", name, i, gs)
-					}
+			for _, f := range stringFields {
+				raw, ok := obj[f]
+				if !ok {
+					continue
+				}
+				var s string
+				if err := json.Unmarshal(raw, &s); err != nil {
+					t.Errorf("%s example %d field %q not a JSON string: %v", name, i, f, err)
+				} else if !json.Valid([]byte(s)) {
+					t.Errorf("%s example %d field %q is not valid JSON: %s", name, i, f, s)
 				}
 			}
 		}
 	}
-	check("create_schedule", CreateScheduleTool{}.Def().Examples, false)
-	check("create_flow", CreateFlowTool{}.Def().Examples, true)
+	check("create_schedule", CreateScheduleTool{}.Def().Examples)
+	check("create_flow", CreateFlowTool{}.Def().Examples, "graph")
+	check("create_hook", CreateHookTool{}.Def().Examples)
+	check("update_settings", UpdateSettingsTool{}.Def().Examples)
+	check("create_mcp_server", CreateMCPServerTool{}.Def().Examples, "args", "env")
 }
 
 // ---- helpers ----

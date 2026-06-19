@@ -50,6 +50,12 @@
   yani eager bütçeye sıfır etki. Hatalı-çağrı + retry turunu önlediğinden genelde
   **net token kazandırır**. Test: `TestExamplesFoldIntoSchemaNotCatalog`,
   `TestPilotToolExamplesAreValid`.
+  - **2. dalga pilotlar (2026-06-19):** `create_hook` (matcher araç-adı glob'u +
+    command'in stdin/stdout JSON sözleşmesi), `update_settings` (`patch`
+    `additionalProperties:true` → şema anahtarları tamamen opak; örnek doğru
+    anahtarları gösterir), `create_mcp_server` (stdio vs sse/http; `args`/`env`
+    escaped JSON string). Not: "permission-pattern" aday değil — ajan-yüzlü tool
+    girdisi değil, kullanıcı onay katmanı (`permpattern.go`).
 - Sistem promptuna **"Available Tools (load on demand)"** bloğu eklenir
   (`Runtime.LazyToolsCatalogBlock` → `renderLazyToolCatalog`), yalnızca ad+özet.
 - Üç eager meta-araç: **`activate_tools`** (şema yükle), **`deactivate_tools`**,

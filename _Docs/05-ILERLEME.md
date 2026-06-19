@@ -2,6 +2,17 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-19**
 
+## Ağ — Canlı mod: Boşta lobisi + ajanın akışı ✅ (2026-06-19)
+
+**İstek:** Aktif görevi olmayan ajanlar için bir "boşta" çekim alanı; ayrıca ajanın kullandığı Flow/Session gibi şeyleri göstermek.
+
+**Yapılan (Canlı mod):**
+- **Boşta lobisi:** alt-ortada sabit `idle` çekirdeği; aktif (`in_progress`) görevi olmayan ajanlar zayıf yayla buraya çekilir, görev alınca güçlü aktif bağ onları kartına çeker.
+- **Ajanın akışı:** Canlı modda `uses` (akış→ajan) kenarları + akış düğümleri gösterilir (flow katman chip'i ile); ajan bağlı olduğu akışla birlikte hareket eder. Skill/MCP de korunur.
+- `lib/relationGraph.ts`: `IDLE_ID` anchor + busy-agent hesabı; `show()` Canlı modda flow'a izin verir; NetworkPanel katman chip'lerine flow eklendi.
+- **Session/run (gerçek "şu an çalışıyor")**: ayrı adıma bırakıldı — backend'de executions `running`+kind+sourceId join'i gerekiyor.
+- **Doğrulama:** `tsc`/`go build` yeşil; canlı Chrome (DenemeBilimsel): 4 ajan "Araştırma Akışı"na (uses) ve "Boşta" lobisine bağlı render oldu.
+
 ## Ağ — "Canlı" sütun-akışı modu ✅ (2026-06-19)
 
 **İstek:** Ağda sütunlar sabit, görevler sütun altlarında; bir ajan göreve başlayınca o karta çekilsin, kart sütun değişince bağ kopsun, ajan başka görev alınca yeni bağ kursun — canlı akış. Skill/MCP ajanla bağlı.
@@ -57,9 +68,14 @@ deseni, opsiyonel alan kombinasyonu) gösteren somut örnek çağrılar.
   `BridgeableDefs`'te uygulanır, `LazyCatalog`'a **değil**. Böylece lazy araçta
   örnek katalogu şişirmez, yalnız `activate_tools` sonrası (kullanılacağı an) token
   harcar. Provider'lara dokunulmadı (hepsi InputSchema okur).
-- **Pilot:** `create_schedule` (5-alan cron + enabled) ve `create_flow` (graf'ın
-  **escaped JSON string** oluşu + `{{input}}`/`{{node.id}}` şablonları + `next:""`=
-  son). İkisi de lazy → eager bütçeye sıfır etki.
+- **Pilot (1. dalga):** `create_schedule` (5-alan cron + enabled) ve `create_flow`
+  (graf'ın **escaped JSON string** oluşu + `{{input}}`/`{{node.id}}` şablonları +
+  `next:""`=son). İkisi de lazy → eager bütçeye sıfır etki.
+- **Pilot (2. dalga, 2026-06-19):** `create_hook` (matcher glob + command'in
+  stdin/stdout JSON sözleşmesi), `update_settings` (`patch` opak
+  `additionalProperties:true` → en güçlü aday), `create_mcp_server` (stdio vs
+  sse/http; `args`/`env` escaped JSON string). `TestPilotToolExamplesAreValid` beş
+  aracın da örneklerini doğrular (stringify alanların iç JSON'u dahil).
 - **Maliyet:** örnek küçük sabit token; hatalı-çağrı + hata + retry turunu
   önlediğinden pratikte **net negatif** (token kazandırır).
 

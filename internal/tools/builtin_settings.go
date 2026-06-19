@@ -76,6 +76,11 @@ func (UpdateSettingsTool) Def() providers.ToolDef {
 			"required":["patch"],
 			"additionalProperties":false
 		}`),
+		Examples: []json.RawMessage{
+			json.RawMessage(`{"patch":{"theme":"light"}}`),
+			json.RawMessage(`{"patch":{"defaultModel":"claude-sonnet-4-6","pauseAutonomy":true}}`),
+			json.RawMessage(`{"patch":{"enableShell":true,"enableSelfManage":true}}`),
+		},
 	}
 }
 
