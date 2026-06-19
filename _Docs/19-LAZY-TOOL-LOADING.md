@@ -6,12 +6,43 @@
 ## Uygulanan davranış (özet)
 
 - `ToolDef.Lazy` alanı; `Registry` lazy seti tutar. **Self-management suite +
-  tüm MCP araçları lazy**; çekirdek araçlar (read/write/edit/grep/glob, memory,
-  todo, artifacts, use_skill, secrets, config, http, time) **eager**.
+  tüm MCP araçları lazy.**
+- **Eager çekirdek küçültmesi (2026-06-19):** her zaman kurulan ama turların
+  azında kullanılan 8 araç da lazy'ye indirildi (`toolsetup.go`, açık `MarkLazy`):
+  `read_config`/`write_config`/`list_config` (workspace prompt/instruction
+  editing — nadir), `secret_list`/`secret_get` (yalnız kimlik-bilgili görevler),
+  `list_sessions` (context bloğu zaten push'lanıyor), `memory_recall` (recall
+  `ContextBlock` ile otomatik enjekte), `http_get` (çoğu tur dış istek yapmıyor).
+  `MarkLazy` builtins'te olmayan ada **no-op** olduğundan gate'li araçlar (vault/
+  config kapalı) için ek koruma gerekmez.
+- **Kalan eager çekirdek:** `read_file`/`write_file`/`edit_file`/`list_dir`/
+  `glob`/`grep`, `shell` (gate'li), `todo_write`, `ask_user`,
+  `request_confirmation`, `schedule_wake`, `create_artifact`/`update_artifact`,
+  `use_skill`, `get_current_time` + 3 meta-araç. (Etkileşim primitifleri ve
+  artifact çıktı yolu, aktive turu beklememesi için eager bırakıldı.)
+- **claude-cli yolu (CLI-3, `fc7d30e`):** CLI'de native `activate_tools` döngüsü
+  yok; lazy built-in'ler Interaction MCP üzerinden **bridge** edilir
+  (`Registry.BridgeableDefs` → tüm lazy built-in'ler, MCP hariç). Bu yüzden eager→
+  lazy indirme CLI ajanlarında **erişim kaybına yol açmaz** — yeni lazy araçlar
+  otomatik köprülenir. Not: CLI yolunda bridge, lazy araçların **tam şemasını** her
+  koşuda ilan eder (native yol yalnız ad+özet katalog satırı taşır).
+- **Bridge alt-küme sınırı (2026-06-19):** CLI tam şema ilan ettiği için köprü
+  yüzeyi `tools.bridgeExcluded` ile budanır — **CLI'de native karşılığı olan**
+  (`http_get` → WebFetch) ve **native-loop context'i gereken** (`call_agent`,
+  dispatch `DelegationFrom(ctx)` ister — bridge ctx'inde yok) araçlar köprülenmez.
+  Native ajanlar etkilenmez; bunlara `activate_tools` ile erişir. Test:
+  `TestBridgeableDefsExcludesCLINative`.
+- **Rol-bazlı eager (2026-06-19):** `Agent.PermissionMode == "read-only"` ise
+  yazma araçları (`write_file`/`edit_file`; `write_config` zaten lazy) eager'dan
+  düşürülür — read-only ajanda yazma zaten onaylanmaz, şemayı her tur göndermek
+  israf. "ask"/"auto" ajanlar bunları eager tutar. Test:
+  `TestReadOnlyAgentDemotesWriteTools`.
+- **call_agent (2026-06-19):** senkron delegasyon (gate'li) artık lazy — turların
+  azında kullanılıyor; native'de `activate_tools` ile gelir, CLI'ye köprülenmez.
 - Sistem promptuna **"Available Tools (load on demand)"** bloğu eklenir
   (`Runtime.LazyToolsCatalogBlock` → `renderLazyToolCatalog`), yalnızca ad+özet.
 - Üç eager meta-araç: **`activate_tools`** (şema yükle), **`deactivate_tools`**,
-  **`find_tools`** (katalogda anahtar kelime arama). `internal/tools/builtin_activate.go`.
+  **`tool_search`** (katalogda anahtar kelime arama). `internal/tools/builtin_activate.go`.
 - Per-turn **aktif set** (`internal/tools/activetools.go`, context üzerinden
   `buildRegistry`'ye taşınır). Tool loop her iterasyonda
   `reg.ActiveDefs(filter, active.Snapshot())` ile gönderilen şemayı yeniden
@@ -75,7 +106,7 @@ context üzerinde `activeTools map[string]bool`). `composeTurnRequest`/registry
 - Ajanın allowlist'i ve workspace denylist'i yine üstte uygulanır.
 
 ### 5. Eşleştirme / arama (opsiyonel, faz 2)
-`ToolSearch` benzeri bir `find_tools(query)` — anahtar kelimeyle lazy katalogda
+`ToolSearch` benzeri bir `tool_search(query)` — anahtar kelimeyle lazy katalogda
 arama. Küçük kataloglarda gerekmez; MCP-ağır workspace'lerde değerli.
 
 ## Dosya dokunuşları (tahmini)
@@ -105,7 +136,7 @@ arama. Küçük kataloglarda gerekmez; MCP-ağır workspace'lerde değerli.
 
 1. **Faz 1** — `Lazy` alanı + lazy katalog + `activate_tools` + aktif-set. MCP
    araçlarını lazy yap. (token kazancının çoğu burada)
-2. **Faz 2** — `deactivate_tools` + `find_tools(query)` arama.
+2. **Faz 2** — `deactivate_tools` + `tool_search(query)` arama.
 3. **Faz 3** — otomatik kısma: uzun oturumda kullanılmayan aktif araçları düşürme.
 
 ## İlişki

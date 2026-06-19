@@ -58,6 +58,30 @@ func TestRegistryActiveDefsAndLazyCatalog(t *testing.T) {
 	}
 }
 
+// TestBridgeableDefsExcludesCLINative verifies the CLI Interaction MCP bridge
+// skips lazy built-ins that are CLI-native (http_get) or native-loop-context-bound
+// (call_agent), while still bridging an ordinary lazy self-management tool.
+func TestBridgeableDefsExcludesCLINative(t *testing.T) {
+	reg := NewRegistry(
+		stubTool{name: "eager_a", desc: "always on"},
+		stubTool{name: "create_agent", desc: "self-mgmt"},
+		stubTool{name: "http_get", desc: "cli has WebFetch"},
+		stubTool{name: "call_agent", desc: "needs native delegation ctx"},
+	)
+	reg.MarkLazy("create_agent", "http_get", "call_agent")
+
+	got := names(reg.BridgeableDefs(nil))
+	if !eq(got, []string{"create_agent"}) {
+		t.Errorf("BridgeableDefs = %v, want [create_agent] (http_get/call_agent excluded)", got)
+	}
+	// Schemas are full (not stripped) for bridged tools.
+	for _, d := range reg.BridgeableDefs(nil) {
+		if len(d.InputSchema) == 0 {
+			t.Errorf("BridgeableDefs must ship full schema for %s", d.Name)
+		}
+	}
+}
+
 func TestActiveToolsPrune(t *testing.T) {
 	a := NewActiveTools()
 	a.SetIter(0)
@@ -100,11 +124,14 @@ func TestActivateToolsTool(t *testing.T) {
 		t.Errorf("activate output = %q", out)
 	}
 
-	// find_tools keyword search.
-	ft := NewFindToolsTool(cat)
-	fout, _ := ft.Call(context.Background(), json.RawMessage(`{"query":"B"}`))
+	// tool_search keyword search.
+	ts := NewToolSearchTool(cat)
+	fout, _ := ts.Call(context.Background(), json.RawMessage(`{"query":"B"}`))
 	if !strings.Contains(fout, "lazy_b") || strings.Contains(fout, "lazy_a") {
-		t.Errorf("find_tools output = %q", fout)
+		t.Errorf("tool_search output = %q", fout)
+	}
+	if got := ts.Def().Name; got != "tool_search" {
+		t.Errorf("tool name = %q, want tool_search", got)
 	}
 }
 

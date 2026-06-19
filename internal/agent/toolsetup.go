@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
@@ -231,6 +232,37 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	for _, t := range builtins[selfManageStart:] {
 		reg.MarkLazy(t.Def().Name)
 	}
+	// Trim the eager core further: a handful of always-built tools are themselves
+	// used in only a minority of turns, so they too load on demand. This shrinks
+	// the per-turn tool schema shipped to every agent (and, via the Interaction
+	// MCP bridge, advertised to every claude-cli run) without losing capability —
+	// the model pulls them through activate_tools / find_tools when needed.
+	//   - read/write/list_config : workspace prompt+instruction editing (rare)
+	//   - secret_list/secret_get  : only credential-backed tasks
+	//   - list_sessions           : cross-session pull (the context block is pushed)
+	//   - memory_recall           : recall is already auto-injected via ContextBlock
+	//   - http_get                : most turns make no outbound web request
+	// MarkLazy on a name not present in this agent's builtins is a harmless no-op,
+	// so gated tools (vault/config off) need no extra guarding here.
+	reg.MarkLazy(
+		"read_config", "write_config", "list_config",
+		"secret_list", "secret_get",
+		"list_sessions",
+		"memory_recall",
+		"http_get",
+	)
+	// call_agent (synchronous delegation, gated by DelegationEnabled) is used in a
+	// minority of turns, so it loads on demand too. It is intentionally NOT bridged
+	// to claude-cli (see tools.bridgeExcluded): its dispatch needs the native loop's
+	// delegation context, which the CLI bridge cannot supply.
+	reg.MarkLazy("call_agent")
+	// Role-aware eager trim: a read-only agent can never have a write approved, so
+	// shipping the mutating tools' schemas every turn is pure waste. Demote them to
+	// load-on-demand for read-only agents (still reachable via activate_tools, and
+	// still execution-gated by the permission layer). "ask"/"auto" keep them eager.
+	if agent.PermissionMode == "read-only" {
+		reg.MarkLazy("write_file", "edit_file") // write_config already lazy above
+	}
 
 	if servers, err := r.db.ListEnabledMCPServers(ctx); err != nil {
 		r.logger.Warn("list mcp servers failed", "error", err)
@@ -259,7 +291,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		reg.Add(
 			tools.NewActivateToolsTool(active, lazyCat),
 			tools.NewDeactivateToolsTool(active),
-			tools.NewFindToolsTool(lazyCat),
+			tools.NewToolSearchTool(lazyCat),
 		)
 	}
 	return reg
@@ -327,20 +359,71 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 	return renderLazyToolCatalog(lazy)
 }
 
+// lazyCatalogMCPListLimit caps how many MCP (namespaced) lazy tools are listed
+// individually in the load-on-demand catalog block. Above it, MCP tools are
+// summarised per server with a count and the model is pointed at tool_search —
+// this keeps the cached system-prompt prefix lean in MCP-heavy workspaces, where
+// a single server can expose hundreds of tools. Built-in lazy tools (the
+// self-management family) are always listed in full: they are few and high-value.
+// This is the SwarmGo analogue of the Anthropic "tool search" pattern — search
+// instead of enumerate once the catalog grows large.
+const lazyCatalogMCPListLimit = 30
+
 // renderLazyToolCatalog builds the load-on-demand tool catalog block from a list
-// of lazy tool defs (name + description). Returns "" for an empty list.
+// of lazy tool defs (name + description). Built-in lazy tools are always listed;
+// namespaced MCP tools are listed individually only while under
+// lazyCatalogMCPListLimit, otherwise summarised per server (discover the rest via
+// tool_search). Returns "" for an empty list.
 func renderLazyToolCatalog(lazy []providers.ToolDef) string {
 	if len(lazy) == 0 {
 		return ""
 	}
+	// Separate built-in lazy tools from namespaced MCP tools (server__tool).
+	var builtin, mcpTools []providers.ToolDef
+	for _, d := range lazy {
+		if _, _, ok := mcp.SplitNamespaced(d.Name); ok {
+			mcpTools = append(mcpTools, d)
+		} else {
+			builtin = append(builtin, d)
+		}
+	}
+
 	var b strings.Builder
 	b.WriteString("# Available Tools (load on demand)\n")
 	b.WriteString("These tools are NOT loaded yet — only their names and summaries are shown. " +
 		"To use one, first call `activate_tools` with its exact name(s); its full schema becomes " +
-		"available on your next step. Use `find_tools` to search this list by keyword. Activate " +
+		"available on your next step. Use `tool_search` to find a tool by keyword. Activate " +
 		"everything you expect to need for a task in one call.\n")
-	for _, d := range lazy {
+	for _, d := range builtin {
 		fmt.Fprintf(&b, "- `%s` — %s\n", d.Name, d.Description)
+	}
+
+	switch {
+	case len(mcpTools) == 0:
+		// nothing more to add
+	case len(mcpTools) <= lazyCatalogMCPListLimit:
+		for _, d := range mcpTools {
+			fmt.Fprintf(&b, "- `%s` — %s\n", d.Name, d.Description)
+		}
+	default:
+		// Too many MCP tools to enumerate without bloating the cached prefix:
+		// summarise per server and defer individual discovery to tool_search.
+		counts := map[string]int{}
+		var order []string
+		for _, d := range mcpTools {
+			srv, _, _ := mcp.SplitNamespaced(d.Name)
+			if _, seen := counts[srv]; !seen {
+				order = append(order, srv)
+			}
+			counts[srv]++
+		}
+		sort.Strings(order)
+		fmt.Fprintf(&b, "\n%d more tools are available from MCP servers but not listed individually "+
+			"(to save context). Find one with `tool_search(\"keyword\")`, then `activate_tools` it. "+
+			"Servers:\n", len(mcpTools))
+		for _, srv := range order {
+			fmt.Fprintf(&b, "- `%s` — %d tools\n", srv, counts[srv])
+		}
 	}
 	return strings.TrimSpace(b.String())
 }

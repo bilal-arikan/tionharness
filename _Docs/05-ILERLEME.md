@@ -2,6 +2,107 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-19**
 
+## Ağ — "Canlı" sütun-akışı modu ✅ (2026-06-19)
+
+**İstek:** Ağda sütunlar sabit, görevler sütun altlarında; bir ajan göreve başlayınca o karta çekilsin, kart sütun değişince bağ kopsun, ajan başka görev alınca yeni bağ kursun — canlı akış. Skill/MCP ajanla bağlı.
+
+**Yapılan:** Ağ paneline **İlişki | Canlı** mod geçişi eklendi.
+- **Canlı mod (`workspaceToVis(graph, visible, 'live')`):** 5 sabit board-durumu sütun başlığı (`fixed`+`physics:false`), her görev `task→col` kenarıyla durum sütununa yaylanır. **Aktif bağ** = `owns` + görev `in_progress` (parlak accent kenar + gölge); diğer owns/created/runs/uses bağları canlı modda gizli. Skill/MCP bağları ajanla kalır.
+- **Gerçek zamanlı:** `NetworkPanel` canlı modda `/api/events` SSE'ye abone olur (600ms debounce) → grafiği yeniden çeker. `VisNetworkGraph` DataSet'i **artımlı** (diff, konum sıfırlamadan) günceller → fizik motoru ajanı yeni bağına kaydırarak animasyon yapar.
+- `VisNetworkGraph`'a `mode` prop'u (live'da düşük centralGravity + avoidOverlap); fit stabilizasyon sonrası yapılır.
+- **Doğrulama:** `go build`/`tsc`/`vite build` yeşil. Canlı Chrome (MINIMAX ws): 5 sütun başlığı + görevler durum renklerine göre sütun altlarında kümelendi; geçici olarak bir in_progress göreve sahip atayınca **ajan→aktif görev parlak bağı** render oldu (sonra sahip `""`'a geri alındı — gerçek veri korundu). Detay: `_Docs/23-ILISKI-GRAFIGI.md`.
+
+## Ajan kontrol-yüzeyi genişletme — hooks/mcp/secret-write/skill araçları ✅ (2026-06-19)
+
+**Hedef:** "Ajanlar SwarmGo'yu her şekilde kontrol edebilsin." Ajanların araçla
+dokunamadığı kontrol yüzeyleri kapatıldı (insan API/UI'da yapılabilen ama ajan
+tool'u olmayanlar). `builtin_taskmgmt.go` desenini (provenance + `SelfManageEnabled`
+gating + lazy) tekrarlayan 11 yeni araç:
+
+- **Hooks** (`builtin_hookmgmt.go`): `list_hooks`/`create_hook`/`delete_hook` —
+  delete yalnız ajan-oluşturduğu (`Hook.CreatedBy`).
+- **MCP sunucuları** (`builtin_mcpmgmt.go`): `list_mcp_servers`/`create_mcp_server`/
+  `toggle_mcp_server`/`delete_mcp_server` — yeni/etkin sunucu sonraki turda
+  kataloğa girer (toolsetup `ListEnabledMCPServers`'ı her tur canlı okur);
+  provenance için **`MCPServer`'a `CreatedBy` eklendi** (additive JSON alanı).
+- **Secret yazma** (`builtin_secretmgmt.go`): `secret_set`/`secret_delete` —
+  `secret_list`/`secret_get` okuma tarafının tamamlayıcısı (vault, AES-GCM).
+- **Skills** (`builtin_skillmgmt.go`): `create_skill`/`delete_skill` — `tools`
+  paketi `skills`'i import etmesin diye `SkillWriter` arayüzü + `runtime.go`
+  `agentSkillWriter` adaptörü.
+
+Hepsi `toolsetup.go` self-manage bloğuna eklendi (lazy işaretli). Testler
+`builtin_controlgaps_test.go` (hook/mcp create + provenance + validation). Canlı
+doğrulama: self-manage açık sunucuda ajan oluşturup `/api/agents/{id}/tools`
+kataloğunda 11 aracın hepsi göründü. Default skill `swarmgo-self-management` +
+`swarmgo-guide` ve `SKILL.md` (proje skill'i) güncellendi.
+
+**Kalan boşluklar (bilinçli):** workspace CRUD (tools paketi `workspace.Manager`'a
+erişmiyor — köprü gerek), market install (tür-özel install switch'i tool'a
+taşınmalı), özel sağlayıcı (ayrı araç yok ama `update_settings` ile dolaylı).
+
+**Not — Otomasyon motoru (event→action) prototiplendi ve KALDIRILDI:** kısa süre
+`internal/agent/automation.go` + `Automation` entity + UI paneli denendi; ancak
+spawn/schedule/flow ile benzer tetikleme zaten yapılabildiğinden ve panel ajan
+kontrolü tezini ilerletmediğinden tümü geri alındı. Repoda iz yok.
+
+## tool_search rename + MCP-ağır katalog kısaltma ✅ (2026-06-19)
+
+Lazy keşfini Anthropic "advanced tool use" modeline yaklaştıran iki değişiklik:
+
+1. **`find_tools` → `tool_search` rename** (`builtin_activate.go`): tip
+   `ToolSearchTool`, ctor `NewToolSearchTool`, araç adı `tool_search`. Tüm
+   referanslar (toolsetup wiring, katalog blok metni, activate_tools hata mesajı,
+   testler, doc/skill) güncellendi. Frontend'de referans yok.
+2. **MCP-ağır katalog kısaltma** (`renderLazyToolCatalog`, `toolsetup.go`):
+   "Available Tools (load on demand)" bloğu built-in lazy araçları **tam** listeler;
+   namespaced MCP araçları `lazyCatalogMCPListLimit=30`'a kadar tek tek listelenir,
+   üstünde **sunucu başına özet** (ad + sayı) verilip gerisi `tool_search`'e
+   bırakılır. Bir MCP sunucusu yüzlerce araç açabildiğinden bu, cache'lenen sistem-
+   prompt prefix'ini yalın tutar (Anthropic'in "ara, sıralama" deseni).
+
+Testler: `TestLazyCatalogSummarisesManyMCPTools` (agent), `tool_search` adı +
+arama (`lazyload_test.go`). `go build`/`vet`/`test` yeşil. Detay:
+`19-LAZY-TOOL-LOADING.md`. Not: bu turda PowerShell `Get-Content|Set-Content`
+round-trip'i 3 dokümanı cp1254 çift-kodlamayla bozdu; cp1254 ters çevirimle
+kayıpsız onarıldı (U+FFFD=0). Doküman düzenlemede artık Edit aracı kullanılmalı.
+
+## Bridge alt-küme + rol-bazlı eager + call_agent lazy ✅ (2026-06-19)
+
+Eager küçültmenin üç takip adımı:
+
+1. **Bridge alt-küme sınırı** (`tools.bridgeExcluded`, `registry.go`): CLI köprüsü
+   tam şema ilan ettiğinden yüzeyi budandı — `http_get` (CLI'de WebFetch var) ve
+   `call_agent` (dispatch native-loop `DelegationFrom(ctx)` ister, bridge ctx'inde
+   yok) artık köprülenmiyor. Native ajanlar etkilenmez.
+2. **Rol-bazlı eager** (`toolsetup.go`): `PermissionMode == "read-only"` ajanda
+   `write_file`/`edit_file` eager'dan lazy'ye düşer (yazma zaten onaylanmaz → şema
+   israfı). "ask"/"auto" eager tutar.
+3. **call_agent lazy**: senkron delegasyon artık lazy (native `activate_tools`;
+   CLI'ye köprülenmez — bkz. madde 1).
+
+Testler: `TestBridgeableDefsExcludesCLINative` (tools),
+`TestReadOnlyAgentDemotesWriteTools` (agent). `go test ./...` tamamı yeşil.
+Detay: `19-LAZY-TOOL-LOADING.md`, `11-INTERACTION-MCP.md`.
+
+## Eager çekirdek küçültme — 8 araç lazy ✅ (2026-06-19)
+
+**Her tur gönderilen eager araç yüzeyi daraltıldı.** Self-management + MCP zaten
+lazy'ydi; ek olarak her zaman kurulan ama turların azında kullanılan 8 araç da
+lazy'ye indirildi (`toolsetup.go`, `reg.MarkLazy(...)`): `read_config`/
+`write_config`/`list_config`, `secret_list`/`secret_get`, `list_sessions`,
+`memory_recall`, `http_get`. Gerekçe: config editing nadir; secret yalnız
+kimlik-bilgili görevlerde; recall `ContextBlock` ile zaten otomatik enjekte;
+çoğu tur dış istek yapmıyor. UX-hassas etkileşim primitifleri (`ask_user`,
+`request_confirmation`, `schedule_wake`) ve artifact çıktı yolu eager bırakıldı.
+
+**Sinerji:** CLI-3 köprüsü tüm lazy built-in'leri `BridgeableDefs` ile claude-cli'ye
+bridge ettiğinden, bu indirme aynı zamanda `memory_recall`/`secret_list`/
+`secret_get`/`list_sessions` araçlarını **CLI ajanlarına da otomatik açar** —
+aşağıdaki "sıradaki köprü adayları" listesinin bir kısmı bu değişiklikle kapandı.
+`MarkLazy` builtins'te olmayan ada no-op olduğundan gate'li araçlar için ek koruma
+yok. `go build`/`vet`/`test` (tools/agent/api) yeşil. Detay: `19-LAZY-TOOL-LOADING.md`.
+
 ## use_skill — CLI köprüsü ✅ (2026-06-19)
 
 **Skill'ler artık claude-cli ajanları tarafından da kullanılabiliyor.** Sorun:

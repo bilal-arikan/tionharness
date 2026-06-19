@@ -288,6 +288,13 @@ advertise** edilip native registry üzerinden dispatch edilir. Mekanizma generic
 - `Call()` default case → `run.bridgeCallFor()` ile native registry'ye dispatch.
   Advertise edilen katalog (+ per-ajan filter) hangi adın çağrılabileceğinin kapısı.
 - Self-manage kapalıyken katalog boş (lazy built-in yok) → köprü no-op.
+- **Köprü alt-küme sınırı (2026-06-19):** `BridgeableDefs`, lazy olsa bile
+  `tools.bridgeExcluded` setindeki araçları atlar. Gerekçe: köprü **tam şema** ilan
+  ettiğinden yüzeyi yalın tutmak gerekir. Dışlananlar: `http_get` (CLI'de WebFetch
+  native var → çift maliyet) ve `call_agent` (dispatch native-loop'un kurduğu
+  `DelegationFrom(ctx)`'i ister; bridge dispatcher düz request ctx ile koşar →
+  köprülenirse hep "delegation not available" hatası). Native ajanlar etkilenmez.
+  Test: `tools/lazyload_test.go TestBridgeableDefsExcludesCLINative`.
 - Test: `mcp_interaction_test.go TestInteractionBridge` (advertise + dispatch +
   token izolasyonu). claude-cli ile canlı uçtan-uca doğrulama **beklemede**.
 

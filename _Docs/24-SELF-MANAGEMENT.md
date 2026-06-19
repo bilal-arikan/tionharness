@@ -15,7 +15,7 @@ uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
   tok/tur tasarrufu).
 - **Hepsi lazy:** aile geniş ve turların azında kullanıldığı için şemalar her tura
   basılmaz; ajan "Available Tools (load on demand)" listesinden gerekeni
-  `activate_tools` / `find_tools` ile **kendisi yükler** (`toolsetup.go`'da
+  `activate_tools` / `tool_search` ile **kendisi yükler** (`toolsetup.go`'da
   `selfManageStart`'tan sonrası `MarkLazy`). MCP araçları da `AttachMCP` içinde lazy.
 - **Koşullu alt-aileler:** secret yazımı yalnız vault varsa; skill yazımı yalnız
   skill store varsa; ayar araçları yalnız `settingsBridge` bağlıysa eklenir.

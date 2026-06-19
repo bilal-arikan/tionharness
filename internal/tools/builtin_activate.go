@@ -83,7 +83,7 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 	}
 	if len(known) == 0 {
 		if len(unknown) > 0 {
-			return fmt.Sprintf("No tools activated. Unknown names: %s. Use the exact names from the \"Available Tools (load on demand)\" list (or find_tools).", strings.Join(unknown, ", ")), nil
+			return fmt.Sprintf("No tools activated. Unknown names: %s. Use the exact names from the \"Available Tools (load on demand)\" list (or tool_search).", strings.Join(unknown, ", ")), nil
 		}
 		return "No tool names given.", nil
 	}
@@ -148,24 +148,30 @@ func (t DeactivateToolsTool) Call(ctx context.Context, input json.RawMessage) (s
 	return "Deactivated: " + strings.Join(removed, ", "), nil
 }
 
-// ---- find_tools -----------------------------------------------------------
+// ---- tool_search ----------------------------------------------------------
 
-// FindToolsTool searches the load-on-demand catalog by keyword, so the model can
-// discover the right tool name in MCP-heavy workspaces with large catalogs.
-type FindToolsTool struct {
+// ToolSearchTool searches the load-on-demand catalog by keyword, so the model can
+// discover the right tool name in MCP-heavy workspaces with large catalogs. It is
+// the keyword-search complement to the system-prompt catalog block: in MCP-heavy
+// workspaces that block lists built-in tools in full but only summarises MCP tools
+// per server, deferring individual discovery to this tool (mirrors the Anthropic
+// "tool search" pattern — search instead of enumerate).
+type ToolSearchTool struct {
 	entries []lazyEntry
 }
 
-// NewFindToolsTool builds the tool over a snapshot of the lazy catalog.
-func NewFindToolsTool(catalog []providers.ToolDef) FindToolsTool {
-	return FindToolsTool{entries: toLazyEntries(catalog)}
+// NewToolSearchTool builds the tool over a snapshot of the lazy catalog.
+func NewToolSearchTool(catalog []providers.ToolDef) ToolSearchTool {
+	return ToolSearchTool{entries: toLazyEntries(catalog)}
 }
 
-func (FindToolsTool) Def() providers.ToolDef {
+func (ToolSearchTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "find_tools",
+		Name: "tool_search",
 		Description: "Search the on-demand tool catalog by keyword to find a tool's exact name before " +
-			"activating it. Returns matching name — description lines. Useful when many tools are available.",
+			"activating it. Returns matching name — description lines. Use this when a tool you need is " +
+			"not listed individually in the \"Available Tools (load on demand)\" block (e.g. MCP tools, " +
+			"which are summarised per server in MCP-heavy workspaces).",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
@@ -177,12 +183,12 @@ func (FindToolsTool) Def() providers.ToolDef {
 	}
 }
 
-func (t FindToolsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+func (t ToolSearchTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		Query string `json:"query"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid find_tools input: %w", err)
+		return "", fmt.Errorf("invalid tool_search input: %w", err)
 	}
 	q := strings.ToLower(strings.TrimSpace(in.Query))
 	if q == "" {

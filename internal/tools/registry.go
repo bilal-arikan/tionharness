@@ -182,15 +182,34 @@ func (r *Registry) LazyCatalog(allow func(name string) bool) []providers.ToolDef
 	return out
 }
 
+// bridgeExcluded names lazy built-ins that must NOT be advertised to the
+// claude-cli Interaction MCP bridge, even though they are lazy and would
+// otherwise qualify. Two reasons, both about keeping the CLI surface lean and
+// correct:
+//   - http_get  : the CLI already has a native WebFetch — bridging it only
+//     doubles the schema cost (the bridge ships FULL schemas, unlike the native
+//     lazy catalog which ships name+summary only).
+//   - call_agent: its Call needs the delegation runner from context
+//     (DelegationFrom), which is installed only by the native tool loop. The
+//     bridge dispatcher runs with a plain request context, so a bridged
+//     call_agent would always fail with "delegation not available".
+//
+// Native agents are unaffected — they reach these through activate_tools as usual.
+var bridgeExcluded = map[string]bool{
+	"http_get":   true,
+	"call_agent": true,
+}
+
 // BridgeableDefs returns the FULL schemas of lazy built-in tools — the
 // self-management family — so the CLI path (Interaction MCP bridge) can advertise
 // and call them. MCP tools are excluded (the CLI reaches those through their own
-// server entries); only in-process built-ins are bridged. allow filters by name
+// server entries); only in-process built-ins are bridged. Tools in bridgeExcluded
+// are skipped (CLI-native or native-loop-context-bound). allow filters by name
 // (nil = allow all), mirroring the per-agent tool filter used on the native path.
 func (r *Registry) BridgeableDefs(allow func(name string) bool) []providers.ToolDef {
 	var out []providers.ToolDef
 	for name, t := range r.builtins {
-		if !r.lazy[name] {
+		if !r.lazy[name] || bridgeExcluded[name] {
 			continue
 		}
 		if allow != nil && !allow(name) {

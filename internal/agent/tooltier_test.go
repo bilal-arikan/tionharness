@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bilal/swarmgo/internal/db"
@@ -44,6 +46,72 @@ func TestWorkspaceTierFiltersCatalog(t *testing.T) {
 	// The full catalog is unaffected by the denylist.
 	if !hasTool(rt.WorkspaceToolCatalog(ctx), "http_get") {
 		t.Fatal("full workspace catalog must still list disabled tools")
+	}
+}
+
+// TestLazyCatalogSummarisesManyMCPTools verifies the load-on-demand catalog block
+// lists built-in lazy tools in full but, past lazyCatalogMCPListLimit MCP tools,
+// summarises them per server (count + tool_search pointer) instead of enumerating.
+func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
+	// Few MCP tools → listed individually.
+	small := []providers.ToolDef{
+		{Name: "create_agent", Description: "self-mgmt"},
+		{Name: "srvA__alpha", Description: "mcp tool alpha"},
+		{Name: "srvA__beta", Description: "mcp tool beta"},
+	}
+	out := renderLazyToolCatalog(small)
+	if !strings.Contains(out, "create_agent") || !strings.Contains(out, "srvA__alpha") {
+		t.Fatalf("small catalog should list every tool, got:\n%s", out)
+	}
+
+	// Many MCP tools (> limit) → summarised per server, individuals dropped.
+	big := []providers.ToolDef{{Name: "create_agent", Description: "self-mgmt"}}
+	for i := 0; i < lazyCatalogMCPListLimit+5; i++ {
+		big = append(big, providers.ToolDef{
+			Name:        fmt.Sprintf("bigsrv__tool%d", i),
+			Description: "an mcp tool",
+		})
+	}
+	out = renderLazyToolCatalog(big)
+	if !strings.Contains(out, "create_agent") {
+		t.Error("built-in lazy tool must still be listed in full")
+	}
+	if strings.Contains(out, "bigsrv__tool0") {
+		t.Error("individual MCP tools must NOT be enumerated past the limit")
+	}
+	if !strings.Contains(out, "tool_search") {
+		t.Error("summary must point the model at tool_search")
+	}
+	if !strings.Contains(out, "bigsrv") {
+		t.Error("summary must name the server")
+	}
+}
+
+// TestReadOnlyAgentDemotesWriteTools verifies a read-only agent ships the read
+// tools eagerly but the mutating tools (write_file/edit_file) are demoted to the
+// load-on-demand catalog, while an auto agent keeps them eager.
+func TestReadOnlyAgentDemotesWriteTools(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+
+	auto := db.Agent{ID: "auto", MCPEnabled: true, PermissionMode: "auto"}
+	if !hasTool(rt.ShippedToolCatalog(ctx, auto), "write_file") {
+		t.Fatal("auto agent must ship write_file eagerly")
+	}
+
+	ro := db.Agent{ID: "ro", MCPEnabled: true, PermissionMode: "read-only"}
+	if hasTool(rt.ShippedToolCatalog(ctx, ro), "write_file") {
+		t.Fatal("read-only agent must NOT ship write_file eagerly")
+	}
+	if hasTool(rt.ShippedToolCatalog(ctx, ro), "edit_file") {
+		t.Fatal("read-only agent must NOT ship edit_file eagerly")
+	}
+	if !hasTool(rt.LazyToolCatalog(ctx, ro), "write_file") {
+		t.Fatal("read-only agent must list write_file as load-on-demand")
+	}
+	// Read tools stay eager regardless of permission mode.
+	if !hasTool(rt.ShippedToolCatalog(ctx, ro), "read_file") {
+		t.Fatal("read-only agent must still ship read_file eagerly")
 	}
 }
 

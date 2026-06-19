@@ -26,13 +26,15 @@ workspaces never leaks content between them.
 - **Flows** — multi-step / multi-agent orchestration graphs (see the
   `swarmgo-flows` skill for details).
 - **Schedules (routines)** — cron-driven prompts delivered to an agent.
-- **Memory** — durable facts an agent recalls across sessions via the
-  `memory_recall` tool (and `memory_add` when self-management is on).
+- **Memory** — durable facts an agent recalls across sessions. Recall results are
+  auto-injected into the prompt each turn; the explicit `memory_recall` tool (and
+  `memory_add` when self-management is on) is load-on-demand — `activate_tools` it
+  for a targeted lookup.
 - **Skills** — reusable instruction sets (like this one). Their summaries are
   advertised in the prompt; full bodies load on demand via `use_skill`.
 - **MCP servers** — external tool providers attached per workspace.
 - **Secrets** — an encrypted per-workspace vault, read via `secret_list` /
-  `secret_get`.
+  `secret_get` (both load-on-demand — activate them when a task needs a credential).
 
 ## How a turn is assembled
 
@@ -56,11 +58,11 @@ body with `use_skill` exactly when a task matches it.
 - **Tune the app** → read or change application-wide settings live with the
   `get_settings` / `update_settings` tools. Load the `swarmgo-settings` skill for
   the full field reference.
-- **Manage SwarmGo itself** → create/edit agents, flows, schedules, tasks and
-  automations, spawn parallel workers, or manage artifacts/memory/logs with the
-  self-management tools. They are loaded on demand — `activate_tools` pulls the
-  one you need. Load the `swarmgo-self-management` skill for the catalog and the
-  activation workflow.
+- **Manage SwarmGo itself** → create/edit agents, flows, schedules, tasks, hooks,
+  MCP servers and skills, spawn parallel workers, store secrets, or manage
+  artifacts/memory/logs with the self-management tools. They are loaded on demand
+  — `activate_tools` pulls the one you need. Load the `swarmgo-self-management`
+  skill for the catalog and the activation workflow.
 
 When a subsystem needs deeper instructions, load the matching skill rather than
 guessing — start with `swarmgo-flows` for orchestration, `swarmgo-self-management`
