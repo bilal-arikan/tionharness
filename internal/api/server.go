@@ -17,6 +17,7 @@ import (
 	"github.com/bilal/swarmgo/internal/logbuf"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/settings"
+	"github.com/bilal/swarmgo/internal/web"
 	"github.com/bilal/swarmgo/internal/workspace"
 )
 
@@ -94,6 +95,7 @@ func (s *Server) applySettings() {
 	s.providers.SetDefaultModel(cur.DefaultModel)
 	s.providers.SetAnthropicBetas(cur.OneMillionContext, cur.ExtendedPromptCache)
 	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
+	s.providers.SetOpenRouter(s.settings.OpenRouterKey(), cur.OpenRouterBaseURL)
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
@@ -138,11 +140,28 @@ func (s *Server) Routes() http.Handler {
 	s.registerGraphRoutes(mux)
 	s.registerSecretRoutes(mux)
 	s.registerMiscRoutes(mux)
+	s.registerWebRoutes(mux)
 
 	// withRecover sits inside withRequestLog so a recovered panic's 500 is also
 	// reflected in the access log, and outside withWorkspace so a panic in any
 	// workspace-scoped handler is caught.
 	return withCORS(s.withRequestLog(s.withRecover(s.withWorkspace(mux))))
+}
+
+// registerWebRoutes mounts the embedded frontend SPA at the catch-all "/" route.
+// More specific patterns (/api/*, /health, /mcp/*) take precedence under Go's
+// method+path mux, so this only handles UI navigation and static assets. When no
+// frontend build was bundled, it logs a hint and leaves "/" unhandled (404),
+// which is the expected state for backend-only or dev (Vite proxy) workflows.
+func (s *Server) registerWebRoutes(mux *http.ServeMux) {
+	h, ok := web.Handler()
+	if !ok {
+		if s.logger != nil {
+			s.logger.Info("frontend not bundled; UI not served by this binary (run 'npm run build' then rebuild, or use the Vite dev server)")
+		}
+		return
+	}
+	mux.Handle("/", h)
 }
 
 // registerWorkspaceRoutes registers workspace management (not workspace-scoped).

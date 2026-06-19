@@ -15,6 +15,10 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    // Emit straight into the Go package that embeds it (//go:embed all:dist in
+    // internal/web), so `npm run build` + `go build` yields one binary that
+    // serves the UI. emptyOutDir is required because the target is outside root.
+    outDir: '../internal/web/dist',
+    emptyOutDir: true,
   },
 })

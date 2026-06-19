@@ -1,0 +1,1 @@
+Frontend build placeholder. Real assets are emitted here by 'npm run build' (vite outDir) and embedded via go:embed. Do not delete this file.

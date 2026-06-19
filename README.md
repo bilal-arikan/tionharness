@@ -36,6 +36,31 @@ Sağlık kontrolü: `curl http://localhost:8090/health`
 
 > Tüm `/api/*` uçları `X-Workspace-Id` header'ına göre çalışır; yoksa Varsayılan workspace kullanılır.
 
+## Tek Binary (üretim)
+
+Frontend, `//go:embed` ile binary'ye gömülür → tek `swarmgo.exe` hem API'yi hem UI'yı
+aynı porttan sunar (ayrı Vite sunucusu gerekmez).
+
+```powershell
+# Hepsi bir arada: UI build (vite → internal/web/dist) + UI gömülü go build
+.\scripts\build.ps1            # → swarmgo.exe (~12 MB)
+
+# Çalıştır
+$env:SWARMGO_ADDR="127.0.0.1:8095"; .\swarmgo.exe   # → http://127.0.0.1:8095 (UI + API)
+```
+
+Manuel (script'siz):
+
+```powershell
+cd frontend; npm run build; cd ..          # internal/web/dist'e üretir
+go build -trimpath -ldflags "-s -w" -o swarmgo.exe ./cmd/swarmgo
+```
+
+> Frontend build edilmemişse (`internal/web/dist` yalnız placeholder içerir) binary yine
+> derlenir; UI sunulmaz, log "frontend not bundled" der ve dev (Vite proxy) akışı kullanılır.
+> Rota önceliği: `/api/*`, `/health`, `/mcp/*` her zaman önce; `/` ve bilinmeyen yollar SPA
+> kabuğuna (index.html) düşer.
+
 ## Ortam Değişkenleri
 
 | Değişken | Açıklama | Varsayılan |

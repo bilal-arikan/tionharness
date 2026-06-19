@@ -2,6 +2,73 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-19**
 
+## Tek binary — frontend `//go:embed` ile gömüldü ✅ (2026-06-19)
+
+Proje artık **tek executable** olarak dağıtılabiliyor (projenin "tek binary, çapraz
+platform" hedefiyle birebir uyumlu). Yeni `internal/web` paketi (`embed.go`) Vite build'ini
+`//go:embed all:dist` ile gömer ve **SPA fallback'li** bir handler sunar (gerçek dosyalar
+yol bazlı; kök + bilinmeyen yollar → `index.html`). `server.go` `registerWebRoutes` ile köke
+(`/`) bağlar — `/api/*`·`/health`·`/mcp/*` Go mux'ında daha spesifik olduğundan önceliği
+korur. Build bundle edilmemişse (`dist` yalnız `.gitkeep`) `Handler` `ok=false` döner →
+binary yine derlenir, UI sunulmaz, log "frontend not bundled" der (dev/Vite-proxy akışı
+bozulmaz). Vite `outDir` → `../internal/web/dist` + `emptyOutDir:true`; `.gitignore`
+`/internal/web/dist/*` (placeholder hariç). Yeni `scripts/build.ps1`: UI build + UI gömülü
+`go build -trimpath -ldflags "-s -w"` → `swarmgo.exe` (~12 MB), build sonrası `.gitkeep`
+geri konur. ✅ `go build`/`vet` yeşil; **canlı smoke** (izole instance, port 8097):
+`/`→HTML 200, `/health`→JSON 200, `/api/version`→200, `/agents`→index.html fallback 200,
+`/favicon.svg`→200. README "Tek Binary (üretim)" bölümü eklendi.
+
+**Repo temizliği (aynı oturum):** kök + frontend'deki ~43 MB yerel artefakt
+(eski `swarmgo*.exe`, `*.log`, `_agentid.txt`, vite logları) silindi — tamamı zaten
+`.gitignore`'da, git'te izlenmiyordu. Kök artık yalnız kaynak + `_Docs` içerir.
+
+## Otonom Ops skill'i + Link Kısaltma workspace template'i ✅ (2026-06-19)
+
+**İstek:** Uzman "vibe coding" otomasyon sistemini (video altyazısı) SwarmGo'ya uyarlayan detaylı bir skill; ve bu skill'i somutlaştıran, basit bir uygulama (URL kısaltma sitesi) üzerinde çalışmaya hazır bir workspace.
+
+**Yapılan:**
+- **Yeni default skill** — `internal/skills/defaults/swarmgo-autonomous-ops/SKILL.md` (`♻️ SwarmGo Autonomous Ops`, `access: shared`). Videodaki uzman desenlerini SwarmGo primitiflerine eşler: agent/provider çok-modelliği, kurallar (workspace config), skills, automations (**Schedules** = zaman trigger + **Hooks** = olay trigger), loops (otonom heartbeat runtime + Flows), paralellik (`spawn_session` + workspace izolasyonu), quality gates (izin katmanı + hooks) ve test/döküman/log "flywheel"ı. Worktree/git-merge sınırları dürüstçe belirtildi. `//go:embed defaults` ile otomatik seed olur (kod değişikliği gerekmez).
+- **Yeni workspace template** — `internal/api/templates.go` → `linkshortener` ("Link Kısaltma (Otonom Ops)", 🔗). 4 ajan (Mimar/Plan, Geliştirici/Write, İnceleyici/Review, Bakım/Ops), **Plan → Yaz → İncele** çok-modelli flow'u, ve 3 **disabled** starter schedule (gece 01:00 docs sweep, 02:00 test coverage, 03:00 production error sweep). Ajan ruhları `swarmgo-autonomous-ops` skill'ini yüklemeye yönlendirir.
+- **Doğrulama:** `go build ./...` + `go vet ./internal/api ./internal/skills` yeşil.
+- **Not:** Template ajanları aynı default provider/model ile seed olur (`tmplAgent`'ta per-agent model alanı yok); gerçek çok-modelli pipeline için kullanıcı ajanlara UI'dan farklı model pinler.
+
+## Ağ Canlı mod — flow run'ları run-tracker'a kaydedildi ✅ (2026-06-19)
+
+**İstek:** Task/flow run'larını run-tracker'a kaydedip `runTarget` (aktif task/flow bağı) gerçekten canlansın.
+
+**Yapılan:**
+- **`graph.go`** çalışan-oturum kümesine `Runtime.ActiveSessionIDs()` eklendi (executions feed'iyle aynı; önceden yalnız `s.runs` = chat vardı). Böylece otonom (schedule/heartbeat/spawn) + flow run'ları grafikte "running" olarak görünür.
+- **`flow.go RunFlowRecorded`**: flow oturumu çalışmadan önce `GetOrCreateSourceSession` ile çözülüp `trackSession`/`defer untrackSession` ile sarmalandı → flow çalışırken oturum aktif işaretlenir.
+- **Sonuç:** flow çalışınca ilgili ajan `runKind=flow`, `runTarget=flow:<id>` raporlanır → Canlı modda **flow düğümüne aktif accent bağ + glow**, bitince temizlenir.
+- **Doğrulama (uçtan uca):** DenemeBilimsel "Araştırma Akışı" çalıştırıldı; çalışırken `/api/graph` ajanı `running:true, runKind:'flow', runTarget:'flow:…'` raporladı; run bitince (lastStatus=success) running temizlendi. `go build`/`vet` yeşil.
+- **Not:** Repoda doğrudan **task çalıştırma** yolu yok (task'lar flow-backed/otonom çalışır); doğrudan run path eklenirse aynı tracker'la otomatik kapsanır. Test, "deneme" amaçlı DenemeBilimsel workspace'inde bir başarılı flow run bıraktı.
+
+## Silme — cascade temizliği (agent + skill) ✅ (2026-06-19)
+
+**İstek:** Bir şey silindiğinde bağlı olduğu yerler de temizlensin (orphan
+referans kalmasın).
+
+**Tespit:** `DeleteAgent` yalnızca ajanı + sahip olduğu session'ları siliyordu;
+ajana bağlı **schedule/task** ile run'lar orphan kalıyordu. **Skill** silinince
+ajanların `Skills` listesindeki slug referansı duruyordu.
+
+**Yapılan (`go build`/`vet`/`test` yeşil):**
+- **`db/store.go` → `DeleteAgent` cascade'i genişletildi:** ajana bağlı
+  schedule'lar (`AgentID`), ajanın sahip olduğu task'lar (`OwnerAgentID`) ve
+  bunların run'ları da silinir. (Hook/Flow'da doğrudan `AgentID` alanı yok —
+  bilerek dokunulmadı; flow ajanları graph içinde referanslanır.)
+- **`db/store.go` → `RemoveSkillFromAgents(slug)` (yeni):** silinen skill slug'ını
+  her ajanın `Skills` listesinden düşürür, değişen ajanları persist eder, güncellenen
+  ajan sayısını döner.
+- **Scheduler tazeleme:** `api.handleDeleteAgent` ve self-management `delete_agent`
+  tool'u silmeden sonra `Scheduler.Reload` çağırır → kaldırılan schedule'lar canlı
+  cron registry'sinden de düşer. `NewDeleteAgentTool` artık `reloadSchedules` parametresi
+  alır; `agentDeps`'e eklendi, `toolsetup.go`'da `r.reloadSchedules` ile bağlandı.
+- **Skill silme köprüsü:** `api.handleDeleteSkill` ve `agentSkillWriter.DeleteSkill`
+  (artık DB taşır) skill silindikten sonra `RemoveSkillFromAgents` çağırır.
+- **Testler (yeni):** `db/delete_cascade_test.go` — agent silmede schedule/task/run
+  cascade + başka ajanın kayıtlarının korunması; `RemoveSkillFromAgents` slug strip.
+
 ## Ajan kontrol-yüzeyi — workspace CRUD araçları ✅ (2026-06-19)
 
 **İstek:** Ajan kendi kendine uygulamayı kullanabiliyor ama **workspace
