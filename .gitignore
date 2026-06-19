@@ -2,6 +2,7 @@
 /build/
 /bin/
 *.exe
+*.exe~
 
 # Local runtime data
 /.localdata*/
@@ -23,6 +24,7 @@ credential-secret
 /.flowids.json
 /.testids.json
 /.mcptest/
+/frontend/swarmgo_title_test.mjs
 
 # Dependencies
 /frontend/node_modules/

@@ -176,10 +176,18 @@ erDiagram
 | `schedules` | Cron zamanlama; ajana doğrudan `prompt` teslimi (panodan bağımsız — görev çalıştırmaz); sonraki/son çalışma + teslim durumu; etkin mi. **`expires_at`** dolu ise (opsiyonel son tarih, unix saniye) o tarihten sonra zamanlama çalışmaz ve otomatik pasifleşir (0 = süresiz) |
 | `runs` | Yürütme kaydı: durum, tetikleyici (`trigger`), ajan çıktısı (`output`), hata |
 | `knowledge_sources` | Doküman, journal, reflection notları + embedding |
-| `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace) |
-| `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node) |
+| `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace). **`created_by`** = sunucuyu ekleyen ajan ("" = kullanıcı tanımlı, korumalı; ajan yalnız kendi eklediğini silebilir) |
+| `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node). **`created_by`** = akışı oluşturan ajan ("" = kullanıcı) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
 | `artifacts` | Ajanın ürettiği kalıcı, sürümlenen içerik (doküman/kod/HTML/metin/SVG/Mermaid). `kind`+`language`, güncel `content`/`version` ve **inline revizyon geçmişi** (`revisions`, eskiden yeniye); köken `session_id`/`agent_id`. Workspace-scoped — SwarmGo'nun Claude.ai artifact karşılığı |
+
+> **Köken (provenance) konvansiyonu — `created_by`:** Self-management ile ajan
+> tarafından oluşturulabilen entity'ler (`agents`, `tasks`, `schedules`, `flows`,
+> `hooks`, `mcp_servers`) ortak bir `created_by` alanı taşır: **boş** = kullanıcı
+> tarafından (UI/API) oluşturulmuş, **korumalı**; **ajan id'si** = o ajan
+> tarafından bir self-management tool'u ile oluşturulmuş. Guard kuralı: bir ajan
+> yalnızca **ajan-oluşturduğu** (`created_by` dolu) entity'leri silebilir/düzenleyebilir;
+> kullanıcı varlıklarına dokunamaz.
 
 ## Güvenlik / Şifreleme
 
@@ -214,6 +222,7 @@ erDiagram
 - **Tasks/Schedules** (eski `0003`): `Task.Prompt/LastRun*`, `Schedule.TaskID/Prompt`, `Run.Output/Trigger`.
 - **Context/Budget** (eski `0004`): `Session.Summary*`, `Agent.Daily*Limit`, `Usage` (gün-bazlı dosya).
 - **MCP/Tools** (eski `0005`): `MCPServer.Command/Args/URL/Enabled/Scope`, `Agent.MCPEnabled/AllowedTools`.
+- **Self-management köken** (sürümsüz, son eklenen): `created_by` alanı `Agent`/`Task`/`Schedule`/`Flow`/`Hook`/`MCPServer` struct'larına eklendi (boş = kullanıcı, korumalı). Eski JSON dosyaları okunurken boş kalır → kullanıcı varlığı sayılır (geriye dönük uyumlu).
 - **Flows** (eski `0006`): `Flow.Graph`, `FlowRun` (restart-safe `State` JSON, status/input/output/error).
 - **Message steps** (eski `0007`): `Message.Steps` (JSON `[]TurnStep`: zengin sohbet tur izi — thinking/ara metin/tool çağrıları).
 

@@ -92,6 +92,17 @@ Workspace-scoped (`X-Workspace-Id` header):
 - Sohbet izi: `chat/HookStep.tsx` (🪝 / engelde ⛔ tonlu tek-satır kart).
 - Adım türü referansı: Ayarlar → **Adım Türleri** → "Hook".
 
+## Self-management (ajan araçları)
+
+Ajan, hook'ları kendi de yönetebilir (self-management gated, lazy yüklenir;
+`internal/tools/builtin_hookmgmt.go`):
+- `list_hooks` — workspace'teki hook'ları döner (id/event/matcher/command/enabled +
+  `createdByAgent` = silebilir mi).
+- `create_hook` — yeni PreToolUse/PostToolUse hook (komut Claude Code hook
+  sözleşmesini konuşur); `CreatedBy = actorID` ile etkin oluşturulur.
+- `delete_hook` — **yalnız ajan-oluşturduğu** hook'u siler; `CreatedBy == ""`
+  (kullanıcı tanımlı) ise reddedilir (provenance guard'ı).
+
 ## Dosyalar
 
 | Katman | Dosya |
@@ -102,6 +113,7 @@ Workspace-scoped (`X-Workspace-Id` header):
 | İz | `internal/agent/trace.go` (`StepHook`) |
 | Entegrasyon | `internal/agent/toolloop.go` (pre/post çağrıları) |
 | API | `internal/api/hooks.go` (+ `server.go` route) |
+| Ajan araçları | `internal/tools/builtin_hookmgmt.go` (`list/create/delete_hook`, self-manage gated) |
 | Test | `internal/db/store_hook_test.go`, `internal/agent/hooks_test.go` |
 | Frontend | `types/hook.ts`, `api/hooks.ts`, `components/settings/HooksPanel.tsx`, `components/chat/HookStep.tsx`, `lib/stepKinds.ts` |
 

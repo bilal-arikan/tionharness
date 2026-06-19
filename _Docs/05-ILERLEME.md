@@ -2,6 +2,111 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-19**
 
+## Faz B5 — Yüzeyler Arası Tutarlılık (Motor B paylaşımı) ✅ (2026-06-19)
+
+**Karar:** İki veri motoru ayrı kalır — **Motor A** (canlı bağlam tahmini,
+`conversation.EstimateTokens`) ve **Motor B** (kayıtlı kullanım defteri,
+`RecordUsage`→`db.Usage`→`pricing.go`). Birleştirme yanlış soyutlama olurdu
+(farklı ömür/kapsam/birim). Bunun yerine üç yüzey aynı motorları **tutarlı**
+okusun diye yüzey düzeyinde hizalama yapıldı.
+
+**Backend:** `/api/agents/{id}/usage` artık Bütçe ekranıyla **aynı Motor-B
+yardımcısından** (`modelRowsFor`) geçer → `costUSD`, `savingsUSD`, `byModel[]`,
+cache token'ları, `priced`/`estimated` döner. `budget.go`'ya paylaşılan
+`modelRowsFor` eklendi (PriceFor→EstimateFor fallback; budget ekranıyla bire bir
+aynı maliyet mantığı).
+
+**Frontend:**
+- `ChatMeters` (sohbet sağ-üst): harcama göstergesi artık **maliyet** de gösterir;
+  tooltip netleşti ("Bu ajanın BUGÜNKÜ toplam harcaması — tüm oturumlar"); tıklayınca
+  **Bütçe ekranına** gider (`onOpenBudget`). Bağlam göstergesinin tooltip'i de
+  "bu oturumun doluluğu" diye netleşti (Motor A vs B karışmasın).
+- **Limit düzenleme** ChatMeters'tan **Bütçe ekranına taşındı** (asıl yeri orası):
+  ajan tablosunda "limit" butonu → çağrı+token limiti düzenler (`api.setBudget`).
+- `SessionDetailPanel`: yeni **"Ajanın bugünkü harcaması"** bölümü — Motor-B'yi
+  olduğu gibi (ajan+gün) gösterir, **açıkça "bu sohbete özel değil" etiketiyle**
+  (usage session bazlı değil); maliyet + ilk 4 model + cache tasarrufu + "Bütçe
+  ekranı →" linki. `agentId` + `onOpenBudget` prop'ları App'ten geçer.
+
+**Sınır (bilinçli):** Per-sohbet maliyet YOK — usage `agent+gün` ile anahtarlı,
+`SessionID` boyutu yok. Gerçek per-sohbet maliyet istenirse usage kaydına
+`SessionID` eklenmesi gerekir (ayrı, daha büyük iş — bilinçli ertelendi).
+
+**Doğrulama:** `go build`/`vet`/`test` + `tsc`/`vite` yeşil. **Canlı API smoke:**
+`/api/agents/{id}/usage` opus 120k girdi + 400k cache-oku + 24k çıktı →
+**$4.20** maliyet + **$5.40** tasarruf + model detayı, Bütçe ekranıyla birebir
+aynı hesap.
+
+## Doküman bakımı: kod ↔ doküman senkronu ✅ (2026-06-19)
+
+**İstek:** Git'e eklenmiş commit'ler + commit'lenmemiş dosyalar incelensin; dokümanlarda eksik/yanlış/fazlalık varsa düzeltilsin.
+
+**Yapılan (kod değişikliği yok, yalnız doküman + `.gitignore`):**
+- **`_Docs/02-VERI-MODELI.md`** — yeni `MCPServer.CreatedBy` + `flows.created_by` tabloya işlendi; tüm self-management entity'leri için ortak **provenance (`created_by`) konvansiyonu** notu + şema-evrim maddesi eklendi.
+- **`_Docs/18-HOOKS.md`** — yeni ajan araçları (`list/create/delete_hook`, provenance guard'lı) için "Self-management (ajan araçları)" bölümü + Dosyalar satırı.
+- **`_Docs/24-SELF-MANAGEMENT.md` (YENİ)** — tüm öz-yönetim araç yüzeyi (agents/flows/schedules/tasks/hooks/MCP/secret/skill/artifact/memory/logs/settings) + gating/lazy davranışı + provenance guard'ı + **ayarlar alt sistemi** (validate→clamp, bridge wiring, `settings` SSE çok-pencere senkronu) tek dokümanda toplandı.
+- **`_Docs/03-YOL-HARITASI.md`** — CG-7 `[ ]`→`[~]` (komut hook'ları Faz P4 ile yapıldı); Tamamlananlar listesine self-management genişlemesi + ayarlar canlı-uygulama + İlişki Grafiği eklendi.
+- **Numara çakışması düzeltildi:** iki `18-` önekli dosya vardı → `18-SPAWN-SESSION.md` boş `22` slotuna taşındı (`22-SPAWN-SESSION.md`), başlık + tek çapraz-referans güncellendi. `_Docs/` artık 00–24 kesintisiz.
+- **İçerik doğruluğu:** `05` grafik yerleşim özeti (Fizik/Küme) ile koda göre düzeltildi.
+- **`.gitignore`** — build artıfaktı `*.exe~` + scratch manuel test `frontend/swarmgo_title_test.mjs` ignore'a eklendi.
+- **Workspace referans skill'i** (`swarmgo-project/SKILL.md`) — doküman aralığı 00–24'e genişletildi, İlişki Grafiği yeteneği + 24 referansı eklendi.
+
+## "Araçlar" NavRail görünümü → Ayarlar kategorisine taşındı ✅ (2026-06-19)
+
+**İstek:** NavRail'deki **Araçlar** butonu, Ayarlar ekranının soldaki kategori paneline taşınsın.
+
+**Yapılan:** Çalışma-alanı araç kataloğu + MCP sunucu yönetimi (`components/panels/ToolsPanel.tsx`) artık ayrı bir top-level görünüm değil; Ayarlar ekranının sol panelinde **"Araçlar & MCP"** kategorisi olarak açılıyor. Panel kendi master-detail düzenini taşıdığı için Ayarlar içinde **tam genişlikte** (merkezi `max-w-2xl` sütununun dışında) render edilir; bu kategoride "Kaydet" butonu/durum metni gizlidir (araçlar toggle ile anında kaydeder).
+- `components/settings/primitives.tsx` — yeni `Cat` anahtarı `mcptools` + `APP_CATS`'a `{ key: 'mcptools', label: 'Araçlar & MCP', icon: Plug }` ('tools'/"Yetenekler" hemen ardından).
+- `components/SettingsPanel.tsx` — `ToolsPanel`'i `ToolsCatalogPanel` olarak içe aktarır; `cat === 'mcptools'` özel-durumu tam genişlik render eder; header'da Kaydet + durum metni `mcptools` için gizli.
+- `components/NavRail.tsx` — `NAV`'dan `tools` kaldırıldı; `View` birleşiminden `'tools'` çıkarıldı; kullanılmayan `Plug` import'u silindi.
+- `App.tsx` — `ToolsPanel` import'u, `VIEW_TITLE.tools` ve `view === 'tools'` render satırı kaldırıldı; ilgili eski yorum sadeleştirildi.
+- `lib/url.ts` — `VIEWS` listesinden `'tools'` çıkarıldı (artık geçerli bir deep-link view'i değil).
+- **Not:** Ayarlar'daki mevcut **"Yetenekler (Araçlar)"** kategorisi (`tools`, env toggle'ları) ayrı bir şeydir; ona dokunulmadı. Sohbet `/tools` özet komutu (summarize 'tools') de ayrıdır, korundu.
+- **Durum:** `tsc --noEmit` yeşil (EXIT=0).
+
+## Masaüstü bildirimlerinde çoklu-sekme tekilleştirme (`tag`) ✅ (2026-06-19)
+
+**İstek:** Zamanlama (schedule) her tamamlandığında "bir fazla bildirim" geliyordu.
+
+**Teşhis:** Backend doğru — `scheduler.go` her tur için **tam bir** event yayınlıyor; çift-emit yok, frontend tek SSE abonesi. Çift bildirimin kaynağı: uygulamanın **birden fazla sekme/pencerede** açık olması; her sekme aynı SSE olayını alıp ayrı bir OS toast'u gösteriyordu. (Ayrıca önceden aynı prompt'un iki ajana zamanlanmış olması da ayrı bir çift kaynağıydı; o veri zaten temizlenmişti.)
+
+**Yapılan:** Bildirimlere olay-türevli **stabil `tag`** eklendi; tarayıcı aynı tag'li bildirimleri **değiştirir (yığmaz)** → çok sekmede bile tek toast.
+- `lib/clientPrefs.ts` — `notify(..., tag?)` → `new Notification(title, { body, tag })`.
+- `App.tsx` — otonom olaylar için `tag = workspaceId:type:sessionId|agentId:time`.
+- `hooks/useChatStream.ts` — sohbet yanıt/hata bildirimleri için `chat-reply:sid:msgId` / `chat-error:sid:liveId`.
+- **Durum:** `tsc -b` yeşil.
+
+## İlişki Grafiği — Workspace Ağı + Hafıza Bilgi Grafiği ✅ (2026-06-19)
+
+**İstek:** Agent-MCP'deki "Multi-Agent Collaboration Network" tarzı ilişki görselleştirmesini SwarmGo'da kullan.
+
+**Yapılan:** Mevcut React Flow altyapısını yeniden kullanan iki salt-okunur ağ görünümü eklendi.
+- **Workspace Ağı** (NavRail → "Ağ", `Share2` ikonu): ajanlar hub, görevler ışın, akışlar çok-ajanlı bağlayıcı. Kenar türleri: `owns`/`created`/`runs`/`uses` (renk+lejant). İki deterministik yerleşim modu (toolbar geçişi): **Fizik** (varsayılan, `forcePositions` — Fruchterman–Reingold eşit dağılım) ve **Küme** (`clusterPositions` — hub-and-spoke).
+- **Hafıza Bilgi Grafiği** (Hafıza → Liste/Ağ geçişi): bir ajanın hafızalarının lexical-cosine benzerlik grafiği; tür-renkli düğümler, degree ile boyut, benzerlik eşiği kaydırıcısı.
+- **Backend:** `internal/memory/graph.go` (`Store.Graph`, pairwise cosine + cap, `graph_test.go`), `internal/api/graph.go` (`GET /api/graph`, `GET /api/agents/{id}/memory-graph`).
+- **Frontend:** `types/graph.ts`, `api/graph.ts`, `lib/relationGraph.ts`, `components/graph/{VisNetworkGraph,MemoryGraphView}.tsx`, `components/panels/NetworkPanel.tsx`. Grafik motoru ayrı lazy chunk.
+- **vis-network'e geçiş (2026-06-19):** İlk React Flow + saf-TS force simülasyonu homojen dağılım vermedi (mesafe/yoğunluk kırılgan). Agent-MCP'nin de **`vis-network` (vis.js)** kullandığı `package.json`'dan doğrulanınca **`vis-network` v10.1.0 + `vis-data` v8.0.4**'e geçildi. Gerçek fizik motoru (`forceAtlas2Based` çözücü) bağsız/seyrek graflarda bile **homojen dağılım** veriyor; toolbar'da **Fizik / Ağaç** (hiyerarşik) geçişi. Eski `RelationGraph.tsx`/`EntityNode.tsx` + force layout fn'leri silindi; `lib/relationGraph.ts` artık DTO→vis eşleyici (`workspaceToVis`/`memoryToVis`), yeni `VisNetworkGraph.tsx` sarmalayıcı. vis-network ~515KB ayrı lazy chunk (ana bundle değişmedi).
+- **Durum:** `go build/vet/test ./internal/...` + `tsc`/`vite build` yeşil; canlı API smoke + **canlı Chrome görsel doğrulaması** (MINIMAX ws, 4 ajan + 32 görev, 0 kenar → Fizik modunda homojen yayılım, üst üste binme yok). Detay: `_Docs/23-ILISKI-GRAFIGI.md`.
+
+## Ayarlar skill'i + canlı ayar tool'ları (`get_settings`/`update_settings`) ✅ (2026-06-19)
+
+**İstek:** SwarmGo'ya, uygulamanın tüm ayarlarını bilen bir **default skill** eklensin; ayarları/configleri dosya yolundan değiştirip **aktifleştiren** bir **tool** da eklensin; skill tool'a referans versin.
+
+**Yapılan:**
+- **Default skill `swarmgo-settings`** (`internal/skills/defaults/swarmgo-settings/SKILL.md`, `access: shared`): `settings.json` içindeki tüm uygulama ayarlarını gruplandırılmış olarak belgeler (görünüm, sağlayıcılar/model, kullanıcı profili, bağlam & hafıza, tur kurtarma, araç-çıktısı sıkıştırma, bütçe & otonomi, MCP + gated yetenekler, tanılama) — her alanın anlamı + geçerli aralık/varsayılan. `swarmgo-guide`'a subskill olarak eklendi. Gömülü defaults `EnsureDefaults` ile her workspace'e seed'lenir.
+- **İki built-in tool** (`internal/tools/builtin_settings.go`, self-management gated, lazy):
+  - `get_settings` → `settings.json` dosya yolu + güncel ayarları **maskeli** JSON döner (secret key'ler yalnız "set mi" olarak görünür).
+  - `update_settings` → yalnızca değişen alanları içeren bir `patch` alır, diske yazar **ve canlı uygular** (restart yok); sayısal alanlar clamp'lenir.
+- **Köprü (bridge) wiring'i:** `tools.SettingsBridge` arayüzü → `api.settingsBridge` (settings store + `applySettings` hook'unu sarar) → `Server.SettingsBridge()`; `Manager.SetSettingsBridge` mevcut + sonradan açılan tüm workspace `Runtime`'larına dağıtır (`Runtime.settingsBridge` + `SetSettingsBridge`); `main.go` server kurulumundan sonra bağlar. `settings.Store.Path()` eklendi.
+- **Test:** `internal/tools/builtin_settings_test.go` (path raporu, patch uygulama, boş-patch reddi). `go build/vet/test ./...` yeşil.
+
+**Sağlamlaştırma (validation) + canlı frontend yenileme (aynı gün):**
+- **Validation (`internal/settings/validate.go`):** `Validate(Patch)` enum/format alanlarını denetler (theme, language, defaultProvider, defaultPermissionMode, logLevel, accent hex) ve geçersizleri **açık hata mesajıyla reddeder** — `Apply` en başta çağırır, yani hatalı değişiklik canlı alt sistemlere hiç ulaşmaz. Sayısal alanlar reddedilmez, `normalize` tarafından güvenli aralığa **clamp** edilir. `normalize`'a ek güvenlik ağı: `accent` (geçersiz hex → varsayılan) + `defaultPermissionMode` (bilinmeyen → `auto`) coercion'ı — elle bozulmuş bir `settings.json` bile yüklendiğinde uygulama çökmez. HTTP `PUT /api/settings` artık validation hatasında **400** döner (encryption hatası 500 kalır). Test: `internal/settings/validate_test.go` (kötü enum reddi, geçersiz patch state'i değiştirmez, bozuk değer coercion'ı, sayısal clamp).
+- **Frontend canlı yenileme:** bir ajan `update_settings` ile ayar değiştirince `api.settingsBridge.Apply` `/api/events` üzerinden bir **`settings`** SSE event'i yayınlar (app-global → workspace rozeti/toast yok). `App.tsx` `onEvent`'te bu event: client-side prefs'i (tema/accent/bildirim) **canlı uygular** (`applyClientPrefs`) + `settingsNonce`'u artırır. `SettingsPanel` yeni `reloadNonce` prop'u ile — **yalnız kaydedilmemiş düzenleme yoksa** (dirty değilse) formu yeniden yükler, böylece eşzamanlı ajan değişikliği kullanıcının yazdığını ezmez. `tsc -b` + `vite build` yeşil.
+- **Not (ilgisiz düzeltme):** `vite build`'i tıkayan, devam eden market/hooks WIP'ine ait iki TS hatası giderildi — `App.tsx` `VIEW_TITLE` haritasına `market: 'Market'` eklendi; `HooksPanel.tsx` `displayPath(t.path ?? '')`.
+- **Default skill `swarmgo-self-management` (2026-06-19):** öz-yönetim tool ailesini (agents/flows/schedules/tasks/automations CRUD + `spawn_session`/`send_agent_message`/`run_flow` + artifact/memory/log + `get_settings`/`update_settings`) kataloglayan ve **lazy tool'ları `activate_tools` ile kendi-aktivasyon** akışını öğreten gömülü skill (`access: shared`). Ajan, "Available Tools (load on demand)" listesinden gerekeni `activate_tools`/`find_tools` ile kendisi yükler. `swarmgo-guide`'a subskill + body referansı; provenance/guard notları (silme yalnız ajan-oluşturduğu entity). `internal/skills/defaults/swarmgo-self-management/SKILL.md`. `go build/test ./internal/skills/` yeşil.
+- **Çok-pencere senkronu (2026-06-19):** `settings` SSE event'i artık **UI'dan yapılan değişikliklerde de** yayılıyor — `handleUpdateSettings` (HTTP `PUT /api/settings`) ortak `Server.publishSettingsChanged` helper'ını çağırır (bridge de aynı helper'ı kullanır → tekrar yok). Böylece bir pencerede (veya ajan tarafından) yapılan ayar değişikliği **diğer tüm açık pencerelerde** canlı yansır (tema + form, dirty değilse). `go build/vet/test ./...` + `vite build` yeşil.
+
 ## Zamanlamalara opsiyonel son tarih (`expiresAt`) ✅ (2026-06-19)
 
 **İstek:** Schedules ekranına opsiyonel bir "son tarih" seçimi eklensin.
@@ -73,7 +178,7 @@ Provider kurulumunda API anahtarı artık **serbest metin değil**, Ayarlar→Sa
 
 ## Spawn Session — fire-and-forget paralel işçi ✅ (2026-06-18)
 
-**İstek:** the external agent project/SwarmClaw'daki `spawn_session` benzeri: bir prompt'tan **yeni, bağımsız bir oturum** başlatıp **beklemeden** bırakmak (paralel otonom işçi). Mevcut tetiklemeler (flow/schedule/`call_agent`/`send_agent_message`) bunu karşılamıyordu — spawn, FRESH bir oturum açıp turu arka planda koşar. Çıktı Faz U Aktivite feed'inde canlı görünür. Tasarım: `_Docs/18-SPAWN-SESSION.md`.
+**İstek:** the external agent project/SwarmClaw'daki `spawn_session` benzeri: bir prompt'tan **yeni, bağımsız bir oturum** başlatıp **beklemeden** bırakmak (paralel otonom işçi). Mevcut tetiklemeler (flow/schedule/`call_agent`/`send_agent_message`) bunu karşılamıyordu — spawn, FRESH bir oturum açıp turu arka planda koşar. Çıktı Faz U Aktivite feed'inde canlı görünür. Tasarım: `_Docs/22-SPAWN-SESSION.md`.
 
 **Mimari (iki katman):**
 - **Çekirdek `Runtime.SpawnSession` (`internal/agent/spawn.go`, yeni):** `scheduler.deliverPrompt` kalıbını genelleştirir — `resolveAgent` (id/isim, workspace-scoped) → `kind:"spawned"` + taze `sourceID` ile **bağımsız** session (GetOrCreate değil) → `AddMessage(user)` → **fire-and-forget goroutine** (`runSpawn`): `trackSession` (feed'de canlı "running") → `invokeTraced(KindSpawn, autonomous=true)` → `AddMessage(assistant, steps)` → tamamlanma event'i. Çağıranın ctx'i goroutine'i iptal etmez (`context.WithoutCancel`+10dk timeout) — HTTP/tur kapanınca spawn ölmesin. `SpawnOptions{ModelOverride,Title,CreatedBy}`.
