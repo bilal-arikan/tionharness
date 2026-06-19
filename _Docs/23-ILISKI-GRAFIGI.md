@@ -51,7 +51,41 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   > DAG/ağaç ister; bu veride her bağsız görev ayrı kök olup üst sırayı doldurarak
   > "bozuk" görünür. Hiyerarşi gereken yer **Akışlar** ekranıdır (gerçek DAG). Bu
   > yüzden ağ yalnız fizik düzeni kullanır.
-- Toolbar'da istatistik (ajan/görev/akış/beceri/MCP sayısı) + ilişki türü lejantı + Yenile.
+- Toolbar'da istatistik (ajan/görev/akış/beceri/MCP sayısı) + ilişki türü lejantı +
+  **İlişki / Canlı** mod geçişi + Yenile.
+
+#### Canlı (live) modu
+Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canlandıran ikinci yerleşim:
+- **5 sabit sütun başlığı** üstte (Yapılacak→Başarısız, `fixed:{x,y}`, `physics:false`).
+- Her görev **kendi durum sütununa** yaylanır (`task→col` kenarı, kesik çizgi) →
+  görevler durumlarına göre sütun altlarında kümelenir.
+- **Aktif bağ:** bir ajan yalnız **şu an çalıştığı** göreve bağlanır — `owns` kenarı
+  **ve** görev `in_progress` ise. Parlak accent kenar + gölge. Görev durum değişince
+  (board'da taşınınca) bağ kopar, ajan serbest kalır; başka görev `in_progress`
+  olunca yeni bağ kurulur. Skill/MCP bağları ajanla kalır (onunla sürüklenir).
+- **Gerçek zamanlı:** Canlı modda panel `/api/events` SSE'ye abone olur; görev/zamanlama/
+  heartbeat olaylarında grafiği yeniden çeker. `VisNetworkGraph` DataSet'i **artımlı**
+  (diff ekle/güncelle/sil, konum sıfırlamadan) güncellediği için fizik motoru ajanı yeni
+  bağına **kaydırarak animasyon** yapar — "canlı akış" hissi buradan gelir.
+- **Boşta (idle) lobi:** alt-ortada sabit bir "Boşta" çekirdeği; aktif görevi olmayan
+  her ajan zayıf bir yayla buraya çekilir. Görev `in_progress` olunca güçlü aktif bağ
+  ajanı kartına çeker (idle yayını ezer), görev bitince ajan lobiye geri döner.
+- **Ajanın akışı/skill/MCP'si:** Canlı modda `uses` (akış→ajan), `skill` ve `mcp`
+  bağları korunur → ajanın bağlı olduğu akış/beceri/sunucu onunla birlikte sürüklenir.
+  Görev/sütun yapısaldır; flow/skill/MCP katmanları chip'lerle açılıp kapatılır.
+- **Canlı run / "şu an çalışıyor":** Backend `/api/graph` ajan düğümüne `running`+
+  `runKind`+`runTarget` ekler (process-wide çalışan oturum kümesi `s.runs.activeSessionIDs()`
+  → bu workspace'in oturumlarına join). Canlı modda: çalışan ajan **parlak "live"
+  glow** alır; oturumu task/flow-kind ise o **task/flow düğümüne aktif (accent) bağ**
+  kurulur. Aktif bağ ayrıca `in_progress` görev sahipliğiyle de (fallback) kurulur.
+  > Çalışan kümesi iki kaynaktan birleşir: `s.runs.activeSessionIDs()` (chat
+  > streaming turn'leri) **+** `Runtime.ActiveSessionIDs()` (otonom + flow run'ları).
+  > **Flow run'ları artık tracker'a kaydoluyor:** `RunFlowRecorded` flow oturumunu
+  > çalışmadan önce `GetOrCreateSourceSession` ile çözüp `trackSession`/`defer
+  > untrackSession` ile sarmalıyor → flow çalışırken ilgili ajan `runKind=flow`,
+  > `runTarget=flow:<id>` ile **aktif accent bağ + glow** alır, bitince temizlenir.
+  > (Doğrudan task çalıştırma yolu henüz yok — task'lar flow-backed ya da otonom
+  > çalışır; doğrudan run path eklenince aynı tracker'la otomatik kapsanır.)
 
 ### 2. Hafıza Bilgi Grafiği ("Hafıza" → Ağ sekmesi)
 Bir ajanın hafızalarının benzerlik grafiği: her hafıza bir düğüm, lexical-cosine

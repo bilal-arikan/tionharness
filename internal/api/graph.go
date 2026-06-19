@@ -20,6 +20,13 @@ type graphNode struct {
 	Group  string `json:"group,omitempty"`  // owning hub id (for cluster layout)
 	Status string `json:"status,omitempty"` // task board state
 	Desc   string `json:"desc,omitempty"`   // longer description (task tooltip)
+
+	// Live activity (agents only): whether the agent has an in-flight run right
+	// now, what kind (task|flow|chat|schedule|heartbeat) and the type-prefixed id
+	// of the task/flow it is running (empty for chat/schedule/heartbeat).
+	Running   bool   `json:"running,omitempty"`
+	RunKind   string `json:"runKind,omitempty"`
+	RunTarget string `json:"runTarget,omitempty"`
 }
 
 // graphEdge links two graph nodes. Kind names the relationship so the frontend
@@ -80,6 +87,42 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	nodes := make([]graphNode, 0, len(agents)+len(tasks)+len(flows))
 	edges := make([]graphEdge, 0)
 
+	// Per-agent live activity: which agent currently has an in-flight streaming
+	// run, derived from the process-wide running session set joined to this
+	// workspace's sessions. A task/flow-kind running session bonds the agent to
+	// that task/flow node in the live view; chat/schedule/heartbeat just mark it
+	// as running (a glow, no specific target).
+	type activity struct{ kind, target string }
+	agentAct := map[string]activity{}
+	running := map[string]bool{}
+	for _, id := range s.runs.activeSessionIDs() {
+		running[id] = true // chat-streaming turns
+	}
+	for _, id := range wsp.Runtime.ActiveSessionIDs() {
+		running[id] = true // autonomous + flow/task runs (schedule/heartbeat/spawn/flow)
+	}
+	if len(running) > 0 {
+		if sessions, serr := wsp.DB.ListSessions(ctx, ""); serr == nil {
+			for _, sess := range sessions {
+				if !running[sess.ID] || sess.AgentID == "" {
+					continue
+				}
+				target := ""
+				switch sess.Kind {
+				case "task":
+					if sess.SourceID != "" {
+						target = taskPfx + sess.SourceID
+					}
+				case "flow":
+					if sess.SourceID != "" {
+						target = flowPfx + sess.SourceID
+					}
+				}
+				agentAct[sess.AgentID] = activity{kind: sess.Kind, target: target}
+			}
+		}
+	}
+
 	agentExists := make(map[string]bool, len(agents))
 	for _, a := range agents {
 		agentExists[a.ID] = true
@@ -87,14 +130,20 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		if a.Model != "" {
 			sub = a.Provider + " · " + a.Model
 		}
-		nodes = append(nodes, graphNode{
+		node := graphNode{
 			ID:    agentPfx + a.ID,
 			Type:  "agent",
 			Label: a.Name,
 			Sub:   sub,
 			Color: a.Color,
 			Emoji: a.Avatar,
-		})
+		}
+		if act, ok := agentAct[a.ID]; ok {
+			node.Running = true
+			node.RunKind = act.kind
+			node.RunTarget = act.target
+		}
+		nodes = append(nodes, node)
 	}
 
 	for _, t := range tasks {

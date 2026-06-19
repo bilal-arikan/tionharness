@@ -1,22 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { RefreshCw, Share2, Radio } from 'lucide-react'
 import { api } from '../../api'
 import type { WorkspaceGraph, WorkspaceNodeType } from '../../types'
 import { VisNetworkGraph } from '../graph/VisNetworkGraph'
-import { workspaceToVis, EDGE_LEGEND, NODE_LAYERS } from '../../lib/relationGraph'
+import { workspaceToVis, EDGE_LEGEND, NODE_LAYERS, type WorkspaceMode } from '../../lib/relationGraph'
 
 interface Props {
   onError: (msg: string) => void
 }
 
-// NetworkPanel renders the workspace collaboration network with vis-network:
-// agents, tasks, flows, skills and MCP servers as nodes, their relationships as
-// color-coded edges. A real physics engine (Fizik) or a hierarchical tree (Ağaç)
-// lays them out; layer chips toggle node types and a density slider tunes packing.
+// NetworkPanel renders the workspace collaboration network with vis-network.
+// Two modes: 'relation' (the full collaboration web) and 'live' (a board-column
+// flow where tasks gather under their status column and agents bond to the task
+// they're actively working — auto-refreshing on autonomous events). Layer chips
+// toggle node types and a density slider tunes packing.
 export function NetworkPanel({ onError }: Props) {
   const [graph, setGraph] = useState<WorkspaceGraph | null>(null)
   const [loading, setLoading] = useState(false)
   const [density, setDensity] = useState(1)
+  const [mode, setMode] = useState<WorkspaceMode>('relation')
   // Visible node layers (agents are always shown). Skills/MCP start hidden to
   // keep the default view focused on the agent/task/flow collaboration core.
   const [visible, setVisible] = useState<Set<WorkspaceNodeType>>(
@@ -43,10 +45,34 @@ export function NetworkPanel({ onError }: Props) {
     load()
   }, [load])
 
+  // Live mode: re-fetch the graph when an autonomous event (task run, schedule,
+  // heartbeat) lands, so the flow animates as agents pick up / finish work. A
+  // short debounce coalesces bursts. The incremental DataSet update in
+  // VisNetworkGraph means the physics engine glides nodes to their new bonds.
+  const debounceRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (mode !== 'live') return
+    const unsub = api.subscribeEvents(() => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current)
+      debounceRef.current = window.setTimeout(() => load(), 600)
+    })
+    return () => {
+      unsub()
+      if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    }
+  }, [mode, load])
+
   const { nodes, edges } = useMemo(
-    () => (graph ? workspaceToVis(graph, visible) : { nodes: [], edges: [] }),
-    [graph, visible],
+    () => (graph ? workspaceToVis(graph, visible, mode) : { nodes: [], edges: [] }),
+    [graph, visible, mode],
   )
+
+  // In live mode tasks/columns are intrinsic; the flow/skill/MCP layers stay
+  // user-toggleable (an agent's flows, skills and MCP servers drift with it).
+  const layers =
+    mode === 'live'
+      ? NODE_LAYERS.filter((l) => l.type === 'flow' || l.type === 'skill' || l.type === 'mcp')
+      : NODE_LAYERS
 
   const isEmpty = graph && graph.nodes.length === 0
 
@@ -61,12 +87,39 @@ export function NetworkPanel({ onError }: Props) {
           </span>
         )}
         <div className="ml-auto flex items-center gap-3">
-          {EDGE_LEGEND.map((l) => (
-            <span key={l.kind} className="flex items-center gap-1 text-[var(--color-text-dim)]">
-              <span className="inline-block h-0.5 w-4 rounded" style={{ background: l.color }} />
-              {l.label}
+          {mode === 'relation' &&
+            EDGE_LEGEND.map((l) => (
+              <span key={l.kind} className="flex items-center gap-1 text-[var(--color-text-dim)]">
+                <span className="inline-block h-0.5 w-4 rounded" style={{ background: l.color }} />
+                {l.label}
+              </span>
+            ))}
+          {mode === 'live' && (
+            <span className="flex items-center gap-1 text-[var(--color-accent)]">
+              <Radio size={12} className="animate-pulse" /> canlı — olaylarda kendiliğinden güncellenir
             </span>
-          ))}
+          )}
+          {/* Mode toggle: relationship web vs live board-column flow. */}
+          <div className="flex gap-0.5 rounded-md bg-[var(--color-surface-2)] p-0.5">
+            <button
+              onClick={() => setMode('relation')}
+              className={`flex items-center gap-1 rounded px-2 py-0.5 transition ${
+                mode === 'relation' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
+              }`}
+              title="İlişki ağı (tüm bağlar)"
+            >
+              <Share2 size={13} /> İlişki
+            </button>
+            <button
+              onClick={() => setMode('live')}
+              className={`flex items-center gap-1 rounded px-2 py-0.5 transition ${
+                mode === 'live' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
+              }`}
+              title="Canlı sütun akışı (görevler durum sütunlarında, ajan aktif göreve bağlanır)"
+            >
+              <Radio size={13} /> Canlı
+            </button>
+          </div>
           <button
             onClick={load}
             disabled={loading}
@@ -81,8 +134,10 @@ export function NetworkPanel({ onError }: Props) {
 
       {/* Toolbar row 2: layer chips + density slider */}
       <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] px-4 py-1.5 text-xs">
-        <span className="text-[var(--color-text-dim)]">Katmanlar:</span>
-        {NODE_LAYERS.map((l) => {
+        <span className="text-[var(--color-text-dim)]">
+          {mode === 'live' ? 'Sütun akışı · katmanlar:' : 'Katmanlar:'}
+        </span>
+        {layers.map((l) => {
           const on = visible.has(l.type)
           return (
             <button
@@ -125,7 +180,7 @@ export function NetworkPanel({ onError }: Props) {
             belirir.
           </div>
         ) : (
-          <VisNetworkGraph nodes={nodes} edges={edges} density={density} />
+          <VisNetworkGraph nodes={nodes} edges={edges} mode={mode} density={density} />
         )}
       </div>
     </div>

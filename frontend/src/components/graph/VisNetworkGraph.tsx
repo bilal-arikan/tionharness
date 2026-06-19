@@ -2,23 +2,24 @@ import { useEffect, useRef } from 'react'
 import { Network, type Options, type Node, type Edge } from 'vis-network'
 import { DataSet } from 'vis-data'
 
+export type VisMode = 'relation' | 'live'
+
 interface Props {
   nodes: Node[]
   edges: Edge[]
-  // density: 0.4 (sparse, far apart) … 2 (dense, close). Scales the physics
-  // repulsion + spring length so the user can tune how tightly packed the graph
-  // sits. Default 1.
+  // 'relation' = free force cloud; 'live' = board-column flow (fixed anchors at
+  // top, low central gravity so columns spread horizontally).
+  mode?: VisMode
+  // density: 0.4 (sparse) … 2 (dense). Scales repulsion + spring length.
   density?: number
   onSelect?: (id: string | null) => void
 }
 
-// buildOptions configures the vis-network instance to match the reference
-// collaboration network: a forceAtlas2 force field (even, organic spacing the
-// solver maintains automatically) on a dark canvas. This is the right layout for
-// a general relationship graph — a strict hierarchy/tree only suits a DAG (the
-// Flows screen), not this cyclic, partly-disconnected network. `density` scales
-// repulsion/springs.
-function buildOptions(density = 1): Options {
+// buildOptions configures the vis-network instance. Relation mode uses a
+// forceAtlas2 force field (even organic spread); live mode drops central gravity
+// so the fixed board-state column anchors govern the horizontal layout while
+// tasks spring under their column. `density` scales repulsion/springs.
+function buildOptions(density = 1, mode: VisMode = 'relation'): Options {
   const d = Math.min(2, Math.max(0.4, density))
   return {
     autoResize: true,
@@ -34,23 +35,20 @@ function buildOptions(density = 1): Options {
     },
     physics: {
       enabled: true,
-      // forceAtlas2Based spreads disconnected nodes into an even cloud (rather
-      // than collapsing them to a clump or exploding them off-screen) — the
-      // right solver for graphs that are often sparse/edgeless. avoidOverlap
-      // keeps the wide task boxes from stacking.
       solver: 'forceAtlas2Based',
       forceAtlas2Based: {
-        // Higher density → weaker repulsion + shorter springs → tighter packing.
-        gravitationalConstant: -60 / d,
-        centralGravity: 0.012 * d,
+        gravitationalConstant: (mode === 'live' ? -45 : -60) / d,
+        // Live mode: near-zero central gravity so the fixed, horizontally-spread
+        // column anchors (not a central pull) shape the layout.
+        centralGravity: mode === 'live' ? 0.004 : 0.012 * d,
         springLength: 110 / d,
         springConstant: 0.08,
         damping: 0.4,
-        avoidOverlap: 0.5,
+        avoidOverlap: mode === 'live' ? 0.6 : 0.5,
       },
       maxVelocity: 50,
       minVelocity: 0.75,
-      stabilization: { enabled: true, iterations: 320, fit: true },
+      stabilization: { enabled: true, iterations: 300, fit: true },
     },
     layout: { improvedLayout: true },
     interaction: {
@@ -62,16 +60,19 @@ function buildOptions(density = 1): Options {
   }
 }
 
-// VisNetworkGraph wraps a vis-network instance — the same library Agent-MCP's
-// dashboard uses — giving a real continuous physics engine (drag, hover, even
-// organic spacing). The network is created once; node/edge data and density
-// changes are pushed onto the live instance.
-export function VisNetworkGraph({ nodes, edges, density = 1, onSelect }: Props) {
+// VisNetworkGraph wraps a vis-network instance (the library Agent-MCP's dashboard
+// uses): a real continuous physics engine. Data is pushed onto the live DataSets
+// *incrementally* (diff add/update/remove by id) so that when the graph changes —
+// a task moves columns, an agent re-bonds to a new task — the physics engine
+// animates the transition instead of resetting every node's position.
+export function VisNetworkGraph({ nodes, edges, mode = 'relation', density = 1, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const networkRef = useRef<Network | null>(null)
   const nodesDSRef = useRef<DataSet<Node> | null>(null)
   const edgesDSRef = useRef<DataSet<Edge> | null>(null)
+  const modeRef = useRef(mode)
   const densityRef = useRef(density)
+  const populatedRef = useRef(false)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
 
@@ -85,7 +86,7 @@ export function VisNetworkGraph({ nodes, edges, density = 1, onSelect }: Props) 
     const network = new Network(
       containerRef.current,
       { nodes: nodesDS, edges: edgesDS },
-      buildOptions(densityRef.current),
+      buildOptions(densityRef.current, modeRef.current),
     )
     networkRef.current = network
     network.on('selectNode', (p: { nodes: string[] }) => onSelectRef.current?.(p.nodes[0] ?? null))
@@ -93,30 +94,53 @@ export function VisNetworkGraph({ nodes, edges, density = 1, onSelect }: Props) 
     return () => {
       network.destroy()
       networkRef.current = null
+      populatedRef.current = false
     }
   }, [])
 
-  // Push data updates onto the live DataSets (diff-free reset is fine at this
-  // scale and keeps positions recomputed when the graph genuinely changes).
+  // Incremental data sync: remove gone ids, upsert the rest. Existing nodes keep
+  // their physics-computed positions (we never set x/y except fixed anchors), so
+  // changes animate. Only the first population auto-fits — later live refreshes
+  // leave the viewport where the user left it.
   useEffect(() => {
     const nds = nodesDSRef.current
     const eds = edgesDSRef.current
-    if (!nds || !eds) return
-    nds.clear()
-    eds.clear()
-    nds.add(nodes)
-    eds.add(edges)
-    networkRef.current?.once('stabilizationIterationsDone', () => networkRef.current?.fit({ animation: false }))
+    const net = networkRef.current
+    if (!nds || !eds || !net) return
+
+    const nodeIds = new Set(nodes.map((n) => n.id as string))
+    ;(nds.getIds() as string[]).forEach((id) => {
+      if (!nodeIds.has(id)) nds.remove(id)
+    })
+    nds.update(nodes)
+
+    const edgeIds = new Set(edges.map((e) => e.id as string))
+    ;(eds.getIds() as string[]).forEach((id) => {
+      if (!edgeIds.has(id)) eds.remove(id)
+    })
+    eds.update(edges)
+
+    if (!populatedRef.current && nodes.length > 0) {
+      populatedRef.current = true
+      net.once('stabilizationIterationsDone', () => net.fit({ animation: false }))
+    }
   }, [nodes, edges])
 
-  // Apply density changes to the live instance (re-runs physics).
+  // Apply mode / density changes to the live instance (re-runs physics + refits).
+  // Fit AFTER stabilization (not immediately) so the layout — especially live
+  // mode's fixed column anchors at the top — is fully formed before framing; a
+  // timeout fallback covers cases where the stabilization event doesn't fire.
   useEffect(() => {
+    modeRef.current = mode
     densityRef.current = density
     const net = networkRef.current
     if (!net) return
-    net.setOptions(buildOptions(density))
-    setTimeout(() => net.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } }), 60)
-  }, [density])
+    net.setOptions(buildOptions(density, mode))
+    const fit = () => net.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } })
+    net.once('stabilizationIterationsDone', fit)
+    const t = setTimeout(fit, 1600)
+    return () => clearTimeout(t)
+  }, [mode, density])
 
   return <div ref={containerRef} className="h-full w-full" />
 }

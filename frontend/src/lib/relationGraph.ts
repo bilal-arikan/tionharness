@@ -93,17 +93,26 @@ export interface VisData {
   edges: Edge[]
 }
 
-// workspaceToVis maps agents/tasks/flows/skills/mcp to vis-network nodes (agent =
-// colored disc, task = status-bordered box, flow = violet diamond, skill = yellow
-// hexagon, mcp = teal square) and the relationships to directed, color-coded
-// edges. `visible` (a set of node types) filters layers; agents are always shown,
-// and edges touching a hidden node are dropped.
-export function workspaceToVis(graph: WorkspaceGraph, visible?: Set<WorkspaceNodeType>): VisData {
-  const show = (t: WorkspaceNodeType) => t === 'agent' || !visible || visible.has(t)
-  const shownIds = new Set(graph.nodes.filter((n) => show(n.type)).map((n) => n.id))
-  const nodes: Node[] = graph.nodes
-    .filter((n) => show(n.type))
-    .map((n) => {
+export type WorkspaceMode = 'relation' | 'live'
+
+// Board-state columns for the live mode: fixed anchor headers across the top that
+// tasks gather under. Order = kanban flow left→right.
+export const BOARD_COLUMNS: { state: string; label: string; color: string }[] = [
+  { state: 'todo', label: 'Yapılacak', color: '#64748b' },
+  { state: 'in_progress', label: 'Sürüyor', color: '#0ea5e9' },
+  { state: 'review', label: 'İncelemede', color: '#f59e0b' },
+  { state: 'done', label: 'Tamamlandı', color: '#10b981' },
+  { state: 'failed', label: 'Başarısız', color: '#ef4444' },
+]
+const COL_PREFIX = 'col:'
+const COL_GAP = 360 // horizontal spacing between column anchors
+const COL_Y = -380 // anchors sit at the top of the canvas
+const IDLE_ID = 'idle' // lobby anchor that taskless agents drift to
+const IDLE_Y = 420 // bottom of the canvas, opposite the columns
+
+// nodeFor builds the vis node for one workspace graph entity (shared by both
+// modes).
+function nodeFor(n: WorkspaceGraph['nodes'][number]): Node {
     if (n.type === 'agent') {
       const c = n.color || '#7c3aed'
       return {
@@ -166,23 +175,169 @@ export function workspaceToVis(graph: WorkspaceGraph, visible?: Set<WorkspaceNod
       color: { background: sc, border: sc, highlight: { background: sc, border: '#fff' } },
       font: { color: '#cbd5e1', size: 11 },
     }
-  })
+}
 
-  const edges: Edge[] = graph.edges
-    .filter((e) => shownIds.has(e.source) && shownIds.has(e.target))
-    .map((e, i) => {
-      const color = EDGE_COLOR[e.kind]
-      return {
-        id: `e${i}`,
-        from: e.source,
-        to: e.target,
-        color: { color, highlight: color, opacity: 0.85 },
-        width: 1.6,
-        arrows: { to: { enabled: true, scaleFactor: 0.6 } },
-        dashes: e.kind === 'created',
-      }
+// edgeId is a stable, content-derived id so incremental DataSet updates can diff
+// edges across refreshes (an unchanged edge keeps its id → no flicker).
+function edgeId(kind: string, from: string, to: string): string {
+  return `${kind}:${from}->${to}`
+}
+
+// workspaceToVis maps the workspace graph to vis-network data. `mode`:
+//  - 'relation' (default): the full collaboration web — every node type + all
+//    relationship edges (owns/created/runs/uses/skill/mcp).
+//  - 'live': a kanban-flow view — fixed board-state column anchors across the
+//    top, every task springs to its column, and an agent bonds ONLY to the task
+//    it is actively working (in_progress + owner). Skills/MCP stay bonded to the
+//    agent so they drift with it. As board states change the bonds re-form,
+//    giving the "living flow" when combined with live refresh.
+// `visible` filters the skill/mcp layers (agents/tasks/columns always shown).
+export function workspaceToVis(
+  graph: WorkspaceGraph,
+  visible?: Set<WorkspaceNodeType>,
+  mode: WorkspaceMode = 'relation',
+): VisData {
+  const live = mode === 'live'
+  // Visibility: agents always; tasks always in live; flow/skill/mcp by toggle.
+  const show = (t: WorkspaceNodeType): boolean => {
+    if (t === 'agent') return true
+    if (live && t === 'task') return true
+    return !visible || visible.has(t)
+  }
+  const shownIds = new Set(graph.nodes.filter((n) => show(n.type)).map((n) => n.id))
+  const statusOf = new Map(graph.nodes.filter((n) => n.type === 'task').map((n) => [n.id, n.status]))
+
+  const nodes: Node[] = graph.nodes.filter((n) => show(n.type)).map(nodeFor)
+
+  const edges: Edge[] = []
+  const addEdge = (kind: string, from: string, to: string, style: Partial<Edge>) => {
+    if (!shownIds.has(from) || !shownIds.has(to)) return
+    edges.push({ id: edgeId(kind, from, to), from, to, ...style } as Edge)
+  }
+
+  if (live) {
+    // Fixed column anchors across the top.
+    const n = BOARD_COLUMNS.length
+    BOARD_COLUMNS.forEach((col, i) => {
+      const x = (i - (n - 1) / 2) * COL_GAP
+      nodes.push({
+        id: COL_PREFIX + col.state,
+        label: col.label,
+        shape: 'box',
+        x,
+        y: COL_Y,
+        fixed: { x: true, y: true },
+        physics: false,
+        color: { background: 'rgba(30,39,51,0.9)', border: col.color },
+        font: { color: col.color, size: 15, bold: { color: col.color } } as Node['font'],
+        margin: { top: 8, bottom: 8, left: 14, right: 14 } as Node['margin'],
+        widthConstraint: { minimum: 110 } as Node['widthConstraint'],
+      })
+    })
+    // Every task springs to its board-state column.
+    for (const t of graph.nodes) {
+      if (t.type !== 'task') continue
+      const col = COL_PREFIX + (t.status || 'todo')
+      edges.push({
+        id: edgeId('col', t.id, col),
+        from: t.id,
+        to: col,
+        color: { color: '#334155', opacity: 0.5 },
+        width: 1,
+        length: 150,
+        dashes: true,
+        smooth: false,
+      } as Edge)
+    }
+    // Idle lobby anchor at the bottom — taskless agents drift here.
+    nodes.push({
+      id: IDLE_ID,
+      label: 'Boşta',
+      shape: 'box',
+      x: 0,
+      y: IDLE_Y,
+      fixed: { x: true, y: true },
+      physics: false,
+      color: { background: 'rgba(30,39,51,0.7)', border: '#475569' },
+      font: { color: '#94a3b8', size: 13 } as Node['font'],
+      margin: { top: 6, bottom: 6, left: 14, right: 14 } as Node['margin'],
+      widthConstraint: { minimum: 90 } as Node['widthConstraint'],
     })
 
+    // Active bonds come from two signals: a live in-flight run (agent.running +
+    // runTarget — the strongest "doing it right now") and, as a fallback, owning
+    // an in_progress task. Collect the (agentId → targetNodeId) pairs.
+    const activeTarget = new Map<string, string>()
+    for (const a of graph.nodes) {
+      if (a.type === 'agent' && a.running && a.runTarget) activeTarget.set(a.id, a.runTarget)
+    }
+    for (const e of graph.edges) {
+      if (e.kind === 'owns' && statusOf.get(e.target) === 'in_progress' && !activeTarget.has(e.source)) {
+        activeTarget.set(e.source, e.target)
+      }
+    }
+    // Busy = has an active target OR is running anything (chat/schedule glow).
+    const runningAgents = new Set(graph.nodes.filter((n) => n.type === 'agent' && n.running).map((n) => n.id))
+    const busyAgents = new Set<string>([...activeTarget.keys(), ...runningAgents])
+    // Idle agents drift to the lobby via a weak spring (an active task bond, when
+    // present, easily overpowers it and pulls the agent up to its card).
+    for (const a of graph.nodes) {
+      if (a.type !== 'agent' || busyAgents.has(a.id)) continue
+      edges.push({
+        id: edgeId('idle', a.id, IDLE_ID),
+        from: a.id,
+        to: IDLE_ID,
+        color: { color: '#475569', opacity: 0.35 },
+        width: 1,
+        length: 220,
+        dashes: true,
+        smooth: false,
+      } as Edge)
+    }
+
+    // Active bonds: agent → the task/flow it is running (or owns in_progress).
+    for (const [agentId, target] of activeTarget) {
+      addEdge('active', agentId, target, {
+        color: { color: 'var(--color-accent)', highlight: '#fff', opacity: 1 },
+        width: 3,
+        arrows: { to: { enabled: true, scaleFactor: 0.7 } },
+        shadow: { enabled: true, color: 'var(--color-accent)', size: 12, x: 0, y: 0 } as Edge['shadow'],
+      })
+    }
+    // Agent attachments: skills, MCP servers and the flow(s) it is wired into.
+    for (const e of graph.edges) {
+      if (e.kind === 'skill' || e.kind === 'mcp' || e.kind === 'uses') {
+        const color = EDGE_COLOR[e.kind]
+        addEdge(e.kind, e.source, e.target, {
+          color: { color, highlight: color, opacity: 0.7 },
+          width: 1.2,
+        })
+      }
+    }
+    // Give running agents a bright "live" glow so it's clear who's working now.
+    if (runningAgents.size > 0) {
+      const byId = new Map(nodes.map((nd) => [nd.id as string, nd]))
+      for (const id of runningAgents) {
+        const nd = byId.get(id)
+        if (!nd) continue
+        nd.borderWidth = 3
+        nd.color = { background: (nd.color as { background?: string })?.background ?? '#7c3aed', border: '#fff' }
+        nd.shadow = { enabled: true, color: 'var(--color-accent)', size: 22, x: 0, y: 0 } as Node['shadow']
+      }
+    }
+    return { nodes, edges }
+  }
+
+  // relation mode: the full relationship web.
+  for (const e of graph.edges) {
+    const color = EDGE_COLOR[e.kind]
+    addEdge(e.kind, e.source, e.target, {
+      color: { color, highlight: color, opacity: 0.85 },
+      width: 1.6,
+      arrows: { to: { enabled: true, scaleFactor: 0.6 } },
+      dashes: e.kind === 'created',
+    })
+  }
   return { nodes, edges }
 }
 

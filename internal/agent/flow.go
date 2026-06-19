@@ -117,8 +117,21 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 	if ferr != nil {
 		return db.FlowRun{}, "", ferr
 	}
+	// Resolve the flow's transcript session up front and mark it running for the
+	// duration of the execution, so the live executions feed and the network
+	// graph show the flow (and its agent) as active *while* it runs — not only
+	// after it finishes. The session is idempotent (one per flow), so
+	// recordFlowSessionTurn below reuses the same one.
+	sessionID := ""
+	if sess, serr := r.db.GetOrCreateSourceSession(ctx, "flow", flow.ID, firstFlowAgentID(flow), flow.Name); serr == nil {
+		sessionID = sess.ID
+		r.trackSession(sessionID)
+		defer r.untrackSession(sessionID)
+	}
 	run, runErr := r.RunFlow(ctx, flowID, input, autonomous, obs)
-	sessionID := r.recordFlowSessionTurn(ctx, flow, run, input, runErr)
+	if recorded := r.recordFlowSessionTurn(ctx, flow, run, input, runErr); recorded != "" {
+		sessionID = recorded
+	}
 	// Every recorded flow run raises a desktop notification that deep-links to the
 	// run's transcript in the executions feed. This covers both autonomous
 	// (background) runs and interactive runs the user started then switched away
