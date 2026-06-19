@@ -39,6 +39,17 @@
   `TestReadOnlyAgentDemotesWriteTools`.
 - **call_agent (2026-06-19):** senkron delegasyon (gate'li) artık lazy — turların
   azında kullanılıyor; native'de `activate_tools` ile gelir, CLI'ye köprülenmez.
+- **input_examples (2026-06-19):** `ToolDef.Examples []json.RawMessage` — şemanın
+  ifade edemediği kullanım konvansiyonlarını (tarih/cron formatı, ID deseni, hangi
+  opsiyonel alanın birlikte geldiği) gösteren somut örnek çağrılar. Anthropic
+  "advanced tool use" `input_examples` alanının muadili. **Yalnız tam şemaya**
+  katlanır (`registry.go foldExamples` → InputSchema'ya JSON Schema `examples`
+  dizisi olarak); hafif lazy katalog (yalnız ad+özet) **etkilenmez** → lazy araçta
+  örnek yalnız aktive sonrası, yani kullanılacağı anda token harcar. Pilot:
+  `create_schedule` (cron) + `create_flow` (graf JSON string'i) — ikisi de lazy,
+  yani eager bütçeye sıfır etki. Hatalı-çağrı + retry turunu önlediğinden genelde
+  **net token kazandırır**. Test: `TestExamplesFoldIntoSchemaNotCatalog`,
+  `TestPilotToolExamplesAreValid`.
 - Sistem promptuna **"Available Tools (load on demand)"** bloğu eklenir
   (`Runtime.LazyToolsCatalogBlock` → `renderLazyToolCatalog`), yalnızca ad+özet.
 - Üç eager meta-araç: **`activate_tools`** (şema yükle), **`deactivate_tools`**,

@@ -56,6 +56,12 @@ func (CreateScheduleTool) Def() providers.ToolDef {
 			"required":["agentId","cronExpr","prompt"],
 			"additionalProperties":false
 		}`),
+		Examples: []json.RawMessage{
+			// Minimal: required fields only; standard 5-field cron (daily 09:00).
+			json.RawMessage(`{"agentId":"agt_7f3a","cronExpr":"0 9 * * *","prompt":"Summarise overnight changes and post them to the team."}`),
+			// Weekday business hours, every 30 min, created paused (enabled:false).
+			json.RawMessage(`{"agentId":"agt_7f3a","cronExpr":"*/30 9-18 * * 1-5","prompt":"Check the build queue; flag anything stuck.","enabled":false}`),
+		},
 	}
 }
 

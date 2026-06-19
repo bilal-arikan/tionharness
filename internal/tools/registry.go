@@ -105,13 +105,39 @@ func (r *Registry) AttachMCP(entries []mcp.CatalogEntry, cfgByServer map[string]
 	}
 }
 
+// foldExamples merges a tool's Examples into its InputSchema as a JSON Schema
+// "examples" array, so sample calls travel with the FULL schema sent to the model.
+// Tools without examples (or without an object schema) are returned unchanged.
+// Deliberately NOT applied by LazyCatalog, which emits name+description only — so
+// examples never bloat the load-on-demand catalog, only the activated schema.
+func foldExamples(d providers.ToolDef) providers.ToolDef {
+	if len(d.Examples) == 0 || len(d.InputSchema) == 0 {
+		return d
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(d.InputSchema, &obj); err != nil {
+		return d // non-object schema — leave as-is
+	}
+	arr, err := json.Marshal(d.Examples)
+	if err != nil {
+		return d
+	}
+	obj["examples"] = arr
+	merged, err := json.Marshal(obj)
+	if err != nil {
+		return d
+	}
+	d.InputSchema = merged
+	return d
+}
+
 // Defs returns the tool schemas to offer the model. If allow is non-nil, only
 // tools whose name satisfies allow(name) are included.
 func (r *Registry) Defs(allow func(name string) bool) []providers.ToolDef {
 	var out []providers.ToolDef
 	for name, t := range r.builtins {
 		if allow == nil || allow(name) {
-			out = append(out, t.Def())
+			out = append(out, foldExamples(t.Def()))
 		}
 	}
 	for _, e := range r.mcpEntries {
@@ -144,7 +170,7 @@ func (r *Registry) ActiveDefs(allow func(name string) bool, active map[string]bo
 	var out []providers.ToolDef
 	for name, t := range r.builtins {
 		if keep(name) {
-			out = append(out, t.Def())
+			out = append(out, foldExamples(t.Def()))
 		}
 	}
 	for _, e := range r.mcpEntries {
@@ -215,7 +241,7 @@ func (r *Registry) BridgeableDefs(allow func(name string) bool) []providers.Tool
 		if allow != nil && !allow(name) {
 			continue
 		}
-		out = append(out, t.Def())
+		out = append(out, foldExamples(t.Def()))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

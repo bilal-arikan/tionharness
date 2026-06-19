@@ -32,6 +32,14 @@ type ToolDef struct {
 	// pulls the real schema on demand via activate_tools (progressive disclosure).
 	// Not serialised to providers — it only informs catalog/request assembly.
 	Lazy bool `json:"-"`
+	// Examples are concrete sample tool calls (each a JSON object matching
+	// InputSchema) that demonstrate usage conventions a schema alone cannot express
+	// — date formats, ID patterns, which optional fields go together. They are
+	// folded into the shipped InputSchema as a JSON Schema "examples" array at
+	// request-assembly time (see registry foldExamples), so they travel only with
+	// the FULL schema — never with the lightweight lazy catalog (name+desc only).
+	// This is the SwarmGo analogue of the Anthropic "input_examples" tool field.
+	Examples []json.RawMessage `json:"-"`
 }
 
 // ToolCall is a model request to run a tool. Input holds the raw JSON args.

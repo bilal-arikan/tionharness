@@ -46,6 +46,27 @@ taşınmalı), özel sağlayıcı (ayrı araç yok ama `update_settings` ile dol
 spawn/schedule/flow ile benzer tetikleme zaten yapılabildiğinden ve panel ajan
 kontrolü tezini ilerletmediğinden tümü geri alındı. Repoda iz yok.
 
+## input_examples (tool kullanım örnekleri) ✅ (2026-06-19)
+
+Anthropic "advanced tool use" üçüncü tekniği eklendi. `ToolDef.Examples
+[]json.RawMessage`: şemanın söyleyemediği konvansiyonları (cron/tarih formatı, ID
+deseni, opsiyonel alan kombinasyonu) gösteren somut örnek çağrılar.
+
+- **Mimari:** örnekler **yalnız tam şemaya** katlanır — `registry.foldExamples`
+  InputSchema'ya JSON Schema `examples` dizisi olarak gömer; `Defs`/`ActiveDefs`/
+  `BridgeableDefs`'te uygulanır, `LazyCatalog`'a **değil**. Böylece lazy araçta
+  örnek katalogu şişirmez, yalnız `activate_tools` sonrası (kullanılacağı an) token
+  harcar. Provider'lara dokunulmadı (hepsi InputSchema okur).
+- **Pilot:** `create_schedule` (5-alan cron + enabled) ve `create_flow` (graf'ın
+  **escaped JSON string** oluşu + `{{input}}`/`{{node.id}}` şablonları + `next:""`=
+  son). İkisi de lazy → eager bütçeye sıfır etki.
+- **Maliyet:** örnek küçük sabit token; hatalı-çağrı + hata + retry turunu
+  önlediğinden pratikte **net negatif** (token kazandırır).
+
+Testler: `TestExamplesFoldIntoSchemaNotCatalog`, `TestPilotToolExamplesAreValid`
+(gerçek pilot örneklerin JSON geçerliliği). `go vet`/`test ./...` yeşil. Detay:
+`19-LAZY-TOOL-LOADING.md`.
+
 ## tool_search rename + MCP-ağır katalog kısaltma ✅ (2026-06-19)
 
 Lazy keşfini Anthropic "advanced tool use" modeline yaklaştıran iki değişiklik:

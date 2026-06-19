@@ -135,6 +135,78 @@ func TestActivateToolsTool(t *testing.T) {
 	}
 }
 
+// exampledStub is a stub tool that carries input_examples.
+type exampledStub struct{}
+
+func (exampledStub) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "ex_tool",
+		Description: "stub with examples",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"x":{"type":"string"}}}`),
+		Examples:    []json.RawMessage{json.RawMessage(`{"x":"hello"}`)},
+	}
+}
+func (exampledStub) Call(context.Context, json.RawMessage) (string, error) { return "ok", nil }
+
+// TestExamplesFoldIntoSchemaNotCatalog verifies input_examples are merged into the
+// shipped InputSchema (active path) but never leak into the lightweight lazy
+// catalog (name+description only).
+func TestExamplesFoldIntoSchemaNotCatalog(t *testing.T) {
+	reg := NewRegistry(exampledStub{})
+
+	// Active/full schema carries an "examples" array with the sample.
+	defs := reg.ActiveDefs(nil, nil)
+	if len(defs) != 1 {
+		t.Fatalf("expected 1 def, got %d", len(defs))
+	}
+	var schema map[string]json.RawMessage
+	if err := json.Unmarshal(defs[0].InputSchema, &schema); err != nil {
+		t.Fatalf("shipped schema not valid JSON: %v", err)
+	}
+	if _, ok := schema["examples"]; !ok {
+		t.Errorf("shipped schema must contain folded examples, got: %s", defs[0].InputSchema)
+	}
+	if !strings.Contains(string(defs[0].InputSchema), `"hello"`) {
+		t.Errorf("folded example value missing: %s", defs[0].InputSchema)
+	}
+
+	// Lazy catalog (mark it lazy) carries neither schema nor examples.
+	reg.MarkLazy("ex_tool")
+	cat := reg.LazyCatalog(nil)
+	if len(cat) != 1 || len(cat[0].InputSchema) != 0 || len(cat[0].Examples) != 0 {
+		t.Errorf("lazy catalog must omit schema+examples, got %+v", cat)
+	}
+}
+
+// TestPilotToolExamplesAreValid checks the create_schedule / create_flow examples
+// are valid JSON objects (and, for the flow, that the stringified graph parses).
+func TestPilotToolExamplesAreValid(t *testing.T) {
+	check := func(name string, defs []json.RawMessage, graphField bool) {
+		if len(defs) == 0 {
+			t.Fatalf("%s has no examples", name)
+		}
+		for i, ex := range defs {
+			var obj map[string]json.RawMessage
+			if err := json.Unmarshal(ex, &obj); err != nil {
+				t.Errorf("%s example %d invalid JSON: %v", name, i, err)
+				continue
+			}
+			if graphField {
+				if g, ok := obj["graph"]; ok {
+					var gs string
+					if err := json.Unmarshal(g, &gs); err != nil {
+						t.Errorf("%s example %d graph not a JSON string: %v", name, i, err)
+					} else if !json.Valid([]byte(gs)) {
+						t.Errorf("%s example %d graph string is not valid JSON: %s", name, i, gs)
+					}
+				}
+			}
+		}
+	}
+	check("create_schedule", CreateScheduleTool{}.Def().Examples, false)
+	check("create_flow", CreateFlowTool{}.Def().Examples, true)
+}
+
 // ---- helpers ----
 
 func names(defs []providers.ToolDef) []string {

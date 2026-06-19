@@ -82,6 +82,12 @@ func (CreateFlowTool) Def() providers.ToolDef {
 			"required":["name"],
 			"additionalProperties":false
 		}`),
+		Examples: []json.RawMessage{
+			// graph is a JSON STRING (escaped) describing Graph{start,nodes}.
+			json.RawMessage(`{"name":"Draft then review","description":"Writer drafts, reviewer critiques","graph":"{\"start\":\"draft\",\"nodes\":[{\"id\":\"draft\",\"type\":\"agent\",\"agentId\":\"agt_writer\",\"prompt\":\"Write a short post about: {{input}}\",\"next\":\"review\"},{\"id\":\"review\",\"type\":\"agent\",\"agentId\":\"agt_reviewer\",\"prompt\":\"Critique this draft: {{node.draft}}\",\"next\":\"\"}]}"}`),
+			// Minimal single-node flow; description omitted.
+			json.RawMessage(`{"name":"Quick classify","graph":"{\"start\":\"c\",\"nodes\":[{\"id\":\"c\",\"type\":\"agent\",\"agentId\":\"agt_triage\",\"prompt\":\"Classify: {{input}}\",\"next\":\"\"}]}"}`),
+		},
 	}
 }
 
