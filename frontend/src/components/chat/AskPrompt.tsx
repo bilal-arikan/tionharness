@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { MessageCircleQuestion } from 'lucide-react'
+import { Button } from '../common'
 
 export interface PendingAsk {
   question: string
@@ -67,13 +68,9 @@ export function AskPrompt({ ask, onAnswer }: Props) {
           placeholder="Yanıtını yaz…"
           className="min-w-0 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
         />
-        <button
-          type="submit"
-          disabled={!text.trim()}
-          className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-        >
+        <Button type="submit" disabled={!text.trim()}>
           Gönder
-        </button>
+        </Button>
       </form>
     </div>
   )

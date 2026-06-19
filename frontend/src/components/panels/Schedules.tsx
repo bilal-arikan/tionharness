@@ -4,6 +4,7 @@ import { api } from '../../api'
 import type { Agent, Schedule } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
+import { Button } from '../common'
 
 interface Props {
   agents: Agent[]
@@ -289,12 +290,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
             placeholder="Prompt (zorunlu) — ajana gönderilecek talimat"
             className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
           />
-          <button
-            onClick={create}
-            className="rounded bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white hover:opacity-90"
-          >
-            + Zamanlama
-          </button>
+          <Button onClick={create}>+ Zamanlama</Button>
         </div>
       </div>
 
@@ -361,18 +357,10 @@ export function Schedules({ agents, focusId, onError }: Props) {
                   placeholder="Prompt (zorunlu) — ajana gönderilecek talimat"
                   className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
                 />
-                <button
-                  onClick={() => saveEdit(s)}
-                  className="rounded bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white hover:opacity-90"
-                >
-                  Kaydet
-                </button>
-                <button
-                  onClick={cancelEdit}
-                  className="rounded border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-bg)]"
-                >
+                <Button onClick={() => saveEdit(s)}>Kaydet</Button>
+                <Button variant="secondary" onClick={cancelEdit}>
                   İptal
-                </button>
+                </Button>
               </div>
             </div>
           ) : (

@@ -3,6 +3,7 @@ import { Sparkles, X, Loader2 } from 'lucide-react'
 import type { Agent } from '../../types'
 import { api } from '../../api'
 import { AgentPicker } from '../agents/AgentPicker'
+import { Button } from '../common'
 
 interface Props {
   agents: Agent[]
@@ -104,14 +105,10 @@ export function SpawnSessionModal({ agents, onClose, onSpawned, onError }: Props
           >
             İptal
           </button>
-          <button
-            onClick={submit}
-            disabled={!canSubmit}
-            className="flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white transition disabled:opacity-50"
-          >
+          <Button onClick={submit} disabled={!canSubmit} className="flex items-center gap-1.5">
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
             Başlat
-          </button>
+          </Button>
         </div>
       </div>
     </div>

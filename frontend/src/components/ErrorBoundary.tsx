@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { reportClientError } from '../lib/reportError'
+import { Button } from './common'
 
 interface Props {
   children: ReactNode
@@ -43,18 +44,10 @@ export class ErrorBoundary extends Component<Props, State> {
           {this.state.error.message}
         </pre>
         <div className="flex gap-2">
-          <button
-            onClick={() => this.setState({ error: null })}
-            className="rounded border border-[var(--color-border)] px-3 py-1.5 text-sm hover:border-[var(--color-accent)]"
-          >
+          <Button variant="secondary" onClick={() => this.setState({ error: null })}>
             Tekrar dene
-          </button>
-          <button
-            onClick={() => location.reload()}
-            className="rounded bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
-          >
-            Sayfayı yenile
-          </button>
+          </Button>
+          <Button onClick={() => location.reload()}>Sayfayı yenile</Button>
         </div>
       </div>
     )
