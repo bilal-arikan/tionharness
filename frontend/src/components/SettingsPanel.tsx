@@ -36,6 +36,10 @@ import { StepKindsPanel } from './settings/StepKindsPanel'
 import { WorkspacePanel } from './settings/WorkspacePanel'
 import { WorkspaceFilesPanel } from './settings/WorkspaceFilesPanel'
 import { HooksPanel } from './settings/HooksPanel'
+// The workspace tool catalog + MCP server management, surfaced here as a
+// settings category (previously a top-level NavRail view). Renders its own
+// master-detail layout, so it is shown full-bleed below.
+import { ToolsPanel as ToolsCatalogPanel } from './panels/ToolsPanel'
 
 interface Props {
   onError: (msg: string) => void
@@ -58,6 +62,10 @@ interface Props {
   // tracked internally.
   cat?: string | null
   onCatChange?: (c: Cat) => void
+  // Bumped by the parent when an agent changes app settings (settings SSE
+  // event). On change the app-settings form reloads — but only when it has no
+  // unsaved edits, so a concurrent agent change never clobbers in-progress typing.
+  reloadNonce?: number
 }
 
 const ALL_CATS: Cat[] = [...APP_CATS, ...WS_CATS].map((c) => c.key)
@@ -69,7 +77,7 @@ function isCat(v: string | null | undefined): v is Cat {
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
 // The per-category forms live in ./settings/*.
-export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWorkspace, commands = [], onNavigate, cat: catProp, onCatChange }: Props) {
+export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWorkspace, commands = [], onNavigate, cat: catProp, onCatChange, reloadNonce = 0 }: Props) {
   // Category is controlled by the parent (URL deep-link) when onCatChange is
   // given; an unknown/empty routed category falls back to 'profile'.
   const [catState, setCatState] = useState<Cat>('profile')
@@ -119,6 +127,16 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
     [ws, wsOrig],
   )
   const dirty = isWs ? dirtyWs : dirtyApp
+
+  // Live reload: when an agent changes app settings (parent bumps reloadNonce),
+  // re-fetch and refresh the form — but skip while the user has unsaved edits so
+  // their in-progress changes are never clobbered. reloadNonce starts at 0; the
+  // first bump (>0) is the first real signal.
+  useEffect(() => {
+    if (reloadNonce === 0 || dirtyApp) return
+    api.getSettings().then((s) => { setDraft(s); setOriginal(s) }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadNonce])
 
   const set = <K extends keyof AppSettings>(key: K, val: AppSettings[K]) =>
     setDraft((d) => (d ? { ...d, [key]: val } : d))
@@ -252,10 +270,12 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
             {catMeta?.label ?? ''}
           </span>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[var(--color-text-dim)]">
-              {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
-            </span>
-            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'wsfiles' && cat !== 'hooks' && (
+            {cat !== 'mcptools' && (
+              <span className="text-xs text-[var(--color-text-dim)]">
+                {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
+              </span>
+            )}
+            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'wsfiles' && cat !== 'hooks' && cat !== 'mcptools' && (
               <button
                 onClick={save}
                 disabled={!dirty || saving}
@@ -267,6 +287,11 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
           </div>
         </div>
 
+        {cat === 'mcptools' ? (
+          // Tool catalog hosts its own searchable list + detail/server panes, so
+          // it is rendered full-bleed (outside the centered max-w content column).
+          <ToolsCatalogPanel onError={onError} />
+        ) : (
         <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-6">
           {!draft || !ws ? (
             <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
@@ -330,6 +355,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
             </>
           )}
         </div>
+        )}
       </div>
     </div>
   )

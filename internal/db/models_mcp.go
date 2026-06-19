@@ -19,6 +19,7 @@ type MCPServer struct {
 	URL       string `json:"url"`       // sse/http endpoint
 	EnvConfig string `json:"envConfig"` // JSON object of env vars
 	Enabled   bool   `json:"enabled"`
-	Scope     string `json:"scope"` // shared | scoped
+	Scope     string `json:"scope"`               // shared | scoped
+	CreatedBy string `json:"createdBy,omitempty"` // "" = user-defined (protected); agent id = agent-created
 	CreatedAt int64  `json:"createdAt"`
 }

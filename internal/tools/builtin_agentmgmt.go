@@ -49,7 +49,7 @@ func NewCreateAgentTool(database *db.DB, actorID string, startWorker func(string
 
 func (CreateAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "create_agent",
+		Name:        "create_agent",
 		Description: "Create a new AI agent in this workspace. Provide a name and optionally a soul (personality/system prompt), identity, provider and model. The new agent is tagged as created by you, so you can later edit or delete it. Returns the new agent's id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -130,7 +130,7 @@ func NewUpdateAgentTool(database *db.DB, actorID string) UpdateAgentTool {
 
 func (UpdateAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "update_agent",
+		Name:        "update_agent",
 		Description: "Edit an existing agent that was created by an agent (not by the user). Pass the agent id and only the fields you want to change. Returns the updated agent id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -198,7 +198,7 @@ func NewDeleteAgentTool(database *db.DB, actorID string, stopWorker func(string)
 
 func (DeleteAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "delete_agent",
+		Name:        "delete_agent",
 		Description: "Delete an agent that was created by an agent (not by the user). This also removes the agent's sessions. Pass the agent id. You cannot delete yourself.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",

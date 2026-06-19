@@ -246,7 +246,7 @@ export function useChatStream(deps: ChatStreamDeps) {
             if (st.kind === 'permission') {
               setPendingAsks((p) => ({
                 ...p,
-                [sid]: { question: '', options: st.options, kind: 'permission', tool: st.tool, risk: st.reason },
+                [sid]: { question: '', options: st.options, kind: 'permission', tool: st.tool, risk: st.reason, cmd: st.text },
               }))
               return
             }

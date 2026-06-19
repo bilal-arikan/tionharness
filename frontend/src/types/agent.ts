@@ -9,10 +9,6 @@ export interface Agent {
   identity: string
   provider: string
   model: string
-  // Optional quality tier ("cheap"|"medium"|"smart"). When set, the effective
-  // provider/model is resolved from the workspace tier config; provider/model
-  // above remain the fallback. Empty = use provider/model directly.
-  tier?: string
   planningMode: string
   thinkingLevel?: string
   // Tool-use permission gate: "read-only" | "ask" | "auto". Empty = auto.
@@ -38,7 +34,6 @@ export interface AgentPatch {
   identity?: string
   provider?: string
   model?: string
-  tier?: string
   planningMode?: string
   thinkingLevel?: string
   permissionMode?: string
@@ -47,11 +42,21 @@ export interface AgentPatch {
   skills?: string[]
 }
 
+import type { ModelStat, KindStat } from './usage'
+
 export interface AgentUsage {
   day: string
   calls: number
   inputTokens: number
   outputTokens: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  byKind?: Record<string, KindStat>
+  byModel?: ModelStat[]
+  costUSD?: number
+  savingsUSD?: number
+  priced?: boolean
+  estimated?: boolean
   dailyCallLimit: number
   dailyTokenLimit: number
 }

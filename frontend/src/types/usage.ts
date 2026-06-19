@@ -58,6 +58,25 @@ export interface BudgetTrendPoint {
   calls: number
   inputTokens: number
   outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  costUSD: number
+  savingsUSD: number
+}
+
+// Window-cumulative totals across the selected trend window ("oturumlar arası
+// toplam" / caching ROI). cacheHitRate is cacheRead / (cacheRead + input +
+// cacheWrite) — the share of prompt tokens served from cache.
+export interface BudgetCumulative {
+  days: number
+  calls: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  costUSD: number
+  savingsUSD: number
+  cacheHitRate: number
 }
 
 export interface WorkspaceUsage {
@@ -77,4 +96,5 @@ export interface WorkspaceUsage {
   byProvider: ProviderStat[]
   agents: BudgetAgentRow[]
   trend: BudgetTrendPoint[]
+  cumulative: BudgetCumulative
 }

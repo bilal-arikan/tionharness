@@ -37,6 +37,45 @@ type chatRun struct {
 	artifacts tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
 	grants    *tools.PermissionGrants      // session "Always allow" set, for the CLI permission-prompt tool
 	wake      tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
+	spawn     *tools.SpawnSessionTool      // current agent's spawn tool (self-manage on), for the Interaction MCP spawn_session tool
+	skill     skillLoader                  // current agent's skill loader, for the Interaction MCP use_skill tool
+}
+
+// skillLoader loads a skill's full body by slug, enforcing the responding agent's
+// allowlist. Installed per turn so the Interaction MCP use_skill tool (CLI path)
+// mirrors the native use_skill built-in over the same skill store.
+type skillLoader func(slug string) (string, error)
+
+// setSkillLoader installs the per-agent skill loader so the Interaction MCP
+// use_skill tool (CLI path) can load a skill body. A nil value disables it.
+func (r *chatRun) setSkillLoader(fn skillLoader) {
+	r.mu.Lock()
+	r.skill = fn
+	r.mu.Unlock()
+}
+
+// skillLoaderFor returns the current skill loader (nil if none installed).
+func (r *chatRun) skillLoaderFor() skillLoader {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.skill
+}
+
+// setSpawnTool installs the per-agent spawn tool so the Interaction MCP
+// spawn_session tool (CLI path) can launch independent sessions. A nil value
+// disables it (self-manage off). A fresh instance per turn resets the per-turn
+// spawn budget, mirroring the native path's per-turn tool instance.
+func (r *chatRun) setSpawnTool(t *tools.SpawnSessionTool) {
+	r.mu.Lock()
+	r.spawn = t
+	r.mu.Unlock()
+}
+
+// spawnTool returns the current spawn tool (nil if self-manage is off / none).
+func (r *chatRun) spawnTool() *tools.SpawnSessionTool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.spawn
 }
 
 // setWakeScheduler installs the self-wake scheduler for the currently responding

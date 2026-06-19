@@ -24,6 +24,7 @@ const askTimeout = 15 * time.Minute
 // tool path emits). See _Docs/11-INTERACTION-MCP.md.
 type interactionBackend struct {
 	runs *chatRuns
+	tun  *agent.Tunables // gates self-manage tools (spawn_session) on the CLI path
 }
 
 // Valid implements interaction.Backend.
@@ -35,6 +36,26 @@ func (b *interactionBackend) Valid(token string) bool {
 // definitions in the tools package — the schema is never re-declared here, so the
 // native and CLI paths advertise the identical contract.
 func (b *interactionBackend) Tools() []interaction.ToolSpec {
+	return interactionToolSpecs(b.tun)
+}
+
+// interactionAdvertisedNames returns the bare tool names the Interaction MCP
+// server advertises for a turn (gated by self-manage exactly like the specs).
+// The CLI MCP-config writer consumes this via InteractionEndpoint.ToolNames so
+// the advertised set and the CLI allowlist share ONE source — no second list.
+func interactionAdvertisedNames(tun *agent.Tunables) []string {
+	specs := interactionToolSpecs(tun)
+	names := make([]string, 0, len(specs))
+	for _, s := range specs {
+		names = append(names, s.Name)
+	}
+	return names
+}
+
+// interactionToolSpecs builds the Interaction MCP tool specs for a turn. Single
+// source for both Tools() (advertisement) and interactionAdvertisedNames (CLI
+// allowlist). tun may be nil (then self-manage tools are omitted).
+func interactionToolSpecs(tun *agent.Tunables) []interaction.ToolSpec {
 	defs := []providers.ToolDef{
 		tools.NewAskUserTool().Def(),
 		tools.NewTodoWriteTool().Def(),
@@ -45,6 +66,16 @@ func (b *interactionBackend) Tools() []interaction.ToolSpec {
 		// disallows): the CLI runs one-shot, so its built-in wake never fires —
 		// ours arms a real SwarmGo timer that re-delivers into this session.
 		tools.NewScheduleWakeTool().Def(),
+		// use_skill loads a SwarmGo skill body on demand. The CLI sees the skill
+		// catalog in its appended system prompt but has no native way to load a
+		// body; this bridge gives it the same lazy-load path native agents use.
+		tools.NewUseSkillTool(nil).Def(),
+	}
+	// spawn_session is a self-management capability: advertise it on the CLI path
+	// only when self-manage is enabled, mirroring the native tool loop's gating.
+	// The per-turn spawn tool is installed on each run by the stream handler.
+	if tun != nil && tun.SelfManageEnabled() {
+		defs = append(defs, tools.NewSpawnSessionTool("", 0, nil).Def())
 	}
 	specs := make([]interaction.ToolSpec, 0, len(defs)+1)
 	for _, d := range defs {
@@ -86,6 +117,10 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callWake(ctx, run, args)
 	case "create_artifact", "update_artifact":
 		return b.callArtifact(run, bareToolName(name), args)
+	case "spawn_session":
+		return b.callSpawn(ctx, run, args)
+	case "use_skill":
+		return b.callUseSkill(run, args)
 	default:
 		return interaction.CallResult{Text: "unknown tool: " + name, IsError: true}, nil
 	}
@@ -153,15 +188,18 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 		return interaction.CallResult{Text: permDecision(false, in.Input, "invalid permission request: "+err.Error())}, nil
 	}
 	risk := tools.Classify(in.ToolName)
-	if risk == tools.RiskRead || run.grantStore().Granted(in.ToolName) {
+	// Argument-aware grants (B2): honour a standing rule (e.g. Bash(git *)) that
+	// already covers this command without re-prompting.
+	arg := tools.RepresentativeArg(in.ToolName, in.Input)
+	if risk == tools.RiskRead || run.grantStore().Matches(in.ToolName, arg) {
 		return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
 	}
-	run.emit("step", agent.TurnStep{Kind: agent.StepPermission, Tool: in.ToolName, Reason: string(risk), Options: tools.PermissionOptions})
+	run.emit("step", agent.TurnStep{Kind: agent.StepPermission, Tool: in.ToolName, Reason: string(risk), Text: arg, Options: tools.PermissionOptions})
 	select {
 	case ans := <-run.answer:
 		switch tools.NormalizePermission(ans) {
 		case "always":
-			run.grantStore().Grant(in.ToolName)
+			run.grantStore().GrantRule(tools.DeriveGrantRule(in.ToolName, arg))
 			return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
 		case "allow":
 			return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
@@ -247,6 +285,49 @@ func (b *interactionBackend) callArtifact(run *chatRun, name string, args json.R
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}
 	return interaction.CallResult{Text: text}, nil
+}
+
+// callSpawn launches a new independent session through the per-agent spawn tool
+// installed on the run by the stream handler (CLI path). Returns immediately —
+// the spawned session runs in the background and appears in the activity feed.
+func (b *interactionBackend) callSpawn(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	tool := run.spawnTool()
+	if tool == nil {
+		return interaction.CallResult{Text: "spawn_session is not available for this turn (self-management is off)", IsError: true}, nil
+	}
+	text, err := tool.Call(ctx, args)
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: text}, nil
+}
+
+// callUseSkill loads a skill body through the run's per-agent skill loader (CLI
+// path), enforcing the same allowlist as the native use_skill tool. The output
+// matches the native tool's shape so both provider paths read identically.
+func (b *interactionBackend) callUseSkill(run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	load := run.skillLoaderFor()
+	if load == nil {
+		return interaction.CallResult{Text: "skills are not available for this turn", IsError: true}, nil
+	}
+	var in struct {
+		Slug string `json:"slug"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return interaction.CallResult{Text: "invalid use_skill input: " + err.Error(), IsError: true}, nil
+	}
+	slug := strings.TrimSpace(in.Slug)
+	if slug == "" {
+		return interaction.CallResult{Text: "slug is required", IsError: true}, nil
+	}
+	body, err := load(slug)
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	if strings.TrimSpace(body) == "" {
+		return interaction.CallResult{Text: "Skill \"" + slug + "\" has no instructions."}, nil
+	}
+	return interaction.CallResult{Text: "# Skill: " + slug + "\n\n" + body}, nil
 }
 
 // interactionURL builds the loopback URL a CLI subprocess uses to reach this

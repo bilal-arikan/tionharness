@@ -9,6 +9,9 @@ export interface PendingAsk {
   kind?: 'ask' | 'permission'
   tool?: string
   risk?: string
+  // cmd is the representative argument of the gated call (e.g. the shell command)
+  // shown on the permission card so the user sees what is being approved.
+  cmd?: string
 }
 
 interface Props {

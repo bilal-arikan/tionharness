@@ -39,9 +39,10 @@ func NormalizePermission(ans string) string {
 
 // PermissionFunc prompts the user to approve a risky tool call and blocks until
 // an answer (or ctx is done). tool is the tool name, risk its tier
-// ("write"/"exec"). Supplied by the interactive chat layer; autonomous runs
-// leave it unset.
-type PermissionFunc func(ctx context.Context, tool, risk string, options []string) (string, error)
+// ("write"/"exec"), and arg the representative argument (e.g. a shell command;
+// "" when not applicable) so the prompt can show what is being approved.
+// Supplied by the interactive chat layer; autonomous runs leave it unset.
+type PermissionFunc func(ctx context.Context, tool, risk, arg string, options []string) (string, error)
 
 // permKey keys the PermissionFunc on a request context.
 type permKey struct{}

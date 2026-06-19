@@ -2,6 +2,113 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-19**
 
+## use_skill — CLI köprüsü ✅ (2026-06-19)
+
+**Skill'ler artık claude-cli ajanları tarafından da kullanılabiliyor.** Sorun:
+CLI ajanları sistem promptunda `# Available Skills` kataloğunu görüyordu ama
+gövdeyi yükleyecek `use_skill` aracı native bir Go aracıydı ve CLI'nin
+`--mcp-config`'inde yer almıyordu → katalog görünüyor, hiçbir skill okunamıyordu.
+Çözüm `spawn_session` köprüsüyle aynı desende: `use_skill` Interaction MCP'ye
+eklendi. Değişen dosyalar: `runtime.go` (`LoadSkillForAgent` — native `agentSkillLib`
+allowlist'ini dışa açar), `chat_control.go` (`chatRun.skill` + `setSkillLoader`/
+`skillLoaderFor`), `chat_stream.go` (her turda yanıtlayan ajanın yükleyicisini kurar),
+`mcp_interaction.go` (`Tools()` ilanı + `callUseSkill` dispatch, çıktı native
+`UseSkillTool.Call` ile birebir), `climcp.go` (`interactionToolNames` allowlist).
+Erişim kontrolü, sub-skill footer'ı, lazy disk okuma native yolla tam parite;
+tek kaynak SwarmGo skill store'u (dosya kopyası/symlink yok). Build + `go test`
+(api/agent/skills) yeşil. Detay: `11-INTERACTION-MCP.md §8`.
+
+> Sıradaki köprü adayları (native'de var, CLI'de yok): `memory_recall`/`memory_add`
+> (SwarmGo hafızası — CLI tamamen kör), `secret_list`/`secret_get` (kasa),
+> `list_sessions`, `call_agent` (delegation açıkken) ve self-manage ailesinin
+> tamamı (yalnız `spawn_session` köprülü). FS/shell/http→WebFetch CLI'de native
+> karşılığı olduğu için köprü gerektirmez.
+
+## Spawn — CLI köprüsü + tier/log fix + UI temizliği ✅ (2026-06-19)
+
+**spawn_session → claude-cli ajanlarına açıldı.** Daha önce `spawn_session` yalnız
+native-API provider'larının (anthropic/minimax-anthropic) Go tool-loop'unda vardı;
+claude-cli ajanları (Coder/Fasty) araçlara Interaction MCP köprüsüyle ulaştığından
+bulamıyordu. Köprüye eklendi: `mcp_interaction.go` (`interactionBackend.tun` ile
+self-manage gating, `Tools()` ilanı, `callSpawn` dispatch), `chat_control.go`
+(`chatRun.spawn` + set/get), `chat_stream.go` (her ajan turunda taze
+`SpawnSessionTool` örneği → per-turn bütçe), `server.go` (köprüye `tun`). Hem
+Minimax3 (native) hem Coder (claude-cli) canlı doğrulandı → Fasty için bağımsız
+oturum açtılar. Detay: `22-SPAWN-SESSION.md` + `11-INTERACTION-MCP.md §8`.
+
+**Tier→provider bug'ı (çalışan binary bayattı):** Eski binary `agent.Tier` etiketini
+ayar tier-provider'ına (`tierMedium/Smart`=anahtarsız `anthropic`) yönlendirip
+"anthropic provider not configured" veriyordu; güncel kaynakta bu bağ zaten yok →
+backend güncel kaynakla yeniden başlatılınca düzeldi (Coder/Minimax3 PONG).
+
+**Log açığı:** `chat_stream.go::failTurn` artık başarısız turu loglar
+(`"turn failed"` reason+detail) — provider-unavailable gibi çıktısız hatalar
+sunucu log'unda görünmüyordu.
+
+**UI:** ExecutionsPanel'den "✨ Başlat" butonu kaldırıldı (`SpawnSessionModal`
+artık öksüz). `tsc` yeşil.
+
+## A3 + B2 + P3-Aşama4 — İptal hiyerarşisi & arg-bazlı izin ✅ (2026-06-19)
+
+Üç P1 izin/iptal maddesi tek oturumda kapatıldı. **P3 Aşama 4** kodda zaten
+tamdı (callPermission + StepPermission + ortak grant); roadmap durumu güncellendi.
+
+**A3 — İptal hiyerarşisi (`agent/toolloop.go`):** Tur-içi iptal dalı (`ctx.Err()`)
+artık dönmeden önce yarım kalan batch'in TÜM tool_call'larına sentetik `cancelled`
+tool_result basar (`fillCancelledResults` + `cancelledToolMsg`) ve user turunu
+ekler → assistant'ın tool_use turu hiç dangling kalmaz (provider'ın tool_use↔
+tool_result eşleme kuralı korunur; reaktif compaction / replay güvenli). Not:
+kalıcı geçmiş zaten yalnız metin turlarını saklıyor (`toProviderMessages`), bu
+fix tur-içi `req.Messages` bütünlüğü + ileriye dönük güvence içindir. `cancel_test.go`.
+
+**B2 — Arg-bazlı izin deseni (`Bash(git *)`):** Yeni `tools/permpattern.go`:
+`PermRule` (`Tool` + opsiyonel `ArgGlob`), `globMatch` (`*` joker), `RepresentativeArg`
+(exec araçlarda komut satırını çıkarır), `DeriveGrantRule` ("git status -s" →
+`shell(git *)`, env-prefix atlar). `tools/grants.go` kural deposuyla genişledi
+(`Matches`/`GrantRule`; `Grant`/`Granted` geriye-uyumlu sarmalayıcı). `permGate`
+(native) ve `callPermission` (CLI) artık çağrı argümanını çıkarıp eşleştiriyor;
+"Her zaman izin ver" exec araçta **komut ailesine daraltılır** (git'e izin →
+git'ler sorusuz, ama `rm` yine sorar) — diğer araçlarda eski "tüm-araç" davranışı.
+`PermissionFunc` imzasına `arg` eklendi; izin kartı (`PermissionPrompt.tsx`) artık
+gated komutu gösterir (`StepPermission.Text`→`PendingAsk.cmd`). `permpattern_test.go`
++ `permission_test.go` (komut-ailesi daraltma testi).
+
+**P3 Aşama 4 (durum güncellemesi):** claude-cli "ask" → `--permission-prompt-tool`
+→ Interaction MCP `permission_prompt` (`mcp_interaction.go callPermission`):
+risk sınıflar, read/granted otomatik geçer, aksi halde `StepPermission` kartı
+basıp kullanıcı kararını bekler; native yol ile **aynı oturum grant setini**
+paylaşır (`run.setGrants` + `tools.WithGrants`). Zaten implementeydi.
+
+**Doğrulama:** `go build ./...` + `go vet` + `go test ./internal/tools ./internal/agent ./internal/api` + `tsc --noEmit` yeşil.
+
+## C4 — Caching ROI: oturumlar arası kümülatif maliyet ✅ (2026-06-19)
+
+**Bağlam:** C4'ün ilk yarısı (`cache_creation` vs `cache_read` ayrımı) zaten
+uçtan uca yapılmıştı — `anthropic.go` API parse → `db.Usage` ayrı CacheRead/Write
+→ `pricing.go` (`CostDetailed`/`CacheSavings`) → Bütçe ekranı "bugün" rozeti.
+Eksik olan ikinci yarıydı: **"oturumlar arası toplam (caching ROI)"** — her şey
+yalnız *bugün* kapsamlıydı.
+
+**Backend (`api/budget.go`):** `dayPoint`'e `cacheReadTokens`/`cacheWriteTokens`/
+`costUSD`/`savingsUSD` eklendi → trend artık token hacmi değil **caching ROI**'yi
+de zaman ekseninde taşır (her gün `modelRowsFor(u.ByModel)` ile bugünkü ekranla
+birebir aynı maliyet mantığı). Yanıta yeni **`cumulative`** bloğu: seçili pencere
+(7/30/90g) genelinde toplam çağrı/token/maliyet/tasarruf + **`cacheHitRate`**
+(`cacheRead / (cacheRead + input + cacheWrite)`) — tek bakışta ROI sinyali.
+
+**Frontend (`BudgetPanel.tsx` + `types/usage.ts`):** "bugün" kartlarının altına
+**pencere-kümülatif kart sırası**: Toplam maliyet (son Ng), Cache tasarrufu (son
+Ng), Cache isabet oranı (%), Tasarrufsuz maliyet (caching olmasaydı = maliyet +
+tasarruf). Trend tooltip'ine günlük maliyet/tasarruf eklendi. `BudgetTrendPoint`
+genişledi + yeni `BudgetCumulative` tipi.
+
+**Sınır (B5'ten devam):** Hâlâ per-sohbet maliyet YOK — usage `agent+gün` anahtarlı;
+kümülatif "oturumlar arası" toplam pencere genelinde agregadır, `SessionID`
+boyutu eklenmedi (bilinçli ertelendi).
+
+**Doğrulama:** `go build ./...` + `go test ./internal/db ./internal/providers` +
+`tsc --noEmit` yeşil.
+
 ## Faz B5 — Yüzeyler Arası Tutarlılık (Motor B paylaşımı) ✅ (2026-06-19)
 
 **Karar:** İki veri motoru ayrı kalır — **Motor A** (canlı bağlam tahmini,
@@ -36,6 +143,25 @@ aynı maliyet mantığı).
 `/api/agents/{id}/usage` opus 120k girdi + 400k cache-oku + 24k çıktı →
 **$4.20** maliyet + **$5.40** tasarruf + model detayı, Bütçe ekranıyla birebir
 aynı hesap.
+
+## Interaction MCP: CLI araç köprüsü generic'leştirildi (CLI-2) ✅ (2026-06-19)
+
+**Sorun:** claude-cli ajanları skill kataloğunu görüyor ama gövde yükleyecek `use_skill` aracı CLI'nin `--mcp-config`'inde yoktu. Ayrıca her Interaction MCP aracı **üç yerde** elle kablolu (advertise `Tools()` + dispatch `Call()` + `climcp.go` allowlist'i `interactionToolNames`) — yeni araç eklemek kırılgan.
+
+**Yapılan:**
+- **CLI-1 (paralel oturum, bu sırada uygulandı):** `use_skill` Interaction MCP'ye köprülendi — `Tools()` spec + `Call()` → `callUseSkill` + stream handler'ın `setSkillLoader(LoadSkillForAgent)` (per-agent `AllowedFor` allowlist'i korur). Detay: `_Docs/11-INTERACTION-MCP.md` §8.
+- **CLI-2 (bu oturum):** advertise + allowlist **tek kaynağa** indirildi. `interactionToolSpecs(tun)` tek üretici → hem `Tools()` hem yeni `interactionAdvertisedNames(tun)`. Stream handler isimleri `InteractionEndpoint.ToolNames`'e koyar (`tools/interaction.go` yeni alan + `WithInteractionEndpoint` imzası); `climcp.go` allowlist'i bundan türetir, sabit `interactionToolNames` **kaldırıldı**. Artık araç eklemek = `interactionToolSpecs`'e `Def()` + `Call()`'a `case`; allowlist otomatik. `spawn_session` self-manage gating'i tek yerde. Test: `mcp_interaction_test.go TestInteractionAdvertisedNames` (advertise == allowlist değişmezi).
+- **Durum:** `go build`/`go vet`/`go test ./internal/{api,agent,tools,interaction}/...` yeşil.
+- **Not:** CLI-1, ben CLI-2'yi analiz ederken paralel bir oturumca aynı dosyalara yazıldı (mcp_interaction.go 286→320 satır). Çakışmadan kaçınmak için CLI-1 bitene kadar bekleyip CLI-2'yi taze taban üstüne uyguladım — bu oturumun belgelediği RG-1/RG-2 yarışının canlı örneği.
+
+## Backlog: Faz R — çok-ajan yarış & kurtarma guard'ları (2026-06-19)
+
+**İstek:** Bir dev-oturumu (`260617-gentle-coyote`) analizinden çıkan sürtünme noktaları (paralel-commit yarışı, port çakışması, elle temizlik, varlık-kontrolsüz "özellik yok" kararı) SwarmGo task'ı olarak dokümanlara işlensin.
+
+**Yapılan:** `_Docs/03-YOL-HARITASI.md`'ye yeni **Faz R** bölümü eklendi — 6 aday task (RG-1..RG-6) gerçek dosya dayanaklarıyla:
+- **RG-1** entity versioning + CAS (data-loss kapatır), **RG-2** workspace git-lock + provenance-scoped staging, **RG-3** kaynak kira registry, **RG-4** tur yan-etki defteri → auto-teardown, **RG-5** boot orphan reconcile, **RG-6** implement-öncesi keşif guard'ı (skill, kod yok).
+- Önceliklendirme: 1. dalga RG-6+RG-1+RG-4; 2. dalga RG-2+RG-3+RG-5. Ürün/skill ayrımı belirtildi.
+- Not: ekleme sırasında 03 dosyasının paralel oturumca güncellendiği görüldü (B2 + P3 Aşama-4 artık tamamlanmış) — tam da RG-1/RG-2'nin hedeflediği eşzamanlı-yazım durumu.
 
 ## Doküman bakımı: kod ↔ doküman senkronu ✅ (2026-06-19)
 
@@ -85,8 +211,10 @@ aynı hesap.
 - **Hafıza Bilgi Grafiği** (Hafıza → Liste/Ağ geçişi): bir ajanın hafızalarının lexical-cosine benzerlik grafiği; tür-renkli düğümler, degree ile boyut, benzerlik eşiği kaydırıcısı.
 - **Backend:** `internal/memory/graph.go` (`Store.Graph`, pairwise cosine + cap, `graph_test.go`), `internal/api/graph.go` (`GET /api/graph`, `GET /api/agents/{id}/memory-graph`).
 - **Frontend:** `types/graph.ts`, `api/graph.ts`, `lib/relationGraph.ts`, `components/graph/{VisNetworkGraph,MemoryGraphView}.tsx`, `components/panels/NetworkPanel.tsx`. Grafik motoru ayrı lazy chunk.
-- **vis-network'e geçiş (2026-06-19):** İlk React Flow + saf-TS force simülasyonu homojen dağılım vermedi (mesafe/yoğunluk kırılgan). Agent-MCP'nin de **`vis-network` (vis.js)** kullandığı `package.json`'dan doğrulanınca **`vis-network` v10.1.0 + `vis-data` v8.0.4**'e geçildi. Gerçek fizik motoru (`forceAtlas2Based` çözücü) bağsız/seyrek graflarda bile **homojen dağılım** veriyor; toolbar'da **Fizik / Ağaç** (hiyerarşik) geçişi. Eski `RelationGraph.tsx`/`EntityNode.tsx` + force layout fn'leri silindi; `lib/relationGraph.ts` artık DTO→vis eşleyici (`workspaceToVis`/`memoryToVis`), yeni `VisNetworkGraph.tsx` sarmalayıcı. vis-network ~515KB ayrı lazy chunk (ana bundle değişmedi).
-- **Durum:** `go build/vet/test ./internal/...` + `tsc`/`vite build` yeşil; canlı API smoke + **canlı Chrome görsel doğrulaması** (MINIMAX ws, 4 ajan + 32 görev, 0 kenar → Fizik modunda homojen yayılım, üst üste binme yok). Detay: `_Docs/23-ILISKI-GRAFIGI.md`.
+- **vis-network'e geçiş (2026-06-19):** İlk React Flow + saf-TS force simülasyonu homojen dağılım vermedi (mesafe/yoğunluk kırılgan). Agent-MCP'nin de **`vis-network` (vis.js)** kullandığı `package.json`'dan doğrulanınca **`vis-network` v10.1.0 + `vis-data` v8.0.4**'e geçildi. Gerçek fizik motoru (`forceAtlas2Based` çözücü) bağsız/seyrek graflarda bile **homojen dağılım** veriyor. (Not: kısa süre denenen "Ağaç"/hiyerarşik mod bu döngüsel+bağsız veride bozuk göründüğü için kaldırıldı — hiyerarşi için Akışlar ekranı zaten gerçek DAG'dır; ağ yalnız fizik düzeni kullanır.) Eski `RelationGraph.tsx`/`EntityNode.tsx` + force layout fn'leri silindi; `lib/relationGraph.ts` artık DTO→vis eşleyici (`workspaceToVis`/`memoryToVis`), yeni `VisNetworkGraph.tsx` sarmalayıcı. vis-network ~515KB ayrı lazy chunk (ana bundle değişmedi).
+- **Yoğunluk kaydırıcısı + yeni katmanlar (2026-06-19):** Toolbar'a **Yoğunluk** kaydırıcısı (0.4×–2×) eklendi — `VisNetworkGraph` `density` prop'u forceAtlas2 itme/yay uzunluğunu canlı ölçekler. Ağa iki yeni düğüm türü eklendi: **beceri/skill** (sarı altıgen, `Agent.Skills`'ten, `skill` kenarı) ve **MCP sunucusu** (teal kare, etkin sunucular + `Agent.MCPEnabled`, `mcp` kenarı). Toolbar'da **katman chip'leri** (Görevler/Akışlar/Beceriler/MCP) ile her tür açılıp kapatılır; backend `/api/graph` skills/mcp düğüm+kenarlarını ve `stats`'a sayıları döndürür. Hafıza bilinçli olarak workspace ağına eklenmedi (yüzlerce düğüm → ayrı Hafıza→Ağ grafiği kapsar). Canlı doğrulama: MINIMAX ws'de teal "gateway" MCP düğümü + ajanlara teal kenarlar render oldu.
+- **Düğüm şekilleri + tooltip (2026-06-19):** Görevler artık **durum-renkli kare** (başlık altında etiket) + **hover açıklama tooltip'i** (vis `title`=HTMLElement; backend `graphNode.Desc`=`Task.Description` eklendi). Beceriler **yıldız**, MCP **üçgen** (kareyle çakışmasın diye). `lib/relationGraph.ts`'e `tip()`/`esc()` tooltip yardımcıları. Canlı doğrulama: MINIMAX ws'de kare görevler (durum renkli) + teal üçgen "gateway" render oldu; `desc` 23 görevde mevcut.
+- **Durum:** `go build/vet/test ./internal/...` + `tsc`/`vite build` yeşil; canlı API smoke + **canlı Chrome görsel doğrulaması** (MINIMAX ws, Fizik homojen yayılım; kare görevler, üçgen MCP, yoğunluk kaydırıcısı çalışıyor). Detay: `_Docs/23-ILISKI-GRAFIGI.md`.
 
 ## Ayarlar skill'i + canlı ayar tool'ları (`get_settings`/`update_settings`) ✅ (2026-06-19)
 

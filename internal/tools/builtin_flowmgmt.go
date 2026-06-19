@@ -70,7 +70,7 @@ func NewCreateFlowTool(database *db.DB, actorID string) CreateFlowTool {
 
 func (CreateFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "create_flow",
+		Name:        "create_flow",
 		Description: "Create a multi-agent orchestration flow. The graph is the orchestration JSON (nodes of type agent/branch/parallel wired by edges, with {{input}}/{{last}}/{{node.id}} templates). The flow is tagged as created by you. Returns the new flow id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -124,7 +124,7 @@ func NewUpdateFlowTool(database *db.DB, actorID string) UpdateFlowTool {
 
 func (UpdateFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "update_flow",
+		Name:        "update_flow",
 		Description: "Edit an agent-created flow (not one made by the user). Pass the flow id and the fields to change (name, description, graph).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -187,7 +187,7 @@ func NewDeleteFlowTool(database *db.DB, actorID string) DeleteFlowTool {
 
 func (DeleteFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "delete_flow",
+		Name:        "delete_flow",
 		Description: "Delete an agent-created flow (not one made by the user). This also removes the flow's runs. Pass the flow id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -274,7 +274,7 @@ func NewGetFlowTool(database *db.DB, actorID string) GetFlowTool {
 
 func (GetFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "get_flow",
+		Name:        "get_flow",
 		Description: "Get one orchestration flow in full, including its graph JSON (the node graph). Use this to read a flow's current graph before editing it with update_flow. Returns id, name, description, graph and whether it was created by an agent. Allowed on any flow.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -325,7 +325,7 @@ func NewRunFlowTool(database *db.DB, actorID string, run runFlowFn) RunFlowTool 
 
 func (RunFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "run_flow",
+		Name:        "run_flow",
 		Description: "Run an orchestration flow now with the given input (the value bound to {{input}} in the graph). Drives the flow to completion, records a run in the executions feed, and returns the status and (truncated) final output. Allowed on any flow.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",

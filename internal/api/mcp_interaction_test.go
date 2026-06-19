@@ -75,6 +75,45 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 	}
 }
 
+// TestInteractionAdvertisedNames locks the single-source invariant (CLI-2): the
+// names handed to the CLI allowlist (InteractionEndpoint.ToolNames) are exactly
+// the names the backend advertises via Tools(). Adding a tool to one therefore
+// adds it to the other automatically. Also asserts the use_skill bridge is
+// advertised and that self-manage-gated spawn_session is absent without a tun.
+func TestInteractionAdvertisedNames(t *testing.T) {
+	b := &interactionBackend{runs: newChatRuns()} // tun nil → self-manage off
+	specs := b.Tools()
+	want := make(map[string]bool, len(specs))
+	for _, s := range specs {
+		want[s.Name] = true
+	}
+	got := interactionAdvertisedNames(nil)
+	if len(got) != len(specs) {
+		t.Fatalf("advertised names (%d) must match Tools() specs (%d)", len(got), len(specs))
+	}
+	for _, n := range got {
+		if !want[n] {
+			t.Fatalf("advertised name %q is not in Tools()", n)
+		}
+	}
+	names := strings.Join(got, ",")
+	if !contains(got, "use_skill") {
+		t.Fatalf("use_skill must be advertised (CLI skill bridge); got %s", names)
+	}
+	if contains(got, "spawn_session") {
+		t.Fatalf("spawn_session must NOT be advertised without self-manage; got %s", names)
+	}
+}
+
+func contains(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestInteractionBackend_AskTurnEnded(t *testing.T) {
 	runs := newChatRuns()
 	run := runs.register("r2", "s-r2", func() {})

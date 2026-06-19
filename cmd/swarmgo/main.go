@@ -115,6 +115,10 @@ func main() {
 	// Advertise this server's own loopback URL so CLI agents can reach the
 	// in-process Interaction MCP endpoint (ask_user/todo_write) for their turn.
 	server.SetBaseURL(cfg.Addr)
+	// Wire the application-settings bridge into every workspace runtime so the
+	// get_settings / update_settings self-management tools can read and live-apply
+	// settings (the server owns the apply hook; the manager owns the runtimes).
+	manager.SetSettingsBridge(server.SettingsBridge())
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

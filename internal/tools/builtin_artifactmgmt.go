@@ -30,7 +30,7 @@ func NewDeleteArtifactTool(database *db.DB, actorID string) DeleteArtifactTool {
 
 func (DeleteArtifactTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "delete_artifact",
+		Name:        "delete_artifact",
 		Description: "Delete an agent-created artifact (not one the user made manually). Pass the artifact id (see list_artifacts).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",

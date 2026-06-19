@@ -8,6 +8,9 @@ import {
   DollarSign,
   ChevronRight,
   ChevronDown,
+  PiggyBank,
+  Percent,
+  Sigma,
 } from 'lucide-react'
 import { api } from '../../api'
 import type { WorkspaceUsage, KindStat, ProviderStat } from '../../types'
@@ -201,6 +204,24 @@ export function BudgetPanel({ onError }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => load(days), [days])
 
+  // Inline daily-limit editor — the Budget screen is the home for limits (moved
+  // here from the chat meters). Prompts for call + token caps, then reloads.
+  const editLimit = async (agentId: string, callLimit: number, tokenLimit: number) => {
+    const c = window.prompt('Günlük çağrı limiti (0 = sınırsız):', String(callLimit))
+    if (c === null) return
+    const t = window.prompt('Günlük token limiti (0 = sınırsız):', String(tokenLimit))
+    if (t === null) return
+    const cn = parseInt(c, 10)
+    const tn = parseInt(t, 10)
+    if (Number.isNaN(cn) || Number.isNaN(tn) || cn < 0 || tn < 0) return
+    try {
+      await api.setBudget(agentId, cn, tn)
+      load()
+    } catch (e) {
+      onError((e as Error).message)
+    }
+  }
+
   const totalTokens = usage ? usage.totals.inputTokens + usage.totals.outputTokens : 0
 
   // Origins sorted by token spend, biggest first. Any spend not attributed to a
@@ -306,6 +327,36 @@ export function BudgetPanel({ onError }: Props) {
             />
           </div>
 
+          {/* Window-cumulative ROI — cross-session totals over the selected
+              window (today's cards above are just one day). The cache hit rate
+              and total savings are the caching ROI signal. */}
+          <div className="mb-5 flex gap-3">
+            <SummaryCard
+              icon={<Sigma size={12} />}
+              label={`Toplam maliyet (son ${days}g)`}
+              value={`${usage.cumulative.costUSD > 0 && !usage.totals.priced ? '~' : ''}${usd(usage.cumulative.costUSD)}`}
+              sub={`${fmt(usage.cumulative.calls)} çağrı · ${fmt(usage.cumulative.inputTokens + usage.cumulative.outputTokens)} token`}
+            />
+            <SummaryCard
+              icon={<PiggyBank size={12} />}
+              label={`Cache tasarrufu (son ${days}g)`}
+              value={usd(usage.cumulative.savingsUSD)}
+              sub={`${fmt(usage.cumulative.cacheReadTokens)} oku · ${fmt(usage.cumulative.cacheWriteTokens)} yaz`}
+            />
+            <SummaryCard
+              icon={<Percent size={12} />}
+              label="Cache isabet oranı"
+              value={`${(usage.cumulative.cacheHitRate * 100).toFixed(0)}%`}
+              sub="önbellekten okunan istem payı"
+            />
+            <SummaryCard
+              icon={<DollarSign size={12} />}
+              label="Tasarrufsuz maliyet (varsayım)"
+              value={`${usage.cumulative.savingsUSD > 0 && !usage.totals.priced ? '~' : ''}${usd(usage.cumulative.costUSD + usage.cumulative.savingsUSD)}`}
+              sub="caching olmasaydı ödenecek"
+            />
+          </div>
+
           <div className="mb-5 grid grid-cols-2 gap-4">
             {/* Origin breakdown */}
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
@@ -353,7 +404,7 @@ export function BudgetPanel({ onError }: Props) {
                         key={p.day}
                         className="flex-1 rounded-t bg-[var(--color-accent)] transition-all hover:opacity-80"
                         style={{ height: `${Math.max(2, h)}%` }}
-                        title={`${p.day}: ${fmt(t)} token · ${p.calls} çağrı`}
+                        title={`${p.day}: ${fmt(t)} token · ${p.calls} çağrı · ${usd(p.costUSD)} maliyet${p.savingsUSD > 0 ? ` · ${usd(p.savingsUSD)} tasarruf` : ''}`}
                       />
                     )
                   })}
@@ -487,23 +538,32 @@ export function BudgetPanel({ onError }: Props) {
                           )}
                         </td>
                         <td className="px-4 py-2.5">
-                          <span
-                            className="rounded px-2 py-0.5 text-xs"
-                            style={{
-                              background: over
-                                ? 'color-mix(in srgb, var(--color-danger) 15%, transparent)'
-                                : near
-                                  ? 'color-mix(in srgb, var(--color-warning) 15%, transparent)'
-                                  : 'var(--color-surface)',
-                              color: over
-                                ? 'var(--color-danger)'
-                                : near
-                                  ? 'var(--color-warning)'
-                                  : 'var(--color-text-dim)',
-                            }}
-                          >
-                            {over ? 'Aşıldı' : near ? 'Limit yakın' : 'Normal'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="rounded px-2 py-0.5 text-xs"
+                              style={{
+                                background: over
+                                  ? 'color-mix(in srgb, var(--color-danger) 15%, transparent)'
+                                  : near
+                                    ? 'color-mix(in srgb, var(--color-warning) 15%, transparent)'
+                                    : 'var(--color-surface)',
+                                color: over
+                                  ? 'var(--color-danger)'
+                                  : near
+                                    ? 'var(--color-warning)'
+                                    : 'var(--color-text-dim)',
+                              }}
+                            >
+                              {over ? 'Aşıldı' : near ? 'Limit yakın' : 'Normal'}
+                            </span>
+                            <button
+                              onClick={() => editLimit(a.agentId, a.dailyCallLimit, a.dailyTokenLimit)}
+                              className="text-xs text-[var(--color-text-dim)] underline-offset-2 transition hover:text-[var(--color-accent)] hover:underline"
+                              title="Günlük çağrı/token limitini düzenle"
+                            >
+                              limit
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )

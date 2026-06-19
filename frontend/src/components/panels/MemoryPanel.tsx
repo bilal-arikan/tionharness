@@ -1,8 +1,14 @@
-import { useEffect, useState } from 'react'
-import { Sparkles, ChevronDown, ChevronRight } from 'lucide-react'
+import { useEffect, useState, lazy, Suspense } from 'react'
+import { Sparkles, ChevronDown, ChevronRight, List, Share2 } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Memory, MemoryKind } from '../../types'
 import { Markdown } from '../markdown/Markdown'
+
+// The knowledge-graph view pulls in React Flow (~300KB); load it only when the
+// user switches to the graph tab.
+const MemoryGraphView = lazy(() =>
+  import('../graph/MemoryGraphView').then((m) => ({ default: m.MemoryGraphView })),
+)
 
 interface Props {
   agent: Agent | null
@@ -33,6 +39,8 @@ export function MemoryPanel({ agent, onError }: Props) {
   const [content, setContent] = useState('')
   const [filter, setFilter] = useState<MemoryKind | 'all'>('all')
   const [reflecting, setReflecting] = useState(false)
+  // Memory view mode: the flat list or the similarity knowledge graph.
+  const [mode, setMode] = useState<'list' | 'graph'>('list')
   // Cards render collapsed (a 4-line plain-text preview) by default; this tracks
   // which ids the user has expanded into the full markdown view.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -129,24 +137,54 @@ export function MemoryPanel({ agent, onError }: Props) {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="mb-3 flex gap-1">
-        {FILTERS.map((f) => (
+      {/* Filters (list mode) + list/graph mode toggle */}
+      <div className="mb-3 flex items-center gap-1">
+        {mode === 'list' &&
+          FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`rounded-md px-2 py-0.5 text-xs transition ${
+                filter === f.key
+                  ? 'bg-[var(--color-accent)] text-white'
+                  : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        <div className="ml-auto flex gap-1 rounded-md bg-[var(--color-surface-2)] p-0.5">
           <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`rounded-md px-2 py-0.5 text-xs transition ${
-              filter === f.key
-                ? 'bg-[var(--color-accent)] text-white'
-                : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+            onClick={() => setMode('list')}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs transition ${
+              mode === 'list' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
             }`}
           >
-            {f.label}
+            <List size={13} /> Liste
           </button>
-        ))}
+          <button
+            onClick={() => setMode('graph')}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs transition ${
+              mode === 'graph' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
+            }`}
+          >
+            <Share2 size={13} /> Ağ
+          </button>
+        </div>
       </div>
 
-      {/* Memory list */}
+      {mode === 'graph' ? (
+        <Suspense
+          fallback={
+            <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
+              Grafik yükleniyor…
+            </div>
+          }
+        >
+          <MemoryGraphView agentId={agent.id} onError={onError} />
+        </Suspense>
+      ) : (
+      /* Memory list */
       <div className="flex-1 space-y-2 overflow-y-auto">
         {shown.length === 0 && (
           <p className="text-sm text-[var(--color-text-dim)]">
@@ -204,6 +242,7 @@ export function MemoryPanel({ agent, onError }: Props) {
           )
         })}
       </div>
+      )}
     </div>
   )
 }

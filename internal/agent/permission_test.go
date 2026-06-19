@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/bilal/swarmgo/internal/providers"
@@ -47,7 +49,7 @@ func TestPermGate_AskWithoutPrompterDenies(t *testing.T) {
 func TestPermGate_AskAlwaysAllowRememberedAcrossCalls(t *testing.T) {
 	prompts := 0
 	ctx := tools.WithGrants(context.Background(), tools.NewPermissionGrants())
-	ctx = tools.WithPermissionPrompter(ctx, func(_ context.Context, _, _ string, _ []string) (string, error) {
+	ctx = tools.WithPermissionPrompter(ctx, func(_ context.Context, _, _, _ string, _ []string) (string, error) {
 		prompts++
 		return tools.PermAllowAlways, nil
 	})
@@ -64,10 +66,43 @@ func TestPermGate_AskAlwaysAllowRememberedAcrossCalls(t *testing.T) {
 
 func TestPermGate_AskDeny(t *testing.T) {
 	ctx := tools.WithGrants(context.Background(), tools.NewPermissionGrants())
-	ctx = tools.WithPermissionPrompter(ctx, func(_ context.Context, _, _ string, _ []string) (string, error) {
+	ctx = tools.WithPermissionPrompter(ctx, func(_ context.Context, _, _, _ string, _ []string) (string, error) {
 		return tools.PermDeny, nil
 	})
 	if ok, msg := permGate(ctx, "ask", call("shell")); ok || msg == "" {
 		t.Errorf("ask: denied shell should not run, got ok=%v msg=%q", ok, msg)
+	}
+}
+
+// shellCall builds an exec tool call carrying a command, for arg-pattern tests.
+func shellCall(command string) providers.ToolCall {
+	return providers.ToolCall{ID: "1", Name: "shell", Input: json.RawMessage(`{"command":` + strconv.Quote(command) + `}`)}
+}
+
+// TestPermGate_AskAlwaysScopesExecToCommandFamily verifies B2: approving one
+// `git` command with "always" grants shell(git *) — later git commands run
+// without a prompt, but a different command (rm) still prompts.
+func TestPermGate_AskAlwaysScopesExecToCommandFamily(t *testing.T) {
+	prompts := 0
+	ctx := tools.WithGrants(context.Background(), tools.NewPermissionGrants())
+	ctx = tools.WithPermissionPrompter(ctx, func(_ context.Context, _, _, _ string, _ []string) (string, error) {
+		prompts++
+		return tools.PermAllowAlways, nil
+	})
+	if ok, _ := permGate(ctx, "ask", shellCall("git status -s")); !ok {
+		t.Fatal("ask: first git command should be approved")
+	}
+	if ok, _ := permGate(ctx, "ask", shellCall("git push origin main")); !ok {
+		t.Fatal("ask: second git command should run via the granted shell(git *) rule")
+	}
+	if prompts != 1 {
+		t.Errorf("expected one prompt (git family granted), got %d", prompts)
+	}
+	// A different command family is NOT covered by shell(git *) → prompts again.
+	if ok, _ := permGate(ctx, "ask", shellCall("rm -rf build")); !ok {
+		t.Fatal("ask: rm should still be approvable")
+	}
+	if prompts != 2 {
+		t.Errorf("expected a second prompt for the rm command, got %d", prompts)
 	}
 }

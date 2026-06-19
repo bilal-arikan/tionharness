@@ -96,12 +96,62 @@ func costOf(byModel map[string]db.KindStat) (cost float64, priced bool, estimate
 	return cost, priced, estimated
 }
 
-// dayPoint is one day's workspace-wide totals for the trend chart.
+// modelRowsFor turns a usage rollup's per-model breakdown into sorted detail
+// rows (costliest first) plus aggregate cost/savings/cache totals. Mirrors the
+// workspace screen's per-model logic (real price, else equivalent-API estimate)
+// so the per-agent usage endpoint computes model cost identically.
+func modelRowsFor(byModel map[string]db.KindStat) (rows []modelStat, totalCost, totalSavings float64, priced, estimated bool, cacheRead, cacheWrite int) {
+	priced = true
+	for key, st := range byModel {
+		provider, model, _ := strings.Cut(key, "|")
+		var cost, save float64
+		modelPriced := true
+		var modelEstimated bool
+		if p, ok := providers.PriceFor(provider, model); ok {
+			cost = p.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
+			save = p.CacheSavings(st.CacheReadTokens)
+		} else if st.InputTokens+st.OutputTokens+st.CacheReadTokens+st.CacheWriteTokens > 0 {
+			modelPriced = false
+			priced = false
+			if ep, eok := providers.EstimateFor(provider, model); eok {
+				cost = ep.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
+				modelEstimated = true
+				estimated = true
+			}
+		}
+		rows = append(rows, modelStat{
+			Model: model, Calls: st.Calls,
+			InputTokens: st.InputTokens, OutputTokens: st.OutputTokens,
+			CacheReadTokens: st.CacheReadTokens, CacheWriteTokens: st.CacheWriteTokens,
+			CostUSD: cost, SavingsUSD: save, Priced: modelPriced, Estimated: modelEstimated,
+		})
+		totalCost += cost
+		totalSavings += save
+		cacheRead += st.CacheReadTokens
+		cacheWrite += st.CacheWriteTokens
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].CostUSD != rows[j].CostUSD {
+			return rows[i].CostUSD > rows[j].CostUSD
+		}
+		return rows[i].InputTokens+rows[i].OutputTokens > rows[j].InputTokens+rows[j].OutputTokens
+	})
+	return rows, totalCost, totalSavings, priced, estimated, cacheRead, cacheWrite
+}
+
+// dayPoint is one day's workspace-wide totals for the trend chart. Cache and
+// cost/savings are carried per day so the trend can plot caching ROI over time
+// (not just token volume) and so the window-cumulative totals can be summed
+// straight off the trend.
 type dayPoint struct {
-	Day          string `json:"day"`
-	Calls        int    `json:"calls"`
-	InputTokens  int    `json:"inputTokens"`
-	OutputTokens int    `json:"outputTokens"`
+	Day              string  `json:"day"`
+	Calls            int     `json:"calls"`
+	InputTokens      int     `json:"inputTokens"`
+	OutputTokens     int     `json:"outputTokens"`
+	CacheReadTokens  int     `json:"cacheReadTokens"`
+	CacheWriteTokens int     `json:"cacheWriteTokens"`
+	CostUSD          float64 `json:"costUSD"`
+	SavingsUSD       float64 `json:"savingsUSD"`
 }
 
 // handleWorkspaceUsage returns the data behind the Budget screen: today's
@@ -287,12 +337,42 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		p.Calls += u.Calls
 		p.InputTokens += u.InputTokens
 		p.OutputTokens += u.OutputTokens
+		// Cost/savings/cache per day come from the same per-model logic the
+		// today screen uses (real price, else equivalent-API estimate), so the
+		// trend plots caching ROI consistently with the headline figures.
+		_, dayCost, daySavings, _, _, dayCacheRead, dayCacheWrite := modelRowsFor(u.ByModel)
+		p.CostUSD += dayCost
+		p.SavingsUSD += daySavings
+		p.CacheReadTokens += dayCacheRead
+		p.CacheWriteTokens += dayCacheWrite
 	}
 	trend := make([]dayPoint, 0, len(perDay))
 	for _, p := range perDay {
 		trend = append(trend, *p)
 	}
 	sort.SliceStable(trend, func(i, j int) bool { return trend[i].Day < trend[j].Day })
+
+	// Window-cumulative totals ("oturumlar arası toplam" / caching ROI): sum the
+	// whole trend window so the screen can show lifetime-over-the-window spend,
+	// savings, and a cache hit rate — not just today. cacheHitRate is the share
+	// of prompt tokens served from cache: cacheRead / (cacheRead + freshInput +
+	// cacheWrite). It is the single ROI signal — higher means the static prefix
+	// is being reused instead of re-paid.
+	var cumCalls, cumIn, cumOut, cumCacheRead, cumCacheWrite int
+	var cumCost, cumSavings float64
+	for _, p := range trend {
+		cumCalls += p.Calls
+		cumIn += p.InputTokens
+		cumOut += p.OutputTokens
+		cumCacheRead += p.CacheReadTokens
+		cumCacheWrite += p.CacheWriteTokens
+		cumCost += p.CostUSD
+		cumSavings += p.SavingsUSD
+	}
+	var cacheHitRate float64
+	if denom := cumCacheRead + cumIn + cumCacheWrite; denom > 0 {
+		cacheHitRate = float64(cumCacheRead) / float64(denom)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"day": today,
@@ -311,5 +391,16 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		"byProvider": providerRows,
 		"agents":     rows,
 		"trend":      trend,
+		"cumulative": map[string]any{
+			"days":             days,
+			"calls":            cumCalls,
+			"inputTokens":      cumIn,
+			"outputTokens":     cumOut,
+			"cacheReadTokens":  cumCacheRead,
+			"cacheWriteTokens": cumCacheWrite,
+			"costUSD":          cumCost,
+			"savingsUSD":       cumSavings,    // total saved by prompt-cache reads over the window
+			"cacheHitRate":     cacheHitRate,  // cacheRead / (cacheRead + input + cacheWrite)
+		},
 	})
 }

@@ -43,7 +43,7 @@ func NewCreateScheduleTool(database *db.DB, actorID string, reload func(context.
 
 func (CreateScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "create_schedule",
+		Name:        "create_schedule",
 		Description: "Create a recurring schedule (routine) that delivers a prompt to an agent on a cron expression. Example cronExpr: \"0 9 * * *\" (every day at 09:00), \"*/30 * * * *\" (every 30 minutes). The schedule is tagged as created by you. Returns the new schedule id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -109,7 +109,7 @@ func NewUpdateScheduleTool(database *db.DB, actorID string, reload func(context.
 
 func (UpdateScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "update_schedule",
+		Name:        "update_schedule",
 		Description: "Edit an agent-created schedule (not one made by the user). Pass the schedule id and the fields to change (agentId, cronExpr, prompt, enabled).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -182,7 +182,7 @@ func NewDeleteScheduleTool(database *db.DB, actorID string, reload func(context.
 
 func (DeleteScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "delete_schedule",
+		Name:        "delete_schedule",
 		Description: "Delete an agent-created schedule (not one made by the user). Pass the schedule id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",

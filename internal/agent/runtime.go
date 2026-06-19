@@ -20,6 +20,7 @@ import (
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/secrets"
 	"github.com/bilal/swarmgo/internal/skills"
+	"github.com/bilal/swarmgo/internal/tools"
 )
 
 // Runtime owns the lifecycle of all autonomous agent workers.
@@ -60,6 +61,11 @@ type Runtime struct {
 	// creates/edits/deletes one via a self-management tool. Wired by the
 	// workspace manager once the scheduler exists; nil before then (no-op).
 	reloadSched func(context.Context) error
+
+	// settingsBridge backs the get_settings / update_settings self-management
+	// tools: read and live-apply the application-wide settings. Wired by the
+	// workspace manager once the api server exists; nil before then (tools off).
+	settingsBridge tools.SettingsBridge
 
 	mu      sync.Mutex
 	workers map[string]*worker
@@ -242,6 +248,18 @@ func (r *Runtime) SkillsCatalogBlockForAgent(agent db.Agent) string {
 	return r.skills.CatalogBlockForAgent(agent.Skills)
 }
 
+// LoadSkillForAgent returns a skill's full body for the CLI path (the Interaction
+// MCP use_skill bridge), enforcing the SAME per-agent allowlist as the native
+// use_skill built-in. It mirrors the agentSkillLib the native tool loop builds,
+// so both provider paths advertise an identical contract over one skill store.
+func (r *Runtime) LoadSkillForAgent(agent db.Agent, slug string) (string, error) {
+	if r.skills == nil {
+		return "", fmt.Errorf("skills are not available")
+	}
+	allow := r.skills.AllowedFor(agent.Skills)
+	return agentSkillLib{store: r.skills, allow: allow}.Body(slug)
+}
+
 // agentSkillLib restricts the use_skill tool to an agent's selected slugs, so an
 // agent cannot load a skill it has not been given.
 type agentSkillLib struct {
@@ -256,10 +274,34 @@ func (l agentSkillLib) Body(slug string) (string, error) {
 	return l.store.UseSkillBody(slug, l.allow)
 }
 
+// agentSkillWriter adapts *skills.Store to the tools.SkillWriter interface so the
+// create_skill / delete_skill self-management tools can author workspace skills
+// without the tools package importing the skills package.
+type agentSkillWriter struct{ store *skills.Store }
+
+func (w agentSkillWriter) CreateSkill(slug, name, description, whenToUse, body string, shared bool) error {
+	_, err := w.store.Create(slug, skills.SkillInput{
+		Name:        name,
+		Description: description,
+		WhenToUse:   whenToUse,
+		Body:        body,
+		Shared:      shared,
+	})
+	return err
+}
+
+func (w agentSkillWriter) DeleteSkill(slug string) error { return w.store.Delete(slug) }
+
 // SetScheduleReloader wires the scheduler's Reload so self-management schedule
 // tools take effect immediately. Called by the workspace manager after the
 // scheduler is constructed.
 func (r *Runtime) SetScheduleReloader(fn func(context.Context) error) { r.reloadSched = fn }
+
+// SetSettingsBridge wires the application-wide settings store + live-apply hook
+// so the get_settings / update_settings self-management tools become available.
+// Called by the workspace manager once the api server (which owns the apply
+// hook) exists. Nil leaves those tools off.
+func (r *Runtime) SetSettingsBridge(b tools.SettingsBridge) { r.settingsBridge = b }
 
 // reloadSchedules re-reads schedules into the cron scheduler (nil-safe).
 func (r *Runtime) reloadSchedules(ctx context.Context) error {
@@ -462,7 +504,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 		return err
 	}
 
-	provider, model, err := r.effectiveProvider(agent)
+	provider, err := r.providers.Get(agent.Provider)
 	if err != nil {
 		return err
 	}
@@ -472,7 +514,7 @@ func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) err
 	// A goal set on the heartbeat session steers the autonomous loop too: inject
 	// it into the dynamic suffix so the agent's wake action stays on-objective.
 	resp, err := r.CompleteWithTools(WithCallKind(ctx, KindHeartbeat), agent, provider, providers.Request{
-		Model:         model,
+		Model:         agent.Model,
 		System:        r.systemPrompt(agent),
 		SystemDynamic: heartbeatGoalBlock(session.Goal, session.GoalDone),
 		Messages: []providers.Message{

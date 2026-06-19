@@ -69,7 +69,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// endpoint for this turn, carrying the per-run token so its ask_user/todo_write
 	// calls correlate back here. No-op when the base URL is unknown.
 	if url := s.interactionURL(); url != "" {
-		ctx = tools.WithInteractionEndpoint(ctx, url, run.token)
+		ctx = tools.WithInteractionEndpoint(ctx, url, run.token, interactionAdvertisedNames(s.tun))
 	}
 
 	wsp := ws(r)
@@ -180,8 +180,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	grants := s.grants.forSession(session.ID)
 	run.setGrants(grants)
 	ctx = tools.WithGrants(ctx, grants)
-	ctx = tools.WithPermissionPrompter(ctx, func(ctx context.Context, tool, risk string, options []string) (string, error) {
-		sse("step", agent.TurnStep{Kind: agent.StepPermission, Tool: tool, Reason: risk, Options: options})
+	ctx = tools.WithPermissionPrompter(ctx, func(ctx context.Context, tool, risk, arg string, options []string) (string, error) {
+		sse("step", agent.TurnStep{Kind: agent.StepPermission, Tool: tool, Reason: risk, Text: arg, Options: options})
 		select {
 		case ans := <-run.answer:
 			return ans, nil
@@ -243,6 +243,30 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 		turnCtx = tools.WithWakeScheduler(turnCtx, wakeFn)
 		run.setWakeScheduler(wakeFn)
+
+		// use_skill (CLI path): mirror the native built-in for claude-cli agents,
+		// which reach SwarmGo skills only through the Interaction MCP bridge. The
+		// loader enforces the same per-agent allowlist as the native use_skill tool,
+		// so a restricted skill stays unreachable unless assigned/shared.
+		skillAgent := agentRow
+		run.setSkillLoader(func(slug string) (string, error) {
+			return wsp.Runtime.LoadSkillForAgent(skillAgent, slug)
+		})
+
+		// Spawn (CLI path): mirror the native built-in for claude-cli agents, which
+		// reach SwarmGo tools only through the Interaction MCP bridge. Install a
+		// per-agent spawn tool on the run so the bridge's spawn_session dispatch can
+		// launch independent sessions. Gated by the same self-manage master toggle;
+		// a fresh instance per turn resets the per-turn spawn budget.
+		if s.tun.SelfManageEnabled() {
+			run.setSpawnTool(tools.NewSpawnSessionTool(respondingID, s.tun.SpawnMaxPerTurn(),
+				func(sctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
+					res, err := wsp.Runtime.SpawnSession(sctx, target, prompt, agent.SpawnOptions{ModelOverride: modelOverride, CreatedBy: respondingID})
+					return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
+				}))
+		} else {
+			run.setSpawnTool(nil)
+		}
 
 		agentStart := time.Now()
 		// Pre-allocate the reply id so the streaming crash sidecar and the final
@@ -370,6 +394,10 @@ func (s *Server) resolveTurnAgents(ctx context.Context, database *db.DB, session
 // is a stable machine tag (provider_error, compaction_failed, …) shown as a
 // badge; detail is the human-readable message.
 func (s *Server) failTurn(ctx context.Context, database *db.DB, sse func(string, any), sessionID, agentID, reason, detail string) {
+	// Surface the failure in the server log too — without this a turn that dies
+	// before producing output (provider unavailable, compaction failure, …) is
+	// invisible server-side and only visible as a red card in the UI.
+	s.logger.Error("turn failed", "session", sessionID, "agent", agentID, "reason", reason, "detail", detail)
 	step := agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason}
 	payload := map[string]any{"error": detail, "reason": reason}
 	if msg, err := database.AddMessage(ctx, db.Message{

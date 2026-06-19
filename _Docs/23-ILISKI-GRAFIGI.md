@@ -3,7 +3,7 @@
 Agent-MCP'nin "Multi-Agent Collaboration Network" görselleştirmesinden esinlenen,
 entity'ler arası ilişkileri tek bakışta gösteren iki **salt-okunur** ağ görünümü.
 Görselleştirme, Agent-MCP'nin de kullandığı **`vis-network` (vis.js)** ile yapılır —
-gerçek sürekli fizik motoru (sürükle/hover, canlı denge).
+gerçek sürekli fizik motoru (sürükle/hover, canlı denge, forceAtlas2 ile homojen yayılım).
 
 ## Kütüphane seçimi
 
@@ -18,23 +18,40 @@ ayrı chunk; ana bundle'a binmez).
 ## İki görünüm
 
 ### 1. Workspace Ağı ("Ağ" — NavRail)
-Tüm workspace'in işbirliği ağı: ajanlar (renkli disk), görevler (durum-renkli kutu),
-akışlar (mor baklava); kenarlar ilişkileri gösterir.
+Tüm workspace'in işbirliği ağı. **Düğüm türleri / şekilleri:** ajan (renkli disk),
+görev (**durum-renkli kare**; başlık altında etiket, **hover'da açıklama tooltip'i**),
+akış (mor baklava), **beceri/skill** (sarı **yıldız**), **MCP sunucusu** (teal **üçgen**).
+Tooltip'ler vis-network `title`'a verilen HTMLElement ile zengin (başlık + durum +
+açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description`) olarak gelir.
 
 - **Kenarlar (ilişki türleri, oklu):**
   - `owns` (yeşil) — ajan → sahip olduğu görev (`Task.OwnerAgentID`)
   - `created` (amber, kesik çizgi) — ajan → oluşturduğu görev (`Task.CreatedBy`)
   - `runs` (mor) — görev → çalıştırdığı akış (`Task.FlowID`)
   - `uses` (mavi) — akış → içindeki ajan node'ların ajanları (multi-agent sinyali)
-- **Yerleşim — iki mod (toolbar'da "Fizik / Ağaç" geçişi):**
-  - **Fizik (varsayılan):** vis-network `forceAtlas2Based` çözücüsü. Bu çözücü
-    bağsız/seyrek graflarda bile düğümleri **eşit/organik (homojen)** bir buluta
-    yayar (barnesHut'ın aksine kümeye çökmez/dağılıp uçmaz). `avoidOverlap` geniş
-    görev kutularının üst üste binmesini engeller. Kenar varken bağlı düğümler
-    doğal kümeler oluşturur.
-  - **Ağaç:** `layout.hierarchical` (UD, directed) — fizik kapalı, hiyerarşik dizilim.
-- Toolbar'da istatistik (ajan/görev/akış/bağ sayısı) + ilişki türü lejantı +
-  **Fizik/Ağaç** + Yenile.
+  - `skill` (sarı) — ajan → kullandığı beceri (`Agent.Skills`); paylaşılan beceriler
+    hangi ajanların örtüştüğünü gösterir
+  - `mcp` (teal) — MCP-enabled ajan → etkin MCP sunucusu (kaba erişim sinyali;
+    SwarmGo araçları ajan başına allowlist ile geçer, sunucu başına değil)
+- **Katman chip'leri (toolbar):** Görevler / Akışlar / Beceriler / MCP — her düğüm
+  türü açılıp kapatılabilir (ajanlar her zaman görünür); gizli düğüme değen kenarlar
+  da düşer. Varsayılan: Görevler + Akışlar açık, Beceriler/MCP kapalı (sade başlangıç).
+- **Yoğunluk kaydırıcısı (0.4×–2×):** fizik itme + yay uzunluğunu canlı ölçekler —
+  yüksek değer = daha sıkı paketleme, düşük = daha geniş yayılım.
+- **Hafıza neden burada yok?** Bir ajanın hafızaları yüzlerce düğüm olabilir;
+  workspace ağını boğmamak için hafıza ayrı **Hafıza → Ağ** grafiğinde gösterilir.
+- **Yerleşim — fizik (forceAtlas2):** vis-network `forceAtlas2Based` çözücüsü.
+  Bağsız/seyrek graflarda bile düğümleri **eşit/organik (homojen)** bir buluta
+  yayar (barnesHut'ın aksine kümeye çökmez/dağılıp uçmaz). `avoidOverlap` geniş
+  görev kutularının üst üste binmesini engeller. Kenar varken bağlı düğümler
+  doğal kümeler oluşturur.
+  > **Neden hiyerarşik/"Ağaç" modu yok?** İşbirliği ağı genel bir grafik:
+  > çok sayıda bağsız görev + döngüsel kenarlar (`uses`: akış→ajan, `owns`'a ters) +
+  > çok-ebeveynli düğümler içerir. vis-network'ün `hierarchical` düzeni temiz bir
+  > DAG/ağaç ister; bu veride her bağsız görev ayrı kök olup üst sırayı doldurarak
+  > "bozuk" görünür. Hiyerarşi gereken yer **Akışlar** ekranıdır (gerçek DAG). Bu
+  > yüzden ağ yalnız fizik düzeni kullanır.
+- Toolbar'da istatistik (ajan/görev/akış/beceri/MCP sayısı) + ilişki türü lejantı + Yenile.
 
 ### 2. Hafıza Bilgi Grafiği ("Hafıza" → Ağ sekmesi)
 Bir ajanın hafızalarının benzerlik grafiği: her hafıza bir düğüm, lexical-cosine
@@ -55,8 +72,10 @@ benzerliği **eşik** üstündeki çiftler bağlanır.
   sıralı + `maxEdges` ile cap; düğüm degree'leri hesaplanır. (`graph_test.go`)
 - `internal/api/graph.go` — `registerGraphRoutes`:
   - `GET /api/graph` → workspace ağı (`workspaceGraph{nodes,edges,stats}`).
-    Düğüm id'leri tür-önekli: `agent:` / `task:` / `flow:` (türler arası benzersiz).
-    Akış→ajan kenarları `orchestration.ParseGraph` ile akış graf'ından çıkarılır.
+    Düğüm id'leri tür-önekli: `agent:` / `task:` / `flow:` / `skill:<slug>` / `mcp:<id>`
+    (türler arası benzersiz). Akış→ajan kenarları `orchestration.ParseGraph` ile
+    akış graf'ından; skill kenarları `Agent.Skills`'ten; mcp kenarları etkin
+    `ListMCPServers` + `Agent.MCPEnabled`'dan çıkarılır. `stats` skills/mcp sayılarını da içerir.
   - `GET /api/agents/{id}/memory-graph?threshold=&max=` → hafıza grafiği
     (varsayılan threshold 0.18, max 400).
 
@@ -67,8 +86,9 @@ benzerliği **eşik** üstündeki çiftler bağlanır.
 - `lib/relationGraph.ts` — DTO → vis-network `{nodes, edges}` eşleyiciler
   (`workspaceToVis`, `memoryToVis`) + kenar/lejant/tür renk sabitleri.
 - `components/graph/VisNetworkGraph.tsx` — vis-network sarmalayıcı: `Network`+`DataSet`
-  yaşam döngüsü, fizik/ağaç seçenekleri, `physics`/`tree` layout prop'u, seçim olayı,
-  stabilize sonrası `fit`.
+  yaşam döngüsü, forceAtlas2 fizik düzeni, **`density` prop'u** (itme/yay uzunluğunu
+  ölçekler — canlı `setOptions`), seçim olayı, stabilize sonrası `fit`.
+  `workspaceToVis(graph, visible)` katman filtresi alır.
 - `components/panels/NetworkPanel.tsx` — workspace ağı paneli (App'te lazy).
 - `components/graph/MemoryGraphView.tsx` — hafıza grafiği (MemoryPanel'de lazy).
 

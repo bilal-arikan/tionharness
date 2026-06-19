@@ -180,6 +180,17 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewUpdateTaskTool(r.db, agent.ID),
 			tools.NewMoveTaskTool(r.db, agent.ID),
 			tools.NewDeleteTaskTool(r.db, agent.ID),
+			// Hooks (PreToolUse/PostToolUse). List/create on any; delete only
+			// agent-created (provenance).
+			tools.NewListHooksTool(r.db, agent.ID),
+			tools.NewCreateHookTool(r.db, agent.ID),
+			tools.NewDeleteHookTool(r.db, agent.ID),
+			// MCP servers. List/create/toggle on any; delete only agent-created
+			// (provenance). New/enabled servers are picked up next turn.
+			tools.NewListMCPServersTool(r.db, agent.ID),
+			tools.NewCreateMCPServerTool(r.db, agent.ID),
+			tools.NewToggleMCPServerTool(r.db, agent.ID),
+			tools.NewDeleteMCPServerTool(r.db, agent.ID),
 			// Artifacts (create/update already provided via the per-turn sink).
 			tools.NewDeleteArtifactTool(r.db, agent.ID),
 			tools.NewListArtifactsTool(r.db, agent.ID),
@@ -187,6 +198,20 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewMemoryAddTool(r.mem, agent.ID),
 			tools.NewReadLogsTool(r.logs),
 		)
+		// Secret vault writes: store/remove credentials (read is always-on above).
+		if r.vault != nil {
+			builtins = append(builtins,
+				tools.NewSecretSetTool(r.vault),
+				tools.NewSecretDeleteTool(r.vault),
+			)
+		}
+		// Skill authoring: create/delete reusable workspace skills.
+		if r.skills != nil {
+			builtins = append(builtins,
+				tools.NewCreateSkillTool(agentSkillWriter{store: r.skills}),
+				tools.NewDeleteSkillTool(agentSkillWriter{store: r.skills}),
+			)
+		}
 		// Application-wide settings: read + live-apply the settings.json document
 		// behind the Settings screen. Only offered when the bridge is wired (the
 		// api server provides it), since changes affect every workspace.

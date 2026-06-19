@@ -351,7 +351,18 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			}
 			// Cancellation mid-tool (user stop / timeout): record it and end the
 			// turn cleanly instead of feeding a half-result back to the model.
+			// A3 (cancellation hierarchy): the assistant's tool_use turn was already
+			// appended with every call in this batch, but only the calls processed
+			// so far have results. Synthesize a 'cancelled' tool_result for the
+			// interrupted call and any not-yet-run calls, then append the user turn,
+			// so the in-flight history never carries a dangling tool_use (which the
+			// provider rejects on any later replay / reactive compaction).
 			if ctx.Err() != nil {
+				results = fillCancelledResults(results, resp.ToolCalls)
+				req.Messages = append(req.Messages, providers.Message{
+					Role:        providers.RoleUser,
+					ToolResults: results,
+				})
 				fail(string(termCancelled), ctx.Err())
 				return last, steps, ctx.Err()
 			}
@@ -428,6 +439,29 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	steps = append(steps, rec)
 	emit(rec)
 	return last, steps, nil
+}
+
+// cancelledToolMsg is the synthetic tool_result content fed back for a tool call
+// abandoned by cancellation (user stop / timeout), so the model — and the
+// provider's tool_use/tool_result pairing rule — sees a terminal answer.
+const cancelledToolMsg = "tool call cancelled: the turn was stopped before this tool finished"
+
+// fillCancelledResults appends a synthetic 'cancelled' tool_result for every
+// call in calls that does not already have a result, preserving the provider
+// invariant that each tool_use block is answered by exactly one tool_result.
+// A3 (cancellation hierarchy): used when a turn ends mid-batch so no tool_use is
+// left dangling in the in-flight history.
+func fillCancelledResults(results []providers.ToolResult, calls []providers.ToolCall) []providers.ToolResult {
+	have := make(map[string]bool, len(results))
+	for _, r := range results {
+		have[r.CallID] = true
+	}
+	for _, c := range calls {
+		if !have[c.ID] {
+			results = append(results, providers.ToolResult{CallID: c.ID, Content: cancelledToolMsg, IsError: true})
+		}
+	}
+	return results
 }
 
 // recordedComplete calls the provider once and records token usage. Every

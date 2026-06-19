@@ -92,7 +92,7 @@ func NewCreateTaskTool(database *db.DB, actorID string) CreateTaskTool {
 
 func (CreateTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "create_task",
+		Name:        "create_task",
 		Description: "Create a task on the kanban board. Provide a prompt (the instruction run by the owner agent) and/or a flowId (the task runs that orchestration flow instead, with the prompt as its input). Optionally set title (auto-generated from prompt when omitted), description, ownerAgentId, boardState (default todo), and dependencies (JSON array of task IDs that must complete before this one). The task is tagged as created by you. Returns the new task id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -175,7 +175,7 @@ func NewUpdateTaskTool(database *db.DB, actorID string) UpdateTaskTool {
 
 func (UpdateTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "update_task",
+		Name:        "update_task",
 		Description: "Edit a task on the board. Pass the task id and the fields to change (title, prompt, description, ownerAgentId, flowId, boardState, dependencies). To change only the column, prefer move_task. Allowed on any task.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -270,7 +270,7 @@ func NewMoveTaskTool(database *db.DB, actorID string) MoveTaskTool {
 
 func (MoveTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "move_task",
+		Name:        "move_task",
 		Description: "Move a task to a different board column (todo, in_progress, review, done, failed). Allowed on any task.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -318,7 +318,7 @@ func NewDeleteTaskTool(database *db.DB, actorID string) DeleteTaskTool {
 
 func (DeleteTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "delete_task",
+		Name:        "delete_task",
 		Description: "Delete an agent-created task (not one made by the user). Pass the task id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",

@@ -27,7 +27,7 @@ func NewMemoryAddTool(mem *memory.Store, agentID string) MemoryAddTool {
 
 func (MemoryAddTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "memory_add",
+		Name:        "memory_add",
 		Description: "Save a long-term memory for yourself so you can recall it in future conversations (use memory_recall to retrieve). Use kind=document for facts/notes the user gave you, kind=reflection for your own summaries/insights.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",

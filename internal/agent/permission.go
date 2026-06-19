@@ -35,21 +35,26 @@ func permGate(ctx context.Context, mode string, call providers.ToolCall) (bool, 
 		if risk == tools.RiskRead {
 			return true, ""
 		}
+		// Argument-aware grants (B2): a standing rule may cover this exact call
+		// (e.g. shell(git *) approving `git status`) without re-prompting.
+		arg := tools.RepresentativeArg(call.Name, call.Input)
 		grants := tools.GrantsFrom(ctx)
-		if grants.Granted(call.Name) {
+		if grants.Matches(call.Name, arg) {
 			return true, ""
 		}
 		prompt := tools.PermissionPrompterFrom(ctx)
 		if prompt == nil {
 			return false, fmt.Sprintf("permission denied: %q (%s) requires approval but no interactive session is available", call.Name, string(risk))
 		}
-		ans, err := prompt(ctx, call.Name, string(risk), tools.PermissionOptions)
+		ans, err := prompt(ctx, call.Name, string(risk), arg, tools.PermissionOptions)
 		if err != nil {
 			return false, "permission denied: approval request failed: " + err.Error()
 		}
 		switch tools.NormalizePermission(ans) {
 		case "always":
-			grants.Grant(call.Name)
+			// Scope "always" to the command family for exec tools (shell(git *)),
+			// or whole-tool otherwise — see DeriveGrantRule.
+			grants.GrantRule(tools.DeriveGrantRule(call.Name, arg))
 			return true, ""
 		case "allow":
 			return true, ""

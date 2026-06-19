@@ -3,10 +3,10 @@ import {
   MessageSquare,
   Activity,
   Users,
+  Share2,
   LayoutGrid,
   Clock,
   Database,
-  Plug,
   GitBranch,
   FileCode,
   KeyRound,
@@ -23,7 +23,7 @@ import type { Workspace } from '../types'
 import { WorkspaceSwitcher } from './workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from './workspace/WorkspaceCreateModal'
 
-export type View = 'chat' | 'executions' | 'agents' | 'board' | 'schedules' | 'memory' | 'tools' | 'flows' | 'artifacts' | 'secrets' | 'skills' | 'market' | 'budget' | 'logs' | 'settings'
+export type View = 'chat' | 'executions' | 'agents' | 'network' | 'board' | 'schedules' | 'memory' | 'flows' | 'artifacts' | 'secrets' | 'skills' | 'market' | 'budget' | 'logs' | 'settings'
 
 interface Props {
   view: View
@@ -43,10 +43,10 @@ const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
   { key: 'executions', label: 'Aktivite', icon: Activity },
   { key: 'agents', label: 'Ajanlar', icon: Users },
+  { key: 'network', label: 'Ağ', icon: Share2 },
   { key: 'board', label: 'Görevler', icon: LayoutGrid },
   { key: 'schedules', label: 'Zamanlamalar', icon: Clock },
   { key: 'memory', label: 'Hafıza', icon: Database },
-  { key: 'tools', label: 'Araçlar', icon: Plug },
   { key: 'flows', label: 'Akışlar', icon: GitBranch },
   { key: 'artifacts', label: 'Artifactlar', icon: FileCode },
   { key: 'secrets', label: 'Sırlar', icon: KeyRound },

@@ -72,6 +72,10 @@ func Open(dataDir string, cipher Cipher) (*Store, error) {
 	return s, nil
 }
 
+// Path returns the absolute path of the settings.json document on disk. Exposed
+// so tools can report exactly which file backs the live application settings.
+func (s *Store) Path() string { return s.path }
+
 // Get returns a copy of the current settings (including the encrypted secret).
 func (s *Store) Get() Settings {
 	s.mu.RLock()
@@ -216,7 +220,14 @@ func (s *Store) decrypt(enc string) string {
 
 // Apply merges a patch into the current settings, persists, and returns the new
 // state. The write-only AnthropicKey field is encrypted (or cleared) here.
+// Invalid enum/format values are rejected up front (see Validate) so a bad
+// change never reaches the live subsystems; numeric fields are clamped by
+// normalize rather than refused.
 func (s *Store) Apply(p Patch) (Settings, error) {
+	if err := Validate(p); err != nil {
+		return Settings{}, err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -352,11 +363,19 @@ func normalize(v Settings) Settings {
 	if v.Theme != ThemeLight && v.Theme != ThemeSystem {
 		v.Theme = ThemeDark
 	}
-	if v.Accent == "" {
+	// Accent must be a valid hex color; coerce anything else (incl. empty or a
+	// hand-edited bad file) to the default so the UI never gets broken CSS.
+	if !isHexColor(v.Accent) {
 		v.Accent = "#8b5cf6"
 	}
 	if v.Language != "en" {
 		v.Language = "tr"
+	}
+	// Permission mode seeds new agents; an unknown value falls back to "auto".
+	switch v.DefaultPermissionMode {
+	case "read-only", "ask", "auto":
+	default:
+		v.DefaultPermissionMode = "auto"
 	}
 	if v.DefaultProvider != "anthropic" {
 		v.DefaultProvider = "claude-cli"

@@ -86,7 +86,9 @@ type Session struct {
 	// replies aligned with it. Inspired by Claude Code's /goal: one durable,
 	// measurable objective that steers the conversation. Empty = no goal.
 	Goal string `json:"goal,omitempty"`
-	// GoalDone marks the goal as achieved: kept stored but no longer injected.
+	// GoalDone marks the goal as achieved: it stays stored (so the user can
+	// review or reopen it) but is no longer injected into context — completing a
+	// goal stops it steering future turns.
 	GoalDone bool `json:"goalDone,omitempty"`
 
 	// Conversation compaction state (see internal/conversation).

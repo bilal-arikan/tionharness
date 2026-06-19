@@ -29,18 +29,6 @@ type cliMCPServer struct {
 // server; the CLI namespaces its tools as mcp__<key>__<tool>.
 const interactionServerKey = "swarmgo_interaction"
 
-// interactionToolNames are the Interaction MCP tools advertised to the CLI. Kept
-// in sync with the interaction backend's dispatch + the interaction Tools() list.
-var interactionToolNames = []string{
-	"ask_user",
-	"todo_write",
-	"request_confirmation",
-	"create_artifact",
-	"update_artifact",
-	"permission_prompt",
-	"schedule_wake",
-}
-
 // permissionPromptToolID is the namespaced Interaction MCP tool the claude CLI is
 // pointed at via --permission-prompt-tool (only in "ask" mode) so risky tools are
 // gated through SwarmGo's approval UI instead of auto-approved.
@@ -100,7 +88,10 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 			URL:     inter.URL,
 			Headers: map[string]string{"Authorization": "Bearer " + inter.Token},
 		}
-		for _, t := range interactionToolNames {
+		// Allowlist derives from the names the backend advertises for this turn
+		// (InteractionEndpoint.ToolNames) — a single source shared with Tools(), so
+		// a tool added to the backend is allowlisted automatically.
+		for _, t := range inter.ToolNames {
 			allowed = append(allowed, "mcp__"+interactionServerKey+"__"+t)
 		}
 		// Suppress the CLI's own equivalents, which can't be answered/honored in

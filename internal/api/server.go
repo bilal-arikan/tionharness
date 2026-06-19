@@ -33,8 +33,8 @@ type Server struct {
 	settings   *settings.Store
 	tun        *agent.Tunables
 	logs       *logbuf.Buffer
-	bus        *events.Bus // autonomous notifications streamed to the UI over SSE
-	runs       *chatRuns   // in-flight streaming turns (stop/steer control)
+	bus        *events.Bus     // autonomous notifications streamed to the UI over SSE
+	runs       *chatRuns       // in-flight streaming turns (stop/steer control)
 	grants     *permGrantStore // per-session "Always allow" permission grants
 	logger     *slog.Logger
 
@@ -64,7 +64,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	}
 	// Interaction MCP: lets CLI agents (claude-cli, ...) reach SwarmGo's
 	// human-in-the-loop tools over in-process HTTP. See _Docs/11-INTERACTION-MCP.md.
-	s.interactionMCP = interaction.Handler(&interactionBackend{runs: s.runs}, logger)
+	s.interactionMCP = interaction.Handler(&interactionBackend{runs: s.runs, tun: tun}, logger)
 	s.applySettings()
 	return s
 }
@@ -135,6 +135,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerMarketRoutes(mux)
 	s.registerSettingsRoutes(mux)
 	s.registerMemoryRoutes(mux)
+	s.registerGraphRoutes(mux)
 	s.registerSecretRoutes(mux)
 	s.registerMiscRoutes(mux)
 

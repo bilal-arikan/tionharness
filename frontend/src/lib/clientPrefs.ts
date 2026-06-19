@@ -55,12 +55,17 @@ export function ensureNotificationPermission(enabled: boolean) {
 // the background (no point notifying a focused window). An optional onClick runs
 // when the user clicks the notification (after focusing the window) so callers
 // can navigate to the relevant target, e.g. the source chat or the logs view.
-export function notify(enabled: boolean, title: string, body: string, onClick?: () => void) {
+//
+// `tag` coalesces duplicate toasts: when the app is open in several tabs/windows
+// of the same origin, each receives the same SSE event and would otherwise raise
+// its own OS toast. Passing a stable, event-derived tag makes the browser replace
+// (not stack) same-tag notifications, so the user sees exactly one.
+export function notify(enabled: boolean, title: string, body: string, onClick?: () => void, tag?: string) {
   if (!enabled || !('Notification' in window)) return
   if (Notification.permission !== 'granted') return
   if (document.visibilityState === 'visible') return
   try {
-    const n = new Notification(title, { body: body.slice(0, 180) })
+    const n = new Notification(title, { body: body.slice(0, 180), tag })
     if (onClick) {
       n.onclick = () => {
         // Bring the app to the foreground, then run the navigation callback.

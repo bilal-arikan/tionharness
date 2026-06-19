@@ -651,6 +651,7 @@ export default function App() {
                 sessionId={activeSessionId}
                 refreshKey={meterRefresh}
                 onError={setError}
+                onOpenBudget={() => setView('budget')}
               />
             )}
             {view === 'chat' && activeSessionId && (
@@ -812,6 +813,7 @@ export default function App() {
       {view === 'chat' && detailOpen && activeSessionId && (
         <SessionDetailPanel
           sessionId={activeSessionId}
+          agentId={activeAgentId}
           refreshKey={meterRefresh}
           onClose={toggleDetail}
           onError={setError}
@@ -821,6 +823,7 @@ export default function App() {
           onRename={renameSession}
           onSummarize={(_, kind) => chat.summarize(kind as 'memory' | 'board' | 'flows' | 'tools')}
           onDeleteSession={deleteSession}
+          onOpenBudget={() => setView('budget')}
         />
       )}
     </div>

@@ -23,6 +23,7 @@ import (
 	"github.com/bilal/swarmgo/internal/logbuf"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/secrets"
+	"github.com/bilal/swarmgo/internal/tools"
 )
 
 // Meta is the persisted descriptor of a workspace (no live handles). Path, when
@@ -60,6 +61,24 @@ type Manager struct {
 	mu         sync.RWMutex
 	workspaces map[string]*Workspace
 	order      []string // creation order (first = default)
+
+	// settingsBridge is the application-wide settings store + live-apply hook,
+	// wired in after the api server is constructed. Stored so it can be applied
+	// both to existing runtimes (via SetSettingsBridge) and to any workspace
+	// opened later. nil until wired.
+	settingsBridge tools.SettingsBridge
+}
+
+// SetSettingsBridge wires the application-wide settings bridge into every
+// existing workspace runtime and remembers it for workspaces opened later. The
+// api server calls this once at startup (it owns the live-apply hook).
+func (m *Manager) SetSettingsBridge(b tools.SettingsBridge) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.settingsBridge = b
+	for _, ws := range m.workspaces {
+		ws.Runtime.SetSettingsBridge(b)
+	}
 }
 
 // NewManager loads the registry from disk, opens every workspace, and ensures
@@ -126,6 +145,12 @@ func (m *Manager) open(meta Meta) error {
 	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), vault, m.bus, meta.ID, meta.Name, m.logs, m.logger)
 	if err := rt.StartConfigured(context.Background()); err != nil {
 		m.logger.Warn("start configured agents failed", "workspace", meta.ID, "error", err)
+	}
+
+	// Apply the settings bridge if it has already been wired (workspaces created
+	// after startup); startup workspaces get it via SetSettingsBridge instead.
+	if m.settingsBridge != nil {
+		rt.SetSettingsBridge(m.settingsBridge)
 	}
 
 	sched := agent.NewScheduler(database, rt, m.logger)

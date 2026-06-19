@@ -5,7 +5,7 @@ when_to_use: "When you need to understand SwarmGo itself, or to orient before us
 icon: "🗺️"
 color: "#6366f1"
 access: shared
-subskills: [swarmgo-flows]
+subskills: [swarmgo-flows, swarmgo-settings, swarmgo-self-management]
 ---
 # SwarmGo — How It Works
 
@@ -53,5 +53,15 @@ body with `use_skill` exactly when a task matches it.
 - **Repeat on a schedule** → create a schedule (routine).
 - **Persist knowledge** → add a memory.
 
+- **Tune the app** → read or change application-wide settings live with the
+  `get_settings` / `update_settings` tools. Load the `swarmgo-settings` skill for
+  the full field reference.
+- **Manage SwarmGo itself** → create/edit agents, flows, schedules, tasks and
+  automations, spawn parallel workers, or manage artifacts/memory/logs with the
+  self-management tools. They are loaded on demand — `activate_tools` pulls the
+  one you need. Load the `swarmgo-self-management` skill for the catalog and the
+  activation workflow.
+
 When a subsystem needs deeper instructions, load the matching skill rather than
-guessing — start with `swarmgo-flows` for orchestration.
+guessing — start with `swarmgo-flows` for orchestration, `swarmgo-self-management`
+for operating SwarmGo, or `swarmgo-settings` for configuration.

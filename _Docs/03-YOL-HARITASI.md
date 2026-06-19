@@ -131,14 +131,14 @@ graph LR
 - [x] **D2** — Provider **retry middleware**: `transport.go` `doWithRetry` (üstel backoff + jitter, `Retry-After` saygılı, 429/5xx/529 + ağ hatası); `postJSON`/`postSSE` sarıldı (+ token streaming `Streamer`)
 - [x] **C1** — Sistem-prompt **cache sınırı**: `Request.System` (statik: persona+profil) / `Request.SystemDynamic` (dinamik: bellek+özet); Anthropic cache breakpoint yalnız statik blokta → araç+statik prefix cache'lenir, dinamik suffix cache'i bozmaz
 - [x] **Ara özellikler** — otonom olay akışı (`/api/events`), workspace switcher + çapraz-ws rozet, tıklanabilir bildirimler, sessions-only sidebar + okundu/okunmadı, tema presetleri
-- [x] **A1 (loop recovery)** — Agent loop **recovery + `continuationReason`**: saf karar katmanı (`agent/recovery.go`: `loopState`+`decideRecovery`), max-token resume (guard'lı + partial-stitch + withhold), reaktif compaction (`conversation/reactive.go`, assistant-sınır fold), minimax `length`→`max_tokens` map; `recovery_test.go`+`reactive_test.go`. **Kalan:** A3 (iptalde sentetik `cancelled`), max-token escalation merdiveni (8k→64k)
+- [x] **A1 (loop recovery)** — Agent loop **recovery + `continuationReason`**: saf karar katmanı (`agent/recovery.go`: `loopState`+`decideRecovery`), max-token resume (guard'lı + partial-stitch + withhold), reaktif compaction (`conversation/reactive.go`, assistant-sınır fold), minimax `length`→`max_tokens` map; `recovery_test.go`+`reactive_test.go`. **Kalan:** max-token escalation merdiveni (8k→64k) *(A3 iptal sentetiği ✅ 2026-06-19)*
 - [x] **Self-management genişlemesi** ✅ 2026-06-19 — öz-yönetim araç ailesine **hooks/MCP/secret/skill/settings** eklendi (`builtin_{hookmgmt,mcpmgmt,secretmgmt,skillmgmt,settings}.go`); provenance guard'ı (`created_by`); öğretici default skill `swarmgo-self-management` + ayar referansı `swarmgo-settings`. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
 - [x] **Ayarlar canlı-uygulama + validation** ✅ 2026-06-19 — `get_settings`/`update_settings` tool'ları + `settings.Validate` (enum reddi/clamp) + bridge wiring + `settings` SSE event'i ile çok-pencere senkronu. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
 - [x] **İlişki Grafiği** ✅ 2026-06-19 — Workspace Ağı (NavRail) + Hafıza Bilgi Grafiği (salt-okunur React Flow ağları, Fizik/Küme yerleşim). Bkz. `_Docs/23-ILISKI-GRAFIGI.md`
 
 ### Mimari sıçrama
 - [ ] **A2** — **Subagent / Task izolasyonu**: `AgentContext` (parent'tan klon, mutasyon izole, altyapı paylaşılır) + `subagent` StepKind. SwarmGo'nun en büyük boşluğu.
-- [ ] **A3** — İptal hiyerarşisi: yarım kalan tool_call'lara sentetik `cancelled` sonucu (orphan tool_use önler)
+- [x] **A3** — İptal hiyerarşisi: tur-içi iptalde (`toolloop.go`) yarım kalan tool_call'lara sentetik `cancelled` tool_result (`fillCancelledResults`) → dangling tool_use yok; `cancel_test.go` (2026-06-19)
 
 ### Araç & yetki katmanı
 - [ ] **B1** — Tool sözleşmesi v2: `ReadOnly()`/`ConcurrencySafe()`/`ValidateInput()` + `BaseTool` varsayılanları
@@ -147,7 +147,7 @@ graph LR
 
 ### Bağlam, bellek, trace
 - [ ] **C3** — memdir benzeri bellek **yazma/indeksleme** (`memory_write`, frontmatter türleri) — şu an sadece recall
-- [ ] **C4** — Maliyet takibi: `cache_creation` vs `cache_read` ayrımı + oturumlar arası toplam (caching ROI)
+- [x] **C4** — Maliyet takibi: `cache_creation` vs `cache_read` ayrımı (uçtan uca) + oturumlar arası kümülatif toplam & `cacheHitRate` (caching ROI) — Bütçe ekranı pencere-kümülatif kartları + trend maliyet/tasarruf (2026-06-19)
 - [ ] **E3 kalan** — `subagent` (A2 ile) + `tombstone`/`tool_delta` (canlı adım güncelleme altyapısı)
 - [ ] **C2** — Compaction emniyet katmanı (`snip`) — 1M tampon var, düşük öncelik
 
@@ -206,14 +206,35 @@ graph LR
 
 ---
 
+## Faz R — Çok-ajan yarış & kurtarma guard'ları (oturum analizinden, 2026-06-19)
+
+> Kaynak: bir dev-oturumunun (`260617-gentle-coyote`) analizi. Oturumda agent'ın
+> **kendi muhakemesiyle** çözdüğü üç sürtünme (paralel-commit yarışı, port çakışması,
+> elle temizlik) ve bir yanlış karar (varlık-kontrolü yapmadan "özellik yok" demek)
+> SwarmGo'nun da yaşayacağı gerçek mimari boşluklara birebir oturuyor — çünkü ürün de
+> birden çok ajanı **aynı workspace'te** shell/fs/git araçlarıyla eşzamanlı koşturuyor.
+> Amaç: bu davranışları muhakemeden **mekanizmaya** taşımak. Önceliklendirme: 1. dalga
+> RG-6 + RG-1 + RG-4; 2. dalga RG-2 + RG-3 + RG-5.
+
+- [ ] **RG-1 — Entity versioning + CAS** *(1. dalga, S-M, yüksek değer)*: `db` entity'lerine `Version int`; her `mutate*Locked` bump'lar; yazım araç/API'sinde opsiyonel `If-Match` → bayat sürüm reddedilir. Belgelenmiş **"son yazan kazanır"** veri-kaybını kapatır. Temel: atomik `*.tmp`→`rename` + `store.go mutateSessionLocked` deseni (zaten var).
+- [ ] **RG-2 — Workspace git-lock + provenance-scoped staging** *(2. dalga, M, yüksek değer)*: workspace başına tek-yazar git kilidi + ajan yalnız dokunduğu/`created_by` path'leri stage eder (oturumda elle Python ile yapılanın ürünleşmiş hali). Temel: `created_by` provenance (`_Docs/24-SELF-MANAGEMENT.md`) + `builtin_shell.go` git çağrıları.
+- [ ] **RG-3 — Kaynak kira (lease) registry** *(2. dalga, M, orta değer)*: ajan port/temp-dir ister, runtime boş olanı verir, `stop`'ta otomatik bırakır. `:8090` çakışması bir daha olmaz; SwarmGo'nun kendi açılış preflight'ı için de kullanılır. Yer: `agent/runtime.go` yaşam döngüsü.
+- [ ] **RG-4 — Tur yan-etki defteri → otomatik teardown** *(1. dalga, M, yüksek değer)*: tur başına spawn edilen PID / geçici workspace / temp dosya kaydı; tur biter veya çökerse otomatik teardown. Agent'ın elle yaptığı "test ws sil, sunucu durdur" işini garantiye alır. Temel: `agent/recovery.go` (A1) + `db/inflight.go` sidecar deseni.
+- [ ] **RG-5 — Boot orphan reconcile genişletmesi** *(2. dalga, S-M, orta değer)*: açılışta takılı child süreç + sahipsiz temp workspace temizliği. Şu an yalnız tur (`inflight.go`) ve flow (`ResumeRunningFlows`, `flow.go`) resume ediliyor; aynı boot yoluna süreç/kaynak reconcile eklenir.
+- [ ] **RG-6 — Implement-öncesi keşif guard'ı** *(1. dalga, XS, yüksek değer — KOD YOK)*: agent'a "uygulamadan önce ilgili dosyaları okuyup özelliğin zaten var olup olmadığını doğrula" adımını zorunlu kıl. Oturumdaki en büyük yanlış kararı (var olan özelliği "yok" sanıp yeniden yazma riski) önler. Yer: `swarmgo-guide` / `swarmgo-self-management` SKILL.md (system-prompt/skill düzeyi).
+
+> **Ürün mü, skill mi?** RG-1/2/3/4/5 = SwarmGo **ürün kodu** (runtime ajanlarına verilen guard'lar); RG-6 = **skill/system-prompt**. İkisi farklı yere yazar.
+
+---
+
 ## En Sona Ertelenenler (en düşük öncelik)
 
 > Kullanıcı talebiyle (2026-06-17) bilinçli olarak en sona alındı. Diğer tüm backlog maddelerinden sonra ele alınacak.
 
-- [ ] **B2** — İzin modeli (`allow/ask/deny`, **arg-bazlı desen eşleme** `Bash(git *)`) — `ask_user` altyapısını yeniden kullanır. *(Temel mod gate'i yapıldı; kalan = arg-bazlı desen.)*
-- [~] **Faz P3** — Permission/onay modu (`auto`/`ask`/`read-only`) *(Aşama 1-3 ✅ YAPILDI, 2026-06-17)*: claude-cli mod bayrakları (`permission.go`/`claudecli.go`), native risk-sınıflı gate (`tools/classify.go` read/write/exec + `agent/permission.go permGate` + `AskPrompt` onayı), UI (ajan formu + composer 🛡 Shift+Tab + Settings varsayılanı). `permission_test.go`. **Kalan:** Aşama 4 — claude-cli "ask" → Interaction MCP permission-prompt + ops. `StepPermission` kartı + oturum-ömürlü "Always allow".
+- [x] **B2** — İzin modeli (`allow/ask/deny`, **arg-bazlı desen eşleme** `Bash(git *)`): `tools/permpattern.go` (`PermRule`/glob/`RepresentativeArg`/`DeriveGrantRule`) + `grants.go` kural deposu (`Matches`/`GrantRule`); "Her zaman izin ver" exec araçta komut ailesine daraltılır (`shell(git *)`); native + CLI yolu ortak; izin kartı gated komutu gösterir. `permpattern_test.go`+`permission_test.go` (2026-06-19)
+- [x] **Faz P3** — Permission/onay modu (`auto`/`ask`/`read-only`) *(Aşama 1-4 ✅ YAPILDI; 1-3: 2026-06-17, 4: 2026-06-19)*: claude-cli mod bayrakları (`permission.go`/`claudecli.go`), native risk-sınıflı gate (`tools/classify.go` read/write/exec + `agent/permission.go permGate` + `AskPrompt` onayı), UI (ajan formu + composer 🛡 Shift+Tab + Settings varsayılanı). **Aşama 4:** claude-cli "ask" → Interaction MCP `permission_prompt` tool'u (`mcp_interaction.go callPermission`, `--permission-prompt-tool`) + native+CLI ortak `StepPermission` kartı (`PermissionPrompt.tsx`) + oturum-ömürlü "Always allow" (`tools/grants.go`, native ile aynı grant seti). `permission_test.go`.
 
-> Not: temel `PermissionMode` gate'i (`agent/permission.go permGate` + `tools/classify.go`) **uygulandı**; bu bölümde kalan yalnız B2'nin arg-bazlı desen eşlemesi ve P3 Aşama 4'tür.
+> Not: `PermissionMode` gate'i, B2 arg-bazlı desen eşlemesi ve P3 Aşama 4 (CLI permission-prompt + StepPermission + oturum-ömürlü grant) **tamamlandı** (2026-06-19). Bu bölümde bekleyen izin işi kalmadı.
 
 ---
 

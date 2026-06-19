@@ -6,9 +6,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bilal/swarmgo/internal/events"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/settings"
 )
+
+// publishSettingsChanged notifies open UIs (over the /api/events SSE feed) that
+// the application-wide settings changed, so every window's Settings screen and
+// live theme refresh without a manual reload. WorkspaceID is empty because
+// settings are application-global. Body carries who made the change.
+func (s *Server) publishSettingsChanged(body string) {
+	s.bus.Publish(events.Event{
+		Type:  "settings",
+		Level: "info",
+		Title: "Ayarlar güncellendi",
+		Body:  body,
+	})
+}
 
 // userContextBlock renders the user-profile settings into a system-prompt block
 // so agents address the user correctly. Empty when no profile fields are set.
@@ -47,11 +61,19 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
+	// Reject invalid enum/format values with a 400 (client error) so the UI shows
+	// a clear message instead of a generic 500. Apply re-validates defensively.
+	if err := settings.Validate(patch); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if _, err := s.settings.Apply(patch); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	s.applySettings()
+	// Sync other open windows (the editing window already has the new state).
+	s.publishSettingsChanged("Uygulama ayarları güncellendi.")
 	writeJSON(w, http.StatusOK, s.settings.DTO())
 }
 

@@ -22,14 +22,27 @@ func (s *Server) handleAgentUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Cost + per-model detail come from the same Motor-B helpers the Budget
+	// screen uses, so the chat meters and session detail panel show figures
+	// consistent with /api/usage (this is the agent's whole-day spend, not a
+	// single session's).
+	models, cost, savings, priced, estimated, cacheRead, cacheWrite := modelRowsFor(usage.ByModel)
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"day":             usage.Day,
-		"calls":           usage.Calls,
-		"inputTokens":     usage.InputTokens,
-		"outputTokens":    usage.OutputTokens,
-		"byKind":          usage.ByKind, // per-origin breakdown (chat/task/schedule/flow/compact/…)
-		"dailyCallLimit":  agent.DailyCallLimit,
-		"dailyTokenLimit": agent.DailyTokenLimit,
+		"day":              usage.Day,
+		"calls":            usage.Calls,
+		"inputTokens":      usage.InputTokens,
+		"outputTokens":     usage.OutputTokens,
+		"cacheReadTokens":  cacheRead,
+		"cacheWriteTokens": cacheWrite,
+		"byKind":           usage.ByKind, // per-origin breakdown (chat/task/schedule/flow/compact/…)
+		"byModel":          models,       // per-model detail with cost
+		"costUSD":          cost,
+		"savingsUSD":       savings,
+		"priced":           priced,
+		"estimated":        estimated,
+		"dailyCallLimit":   agent.DailyCallLimit,
+		"dailyTokenLimit":  agent.DailyTokenLimit,
 	})
 }
 

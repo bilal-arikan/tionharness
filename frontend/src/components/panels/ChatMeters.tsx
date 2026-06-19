@@ -8,17 +8,28 @@ interface Props {
   sessionId: string | null
   refreshKey: number // bump to re-fetch (e.g. after a chat turn)
   onError: (msg: string) => void
+  // Open the Budget screen (the spend pill deep-links there — Motor B's home).
+  onOpenBudget: () => void
 }
 
 function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`
 }
 
-// ChatMeters shows a live context-size meter and today's autonomous spend, with
-// an inline control to set the agent's daily call limit.
-export function ChatMeters({ agentId, sessionId, refreshKey, onError }: Props) {
+function usd(n: number): string {
+  if (n === 0) return '$0'
+  if (n < 0.01) return `$${n.toFixed(4)}`
+  return `$${n.toFixed(2)}`
+}
+
+// ChatMeters shows two indicators sharing nothing but the top bar: a LIVE
+// context-size meter (Motor A — this session's window fill) and TODAY'S agent
+// spend (Motor B — the whole-day recorded ledger, all sessions). The spend pill
+// deep-links to the Budget screen, where limits are edited.
+export function ChatMeters({ agentId, sessionId, refreshKey, onError, onOpenBudget }: Props) {
   const [ctx, setCtx] = useState<SessionContext | null>(null)
   const [usage, setUsage] = useState<AgentUsage | null>(null)
+  void onError
 
   useEffect(() => {
     if (sessionId) api.sessionContext(sessionId).then(setCtx).catch(() => setCtx(null))
@@ -30,27 +41,12 @@ export function ChatMeters({ agentId, sessionId, refreshKey, onError }: Props) {
     else setUsage(null)
   }, [agentId, refreshKey])
 
-  const editLimit = async () => {
-    if (!agentId || !usage) return
-    const input = window.prompt(
-      'Günlük otonom çağrı limiti (0 = sınırsız):',
-      String(usage.dailyCallLimit),
-    )
-    if (input === null) return
-    const n = parseInt(input, 10)
-    if (Number.isNaN(n) || n < 0) return
-    try {
-      await api.setBudget(agentId, n, usage.dailyTokenLimit)
-      setUsage({ ...usage, dailyCallLimit: n })
-    } catch (e) {
-      onError((e as Error).message)
-    }
-  }
-
   if (!agentId) return null
 
   const overBudget =
     usage && usage.dailyCallLimit > 0 && usage.calls >= usage.dailyCallLimit
+  const cost = usage?.costUSD ?? 0
+  const costLabel = cost > 0 ? `${usage?.estimated ? '~' : ''}${usd(cost)}` : ''
 
   return (
     <div className="flex items-center gap-2 text-xs">
@@ -59,8 +55,8 @@ export function ChatMeters({ agentId, sessionId, refreshKey, onError }: Props) {
           className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-[var(--color-text-dim)]"
           title={
             ctx.hasSummary
-              ? `Bağlam ~${ctx.contextTokens} token · ${ctx.summaryMsgCount} mesaj özetlendi`
-              : `Bağlam ~${ctx.contextTokens} token`
+              ? `Bu oturumun bağlam doluluğu ~${ctx.contextTokens} token · ${ctx.summaryMsgCount} mesaj özetlendi`
+              : `Bu oturumun bağlam doluluğu ~${ctx.contextTokens} token`
           }
         >
           <Database size={12} /> {fmtTokens(ctx.contextTokens)}
@@ -69,16 +65,17 @@ export function ChatMeters({ agentId, sessionId, refreshKey, onError }: Props) {
       )}
       {usage && (
         <button
-          onClick={editLimit}
+          onClick={onOpenBudget}
           className={`inline-flex items-center gap-1 rounded px-2 py-0.5 transition hover:opacity-80 ${
             overBudget
               ? 'bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] text-[var(--color-danger)]'
               : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
           }`}
-          title="Bugünkü otonom çağrılar · tıkla: limit ayarla"
+          title="Bu ajanın BUGÜNKÜ toplam harcaması (tüm oturumlar) · tıkla: Bütçe ekranı"
         >
           <Clock size={12} /> {usage.calls}
           {usage.dailyCallLimit > 0 ? `/${usage.dailyCallLimit}` : ''} çağrı
+          {costLabel && <span className="opacity-70">· {costLabel}</span>}
         </button>
       )}
     </div>

@@ -34,6 +34,11 @@ export function PermissionPrompt({ ask, onAnswer }: Props) {
           aracını çalıştırmak istiyor (<span className="font-medium">{riskLabel(ask.risk)}</span>). İzin veriyor musun?
         </span>
       </div>
+      {ask.cmd && (
+        <pre className="mb-2 overflow-x-auto whitespace-pre-wrap break-words rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-xs text-[var(--color-text-dim)]">
+          {ask.cmd}
+        </pre>
+      )}
       <div className="flex flex-wrap gap-1.5">
         {options.map((opt, i) => {
           const deny = /reddet|deny/i.test(opt)

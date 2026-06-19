@@ -41,7 +41,7 @@ func logLevelRank(level string) int {
 
 func (ReadLogsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "read_logs",
+		Name:        "read_logs",
 		Description: "Read recent log entries from the application + workspace log stream (for self-diagnosis). Optionally filter by minimum level (debug|info|warn|error) and a case-insensitive substring query. Returns the most recent matching entries.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",

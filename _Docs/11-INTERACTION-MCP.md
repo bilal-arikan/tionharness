@@ -240,11 +240,48 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `todo_write` | bloklamayan (UI kartı) | Faz 1 |
 | `create_artifact` / `update_artifact` | bloklamayan | Faz 2 |
 | `request_confirmation` (evet/hayır) | bloklayan | Faz 2 |
+| `schedule_wake` | bloklamayan | Faz 2 |
+| `use_skill` | bloklamayan (skill gövdesi döndürür) | Faz 4 |
+| `spawn_session` | bloklamayan (fire-and-forget) | Faz 4 |
 | `notify` (masaüstü bildirim) | bloklamayan | Faz 3 |
 | workspace/oturum etkileşimleri | — | Faz 3+ |
 
 Yeni tool eklemek = `tools.Registry`'de tek tanım → her iki adaptöre (native +
 MCP) otomatik yansır (tek şema kuralı, §2).
+
+**`spawn_session` (Faz 4, 2026-06-19):** Bir self-management aracı olduğundan CLI
+yolunda **yalnızca self-manage açıkken** ilan edilir (`interactionBackend.tun.
+SelfManageEnabled()`), native yoldaki `buildRegistry` gating'ini birebir yansıtır.
+Tur başına spawn bütçesi (`SpawnMaxPerTurn`) için, stream handler her ajan turunda
+`chatRun`'a taze bir `*tools.SpawnSessionTool` örneği kurar (`setSpawnTool`);
+native yoldaki per-turn tool örneğiyle aynı sıfırlama davranışı. `Call()` dispatch
+bu örneğe `spawn_session` adıyla yönlendirir. Böylece claude-cli ajanları (Coder,
+Fasty …) de bağımsız oturum başlatabilir — canlı doğrulandı.
+
+**`use_skill` (Faz 4, 2026-06-19):** claude-cli ajanları sistem promptunda
+`# Available Skills` kataloğunu **görüyordu** ama gövdeyi yükleyecek araçları
+yoktu (`use_skill` native bir Go aracı; CLI'nin `--mcp-config`'inde yer almıyordu)
+→ skill'ler CLI tarafından okunamıyordu. Çözüm: `use_skill` Interaction MCP'ye
+köprülendi. Stream handler her turda `chatRun`'a, **yanıtlayan ajanın** izinli
+setini (`AllowedFor`) uygulayan bir skill yükleyici kurar (`setSkillLoader` →
+`Runtime.LoadSkillForAgent`); backend dispatch `use_skill` adıyla buna yönlendirir
+ve çıktıyı native `UseSkillTool.Call` ile birebir aynı biçimde döndürür
+(`# Skill: <slug>\n\n<body>`). Erişim kontrolü, sub-skill footer'ı ve lazy disk
+okuma native yolla tam parite. Tek kaynak SwarmGo skill store'u kalır —
+dosya kopyası/symlink yok.
+
+**Tek-kaynak allowlist (CLI-2, 2026-06-19):** Önceden CLI'ye verilen araç
+allowlist'i (`climcp.go` içindeki sabit `interactionToolNames`) ile backend'in
+`Tools()` advertise listesi **iki ayrı yerde** elle senkron tutuluyordu — yeni
+bir araç eklemek üç dokunuş (Tools + Call + allowlist) gerektiriyor, biri unutulsa
+sessizce kırılıyordu. Artık tek kaynak var: backend `interactionToolSpecs(tun)`
+hem `Tools()`'u (advertise) hem `interactionAdvertisedNames(tun)`'ı üretir; stream
+handler bu isimleri her turda `InteractionEndpoint.ToolNames`'e koyar; `climcp.go`
+allowlist'i bundan türetir. Sonuç: **araç eklemek = `interactionToolSpecs`'e bir
+`Def()` + `Call()`'a bir `case`** — allowlist otomatik takip eder, ikinci liste
+yok. (Self-manage'e bağlı `spawn_session` gating'i tek yerde kalır → advertise ve
+allowlist ikisi de aynı koşula uyar.) Değişmez: `mcp_interaction_test.go`
+`TestInteractionAdvertisedNames` advertise == allowlist isimlerini kilitler.
 
 ---
 
@@ -426,6 +463,9 @@ izde doğru render olur (canlı emit yerine izden — çift kart yok).
 
 **Wiring:** `climcp.go` interaction allow-listesi 5 araca çıktı
 (`interactionToolNames`); interaction `Tools()` + backend dispatch eşitlendi.
+> Güncelleme (CLI-2, 2026-06-19): bu iki liste **tek kaynağa** indirildi —
+> `interactionToolNames` sabiti kaldırıldı; allowlist artık backend'in advertise
+> ettiği isimlerden (`InteractionEndpoint.ToolNames`) türüyor. Bkz. §8 use_skill notu.
 
 **Canlı test (claude-cli):** "todo_write → request_confirmation → (onay) →
 create_artifact" promptu → SSE'de TodoCard `[in_progress,pending]`, ASK

@@ -108,7 +108,28 @@ Akış:
 - `internal/api/server.go::applySettings` — `tun.SetSpawnLimits(...)`.
 - `internal/agent/toolsetup.go` — self-manage bloğunda `spawn_session` kaydı.
 - Frontend: `api/sessions.ts` (spawnSession), `components/panels/ExecutionsPanel.tsx`
-  (kind + buton), `components/sessions/SpawnSessionModal.tsx` (yeni).
+  (kind; "✨ Başlat" butonu 2026-06-19'da kaldırıldı), `components/sessions/SpawnSessionModal.tsx`
+  (artık bağlı değil, öksüz).
+
+## CLI köprüsü (2026-06-19) — claude-cli ajanları da spawn edebilir
+
+`spawn_session` bir **native Go builtin**'di; sadece native-API provider'ları
+(anthropic, minimax-anthropic, openai) Go tool-loop'unda görüyordu. claude-cli
+ajanları (Coder, Fasty …) araçlara **Interaction MCP köprüsü** üzerinden ulaştığı
+için `spawn_session`'ı bulamıyordu (Coder testinde "No such tool" → doğaçlama).
+
+Çözüm — Interaction MCP köprüsüne eklendi (bkz. `11-INTERACTION-MCP.md §8`):
+
+- `internal/api/mcp_interaction.go` — `interactionBackend.tun` ile gate; `Tools()`
+  self-manage açıkken `spawn_session` ilan eder; `Call()` → `callSpawn`.
+- `internal/api/chat_control.go` — `chatRun.spawn` (`*tools.SpawnSessionTool`) +
+  `setSpawnTool`/`spawnTool`.
+- `internal/api/chat_stream.go` — her ajan turunda taze spawn tool örneği kurulur
+  (per-turn bütçe sıfırlanır), `wsp.Runtime.SpawnSession`'a bağlı.
+- `internal/api/server.go` — köprüye `tun` geçilir.
+
+Sonuç: hem native (Minimax3) hem claude-cli (Coder) ajanları "@Ajan, X'e şu konuda
+session başlat" diyince çalışır — ikisi de canlı doğrulandı.
 
 ## Test
 

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	shellMaxOutputBytes = 64 * 1024       // cap combined stdout+stderr
+	shellMaxOutputBytes = 64 * 1024 // cap combined stdout+stderr
 	shellMaxTimeout     = 120 * time.Second
 	shellDefaultTimeout = 30 * time.Second
 )

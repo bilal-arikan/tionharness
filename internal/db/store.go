@@ -283,9 +283,9 @@ func (d *DB) SetSessionTitle(ctx context.Context, sessionID, title string) error
 	})
 }
 
-// SetSessionGoal persists a session's persistent objective ("north star"). An
-// empty string clears the goal. Does not bump UpdatedAt so editing the goal
-// never reorders the session list.
+// SetSessionGoal persists a session's persistent objective ("north star") and
+// its done state. An empty string clears the goal (and its done flag). Does not
+// bump UpdatedAt so editing the goal never reorders the session list.
 func (d *DB) SetSessionGoal(ctx context.Context, sessionID, goal string, done bool) error {
 	return d.mutateSessionLocked(sessionID, func(s *Session) {
 		s.Goal = goal
