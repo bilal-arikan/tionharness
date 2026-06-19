@@ -415,9 +415,9 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                 rn.status === 'success' ? '✓' : rn.status === 'failure' ? '✕' : '▶'
               const badgeColor =
                 rn.status === 'success'
-                  ? 'text-green-400'
+                  ? 'text-[var(--color-success)]'
                   : rn.status === 'failure'
-                    ? 'text-red-400'
+                    ? 'text-[var(--color-danger)]'
                     : 'text-[var(--color-accent)]'
               return (
                 <li key={rn.id}>
@@ -701,10 +701,10 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               <div className="mt-4 border-t border-[var(--color-border)] pt-3">
                 <div className="mb-2 text-xs">
                   Durum:{' '}
-                  <span className={run.status === 'success' ? 'text-green-400' : 'text-red-400'}>
+                  <span className={run.status === 'success' ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}>
                     {run.status}
                   </span>
-                  {run.error && <span className="ml-2 text-red-400">· {run.error}</span>}
+                  {run.error && <span className="ml-2 text-[var(--color-danger)]">· {run.error}</span>}
                 </div>
                 <ol className="space-y-2">
                   {(trace?.trace ?? []).map((t, i) => (

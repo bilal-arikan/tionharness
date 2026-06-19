@@ -219,7 +219,7 @@ export function SecretsPanel({ onError }: Props) {
                     <button
                       onClick={() => remove(s)}
                       title="Sil"
-                      className="rounded p-1.5 text-red-400 hover:bg-red-500/10"
+                      className="rounded p-1.5 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
                     >
                       <Trash2 size={15} />
                     </button>

@@ -153,7 +153,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
           </button>
         </div>
 
-        {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
+        {error && <p className="mb-3 text-xs text-[var(--color-danger)]">{error}</p>}
 
         <div className="flex justify-end gap-2">
           <button

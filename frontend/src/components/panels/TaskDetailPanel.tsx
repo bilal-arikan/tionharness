@@ -283,7 +283,7 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
                     key={depId}
                     className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] ${
                       done
-                        ? 'bg-green-500/15 text-green-400'
+                        ? 'bg-[var(--color-success)]/15 text-[var(--color-success)]'
                         : depColColor
                         ? ''
                         : 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'

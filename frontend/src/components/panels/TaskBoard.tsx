@@ -381,7 +381,7 @@ export function TaskBoard({ agents, onError }: Props) {
                                     ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
                                     : unmetDeps.length > 0
                                     ? ''
-                                    : 'bg-green-500/10 text-green-400'
+                                    : 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
                                 }`}
                                 style={chipStyle}
                                 title={unmetDeps.length > 0 ? `${unmetDeps.length} bağımlılık tamamlanmadı` : 'Tüm bağımlılıklar tamamlandı'}

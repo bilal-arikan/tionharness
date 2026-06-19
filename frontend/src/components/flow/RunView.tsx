@@ -18,8 +18,8 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 function statusColor(status: string): string {
-  if (status === 'success') return 'text-green-400'
-  if (status === 'failure') return 'text-red-400'
+  if (status === 'success') return 'text-[var(--color-success)]'
+  if (status === 'failure') return 'text-[var(--color-danger)]'
   return 'text-[var(--color-accent)]'
 }
 

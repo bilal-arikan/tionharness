@@ -55,7 +55,7 @@ export function DependencyPicker({ tasks, value, onChange }: Props) {
               {t.title || t.description || t.id}
             </span>
             <span
-              className={`ml-auto shrink-0 text-[10px] ${done ? 'text-green-400' : 'text-[var(--color-text-dim)]'}`}
+              className={`ml-auto shrink-0 text-[10px] ${done ? 'text-[var(--color-success)]' : 'text-[var(--color-text-dim)]'}`}
             >
               {STATE_LABELS[t.boardState as BoardState] ?? t.boardState}
             </span>

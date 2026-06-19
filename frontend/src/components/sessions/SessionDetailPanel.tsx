@@ -359,7 +359,7 @@ export function SessionDetailPanel({
                     className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition disabled:opacity-40 ${
                       info.goalDone
                         ? 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-                        : 'border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10'
+                        : 'border-[var(--color-success)]/40 text-[var(--color-success)] hover:bg-[var(--color-success)]/10'
                     }`}
                   >
                     {savingGoal ? (
@@ -372,7 +372,7 @@ export function SessionDetailPanel({
                     {info.goalDone ? 'Yeniden aç' : 'Tamamlandı'}
                   </button>
                   {info.goalDone && (
-                    <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-500">
+                    <span className="flex items-center gap-1 text-[10px] font-medium text-[var(--color-success)]">
                       <CheckCircle2 size={12} /> Tamamlandı · enjekte edilmiyor
                     </span>
                   )}
@@ -455,7 +455,7 @@ export function SessionDetailPanel({
               </p>
             )}
             {ctxUsed > ctxWindow && (
-              <p className="mt-1 text-[10px] text-amber-400">
+              <p className="mt-1 text-[10px] text-[var(--color-warning)]">
                 Pencere aşıldı — sonraki turda eski turlar özete sıkıştırılır.
               </p>
             )}

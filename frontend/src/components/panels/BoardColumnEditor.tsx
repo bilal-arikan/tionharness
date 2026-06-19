@@ -242,7 +242,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                       ? 'Son sütun silinemez'
                       : 'Sütunu sil'
                   }
-                  className="flex-shrink-0 rounded p-1 text-xs text-[var(--color-text-dim)] hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="flex-shrink-0 rounded p-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   🗑
                 </button>
@@ -256,7 +256,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                   placeholder="ornek_anahtar"
                   className={`w-32 rounded border px-1.5 py-0.5 font-mono text-[11px] outline-none ${
                     col.key && !isValidKey(col.key)
-                      ? 'border-red-400 bg-red-400/10'
+                      ? 'border-[var(--color-danger)] bg-[var(--color-danger)]/10'
                       : 'border-[var(--color-border)] bg-[var(--color-bg)] focus:border-[var(--color-accent)]'
                   }`}
                 />
@@ -300,7 +300,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
       {/* Footer */}
       <div className="border-t border-[var(--color-border)] p-3 space-y-2">
         {error && (
-          <div className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-400">{error}</div>
+          <div className="rounded bg-[var(--color-danger)]/10 px-2 py-1 text-xs text-[var(--color-danger)]">{error}</div>
         )}
         <button
           onClick={handleSave}

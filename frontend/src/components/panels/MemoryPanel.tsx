@@ -233,7 +233,7 @@ export function MemoryPanel({ agent, onError }: Props) {
               </div>
               <button
                 onClick={() => remove(m)}
-                className="flex-shrink-0 text-[var(--color-text-dim)] opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                className="flex-shrink-0 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-danger)] group-hover:opacity-100"
                 title="Sil"
               >
                 ✕

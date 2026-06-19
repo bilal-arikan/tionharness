@@ -313,9 +313,9 @@ export function AboutPanel() {
           {loading ? (
             <span className="text-[var(--color-text-dim)]">yükleniyor…</span>
           ) : error ? (
-            <span className="text-red-400">Alınamadı</span>
+            <span className="text-[var(--color-danger)]">Alınamadı</span>
           ) : isDev ? (
-            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-400 font-mono text-xs">dev build</span>
+            <span className="rounded bg-[var(--color-warning)]/15 px-1.5 py-0.5 text-[var(--color-warning)] font-mono text-xs">dev build</span>
           ) : (
             <span className="font-mono">{info!.version}</span>
           )}
@@ -344,7 +344,7 @@ export function AboutPanel() {
 
       {/* Güncelleme notu */}
       <div className="rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-[var(--color-text-dim)]">
-        <span className="mr-1.5 text-amber-400">⚠</span>
+        <span className="mr-1.5 text-[var(--color-warning)]">⚠</span>
         Otomatik güncelleme kontrolü henüz desteklenmiyor. Yeni sürümler için
         projeyi manuel olarak kontrol edin.
       </div>
