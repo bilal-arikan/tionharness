@@ -15,6 +15,7 @@ import {
 import { api } from '../../api'
 import type { WorkspaceUsage, KindStat, ProviderStat } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
+import { kindColor } from '../../lib/palette'
 
 interface Props {
   onError: (msg: string) => void
@@ -46,24 +47,24 @@ function providerLabel(p: string): string {
   return PROVIDER_LABEL[p] ?? p
 }
 
-// Turkish labels + a stable color per call origin, so the breakdown reads
-// consistently and the same kind keeps its hue across the screen.
-const KIND_META: Record<string, { label: string; color: string }> = {
-  chat: { label: 'Sohbet', color: '#6366f1' },
-  task: { label: 'Görev', color: '#0ea5e9' },
-  schedule: { label: 'Zamanlama', color: '#14b8a6' },
-  flow: { label: 'Akış', color: '#a855f7' },
-  heartbeat: { label: 'Nabız', color: '#f59e0b' },
-  delegate: { label: 'Delegasyon', color: '#ec4899' },
-  title: { label: 'Başlık', color: '#84cc16' },
-  summary: { label: 'Özet', color: '#22c55e' },
-  reflect: { label: 'Yansıma', color: '#eab308' },
-  compact: { label: 'Sıkıştırma', color: '#ef4444' },
-  other: { label: 'Diğer', color: '#94a3b8' },
+// Turkish labels per call origin; the hue comes from the shared categorical
+// palette (lib/palette) so the same kind keeps its colour across the app.
+const KIND_LABELS: Record<string, string> = {
+  chat: 'Sohbet',
+  task: 'Görev',
+  schedule: 'Zamanlama',
+  flow: 'Akış',
+  heartbeat: 'Nabız',
+  delegate: 'Delegasyon',
+  title: 'Başlık',
+  summary: 'Özet',
+  reflect: 'Yansıma',
+  compact: 'Sıkıştırma',
+  other: 'Diğer',
 }
 
 function kindMeta(kind: string) {
-  return KIND_META[kind] ?? { label: kind, color: '#94a3b8' }
+  return { label: KIND_LABELS[kind] ?? kind, color: kindColor(kind) }
 }
 
 function tokensOf(s: KindStat): number {

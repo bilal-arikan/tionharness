@@ -3,6 +3,7 @@ import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy,
 import { api } from '../../api'
 import type { SessionInfo, AgentUsage } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
+import { roleColor } from '../../lib/palette'
 
 interface Props {
   sessionId: string
@@ -680,29 +681,8 @@ function pctOf(n: number, total: number): number {
 }
 
 // fillerColor maps a context bucket role to a stable segment colour for the
-// usage bar and legend.
-function fillerColor(role: string): string {
-  switch (role) {
-    case 'summary':
-      return '#f59e0b' // amber — folded history
-    case 'user':
-      return 'var(--color-accent)'
-    case 'assistant':
-      return '#10b981' // emerald
-    case 'tool':
-      return '#8b5cf6' // violet — tool-result messages
-    case 'tools':
-      return '#a855f7' // purple — tool/MCP schemas (always-sent catalog)
-    case 'artifacts':
-      return '#ec4899' // pink — session artifact context block
-    case 'goal':
-      return '#f43f5e' // rose — persistent session goal block
-    case 'system':
-      return '#64748b' // slate
-    default:
-      return '#94a3b8'
-  }
-}
+// usage bar and legend (hues live in the shared categorical palette).
+const fillerColor = roleColor
 
 function formatDate(unixSec: number): string {
   if (!unixSec) return '—'
