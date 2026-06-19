@@ -1,3 +1,6 @@
+// Package agent implements SwarmGo's multi-agent ("swarm") runtime: it owns each
+// agent's provider calls, tool loop, delegation, cron scheduler and the headless
+// autonomous entry points (schedule/spawn/flow).
 package agent
 
 import (
@@ -7,7 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -40,7 +43,7 @@ type Runtime struct {
 	// secret_list / secret_get built-in tools. May be nil (no secret tools).
 	vault *secrets.Vault
 
-	// bus + workspace identity let autonomous events (heartbeat/task/schedule)
+	// bus + workspace identity let autonomous events (task/schedule)
 	// be published with enough context for the UI to deep-link on click.
 	bus    *events.Bus
 	wsID   string
@@ -68,8 +71,16 @@ type Runtime struct {
 	// workspace manager once the api server exists; nil before then (tools off).
 	settingsBridge tools.SettingsBridge
 
-	mu      sync.Mutex
-	workers map[string]*worker
+	// workspaceBridge backs the workspace self-management tools (list/create/
+	// rename/delete_workspace): cross-workspace operations through the manager.
+	// Wired by the workspace manager once the api server exists; nil before then
+	// (tools off).
+	workspaceBridge tools.WorkspaceBridge
+
+	// autoInteract wires an Interaction MCP endpoint for headless (non-chat) CLI
+	// turns so scheduler/spawn agents reach use_skill/shell/self-manage.
+	// Set by the workspace manager once the api server exists; nil before then.
+	autoInteract AutonomousInteraction
 
 	// paused is this workspace's autonomy brake (set from per-workspace
 	// settings); when true, autonomous calls are rejected like the global one.
@@ -93,7 +104,7 @@ type Runtime struct {
 	reflecting sync.Map
 
 	// activeSessions tracks sessions currently executing an autonomous invoke
-	// (schedule / heartbeat / spawn). Keyed by session id; value is struct{}.
+	// (schedule / spawn). Keyed by session id; value is struct{}.
 	// Used by the executions feed to show a live "running" indicator for
 	// autonomous runs that aren't chat-streaming turns.
 	activeSessions sync.Map
@@ -177,7 +188,6 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		logger:    logger,
 		skills:    skills.New(globalSkillsDir(), workspaceSkillsDir(workDir)),
 		market:    market.New(marketGlobalDir(), workspaceMarketDir(workDir)),
-		workers:   make(map[string]*worker),
 	}
 }
 
@@ -215,6 +225,44 @@ func (r *Runtime) Market() *market.Store { return r.market }
 // WorkspaceSkillsDir is the workspace's skills directory, where the market
 // installs skill packs. Exposed so the API layer can pass it to InstallSkill.
 func (r *Runtime) WorkspaceSkillsDir() string { return workspaceSkillsDir(r.workDir) }
+
+// ShellEnabled reports whether the built-in shell tool may be offered. Exposed so
+// the CLI Interaction MCP bridge gates the bridged shell exactly like the native
+// path's shell gate.
+func (r *Runtime) ShellEnabled() bool { return r.tun.ShellEnabled() }
+
+// AutonomousInteraction prepares an Interaction MCP endpoint for a headless
+// (non-chat) CLI turn — scheduler / spawn / flow — so those agents
+// reach the same use_skill / shell / self-management bridge that chat agents do.
+// It returns an augmented context (carrying the endpoint) and a cleanup func that
+// MUST be called when the turn ends. Installed by the api server, which owns the
+// run registry and the loopback endpoint. nil = no wiring (CLI agent falls back
+// to its native tools, as before).
+type AutonomousInteraction func(ctx context.Context, agent db.Agent, sessionID string) (context.Context, func())
+
+// SetAutonomousInteraction wires the headless Interaction MCP setup. The
+// workspace manager calls this for every runtime (existing + later-opened).
+func (r *Runtime) SetAutonomousInteraction(fn AutonomousInteraction) { r.autoInteract = fn }
+
+// NewShellRunner returns a closure that runs a shell command through the
+// workspace-sandboxed shell tool (PowerShell on Windows, /bin/sh elsewhere), for
+// the claude-cli Interaction MCP bridge — so a CLI agent runs commands through
+// SwarmGo's own shell (sandboxed, bounded, permission/hook-gated) instead of the
+// CLI's native POSIX Bash. Returns nil when shell is disabled or no sandbox is
+// configured, so the bridge advertises shell only when it can honour it.
+func (r *Runtime) NewShellRunner() func(ctx context.Context, args json.RawMessage) (string, error) {
+	if !r.tun.ShellEnabled() {
+		return nil
+	}
+	sb := tools.NewSandbox(r.workDir)
+	if !sb.Ready() {
+		return nil
+	}
+	t := tools.NewShellTool(sb)
+	return func(ctx context.Context, args json.RawMessage) (string, error) {
+		return t.Call(ctx, args)
+	}
+}
 
 // marketGlobalDir is SwarmGo's data-dir-level global market directory
 // (<DataDir>/market, default ~/.swarmgo/market). Mirrors globalSkillsDir.
@@ -298,8 +346,12 @@ func (l agentSkillLib) Body(slug string) (string, error) {
 
 // agentSkillWriter adapts *skills.Store to the tools.SkillWriter interface so the
 // create_skill / delete_skill self-management tools can author workspace skills
-// without the tools package importing the skills package.
-type agentSkillWriter struct{ store *skills.Store }
+// without the tools package importing the skills package. db (optional) lets
+// DeleteSkill strip the removed slug from every agent's skill selection.
+type agentSkillWriter struct {
+	store *skills.Store
+	db    *db.DB
+}
 
 func (w agentSkillWriter) CreateSkill(slug, name, description, whenToUse, body string, shared bool) error {
 	_, err := w.store.Create(slug, skills.SkillInput{
@@ -312,7 +364,17 @@ func (w agentSkillWriter) CreateSkill(slug, name, description, whenToUse, body s
 	return err
 }
 
-func (w agentSkillWriter) DeleteSkill(slug string) error { return w.store.Delete(slug) }
+func (w agentSkillWriter) DeleteSkill(slug string) error {
+	if err := w.store.Delete(slug); err != nil {
+		return err
+	}
+	// Drop the now-deleted slug from any agent that referenced it so no agent
+	// keeps a dangling skill reference.
+	if w.db != nil {
+		_, _ = w.db.RemoveSkillFromAgents(context.Background(), slug)
+	}
+	return nil
+}
 
 // SetScheduleReloader wires the scheduler's Reload so self-management schedule
 // tools take effect immediately. Called by the workspace manager after the
@@ -324,6 +386,12 @@ func (r *Runtime) SetScheduleReloader(fn func(context.Context) error) { r.reload
 // Called by the workspace manager once the api server (which owns the apply
 // hook) exists. Nil leaves those tools off.
 func (r *Runtime) SetSettingsBridge(b tools.SettingsBridge) { r.settingsBridge = b }
+
+// SetWorkspaceBridge wires the cross-workspace management bridge so the
+// list/create/rename/delete_workspace self-management tools become available.
+// Called by the workspace manager once the api server exists. Nil leaves those
+// tools off.
+func (r *Runtime) SetWorkspaceBridge(b tools.WorkspaceBridge) { r.workspaceBridge = b }
 
 // reloadSchedules re-reads schedules into the cron scheduler (nil-safe).
 func (r *Runtime) reloadSchedules(ctx context.Context) error {
@@ -375,7 +443,65 @@ func (r *Runtime) ScheduleWake(ctx context.Context, sessionID, agentID, prompt, 
 	if err := r.reloadSchedules(ctx); err != nil {
 		return "", fmt.Errorf("wake saved (%s) but arming failed: %w", sc.ID, err)
 	}
+	// Tell an open session screen that the turn ended into a WAITING state (not a
+	// finished one): phase=armed raises a "waiting to auto-resume" banner with the
+	// reason and a Cancel control, so the chat no longer looks idle while the wake
+	// timer counts down. emitWakePhase carries reason + fireAt for the UI.
+	r.emitWakePhase(sessionID, "armed", reason, fireAt, "⏰ Otomatik uyandırma kuruldu")
 	return fmt.Sprintf("Wake armed: in %ds I will continue this conversation on my own. Nothing more to do this turn.", delaySeconds), nil
+}
+
+// emitWakePhase publishes a "chat"-typed wake lifecycle event for a session. The
+// frontend keys off target.phase: "armed" raises the waiting banner (with reason
+// + fireAt), "cancelled" clears it. The fire path (scheduler) emits start/done.
+func (r *Runtime) emitWakePhase(sessionID, phase, reason string, fireAt int64, title string) {
+	target := map[string]string{"view": "chat", "sessionId": sessionID, "phase": phase}
+	if reason != "" {
+		target["reason"] = reason
+	}
+	if fireAt > 0 {
+		target["fireAt"] = strconv.FormatInt(fireAt, 10)
+	}
+	r.publish(events.Event{
+		Type:   "chat",
+		Level:  "info",
+		Title:  title,
+		Body:   reason,
+		Target: target,
+	})
+}
+
+// CancelWake disarms any pending one-shot self-wake armed for sessionID (the user
+// pressed "Durdur" on the waiting banner). It deletes the matching one-shot
+// schedule rows, re-arms the scheduler so their timers are cancelled, and emits a
+// phase=cancelled event so the open screen clears the waiting banner. Returns the
+// number of wakes cancelled (0 when none were pending).
+func (r *Runtime) CancelWake(ctx context.Context, sessionID string) (int, error) {
+	if sessionID == "" {
+		return 0, fmt.Errorf("sessionId is required")
+	}
+	schedules, err := r.db.ListEnabledSchedules(ctx)
+	if err != nil {
+		return 0, err
+	}
+	cancelled := 0
+	for _, sc := range schedules {
+		if !sc.OneShot || sc.SessionID != sessionID {
+			continue
+		}
+		if err := r.db.DeleteSchedule(ctx, sc.ID); err != nil {
+			return cancelled, fmt.Errorf("cancel wake %s: %w", sc.ID, err)
+		}
+		cancelled++
+	}
+	if cancelled == 0 {
+		return 0, nil
+	}
+	if err := r.reloadSchedules(ctx); err != nil {
+		return cancelled, fmt.Errorf("wake cancelled but re-arm failed: %w", err)
+	}
+	r.emitWakePhase(sessionID, "cancelled", "", 0, "⏰ Otomatik uyandırma iptal edildi")
+	return cancelled, nil
 }
 
 // publish stamps the workspace identity onto an event and pushes it to the bus.
@@ -398,175 +524,8 @@ func (r *Runtime) agentName(id string) string {
 	return id
 }
 
-// emitHeartbeatFailure publishes a heartbeat failure (or auto-disable) event
-// that deep-links to the logs view.
-func (r *Runtime) emitHeartbeatFailure(agentID, errMsg string, disabled bool) {
-	name := r.agentName(agentID)
-	title := "Heartbeat hatası: " + name
-	body := errMsg
-	if disabled {
-		title = "Ajan devre dışı: " + name
-		body = "10 ardışık hatadan sonra otomatik durduruldu"
-	}
-	r.publish(events.Event{
-		Type:   "heartbeat",
-		Level:  "error",
-		Title:  title,
-		Body:   body,
-		Target: map[string]string{"view": "logs", "agentId": agentID},
-		Time:   time.Now().Unix(),
-	})
-}
-
 // Memory exposes the runtime's memory store for handlers in the same workspace.
 func (r *Runtime) Memory() *memory.Store { return r.mem }
-
-// StartConfigured starts workers for every agent with heartbeat enabled.
-// Call once on boot.
-func (r *Runtime) StartConfigured(ctx context.Context) error {
-	agents, err := r.db.ListAgents(ctx)
-	if err != nil {
-		return err
-	}
-	for _, a := range agents {
-		if a.HeartbeatEnabled {
-			if err := r.Start(a.ID, a.HeartbeatIntervalSec); err != nil {
-				r.logger.Warn("failed to start agent", "agent", a.ID, "error", err)
-			}
-		}
-	}
-	return nil
-}
-
-// Start launches a worker for the agent (idempotent).
-func (r *Runtime) Start(agentID string, intervalSec int) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, ok := r.workers[agentID]; ok {
-		return nil // already running
-	}
-	w := newWorker(agentID, r, intervalSec)
-	r.workers[agentID] = w
-	go w.run()
-	r.logger.Info("agent started", "agent", agentID, "interval_sec", w.snapshot().IntervalSec)
-	return nil
-}
-
-// Stop terminates the agent's worker (idempotent).
-func (r *Runtime) Stop(agentID string) {
-	r.mu.Lock()
-	w, ok := r.workers[agentID]
-	if ok {
-		delete(r.workers, agentID)
-	}
-	r.mu.Unlock()
-
-	if ok {
-		w.stop()
-		r.logger.Info("agent stopped", "agent", agentID)
-	}
-}
-
-// Wake triggers an immediate tick for a running agent.
-func (r *Runtime) Wake(agentID string) error {
-	r.mu.Lock()
-	w, ok := r.workers[agentID]
-	r.mu.Unlock()
-	if !ok {
-		return fmt.Errorf("agent %s is not running", agentID)
-	}
-	w.wake()
-	return nil
-}
-
-// Status returns a snapshot of all workers, sorted by agent id.
-func (r *Runtime) Status() []WorkerStatus {
-	r.mu.Lock()
-	out := make([]WorkerStatus, 0, len(r.workers))
-	for _, w := range r.workers {
-		out = append(out, w.snapshot())
-	}
-	r.mu.Unlock()
-
-	sort.Slice(out, func(i, j int) bool { return out[i].AgentID < out[j].AgentID })
-	return out
-}
-
-// StopAll terminates every worker. Call on shutdown.
-func (r *Runtime) StopAll() {
-	r.mu.Lock()
-	workers := make([]*worker, 0, len(r.workers))
-	for id, w := range r.workers {
-		workers = append(workers, w)
-		delete(r.workers, id)
-	}
-	r.mu.Unlock()
-
-	for _, w := range workers {
-		w.stop()
-	}
-}
-
-// runHeartbeat performs the agent's wake action: if a heartbeat prompt is set,
-// it calls the provider and logs the reply into the agent's heartbeat session.
-func (r *Runtime) runHeartbeat(ctx context.Context, agentID, trigger string) error {
-	agent, err := r.db.GetAgent(ctx, agentID)
-	if err != nil {
-		return err
-	}
-
-	// No prompt → nothing to do; a successful no-op heartbeat ("pulse").
-	if agent.HeartbeatPrompt == "" {
-		return nil
-	}
-
-	session, err := r.db.GetOrCreateHeartbeatSession(ctx, agentID)
-	if err != nil {
-		return err
-	}
-
-	provider, err := r.providers.Get(agent.Provider)
-	if err != nil {
-		return err
-	}
-	// Heartbeat is autonomous → enforce the agent's daily budget. Tools run when
-	// the agent has them enabled.
-	r.trackSession(session.ID)
-	// A goal set on the heartbeat session steers the autonomous loop too: inject
-	// it into the dynamic suffix so the agent's wake action stays on-objective.
-	resp, err := r.CompleteWithTools(WithCallKind(ctx, KindHeartbeat), agent, provider, providers.Request{
-		Model:         agent.Model,
-		System:        r.systemPrompt(agent),
-		SystemDynamic: heartbeatGoalBlock(session.Goal, session.GoalDone),
-		Messages: []providers.Message{
-			{Role: providers.RoleUser, Text: agent.HeartbeatPrompt},
-		},
-	}, true)
-	r.untrackSession(session.ID)
-	if err != nil {
-		return err
-	}
-
-	_, err = r.db.AddMessage(ctx, db.Message{
-		SessionID: session.ID,
-		Role:      providers.RoleAssistant,
-		Text:      fmt.Sprintf("[%s] %s", trigger, resp.Text),
-	})
-	return err
-}
-
-// heartbeatGoalBlock renders a session's persistent goal for the autonomous
-// heartbeat turn, mirroring the chat path's goalContextBlock (api package).
-// Returns "" when no goal is set.
-func heartbeatGoalBlock(goal string, done bool) string {
-	goal = strings.TrimSpace(goal)
-	if goal == "" || done {
-		return ""
-	}
-	return "## Session goal (north star)\n" +
-		"This session has a persistent goal. Treat it as the overriding objective for your wake action: make progress toward it and stay aligned with it.\n\n" + goal
-}
 
 // buildSystemPrompt composes the agent's persona from soul + identity.
 func buildSystemPrompt(a db.Agent) string {
@@ -595,6 +554,20 @@ func (r *Runtime) systemPrompt(a db.Agent) string {
 			}
 			out += "# Workspace Instructions\n" + ins
 		}
+	}
+	return out
+}
+
+// autonomousSystemPrompt is systemPrompt plus the agent's Available Skills block,
+// for headless runs (scheduler/spawn/flow). Chat turns add the catalog
+// in composeTurnRequest; the autonomous entry points (which build their own
+// request) had no catalog, so a scheduled agent never learned its skills. Adding
+// it here — together with the autonomous Interaction use_skill bridge — gives
+// headless runs the same skill access chat agents have.
+func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
+	out := r.systemPrompt(a)
+	if sb := r.SkillsCatalogBlockForAgent(a); sb != "" {
+		out = strings.TrimSpace(out + "\n\n" + sb)
 	}
 	return out
 }

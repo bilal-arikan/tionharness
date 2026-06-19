@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/conversation"
@@ -10,9 +12,27 @@ import (
 	"github.com/bilal/swarmgo/internal/tools"
 )
 
-// maxToolIters bounds the native agentic loop so a misbehaving model can't spin
-// forever calling tools.
-const maxToolIters = 8
+// defaultMaxToolIters bounds the native agentic loop so a misbehaving model can't
+// spin forever calling tools. Tripled from the original 8 to 24 to give multi-step
+// tool workflows (and schedule_wake-driven async flows) room to finish before the
+// loop cap ends the turn.
+const defaultMaxToolIters = 24
+
+// maxToolIters is the live loop bound, defaulting to defaultMaxToolIters and
+// overridable via SWARMGO_MAX_TOOL_ITERS (positive integer) for power users who
+// want longer or shorter native tool loops without a rebuild.
+var maxToolIters = resolveMaxToolIters()
+
+// resolveMaxToolIters reads the env override once at package init, falling back to
+// the default for an unset, empty, non-numeric or non-positive value.
+func resolveMaxToolIters() int {
+	if v := os.Getenv("SWARMGO_MAX_TOOL_ITERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultMaxToolIters
+}
 
 // activeToolMaxIdle is how many iterations a lazily-activated tool may go unused
 // before it is pruned from the shipped schema set (Phase 3 of lazy tool loading).
@@ -105,6 +125,18 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	// is wired for this turn (so ask_user/todo_write work even with MCP off).
 	cli, isCLI := provider.(*providers.ClaudeCLI)
 	inter := tools.InteractionFrom(ctx)
+	// Autonomous CLI turns (scheduler/spawn/flow) don't carry an
+	// Interaction endpoint the way chat turns do, so a CLI agent there can't reach
+	// the bridged use_skill/shell/self-manage tools and falls back to its native
+	// (now-disallowed/foreign) ones — the cause of scheduled "Unknown skill" + the
+	// POSIX-Bash mismatch. Wire one on demand for this turn so headless runs get
+	// the same bridge chat agents do. Only when none is already present.
+	if autonomous && isCLI && inter.URL == "" && r.autoInteract != nil {
+		var done func()
+		ctx, done = r.autoInteract(ctx, agent, SessionIDFrom(ctx))
+		defer done()
+		inter = tools.InteractionFrom(ctx)
+	}
 	cliMCP := isCLI && (agent.MCPEnabled || inter.URL != "")
 
 	if !agent.MCPEnabled && !cliMCP {
@@ -146,9 +178,17 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			r.logger.Warn("cli mcp config failed", "error", err)
 		} else if path != "" {
 			defer cleanup()
+			// Per-turn --settings: permission deny-list (mirrors disallowed) plus the
+			// workspace's PreToolUse/PostToolUse hooks, so the CLI's own loop honours
+			// the same blocks/hooks the native loop does. "" when there is nothing.
+			settingsPath, settingsCleanup, serr := r.writeCLISettings(ctx, disallowed)
+			if serr != nil {
+				r.logger.Warn("cli settings write failed", "error", serr)
+			}
+			defer settingsCleanup()
 			// In "ask" mode route risky CLI tools through the Interaction MCP
 			// permission-prompt tool (real per-tool approval) instead of acceptEdits.
-			cli.ConfigureMCP(path, allowed, disallowed, promptToolForMode(agent.PermissionMode, inter))
+			cli.ConfigureMCP(path, allowed, disallowed, promptToolForMode(agent.PermissionMode, inter), settingsPath)
 		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
@@ -175,10 +215,10 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	toolFilter := r.toolFilter(ctx, agent)
 	req.Tools = reg.ActiveDefs(toolFilter, active.Snapshot())
 
-	// Wire agent→agent delegation for this turn: the call_agent tool reads the
-	// runner (and its loop guards) from the context. &req lets a summoned agent
-	// inherit the conversation exactly as it stands when the tool fires.
-	ctx = r.withDelegation(ctx, agent, &req, autonomous)
+	// Wire the generic subagent runner for this turn: the run_subagent tool reads
+	// it (and the shared loop guards) from the context. &req lets an inherited-
+	// context subagent see the conversation as it stands when the tool fires.
+	ctx = r.withRunAgent(ctx, agent, &req, autonomous)
 
 	emit := func(s TurnStep) {
 		if onStep != nil {
@@ -288,6 +328,10 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			Text:      resp.Text,
 			ToolCalls: resp.ToolCalls,
 		})
+		// Parallel fan-out: when this batch holds multiple run_subagent calls, start
+		// them concurrently up front; the loop below awaits each future in place
+		// (results stay in tool_use order). nil when there is nothing to parallelise.
+		subFutures := r.launchParallelSubagents(ctx, reg, resp.ToolCalls)
 		results := make([]providers.ToolResult, 0, len(resp.ToolCalls))
 		for _, call := range resp.ToolCalls {
 			r.logger.Info("tool call", "agent", agent.ID, "tool", call.Name)
@@ -329,14 +373,24 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			}
 
 			// Attach a per-call diff sink so file-mutating built-ins (write_file /
-			// edit_file) can surface a structured diff for the UI card below.
+			// edit_file) can surface a structured diff for the UI card below. A
+			// per-call subagent sink lets run_subagent hand back its nested trace so
+			// the row is promoted to a collapsible StepSubagent.
 			callCtx, diffs := tools.WithDiffSink(ctx)
+			callCtx, subs := withSubStepSink(callCtx)
 
 			// Stream long-running tool output live as tool_delta chunks (keyed by
 			// the call id) when the tool and the live sink both support it.
 			var res providers.ToolResult
 			streamed := false
-			if onStep != nil && call.ID != "" && reg.CanStream(call.Name) {
+			if f := subFutures[call.ID]; f != nil {
+				// Parallel run_subagent: the runner was launched before the loop; wait
+				// for it and adopt its result + nested trace (promoted to StepSubagent
+				// below via the per-call sink).
+				<-f.done
+				res = f.res
+				subs.steps = f.steps
+			} else if onStep != nil && call.ID != "" && reg.CanStream(call.Name) {
 				res = reg.CallStream(callCtx, call, func(chunk string) {
 					streamed = true
 					emit(TurnStep{Kind: StepToolDelta, ID: call.ID, Tool: call.Name, Output: chunk})
@@ -417,6 +471,12 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 				st.Patch = d.Patch
 				st.Created = d.Created
 			}
+			// A subagent run renders as a collapsible nested-agent card carrying the
+			// subagent's own trace (input=target+task, output=its final reply).
+			if len(subs.steps) > 0 && !res.IsError {
+				st.Kind = StepSubagent
+				st.SubSteps = subs.steps
+			}
 			steps = append(steps, st)
 			emit(st)
 		}
@@ -468,7 +528,7 @@ func fillCancelledResults(results []providers.ToolResult, calls []providers.Tool
 // tool-loop path (native, claude-cli, streaming fallback) funnels its provider
 // call through here, so logging the failure once at this choke point guarantees
 // a provider error is recorded regardless of which caller (chat, task,
-// schedule, heartbeat) triggered it.
+// schedule) triggered it.
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
 	resp, err := provider.Complete(ctx, req)
 	if err != nil {

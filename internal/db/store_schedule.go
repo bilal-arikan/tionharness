@@ -12,7 +12,7 @@ func (d *DB) persistScheduleLocked(sc Schedule) error {
 
 // CreateSchedule inserts a new schedule.
 func (d *DB) CreateSchedule(ctx context.Context, sc Schedule) (Schedule, error) {
-	sc.ID = newID()
+	sc.ID = d.nextID(idSchedule)
 	sc.CreatedAt = now()
 	d.mu.Lock()
 	defer d.mu.Unlock()

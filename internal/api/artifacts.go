@@ -18,10 +18,9 @@ import (
 // artifacts by default — the user expects deliverables to open in the Artifacts
 // screen, not be buried in chat or written only via an ad-hoc script.
 const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
-	"When the user asks you to produce a file, document, dataset, report, spreadsheet, diagram or code module, treat it as a deliverable that must appear in the Artifacts screen:\n" +
-	"- Prefer writing the deliverable to a file with your file-writing tool (write_file / Write). Files written that way are captured as artifacts automatically.\n" +
-	"- If you produce the content directly (not as a file) and have the create_artifact tool, call it with the full content.\n" +
-	"- Do NOT deliver substantial output only as inline chat text, and avoid producing a deliverable solely via an ad-hoc shell/script command (that bypasses artifact capture) — write it out with the file tool instead."
+	"When asked to produce a file, document, dataset, report, spreadsheet, diagram or code module, write it out with your file tool (write_file / Write) — files are captured as artifacts automatically. " +
+	"If you can't write a file but have create_artifact, call it with the full content. " +
+	"Don't deliver substantial output only as inline chat text or via an ad-hoc shell command (that bypasses artifact capture)."
 
 // artifactsContextBlock builds a system-prompt section listing the artifacts a
 // session already has, so the agent can revise them with update_artifact (by id)

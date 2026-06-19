@@ -99,6 +99,18 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		// ScheduleWakeup schedules a wake the CLI subprocess never lives to fire —
 		// SwarmGo's own schedule_wake (above) replaces it with a real timer.
 		disallowed = append(disallowed, "AskUserQuestion", "TodoWrite", "ScheduleWakeup")
+		// Skill: the CLI's native skill tool only sees its own .claude/skills dirs,
+		// never SwarmGo's workspace skills — so a weak model reaching for it fails
+		// with "Unknown skill". The bridged use_skill (above) is the correct path,
+		// so suppress the native one to force it.
+		disallowed = append(disallowed, "Skill")
+		// Bash: only suppress the CLI's native POSIX Bash when SwarmGo's own shell is
+		// bridged (shell enabled) as its replacement — otherwise the agent would lose
+		// shell entirely (SwarmGo's shell is not bridged when disabled). With the
+		// bridge present, all commands route through SwarmGo's PowerShell shell.
+		if r.tun.ShellEnabled() {
+			disallowed = append(disallowed, "Bash")
+		}
 	}
 
 	if len(cfg.MCPServers) == 0 {
@@ -125,4 +137,97 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 	r.logger.Info("cli mcp config written", "path", filepath.Base(path),
 		"servers", len(cfg.MCPServers), "interaction", inter.URL != "")
 	return path, allowed, disallowed, cleanup, nil
+}
+
+// cliSettings is the subset of the claude CLI's settings.json SwarmGo generates
+// per turn: a permission deny-list (defense-in-depth alongside --disallowedTools,
+// with pattern support) plus the workspace's PreToolUse/PostToolUse hooks so the
+// CLI's own tool loop fires the same hooks the native loop does (CLI-path hooks).
+type cliSettings struct {
+	Permissions *cliPermissions          `json:"permissions,omitempty"`
+	Hooks       map[string][]cliHookRule `json:"hooks,omitempty"`
+}
+
+type cliPermissions struct {
+	Deny []string `json:"deny,omitempty"`
+}
+
+// cliHookRule mirrors Claude Code's settings hook shape: a matcher plus a list of
+// command hooks to run for tools matching it.
+type cliHookRule struct {
+	Matcher string        `json:"matcher,omitempty"`
+	Hooks   []cliHookSpec `json:"hooks"`
+}
+
+type cliHookSpec struct {
+	Type    string `json:"type"`              // always "command"
+	Command string `json:"command"`           // shell command
+	Timeout int    `json:"timeout,omitempty"` // seconds
+}
+
+// writeCLISettings renders a per-turn claude --settings file carrying (a) a
+// permission deny-list mirroring the native-tool suppression (so a CLI version
+// that honours permissions.deny in bypass mode blocks them even if a flag is
+// ignored), and (b) the workspace's enabled PreToolUse/PostToolUse hooks, so a
+// claude-cli agent's own tool loop triggers the same hooks the native loop runs.
+// Returns ("", noop, nil) when there is nothing to write (no deny + no hooks), so
+// the caller passes --settings only when it carries something.
+//
+// Caveat: CLI hooks run under the CLI's own hook runner/shell, which may differ
+// from SwarmGo's execHook (PowerShell on Windows). A hook authored for SwarmGo's
+// shell may need adjusting to run identically here.
+func (r *Runtime) writeCLISettings(ctx context.Context, deny []string) (string, func(), error) {
+	set := cliSettings{}
+	if len(deny) > 0 {
+		set.Permissions = &cliPermissions{Deny: append([]string(nil), deny...)}
+	}
+
+	hooks := map[string][]cliHookRule{}
+	// CLI-path hook passthrough is opt-out (on by default): skip the hooks block
+	// entirely when disabled, leaving only the permission deny-list.
+	for _, event := range []string{db.HookPreToolUse, db.HookPostToolUse} {
+		if !r.tun.CLIHooksEnabled() {
+			break
+		}
+		list, err := r.db.ListEnabledHooksByEvent(ctx, event)
+		if err != nil {
+			r.logger.Warn("cli settings: list hooks failed", "event", event, "error", err)
+			continue
+		}
+		for _, h := range list {
+			if h.Type != "" && h.Type != "command" {
+				continue // only command hooks map to the CLI contract
+			}
+			hooks[event] = append(hooks[event], cliHookRule{
+				Matcher: h.Matcher,
+				Hooks:   []cliHookSpec{{Type: "command", Command: h.Command, Timeout: h.TimeoutSec}},
+			})
+		}
+	}
+	if len(hooks) > 0 {
+		set.Hooks = hooks
+	}
+
+	if set.Permissions == nil && set.Hooks == nil {
+		return "", func() {}, nil
+	}
+
+	data, err := json.MarshalIndent(set, "", "  ")
+	if err != nil {
+		return "", func() {}, err
+	}
+	f, err := os.CreateTemp("", "swarmgo-settings-*.json")
+	if err != nil {
+		return "", func() {}, err
+	}
+	path := f.Name()
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return "", func() {}, err
+	}
+	_ = f.Close()
+	r.logger.Info("cli settings written", "path", filepath.Base(path),
+		"deny", len(deny), "hookEvents", len(hooks))
+	return path, func() { _ = os.Remove(path) }, nil
 }

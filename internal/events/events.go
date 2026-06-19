@@ -1,5 +1,5 @@
 // Package events provides a process-wide pub/sub bus for autonomous runtime
-// notifications (agent heartbeat failures, task/schedule outcomes). The API
+// notifications (task/schedule outcomes). The API
 // layer streams these to the frontend over SSE so the UI can raise desktop
 // notifications that deep-link to the relevant view.
 package events

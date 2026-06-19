@@ -12,7 +12,7 @@ import (
 
 // ReadLogsTool lets an agent read the recent application + workspace log stream
 // (the same ring buffer the Logs UI shows). Useful for self-diagnosis: checking
-// why a heartbeat failed, what a scheduled run reported, etc.
+// why a scheduled run reported a failure, what it reported, etc.
 type ReadLogsTool struct {
 	logs *logbuf.Buffer
 }

@@ -37,7 +37,7 @@ func (d *DB) mutateAgentLocked(id string, fn func(*Agent)) (Agent, error) {
 
 // CreateAgent inserts a new agent and returns the stored row.
 func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
-	a.ID = newID()
+	a.ID = d.nextID(idAgent)
 	a.CreatedAt = now()
 	a.UpdatedAt = a.CreatedAt
 	if a.Capabilities == "" {
@@ -60,9 +60,15 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	return a, d.persistAgentLocked(a)
 }
 
-// DeleteAgent removes an agent, its on-disk file, and every session it owns
-// (with their messages/folders), since those sessions become unusable once
-// their default agent is gone.
+// DeleteAgent removes an agent, its on-disk file, and every record that becomes
+// unusable once the agent is gone:
+//   - sessions it owns (with their messages, folders and artifacts),
+//   - schedules bound to it (AgentID),
+//   - tasks it owns (OwnerAgentID) together with their runs.
+//
+// Removing the schedules here only clears the persisted rows; callers that run a
+// live cron registry (the API server) must reload the scheduler afterwards so
+// the in-memory jobs drop too.
 func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -81,7 +87,62 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 			_ = os.RemoveAll(d.dir(dirSessions, sid))
 		}
 	}
+	// Cascade: schedules deliver prompts to this agent, so they can no longer fire.
+	for scid, sc := range d.schedules {
+		if sc.AgentID == id {
+			delete(d.schedules, scid)
+			_ = removeFile(d.dir(dirSchedules, scid+".json"))
+		}
+	}
+	// Cascade: tasks owned by this agent (and their runs) — they cannot be
+	// delivered without an owner.
+	deletedTasks := make(map[string]bool)
+	for tid, t := range d.tasks {
+		if t.OwnerAgentID == id {
+			delete(d.tasks, tid)
+			_ = removeFile(d.dir(dirTasks, tid+".json"))
+			deletedTasks[tid] = true
+		}
+	}
+	for rid, r := range d.runs {
+		if r.AgentID == id || deletedTasks[r.TaskID] {
+			delete(d.runs, rid)
+			_ = removeFile(d.dir(dirRuns, rid+".json"))
+		}
+	}
 	return nil
+}
+
+// RemoveSkillFromAgents strips a skill slug from every agent's skill selection
+// and persists the agents that changed. It is called after a skill is deleted so
+// no agent keeps a dangling reference to a skill that no longer exists. Returns
+// the number of agents that were updated.
+func (d *DB) RemoveSkillFromAgents(ctx context.Context, slug string) (int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	updated := 0
+	for aid, a := range d.agents {
+		if len(a.Skills) == 0 {
+			continue
+		}
+		kept := make([]string, 0, len(a.Skills))
+		for _, s := range a.Skills {
+			if s != slug {
+				kept = append(kept, s)
+			}
+		}
+		if len(kept) == len(a.Skills) {
+			continue // slug not referenced by this agent
+		}
+		a.Skills = kept
+		a.UpdatedAt = now()
+		if err := d.persistAgentLocked(a); err != nil {
+			return updated, err
+		}
+		d.agents[aid] = a
+		updated++
+	}
+	return updated, nil
 }
 
 // GetAgent loads an agent by id.
@@ -165,22 +226,6 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 	})
 }
 
-// UpdateHeartbeat sets the autonomous wake configuration for an agent.
-func (d *DB) UpdateHeartbeat(ctx context.Context, agentID string, enabled bool, intervalSec int, prompt string) error {
-	_, err := d.mutateAgentLocked(agentID, func(a *Agent) {
-		a.HeartbeatEnabled = enabled
-		a.HeartbeatIntervalSec = intervalSec
-		a.HeartbeatPrompt = prompt
-	})
-	return err
-}
-
-// GetOrCreateHeartbeatSession returns the dedicated heartbeat session for an
-// agent, creating it if absent. Heartbeat output is logged here for visibility.
-func (d *DB) GetOrCreateHeartbeatSession(ctx context.Context, agentID string) (Session, error) {
-	return d.getOrCreateKindSession(agentID, "heartbeat", "♥ Heartbeat")
-}
-
 // ---- Sessions ----
 
 func (d *DB) persistSessionLocked(s Session) error {
@@ -228,7 +273,7 @@ func (d *DB) CreateSession(ctx context.Context, s Session) (Session, error) {
 }
 
 func (d *DB) createSessionLocked(s Session) (Session, error) {
-	s.ID = newID()
+	s.ID = d.nextID(idSession)
 	s.CreatedAt = now()
 	s.UpdatedAt = s.CreatedAt
 	if s.Kind == "" {

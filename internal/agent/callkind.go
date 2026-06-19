@@ -8,7 +8,7 @@ import (
 )
 
 // CallKind tags a provider call by its origin so usage can be attributed across
-// every entry point — chat, autonomous task/schedule/heartbeat, flow nodes,
+// every entry point — chat, autonomous task/schedule, flow nodes,
 // agent→agent delegation, and the auxiliary calls (titling, summaries,
 // reflection, context compaction). It mirrors the db.UsageKind* taxonomy.
 type CallKind string
@@ -18,9 +18,9 @@ const (
 	KindTask      CallKind = db.UsageKindTask
 	KindSchedule  CallKind = db.UsageKindSchedule
 	KindFlow      CallKind = db.UsageKindFlow
-	KindHeartbeat CallKind = db.UsageKindHeartbeat
 	KindDelegate  CallKind = db.UsageKindDelegate
 	KindSpawn     CallKind = db.UsageKindSpawn
+	KindSubagent  CallKind = db.UsageKindSubagent
 	KindTitle     CallKind = db.UsageKindTitle
 	KindSummary   CallKind = db.UsageKindSummary
 	KindReflect   CallKind = db.UsageKindReflect
@@ -43,6 +43,24 @@ func WithCallKind(ctx context.Context, kind CallKind) context.Context {
 		ctx = tools.WithAutonomous(ctx)
 	}
 	return ctx
+}
+
+type sessionIDKey struct{}
+
+// WithSessionID stamps the originating session id onto the context. The
+// autonomous Interaction MCP wiring (scheduler/spawn) reads it so a
+// CLI agent's schedule_wake targets the right session. Optional: an unstamped
+// context yields "" (wake then degrades to unavailable, not wrong-session).
+func WithSessionID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, sessionIDKey{}, id)
+}
+
+// SessionIDFrom returns the session id stamped on the context, or "" if none.
+func SessionIDFrom(ctx context.Context) string {
+	if id, ok := ctx.Value(sessionIDKey{}).(string); ok {
+		return id
+	}
+	return ""
 }
 
 // callKindFrom returns the call origin stamped on the context, defaulting to

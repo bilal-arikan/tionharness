@@ -22,11 +22,11 @@ func TestListSessionsTool(t *testing.T) {
 
 	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Alpha", State: "active"})
 	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Beta", State: "archived"})
-	database.CreateSession(ctx, db.Session{Kind: "heartbeat", Title: "Pulse", State: "active"})
+	database.CreateSession(ctx, db.Session{Kind: "schedule", Title: "Pulse", State: "active"})
 
 	tool := NewListSessionsTool(database)
 
-	// Default (active only): Alpha yes, Beta no, Pulse (heartbeat) no.
+	// Default (active only): Alpha yes, Beta no, Pulse (schedule) no.
 	out, err := tool.Call(ctx, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("call: %v", err)
@@ -35,7 +35,7 @@ func TestListSessionsTool(t *testing.T) {
 		t.Fatalf("active-only listing wrong:\n%s", out)
 	}
 
-	// state=all surfaces the archived chat session too (still not heartbeat).
+	// state=all surfaces the archived chat session too (still not the schedule one).
 	out, err = tool.Call(ctx, json.RawMessage(`{"state":"all"}`))
 	if err != nil {
 		t.Fatalf("call all: %v", err)
@@ -44,6 +44,6 @@ func TestListSessionsTool(t *testing.T) {
 		t.Fatalf("state=all should list both chat sessions:\n%s", out)
 	}
 	if strings.Contains(out, "Pulse") {
-		t.Fatalf("heartbeat must never be listed:\n%s", out)
+		t.Fatalf("non-chat sessions must never be listed:\n%s", out)
 	}
 }

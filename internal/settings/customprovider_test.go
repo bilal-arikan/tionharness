@@ -1,4 +1,4 @@
-package settings
+﻿package settings
 
 import "testing"
 
@@ -34,18 +34,18 @@ func TestCustomProviderCRUD(t *testing.T) {
 
 	// Create with key.
 	key := "sk-123"
-	if _, err := store.UpsertCustomProvider(CustomProvider{ID: "openrouter", Label: "OpenRouter", Kind: "openai", BaseURL: "https://openrouter.ai/api/v1"}, &key); err != nil {
+	if _, err := store.UpsertCustomProvider(CustomProvider{ID: "myrouter", Label: "myrouter", Kind: "openai", BaseURL: "https://myrouter.ai/api/v1"}, &key); err != nil {
 		t.Fatal(err)
 	}
-	if got := store.CustomProviderKey("openrouter"); got != key {
+	if got := store.CustomProviderKey("myrouter"); got != key {
 		t.Errorf("key = %q, want %q", got, key)
 	}
 
 	// Update without a key keeps the stored key.
-	if _, err := store.UpsertCustomProvider(CustomProvider{ID: "openrouter", Label: "OR v2", Kind: "openai", BaseURL: "https://openrouter.ai/api/v1"}, nil); err != nil {
+	if _, err := store.UpsertCustomProvider(CustomProvider{ID: "myrouter", Label: "OR v2", Kind: "openai", BaseURL: "https://myrouter.ai/api/v1"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := store.CustomProviderKey("openrouter"); got != key {
+	if got := store.CustomProviderKey("myrouter"); got != key {
 		t.Errorf("key after meta update = %q, want preserved %q", got, key)
 	}
 	dto := store.DTO().CustomProviders
@@ -58,12 +58,12 @@ func TestCustomProviderCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if store2.CustomProviderKey("openrouter") != key {
+	if store2.CustomProviderKey("myrouter") != key {
 		t.Error("key did not persist across reopen")
 	}
 
 	// Delete.
-	if _, err := store2.DeleteCustomProvider("openrouter"); err != nil {
+	if _, err := store2.DeleteCustomProvider("myrouter"); err != nil {
 		t.Fatal(err)
 	}
 	if len(store2.DTO().CustomProviders) != 0 {
@@ -73,3 +73,4 @@ func TestCustomProviderCRUD(t *testing.T) {
 		t.Error("deleting missing provider should error")
 	}
 }
+

@@ -43,7 +43,7 @@ func (d *DB) loadKnowledge() error {
 
 // CreateKnowledge inserts a memory and returns it.
 func (d *DB) CreateKnowledge(ctx context.Context, k KnowledgeSource) (KnowledgeSource, error) {
-	k.ID = newID()
+	k.ID = d.nextID(idKnowledge)
 	k.CreatedAt = now()
 	if k.Kind == "" {
 		k.Kind = MemoryDocument

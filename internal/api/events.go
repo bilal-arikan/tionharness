@@ -11,8 +11,8 @@ import (
 // real events.
 const eventsPingInterval = 25 * time.Second
 
-// handleEvents streams autonomous runtime events (heartbeat failures, task and
-// schedule outcomes) to the client over Server-Sent Events. The feed is global:
+// handleEvents streams autonomous runtime events (task and schedule outcomes)
+// to the client over Server-Sent Events. The feed is global:
 // every event carries its own workspaceId so the UI can deep-link on click.
 //
 //	notify → an events.Event (zero or more, as they occur)

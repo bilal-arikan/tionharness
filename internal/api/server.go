@@ -66,6 +66,9 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	// Interaction MCP: lets CLI agents (claude-cli, ...) reach SwarmGo's
 	// human-in-the-loop tools over in-process HTTP. See _Docs/11-INTERACTION-MCP.md.
 	s.interactionMCP = interaction.Handler(&interactionBackend{runs: s.runs, tun: tun}, logger)
+	// Headless Interaction MCP: give autonomous (scheduler/spawn) CLI
+	// turns the same use_skill/shell/self-manage bridge chat turns get.
+	manager.SetAutonomousInteraction(s.autonomousInteraction)
 	s.applySettings()
 	return s
 }
@@ -104,6 +107,7 @@ func (s *Server) applySettings() {
 	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
 	s.tun.SetShellEnabled(cur.EnableShell)
 	s.tun.SetSelfManageEnabled(cur.EnableSelfManage)
+	s.tun.SetCLIHooksEnabled(cur.EnableCLIHooks)
 	s.tun.SetDelegationEnabled(cur.EnableDelegation)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
@@ -124,7 +128,6 @@ func (s *Server) Routes() http.Handler {
 	s.registerAgentRoutes(mux)
 	s.registerSessionRoutes(mux)
 	s.registerChatRoutes(mux)
-	s.registerRuntimeRoutes(mux)
 	s.registerTaskRoutes(mux)
 	s.registerScheduleRoutes(mux)
 	s.registerUsageRoutes(mux)
@@ -222,6 +225,9 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
 	// Control an in-flight streaming turn: stop (cancel) or steer (live guidance).
 	mux.HandleFunc("POST /api/chat/control", s.handleChatControl)
+	// Disarm a pending one-shot self-wake (schedule_wake) for a session — the
+	// user pressed "Durdur" on the waiting banner before the wake fired.
+	mux.HandleFunc("POST /api/chat/wake/cancel", s.handleCancelWake)
 	// Interaction MCP endpoint: CLI agents (claude-cli, ...) call SwarmGo's
 	// human-in-the-loop tools (ask_user/todo_write) here over MCP-over-HTTP.
 	// Bound to all methods; the handler does its own bearer auth + method switch.
@@ -230,13 +236,6 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	if s.interactionMCP != nil {
 		mux.Handle("/mcp/interaction", s.interactionMCP)
 	}
-}
-
-// registerRuntimeRoutes registers autonomous runtime control + status.
-func (s *Server) registerRuntimeRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/runtime", s.handleRuntimeStatus)
-	mux.HandleFunc("POST /api/agents/{id}/heartbeat", s.handleSetHeartbeat)
-	mux.HandleFunc("POST /api/agents/{id}/wake", s.handleWake)
 }
 
 // registerTaskRoutes registers the kanban board + run history.
@@ -382,7 +381,7 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	// Frontend error bridge: client-side crashes/rejections funnel into the log
 	// stream so they surface in the Logs screen, not just the browser console.
 	mux.HandleFunc("POST /api/logs", s.handleClientLog)
-	// Autonomous event feed (heartbeat/task/schedule) — SSE, global.
+	// Autonomous event feed (task/schedule) — SSE, global.
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	// Detect optional external token-optimization tools on PATH (presence-only,
 	// never installs/runs them) — surfaced by the Settings diagnostics panel.

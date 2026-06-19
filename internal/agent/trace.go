@@ -73,6 +73,12 @@ const (
 	// — path plus added/removed line counts and an optional unified patch — rather
 	// than a generic tool row. The payload lives in Path/Added/Removed/Patch.
 	StepDiff StepKind = "diff"
+	// StepSubagent is one run_subagent invocation rendered as a collapsible nested
+	// agent card: Tool holds the resolved target (profile id or agent name), Text
+	// the delegated task, Output the subagent's final reply, and SubSteps the
+	// subagent's own activity trace (its tool calls, thinking, etc.) gathered in an
+	// isolated context. Persisted so the nested trace survives reload.
+	StepSubagent StepKind = "subagent"
 )
 
 // TodoItem is one entry in a StepTodo checklist (mirrors the todo_write input).
@@ -114,6 +120,9 @@ type TurnStep struct {
 	Removed int    `json:"removed,omitempty"`
 	Patch   string `json:"patch,omitempty"`
 	Created bool   `json:"created,omitempty"`
+	// SubSteps carries the nested activity trace of a StepSubagent step — the
+	// subagent's own tool calls / thinking, captured in its isolated context.
+	SubSteps []TurnStep `json:"subSteps,omitempty"`
 }
 
 // parseTodos extracts the checklist items from a todo_write tool call's input

@@ -22,7 +22,7 @@ func goalContextBlock(goal string, done bool) string {
 	}
 	var b strings.Builder
 	b.WriteString("## Session goal (north star)\n")
-	b.WriteString("The user has set a persistent goal for this conversation. Treat it as the overriding objective: keep every reply aligned with it, make steady progress toward it, and call out when it is achieved or blocked. It persists across turns even after earlier messages scroll out of context.\n\n")
+	b.WriteString("Keep every reply aligned with this persistent objective and make steady progress toward it; flag when it is achieved or blocked. It persists across turns.\n\n")
 	b.WriteString(goal)
 	return strings.TrimSpace(b.String())
 }

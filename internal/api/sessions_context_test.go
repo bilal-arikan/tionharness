@@ -22,7 +22,7 @@ func TestSessionsContextBlock(t *testing.T) {
 	current, _ := database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Current Work", State: "active"})
 	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Other Active", State: "active", Summary: "wiring the API"})
 	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Old Thread", State: "archived"})
-	database.CreateSession(ctx, db.Session{Kind: "heartbeat", Title: "Pulse Loop", State: "active"})
+	database.CreateSession(ctx, db.Session{Kind: "schedule", Title: "Pulse Loop", State: "active"})
 
 	block := sessionsContextBlock(ctx, database, current.ID, 5)
 	if block == "" {
@@ -41,7 +41,7 @@ func TestSessionsContextBlock(t *testing.T) {
 		t.Errorf("current session must be excluded:\n%s", block)
 	}
 	if strings.Contains(block, "Pulse Loop") {
-		t.Errorf("non-chat (heartbeat) session must be filtered out:\n%s", block)
+		t.Errorf("non-chat (schedule) session must be filtered out:\n%s", block)
 	}
 	if !strings.Contains(block, "Active:") || !strings.Contains(block, "Recent:") {
 		t.Errorf("expected both Active and Recent sections:\n%s", block)

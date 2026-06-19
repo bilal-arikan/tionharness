@@ -113,6 +113,13 @@ func interactionToolSpecs(tun *agent.Tunables) []interaction.ToolSpec {
 		// body; this bridge gives it the same lazy-load path native agents use.
 		tools.NewUseSkillTool(nil).Def(),
 	}
+	// shell is bridged only when enabled, mirroring the native tool loop's shell
+	// gate. It lets a claude-cli agent run commands through SwarmGo's sandboxed
+	// shell (PowerShell on Windows) instead of the CLI's native POSIX Bash — so
+	// the CLI's Bash can be safely disallowed and shell behaviour stays consistent.
+	if tun != nil && tun.ShellEnabled() {
+		defs = append(defs, tools.NewShellTool(tools.Sandbox{}).Def())
+	}
 	// spawn_session is a self-management capability: advertise it on the CLI path
 	// only when self-manage is enabled, mirroring the native tool loop's gating.
 	// The per-turn spawn tool is installed on each run by the stream handler.
@@ -163,6 +170,8 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callSpawn(ctx, run, args)
 	case "use_skill":
 		return b.callUseSkill(run, args)
+	case "shell":
+		return b.callShell(ctx, run, args)
 	default:
 		// CLI-3: dispatch a bridged self-management tool through the run's native
 		// registry. The advertised catalog (and the per-agent tool filter) gates
@@ -212,6 +221,11 @@ func (b *interactionBackend) callConfirm(ctx context.Context, run *chatRun, args
 // the user answers, the turn ends, the request is cancelled, or the timeout fires.
 // normalize maps the raw answer to the tool's result text.
 func (b *interactionBackend) blockForAnswer(ctx context.Context, run *chatRun, question string, options []string, normalize func(string) string) (interaction.CallResult, error) {
+	// Headless turn (scheduler/spawn): no live user can answer, so bail
+	// at once rather than pinning the call until the 15-minute timeout.
+	if run.autonomous {
+		return interaction.CallResult{Text: "no interactive session is available (autonomous run); proceed on your own", IsError: true}, nil
+	}
 	run.emit("step", agent.TurnStep{Kind: agent.StepAsk, Text: question, Options: options})
 	select {
 	case ans := <-run.answer:
@@ -380,6 +394,22 @@ func (b *interactionBackend) callUseSkill(run *chatRun, args json.RawMessage) (i
 		return interaction.CallResult{Text: "Skill \"" + slug + "\" has no instructions."}, nil
 	}
 	return interaction.CallResult{Text: "# Skill: " + slug + "\n\n" + body}, nil
+}
+
+// callShell runs a shell command through the run's per-agent shell runner (CLI
+// path), which is bound to the workspace sandbox and uses SwarmGo's own shell
+// (PowerShell on Windows). Returns a graceful error result when shell is not
+// available for this turn (disabled or no sandbox).
+func (b *interactionBackend) callShell(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	runFn := run.shellRunnerFor()
+	if runFn == nil {
+		return interaction.CallResult{Text: "shell is not available for this turn", IsError: true}, nil
+	}
+	out, err := runFn(ctx, args)
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: out}, nil
 }
 
 // interactionURL builds the loopback URL a CLI subprocess uses to reach this

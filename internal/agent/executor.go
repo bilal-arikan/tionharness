@@ -47,7 +47,7 @@ func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt strin
 	}
 	resp, steps, err := r.CompleteWithToolsTraced(ctx, agent, provider, providers.Request{
 		Model:  agent.Model,
-		System: r.systemPrompt(agent),
+		System: r.autonomousSystemPrompt(agent),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: prompt},
 		},

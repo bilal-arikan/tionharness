@@ -253,6 +253,13 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return wsp.Runtime.LoadSkillForAgent(skillAgent, slug)
 		})
 
+		// shell (CLI path): mirror the native built-in for claude-cli agents, which
+		// reach SwarmGo tools only through the Interaction MCP bridge. When shell is
+		// enabled, install a sandboxed runner so the bridge's shell dispatch runs
+		// commands through SwarmGo's PowerShell shell — letting the CLI's own POSIX
+		// Bash be safely disallowed. nil when shell is off (then Bash stays allowed).
+		run.setShellRunner(wsp.Runtime.NewShellRunner())
+
 		// Spawn (CLI path): mirror the native built-in for claude-cli agents, which
 		// reach SwarmGo tools only through the Interaction MCP bridge. Install a
 		// per-agent spawn tool on the run so the bridge's spawn_session dispatch can

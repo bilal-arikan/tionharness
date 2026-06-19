@@ -36,7 +36,7 @@ func (d *DB) persistArtifactLocked(a *Artifact) error {
 
 // CreateArtifact inserts a new artifact and returns the stored row.
 func (d *DB) CreateArtifact(ctx context.Context, a Artifact) (Artifact, error) {
-	a.ID = newID()
+	a.ID = d.nextID(idArtifact)
 	a.CreatedAt = now()
 	a.UpdatedAt = a.CreatedAt
 	if a.Kind == "" {
@@ -129,7 +129,7 @@ func (d *DB) SaveFileArtifact(ctx context.Context, sessionID, agentID, sourcePat
 		}
 	}
 	a := Artifact{
-		ID:         newID(),
+		ID:         d.nextID(idArtifact),
 		SessionID:  sessionID,
 		AgentID:    agentID,
 		Title:      title,
@@ -164,7 +164,7 @@ func (d *DB) upsertAttachmentArtifactLocked(sessionID, agentID, relPath, name, k
 		}
 	}
 	a := Artifact{
-		ID:         newID(),
+		ID:         d.nextID(idArtifact),
 		SessionID:  sessionID,
 		AgentID:    agentID,
 		Title:      name,

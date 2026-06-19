@@ -58,6 +58,10 @@ type Settings struct {
 	MinimaxKeyEnc  string `json:"minimaxKeyEnc"` // AES-GCM, never exposed
 	MinimaxBaseURL string `json:"minimaxBaseUrl"`
 
+	// OpenRouter (OpenAI-compatible) provider — one key, hundreds of models.
+	OpenRouterKeyEnc  string `json:"openrouterKeyEnc"` // AES-GCM, never exposed
+	OpenRouterBaseURL string `json:"openrouterBaseUrl"`
+
 	// CustomProviders are user-added OpenAI- or Anthropic-compatible endpoints
 	// (OpenRouter, Gemini, Kimi, Ollama, ...). Each is selectable as a provider
 	// id alongside the built-ins; the key is AES-GCM encrypted like the others.
@@ -115,8 +119,7 @@ type Settings struct {
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
 
 	// Autonomy.
-	DefaultHeartbeatSec int  `json:"defaultHeartbeatSec"`
-	PauseAutonomy       bool `json:"pauseAutonomy"`
+	PauseAutonomy bool `json:"pauseAutonomy"`
 
 	// Auto-title generation.
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
@@ -128,11 +131,13 @@ type Settings struct {
 	// Gated tool capabilities — off by default; each expands agent power/cost.
 	EnableShell        bool `json:"enableShell"`        // built-in shell (arbitrary commands in sandbox)
 	EnableSelfManage   bool `json:"enableSelfManage"`   // self-management suite (create/edit/delete entities)
-	EnableDelegation   bool `json:"enableDelegation"`   // call_agent (agent→agent delegation)
-	DelegationMaxDepth int  `json:"delegationMaxDepth"` // max delegation nesting (0 = default 3)
-	DelegationMaxCalls int  `json:"delegationMaxCalls"` // max delegations per turn (0 = default 8)
+	EnableCLIHooks     bool `json:"enableCliHooks"`     // pass PreToolUse/PostToolUse hooks to claude-cli agents via --settings
+	EnableDelegation   bool `json:"enableDelegation"`   // run_subagent (isolated subagents / agent→agent delegation)
+	DelegationMaxDepth int  `json:"delegationMaxDepth"` // max subagent nesting (0 = default 3)
+	DelegationMaxCalls int  `json:"delegationMaxCalls"` // max subagent runs per turn (0 = default 8)
 
-	// Spawn guards — fire-and-forget spawn_session / spawn surface.
+	// Spawn guards — the detached background surface: run_subagent wait:"async"
+	// (native) and the bridged spawn_session (claude-cli) + the UI spawn button.
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"` // max concurrent spawned sessions (0 = default 16)
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`    // max spawns per agent turn (0 = default 4)
 
@@ -181,13 +186,16 @@ func Default() Settings {
 		DefaultDailyCallLimit:  0,
 		DefaultDailyTokenLimit: 0,
 
-		DefaultHeartbeatSec: 60,
-		PauseAutonomy:       false,
+		PauseAutonomy: false,
 
 		AutoTitleEnabled: true,
 		TitleModel:       "",
 
 		MCPGatewayURL: "",
+
+		// CLI-path hooks default ON (preserves the hook-passthrough behaviour); turn
+		// off when a hook authored for SwarmGo's shell misbehaves under the CLI's.
+		EnableCLIHooks: true,
 
 		DelegationMaxDepth: 3,
 		DelegationMaxCalls: 8,
@@ -214,6 +222,8 @@ type DTO struct {
 	AnthropicKeySet       bool   `json:"anthropicKeySet"`
 	MinimaxKeySet         bool   `json:"minimaxKeySet"`
 	MinimaxBaseURL        string `json:"minimaxBaseUrl"`
+	OpenRouterKeySet      bool   `json:"openrouterKeySet"`
+	OpenRouterBaseURL     string `json:"openrouterBaseUrl"`
 
 	CustomProviders []CustomProviderDTO `json:"customProviders"`
 
@@ -254,8 +264,7 @@ type DTO struct {
 	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
 
-	DefaultHeartbeatSec int  `json:"defaultHeartbeatSec"`
-	PauseAutonomy       bool `json:"pauseAutonomy"`
+	PauseAutonomy bool `json:"pauseAutonomy"`
 
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
 	TitleModel       string `json:"titleModel"`
@@ -264,6 +273,7 @@ type DTO struct {
 
 	EnableShell        bool `json:"enableShell"`
 	EnableSelfManage   bool `json:"enableSelfManage"`
+	EnableCLIHooks     bool `json:"enableCliHooks"`
 	EnableDelegation   bool `json:"enableDelegation"`
 	DelegationMaxDepth int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls int  `json:"delegationMaxCalls"`
@@ -289,6 +299,8 @@ func (s Settings) ToDTO() DTO {
 		AnthropicKeySet:       s.AnthropicKeyEnc != "",
 		MinimaxKeySet:         s.MinimaxKeyEnc != "",
 		MinimaxBaseURL:        s.MinimaxBaseURL,
+		OpenRouterKeySet:      s.OpenRouterKeyEnc != "",
+		OpenRouterBaseURL:     s.OpenRouterBaseURL,
 		CustomProviders:       customProvidersToDTO(s.CustomProviders),
 
 		OneMillionContext:   s.OneMillionContext,
@@ -328,8 +340,7 @@ func (s Settings) ToDTO() DTO {
 		DefaultDailyCallLimit:  s.DefaultDailyCallLimit,
 		DefaultDailyTokenLimit: s.DefaultDailyTokenLimit,
 
-		DefaultHeartbeatSec: s.DefaultHeartbeatSec,
-		PauseAutonomy:       s.PauseAutonomy,
+		PauseAutonomy: s.PauseAutonomy,
 
 		AutoTitleEnabled: s.AutoTitleEnabled,
 		TitleModel:       s.TitleModel,
@@ -338,6 +349,7 @@ func (s Settings) ToDTO() DTO {
 
 		EnableShell:        s.EnableShell,
 		EnableSelfManage:   s.EnableSelfManage,
+		EnableCLIHooks:     s.EnableCLIHooks,
 		EnableDelegation:   s.EnableDelegation,
 		DelegationMaxDepth: s.DelegationMaxDepth,
 		DelegationMaxCalls: s.DelegationMaxCalls,
@@ -365,6 +377,8 @@ type Patch struct {
 	AnthropicKey          *string `json:"anthropicKey"` // write-only
 	MinimaxKey            *string `json:"minimaxKey"`   // write-only
 	MinimaxBaseURL        *string `json:"minimaxBaseUrl"`
+	OpenRouterKey         *string `json:"openrouterKey"` // write-only
+	OpenRouterBaseURL     *string `json:"openrouterBaseUrl"`
 
 	OneMillionContext   *bool `json:"oneMillionContext"`
 	ExtendedPromptCache *bool `json:"extendedPromptCache"`
@@ -403,8 +417,7 @@ type Patch struct {
 	DefaultDailyCallLimit  *int `json:"defaultDailyCallLimit"`
 	DefaultDailyTokenLimit *int `json:"defaultDailyTokenLimit"`
 
-	DefaultHeartbeatSec *int  `json:"defaultHeartbeatSec"`
-	PauseAutonomy       *bool `json:"pauseAutonomy"`
+	PauseAutonomy *bool `json:"pauseAutonomy"`
 
 	AutoTitleEnabled *bool   `json:"autoTitleEnabled"`
 	TitleModel       *string `json:"titleModel"`
@@ -413,6 +426,7 @@ type Patch struct {
 
 	EnableShell        *bool `json:"enableShell"`
 	EnableSelfManage   *bool `json:"enableSelfManage"`
+	EnableCLIHooks     *bool `json:"enableCliHooks"`
 	EnableDelegation   *bool `json:"enableDelegation"`
 	DelegationMaxDepth *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls *int  `json:"delegationMaxCalls"`

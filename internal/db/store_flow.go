@@ -14,7 +14,7 @@ func (d *DB) persistFlowLocked(f Flow) error {
 
 // CreateFlow inserts a new flow and returns the stored row.
 func (d *DB) CreateFlow(ctx context.Context, f Flow) (Flow, error) {
-	f.ID = newID()
+	f.ID = d.nextID(idFlow)
 	f.CreatedAt = now()
 	f.UpdatedAt = f.CreatedAt
 	if f.Graph == "" {
@@ -92,7 +92,7 @@ func (d *DB) persistFlowRunLocked(r FlowRun) error {
 
 // CreateFlowRun opens a new run in the running state.
 func (d *DB) CreateFlowRun(ctx context.Context, r FlowRun) (FlowRun, error) {
-	r.ID = newID()
+	r.ID = d.nextID(idFlowRun)
 	r.CreatedAt = now()
 	r.UpdatedAt = r.CreatedAt
 	if r.Status == "" {

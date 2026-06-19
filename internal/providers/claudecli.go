@@ -31,6 +31,11 @@ type ClaudeCLI struct {
 	// CLI routes tools needing approval through that MCP tool (used in "ask" mode
 	// instead of acceptEdits). Empty → fall back to the --permission-mode flag.
 	permissionPromptTool string
+	// settingsPath, when set, is handed to --settings so the CLI loads a SwarmGo-
+	// generated settings.json (permission deny-list + PreToolUse/PostToolUse hooks)
+	// for this turn. Lifecycle mirrors mcpConfigPath: set fresh by ConfigureMCP each
+	// MCP turn (possibly "") and only emitted on the MCP path.
+	settingsPath string
 }
 
 // NewClaudeCLI creates a provider that invokes the given claude binary.
@@ -43,11 +48,14 @@ func NewClaudeCLI(binPath, model string) *ClaudeCLI {
 // list of tool identifiers the CLI may use (e.g. "mcp__filesystem");
 // disallowedTools suppresses conflicting CLI built-ins (e.g. AskUserQuestion,
 // TodoWrite) so the SwarmGo Interaction MCP equivalents are used instead.
-func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools, disallowedTools []string, permissionPromptTool string) {
+// settingsPath points to a --settings file (permission deny-list + hooks); pass
+// "" for none. Its lifecycle is tied to configPath so it is reset every MCP turn.
+func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools, disallowedTools []string, permissionPromptTool, settingsPath string) {
 	c.mcpConfigPath = configPath
 	c.allowedTools = allowedTools
 	c.disallowedTools = disallowedTools
 	c.permissionPromptTool = permissionPromptTool
+	c.settingsPath = settingsPath
 }
 
 // Name implements Provider.
@@ -170,6 +178,12 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	// trailing --allowedTools so neither variadic flag swallows the other.
 	if c.mcpConfigPath != "" {
 		args = append(args, "--mcp-config", c.mcpConfigPath, "--strict-mcp-config")
+		// SwarmGo-generated settings (permission deny-list + PreToolUse/PostToolUse
+		// hooks) for this turn. Scoped to the MCP path so a stale path can't leak
+		// onto the plain (non-MCP) completion path.
+		if c.settingsPath != "" {
+			args = append(args, "--settings", c.settingsPath)
+		}
 		if len(c.disallowedTools) > 0 {
 			args = append(args, "--disallowedTools")
 			args = append(args, c.disallowedTools...)

@@ -12,7 +12,7 @@ func (d *DB) persistHookLocked(h Hook) error {
 
 // CreateHook inserts a new hook config and returns the stored row.
 func (d *DB) CreateHook(ctx context.Context, h Hook) (Hook, error) {
-	h.ID = newID()
+	h.ID = d.nextID(idHook)
 	h.CreatedAt = now()
 	if h.Type == "" {
 		h.Type = "command"

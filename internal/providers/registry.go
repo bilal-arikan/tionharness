@@ -35,6 +35,9 @@ type Registry struct {
 	minimaxKey     string // MiniMax (OpenAI-compatible) API key
 	minimaxBaseURL string // MiniMax base URL ("" = public default)
 
+	openrouterKey     string // OpenRouter (OpenAI-compatible) API key
+	openrouterBaseURL string // OpenRouter base URL ("" = public default)
+
 	custom      map[string]CustomSpec // user-added providers, keyed by id
 	customOrder []string              // ids in catalog order
 }
@@ -88,6 +91,21 @@ func (r *Registry) SetMinimax(key, baseURL string) {
 	r.minimaxKey = key
 	r.minimaxBaseURL = baseURL
 	r.mu.Unlock()
+}
+
+// SetOpenRouter updates the OpenRouter (OpenAI-compatible) API key and base URL.
+func (r *Registry) SetOpenRouter(key, baseURL string) {
+	r.mu.Lock()
+	r.openrouterKey = key
+	r.openrouterBaseURL = baseURL
+	r.mu.Unlock()
+}
+
+// OpenRouterConfigured reports whether an OpenRouter key is set.
+func (r *Registry) OpenRouterConfigured() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.openrouterKey != ""
 }
 
 // SetCustomProviders replaces the set of user-added providers (called from
@@ -198,6 +216,9 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 		// Reuses the MiniMax key but the Anthropic-compatible endpoint; the kind
 		// supplies its own base URL (minimaxBaseURL is the OpenAI base, N/A here).
 		cfg.Key = r.minimaxKey
+	case "openrouter":
+		cfg.Key = r.openrouterKey
+		cfg.BaseURL = r.openrouterBaseURL
 	}
 	return cfg
 }

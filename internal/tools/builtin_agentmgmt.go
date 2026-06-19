@@ -16,14 +16,11 @@ import (
 // agent-created agents (CreatedBy != "") may be edited or deleted — an agent can
 // never touch an agent the user made in the UI.
 
-// agentDeps carries what the agent-management tools need: the workspace DB, the
-// acting agent's ID (the provenance stamp), and callbacks to start/stop a
-// worker so a newly created/removed agent's heartbeat takes effect immediately.
+// agentDeps carries what the agent-management tools need: the workspace DB and
+// the acting agent's ID (the provenance stamp).
 type agentDeps struct {
-	db          *db.DB
-	actorID     string
-	startWorker func(agentID string, intervalSec int) error
-	stopWorker  func(agentID string)
+	db      *db.DB
+	actorID string
 	// reloadSchedules refreshes the live cron registry after DeleteAgent drops
 	// the agent's schedules. Optional; nil in contexts without a scheduler.
 	reloadSchedules func(context.Context) error
@@ -46,8 +43,8 @@ func (d agentDeps) requireAgentCreatedByAgent(ctx context.Context, id string) (d
 type CreateAgentTool struct{ d agentDeps }
 
 // NewCreateAgentTool constructs create_agent.
-func NewCreateAgentTool(database *db.DB, actorID string, startWorker func(string, int) error) CreateAgentTool {
-	return CreateAgentTool{d: agentDeps{db: database, actorID: actorID, startWorker: startWorker}}
+func NewCreateAgentTool(database *db.DB, actorID string) CreateAgentTool {
+	return CreateAgentTool{d: agentDeps{db: database, actorID: actorID}}
 }
 
 func (CreateAgentTool) Def() providers.ToolDef {
@@ -63,10 +60,7 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"provider":{"type":"string","description":"LLM provider id (e.g. claude-cli, anthropic, minimax). Defaults to the workspace default if omitted."},
 				"model":{"type":"string","description":"Model id for the chosen provider"},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
-				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"},
-				"heartbeatEnabled":{"type":"boolean","description":"Whether the agent wakes autonomously on a timer"},
-				"heartbeatIntervalSec":{"type":"integer","description":"Seconds between autonomous wakes (when heartbeatEnabled)"},
-				"heartbeatPrompt":{"type":"string","description":"Prompt delivered on each autonomous wake"}
+				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"}
 			},
 			"required":["name"],
 			"additionalProperties":false
@@ -76,24 +70,19 @@ func (CreateAgentTool) Def() providers.ToolDef {
 			json.RawMessage(`{"name":"Reviewer","provider":"anthropic","model":"claude-sonnet-4-6","soul":"You are a meticulous code reviewer; be terse."}`),
 			// claude-cli provider is keyless and needs no model id.
 			json.RawMessage(`{"name":"Helper","provider":"claude-cli"}`),
-			// Autonomous agent: heartbeat fields are set together.
-			json.RawMessage(`{"name":"Watcher","provider":"anthropic","model":"claude-sonnet-4-6","heartbeatEnabled":true,"heartbeatIntervalSec":3600,"heartbeatPrompt":"Check for new issues and triage them."}`),
 		},
 	}
 }
 
 func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Name                 string `json:"name"`
-		Soul                 string `json:"soul"`
-		Identity             string `json:"identity"`
-		Provider             string `json:"provider"`
-		Model                string `json:"model"`
-		Avatar               string `json:"avatar"`
-		Color                string `json:"color"`
-		HeartbeatEnabled     bool   `json:"heartbeatEnabled"`
-		HeartbeatIntervalSec int    `json:"heartbeatIntervalSec"`
-		HeartbeatPrompt      string `json:"heartbeatPrompt"`
+		Name     string `json:"name"`
+		Soul     string `json:"soul"`
+		Identity string `json:"identity"`
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+		Avatar   string `json:"avatar"`
+		Color    string `json:"color"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("invalid arguments: %w", err)
@@ -102,30 +91,19 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	if in.Name == "" {
 		return "", fmt.Errorf("name is required")
 	}
-	if in.HeartbeatEnabled && in.HeartbeatIntervalSec <= 0 {
-		in.HeartbeatIntervalSec = 3600 // sane default: hourly
-	}
 	created, err := t.d.db.CreateAgent(ctx, db.Agent{
-		Name:                 in.Name,
-		Soul:                 in.Soul,
-		Identity:             in.Identity,
-		Provider:             in.Provider,
-		Model:                in.Model,
-		Avatar:               in.Avatar,
-		Color:                in.Color,
-		HeartbeatEnabled:     in.HeartbeatEnabled,
-		HeartbeatIntervalSec: in.HeartbeatIntervalSec,
-		HeartbeatPrompt:      in.HeartbeatPrompt,
-		MCPEnabled:           true,
-		CreatedBy:            t.d.actorID,
+		Name:       in.Name,
+		Soul:       in.Soul,
+		Identity:   in.Identity,
+		Provider:   in.Provider,
+		Model:      in.Model,
+		Avatar:     in.Avatar,
+		Color:      in.Color,
+		MCPEnabled: true,
+		CreatedBy:  t.d.actorID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create agent: %w", err)
-	}
-	if created.HeartbeatEnabled && t.d.startWorker != nil {
-		if err := t.d.startWorker(created.ID, created.HeartbeatIntervalSec); err != nil {
-			return "", fmt.Errorf("agent created (%s) but failed to start its heartbeat: %w", created.ID, err)
-		}
 	}
 	b, _ := json.Marshal(map[string]string{"id": created.ID, "name": created.Name, "action": "created"})
 	return string(b), nil
@@ -205,8 +183,8 @@ type DeleteAgentTool struct{ d agentDeps }
 // NewDeleteAgentTool constructs delete_agent. reloadSchedules (optional) is run
 // after deletion so the agent's now-removed schedules also leave the live cron
 // registry.
-func NewDeleteAgentTool(database *db.DB, actorID string, stopWorker func(string), reloadSchedules func(context.Context) error) DeleteAgentTool {
-	return DeleteAgentTool{d: agentDeps{db: database, actorID: actorID, stopWorker: stopWorker, reloadSchedules: reloadSchedules}}
+func NewDeleteAgentTool(database *db.DB, actorID string, reloadSchedules func(context.Context) error) DeleteAgentTool {
+	return DeleteAgentTool{d: agentDeps{db: database, actorID: actorID, reloadSchedules: reloadSchedules}}
 }
 
 func (DeleteAgentTool) Def() providers.ToolDef {
@@ -238,9 +216,6 @@ func (t DeleteAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	}
 	if _, err := t.d.requireAgentCreatedByAgent(ctx, in.ID); err != nil {
 		return "", err
-	}
-	if t.d.stopWorker != nil {
-		t.d.stopWorker(in.ID)
 	}
 	if err := t.d.db.DeleteAgent(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("delete agent: %w", err)

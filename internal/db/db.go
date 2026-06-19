@@ -15,6 +15,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +50,13 @@ type DB struct {
 	usage     map[string]Usage // keyed by agentID + "|" + day
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
+
+	// counters holds the per-entity monotonic id sequence (prefix -> last n).
+	// It is persisted to counters.json so a number is never reused, even across
+	// deletions or restarts. Guarded by its own mutex (independent of mu) so it
+	// can be called both before and while mu is held.
+	countersMu sync.Mutex
+	counters   map[string]int64
 }
 
 // Open opens (creating if missing) the file-backed store rooted at path and
@@ -69,6 +77,7 @@ func Open(path string) (*DB, error) {
 		artifacts: map[string]Artifact{},
 		hooks:     map[string]Hook{},
 		usage:     map[string]Usage{},
+		counters:  map[string]int64{},
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		return nil, err
@@ -102,6 +111,60 @@ const (
 	dirHooks     = "hooks"
 	dirUsage     = "usage"
 )
+
+// countersFile stores the per-entity id sequence at the workspace store root.
+const countersFile = "counters.json"
+
+// Human-readable id prefixes (English mnemonics). A new entity gets
+// "<prefix><n>" (e.g. "TSK7"). Legacy UUID ids keep working unchanged; lookups
+// are by opaque string so the two schemes coexist. Prefixes are pure letters,
+// numbers are pure digits, so an id is trivially parseable and can never
+// collide with a UUID.
+const (
+	idAgent     = "AGT"
+	idSession   = "SES"
+	idTask      = "TSK"
+	idFlow      = "FLW"
+	idFlowRun   = "RUN"
+	idArtifact  = "ART"
+	idKnowledge = "MEM"
+	idMCP       = "MCP"
+	idHook      = "HOK"
+	idSchedule  = "SCH"
+)
+
+// loadCounters reads the persisted id sequence. A missing file is fine (fresh
+// store): every counter simply starts at zero.
+func (d *DB) loadCounters() error {
+	var c map[string]int64
+	err := readJSONFile(d.dir(countersFile), &c)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if c != nil {
+		d.counters = c
+	}
+	return nil
+}
+
+// nextID allocates the next monotonic, never-reused id for the given entity
+// prefix. The counter is bumped in memory and persisted before returning, so a
+// deletion never frees a number and a restart never reissues one. It takes its
+// own mutex, making it safe to call both before mu is acquired (most Create*
+// paths) and while mu is already held (e.g. createSessionLocked).
+func (d *DB) nextID(prefix string) string {
+	d.countersMu.Lock()
+	defer d.countersMu.Unlock()
+	d.counters[prefix]++
+	n := d.counters[prefix]
+	// Best-effort persist: a write error here only risks a future restart
+	// reissuing this number, which is acceptably rare for a local file store.
+	_ = atomicWriteJSON(d.dir(countersFile), d.counters)
+	return prefix + strconv.FormatInt(n, 10)
+}
 
 // ---- generic disk helpers ----
 
@@ -172,6 +235,10 @@ func removeFile(path string) error {
 
 // load reads every entity from disk into the in-memory maps.
 func (d *DB) load() error {
+	if err := d.loadCounters(); err != nil {
+		return err
+	}
+
 	agents, err := loadJSONDir[Agent](d.dir(dirAgents))
 	if err != nil {
 		return err

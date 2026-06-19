@@ -12,6 +12,7 @@ import (
 
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/events"
+	"github.com/bilal/swarmgo/internal/tools"
 )
 
 // scheduleTimeout bounds a single scheduled fire (task run or prompt delivery).
@@ -226,7 +227,12 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	}
 	s.emitWakeEvent(sc, "start", "⏰ Otomatik uyandırma çalışıyor")
 
-	output, steps, invokeErr := s.rt.invokeTraced(WithCallKind(ctx, KindSchedule), agent, sc.Prompt, true)
+	// A wake re-enters a real, human-visible chat session: mark the turn as an
+	// asynchronous chat run so interactive-only tools (ask_user/request_confirmation)
+	// guide the model to ask in its reply instead of bailing with "proceed without
+	// asking" — the user can answer in the chat afterwards.
+	wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(ctx, KindSchedule), sc.SessionID))
+	output, steps, invokeErr := s.rt.invokeTraced(wakeCtx, agent, sc.Prompt, true)
 	if invokeErr != nil {
 		if _, addErr := s.db.AddMessage(ctx, db.Message{
 			SessionID: sc.SessionID,
@@ -396,7 +402,7 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		return session.ID, err
 	}
 	s.rt.trackSession(session.ID)
-	output, steps, err := s.rt.invokeTraced(WithCallKind(ctx, KindSchedule), agent, sc.Prompt, true) // scheduled = autonomous
+	output, steps, err := s.rt.invokeTraced(WithSessionID(WithCallKind(ctx, KindSchedule), session.ID), agent, sc.Prompt, true) // scheduled = autonomous
 	s.rt.untrackSession(session.ID)
 	if err != nil {
 		// Log the provider/tool-loop failure with the agent + its provider/model,

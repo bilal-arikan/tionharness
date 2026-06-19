@@ -215,15 +215,16 @@ func (r *Registry) LazyCatalog(allow func(name string) bool) []providers.ToolDef
 //   - http_get  : the CLI already has a native WebFetch — bridging it only
 //     doubles the schema cost (the bridge ships FULL schemas, unlike the native
 //     lazy catalog which ships name+summary only).
-//   - call_agent: its Call needs the delegation runner from context
-//     (DelegationFrom), which is installed only by the native tool loop. The
-//     bridge dispatcher runs with a plain request context, so a bridged
-//     call_agent would always fail with "delegation not available".
+//   - run_subagent: its Call needs the run-agent runner from context
+//     (RunAgentFrom), installed only by the native tool loop. The bridge
+//     dispatcher runs with a plain request context, so a bridged run_subagent
+//     would always fail with "subagents not available". (CLI agents reach
+//     background work through the bridged spawn_session instead.)
 //
 // Native agents are unaffected — they reach these through activate_tools as usual.
 var bridgeExcluded = map[string]bool{
-	"http_get":   true,
-	"call_agent": true,
+	"http_get":     true,
+	"run_subagent": true,
 }
 
 // BridgeableDefs returns the FULL schemas of lazy built-in tools — the

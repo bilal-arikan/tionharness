@@ -12,7 +12,7 @@ func (d *DB) persistMCPLocked(m MCPServer) error {
 
 // CreateMCPServer inserts a new MCP server config and returns the stored row.
 func (d *DB) CreateMCPServer(ctx context.Context, m MCPServer) (MCPServer, error) {
-	m.ID = newID()
+	m.ID = d.nextID(idMCP)
 	m.CreatedAt = now()
 	if m.Transport == "" {
 		m.Transport = MCPTransportStdio

@@ -49,6 +49,12 @@ func (RequestConfirmationTool) Call(ctx context.Context, input json.RawMessage) 
 	// Bail early in autonomous/flow runs before touching the payload. IsAutonomous
 	// is the fast path; askerFrom falls back for unstamped contexts.
 	if IsAutonomous(ctx) || askerFrom(ctx) == nil {
+		// Asynchronous chat run (wake-delivered turn): the user can read a reply but
+		// can't confirm mid-turn. Have the model state what it wants to do and ask
+		// for a go-ahead in its reply, then stop — instead of a flat "don't act".
+		if IsAsyncChat(ctx) {
+			return "", fmt.Errorf("request_confirmation can't block in this asynchronous chat turn. Describe the risky action in your reply, ask the user to confirm, and end the turn WITHOUT doing it; act only after they approve in a later message")
+		}
 		return "", fmt.Errorf("request_confirmation is only available in interactive chat sessions; do not take the risky action")
 	}
 	ask := askerFrom(ctx)

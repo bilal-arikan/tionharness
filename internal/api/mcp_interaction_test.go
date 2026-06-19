@@ -269,6 +269,25 @@ func TestInteractionBackend_Artifact(t *testing.T) {
 	}
 }
 
+// TestInteractionBackend_AutonomousAskBails locks the headless-run guarantee: an
+// autonomous run (scheduler/spawn) has no live client, so ask_user must
+// return an error result at once instead of blocking until the 15-minute timeout.
+func TestInteractionBackend_AutonomousAskBails(t *testing.T) {
+	runs := newChatRuns()
+	run := runs.register("rauto", "s-rauto", func() {})
+	defer runs.unregister("rauto")
+	run.autonomous = true
+	b := &interactionBackend{runs: runs}
+
+	res, err := b.Call(context.Background(), run.token, "ask_user", json.RawMessage(`{"question":"q"}`))
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if !res.IsError {
+		t.Fatalf("autonomous ask_user must bail with an error result, got %+v", res)
+	}
+}
+
 func TestInteractionBackend_UnknownToken(t *testing.T) {
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs}

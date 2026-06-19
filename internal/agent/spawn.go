@@ -113,7 +113,7 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 	defer cancel()
 
 	r.trackSession(sessionID)
-	output, steps, err := r.invokeTraced(WithCallKind(ctx, KindSpawn), agent, prompt, true)
+	output, steps, err := r.invokeTraced(WithSessionID(WithCallKind(ctx, KindSpawn), sessionID), agent, prompt, true)
 	r.untrackSession(sessionID)
 
 	if err != nil {

@@ -25,11 +25,6 @@ type Agent struct {
 	Avatar string `json:"avatar"`
 	Color  string `json:"color"`
 
-	// Heartbeat (autonomous wake) configuration.
-	HeartbeatEnabled     bool   `json:"heartbeatEnabled"`
-	HeartbeatIntervalSec int    `json:"heartbeatIntervalSec"`
-	HeartbeatPrompt      string `json:"heartbeatPrompt"`
-
 	// Daily spend caps for autonomous calls (0 = unlimited).
 	DailyCallLimit  int `json:"dailyCallLimit"`
 	DailyTokenLimit int `json:"dailyTokenLimit"`
@@ -62,10 +57,9 @@ type Agent struct {
 //	task      a kanban task's run history (one session per task)
 //	flow      an orchestration flow's run history (one session per flow)
 //	schedule  an agent's scheduled-prompt deliveries (one per agent)
-//	heartbeat an agent's autonomous wake turns
 //
 // SourceID links the session back to the entity that owns it (a task or flow id);
-// it is empty for plain chat and for agent-keyed kinds (schedule/heartbeat). This
+// it is empty for plain chat and for agent-keyed kinds (schedule). This
 // is the unification primitive: every execution path funnels its output into a
 // Session, so a single streamable transcript viewer and the unified "executions"
 // feed can render task runs, flow runs and scheduled deliveries like any chat.

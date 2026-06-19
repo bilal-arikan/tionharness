@@ -87,12 +87,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		}
 	}
 
-	// Agent→agent delegation: the call_agent tool lets this agent hand a sub-task
-	// to another agent and wait for its reply. Gated (off by default) because it
-	// multiplies token cost and lets one turn fan out across several agents; the
-	// runner enforces depth/cycle/budget guards.
+	// Subagents: the generic run_subagent tool launches an isolated worker — a
+	// built-in profile (explore/coder/reviewer) or an existing agent — sync or
+	// async, gathering only its final result so a sub-task's tool output never
+	// floods this turn's context. Gated (off by default) because it multiplies
+	// token cost and lets one turn fan out across several subagents; the runner
+	// enforces depth/cycle/budget/concurrency guards. Eager (always shipped) so the
+	// model reaches for it readily.
 	if r.tun.DelegationEnabled() {
-		builtins = append(builtins, tools.NewCallAgentTool())
+		builtins = append(builtins, tools.NewRunSubagentTool())
 	}
 
 	// Cross-session awareness: the list_sessions pull tool (complements the pushed
@@ -144,19 +147,13 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	if r.tun.SelfManageEnabled() {
 		builtins = append(builtins,
 			// Agents.
-			tools.NewCreateAgentTool(r.db, agent.ID, r.Start),
+			tools.NewCreateAgentTool(r.db, agent.ID),
 			tools.NewUpdateAgentTool(r.db, agent.ID),
-			tools.NewDeleteAgentTool(r.db, agent.ID, r.Stop),
+			tools.NewDeleteAgentTool(r.db, agent.ID, r.reloadSchedules),
 			tools.NewListAgentsTool(r.db, agent.ID),
-			// Inter-agent messaging: fire-and-forget hand-off to another agent's
-			// inbox (the async complement to call_agent's synchronous delegation).
-			tools.NewSendAgentMessageTool(agent.ID, r.SendAgentMessage),
-			// Spawn: launch a NEW independent session for another agent and walk
-			// away (fire-and-forget parallel worker — the "swarm" primitive).
-			tools.NewSpawnSessionTool(agent.ID, r.tun.SpawnMaxPerTurn(), func(ctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
-				res, err := r.SpawnSession(ctx, target, prompt, SpawnOptions{ModelOverride: modelOverride, CreatedBy: agent.ID})
-				return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
-			}),
+			// Note: agent→agent work is unified under run_subagent (above) — async
+			// background runs go through its wait:"async" mode (→ SpawnSession). The
+			// old call_agent / spawn_session / send_agent_message tools were removed.
 			// Flows.
 			tools.NewCreateFlowTool(r.db, agent.ID),
 			tools.NewUpdateFlowTool(r.db, agent.ID),
@@ -210,7 +207,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		if r.skills != nil {
 			builtins = append(builtins,
 				tools.NewCreateSkillTool(agentSkillWriter{store: r.skills}),
-				tools.NewDeleteSkillTool(agentSkillWriter{store: r.skills}),
+				tools.NewDeleteSkillTool(agentSkillWriter{store: r.skills, db: r.db}),
 			)
 		}
 		// Application-wide settings: read + live-apply the settings.json document
@@ -220,6 +217,18 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			builtins = append(builtins,
 				tools.NewGetSettingsTool(r.settingsBridge),
 				tools.NewUpdateSettingsTool(r.settingsBridge),
+			)
+		}
+		// Workspaces: list/create/rename across all workspaces; delete only
+		// agent-created ones (and never the current or last). Cross-workspace, so
+		// it goes through the bridge the manager wires from the api server. Only
+		// offered when that bridge is present.
+		if r.workspaceBridge != nil {
+			builtins = append(builtins,
+				tools.NewListWorkspacesTool(r.workspaceBridge, agent.ID, r.wsID),
+				tools.NewCreateWorkspaceTool(r.workspaceBridge, agent.ID, r.wsID),
+				tools.NewRenameWorkspaceTool(r.workspaceBridge, agent.ID, r.wsID),
+				tools.NewDeleteWorkspaceTool(r.workspaceBridge, agent.ID, r.wsID),
 			)
 		}
 	}
@@ -251,11 +260,6 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		"memory_recall",
 		"http_get",
 	)
-	// call_agent (synchronous delegation, gated by DelegationEnabled) is used in a
-	// minority of turns, so it loads on demand too. It is intentionally NOT bridged
-	// to claude-cli (see tools.bridgeExcluded): its dispatch needs the native loop's
-	// delegation context, which the CLI bridge cannot supply.
-	reg.MarkLazy("call_agent")
 	// Role-aware eager trim: a read-only agent can never have a write approved, so
 	// shipping the mutating tools' schemas every turn is pure waste. Demote them to
 	// load-on-demand for read-only agents (still reachable via activate_tools, and

@@ -12,7 +12,7 @@ func (d *DB) persistTaskLocked(t Task) error {
 
 // CreateTask inserts a new task and returns the stored row.
 func (d *DB) CreateTask(ctx context.Context, t Task) (Task, error) {
-	t.ID = newID()
+	t.ID = d.nextID(idTask)
 	t.CreatedAt = now()
 	t.UpdatedAt = t.CreatedAt
 	if t.BoardState == "" {

@@ -163,6 +163,39 @@ var workspaceTemplates = []workspaceTemplate{
 			{AgentKey: "coach", CronExpr: "0 20 * * *", Prompt: "Reflect on today: review what was done, note wins and friction points, and suggest one improvement for tomorrow."},
 		},
 	},
+	{
+		ID:          "linkshortener",
+		Name:        "Link Kısaltma (Otonom Ops)",
+		Description: "Basit bir URL kısaltma sitesi üzerinde çalışmaya hazır: Plan → Yaz → İncele çok-modelli pipeline + gece çalışan döküman/test/log sweep zamanlamaları. `swarmgo-autonomous-ops` skill'ini somutlaştırır.",
+		Icon:        "🔗",
+		Agents: []tmplAgent{
+			{Key: "architect", Name: "Mimar (Plan)", Avatar: "🗺", Color: "#8b5cf6",
+				Soul: "You are the architect for a URL shortener web app (short-code generation, the redirect endpoint, click analytics, a small REST API and web UI). You explore the codebase and turn a feature request into a concrete, step-by-step implementation plan: which files to change, in what order, the approach, and the risks. You favor small, atomic changes and existing conventions, and you do not write the final code. Load the `swarmgo-autonomous-ops` skill for the team's operating playbook."},
+			{Key: "builder", Name: "Geliştirici (Write)", Avatar: "⚙", Color: "#10b981",
+				Soul: "You implement plans for a URL shortener web app with clean, idiomatic code and small, focused changes. You follow the plan and existing conventions, write tests alongside the code, and keep edits scoped. Load the `swarmgo-autonomous-ops` skill for conventions and quality gates."},
+			{Key: "reviewer", Name: "İnceleyici (Review)", Avatar: "🧐", Color: "#f59e0b",
+				Soul: "You review code for the URL shortener app from an independent viewpoint: correctness, security (open-redirect, injection, SSRF), edge cases, and test coverage. You give specific, actionable feedback and a clear merge-confidence verdict. Load the `swarmgo-autonomous-ops` skill."},
+			{Key: "ops", Name: "Bakım (Ops)", Avatar: "♻️", Color: "#6366f1",
+				Soul: "You keep the URL shortener project healthy: sweep docs for staleness, ensure test coverage, and mine logs for errors. You open small fixes and report what changed. Load the `swarmgo-autonomous-ops` skill for the docs/tests/logs flywheel."},
+		},
+		Flow: &tmplFlow{
+			Name:        "Plan → Yaz → İncele",
+			Description: "URL kısaltma özelliklerini üç aşamada yürüten çok-modelli pipeline",
+			Steps: []tmplStep{
+				{ID: "plan", Title: "Plan", AgentKey: "architect",
+					Prompt: "Feature for the URL shortener app:\n{{input}}\n\nExplore the relevant code and produce a concrete, step-by-step implementation plan."},
+				{ID: "write", Title: "Yaz", AgentKey: "builder",
+					Prompt: "Implement the following plan with clean, atomic changes and tests.\n\n{{last}}"},
+				{ID: "review", Title: "İncele", AgentKey: "reviewer",
+					Prompt: "Independently review the implementation below against the feature request. Check correctness, security (open-redirect/injection/SSRF), edge cases and tests, then give a merge-confidence verdict.\n\nFeature:\n{{input}}\n\nImplementation:\n{{last}}"},
+			},
+		},
+		Schedules: []tmplSchedule{
+			{AgentKey: "ops", CronExpr: "0 1 * * *", Prompt: "Overnight docs sweep: compare the day's code changes against the docs (README + internal docs), update anything stale or missing, and report what changed."},
+			{AgentKey: "ops", CronExpr: "0 2 * * *", Prompt: "Test coverage sweep: find untested code paths in the URL shortener app and add tests until the coverage target is met. Report any gaps you could not close."},
+			{AgentKey: "ops", CronExpr: "0 3 * * *", Prompt: "Production error sweep: read the logs, find errors, diagnose the most likely cause of each, and propose a concrete fix. Summarize findings as a notification."},
+		},
+	},
 }
 
 // templateByID returns the named template, falling back to the "blank" default.

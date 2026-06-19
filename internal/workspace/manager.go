@@ -15,8 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/events"
@@ -34,6 +32,10 @@ type Meta struct {
 	Name      string `json:"name"`
 	CreatedAt int64  `json:"createdAt"`
 	Path      string `json:"path,omitempty"`
+	// CreatedBy is the id of the agent that created this workspace via a
+	// self-management tool. Empty means the user created it (in the UI). Only
+	// agent-created workspaces (CreatedBy != "") may be deleted by an agent.
+	CreatedBy string `json:"createdBy,omitempty"`
 }
 
 // Workspace bundles a workspace's live database, runtime and scheduler.
@@ -62,11 +64,40 @@ type Manager struct {
 	workspaces map[string]*Workspace
 	order      []string // creation order (first = default)
 
+	// wsCounter is the monotonic sequence behind human-readable workspace ids
+	// ("WS1", "WS2"), persisted to ws-counter.json so a number is never reused
+	// across deletions or restarts. Guarded by mu.
+	wsCounter int64
+
 	// settingsBridge is the application-wide settings store + live-apply hook,
 	// wired in after the api server is constructed. Stored so it can be applied
 	// both to existing runtimes (via SetSettingsBridge) and to any workspace
 	// opened later. nil until wired.
 	settingsBridge tools.SettingsBridge
+
+	// workspaceBridge backs the workspace self-management tools (list/create/
+	// rename/delete_workspace). Like settingsBridge it is wired in after the api
+	// server exists and distributed to every runtime (existing + later-opened).
+	// nil until wired.
+	workspaceBridge tools.WorkspaceBridge
+
+	// autoInteractFactory builds the headless Interaction MCP setup for a runtime
+	// (so scheduler/spawn CLI agents reach use_skill/shell/self-manage).
+	// Wired in after the api server exists; applied to existing + later-opened
+	// runtimes. nil until wired.
+	autoInteractFactory func(*agent.Runtime) agent.AutonomousInteraction
+}
+
+// SetAutonomousInteraction wires the headless Interaction MCP factory into every
+// existing workspace runtime and remembers it for workspaces opened later. The
+// api server calls this once at startup (it owns the run registry + endpoint).
+func (m *Manager) SetAutonomousInteraction(factory func(*agent.Runtime) agent.AutonomousInteraction) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.autoInteractFactory = factory
+	for _, ws := range m.workspaces {
+		ws.Runtime.SetAutonomousInteraction(factory(ws.Runtime))
+	}
 }
 
 // SetSettingsBridge wires the application-wide settings bridge into every
@@ -78,6 +109,18 @@ func (m *Manager) SetSettingsBridge(b tools.SettingsBridge) {
 	m.settingsBridge = b
 	for _, ws := range m.workspaces {
 		ws.Runtime.SetSettingsBridge(b)
+	}
+}
+
+// SetWorkspaceBridge wires the cross-workspace management bridge into every
+// existing workspace runtime and remembers it for workspaces opened later. The
+// api server calls this once at startup (it owns the manager + seed/notify hooks).
+func (m *Manager) SetWorkspaceBridge(b tools.WorkspaceBridge) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.workspaceBridge = b
+	for _, ws := range m.workspaces {
+		ws.Runtime.SetWorkspaceBridge(b)
 	}
 }
 
@@ -102,6 +145,16 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 		return nil, err
 	}
 
+	// Restore the workspace id counter; guard against rewind by also taking the
+	// max of any "WS<n>" id already on disk (so a stale/missing counter file can
+	// never reissue a live id).
+	m.wsCounter = m.loadWSCounter()
+	for _, meta := range metas {
+		if n, ok := parseWSID(meta.ID); ok && n > m.wsCounter {
+			m.wsCounter = n
+		}
+	}
+
 	for _, meta := range metas {
 		if err := m.open(meta); err != nil {
 			logger.Warn("failed to open workspace", "id", meta.ID, "error", err)
@@ -111,7 +164,7 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 
 	// Ensure a default workspace exists.
 	if len(m.order) == 0 {
-		if _, err := m.Create("Varsayılan", ""); err != nil {
+		if _, err := m.Create("Varsayılan", "", ""); err != nil {
 			return nil, fmt.Errorf("create default workspace: %w", err)
 		}
 	}
@@ -143,14 +196,17 @@ func (m *Manager) open(meta Meta) error {
 	}
 
 	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), vault, m.bus, meta.ID, meta.Name, m.logs, m.logger)
-	if err := rt.StartConfigured(context.Background()); err != nil {
-		m.logger.Warn("start configured agents failed", "workspace", meta.ID, "error", err)
-	}
 
 	// Apply the settings bridge if it has already been wired (workspaces created
 	// after startup); startup workspaces get it via SetSettingsBridge instead.
 	if m.settingsBridge != nil {
 		rt.SetSettingsBridge(m.settingsBridge)
+	}
+	if m.workspaceBridge != nil {
+		rt.SetWorkspaceBridge(m.workspaceBridge)
+	}
+	if m.autoInteractFactory != nil {
+		rt.SetAutonomousInteraction(m.autoInteractFactory(rt))
 	}
 
 	sched := agent.NewScheduler(database, rt, m.logger)
@@ -211,12 +267,14 @@ func (m *Manager) Default() *Workspace {
 // Create makes a new isolated workspace. parentPath, when non-empty, is a
 // user-chosen directory under which this workspace's own data folder is created
 // (so deleting the workspace never removes unrelated sibling content); empty
-// uses the default location under the manager root.
-func (m *Manager) Create(name, parentPath string) (*Workspace, error) {
+// uses the default location under the manager root. createdBy stamps provenance:
+// pass an agent id when an agent creates the workspace (so it may delete it
+// later), or "" for a user-created workspace.
+func (m *Manager) Create(name, parentPath, createdBy string) (*Workspace, error) {
 	if name == "" {
 		name = "Yeni Workspace"
 	}
-	meta := Meta{ID: uuid.NewString(), Name: name, CreatedAt: time.Now().Unix()}
+	meta := Meta{ID: m.nextWorkspaceID(), Name: name, CreatedAt: time.Now().Unix(), CreatedBy: createdBy}
 	if parentPath != "" {
 		meta.Path = filepath.Join(parentPath, "swarmgo-"+meta.ID)
 	}
@@ -247,7 +305,6 @@ func (m *Manager) Delete(id string) error {
 	m.mu.Unlock()
 
 	ws.Scheduler.Stop()
-	ws.Runtime.StopAll()
 	_ = ws.DB.Close()
 	if err := os.RemoveAll(ws.DataDir); err != nil {
 		m.logger.Warn("failed to remove workspace dir", "id", id, "error", err)
@@ -261,7 +318,6 @@ func (m *Manager) Close() {
 	defer m.mu.Unlock()
 	for _, ws := range m.workspaces {
 		ws.Scheduler.Stop()
-		ws.Runtime.StopAll()
 		_ = ws.DB.Close()
 	}
 }

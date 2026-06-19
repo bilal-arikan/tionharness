@@ -24,6 +24,18 @@ func (s *Server) publishSettingsChanged(body string) {
 	})
 }
 
+// publishWorkspacesChanged notifies open UIs that the set of workspaces changed
+// (an agent created/renamed/deleted one) so the switcher refreshes its list
+// without a manual reload. App-global → no workspace badge, no toast.
+func (s *Server) publishWorkspacesChanged(body string) {
+	s.bus.Publish(events.Event{
+		Type:  "workspaces",
+		Level: "info",
+		Title: "Workspace listesi güncellendi",
+		Body:  body,
+	})
+}
+
 // userContextBlock renders the user-profile settings into a system-prompt block
 // so agents address the user correctly. Empty when no profile fields are set.
 func userContextBlock(s settings.Settings) string {
@@ -79,6 +91,12 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 type testProviderReq struct {
 	Provider string `json:"provider"`
+	// Model is the model id to probe with. Optional: when empty the configured
+	// default model is used (correct for the default provider). The per-provider
+	// test buttons pass a representative model id, since the global default model
+	// is usually for a different provider (e.g. an Anthropic id can't probe
+	// MiniMax/OpenRouter).
+	Model string `json:"model"`
 }
 
 type testProviderResp struct {
@@ -106,8 +124,12 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 
+	model := req.Model
+	if model == "" {
+		model = s.settings.Get().DefaultModel
+	}
 	resp, err := provider.Complete(ctx, providers.Request{
-		Model:  s.settings.Get().DefaultModel,
+		Model:  model,
 		System: "You are a connectivity probe. Reply with exactly: OK",
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: "ping"},

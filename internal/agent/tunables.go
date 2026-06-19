@@ -45,6 +45,7 @@ type Tunables struct {
 	titleModel    string
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
 	selfManage    bool // gates the self-management tool suite (off by default)
+	cliHooks      bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
 	delegation    bool // gates the agent→agent `call_agent` tool (off by default)
 	delegMaxDepth int  // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls int  // 0 → DefaultMaxDelegationCalls
@@ -87,7 +88,7 @@ func NewTunables() *Tunables {
 }
 
 // SetAutonomyPaused toggles the global autonomy brake. When paused, autonomous
-// provider calls (heartbeat, scheduler) are rejected before reaching a model;
+// provider calls (scheduler) are rejected before reaching a model;
 // manual chat and run-now are unaffected.
 func (t *Tunables) SetAutonomyPaused(paused bool) {
 	t.mu.Lock()
@@ -148,6 +149,23 @@ func (t *Tunables) SelfManageEnabled() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.selfManage
+}
+
+// SetCLIHooksEnabled toggles whether the workspace's PreToolUse/PostToolUse hooks
+// are passed to claude-cli agents (via the generated --settings file). On by
+// default; turn off to keep hooks native-only when a hook authored for SwarmGo's
+// shell misbehaves under the CLI's own hook runner.
+func (t *Tunables) SetCLIHooksEnabled(enabled bool) {
+	t.mu.Lock()
+	t.cliHooks = enabled
+	t.mu.Unlock()
+}
+
+// CLIHooksEnabled reports whether hooks are passed through to claude-cli agents.
+func (t *Tunables) CLIHooksEnabled() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.cliHooks
 }
 
 // SetDelegationEnabled toggles the agent→agent `call_agent` tool. Off by

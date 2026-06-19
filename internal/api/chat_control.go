@@ -26,6 +26,10 @@ type chatRun struct {
 	// token is the per-run opaque secret a CLI subprocess presents (Bearer) so
 	// its Interaction MCP calls correlate back to this turn.
 	token string
+	// autonomous marks a headless turn (scheduler/spawn) with no live
+	// client: interactive Interaction MCP tools (ask_user/request_confirmation)
+	// bail out immediately instead of blocking for an answer that can't arrive.
+	autonomous bool
 	// sessionID is the chat session this turn belongs to, so the UI can ask
 	// "is a turn in flight for session X?" after a page reload (turns are
 	// detached from the client connection and keep running server-side).
@@ -41,6 +45,7 @@ type chatRun struct {
 	wake      tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
 	spawn     *tools.SpawnSessionTool      // current agent's spawn tool (self-manage on), for the Interaction MCP spawn_session tool
 	skill     skillLoader                  // current agent's skill loader, for the Interaction MCP use_skill tool
+	shell     shellRunner                  // current agent's shell runner, for the Interaction MCP shell tool
 	// bridge exposes the responding agent's lazy self-management tools to the CLI
 	// path (CLI-3): bridgeDefs are advertised in tools/list + the allowlist, and
 	// bridgeCall dispatches them through the native registry. Empty when
@@ -90,6 +95,27 @@ func (r *chatRun) skillLoaderFor() skillLoader {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.skill
+}
+
+// shellRunner runs a shell command for the responding agent (CLI path), bound to
+// the workspace sandbox. Mirrors the native shell built-in over the Interaction
+// MCP bridge so a claude-cli agent runs commands through SwarmGo's own shell
+// (PowerShell on Windows, sandboxed + bounded) instead of the CLI's POSIX Bash.
+type shellRunner func(ctx context.Context, args json.RawMessage) (string, error)
+
+// setShellRunner installs the per-agent shell runner so the Interaction MCP shell
+// tool (CLI path) can run a command. A nil value disables it (shell off).
+func (r *chatRun) setShellRunner(fn shellRunner) {
+	r.mu.Lock()
+	r.shell = fn
+	r.mu.Unlock()
+}
+
+// shellRunnerFor returns the current shell runner (nil if none installed).
+func (r *chatRun) shellRunnerFor() shellRunner {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.shell
 }
 
 // setSpawnTool installs the per-agent spawn tool so the Interaction MCP
@@ -304,4 +330,30 @@ func (s *Server) handleChatControl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
+}
+
+type cancelWakeReq struct {
+	SessionID string `json:"sessionId"`
+}
+
+// handleCancelWake disarms a pending one-shot self-wake (schedule_wake) for a
+// session — the user pressed "Durdur" on the waiting banner before the wake
+// fired. It cancels the timer + deletes the schedule via the workspace runtime,
+// which also emits a phase=cancelled event so the open screen clears the banner.
+func (s *Server) handleCancelWake(w http.ResponseWriter, r *http.Request) {
+	var req cancelWakeReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.SessionID == "" {
+		writeError(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+	cancelled, err := ws(r).Runtime.CancelWake(r.Context(), req.SessionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"result": "ok", "cancelled": cancelled})
 }

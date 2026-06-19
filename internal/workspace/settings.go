@@ -16,7 +16,7 @@ const wsSettingsFile = "ws-settings.json"
 // WSSettings holds the per-workspace overrides editable from the Settings
 // screen's "Bu Workspace" category. Empty provider/model fall back to the
 // application-global defaults; PauseAutonomy pauses only this workspace's
-// runtime (heartbeat + scheduler), independent of the global brake.
+// runtime (scheduler), independent of the global brake.
 // Instructions is free-form guidance injected into agents running in this
 // workspace (workspace-specific system prompt addendum).
 type WSSettings struct {

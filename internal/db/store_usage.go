@@ -6,7 +6,7 @@ import (
 )
 
 // Usage kinds tag every LLM call by its origin so spend can be attributed
-// (chat vs. autonomous heartbeat vs. compaction vs. titling, …). They are the
+// (chat vs. autonomous schedule vs. compaction vs. titling, …). They are the
 // single source of truth for the call taxonomy: the agent package's CallKind is
 // defined in terms of these strings. UsageKindOther is the fallback for calls
 // recorded without an explicit kind.
@@ -15,9 +15,9 @@ const (
 	UsageKindTask      = "task"
 	UsageKindSchedule  = "schedule"
 	UsageKindFlow      = "flow"
-	UsageKindHeartbeat = "heartbeat"
 	UsageKindDelegate  = "delegate"
 	UsageKindSpawn     = "spawned"
+	UsageKindSubagent  = "subagent"
 	UsageKindTitle     = "title"
 	UsageKindSummary   = "summary"
 	UsageKindReflect   = "reflect"

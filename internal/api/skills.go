@@ -119,12 +119,17 @@ func (s *Server) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, skillDetailFor(store, sk))
 }
 
-// handleDeleteSkill removes a skill's folder from disk.
+// handleDeleteSkill removes a skill's folder from disk and strips the slug from
+// every agent that referenced it, so no agent keeps a dangling skill reference.
 func (s *Server) handleDeleteSkill(w http.ResponseWriter, r *http.Request) {
-	store := ws(r).Runtime.Skills()
-	if err := store.Delete(r.PathValue("slug")); err != nil {
+	wsp := ws(r)
+	slug := r.PathValue("slug")
+	if err := wsp.Runtime.Skills().Delete(slug); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if _, err := wsp.DB.RemoveSkillFromAgents(r.Context(), slug); err != nil {
+		s.logger.Warn("strip deleted skill from agents failed", "slug", slug, "error", err)
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

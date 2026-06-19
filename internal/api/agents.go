@@ -102,14 +102,18 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, agent)
 }
 
-// handleDeleteAgent stops the agent's autonomous worker (if running) and removes
-// the agent together with the sessions it owns.
+// handleDeleteAgent removes the agent together with the sessions, schedules and
+// tasks it owns.
 func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
-	wsp.Runtime.Stop(id) // halt any heartbeat worker before removal
 	if err := wsp.DB.DeleteAgent(r.Context(), id); writeDBError(w, err, "agent not found") {
 		return
+	}
+	// DeleteAgent also drops the agent's schedules; reload so their cron jobs
+	// leave the live registry too.
+	if err := wsp.Scheduler.Reload(r.Context()); err != nil {
+		s.logger.Warn("scheduler reload after agent delete failed", "error", err)
 	}
 	s.logger.Info("agent deleted", "id", id)
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})

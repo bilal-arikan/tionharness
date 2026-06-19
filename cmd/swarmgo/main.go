@@ -119,6 +119,10 @@ func main() {
 	// get_settings / update_settings self-management tools can read and live-apply
 	// settings (the server owns the apply hook; the manager owns the runtimes).
 	manager.SetSettingsBridge(server.SettingsBridge())
+	// Wire the cross-workspace management bridge so the list/create/rename/
+	// delete_workspace self-management tools can manage workspaces through the
+	// manager (which the server holds) and notify the UI on change.
+	manager.SetWorkspaceBridge(server.WorkspaceBridge())
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

@@ -60,19 +60,19 @@ func TestRegistryActiveDefsAndLazyCatalog(t *testing.T) {
 
 // TestBridgeableDefsExcludesCLINative verifies the CLI Interaction MCP bridge
 // skips lazy built-ins that are CLI-native (http_get) or native-loop-context-bound
-// (call_agent), while still bridging an ordinary lazy self-management tool.
+// (run_subagent), while still bridging an ordinary lazy self-management tool.
 func TestBridgeableDefsExcludesCLINative(t *testing.T) {
 	reg := NewRegistry(
 		stubTool{name: "eager_a", desc: "always on"},
 		stubTool{name: "create_agent", desc: "self-mgmt"},
 		stubTool{name: "http_get", desc: "cli has WebFetch"},
-		stubTool{name: "call_agent", desc: "needs native delegation ctx"},
+		stubTool{name: "run_subagent", desc: "needs native run-agent ctx"},
 	)
-	reg.MarkLazy("create_agent", "http_get", "call_agent")
+	reg.MarkLazy("create_agent", "http_get", "run_subagent")
 
 	got := names(reg.BridgeableDefs(nil))
 	if !eq(got, []string{"create_agent"}) {
-		t.Errorf("BridgeableDefs = %v, want [create_agent] (http_get/call_agent excluded)", got)
+		t.Errorf("BridgeableDefs = %v, want [create_agent] (http_get/run_subagent excluded)", got)
 	}
 	// Schemas are full (not stripped) for bridged tools.
 	for _, d := range reg.BridgeableDefs(nil) {

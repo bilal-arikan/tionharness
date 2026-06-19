@@ -47,7 +47,7 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	wsNew, err := s.workspaces.Create(req.Name, strings.TrimSpace(req.Path))
+	wsNew, err := s.workspaces.Create(req.Name, strings.TrimSpace(req.Path), "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

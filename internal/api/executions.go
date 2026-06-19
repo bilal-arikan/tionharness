@@ -10,7 +10,7 @@ import (
 )
 
 // executionItem is one row of the unified executions feed: a session-backed
-// transcript produced by any path (chat, task, flow, schedule, heartbeat),
+// transcript produced by any path (chat, task, flow, schedule),
 // enriched with the agent name, a live-running flag and a last-run status so the
 // feed renders every execution uniformly.
 type executionItem struct {
@@ -42,7 +42,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Merge chat streaming sessions and autonomous (schedule/heartbeat) sessions.
+	// Merge chat streaming sessions and autonomous (schedule) sessions.
 	running := map[string]bool{}
 	for _, id := range s.runs.activeSessionIDs() {
 		running[id] = true

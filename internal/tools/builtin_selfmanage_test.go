@@ -27,7 +27,7 @@ func TestCreateAgentStampsCreatedBy(t *testing.T) {
 	d := openTestDB(t)
 	const actor = "actor-1"
 
-	create := NewCreateAgentTool(d, actor, nil)
+	create := NewCreateAgentTool(d, actor)
 	out, err := create.Call(ctx, json.RawMessage(`{"name":"Helper","soul":"helpful"}`))
 	if err != nil {
 		t.Fatalf("create_agent: %v", err)

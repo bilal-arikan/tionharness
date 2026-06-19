@@ -31,7 +31,7 @@ func WithArtifacts(ctx context.Context, sink ArtifactSink) context.Context {
 }
 
 // artifactsFrom returns the sink attached to ctx, or nil when none is present
-// (e.g. heartbeat/scheduler runs with no open client connection).
+// (e.g. scheduler runs with no open client connection).
 func artifactsFrom(ctx context.Context) ArtifactSink {
 	s, _ := ctx.Value(artifactKey{}).(ArtifactSink)
 	return s

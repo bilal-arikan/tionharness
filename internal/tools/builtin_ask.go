@@ -73,6 +73,14 @@ func (AskUserTool) Call(ctx context.Context, input json.RawMessage) (string, err
 	// is the fast path (set by WithCallKind for every non-chat entry point);
 	// askerFrom falls back for contexts that were not stamped with WithCallKind.
 	if IsAutonomous(ctx) || askerFrom(ctx) == nil {
+		// In an asynchronous chat run (a schedule_wake turn delivered back into its
+		// live session) the user IS present, just not able to answer a blocking
+		// prompt mid-turn. Tell the model to ask in its normal reply and end the
+		// turn so the user can read it and respond in the chat — rather than the
+		// fully-headless "proceed without asking", which would make it guess.
+		if IsAsyncChat(ctx) {
+			return "", fmt.Errorf("ask_user can't block in this asynchronous chat turn. Write your question as your normal reply text and end the turn; the user will read it and answer in the chat, which continues the conversation")
+		}
 		return "", fmt.Errorf("ask_user is only available in interactive chat sessions; proceed without asking")
 	}
 	ask := askerFrom(ctx)

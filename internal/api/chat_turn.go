@@ -34,7 +34,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// (the UI's agent selector) is understood as the user addressing this agent —
 	// not mistaken for a file, skill, or entity to look up.
 	if n := strings.TrimSpace(agentRow.Name); n != "" {
-		note := "You are the agent named \"" + n + "\". In this chat, the user picks which agent should answer by starting a message with \"@<AgentName>\". So an \"@" + n + "\" at the start of a message means the user is addressing you by name — treat it as being called, not as a file, skill, or entity to look up; just answer the rest of the message."
+		note := "You are the agent \"" + n + "\". A leading \"@" + n + "\" means the user is addressing you by name — not a file, skill, or entity to look up. Just answer the message."
 		// Multi-agent turn: when the user mentions several agents, each answers the
 		// same message in order and later agents can see the earlier replies.
 		var others []string
@@ -46,7 +46,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 			}
 		}
 		if len(others) > 0 {
-			note += " The user also addressed other agents in this message (" + strings.Join(others, ", ") + "); each mentioned agent answers this same message in turn, and later agents can see the earlier agents' replies. Answer only from your own perspective — do not speak for or impersonate the other agents."
+			note += " Other agents were also addressed (" + strings.Join(others, ", ") + "); each answers this same message in turn and can see earlier replies. Speak only as yourself — do not impersonate the others."
 		}
 		system = strings.TrimSpace(note + "\n\n" + system)
 	}

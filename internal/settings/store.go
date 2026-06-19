@@ -17,6 +17,7 @@ var reservedProviderIDs = map[string]bool{
 	"minimax":           true,
 	"claude-cli":        true,
 	"minimax-anthropic": true,
+	"openrouter":        true,
 }
 
 // providerIDRe constrains a custom provider id to a clean identifier.
@@ -96,6 +97,11 @@ func (s *Store) AnthropicKey() string {
 // MinimaxKey returns the decrypted MiniMax API key, or "" if none.
 func (s *Store) MinimaxKey() string {
 	return s.decrypt(s.Get().MinimaxKeyEnc)
+}
+
+// OpenRouterKey returns the decrypted OpenRouter API key, or "" if none.
+func (s *Store) OpenRouterKey() string {
+	return s.decrypt(s.Get().OpenRouterKeyEnc)
 }
 
 // CustomProviderKey returns the decrypted key for a custom provider id, or "".
@@ -289,7 +295,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.DefaultDailyCallLimit, p.DefaultDailyCallLimit)
 	applyInt(&next.DefaultDailyTokenLimit, p.DefaultDailyTokenLimit)
 
-	applyInt(&next.DefaultHeartbeatSec, p.DefaultHeartbeatSec)
 	if p.PauseAutonomy != nil {
 		next.PauseAutonomy = *p.PauseAutonomy
 	}
@@ -303,6 +308,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 
 	applyBool(&next.EnableShell, p.EnableShell)
 	applyBool(&next.EnableSelfManage, p.EnableSelfManage)
+	applyBool(&next.EnableCLIHooks, p.EnableCLIHooks)
 	applyBool(&next.EnableDelegation, p.EnableDelegation)
 	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
@@ -312,6 +318,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.LogLevel, p.LogLevel)
 
 	applyString(&next.MinimaxBaseURL, p.MinimaxBaseURL)
+	applyString(&next.OpenRouterBaseURL, p.OpenRouterBaseURL)
 
 	// Secrets: write-only. Empty string clears; non-empty encrypts and replaces.
 	if p.AnthropicKey != nil {
@@ -334,6 +341,17 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 				return Settings{}, err
 			}
 			next.MinimaxKeyEnc = enc
+		}
+	}
+	if p.OpenRouterKey != nil {
+		if *p.OpenRouterKey == "" {
+			next.OpenRouterKeyEnc = ""
+		} else {
+			enc, err := s.cipher.Encrypt(*p.OpenRouterKey)
+			if err != nil {
+				return Settings{}, err
+			}
+			next.OpenRouterKeyEnc = enc
 		}
 	}
 
@@ -455,9 +473,6 @@ func normalize(v Settings) Settings {
 	}
 	if v.DefaultDailyTokenLimit < 0 {
 		v.DefaultDailyTokenLimit = 0
-	}
-	if v.DefaultHeartbeatSec < 5 {
-		v.DefaultHeartbeatSec = 5
 	}
 	// Delegation guards: keep at least one level/call; clamp to sane ceilings.
 	if v.DelegationMaxDepth < 1 {

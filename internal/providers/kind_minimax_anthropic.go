@@ -30,6 +30,9 @@ func (minimaxAnthropicKind) Manifest() Manifest {
 		AllowCustomModel: true,
 		Order:            3,
 		Models: []ModelInfo{
+			{ID: "MiniMax-M3", Label: "MiniMax M3 - guncel amiral", Description: "Anthropic modu: arac kullanimi + dusunme"},
+			{ID: "MiniMax-M2.7", Label: "MiniMax M2.7 - onceki nesil", Description: "Anthropic modu: onceki hosted akil-yurutme"},
+			{ID: "MiniMax-M2.5", Label: "MiniMax M2.5", Description: "Anthropic modu: dengeli akil yurutme"},
 			{ID: "MiniMax-M2.1", Label: "MiniMax M2.1 — çok dilli kodlama", Description: "Anthropic modu: araç kullanımı + düşünme"},
 			{ID: "MiniMax-M2.1-lightning", Label: "MiniMax M2.1 Lightning — hızlı", Description: "M2.1'in hızlı varyantı"},
 			{ID: "MiniMax-M2", Label: "MiniMax M2 — ajan/akıl yürütme", Description: "Ajan yetenekleri + gelişmiş akıl yürütme"},

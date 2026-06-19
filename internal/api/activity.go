@@ -11,7 +11,7 @@ import "net/http"
 //   - schedule: a running run that was triggered by a schedule
 //
 // Because every run path persists its running state, this covers both
-// interactive (streamed) and autonomous (heartbeat/cron) executions.
+// interactive (streamed) and autonomous (cron) executions.
 type activityState struct {
 	Chat     bool `json:"chat"`
 	Task     bool `json:"task"`

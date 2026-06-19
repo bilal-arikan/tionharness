@@ -22,8 +22,8 @@ type graphNode struct {
 	Desc   string `json:"desc,omitempty"`   // longer description (task tooltip)
 
 	// Live activity (agents only): whether the agent has an in-flight run right
-	// now, what kind (task|flow|chat|schedule|heartbeat) and the type-prefixed id
-	// of the task/flow it is running (empty for chat/schedule/heartbeat).
+	// now, what kind (task|flow|chat|schedule) and the type-prefixed id
+	// of the task/flow it is running (empty for chat/schedule).
 	Running   bool   `json:"running,omitempty"`
 	RunKind   string `json:"runKind,omitempty"`
 	RunTarget string `json:"runTarget,omitempty"`
@@ -90,7 +90,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	// Per-agent live activity: which agent currently has an in-flight streaming
 	// run, derived from the process-wide running session set joined to this
 	// workspace's sessions. A task/flow-kind running session bonds the agent to
-	// that task/flow node in the live view; chat/schedule/heartbeat just mark it
+	// that task/flow node in the live view; chat/schedule just mark it
 	// as running (a glow, no specific target).
 	type activity struct{ kind, target string }
 	agentAct := map[string]activity{}
@@ -99,28 +99,27 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		running[id] = true // chat-streaming turns
 	}
 	for _, id := range wsp.Runtime.ActiveSessionIDs() {
-		running[id] = true // autonomous + flow/task runs (schedule/heartbeat/spawn/flow)
+		running[id] = true // autonomous + flow/task runs (schedule/spawn/flow)
 	}
-	if len(running) > 0 {
-		if sessions, serr := wsp.DB.ListSessions(ctx, ""); serr == nil {
-			for _, sess := range sessions {
-				if !running[sess.ID] || sess.AgentID == "" {
-					continue
-				}
-				target := ""
-				switch sess.Kind {
-				case "task":
-					if sess.SourceID != "" {
-						target = taskPfx + sess.SourceID
-					}
-				case "flow":
-					if sess.SourceID != "" {
-						target = flowPfx + sess.SourceID
-					}
-				}
-				agentAct[sess.AgentID] = activity{kind: sess.Kind, target: target}
+	// Session list backs both the live activity (running) join and the completed
+	// run-history nodes built later.
+	sessions, _ := wsp.DB.ListSessions(ctx, "")
+	for _, sess := range sessions {
+		if !running[sess.ID] || sess.AgentID == "" {
+			continue
+		}
+		target := ""
+		switch sess.Kind {
+		case "task":
+			if sess.SourceID != "" {
+				target = taskPfx + sess.SourceID
+			}
+		case "flow":
+			if sess.SourceID != "" {
+				target = flowPfx + sess.SourceID
 			}
 		}
+		agentAct[sess.AgentID] = activity{kind: sess.Kind, target: target}
 	}
 
 	agentExists := make(map[string]bool, len(agents))
@@ -231,6 +230,48 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Completed run history: finished (not-running) execution sessions as "run"
+	// nodes — the same task/flow/schedule transcripts the Activity
+	// (executions) screen lists. The live view drifts these to a "Geçmiş"
+	// (archive) anchor so finished work piles up there as titled cards. Capped to
+	// the most recent runHistoryCap by recency to bound the payload.
+	const runPfx = "run:"
+	const runHistoryCap = 30
+	agentName := make(map[string]string, len(agents))
+	for _, a := range agents {
+		agentName[a.ID] = a.Name
+	}
+	// sessions are newest-updated first from ListSessions; take the first N
+	// finished (not-running) ones — mirrors exactly what the Activity (executions)
+	// screen lists (chat/task/flow/schedule). Agent is optional (flow
+	// sessions may have none) and only enriches the tooltip.
+	runCount := 0
+	for _, sess := range sessions {
+		if runCount >= runHistoryCap {
+			break
+		}
+		if running[sess.ID] {
+			continue
+		}
+		switch sess.Kind {
+		case "chat", "task", "flow", "schedule":
+		default:
+			continue
+		}
+		label := sess.Title
+		if label == "" {
+			label = "(" + sess.Kind + ")"
+		}
+		nodes = append(nodes, graphNode{
+			ID:      runPfx + sess.ID,
+			Type:    "run",
+			Label:   label,
+			RunKind: sess.Kind,
+			Sub:     agentName[sess.AgentID],
+		})
+		runCount++
+	}
+
 	writeJSON(w, http.StatusOK, workspaceGraph{
 		Nodes: nodes,
 		Edges: edges,
@@ -240,6 +281,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 			"flows":  len(flows),
 			"skills": skillCount,
 			"mcp":    mcpCount,
+			"runs":   runCount,
 			"edges":  len(edges),
 		},
 	})
