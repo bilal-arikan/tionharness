@@ -182,6 +182,26 @@ func (r *Registry) LazyCatalog(allow func(name string) bool) []providers.ToolDef
 	return out
 }
 
+// BridgeableDefs returns the FULL schemas of lazy built-in tools — the
+// self-management family — so the CLI path (Interaction MCP bridge) can advertise
+// and call them. MCP tools are excluded (the CLI reaches those through their own
+// server entries); only in-process built-ins are bridged. allow filters by name
+// (nil = allow all), mirroring the per-agent tool filter used on the native path.
+func (r *Registry) BridgeableDefs(allow func(name string) bool) []providers.ToolDef {
+	var out []providers.ToolDef
+	for name, t := range r.builtins {
+		if !r.lazy[name] {
+			continue
+		}
+		if allow != nil && !allow(name) {
+			continue
+		}
+		out = append(out, t.Def())
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
 // Has reports whether the registry knows a tool by (namespaced) name.
 func (r *Registry) Has(name string) bool {
 	if _, ok := r.builtins[name]; ok {

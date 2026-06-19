@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bilal/swarmgo/internal/interaction"
+	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/tools"
 )
 
@@ -82,7 +84,7 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 // advertised and that self-manage-gated spawn_session is absent without a tun.
 func TestInteractionAdvertisedNames(t *testing.T) {
 	b := &interactionBackend{runs: newChatRuns()} // tun nil → self-manage off
-	specs := b.Tools()
+	specs := b.Tools("") // no token → static set only (no per-run bridge)
 	want := make(map[string]bool, len(specs))
 	for _, s := range specs {
 		want[s.Name] = true
@@ -108,6 +110,57 @@ func TestInteractionAdvertisedNames(t *testing.T) {
 func contains(ss []string, want string) bool {
 	for _, s := range ss {
 		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// TestInteractionBridge covers CLI-3: a run with bridged self-management tools
+// installed advertises them in Tools(token) and dispatches them via Call's
+// default case through the run's bridge dispatcher.
+func TestInteractionBridge(t *testing.T) {
+	runs := newChatRuns()
+	run := runs.register("rb", "s-rb", func() {})
+	defer runs.unregister("rb")
+
+	var gotName string
+	var gotArgs string
+	run.setBridge(
+		[]providers.ToolDef{{Name: "create_agent", Description: "make an agent", InputSchema: json.RawMessage(`{"type":"object"}`)}},
+		func(_ context.Context, name string, args json.RawMessage) (string, error) {
+			gotName, gotArgs = name, string(args)
+			return "agent created", nil
+		},
+	)
+
+	b := &interactionBackend{runs: runs}
+
+	// Advertised for this token: the bridged tool appears alongside the static set.
+	if !specHasTool(b.Tools(run.token), "create_agent") {
+		t.Fatal("bridged tool create_agent must be advertised for the run token")
+	}
+	// Not advertised for an unknown token (no run → static set only).
+	if specHasTool(b.Tools("other"), "create_agent") {
+		t.Fatal("bridged tool must not leak to a different token")
+	}
+
+	// Dispatched through the bridge (namespaced name is stripped before dispatch).
+	res, err := b.Call(context.Background(), run.token, "mcp__swarmgo_interaction__create_agent", json.RawMessage(`{"name":"x"}`))
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if res.IsError || res.Text != "agent created" {
+		t.Fatalf("want bridged result, got %+v", res)
+	}
+	if gotName != "create_agent" || gotArgs != `{"name":"x"}` {
+		t.Fatalf("bridge dispatch got name=%q args=%q", gotName, gotArgs)
+	}
+}
+
+func specHasTool(specs []interaction.ToolSpec, name string) bool {
+	for _, s := range specs {
+		if s.Name == name {
 			return true
 		}
 	}

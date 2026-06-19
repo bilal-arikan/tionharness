@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"sync"
 
 	"github.com/google/uuid"
 
+	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/tools"
 )
 
@@ -39,6 +41,35 @@ type chatRun struct {
 	wake      tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
 	spawn     *tools.SpawnSessionTool      // current agent's spawn tool (self-manage on), for the Interaction MCP spawn_session tool
 	skill     skillLoader                  // current agent's skill loader, for the Interaction MCP use_skill tool
+	// bridge exposes the responding agent's lazy self-management tools to the CLI
+	// path (CLI-3): bridgeDefs are advertised in tools/list + the allowlist, and
+	// bridgeCall dispatches them through the native registry. Empty when
+	// self-management is off. Installed per agent turn by the stream handler.
+	bridgeDefs []providers.ToolDef
+	bridgeCall func(ctx context.Context, name string, args json.RawMessage) (string, error)
+}
+
+// setBridge installs the responding agent's self-management tool catalog +
+// dispatcher for the Interaction MCP CLI bridge. nil/empty disables it.
+func (r *chatRun) setBridge(defs []providers.ToolDef, call func(ctx context.Context, name string, args json.RawMessage) (string, error)) {
+	r.mu.Lock()
+	r.bridgeDefs = defs
+	r.bridgeCall = call
+	r.mu.Unlock()
+}
+
+// bridgeDefsFor returns the installed bridge tool defs (nil if none).
+func (r *chatRun) bridgeDefsFor() []providers.ToolDef {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.bridgeDefs
+}
+
+// bridgeCallFor returns the installed bridge dispatcher (nil if none).
+func (r *chatRun) bridgeCallFor() func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.bridgeCall
 }
 
 // skillLoader loads a skill's full body by slug, enforcing the responding agent's

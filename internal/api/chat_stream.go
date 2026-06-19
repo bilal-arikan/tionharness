@@ -268,6 +268,19 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			run.setSpawnTool(nil)
 		}
 
+		// Self-management bridge (CLI path, CLI-3): claude-cli has no native
+		// activate_tools loop, so advertise the responding agent's lazy
+		// self-management tools up front through the Interaction MCP and dispatch
+		// them through the same registry the native loop uses. Empty when
+		// self-manage is off. Re-point the CLI MCP endpoint for THIS agent turn so
+		// its allowlist carries the static interaction tools + the bridged tools.
+		bridgeDefs, bridgeCall := wsp.Runtime.BridgeTools(turnCtx, agentRow)
+		run.setBridge(bridgeDefs, bridgeCall)
+		if url := s.interactionURL(); url != "" {
+			turnCtx = tools.WithInteractionEndpoint(turnCtx, url, run.token,
+				mergeInteractionToolNames(interactionAdvertisedNames(s.tun), bridgeDefs))
+		}
+
 		agentStart := time.Now()
 		// Pre-allocate the reply id so the streaming crash sidecar and the final
 		// persisted message share one identity (recovery is then idempotent).

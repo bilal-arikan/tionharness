@@ -45,8 +45,10 @@ type CallResult struct {
 type Backend interface {
 	// Valid reports whether token maps to a live run.
 	Valid(token string) bool
-	// Tools returns the advertised interaction tool set (static).
-	Tools() []ToolSpec
+	// Tools returns the tool set advertised for the run identified by token: the
+	// static interaction tools plus any per-run bridged tools (e.g. the CLI
+	// self-management catalog). token is always valid here (checked before call).
+	Tools(token string) []ToolSpec
 	// Call dispatches a tool call for the run identified by token. A blocking
 	// tool (ask_user) returns once the user answers, ctx is cancelled, or the
 	// turn ends.
@@ -127,7 +129,7 @@ func (h *mcpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "notifications/initialized":
 		w.WriteHeader(http.StatusAccepted)
 	case "tools/list":
-		specs := h.backend.Tools()
+		specs := h.backend.Tools(token)
 		tools := make([]map[string]any, 0, len(specs))
 		for _, s := range specs {
 			tools = append(tools, map[string]any{

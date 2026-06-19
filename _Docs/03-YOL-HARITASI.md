@@ -135,6 +135,7 @@ graph LR
 - [x] **Self-management genişlemesi** ✅ 2026-06-19 — öz-yönetim araç ailesine **hooks/MCP/secret/skill/settings** eklendi (`builtin_{hookmgmt,mcpmgmt,secretmgmt,skillmgmt,settings}.go`); provenance guard'ı (`created_by`); öğretici default skill `swarmgo-self-management` + ayar referansı `swarmgo-settings`. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
 - [x] **Ayarlar canlı-uygulama + validation** ✅ 2026-06-19 — `get_settings`/`update_settings` tool'ları + `settings.Validate` (enum reddi/clamp) + bridge wiring + `settings` SSE event'i ile çok-pencere senkronu. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
 - [x] **İlişki Grafiği** ✅ 2026-06-19 — Workspace Ağı (NavRail) + Hafıza Bilgi Grafiği (salt-okunur React Flow ağları, Fizik/Küme yerleşim). Bkz. `_Docs/23-ILISKI-GRAFIGI.md`
+- [x] **CLI araç köprüsü (CLI-1/2/3)** ✅ 2026-06-19 — claude-cli ajanları Interaction MCP üzerinden: `use_skill` skill-gövde yükleme (CLI-1), advertise+allowlist tek-kaynak (`InteractionEndpoint.ToolNames`, CLI-2), lazy self-management ailesi köprüsü (`BridgeTools`/`Tools(token)`, CLI-3). Bkz. `_Docs/11-INTERACTION-MCP.md`. Kalan: claude-cli ile canlı uçtan-uca doğrulama.
 
 ### Mimari sıçrama
 - [ ] **A2** — **Subagent / Task izolasyonu**: `AgentContext` (parent'tan klon, mutasyon izole, altyapı paylaşılır) + `subagent` StepKind. SwarmGo'nun en büyük boşluğu.

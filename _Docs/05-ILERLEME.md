@@ -144,6 +144,16 @@ aynı maliyet mantığı).
 **$4.20** maliyet + **$5.40** tasarruf + model detayı, Bütçe ekranıyla birebir
 aynı hesap.
 
+## Interaction MCP: self-management CLI köprüsü (CLI-3) ✅ (2026-06-19)
+
+**İstek:** claude-cli ajanları lazy self-management ailesini kullanamıyor (`activate_tools` döngüsü CLI'de yok).
+
+**Yapılan:** Lazy built-in'ler CLI'ye önden advertise edilip native registry üzerinden dispatch edilen generic köprü.
+- `Registry.BridgeableDefs(allow)` — lazy built-in'lerin tam şeması (MCP hariç). `Runtime.BridgeTools(ctx, agent)` — registry kurar, def'ler + dispatcher döner (per-agent `toolFilter`).
+- `chatRun.setBridge(defs, call)` + stream handler her ajan turunda kurar; endpoint `mergeInteractionToolNames` ile birleşik allowlist (statik + köprü, dedup) ile yeniden bağlanır.
+- `interaction.Backend.Tools()` → **`Tools(token)`** (per-run): token→run, statik spec'lere `bridgeDefs` eklenir (ad-dedup). `Call()` default → `run.bridgeCallFor()` native registry dispatch'i.
+- Self-manage kapalıyken katalog boş → no-op. Test: `mcp_interaction_test.go TestInteractionBridge` (advertise + dispatch + token izolasyonu). **Durum:** `go build/vet/test ./...` yeşil; claude-cli canlı uçtan-uca doğrulama beklemede. Detay: `_Docs/11-INTERACTION-MCP.md`.
+
 ## Interaction MCP: CLI araç köprüsü generic'leştirildi (CLI-2) ✅ (2026-06-19)
 
 **Sorun:** claude-cli ajanları skill kataloğunu görüyor ama gövde yükleyecek `use_skill` aracı CLI'nin `--mcp-config`'inde yoktu. Ayrıca her Interaction MCP aracı **üç yerde** elle kablolu (advertise `Tools()` + dispatch `Call()` + `climcp.go` allowlist'i `interactionToolNames`) — yeni araç eklemek kırılgan.

@@ -270,6 +270,27 @@ ve çıktıyı native `UseSkillTool.Call` ile birebir aynı biçimde döndürür
 okuma native yolla tam parite. Tek kaynak SwarmGo skill store'u kalır —
 dosya kopyası/symlink yok.
 
+**Self-management köprüsü (CLI-3, 2026-06-19):** claude-cli'nin native
+`activate_tools` döngüsü yok; bu yüzden lazy self-management ailesi (agents/flows/
+schedules/tasks/hooks/mcp/secret/skill/settings — bkz. `_Docs/24-SELF-MANAGEMENT.md`)
+CLI ajanlarına görünmüyordu. Çözüm: bu lazy built-in'ler CLI tarafına **önden
+advertise** edilip native registry üzerinden dispatch edilir. Mekanizma generic:
+- `Runtime.BridgeTools(ctx, agent)` per-ajan registry'yi kurar → `Registry.BridgeableDefs`
+  (lazy built-in'lerin **tam şeması**, MCP araçları hariç; per-ajan `toolFilter`
+  uygulanır) + bir dispatcher closure'ı döner.
+- Stream handler her ajan turunda `run.setBridge(defs, call)` ile bunu run'a kurar
+  ve CLI endpoint'ini **birleşik allowlist** ile yeniden bağlar
+  (`mergeInteractionToolNames`: statik interaction araçları + köprü araçları, dedup).
+- `Backend.Tools(token)` artık **per-run**: token→run çözülür, statik spec'lere
+  run'ın `bridgeDefs`'i eklenir (ad-bazlı dedup; `spawn_session` çift sayılmaz).
+  `interaction.Backend.Tools()` imzası `Tools(token string)` oldu (handler zaten
+  her istekte bearer'ı doğruluyor).
+- `Call()` default case → `run.bridgeCallFor()` ile native registry'ye dispatch.
+  Advertise edilen katalog (+ per-ajan filter) hangi adın çağrılabileceğinin kapısı.
+- Self-manage kapalıyken katalog boş (lazy built-in yok) → köprü no-op.
+- Test: `mcp_interaction_test.go TestInteractionBridge` (advertise + dispatch +
+  token izolasyonu). claude-cli ile canlı uçtan-uca doğrulama **beklemede**.
+
 **Tek-kaynak allowlist (CLI-2, 2026-06-19):** Önceden CLI'ye verilen araç
 allowlist'i (`climcp.go` içindeki sabit `interactionToolNames`) ile backend'in
 `Tools()` advertise listesi **iki ayrı yerde** elle senkron tutuluyordu — yeni

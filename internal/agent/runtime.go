@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -258,6 +259,27 @@ func (r *Runtime) LoadSkillForAgent(agent db.Agent, slug string) (string, error)
 	}
 	allow := r.skills.AllowedFor(agent.Skills)
 	return agentSkillLib{store: r.skills, allow: allow}.Body(slug)
+}
+
+// BridgeTools builds the per-agent tool registry and returns the bridgeable
+// (lazy built-in = self-management) tool schemas plus a dispatcher, for the CLI
+// path's Interaction MCP bridge (CLI-3). claude-cli has no native activate_tools
+// loop, so instead of lazy-loading these are advertised up front and dispatched
+// straight through the same registry the native loop uses — identical behaviour
+// and the same per-agent allowlist. Returns an empty catalog when self-management
+// is off (no lazy built-ins are registered). The dispatcher runs any built-in by
+// name (the catalog is the gate); unknown/foreign names return an error.
+func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.ToolDef, func(ctx context.Context, name string, args json.RawMessage) (string, error)) {
+	reg := r.buildRegistry(ctx, agent)
+	defs := reg.BridgeableDefs(r.toolFilter(ctx, agent))
+	call := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+		res := reg.Call(ctx, providers.ToolCall{Name: name, Input: args})
+		if res.IsError {
+			return "", fmt.Errorf("%s", res.Content)
+		}
+		return res.Content, nil
+	}
+	return defs, call
 }
 
 // agentSkillLib restricts the use_skill tool to an agent's selected slugs, so an

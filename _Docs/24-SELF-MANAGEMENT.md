@@ -23,6 +23,13 @@ uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
 Öğretici default skill: **`swarmgo-self-management`** (`access: shared`,
 `swarmgo-guide`'a subskill) — aileyi kataloglar ve self-aktivasyon akışını öğretir.
 
+**claude-cli yolu (CLI-3):** CLI'nin native `activate_tools` döngüsü olmadığından
+bu lazy aile, Interaction MCP **köprüsü** ile CLI ajanlarına önden advertise edilip
+native registry üzerinden dispatch edilir (`Runtime.BridgeTools` →
+`Registry.BridgeableDefs`; backend `Tools(token)` + `Call` default). Per-ajan
+`toolFilter` ve self-manage gate'i CLI'de de aynen geçerli. Detay:
+`_Docs/11-INTERACTION-MCP.md`.
+
 ## Provenance guard'ı (`created_by`)
 
 Ajan **yalnızca kendi oluşturduğu** (`CreatedBy` dolu) entity'leri silebilir;

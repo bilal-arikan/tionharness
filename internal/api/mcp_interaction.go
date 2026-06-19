@@ -35,8 +35,29 @@ func (b *interactionBackend) Valid(token string) bool {
 // Tools implements interaction.Backend. The specs come from the single tool
 // definitions in the tools package — the schema is never re-declared here, so the
 // native and CLI paths advertise the identical contract.
-func (b *interactionBackend) Tools() []interaction.ToolSpec {
-	return interactionToolSpecs(b.tun)
+func (b *interactionBackend) Tools(token string) []interaction.ToolSpec {
+	specs := interactionToolSpecs(b.tun)
+	// Append the run's bridged self-management tools (CLI-3), deduped by name
+	// against the static set (spawn_session is advertised by both paths).
+	run := b.runs.byToken(token)
+	if run == nil {
+		return specs
+	}
+	defs := run.bridgeDefsFor()
+	if len(defs) == 0 {
+		return specs
+	}
+	seen := make(map[string]bool, len(specs))
+	for _, s := range specs {
+		seen[s.Name] = true
+	}
+	for _, d := range defs {
+		if seen[d.Name] {
+			continue
+		}
+		specs = append(specs, interaction.ToolSpec{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
+	}
+	return specs
 }
 
 // interactionAdvertisedNames returns the bare tool names the Interaction MCP
@@ -50,6 +71,27 @@ func interactionAdvertisedNames(tun *agent.Tunables) []string {
 		names = append(names, s.Name)
 	}
 	return names
+}
+
+// mergeInteractionToolNames returns the static interaction tool names plus the
+// bridged self-management tool names (CLI-3), deduped — the CLI allowlist source.
+// Mirrors what Tools(token) advertises so allowlist and tools/list agree.
+func mergeInteractionToolNames(static []string, bridge []providers.ToolDef) []string {
+	seen := make(map[string]bool, len(static)+len(bridge))
+	out := make([]string, 0, len(static)+len(bridge))
+	for _, n := range static {
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	for _, d := range bridge {
+		if !seen[d.Name] {
+			seen[d.Name] = true
+			out = append(out, d.Name)
+		}
+	}
+	return out
 }
 
 // interactionToolSpecs builds the Interaction MCP tool specs for a turn. Single
@@ -122,6 +164,16 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 	case "use_skill":
 		return b.callUseSkill(run, args)
 	default:
+		// CLI-3: dispatch a bridged self-management tool through the run's native
+		// registry. The advertised catalog (and the per-agent tool filter) gates
+		// what the CLI can name here.
+		if call := run.bridgeCallFor(); call != nil {
+			out, err := call(ctx, bareToolName(name), args)
+			if err != nil {
+				return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+			}
+			return interaction.CallResult{Text: out}, nil
+		}
 		return interaction.CallResult{Text: "unknown tool: " + name, IsError: true}, nil
 	}
 }
