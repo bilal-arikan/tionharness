@@ -56,6 +56,14 @@
     anahtarları gösterir), `create_mcp_server` (stdio vs sse/http; `args`/`env`
     escaped JSON string). Not: "permission-pattern" aday değil — ajan-yüzlü tool
     girdisi değil, kullanıcı onay katmanı (`permpattern.go`).
+  - **3. dalga — edit/create araçları (2026-06-19):** `update_flow` (graph string +
+    kısmi güncelleme), `update_schedule` (cron + kısmi), `update_task`
+    (`dependencies` escaped JSON array + `flowId:""`=unlink + kısmi), `create_agent`
+    (provider/model eşleşmesi — claude-cli modelsiz, anthropic model ister +
+    heartbeat alanları birlikte). **Silme araçları aday değil** (girdi yalnız
+    `{id}` — belirsizlik yok); `move_task` da değil (`boardState` zaten `enum`).
+    Edit aracında örnek ana faydası **kısmi-güncelleme konvansiyonunu** öğretmek
+    (id + yalnız değişen alan; `""`=temizle).
 - Sistem promptuna **"Available Tools (load on demand)"** bloğu eklenir
   (`Runtime.LazyToolsCatalogBlock` → `renderLazyToolCatalog`), yalnızca ad+özet.
 - Üç eager meta-araç: **`activate_tools`** (şema yükle), **`deactivate_tools`**,

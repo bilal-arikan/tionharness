@@ -24,6 +24,9 @@ type agentDeps struct {
 	actorID     string
 	startWorker func(agentID string, intervalSec int) error
 	stopWorker  func(agentID string)
+	// reloadSchedules refreshes the live cron registry after DeleteAgent drops
+	// the agent's schedules. Optional; nil in contexts without a scheduler.
+	reloadSchedules func(context.Context) error
 }
 
 // requireAgentCreatedByAgent loads an agent and verifies it was created by an
@@ -68,6 +71,14 @@ func (CreateAgentTool) Def() providers.ToolDef {
 			"required":["name"],
 			"additionalProperties":false
 		}`),
+		Examples: []json.RawMessage{
+			// anthropic provider needs an explicit model id.
+			json.RawMessage(`{"name":"Reviewer","provider":"anthropic","model":"claude-sonnet-4-6","soul":"You are a meticulous code reviewer; be terse."}`),
+			// claude-cli provider is keyless and needs no model id.
+			json.RawMessage(`{"name":"Helper","provider":"claude-cli"}`),
+			// Autonomous agent: heartbeat fields are set together.
+			json.RawMessage(`{"name":"Watcher","provider":"anthropic","model":"claude-sonnet-4-6","heartbeatEnabled":true,"heartbeatIntervalSec":3600,"heartbeatPrompt":"Check for new issues and triage them."}`),
+		},
 	}
 }
 
@@ -191,9 +202,11 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 // DeleteAgentTool removes an agent-created agent.
 type DeleteAgentTool struct{ d agentDeps }
 
-// NewDeleteAgentTool constructs delete_agent.
-func NewDeleteAgentTool(database *db.DB, actorID string, stopWorker func(string)) DeleteAgentTool {
-	return DeleteAgentTool{d: agentDeps{db: database, actorID: actorID, stopWorker: stopWorker}}
+// NewDeleteAgentTool constructs delete_agent. reloadSchedules (optional) is run
+// after deletion so the agent's now-removed schedules also leave the live cron
+// registry.
+func NewDeleteAgentTool(database *db.DB, actorID string, stopWorker func(string), reloadSchedules func(context.Context) error) DeleteAgentTool {
+	return DeleteAgentTool{d: agentDeps{db: database, actorID: actorID, stopWorker: stopWorker, reloadSchedules: reloadSchedules}}
 }
 
 func (DeleteAgentTool) Def() providers.ToolDef {
@@ -231,6 +244,10 @@ func (t DeleteAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	}
 	if err := t.d.db.DeleteAgent(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("delete agent: %w", err)
+	}
+	// Drop the deleted agent's schedules from the live cron registry too.
+	if t.d.reloadSchedules != nil {
+		_ = t.d.reloadSchedules(ctx)
 	}
 	b, _ := json.Marshal(map[string]string{"id": in.ID, "action": "deleted"})
 	return string(b), nil

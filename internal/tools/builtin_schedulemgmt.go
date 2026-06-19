@@ -129,6 +129,12 @@ func (UpdateScheduleTool) Def() providers.ToolDef {
 			"required":["id"],
 			"additionalProperties":false
 		}`),
+		Examples: []json.RawMessage{
+			// Partial update: pause a schedule without touching its cron/prompt.
+			json.RawMessage(`{"id":"sch_4f1","enabled":false}`),
+			// Change only the cron (every 2 hours).
+			json.RawMessage(`{"id":"sch_4f1","cronExpr":"0 */2 * * *"}`),
+		},
 	}
 }
 

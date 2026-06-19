@@ -2,6 +2,40 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-19**
 
+## Ajan kontrol-yüzeyi — workspace CRUD araçları ✅ (2026-06-19)
+
+**İstek:** Ajan kendi kendine uygulamayı kullanabiliyor ama **workspace
+düzenlemeleri eksikti**; onları da ekle.
+
+**Yapılan (`go build`/`vet`/`test` + `tsc`/`vite build` yeşil):**
+- **4 yeni self-management aracı** (`internal/tools/builtin_workspacemgmt.go`):
+  `list_workspaces` / `create_workspace` / `rename_workspace` / `delete_workspace`.
+- **Çapraz-workspace köprüsü** — diğer self-manage araçları mevcut DB'de çalışır;
+  workspace araçları workspace sınırını aştığından ayarlar gibi bir köprüden geçer:
+  `tools.WorkspaceBridge` (arayüz) → `api.workspaceBridge` (manager + seedTemplate +
+  `publishWorkspacesChanged`'i sarar) → `Manager.SetWorkspaceBridge` (tüm Runtime'lara
+  dağıtır) → `Runtime.workspaceBridge`. `main.go`'da `SetSettingsBridge` yanında bağlanır.
+- **Provenance + guard'lar:** `Meta.CreatedBy` alanı eklendi (ajan-oluşturduğu
+  workspace). `list/create/rename` her workspace'te; **delete yalnız ajan-oluşturduğu**,
+  ayrıca **mevcut çalıştığı** ve **son kalan** workspace silinemez. `Manager.Create`
+  imzası `createdBy` parametresi aldı (UI yolu `""` geçer).
+- **Canlı UI:** her değişiklik `workspaces` SSE event'i yayar → `App.tsx` switcher
+  listesini canlı tazeler (`refreshWorkspaces`). create blank şablonla tohumlanır.
+- **Testler (yeni):** `builtin_workspacemgmt_test.go` — provenance stamp + delete
+  guard'ları (current/user/unknown/agent-created).
+- **Doküman:** `24-SELF-MANAGEMENT.md` (workspace satırı + köprü wiring + guard notu),
+  `swarmgo-self-management` skill kataloğu, `swarmgo-project` referans skill güncellendi.
+
+## Ağ — Canlı mod: çalışan-run (Session) bağı + glow ✅ (2026-06-19)
+
+**İstek:** Ajanın şu an çalıştırdığı oturum/run'ı (Session) gösterme — gerçek "şu an ne yapıyor".
+
+**Yapılan:**
+- **Backend** (`graph.go`): ajan düğümüne `running`+`runKind`+`runTarget` eklendi. `s.runs.activeSessionIDs()` (process-wide çalışan oturumlar) bu workspace'in oturumlarına join edilip her ajanın o anki aktivitesi (kind + type-prefixed task/flow hedefi) çıkarılır.
+- **Frontend** (Canlı mod): çalışan ajan **parlak "live" glow** alır; `runTarget` (task/flow) varsa o düğüme **aktif accent bağ** kurulur. Aktif bağ ayrıca `in_progress` görev sahipliğiyle (fallback) de kurulur. Idle/busy hesabı running'i kapsar (çalışan ajan lobiye çekilmez).
+- **Doğrulama:** `go build`/`tsc`/`vite build` yeşil. Canlı chat stream tetiklenip `/api/graph` poll'landı → akış sürerken ajan `running:true, runKind:'chat'` raporlandı (uçtan uca); test oturumu silindi (gerçek veri korundu).
+- **Sınır:** `s.runs` yalnız chat-stream turn'lerini izlediğinden task/flow `runTarget` bağı şimdilik `in_progress` fallback'iyle gelir; run-tracker eklenince otomatik yanar.
+
 ## Ağ — Canlı mod: Boşta lobisi + ajanın akışı ✅ (2026-06-19)
 
 **İstek:** Aktif görevi olmayan ajanlar için bir "boşta" çekim alanı; ayrıca ajanın kullandığı Flow/Session gibi şeyleri göstermek.
@@ -74,8 +108,14 @@ deseni, opsiyonel alan kombinasyonu) gösteren somut örnek çağrılar.
 - **Pilot (2. dalga, 2026-06-19):** `create_hook` (matcher glob + command'in
   stdin/stdout JSON sözleşmesi), `update_settings` (`patch` opak
   `additionalProperties:true` → en güçlü aday), `create_mcp_server` (stdio vs
-  sse/http; `args`/`env` escaped JSON string). `TestPilotToolExamplesAreValid` beş
-  aracın da örneklerini doğrular (stringify alanların iç JSON'u dahil).
+  sse/http; `args`/`env` escaped JSON string).
+- **Pilot (3. dalga, 2026-06-19) — edit/create araçları:** `update_flow`,
+  `update_schedule`, `update_task` (`dependencies` escaped JSON array + `flowId:""`
+  =unlink), `create_agent` (provider/model eşleşmesi + heartbeat). Edit aracında
+  örnek **kısmi-güncelleme** konvansiyonunu öğretir (id + yalnız değişen alan).
+  **Silme araçları ve `move_task` (enum) bilinçli atlandı** — şema zaten
+  belirsizliksiz. `TestPilotToolExamplesAreValid` artık **dokuz** aracın örneklerini
+  doğrular (stringify alanların iç JSON'u dahil).
 - **Maliyet:** örnek küçük sabit token; hatalı-çağrı + hata + retry turunu
   önlediğinden pratikte **net negatif** (token kazandırır).
 

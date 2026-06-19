@@ -192,6 +192,14 @@ func (UpdateTaskTool) Def() providers.ToolDef {
 			"required":["id"],
 			"additionalProperties":false
 		}`),
+		Examples: []json.RawMessage{
+			// Move column (or prefer move_task for column-only changes).
+			json.RawMessage(`{"id":"tsk_77","boardState":"in_progress"}`),
+			// Set dependencies: a JSON ARRAY STRING of task ids ([] clears).
+			json.RawMessage(`{"id":"tsk_77","dependencies":"[\"tsk_12\",\"tsk_34\"]"}`),
+			// Unlink the flow by passing an empty string.
+			json.RawMessage(`{"id":"tsk_77","flowId":""}`),
+		},
 	}
 }
 

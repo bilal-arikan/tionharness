@@ -213,6 +213,10 @@ func TestPilotToolExamplesAreValid(t *testing.T) {
 	check("create_hook", CreateHookTool{}.Def().Examples)
 	check("update_settings", UpdateSettingsTool{}.Def().Examples)
 	check("create_mcp_server", CreateMCPServerTool{}.Def().Examples, "args", "env")
+	check("create_agent", CreateAgentTool{}.Def().Examples)
+	check("update_flow", UpdateFlowTool{}.Def().Examples, "graph")
+	check("update_schedule", UpdateScheduleTool{}.Def().Examples)
+	check("update_task", UpdateTaskTool{}.Def().Examples, "dependencies")
 }
 
 // ---- helpers ----

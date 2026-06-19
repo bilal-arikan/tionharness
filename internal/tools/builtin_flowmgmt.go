@@ -143,6 +143,12 @@ func (UpdateFlowTool) Def() providers.ToolDef {
 			"required":["id"],
 			"additionalProperties":false
 		}`),
+		Examples: []json.RawMessage{
+			// Partial update: pass id + only the fields to change. Rename only.
+			json.RawMessage(`{"id":"flw_9a2","name":"Draft and review v2"}`),
+			// Replace just the graph (escaped JSON string); other fields untouched.
+			json.RawMessage(`{"id":"flw_9a2","graph":"{\"start\":\"c\",\"nodes\":[{\"id\":\"c\",\"type\":\"agent\",\"agentId\":\"agt_triage\",\"prompt\":\"Classify: {{input}}\",\"next\":\"\"}]}"}`),
+		},
 	}
 }
 
