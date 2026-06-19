@@ -3,6 +3,7 @@ import { Copy, X } from 'lucide-react'
 import type { AgentContextPreview } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
+import { Button } from '../common'
 
 interface Props {
   agentId: string
@@ -100,13 +101,9 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
             placeholder="Örnek mesaj yaz → bu mesaj için hafıza recall + çapraz-oturum bağlamı simüle edilir"
             className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
           />
-          <button
-            onClick={() => load(message)}
-            disabled={loading}
-            className="shrink-0 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-          >
+          <Button onClick={() => load(message)} disabled={loading} className="shrink-0">
             {loading ? '…' : 'Simüle et'}
-          </button>
+          </Button>
         </div>
 
         {/* Body */}

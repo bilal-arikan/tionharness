@@ -4,6 +4,7 @@ import { api } from '../../api'
 import type { Agent, Task, Flow, BoardState, BoardColumnDef } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
+import { Button } from '../common'
 
 function parseDeps(raw: string): string[] {
   try {
@@ -341,13 +342,9 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
         </Field>
 
         <div className="flex items-center gap-2 border-t border-[var(--color-border)] pt-3">
-          <button
-            onClick={save}
-            disabled={!dirty || saving}
-            className="rounded bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
-          >
+          <Button onClick={save} disabled={!dirty || saving}>
             {saving ? 'Kaydediliyor…' : 'Kaydet'}
-          </button>
+          </Button>
           {dirty && !saving && (
             <span className="text-[11px] text-[var(--color-warning)]">kaydedilmemiş değişiklik</span>
           )}

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
 import type { WorkspaceConfig, WorkspaceConfigPatch } from '../../types'
 import { Field, inputCls } from './primitives'
+import { Button } from '../common'
 import { CopyPathButton } from '../CopyPathButton'
 import { displayPath } from '../../lib/paths'
 
@@ -146,13 +147,9 @@ export function WorkspaceFilesPanel({ onError }: Props) {
 
       <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-[var(--color-border)] bg-[var(--color-bg)] py-2">
         <span className="text-xs text-[var(--color-text-dim)]">{dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}</span>
-        <button
-          onClick={save}
-          disabled={!dirty || saving}
-          className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-30"
-        >
+        <Button onClick={save} disabled={!dirty || saving}>
           {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
+        </Button>
       </div>
     </>
   )

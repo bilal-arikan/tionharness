@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
 import type { WorkspaceTemplate } from '../../types'
 import { EmojiField } from '../common/EmojiField'
+import { Button } from '../common'
 
 export interface NewWorkspaceData {
   name: string
@@ -162,12 +163,9 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
           >
             İptal
           </button>
-          <button
-            onClick={submit}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
+          <Button onClick={submit} size="lg">
             Oluştur
-          </button>
+          </Button>
         </div>
       </div>
     </div>

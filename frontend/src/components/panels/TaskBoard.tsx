@@ -5,6 +5,7 @@ import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { BoardColumnEditor } from './BoardColumnEditor'
+import { Button } from '../common'
 
 // Fallback columns used until workspace settings are loaded.
 const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -233,12 +234,7 @@ export function TaskBoard({ agents, onError }: Props) {
               ))}
             </select>
           )}
-          <button
-            onClick={createTask}
-            className="rounded bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white hover:opacity-90"
-          >
-            + Görev
-          </button>
+          <Button onClick={createTask}>+ Görev</Button>
           <button
             onClick={() => {
               if (!depSort && !confirm('Görevler bağımlılık sırasına göre yeniden dizilecek. Devam edilsin mi?')) return

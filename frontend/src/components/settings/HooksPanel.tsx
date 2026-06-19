@@ -8,6 +8,7 @@ import { systemApi } from '../../api/system'
 import type { Hook, HookEvent, ExternalToolStatus } from '../../types'
 import type { HookInput } from '../../api/hooks'
 import { Field, Toggle, inputCls } from './primitives'
+import { Button } from '../common'
 import { displayPath } from '../../lib/paths'
 
 interface Props {
@@ -173,12 +174,9 @@ export function HooksPanel({ onError }: Props) {
           </div>
 
           {editing === null ? (
-            <button
-              onClick={startCreate}
-              className="flex items-center gap-1.5 rounded bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
-            >
+            <Button onClick={startCreate} className="flex items-center gap-1.5">
               <Plus size={15} /> Hook ekle
-            </button>
+            </Button>
           ) : (
             <div className="space-y-3 rounded-lg border border-[var(--color-accent)] bg-[var(--color-surface)] p-4">
               <div className="text-sm font-semibold">{editing ? 'Hook düzenle' : 'Yeni hook'}</div>
@@ -216,16 +214,12 @@ export function HooksPanel({ onError }: Props) {
               </Field>
               <Toggle label="Aktif" checked={draft.enabled} onChange={(v) => set('enabled', v)} />
               <div className="flex gap-2">
-                <button
-                  onClick={save}
-                  disabled={busy}
-                  className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-30"
-                >
+                <Button onClick={save} disabled={busy}>
                   {busy ? 'Kaydediliyor…' : 'Kaydet'}
-                </button>
-                <button onClick={cancel} className="rounded border border-[var(--color-border)] px-4 py-1.5 text-sm">
+                </Button>
+                <Button variant="secondary" onClick={cancel}>
                   İptal
-                </button>
+                </Button>
               </div>
             </div>
           )}

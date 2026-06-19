@@ -3,6 +3,7 @@ import { Download, RefreshCw, Store, Check, KeyRound } from 'lucide-react'
 import type { Pack, PackKind, Secret } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
+import { Button } from '../common'
 
 interface Props {
   onError: (msg: string) => void
@@ -447,13 +448,13 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
                   ? 'Güncelle'
                   : INSTALL_LABEL[selected.kind]
               return (
-                <button
+                <Button
                   onClick={() => void install(selected)}
                   disabled={busy || blocked}
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  className="mt-3 flex w-full items-center justify-center gap-1.5"
                 >
                   {blocked ? <Check size={13} /> : <Download size={13} />} {label}
-                </button>
+                </Button>
               )
             })()}
           </div>

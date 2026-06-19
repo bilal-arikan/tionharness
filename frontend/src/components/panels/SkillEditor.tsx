@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { SkillDetail, SkillInput } from '../../types'
 import { api } from '../../api'
 import { EmojiField } from '../common/EmojiField'
+import { Button } from '../common'
 
 interface Props {
   mode: 'create' | 'edit'
@@ -89,13 +90,9 @@ export function SkillEditor({ mode, initial, onClose, onSaved }: Props) {
             >
               İptal
             </button>
-            <button
-              onClick={save}
-              disabled={saving}
-              className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-            >
+            <Button onClick={save} disabled={saving}>
               {saving ? 'Kaydediliyor…' : 'Kaydet'}
-            </button>
+            </Button>
           </div>
         </div>
 

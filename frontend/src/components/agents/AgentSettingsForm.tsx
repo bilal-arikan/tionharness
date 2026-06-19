@@ -8,6 +8,7 @@ import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentToolsSection } from './AgentToolsSection'
 import { AgentSkillsSection } from './AgentSkillsSection'
 import { AgentContextModal } from './AgentContextModal'
+import { Button } from '../common'
 
 interface Props {
   agent: Agent
@@ -115,13 +116,9 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
               <Trash2 size={14} /> Sil
             </button>
           )}
-          <button
-            onClick={save}
-            disabled={saving}
-            className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-          >
+          <Button onClick={save} disabled={saving}>
             {saving ? 'Kaydediliyor…' : 'Kaydet'}
-          </button>
+          </Button>
         </div>
       </div>
 
