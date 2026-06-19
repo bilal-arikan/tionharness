@@ -3,6 +3,7 @@ import { Sparkles, ChevronDown, ChevronRight, List, Share2 } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Memory, MemoryKind } from '../../types'
 import { Markdown } from '../markdown/Markdown'
+import { Button } from '../common'
 
 // The knowledge-graph view pulls in React Flow (~300KB); load it only when the
 // user switches to the graph tab.
@@ -120,12 +121,7 @@ export function MemoryPanel({ agent, onError }: Props) {
           placeholder={`${agent.name} için hatırlanacak bir bilgi ekle…`}
           className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
         />
-        <button
-          onClick={add}
-          className="rounded bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white hover:opacity-90"
-        >
-          + Belge
-        </button>
+        <Button onClick={add}>+ Belge</Button>
         <button
           onClick={reflect}
           disabled={reflecting}

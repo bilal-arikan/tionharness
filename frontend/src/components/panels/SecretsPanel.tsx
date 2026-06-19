@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Eye, EyeOff, Copy, Trash2, KeyRound } from 'lucide-react'
 import { api } from '../../api'
 import type { Secret } from '../../types'
+import { Button } from '../common'
 
 interface Props {
   onError: (msg: string) => void
@@ -153,20 +154,13 @@ export function SecretsPanel({ onError }: Props) {
             Ad bir harfle başlamalı; harf, rakam, <code>_</code>, <code>-</code>, <code>.</code> içerebilir.
           </p>
           <div className="mt-3 flex items-center gap-2">
-            <button
-              onClick={save}
-              disabled={saving || !name.trim() || !value}
-              className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-            >
+            <Button onClick={save} disabled={saving || !name.trim() || !value} size="lg">
               {editing ? 'Güncelle' : 'Ekle'}
-            </button>
+            </Button>
             {editing && (
-              <button
-                onClick={resetForm}
-                className="rounded-lg bg-[var(--color-surface-2)] px-4 py-2 text-sm hover:opacity-90"
-              >
+              <Button onClick={resetForm} variant="secondary" size="lg">
                 İptal
-              </button>
+              </Button>
             )}
           </div>
         </section>
