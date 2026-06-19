@@ -415,9 +415,15 @@ export default function App() {
         } else if (phase === 'start') {
           chat.clearWakeWait(sid)
           chat.markPending([sid])
-        } else {
-          // done | cancelled | any other chat event → the turn is no longer active.
+        } else if (phase === 'cancelled') {
           chat.clearWakeWait(sid)
+          chat.clearPending(sid)
+        } else {
+          // A generic chat event (e.g. the schedule_wake turn ending right after it
+          // armed the wake) must NOT clear the waiting banner — otherwise the turn-end
+          // event wipes it the instant it appears, and the session looks "done" while
+          // a wake is still pending. Keep the banner until the wake fires (start) or
+          // is cancelled; here only drop the thinking indicator.
           chat.clearPending(sid)
         }
         if (sid === activeSessionIdRef.current) {

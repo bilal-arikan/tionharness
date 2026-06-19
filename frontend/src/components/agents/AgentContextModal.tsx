@@ -45,13 +45,13 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
     })
   }
 
-  // Tools whose name already appears inside the previewed Context (the system
-  // prompt) are not re-listed separately below: the lazy "Available Tools (load
-  // on demand)" block already names them in the prompt, so a second list just
-  // duplicates the Context. Schema tools (sent via the API tools field, not the
-  // prompt text) normally aren't in it, so they stay listed.
+  // Lazy ("load on demand") tools are already named inside the previewed Context:
+  // the system prompt's "Available Tools (load on demand)" block lists them. So we
+  // don't re-list any lazy tool whose name already appears in the Context — that
+  // separate list only duplicated what the Context already carries. (The eager
+  // "schema sent every turn" tools are likewise part of the per-turn Context and
+  // are not enumerated below at all; their count/cost stays in the summary chips.)
   const inContext = (name: string) => !!data && data.system.includes(name)
-  const shownTools = data ? data.tools.filter((t) => !inContext(t.name)) : []
   const shownLazyTools = data ? data.lazyTools.filter((t) => !inContext(t.name)) : []
 
   return (
@@ -176,27 +176,12 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                 </p>
               )}
 
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                Araçlar — her tur şema gönderilen · {data.tools.length}
-              </h3>
-              <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
-                Tam şema her tura girer; token maliyeti yukarıdaki "Şema araçlar" sayacına yansır.
-              </p>
-              {shownTools.length === 0 ? (
-                <p className="mb-5 text-xs text-[var(--color-text-dim)]">Bu ajana şema gönderilen araç yok.</p>
-              ) : (
-                <ul className="mb-5 space-y-1">
-                  {shownTools.map((t) => (
-                    <li
-                      key={t.name}
-                      className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5"
-                    >
-                      <code className="text-xs font-medium text-[var(--color-accent)]">{t.name}</code>
-                      <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">{t.description}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {/* The "schema sent every turn" tools are already part of the
+                  per-turn Context (shipped via the API tools field — that's what
+                  "her tur şema gönderilen" means), and their count + token cost is
+                  shown in the summary chips above ("Şema araçlar (N)"). So they are
+                  intentionally NOT re-listed here: the separate enumeration only
+                  duplicated what the Context already carries. */}
 
               {shownLazyTools.length > 0 && (
                 <>

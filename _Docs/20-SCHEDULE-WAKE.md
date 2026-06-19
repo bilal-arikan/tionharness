@@ -229,3 +229,19 @@ internal/agent/scheduler_test.go
   TestScheduleExpired                  — 0 süresiz, gelecek canlı, geçmiş süresi dolmuş
   TestExpiredScheduleSkippedOnReload   — süresi dolmuş zamanlama Start'ta otomatik pasifleşir
 ```
+
+## Düzeltme: bekleme banner'ı erken kayboluyordu (2026-06-19)
+
+**Belirti:** `schedule_wake` çağrıldıktan sonra sohbet "bitti" gibi görünüyor; "X sn
+sonra devam edecek" bekleme banner'ı görünmüyor, sonra zamanlanmış prompt düşüyordu.
+
+**Kök neden (frontend):** Backend `armed` fazlı eventi doğru yayıyordu (banner'ı
+kaldırır). Ama `schedule_wake` turu hemen ardından **başarıyla biterken**
+`chat_stream.go` phase'siz bir `chat` eventi ("Yanıt hazır") yayıyor; `App.tsx`
+event handler'ı bunu `else` dalında "tur bitti" sayıp `clearWakeWait` ile banner'ı
+**anında siliyordu**. Yani banner bir an görünüp kayboluyordu.
+
+**Çözüm (`App.tsx`):** Generic (phase'siz) tur-sonu eventi artık banner'ı silmiyor;
+yalnız `start` (uyandı) ve `cancelled` (iptal) fazları siliyor. Banner, uyanış
+gerçekleşene veya iptal edilene kadar kalıyor (geri sayım + İptal düğmesiyle). Hem
+native hem claude-cli yolu için geçerli (`armed` her iki yolda da yayılıyor).
