@@ -576,10 +576,9 @@ func renderCatalog(list []Skill) string {
 	}
 	var b strings.Builder
 	b.WriteString("# Available Skills\n")
-	b.WriteString("You have reusable skills — predefined instruction sets for specific tasks. " +
-		"Each entry below shows only a slug and a short summary. When a task matches a skill, " +
-		"call the `use_skill` tool with that slug to load its full instructions BEFORE acting. " +
-		"Do not guess a skill's contents from its summary.\n")
+	b.WriteString("Reusable instruction sets, listed as slug + summary. When a task matches one, " +
+		"call the `use_skill` tool with its slug to load the full instructions BEFORE acting — " +
+		"don't guess from the summary.\n")
 	for _, sk := range list {
 		fmt.Fprintf(&b, "- `%s` — %s", sk.Slug, sk.Description)
 		if sk.WhenToUse != "" {

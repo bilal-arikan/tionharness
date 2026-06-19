@@ -5,6 +5,7 @@ when_to_use: "When designing, creating or running a flow (multi-step or multi-ag
 icon: "🔀"
 color: "#0ea5e9"
 access: shared
+auto_summary: false
 ---
 # SwarmGo Flows — Detailed Guide
 

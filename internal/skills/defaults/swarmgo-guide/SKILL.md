@@ -16,12 +16,11 @@ workspaces never leaks content between them.
 ## Core building blocks
 
 - **Agents** — autonomous entities bound to a provider/model. Each has a soul
-  (persona), identity, tool access, optional heartbeat (autonomous wake) and
-  per-agent skill selection.
+  (persona), identity, tool access and per-agent skill selection.
 - **Sessions** — conversation threads. Every execution path funnels into a
   session, so chats, task runs, flow runs and scheduled deliveries are all
   viewable as one streamable transcript. `Kind` tags the origin (chat / task /
-  flow / schedule / heartbeat).
+  flow / schedule).
 - **Tasks** — a kanban board. Each task owns one run session.
 - **Flows** — multi-step / multi-agent orchestration graphs (see the
   `swarmgo-flows` skill for details).

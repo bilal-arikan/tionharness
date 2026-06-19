@@ -5,6 +5,7 @@ when_to_use: "When you need to inspect or change SwarmGo's application settings:
 icon: "⚙️"
 color: "#8b5cf6"
 access: shared
+auto_summary: false
 ---
 # SwarmGo — Application Settings
 
@@ -29,7 +30,7 @@ only touches the fields you include; everything else is left unchanged.
 
 ```
 get_settings → {}
-update_settings → {"patch": {"pauseAutonomy": true, "defaultHeartbeatSec": 120}}
+update_settings → {"patch": {"pauseAutonomy": true}}
 ```
 
 ## Settings reference
@@ -48,6 +49,7 @@ update_settings → {"patch": {"pauseAutonomy": true, "defaultHeartbeatSec": 120
 - `claudeCliPath` — path to the `claude` binary; `""` = auto-detect on PATH.
 - `anthropicKey` — **write-only**; `""` clears. Read shows only `anthropicKeySet`.
 - `minimaxKey` (write-only), `minimaxBaseUrl` — MiniMax (OpenAI-compatible).
+- `openrouterKey` (write-only), `openrouterBaseUrl` — OpenRouter (OpenAI-compatible; one key, hundreds of models via `author/model-slug` ids).
 - `oneMillionContext`, `extendedPromptCache` — Anthropic betas (anthropic only).
 - Custom providers are managed separately (Providers panel / market), not patched here.
 
@@ -72,16 +74,22 @@ update_settings → {"patch": {"pauseAutonomy": true, "defaultHeartbeatSec": 120
 
 ### Budgets & autonomy
 - `defaultDailyCallLimit`, `defaultDailyTokenLimit` — new-agent defaults (0 = unlimited).
-- `defaultHeartbeatSec` (min 5, default 60), `pauseAutonomy` (global brake).
+- `pauseAutonomy` (global autonomy brake — pauses scheduled calls).
 - `autoTitleEnabled` (default true), `titleModel` (`""` = agent's model).
 
 ### MCP & gated tool capabilities (off by default — each expands power/cost)
 - `mcpGatewayUrl` — external MCP gateway URL.
-- `enableShell` — the built-in shell tool.
+- `enableShell` — the built-in shell tool. On claude-cli agents it is bridged
+  (PowerShell on Windows) and the CLI's native `Bash` is suppressed so commands
+  route through SwarmGo's shell.
 - `enableSelfManage` — the self-management suite (create/edit/delete entities,
   **including these settings tools**).
-- `enableDelegation` — `call_agent`; `delegationMaxDepth` (1–10, default 3),
-  `delegationMaxCalls` (1–100, default 8).
+- `enableCliHooks` — pass PreToolUse/PostToolUse hooks to claude-cli agents via
+  `--settings` (default true). Turn off to keep hooks native-only when a hook
+  authored for SwarmGo's shell misbehaves under the CLI's own hook runner.
+- `enableDelegation` — `run_subagent` (isolated subagent workers, agent→agent
+  delegation); `delegationMaxDepth` (1–10, default 3), `delegationMaxCalls`
+  (1–100, default 8).
 - `spawnMaxConcurrent` (1–128, default 16), `spawnMaxPerTurn` (1–64, default 4).
 
 ### Diagnostics
