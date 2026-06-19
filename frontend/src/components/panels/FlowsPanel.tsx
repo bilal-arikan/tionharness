@@ -18,6 +18,7 @@ import {
   type FlowRFNode,
 } from '../../lib/flowGraph'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../../types'
+import { Button } from '../common'
 
 interface Props {
   agents: Agent[]
@@ -446,12 +447,9 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
           </ul>
         ) : (
           <>
-        <button
-          onClick={createFlow}
-          className="mb-3 w-full rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
-        >
+        <Button onClick={createFlow} size="lg" className="mb-3 w-full">
           + Yeni akış
-        </button>
+        </Button>
         <ul className="space-y-1">
           {flows.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase())).map((f) => (
             <li key={f.id}>
@@ -512,12 +510,9 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                 <span className="flex-shrink-0 text-xs text-[var(--color-text-dim)]">
                   salt-okunur önizleme
                 </span>
-                <button
-                  onClick={() => instantiateTemplate(selectedTemplate)}
-                  className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
-                >
+                <Button onClick={() => instantiateTemplate(selectedTemplate)} size="lg" className="flex-shrink-0">
                   + Bu şablondan akış oluştur
-                </button>
+                </Button>
               </div>
               <div className="min-h-0 flex-1">
                 <TemplatePreview graph={selectedTemplate.graph} agents={agents} />
@@ -584,12 +579,9 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               />
               Animasyon
             </label>
-            <button
-              onClick={saveFlow}
-              className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
+            <Button onClick={saveFlow} size="lg" className="flex-shrink-0">
               Kaydet
-            </button>
+            </Button>
           </div>
 
           {/* Node palette + canvas + inspector */}
@@ -658,13 +650,9 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                 rows={1}
                 className="flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               />
-              <button
-                onClick={doRun}
-                disabled={running}
-                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-              >
+              <Button onClick={doRun} disabled={running} size="lg">
                 {running ? 'Çalışıyor…' : '▶ Çalıştır'}
-              </button>
+              </Button>
             </div>
 
             {/* Live node progress while running (before the final run lands). */}
