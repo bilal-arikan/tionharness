@@ -52,6 +52,10 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 				}))
 		}
 
+		// run_subagent (CLI path): synchronous delegation — hand a sub-task to another
+		// agent and get the answer back in this turn. nil when delegation is off.
+		run.setRunAgent(rt.RunSubagentRunner(ag, true))
+
 		// schedule_wake (CLI path): only when we know the session to resume.
 		if sessionID != "" {
 			run.setWakeScheduler(func(wctx context.Context, delaySeconds int, prompt, reason string) (string, error) {

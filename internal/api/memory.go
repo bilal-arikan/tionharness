@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal/swarmgo/internal/memory"
 )
 
 // handleListMemories returns an agent's memories, optionally filtered by ?kind=.
@@ -58,6 +59,59 @@ func (s *Server) handleCreateMemory(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logger.Info("memory added", "agent", agentID, "kind", req.Kind, "id", mem.ID)
 	writeJSON(w, http.StatusCreated, mem)
+}
+
+// handleGetCore returns the agent's MemGPT-style core memory, split into its
+// persona and human sections (each "" when unset).
+func (s *Server) handleGetCore(w http.ResponseWriter, r *http.Request) {
+	agentID := r.PathValue("id")
+	persona, human, err := ws(r).Runtime.Memory().ReadCoreSections(r.Context(), agentID)
+	if writeDBError(w, err, "") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"persona": persona, "human": human})
+}
+
+// putCoreReq carries the two sections. Each is a pointer so a client can update
+// just one section; a non-nil empty string clears that section.
+type putCoreReq struct {
+	Persona *string `json:"persona"`
+	Human   *string `json:"human"`
+}
+
+// handlePutCore replaces the agent's core sections (upsert). Only the sections
+// present in the body are written; the single-row-per-section invariant is
+// preserved by the store. Returns the resulting persona/human.
+func (s *Server) handlePutCore(w http.ResponseWriter, r *http.Request) {
+	agentID := r.PathValue("id")
+	wsp := ws(r)
+
+	var req putCoreReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if _, err := wsp.DB.GetAgent(r.Context(), agentID); err != nil {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	mem := wsp.Runtime.Memory()
+	if req.Persona != nil {
+		if err := mem.WriteCore(r.Context(), agentID, memory.CorePersona, *req.Persona); writeDBError(w, err, "") {
+			return
+		}
+	}
+	if req.Human != nil {
+		if err := mem.WriteCore(r.Context(), agentID, memory.CoreHuman, *req.Human); writeDBError(w, err, "") {
+			return
+		}
+	}
+	persona, human, err := mem.ReadCoreSections(r.Context(), agentID)
+	if writeDBError(w, err, "") {
+		return
+	}
+	s.logger.Info("core memory written", "agent", agentID)
+	writeJSON(w, http.StatusOK, map[string]string{"persona": persona, "human": human})
 }
 
 // handleDeleteMemory removes a memory by id.

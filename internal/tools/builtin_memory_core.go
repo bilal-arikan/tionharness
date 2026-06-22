@@ -31,15 +31,20 @@ func NewCoreMemoryAppendTool(mem *memory.Store, agentID string) CoreMemoryTool {
 	return CoreMemoryTool{mem: mem, agentID: agentID, mode: "append"}
 }
 
+// sectionSchema is the shared "section" property: which half of core memory the
+// edit targets. persona = facts about yourself; human = facts about the user.
+const sectionSchema = `"section":{"type":"string","enum":["persona","human"],"description":"Which core-memory section to edit: \"persona\" = facts about yourself (your identity/behaviour); \"human\" = facts about the user (their preferences/context). Defaults to persona."}`
+
 func (t CoreMemoryTool) Def() providers.ToolDef {
 	if t.mode == "append" {
 		return providers.ToolDef{
 			Name:        "core_memory_append",
-			Description: "Append one line to your core memory — the persistent working-memory block kept in context every turn. Use it to record a new durable fact about yourself or the user without rewriting the whole block.",
+			Description: "Append one line to a section of your core memory — the persistent working-memory block kept in context every turn. Use section=\"human\" to record a durable fact about the user, section=\"persona\" for a fact about yourself.",
 			InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{
-					"content":{"type":"string","description":"The line to append to your core memory"}
+					"content":{"type":"string","description":"The line to append to the section"},
+					` + sectionSchema + `
 				},
 				"required":["content"],
 				"additionalProperties":false
@@ -48,11 +53,12 @@ func (t CoreMemoryTool) Def() providers.ToolDef {
 	}
 	return providers.ToolDef{
 		Name:        "core_memory_replace",
-		Description: "Replace your entire core memory block with new content. Core memory is a small, persistent block kept in context every turn; rewrite it to keep it accurate and concise (e.g. update a fact that changed).",
+		Description: "Replace one section of your core memory with new content. Core memory is a small, persistent block kept in context every turn, split into \"persona\" (about you) and \"human\" (about the user); rewrite a section to keep it accurate and concise.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
-				"content":{"type":"string","description":"The new full content of your core memory block"}
+				"content":{"type":"string","description":"The new full content of the section"},
+				` + sectionSchema + `
 			},
 			"required":["content"],
 			"additionalProperties":false
@@ -63,6 +69,7 @@ func (t CoreMemoryTool) Def() providers.ToolDef {
 func (t CoreMemoryTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		Content string `json:"content"`
+		Section string `json:"section"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("invalid arguments: %w", err)
@@ -74,16 +81,22 @@ func (t CoreMemoryTool) Call(ctx context.Context, input json.RawMessage) (string
 	if t.mem == nil {
 		return "", fmt.Errorf("memory is not available in this workspace")
 	}
+	// Normalize the section; an empty/unknown value falls back to persona in the
+	// store. Echo the resolved section back so the caller sees where it landed.
+	section := memory.CorePersona
+	if strings.EqualFold(strings.TrimSpace(in.Section), memory.CoreHuman) {
+		section = memory.CoreHuman
+	}
 	if t.mode == "append" {
-		if err := t.mem.AppendCore(ctx, t.agentID, in.Content); err != nil {
+		if err := t.mem.AppendCore(ctx, t.agentID, section, in.Content); err != nil {
 			return "", fmt.Errorf("append core memory: %w", err)
 		}
-		b, _ := json.Marshal(map[string]string{"action": "core_appended"})
+		b, _ := json.Marshal(map[string]string{"action": "core_appended", "section": section})
 		return string(b), nil
 	}
-	if err := t.mem.WriteCore(ctx, t.agentID, in.Content); err != nil {
+	if err := t.mem.WriteCore(ctx, t.agentID, section, in.Content); err != nil {
 		return "", fmt.Errorf("replace core memory: %w", err)
 	}
-	b, _ := json.Marshal(map[string]string{"action": "core_replaced"})
+	b, _ := json.Marshal(map[string]string{"action": "core_replaced", "section": section})
 	return string(b), nil
 }

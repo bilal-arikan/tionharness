@@ -30,7 +30,7 @@ loaded. To use one:
 > If a self-management tool (agents/flows/schedules/tasks/hooks/mcp/skills/settings) is
 > not in the load-on-demand list at all, the workspace does not have
 > self-management enabled (ask the user to turn it on in Settings → Capabilities).
-> The vault/session/web tools below (`secret_*`, `list_sessions`, `http_get`) are
+> The vault/session/web tools below (`secret_*`, `list_sessions`, `WebFetch`) are
 > load-on-demand independently of self-management — they appear when their own
 > capability (secret vault / cross-session context) is on.
 
@@ -89,7 +89,8 @@ in the catalog next turn. Deleting a skill also strips its slug from every agent
 that had it selected, so no agent keeps a dangling reference. (`use_skill` itself
 is always available.)
 
-**Artifacts** — `list_artifacts`, `delete_artifact` (delete only agent-created).
+**Artifacts** — `list_artifacts`, `read_artifact` (get content by id — do NOT guess
+the file path), `delete_artifact` (delete only agent-created).
 `create_artifact` / `update_artifact` are always available in chat.
 
 **Memory & logs** — `memory_add` (store a durable fact), `memory_recall` (pull
@@ -101,7 +102,7 @@ them like the rest of this suite.
 **Secrets & sessions & web** — `secret_list` / `secret_get` (read the encrypted
 vault), `secret_set` / `secret_delete` (store or remove a credential — write side,
 gated by self-management), `list_sessions` (enumerate sibling sessions; a context
-block is also pushed automatically), `http_get` (outbound HTTP GET). These are
+block is also pushed automatically), `WebFetch` (fetch a web page as Markdown). These are
 load-on-demand too: `activate_tools` first.
 
 **Application settings** — `get_settings`, `update_settings` (read and live-apply

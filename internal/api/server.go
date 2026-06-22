@@ -101,6 +101,7 @@ func (s *Server) applySettings() {
 	s.providers.SetOpenRouter(s.settings.OpenRouterKey(), cur.OpenRouterBaseURL)
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
+	s.tun.SetContextBudget(cur.MaxContextTokens) // scale tool-output thresholds to the budget (CG-9)
 	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
 	s.tun.SetTitleModel(cur.TitleModel)
 	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen)
@@ -364,6 +365,8 @@ func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 func (s *Server) registerMemoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents/{id}/memories", s.handleListMemories)
 	mux.HandleFunc("POST /api/agents/{id}/memories", s.handleCreateMemory)
+	mux.HandleFunc("GET /api/agents/{id}/core", s.handleGetCore)
+	mux.HandleFunc("PUT /api/agents/{id}/core", s.handlePutCore)
 	mux.HandleFunc("POST /api/agents/{id}/reflect", s.handleReflect)
 	mux.HandleFunc("POST /api/agents/{id}/recall", s.handleRecall)
 	mux.HandleFunc("DELETE /api/memories/{id}", s.handleDeleteMemory)

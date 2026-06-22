@@ -56,7 +56,7 @@ func TestBuiltinFSToolsThroughRegistry(t *testing.T) {
 	}
 
 	// write_file then read_file round-trips real bytes on disk.
-	if res := callTool(t, rt, agent, "write_file", map[string]any{
+	if res := callTool(t, rt, agent, "Write", map[string]any{
 		"path": "docs/note.txt", "content": "hello sandbox",
 	}); res.IsError {
 		t.Fatalf("write_file errored: %s", res.Content)
@@ -64,33 +64,33 @@ func TestBuiltinFSToolsThroughRegistry(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(workDir, "docs", "note.txt")); err != nil {
 		t.Fatalf("file not written to sandbox: %v", err)
 	}
-	if res := callTool(t, rt, agent, "read_file", map[string]any{"path": "docs/note.txt"}); res.IsError || res.Content != "hello sandbox" {
+	if res := callTool(t, rt, agent, "Read", map[string]any{"path": "docs/note.txt"}); res.IsError || res.Content != "hello sandbox" {
 		t.Fatalf("read_file got %q (err=%v)", res.Content, res.IsError)
 	}
 
 	// edit_file mutates the file.
-	if res := callTool(t, rt, agent, "edit_file", map[string]any{
+	if res := callTool(t, rt, agent, "Edit", map[string]any{
 		"path": "docs/note.txt", "old_string": "hello", "new_string": "HELLO",
 	}); res.IsError {
 		t.Fatalf("edit_file errored: %s", res.Content)
 	}
-	if res := callTool(t, rt, agent, "read_file", map[string]any{"path": "docs/note.txt"}); res.Content != "HELLO sandbox" {
+	if res := callTool(t, rt, agent, "Read", map[string]any{"path": "docs/note.txt"}); res.Content != "HELLO sandbox" {
 		t.Fatalf("after edit got %q", res.Content)
 	}
 
 	// list_dir, glob and grep see the new file.
-	if res := callTool(t, rt, agent, "list_dir", map[string]any{"path": "docs"}); !strings.Contains(res.Content, "note.txt") {
+	if res := callTool(t, rt, agent, "LS", map[string]any{"path": "docs"}); !strings.Contains(res.Content, "note.txt") {
 		t.Fatalf("list_dir got %q", res.Content)
 	}
-	if res := callTool(t, rt, agent, "glob", map[string]any{"pattern": "**/*.txt"}); !strings.Contains(res.Content, "docs/note.txt") {
+	if res := callTool(t, rt, agent, "Glob", map[string]any{"pattern": "**/*.txt"}); !strings.Contains(res.Content, "docs/note.txt") {
 		t.Fatalf("glob got %q", res.Content)
 	}
-	if res := callTool(t, rt, agent, "grep", map[string]any{"pattern": "HELLO"}); !strings.Contains(res.Content, "docs/note.txt:1:HELLO sandbox") {
+	if res := callTool(t, rt, agent, "Grep", map[string]any{"pattern": "HELLO"}); !strings.Contains(res.Content, "docs/note.txt:1:HELLO sandbox") {
 		t.Fatalf("grep got %q", res.Content)
 	}
 
 	// A path-traversal attempt is rejected as an error result, not executed.
-	if res := callTool(t, rt, agent, "read_file", map[string]any{"path": "../escape.txt"}); !res.IsError {
+	if res := callTool(t, rt, agent, "Read", map[string]any{"path": "../escape.txt"}); !res.IsError {
 		t.Fatalf("expected sandbox escape to be rejected, got %q", res.Content)
 	}
 }
@@ -110,13 +110,13 @@ func TestShellToolGate(t *testing.T) {
 	}
 
 	// Off by default.
-	if rt.buildRegistry(ctx, agent).Has("shell") {
+	if rt.buildRegistry(ctx, agent).Has("Bash") {
 		t.Fatal("shell tool must be absent when disabled")
 	}
 
 	// Enabled → present and actually executes.
 	tun.SetShellEnabled(true)
-	res := callTool(t, rt, agent, "shell", map[string]any{"command": "echo swarmgo-shell-ok"})
+	res := callTool(t, rt, agent, "Bash", map[string]any{"command": "echo swarmgo-shell-ok"})
 	if res.IsError || !strings.Contains(res.Content, "swarmgo-shell-ok") {
 		t.Fatalf("shell run got %q (err=%v)", res.Content, res.IsError)
 	}

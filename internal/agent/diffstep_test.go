@@ -23,7 +23,7 @@ func callWithDiff(t *testing.T, rt *Runtime, agent db.Agent, name string, args m
 	return res, sink.Take()
 }
 
-// TestFSToolsEmitDiff verifies that write_file and edit_file surface a structured
+// TestFSToolsEmitDiff verifies that Write and Edit surface a structured
 // FileDiff through the diff sink — the data the chat renders as a diff card.
 func TestFSToolsEmitDiff(t *testing.T) {
 	workDir := filepath.Join(t.TempDir(), "workspace")
@@ -37,7 +37,7 @@ func TestFSToolsEmitDiff(t *testing.T) {
 	}
 
 	// New file → Created, all lines added.
-	res, d := callWithDiff(t, rt, agent, "write_file", map[string]any{
+	res, d := callWithDiff(t, rt, agent, "Write", map[string]any{
 		"path": "a.txt", "content": "one\ntwo\nthree\n",
 	})
 	if res.IsError {
@@ -48,7 +48,7 @@ func TestFSToolsEmitDiff(t *testing.T) {
 	}
 
 	// Edit one line → one added, one removed.
-	res, d = callWithDiff(t, rt, agent, "edit_file", map[string]any{
+	res, d = callWithDiff(t, rt, agent, "Edit", map[string]any{
 		"path": "a.txt", "old_string": "two", "new_string": "TWO",
 	})
 	if res.IsError {

@@ -38,19 +38,36 @@ func (s *Store) Remember(ctx context.Context, agentID, kind, content string) (db
 	})
 }
 
-// WriteCore replaces the agent's single "core" working-memory block with content,
-// caching its term vector. Upsert: the existing core row is updated in place (or
-// created on first write), so there is always exactly one core row per agent.
-func (s *Store) WriteCore(ctx context.Context, agentID, content string) error {
+// Core-memory sections (MemGPT persona/human split). "persona" is the agent's
+// self-model; "human" is its model of the user. Each is a single, in-place
+// editable row per agent, injected into every prompt.
+const (
+	CorePersona = "persona"
+	CoreHuman   = "human"
+)
+
+// coreKind maps a section name to its storage kind. An empty/unknown section
+// defaults to persona so a bare core_memory_* call still has a home.
+func coreKind(section string) string {
+	if strings.ToLower(strings.TrimSpace(section)) == CoreHuman {
+		return db.MemoryCoreHuman
+	}
+	return db.MemoryCorePersona
+}
+
+// WriteCore replaces the agent's core block for the given section (persona|human)
+// with content, caching its term vector. Upsert: the section's row is updated in
+// place (or created on first write), so there is exactly one row per section.
+func (s *Store) WriteCore(ctx context.Context, agentID, section, content string) error {
 	content = strings.TrimSpace(content)
 	vec := buildVector(content)
-	_, err := s.db.UpsertKnowledgeByKind(ctx, agentID, db.MemoryCore, content, marshalVector(vec))
+	_, err := s.db.UpsertKnowledgeByKind(ctx, agentID, coreKind(section), content, marshalVector(vec))
 	return err
 }
 
-// ReadCore returns the agent's current core working-memory block, or "" if none.
-func (s *Store) ReadCore(ctx context.Context, agentID string) (string, error) {
-	sources, err := s.db.ListKnowledge(ctx, agentID, db.MemoryCore)
+// ReadCore returns the agent's core block for the given section, or "" if none.
+func (s *Store) ReadCore(ctx context.Context, agentID, section string) (string, error) {
+	sources, err := s.db.ListKnowledge(ctx, agentID, coreKind(section))
 	if err != nil {
 		return "", err
 	}
@@ -60,11 +77,11 @@ func (s *Store) ReadCore(ctx context.Context, agentID string) (string, error) {
 	return sources[0].Content, nil
 }
 
-// AppendCore appends a line to the agent's core block (read-modify-write). A
+// AppendCore appends a line to a section's core block (read-modify-write). A
 // blank existing block yields just the line, so the first append reads cleanly.
-func (s *Store) AppendCore(ctx context.Context, agentID, line string) error {
+func (s *Store) AppendCore(ctx context.Context, agentID, section, line string) error {
 	line = strings.TrimSpace(line)
-	cur, err := s.ReadCore(ctx, agentID)
+	cur, err := s.ReadCore(ctx, agentID, section)
 	if err != nil {
 		return err
 	}
@@ -72,7 +89,19 @@ func (s *Store) AppendCore(ctx context.Context, agentID, line string) error {
 	if strings.TrimSpace(cur) != "" {
 		next = strings.TrimRight(cur, "\n") + "\n" + line
 	}
-	return s.WriteCore(ctx, agentID, next)
+	return s.WriteCore(ctx, agentID, section, next)
+}
+
+// ReadCoreSections returns both core sections (persona, human) for an agent —
+// the shape used for prompt injection and the core API. Either may be "".
+func (s *Store) ReadCoreSections(ctx context.Context, agentID string) (persona, human string, err error) {
+	if persona, err = s.ReadCore(ctx, agentID, CorePersona); err != nil {
+		return "", "", err
+	}
+	if human, err = s.ReadCore(ctx, agentID, CoreHuman); err != nil {
+		return "", "", err
+	}
+	return persona, human, nil
 }
 
 // List returns an agent's memories (optionally filtered by kind), newest first.

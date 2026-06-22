@@ -33,10 +33,10 @@ type spawnSessionInput struct {
 
 // SpawnSessionTool lets an agent launch a brand-new, independent session for
 // another agent and walk away — a fire-and-forget parallel worker. Unlike
-// call_agent (synchronous, same turn, returns the reply) and send_agent_message
-// (queues into an existing agent's inbox), spawn opens a FRESH session and runs
-// the turn in the background; the spawner does not wait. This is the building
-// block for autonomous "swarm" fan-out.
+// run_subagent's synchronous mode (same turn, returns the reply), spawn opens a
+// FRESH session and runs the turn in the background; the spawner does not wait.
+// It backs run_subagent's wait:"async" mode and is the building block for
+// autonomous "swarm" fan-out.
 //
 // A per-turn budget caps how many spawns one turn may launch, complementing the
 // runtime's global concurrency cap, so a single turn can't trigger a spawn storm.
@@ -59,11 +59,12 @@ func (*SpawnSessionTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "spawn_session",
 		Description: "Spawn a NEW, independent session for an agent in this workspace and let it " +
-			"run on its own — fire-and-forget. The agent works the prompt in the background; you " +
-			"do NOT wait for a result (use call_agent when you need an answer back now, or " +
-			"send_agent_message to queue a note into an existing agent's inbox). Use this to fan " +
-			"work out to parallel autonomous workers. Returns the new session id, which appears " +
-			"live in the activity feed.",
+			"run on its own — fire-and-forget. The agent works the prompt in the background in a " +
+			"SEPARATE session; you do NOT wait for it and its result does NOT come back to this " +
+			"conversation — it lands in that new session's transcript (visible in the activity " +
+			"feed). So do NOT promise to relay its answer here. When you instead need an answer " +
+			"back NOW, in this turn, use run_subagent (if available). Use spawn_session to fan " +
+			"work out to parallel autonomous workers. Returns the new session id.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {

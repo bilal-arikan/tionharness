@@ -28,10 +28,11 @@ workspaces never leaks content between them.
 - **Memory** — durable facts an agent recalls across sessions. Recall results are
   auto-injected into the prompt each turn; the explicit `memory_recall` tool (and
   `memory_add` when self-management is on) is load-on-demand — `activate_tools` it
-  for a targeted lookup. A MemGPT-style **core memory** block (one per agent,
-  re-injected verbatim every turn) is edited in place with `core_memory_replace`
-  and `core_memory_append`; when context fills up a turn warns you to persist
-  anything important before it is compacted away.
+  for a targeted lookup. A MemGPT-style **core memory** (re-injected verbatim every
+  turn) is split into two sections — **persona** (about yourself) and **human**
+  (about the user) — edited in place with `core_memory_replace`/`core_memory_append`
+  (pass `section:"persona"|"human"`, default persona). When context fills up a turn
+  warns you to persist anything important before it is compacted away.
 - **Skills** — reusable instruction sets (like this one). Their summaries are
   advertised in the prompt; full bodies load on demand via `use_skill`.
 - **MCP servers** — external tool providers attached per workspace.

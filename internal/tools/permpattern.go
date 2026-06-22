@@ -6,13 +6,13 @@ import (
 )
 
 // PermRule is a parsed permission pattern: a tool name plus an optional argument
-// glob. "shell" matches any shell call; "shell(git *)" matches only shell calls
+// glob. "Bash" matches any shell call; "Bash(git *)" matches only shell calls
 // whose representative argument matches the glob "git *". It is the unit behind
 // argument-aware permission grants (B2): approving `git status` once with
-// "always" grants shell(git *), so later git commands skip the prompt while
+// "always" grants Bash(git *), so later git commands skip the prompt while
 // `rm -rf /` still asks.
 type PermRule struct {
-	Tool    string // tool name, e.g. "shell" / "Bash"
+	Tool    string // tool name, e.g. "Bash"
 	ArgGlob string // "" = match any argument (whole-tool grant)
 }
 
@@ -75,8 +75,9 @@ func globMatch(pattern, s string) bool {
 
 // execArgTools are the tools whose risk depends on their argument (a command),
 // so the gate can derive an argument-scoped grant instead of a whole-tool one.
-// shell is SwarmGo's exec built-in; Bash is the claude-cli analog.
-var execArgTools = map[string]bool{"shell": true, "Bash": true}
+// "Bash" is the shared exec built-in name (SwarmGo's native shell and the
+// claude-cli analog both report it).
+var execArgTools = map[string]bool{"Bash": true}
 
 // RepresentativeArg returns the argument string a permission rule matches
 // against for a tool call. For command-execution tools it is the command line;

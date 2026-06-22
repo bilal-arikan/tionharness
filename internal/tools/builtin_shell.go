@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -35,9 +36,10 @@ func (ShellTool) Def() providers.ToolDef {
 		shell = "PowerShell"
 	}
 	return providers.ToolDef{
-		Name: "shell",
+		Name: "Bash",
 		Description: fmt.Sprintf(
-			"Run a shell command (%s) and return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may cd to and operate on any path. Bounded by a timeout (default 30s, max 120s). Use for builds, tests, and file operations.",
+			"Run a shell command (%s) and return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may cd to and operate on any path. Bounded by a timeout (default 30s, max 120s). Use for builds, tests, and file operations. "+
+				"The command runs DIRECTLY in the shell above — on Windows do NOT wrap it in another `powershell -Command \"...\"` / `powershell.exe -Command \"...\"`; pass the PowerShell statements as-is (e.g. `$x = Invoke-RestMethod ...; $x.foo`). Wrapping it re-parses the string and strips `$variable` references.",
 			shell,
 		),
 		InputSchema: json.RawMessage(`{
@@ -92,6 +94,12 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
+		// Defensive unwrap: this tool already runs inside powershell.exe. Agents
+		// often redundantly wrap their command in `powershell -Command "..."`,
+		// which makes the OUTER shell expand (and strip) any $variable before the
+		// inner shell ever sees it — breaking scripts like `$x = ...; $x | ...`.
+		// Strip a single redundant wrapper so the statements run directly.
+		args.Command = unwrapRedundantPowershell(args.Command)
 		cmd = exec.CommandContext(runCtx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", args.Command)
 	} else {
 		cmd = exec.CommandContext(runCtx, "/bin/sh", "-c", args.Command)
@@ -134,6 +142,28 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 func isNetworkMutatingGit(cmd string) bool {
 	norm := strings.ToLower(strings.Join(strings.Fields(cmd), " "))
 	return strings.Contains(norm, "git push") || strings.Contains(norm, "git remote add") || strings.Contains(norm, "git remote set-url")
+}
+
+// powershellWrapperRe matches a command that is ENTIRELY a redundant invocation
+// of `powershell[.exe] [flags] -Command "<inner>"` (or `-c "<inner>"`). Only the
+// quoted single-argument form is unwrapped — anything more complex is left as-is.
+var powershellWrapperRe = regexp.MustCompile(`(?is)^\s*powershell(?:\.exe)?\s+(?:-\S+\s+)*-c(?:ommand)?\s+"(.*)"\s*$`)
+
+// unwrapRedundantPowershell strips one redundant outer `powershell -Command "..."`
+// wrapper (see the call site for why). It only unwraps when the whole command is
+// the wrapper and the inner script carries no escaped quotes (`\"` or `""`), which
+// would make naive unquoting wrong — in that case the original is returned
+// untouched so behaviour never silently changes.
+func unwrapRedundantPowershell(cmd string) string {
+	m := powershellWrapperRe.FindStringSubmatch(cmd)
+	if m == nil {
+		return cmd
+	}
+	inner := m[1]
+	if strings.Contains(inner, `\"`) || strings.Contains(inner, `""`) {
+		return cmd
+	}
+	return strings.TrimSpace(inner)
 }
 
 // shellStreamWriter buffers process output up to max bytes (for the final

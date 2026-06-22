@@ -4,6 +4,7 @@ import { api } from '../../api'
 import type { Agent, Memory, MemoryKind } from '../../types'
 import { Markdown } from '../markdown/Markdown'
 import { Button } from '../common'
+import { CoreMemoryCard } from './CoreMemoryCard'
 
 // The knowledge-graph view pulls in React Flow (~300KB); load it only when the
 // user switches to the graph tab.
@@ -113,6 +114,9 @@ export function MemoryPanel({ agent, onError }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col p-4">
+      {/* Core memory (MemGPT): the agent's persistent, always-in-context block. */}
+      <CoreMemoryCard agentId={agent.id} onError={onError} />
+
       {/* Add memory + reflect */}
       <div className="mb-3 flex gap-2">
         <input

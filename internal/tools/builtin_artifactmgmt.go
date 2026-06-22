@@ -20,6 +20,56 @@ type artifactMgmtDeps struct {
 	actorID string
 }
 
+// ReadArtifactTool returns an artifact's full content by id. It saves the agent
+// from guessing the on-disk path (artifacts live under workspace/artifacts/<...>/,
+// not next to the file the agent wrote) — a common failure when an agent tries to
+// re-display an artifact it created earlier.
+type ReadArtifactTool struct{ d artifactMgmtDeps }
+
+// NewReadArtifactTool constructs read_artifact.
+func NewReadArtifactTool(database *db.DB, actorID string) ReadArtifactTool {
+	return ReadArtifactTool{d: artifactMgmtDeps{db: database, actorID: actorID}}
+}
+
+func (ReadArtifactTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "read_artifact",
+		Description: "Return the full content of an artifact by id (see list_artifacts). Use this to re-display or revise an artifact you created earlier — do NOT guess its file path on disk.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{"id":{"type":"string","description":"The artifact id (see list_artifacts)"}},
+			"required":["id"],
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t ReadArtifactTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	in.ID = strings.TrimSpace(in.ID)
+	if in.ID == "" {
+		return "", fmt.Errorf("id is required")
+	}
+	art, err := t.d.db.GetArtifact(ctx, in.ID)
+	if err != nil {
+		return "", fmt.Errorf("no artifact with id %q (use list_artifacts)", in.ID)
+	}
+	out := struct {
+		ID       string `json:"id"`
+		Title    string `json:"title"`
+		Kind     string `json:"kind"`
+		Language string `json:"language,omitempty"`
+		Content  string `json:"content"`
+	}{art.ID, art.Title, art.Kind, art.Language, art.Content}
+	b, _ := json.Marshal(out)
+	return string(b), nil
+}
+
 // DeleteArtifactTool removes an agent-created artifact.
 type DeleteArtifactTool struct{ d artifactMgmtDeps }
 
@@ -77,7 +127,7 @@ func NewListArtifactsTool(database *db.DB, actorID string) ListArtifactsTool {
 func (ListArtifactsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_artifacts",
-		Description: "List the artifacts in this workspace (id, title, kind, and whether each was created by an agent and is therefore deletable by you). Use update_artifact to edit content, delete_artifact to remove.",
+		Description: "List the artifacts in this workspace (id, title, kind, optional contentFile path, and whether each was created by an agent and is therefore deletable by you). Use read_artifact to get content by id, update_artifact to edit, delete_artifact to remove.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	}
 }
@@ -91,6 +141,7 @@ func (t ListArtifactsTool) Call(ctx context.Context, _ json.RawMessage) (string,
 		ID             string `json:"id"`
 		Title          string `json:"title"`
 		Kind           string `json:"kind"`
+		ContentFile    string `json:"contentFile,omitempty"`
 		CreatedByAgent bool   `json:"createdByAgent"`
 	}
 	out := make([]row, 0, len(artifacts))
@@ -99,6 +150,7 @@ func (t ListArtifactsTool) Call(ctx context.Context, _ json.RawMessage) (string,
 			ID:             a.ID,
 			Title:          a.Title,
 			Kind:           a.Kind,
+			ContentFile:    a.ContentFile,
 			CreatedByAgent: a.AgentID != "",
 		})
 	}

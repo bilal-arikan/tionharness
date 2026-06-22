@@ -64,61 +64,74 @@ func TestPruneKindKeepsNewest(t *testing.T) {
 	}
 }
 
-// TestCoreMemoryUpsert verifies the single-row invariant: repeated WriteCore
-// replaces the block in place (never accumulating rows), AppendCore adds a line,
-// and ReadCore returns "" before any write.
+// TestCoreMemoryUpsert verifies the per-section single-row invariant: repeated
+// WriteCore replaces a section in place, AppendCore adds a line, persona and
+// human are independent, and ReadCore returns "" before any write.
 func TestCoreMemoryUpsert(t *testing.T) {
 	ctx := context.Background()
 	s, d, agentID := newTestStore(t)
 	defer d.Close()
 
-	got, err := s.ReadCore(ctx, agentID)
+	got, err := s.ReadCore(ctx, agentID, CorePersona)
 	if err != nil {
 		t.Fatalf("read empty core: %v", err)
 	}
 	if got != "" {
-		t.Fatalf("empty core = %q, want \"\"", got)
+		t.Fatalf("empty persona = %q, want \"\"", got)
 	}
 
-	if err := s.WriteCore(ctx, agentID, "name: Bilal"); err != nil {
-		t.Fatalf("write core: %v", err)
+	if err := s.WriteCore(ctx, agentID, CorePersona, "role: assistant"); err != nil {
+		t.Fatalf("write persona: %v", err)
 	}
-	if err := s.WriteCore(ctx, agentID, "name: Bilal\nrole: engineer"); err != nil {
-		t.Fatalf("rewrite core: %v", err)
+	if err := s.WriteCore(ctx, agentID, CorePersona, "role: senior assistant"); err != nil {
+		t.Fatalf("rewrite persona: %v", err)
 	}
-	got, _ = s.ReadCore(ctx, agentID)
-	if got != "name: Bilal\nrole: engineer" {
-		t.Fatalf("core = %q after rewrite", got)
+	got, _ = s.ReadCore(ctx, agentID, CorePersona)
+	if got != "role: senior assistant" {
+		t.Fatalf("persona = %q after rewrite", got)
 	}
-
-	// Upsert invariant: exactly one core row, regardless of write count.
-	rows, _ := s.List(ctx, agentID, db.MemoryCore)
+	// Upsert invariant: exactly one persona row regardless of write count.
+	rows, _ := s.List(ctx, agentID, db.MemoryCorePersona)
 	if len(rows) != 1 {
-		t.Fatalf("core rows = %d, want 1 (upsert must not accumulate)", len(rows))
+		t.Fatalf("persona rows = %d, want 1 (upsert must not accumulate)", len(rows))
 	}
 
-	if err := s.AppendCore(ctx, agentID, "city: Istanbul"); err != nil {
-		t.Fatalf("append core: %v", err)
+	// human is independent of persona.
+	if err := s.WriteCore(ctx, agentID, CoreHuman, "name: Bilal"); err != nil {
+		t.Fatalf("write human: %v", err)
 	}
-	got, _ = s.ReadCore(ctx, agentID)
-	if got != "name: Bilal\nrole: engineer\ncity: Istanbul" {
-		t.Fatalf("core = %q after append", got)
+	if err := s.AppendCore(ctx, agentID, CoreHuman, "city: Istanbul"); err != nil {
+		t.Fatalf("append human: %v", err)
 	}
-	rows, _ = s.List(ctx, agentID, db.MemoryCore)
-	if len(rows) != 1 {
-		t.Fatalf("core rows = %d after append, want 1", len(rows))
+	human, _ := s.ReadCore(ctx, agentID, CoreHuman)
+	if human != "name: Bilal\ncity: Istanbul" {
+		t.Fatalf("human = %q after append", human)
+	}
+	// persona untouched by the human writes.
+	got, _ = s.ReadCore(ctx, agentID, CorePersona)
+	if got != "role: senior assistant" {
+		t.Fatalf("persona changed by human writes: %q", got)
+	}
+
+	// ReadCoreSections returns both.
+	p, h, _ := s.ReadCoreSections(ctx, agentID)
+	if p != "role: senior assistant" || h != "name: Bilal\ncity: Istanbul" {
+		t.Fatalf("sections = (%q, %q)", p, h)
 	}
 }
 
-// TestRecallExcludesCore ensures the always-injected core block never surfaces
-// through similarity recall (which would inject it twice).
+// TestRecallExcludesCore ensures the always-injected core sections never surface
+// through similarity recall (which would inject them twice).
 func TestRecallExcludesCore(t *testing.T) {
 	ctx := context.Background()
 	s, d, agentID := newTestStore(t)
 	defer d.Close()
 
-	if err := s.WriteCore(ctx, agentID, "the sky is blue today"); err != nil {
-		t.Fatalf("write core: %v", err)
+	if err := s.WriteCore(ctx, agentID, CorePersona, "the sky is blue today"); err != nil {
+		t.Fatalf("write persona: %v", err)
+	}
+	if err := s.WriteCore(ctx, agentID, CoreHuman, "the sky is blue today"); err != nil {
+		t.Fatalf("write human: %v", err)
 	}
 	if _, err := s.Remember(ctx, agentID, db.MemoryDocument, "the sky is blue today"); err != nil {
 		t.Fatalf("remember document: %v", err)
@@ -129,8 +142,8 @@ func TestRecallExcludesCore(t *testing.T) {
 		t.Fatalf("recall: %v", err)
 	}
 	for _, h := range hits {
-		if h.Source.Kind == db.MemoryCore {
-			t.Fatalf("recall returned a core memory; core must be excluded")
+		if h.Source.Kind == db.MemoryCorePersona || h.Source.Kind == db.MemoryCoreHuman {
+			t.Fatalf("recall returned a core memory (%s); core must be excluded", h.Source.Kind)
 		}
 	}
 	if len(hits) == 0 {

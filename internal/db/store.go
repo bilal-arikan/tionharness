@@ -40,9 +40,6 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	a.ID = d.nextID(idAgent)
 	a.CreatedAt = now()
 	a.UpdatedAt = a.CreatedAt
-	if a.Capabilities == "" {
-		a.Capabilities = "[]"
-	}
 	if a.PlanningMode == "" {
 		a.PlanningMode = "standard"
 	}

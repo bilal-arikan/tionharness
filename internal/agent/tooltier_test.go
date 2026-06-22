@@ -29,22 +29,22 @@ func TestWorkspaceTierFiltersCatalog(t *testing.T) {
 	ctx := context.Background()
 
 	full := rt.WorkspaceToolCatalog(ctx)
-	if !hasTool(full, "get_current_time") || !hasTool(full, "http_get") {
+	if !hasTool(full, "Read") || !hasTool(full, "WebFetch") {
 		t.Fatalf("full catalog missing built-ins: %v", full)
 	}
 
-	if err := rt.db.SetWorkspaceToolConfig(ctx, db.WorkspaceToolConfig{DisabledTools: []string{"http_get"}}); err != nil {
+	if err := rt.db.SetWorkspaceToolConfig(ctx, db.WorkspaceToolConfig{DisabledTools: []string{"WebFetch"}}); err != nil {
 		t.Fatalf("set workspace tool config: %v", err)
 	}
 	active := rt.ActiveToolCatalog(ctx)
-	if hasTool(active, "http_get") {
+	if hasTool(active, "WebFetch") {
 		t.Fatal("workspace-disabled tool must be absent from the active catalog")
 	}
-	if !hasTool(active, "get_current_time") {
+	if !hasTool(active, "Read") {
 		t.Fatal("non-disabled tool must remain active")
 	}
 	// The full catalog is unaffected by the denylist.
-	if !hasTool(rt.WorkspaceToolCatalog(ctx), "http_get") {
+	if !hasTool(rt.WorkspaceToolCatalog(ctx), "WebFetch") {
 		t.Fatal("full workspace catalog must still list disabled tools")
 	}
 }
@@ -88,30 +88,30 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 }
 
 // TestReadOnlyAgentDemotesWriteTools verifies a read-only agent ships the read
-// tools eagerly but the mutating tools (write_file/edit_file) are demoted to the
+// tools eagerly but the mutating tools (Write/Edit) are demoted to the
 // load-on-demand catalog, while an auto agent keeps them eager.
 func TestReadOnlyAgentDemotesWriteTools(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 
 	auto := db.Agent{ID: "auto", MCPEnabled: true, PermissionMode: "auto"}
-	if !hasTool(rt.ShippedToolCatalog(ctx, auto), "write_file") {
-		t.Fatal("auto agent must ship write_file eagerly")
+	if !hasTool(rt.ShippedToolCatalog(ctx, auto), "Write") {
+		t.Fatal("auto agent must ship Write eagerly")
 	}
 
 	ro := db.Agent{ID: "ro", MCPEnabled: true, PermissionMode: "read-only"}
-	if hasTool(rt.ShippedToolCatalog(ctx, ro), "write_file") {
-		t.Fatal("read-only agent must NOT ship write_file eagerly")
+	if hasTool(rt.ShippedToolCatalog(ctx, ro), "Write") {
+		t.Fatal("read-only agent must NOT ship Write eagerly")
 	}
-	if hasTool(rt.ShippedToolCatalog(ctx, ro), "edit_file") {
-		t.Fatal("read-only agent must NOT ship edit_file eagerly")
+	if hasTool(rt.ShippedToolCatalog(ctx, ro), "Edit") {
+		t.Fatal("read-only agent must NOT ship Edit eagerly")
 	}
-	if !hasTool(rt.LazyToolCatalog(ctx, ro), "write_file") {
-		t.Fatal("read-only agent must list write_file as load-on-demand")
+	if !hasTool(rt.LazyToolCatalog(ctx, ro), "Write") {
+		t.Fatal("read-only agent must list Write as load-on-demand")
 	}
 	// Read tools stay eager regardless of permission mode.
-	if !hasTool(rt.ShippedToolCatalog(ctx, ro), "read_file") {
-		t.Fatal("read-only agent must still ship read_file eagerly")
+	if !hasTool(rt.ShippedToolCatalog(ctx, ro), "Read") {
+		t.Fatal("read-only agent must still ship Read eagerly")
 	}
 }
 
@@ -122,17 +122,17 @@ func TestAgentTierIntersectsWorkspace(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 
-	// Disable get_current_time workspace-wide.
-	if err := rt.db.SetWorkspaceToolConfig(ctx, db.WorkspaceToolConfig{DisabledTools: []string{"get_current_time"}}); err != nil {
+	// Disable WebFetch workspace-wide.
+	if err := rt.db.SetWorkspaceToolConfig(ctx, db.WorkspaceToolConfig{DisabledTools: []string{"WebFetch"}}); err != nil {
 		t.Fatalf("set workspace tool config: %v", err)
 	}
 
 	// Agent allowlists both a disabled tool and an active one.
-	allow, _ := json.Marshal([]string{"get_current_time", "memory_recall"})
+	allow, _ := json.Marshal([]string{"WebFetch", "memory_recall"})
 	agent := db.Agent{ID: "a1", MCPEnabled: true, AllowedTools: string(allow)}
 
 	eff := rt.ToolCatalog(ctx, agent)
-	if hasTool(eff, "get_current_time") {
+	if hasTool(eff, "WebFetch") {
 		t.Fatal("workspace-disabled tool must not reach the agent even if allowlisted")
 	}
 	if !hasTool(eff, "memory_recall") {

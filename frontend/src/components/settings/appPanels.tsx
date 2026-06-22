@@ -8,7 +8,7 @@ import { api } from '../../api'
 import type { AppSettings } from '../../types'
 import { THEME_PRESETS } from '../../lib/themePresets'
 import { NOTIFY_TYPES, mutedTypes, setTypeEnabled } from '../../lib/notifyPrefs'
-import { Field, Toggle, inputCls, type AppSet } from './primitives'
+import { Field, Toggle, Slider, inputCls, type AppSet } from './primitives'
 
 interface PanelProps {
   draft: AppSettings
@@ -162,8 +162,32 @@ export function ContextPanel({ draft, set }: PanelProps) {
         Letta/MemGPT tarzı kendi-düzenleyen bellek: bağlam dolmaya yaklaşınca ajana "önemliyi şimdi yaz" uyarısı gösterilir; ajan ayrıca her turda sabit kalan,
         kendi düzenlediği bir <span className="font-medium text-[var(--color-text)]">çekirdek bellek</span> bloğunu <code>core_memory_replace</code>/<code>core_memory_append</code> ile yönetir.
       </div>
-      <Field label="Bağlam basıncı uyarı eşiği" hint="Bağlam doluluk oranı (0–1) bunu aşınca tura 'belleğe yaz' uyarısı eklenir. 0 = kapalı."><input type="number" step="0.05" min="0" max="1" value={draft.memoryPressureWarn} onChange={(e) => set('memoryPressureWarn', Number(e.target.value))} className={inputCls} /></Field>
+      <Slider
+        label="Bağlam basıncı uyarı eşiği"
+        min={0}
+        max={1}
+        step={0.05}
+        value={draft.memoryPressureWarn}
+        onChange={(v) => set('memoryPressureWarn', v)}
+        badge={draft.memoryPressureWarn <= 0 ? 'Kapalı' : `%${Math.round(draft.memoryPressureWarn * 100)}`}
+        hint="Bağlam doluluğu bu oranı aşınca tura 'belleğe yaz' uyarısı eklenir. Sola dayayınca (0) kapanır."
+        sub={
+          draft.memoryPressureWarn > 0
+            ? `≈ ${Math.round(draft.maxContextTokens * draft.memoryPressureWarn).toLocaleString('tr-TR')} token dolunca tetiklenir (maks. ${draft.maxContextTokens.toLocaleString('tr-TR')} token üzerinden).`
+            : 'Uyarı kapalı — ajan bağlam dolduğunda sessizce sıkıştırılır.'
+        }
+      />
       <Toggle label="Çekirdek bellek araçları" hint="core_memory_replace/append araçlarını ajana sun (kapatınca minimal araç yüzeyi)." checked={draft.coreMemoryTools} onChange={(v) => set('coreMemoryTools', v)} />
+      {/* Live status card (B): the net effect of the two controls at a glance. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs">
+        <span className="text-[var(--color-text-dim)]">Durum:</span>
+        <span className={`rounded px-1.5 py-0.5 font-medium ${draft.coreMemoryTools ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]' : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'}`}>
+          Çekirdek araçları {draft.coreMemoryTools ? 'açık' : 'kapalı'}
+        </span>
+        <span className={`rounded px-1.5 py-0.5 font-medium ${draft.memoryPressureWarn > 0 ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]' : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'}`}>
+          {draft.memoryPressureWarn > 0 ? `Uyarı %${Math.round(draft.memoryPressureWarn * 100)}'te` : 'Uyarı kapalı'}
+        </span>
+      </div>
 
       <SubHead icon={LifeBuoy}>Tur kurtarma & sıkıştırma</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
@@ -261,8 +285,8 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('enableCliHooks', v)}
       />
       <Toggle
-        label="Ajan→ajan delegasyon (call_agent)"
-        hint="Bir ajan başka bir ajana alt-görev devredip cevabını bekleyebilir. Her çağrı tam bir alt-ajan turu koşar (token maliyeti). Yalnızca native/anthropic tool yolunda."
+        label="Ajan→ajan delegasyon (run_subagent)"
+        hint="Bir ajan, izole bir alt-ajana (yerleşik profil ya da mevcut bir ajan) alt-görev devredip cevabını bekleyebilir; tek turda paralel de çağrılabilir. Her çağrı tam bir alt-ajan turu koşar (token maliyeti). Yalnızca native/anthropic tool yolunda."
         checked={draft.enableDelegation}
         onChange={(v) => set('enableDelegation', v)}
       />
@@ -271,11 +295,24 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           <Field label="Maks. delegasyon derinliği" hint="Zincirin kaç kat iç içe gidebileceği (1–10). Döngü koruması.">
             <input type="number" min={1} max={10} value={draft.delegationMaxDepth} onChange={(e) => set('delegationMaxDepth', Number(e.target.value))} className={inputCls} />
           </Field>
-          <Field label="Tur başına maks. delegasyon" hint="Tek kullanıcı turunda toplam call_agent çağrısı (1–100). Bütçe koruması.">
+          <Field label="Tur başına maks. delegasyon" hint="Tek kullanıcı turunda toplam run_subagent çağrısı (1–100). Bütçe koruması.">
             <input type="number" min={1} max={100} value={draft.delegationMaxCalls} onChange={(e) => set('delegationMaxCalls', Number(e.target.value))} className={inputCls} />
           </Field>
         </div>
       )}
+
+      <SubHead icon={Sparkles}>Spawn (arka plan) limitleri</SubHead>
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
+        Ayrık arka plan yüzeyi için sınırlar: <code>run_subagent</code> (async) ve köprülenen <code>spawn_session</code> + UI spawn düğmesi.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Maks. eşzamanlı spawn" hint="Aynı anda çalışabilen spawn edilmiş oturum sayısı (1–128).">
+          <input type="number" min={1} max={128} value={draft.spawnMaxConcurrent} onChange={(e) => set('spawnMaxConcurrent', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Tur başına maks. spawn" hint="Tek ajan turunda başlatılabilecek spawn sayısı (1–64).">
+          <input type="number" min={1} max={64} value={draft.spawnMaxPerTurn} onChange={(e) => set('spawnMaxPerTurn', Number(e.target.value))} className={inputCls} />
+        </Field>
+      </div>
 
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         <b>Çalışma dizini güvenliği.</b> Dosya/kabuk araçları artık workspace'e kilitli

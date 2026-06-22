@@ -33,14 +33,14 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 			"workspace, read the relevant files, and report precise findings (file:line, names, facts). " +
 			"You never modify anything. Return a concise, structured answer — your reply is the only " +
 			"thing the caller sees, so make it self-contained.",
-		AllowedTools: []string{"read_file", "list_dir", "glob", "grep", "http_get", "memory_recall"},
+		AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch", "memory_recall"},
 	},
 	"coder": {
 		ID: "coder",
 		SystemPrompt: "You are a Coder subagent: you implement a well-scoped change. Read what you need, " +
 			"write or edit the necessary files, and keep edits minimal and idiomatic. Report what you " +
 			"changed (files + a one-line rationale each). Your reply is the only thing the caller sees.",
-		AllowedTools: []string{"read_file", "list_dir", "glob", "grep", "write_file", "edit_file", "shell"},
+		AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Write", "Edit", "Bash"},
 	},
 	"reviewer": {
 		ID: "reviewer",
@@ -48,7 +48,7 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 			"for bugs, races, security issues and unclear code. Report ONLY real, actionable findings " +
 			"with file:line and a short why; say so plainly if it looks correct. You never modify " +
 			"anything. Your reply is the only thing the caller sees.",
-		AllowedTools: []string{"read_file", "list_dir", "glob", "grep"},
+		AllowedTools: []string{"Read", "LS", "Glob", "Grep"},
 	},
 }
 
@@ -94,6 +94,24 @@ func (r *Runtime) withRunAgent(ctx context.Context, caller db.Agent, reqPtr *pro
 		return r.runAgent(rctx, caller, reqPtr, autonomous, spec)
 	}
 	return tools.WithRunAgent(ctx, fn)
+}
+
+// RunSubagentRunner returns a run_subagent runner for the CLI Interaction bridge,
+// bound to the caller agent: it seeds the delegation call-graph + runner into ctx
+// and executes the run_subagent tool, returning its formatted result. There is no
+// live providers.Request on the CLI path, so inherited-context mode degrades to the
+// prompt only (the caller passes any needed context in the task). Returns nil when
+// delegation is disabled — the tool is then neither advertised nor callable on the
+// CLI path, mirroring the native gate (toolsetup).
+func (r *Runtime) RunSubagentRunner(caller db.Agent, autonomous bool) func(ctx context.Context, args json.RawMessage) (string, error) {
+	if !r.tun.DelegationEnabled() {
+		return nil
+	}
+	tool := tools.NewRunSubagentTool()
+	return func(ctx context.Context, args json.RawMessage) (string, error) {
+		ctx = r.withRunAgent(ctx, caller, nil, autonomous)
+		return tool.Call(ctx, args)
+	}
 }
 
 // runAgent is the single generic entry point behind run_subagent. It enforces the

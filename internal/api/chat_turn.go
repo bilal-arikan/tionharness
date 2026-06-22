@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bilal/swarmgo/internal/agent"
 	"github.com/bilal/swarmgo/internal/conversation"
@@ -38,7 +39,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// up. You answer the message yourself; if it helps you may address or relay to
 	// the referenced agent in your reply, but nothing is routed automatically.
 	if n := strings.TrimSpace(agentRow.Name); n != "" {
-		note := "You are the agent \"" + n + "\", and this message is addressed to you. It may contain \"@name\" references to other agents — treat each as a plain name reference (the user pointing at who they mean), not a handoff, a command to call that agent, or a file/skill to look up. Answer the message yourself; if useful you may address or relay to a referenced agent in your reply, but there is no automatic routing."
+		note := "You are the agent \"" + n + "\", and this message is addressed to you. It may contain \"@name\" references to other agents — treat each as a plain name reference (the user pointing at who they mean), not a handoff, a command to call that agent, or a file/skill to look up. Answer the message yourself; if useful you may address or relay to a referenced agent in your reply, but there is no automatic routing. If you hand work to another agent with spawn_session, its result runs in a SEPARATE session and does NOT come back to this conversation — do not promise to relay it here; instead tell the user it is running and where to find it (the activity feed)."
 		system = strings.TrimSpace(note + "\n\n" + system)
 	}
 	if uc := userContextBlock(s.settings.Get()); uc != "" {
@@ -62,11 +63,14 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		system = strings.TrimSpace(system + "\n\n" + tb)
 	}
 
-	var dynamic string
+	// Wall-clock awareness: a single date/time line so the agent always knows
+	// "now" without a tool round-trip (there is no get_current_time tool). Volatile
+	// by nature, so it leads the dynamic suffix and never invalidates the cache.
+	dynamic := dateTimeContextBlock()
 	// The session's persistent goal leads the dynamic context — it is the agent's
 	// north star and should be the first thing it reads after the static persona.
 	if gb := goalContextBlock(session.Goal, session.GoalDone); gb != "" {
-		dynamic = gb
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + gb)
 	}
 	// Tell the agent its working directory (cwd) + git branch, so it knows where
 	// its file/shell tools operate. The session override wins; else the workspace
@@ -79,13 +83,13 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + wb)
 	}
 	// Core memory (MemGPT-style): the agent's self-maintained working-memory block,
-	// re-injected verbatim every turn (edited via core_memory_replace/append). Sits
-	// above recall because it is the agent's own durable context, not a similarity
-	// hit. Recall already excludes the "core" kind, so it never appears twice.
-	if core, err := wsp.Runtime.Memory().ReadCore(ctx, agentRow.ID); err == nil {
-		if core = strings.TrimSpace(core); core != "" {
-			block := "## Core memory (you maintain this; edit with core_memory_replace/append)\n" + core
-			dynamic = strings.TrimSpace(dynamic + "\n\n" + block)
+	// re-injected verbatim every turn (edited via core_memory_replace/append). Split
+	// into persona (about itself) + human (about the user). Sits above recall because
+	// it is the agent's own durable context, not a similarity hit; recall excludes
+	// both core kinds, so it never appears twice.
+	if persona, human, err := wsp.Runtime.Memory().ReadCoreSections(ctx, agentRow.ID); err == nil {
+		if cb := coreMemoryBlock(persona, human); cb != "" {
+			dynamic = strings.TrimSpace(dynamic + "\n\n" + cb)
 		}
 	}
 	if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, message, 5); block != "" {
@@ -136,6 +140,35 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		SystemDynamic: dynamic,
 		Messages:      prep.Messages,
 	}
+}
+
+// dateTimeContextBlock renders the current server-local date/time as a single
+// system-prompt line, e.g. "Current date and time: Monday, 2026-06-22 15:31
+// (+03:00)". It replaces the removed get_current_time tool: the agent reads
+// "now" straight from its context instead of spending a tool round-trip on it.
+func dateTimeContextBlock() string {
+	return "Current date and time: " + time.Now().Format("Monday, 2006-01-02 15:04 (-07:00)")
+}
+
+// coreMemoryBlock formats the agent's two core-memory sections for prompt
+// injection, emitting only the non-empty ones under a shared header. Returns ""
+// when both are blank so the caller can append it unconditionally.
+func coreMemoryBlock(persona, human string) string {
+	persona, human = strings.TrimSpace(persona), strings.TrimSpace(human)
+	if persona == "" && human == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Core memory (you maintain this; edit with core_memory_replace/append, section=persona|human)")
+	if persona != "" {
+		b.WriteString("\n### Persona (who you are)\n")
+		b.WriteString(persona)
+	}
+	if human != "" {
+		b.WriteString("\n### Human (what you know about the user)\n")
+		b.WriteString(human)
+	}
+	return b.String()
 }
 
 // adoptMentionedAgent makes the first @mentioned agent the session's default

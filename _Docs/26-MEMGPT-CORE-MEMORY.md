@@ -4,6 +4,10 @@
 > bilinçli olarak sonraya bırakıldı. Uygulama özeti dosyanın sonunda
 > ("Uygulama notu") + `05-ILERLEME.md`.
 >
+> **CLI köprüsü (2026-06-22):** `core_memory_replace`/`core_memory_append` artık
+> claude-cli ajanlarına da Interaction MCP üzerinden sunuluyor (önceden CLI ajanı
+> core-memory bloğunu görüyor ama düzenleyemiyordu). Bkz. `11-INTERACTION-MCP.md`.
+>
 > **Roadmap maddesi:** `03-YOL-HARITASI.md` → **C6**.
 > **Karar:** Letta'yı doğrudan koşmak yerine (Docker + Postgres + Python sidecar →
 > SwarmGo'nun "tek binary, sunucusuz, dosya-tabanlı, offline" kimliğini bozar)
@@ -219,13 +223,39 @@ Letta'nın "core memory always in context" davranışı budur.
 
 ---
 
-## Parça 4 — persona/human ayrımı (opsiyonel, sonraya)
+## Parça 4 — persona/human ayrımı
 
-Core bloğunu iki etiketli alt-bölüme ayır: `<persona>` (ajanın kendini tanımı) +
-`<human>` (kullanıcı modeli). `<human>` bloğu doğrudan **HA-1 Honcho-benzeri
-kullanıcı modelleme** ile birleşir (`03-YOL-HARITASI.md` HA-1). Bu fazda
-`core_memory_replace`'e opsiyonel `section: "persona"|"human"` alanı eklenir.
-Parça 1–3 olgunlaşmadan başlanmaz.
+### Parça 4a — mekanik bölme ✅ (2026-06-22, UYGULANDI)
+
+Core bloğu iki bağımsız bölüme ayrıldı: **persona** (ajanın kendini tanımı) +
+**human** (kullanıcı modeli). Geri-uyum **gözetilmedi** (kullanıcı onayı) → eski
+tek `core` kind'i kaldırıldı, yerine iki kind geldi.
+
+- **Depolama:** `db.MemoryCorePersona = "core_persona"` + `db.MemoryCoreHuman =
+  "core_human"`, her biri ajan başına tek satır (`UpsertKnowledgeByKind`). Eski
+  `db.MemoryCore` kaldırıldı.
+- **Store API:** `WriteCore/ReadCore/AppendCore(ctx, agentID, section, …)` artık
+  `section` ("persona"|"human") alır; boş/bilinmeyen → persona (`coreKind`).
+  Yeni `ReadCoreSections(agentID) → (persona, human)`. Recall ikisini de hariç
+  tutar (zaten `recallKinds` allowlist'i dışında).
+- **Araçlar:** `core_memory_replace`/`append` şemasına `section` (enum
+  persona|human, vars. persona) eklendi; dönüş `{action, section}`. Constructor
+  imzaları **değişmedi** (CLI köprüsü `runtime.go::BridgeTools` bozulmaz).
+- **Enjeksiyon:** `composeTurnRequest` → `coreMemoryBlock(persona, human)`; iki
+  alt başlık ("### Persona (who you are)", "### Human (what you know about the
+  user)"), yalnız dolu bölümler basılır.
+- **API:** `GET /api/agents/{id}/core` → `{persona, human}`; `PUT` gövdesi
+  `{persona?, human?}` (yalnız verilen bölüm yazılır, pointer → kısmi güncelleme).
+- **UI:** `CoreMemoryCard` iki bölümlü (Persona/Human), her biri ayrı düzenlenir.
+- **Test:** `memory_test.go` (per-section upsert + bağımsızlık + recall-exclude),
+  `builtin_memory_core_test.go` (section'lı replace/append), hepsi yeşil.
+
+### Parça 4b — HA-1 Honcho-benzeri kullanıcı modelleme (sonraya)
+
+`human` bölümünü **otomatik** doldurma: `Reflect` dream-cycle benzeri bir döngü
+son turlardan kalıcı kullanıcı çıkarımlarını üretip `core_human`'a yazar
+(`03-YOL-HARITASI.md` HA-1). Ayrı/orta-büyük özellik; 4a + Reflect altyapısına
+bağlı. Henüz başlanmadı.
 
 ---
 
@@ -236,7 +266,8 @@ graph LR
     P1["Parça 1<br/>pressure sinyali"] --> SHIP1{{"sevk edilebilir<br/>(bağımsız)"}}
     P2["Parça 2<br/>core kind + Store"] --> P3["Parça 3<br/>core_memory_* araçları"]
     P3 --> SHIP2{{"sevk edilebilir"}}
-    P3 -.-> P4["Parça 4<br/>persona/human + HA-1"]
+    P3 --> P4A["Parça 4a<br/>persona/human ✅"]
+    P4A -.-> P4B["Parça 4b<br/>HA-1 oto-modelleme"]
 ```
 
 | Adım | Efor | Bağımlılık | Geri-uyum |
@@ -303,6 +334,16 @@ Parça 1–3 sevk edildi. Plandan sapmalar:
 - **Testler** `conversation/manager_test.go` (pressure), `memory/memory_test.go`
   (upsert + recall-exclude), `tools/builtin_memory_core_test.go` (replace/append/
   boş/nil).
+
+### UI/API genişletmesi (ikinci tur)
+- **Ayar UI'si (A+B):** basınç eşiği artık **sürgü** (`settings/primitives.tsx`
+  yeni `Slider`) — canlı **%** rozeti + "≈ N token dolunca tetiklenir"
+  (`maxContextTokens × eşik`) alt satırı + `0`→"Kapalı"; altında iki durum rozetli
+  **canlı özet kartı** (araçlar açık/kapalı · uyarı %X).
+- **Çekirdek bellek yönetimi (C):** Hafıza paneline `panels/CoreMemoryCard.tsx`
+  — ajanın güncel core bloğunu gösterir + textarea ile düzenleme. API:
+  `GET /api/agents/{id}/core` (→ `{content}`) ve `PUT /api/agents/{id}/core`
+  (upsert; boş gövde temizler) — `api/memory.go` `handleGetCore`/`handlePutCore`.
 
 ## Sırada ne var — sonraki adımlar
 

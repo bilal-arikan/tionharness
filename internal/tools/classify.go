@@ -15,27 +15,19 @@ const (
 // tools (ask_user, todo_write, artifacts) are RiskRead: they have no host side
 // effects, so Explore (read-only) agents can still use them.
 var toolRisk = map[string]Risk{
-	// Reads & harmless helpers.
-	"read_file":            RiskRead,
-	"list_dir":             RiskRead,
-	"glob":                 RiskRead,
-	"grep":                 RiskRead,
-	"get_current_time":     RiskRead,
+	// SwarmGo-specific built-ins (no claude-cli analog).
 	"memory_recall":        RiskRead,
-	"http_get":             RiskRead,
 	"ask_user":             RiskRead,
 	"request_confirmation": RiskRead,
 	"todo_write":           RiskRead,
 	"create_artifact":      RiskRead,
 	"update_artifact":      RiskRead,
-	// Filesystem mutations.
-	"write_file": RiskWrite,
-	"edit_file":  RiskWrite,
-	// Arbitrary execution.
-	"shell": RiskExec,
+	"list_artifacts":       RiskRead,
+	"read_artifact":        RiskRead,
 
-	// Claude Code (claude-cli) built-in tool names, classified for the CLI
-	// permission-prompt tool (the CLI reports its own tool names, not SwarmGo's).
+	// Core file/shell built-ins share claude-cli's tool names (Read/Write/Edit/
+	// LS/Glob/Grep/Bash), so native and CLI agents — and the CLI permission-prompt
+	// tool, which reports the CLI's own names — classify against ONE set.
 	"Read":         RiskRead,
 	"Glob":         RiskRead,
 	"Grep":         RiskRead,

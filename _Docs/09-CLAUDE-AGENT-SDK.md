@@ -23,7 +23,7 @@
 
 | Yetenek | Agent SDK | SwarmGo (bugün) | Boşluk |
 |---|---|---|---|
-| Built-in araçlar (file/bash/grep/glob/web) | Kutudan | Sadece `get_current_time` / `http_get` / `memory_recall` | **Var** |
+| Built-in araçlar (file/bash/grep/glob/web) | Kutudan | `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`/`Bash`/`WebFetch` (claude-cli ile aynı isimler) + `memory_recall` | Kapandı (P2) |
 | Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters` varsayılan 24, `SWARMGO_MAX_TOOL_ITERS` ile override) + tur kurtarma (`recovery.go`: max-token resume + reaktif compaction, A1) | Yok |
 | Context yönetimi / compaction | Otomatik | `internal/conversation` (token-bütçeli) | Yok |
 | Prompt caching | İnce ayarlı | Yok (native HTTP) | Küçük |
@@ -74,13 +74,14 @@ graph TD
   metin girişi olan soru kartı.
 
 ### Faz P2 — Built-in Araç Seti (SDK'nın en güçlü yanı) ✅ (2026-06-16)
-- [x] `read_file` / `write_file` / `edit_file` / `list_dir` / `grep` / `glob` →
+- [x] `Read` / `Write` / `Edit` / `LS` / `Grep` / `Glob` →
   `internal/tools/builtin_fs.go` (workspace-scoped kök, path-traversal koruması →
-  `internal/tools/sandbox.go`).
-- [x] `shell` (Windows'ta PowerShell, diğerinde `/bin/sh`) → `internal/tools/builtin_shell.go`
+  `internal/tools/sandbox.go`). (İsimler 2026-06-22'de claude-cli ile hizalandı;
+  eski `read_file`/`write_file`/… adları.)
+- [x] `Bash` (Windows'ta PowerShell, diğerinde `/bin/sh`; eski ad `shell`) → `internal/tools/builtin_shell.go`
   (timeout + sandbox cwd + 64KB çıktı cap). **Varsayılan KAPALI** (`Tunables.shellEnabled`);
   `SWARMGO_ENABLE_SHELL=1` ile açılır. Permission katmanı (P3) gelene dek opt-in kalır.
-- [ ] `web_fetch` → mevcut `http_get`'in üstüne içerik özetleme (henüz yok).
+- [x] `WebFetch` (2026-06-22) — `http_get` zengin fetch'e yükseltildi: HTML→Markdown (stdlib-only converter `htmltomarkdown.go`, script/style/nav ayıklama, göreli link çözümleme), metinsel içerik verbatim, ikili içerik özet; SSRF guard korunur. `builtin_http.go` (`WebFetchTool`).
 
 ### Faz SM — Self-Management Araçları ✅ (2026-06-17)
 - [x] Ajanın **kendi runtime'ını yönetmesi**: `create/update/delete/list_agent`,

@@ -14,6 +14,17 @@ export const memoryApi = {
     }),
   deleteMemory: (id: string) =>
     req<{ result: string }>(`/api/memories/${id}`, { method: 'DELETE' }),
+  // Core memory (MemGPT): the agent's editable working memory, split into a
+  // persona section (about itself) and a human section (about the user).
+  getCore: (agentId: string) =>
+    req<{ persona: string; human: string }>(`/api/agents/${agentId}/core`),
+  // Writes only the sections provided (each optional); a non-undefined empty
+  // string clears that section. Returns the resulting persona/human.
+  writeCore: (agentId: string, sections: { persona?: string; human?: string }) =>
+    req<{ persona: string; human: string }>(`/api/agents/${agentId}/core`, {
+      method: 'PUT',
+      body: JSON.stringify(sections),
+    }),
   reflect: (agentId: string) =>
     req<Memory>(`/api/agents/${agentId}/reflect`, { method: 'POST' }),
   recall: (agentId: string, query: string, limit = 5) =>

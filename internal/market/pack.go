@@ -86,7 +86,6 @@ type AgentPayload struct {
 	Identity       string   `json:"identity,omitempty"`
 	Provider       string   `json:"provider,omitempty"`
 	Model          string   `json:"model,omitempty"`
-	Capabilities   string   `json:"capabilities,omitempty"`
 	PlanningMode   string   `json:"planningMode,omitempty"`
 	ThinkingLevel  string   `json:"thinkingLevel,omitempty"`
 	PermissionMode string   `json:"permissionMode,omitempty"`

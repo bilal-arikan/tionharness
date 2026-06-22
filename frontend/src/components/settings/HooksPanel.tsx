@@ -191,7 +191,7 @@ export function HooksPanel({ onError }: Props) {
                   <option value="PostToolUse">PostToolUse (çağrı sonrası)</option>
                 </select>
               </Field>
-              <Field label="Eşleşme (araç adı glob)" hint="Boş = tüm araçlar. Örn: shell, write_file, http_*">
+              <Field label="Eşleşme (araç adı glob)" hint="Boş = tüm araçlar. Örn: Bash, Write, http_*">
                 <input value={draft.matcher} onChange={(e) => set('matcher', e.target.value)} className={inputCls} placeholder="*" />
               </Field>
               <Field label="Komut" hint="Shell komutu (Windows: PowerShell). JSON stdin alır, JSON stdout döner.">

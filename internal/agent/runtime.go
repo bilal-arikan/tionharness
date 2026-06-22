@@ -323,7 +323,25 @@ func (r *Runtime) SkillsCatalogBlockForAgent(agent db.Agent) string {
 	if r.skills == nil {
 		return ""
 	}
-	return r.skills.CatalogBlockForAgent(agent.Skills)
+	// Name the use_skill tool exactly as THIS agent will see it. A claude-cli agent
+	// reaches SwarmGo's built-ins through the Interaction MCP bridge, where they are
+	// namespaced (mcp__swarmgo_interaction__use_skill). Advertising the bare name to
+	// it makes the model emit an unqualified `use_skill` call the CLI rejects with
+	// "No such tool available: use_skill" on the first turn (it recovers on retry by
+	// finding the namespaced tool, but the wasted round-trip + error is avoidable).
+	return r.skills.CatalogBlockForAgentTool(agent.Skills, skillToolNameFor(agent.Provider))
+}
+
+// skillToolNameFor returns the identifier the use_skill tool carries for an agent
+// on the given provider: native (API) providers register the bare name, while
+// claude-cli reaches it namespaced through the Interaction MCP bridge. The empty
+// provider is the keyless claude-cli default. Custom providers are only ever
+// OpenAI/Anthropic-compatible (native), so they take the bare name.
+func skillToolNameFor(provider string) string {
+	if provider == "" || provider == "claude-cli" {
+		return interactionToolPrefix + skills.DefaultSkillTool
+	}
+	return skills.DefaultSkillTool
 }
 
 // LoadSkillForAgent returns a skill's full body for the CLI path (the Interaction
@@ -348,7 +366,32 @@ func (r *Runtime) LoadSkillForAgent(agent db.Agent, slug string) (string, error)
 // name (the catalog is the gate); unknown/foreign names return an error.
 func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.ToolDef, func(ctx context.Context, name string, args json.RawMessage) (string, error)) {
 	reg := r.buildRegistry(ctx, agent)
-	defs := reg.BridgeableDefs(r.toolFilter(ctx, agent))
+	allow := r.toolFilter(ctx, agent)
+	defs := reg.BridgeableDefs(allow)
+	// Bridge a few EAGER built-ins that the CLI would otherwise lack but that have
+	// no native-loop context dependency (they only need r.mem / r.db, which reg
+	// already holds). They stay eager on the native path — we just advertise them
+	// to the CLI here; the call closure below dispatches them via reg.Call by name,
+	// exactly like the lazy bridged tools. Gated to match buildRegistry's own gates.
+	//   - core_memory_replace/append : let a CLI agent EDIT the working-memory block
+	//     it already SEES in its prompt (previously read-only for CLI agents).
+	//   - conversation_search        : full-text history search (deeper than the
+	//     list_sessions pull tool, which is already bridged).
+	var extra []providers.ToolDef
+	if r.tun.CoreMemoryTools() {
+		extra = append(extra,
+			tools.NewCoreMemoryReplaceTool(r.mem, agent.ID).Def(),
+			tools.NewCoreMemoryAppendTool(r.mem, agent.ID).Def(),
+		)
+	}
+	if r.SessionContextEnabled() {
+		extra = append(extra, tools.NewConversationSearchTool(r.db).Def())
+	}
+	for _, d := range extra {
+		if allow == nil || allow(d.Name) {
+			defs = append(defs, d)
+		}
+	}
 	call := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
 		res := reg.Call(ctx, providers.ToolCall{Name: name, Input: args})
 		if res.IsError {
@@ -598,5 +641,9 @@ func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
 	if sb := r.SkillsCatalogBlockForAgent(a); sb != "" {
 		out = strings.TrimSpace(out + "\n\n" + sb)
 	}
+	// Wall-clock awareness for headless runs: chat turns get this via
+	// composeTurnRequest's dynamic suffix; autonomous turns build their own request,
+	// so inject the date/time line here too (replaces the removed get_current_time).
+	out = strings.TrimSpace(out + "\n\nCurrent date and time: " + time.Now().Format("Monday, 2006-01-02 15:04 (-07:00)"))
 	return out
 }

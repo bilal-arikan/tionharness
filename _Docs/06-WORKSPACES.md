@@ -166,7 +166,7 @@ prompt cache'i bozmaz.
 - **Runtime izolasyonu:** Her workspace'in kendi agent runtime'ı var → bir workspace'in otonom ajanları diğerini etkilemez. Tüm workspace'lerin zamanlayıcıları paralel çalışır.
 - **Silme koruması:** En az bir workspace her zaman kalır.
 - **fs/shell artık kilitli DEĞİL (2026-06-22):** `workspace/` dizini eskiden built-in
-  `read_file`/`write_file`/`edit_file`/`list_dir`/`glob`/`grep`/`shell` araçları için
+  `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`/`Bash` araçları için
   bir **güvenlik kilidiydi** (mutlak yol yasak, `..` kaçışı reddedilir). Bu kilit
   kullanıcı kararıyla **kaldırıldı**: artık bu araçlar makinedeki herhangi bir yolu
   okuyup yazabilir ve her yerde komut çalıştırabilir. `Sandbox.Root` yalnızca göreli

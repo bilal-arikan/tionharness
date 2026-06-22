@@ -8,15 +8,18 @@ interface Props {
   onOpenFile?: (path: string) => void
 }
 
-// A friendly verb for the mutating tool that produced this diff.
+// A friendly verb for the mutating tool that produced this diff. The tool name is
+// lower-cased first so it matches whether the step reports "Edit"/"Write" (the
+// shared, claude-cli-style names) or a namespaced/legacy variant.
 function actionLabel(step: TurnStep): string {
   if (step.created) return 'Oluştur'
-  if (step.tool === 'edit_file') return 'Düzenle'
-  if (step.tool === 'write_file') return 'Yaz'
+  const base = (step.tool || '').toLowerCase()
+  if (base === 'edit' || base === 'edit_file') return 'Düzenle'
+  if (base === 'write' || base === 'write_file') return 'Yaz'
   return 'Değişiklik'
 }
 
-// DiffCard renders a single file mutation (write_file / edit_file) as a compact
+// DiffCard renders a single file mutation (Write / Edit) as a compact
 // row: ✏️ icon, action label, clickable path and the +added/−removed line
 // counts — expandable to the full unified patch. Mirrors the file-change cards
 // in External Agent / Claude Code chat.

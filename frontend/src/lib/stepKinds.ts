@@ -127,7 +127,7 @@ export const STEP_KINDS: StepKindInfo[] = [
     persisted: true,
     status: 'active',
     description:
-      'write_file / edit_file ile yapılan dosya değişikliği; yol + eklenen/silinen satır sayısı ve açılabilir birleşik diff (patch) olarak gösterilir.',
+      'Write / Edit ile yapılan dosya değişikliği; yol + eklenen/silinen satır sayısı ve açılabilir birleşik diff (patch) olarak gösterilir.',
   },
   {
     kind: 'hook',

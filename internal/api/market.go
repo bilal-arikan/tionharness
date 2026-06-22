@@ -134,7 +134,6 @@ func (s *Server) installAgentPack(w http.ResponseWriter, r *http.Request, wsp *w
 		Identity:       ap.Identity,
 		Provider:       ap.Provider,
 		Model:          ap.Model,
-		Capabilities:   ap.Capabilities,
 		PlanningMode:   ap.PlanningMode,
 		ThinkingLevel:  ap.ThinkingLevel,
 		PermissionMode: ap.PermissionMode,

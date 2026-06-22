@@ -2,6 +2,27 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## `http_get` → `WebFetch` zengin fetch ✅ (2026-06-22)
+
+`http_get` (düz GET, 64KB) **`WebFetch`'e yükseltildi** — claude-cli'nin WebFetch'inin
+native eşleniği, son web-parite boşluğu kapandı. Build+vet temiz, **300 test** yeşil,
+`tsc --noEmit` temiz, backend rebuild+restart.
+
+- **HTML→Markdown converter** (`internal/tools/htmltomarkdown.go`, **stdlib-only** —
+  go.mod minimal kalır, `x/net/html` yok): regexp geçişleriyle script/style/nav/form
+  blokları atılır; başlık/link/liste/bold/italic/code/pre → Markdown; göreli linkler
+  base URL'e çözülür; `html.UnescapeString` ile entity çözme; whitespace temizliği.
+- **`WebFetchTool`** (`builtin_http.go`): SSRF-guard'lı dialer korunur (loopback/
+  private/link-local + 169.254 metadata + CGNAT engeli, redirect/DNS-rebind kapsanır).
+  HTML→Markdown; metinsel içerik (md/plain/json/xml) verbatim; ikili içerik özetlenir
+  (dump edilmez). `raw=true` ham gövde döndürür. Ham indirme 3MB, çıktı 96KB cap.
+  Yönlendirme sonrası final URL başlıkta.
+- **İsim:** `http_get`→`WebFetch` (classify zaten `WebFetch=RiskRead` taşıyordu;
+  `bridgeExcluded` anahtarı güncellendi — CLI kendi WebFetch'ini kullandığından bizimki
+  köprülenmez). Referanslar: `toolsetup`/`subagent`/`registry`/frontend `tools.ts` +
+  default skill + testler (`tooltier`/`lazyload`/`builtin_http`). Yeni test:
+  `htmltomarkdown_test.go` (4 senaryo). Dokümanlar: `09-SDK`, `11-INTERACTION`, `19-LAZY`.
+
 ## Tool eşikleri per-model bütçeye hizalandı + model picker rozeti ✅ (2026-06-22)
 
 **Hedef:** (1) §5 tool eşiklerini de per-model bütçeye bağla (zinciri tutarlı kıl),
@@ -17,6 +38,27 @@
   `formatContextWindow` (200000→"200K", 1000000→"1M"); dropdown option'larında
   "· 200K" + seçili modelde "200K bağlam" rozeti. `tsc` + `npm run build` yeşil.
 - **Not:** Hepsi agent/conversation/providers/frontend'de — `api` paketine dokunulmadı.
+
+---
+
+## claude-cli `use_skill` isim uyuşmazlığı düzeltmesi ✅ (2026-06-22)
+
+**Hedef:** SES21'de açık kalan konu — claude-cli ajanı ilk turda `use_skill`'i çağırınca
+"No such tool available: use_skill" alıyordu (ikinci turda kendini toparlıyordu).
+
+- **Kök neden (yarış değil, isim uyuşmazlığı):** "# Available Skills" prompt bloğu modele
+  **çıplak** `use_skill` adını söylüyordu (`skills/store.go renderCatalog`). Native
+  ajanlarda araç gerçekten `use_skill`; ama **claude-cli** ajanlarında SwarmGo built-in'leri
+  Interaction MCP köprüsünden **namespaced** geliyor: `mcp__swarmgo_interaction__use_skill`.
+  Model prompt'u harfiyen izleyip çıplak adı deniyor → CLI reddediyor. (`trace.go` namespace'i
+  soyduğu için başarılı 2. çağrı izde yine `use_skill` görünüyor — kafa karıştırıcı.)
+- **Çözüm:** Katalog bloğu artık aracı **ajanın göreceği adla** yazıyor. `renderCatalog`
+  skill-araç-adı parametresi aldı; `skills.DefaultSkillTool` sabiti + yeni
+  `CatalogBlockForAgentTool(assigned, skillTool)`. `runtime.go skillToolNameFor(provider)`:
+  provider `""`/`claude-cli` → namespaced, diğerleri (anthropic/minimax/openrouter/custom)
+  → çıplak. `SkillsCatalogBlockForAgent` bunu kullanıyor (chat + autonomous yolları).
+- **Doğrulama:** `TestSkillToolNameFor` (6 vaka) + `TestCatalogBlockForAgentTool`;
+  `internal/agent` & `internal/skills` **88 test** yeşil, `go vet` temiz.
 
 ---
 

@@ -159,9 +159,9 @@ type SubagentProfile struct {
 
 | Profil | Amaç | Allowlist (öneri) |
 |--------|------|-------------------|
-| `explore` | Salt-okunur keşif | read_file, glob, grep, list_dir |
-| `coder` | Kod yazma/düzenleme | + write_file, edit_file, shell |
-| `reviewer` | Bağımsız inceleme | read_file, glob, grep (yazma yok) |
+| `explore` | Salt-okunur keşif | Read, Glob, Grep, LS |
+| `coder` | Kod yazma/düzenleme | + Write, Edit, Bash |
+| `reviewer` | Bağımsız inceleme | Read, Glob, Grep (yazma yok) |
 
 ## Guard'lar (yeniden kullanım)
 

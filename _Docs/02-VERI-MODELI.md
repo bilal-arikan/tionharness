@@ -27,7 +27,6 @@ erDiagram
         text identity
         text provider
         text model
-        text capabilities
         text planning_mode
         text avatar
         text color

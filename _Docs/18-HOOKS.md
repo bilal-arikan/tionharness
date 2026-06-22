@@ -35,7 +35,7 @@ Komut, **stdin'den JSON** alır, **stdout'a JSON** döner. `exit 2` = engelle.
 **PreToolUse stdin:**
 ```json
 { "session_id": "", "cwd": "<workspace>", "hook_event_name": "PreToolUse",
-  "tool_name": "shell", "tool_input": { "command": "..." } }
+  "tool_name": "Bash", "tool_input": { "command": "..." } }
 ```
 **PostToolUse stdin:** yukarıdakine ek `"tool_response": { "content": "...", "isError": false }`.
 

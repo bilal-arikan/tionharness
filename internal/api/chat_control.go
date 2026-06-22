@@ -46,6 +46,7 @@ type chatRun struct {
 	spawn     *tools.SpawnSessionTool      // current agent's spawn tool (self-manage on), for the Interaction MCP spawn_session tool
 	skill     skillLoader                  // current agent's skill loader, for the Interaction MCP use_skill tool
 	shell     shellRunner                  // current agent's shell runner, for the Interaction MCP shell tool
+	runAgent  runAgentRunner               // current agent's run_subagent runner (delegation on), for the Interaction MCP run_subagent tool
 	// bridge exposes the responding agent's lazy self-management tools to the CLI
 	// path (CLI-3): bridgeDefs are advertised in tools/list + the allowlist, and
 	// bridgeCall dispatches them through the native registry. Empty when
@@ -116,6 +117,28 @@ func (r *chatRun) shellRunnerFor() shellRunner {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.shell
+}
+
+// runAgentRunner runs a run_subagent call for the responding agent (CLI path),
+// returning the subagent's final result synchronously. Mirrors the native
+// run_subagent built-in over the Interaction MCP bridge so a claude-cli agent can
+// delegate a self-contained sub-task to another agent and get the answer back IN
+// THIS turn — unlike spawn_session's fire-and-forget into a separate session.
+type runAgentRunner func(ctx context.Context, args json.RawMessage) (string, error)
+
+// setRunAgent installs the per-agent run_subagent runner so the Interaction MCP
+// run_subagent tool (CLI path) can delegate. A nil value disables it (delegation off).
+func (r *chatRun) setRunAgent(fn runAgentRunner) {
+	r.mu.Lock()
+	r.runAgent = fn
+	r.mu.Unlock()
+}
+
+// runAgentFor returns the current run_subagent runner (nil if none installed).
+func (r *chatRun) runAgentFor() runAgentRunner {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.runAgent
 }
 
 // setSpawnTool installs the per-agent spawn tool so the Interaction MCP

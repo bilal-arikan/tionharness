@@ -8,7 +8,6 @@ type Agent struct {
 	Identity     string `json:"identity"`
 	Provider     string `json:"provider"`
 	Model        string `json:"model"`
-	Capabilities string `json:"capabilities"` // JSON array
 	PlanningMode string `json:"planningMode"`
 	// ThinkingLevel requests extended reasoning: "" / "off" | "low" | "medium" |
 	// "high". Applied on plain (non-tool) completions; anthropic provider only.

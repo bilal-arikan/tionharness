@@ -53,7 +53,7 @@ schedules, flows, hooks, mcp_servers, **workspaces** (`Meta.CreatedBy`). Detay:
 | **Hooks** | `list_hooks` / `create_hook` / `delete_hook` | delete provenance-guard'lı. Bkz. `18-HOOKS.md` |
 | **MCP sunucuları** | `list_mcp_servers` / `create_mcp_server` / `toggle_mcp_server` / `delete_mcp_server` | yeni/etkin sunucunun araçları **sonraki turda** görünür; delete provenance-guard'lı, toggle her sunucuda |
 | **Workspaces** | `list_workspaces` / `create_workspace` / `rename_workspace` / `delete_workspace` | **çapraz-workspace**: `WorkspaceBridge` köprüsünden (manager). list/create/rename her workspace'te; **delete yalnız ajan-oluşturduğu** (`Meta.CreatedBy`), **mevcut çalıştığı** workspace'i ve **son kalan** workspace'i silemez. create blank şablonla tohumlanır; değişiklik UI'a `workspaces` SSE event'i yayar |
-| **Artifacts** | `delete_artifact` / `list_artifacts` | create/update zaten tur-başı sink ile sağlanır |
+| **Artifacts** | `delete_artifact` / `list_artifacts` / `read_artifact` | create/update zaten tur-başı sink ile sağlanır; `list_artifacts` artık `contentFile` yolunu da döndürür; `read_artifact` ID ile içeriği döndürür (dosya yolu tahmin etmeye gerek yok) |
 | **Memory** | `memory_add` | recall her zaman açık (`memory_recall`) |
 | **Loglar** | `read_logs` | ring-buffer log okuma |
 | **Secret kasası** | `secret_set` / `secret_delete` | yazım gated; okuma (`secret_list` / `secret_get`) **her zaman açık** (`builtin_secret.go`), per-workspace AES-GCM vault |

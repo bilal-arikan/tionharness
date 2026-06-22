@@ -35,8 +35,8 @@ func TestIsBlockedIP(t *testing.T) {
 	}
 }
 
-func TestHTTPGetRejectsBadScheme(t *testing.T) {
-	tool := NewHTTPGetTool()
+func TestWebFetchRejectsBadScheme(t *testing.T) {
+	tool := NewWebFetchTool()
 	if _, err := tool.Call(t.Context(), []byte(`{"url":"file:///etc/passwd"}`)); err == nil {
 		t.Fatal("expected error for file:// scheme")
 	}

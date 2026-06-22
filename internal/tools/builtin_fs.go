@@ -28,7 +28,7 @@ func NewFSReadFileTool(sb Sandbox) FSReadFileTool { return FSReadFileTool{sb: sb
 
 func (FSReadFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "read_file",
+		Name:        "Read",
 		Description: "Read a UTF-8 text file. Returns up to 256KB. Accepts an absolute path or one relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -55,7 +55,7 @@ func (t FSReadFileTool) Call(_ context.Context, input json.RawMessage) (string, 
 		return "", err
 	}
 	if info.IsDir() {
-		return "", fmt.Errorf("%q is a directory; use list_dir", args.Path)
+		return "", fmt.Errorf("%q is a directory; use LS", args.Path)
 	}
 	data, err := os.ReadFile(abs)
 	if err != nil {
@@ -81,7 +81,7 @@ func NewFSWriteFileTool(sb Sandbox) FSWriteFileTool { return FSWriteFileTool{sb:
 
 func (FSWriteFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "write_file",
+		Name:        "Write",
 		Description: "Create or overwrite a text file, creating parent directories as needed. Accepts an absolute path or one relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -129,7 +129,7 @@ func NewFSEditFileTool(sb Sandbox) FSEditFileTool { return FSEditFileTool{sb: sb
 
 func (FSEditFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "edit_file",
+		Name:        "Edit",
 		Description: "Replace an exact string in a file. By default old_string must occur exactly once. Set replace_all to replace every occurrence. Accepts an absolute path or one relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -196,7 +196,7 @@ func NewFSListDirTool(sb Sandbox) FSListDirTool { return FSListDirTool{sb: sb} }
 
 func (FSListDirTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "list_dir",
+		Name:        "LS",
 		Description: "List the files and subdirectories of a directory. Accepts an absolute path or one relative to the working directory. Use an empty path or \".\" for the working directory itself.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -259,7 +259,7 @@ func NewFSGlobTool(sb Sandbox) FSGlobTool { return FSGlobTool{sb: sb} }
 
 func (FSGlobTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "glob",
+		Name:        "Glob",
 		Description: "Find files under the working directory whose path matches a glob pattern (e.g. \"**/*.go\", \"src/*.ts\"). Returns paths relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -322,7 +322,7 @@ func NewFSGrepTool(sb Sandbox) FSGrepTool { return FSGrepTool{sb: sb} }
 
 func (FSGrepTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "grep",
+		Name:        "Grep",
 		Description: "Search file contents under the working directory for a regular expression. Returns matching lines as path:line:text. Optionally restrict to files matching a glob.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",

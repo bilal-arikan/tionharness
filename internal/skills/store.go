@@ -476,9 +476,14 @@ func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
+// DefaultSkillTool is the identifier the native tool loop registers for the
+// skill-loading tool. claude-cli agents reach it namespaced through the
+// Interaction MCP bridge, so callers there pass the namespaced name instead.
+const DefaultSkillTool = "use_skill"
+
 // CatalogBlock renders the prompt section advertising EVERY available skill.
 func (s *Store) CatalogBlock() string {
-	return renderCatalog(s.List())
+	return renderCatalog(s.List(), DefaultSkillTool)
 }
 
 // CatalogBlockFor renders the prompt section for a specific ordered selection of
@@ -500,7 +505,7 @@ func (s *Store) CatalogBlockFor(slugs []string) string {
 			seen[slug] = true
 		}
 	}
-	return renderCatalog(picked)
+	return renderCatalog(picked, DefaultSkillTool)
 }
 
 // SharedList returns the shared (on-demand) skills in display order.
@@ -547,8 +552,18 @@ func (s *Store) effectiveFor(assigned []string) []Skill {
 
 // CatalogBlockForAgent renders the Available Skills block an agent sees: its
 // assigned skills (in order) plus all shared (on-demand) skills. "" when neither.
+// Uses the default (bare) skill-tool name; see CatalogBlockForAgentTool to render
+// the namespaced name a claude-cli agent must use.
 func (s *Store) CatalogBlockForAgent(assigned []string) string {
-	return renderCatalog(s.effectiveFor(assigned))
+	return renderCatalog(s.effectiveFor(assigned), DefaultSkillTool)
+}
+
+// CatalogBlockForAgentTool is CatalogBlockForAgent with an explicit skill-tool
+// identifier, so the block names the tool exactly as the target agent will see it
+// (bare for native providers, namespaced for claude-cli's MCP bridge). An empty
+// skillTool falls back to the default.
+func (s *Store) CatalogBlockForAgentTool(assigned []string, skillTool string) string {
+	return renderCatalog(s.effectiveFor(assigned), skillTool)
 }
 
 // AllowedFor returns the set of skill slugs an agent may load via use_skill: its
@@ -570,15 +585,18 @@ func (s *Store) AllowedFor(assigned []string) map[string]bool {
 // (already in the desired order). Lists only slug + description + when-to-use
 // (frontmatter), and instructs the model to call use_skill to load the body.
 // Returns "" when the list is empty.
-func renderCatalog(list []Skill) string {
+func renderCatalog(list []Skill, skillTool string) string {
 	if len(list) == 0 {
 		return ""
 	}
+	if strings.TrimSpace(skillTool) == "" {
+		skillTool = DefaultSkillTool
+	}
 	var b strings.Builder
 	b.WriteString("# Available Skills\n")
-	b.WriteString("Reusable instruction sets, listed as slug + summary. When a task matches one, " +
-		"call the `use_skill` tool with its slug to load the full instructions BEFORE acting — " +
-		"don't guess from the summary.\n")
+	fmt.Fprintf(&b, "Reusable instruction sets, listed as slug + summary. When a task matches one, "+
+		"call the `%s` tool with its slug to load the full instructions BEFORE acting — "+
+		"don't guess from the summary.\n", skillTool)
 	for _, sk := range list {
 		fmt.Fprintf(&b, "- `%s` — %s", sk.Slug, sk.Description)
 		if sk.WhenToUse != "" {

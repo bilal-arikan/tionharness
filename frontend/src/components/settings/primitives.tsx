@@ -107,6 +107,57 @@ export function Toggle({
   )
 }
 
+// Slider is a labelled range input with a live value badge and an optional
+// sub-line (e.g. a derived/absolute figure). Used where a raw 0–1 number is
+// unintuitive — the badge and sub turn it into a readable control.
+export function Slider({
+  label,
+  hint,
+  sub,
+  value,
+  onChange,
+  min = 0,
+  max = 1,
+  step = 0.05,
+  badge,
+  disabled,
+}: {
+  label: string
+  hint?: string
+  sub?: ReactNode
+  value: number
+  onChange: (v: number) => void
+  min?: number
+  max?: number
+  step?: number
+  badge?: string
+  disabled?: boolean
+}) {
+  return (
+    <div className={`flex flex-col gap-1 ${disabled ? 'opacity-50' : ''}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">{label}</span>
+        {badge && (
+          <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs font-medium tabular-nums text-[var(--color-text)]">
+            {badge}
+          </span>
+        )}
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--color-surface-2)] accent-[var(--color-accent)]"
+      />
+      {hint && <span className="text-xs text-[var(--color-text-dim)]">{hint}</span>}
+      {sub && <span className="text-xs text-[var(--color-text-dim)]">{sub}</span>}
+    </div>
+  )
+}
+
 export function CatButton({
   c,
   active,

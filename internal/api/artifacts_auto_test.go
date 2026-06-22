@@ -16,11 +16,11 @@ func TestParseFileWrite(t *testing.T) {
 		wantPath, wantBody string
 		wantOK             bool
 	}{
-		{"native", "write_file", `{"path":"out/report.md","content":"# Hi"}`, "out/report.md", "# Hi", true},
+		{"native", "Write", `{"path":"out/report.md","content":"# Hi"}`, "out/report.md", "# Hi", true},
 		{"cli", "Write", `{"file_path":"C:\\tmp\\data.csv","content":"a,b"}`, "C:\\tmp\\data.csv", "a,b", true},
-		{"not a writer", "read_file", `{"path":"x","content":"y"}`, "", "", false},
-		{"empty content", "write_file", `{"path":"x","content":""}`, "", "", false},
-		{"empty path", "write_file", `{"content":"y"}`, "", "", false},
+		{"not a writer", "Read", `{"path":"x","content":"y"}`, "", "", false},
+		{"empty content", "Write", `{"path":"x","content":""}`, "", "", false},
+		{"empty path", "Write", `{"content":"y"}`, "", "", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -65,8 +65,8 @@ func TestCaptureFileArtifacts_DedupByPath(t *testing.T) {
 
 	// First turn: agent writes a CSV via the native tool.
 	s.captureFileArtifacts(ctx, database, "sess", "agent", []agent.TurnStep{
-		step("write_file", `{"path":"weather.csv","content":"il,sicaklik\nAdana,24"}`),
-		step("read_file", `{"path":"weather.csv"}`), // non-write → ignored
+		step("Write", `{"path":"weather.csv","content":"il,sicaklik\nAdana,24"}`),
+		step("Read", `{"path":"weather.csv"}`), // non-write → ignored
 	})
 	arts, _ := database.ListArtifacts(ctx, "sess")
 	if len(arts) != 1 {
@@ -78,7 +78,7 @@ func TestCaptureFileArtifacts_DedupByPath(t *testing.T) {
 
 	// Second turn: same file rewritten → updates in place (no duplicate).
 	s.captureFileArtifacts(ctx, database, "sess", "agent", []agent.TurnStep{
-		step("write_file", `{"path":"weather.csv","content":"il,sicaklik\nAdana,25"}`),
+		step("Write", `{"path":"weather.csv","content":"il,sicaklik\nAdana,25"}`),
 	})
 	arts, _ = database.ListArtifacts(ctx, "sess")
 	if len(arts) != 1 {
@@ -90,7 +90,7 @@ func TestCaptureFileArtifacts_DedupByPath(t *testing.T) {
 
 	// An errored write step must not be captured.
 	s.captureFileArtifacts(ctx, database, "sess", "agent", []agent.TurnStep{
-		{Kind: agent.StepTool, Tool: "write_file", IsError: true, Input: json.RawMessage(`{"path":"bad.txt","content":"x"}`)},
+		{Kind: agent.StepTool, Tool: "Write", IsError: true, Input: json.RawMessage(`{"path":"bad.txt","content":"x"}`)},
 	})
 	arts, _ = database.ListArtifacts(ctx, "sess")
 	if len(arts) != 1 {

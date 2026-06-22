@@ -58,8 +58,7 @@ func allowFunc(agent db.Agent) func(string) bool {
 // sanitized server names back to their configs for dispatch.
 func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Registry {
 	builtins := []tools.Tool{
-		tools.TimeTool{},
-		tools.NewHTTPGetTool(),
+		tools.NewWebFetchTool(),
 		tools.NewMemoryRecallTool(r.mem, agent.ID),
 		// Interaction tools: todo_write surfaces a live checklist; ask_user pauses
 		// the turn for a clarifying question; request_confirmation blocks for a
@@ -223,6 +222,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			// Artifacts (create/update already provided via the per-turn sink).
 			tools.NewDeleteArtifactTool(r.db, agent.ID),
 			tools.NewListArtifactsTool(r.db, agent.ID),
+			tools.NewReadArtifactTool(r.db, agent.ID),
 			// Memory (recall already provided above) + logs.
 			tools.NewMemoryAddTool(r.mem, agent.ID),
 			tools.NewReadLogsTool(r.logs),
@@ -281,7 +281,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	//   - secret_list/secret_get  : only credential-backed tasks
 	//   - list_sessions           : cross-session pull (the context block is pushed)
 	//   - memory_recall           : recall is already auto-injected via ContextBlock
-	//   - http_get                : most turns make no outbound web request
+	//   - WebFetch                 : most turns make no outbound web request
 	// MarkLazy on a name not present in this agent's builtins is a harmless no-op,
 	// so gated tools (vault/config off) need no extra guarding here.
 	reg.MarkLazy(
@@ -289,14 +289,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		"secret_list", "secret_get",
 		"list_sessions",
 		"memory_recall",
-		"http_get",
+		"WebFetch",
 	)
 	// Role-aware eager trim: a read-only agent can never have a write approved, so
 	// shipping the mutating tools' schemas every turn is pure waste. Demote them to
 	// load-on-demand for read-only agents (still reachable via activate_tools, and
 	// still execution-gated by the permission layer). "ask"/"auto" keep them eager.
 	if agent.PermissionMode == "read-only" {
-		reg.MarkLazy("write_file", "edit_file") // write_config already lazy above
+		reg.MarkLazy("Write", "Edit") // write_config already lazy above
 	}
 
 	if servers, err := r.db.ListEnabledMCPServers(ctx); err != nil {

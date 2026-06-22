@@ -11,11 +11,10 @@ import (
 )
 
 // fileWriteTools are the tool names that write a full file body we can capture
-// as an artifact: the native built-in (write_file) and the claude CLI's own
-// file tool (Write). Edits (partial diffs) are intentionally excluded.
+// as an artifact. The native built-in and the claude CLI share the name "Write";
+// create_file covers an alternate CLI shape. Edits (partial diffs) are excluded.
 var fileWriteTools = map[string]bool{
-	"write_file": true,
-	"Write":      true,
+	"Write":       true,
 	"create_file": true,
 }
 

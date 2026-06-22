@@ -124,7 +124,8 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
     if (!draft) return
     const patch: SettingsPatch = {
       theme: draft.theme, accent: draft.accent, themePreset: draft.themePreset, language: draft.language,
-      defaultProvider: draft.defaultProvider, defaultModel: draft.defaultModel, claudeCliPath: draft.claudeCliPath,
+      defaultProvider: draft.defaultProvider, defaultModel: draft.defaultModel,
+      defaultPermissionMode: draft.defaultPermissionMode, claudeCliPath: draft.claudeCliPath,
       minimaxBaseUrl: draft.minimaxBaseUrl,
       openrouterBaseUrl: draft.openrouterBaseUrl,
       oneMillionContext: draft.oneMillionContext, extendedPromptCache: draft.extendedPromptCache,
@@ -136,6 +137,11 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       journalCap: draft.journalCap, journalMaxLen: draft.journalMaxLen,
       memoryPressureWarn: draft.memoryPressureWarn, coreMemoryTools: draft.coreMemoryTools,
       autoReflect: draft.autoReflect, autoReflectThreshold: draft.autoReflectThreshold,
+      reactiveCompact: draft.reactiveCompact, maxTokenRetries: draft.maxTokenRetries,
+      reactiveKeepRecent: draft.reactiveKeepRecent,
+      compactToolOutput: draft.compactToolOutput, compactMaxLines: draft.compactMaxLines,
+      compactMaxBytes: draft.compactMaxBytes, compactLlmSummary: draft.compactLlmSummary,
+      compactLlmThreshold: draft.compactLlmThreshold, compactModel: draft.compactModel,
       defaultDailyCallLimit: draft.defaultDailyCallLimit, defaultDailyTokenLimit: draft.defaultDailyTokenLimit,
       pauseAutonomy: draft.pauseAutonomy,
       autoTitleEnabled: draft.autoTitleEnabled, titleModel: draft.titleModel,
@@ -144,6 +150,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       enableCliHooks: draft.enableCliHooks,
       enableDelegation: draft.enableDelegation,
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
+      spawnMaxConcurrent: draft.spawnMaxConcurrent, spawnMaxPerTurn: draft.spawnMaxPerTurn,
       autonomousConfine: draft.autonomousConfine, gitWorktreeIsolation: draft.gitWorktreeIsolation,
     }
     if (keyInput) patch.anthropicKey = keyInput

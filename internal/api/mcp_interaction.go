@@ -126,6 +126,13 @@ func interactionToolSpecs(tun *agent.Tunables) []interaction.ToolSpec {
 	if tun != nil && tun.SelfManageEnabled() {
 		defs = append(defs, tools.NewSpawnSessionTool("", 0, nil).Def())
 	}
+	// run_subagent is bridged only when delegation is enabled, mirroring the native
+	// tool loop's gate. Unlike spawn_session (fire-and-forget into a separate
+	// session), it runs a subagent synchronously and returns its answer into THIS
+	// turn — the CLI agent's "ask another agent and get the result back now" path.
+	if tun != nil && tun.DelegationEnabled() {
+		defs = append(defs, tools.NewRunSubagentTool().Def())
+	}
 	specs := make([]interaction.ToolSpec, 0, len(defs)+1)
 	for _, d := range defs {
 		specs = append(specs, interaction.ToolSpec{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
@@ -170,8 +177,10 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callSpawn(ctx, run, args)
 	case "use_skill":
 		return b.callUseSkill(run, args)
-	case "shell":
+	case "Bash":
 		return b.callShell(ctx, run, args)
+	case "run_subagent":
+		return b.callRunSubagent(ctx, run, args)
 	default:
 		// CLI-3: dispatch a bridged self-management tool through the run's native
 		// registry. The advertised catalog (and the per-agent tool filter) gates
@@ -404,6 +413,21 @@ func (b *interactionBackend) callShell(ctx context.Context, run *chatRun, args j
 	runFn := run.shellRunnerFor()
 	if runFn == nil {
 		return interaction.CallResult{Text: "shell is not available for this turn", IsError: true}, nil
+	}
+	out, err := runFn(ctx, args)
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: out}, nil
+}
+
+// callRunSubagent dispatches a bridged run_subagent call: it runs a subagent
+// synchronously through the runner installed on the run and returns its final
+// result, so a claude-cli agent can delegate and get the answer back in this turn.
+func (b *interactionBackend) callRunSubagent(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	runFn := run.runAgentFor()
+	if runFn == nil {
+		return interaction.CallResult{Text: "run_subagent is not available for this turn (delegation disabled)", IsError: true}, nil
 	}
 	out, err := runFn(ctx, args)
 	if err != nil {

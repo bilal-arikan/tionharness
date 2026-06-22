@@ -4,6 +4,10 @@
 > Sidebar arama kutusu artık başlık + mesaj-içeriği arıyor; sonuca tıklayınca
 > oturum açılıp ilgili mesaja kaydırılıp flash'lanıyor. Uygulama özeti dosyanın sonunda.
 >
+> **CLI köprüsü (2026-06-22):** `conversation_search` artık claude-cli ajanlarına da
+> Interaction MCP üzerinden sunuluyor (eager built-in, native'de değişmeden kalır).
+> Bkz. `11-INTERACTION-MCP.md`.
+>
 > **Roadmap maddesi:** `03-YOL-HARITASI.md` → **CG-16** (external-agent-oss P4).
 > **Zemin olduğu işler:** **HA-1** (gelişmiş hafıza / FTS) ve **N5**
 > (`conversation_search` aracı, bkz. `26-MEMGPT-CORE-MEMORY.md` — bu araçla kapandı).

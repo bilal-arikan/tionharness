@@ -7,6 +7,28 @@ import (
 	"testing"
 )
 
+// TestUnwrapRedundantPowershell checks that a redundant outer
+// `powershell -Command "..."` wrapper is stripped (so $variables survive), while
+// non-wrapper commands and ambiguous escaped-quote cases are left untouched.
+func TestUnwrapRedundantPowershell(t *testing.T) {
+	cases := []struct{ in, want string }{
+		// Redundant wrapper → unwrapped.
+		{`powershell -Command "$x = 1; $x"`, `$x = 1; $x`},
+		{`powershell.exe -NoProfile -Command "Get-Date"`, `Get-Date`},
+		{`powershell -c "Write-Host hi"`, `Write-Host hi`},
+		// Not a wrapper → unchanged.
+		{`$x = Invoke-RestMethod $u; $x.city`, `$x = Invoke-RestMethod $u; $x.city`},
+		{`Get-ChildItem`, `Get-ChildItem`},
+		// Escaped quotes inside → too risky to unwrap, left as-is.
+		{`powershell -Command "Write-Host \"hi\""`, `powershell -Command "Write-Host \"hi\""`},
+	}
+	for _, c := range cases {
+		if got := unwrapRedundantPowershell(c.in); got != c.want {
+			t.Errorf("unwrapRedundantPowershell(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // TestShellCallStreamEmitsChunks verifies the shell tool implements StreamingTool
 // and forwards output to onChunk while still returning the full result.
 func TestShellCallStreamEmitsChunks(t *testing.T) {
@@ -18,7 +40,7 @@ func TestShellCallStreamEmitsChunks(t *testing.T) {
 
 	// Sanity: it is recognised as a streaming tool by the registry.
 	reg := NewRegistry(tool)
-	if !reg.CanStream("shell") {
+	if !reg.CanStream("Bash") {
 		t.Fatal("shell should be a StreamingTool")
 	}
 

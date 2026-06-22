@@ -242,7 +242,11 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `request_confirmation` (evet/hayır) | bloklayan | Faz 2 |
 | `schedule_wake` | bloklamayan | Faz 2 |
 | `use_skill` | bloklamayan (skill gövdesi döndürür) | Faz 4 |
+| `Bash` (CLI köprüsü, eski `shell`) | bloklamayan (komut çıktısı) | 2026-06-19 |
 | `spawn_session` (CLI köprüsü) | bloklamayan (fire-and-forget) | Faz 4 |
+| `run_subagent` (CLI köprüsü) | **bloklayan (cevabı bu turda döndürür)** | 2026-06-22 |
+| `core_memory_replace` / `core_memory_append` (CLI köprüsü) | bloklamayan (working-memory düzenler) | 2026-06-22 |
+| `conversation_search` (CLI köprüsü) | bloklamayan (geçmiş tam-metin arama) | 2026-06-22 |
 | `notify` (masaüstü bildirim) | bloklamayan | Faz 3 |
 | workspace/oturum etkileşimleri | — | Faz 3+ |
 
@@ -250,14 +254,42 @@ Yeni tool eklemek = `tools.Registry`'de tek tanım → her iki adaptöre (native
 MCP) otomatik yansır (tek şema kuralı, §2).
 
 **`spawn_session` — CLI köprüsünde korunuyor (Faz 4, 2026-06-19):** Native ajan
-tool listesinden kaldırıldı (native ajanlar artık `run_subagent` ile arka plan çalışması
-yapar). Ancak claude-cli ajanlarının **Interaction MCP köprüsünde** aktif olmaya devam
-eder: CLI kendi native döngüsüyle çalıştığından `run_subagent`'a erişimi yoktur;
-`spawn_session` bu yolun tek arka plan primitifidir. Bir self-management aracı olduğundan
-yalnızca `SelfManageEnabled()` açıkken ilan edilir (`interactionBackend.tun`). Stream
-handler her ajan turunda `chatRun`'a taze bir `*tools.SpawnSessionTool` örneği kurar
+tool listesinden kaldırıldı. Ancak claude-cli ajanlarının **Interaction MCP köprüsünde**
+aktif olmaya devam eder — **fire-and-forget**: yeni bağımsız bir oturum açar, çıktı o
+oturuma düşer, bu konuşmaya DÖNMEZ. Bir self-management aracı olduğundan yalnızca
+`SelfManageEnabled()` açıkken ilan edilir (`interactionBackend.tun`). Stream handler
+her ajan turunda `chatRun`'a taze bir `*tools.SpawnSessionTool` örneği kurar
 (`setSpawnTool`); `Call()` dispatch bu örneğe `spawn_session` adıyla yönlendirir.
 Böylece claude-cli ajanları (Coder, Fasty …) bağımsız oturum başlatabilir — canlı doğrulandı.
+
+**`run_subagent` — CLI köprüsüne eklendi (2026-06-22):** `spawn_session`'ın
+fire-and-forget olması, CLI ajanının "başka ajana sor, **cevabı bu turda al**"
+ihtiyacını karşılamıyordu (gözlem: bir ajan `@WeatherBot`'a sormak istedi, eldeki tek
+primitif spawn olduğundan kopuk bir oturum açıp "raporu ileteceğim" diye yanlış söz
+verdi). `run_subagent` **eager** bir built-in olduğundan `BridgeableDefs` (yalnız *lazy*
+araçlar) onu köprülemiyordu; ayrıca runner ctx'ten okunuyor (`WithRunAgent`), CLI köprü
+ctx'inde seed'li değildi. Çözüm shell/spawn desenini izler: `Runtime.RunSubagentRunner(caller, autonomous)`
+deleg call-graph'ını + runner'ı ctx'e seed edip `RunSubagentTool.Call`'u çalıştırır;
+stream handler (`setRunAgent`) ve autonomous kurulum bunu `chatRun`'a takar; `Call()`
+dispatch `run_subagent` adıyla `callRunSubagent`'a yönlendirir. **Senkron** çalışır:
+HTTP isteği subagent bitene dek bloklar ve final cevabı döndürür. Yalnızca
+`DelegationEnabled()` açıkken ilan/dispatch edilir (native gate ile aynı). CLI yolunda
+canlı `providers.Request` olmadığından *inherited-context* modu yalnız prompt'a düşer.
+
+**`core_memory_replace`/`core_memory_append` + `conversation_search` — CLI köprüsüne eklendi (2026-06-22):**
+Bu üç araç **eager** built-in (native'de her turda hazır) ve native-loop ctx bağımlılığı
+yok — yalnız `r.mem` / `r.db` ister. Daha önce CLI ajanı core-memory bloğunu prompt'unda
+**görüyor** ama düzenleyemiyordu; geçmişte derin (tam-metin) arama da yoktu. Lazy işaretleyip
+köprülemek native UX'i bozardı (ajan önce `activate_tools` demek zorunda kalırdı). Bunun
+yerine `BridgeTools` eager def'leri köprü ilan listesine **doğrudan ekler** (gate'leri
+`CoreMemoryTools()` / `SessionContextEnabled()`); dispatch zaten `bridgeCallFor()` →
+`reg.Call` ile isimle çalışır (ekstra case gerekmez). Native tarafta eager kalırlar.
+
+**İsim hizalama (2026-06-22):** Çekirdek dosya/şel araçları artık claude-cli ile **aynı
+isimleri** taşır — `read_file→Read`, `write_file→Write`, `edit_file→Edit`, `list_dir→LS`,
+`glob→Glob`, `grep→Grep`, `shell→Bash` (`classify.go`/`permpattern.go` tek isim setine
+indirgendi). `get_current_time` aracı kaldırıldı; tarih artık sistem prompt'unun dinamik
+bloğuna tek satır olarak enjekte edilir (`composeTurnRequest` / `autonomousSystemPrompt`).
 
 **`use_skill` (Faz 4, 2026-06-19):** claude-cli ajanları sistem promptunda
 `# Available Skills` kataloğunu **görüyordu** ama gövdeyi yükleyecek araçları
@@ -291,8 +323,8 @@ advertise** edilip native registry üzerinden dispatch edilir. Mekanizma generic
 - Self-manage kapalıyken katalog boş (lazy built-in yok) → köprü no-op.
 - **Köprü alt-küme sınırı (2026-06-19):** `BridgeableDefs`, lazy olsa bile
   `tools.bridgeExcluded` setindeki araçları atlar. Gerekçe: köprü **tam şema** ilan
-  ettiğinden yüzeyi yalın tutmak gerekir. Dışlananlar: `http_get` (CLI'de WebFetch
-  native var → çift maliyet) ve `call_agent` (dispatch native-loop'un kurduğu
+  ettiğinden yüzeyi yalın tutmak gerekir. Dışlananlar: `WebFetch` (CLI'nin kendi
+  WebFetch'i var → çift maliyet) ve `call_agent` (dispatch native-loop'un kurduğu
   `DelegationFrom(ctx)`'i ister; bridge dispatcher düz request ctx ile koşar →
   köprülenirse hep "delegation not available" hatası). Native ajanlar etkilenmez.
   Test: `tools/lazyload_test.go TestBridgeableDefsExcludesCLINative`.

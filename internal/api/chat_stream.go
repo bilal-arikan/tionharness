@@ -278,6 +278,13 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			run.setSpawnTool(nil)
 		}
 
+		// run_subagent (CLI path): mirror the native delegation built-in so a
+		// claude-cli agent can hand a self-contained sub-task to another agent and
+		// get the answer back IN THIS turn (unlike spawn_session's fire-and-forget
+		// into a separate session). nil when delegation is off. Bound to this agent
+		// so depth / cycle / per-turn budget guards apply.
+		run.setRunAgent(wsp.Runtime.RunSubagentRunner(agentRow, run.autonomous))
+
 		// Self-management bridge (CLI path, CLI-3): claude-cli has no native
 		// activate_tools loop, so advertise the responding agent's lazy
 		// self-management tools up front through the Interaction MCP and dispatch

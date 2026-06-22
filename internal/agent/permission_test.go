@@ -14,20 +14,20 @@ func call(name string) providers.ToolCall { return providers.ToolCall{ID: "1", N
 
 func TestPermGate_AutoAllowsEverything(t *testing.T) {
 	for _, mode := range []string{"auto", ""} {
-		if ok, _ := permGate(context.Background(), mode, call("shell")); !ok {
+		if ok, _ := permGate(context.Background(), mode, call("Bash")); !ok {
 			t.Errorf("mode %q: shell should be allowed", mode)
 		}
-		if ok, _ := permGate(context.Background(), mode, call("write_file")); !ok {
+		if ok, _ := permGate(context.Background(), mode, call("Write")); !ok {
 			t.Errorf("mode %q: write_file should be allowed", mode)
 		}
 	}
 }
 
 func TestPermGate_ReadOnlyBlocksWritesAllowsReads(t *testing.T) {
-	if ok, _ := permGate(context.Background(), "read-only", call("read_file")); !ok {
+	if ok, _ := permGate(context.Background(), "read-only", call("Read")); !ok {
 		t.Error("read-only: read_file should be allowed")
 	}
-	if ok, msg := permGate(context.Background(), "read-only", call("write_file")); ok || msg == "" {
+	if ok, msg := permGate(context.Background(), "read-only", call("Write")); ok || msg == "" {
 		t.Errorf("read-only: write_file should be blocked with a message, got ok=%v msg=%q", ok, msg)
 	}
 	// Unknown / MCP tools default to write and are blocked.
@@ -38,10 +38,10 @@ func TestPermGate_ReadOnlyBlocksWritesAllowsReads(t *testing.T) {
 
 func TestPermGate_AskWithoutPrompterDenies(t *testing.T) {
 	// No prompter on ctx (autonomous run) → write/exec denied, reads allowed.
-	if ok, _ := permGate(context.Background(), "ask", call("grep")); !ok {
+	if ok, _ := permGate(context.Background(), "ask", call("Grep")); !ok {
 		t.Error("ask: read tool should be allowed without a prompter")
 	}
-	if ok, _ := permGate(context.Background(), "ask", call("edit_file")); ok {
+	if ok, _ := permGate(context.Background(), "ask", call("Edit")); ok {
 		t.Error("ask: write tool should be denied without a prompter")
 	}
 }
@@ -53,10 +53,10 @@ func TestPermGate_AskAlwaysAllowRememberedAcrossCalls(t *testing.T) {
 		prompts++
 		return tools.PermAllowAlways, nil
 	})
-	if ok, _ := permGate(ctx, "ask", call("write_file")); !ok {
+	if ok, _ := permGate(ctx, "ask", call("Write")); !ok {
 		t.Fatal("ask: first write_file should be approved")
 	}
-	if ok, _ := permGate(ctx, "ask", call("write_file")); !ok {
+	if ok, _ := permGate(ctx, "ask", call("Write")); !ok {
 		t.Fatal("ask: second write_file should be approved (granted)")
 	}
 	if prompts != 1 {
@@ -69,14 +69,14 @@ func TestPermGate_AskDeny(t *testing.T) {
 	ctx = tools.WithPermissionPrompter(ctx, func(_ context.Context, _, _, _ string, _ []string) (string, error) {
 		return tools.PermDeny, nil
 	})
-	if ok, msg := permGate(ctx, "ask", call("shell")); ok || msg == "" {
+	if ok, msg := permGate(ctx, "ask", call("Bash")); ok || msg == "" {
 		t.Errorf("ask: denied shell should not run, got ok=%v msg=%q", ok, msg)
 	}
 }
 
 // shellCall builds an exec tool call carrying a command, for arg-pattern tests.
 func shellCall(command string) providers.ToolCall {
-	return providers.ToolCall{ID: "1", Name: "shell", Input: json.RawMessage(`{"command":` + strconv.Quote(command) + `}`)}
+	return providers.ToolCall{ID: "1", Name: "Bash", Input: json.RawMessage(`{"command":` + strconv.Quote(command) + `}`)}
 }
 
 // TestPermGate_AskAlwaysScopesExecToCommandFamily verifies B2: approving one

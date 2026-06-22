@@ -46,7 +46,7 @@ type Tunables struct {
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
 	selfManage    bool // gates the self-management tool suite (off by default)
 	cliHooks      bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
-	delegation    bool // gates the agent→agent `call_agent` tool (off by default)
+	delegation    bool // gates the agent→agent `run_subagent` tool (off by default)
 	delegMaxDepth int  // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls int  // 0 → DefaultMaxDelegationCalls
 
@@ -187,7 +187,7 @@ func (t *Tunables) CLIHooksEnabled() bool {
 	return t.cliHooks
 }
 
-// SetDelegationEnabled toggles the agent→agent `call_agent` tool. Off by
+// SetDelegationEnabled toggles the agent→agent `run_subagent` tool. Off by
 // default: delegation multiplies token cost (each call runs another full agent
 // turn) and lets a single turn fan out across agents. The runner still enforces
 // depth, cycle and per-turn call-budget guards when enabled.
@@ -197,7 +197,7 @@ func (t *Tunables) SetDelegationEnabled(enabled bool) {
 	t.mu.Unlock()
 }
 
-// DelegationEnabled reports whether the call_agent tool may be offered.
+// DelegationEnabled reports whether the run_subagent tool may be offered.
 func (t *Tunables) DelegationEnabled() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()

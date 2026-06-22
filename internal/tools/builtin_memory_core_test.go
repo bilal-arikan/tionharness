@@ -8,8 +8,8 @@ import (
 	"github.com/bilal/swarmgo/internal/memory"
 )
 
-// TestCoreMemoryReplaceAndAppend exercises both modes end-to-end through the
-// tool surface and verifies the resulting block via the store.
+// TestCoreMemoryReplaceAndAppend exercises both modes + both sections end-to-end
+// through the tool surface and verifies the result via the store.
 func TestCoreMemoryReplaceAndAppend(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
@@ -18,30 +18,28 @@ func TestCoreMemoryReplaceAndAppend(t *testing.T) {
 	const agentID = "agent-1"
 
 	replace := NewCoreMemoryReplaceTool(mem, agentID)
-	if _, err := replace.Call(ctx, json.RawMessage(`{"content":"name: Bilal"}`)); err != nil {
-		t.Fatalf("replace: %v", err)
+	// No section → defaults to persona.
+	if _, err := replace.Call(ctx, json.RawMessage(`{"content":"role: assistant"}`)); err != nil {
+		t.Fatalf("replace persona: %v", err)
 	}
-	got, _ := mem.ReadCore(ctx, agentID)
-	if got != "name: Bilal" {
-		t.Fatalf("core = %q after replace", got)
+	got, _ := mem.ReadCore(ctx, agentID, memory.CorePersona)
+	if got != "role: assistant" {
+		t.Fatalf("persona = %q after replace", got)
 	}
 
 	appendTool := NewCoreMemoryAppendTool(mem, agentID)
-	if _, err := appendTool.Call(ctx, json.RawMessage(`{"content":"role: engineer"}`)); err != nil {
-		t.Fatalf("append: %v", err)
+	// Explicit human section.
+	if _, err := appendTool.Call(ctx, json.RawMessage(`{"content":"name: Bilal","section":"human"}`)); err != nil {
+		t.Fatalf("append human: %v", err)
 	}
-	got, _ = mem.ReadCore(ctx, agentID)
-	if got != "name: Bilal\nrole: engineer" {
-		t.Fatalf("core = %q after append", got)
+	got, _ = mem.ReadCore(ctx, agentID, memory.CoreHuman)
+	if got != "name: Bilal" {
+		t.Fatalf("human = %q after append", got)
 	}
-
-	// Replace overwrites the whole block.
-	if _, err := replace.Call(ctx, json.RawMessage(`{"content":"fresh"}`)); err != nil {
-		t.Fatalf("replace 2: %v", err)
-	}
-	got, _ = mem.ReadCore(ctx, agentID)
-	if got != "fresh" {
-		t.Fatalf("core = %q after second replace", got)
+	// persona untouched by the human append.
+	got, _ = mem.ReadCore(ctx, agentID, memory.CorePersona)
+	if got != "role: assistant" {
+		t.Fatalf("persona changed: %q", got)
 	}
 }
 

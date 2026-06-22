@@ -203,7 +203,7 @@ saklanır.
 
 - **Zaman damgaları:** unix epoch **saniye** (`int64`), değişmedi.
 - **Birincil anahtarlar:** UUID (`google/uuid`), değişmedi.
-- **Gömülü JSON alanları:** `capabilities`, `dream_config`, `tool_calls`,
+- **Gömülü JSON alanları:** `dream_config`, `tool_calls`,
   `graph`, `state`, `env_config` vb. yine TEXT-içinde-JSON string olarak tutulur
   (model değişmedi).
 - **Memory embedding:** `KnowledgeSource.Embedding []byte` bellek modelinde

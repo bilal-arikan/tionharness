@@ -7,10 +7,10 @@ import (
 
 func TestParsePermRule(t *testing.T) {
 	cases := map[string]PermRule{
-		"shell":           {Tool: "shell"},
-		"shell(git *)":    {Tool: "shell", ArgGlob: "git *"},
+		"Bash":           {Tool: "Bash"},
+		"Bash(git *)":    {Tool: "Bash", ArgGlob: "git *"},
 		"  Bash( npm * )": {Tool: "Bash", ArgGlob: "npm *"},
-		"write_file":      {Tool: "write_file"},
+		"Write":      {Tool: "Write"},
 		"broken(":         {Tool: "broken("}, // no trailing ) → whole-tool, left as-is
 	}
 	for in, want := range cases {
@@ -21,22 +21,22 @@ func TestParsePermRule(t *testing.T) {
 }
 
 func TestPermRuleMatch(t *testing.T) {
-	whole := PermRule{Tool: "shell"}
-	if !whole.Match("shell", "anything") {
+	whole := PermRule{Tool: "Bash"}
+	if !whole.Match("Bash", "anything") {
 		t.Error("whole-tool rule should match any argument")
 	}
-	if whole.Match("write_file", "") {
+	if whole.Match("Write", "") {
 		t.Error("rule must not match a different tool")
 	}
-	git := PermRule{Tool: "shell", ArgGlob: "git *"}
-	if !git.Match("shell", "git status -s") {
+	git := PermRule{Tool: "Bash", ArgGlob: "git *"}
+	if !git.Match("Bash", "git status -s") {
 		t.Error("git * should match 'git status -s'")
 	}
-	if git.Match("shell", "rm -rf /") {
+	if git.Match("Bash", "rm -rf /") {
 		t.Error("git * must not match 'rm -rf /'")
 	}
-	if git.Match("Bash", "git status") {
-		t.Error("rule is scoped to the shell tool, not Bash")
+	if git.Match("Write", "git status") {
+		t.Error("rule is scoped to the Bash tool, not Write")
 	}
 }
 
@@ -65,44 +65,44 @@ func TestGlobMatch(t *testing.T) {
 
 func TestRepresentativeArg(t *testing.T) {
 	cmd := json.RawMessage(`{"command":"git status"}`)
-	if got := RepresentativeArg("shell", cmd); got != "git status" {
-		t.Errorf("shell command arg = %q, want %q", got, "git status")
+	if got := RepresentativeArg("Bash", cmd); got != "git status" {
+		t.Errorf("Bash command arg = %q, want %q", got, "git status")
 	}
 	if got := RepresentativeArg("Bash", json.RawMessage(`{"command":" ls -la "}`)); got != "ls -la" {
 		t.Errorf("Bash command arg = %q, want trimmed %q", got, "ls -la")
 	}
 	// Non-exec tools never expose an argument (only whole-tool grants apply).
-	if got := RepresentativeArg("write_file", json.RawMessage(`{"path":"x"}`)); got != "" {
+	if got := RepresentativeArg("Write", json.RawMessage(`{"path":"x"}`)); got != "" {
 		t.Errorf("non-exec tool arg = %q, want empty", got)
 	}
 }
 
 func TestDeriveGrantRule(t *testing.T) {
-	if r := DeriveGrantRule("shell", "git push origin main"); r.String() != "shell(git *)" {
-		t.Errorf("exec grant = %q, want shell(git *)", r.String())
+	if r := DeriveGrantRule("Bash", "git push origin main"); r.String() != "Bash(git *)" {
+		t.Errorf("exec grant = %q, want Bash(git *)", r.String())
 	}
 	// Env-assignment prefix is skipped when finding the command head.
-	if r := DeriveGrantRule("shell", "GIT_PAGER=cat git log"); r.String() != "shell(git *)" {
-		t.Errorf("env-prefixed grant = %q, want shell(git *)", r.String())
+	if r := DeriveGrantRule("Bash", "GIT_PAGER=cat git log"); r.String() != "Bash(git *)" {
+		t.Errorf("env-prefixed grant = %q, want Bash(git *)", r.String())
 	}
 	// Non-exec tools fall back to a whole-tool grant.
-	if r := DeriveGrantRule("write_file", ""); r.String() != "write_file" {
-		t.Errorf("non-exec grant = %q, want write_file", r.String())
+	if r := DeriveGrantRule("Write", ""); r.String() != "Write" {
+		t.Errorf("non-exec grant = %q, want Write", r.String())
 	}
 }
 
 func TestGrantsMatchesRuleAndWholeTool(t *testing.T) {
 	g := NewPermissionGrants()
-	g.GrantRule(DeriveGrantRule("shell", "git status"))
-	if !g.Matches("shell", "git push") {
-		t.Error("granted shell(git *) should match a later git command")
+	g.GrantRule(DeriveGrantRule("Bash", "git status"))
+	if !g.Matches("Bash", "git push") {
+		t.Error("granted Bash(git *) should match a later git command")
 	}
-	if g.Matches("shell", "rm -rf /") {
-		t.Error("shell(git *) must not cover rm")
+	if g.Matches("Bash", "rm -rf /") {
+		t.Error("Bash(git *) must not cover rm")
 	}
 	// Whole-tool grant matches any argument.
-	g.Grant("write_file")
-	if !g.Matches("write_file", "") || !g.Granted("write_file") {
+	g.Grant("Write")
+	if !g.Matches("Write", "") || !g.Granted("Write") {
 		t.Error("whole-tool grant should match")
 	}
 }

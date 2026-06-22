@@ -111,6 +111,29 @@ func TestCatalogBlockAndEmpty(t *testing.T) {
 	}
 }
 
+// TestCatalogBlockForAgentTool verifies the block names the skill tool exactly as
+// given (e.g. the namespaced identifier a claude-cli agent must call), instead of
+// the bare default.
+func TestCatalogBlockForAgentTool(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "triage", "---\nname: Triage\ndescription: sort issues\nshared: true\n---\nbody")
+	s := New("", dir)
+
+	const ns = "mcp__swarmgo_interaction__use_skill"
+	block := s.CatalogBlockForAgentTool(nil, ns)
+	if !contains(block, ns) {
+		t.Errorf("block missing namespaced tool %q:\n%s", ns, block)
+	}
+	// The instruction line must NOT fall back to the bare name when a name is given.
+	if contains(block, "`use_skill`") {
+		t.Errorf("block should use the namespaced tool, not bare use_skill:\n%s", block)
+	}
+	// Empty tool name falls back to the default.
+	if def := s.CatalogBlockForAgentTool(nil, ""); !contains(def, "`use_skill`") {
+		t.Errorf("empty skillTool should fall back to default use_skill:\n%s", def)
+	}
+}
+
 func TestCatalogBlockFor(t *testing.T) {
 	dir := t.TempDir()
 	writeSkill(t, dir, "alpha", "---\nname: Alpha\ndescription: a\n---\nbody")

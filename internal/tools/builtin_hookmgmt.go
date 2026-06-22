@@ -91,9 +91,9 @@ func (CreateHookTool) Def() providers.ToolDef {
 		}`),
 		Examples: []json.RawMessage{
 			// Pre-hook: block a shell call by exiting non-zero; reads the call JSON on stdin.
-			json.RawMessage(`{"event":"PreToolUse","matcher":"shell","command":"jq -e '.tool_input.command | test(\"rm -rf\") | not'"}`),
+			json.RawMessage(`{"event":"PreToolUse","matcher":"Bash","command":"jq -e '.tool_input.command | test(\"rm -rf\") | not'"}`),
 			// Post-hook scoped to one tool, with a timeout.
-			json.RawMessage(`{"event":"PostToolUse","matcher":"write_file","command":"prettier --write \"$(jq -r .tool_input.path)\"","timeoutSec":30}`),
+			json.RawMessage(`{"event":"PostToolUse","matcher":"Write","command":"prettier --write \"$(jq -r .tool_input.path)\"","timeoutSec":30}`),
 		},
 	}
 }

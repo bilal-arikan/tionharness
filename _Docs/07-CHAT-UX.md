@@ -98,7 +98,7 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   (başlıkta), açınca girdi/çıktı. Edit/Write çıktısı diff olarak. Hata kırmızı.
 - `DiffCard.tsx` — `kind:diff` adımı için özel dosya-değişikliği kartı: ✏️ +
   eylem (Oluştur/Düzenle/Yaz) + tıklanabilir yol + `+N −M` satır sayıları
-  (başlıkta), açınca `DiffView` ile birleşik patch. `write_file`/`edit_file`
+  (başlıkta), açınca `DiffView` ile birleşik patch. `Write`/`Edit`
   çağrıları `todo_write` gibi generic tool satırı yerine bu kart olur.
 - `PathText.tsx` — düz metindeki dosya yollarını tıklanabilir çiplere çevirir
   (`lib/paths.ts` tespit eder).
@@ -138,14 +138,20 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   yolları panoya kopyalar.
 - `index.css` — `.sg-markdown` tipografisi + `github-dark` highlight teması.
 
-### Composer — ajan seçici / `#` artifact / `/` komut menüleri
-- **Ajan seçimi (`composer/AgentSelect.tsx`):** mesaj **her zaman** dropdown'dan
-  seçilen ajana gider — **`@` mention yönlendirmesi tamamen kaldırıldı**. Textarea'nın
-  solunda avatar+ad gösteren, yukarı açılan zorunlu seçici. Seçim oturuma kalıcı
-  yazılır (`PUT /api/sessions/{id}/agent` → `db.SetSessionAgent`) ve sonraki her tur o
-  ajana yönlenir. Ajan seçili değilse **Gönder kilitli** (seçici kırmızı kenarlık).
+### Composer — ajan seçici / `@` referans / `#` artifact / `/` komut menüleri
+- **Ajan seçimi (`composer/AgentSelect.tsx`):** mesajın gönderileceği ajan **her zaman**
+  dropdown'dan seçilir (zorunlu) — **`@` ile yönlendirme YOK**. Textarea'nın solunda
+  avatar+ad gösteren, yukarı açılan seçici. Seçim oturuma kalıcı yazılır
+  (`PUT /api/sessions/{id}/agent` → `db.SetSessionAgent`) ve sonraki her tur o ajana
+  gider. Ajan seçili değilse **Gönder kilitli** (seçici kırmızı kenarlık).
 - `Composer.tsx` otomatik-tamamlama menüsü (`composer/AutocompleteMenu.tsx`): caret
-  konumuna göre `detectTrigger` (yalnız `#` ve `/`).
+  konumuna göre `detectTrigger` (`@`, `#`, `/`).
+  - **`@`** (token başında) → **ajan adı referansı**; seçim metne `@Ad` ekler ve
+    `UserBubble`'da çip olarak vurgulanır. **Bu yalnız bir isim referansıdır — turu o
+    ajana YÖNLENDİRMEZ** (alıcı yine dropdown ajanıdır). `@Ad` düz metin olarak mesajla
+    gider; alıcı ajan, sistem-prompt notu sayesinde bunu "başka ajana yapılan isim
+    referansı" (handoff/çağırma değil) olarak yorumlar ve gerekirse yanıtında ona
+    hitap edebilir/iletebilir — ama otomatik bağlantı yoktur (`chat_turn.go` notu).
   - **`#`** (token başında) → **artifact seçici**; **workspace'teki tüm artifact'lar**
     listelenir (yalnız bu oturumunkiler değil — `App.tsx` `listArtifacts()`'i sessionId'siz
     çağırır, aksi halde elle/başka-oturumda oluşturulan sessionId'siz artifact'lar hiç
@@ -177,8 +183,11 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   gösterir; değiştirince `PUT /api/sessions/{id}/agent` ile kalıcı olur ve `activeAgentId`
   + sessions listesi güncellenir. `sendMessage` her zaman **oturumun ajanını** tek
   elemanlı `agentIds=[sessAgent]` olarak gönderir. `POST /api/chat/stream` `agentIds` alır.
-  - **`@` mention yönlendirmesi tamamen kaldırıldı** (frontend parse, composer `@`
-    menüsü, `UserBubble` mention çipleri — hepsi silindi). Bir tur tek ajana gider.
+  - **`@` = isim referansı, yönlendirme DEĞİL.** Composer `@` menüsü metne `@Ad`
+    ekler ve `UserBubble` çip olarak vurgular; `useChatStream` bunu **parse etmez** —
+    mesaj yine yalnız oturumun ajanına gider (`agentIds=[sessAgent]`). `@Ad` düz
+    metindir; alıcı ajan `chat_turn.go` sistem-prompt notuyla onu "başka ajana isim
+    referansı (handoff/çağırma değil)" olarak yorumlar. Bir tur tek ajana gider.
     Backend `agentIds`'i hâlâ dizi olarak kabul eder (geriye dönük uyumlu); yeni boş
     oturumda ilk ajan `adoptMentionedAgent` ile oturuma yazılır.
 - Her asistan turu `Message.AgentID` ile kalıcılaşır; `MessageList` her turu **kendi

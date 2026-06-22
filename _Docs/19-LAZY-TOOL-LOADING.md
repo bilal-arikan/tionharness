@@ -12,14 +12,16 @@
   `read_config`/`write_config`/`list_config` (workspace prompt/instruction
   editing — nadir), `secret_list`/`secret_get` (yalnız kimlik-bilgili görevler),
   `list_sessions` (context bloğu zaten push'lanıyor), `memory_recall` (recall
-  `ContextBlock` ile otomatik enjekte), `http_get` (çoğu tur dış istek yapmıyor).
+  `ContextBlock` ile otomatik enjekte), `WebFetch` (çoğu tur dış istek yapmıyor).
   `MarkLazy` builtins'te olmayan ada **no-op** olduğundan gate'li araçlar (vault/
   config kapalı) için ek koruma gerekmez.
-- **Kalan eager çekirdek:** `read_file`/`write_file`/`edit_file`/`list_dir`/
-  `glob`/`grep`, `shell` (gate'li), `todo_write`, `ask_user`,
+- **Kalan eager çekirdek:** `Read`/`Write`/`Edit`/`LS`/
+  `Glob`/`Grep`, `Bash` (gate'li), `todo_write`, `ask_user`,
   `request_confirmation`, `schedule_wake`, `create_artifact`/`update_artifact`,
-  `use_skill`, `get_current_time` + 3 meta-araç. (Etkileşim primitifleri ve
-  artifact çıktı yolu, aktive turu beklememesi için eager bırakıldı.)
+  `use_skill` + 3 meta-araç. (Etkileşim primitifleri ve artifact çıktı yolu,
+  aktive turu beklememesi için eager bırakıldı.) Not (2026-06-22): çekirdek araçlar
+  claude-cli ile aynı isimleri taşır; `get_current_time` kaldırıldı (tarih artık
+  sistem prompt'unun dinamik bloğunda).
 - **claude-cli yolu (CLI-3, `fc7d30e`):** CLI'de native `activate_tools` döngüsü
   yok; lazy built-in'ler Interaction MCP üzerinden **bridge** edilir
   (`Registry.BridgeableDefs` → tüm lazy built-in'ler, MCP hariç). Bu yüzden eager→
@@ -28,12 +30,12 @@
   koşuda ilan eder (native yol yalnız ad+özet katalog satırı taşır).
 - **Bridge alt-küme sınırı (2026-06-19):** CLI tam şema ilan ettiği için köprü
   yüzeyi `tools.bridgeExcluded` ile budanır — **CLI'de native karşılığı olan**
-  (`http_get` → WebFetch) ve **native-loop context'i gereken** (`call_agent`,
+  (`WebFetch` → CLI'nin kendi WebFetch'i) ve **native-loop context'i gereken** (`call_agent`,
   dispatch `DelegationFrom(ctx)` ister — bridge ctx'inde yok) araçlar köprülenmez.
   Native ajanlar etkilenmez; bunlara `activate_tools` ile erişir. Test:
   `TestBridgeableDefsExcludesCLINative`.
 - **Rol-bazlı eager (2026-06-19):** `Agent.PermissionMode == "read-only"` ise
-  yazma araçları (`write_file`/`edit_file`; `write_config` zaten lazy) eager'dan
+  yazma araçları (`Write`/`Edit`; `write_config` zaten lazy) eager'dan
   düşürülür — read-only ajanda yazma zaten onaylanmaz, şemayı her tur göndermek
   israf. "ask"/"auto" ajanlar bunları eager tutar. Test:
   `TestReadOnlyAgentDemotesWriteTools`.
@@ -109,7 +111,7 @@ graph LR
 ### 1. Araç meta katmanı
 Her `Tool`/`ToolDef` için zaten `Name` + `Description` var. Eklenecek:
 - `Lazy bool` — araç "her zaman açık" mı yoksa "lazy" mı. (`providers.ToolDef.Lazy`, JSON serileşmez: `json:"-"`)
-- Çekirdek, sık kullanılan araçlar (read_file, write_file, time, memory_recall,
+- Çekirdek, sık kullanılan araçlar (Read, Write, memory_recall,
   todo_write…) **eager** kalır — şemaları hep yüklü.
 - Geri kalan built-in'ler (self-management suite) ve **tüm MCP araçları** **lazy**
   olur.

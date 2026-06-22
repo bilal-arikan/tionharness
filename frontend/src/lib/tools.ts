@@ -13,11 +13,12 @@ export interface ToolMeta {
 
 // Per-tool icon glyphs (emoji keeps us dependency-free vs. an icon set).
 const ICONS: Record<string, string> = {
-  get_current_time: '🕐',
+  webfetch: '🌐',
   http_get: '🌐',
   http_request: '🌐',
   memory_recall: '🧠',
   memory_remember: '🧠',
+  conversation_search: '🔎',
   read: '📄',
   write: '✏️',
   edit: '✏️',
@@ -25,6 +26,7 @@ const ICONS: Record<string, string> = {
   terminal: '▶️',
   grep: '🔎',
   glob: '🗂️',
+  ls: '🗂️',
   browser: '🧭',
   todo_write: '✅',
   ask_user: '💬',
