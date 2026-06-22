@@ -2,7 +2,7 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
-## CG-16 — Oturumlar-arası tam-metin arama ✅ çekirdek+araç+API (2026-06-22)
+## CG-16 — Oturumlar-arası tam-metin arama ✅ TAM (çekirdek+araç+API+UI, 2026-06-22)
 
 **Hedef:** Workspace'in tüm oturum mesaj geçmişinde anahtar-kelime araması (bugün
 yalnız başlık+summary üzerinden farkındalık vardı). Plan: `_Docs/27-CROSS-SESSION-SEARCH.md`.
@@ -26,7 +26,13 @@ Yapılan:
 - **Doğrulama:** `go build ./...` + db/tools/api/agent testleri **200** yeşil;
   `tsc --noEmit` temiz. Yeni testler: `store_search_test.go`,
   `builtin_conversation_search_test.go`.
-- **Kalan:** görsel global-arama UI bileşeni (deep-link). Contract hazır.
+- **Görsel arama ✅ (aynı gün):** `SessionsSidebar` arama kutusu çift işlevli —
+  başlık filtresi + `api.searchMessages` mesaj araması (≥2 char, 250ms debounce,
+  `cancelled` guard). "Mesajlarda (N)" bölümü rol-rozeti+snippet+yaş; tıkla →
+  `onSelectSession(sessionId, messageId)`. `selectSession` opsiyonel `messageId` →
+  `scrollToMsgId` → `MessageList`: her satır `data-msg-id`, hedefe `scrollIntoView`
+  (center) + 1.6sn accent-ring flash, sonra `onHighlightConsumed`. `tsc` + `npm run
+  build` + `go build` yeşil. **CG-16 tam kapandı.**
 
 ---
 
@@ -78,6 +84,10 @@ Yapılan (3 parça):
   (MemGPT)" bölümü.
 - **Doğrulama:** `go build ./...` + ilgili paket testleri (conversation/memory/
   tools/api/agent/db/settings) yeşil; frontend `tsc --noEmit` temiz.
+- **UI/API genişletmesi (ikinci tur):** Ayarlarda basınç eşiği **sürgü** + canlı
+  yüzde + tetikleme-token'ı + "kapalı" durumu + canlı durum kartı (yeni `Slider`
+  primitifi). Hafıza panelinde **çekirdek bellek kartı** (`CoreMemoryCard` —
+  göster/düzenle) + `GET|PUT /api/agents/{id}/core` uç noktaları.
 - **Sırada:** Parça 4 (persona/human ayrımı + HA-1 kullanıcı modelleme) sonraya.
 
 ## Oturum-başına Çalışma Dizini (cwd) + otonomi frenleri ✅ (2026-06-22)

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, type LucideIcon } from 'lucide-react'
-import type { Agent, Session } from '../../types'
+import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, type LucideIcon } from 'lucide-react'
+import type { Agent, Session, SearchHit } from '../../types'
+import { api } from '../../api'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '../../lib/time'
 import { useOutsideClick } from '../../hooks/useOutsideClick'
@@ -14,7 +15,9 @@ interface Props {
   // A set because several turns can stream concurrently (detached server-side).
   streamingSessionIds?: ReadonlySet<string>
   newDisabled: boolean
-  onSelectSession: (id: string) => void
+  // messageId is set when the user clicks a message-content search result, so the
+  // transcript can scroll to that exact turn.
+  onSelectSession: (id: string, messageId?: string) => void
   onNewSession: () => void
   onRenameSession: (id: string, title: string) => void
   onGenerateTitle: (id: string) => void
@@ -44,6 +47,11 @@ export function SessionsSidebar({
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
   const [query, setQuery] = useState('')
+  // Cross-session message-content search (CG-16). The same box filters session
+  // titles locally AND, when the query is long enough, full-text searches every
+  // session's messages via the backend (debounced).
+  const [hits, setHits] = useState<SearchHit[]>([])
+  const [searching, setSearching] = useState(false)
   // Close the open row menu on any outside click (detached while no menu is open).
   const rootRef = useOutsideClick<HTMLDivElement>(() => setMenuId(null), !!menuId)
 
@@ -97,6 +105,36 @@ export function SessionsSidebar({
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
   }, [sessions, query])
 
+  // Debounced full-text message search. Runs only for queries of 2+ chars so a
+  // single keystroke doesn't hit the backend; cleared when the box empties.
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setHits([])
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    let cancelled = false
+    const handle = setTimeout(() => {
+      api
+        .searchMessages(q, { limit: 20 })
+        .then((r) => {
+          if (!cancelled) setHits(r)
+        })
+        .catch(() => {
+          if (!cancelled) setHits([])
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false)
+        })
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [query])
+
   const startRename = (s: Session) => {
     setRenamingId(s.id)
     setRenameText(s.title || '')
@@ -134,7 +172,7 @@ export function SessionsSidebar({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Oturum ara…"
+          placeholder="Oturum + mesaj ara…"
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-7 pr-7 text-xs outline-none focus:border-[var(--color-accent)]"
         />
         {query && (
@@ -274,8 +312,39 @@ export function SessionsSidebar({
         {sessions.length === 0 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">Oturum yok. + ile başlat.</p>
         )}
-        {sessions.length > 0 && groups.length === 0 && (
+        {sessions.length > 0 && groups.length === 0 && query.trim().length < 2 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">Aramayla eşleşen oturum yok.</p>
+        )}
+
+        {/* Cross-session message matches (CG-16) — shown whenever a search is active. */}
+        {query.trim().length >= 2 && (
+          <div className="mt-2 border-t border-[var(--color-border)] pt-2">
+            <div className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+              <MessageSquareText size={11} />
+              Mesajlarda{searching ? '…' : hits.length ? ` (${hits.length})` : ''}
+            </div>
+            {!searching && hits.length === 0 && (
+              <p className="px-3 py-1.5 text-xs text-[var(--color-text-dim)]">Eşleşen mesaj yok.</p>
+            )}
+            {hits.map((h) => (
+              <button
+                key={h.messageId}
+                onClick={() => onSelectSession(h.sessionId, h.messageId)}
+                className="mb-0.5 flex w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left transition hover:bg-[var(--color-surface-2)]"
+              >
+                <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
+                  <span className="rounded bg-[var(--color-surface-2)] px-1 py-px text-[9px] uppercase tracking-wide">
+                    {h.role === 'assistant' ? 'ajan' : h.role === 'user' ? 'kullanıcı' : h.role}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-[var(--color-text)]">
+                    {h.sessionTitle || 'Yeni sohbet'}
+                  </span>
+                  <span className="shrink-0">{relativeTime(h.createdAt)}</span>
+                </span>
+                <span className="line-clamp-2 text-xs text-[var(--color-text-dim)]">{h.snippet}</span>
+              </button>
+            ))}
+          </div>
         )}
       </div>
 

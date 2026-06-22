@@ -221,11 +221,11 @@ graph LR
 
 ### 🔵 P4 — UI/UX & ekosistem (opsiyonel)
 - [ ] **CG-15 — Render blokları**: Mermaid native · HTML/PDF/image/markdown preview · datatable/spreadsheet + `transform_data`. Artifact sistemine eklenebilir. *(craft v0.3.0, v0.4.2, v0.4.6, v0.9.6)*
-- [~] **CG-16 — Cross-session full-text arama** (ripgrep/Go) ✅ **çekirdek+araç+API YAPILDI** (2026-06-22):
+- [x] **CG-16 — Cross-session full-text arama** (ripgrep/Go) ✅ **YAPILDI** (2026-06-22):
   saf-Go RAM-içi tarama (`db.SearchMessages`, oturumlar boot'ta `d.messages`'a yüklü → ripgrep/FTS
-  gerekmedi) + `conversation_search` ajan aracı (**N5 kapandı**) + `GET /api/sessions/search` + frontend
-  client/tip. **Kalan:** görsel global-arama bileşeni (salt UI). Plan + uygulama notu:
-  [`27-CROSS-SESSION-SEARCH.md`](27-CROSS-SESSION-SEARCH.md). İlişkili: **HA-1**, **N5**. *(craft v0.3.1)*
+  gerekmedi) + `conversation_search` ajan aracı (**N5 kapandı**) + `GET /api/sessions/search` +
+  **görsel arama** (sidebar kutusu başlık+mesaj arar, sonuç→oturum/mesaj deep-link + flash). Plan +
+  uygulama notu: [`27-CROSS-SESSION-SEARCH.md`](27-CROSS-SESSION-SEARCH.md). İlişkili: **HA-1**, **N5**. *(craft v0.3.1)*
 - [ ] **CG-17 — Mini agents** (hafif prompt + hızlı model profili). *(craft v0.3.1)*
 - [ ] **CG-18 — Session labels + auto-label + batch işlemler**. *(craft v0.2.27, v0.4.6)*
 - [x] **CG-19 — Generic OpenAI-uyumlu custom endpoint** ✅ (commit `cf7d718` generic `OpenAICompat` tool-use + `35ec373` data-instance özel sağlayıcılar: kullanıcı OpenAI- veya Anthropic-uyumlu herhangi bir ucu — OpenRouter/Gemini/Kimi/Ollama — ekleyip ajan sağlayıcısı seçebiliyor; `<think>` ayıklama `7273a62`). Bedrock/DeepSeek özel-eklenti yolundan karşılanıyor. *(craft v0.7.4, v0.5.0)*

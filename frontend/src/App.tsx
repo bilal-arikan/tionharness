@@ -311,9 +311,15 @@ export default function App() {
   }, [])
 
   // Select a session: reflect its default agent and clear its unread flag.
+  // When a cross-session search result is clicked, the target message id is
+  // stashed here so MessageList scrolls to (and briefly highlights) it once the
+  // session's transcript has loaded. Cleared after the scroll is consumed.
+  const [scrollToMsgId, setScrollToMsgId] = useState<string | null>(null)
+
   const selectSession = useCallback(
-    (id: string) => {
+    (id: string, messageId?: string) => {
       setActiveSessionId(id)
+      setScrollToMsgId(messageId ?? null)
       const sess = sessions.find((s) => s.id === id)
       if (sess) setActiveAgentId(sess.agentId)
       // Optimistically clear unread, then persist on the backend.
@@ -743,6 +749,8 @@ export default function App() {
               agents={agents}
               artifacts={sessionArtifacts}
               streaming={chat.activeStreaming}
+              highlightMessageId={scrollToMsgId}
+              onHighlightConsumed={() => setScrollToMsgId(null)}
               onOpenFile={openFile}
               onOpenArtifact={openArtifact}
               onDeleteMessage={deleteMessage}

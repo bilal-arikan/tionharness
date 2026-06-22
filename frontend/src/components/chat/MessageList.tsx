@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Agent, Artifact, Message } from '../../types'
 import { MessageTime, LiveTimer } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
@@ -23,6 +23,11 @@ interface Props {
   // True when the open session has a turn currently streaming — drives the live
   // elapsed timer on the last (in-flight) assistant bubble.
   streaming?: boolean
+  // A message id to scroll to and briefly highlight — set when the user opens a
+  // cross-session search result. Consumed (and cleared via onHighlightConsumed)
+  // once the transcript has rendered and the scroll has run.
+  highlightMessageId?: string | null
+  onHighlightConsumed?: () => void
   onOpenFile?: (path: string) => void
   onOpenArtifact?: (id: string) => void
   // Delete a single message (prune a mistaken/test one). Shown on row hover.
@@ -42,12 +47,17 @@ export function MessageList({
   agents,
   artifacts,
   streaming,
+  highlightMessageId,
+  onHighlightConsumed,
   onOpenFile,
   onOpenArtifact,
   onDeleteMessage,
   onRetry,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Transiently highlighted message (from a search deep-link); cleared after the
+  // flash animation so the highlight doesn't stick.
+  const [flashId, setFlashId] = useState<string | null>(null)
   // Whether the user is currently pinned to the bottom of the transcript. When
   // they scroll up to read history we stop auto-scrolling so streaming deltas
   // don't yank them back down.
@@ -89,6 +99,22 @@ export function MessageList({
     el.scrollTop = el.scrollHeight
   }, [messages, pending, firstId])
 
+  // Deep-link: when a search result is opened, scroll to the target message once
+  // it is present in the loaded transcript, flash it, then clear the request.
+  useEffect(() => {
+    if (!highlightMessageId) return
+    const el = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-msg-id="${CSS.escape(highlightMessageId)}"]`,
+    )
+    if (!el) return // transcript not loaded yet; a later messages update re-runs this
+    el.scrollIntoView({ block: 'center' })
+    pinnedRef.current = false // don't yank back to bottom after the jump
+    setFlashId(highlightMessageId)
+    const t = setTimeout(() => setFlashId(null), 1600)
+    onHighlightConsumed?.()
+    return () => clearTimeout(t)
+  }, [highlightMessageId, messages])
+
   // When a live assistant bubble is already present (streaming), the standalone
   // pending bubble would duplicate it — suppress it in that case.
   const last = messages[messages.length - 1]
@@ -98,12 +124,12 @@ export function MessageList({
     <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
       <div className="flex w-full flex-col gap-4">
         {messages.map((m, i) => {
+          let row: ReactNode
           if (m.role === 'user') {
-            return m.origin ? (
-              <AutoPromptNote key={m.id} message={m} onDelete={onDeleteMessage} />
+            row = m.origin ? (
+              <AutoPromptNote message={m} onDelete={onDeleteMessage} />
             ) : (
               <UserTurn
-                key={m.id}
                 message={m}
                 agents={agents}
                 artifacts={artifacts}
@@ -111,30 +137,43 @@ export function MessageList({
                 onOpenArtifact={onOpenArtifact}
               />
             )
+          } else {
+            // The in-flight assistant bubble is the last message while streaming; its
+            // createdAt marks the turn start, so a live timer counts up from it.
+            const isLastLive = !!streaming && i === messages.length - 1
+            // Completed-turn working time ≈ this message's createdAt (turn end) minus
+            // the triggering user message's (turn start). Only meaningful when the
+            // previous message is the user's — injected summaries or consecutive
+            // assistant turns would otherwise report idle gaps, not real work.
+            const prev = messages[i - 1]
+            const workedSec = prev?.role === 'user' ? m.createdAt - prev.createdAt : 0
+            row = (
+              <AssistantTurn
+                message={m}
+                agent={agentById(m.agentId)}
+                isLastLive={isLastLive}
+                workedSec={workedSec}
+                toolsHidden={collapsedTools.has(m.id)}
+                onToggleTools={toggleTools}
+                onOpenFile={onOpenFile}
+                onOpenArtifact={onOpenArtifact}
+                onDelete={onDeleteMessage}
+                onRetry={onRetry}
+              />
+            )
           }
-          // The in-flight assistant bubble is the last message while streaming; its
-          // createdAt marks the turn start, so a live timer counts up from it.
-          const isLastLive = !!streaming && i === messages.length - 1
-          // Completed-turn working time ≈ this message's createdAt (turn end) minus
-          // the triggering user message's (turn start). Only meaningful when the
-          // previous message is the user's — injected summaries or consecutive
-          // assistant turns would otherwise report idle gaps, not real work.
-          const prev = messages[i - 1]
-          const workedSec = prev?.role === 'user' ? m.createdAt - prev.createdAt : 0
           return (
-            <AssistantTurn
+            <div
               key={m.id}
-              message={m}
-              agent={agentById(m.agentId)}
-              isLastLive={isLastLive}
-              workedSec={workedSec}
-              toolsHidden={collapsedTools.has(m.id)}
-              onToggleTools={toggleTools}
-              onOpenFile={onOpenFile}
-              onOpenArtifact={onOpenArtifact}
-              onDelete={onDeleteMessage}
-              onRetry={onRetry}
-            />
+              data-msg-id={m.id}
+              className={
+                flashId === m.id
+                  ? 'rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow'
+                  : undefined
+              }
+            >
+              {row}
+            </div>
           )
         })}
 

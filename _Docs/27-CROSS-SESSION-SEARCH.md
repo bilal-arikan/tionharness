@@ -1,8 +1,8 @@
 # 27 — Oturumlar-Arası Tam-Metin Arama (CG-16)
 
-> **Durum (2026-06-22): Parça 1, 2 ve Parça 3 (API + frontend client) UYGULANDI.**
-> Kalan tek parça: görsel global-arama bileşeni (sonuç listesi + mesaja deep-link)
-> — backend/contract hazır, salt UI işi. Uygulama özeti dosyanın sonunda.
+> **Durum (2026-06-22): Parça 1, 2, 3 TAMAMEN UYGULANDI — görsel arama dahil.**
+> Sidebar arama kutusu artık başlık + mesaj-içeriği arıyor; sonuca tıklayınca
+> oturum açılıp ilgili mesaja kaydırılıp flash'lanıyor. Uygulama özeti dosyanın sonunda.
 >
 > **Roadmap maddesi:** `03-YOL-HARITASI.md` → **CG-16** (external-agent-oss P4).
 > **Zemin olduğu işler:** **HA-1** (gelişmiş hafıza / FTS) ve **N5**
@@ -208,8 +208,14 @@ Parça 1, 2 ve Parça 3'ün backend/contract'ı sevk edildi. Plandan sapma yok.
   `sessionApi.searchMessages(q, {limit,role,exclude})` (`api/sessions.ts`).
   `tsc --noEmit` temiz.
 - **Doğrulama:** `go build ./...` + db/tools/api/agent testleri (200) yeşil.
-- **Kalan:** görsel global-arama bileşeni (sidebar/komut paleti arama modu +
-  sonuç→oturum/mesaj deep-link). Contract hazır; salt UI.
+- **Görsel arama (2026-06-22):** `SessionsSidebar` arama kutusu artık çift işlevli —
+  yereldeki başlık filtresi + `api.searchMessages` ile mesaj-içeriği araması (≥2 char,
+  250ms debounce, `cancelled` guard'lı). "Mesajlarda (N)" bölümü rol-rozeti + snippet +
+  yaş ile listeler; tıklayınca `onSelectSession(sessionId, messageId)`. App `selectSession`
+  artık opsiyonel `messageId` taşır → `scrollToMsgId` state → `MessageList`. `MessageList`
+  her satırı `data-msg-id` ile sarmalar; `highlightMessageId` değişince hedefe
+  `scrollIntoView({block:'center'})` + 1.6sn accent-ring flash, sonra `onHighlightConsumed`
+  ile temizlenir. `tsc --noEmit` + `npm run build` + `go build ./...` yeşil.
 
 ## Ayrıca bakınız
 
