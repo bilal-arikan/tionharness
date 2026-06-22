@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/proc"
@@ -198,8 +197,7 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 
 	prompt := serializeTranscript(req.Messages)
 
-	cmd := exec.CommandContext(ctx, c.binPath, args...)
-	proc.Hide(cmd) // no console flash when launched from the windowless desktop app
+	cmd := proc.CommandContext(ctx, c.binPath, args...)
 	// Run inside the workspace sandbox so relative paths (e.g. an attachment's
 	// "uploads/<sid>/<file>") resolve there rather than the backend's launch
 	// directory. Only set when the dir exists; otherwise inherit the default cwd.

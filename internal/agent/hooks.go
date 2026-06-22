@@ -201,11 +201,10 @@ func (r *Runtime) execHook(ctx context.Context, h db.Hook, payload hookPayload) 
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(runCtx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", h.Command)
+		cmd = proc.CommandContext(runCtx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", h.Command)
 	} else {
-		cmd = exec.CommandContext(runCtx, "/bin/sh", "-c", h.Command)
+		cmd = proc.CommandContext(runCtx, "/bin/sh", "-c", h.Command)
 	}
-	proc.Hide(cmd) // no console flash under the windowless desktop app
 	if r.workDir != "" {
 		cmd.Dir = r.workDir
 	}

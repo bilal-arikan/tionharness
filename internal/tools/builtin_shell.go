@@ -102,11 +102,10 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 		// inner shell ever sees it — breaking scripts like `$x = ...; $x | ...`.
 		// Strip a single redundant wrapper so the statements run directly.
 		args.Command = unwrapRedundantPowershell(args.Command)
-		cmd = exec.CommandContext(runCtx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", args.Command)
+		cmd = proc.CommandContext(runCtx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", args.Command)
 	} else {
-		cmd = exec.CommandContext(runCtx, "/bin/sh", "-c", args.Command)
+		cmd = proc.CommandContext(runCtx, "/bin/sh", "-c", args.Command)
 	}
-	proc.Hide(cmd) // no console flash under the windowless desktop app
 	cmd.Dir = t.sb.Root
 
 	// Same writer for stdout+stderr: exec serialises writes when they are equal,

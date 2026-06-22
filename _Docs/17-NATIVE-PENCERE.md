@@ -186,6 +186,18 @@ scheduler periyodik olarak `claude-cli`'ye shell-out yaptığından "ara ara" g�
 zaten GUI olduğundan dokunulmadı. ✅ `go build ./...`/`vet` + `go test ./internal/...` (305) yeşil.
 Not: başsız `swarmgo.exe` zaten konsollu olduğundan etkilenmezdi; bayrak orada da zararsız.
 
+## Konsol gizleme merkezileştirildi — proc.Command factory ✅ (2026-06-23)
+
+Önceki düzeltmede her `exec.Command` sitesine ayrı ayrı `proc.Hide(cmd)` ekleniyordu. Artık
+`internal/proc` bir **fabrika** sunuyor: `Command(name, args...)` / `CommandContext(ctx, name,
+args...)` — `exec.Command*`'ı sarıp `Hide`'ı baştan uygular (`command.go`). Konsol açan tüm
+siteler `exec.Command*` yerine `proc.Command*` kullanır → gizleme kuralı **tek yerde**, site başına
+**tek satır**, ve `exec.Command`'ı doğrudan çağırmadığın sürece gizlemeyi **unutmak imkânsız**.
+Dönüştürülen siteler: `providers/claudecli.go`, `tools/builtin_shell.go`, `agent/hooks.go`,
+`agent/worktree.go` (3 git çağrısı), `mcp/client.go`, `api/git.go`, `workdir_context.go`,
+`workspaces.go`. `explorer.exe` siteleri (GUI, yanıp sönmez) `exec` olarak kaldı. Artık kullanılmayan
+`os/exec` importları temizlendi. ✅ `go build ./...`/`vet` + e2e-harici testler yeşil.
+
 ## Çapraz platform yol haritası (sonraki, opsiyonel)
 
 - macOS/Linux için `webview/webview_go` (CGO) ile `cmd/swarmgo-desktop/main_unix.go`

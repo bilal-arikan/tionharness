@@ -67,8 +67,7 @@ type StdioClient struct {
 // DialStdio launches the given command as an MCP server and performs the
 // initialize handshake. Caller must Close the returned client.
 func DialStdio(ctx context.Context, command string, args, env []string) (*StdioClient, error) {
-	cmd := exec.Command(command, args...)
-	proc.Hide(cmd) // no console flash under the windowless desktop app
+	cmd := proc.Command(command, args...)
 	if len(env) > 0 {
 		cmd.Env = append(cmd.Environ(), env...)
 	}

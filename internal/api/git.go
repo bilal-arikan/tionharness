@@ -4,12 +4,11 @@ import (
 	"context"
 	"net/http"
 	"os"
-	"os/exec"
-
-	"github.com/bilal-arikan/swarmgo/internal/proc"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/bilal-arikan/swarmgo/internal/proc"
 )
 
 // gitCmdTimeout bounds each git invocation so a slow/hung repo can't stall a
@@ -21,8 +20,7 @@ func runGit(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gitCmdTimeout)
 	defer cancel()
 	full := append([]string{"-C", dir}, args...)
-	cmd := exec.CommandContext(ctx, "git", full...)
-	proc.Hide(cmd) // no console flash under the windowless desktop app
+	cmd := proc.CommandContext(ctx, "git", full...)
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }

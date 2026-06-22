@@ -3,14 +3,12 @@ package api
 import (
 	"context"
 	"os"
-	"os/exec"
-
-	"github.com/bilal-arikan/swarmgo/internal/proc"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/proc"
 )
 
 // withSessionID stamps the session id onto ctx so the runtime can resolve the
@@ -32,8 +30,7 @@ func gitBranch(dir string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), gitBranchCtxTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
-	proc.Hide(cmd) // no console flash under the windowless desktop app
+	cmd := proc.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
