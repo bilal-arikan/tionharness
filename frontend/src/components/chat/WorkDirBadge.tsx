@@ -3,6 +3,7 @@ import { FolderOpen, GitBranch, CornerLeftUp, RotateCcw, Check, Folder } from 'l
 import { api } from '../../api'
 import { useOutsideClick } from '../../hooks/useOutsideClick'
 import type { WorkdirInfo, BrowseResp } from '../../types'
+import { Button } from '../common'
 
 // basename returns the last path segment for a compact badge label, handling
 // both Windows ("\\") and POSIX ("/") separators.
@@ -161,13 +162,14 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
           </div>
 
           {/* Commit the currently-browsed folder as the working dir. */}
-          <button
+          <Button
             onClick={() => browse?.path && apply(browse.path)}
             disabled={busy || !browse?.path}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-30"
+            size="lg"
+            className="mt-2 flex w-full items-center justify-center gap-1.5"
           >
             <Check size={14} /> Bu klasörü kullan
-          </button>
+          </Button>
         </div>
       )}
     </div>

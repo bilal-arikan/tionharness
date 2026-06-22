@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { Brain, ChevronDown, ChevronRight, Pencil, Check, X, User, Bot } from 'lucide-react'
 import { api } from '../../api'
+import { Button } from '../common'
 
 interface Props {
   agentId: string
@@ -160,19 +161,12 @@ function CoreSection({
             className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
           />
           <div className="flex items-center gap-2">
-            <button
-              onClick={onSave}
-              disabled={saving}
-              className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-2.5 py-1 text-xs font-medium text-white transition disabled:opacity-40"
-            >
+            <Button onClick={onSave} disabled={saving} size="sm" className="flex items-center gap-1">
               <Check size={12} /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
-            </button>
-            <button
-              onClick={onCancel}
-              className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
-            >
+            </Button>
+            <Button onClick={onCancel} variant="secondary" size="sm" className="flex items-center gap-1">
               <X size={12} /> İptal
-            </button>
+            </Button>
           </div>
         </div>
       ) : empty ? (

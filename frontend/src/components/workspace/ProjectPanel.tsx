@@ -3,6 +3,7 @@ import { GitBranch, FolderGit2, Check, RefreshCw } from 'lucide-react'
 import { api } from '../../api'
 import type { GitInfo } from '../../types'
 import { FolderPickerButton } from '../common/FolderPickerButton'
+import { Button } from '../common'
 import { Field, inputCls } from '../settings/primitives'
 
 interface Props {
@@ -126,13 +127,9 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
             <p className="text-xs text-[var(--color-text-dim)]">
               Bu dizin bir git deposu değil. Sürüm kontrolü için başlat:
             </p>
-            <button
-              onClick={doInit}
-              disabled={saving}
-              className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
-            >
+            <Button onClick={doInit} disabled={saving} size="lg" className="flex items-center gap-1.5">
               <GitBranch size={14} /> git init (main)
-            </button>
+            </Button>
           </div>
         ) : info && info.isGitRepo ? (
           <div className="space-y-3">
@@ -159,13 +156,9 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
                 <input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} className={inputCls} />
               </Field>
             </div>
-            <button
-              onClick={saveGit}
-              disabled={saving}
-              className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
-            >
+            <Button onClick={saveGit} disabled={saving} size="lg" className="flex items-center gap-1.5">
               <Check size={14} /> Git ayarlarını kaydet
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>

@@ -3,6 +3,7 @@ import { FolderSearch, CornerLeftUp, Check, Folder } from 'lucide-react'
 import { api } from '../../api'
 import { useOutsideClick } from '../../hooks/useOutsideClick'
 import type { BrowseResp } from '../../types'
+import { Button } from './index'
 
 // FolderPickerButton is a compact folder icon that opens a directory-browser
 // popover and calls onSelect with the chosen absolute path. Reusable across the
@@ -92,13 +93,14 @@ export function FolderPickerButton({
               ))}
           </div>
 
-          <button
+          <Button
             onClick={() => browse?.path && pick(browse.path)}
             disabled={busy || !browse?.path}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-30"
+            size="lg"
+            className="mt-2 flex w-full items-center justify-center gap-1.5"
           >
             <Check size={14} /> Bu klasörü seç
-          </button>
+          </Button>
         </div>
       )}
     </div>

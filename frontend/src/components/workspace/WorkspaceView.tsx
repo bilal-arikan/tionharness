@@ -5,6 +5,7 @@ import type { WorkspaceSettings } from '../../types'
 import { WorkspacePanel } from '../settings/WorkspacePanel'
 import { WorkspaceFilesPanel, type FilesSaveState } from '../settings/WorkspaceFilesPanel'
 import { ProjectPanel } from './ProjectPanel'
+import { Button } from '../common'
 
 type Tab = 'general' | 'project' | 'files'
 
@@ -137,13 +138,9 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
               <span className="text-xs text-[var(--color-text-dim)]">
                 {headerDirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
               </span>
-              <button
-                onClick={onHeaderSave}
-                disabled={!headerDirty || headerSaving}
-                className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-30"
-              >
+              <Button onClick={onHeaderSave} disabled={!headerDirty || headerSaving}>
                 {headerSaving ? 'Kaydediliyor…' : 'Kaydet'}
-              </button>
+              </Button>
             </div>
           )}
         </div>
