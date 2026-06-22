@@ -3,6 +3,18 @@
 /bin/
 *.exe
 *.exe~
+*.syso
+
+# Go tooling output (profiling, coverage, test binaries)
+*.prof
+*.pprof
+*.test
+coverage.out
+*.cover
+
+# Go workspace (machine-local)
+go.work
+go.work.sum
 
 # Local runtime data
 /.localdata*/
