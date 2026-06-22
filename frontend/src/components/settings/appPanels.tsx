@@ -2,7 +2,7 @@
 // categories (providers, commands, step kinds, workspace) live in their own
 // files; these are pure draft+setter forms.
 import { useState, useEffect } from 'react'
-import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, FlaskConical, type LucideIcon } from 'lucide-react'
+import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, FlaskConical, ShieldCheck, type LucideIcon } from 'lucide-react'
 import type { VersionInfo } from '../../types'
 import { api } from '../../api'
 import type { AppSettings } from '../../types'
@@ -261,13 +261,24 @@ export function McpPanel({ draft, set }: PanelProps) {
 export function ToolsPanel({ draft, set }: PanelProps) {
   return (
     <>
+      <SubHead icon={ShieldCheck}>Yeni ajan varsayılan izin modu</SubHead>
+      <div className="flex flex-col gap-1">
+        <select value={draft.defaultPermissionMode || 'auto'} onChange={(e) => set('defaultPermissionMode', e.target.value)} className={inputCls}>
+          <option value="auto">Otomatik — tüm araçlar onaysız çalışır</option>
+          <option value="ask">Sor — dosya yazma/komut için onay iste</option>
+          <option value="read-only">Salt-okunur — yazma/komut engellenir</option>
+        </select>
+        <span className="text-xs text-[var(--color-text-dim)]">Yeni oluşturulan ajanların araç-kullanım izni. Mevcut ajanları Ajanlar ekranından, tek tur için Composer'dan (Shift+Tab) değiştir.</span>
+      </div>
+
+      <SubHead icon={Sparkles}>Geçişli yetenekler</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         Bu yetenekler varsayılan olarak <b>kapalıdır</b>: her biri ajanların gücünü ve
         token maliyetini artırır. Değişiklikler tüm workspace'lere canlı uygulanır.
       </div>
       <Toggle
-        label="Kabuk (shell) aracı"
-        hint="Built-in `shell`: ajan workspace sandbox'ında komut çalıştırır (Windows'ta PowerShell). claude-cli ajanlarında bu araç köprülenir ve CLI'nin native `Bash`'i bastırılır — tüm komutlar SwarmGo shell'inden geçer. Yüksek risk."
+        label="Kabuk (Bash) aracı"
+        hint="Built-in `Bash`: ajan komut çalıştırır (Windows'ta PowerShell). claude-cli ajanlarında bu araç köprülenir ve CLI'nin native `Bash`'i bastırılır — tüm komutlar SwarmGo kabuğundan geçer. Yüksek risk."
         checked={draft.enableShell}
         onChange={(v) => set('enableShell', v)}
       />

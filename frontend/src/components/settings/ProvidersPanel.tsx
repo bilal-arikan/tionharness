@@ -12,7 +12,7 @@ import { api } from '../../api'
 import type { AppSettings, ProviderTestResult, Secret } from '../../types'
 import type { CustomProvider, UpsertProviderInput } from '../../api/providers'
 import { ProviderModelSelect } from '../agents/ProviderModelSelect'
-import { Field, inputCls, type AppSet } from './primitives'
+import { inputCls, type AppSet } from './primitives'
 
 function testBadge(test: Props['test'], provider: string) {
   const r = test[provider]
@@ -285,40 +285,42 @@ function CustomProviders({
   return (
     <div className="space-y-2">
       {list.length > 0 && (
-        <div className="overflow-x-auto rounded-md border border-[var(--color-border)]">
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface)] text-left text-[var(--color-text-dim)]">
-                <th className="px-2 py-1.5 font-medium">Etiket</th>
-                <th className="px-2 py-1.5 font-medium">id</th>
-                <th className="px-2 py-1.5 font-medium">Tür</th>
-                <th className="px-2 py-1.5 font-medium">Uç / Model</th>
-                <th className="px-2 py-1.5 text-center font-medium">Anahtar</th>
-                <th className="px-2 py-1.5 text-right font-medium">İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((p) => (
-                <tr key={p.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface)]">
-                  <td className="px-2 py-1.5 font-medium">{p.label || <span className="text-[var(--color-text-dim)]">—</span>}</td>
-                  <td className="px-2 py-1.5 text-[var(--color-text-dim)]">{p.id}</td>
-                  <td className="px-2 py-1.5">{p.kind === 'anthropic' ? 'Anthropic-uyumlu' : 'OpenAI-uyumlu'}</td>
-                  <td className="max-w-[220px] truncate px-2 py-1.5 text-[var(--color-text-dim)]" title={`${p.baseUrl}${p.defaultModel ? ` · ${p.defaultModel}` : ''}`}>
-                    {p.baseUrl}{p.defaultModel ? ` · ${p.defaultModel}` : ''}
-                  </td>
-                  <td className="px-2 py-1.5 text-center">
-                    <span className={p.keySet ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'}>{p.keySet ? '🔑' : '—'}</span>
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => edit(p)} className="rounded border border-[var(--color-border)] px-2 py-1 hover:border-[var(--color-accent)]">Düzenle</button>
-                      <button onClick={() => remove(p.id)} className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"><Trash2 size={13} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-2">
+          {list.map((p) => (
+            <div key={p.id} className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Boxes size={15} className="shrink-0 text-[var(--color-accent)]" />
+                  <span className="truncate text-sm font-medium">{p.label || p.id}</span>
+                  <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                    {p.kind === 'anthropic' ? 'Anthropic-uyumlu' : 'OpenAI-uyumlu'}
+                  </span>
+                </div>
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    p.keySet ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]' : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+                  }`}
+                >
+                  {p.keySet ? '✓ Anahtar kayıtlı' : 'Anahtar yok'}
+                </span>
+              </div>
+
+              <div className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-2">
+                <div className="min-w-0 truncate" title={p.id}>
+                  <span className="text-[var(--color-text-dim)]">id: </span>{p.id}
+                </div>
+                <div className="min-w-0 truncate" title={p.defaultModel}>
+                  <span className="text-[var(--color-text-dim)]">model: </span>{p.defaultModel || '—'}
+                </div>
+                <div className="col-span-full min-w-0 truncate text-[var(--color-text-dim)]" title={p.baseUrl}>{p.baseUrl}</div>
+              </div>
+
+              <div className="flex items-center justify-end gap-1.5">
+                <button onClick={() => edit(p)} className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]">Düzenle</button>
+                <button onClick={() => remove(p.id)} className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"><Trash2 size={13} /></button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -383,14 +385,6 @@ export function ProvidersPanel({
           {testBadge(test, draft.defaultProvider)}
         </div>
       </div>
-
-      <Field label="Yeni ajan varsayılan izin modu" hint="Yeni oluşturulan ajanların araç-kullanım izni. Mevcut ajanları Ajanlar ekranından, tek tur için Composer'dan (Shift+Tab) değiştir.">
-        <select value={draft.defaultPermissionMode || 'auto'} onChange={(e) => set('defaultPermissionMode', e.target.value)} className={inputCls}>
-          <option value="auto">Otomatik — tüm araçlar onaysız çalışır</option>
-          <option value="ask">Sor — dosya yazma/komut için onay iste</option>
-          <option value="read-only">Salt-okunur — yazma/komut engellenir</option>
-        </select>
-      </Field>
 
       <div>
         <div className="mb-1.5 flex items-center justify-between gap-2">
