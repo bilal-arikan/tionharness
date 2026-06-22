@@ -2,6 +2,60 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Sıradaki-tur bağlam önizleme (debug) + peer mesajlaşma Faz 2–3 ✅ (2026-06-23)
+
+1. **Sıradaki-tur bağlam önizleme** — Agent ekranındaki bağlam önizlemesinin oturum
+   karşılığı: SessionDetailPanel'de **"Bağlam önizle (debug)"** → `SessionContextModal`,
+   `GET /api/sessions/{id}/context-preview?message=`. Ajanın bu oturumda sonraki turda
+   alacağı tam isteği (sistem + dinamik + **mesaj dizisi** + araçlar, ~token'larla) gösterir.
+   **Yan etkisiz** (compaction/persist/provider çağrısı yok; `Prepared` elle kurulur).
+   `api/session_context.go`, `SessionContextModal.tsx`, `types/session.ts`, `api/sessions.ts`.
+2. **Peer mesajlaşma Faz 2** — yanıt ergonomisi: alıcı `from` adını `to` yapıp yanıtlar
+   (araç açıklamasında talimat). Faz 1'de inbox turu zaten geçmiş-duyarlıydı.
+3. **Peer mesajlaşma Faz 3 (kısmi)** — **broadcast `"*"`** (`broadcastAgentMessage`,
+   best-effort + slot guard, test). Kalan (UI inbox göstergesi + grafik `messaged` kenarı)
+   ve **Faz 4** (yapısal protokol) ertelendi.
+
+Testler: `sendmessage_test.go` (+broadcast), `chat_tool_summary_test.go`. Build +
+131 test yeşil (cmd/swarmgo-desktop WIP hariç). Detay: `_Docs\07-CHAT-UX.md`,
+`_Docs\28-PEER-MESAJLASMA-PLANI.md`.
+
+## Medya/binary artifact desteği (create_artifact sourcePath + auto-capture) ✅ (2026-06-23)
+
+**Sorun (SES30'da görüldü):** Ajan Chrome MCP ile ekran görüntüsü aldı ama PNG'yi
+artifact yapamadı; `create_artifact` yalnız inline metin `content` kabul ediyordu,
+ajan da binary'yi base64 olarak context'ten geçirmeye zorlanıp token sınırına çarptı
+ve "yapısal engel, çözülemez" sonucuna vardı. Oysa depolama (`models_artifact.go`
+`image/video/audio/file` kind'ları, `SourcePath`) ve frontend (`ArtifactView`
+medya render) zaten hazırdı — eksik olan **ajana açık araç** + **auto-capture'da
+medya farkındalığı**ydı.
+
+**Çözüm — iki parça:**
+
+1. **`create_artifact` genişletildi** — `kind` enum'una `image/video/audio/file`
+   eklendi + yeni `sourcePath` parametresi. Medya kind'larında bytes context'e hiç
+   girmez: dosya yolu verilir, `ArtifactSink.CreateArtifact` artık `CreateArtifactSpec`
+   struct'ı alır, sink `db.ImportMediaSource` ile yolu workspace-göreli hale getirir
+   (workspace dışındaki dosyayı — ör. Downloads'taki screenshot — `artifacts/<session>/`
+   altına **kopyalar**, içindekini olduğu yerden referanslar). Doğrulama: text kind →
+   `content` zorunlu, media kind → `sourcePath` zorunlu.
+2. **Auto-capture genişletildi** (`artifacts_auto.go`) — (a) `artifactKindForPath`
+   medya uzantılarını (`.png/.jpg/.gif/.webp/.mp4/.mp3/.pdf/.zip/...`) doğru media
+   kind'a eşler (artık `text`'e düşmez); (b) `Write`/`create_file` medya dosyası
+   yazarsa binary-as-text yerine `SourcePath` ile yakalanır; (c) **herhangi bir aracın
+   çıktısı** taranır (`extractProducedMediaPaths` + regex) — screenshot/export araçları
+   kaydettikleri dosya yolunu döndürünce o dosya da medya artifact'ı olarak yakalanır.
+   Var olmayan yol stat'ta elenir → sahte artifact üretilmez.
+
+Her zaman enjekte edilen `artifactDeliverableGuidance` promptu, ajana "binary dosyayı
+`sourcePath` ile ver, base64 gömme" talimatıyla güncellendi.
+
+Dosyalar: `tools/artifact.go` (`CreateArtifactSpec`), `tools/builtin_artifact.go`,
+`db/artifact_content.go` (`ImportMediaSource`+`copyFileContents`), `api/artifacts.go`
+(sink + guidance), `api/artifacts_auto.go`. Testler: `db/artifact_media_test.go`,
+`api/artifacts_auto_media_test.go` (+ güncellenen `mcp_interaction_test.go` fakeSink).
+Build + tüm api/db/tools testleri yeşil.
+
 ## Peer mesajlaşma Faz 1 (send_message/mailbox) + araç I/O geçmiş özeti ✅ (2026-06-23)
 
 İki iş birlikte yapıldı:

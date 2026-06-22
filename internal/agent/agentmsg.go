@@ -40,6 +40,17 @@ func (r *Runtime) DeliverAgentMessage(ctx context.Context, fromAgentID, toRef, s
 	if message == "" {
 		return "", fmt.Errorf("message is required")
 	}
+	fromName := r.agentName(fromAgentID)
+	if fromName == "" {
+		fromName = "another agent"
+	}
+
+	// Broadcast: deliver to every OTHER agent in the workspace (Faz 3). Expensive
+	// (one background turn each), so the model is told to use it sparingly.
+	if strings.TrimSpace(toRef) == "*" {
+		return r.broadcastAgentMessage(ctx, fromAgentID, fromName, summary, message)
+	}
+
 	target, err := r.resolveAgent(ctx, toRef)
 	if err != nil {
 		return "", err
@@ -47,21 +58,56 @@ func (r *Runtime) DeliverAgentMessage(ctx context.Context, fromAgentID, toRef, s
 	if target.ID == fromAgentID {
 		return "", fmt.Errorf("cannot send a message to yourself")
 	}
-
-	// Concurrency guard (shared with spawn): refuse once the background-turn cap is
-	// reached. The slot is released when the inbox turn finishes.
-	if !r.acquireSpawnSlot() {
-		return "", fmt.Errorf("message delivery limit reached (%d concurrent background turns); try again once some finish", r.tun.SpawnMaxConcurrent())
+	if err := r.deliverOne(ctx, fromName, target, summary, message); err != nil {
+		return "", err
 	}
+	return fmt.Sprintf("Message delivered to %q (inbox). It processes it in the background; the reply is NOT relayed here — it may message you back with send_message.", target.Name), nil
+}
 
+// broadcastAgentMessage delivers a message to every other agent's inbox. Each
+// delivery takes a background-turn slot; recipients past the concurrency cap are
+// skipped (best-effort) and reported, rather than failing the whole broadcast.
+func (r *Runtime) broadcastAgentMessage(ctx context.Context, fromAgentID, fromName, summary, message string) (string, error) {
+	agents, err := r.db.ListAgents(ctx)
+	if err != nil {
+		return "", err
+	}
+	delivered, skipped := 0, 0
+	for _, a := range agents {
+		if a.ID == fromAgentID {
+			continue
+		}
+		if err := r.deliverOne(ctx, fromName, a, summary, message); err != nil {
+			skipped++
+			r.logger.Warn("broadcast: delivery skipped", "to", a.ID, "error", err)
+			continue
+		}
+		delivered++
+	}
+	if delivered == 0 {
+		if skipped > 0 {
+			return "", fmt.Errorf("broadcast reached no one (%d recipient(s) over the delivery limit); try again shortly", skipped)
+		}
+		return "", fmt.Errorf("no other agents in this workspace to broadcast to")
+	}
+	out := fmt.Sprintf("Broadcast delivered to %d agent(s); each processes it in its own inbox in the background.", delivered)
+	if skipped > 0 {
+		out += fmt.Sprintf(" %d skipped (delivery limit).", skipped)
+	}
+	return out, nil
+}
+
+// deliverOne appends the sender-tagged message to one recipient's inbox and fires
+// its background turn (fire-and-forget). Takes a concurrency slot, released when
+// the inbox turn finishes.
+func (r *Runtime) deliverOne(ctx context.Context, fromName string, target db.Agent, summary, message string) error {
+	if !r.acquireSpawnSlot() {
+		return fmt.Errorf("message delivery limit reached (%d concurrent background turns); try again once some finish", r.tun.SpawnMaxConcurrent())
+	}
 	inbox, err := r.db.GetOrCreateKindSession(ctx, target.ID, inboxSessionKind, "📥 Inbox")
 	if err != nil {
 		r.releaseSpawnSlot()
-		return "", err
-	}
-	fromName := r.agentName(fromAgentID)
-	if fromName == "" {
-		fromName = "another agent"
+		return err
 	}
 	text := formatAgentMessage(fromName, summary, message)
 	if _, err := r.db.AddMessage(ctx, db.Message{
@@ -70,17 +116,12 @@ func (r *Runtime) DeliverAgentMessage(ctx context.Context, fromAgentID, toRef, s
 		Text:      text,
 	}); err != nil {
 		r.releaseSpawnSlot()
-		return "", err
+		return err
 	}
-
-	r.logger.Info("agent message: delivered",
-		"from", fromAgentID, "to", target.ID, "session", inbox.ID)
-
-	// Fire-and-forget: process the inbox turn detached from the caller's context so
-	// a finished tool call can never cancel it mid-flight.
+	r.logger.Info("agent message: delivered", "to", target.ID, "session", inbox.ID)
+	// Fire-and-forget: process detached from the caller's context.
 	go r.runInboxDelivery(target, inbox.ID, text)
-
-	return fmt.Sprintf("Message delivered to %q (inbox). It processes it in the background; the reply is NOT relayed here — it may message you back with send_message.", target.Name), nil
+	return nil
 }
 
 // runInboxDelivery executes the recipient's background turn on its inbox session:

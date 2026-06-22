@@ -209,6 +209,14 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   `agents[0]`); metindeki `@Ad` yalnız bilgi amaçlıdır, yönlendirme yapmaz. Çok-yazarlı
   geçmişte kullanıcı turları `"[User → Ada]: …"` olarak etiketlenir → ajan **hangi
   sorunun kime sorulduğunu** da görür. (1:1 oturumda etiket çıkmaz.)
+- **Sıradaki-tur bağlam önizleme (debug, 2026-06-23):** Agent ekranındaki bağlam
+  önizlemesinin oturum karşılığı. SessionDetailPanel → **"Bağlam önizle (debug)"** →
+  `SessionContextModal`, `GET /api/sessions/{id}/context-preview?message=`. Ajanın bu
+  oturumda **bir sonraki turda alacağı tam isteği** gösterir: composed sistem promptu +
+  dinamik suffix + **modele gidecek mesaj dizisi** (yazar etiketleri + araç özeti folded)
+  + şema araç kataloğu, her biri ~token tahminiyle. Opsiyonel örnek "sıradaki mesaj"
+  bekleyen kullanıcı turu olarak eklenir. **Yan etkisiz:** `Prepare`'i atlar (compaction/
+  özet persist YOK, provider çağrısı YOK) — `Prepared` elle kurulur (`api/session_context.go`).
 - **Son turların araç I/O özeti (2026-06-23):** Geçmiş provider'a çevrilirken araç
   çağrı/sonuçları düşüyordu (`toProviderMessages` yalnız metin) → ajan "az önce ne
   yaptın / o komut ne döndü" diye soramıyordu. Artık `Prepare`'den önce son **N=4**

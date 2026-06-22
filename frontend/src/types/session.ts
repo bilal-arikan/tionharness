@@ -93,6 +93,23 @@ export interface SessionContext {
   messageCount: number
 }
 
+// The exact next-turn context a session's agent would be sent (debug preview):
+// composed system + dynamic suffix, the message transcript, and the tool catalog,
+// each with a token estimate. Backed by GET /api/sessions/{id}/context-preview.
+export interface SessionContextPreview {
+  agentName: string
+  multiAgent: boolean
+  system: string
+  systemTokens: number
+  dynamic: string
+  dynamicTokens: number
+  messages: { role: string; text: string }[]
+  messageTokens: number
+  tools: { name: string; description: string }[]
+  toolTokens: number
+  totalTokens: number
+}
+
 // A labelled bucket of the live context window (summary or a message role).
 export interface ContextFiller {
   label: string

@@ -232,6 +232,9 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/{id}/run-flow-stream", s.handleSessionRunFlowStream)
 	mux.HandleFunc("POST /api/sessions/{id}/read", s.handleMarkSessionRead)
 	mux.HandleFunc("GET /api/sessions/{id}/info", s.handleSessionInfo)
+	// Debug: preview the EXACT next-turn context (system + dynamic + transcript +
+	// tools) this session's agent would be sent. Optional ?message= sample turn.
+	mux.HandleFunc("GET /api/sessions/{id}/context-preview", s.handleSessionContextPreview)
 	mux.HandleFunc("GET /api/sessions/{id}/path", s.handleSessionPath)
 	mux.HandleFunc("POST /api/sessions/{id}/reveal", s.handleRevealSession)
 }

@@ -60,6 +60,30 @@ func TestDeliverAgentMessage_Synchronous(t *testing.T) {
 	}
 }
 
+// TestDeliverAgentMessage_Broadcast delivers to every OTHER agent's inbox.
+func TestDeliverAgentMessage_Broadcast(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	a, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Lead", Provider: "anthropic", Model: "m"})
+	b, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Worker1", Provider: "anthropic", Model: "m"})
+	c, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Worker2", Provider: "anthropic", Model: "m"})
+
+	res, err := rt.DeliverAgentMessage(ctx, a.ID, "*", "standup", "status please")
+	if err != nil {
+		t.Fatalf("broadcast: %v", err)
+	}
+	if !strings.Contains(res, "2") {
+		t.Errorf("broadcast should report 2 recipients: %q", res)
+	}
+	for _, target := range []db.Agent{b, c} {
+		inbox, _ := rt.db.GetOrCreateKindSession(ctx, target.ID, inboxSessionKind, "📥 Inbox")
+		msgs, _ := rt.db.ListMessages(ctx, inbox.ID)
+		if len(msgs) == 0 || !strings.Contains(msgs[0].Text, `from="Lead"`) {
+			t.Errorf("agent %q should have the broadcast in its inbox: %+v", target.Name, msgs)
+		}
+	}
+}
+
 // TestDeliverAgentMessage_RejectsSelf guards against an agent messaging itself.
 func TestDeliverAgentMessage_RejectsSelf(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))

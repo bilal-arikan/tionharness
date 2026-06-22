@@ -47,11 +47,13 @@ func (*SendMessageTool) Def() providers.ToolDef {
 			"background — you do NOT wait for it, and its reply does NOT come back into this conversation " +
 			"(it may message you back with send_message, landing in YOUR inbox). Your plain reply text is " +
 			"NOT visible to other agents; to reach one you MUST use this tool. Refer to the agent by name. " +
+			"To REPLY to a message you received, set `to` to the `from` name on that message. Set `to` to " +
+			"\"*\" to broadcast to every other agent (expensive — one background turn each; use sparingly). " +
 			"Use this for ongoing peer collaboration; use run_subagent when you need a result back in THIS turn.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "to": { "type": "string", "description": "Name (or id) of the recipient agent in this workspace." },
+    "to": { "type": "string", "description": "Recipient agent name (or id), or \"*\" to broadcast to all other agents. To reply, use the sender's 'from' name." },
     "message": { "type": "string", "description": "The message to deliver to that agent." },
     "summary": { "type": "string", "description": "Optional 5-10 word preview shown in the UI." }
   },

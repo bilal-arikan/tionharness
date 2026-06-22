@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, CheckCircle2, Circle, type LucideIcon } from 'lucide-react'
+import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, CheckCircle2, Circle, ScanEye, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionInfo, AgentUsage } from '../../types'
+import { SessionContextModal } from './SessionContextModal'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { roleColor } from '../../lib/palette'
 import { displayPath } from '../../lib/paths'
@@ -79,6 +80,8 @@ export function SessionDetailPanel({
   // Manual-refresh nonce: bumped by the refresh button (and after a title
   // regeneration) to re-fetch without touching the parent's refreshKey.
   const [localRefresh, setLocalRefresh] = useState(0)
+  // Debug: next-turn context preview modal visibility.
+  const [ctxPreview, setCtxPreview] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -543,6 +546,12 @@ export function SessionDetailPanel({
                 disabled={info.messageCount === 0 || titling}
                 busy={titling}
               />
+              {/* Debug: preview the exact next-turn context the agent would get. */}
+              <ActionBtn
+                icon={ScanEye}
+                label="Bağlam önizle (debug)"
+                onClick={() => setCtxPreview(true)}
+              />
               {/* Summary kinds rendered as direct buttons (no dropdown): one
                   tap fires the summarize action for that context bucket. */}
               <div className="flex flex-col gap-1.5">
@@ -574,6 +583,13 @@ export function SessionDetailPanel({
             </div>
           </Section>
         </div>
+      )}
+      {ctxPreview && (
+        <SessionContextModal
+          sessionId={sessionId}
+          title={info?.title}
+          onClose={() => setCtxPreview(false)}
+        />
       )}
     </aside>
   )

@@ -5,6 +5,7 @@ import type {
   Message,
   SessionInfo,
   SessionContext,
+  SessionContextPreview,
   SearchHit,
   WorkdirInfo,
   BrowseResp,
@@ -113,6 +114,15 @@ export const sessionApi = {
 
   sessionContext: (sessionId: string) =>
     req<SessionContext>(`/api/sessions/${sessionId}/context`),
+
+  // Debug: preview the exact next-turn context (system + dynamic + transcript +
+  // tools) the session's agent would be sent. Optional sample "next" user message.
+  sessionContextPreview: (sessionId: string, message?: string) =>
+    req<SessionContextPreview>(
+      `/api/sessions/${sessionId}/context-preview${
+        message ? `?message=${encodeURIComponent(message)}` : ''
+      }`,
+    ),
 
   // Working directory (cwd) for the agent's file/shell tools.
   getWorkdir: (sessionId: string) =>

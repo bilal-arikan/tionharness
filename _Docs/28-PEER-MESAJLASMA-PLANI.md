@@ -4,13 +4,15 @@
 > incelemesinden (`observed-behavior`) çıkarılan **adresli mailbox** deseninin
 > SwarmGo'ya uyarlanması. Kavramsal arka plan: [[10-KAVRAMSAL-TASARIM-NOTLARI]] §10.
 >
-> **Faz 1 (tamam):** `send_message({to, message, summary?})` built-in (self-manage
-> gated); teslim = alıcının kalıcı **inbox** oturumuna (`GetOrCreateKindSession`,
-> kind="inbox") `<agent_message from="…" summary="…">…</agent_message>` etiketli
-> kullanıcı mesajı + **arka planda** alıcının geçmiş-duyarlı turu (`runSessionTurn` →
-> wake-runner; SpawnMaxConcurrent guard). Kendine-mesaj reddi. Dosyalar:
-> `internal/agent/agentmsg.go`, `internal/tools/builtin_sendmessage.go`,
-> `internal/agent/toolsetup.go`; testler: `sendmessage_test.go`. **Kalan: Faz 2–4.**
+> **Faz 1–2 + Faz 3-broadcast (tamam):** `send_message({to, message, summary?})`
+> built-in (self-manage gated); teslim = alıcının kalıcı **inbox** oturumuna
+> (`GetOrCreateKindSession`, kind="inbox") `<agent_message from="…" summary="…">…</agent_message>`
+> etiketli mesaj + **arka planda** alıcının geçmiş-duyarlı turu (`runSessionTurn` →
+> wake-runner; SpawnMaxConcurrent guard). **Yanıt:** `to`=gönderenin `from` adı.
+> **Broadcast:** `to="*"` → tüm diğer ajanlar (`broadcastAgentMessage`, best-effort).
+> Kendine-mesaj reddi. Dosyalar: `internal/agent/agentmsg.go`,
+> `internal/tools/builtin_sendmessage.go`, `internal/agent/toolsetup.go`; testler:
+> `sendmessage_test.go`. **Kalan:** Faz 3 UI inbox göstergesi + grafik kenarı, Faz 4 (ertelendi).
 
 ## 1. Neden / Bağlam
 
@@ -109,10 +111,15 @@ işbirliği).
 
 1. ✅ **Faz 1 (2026-06-23)** — `send_message` aracı + inbox teslim (fire-on-deliver) +
    `from`-tag + geçmiş-duyarlı alıcı turu. Test geçti.
-2. **Faz 2** — yanıt ergonomisi (`to: <from>`), inbox geçmiş-duyarlı tur (WakeTurnFunc deseni).
-3. **Faz 3** — broadcast `"*"`, UI inbox göstergesi, ilişki grafiğine `messaged` kenarı.
-4. **Faz 4** — yapısal protokol mesajları (görev atama / durum) — gerekirse; aksi halde
-   `run_task`/Kanban ile yapılır.
+2. ✅ **Faz 2 (2026-06-23)** — yanıt ergonomisi: alıcı, mesajdaki `from` adını `to` yapıp
+   `send_message` ile yanıtlar (araç açıklamasında açık talimat); inbox turu zaten
+   geçmiş-duyarlı (`runSessionTurn`, Faz 1).
+3. ⏳ **Faz 3 (kısmi, 2026-06-23)** — ✅ **broadcast `"*"`** (`broadcastAgentMessage`,
+   en iyi-çaba + slot guard, test geçti). ⏳ **kalan:** UI inbox göstergesi +
+   ilişki grafiğine `messaged` kenarı (frontend-ağırlıklı; ertelendi — inbox oturumları
+   şimdilik Aktivite feed'inde görünür).
+4. ⏳ **Faz 4** — yapısal protokol mesajları (görev atama/durum) — **ertelendi** (opsiyonel;
+   şimdilik `run_task`/Kanban yeterli).
 
 ## 7. Açık kararlar (kullanıcı onayı bekliyor)
 
