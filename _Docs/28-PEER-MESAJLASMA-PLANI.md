@@ -1,8 +1,16 @@
 # SwarmGo — Ajanlar-Arası Peer Mesajlaşma Planı (SendMessage / Mailbox)
 
-> **Durum:** PLAN (henüz uygulanmadı). Claude Code `swarm/teammate` incelemesinden
-> (`observed-behavior`) çıkarılan **adresli mailbox** deseninin SwarmGo'ya uyarlanması.
-> Kavramsal arka plan: [[10-KAVRAMSAL-TASARIM-NOTLARI]] → "Claude Code Swarm/Mailbox".
+> **Durum:** **Faz 1 UYGULANDI (2026-06-23).** Claude Code `swarm/teammate`
+> incelemesinden (`observed-behavior`) çıkarılan **adresli mailbox** deseninin
+> SwarmGo'ya uyarlanması. Kavramsal arka plan: [[10-KAVRAMSAL-TASARIM-NOTLARI]] §10.
+>
+> **Faz 1 (tamam):** `send_message({to, message, summary?})` built-in (self-manage
+> gated); teslim = alıcının kalıcı **inbox** oturumuna (`GetOrCreateKindSession`,
+> kind="inbox") `<agent_message from="…" summary="…">…</agent_message>` etiketli
+> kullanıcı mesajı + **arka planda** alıcının geçmiş-duyarlı turu (`runSessionTurn` →
+> wake-runner; SpawnMaxConcurrent guard). Kendine-mesaj reddi. Dosyalar:
+> `internal/agent/agentmsg.go`, `internal/tools/builtin_sendmessage.go`,
+> `internal/agent/toolsetup.go`; testler: `sendmessage_test.go`. **Kalan: Faz 2–4.**
 
 ## 1. Neden / Bağlam
 
@@ -99,7 +107,8 @@ işbirliği).
 
 ## 6. Fazlar
 
-1. **Faz 1** — `send_message` aracı + inbox teslim (fire-on-deliver) + `from`-tag. Test.
+1. ✅ **Faz 1 (2026-06-23)** — `send_message` aracı + inbox teslim (fire-on-deliver) +
+   `from`-tag + geçmiş-duyarlı alıcı turu. Test geçti.
 2. **Faz 2** — yanıt ergonomisi (`to: <from>`), inbox geçmiş-duyarlı tur (WakeTurnFunc deseni).
 3. **Faz 3** — broadcast `"*"`, UI inbox göstergesi, ilişki grafiğine `messaged` kenarı.
 4. **Faz 4** — yapısal protokol mesajları (görev atama / durum) — gerekirse; aksi halde

@@ -41,6 +41,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// single-agent session) so a woken agent in a shared thread can still tell
 		// who said what.
 		history, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, ag.ID, history)
+		history = appendRecentToolSummaries(history)
 		prep, err := s.convo.Prepare(ctx, wsp.DB, provider, session, ag, history)
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: prepare: %w", err)

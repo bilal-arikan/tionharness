@@ -225,6 +225,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		// tell who said what in a thread shared by several agents (no-op for a
 		// single-agent session). multiAgent gates the explanatory system note.
 		history, multiAgent := s.labelMultiAgentHistory(ctx, database, agentRow.ID, history)
+		// Fold a compact recap of recent turns' tool I/O into the history so the
+		// agent can see what tools it ran and what they returned (the trace is
+		// otherwise dropped when history → provider messages).
+		history = appendRecentToolSummaries(history)
 		prep, cerr := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 		if cerr != nil {
 			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "compaction_failed", "compaction failed: "+cerr.Error())

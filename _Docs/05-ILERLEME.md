@@ -2,7 +2,69 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
-## Peer mesajlaşma (SendMessage/mailbox) — referans inceleme + PLAN 📝 (2026-06-23)
+## Peer mesajlaşma Faz 1 (send_message/mailbox) + araç I/O geçmiş özeti ✅ (2026-06-23)
+
+İki iş birlikte yapıldı:
+
+1. **`send_message` (Faz 1)** — Claude Code mailbox deseninin uyarlaması: bir ajan
+   başka ajana **adresli, kimlikli** mesaj atar; mesaj alıcının kalıcı **inbox**
+   oturumuna (`GetOrCreateKindSession` kind="inbox") `<agent_message from="…">`
+   etiketiyle düşer ve alıcının **geçmiş-duyarlı turu** arka planda çalışır
+   (fire-and-forget, `SpawnMaxConcurrent` guard, kendine-mesaj reddi). self-manage
+   gated. `run_subagent` (izole görev) ile birlikte durur; bu "süregelen peer
+   işbirliği" yolu. Dosyalar: `agentmsg.go`, `builtin_sendmessage.go`, `toolsetup.go`;
+   `runSessionTurn` ile wake/inbox ortak geçmiş-duyarlı runner. Plan/detay:
+   `_Docs\28-PEER-MESAJLASMA-PLANI.md`.
+2. **Araç I/O geçmiş özeti (#5)** — geçmişte araç çağrı/sonuçları düşüyordu; artık
+   son N=4 asistan turunun `Steps` izinden kompakt `<recent_tool_activity>` bloğu
+   (kopya üzerinde) eklenir → ajan "az önce ne yaptın / ne döndü"yü yanıtlar
+   (`api/chat_tool_summary.go`). Wake/inbox turları da dahil.
+
+Testler: `sendmessage_test.go`, `chat_tool_summary_test.go` (+ mevcutlar). Build +
+241 test yeşil (cmd/swarmgo-desktop'taki ilgisiz WIP hariç). Detay:
+`_Docs\07-CHAT-UX.md`, `_Docs\28-PEER-MESAJLASMA-PLANI.md`.
+
+## MCP kalıcı bağlantı havuzu (persistent pool) ✅ (2026-06-23)
+
+Daha önce belgelenen 🔴 kısıt (dinamik MCP araç ekleme / `tools.listChanged` yok +
+dial-per-operation) **kalıcı olarak çözüldü**. Önceki ara çözüm (60sn katalog TTL cache,
+`mcpcatalog.go`) **kaldırıldı**, yerini sunucu başına **canlı oturum havuzu** aldı.
+
+**`internal/mcp/client.go` (yeniden yazıldı):** stdio istemci artık **kalıcı + eşzamanlı
+kullanıma güvenli**. Tek arka-plan **read loop** yanıtları JSON-RPC `id`'ye göre per-call
+kanallara demux eder; sunucu bildirimleri (`notifications/tools/list_changed`) bir
+callback'e yönlenir. `initialize` artık `capabilities.tools.listChanged=true` ilan eder.
+Yeni API: `SetOnToolsChanged`, `Alive`. (`proc.Command` süreç-grubu kill korundu.)
+
+**`internal/mcp/pool.go` (yeni):** `Pool` her enabled MCP server için **tek canlı
+`StdioClient`** tutar (sanitized ada göre).
+- **Catalog reuse:** tur-başı tekrarlı `buildRegistry` çağrıları aynı canlı oturumu
+  kullanır → gateway'de **session churn yok** (eski burst sorunu da tamamen biter).
+- **Oturum-durumu korunur:** gateway'in `activate_tools` etkisi oturum kapanmadığı için
+  **sonraki çağrıda da yaşar** → dinamik araç ekleme artık çalışır (tur-ötesi).
+- **listChanged → invalidate:** sunucu araç listesi değişince entry stale işaretlenir,
+  sonraki `Catalog` aynı canlı oturumda yeniden listeler. Ek emniyet: TTL
+  (`SWARMGO_MCP_POOL_TTL_SEC`, vars. 60sn) — listChanged göndermeyen sunucular için.
+- Config (command/args/url/env fingerprint) değişiminde veya bağlantı ölümünde şeffaf
+  re-dial; çağrı ölü bağlantıda bir kez retry eder.
+
+**Wiring:** `Runtime.mcpPool *mcp.Pool` (+ `CloseMCP()`, workspace teardown'da çağrılır:
+`workspace/manager.go` delete + Close). `buildRegistry` → `pool.Catalog`. `Registry`
+artık `mcpCaller` taşır (`AttachMCP(..., caller)`); MCP çağrıları pool üzerinden gider,
+nil ise dial-per-call'a düşer (testler). Tek-seferlik test endpoint'i
+(`api/mcp.go handleTestMCPServer`) + `live_test.go` hâlâ dial-per-op `ListServerTools`/
+`CallNamespaced` kullanır (kasıtlı).
+
+**Kalan nüans:** Aynı tur içinde `activate_tools` sonrası yeni araçlar **bir sonraki turda**
+çağrılabilir (tur başı `reg` sabit). Pre-load için preset hâlâ en pürüzsüz yol; ama artık
+zorunlu değil. Test: `internal/mcp/pool_test.go` (sahte stdio MCP sunucusu: persistent
+reuse, listChanged refresh, config-change re-dial, Close, hata yolları). **`internal/mcp`
++ `internal/agent` + `internal/tools` + `internal/workspace` 153 test yeşil**; build+vet
+temiz (ilgisiz `internal/e2e` MemGPT WIP build hatası hariç).
+
+---
+
+## Bilinen kısıt — dinamik MCP araç ekleme (`tools.listChanged`) desteklenmiyor 🔴→✅ (2026-06-23)
 
 Çok-ajan "kim ne dedi" çözümünü iki referansla karşılaştırdık:
 - **external-agent-oss:** sorunu *yaşamıyor* — bir oturum = tek ajan; çok-ajan ayrı oturum.

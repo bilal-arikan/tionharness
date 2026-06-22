@@ -184,6 +184,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			// Note: agent→agent work is unified under run_subagent (above) — async
 			// background runs go through its wait:"async" mode (→ SpawnSession). The
 			// old call_agent / spawn_session / send_agent_message tools were removed.
+			// send_message is the "peer DM" complement: an addressed, sender-tagged
+			// message into another agent's persistent inbox (Claude Code mailbox model).
+			tools.NewSendMessageTool(agent.ID, func(ctx context.Context, to, summary, message string) (string, error) {
+				return r.DeliverAgentMessage(ctx, agent.ID, to, summary, message)
+			}),
 			// Flows.
 			tools.NewCreateFlowTool(r.db, agent.ID),
 			tools.NewUpdateFlowTool(r.db, agent.ID),
@@ -301,15 +306,23 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 
 	if servers, err := r.db.ListEnabledMCPServers(ctx); err != nil {
 		r.logger.Warn("list mcp servers failed", "error", err)
-	} else if len(servers) > 0 {
-		// Cached build: the catalog is memoized per workspace (keyed by the enabled
-		// server configs + a TTL), so the several buildRegistry calls per turn dial
-		// each MCP server once instead of opening a fresh session every time.
-		entries, cfgByServer, errs := r.mcpCat.build(ctx, servers)
+	} else if len(servers) > 0 && r.mcpPool != nil {
+		// Persistent-pool build: each enabled server is reached over a live session
+		// reused across turns (no gateway session churn), and a server's session
+		// state (e.g. the gateway's activate_tools) survives across calls. The
+		// catalog refreshes on tools/list_changed (and a safety-net TTL).
+		cfgs := make([]mcp.ServerConfig, 0, len(servers))
+		for _, m := range servers {
+			cfgs = append(cfgs, toServerConfig(m))
+		}
+		entries, cfgByServer, errs := r.mcpPool.Catalog(ctx, cfgs)
 		for name, e := range errs {
 			r.logger.Warn("mcp catalog build failed", "server", name, "error", e)
 		}
-		reg.AttachMCP(entries, cfgByServer)
+		caller := func(cctx context.Context, namespaced string, args json.RawMessage) (mcp.CallToolResult, error) {
+			return r.mcpPool.Call(cctx, cfgByServer, namespaced, args)
+		}
+		reg.AttachMCP(entries, cfgByServer, caller)
 	}
 
 	// Wire the lazy-loading meta-tools once the full lazy catalog (self-management

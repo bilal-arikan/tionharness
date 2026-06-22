@@ -238,18 +238,8 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// Prefer the history-aware runner (installed by the api server) so the woken
 	// agent continues with the FULL conversation — the wake prompt was just
 	// persisted as the last user message, so the history already carries it.
-	// Without it (e.g. before the api server wired the runner) fall back to the
-	// prompt-only invoke so a wake still fires, just without prior context.
-	var (
-		output    string
-		steps     []TurnStep
-		invokeErr error
-	)
-	if s.rt.wakeTurn != nil {
-		output, steps, invokeErr = s.rt.wakeTurn(wakeCtx, agent, sc.SessionID, sc.Prompt)
-	} else {
-		output, steps, invokeErr = s.rt.invokeTraced(wakeCtx, agent, sc.Prompt, true)
-	}
+	// runSessionTurn falls back to the prompt-only invoke when no runner is wired.
+	output, steps, invokeErr := s.rt.runSessionTurn(wakeCtx, agent, sc.SessionID, sc.Prompt, true)
 	if invokeErr != nil {
 		if _, addErr := s.db.AddMessage(ctx, db.Message{
 			SessionID: sc.SessionID,

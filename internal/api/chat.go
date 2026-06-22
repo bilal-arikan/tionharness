@@ -124,6 +124,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Annotate history with each assistant turn's author so this agent can tell who
 	// said what when several agents share the thread (no-op for a 1:1 session).
 	history, multiAgent := s.labelMultiAgentHistory(ctx, database, agent.ID, history)
+	// Recap recent turns' tool I/O so the agent can answer "what did you just do /
+	// what did that return" (the tool trace is dropped when history → messages).
+	history = appendRecentToolSummaries(history)
 	prep, err := s.convo.Prepare(ctx, database, provider, session, agent, history)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "compaction failed: "+err.Error())

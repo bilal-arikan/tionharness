@@ -209,6 +209,13 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   `agents[0]`); metindeki `@Ad` yalnız bilgi amaçlıdır, yönlendirme yapmaz. Çok-yazarlı
   geçmişte kullanıcı turları `"[User → Ada]: …"` olarak etiketlenir → ajan **hangi
   sorunun kime sorulduğunu** da görür. (1:1 oturumda etiket çıkmaz.)
+- **Son turların araç I/O özeti (2026-06-23):** Geçmiş provider'a çevrilirken araç
+  çağrı/sonuçları düşüyordu (`toProviderMessages` yalnız metin) → ajan "az önce ne
+  yaptın / o komut ne döndü" diye soramıyordu. Artık `Prepare`'den önce son **N=4**
+  asistan turunun `Steps` izinden kompakt bir `<recent_tool_activity>` bloğu
+  (araç+kısa arg → kırpılmış çıktı; tur başına ≤10 araç, çıktı ≤240 rune) o turun
+  metnine **kopya üzerinde** eklenir (`api/chat_tool_summary.go`). Token maliyeti
+  son N turla sınırlı. Test: `chat_tool_summary_test.go`.
 - **Ardışık aynı-rol birleştirme (2026-06-23):** Bir kullanıcı mesajına iki ajan
   ardışık yanıt verirse geçmiş `user → assistant → assistant` olur; Anthropic katı
   şekilde rol-değişimi ister ("roles must alternate") → istek reddedilirdi. `providers`

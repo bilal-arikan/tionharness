@@ -42,19 +42,28 @@ never yourself. Deleting an agent cascades: it also removes the agent's sessions
 the schedules bound to it, and the tasks it owns (with their runs) — so delete
 deliberately, it is not reversible.
 
-**Agent delegation** —
+**Agent delegation & messaging** —
 - `run_subagent` — launch an isolated worker (a built-in profile or an existing
   agent) and get back only the final result, so the sub-task's tool output never
   floods the current context. Supports sync (wait for reply, default) and async
   (detached background run). Multiple calls in one turn run in parallel.
-  Gated by the *Delegation* capability (`enableDelegation`).
+  Gated by the *Delegation* capability (`enableDelegation`). Use when you need a
+  RESULT back.
+- `send_message` — send a direct, addressed message (`{to, message, summary?}`) to
+  ANOTHER agent. It lands in that agent's persistent inbox tagged with your name,
+  and the agent processes it on its own in the background — you do NOT wait, and
+  its reply does NOT return to this conversation (it may message you back, landing
+  in YOUR inbox). Your plain reply text is not visible to other agents; to reach
+  one you must use this tool. Use for ONGOING peer collaboration (vs `run_subagent`
+  for a result-in-this-turn).
 
-> Built-in profiles: `explore` (read-only search), `coder` (write/edit code),
-> `reviewer` (read-only review). Pass an existing agent's name or ID as `target`
-> to use a persistent agent instead of an ephemeral profile.
+> Built-in run_subagent profiles: `explore` (read-only search), `coder` (write/edit
+> code), `reviewer` (read-only review). Pass an existing agent's name or ID as
+> `target` to use a persistent agent instead of an ephemeral profile.
 >
-> There is no longer a separate `call_agent`, `spawn_session`, or
-> `send_agent_message` tool — `run_subagent` covers all agent-to-agent patterns.
+> There is no separate `call_agent` / `spawn_session` / `send_agent_message` tool:
+> `run_subagent` covers delegation (isolated task → result) and `send_message`
+> covers peer messaging (addressed DM → recipient's inbox).
 
 **Flows** — `list_flows`, `get_flow`, `create_flow`, `update_flow`, `delete_flow`,
 `run_flow` (drive a flow to completion, recorded in the Activity feed). Load the
