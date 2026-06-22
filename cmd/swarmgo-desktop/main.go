@@ -70,6 +70,13 @@ func main() {
 	}
 	defer w.Destroy()
 
+	// Tint the native title bar (caption, min/max/close buttons, border) to match
+	// the in-app theme, and keep it in sync if the user switches themes.
+	hwnd := uintptr(w.Window())
+	preset, theme, _ := application.Appearance()
+	applyTitleBar(hwnd, preset, theme)
+	go watchTitleBar(w, hwnd, application, preset, theme)
+
 	w.Navigate(url)
 	w.Run() // blocks until the window is closed
 
@@ -78,6 +85,22 @@ func main() {
 	defer cancel()
 	if err := application.Shutdown(ctx); err != nil {
 		logger.Error("shutdown error", "error", err)
+	}
+}
+
+// watchTitleBar re-applies the native title-bar tint whenever the in-app theme
+// changes (the user can switch presets from the Settings screen at runtime).
+// DWM calls are marshalled onto the UI thread via Dispatch.
+func watchTitleBar(w webview2.WebView, hwnd uintptr, application *app.App, preset, theme string) {
+	ticker := time.NewTicker(1500 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		p, t, _ := application.Appearance()
+		if p == preset && t == theme {
+			continue
+		}
+		preset, theme = p, t
+		w.Dispatch(func() { applyTitleBar(hwnd, p, t) })
 	}
 }
 

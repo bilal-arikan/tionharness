@@ -153,6 +153,22 @@ eklenir (build-time, çalışma zamanı bağımlılığı değil).
 | Sunucu boot hatası | MessageBox + exit (pencere açılmadan) |
 | Başsız sunucu hâlâ isteniyor | `swarmgo.exe` aynen durur; iki dağıtım yan yana |
 
+## Başlık çubuğu tema uyumu ✅ (2026-06-23)
+
+Native başlık çubuğu (caption + küçült/büyüt/kapat butonları + kenarlık) uygulama temasına
+boyanır. **`cmd/swarmgo-desktop/titlebar_windows.go`** (`//go:build windows`, salt `syscall`,
+`dwmapi.dll`):
+
+- `DWMWA_USE_IMMERSIVE_DARK_MODE` (20) — koyu/açık frame (Win10 1809+).
+- `DWMWA_CAPTION_COLOR` (35) / `DWMWA_TEXT_COLOR` (36) / `DWMWA_BORDER_COLOR` (34) — palet
+  renkleri (Win11 22000+). Desteklenmeyen build'lerde sessizce yok sayılır.
+- `presetTitleColors` haritası 8 curated paletin `bg/text/border`'ını tutar (`themePresets.ts`
+  ile elle senkron — başlık çubuğu yalnız bu üç token'a ihtiyaç duyar). Hex → COLORREF `0x00BBGGRR`.
+- `app.App.Appearance()` çözülen preset/theme/accent'i sızıntısız verir.
+- **Canlı:** `watchTitleBar` (1.5sn poll) tema değişince `w.Dispatch` ile yeniden uygular.
+
+Bilinmeyen/legacy tema → yalnız dark/light frame (caption rengi atlanır), asla kırılmaz.
+
 ## Çapraz platform yol haritası (sonraki, opsiyonel)
 
 - macOS/Linux için `webview/webview_go` (CGO) ile `cmd/swarmgo-desktop/main_unix.go`

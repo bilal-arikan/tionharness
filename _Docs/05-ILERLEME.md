@@ -2,6 +2,20 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## Native pencere — başlık çubuğu temaya uyumlu ✅ (2026-06-23)
+
+WebView2 penceresinin native başlık çubuğu (caption + küçült/büyüt/kapat butonları + kenarlık)
+artık uygulama temasına boyanıyor — beyaz Windows frame'i koyu temayla çelişmiyor. **DWM** ile
+(`dwmapi.dll` `DwmSetWindowAttribute`, salt `syscall`, yeni bağımlılık yok): `DWMWA_USE_IMMERSIVE_DARK_MODE`
+(Win10 1809+) + `DWMWA_CAPTION_COLOR`/`TEXT_COLOR`/`BORDER_COLOR` (Win11 22000+). `app.App.Appearance()`
+çözülen `ThemePreset`/`Theme`/`Accent`'i verir; `cmd/swarmgo-desktop/titlebar_windows.go` 8 curated paletin
+bg/text/border'ını (`themePresets.ts` ile elle senkron) COLORREF'e (`0x00BBGGRR`) çevirir. Bilinmeyen
+preset → yalnız dark/light frame (caption rengi atlanır); eski Windows'ta desteklenmeyen attribute'lar
+sessizce yok sayılır (pencere yine çalışır). **Canlı güncelleme:** `watchTitleBar` 1.5sn poll ile tema
+değişince `w.Dispatch` üzerinden yeniden uygular (Ayarlar'dan palet değiştirince başlık anında uyar).
+✅ `go build ./...`/`vet` yeşil; desktop canlı (varsayılan midnight-violet, pencere açıldı, health 200,
+panik/hata yok). Detay: [17-NATIVE-PENCERE.md](17-NATIVE-PENCERE.md).
+
 ## Native masaüstü penceresi — WebView2 (CGO'suz) ✅ (2026-06-22)
 
 SwarmGo artık tarayıcı yerine **kendi masaüstü penceresinde** açılabiliyor. Plan:

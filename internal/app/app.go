@@ -31,6 +31,16 @@ type App struct {
 	server   *api.Server
 	httpSrv  *http.Server
 	listener net.Listener
+	settings *settings.Store
+}
+
+// Appearance returns the current UI appearance settings (preset id, theme
+// mode, accent hex). The desktop window uses these to tint its native title
+// bar so the OS chrome matches the in-app theme; values reflect live edits
+// from the Settings screen.
+func (a *App) Appearance() (preset, theme, accent string) {
+	cur := a.settings.Get()
+	return cur.ThemePreset, cur.Theme, cur.Accent
 }
 
 // SetupLogging builds the ring-buffer-backed logger used by every entry point
@@ -148,6 +158,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		server:   server,
 		httpSrv:  httpSrv,
 		listener: ln,
+		settings: settingsStore,
 	}, nil
 }
 
