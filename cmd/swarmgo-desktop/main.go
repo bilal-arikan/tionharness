@@ -21,6 +21,10 @@ import (
 )
 
 func main() {
+	// Opt into per-monitor DPI awareness before any window exists, so high-DPI
+	// displays render crisp text instead of a bitmap-stretched (blurry) window.
+	setDPIAware()
+
 	// The webview event loop must own the main OS thread.
 	runtime.LockOSThread()
 

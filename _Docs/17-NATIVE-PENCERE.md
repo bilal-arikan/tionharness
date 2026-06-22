@@ -198,6 +198,17 @@ Dönüştürülen siteler: `providers/claudecli.go`, `tools/builtin_shell.go`, `
 `workspaces.go`. `explorer.exe` siteleri (GUI, yanıp sönmez) `exec` olarak kaldı. Artık kullanılmayan
 `os/exec` importları temizlendi. ✅ `go build ./...`/`vet` + e2e-harici testler yeşil.
 
+## Bulanık metin düzeltildi — DPI farkındalığı ✅ (2026-06-23)
+
+**Belirti:** Pencerede tüm metinler hafif bulanık (tarayıcıda net). **Sebep:** Yüksek-DPI
+ekranlarda (ölçek >%100) DPI-aware işaretlenmemiş pencereyi Windows 96 DPI'da çizip bitmap
+olarak büyütür → bulanıklık. **Çözüm:** `cmd/swarmgo-desktop/dpi_windows.go` (salt `syscall`,
+`user32.dll`): `setDPIAware()` **pencere oluşturulmadan önce** (main'in ilk satırı)
+`SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2 = -4)` çağırır; eski Windows'ta
+`SetProcessDPIAware` fallback. WebView2 host sürecin DPI farkındalığını izlediğinden artık
+gerçek piksel yoğunluğunda **keskin** render eder. DPI farkındalığı süreçte yalnız bir kez
+ayarlanabildiğinden çağrı en başta yapılır (ilk çağrı kazanır). ✅ build yeşil.
+
 ## Çapraz platform yol haritası (sonraki, opsiyonel)
 
 - macOS/Linux için `webview/webview_go` (CGO) ile `cmd/swarmgo-desktop/main_unix.go`
