@@ -169,6 +169,23 @@ boyanır. **`cmd/swarmgo-desktop/titlebar_windows.go`** (`//go:build windows`, s
 
 Bilinmeyen/legacy tema → yalnız dark/light frame (caption rengi atlanır), asla kırılmaz.
 
+## Konsol penceresi yanıp sönmesi düzeltildi ✅ (2026-06-23)
+
+**Belirti:** `-H windowsgui` ile konsolsuz derlenen desktop binary çalışırken ekranda ara ara
+bir terminal penceresi açılıp kapanıyordu. **Sebep:** konsolsuz GUI süreci bir konsol alt-süreci
+(claude CLI, PowerShell shell aracı/hook, git, MCP stdio sunucusu) başlattığında Windows o çocuk
+için varsayılan olarak yeni bir konsol penceresi açar. Otonom ajan turları/heartbeat/auto-title/
+scheduler periyodik olarak `claude-cli`'ye shell-out yaptığından "ara ara" görünüyordu.
+
+**Çözüm:** yeni **`internal/proc`** paketi — `Hide(cmd)` Windows'ta `CREATE_NO_WINDOW`
+(`0x08000000`) + `HideWindow` set eder (`hide_windows.go`), diğer platformlarda no-op
+(`hide_other.go`). Konsol açan **tüm** `exec.Command` çağrılarına eklendi: `providers/claudecli.go`
+(ana suçlu), `tools/builtin_shell.go`, `agent/hooks.go`, `agent/worktree.go` (git worktree),
+`mcp/client.go` (stdio sunucu), `api/git.go`, `api/workdir_context.go`, `api/workspaces.go`
+(klasör seçici PowerShell — dialog yine görünür, yalnız konsol gizlenir). `explorer.exe` çağrıları
+zaten GUI olduğundan dokunulmadı. ✅ `go build ./...`/`vet` + `go test ./internal/...` (305) yeşil.
+Not: başsız `swarmgo.exe` zaten konsollu olduğundan etkilenmezdi; bayrak orada da zararsız.
+
 ## Çapraz platform yol haritası (sonraki, opsiyonel)
 
 - macOS/Linux için `webview/webview_go` (CGO) ile `cmd/swarmgo-desktop/main_unix.go`

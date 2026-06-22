@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+
+	"github.com/bilal/swarmgo/internal/proc"
 	"sync"
 	"time"
 )
@@ -66,6 +68,7 @@ type StdioClient struct {
 // initialize handshake. Caller must Close the returned client.
 func DialStdio(ctx context.Context, command string, args, env []string) (*StdioClient, error) {
 	cmd := exec.Command(command, args...)
+	proc.Hide(cmd) // no console flash under the windowless desktop app
 	if len(env) > 0 {
 		cmd.Env = append(cmd.Environ(), env...)
 	}

@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 	"os/exec"
+
+	"github.com/bilal/swarmgo/internal/proc"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/workspace"
@@ -94,6 +96,7 @@ $top.TopMost = $true
 if ($d.ShowDialog($top) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }`
 
 	cmd := exec.CommandContext(r.Context(), "powershell.exe", "-NoProfile", "-STA", "-Command", script)
+	proc.Hide(cmd) // suppress the powershell console flash; the folder dialog still shows
 	out, err := cmd.Output()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "folder picker unavailable: "+err.Error())

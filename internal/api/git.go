@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+
+	"github.com/bilal/swarmgo/internal/proc"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,7 +21,9 @@ func runGit(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gitCmdTimeout)
 	defer cancel()
 	full := append([]string{"-C", dir}, args...)
-	out, err := exec.CommandContext(ctx, "git", full...).Output()
+	cmd := exec.CommandContext(ctx, "git", full...)
+	proc.Hide(cmd) // no console flash under the windowless desktop app
+	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }
 

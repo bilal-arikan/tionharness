@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+
+	"github.com/bilal/swarmgo/internal/proc"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -203,6 +205,7 @@ func (r *Runtime) execHook(ctx context.Context, h db.Hook, payload hookPayload) 
 	} else {
 		cmd = exec.CommandContext(runCtx, "/bin/sh", "-c", h.Command)
 	}
+	proc.Hide(cmd) // no console flash under the windowless desktop app
 	if r.workDir != "" {
 		cmd.Dir = r.workDir
 	}

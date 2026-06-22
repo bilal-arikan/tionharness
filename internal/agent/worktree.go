@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"os/exec"
+
+	"github.com/bilal/swarmgo/internal/proc"
 	"path/filepath"
 	"strings"
 )
@@ -13,6 +15,7 @@ import (
 // can be worktree-isolated and to scope worktree operations to the right repo.
 func gitRepoToplevel(ctx context.Context, dir string) string {
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--show-toplevel")
+	proc.Hide(cmd) // no console flash under the windowless desktop app
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -56,8 +59,12 @@ func (r *Runtime) ensureWorktree(ctx context.Context, base, sessionID string) st
 	branch := "swarmgo/session-" + sessionID
 	// -b creates the branch at HEAD; if it already exists (re-create after a manual
 	// rmdir) fall back to attaching without -b.
-	if out, err := exec.CommandContext(ctx, "git", "-C", repo, "worktree", "add", "-b", branch, wtPath, "HEAD").CombinedOutput(); err != nil {
-		if out2, err2 := exec.CommandContext(ctx, "git", "-C", repo, "worktree", "add", wtPath).CombinedOutput(); err2 != nil {
+	addCmd := exec.CommandContext(ctx, "git", "-C", repo, "worktree", "add", "-b", branch, wtPath, "HEAD")
+	proc.Hide(addCmd)
+	if out, err := addCmd.CombinedOutput(); err != nil {
+		retryCmd := exec.CommandContext(ctx, "git", "-C", repo, "worktree", "add", wtPath)
+		proc.Hide(retryCmd)
+		if out2, err2 := retryCmd.CombinedOutput(); err2 != nil {
 			r.logger.Warn("worktree add failed", "error", err, "out", string(out), "retryErr", err2, "retryOut", string(out2))
 			return base
 		}
@@ -80,7 +87,9 @@ func (r *Runtime) RemoveSessionWorktree(sessionID string) {
 	// `git worktree remove` cleans up the repo's worktree registry; --force allows
 	// removal even with uncommitted changes. Fall back to a plain rmdir so the dir
 	// is never leaked when git is unavailable.
-	if out, err := exec.Command("git", "-C", wtPath, "worktree", "remove", "--force", wtPath).CombinedOutput(); err != nil {
+	rmCmd := exec.Command("git", "-C", wtPath, "worktree", "remove", "--force", wtPath)
+	proc.Hide(rmCmd)
+	if out, err := rmCmd.CombinedOutput(); err != nil {
 		_ = os.RemoveAll(wtPath)
 		r.logger.Warn("worktree remove fell back to rmdir", "session", sessionID, "error", err, "out", string(out))
 	}

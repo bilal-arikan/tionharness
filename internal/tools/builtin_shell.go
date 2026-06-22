@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+
+	"github.com/bilal/swarmgo/internal/proc"
 	"regexp"
 	"runtime"
 	"strings"
@@ -104,6 +106,7 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 	} else {
 		cmd = exec.CommandContext(runCtx, "/bin/sh", "-c", args.Command)
 	}
+	proc.Hide(cmd) // no console flash under the windowless desktop app
 	cmd.Dir = t.sb.Root
 
 	// Same writer for stdout+stderr: exec serialises writes when they are equal,

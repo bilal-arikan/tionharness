@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"os/exec"
+
+	"github.com/bilal/swarmgo/internal/proc"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,7 +32,9 @@ func gitBranch(dir string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), gitBranchCtxTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
+	proc.Hide(cmd) // no console flash under the windowless desktop app
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}

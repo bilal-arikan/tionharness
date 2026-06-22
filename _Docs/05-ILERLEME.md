@@ -2,6 +2,16 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## Native pencere — konsol penceresi yanıp sönmesi düzeltildi ✅ (2026-06-23)
+
+Konsolsuz desktop binary (`-H windowsgui`) bir konsol alt-süreci başlattığında Windows'un
+çocuk için açtığı terminal penceresi yanıp sönüyordu (claude CLI/PowerShell/git/MCP). Yeni
+**`internal/proc`** paketi (`Hide(cmd)` → Windows'ta `CREATE_NO_WINDOW`, diğer platformlarda
+no-op) konsol açan tüm `exec.Command` çağrılarına eklendi: `claudecli.go` (ana suçlu),
+`builtin_shell.go`, `agent/hooks.go`, `agent/worktree.go`, `mcp/client.go`, `api/git.go`,
+`workdir_context.go`, `workspaces.go`. `explorer.exe` (GUI) dokunulmadı. ✅ build/vet +
+305 test yeşil. Detay: [17-NATIVE-PENCERE.md](17-NATIVE-PENCERE.md).
+
 ## Native pencere — başlık çubuğu temaya uyumlu ✅ (2026-06-23)
 
 WebView2 penceresinin native başlık çubuğu (caption + küçült/büyüt/kapat butonları + kenarlık)

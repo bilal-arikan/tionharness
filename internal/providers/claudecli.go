@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/bilal/swarmgo/internal/proc"
 )
 
 // ClaudeCLI drives the locally-installed `claude` (Claude Code) CLI in
@@ -112,7 +114,7 @@ type cliBlock struct {
 	Type      string          `json:"type"`
 	Text      string          `json:"text"`
 	Thinking  string          `json:"thinking"`
-	ID        string          `json:"id"`          // tool_use block identifier
+	ID        string          `json:"id"` // tool_use block identifier
 	Name      string          `json:"name"`
 	Input     json.RawMessage `json:"input"`
 	ToolUseID string          `json:"tool_use_id"` // tool_result → references a tool_use id
@@ -197,6 +199,7 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	prompt := serializeTranscript(req.Messages)
 
 	cmd := exec.CommandContext(ctx, c.binPath, args...)
+	proc.Hide(cmd) // no console flash when launched from the windowless desktop app
 	// Run inside the workspace sandbox so relative paths (e.g. an attachment's
 	// "uploads/<sid>/<file>") resolve there rather than the backend's launch
 	// directory. Only set when the dir exists; otherwise inherit the default cwd.
