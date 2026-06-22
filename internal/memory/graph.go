@@ -42,7 +42,9 @@ func (s *Store) Graph(ctx context.Context, agentID string, threshold float64, ma
 		maxEdges = 400
 	}
 
-	sources, err := s.db.ListKnowledge(ctx, agentID) // all kinds, newest first
+	// Display kinds only — the always-in-context core blocks are shown in their
+	// own card, not as nodes in the similarity graph.
+	sources, err := s.db.ListKnowledge(ctx, agentID, recallKinds...) // newest first
 	if err != nil {
 		return Graph{}, err
 	}

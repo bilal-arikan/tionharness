@@ -11,9 +11,12 @@ import (
 // handleListMemories returns an agent's memories, optionally filtered by ?kind=.
 func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
 	agentID := r.PathValue("id")
-	kinds := []string{}
+	// Default to the user-facing display kinds so the always-in-context core
+	// blocks (core_persona/core_human) don't leak into the flat list — they have
+	// their own card. An explicit ?kind= still passes through for debugging.
+	kinds := memory.DisplayKinds()
 	if k := r.URL.Query().Get("kind"); k != "" {
-		kinds = append(kinds, k)
+		kinds = []string{k}
 	}
 
 	mems, err := ws(r).Runtime.Memory().List(r.Context(), agentID, kinds...)

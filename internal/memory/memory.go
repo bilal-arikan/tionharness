@@ -11,11 +11,20 @@ import (
 // minScore is the cosine floor below which a memory is considered irrelevant.
 const minScore = 0.04
 
-// recallKinds are the memory kinds eligible for similarity recall. The "core"
-// kind is deliberately excluded: it is the agent-editable working-memory block
-// that is already injected into every prompt verbatim, so surfacing it again via
-// recall would be redundant.
+// recallKinds are the memory kinds eligible for similarity recall. The core
+// kinds (core_persona/core_human) are deliberately excluded: they are the
+// agent-editable working-memory blocks already injected into every prompt
+// verbatim, so surfacing them again via recall would be redundant. This same
+// allowlist is the set of user-facing memory kinds shown in the Memory screen's
+// list and knowledge-graph views — core blocks have their own dedicated card.
 var recallKinds = []string{db.MemoryDocument, db.MemoryJournal, db.MemoryReflection}
+
+// DisplayKinds returns the memory kinds shown in the Memory screen (everything
+// except the always-in-context core blocks, which render in their own card).
+// Returns a fresh copy so callers can pass it as a variadic filter safely.
+func DisplayKinds() []string {
+	return append([]string(nil), recallKinds...)
+}
 
 // Store is a thin, stateless wrapper over the DB that adds vector recall on top
 // of knowledge_sources CRUD. Construct one per request; it holds no state.
