@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/secrets"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/secrets"
 )
 
 // Secret write tools let an agent store and remove secrets (API keys, tokens)

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bilal/swarmgo/internal/conversation"
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/orchestration"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/orchestration"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {

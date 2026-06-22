@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"os/exec"
 
-	"github.com/bilal/swarmgo/internal/proc"
+	"github.com/bilal-arikan/swarmgo/internal/proc"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // workspaceListItem is the switcher-facing view: registry metadata plus the

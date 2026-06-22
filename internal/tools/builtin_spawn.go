@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // SpawnResult is the outcome of a spawn: the new independent session's id and the

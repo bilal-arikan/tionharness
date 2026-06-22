@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/agent"
-	"github.com/bilal/swarmgo/internal/interaction"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/interaction"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // askTimeout bounds a blocking ask_user call so a never-answering user can't pin

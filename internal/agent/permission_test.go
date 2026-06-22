@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 func call(name string) providers.ToolCall { return providers.ToolCall{ID: "1", Name: name} }

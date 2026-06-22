@@ -103,6 +103,9 @@ type Settings struct {
 	// journal count crosses AutoReflectThreshold.
 	AutoReflect          bool `json:"autoReflect"`
 	AutoReflectThreshold int  `json:"autoReflectThreshold"`
+	// AutoUserModel (HA-1): during the dream cycle, refresh the agent's "human"
+	// core block from the journal so it learns durable facts about the user.
+	AutoUserModel bool `json:"autoUserModel"`
 
 	// Turn recovery (A1): structural handling of output-token cutoffs and context
 	// overflow inside the native agentic tool loop.
@@ -186,6 +189,7 @@ func Default() Settings {
 
 		AutoReflect:          true,
 		AutoReflectThreshold: 30,
+		AutoUserModel:        true,
 
 		ReactiveCompact:    true,
 		MaxTokenRetries:    3,
@@ -277,6 +281,7 @@ type DTO struct {
 
 	AutoReflect          bool `json:"autoReflect"`
 	AutoReflectThreshold int  `json:"autoReflectThreshold"`
+	AutoUserModel        bool `json:"autoUserModel"`
 
 	ReactiveCompact    bool `json:"reactiveCompact"`
 	MaxTokenRetries    int  `json:"maxTokenRetries"`
@@ -358,6 +363,7 @@ func (s Settings) ToDTO() DTO {
 
 		AutoReflect:          s.AutoReflect,
 		AutoReflectThreshold: s.AutoReflectThreshold,
+		AutoUserModel:        s.AutoUserModel,
 
 		ReactiveCompact:    s.ReactiveCompact,
 		MaxTokenRetries:    s.MaxTokenRetries,
@@ -440,6 +446,7 @@ type Patch struct {
 
 	AutoReflect          *bool `json:"autoReflect"`
 	AutoReflectThreshold *int  `json:"autoReflectThreshold"`
+	AutoUserModel        *bool `json:"autoUserModel"`
 
 	ReactiveCompact    *bool `json:"reactiveCompact"`
 	MaxTokenRetries    *int  `json:"maxTokenRetries"`

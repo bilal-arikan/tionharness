@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/bilal/swarmgo/internal/secrets"
+	"github.com/bilal-arikan/swarmgo/internal/secrets"
 )
 
 // setSecretReq is the create/update payload. Value is write-only; an empty value

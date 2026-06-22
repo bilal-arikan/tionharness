@@ -1,5 +1,5 @@
 // Per-agent memory: documents, journal, reflections and recall previews.
-import type { Memory, MemoryKind, RecallHit } from '../types'
+import type { CoreBlock, Memory, MemoryKind, RecallHit } from '../types'
 import { req } from './client'
 
 export const memoryApi = {
@@ -14,16 +14,30 @@ export const memoryApi = {
     }),
   deleteMemory: (id: string) =>
     req<{ result: string }>(`/api/memories/${id}`, { method: 'DELETE' }),
-  // Core memory (MemGPT): the agent's editable working memory, split into a
-  // persona section (about itself) and a human section (about the user).
+  // Core memory (MemGPT): the agent's editable working memory as named blocks
+  // (persona + human by default, plus any custom blocks).
   getCore: (agentId: string) =>
-    req<{ persona: string; human: string }>(`/api/agents/${agentId}/core`),
-  // Writes only the sections provided (each optional); a non-undefined empty
-  // string clears that section. Returns the resulting persona/human.
-  writeCore: (agentId: string, sections: { persona?: string; human?: string }) =>
-    req<{ persona: string; human: string }>(`/api/agents/${agentId}/core`, {
+    req<{ blocks: CoreBlock[] }>(`/api/agents/${agentId}/core`),
+  // Writes content for the given block labels (keyed by label). Returns the
+  // resulting blocks. Over-limit / unknown labels are rejected (400).
+  writeCore: (agentId: string, blocks: Record<string, string>) =>
+    req<{ blocks: CoreBlock[] }>(`/api/agents/${agentId}/core`, {
       method: 'PUT',
-      body: JSON.stringify(sections),
+      body: JSON.stringify({ blocks }),
+    }),
+  // Defines or updates a named block (seeds persona/human first when none).
+  defineCoreBlock: (
+    agentId: string,
+    def: { label: string; description?: string; charLimit?: number; readOnly?: boolean },
+  ) =>
+    req<{ blocks: CoreBlock[] }>(`/api/agents/${agentId}/core/blocks`, {
+      method: 'POST',
+      body: JSON.stringify(def),
+    }),
+  // Deletes a block definition and its content.
+  deleteCoreBlock: (agentId: string, label: string) =>
+    req<{ blocks: CoreBlock[] }>(`/api/agents/${agentId}/core/blocks/${encodeURIComponent(label)}`, {
+      method: 'DELETE',
     }),
   reflect: (agentId: string) =>
     req<Memory>(`/api/agents/${agentId}/reflect`, { method: 'POST' }),

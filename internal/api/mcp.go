@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/mcp"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/mcp"
 )
 
 func (s *Server) handleListMCPServers(w http.ResponseWriter, r *http.Request) {

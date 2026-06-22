@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/memory"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/memory"
 )
 
 // TestCoreMemoryReplaceAndAppend exercises both modes + both sections end-to-end
@@ -65,5 +66,43 @@ func TestCoreMemoryNilStore(t *testing.T) {
 	replace := NewCoreMemoryReplaceTool(nil, "agent-1")
 	if _, err := replace.Call(context.Background(), json.RawMessage(`{"content":"x"}`)); err == nil {
 		t.Fatalf("expected error when store is nil")
+	}
+}
+
+// TestCoreMemoryLabelPolicy verifies the tool rejects unknown labels and refuses
+// to write a read-only block, while a custom writable block works by label.
+func TestCoreMemoryLabelPolicy(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	defer d.Close()
+	mem := memory.New(d)
+
+	ag, err := d.CreateAgent(ctx, db.Agent{Name: "Policy"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	if err := mem.DefineCoreBlock(ctx, ag.ID, db.CoreBlock{Label: "policy", ReadOnly: true}); err != nil {
+		t.Fatalf("define read-only: %v", err)
+	}
+	if err := mem.DefineCoreBlock(ctx, ag.ID, db.CoreBlock{Label: "project"}); err != nil {
+		t.Fatalf("define project: %v", err)
+	}
+
+	replace := NewCoreMemoryReplaceTool(mem, ag.ID)
+	// Unknown label → error.
+	if _, err := replace.Call(ctx, json.RawMessage(`{"content":"x","label":"nope"}`)); err == nil {
+		t.Fatalf("expected error for unknown label")
+	}
+	// Read-only block → refused by the tool.
+	if _, err := replace.Call(ctx, json.RawMessage(`{"content":"x","label":"policy"}`)); err == nil {
+		t.Fatalf("expected error writing read-only block")
+	}
+	// Custom writable block → ok.
+	if _, err := replace.Call(ctx, json.RawMessage(`{"content":"ship v2","label":"project"}`)); err != nil {
+		t.Fatalf("write project: %v", err)
+	}
+	got, _ := mem.ReadCore(ctx, ag.ID, "project")
+	if got != "ship v2" {
+		t.Fatalf("project = %q", got)
 	}
 }

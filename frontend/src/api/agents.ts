@@ -40,6 +40,14 @@ export const agentApi = {
       }`,
     ),
 
+  // Absolute path of the agent's on-disk JSON file.
+  agentPath: (agentId: string) =>
+    req<{ path: string }>(`/api/agents/${agentId}/path`),
+  // Open the folder holding the agent's JSON file in the OS file manager (local
+  // desktop), highlighting the file.
+  revealAgent: (agentId: string) =>
+    req<{ path: string }>(`/api/agents/${agentId}/reveal`, { method: 'POST' }),
+
   agentTools: (agentId: string) => req<AgentTools>(`/api/agents/${agentId}/tools`),
   setAgentTools: (agentId: string, mcpEnabled: boolean, allowedTools: string[]) =>
     req<{ mcpEnabled: boolean; allowedTools: string[] }>(

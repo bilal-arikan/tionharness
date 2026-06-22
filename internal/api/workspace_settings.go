@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // workspaceSettingsDTO is the client view of a workspace's editable settings,

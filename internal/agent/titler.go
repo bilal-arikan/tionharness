@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // titleSystemPrompt instructs a provider to emit a short, bare title that

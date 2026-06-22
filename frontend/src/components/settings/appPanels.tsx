@@ -155,6 +155,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
         <Field label="Otomatik yansıma eşiği" hint="Journal sayısı bunu aşınca dream cycle kendiliğinden tetiklenir."><input type="number" value={draft.autoReflectThreshold} onChange={(e) => set('autoReflectThreshold', Number(e.target.value))} className={inputCls} /></Field>
       </div>
       <Toggle label="Otomatik yansıma (dream cycle)" hint="Journal eşiği aşılınca ajan kendi günlüğünü arka planda özetler ve özetlenen kayıtları siler. Otonom çağrı sayılır: duraklatma ve günlük bütçeye saygı gösterir." checked={draft.autoReflect} onChange={(v) => set('autoReflect', v)} />
+      <Toggle label="Otomatik kullanıcı modelleme (HA-1)" hint="Dream cycle sırasında ajan, journal'dan kullanıcı hakkındaki kalıcı bilgileri çıkarıp 'human' çekirdek belleğini günceller. Yansıma açıkken çalışır." checked={draft.autoUserModel} onChange={(v) => set('autoUserModel', v)} />
 
       <SubHead icon={Database}>Çekirdek bellek (MemGPT)</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">

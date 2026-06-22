@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // confirmInput is the ask shape for the request_confirmation tool.

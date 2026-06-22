@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // TestInheritedMessages keeps readable turns and drops tool plumbing so an

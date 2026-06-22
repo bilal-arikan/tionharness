@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bilal/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
 )
 
 // syncConfigFiles seeds the workspace's editable config/ tree (prompts,

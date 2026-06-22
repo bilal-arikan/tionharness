@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/secrets"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/secrets"
 )
 
 // SecretListTool lets an agent discover which secrets exist in its workspace.

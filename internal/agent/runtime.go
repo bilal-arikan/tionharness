@@ -16,15 +16,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/events"
-	"github.com/bilal/swarmgo/internal/logbuf"
-	"github.com/bilal/swarmgo/internal/market"
-	"github.com/bilal/swarmgo/internal/memory"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/secrets"
-	"github.com/bilal/swarmgo/internal/skills"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/swarmgo/internal/logbuf"
+	"github.com/bilal-arikan/swarmgo/internal/market"
+	"github.com/bilal-arikan/swarmgo/internal/memory"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/secrets"
+	"github.com/bilal-arikan/swarmgo/internal/skills"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // Runtime owns the lifecycle of all autonomous agent workers.
@@ -117,6 +117,11 @@ type Runtime struct {
 	// spawnActive counts the spawned sessions currently running their background
 	// turn — the fire-and-forget concurrency guard (capped by SpawnMaxConcurrent).
 	spawnActive atomic.Int64
+
+	// mcpCat memoizes the dialed MCP tool catalog (per workspace) so the repeated
+	// buildRegistry calls within a single turn don't re-dial every enabled server
+	// each time. Invalidated by server-config changes (fingerprint) + a TTL.
+	mcpCat *mcpCatalog
 }
 
 // trackSession marks a session as actively running an autonomous invoke.
@@ -211,6 +216,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		logger:    logger,
 		skills:    skills.New(globalSkillsDir(), workspaceSkillsDir(workDir)),
 		market:    market.New(marketGlobalDir(), workspaceMarketDir(workDir)),
+		mcpCat:    newMCPCatalog(),
 	}
 }
 
@@ -644,6 +650,7 @@ func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
 	// Wall-clock awareness for headless runs: chat turns get this via
 	// composeTurnRequest's dynamic suffix; autonomous turns build their own request,
 	// so inject the date/time line here too (replaces the removed get_current_time).
-	out = strings.TrimSpace(out + "\n\nCurrent date and time: " + time.Now().Format("Monday, 2006-01-02 15:04 (-07:00)"))
+	out = strings.TrimSpace(out + "\n\nCurrent date and time (captured at the start of this turn; seconds-precise, does not tick mid-turn): " +
+		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)"))
 	return out
 }

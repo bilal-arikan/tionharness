@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/skills"
+	"github.com/bilal-arikan/swarmgo/internal/skills"
 )
 
 // TestSkillToolNameFor checks that claude-cli agents (including the empty default

@@ -1,6 +1,6 @@
 package conversation
 
-import "github.com/bilal/swarmgo/internal/providers"
+import "github.com/bilal-arikan/swarmgo/internal/providers"
 
 // Model-aware transcript budget (Option B). A flat default budget wastes a large
 // model's context window: a 200K–1M model could keep far more history before

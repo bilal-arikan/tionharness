@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/conversation"
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // agentContextPreview is the context an agent receives on a FRESH turn (no

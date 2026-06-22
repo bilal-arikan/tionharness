@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // Hook self-management tools let an agent read and manage PreToolUse/PostToolUse

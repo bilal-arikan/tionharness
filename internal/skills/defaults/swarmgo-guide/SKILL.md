@@ -29,10 +29,15 @@ workspaces never leaks content between them.
   auto-injected into the prompt each turn; the explicit `memory_recall` tool (and
   `memory_add` when self-management is on) is load-on-demand — `activate_tools` it
   for a targeted lookup. A MemGPT-style **core memory** (re-injected verbatim every
-  turn) is split into two sections — **persona** (about yourself) and **human**
-  (about the user) — edited in place with `core_memory_replace`/`core_memory_append`
-  (pass `section:"persona"|"human"`, default persona). When context fills up a turn
-  warns you to persist anything important before it is compacted away.
+  turn) is organised into **named blocks** — **persona** (about yourself) and
+  **human** (about the user) by default, plus any custom blocks the agent defines —
+  edited in place with `core_memory_replace`/`core_memory_append` (pass
+  `label:"persona"|"human"|…`, default persona). Each block has a **character
+  limit**; a write past it is refused so you condense rather than grow context
+  unbounded. The **human** block is also kept current automatically: during the
+  dream cycle (reflection), durable facts about the user are distilled from the
+  journal and merged into it (HA-1, toggleable). When context fills up a turn warns
+  you to persist anything important before it is compacted away.
 - **Skills** — reusable instruction sets (like this one). Their summaries are
   advertised in the prompt; full bodies load on demand via `use_skill`.
 - **MCP servers** — external tool providers attached per workspace.

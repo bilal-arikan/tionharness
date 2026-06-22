@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // catalogEntryDTO is a catalog entry plus whether the provider is configured

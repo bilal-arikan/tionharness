@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/memory"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/memory"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // CoreMemoryTool lets an agent edit its single, persistent "core" working-memory
@@ -31,20 +32,22 @@ func NewCoreMemoryAppendTool(mem *memory.Store, agentID string) CoreMemoryTool {
 	return CoreMemoryTool{mem: mem, agentID: agentID, mode: "append"}
 }
 
-// sectionSchema is the shared "section" property: which half of core memory the
-// edit targets. persona = facts about yourself; human = facts about the user.
-const sectionSchema = `"section":{"type":"string","enum":["persona","human"],"description":"Which core-memory section to edit: \"persona\" = facts about yourself (your identity/behaviour); \"human\" = facts about the user (their preferences/context). Defaults to persona."}`
+// labelSchema is the shared "label" property: which named core block the edit
+// targets. Defaults to persona. The exact set is per-agent (persona + human by
+// default, plus any custom blocks); an unknown label is rejected at call time
+// with the list of valid labels, so the agent learns the available blocks.
+const labelSchema = `"label":{"type":"string","description":"Which core-memory block to edit (default \"persona\"). Standard blocks: \"persona\" = facts about yourself (identity/behaviour), \"human\" = facts about the user (preferences/context). Your agent may define additional named blocks."}`
 
 func (t CoreMemoryTool) Def() providers.ToolDef {
 	if t.mode == "append" {
 		return providers.ToolDef{
 			Name:        "core_memory_append",
-			Description: "Append one line to a section of your core memory — the persistent working-memory block kept in context every turn. Use section=\"human\" to record a durable fact about the user, section=\"persona\" for a fact about yourself.",
+			Description: "Append one line to a named block of your core memory — the persistent working-memory kept in context every turn. Use label=\"human\" for a durable fact about the user, label=\"persona\" for a fact about yourself, or a custom block your agent defines. Each block has a character limit; if it is full, condense it with core_memory_replace.",
 			InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{
-					"content":{"type":"string","description":"The line to append to the section"},
-					` + sectionSchema + `
+					"content":{"type":"string","description":"The line to append to the block"},
+					` + labelSchema + `
 				},
 				"required":["content"],
 				"additionalProperties":false
@@ -53,12 +56,12 @@ func (t CoreMemoryTool) Def() providers.ToolDef {
 	}
 	return providers.ToolDef{
 		Name:        "core_memory_replace",
-		Description: "Replace one section of your core memory with new content. Core memory is a small, persistent block kept in context every turn, split into \"persona\" (about you) and \"human\" (about the user); rewrite a section to keep it accurate and concise.",
+		Description: "Replace one named block of your core memory with new content. Core memory is small, persistent text kept in context every turn (default blocks: \"persona\" about you, \"human\" about the user, plus any custom blocks); rewrite a block to keep it accurate and within its character limit.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
-				"content":{"type":"string","description":"The new full content of the section"},
-				` + sectionSchema + `
+				"content":{"type":"string","description":"The new full content of the block"},
+				` + labelSchema + `
 			},
 			"required":["content"],
 			"additionalProperties":false
@@ -69,7 +72,8 @@ func (t CoreMemoryTool) Def() providers.ToolDef {
 func (t CoreMemoryTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		Content string `json:"content"`
-		Section string `json:"section"`
+		Label   string `json:"label"`
+		Section string `json:"section"` // back-compat alias for label
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("invalid arguments: %w", err)
@@ -81,22 +85,55 @@ func (t CoreMemoryTool) Call(ctx context.Context, input json.RawMessage) (string
 	if t.mem == nil {
 		return "", fmt.Errorf("memory is not available in this workspace")
 	}
-	// Normalize the section; an empty/unknown value falls back to persona in the
-	// store. Echo the resolved section back so the caller sees where it landed.
-	section := memory.CorePersona
-	if strings.EqualFold(strings.TrimSpace(in.Section), memory.CoreHuman) {
-		section = memory.CoreHuman
+	// Resolve the target block. An empty label defaults to persona; "section" is
+	// accepted as an alias so older prompts keep working.
+	label := strings.ToLower(strings.TrimSpace(in.Label))
+	if label == "" {
+		label = strings.ToLower(strings.TrimSpace(in.Section))
 	}
-	if t.mode == "append" {
-		if err := t.mem.AppendCore(ctx, t.agentID, section, in.Content); err != nil {
-			return "", fmt.Errorf("append core memory: %w", err)
+	if label == "" {
+		label = memory.CorePersona
+	}
+	// Validate the label and read-only flag against the agent's defined blocks so
+	// the agent gets an actionable error instead of silently writing nowhere.
+	blocks, err := t.mem.CoreBlocks(ctx, t.agentID)
+	if err != nil {
+		return "", fmt.Errorf("load core blocks: %w", err)
+	}
+	var def *db.CoreBlock
+	for i := range blocks {
+		if strings.EqualFold(blocks[i].Label, label) {
+			def = &blocks[i]
+			break
 		}
-		b, _ := json.Marshal(map[string]string{"action": "core_appended", "section": section})
-		return string(b), nil
 	}
-	if err := t.mem.WriteCore(ctx, t.agentID, section, in.Content); err != nil {
-		return "", fmt.Errorf("replace core memory: %w", err)
+	if def == nil {
+		return "", fmt.Errorf("unknown core block %q; valid blocks: %s", label, strings.Join(blockLabels(blocks), ", "))
 	}
-	b, _ := json.Marshal(map[string]string{"action": "core_replaced", "section": section})
+	if def.ReadOnly {
+		return "", fmt.Errorf("core block %q is read-only and cannot be edited by the agent", def.Label)
+	}
+
+	action := "core_replaced"
+	if t.mode == "append" {
+		action = "core_appended"
+		err = t.mem.AppendCore(ctx, t.agentID, def.Label, in.Content)
+	} else {
+		err = t.mem.WriteCore(ctx, t.agentID, def.Label, in.Content)
+	}
+	if err != nil {
+		// CoreBlockFullError already carries an actionable message (counts + advice).
+		return "", err
+	}
+	b, _ := json.Marshal(map[string]string{"action": action, "label": def.Label})
 	return string(b), nil
+}
+
+// blockLabels lists block labels for error messages.
+func blockLabels(blocks []db.CoreBlock) []string {
+	out := make([]string, len(blocks))
+	for i, b := range blocks {
+		out[i] = b.Label
+	}
+	return out
 }

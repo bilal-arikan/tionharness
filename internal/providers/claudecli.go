@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/proc"
+	"github.com/bilal-arikan/swarmgo/internal/proc"
 )
 
 // ClaudeCLI drives the locally-installed `claude` (Claude Code) CLI in

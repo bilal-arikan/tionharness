@@ -2,10 +2,11 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 // newTestStore opens a throwaway file-backed DB and wraps it in a memory Store.
@@ -91,7 +92,7 @@ func TestCoreMemoryUpsert(t *testing.T) {
 		t.Fatalf("persona = %q after rewrite", got)
 	}
 	// Upsert invariant: exactly one persona row regardless of write count.
-	rows, _ := s.List(ctx, agentID, db.MemoryCorePersona)
+	rows, _ := s.List(ctx, agentID, db.CoreKind(CorePersona))
 	if len(rows) != 1 {
 		t.Fatalf("persona rows = %d, want 1 (upsert must not accumulate)", len(rows))
 	}
@@ -113,10 +114,87 @@ func TestCoreMemoryUpsert(t *testing.T) {
 		t.Fatalf("persona changed by human writes: %q", got)
 	}
 
-	// ReadCoreSections returns both.
-	p, h, _ := s.ReadCoreSections(ctx, agentID)
-	if p != "role: senior assistant" || h != "name: Bilal\ncity: Istanbul" {
-		t.Fatalf("sections = (%q, %q)", p, h)
+	// ReadCoreBlocks returns every block with content, ordered.
+	views, _ := s.ReadCoreBlocks(ctx, agentID)
+	got2 := map[string]string{}
+	for _, v := range views {
+		got2[v.Label] = v.Content
+	}
+	if got2[CorePersona] != "role: senior assistant" || got2[CoreHuman] != "name: Bilal\ncity: Istanbul" {
+		t.Fatalf("blocks = %+v", got2)
+	}
+}
+
+// TestCoreBlockCharLimit verifies a write past a block's character limit is
+// rejected with *CoreBlockFullError and leaves the block unchanged.
+func TestCoreBlockCharLimit(t *testing.T) {
+	ctx := context.Background()
+	s, d, _ := newTestStore(t)
+	defer d.Close()
+
+	// Create a real agent with a tiny custom block.
+	ag, err := d.CreateAgent(ctx, db.Agent{Name: "Limited"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	if err := s.DefineCoreBlock(ctx, ag.ID, db.CoreBlock{Label: "tiny", CharLimit: 10}); err != nil {
+		t.Fatalf("define block: %v", err)
+	}
+	if err := s.WriteCore(ctx, ag.ID, "tiny", "ok"); err != nil {
+		t.Fatalf("write within limit: %v", err)
+	}
+	err = s.WriteCore(ctx, ag.ID, "tiny", "this is way over ten characters")
+	var full *CoreBlockFullError
+	if !errors.As(err, &full) {
+		t.Fatalf("expected CoreBlockFullError, got %v", err)
+	}
+	if full.Limit != 10 || full.Count <= 10 {
+		t.Fatalf("full = %+v, want limit 10 and count>10", full)
+	}
+	// Unchanged after the rejected write.
+	got, _ := s.ReadCore(ctx, ag.ID, "tiny")
+	if got != "ok" {
+		t.Fatalf("block changed after rejected write: %q", got)
+	}
+	// Unknown label is rejected.
+	if err := s.WriteCore(ctx, ag.ID, "nope", "x"); !errors.Is(err, ErrUnknownCoreBlock) {
+		t.Fatalf("expected ErrUnknownCoreBlock, got %v", err)
+	}
+}
+
+// TestDefineAndDeleteCoreBlock verifies custom blocks seed the defaults, persist,
+// and that deletion removes both the definition and its content.
+func TestDefineAndDeleteCoreBlock(t *testing.T) {
+	ctx := context.Background()
+	s, d, _ := newTestStore(t)
+	defer d.Close()
+
+	ag, err := d.CreateAgent(ctx, db.Agent{Name: "Blocks"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	if err := s.DefineCoreBlock(ctx, ag.ID, db.CoreBlock{Label: "project", Description: "current project"}); err != nil {
+		t.Fatalf("define: %v", err)
+	}
+	blocks, _ := s.CoreBlocks(ctx, ag.ID)
+	// Defining a custom block must seed the defaults too (persona, human, project).
+	if len(blocks) != 3 {
+		t.Fatalf("blocks = %d, want 3 (persona+human+project)", len(blocks))
+	}
+	if err := s.WriteCore(ctx, ag.ID, "project", "ship v2"); err != nil {
+		t.Fatalf("write project: %v", err)
+	}
+	if err := s.DeleteCoreBlock(ctx, ag.ID, "project"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	blocks, _ = s.CoreBlocks(ctx, ag.ID)
+	if len(blocks) != 2 {
+		t.Fatalf("blocks after delete = %d, want 2", len(blocks))
+	}
+	// Content row is gone too.
+	rows, _ := s.List(ctx, ag.ID, db.CoreKind("project"))
+	if len(rows) != 0 {
+		t.Fatalf("orphan project rows = %d, want 0", len(rows))
 	}
 }
 
@@ -142,7 +220,7 @@ func TestRecallExcludesCore(t *testing.T) {
 		t.Fatalf("recall: %v", err)
 	}
 	for _, h := range hits {
-		if h.Source.Kind == db.MemoryCorePersona || h.Source.Kind == db.MemoryCoreHuman {
+		if db.IsCoreKind(h.Source.Kind) {
 			t.Fatalf("recall returned a core memory (%s); core must be excluded", h.Source.Kind)
 		}
 	}

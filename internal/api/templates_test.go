@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/orchestration"
+	"github.com/bilal-arikan/swarmgo/internal/orchestration"
 )
 
 // TestWorkspaceTemplatesIntegrity verifies every template is internally

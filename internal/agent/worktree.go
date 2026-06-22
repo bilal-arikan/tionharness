@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/bilal/swarmgo/internal/proc"
+	"github.com/bilal-arikan/swarmgo/internal/proc"
 	"path/filepath"
 	"strings"
 )

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // WakeFunc arms a one-shot self-wake: after delaySeconds the current agent is

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/orchestration"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/orchestration"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // Flow self-management tools let an agent create, edit, delete and list

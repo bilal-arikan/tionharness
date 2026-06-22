@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 // TestCreateTaskStampsCreatedBy verifies create_task tags the new task with the

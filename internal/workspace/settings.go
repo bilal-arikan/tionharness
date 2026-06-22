@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 // wsSettingsFile is the per-workspace settings document inside the workspace dir.

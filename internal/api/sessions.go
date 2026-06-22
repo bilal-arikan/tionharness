@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {

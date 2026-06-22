@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/conversation"
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // defaultMaxToolIters bounds the native agentic loop so a misbehaving model can't

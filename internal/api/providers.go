@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/settings"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/settings"
 )
 
 // customProviderSpecs projects persisted custom providers into registry specs,

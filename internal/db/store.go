@@ -17,6 +17,17 @@ func (d *DB) persistAgentLocked(a Agent) error {
 	return atomicWriteJSON(d.dir(dirAgents, a.ID+".json"), a)
 }
 
+// AgentPath returns the absolute path of an agent's on-disk JSON file (one
+// file per agent under the workspace store's agents/ folder).
+func (d *DB) AgentPath(agentID string) (string, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if _, ok := d.agents[agentID]; !ok {
+		return "", ErrNotFound
+	}
+	return d.dir(dirAgents, agentID+".json"), nil
+}
+
 // mutateAgentLocked loads an agent under the write lock, applies fn to it, bumps
 // UpdatedAt, and persists it — centralizing the lock/lookup/mutate/persist dance
 // shared by every agent mutator. Returns ErrNotFound when the agent is absent.
@@ -33,6 +44,13 @@ func (d *DB) mutateAgentLocked(id string, fn func(*Agent)) (Agent, error) {
 		return Agent{}, err
 	}
 	return a, nil
+}
+
+// SetAgentCoreBlocks replaces an agent's core-memory block definitions
+// (labels/limits/descriptions/read-only). The block text in knowledge_sources is
+// untouched — callers prune orphaned content separately. Returns the stored row.
+func (d *DB) SetAgentCoreBlocks(ctx context.Context, agentID string, blocks []CoreBlock) (Agent, error) {
+	return d.mutateAgentLocked(agentID, func(a *Agent) { a.CoreBlocks = blocks })
 }
 
 // CreateAgent inserts a new agent and returns the stored row.

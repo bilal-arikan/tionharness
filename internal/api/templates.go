@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/orchestration"
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/orchestration"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // Workspace templates seed a freshly created workspace with a curated set of

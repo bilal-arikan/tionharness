@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/events"
-	"github.com/bilal/swarmgo/internal/orchestration"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/swarmgo/internal/orchestration"
 )
 
 // flowRunner adapts the Runtime to orchestration.AgentRunner. Each node runs

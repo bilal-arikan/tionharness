@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 // TestSystemPromptInjectsWorkspaceInstructions verifies that workspace

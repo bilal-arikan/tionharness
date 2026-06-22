@@ -15,13 +15,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/agent"
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/events"
-	"github.com/bilal/swarmgo/internal/logbuf"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/secrets"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/swarmgo/internal/logbuf"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/secrets"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // Meta is the persisted descriptor of a workspace (no live handles). Path, when

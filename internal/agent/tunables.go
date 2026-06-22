@@ -57,6 +57,7 @@ type Tunables struct {
 
 	autoReflect          bool // run the dream cycle automatically as journals grow
 	autoReflectThreshold int  // 0 → DefaultAutoReflectThreshold
+	autoUserModel        bool // HA-1: refresh the "human" core block from journals during the dream cycle
 
 	// Turn recovery (A1) — structural handling of output-token cutoffs and
 	// context overflow inside the native agentic tool loop.
@@ -99,10 +100,12 @@ func NewTunables() *Tunables {
 		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
 		// dir by default — the safety brake for the otherwise-unconfined tools.
 		autonomousConfine: true,
-		// MemGPT memory defaults: warn at 75% context fill, offer the core tools.
-		// Production overrides both from settings via SetMemoryControls.
+		// MemGPT memory defaults: warn at 75% context fill, offer the core tools,
+		// and auto-model the user during the dream cycle. Production overrides these
+		// from settings via SetMemoryControls / SetUserModel.
 		memoryPressureWarn: 0.75,
 		coreMemoryTools:    true,
+		autoUserModel:      true,
 	}
 }
 
@@ -318,6 +321,21 @@ func (t *Tunables) AutoReflectThreshold() int {
 		return DefaultAutoReflectThreshold
 	}
 	return t.autoReflectThreshold
+}
+
+// SetUserModel toggles HA-1 automatic user modelling (refreshing the "human" core
+// block from the journal during the dream cycle).
+func (t *Tunables) SetUserModel(enabled bool) {
+	t.mu.Lock()
+	t.autoUserModel = enabled
+	t.mu.Unlock()
+}
+
+// UserModel reports whether HA-1 automatic user modelling is enabled.
+func (t *Tunables) UserModel() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.autoUserModel
 }
 
 // SetRecoveryLimits configures the A1 turn-recovery knobs: whether reactive

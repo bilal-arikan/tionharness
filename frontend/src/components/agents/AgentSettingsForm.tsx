@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Eye, Trash2 } from 'lucide-react'
+import { Eye, Trash2, FolderOpen, ClipboardCopy, Check } from 'lucide-react'
+import { api } from '../../api'
 import type { Agent, AgentPatch } from '../../types'
 import { AVATAR_COLORS, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
@@ -42,6 +43,28 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [copiedPath, setCopiedPath] = useState(false)
+
+  // Copy the agent's on-disk JSON file path to the clipboard.
+  const copyPath = async () => {
+    try {
+      const { path } = await api.agentPath(agent.id)
+      await navigator.clipboard?.writeText(path)
+      setCopiedPath(true)
+      setTimeout(() => setCopiedPath(false), 1500)
+    } catch (e) {
+      setErr((e as Error).message)
+    }
+  }
+
+  // Open the folder holding the agent's JSON file in the OS file manager.
+  const revealFolder = async () => {
+    try {
+      await api.revealAgent(agent.id)
+    } catch (e) {
+      setErr((e as Error).message)
+    }
+  }
 
   const preview: Pick<Agent, 'id' | 'name' | 'avatar' | 'color'> = {
     id: agent.id,
@@ -99,6 +122,21 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
             className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
           >
             <Eye size={14} /> Bağlam
+          </button>
+          <button
+            onClick={copyPath}
+            title="Ajanın disk üzerindeki JSON dosya yolunu kopyala"
+            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+          >
+            {copiedPath ? <Check size={14} /> : <ClipboardCopy size={14} />}
+            {copiedPath ? 'Kopyalandı' : 'Yolu kopyala'}
+          </button>
+          <button
+            onClick={revealFolder}
+            title="Ajanın JSON dosyasının bulunduğu klasörü dosya yöneticisinde aç"
+            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+          >
+            <FolderOpen size={14} /> Klasörü aç
           </button>
           {onCancel && (
             <button

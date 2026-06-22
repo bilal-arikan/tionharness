@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/logbuf"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/logbuf"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // ReadLogsTool lets an agent read the recent application + workspace log stream

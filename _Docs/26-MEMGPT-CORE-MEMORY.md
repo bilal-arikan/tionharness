@@ -1,8 +1,8 @@
 # 26 — MemGPT/Letta Tarzı Self-Editing Bellek (Mod C uygulama planı)
 
-> **Durum (2026-06-22): Parça 1–3 UYGULANDI.** Parça 4 (persona/human ayrımı)
-> bilinçli olarak sonraya bırakıldı. Uygulama özeti dosyanın sonunda
-> ("Uygulama notu") + `05-ILERLEME.md`.
+> **Durum (2026-06-23): Parça 1–5 + 4a + 4b UYGULANDI (TAMAMLANDI).** Çekirdek
+> bellek **adlandırılmış bloklar + karakter limiti** (Parça 5); `human` bloğu
+> dream-cycle ile **otomatik** doldurulur (Parça 4b/HA-1). Özet + `05-ILERLEME.md`.
 >
 > **CLI köprüsü (2026-06-22):** `core_memory_replace`/`core_memory_append` artık
 > claude-cli ajanlarına da Interaction MCP üzerinden sunuluyor (önceden CLI ajanı
@@ -250,12 +250,56 @@ tek `core` kind'i kaldırıldı, yerine iki kind geldi.
 - **Test:** `memory_test.go` (per-section upsert + bağımsızlık + recall-exclude),
   `builtin_memory_core_test.go` (section'lı replace/append), hepsi yeşil.
 
-### Parça 4b — HA-1 Honcho-benzeri kullanıcı modelleme (sonraya)
+### Parça 4b — HA-1 Honcho-benzeri kullanıcı modelleme ✅ (2026-06-23, UYGULANDI)
 
-`human` bölümünü **otomatik** doldurma: `Reflect` dream-cycle benzeri bir döngü
-son turlardan kalıcı kullanıcı çıkarımlarını üretip `core_human`'a yazar
-(`03-YOL-HARITASI.md` HA-1). Ayrı/orta-büyük özellik; 4a + Reflect altyapısına
-bağlı. Henüz başlanmadı.
+`human` bloğu artık **otomatik** doldurulur: dream-cycle'a (reflect) piggyback eden
+bir geçiş, son journal'lardan kullanıcı hakkındaki **kalıcı** çıkarımları mevcut
+profile **merge** edip `human` çekirdek bloğuna yazar.
+
+- **Tetik:** ayrı eşik yok — `reflect()` her çalıştığında (manuel veya auto),
+  yansıma kaydedildikten sonra journal'lar silinmeden önce `updateUserModel`
+  çağrılır. Reflect başına **bir ucuz model çağrısı** (usage `KindReflect`'e yazılır).
+- **Dosya:** yeni `internal/agent/user_model.go` (`updateUserModel`/`writeUserModel`
+  + `userModelPrompt`). `reflector.go` yalnız tek `if r.tun.UserModel()` satırı.
+  `runtime.go`'ya **dokunulmadı**.
+- **Davranış:** model mevcut profil + journal'ı alır, kısa "key: value" satırları
+  üretir; değişiklik yoksa no-op; limit aşılırsa `human` limitine truncate edilir.
+  Best-effort — hata yansımayı bozmaz.
+- **Ayar:** `AutoUserModel` (varsayılan açık) — `settings` + `Tunables.UserModel()`
+  + `applySettings` + frontend toggle ("Otomatik kullanıcı modelleme (HA-1)").
+- **Test:** tunable default/toggle, over-limit truncation. `go test` 206 ✅.
+
+---
+
+## Parça 5 — Adlandırılmış bloklar + karakter limitleri ✅ (2026-06-23, UYGULANDI)
+
+Letta'nın **memory blocks** kalbi: sabit persona/human ikilisi yerine ajanın
+istediği etikette **dinamik blok** tanımlayabildiği, her biri **karakter limiti +
+açıklama + salt-okunur** taşıyan model. Geri uyum **gerekmedi**; migration yok.
+
+- **Encoding:** `kind = "core:" + label` (`db.CoreKind/IsCoreKind`). Eski tekil
+  `core_persona`/`core_human` kaldırıldı; recall/display zaten allowlist olduğu
+  için eski satırlar inert.
+- **Tanım ↔ içerik ayrımı:** blok *tanımları* (`db.CoreBlock{Label,Description,
+  CharLimit,ReadOnly,Order}`) ajan dosyasında `Agent.CoreBlocks`; *içerik*
+  `knowledge_sources`'ta `core:<label>`. `CoreBlocks` boşsa `DefaultCoreBlocks`
+  (persona+human, 2000 char) — eski ajanlar migration'sız çalışır.
+- **Store:** `WriteCore/ReadCore/AppendCore(label)` + limit kontrolü
+  (`*CoreBlockFullError`), `ErrUnknownCoreBlock`, `CoreBlocks`, `ReadCoreBlocks
+  → []BlockView`, `DefineCoreBlock`/`DeleteCoreBlock` (custom blok ekle/sil;
+  default'ları seed eder). Read-only **store'da değil tool/UI politikasında**.
+- **Araçlar:** `section`→`label` (serbest string, `section` geriye-alias);
+  bilinmeyen label → geçerli liste ile hata; read-only blok → reddedilir; limit
+  aşımı → ajana sayaç+öneri. Constructor imzaları **sabit** (runtime.go/toolsetup.go
+  dokunulmadı).
+- **Enjeksiyon:** `coreMemoryBlock([]BlockView)` → her dolu blok için
+  `### <label> (n/limit) — açıklama` + içerik.
+- **API:** `GET /core → {blocks:[…]}`; `PUT /core` gövdesi `{blocks:{label:content}}`
+  (limit/bilinmeyen → 400); `POST /core/blocks` (tanımla), `DELETE /core/blocks/{label}`.
+- **Frontend:** `CoreMemoryCard` dinamik bloklar — limit/kullanım çubuğu, düzenle,
+  read-only kilidi, "+ Yeni blok" ve sil.
+- **Test:** limit reddi, bilinmeyen label, define/delete+seed, read-only reddi,
+  recall-hariç. `go test` 141 ✅, `tsc` ✅.
 
 ---
 

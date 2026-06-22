@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/memory"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/memory"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // MemoryAddTool lets an agent write a long-term memory for itself — a fact,

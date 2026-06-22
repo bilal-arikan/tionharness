@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // TestEstimateToolCatalog verifies the tool-catalog token estimate accounts for

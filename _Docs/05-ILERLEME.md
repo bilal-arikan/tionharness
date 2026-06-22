@@ -1,6 +1,81 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
+
+## HA-1: human bloğu otomatik kullanıcı modelleme (MemGPT Parça 4b) ✅ (2026-06-23)
+
+`human` çekirdek bloğu artık dream-cycle ile **otomatik** doldurulur. `reflect()`
+her çalıştığında (manuel/auto), yansımadan sonra journal'lar silinmeden önce
+`updateUserModel` çağrılır: model mevcut profili + journal'ı alıp kullanıcı
+hakkındaki kalıcı çıkarımları kısa satırlar olarak merge eder, `human`'a yazar.
+
+- **Yeni dosya** `internal/agent/user_model.go` (`updateUserModel`/`writeUserModel`
+  + prompt); `reflector.go`'ya tek `if r.tun.UserModel()` satırı. `runtime.go`
+  **dokunulmadı**. Usage `KindReflect`'e yazılır (dream-cycle maliyeti).
+- **Best-effort**: değişiklik yoksa no-op, limit aşılırsa truncate, hata yansımayı
+  bozmaz. **Ayar** `AutoUserModel` (varsayılan açık) — settings + Tunables +
+  applySettings + frontend toggle.
+- `go build` ✅, **206 test** ✅, `tsc` ✅. Detay: `26-MEMGPT-CORE-MEMORY.md` Parça 4b.
+
+## Çekirdek bellek: adlandırılmış bloklar + karakter limiti (MemGPT Parça 5) ✅ (2026-06-23)
+
+Letta'nın **memory blocks** modeli native getirildi. Sabit persona/human ikilisi,
+ajanın istediği etikette tanımlayabildiği **dinamik bloklar**a genelleşti; her blok
+**karakter limiti + açıklama + salt-okunur** taşır.
+
+- **Encoding** `kind="core:"+label` (`db.CoreKind/IsCoreKind`); tanım ajan dosyasında
+  (`Agent.CoreBlocks`), içerik `knowledge_sources`'ta. `CoreBlocks` boşsa varsayılan
+  persona+human (2000 char) → migration yok.
+- **Store**: `WriteCore/ReadCore/AppendCore(label)` + limit (`*CoreBlockFullError`),
+  `ErrUnknownCoreBlock`, `ReadCoreBlocks→[]BlockView`, `DefineCoreBlock`/`DeleteCoreBlock`.
+- **Araç**: `section`→`label` (alias korundu); bilinmeyen/read-only/limit hatası ajana
+  net döner. Constructor imzaları sabit → `runtime.go`/`toolsetup.go` **dokunulmadı**.
+- **API**: `GET /core→{blocks}`, `PUT /core {blocks:{label:content}}`, `POST/DELETE
+  /core/blocks[/{label}]`. **Frontend**: `CoreMemoryCard` dinamik + limit çubuğu +
+  blok ekle/sil + read-only kilit.
+- Doğrulama: `go test` 141 ✅, `tsc` ✅. Detay: `26-MEMGPT-CORE-MEMORY.md` Parça 5.
+
+## Composer: oturum-başına taslak + ikon-tabanlı kontroller ✅ (2026-06-23)
+
+İki UX iyileştirmesi (kullanıcı isteği). Yalnız frontend, `tsc --noEmit` temiz.
+
+1. **Oturum-başına taslak.** Yeni `useSessionDraft` hook'u (`hooks/useSessionDraft.ts`):
+   composer'a yazılıp **gönderilmeyen** metin `localStorage`'da oturum-id ile saklanır
+   (`swarmgo:draft:<sessionId>`). Oturum değiştirip dönünce ve sayfa yenilenince korunur;
+   gönderme/temizleme taslağı siler (boş taslak saklanmaz). Composer `useState('')` yerine
+   bu hook'u kullanır — tüm mevcut `setText` çağrıları otomatik kalıcı. **Yan fayda:** eskiden
+   metin oturumlar arası sızıyordu (Composer `key`'siz, monte kalıyor); artık her oturum kendi taslağını taşır.
+2. **İkon-tabanlı composer kontrolleri.** Ajan seçici yalnız avatar (ad tooltip'te); düşünme
+   seviyesi yoğunluk ikonuyla (◌○◔◑●); izin modu emoji ikonuyla (🛡🔒✋⚡). `ComposerPicker`'a
+   `iconOnly` prop'u eklendi; `THINKING_OPTIONS`'a seviye ikonları eklendi.
+
+---
+
+## E2E test paketi — uçtan uca ajan davranışları ✅ (2026-06-23)
+
+Yeni **`internal/e2e`** test paketi: tam kablolu bir `agent.Runtime` (gerçek dosya-store,
+memory, skills, sandbox, `conversation.Manager`) `api/chat_stream`'in sürdüğü tur hattının
+**aynısıyla** sürülür; yalnız LLM, ağsız-deterministik bir **`scriptedProvider`** ile
+değiştirilir. Provider sıraya konmuş yanıtları kuyruktan tüketir (metin turu veya `tool_use`
+turu → native araç döngüsü gerçek araçları çalıştırır), `conversation.Manager`'ın rolling-summary
+özetleme çağrısını ise script'i bozmadan yakalayıp yanıtlar. Harness (`harness_test.go`) her turda
+kullanıcı mesajını kalıcılaştırır, geçmişi bütçeleyici üzerinden tekrar oynatır, sistem+memory
+bağlamını dizer, akışlı araç döngüsünü koşar, yanıtı kalıcılaştırır + journal'lar.
+
+**Kapsam (16 test, hepsi yeşil):**
+- **Konuşma:** çok-turlu geçmiş kalıcılığı + ikinci tura ilk alışverişin tekrar oynatılması (`conversation_e2e_test.go`).
+- **Araç kullanımı:** tek turda `Write`→`Read` çok-adımlı döngü (dosya gerçekten diske düşer, sonuç cevaba akar, `StepDiff` izi), shell-gate (`tools_e2e_test.go`).
+- **Skill kullanımı:** workspace skill oluştur → katalogta slug+özet (gövde lazy) → `use_skill` ile gövde yükleme; ayrıca per-agent allowlist ile kısıtlı skill erişilemezliği (`skills_e2e_test.go`).
+- **Hafıza:** `core_memory_replace` ile kalıcı çekirdek bellek + sonraki tura tekrar enjeksiyon; `memory_recall` ile uzun-dönem hatırlama (`memory_e2e_test.go`).
+- **Uzun oturum:** bütçe aşımında compaction tetiklenmesi (özet kalıcı, yalnız son tur'lar verbatim) (`longsession_e2e_test.go`).
+- **İzin modu:** read-only modda yazma engellenir/okuma serbest; ask modunda interaktif prompter ile onay/red (yazma diske düşer ya da engellenir, `permission_denied` izi) (`permission_e2e_test.go`).
+- **Self-wake:** `schedule_wake` ctx'teki scheduler'a doğru delay/prompt ile ulaşır; scheduler yokken (headless) net hata (`wake_e2e_test.go`).
+- **Delegasyon:** delegasyon kapalıyken `run_subagent` kayıtlı değil (unknown tool); açıkken bilinmeyen hedef target-çözümleme guard'ıyla reddedilir (`delegation_e2e_test.go`). Not: alt-ajan provider'ı registry'den çözüldüğü için (anahtarsız) mutlu-yol e2e'si üretim kodu değişmeden test edilemez; gate+guard yolları kapsandı.
+- **Çok-ajanlı tur:** tek kullanıcı mesajı, iki ajan sırayla yanıtlar; ikinci ajan birincinin cevabını geçmişte görür (`multiagent_e2e_test.go`).
+
+Harness genişletildi: `decorate` ctx-kancası (prompter/grants/wake enjeksiyonu) + `sendMulti` (çok-ajanlı tur sürücüsü).
+İzolasyon: `SWARMGO_DATA_DIR` temp'e yönlendirilir → gerçek `~/.swarmgo` skill/market seed'ine dokunulmaz.
+✅ `go test ./internal/e2e/` 16/16 yeşil, `go vet` temiz.
 
 ## Native pencere — konsol penceresi yanıp sönmesi düzeltildi ✅ (2026-06-23)
 

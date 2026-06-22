@@ -5,12 +5,12 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/bilal/swarmgo/internal/proc"
+	"github.com/bilal-arikan/swarmgo/internal/proc"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
 )
 
 // withSessionID stamps the session id onto ctx so the runtime can resolve the

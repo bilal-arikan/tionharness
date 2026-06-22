@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/bilal/swarmgo/internal/agent"
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // wsConfigDTO is the client view of a workspace's editable config files: the

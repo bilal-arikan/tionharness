@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/agent"
-	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 func todoMsg(steps string) db.Message { return db.Message{Role: "assistant", Steps: steps} }

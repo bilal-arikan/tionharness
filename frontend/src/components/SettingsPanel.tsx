@@ -137,6 +137,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       journalCap: draft.journalCap, journalMaxLen: draft.journalMaxLen,
       memoryPressureWarn: draft.memoryPressureWarn, coreMemoryTools: draft.coreMemoryTools,
       autoReflect: draft.autoReflect, autoReflectThreshold: draft.autoReflectThreshold,
+      autoUserModel: draft.autoUserModel,
       reactiveCompact: draft.reactiveCompact, maxTokenRetries: draft.maxTokenRetries,
       reactiveKeepRecent: draft.reactiveKeepRecent,
       compactToolOutput: draft.compactToolOutput, compactMaxLines: draft.compactMaxLines,

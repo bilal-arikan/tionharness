@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // CallKind tags a provider call by its origin so usage can be attributed across

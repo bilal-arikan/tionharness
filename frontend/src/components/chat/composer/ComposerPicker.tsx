@@ -13,6 +13,9 @@ interface Props {
   // Optional fixed leading glyph for the trigger button (e.g. a Brain icon). When
   // omitted the current option's own `icon` is used instead.
   triggerIcon?: ReactNode
+  // When true the trigger shows only the icon (no text label) — the current value
+  // is conveyed by the glyph alone; the full label/hint stays in the tooltip.
+  iconOnly?: boolean
   menuWidthClass?: string
 }
 
@@ -27,6 +30,7 @@ export function ComposerPicker({
   header,
   title,
   triggerIcon,
+  iconOnly,
   menuWidthClass = 'w-56',
 }: Props) {
   const [open, setOpen] = useState(false)
@@ -47,7 +51,7 @@ export function ComposerPicker({
         }`}
       >
         {leading}
-        <span className="hidden sm:inline">{current.label}</span>
+        {!iconOnly && <span className="hidden sm:inline">{current.label}</span>}
       </button>
 
       {open && (

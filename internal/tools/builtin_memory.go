@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/memory"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/memory"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // MemoryRecallTool lets an agent search its own long-term memory on demand,

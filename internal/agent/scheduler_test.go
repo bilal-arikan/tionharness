@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 // TestScheduleExpired checks the optional end-date guard: 0 never expires, a

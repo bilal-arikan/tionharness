@@ -9,16 +9,16 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/agent"
-	"github.com/bilal/swarmgo/internal/conversation"
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/events"
-	"github.com/bilal/swarmgo/internal/interaction"
-	"github.com/bilal/swarmgo/internal/logbuf"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/settings"
-	"github.com/bilal/swarmgo/internal/web"
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/swarmgo/internal/interaction"
+	"github.com/bilal-arikan/swarmgo/internal/logbuf"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/settings"
+	"github.com/bilal-arikan/swarmgo/internal/web"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // ctxKey is the private type for request-context values.
@@ -107,6 +107,7 @@ func (s *Server) applySettings() {
 	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen)
 	s.tun.SetMemoryControls(cur.MemoryPressureWarn, cur.CoreMemoryTools)
 	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
+	s.tun.SetUserModel(cur.AutoUserModel)
 	s.tun.SetShellEnabled(cur.EnableShell)
 	s.tun.SetSelfManageEnabled(cur.EnableSelfManage)
 	s.tun.SetCLIHooksEnabled(cur.EnableCLIHooks)
@@ -199,6 +200,9 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
 	// Fresh-start context preview (assembled system prompt + tool catalog).
 	mux.HandleFunc("GET /api/agents/{id}/context", s.handleAgentContext)
+	// On-disk JSON file path + reveal in the OS file manager (local desktop).
+	mux.HandleFunc("GET /api/agents/{id}/path", s.handleAgentPath)
+	mux.HandleFunc("POST /api/agents/{id}/reveal", s.handleRevealAgent)
 }
 
 // registerSessionRoutes registers chat sessions + messages + titling.
@@ -367,6 +371,8 @@ func (s *Server) registerMemoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/agents/{id}/memories", s.handleCreateMemory)
 	mux.HandleFunc("GET /api/agents/{id}/core", s.handleGetCore)
 	mux.HandleFunc("PUT /api/agents/{id}/core", s.handlePutCore)
+	mux.HandleFunc("POST /api/agents/{id}/core/blocks", s.handleDefineCoreBlock)
+	mux.HandleFunc("DELETE /api/agents/{id}/core/blocks/{label}", s.handleDeleteCoreBlock)
 	mux.HandleFunc("POST /api/agents/{id}/reflect", s.handleReflect)
 	mux.HandleFunc("POST /api/agents/{id}/recall", s.handleRecall)
 	mux.HandleFunc("DELETE /api/memories/{id}", s.handleDeleteMemory)

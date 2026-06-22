@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/bilal/swarmgo/internal/skills"
+	"github.com/bilal-arikan/swarmgo/internal/skills"
 )
 
 // skillDetail is a skill plus its (lazily read) markdown body, returned by the

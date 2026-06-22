@@ -7,11 +7,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/market"
-	"github.com/bilal/swarmgo/internal/orchestration"
-	"github.com/bilal/swarmgo/internal/settings"
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/market"
+	"github.com/bilal-arikan/swarmgo/internal/orchestration"
+	"github.com/bilal-arikan/swarmgo/internal/settings"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // registerMarketRoutes registers the in-app marketplace: a file-based registry

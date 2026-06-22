@@ -16,8 +16,8 @@ import (
 
 	"github.com/jchv/go-webview2"
 
-	"github.com/bilal/swarmgo/internal/app"
-	"github.com/bilal/swarmgo/internal/config"
+	"github.com/bilal-arikan/swarmgo/internal/app"
+	"github.com/bilal-arikan/swarmgo/internal/config"
 )
 
 func main() {

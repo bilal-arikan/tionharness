@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/bilal/swarmgo/internal/orchestration"
+	"github.com/bilal-arikan/swarmgo/internal/orchestration"
 )
 
 // graphNode is one entity in the workspace collaboration network. ID is

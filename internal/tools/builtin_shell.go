@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/bilal/swarmgo/internal/proc"
+	"github.com/bilal-arikan/swarmgo/internal/proc"
 	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 const (

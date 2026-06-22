@@ -3,7 +3,7 @@ package agent
 import (
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // contReason tags why the loop continued to another iteration (a non-terminal

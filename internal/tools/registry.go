@@ -11,8 +11,8 @@ import (
 	"sort"
 	"unicode/utf8"
 
-	"github.com/bilal/swarmgo/internal/mcp"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/mcp"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // maxToolOutputBytes bounds a tool's output before it is fed back to the model

@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/mcp"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/mcp"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // toServerConfig converts a stored MCP server row into a transport-agnostic
@@ -302,16 +302,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	if servers, err := r.db.ListEnabledMCPServers(ctx); err != nil {
 		r.logger.Warn("list mcp servers failed", "error", err)
 	} else if len(servers) > 0 {
-		cfgs := make([]mcp.ServerConfig, 0, len(servers))
-		cfgByServer := map[string]mcp.ServerConfig{}
-		for _, m := range servers {
-			cfg := toServerConfig(m)
-			cfgs = append(cfgs, cfg)
-			// Key by the sanitized name used in namespacing.
-			srv, _, _ := mcp.SplitNamespaced(mcp.NamespaceTool(cfg.Name, "x"))
-			cfgByServer[srv] = cfg
-		}
-		entries, errs := mcp.BuildCatalog(ctx, cfgs)
+		// Cached build: the catalog is memoized per workspace (keyed by the enabled
+		// server configs + a TTL), so the several buildRegistry calls per turn dial
+		// each MCP server once instead of opening a fresh session every time.
+		entries, cfgByServer, errs := r.mcpCat.build(ctx, servers)
 		for name, e := range errs {
 			r.logger.Warn("mcp catalog build failed", "server", name, "error", e)
 		}

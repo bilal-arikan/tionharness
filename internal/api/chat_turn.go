@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/agent"
-	"github.com/bilal/swarmgo/internal/conversation"
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/memory"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // isFirstUntitledTurn reports whether this is the opening message of a fresh chat
@@ -30,7 +31,7 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // artifacts) that changes every turn and is kept outside the cached prefix.
 //
 // Shared by both the blocking (chat.go) and streaming (chat_stream.go) handlers.
-func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession bool) providers.Request {
+func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool) providers.Request {
 	system := buildSystemPrompt(agentRow)
 	// Tell the agent its own name and how "@name" references work. The message is
 	// addressed to THIS agent (chosen from the UI dropdown). An "@name" inside the
@@ -41,6 +42,13 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if n := strings.TrimSpace(agentRow.Name); n != "" {
 		note := "You are the agent \"" + n + "\", and this message is addressed to you. It may contain \"@name\" references to other agents — treat each as a plain name reference (the user pointing at who they mean), not a handoff, a command to call that agent, or a file/skill to look up. Answer the message yourself; if useful you may address or relay to a referenced agent in your reply, but there is no automatic routing. If you hand work to another agent with spawn_session, its result runs in a SEPARATE session and does NOT come back to this conversation — do not promise to relay it here; instead tell the user it is running and where to find it (the activity feed)."
 		system = strings.TrimSpace(note + "\n\n" + system)
+	}
+	// In a session shared by several agents, the history is annotated with each
+	// assistant turn's author (see labelMultiAgentHistory). Tell the agent how to
+	// read those "[Name]:" tags so it can answer "who said what" — and not copy
+	// the tags into its own reply.
+	if multiAgent {
+		system = strings.TrimSpace(multiAgentHistoryNote + "\n\n" + system)
 	}
 	if uc := userContextBlock(s.settings.Get()); uc != "" {
 		system = strings.TrimSpace(uc + "\n\n" + system)
@@ -82,13 +90,14 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if wb := workdirContextBlock(cwd); wb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + wb)
 	}
-	// Core memory (MemGPT-style): the agent's self-maintained working-memory block,
-	// re-injected verbatim every turn (edited via core_memory_replace/append). Split
-	// into persona (about itself) + human (about the user). Sits above recall because
-	// it is the agent's own durable context, not a similarity hit; recall excludes
-	// both core kinds, so it never appears twice.
-	if persona, human, err := wsp.Runtime.Memory().ReadCoreSections(ctx, agentRow.ID); err == nil {
-		if cb := coreMemoryBlock(persona, human); cb != "" {
+	// Core memory (MemGPT-style): the agent's self-maintained named working-memory
+	// blocks, re-injected verbatim every turn (edited via core_memory_replace/
+	// append). Default blocks are persona (about itself) + human (about the user);
+	// an agent may define more. Sits above recall because it is the agent's own
+	// durable context, not a similarity hit; recall excludes core kinds, so it
+	// never appears twice.
+	if blocks, err := wsp.Runtime.Memory().ReadCoreBlocks(ctx, agentRow.ID); err == nil {
+		if cb := coreMemoryBlock(blocks); cb != "" {
 			dynamic = strings.TrimSpace(dynamic + "\n\n" + cb)
 		}
 	}
@@ -143,32 +152,40 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 }
 
 // dateTimeContextBlock renders the current server-local date/time as a single
-// system-prompt line, e.g. "Current date and time: Monday, 2026-06-22 15:31
+// system-prompt line, e.g. "Current date and time: Monday, 2026-06-22 15:31:08
 // (+03:00)". It replaces the removed get_current_time tool: the agent reads
 // "now" straight from its context instead of spending a tool round-trip on it.
+// Includes seconds and is labelled as the turn-start instant so an agent doing a
+// timing task uses this exact value as a baseline instead of fabricating one — it
+// is captured once per turn and does NOT advance mid-turn.
 func dateTimeContextBlock() string {
-	return "Current date and time: " + time.Now().Format("Monday, 2006-01-02 15:04 (-07:00)")
+	return "Current date and time (captured at the start of this turn; seconds-precise, does not tick mid-turn): " +
+		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)")
 }
 
-// coreMemoryBlock formats the agent's two core-memory sections for prompt
-// injection, emitting only the non-empty ones under a shared header. Returns ""
-// when both are blank so the caller can append it unconditionally.
-func coreMemoryBlock(persona, human string) string {
-	persona, human = strings.TrimSpace(persona), strings.TrimSpace(human)
-	if persona == "" && human == "" {
+// coreMemoryBlock formats the agent's named core-memory blocks for prompt
+// injection, emitting only the non-empty ones under a shared header. Each block
+// shows its description (as guidance) and a usage counter against its limit, so
+// the agent sees how full it is and which label to target. Returns "" when every
+// block is blank so the caller can append it unconditionally.
+func coreMemoryBlock(blocks []memory.BlockView) string {
+	var body strings.Builder
+	for _, blk := range blocks {
+		content := strings.TrimSpace(blk.Content)
+		if content == "" {
+			continue
+		}
+		fmt.Fprintf(&body, "\n### %s (%d/%d chars)", blk.Label, len([]rune(content)), blk.CharLimit)
+		if d := strings.TrimSpace(blk.Description); d != "" {
+			fmt.Fprintf(&body, " — %s", d)
+		}
+		body.WriteString("\n")
+		body.WriteString(content)
+	}
+	if body.Len() == 0 {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString("## Core memory (you maintain this; edit with core_memory_replace/append, section=persona|human)")
-	if persona != "" {
-		b.WriteString("\n### Persona (who you are)\n")
-		b.WriteString(persona)
-	}
-	if human != "" {
-		b.WriteString("\n### Human (what you know about the user)\n")
-		b.WriteString(human)
-	}
-	return b.String()
+	return "## Core memory (you maintain this; edit with core_memory_replace/append using the block label)" + body.String()
 }
 
 // adoptMentionedAgent makes the first @mentioned agent the session's default

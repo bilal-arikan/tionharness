@@ -10,11 +10,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bilal/swarmgo/internal/agent"
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/events"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // handleChatStream runs one chat turn over Server-Sent Events, emitting each
@@ -216,13 +216,17 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		session, _ = database.GetSession(ctx, session.ID)
+		// Annotate the history with each assistant turn's author so this agent can
+		// tell who said what in a thread shared by several agents (no-op for a
+		// single-agent session). multiAgent gates the explanatory system note.
+		history, multiAgent := s.labelMultiAgentHistory(ctx, database, agentRow.ID, history)
 		prep, cerr := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 		if cerr != nil {
 			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "compaction_failed", "compaction failed: "+cerr.Error())
 			return
 		}
 
-		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession)
+		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent)
 
 		// Attach a per-agent artifact sink so create_artifact / update_artifact
 		// persist content stamped with this session + agent — both on the native

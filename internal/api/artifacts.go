@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/tools"
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // artifactDeliverableGuidance is the always-on instruction (kept in the static

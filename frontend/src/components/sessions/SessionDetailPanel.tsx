@@ -4,6 +4,7 @@ import { api } from '../../api'
 import type { SessionInfo, AgentUsage } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { roleColor } from '../../lib/palette'
+import { displayPath } from '../../lib/paths'
 
 interface Props {
   sessionId: string
@@ -400,8 +401,11 @@ export function SessionDetailPanel({
 
           {/* Folder */}
           <Section title="Klasör">
-            <code className="block break-all rounded bg-[var(--color-bg)] px-2 py-1.5 font-mono text-[11px] text-[var(--color-text-dim)]">
-              {info.path || '—'}
+            <code
+              title={info.path || undefined}
+              className="block break-all rounded bg-[var(--color-bg)] px-2 py-1.5 font-mono text-[11px] text-[var(--color-text-dim)]"
+            >
+              {info.path ? displayPath(info.path) : '—'}
             </code>
             <div className="mt-2 flex gap-2">
               <SmallBtn onClick={copyPath}>

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // runAgentFor seeds a chain position into ctx and returns a runner already bound

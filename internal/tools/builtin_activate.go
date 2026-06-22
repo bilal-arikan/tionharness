@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // lazyEntry is one row of the load-on-demand tool catalog (name + summary).

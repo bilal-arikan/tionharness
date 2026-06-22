@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 func (s *Server) handleListHooks(w http.ResponseWriter, r *http.Request) {

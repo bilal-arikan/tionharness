@@ -14,14 +14,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/agent"
-	"github.com/bilal/swarmgo/internal/api"
-	"github.com/bilal/swarmgo/internal/config"
-	"github.com/bilal/swarmgo/internal/events"
-	"github.com/bilal/swarmgo/internal/logbuf"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/settings"
-	"github.com/bilal/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/api"
+	"github.com/bilal-arikan/swarmgo/internal/config"
+	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/swarmgo/internal/logbuf"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/settings"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // App is a fully wired, ready-to-serve SwarmGo instance.

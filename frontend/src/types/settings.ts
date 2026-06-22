@@ -47,6 +47,7 @@ export interface AppSettings {
 
   autoReflect: boolean
   autoReflectThreshold: number
+  autoUserModel: boolean      // HA-1: refresh the "human" core block from journals during the dream cycle
 
   // Turn recovery (A1).
   reactiveCompact: boolean

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // newTestRuntime builds a Runtime backed by a real file store and a workspace

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // Defaults are conservative; override via env for larger-context models.

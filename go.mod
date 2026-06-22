@@ -1,4 +1,4 @@
-module github.com/bilal/swarmgo
+module github.com/bilal-arikan/swarmgo
 
 go 1.26.4
 

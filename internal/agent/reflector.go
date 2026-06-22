@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // reflectMaxJournals is how many recent journal entries feed one reflection.
@@ -150,6 +150,12 @@ func (r *Runtime) reflect(ctx context.Context, agentID string, autonomous bool) 
 	reflection, err := r.mem.Remember(ctx, agentID, db.MemoryReflection, resp.Text)
 	if err != nil {
 		return db.KnowledgeSource{}, err
+	}
+	// HA-1: ride the dream cycle to refresh the agent's model of the user (the
+	// "human" core block) from the same journals, before they are consumed below.
+	// Best-effort and independently toggleable; never fails the reflection.
+	if r.tun != nil && r.tun.UserModel() {
+		r.updateUserModel(ctx, agent, sb.String(), autonomous)
 	}
 	// Dream cycle = compaction: the durable reflection now stands in for the raw
 	// journals it consolidated, so discard them to keep the store bounded.

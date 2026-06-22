@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // activeToolsKey carries the per-turn lazy-tool active set through the context,

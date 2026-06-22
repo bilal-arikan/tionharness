@@ -12,8 +12,9 @@ interface Props {
 }
 
 // AgentSelect is the composer's mandatory agent picker: the message is always sent
-// to the chosen agent (the "@mention" routing was removed). A compact trigger
-// (avatar + name) opens an upward menu, matching the other composer pickers.
+// to the chosen agent (the "@mention" routing was removed). An icon-only trigger
+// (the agent's avatar; name in the tooltip) opens an upward menu listing every
+// agent with avatar + name, matching the other composer pickers.
 export function AgentSelect({ agents, value, onChange, disabled }: Props) {
   const [open, setOpen] = useState(false)
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
@@ -33,10 +34,7 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
         }`}
       >
         {selected ? (
-          <>
-            <AgentAvatar agent={selected} size={18} />
-            <span className="hidden max-w-28 truncate sm:inline">{selected.name}</span>
-          </>
+          <AgentAvatar agent={selected} size={18} />
         ) : (
           <span>Ajan seç</span>
         )}

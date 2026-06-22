@@ -1,7 +1,7 @@
 package conversation
 
 import (
-	"github.com/bilal/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 // charsPerToken is a rough heuristic: ~4 characters per token for mixed

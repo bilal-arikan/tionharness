@@ -192,6 +192,18 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
     oturumda ilk ajan `adoptMentionedAgent` ile oturuma yazılır.
 - Her asistan turu `Message.AgentID` ile kalıcılaşır; `MessageList` her turu **kendi
   ajanının avatar+adıyla** çizer.
+- **Çok-ajanlı geçmişte yazar etiketleme (2026-06-23):** Birden fazla ajanın yanıt
+  verdiği bir oturumda, geçmiş provider'a aktarılırken her asistan turu **yazarının
+  adıyla** ön-eklenir (`api/chat_authors.go` → `labelMultiAgentHistory`): başka ajanın
+  turu `"[Ada]: …"`, yanıtlayan ajanın kendi eski turları `"[Kai (you)]: …"`. Önceden
+  `toProviderMessages` yalnız `Role`+`Text` taşıyıp `AgentID`'yi düşürüyordu → tüm
+  asistan turları tek ayrımsız "assistant" sesine karışıyor, ajan **kimin ne dediğini
+  göremiyordu** (hatta diğer ajanın sözlerini kendi sanıyordu). Etiketleme yalnız
+  **2+ farklı yazar** varken devreye girer (1:1 sohbet ve prompt cache etkilenmez),
+  **kopya** üzerinde çalışır (kayıt değişmez) ve compaction özetine de yansır. Çok-yazarlı
+  oturumda `chat_turn.go` sistem promptuna kısa bir not ekler (`multiAgentHistoryNote`):
+  köşeli-parantez etiketlerinin okuma amaçlı olduğunu ve ajanın **kendi yanıtını
+  ön-eksiz** yazması gerektiğini açıklar. Test: `chat_authors_test.go`.
 - **Oturum-bazlı akış durumu:** akış (streaming) artık **oturuma bağlı** — `App.tsx`
   `streamingSessionId` akışın sahibi oturumu izler. Composer'ın akış aksiyonları
   (Durdur/Kes/Yönlendir) ve `AskPrompt` yalnız `streamingSessionId === activeSessionId`

@@ -276,6 +276,9 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.AutoReflect = *p.AutoReflect
 	}
 	applyInt(&next.AutoReflectThreshold, p.AutoReflectThreshold)
+	if p.AutoUserModel != nil {
+		next.AutoUserModel = *p.AutoUserModel
+	}
 
 	if p.ReactiveCompact != nil {
 		next.ReactiveCompact = *p.ReactiveCompact

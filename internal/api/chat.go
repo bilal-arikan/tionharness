@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal/swarmgo/internal/agent"
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/providers"
-	"github.com/bilal/swarmgo/internal/tools"
+	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 type chatReq struct {
@@ -118,13 +118,16 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	// Reload session so summary state reflects any compaction below.
 	session, _ = database.GetSession(ctx, session.ID)
+	// Annotate history with each assistant turn's author so this agent can tell who
+	// said what when several agents share the thread (no-op for a 1:1 session).
+	history, multiAgent := s.labelMultiAgentHistory(ctx, database, agent.ID, history)
 	prep, err := s.convo.Prepare(ctx, database, provider, session, agent, history)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "compaction failed: "+err.Error())
 		return
 	}
 
-	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession)
+	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession, multiAgent)
 
 	// Manual chat is not budget-gated (autonomous=false). When the agent has
 	// tools enabled this drives the agentic loop (native) or CLI delegation;

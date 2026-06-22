@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // Config tools let an agent read and edit its OWN workspace configuration —

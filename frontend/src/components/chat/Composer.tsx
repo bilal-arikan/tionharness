@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Paperclip, Brain } from 'lucide-react'
+import { Paperclip } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '../../types'
 import { AttachmentChip } from './AttachmentChip'
 import { WorkDirBadge } from './WorkDirBadge'
@@ -12,6 +12,7 @@ import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './composer/pickerOptions'
 import { AutocompleteMenu } from './composer/AutocompleteMenu'
 import { SendActions } from './composer/SendActions'
 import { detectTrigger, buildMenuItems, type Trigger } from './composer/trigger'
+import { useSessionDraft } from '../../hooks/useSessionDraft'
 
 // Cap how much of a referenced artifact is inlined into the turn (the artifact
 // itself stays addressable; very large ones are truncated with a note).
@@ -91,7 +92,10 @@ export function Composer({
   commands,
   artifacts = [],
 }: Props) {
-  const [text, setText] = useState('')
+  // Per-session draft: unsent text is persisted in localStorage keyed by session,
+  // so it survives switching sessions and reloads. setText persists every edit;
+  // sending/clearing the composer sets it to '' which removes the stored draft.
+  const [text, setText] = useSessionDraft(sessionId)
   const [trigger, setTrigger] = useState<Trigger>(null)
   const [sel, setSel] = useState(0)
   const [pending, setPending] = useState<PendingAttachment[]>([])
@@ -388,7 +392,7 @@ export function Composer({
           options={THINKING_OPTIONS}
           header="Düşünme seviyesi"
           title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
-          triggerIcon={<Brain size={15} />}
+          iconOnly
         />
         <ComposerPicker
           value={permissionMode}
@@ -397,6 +401,7 @@ export function Composer({
           header="İzin modu (Shift+Tab)"
           title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
           menuWidthClass="w-60"
+          iconOnly
         />
         <WorkDirBadge sessionId={sessionId} />
         {/* Attach button + hidden multi-file input. */}

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/bilal/swarmgo/internal/db"
-	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // ErrBudgetExceeded is returned when an autonomous call would exceed an agent's
