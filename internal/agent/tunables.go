@@ -420,8 +420,11 @@ func budgetScaleFor(budgetTokens int) float64 {
 	if scale < 1 {
 		scale = 1
 	}
-	if scale > 5 {
-		scale = 5
+	// Upper bound tracks conversation.budgetAutoCeil (128K) / default budget (12K)
+	// ≈ 10.7, with a little headroom — so a model-aware budget at the ceiling is
+	// not clipped, while a misconfigured huge budget still can't explode thresholds.
+	if scale > 12 {
+		scale = 12
 	}
 	return scale
 }

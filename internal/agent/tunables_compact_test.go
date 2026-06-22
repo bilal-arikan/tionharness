@@ -39,10 +39,16 @@ func TestCompactThresholdsScaleWithBudget(t *testing.T) {
 			tun.CompactMaxBytes(), tun.CompactLLMThreshold())
 	}
 
-	// 10× budget → clamped to 5×, never explodes.
+	// 10× budget → 10× (within the [1,12] band, not clamped).
 	tun.SetContextBudget(10 * defaultContextBudgetTokens)
-	if got, want := tun.CompactLLMThreshold(), 5*12288; got != want {
-		t.Fatalf("clamp at 5x: got %d, want %d", got, want)
+	if got, want := tun.CompactLLMThreshold(), 10*12288; got != want {
+		t.Fatalf("10x: got %d, want %d", got, want)
+	}
+
+	// 20× budget → clamped to 12×, never explodes.
+	tun.SetContextBudget(20 * defaultContextBudgetTokens)
+	if got, want := tun.CompactLLMThreshold(), 12*12288; got != want {
+		t.Fatalf("clamp at 12x: got %d, want %d", got, want)
 	}
 
 	// Small budget never shrinks below the configured value (scale floored at 1).

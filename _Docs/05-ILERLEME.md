@@ -2,6 +2,29 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## Bütçe ceil/fraction artırıldı + eskimiş 1M-token ayarı kaldırıldı ✅ (2026-06-22)
+
+**Hedef:** (1) 1M modelleri daha çok kullan, (2) eskimiş 1M-token beta ayarını temizle.
+
+- **Ceil/fraction (1M kullanımını artır):** `budgetWindowFraction 0.10→0.20`,
+  `budgetAutoCeil 32K→128K`, tool-eşik scale clamp `[1,5]→[1,12]`. Artık 1M modeller
+  **128K** transcript bütçesi (≈%12.8), Haiku **40K**. 1M'de ceil operatif knob.
+  `budget_test.go` + `tunables_compact_test.go` güncellendi. **124 test** yeşil.
+- **Eskimiş 1M-token ayarı kaldırıldı:** Web doğrulaması — Anthropic 1M'i **13 Mart 2026**
+  GA yaptı (header gerekmez), `context-1m-2025-08-07` beta header'ı **30 Nisan 2026**
+  kapatıldı. Bugün 22 Haziran → tamamen işlevsiz.
+  - **Provider:** `anthropic.go` artık header'ı **göndermiyor** (const + field + append
+    silindi; `WithBetas(_, extendedCache)`). 43 test + vet temiz.
+  - **Frontend:** Ayarlar → Anthropic beta'daki "1 milyon token bağlam" toggle'ı +
+    `oneMillionContext` tipi/payload referansları kaldırıldı (appPanels + types +
+    SettingsPanel). `npm run build` yeşil.
+  - **Kalan (entangle):** backend `settings.OneMillionContext` alanı + `server.go`
+    `SetAnthropicBetas` argümanı + registry/ResolvedConfig plumbing vestigial kaldı
+    (zararsız, header gitmiyor). `api` paketi paralel MemGPT WIP'inden kurtulunca
+    tek temiz commit'te purge edilecek (server.go o dosyada entangle).
+
+---
+
 ## `http_get` → `WebFetch` zengin fetch ✅ (2026-06-22)
 
 `http_get` (düz GET, 64KB) **`WebFetch`'e yükseltildi** — claude-cli'nin WebFetch'inin

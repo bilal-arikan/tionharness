@@ -139,8 +139,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
       </div>
 
       <SubHead icon={FlaskConical}>Anthropic beta</SubHead>
-      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">Yalnız anthropic sağlayıcıda etkili; claude-cli'da etkisizdir.</p>
-      <Toggle label="1 milyon token bağlam" hint="Anthropic 1M context penceresi beta'sı (anthropic-beta başlığı). claude-cli'da etkisizdir." checked={draft.oneMillionContext} onChange={(v) => set('oneMillionContext', v)} />
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">Yalnız anthropic sağlayıcıda etkili; claude-cli'da etkisizdir. (1M bağlam artık GA — ayar gerekmez.)</p>
       <Toggle label="Uzatılmış prompt cache (1 saat)" hint="Sistem promptunu 1 saatlik cache_control ile önbelleğe alır — tekrar eden büyük persona/bağlam ucuzlar." checked={draft.extendedPromptCache} onChange={(v) => set('extendedPromptCache', v)} />
 
       <SubHead icon={Database}>Hafıza geri çağırma (recall)</SubHead>

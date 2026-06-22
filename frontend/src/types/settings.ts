@@ -22,7 +22,6 @@ export interface AppSettings {
   openrouterKeySet: boolean
   openrouterBaseUrl: string
 
-  oneMillionContext: boolean
   extendedPromptCache: boolean
 
   desktopNotifications: boolean

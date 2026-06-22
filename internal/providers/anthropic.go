@@ -10,9 +10,11 @@ import (
 )
 
 // Anthropic beta feature flags (sent via the anthropic-beta header).
+// The 1M-context beta (context-1m-2025-08-07) was retired: Anthropic made the
+// 1M window GA at standard pricing on 2026-03-13 (no header needed) and turned
+// the beta header off on 2026-04-30, so it is no longer sent.
 const (
-	betaOneMillionContext = "context-1m-2025-08-07"
-	betaExtendedCacheTTL  = "extended-cache-ttl-2025-04-11"
+	betaExtendedCacheTTL = "extended-cache-ttl-2025-04-11"
 )
 
 const (
@@ -37,7 +39,6 @@ type Anthropic struct {
 	defaultModel string // model applied when a request omits one
 	name         string // provider identity reported by Name()
 
-	oneMContext   bool // 1M-token context window beta
 	extendedCache bool // 1h extended prompt cache TTL beta
 }
 
@@ -72,9 +73,9 @@ func (a *Anthropic) WithEndpoint(name, messagesURL, defaultModel string) *Anthro
 }
 
 // WithBetas enables optional Anthropic beta capabilities and returns the client
-// for chaining.
-func (a *Anthropic) WithBetas(oneMContext, extendedCache bool) *Anthropic {
-	a.oneMContext = oneMContext
+// for chaining. The first parameter (the retired 1M-context beta) is ignored —
+// kept only so existing callers compile until the setting is fully purged.
+func (a *Anthropic) WithBetas(_, extendedCache bool) *Anthropic {
 	a.extendedCache = extendedCache
 	return a
 }
@@ -385,9 +386,6 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 // beta flags ("" when none).
 func (a *Anthropic) betaHeader() string {
 	var betas []string
-	if a.oneMContext {
-		betas = append(betas, betaOneMillionContext)
-	}
 	if a.extendedCache {
 		betas = append(betas, betaExtendedCacheTTL)
 	}

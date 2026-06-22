@@ -128,7 +128,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       defaultPermissionMode: draft.defaultPermissionMode, claudeCliPath: draft.claudeCliPath,
       minimaxBaseUrl: draft.minimaxBaseUrl,
       openrouterBaseUrl: draft.openrouterBaseUrl,
-      oneMillionContext: draft.oneMillionContext, extendedPromptCache: draft.extendedPromptCache,
+      extendedPromptCache: draft.extendedPromptCache,
       desktopNotifications: draft.desktopNotifications, keepAwake: draft.keepAwake,
       userName: draft.userName, userTimezone: draft.userTimezone, userCity: draft.userCity,
       userCountry: draft.userCountry, userNotes: draft.userNotes,

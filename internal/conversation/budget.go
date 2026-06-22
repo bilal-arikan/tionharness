@@ -9,13 +9,15 @@ import "github.com/bilal/swarmgo/internal/providers"
 // sane and never dropping below the configured value.
 const (
 	// budgetWindowFraction is the share of a model's context window we are willing
-	// to spend on live transcript before compacting. Deliberately small: the rest
-	// of the window is headroom for tool output, the system prompt and the reply.
-	budgetWindowFraction = 0.10
+	// to spend on live transcript before compacting. The rest of the window is
+	// headroom for tool output, the system prompt and the reply.
+	budgetWindowFraction = 0.20
 	// budgetAutoCeil caps the auto-derived budget (tokens) so a 1M-window model
-	// can't silently run very expensive turns. Users who want more raise
-	// SWARMGO_MAX_CONTEXT_TOKENS explicitly (it is the floor, always respected).
-	budgetAutoCeil = 32000
+	// can't silently run runaway-expensive turns. For 1M models this ceiling is the
+	// operative number (window*fraction exceeds it), so it is the main knob for "how
+	// much of a big window we actually use": 128K ≈ 12.8% of a 1M window. Users who
+	// want more raise SWARMGO_MAX_CONTEXT_TOKENS explicitly (it is the floor).
+	budgetAutoCeil = 128000
 )
 
 // EffectiveBudget returns the transcript token budget for an agent's model. The

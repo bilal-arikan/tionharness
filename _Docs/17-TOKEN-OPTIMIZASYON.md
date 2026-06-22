@@ -197,7 +197,11 @@ model, configured)`: model penceresi biliniyorsa bütçeyi **`clamp(window × 0.
 pencere → değişmez. `Manager.Prepare` artık compaction tetiğini ve pressure oranını bu model-aware bütçeyle
 hesaplıyor; `maxTokens≤0` (bütçe kapalı) dokunulmaz. `budget_test.go`.
 
-- Opus 4.8/Sonnet 4.6 1M → 32K (tavan) · Haiku 4.5 200K → 20K · MiniMax/DeepSeek/Gemini 1M → 32K · bilinmeyen → 12K.
+- **Değerler (2026-06-22, 1M kullanımı artırıldı):** `fraction 0.10→0.20`, `ceil 32K→128K`, tool-eşik scale
+  clamp `[1×,5×]→[1×,12×]`. Sonuç: Opus 4.8/Sonnet 4.6/MiniMax/DeepSeek/Gemini **1M → 128K** (tavan) ·
+  Haiku 4.5 **200K → 40K** · bilinmeyen → 12K. 1M modellerde **ceil** operatif sayıdır (window×fraction onu
+  aşar) → "1M'i ne kadar kullanırız" knob'u = ceil. 128K ≈ 1M'in %12.8'i. Maliyet: 1M modelde ~10× eski varsayılan
+  (prompt-cache ile hafifler); daha çok/az istenirse `budgetAutoCeil` ayarlanır.
 - **Tool eşikleriyle hizalama ✅ YAPILDI (2026-06-22):** Compactor artık her tur için
   `conversation.EffectiveBudget(agent.Provider, agent.Model, tun.ContextBudgetTokens())` hesaplayıp
   `Tunables.CompactMaxBytesFor(budget)` / `CompactLLMThresholdFor(budget)` ile **per-model** ölçekliyor.
