@@ -14,6 +14,7 @@ export type Cat =
   | 'profile'
   | 'appearance'
   | 'providers'
+  | 'secrets'
   | 'context'
   | 'budget'
   | 'tools'
@@ -36,6 +37,7 @@ export const APP_CATS: CatMeta[] = [
   { key: 'profile', label: 'Profil', icon: User },
   { key: 'appearance', label: 'Görünüm', icon: Palette },
   { key: 'providers', label: 'Sağlayıcılar', icon: KeyRound },
+  { key: 'secrets', label: 'Sırlar', icon: Shield },
   { key: 'context', label: 'Bağlam & Bellek', icon: Brain },
   { key: 'budget', label: 'Bütçe', icon: Shield },
   { key: 'tools', label: 'Yetenekler (Araçlar)', icon: Wrench },

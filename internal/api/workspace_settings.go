@@ -16,10 +16,11 @@ type workspaceSettingsDTO struct {
 	Instructions    string `json:"instructions"`
 	Icon            string `json:"icon"`
 	Color           string `json:"color"`
-	DefaultProvider string `json:"defaultProvider"`
-	DefaultModel    string `json:"defaultModel"`
-	PauseAutonomy   bool   `json:"pauseAutonomy"`
-	CreatedAt       int64  `json:"createdAt"`
+	DefaultProvider   string `json:"defaultProvider"`
+	DefaultModel      string `json:"defaultModel"`
+	PauseAutonomy     bool   `json:"pauseAutonomy"`
+	DefaultWorkingDir string `json:"defaultWorkingDir"`
+	CreatedAt         int64  `json:"createdAt"`
 
 	SessionContextEnabled     bool `json:"sessionContextEnabled"`
 	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`
@@ -46,10 +47,11 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		Instructions:    s.Instructions,
 		Icon:            s.Icon,
 		Color:           s.Color,
-		DefaultProvider: s.DefaultProvider,
-		DefaultModel:    s.DefaultModel,
-		PauseAutonomy:   s.PauseAutonomy,
-		CreatedAt:       w.CreatedAt,
+		DefaultProvider:   s.DefaultProvider,
+		DefaultModel:      s.DefaultModel,
+		PauseAutonomy:     s.PauseAutonomy,
+		DefaultWorkingDir: s.DefaultWorkingDir,
+		CreatedAt:         w.CreatedAt,
 
 		SessionContextEnabled:     s.SessionContextEnabled,
 		SessionContextEveryTurn:   s.SessionContextEveryTurn,

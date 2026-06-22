@@ -53,6 +53,33 @@ func (d *DB) CreateKnowledge(ctx context.Context, k KnowledgeSource) (KnowledgeS
 	return k, d.persistKnowledgeLocked(k)
 }
 
+// UpsertKnowledgeByKind enforces a single-row-per-(agent,kind) invariant: it
+// updates the existing row's content/embedding in place (preserving ID and
+// CreatedAt) when one exists for that agent+kind, otherwise it creates a new
+// row. It backs the agent-editable "core" working memory, where each write
+// replaces the previous block rather than appending a new one. Returns the
+// resulting row.
+func (d *DB) UpsertKnowledgeByKind(ctx context.Context, agentID, kind, content string, embedding []byte) (KnowledgeSource, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, k := range d.knowledge {
+		if k.AgentID == agentID && k.Kind == kind {
+			k.Content = content
+			k.Embedding = embedding
+			return k, d.persistKnowledgeLocked(k)
+		}
+	}
+	k := KnowledgeSource{
+		ID:        d.nextID(idKnowledge),
+		AgentID:   agentID,
+		Kind:      kind,
+		Content:   content,
+		Embedding: embedding,
+		CreatedAt: now(),
+	}
+	return k, d.persistKnowledgeLocked(k)
+}
+
 // GetKnowledge loads a memory by id.
 func (d *DB) GetKnowledge(ctx context.Context, id string) (KnowledgeSource, error) {
 	d.mu.RLock()

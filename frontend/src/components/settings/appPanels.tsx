@@ -157,6 +157,14 @@ export function ContextPanel({ draft, set }: PanelProps) {
       </div>
       <Toggle label="Otomatik yansıma (dream cycle)" hint="Journal eşiği aşılınca ajan kendi günlüğünü arka planda özetler ve özetlenen kayıtları siler. Otonom çağrı sayılır: duraklatma ve günlük bütçeye saygı gösterir." checked={draft.autoReflect} onChange={(v) => set('autoReflect', v)} />
 
+      <SubHead icon={Database}>Çekirdek bellek (MemGPT)</SubHead>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+        Letta/MemGPT tarzı kendi-düzenleyen bellek: bağlam dolmaya yaklaşınca ajana "önemliyi şimdi yaz" uyarısı gösterilir; ajan ayrıca her turda sabit kalan,
+        kendi düzenlediği bir <span className="font-medium text-[var(--color-text)]">çekirdek bellek</span> bloğunu <code>core_memory_replace</code>/<code>core_memory_append</code> ile yönetir.
+      </div>
+      <Field label="Bağlam basıncı uyarı eşiği" hint="Bağlam doluluk oranı (0–1) bunu aşınca tura 'belleğe yaz' uyarısı eklenir. 0 = kapalı."><input type="number" step="0.05" min="0" max="1" value={draft.memoryPressureWarn} onChange={(e) => set('memoryPressureWarn', Number(e.target.value))} className={inputCls} /></Field>
+      <Toggle label="Çekirdek bellek araçları" hint="core_memory_replace/append araçlarını ajana sun (kapatınca minimal araç yüzeyi)." checked={draft.coreMemoryTools} onChange={(v) => set('coreMemoryTools', v)} />
+
       <SubHead icon={LifeBuoy}>Tur kurtarma & sıkıştırma</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
         <span className="font-medium text-[var(--color-text)]">Tur kurtarma (A1).</span> Ajanın araç döngüsü "mutlu yol" dışına çıktığında turu yapısal olarak kurtarır: modelin
@@ -268,6 +276,25 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           </Field>
         </div>
       )}
+
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+        <b>Çalışma dizini güvenliği.</b> Dosya/kabuk araçları artık workspace'e kilitli
+        değil (her yola erişebilir). Aşağıdaki frenler bu gücü <b>otonom</b>
+        (zamanlama/spawn/flow — insan döngüde değil) turlarda dengeler. İnteraktif
+        sohbet etkilenmez.
+      </div>
+      <Toggle
+        label="Otonom turları çalışma dizinine kilitle"
+        hint="Açıkken zamanlama/spawn/flow ile çalışan ajanların dosya araçları yalnızca oturumun çalışma dizininde kalır (mutlak yol + `..` kaçışı reddedilir) ve `git push` engellenir. Önerilen: AÇIK."
+        checked={draft.autonomousConfine}
+        onChange={(v) => set('autonomousConfine', v)}
+      />
+      <Toggle
+        label="Git worktree izolasyonu (otonom)"
+        hint="Açıkken çalışma dizini bir git deposuysa, otonom oturumlar depoyu doğrudan değiştirmek yerine oturuma özel bir git worktree + dal alır. Paralel ajanların birbirinin dosyalarını ezmesini önler. Git gerektirir; oturum silinince worktree temizlenir."
+        checked={draft.gitWorktreeIsolation}
+        onChange={(v) => set('gitWorktreeIsolation', v)}
+      />
     </>
   )
 }

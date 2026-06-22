@@ -69,6 +69,9 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
         />
         <span className="text-xs text-[var(--color-text-dim)]">Boş = uygulama varsayılanı.</span>
       </div>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+        📁 Proje dizini (path) ve git ayarları için yan menüdeki <b>Proje</b> sekmesine bak.
+      </div>
       <Toggle label="Bu workspace'te otonomiyi duraklat" hint="Yalnızca bu workspace'in zamanlama çağrılarını bloklar." checked={ws.pauseAutonomy} onChange={(v) => setWsField('pauseAutonomy', v)} />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">

@@ -36,6 +36,7 @@ export interface WorkspaceSettings {
   defaultProvider: string
   defaultModel: string
   pauseAutonomy: boolean
+  defaultWorkingDir: string
   sessionContextEnabled: boolean
   sessionContextEveryTurn: boolean
   sessionContextRecentCount: number
@@ -56,6 +57,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'defaultProvider'
     | 'defaultModel'
     | 'pauseAutonomy'
+    | 'defaultWorkingDir'
     | 'sessionContextEnabled'
     | 'sessionContextEveryTurn'
     | 'sessionContextRecentCount'

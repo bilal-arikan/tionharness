@@ -60,6 +60,8 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 - `maxContextTokens` (min 500, default 12000), `keepRecentMsgs` (min 1, default 8).
 - `recallTopN` (default 5), `recallMinScore` (0–1, default 0.05).
 - `journalCap` (1–1000, default 50), `journalMaxLen` runes (64–65536, default 1024).
+- `memoryPressureWarn` (0–1, default 0.75) — context-fill ratio above which a turn warns the agent to persist important facts before the next silent compaction; `0` disables the warning.
+- `coreMemoryTools` (default true) — offer the `core_memory_replace`/`core_memory_append` tools that edit the agent's persistent core working-memory block (re-injected every turn).
 - `autoReflect` (default true), `autoReflectThreshold` (2–1000, default 30).
 
 ### Turn recovery
@@ -91,6 +93,18 @@ update_settings → {"patch": {"pauseAutonomy": true}}
   delegation); `delegationMaxDepth` (1–10, default 3), `delegationMaxCalls`
   (1–100, default 8).
 - `spawnMaxConcurrent` (1–128, default 16), `spawnMaxPerTurn` (1–64, default 4).
+
+### Working-directory guards
+The built-in fs/shell tools are UNCONFINED (they may read, write and run on any
+path; the permission mode is the safety boundary). These two guards rein that in
+for autonomous (no-human) turns; interactive chat is unaffected.
+- `autonomousConfine` (default true) — on scheduler/spawn/flow turns, confine the
+  fs tools to the session's working dir (reject absolute paths + `..` escapes) and
+  block `git push`. Recommended: on.
+- `gitWorktreeIsolation` (default false) — when the working dir is a git repo,
+  give each autonomous session its own git worktree + branch instead of editing
+  the shared tree (parallel agents never clobber each other). Needs git; the
+  worktree is removed when the session is deleted.
 
 ### Diagnostics
 - `logLevel` — `"info"` | `"debug"` | `"warn"` | `"error"` (applied on restart).

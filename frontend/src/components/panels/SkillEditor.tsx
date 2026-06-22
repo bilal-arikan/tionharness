@@ -32,7 +32,7 @@ export function SkillEditor({ mode, initial, onClose, onSaved }: Props) {
 
   const save = async () => {
     if (!name.trim()) {
-      setErr('Beceri adı boş olamaz.')
+      setErr('Skill adı boş olamaz.')
       return
     }
     setSaving(true)
@@ -75,12 +75,12 @@ export function SkillEditor({ mode, initial, onClose, onSaved }: Props) {
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">
-              {mode === 'create' ? 'Yeni beceri' : name || 'Beceri'}
+              {mode === 'create' ? 'Yeni skill' : name || 'Skill'}
             </h2>
             <p className="text-xs text-[var(--color-text-dim)]">
               {mode === 'create'
-                ? 'Workspace becerisi oluştur'
-                : `Beceriyi düzenle · ${initial?.slug}`}
+                ? 'Workspace skill oluştur'
+                : `Skill düzenle · ${initial?.slug}`}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -127,7 +127,7 @@ export function SkillEditor({ mode, initial, onClose, onSaved }: Props) {
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Becerinin tek satırlık özeti (katalogda görünür)"
+              placeholder="Skill'in tek satırlık özeti (katalogda görünür)"
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
             />
           </Field>
@@ -158,7 +158,7 @@ export function SkillEditor({ mode, initial, onClose, onSaved }: Props) {
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={12}
-              placeholder="# Beceri&#10;&#10;Talimatları buraya yaz…"
+              placeholder="# Skill&#10;&#10;Talimatları buraya yaz…"
               className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
             />
           </Field>

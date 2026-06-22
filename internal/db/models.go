@@ -85,6 +85,14 @@ type Session struct {
 	// goal stops it steering future turns.
 	GoalDone bool `json:"goalDone,omitempty"`
 
+	// WorkingDir is this session's working directory (cwd) for the built-in
+	// filesystem/shell tools — like `cd /path/to/project` in a terminal. When set
+	// it overrides the workspace default: relative paths resolve here and the
+	// shell starts here, and the agent is told its cwd + git branch in context.
+	// Empty = use the workspace default working dir. Inspired by the external agent project's
+	// per-session working directory.
+	WorkingDir string `json:"workingDir,omitempty"`
+
 	// Conversation compaction state (see internal/conversation).
 	Summary         string `json:"summary"`
 	SummaryMsgCount int    `json:"summaryMsgCount"`
@@ -113,6 +121,13 @@ type Message struct {
 	// sidecar (the process died mid-stream): the text/trace are partial and the UI
 	// flags the turn as cut off. Empty/false for normal turns.
 	Interrupted bool `json:"interrupted,omitempty"`
+	// Origin marks how a prompt-bearing message was produced, for display only:
+	// "wake" = a schedule_wake auto-resume, "schedule" = a scheduled routine prompt.
+	// Empty = a real user/assistant message. The role stays "user" so the model's
+	// replayed context is unchanged; the UI keys off this to render auto prompts as
+	// a "⏰ continuation" note instead of a user bubble (so the agent doesn't look
+	// like it is asking itself).
+	Origin string `json:"origin,omitempty"`
 	// Attachments are user-supplied files (or pasted long text) sent with this
 	// message. Stored on user turns; empty for assistant/system. The files live
 	// under the workspace's uploads/ directory so agents can read them via their

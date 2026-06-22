@@ -3,6 +3,7 @@ import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, 
 import type { Agent, Session } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '../../lib/time'
+import { useOutsideClick } from '../../hooks/useOutsideClick'
 
 interface Props {
   sessions: Session[]
@@ -43,7 +44,8 @@ export function SessionsSidebar({
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
   const [query, setQuery] = useState('')
-  const rootRef = useRef<HTMLDivElement>(null)
+  // Close the open row menu on any outside click (detached while no menu is open).
+  const rootRef = useOutsideClick<HTMLDivElement>(() => setMenuId(null), !!menuId)
 
   // Draggable width (persisted), matching the old sidebar behaviour.
   const MIN = 200
@@ -79,15 +81,6 @@ export function SessionsSidebar({
     document.body.style.cursor = 'col-resize'
   }
 
-  // Close the open row menu on any outside click.
-  useEffect(() => {
-    if (!menuId) return
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setMenuId(null)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [menuId])
 
   // Group the (already newest-first) sessions into recency buckets, preserving
   // order. A title search narrows the list first.

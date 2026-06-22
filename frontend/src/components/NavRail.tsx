@@ -9,11 +9,11 @@ import {
   Database,
   GitBranch,
   FileCode,
-  KeyRound,
   ScrollText,
   Sparkles,
   Store,
   Wallet,
+  Boxes,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -23,7 +23,7 @@ import type { Workspace } from '../types'
 import { WorkspaceSwitcher } from './workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from './workspace/WorkspaceCreateModal'
 
-export type View = 'chat' | 'executions' | 'agents' | 'network' | 'board' | 'schedules' | 'memory' | 'flows' | 'artifacts' | 'secrets' | 'skills' | 'market' | 'budget' | 'logs' | 'settings'
+export type View = 'chat' | 'executions' | 'agents' | 'network' | 'board' | 'schedules' | 'memory' | 'flows' | 'artifacts' | 'skills' | 'market' | 'budget' | 'logs' | 'workspace' | 'settings'
 
 interface Props {
   view: View
@@ -49,8 +49,7 @@ const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'memory', label: 'Hafıza', icon: Database },
   { key: 'flows', label: 'Akışlar', icon: GitBranch },
   { key: 'artifacts', label: 'Artifactlar', icon: FileCode },
-  { key: 'secrets', label: 'Sırlar', icon: KeyRound },
-  { key: 'skills', label: 'Beceriler', icon: Sparkles },
+  { key: 'skills', label: 'Skills', icon: Sparkles },
   { key: 'market', label: 'Market', icon: Store },
   { key: 'budget', label: 'Bütçe', icon: Wallet },
   { key: 'logs', label: 'Loglar', icon: ScrollText },
@@ -169,8 +168,17 @@ export function NavRail({
         })}
       </div>
 
-      {/* Settings (pinned at the bottom, separate from primary nav) */}
-      <div className="px-2 pb-1">
+      {/* Workspace + Settings (pinned at the bottom, separate from primary nav) */}
+      <div className="flex flex-col gap-1 px-2 pb-1">
+        <button
+          onClick={() => onSelectView('workspace')}
+          title={collapsed ? (active?.name ? `Workspace · ${active.name}` : 'Workspace') : undefined}
+          className={`w-full ${navItemClass(view === 'workspace', collapsed)}`}
+        >
+          {view === 'workspace' && <ActiveBar />}
+          <Boxes size={18} strokeWidth={2} className="shrink-0" />
+          {!collapsed && <span>Workspace</span>}
+        </button>
         <button
           onClick={() => onSelectView('settings')}
           title={collapsed ? 'Ayarlar' : undefined}

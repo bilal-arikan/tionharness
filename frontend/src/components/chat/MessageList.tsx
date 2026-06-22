@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Trash2, X, RotateCcw } from 'lucide-react'
 import type { Agent, Artifact, Message } from '../../types'
-import { Markdown } from '../markdown/Markdown'
-import { TurnSteps, parseSteps } from './TurnSteps'
-import { ThinkingBlock } from './ThinkingBlock'
-import { UserBubble } from './UserBubble'
-import { MessageTime, TurnDuration, LiveTimer } from './MessageMeta'
-import { AgentAvatar } from '../agents/AgentAvatar'
+import { MessageTime, LiveTimer } from './MessageMeta'
+import { AgentHeader } from './AgentHeader'
+import { WorkingDots } from './WorkingDots'
+import { AutoPromptNote } from './AutoPromptNote'
+import { UserTurn } from './UserTurn'
+import { AssistantTurn } from './AssistantTurn'
 
 interface Props {
   messages: Message[]
@@ -32,56 +31,22 @@ interface Props {
   onRetry?: (id: string) => void
 }
 
-// DeleteButton is the small destructive control revealed on message hover. It
-// uses a two-step inline confirm (🗑 → "Sil" / ✕) instead of a blocking native
-// dialog, so deleting a message stays in the UI.
-function DeleteButton({ onClick }: { onClick: () => void }) {
-  const [armed, setArmed] = useState(false)
-  if (armed) {
-    return (
-      <span className="flex shrink-0 items-center gap-1">
-        <button
-          onClick={() => {
-            setArmed(false)
-            onClick()
-          }}
-          className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)]"
-        >
-          Sil
-        </button>
-        <button
-          onClick={() => setArmed(false)}
-          title="Vazgeç"
-          className="rounded px-1 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
-        >
-          <X size={12} />
-        </button>
-      </span>
-    )
-  }
-  return (
-    <button
-      onClick={() => setArmed(true)}
-      title="Mesajı sil"
-      className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-danger)] group-hover:opacity-100"
-    >
-      <Trash2 size={14} />
-    </button>
-  )
-}
-
-// Bouncing-dots "working" indicator shown while a turn is in flight.
-function WorkingDots() {
-  return (
-    <span className="inline-flex gap-1 text-[var(--color-text-dim)]">
-      <span className="animate-bounce">●</span>
-      <span className="animate-bounce [animation-delay:0.15s]">●</span>
-      <span className="animate-bounce [animation-delay:0.3s]">●</span>
-    </span>
-  )
-}
-
-export function MessageList({ messages, pending, pendingAgentId, agents, artifacts, streaming, onOpenFile, onOpenArtifact, onDeleteMessage, onRetry }: Props) {
+// MessageList is the scrolling transcript. It owns scroll-pinning and per-message
+// tool-trace collapse, then delegates each row to UserTurn / AutoPromptNote /
+// AssistantTurn. The standalone pending bubble covers polled views with no live
+// streaming placeholder.
+export function MessageList({
+  messages,
+  pending,
+  pendingAgentId,
+  agents,
+  artifacts,
+  streaming,
+  onOpenFile,
+  onOpenArtifact,
+  onDeleteMessage,
+  onRetry,
+}: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Whether the user is currently pinned to the bottom of the transcript. When
   // they scroll up to read history we stop auto-scrolling so streaming deltas
@@ -133,100 +98,43 @@ export function MessageList({ messages, pending, pendingAgentId, agents, artifac
     <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
       <div className="flex w-full flex-col gap-4">
         {messages.map((m, i) => {
+          if (m.role === 'user') {
+            return m.origin ? (
+              <AutoPromptNote key={m.id} message={m} onDelete={onDeleteMessage} />
+            ) : (
+              <UserTurn
+                key={m.id}
+                message={m}
+                agents={agents}
+                artifacts={artifacts}
+                onDelete={onDeleteMessage}
+                onOpenArtifact={onOpenArtifact}
+              />
+            )
+          }
+          // The in-flight assistant bubble is the last message while streaming; its
+          // createdAt marks the turn start, so a live timer counts up from it.
+          const isLastLive = !!streaming && i === messages.length - 1
+          // Completed-turn working time ≈ this message's createdAt (turn end) minus
+          // the triggering user message's (turn start). Only meaningful when the
+          // previous message is the user's — injected summaries or consecutive
+          // assistant turns would otherwise report idle gaps, not real work.
           const prev = messages[i - 1]
-          // The in-flight assistant bubble is the last message while streaming;
-          // its createdAt marks the turn start, so a live timer counts up from it.
-          const isLastLive = !!streaming && i === messages.length - 1 && m.role === 'assistant'
-          // For a completed assistant turn, working time ≈ this message's
-          // createdAt (turn end) minus the triggering user message's (turn
-          // start). Only meaningful when the previous message is the user's —
-          // injected summaries or consecutive assistant turns would otherwise
-          // report idle wall-clock gaps, not real work.
-          const workedSec =
-            m.role === 'assistant' && prev?.role === 'user' ? m.createdAt - prev.createdAt : 0
-          // Activity trace + how many of its steps are tool usages (for the
-          // per-message collapse toggle label).
-          const steps = m.role === 'assistant' ? parseSteps(m.steps) : []
-          const toolCount = steps.filter((st) =>
-            st.kind === 'tool' || st.kind === 'diff' || st.kind === 'todo',
-          ).length
-          const toolsHidden = collapsedTools.has(m.id)
-          // A turn that ended in an error step can be retried (resends the
-          // triggering user message). Not offered while still streaming.
-          const hasError = steps.some((st) => st.kind === 'error')
-          const canRetry = !!onRetry && hasError && !isLastLive
-          return m.role === 'user' ? (
-            <div key={m.id} className="group flex flex-col gap-1">
-              <UserBubble text={m.text} agents={agents} attachments={m.attachments} artifacts={artifacts} onOpenArtifact={onOpenArtifact} />
-              <div className="flex items-center justify-end gap-2 pr-1">
-                {onDeleteMessage && <DeleteButton onClick={() => onDeleteMessage(m.id)} />}
-                <MessageTime unixSec={m.createdAt} />
-              </div>
-            </div>
-          ) : (
-            // Assistant turn: who answered (avatar+name) + activity trace above
-            // the final markdown answer — the External Agent chat layout.
-            <div key={m.id} className="group flex flex-col gap-1">
-              <div className="flex w-full justify-start">
-                <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3 text-[var(--color-text)]">
-                  {agentById(m.agentId) && (
-                    <div className="mb-1.5 flex items-center gap-2">
-                      <AgentAvatar agent={agentById(m.agentId)!} size={20} />
-                      <span className="text-xs font-medium text-[var(--color-text-dim)]">
-                        {agentById(m.agentId)!.name}
-                      </span>
-                    </div>
-                  )}
-                  {m.reasoningContent && <ThinkingBlock text={m.reasoningContent} />}
-                  {/* Per-message toggle to hide/show the tool-activity trace. */}
-                  {steps.length > 0 && (
-                    <button
-                      onClick={() => toggleTools(m.id)}
-                      title={toolsHidden ? 'Araç adımlarını göster' : 'Araç adımlarını gizle'}
-                      className="mb-1.5 flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-                    >
-                      <span>🔧</span>
-                      <span>{toolCount > 0 ? `${toolCount} araç` : `${steps.length} adım`}</span>
-                      <span className="opacity-70">{toolsHidden ? '▸ göster' : '▾ gizle'}</span>
-                    </button>
-                  )}
-                  {!toolsHidden && (
-                    <TurnSteps steps={steps} onOpenFile={onOpenFile} onOpenArtifact={onOpenArtifact} />
-                  )}
-                  {m.text.trim() && <Markdown onOpenFile={onOpenFile}>{m.text}</Markdown>}
-                  {/* Empty live assistant bubble → show the working indicator. */}
-                  {!m.text.trim() && !m.reasoningContent && steps.length === 0 && !m.interrupted && <WorkingDots />}
-                  {/* Reply recovered from a mid-stream server crash: flag it as cut off. */}
-                  {m.interrupted && (
-                    <div className="mt-2 flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#d97706)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#d97706)_12%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-                      <span>⚠</span>
-                      <span>Bu yanıt yarıda kesildi (sunucu yeniden başladı). İçerik eksik olabilir.</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 pl-1">
-                <MessageTime unixSec={m.createdAt} />
-                {isLastLive ? (
-                  <LiveTimer startUnixSec={m.createdAt} />
-                ) : (
-                  <TurnDuration seconds={workedSec} />
-                )}
-                {canRetry && (
-                  <button
-                    onClick={() => onRetry!(m.id)}
-                    title="Bu turu yeniden dene"
-                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)]"
-                  >
-                    <RotateCcw size={12} />
-                    Yeniden dene
-                  </button>
-                )}
-                {onDeleteMessage && !isLastLive && (
-                  <DeleteButton onClick={() => onDeleteMessage(m.id)} />
-                )}
-              </div>
-            </div>
+          const workedSec = prev?.role === 'user' ? m.createdAt - prev.createdAt : 0
+          return (
+            <AssistantTurn
+              key={m.id}
+              message={m}
+              agent={agentById(m.agentId)}
+              isLastLive={isLastLive}
+              workedSec={workedSec}
+              toolsHidden={collapsedTools.has(m.id)}
+              onToggleTools={toggleTools}
+              onOpenFile={onOpenFile}
+              onOpenArtifact={onOpenArtifact}
+              onDelete={onDeleteMessage}
+              onRetry={onRetry}
+            />
           )
         })}
 
@@ -234,14 +142,7 @@ export function MessageList({ messages, pending, pendingAgentId, agents, artifac
           <div className="group flex flex-col gap-1">
             <div className="flex w-full justify-start">
               <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3">
-                {agentById(pendingAgentId) && (
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <AgentAvatar agent={agentById(pendingAgentId)!} size={20} />
-                    <span className="text-xs font-medium text-[var(--color-text-dim)]">
-                      {agentById(pendingAgentId)!.name}
-                    </span>
-                  </div>
-                )}
+                <AgentHeader agent={agentById(pendingAgentId)} />
                 <WorkingDots />
               </div>
             </div>

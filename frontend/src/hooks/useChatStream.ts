@@ -79,7 +79,6 @@ export interface ChatStreamDeps {
 
 export function useChatStream(deps: ChatStreamDeps) {
   const {
-    agents,
     sessions,
     activeSessionId,
     activeAgentId,
@@ -144,21 +143,10 @@ export function useChatStream(deps: ChatStreamDeps) {
       if (!sid) return
       setError(null)
 
-      // Resolve "@mentions" → ordered agentIds. No mention → the session's
-      // default agent answers; multiple → each answers in order.
-      const mentioned: string[] = []
-      const norm = (v: string) => v.toLowerCase().replace(/\s+/g, '')
-      const re = /(?:^|\s)@([^\s@]+)/g
-      let mm: RegExpExecArray | null
-      while ((mm = re.exec(text)) !== null) {
-        const q = norm(mm[1])
-        const a =
-          agents.find((ag) => norm(ag.name) === q) ??
-          agents.find((ag) => norm(ag.name).startsWith(q))
-        if (a && !mentioned.includes(a.id)) mentioned.push(a.id)
-      }
+      // The message is answered by the session's bound agent (chosen from the
+      // composer dropdown). "@mention" routing was removed — one agent per turn.
       const sessAgent = sessions.find((s) => s.id === sid)?.agentId
-      const agentIds = mentioned.length ? mentioned : sessAgent ? [sessAgent] : []
+      const agentIds = sessAgent ? [sessAgent] : []
 
       const now = Math.floor(Date.now() / 1000)
       const optimistic: Message = {
@@ -351,7 +339,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         if (h && h.ac === ac) runsRef.current.delete(sid)
       }
     },
-    [activeSessionId, agents, sessions, thinkingLevel, permissionMode, activeSessionIdRef, notifyEnabled, setMessages, setError, setView, selectSession, refreshSessions, bumpMeter],
+    [activeSessionId, sessions, thinkingLevel, permissionMode, activeSessionIdRef, notifyEnabled, setMessages, setError, setView, selectSession, refreshSessions, bumpMeter],
   )
 
   // Keep a live ref to sendMessage so effects (queue flush) can call the latest

@@ -211,7 +211,7 @@ export function SkillsPanel({ onError }: Props) {
       >
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            Beceriler · {list.length}
+            Skills · {list.length}
           </span>
           <div className="flex items-center gap-1.5">
             <button

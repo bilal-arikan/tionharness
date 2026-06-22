@@ -109,11 +109,18 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	// gate their tool use. Empty maps to "auto" downstream.
 	req.PermissionMode = agent.PermissionMode
 
-	// Run provider-driven CLI subprocesses (claude-cli) inside the workspace
-	// sandbox root so relative paths — e.g. an attachment's "uploads/<sid>/<file>"
-	// — resolve there instead of the backend's launch directory. Native providers
-	// ignore this. Empty when no sandbox is configured.
-	req.WorkDir = r.workDir
+	// Resolve this turn's working directory: the session's WorkingDir override
+	// (else the workspace default). Autonomous turns may additionally get an
+	// isolated per-session git worktree. The result roots the fs/shell sandbox
+	// (carried via ctx into buildRegistry) and is the cwd for provider-driven CLI
+	// subprocesses (claude-cli) so relative paths — e.g. an attachment's
+	// "uploads/<sid>/<file>" — resolve there. Native providers ignore req.WorkDir.
+	workDir := r.effectiveWorkDir(ctx)
+	if autonomous && r.tun.GitWorktreeIsolation() {
+		workDir = r.ensureWorktree(ctx, workDir, SessionIDFrom(ctx))
+	}
+	req.WorkDir = workDir
+	ctx = withResolvedWorkDir(ctx, workDir, autonomous)
 
 	// Provider-driven paths (claude CLI) surface their own trace via OnEvent.
 	if onStep != nil {

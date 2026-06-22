@@ -18,7 +18,9 @@ export function NetworkPanel({ onError }: Props) {
   const [graph, setGraph] = useState<WorkspaceGraph | null>(null)
   const [loading, setLoading] = useState(false)
   const [density, setDensity] = useState(1)
-  const [mode, setMode] = useState<WorkspaceMode>('relation')
+  // Default to the live board-column flow so the animated, self-refreshing
+  // network is the primary view; users can switch to the static relation web.
+  const [mode, setMode] = useState<WorkspaceMode>('live')
   // Visible node layers (agents are always shown). Skills/MCP start hidden to
   // keep the default view focused on the agent/task/flow collaboration core.
   const [visible, setVisible] = useState<Set<WorkspaceNodeType>>(

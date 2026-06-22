@@ -40,8 +40,9 @@ export function MemoryPanel({ agent, onError }: Props) {
   const [content, setContent] = useState('')
   const [filter, setFilter] = useState<MemoryKind | 'all'>('all')
   const [reflecting, setReflecting] = useState(false)
-  // Memory view mode: the flat list or the similarity knowledge graph.
-  const [mode, setMode] = useState<'list' | 'graph'>('list')
+  // Memory view mode: the flat list or the similarity knowledge graph. Defaults
+  // to the graph so the knowledge network is the primary memory view.
+  const [mode, setMode] = useState<'list' | 'graph'>('graph')
   // Cards render collapsed (a 4-line plain-text preview) by default; this tracks
   // which ids the user has expanded into the full markdown view.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())

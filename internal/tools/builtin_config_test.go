@@ -11,7 +11,7 @@ import (
 
 func TestConfigTools_ReadWriteList(t *testing.T) {
 	root := t.TempDir()
-	sb := NewSandbox(root)
+	sb := NewConfinedSandbox(root)
 	if !sb.Ready() {
 		t.Fatal("sandbox not ready")
 	}
@@ -45,7 +45,7 @@ func TestConfigTools_ReadWriteList(t *testing.T) {
 
 func TestConfigTools_PathTraversalBlocked(t *testing.T) {
 	root := t.TempDir()
-	sb := NewSandbox(root)
+	sb := NewConfinedSandbox(root)
 	ctx := context.Background()
 
 	// ".." traversal must be rejected on every platform. (An absolute path is

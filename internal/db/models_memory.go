@@ -5,6 +5,7 @@ const (
 	MemoryDocument   = "document"   // user-provided fact or note
 	MemoryJournal    = "journal"    // auto-logged activity (chat turn, task run)
 	MemoryReflection = "reflection" // agent-written summary over its journal
+	MemoryCore       = "core"       // agent-editable working memory; single row per agent, always in context
 )
 
 // KnowledgeSource is one long-term memory belonging to an agent. Embedding

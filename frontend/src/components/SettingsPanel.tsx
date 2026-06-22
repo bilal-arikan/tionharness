@@ -8,12 +8,9 @@ import type {
   Secret,
   SettingsPatch,
   SlashCommand,
-  WorkspaceSettings,
 } from '../types'
-import type { View } from './NavRail'
 import {
   APP_CATS,
-  WS_CATS,
   CatButton,
   type Cat,
 } from './settings/primitives'
@@ -33,9 +30,8 @@ import {
 import { ProvidersPanel } from './settings/ProvidersPanel'
 import { CommandsPanel } from './settings/CommandsPanel'
 import { StepKindsPanel } from './settings/StepKindsPanel'
-import { WorkspacePanel } from './settings/WorkspacePanel'
-import { WorkspaceFilesPanel } from './settings/WorkspaceFilesPanel'
 import { HooksPanel } from './settings/HooksPanel'
+import { SecretsPanel } from './panels/SecretsPanel'
 // The workspace tool catalog + MCP server management, surfaced here as a
 // settings category (previously a top-level NavRail view). Renders its own
 // master-detail layout, so it is shown full-bleed below.
@@ -45,18 +41,9 @@ interface Props {
   onError: (msg: string) => void
   // Re-apply theme/accent globally after an app-settings save.
   onSaved: (s: AppSettings) => void
-  // Notify the app that workspace metadata (e.g. name) changed, so the
-  // workspace list/switcher can refresh.
-  onWorkspaceChanged?: () => void
-  // Delete the active workspace (app handles confirm/switch). Returns whether
-  // the deletion proceeded.
-  onDeleteWorkspace?: () => void
   // Slash commands available in the chat composer — shown read-only in the
   // "Komutlar" reference category.
   commands?: SlashCommand[]
-  // Navigate the main app to another view (used to jump to the Secrets screen
-  // from the provider key fields).
-  onNavigate?: (v: View) => void
   // Controlled active category (deep-link aware). When onCatChange is provided
   // the category is fully controlled by the parent (URL-synced); otherwise it is
   // tracked internally.
@@ -68,7 +55,7 @@ interface Props {
   reloadNonce?: number
 }
 
-const ALL_CATS: Cat[] = [...APP_CATS, ...WS_CATS].map((c) => c.key)
+const ALL_CATS: Cat[] = APP_CATS.map((c) => c.key)
 function isCat(v: string | null | undefined): v is Cat {
   return !!v && (ALL_CATS as string[]).includes(v)
 }
@@ -77,7 +64,7 @@ function isCat(v: string | null | undefined): v is Cat {
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
 // The per-category forms live in ./settings/*.
-export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWorkspace, commands = [], onNavigate, cat: catProp, onCatChange, reloadNonce = 0 }: Props) {
+export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, onCatChange, reloadNonce = 0 }: Props) {
   // Category is controlled by the parent (URL deep-link) when onCatChange is
   // given; an unknown/empty routed category falls back to 'profile'.
   const [catState, setCatState] = useState<Cat>('profile')
@@ -95,10 +82,6 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
   // Workspace secret names, offered as an import source for the key fields.
   const [secrets, setSecrets] = useState<Secret[]>([])
 
-  // Per-workspace settings scope.
-  const [ws, setWs] = useState<WorkspaceSettings | null>(null)
-  const [wsOrig, setWsOrig] = useState<WorkspaceSettings | null>(null)
-
   const [saving, setSaving] = useState(false)
 
   // Built-in runtime prompts (read-only) shown in the Komutlar category.
@@ -109,13 +92,11 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
 
   useEffect(() => {
     api.getSettings().then((s) => { setDraft(s); setOriginal(s) }).catch((e) => onError((e as Error).message))
-    api.getWorkspaceSettings().then((s) => { setWs(s); setWsOrig(s) }).catch((e) => onError((e as Error).message))
     api.getPrompts().then((p) => { setPrompts(p.prompts); setPromptsDir(p.dir) }).catch(() => {})
     api.listSecrets().then(setSecrets).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const isWs = cat === 'workspace'
   const dirtyApp = useMemo(
     () =>
       (draft && original && JSON.stringify(draft) !== JSON.stringify(original)) ||
@@ -124,11 +105,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       openrouterKeyInput.length > 0,
     [draft, original, keyInput, minimaxKeyInput, openrouterKeyInput],
   )
-  const dirtyWs = useMemo(
-    () => ws && wsOrig && JSON.stringify(ws) !== JSON.stringify(wsOrig),
-    [ws, wsOrig],
-  )
-  const dirty = isWs ? dirtyWs : dirtyApp
+  const dirty = dirtyApp
 
   // Live reload: when an agent changes app settings (parent bumps reloadNonce),
   // re-fetch and refresh the form — but skip while the user has unsaved edits so
@@ -142,8 +119,6 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
 
   const set = <K extends keyof AppSettings>(key: K, val: AppSettings[K]) =>
     setDraft((d) => (d ? { ...d, [key]: val } : d))
-  const setWsField = <K extends keyof WorkspaceSettings>(key: K, val: WorkspaceSettings[K]) =>
-    setWs((d) => (d ? { ...d, [key]: val } : d))
 
   const saveApp = async () => {
     if (!draft) return
@@ -159,6 +134,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       maxContextTokens: draft.maxContextTokens, keepRecentMsgs: draft.keepRecentMsgs,
       recallTopN: draft.recallTopN, recallMinScore: draft.recallMinScore,
       journalCap: draft.journalCap, journalMaxLen: draft.journalMaxLen,
+      memoryPressureWarn: draft.memoryPressureWarn, coreMemoryTools: draft.coreMemoryTools,
       autoReflect: draft.autoReflect, autoReflectThreshold: draft.autoReflectThreshold,
       defaultDailyCallLimit: draft.defaultDailyCallLimit, defaultDailyTokenLimit: draft.defaultDailyTokenLimit,
       pauseAutonomy: draft.pauseAutonomy,
@@ -168,6 +144,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
       enableCliHooks: draft.enableCliHooks,
       enableDelegation: draft.enableDelegation,
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
+      autonomousConfine: draft.autonomousConfine, gitWorktreeIsolation: draft.gitWorktreeIsolation,
     }
     if (keyInput) patch.anthropicKey = keyInput
     if (minimaxKeyInput) patch.minimaxKey = minimaxKeyInput
@@ -177,27 +154,10 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
     onSaved(updated)
   }
 
-  const saveWs = async () => {
-    if (!ws) return
-    const updated = await api.updateWorkspaceSettings({
-      // instructions are edited (and saved) in the "Promptlar & Dosyalar" tab as
-      // an editable file; omit here so a Genel save never clobbers a newer value.
-      name: ws.name, icon: ws.icon, color: ws.color,
-      defaultProvider: ws.defaultProvider, defaultModel: ws.defaultModel,
-      pauseAutonomy: ws.pauseAutonomy,
-      sessionContextEnabled: ws.sessionContextEnabled,
-      sessionContextEveryTurn: ws.sessionContextEveryTurn,
-      sessionContextRecentCount: ws.sessionContextRecentCount,
-    })
-    setWs(updated); setWsOrig(updated)
-    onWorkspaceChanged?.()
-  }
-
   const save = async () => {
     setSaving(true)
     try {
-      if (isWs) await saveWs()
-      else await saveApp()
+      await saveApp()
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -247,7 +207,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
     }
   }
 
-  const catMeta = [...APP_CATS, ...WS_CATS].find((c) => c.key === cat)
+  const catMeta = APP_CATS.find((c) => c.key === cat)
   const CatIcon = catMeta?.icon
 
   return (
@@ -258,13 +218,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
           Uygulama
         </div>
         {APP_CATS.map((c) => (
-          <CatButton key={c.key} c={c} active={cat === c.key} onClick={() => setCat(c.key)} dirty={c.key !== 'about' && !!dirtyApp} />
-        ))}
-        <div className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Bu Workspace{ws ? ` · ${ws.name}` : ''}
-        </div>
-        {WS_CATS.map((c) => (
-          <CatButton key={c.key} c={c} active={cat === c.key} onClick={() => setCat(c.key)} dirty={!!dirtyWs} />
+          <CatButton key={c.key} c={c} active={cat === c.key} onClick={() => setCat(c.key)} dirty={c.key !== 'about' && c.key !== 'secrets' && !!dirtyApp} />
         ))}
       </aside>
 
@@ -280,12 +234,12 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
             {catMeta?.label ?? ''}
           </span>
           <div className="flex items-center gap-3">
-            {cat !== 'mcptools' && (
+            {cat !== 'mcptools' && cat !== 'secrets' && (
               <span className="text-xs text-[var(--color-text-dim)]">
                 {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
               </span>
             )}
-            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'wsfiles' && cat !== 'hooks' && cat !== 'mcptools' && (
+            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'hooks' && cat !== 'mcptools' && cat !== 'secrets' && (
               <button
                 onClick={save}
                 disabled={!dirty || saving}
@@ -301,9 +255,13 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
           // Tool catalog hosts its own searchable list + detail/server panes, so
           // it is rendered full-bleed (outside the centered max-w content column).
           <ToolsCatalogPanel onError={onError} />
+        ) : cat === 'secrets' ? (
+          // Secrets manages its own list/forms; render full-bleed like the tool
+          // catalog (moved here from a top-level NavRail view).
+          <SecretsPanel onError={onError} />
         ) : (
         <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-6">
-          {!draft || !ws ? (
+          {!draft ? (
             <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
           ) : (
             <>
@@ -320,7 +278,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
                   applyKey={applyKey}
                   secrets={secrets}
                   onImportSecret={async (name) => (await api.revealSecret(name)).value}
-                  onManageSecrets={() => onNavigate?.('secrets')}
+                  onManageSecrets={() => setCat('secrets')}
                 />
               )}
               {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}
@@ -358,10 +316,6 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceChanged, onDeleteWo
               )}
               {cat === 'stepkinds' && <StepKindsPanel />}
               {cat === 'about' && <AboutPanel />}
-              {cat === 'workspace' && (
-                <WorkspacePanel ws={ws} setWsField={setWsField} onDeleteWorkspace={onDeleteWorkspace} />
-              )}
-              {cat === 'wsfiles' && <WorkspaceFilesPanel onError={onError} />}
             </>
           )}
         </div>

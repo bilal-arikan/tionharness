@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/bilal/swarmgo/internal/agent"
@@ -30,24 +31,14 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // Shared by both the blocking (chat.go) and streaming (chat_stream.go) handlers.
 func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession bool) providers.Request {
 	system := buildSystemPrompt(agentRow)
-	// Tell the agent its own name and how @mentions work, so a leading "@Name"
-	// (the UI's agent selector) is understood as the user addressing this agent —
-	// not mistaken for a file, skill, or entity to look up.
+	// Tell the agent its own name and how "@name" references work. The message is
+	// addressed to THIS agent (chosen from the UI dropdown). An "@name" inside the
+	// message is just a NAME REFERENCE — the user pointing at who they mean — NOT a
+	// handoff or a command to invoke that agent, and NOT a file/skill/entity to look
+	// up. You answer the message yourself; if it helps you may address or relay to
+	// the referenced agent in your reply, but nothing is routed automatically.
 	if n := strings.TrimSpace(agentRow.Name); n != "" {
-		note := "You are the agent \"" + n + "\". A leading \"@" + n + "\" means the user is addressing you by name — not a file, skill, or entity to look up. Just answer the message."
-		// Multi-agent turn: when the user mentions several agents, each answers the
-		// same message in order and later agents can see the earlier replies.
-		var others []string
-		for _, a := range turnAgents {
-			if a.ID != agentRow.ID {
-				if nm := strings.TrimSpace(a.Name); nm != "" {
-					others = append(others, "@"+nm)
-				}
-			}
-		}
-		if len(others) > 0 {
-			note += " Other agents were also addressed (" + strings.Join(others, ", ") + "); each answers this same message in turn and can see earlier replies. Speak only as yourself — do not impersonate the others."
-		}
+		note := "You are the agent \"" + n + "\", and this message is addressed to you. It may contain \"@name\" references to other agents — treat each as a plain name reference (the user pointing at who they mean), not a handoff, a command to call that agent, or a file/skill to look up. Answer the message yourself; if useful you may address or relay to a referenced agent in your reply, but there is no automatic routing."
 		system = strings.TrimSpace(note + "\n\n" + system)
 	}
 	if uc := userContextBlock(s.settings.Get()); uc != "" {
@@ -77,6 +68,26 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if gb := goalContextBlock(session.Goal, session.GoalDone); gb != "" {
 		dynamic = gb
 	}
+	// Tell the agent its working directory (cwd) + git branch, so it knows where
+	// its file/shell tools operate. The session override wins; else the workspace
+	// default. Kept in the dynamic suffix because the branch can change.
+	cwd := strings.TrimSpace(session.WorkingDir)
+	if cwd == "" {
+		cwd = wsp.Runtime.WorkspaceDefaultDir()
+	}
+	if wb := workdirContextBlock(cwd); wb != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + wb)
+	}
+	// Core memory (MemGPT-style): the agent's self-maintained working-memory block,
+	// re-injected verbatim every turn (edited via core_memory_replace/append). Sits
+	// above recall because it is the agent's own durable context, not a similarity
+	// hit. Recall already excludes the "core" kind, so it never appears twice.
+	if core, err := wsp.Runtime.Memory().ReadCore(ctx, agentRow.ID); err == nil {
+		if core = strings.TrimSpace(core); core != "" {
+			block := "## Core memory (you maintain this; edit with core_memory_replace/append)\n" + core
+			dynamic = strings.TrimSpace(dynamic + "\n\n" + block)
+		}
+	}
 	if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, message, 5); block != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + block)
 	}
@@ -104,6 +115,19 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		if sb := sessionsContextBlock(ctx, wsp.DB, session.ID, recent); sb != "" {
 			dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
 		}
+	}
+
+	// Memory-pressure signal (MemGPT-style paging hint): when the context budget is
+	// nearly full, warn the agent — BEFORE the next silent compaction — to persist
+	// anything that must survive. Volatile (recomputed each turn) so it leads the
+	// dynamic suffix without disturbing the cached static prefix. Threshold 0 = off.
+	if warn := s.tun.MemoryPressureWarn(); warn > 0 && prep.Pressure >= warn {
+		note := fmt.Sprintf(
+			"⚠️ Context is %d%% full and older turns will soon be compacted into a summary. "+
+				"If any fact, decision, or detail here must survive, persist it now "+
+				"(memory_add for long-term recall, or core_memory_replace/append for working memory).",
+			int(prep.Pressure*100))
+		dynamic = strings.TrimSpace(note + "\n\n" + dynamic)
 	}
 
 	return providers.Request{

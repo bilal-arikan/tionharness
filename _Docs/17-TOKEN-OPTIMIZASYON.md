@@ -104,8 +104,49 @@ token araçlarının (`rtk`, `sqz`, `headroom`) **kurulu olup olmadığını** g
 
 - Sıkıştırma hem modele giden `ToolResult`'a **hem de** UI'da gösterilen/persist edilen `TurnStep.Output`'a
   uygulanır → kullanıcı, modelin gördüğü çıktıyı görür (tutarlılık).
-- Komut-özel akıllı kısaltıcılar (git/test/grep'e özgü) henüz yok; A jeneriktir. Gelecek iş.
+- Komut-özel akıllı kısaltıcılar (git/test/grep'e özgü) henüz yok; A jeneriktir. → bkz. [Yapılacak](#yapılacak--craftagenttan-aktarılacak-fikirler).
 - claude-cli delegasyon yolu kapsam dışıdır (yukarıdaki sebep).
+
+## Yapılacak — the external agent project'tan Aktarılacak Fikirler
+
+> Kaynak: `external-agent-oss` ([repo](https://github.com/external-agent-project/external-agent-oss)) bağlam-yönetimi
+> incelemesi (2026-06-22). the external agent project çoğu bağlam işini Claude Agent SDK'ye devreder; SwarmGo'nun açık
+> motoru genel olarak daha kontrollü. Aşağıdakiler the external agent project'ta işe yarayan, SwarmGo'ya değer katacak
+> birkaç pratik dokunuş — **henüz yapılmadı**.
+
+### 1. Komut-aile-bazlı deterministik bash sıkıştırıcı (RTK tarzı) 🔶
+
+the external agent project yerel **RTK (Rewrite Toolkit)** binary'siyle `git diff`, `ls -R`, `bun test`, `npm install`,
+`grep` gibi gürültülü bash çıktılarını **model'e gitmeden önce** komut-ailesine özel kurallarla yeniden yazar
+(tasarruf istatistiği de tutar). SwarmGo'da Sistem A jeneriktir (dedupe + boş-satır + ortadan kırpma);
+komut-özel akıllı kısaltıcı yok.
+
+- **Yapılacak:** `internal/tools/compact` içine komut-aile tanıyıcı bir katman (ör. `compact/rules_*.go`):
+  `git diff`/`git status` → dosya başına özet, `ls -R`/`tree` → derinlik kırpma, test runner → yalnız
+  fail+özet satırları, `grep` → eşleşme yoğunluğu kırpma.
+- Tetik: `shell` tool input'undaki komut adına göre kural seçimi; kural yoksa mevcut jenerik A'ya düş.
+- Sistem A ile aynı sözleşme: dep-siz, hata döndürmez, `Stats.Saved()` rollup'a yazılır.
+
+### 2. `_intent` — açık niyet enjeksiyonu 🔶
+
+the external agent project her MCP tool çağrısında şemaya bir **`_intent`** alanı enjekte eder; bu, büyük-sonuç
+özetlemesinin **neye odaklanacağını** açıkça söyler. SwarmGo'da Sistem B niyeti *çıkarımla* buluyor
+(tool adı + ilk `intentInputRunes=300` input). Açık niyet daha iyi sinyal verir.
+
+- **Yapılacak:** native tool-use döngüsünde (`agent/toolloop.go`) modelin tool çağrısına opsiyonel bir
+  `_intent` (kısa amaç cümlesi) taşımasını sağla; `summarizeToolOutput` bunu çıkarım yerine doğrudan
+  niyet olarak kullansın. MCP araçlarında şema NormalizeSchema sırasında `_intent` alanı eklenebilir.
+- Düşük maliyet / yüksek fayda: Sistem B özet kalitesini, ekstra model çağrısı olmadan artırır.
+
+### 3. Büyük-sonuç özet eşiğini the external agent project ile hizala (ince ayar) 🔶
+
+the external agent project büyük tool sonuçlarını **~15k token (≈60KB)** üstünde Haiku ile otomatik özetler. SwarmGo
+Sistem B eşiği şu an **8192 bayt** (`compactLlmThreshold`) ve varsayılan **kapalı**. Bu bir hata değil,
+farklı politika — ama eşiği token-tabanlı bir referansla yeniden gözden geçirmeye değer.
+
+- **Yapılacak:** `compactLlmThreshold` için token-yaklaşık bir varsayılan (ör. ~12–16KB) değerlendir;
+  ayrıca Ayarlar → Bağlam'da "the external agent project ≈15k token özetler" notu referans olarak gösterilebilir.
+- Not: Bu yalnızca eşik ayarı; mekanizma (Sistem B) zaten mevcut.
 
 ## Ayrıca Bakınız
 

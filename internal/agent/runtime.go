@@ -90,6 +90,11 @@ type Runtime struct {
 	// settings), appended to every agent's static system prompt.
 	instructions atomic.Pointer[string]
 
+	// defaultWorkDir is this workspace's user-chosen default working directory (cwd)
+	// for new sessions, set from per-workspace settings. Empty = fall back to
+	// workDir (the physical workspace dir). A session's own WorkingDir overrides it.
+	defaultWorkDir atomic.Pointer[string]
+
 	// Cross-session awareness config, set from per-workspace settings: whether the
 	// feature is on (gates both the pushed context block and the list_sessions
 	// pull tool), whether to inject every turn (vs only a session's first turn),
@@ -138,6 +143,24 @@ func (r *Runtime) Paused() bool { return r.paused.Load() }
 
 // SetInstructions updates this workspace's agent-wide guidance.
 func (r *Runtime) SetInstructions(s string) { r.instructions.Store(&s) }
+
+// SetDefaultWorkDir updates this workspace's default working directory for new
+// sessions (set from per-workspace settings). Empty clears it (back to workDir).
+func (r *Runtime) SetDefaultWorkDir(s string) { r.defaultWorkDir.Store(&s) }
+
+// WorkspaceDefaultDir returns the working dir used when a session has no override:
+// the configured default working dir when set and valid, else the physical
+// workspace dir. This is the fallback for effectiveWorkDir and the cwd badge.
+func (r *Runtime) WorkspaceDefaultDir() string {
+	if p := r.defaultWorkDir.Load(); p != nil {
+		if d := strings.TrimSpace(*p); d != "" {
+			if info, err := os.Stat(d); err == nil && info.IsDir() {
+				return d
+			}
+		}
+	}
+	return r.workDir
+}
 
 // SetSessionContext updates this workspace's cross-session awareness config.
 func (r *Runtime) SetSessionContext(enabled, everyTurn bool, recent int) {
@@ -231,6 +254,11 @@ func (r *Runtime) WorkspaceSkillsDir() string { return workspaceSkillsDir(r.work
 // path's shell gate.
 func (r *Runtime) ShellEnabled() bool { return r.tun.ShellEnabled() }
 
+// WorkDir returns this workspace's default working directory (the fs/shell base
+// dir). Exposed so the API layer can show the effective cwd when a session has no
+// per-session WorkingDir override.
+func (r *Runtime) WorkDir() string { return r.workDir }
+
 // AutonomousInteraction prepares an Interaction MCP endpoint for a headless
 // (non-chat) CLI turn — scheduler / spawn / flow — so those agents
 // reach the same use_skill / shell / self-management bridge that chat agents do.
@@ -254,13 +282,14 @@ func (r *Runtime) NewShellRunner() func(ctx context.Context, args json.RawMessag
 	if !r.tun.ShellEnabled() {
 		return nil
 	}
-	sb := tools.NewSandbox(r.workDir)
-	if !sb.Ready() {
+	if !tools.NewSandbox(r.workDir).Ready() {
 		return nil
 	}
-	t := tools.NewShellTool(sb)
+	// Resolve the working dir per call so the bridged shell honours the session's
+	// WorkingDir override (the ctx carries the session id), matching the native
+	// path. Unconfined, like an interactive turn.
 	return func(ctx context.Context, args json.RawMessage) (string, error) {
-		return t.Call(ctx, args)
+		return tools.NewShellTool(tools.NewSandbox(r.effectiveWorkDir(ctx))).Call(ctx, args)
 	}
 }
 

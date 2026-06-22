@@ -92,6 +92,13 @@ type Settings struct {
 	JournalCap    int `json:"journalCap"`    // newest journal entries kept per agent (0 = default)
 	JournalMaxLen int `json:"journalMaxLen"` // max runes stored per journal entry (0 = default)
 
+	// MemGPT-style self-editing memory (C6). MemoryPressureWarn is the context-fill
+	// ratio (0..1) above which a turn warns the agent to persist important facts
+	// before the next silent compaction; 0 disables the warning. CoreMemoryTools
+	// offers the core_memory_replace/append editing tools.
+	MemoryPressureWarn float64 `json:"memoryPressureWarn"`
+	CoreMemoryTools    bool    `json:"coreMemoryTools"`
+
 	// Auto-reflect (dream cycle): consolidate journals into a reflection once the
 	// journal count crosses AutoReflectThreshold.
 	AutoReflect          bool `json:"autoReflect"`
@@ -141,6 +148,11 @@ type Settings struct {
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"` // max concurrent spawned sessions (0 = default 16)
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`    // max spawns per agent turn (0 = default 4)
 
+	// Working-directory guards. The built-in fs/shell tools are unconfined (may
+	// touch any path); these brake that power on autonomous (no-human) turns.
+	AutonomousConfine    bool `json:"autonomousConfine"`    // confine fs/shell to the working dir on autonomous turns (default true)
+	GitWorktreeIsolation bool `json:"gitWorktreeIsolation"` // give autonomous sessions a per-session git worktree (default false)
+
 	// Diagnostics (informational; applied on restart).
 	LogLevel string `json:"logLevel"` // info | debug | warn | error
 }
@@ -167,6 +179,10 @@ func Default() Settings {
 
 		JournalCap:    50,
 		JournalMaxLen: 1024,
+
+		// MemGPT memory: warn at 75% context fill, offer the core editing tools.
+		MemoryPressureWarn: 0.75,
+		CoreMemoryTools:    true,
 
 		AutoReflect:          true,
 		AutoReflectThreshold: 30,
@@ -202,6 +218,11 @@ func Default() Settings {
 
 		SpawnMaxConcurrent: 16,
 		SpawnMaxPerTurn:    4,
+
+		// Autonomous turns confine fs/shell by default (safety brake); worktree
+		// isolation is opt-in (needs git + has setup cost).
+		AutonomousConfine:    true,
+		GitWorktreeIsolation: false,
 
 		LogLevel: "info",
 	}
@@ -247,6 +268,9 @@ type DTO struct {
 	JournalCap    int `json:"journalCap"`
 	JournalMaxLen int `json:"journalMaxLen"`
 
+	MemoryPressureWarn float64 `json:"memoryPressureWarn"`
+	CoreMemoryTools    bool    `json:"coreMemoryTools"`
+
 	AutoReflect          bool `json:"autoReflect"`
 	AutoReflectThreshold int  `json:"autoReflectThreshold"`
 
@@ -280,6 +304,9 @@ type DTO struct {
 
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"`
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`
+
+	AutonomousConfine    bool `json:"autonomousConfine"`
+	GitWorktreeIsolation bool `json:"gitWorktreeIsolation"`
 
 	LogLevel string `json:"logLevel"`
 }
@@ -323,6 +350,9 @@ func (s Settings) ToDTO() DTO {
 		JournalCap:    s.JournalCap,
 		JournalMaxLen: s.JournalMaxLen,
 
+		MemoryPressureWarn: s.MemoryPressureWarn,
+		CoreMemoryTools:    s.CoreMemoryTools,
+
 		AutoReflect:          s.AutoReflect,
 		AutoReflectThreshold: s.AutoReflectThreshold,
 
@@ -356,6 +386,9 @@ func (s Settings) ToDTO() DTO {
 
 		SpawnMaxConcurrent: s.SpawnMaxConcurrent,
 		SpawnMaxPerTurn:    s.SpawnMaxPerTurn,
+
+		AutonomousConfine:    s.AutonomousConfine,
+		GitWorktreeIsolation: s.GitWorktreeIsolation,
 
 		LogLevel: s.LogLevel,
 	}
@@ -400,6 +433,9 @@ type Patch struct {
 	JournalCap    *int `json:"journalCap"`
 	JournalMaxLen *int `json:"journalMaxLen"`
 
+	MemoryPressureWarn *float64 `json:"memoryPressureWarn"`
+	CoreMemoryTools    *bool    `json:"coreMemoryTools"`
+
 	AutoReflect          *bool `json:"autoReflect"`
 	AutoReflectThreshold *int  `json:"autoReflectThreshold"`
 
@@ -433,6 +469,9 @@ type Patch struct {
 
 	SpawnMaxConcurrent *int `json:"spawnMaxConcurrent"`
 	SpawnMaxPerTurn    *int `json:"spawnMaxPerTurn"`
+
+	AutonomousConfine    *bool `json:"autonomousConfine"`
+	GitWorktreeIsolation *bool `json:"gitWorktreeIsolation"`
 
 	LogLevel *string `json:"logLevel"`
 }

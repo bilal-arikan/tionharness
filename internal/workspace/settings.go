@@ -27,6 +27,11 @@ type WSSettings struct {
 	DefaultModel    string `json:"defaultModel"`
 	PauseAutonomy   bool   `json:"pauseAutonomy"`
 
+	// DefaultWorkingDir is the working directory (cwd) new sessions in this
+	// workspace start with, for the built-in fs/shell tools. Empty = the physical
+	// workspace dir. A session's own WorkingDir overrides it. the external agent project parity.
+	DefaultWorkingDir string `json:"defaultWorkingDir"`
+
 	// Cross-session awareness (workspace-specific): inject a short summary of this
 	// workspace's active + recent chat sessions into an agent's context, and offer
 	// the list_sessions pull tool. Each workspace controls its own behaviour.
@@ -57,9 +62,10 @@ type WSSettingsPatch struct {
 	Instructions    *string `json:"instructions"`
 	Icon            *string `json:"icon"`
 	Color           *string `json:"color"`
-	DefaultProvider *string `json:"defaultProvider"`
-	DefaultModel    *string `json:"defaultModel"`
-	PauseAutonomy   *bool   `json:"pauseAutonomy"`
+	DefaultProvider   *string `json:"defaultProvider"`
+	DefaultModel      *string `json:"defaultModel"`
+	PauseAutonomy     *bool   `json:"pauseAutonomy"`
+	DefaultWorkingDir *string `json:"defaultWorkingDir"`
 
 	SessionContextEnabled     *bool `json:"sessionContextEnabled"`
 	SessionContextEveryTurn   *bool `json:"sessionContextEveryTurn"`
@@ -99,6 +105,7 @@ func (w *Workspace) loadSettings() {
 	if w.Runtime != nil {
 		w.Runtime.SetPaused(s.PauseAutonomy)
 		w.Runtime.SetInstructions(s.Instructions)
+		w.Runtime.SetDefaultWorkDir(s.DefaultWorkingDir)
 		w.Runtime.SetSessionContext(s.SessionContextEnabled, s.SessionContextEveryTurn, s.SessionContextRecentCount)
 	}
 }
@@ -167,6 +174,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.PauseAutonomy != nil {
 		ws.settings.cur.PauseAutonomy = *patch.PauseAutonomy
 	}
+	if patch.DefaultWorkingDir != nil {
+		ws.settings.cur.DefaultWorkingDir = *patch.DefaultWorkingDir
+	}
 	if patch.SessionContextEnabled != nil {
 		ws.settings.cur.SessionContextEnabled = *patch.SessionContextEnabled
 	}
@@ -181,6 +191,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	paused := ws.settings.cur.PauseAutonomy
 	instructions := ws.settings.cur.Instructions
+	defaultWorkDir := ws.settings.cur.DefaultWorkingDir
 	scEnabled := ws.settings.cur.SessionContextEnabled
 	scEvery := ws.settings.cur.SessionContextEveryTurn
 	scRecent := ws.settings.cur.SessionContextRecentCount
@@ -197,6 +208,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if ws.Runtime != nil {
 		ws.Runtime.SetPaused(paused)
 		ws.Runtime.SetInstructions(instructions)
+		ws.Runtime.SetDefaultWorkDir(defaultWorkDir)
 		ws.Runtime.SetSessionContext(scEnabled, scEvery, scRecent)
 	}
 	return ws, nil

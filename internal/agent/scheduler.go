@@ -217,10 +217,13 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	}
 
 	// Record the wake prompt as a user turn and tell the open screen to refresh +
-	// show a thinking indicator (phase=start).
+	// show a thinking indicator (phase=start). Origin "wake" makes the UI render it
+	// as a "⏰ Otomatik devam" note, not a user bubble — the agent resumed itself,
+	// the user did not re-ask. Role stays "user" so the model's context is unchanged.
 	if _, err := s.db.AddMessage(ctx, db.Message{
 		SessionID: sc.SessionID,
 		Role:      "user",
+		Origin:    "wake",
 		Text:      sc.Prompt,
 	}); err != nil {
 		return err
@@ -393,10 +396,12 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		return "", err
 	}
 	// Record the scheduled prompt as a user turn first, so the schedule thread
-	// reads as a real conversation (the UI shows what was asked).
+	// reads as a real conversation (the UI shows what was asked). Origin "schedule"
+	// renders it as a "⏰ Zamanlanmış görev" note rather than a user bubble.
 	if _, err := s.db.AddMessage(ctx, db.Message{
 		SessionID: session.ID,
 		Role:      "user",
+		Origin:    "schedule",
 		Text:      sc.Prompt,
 	}); err != nil {
 		return session.ID, err

@@ -76,6 +76,7 @@ type Prepared struct {
 	Messages      []providers.Message // the turns to actually send
 	ContextTokens int                 // estimated tokens of summary + sent messages
 	Compacted     bool                // whether this call folded new messages into the summary
+	Pressure      float64             // ContextTokens / maxTokens (0..1+); 0 when maxTokens <= 0
 }
 
 // Prepare returns the messages to send for a turn, compacting older history
@@ -106,11 +107,21 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		compacted = true
 	}
 
+	contextTokens := EstimateTokens(summary, pending)
+	// Pressure is how full the context budget is after this turn's compaction —
+	// surfaced to the agent so it can persist anything important BEFORE the next
+	// silent fold (see api/chat_turn.go). 0 when the budget is disabled.
+	pressure := 0.0
+	if maxTokens > 0 {
+		pressure = float64(contextTokens) / float64(maxTokens)
+	}
+
 	return Prepared{
 		Summary:       summary,
 		Messages:      toProviderMessages(pending),
-		ContextTokens: EstimateTokens(summary, pending),
+		ContextTokens: contextTokens,
 		Compacted:     compacted,
+		Pressure:      pressure,
 	}, nil
 }
 

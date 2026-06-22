@@ -267,6 +267,12 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	}
 	applyInt(&next.JournalCap, p.JournalCap)
 	applyInt(&next.JournalMaxLen, p.JournalMaxLen)
+	if p.MemoryPressureWarn != nil {
+		next.MemoryPressureWarn = *p.MemoryPressureWarn
+	}
+	if p.CoreMemoryTools != nil {
+		next.CoreMemoryTools = *p.CoreMemoryTools
+	}
 	if p.AutoReflect != nil {
 		next.AutoReflect = *p.AutoReflect
 	}
@@ -314,6 +320,9 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
 	applyInt(&next.SpawnMaxConcurrent, p.SpawnMaxConcurrent)
 	applyInt(&next.SpawnMaxPerTurn, p.SpawnMaxPerTurn)
+
+	applyBool(&next.AutonomousConfine, p.AutonomousConfine)
+	applyBool(&next.GitWorktreeIsolation, p.GitWorktreeIsolation)
 
 	applyString(&next.LogLevel, p.LogLevel)
 
@@ -425,6 +434,13 @@ func normalize(v Settings) Settings {
 	}
 	if v.JournalMaxLen > 65536 {
 		v.JournalMaxLen = 65536
+	}
+	// Memory-pressure warning ratio: clamp to [0,1]; 0 disables the warning.
+	if v.MemoryPressureWarn < 0 {
+		v.MemoryPressureWarn = 0
+	}
+	if v.MemoryPressureWarn > 1 {
+		v.MemoryPressureWarn = 1
 	}
 	// Auto-reflect threshold: at least 2 entries to summarize; cap at 1000.
 	if v.AutoReflectThreshold < 2 {

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { Agent } from '../../types'
+import { useOutsideClick } from '../../hooks/useOutsideClick'
 import { AgentAvatar } from './AgentAvatar'
 
 interface Props {
@@ -14,19 +15,8 @@ interface Props {
 // both in the trigger and the option list. Closes on outside click.
 export function AgentPicker({ agents, value, onChange, placeholder = 'Ajan seç' }: Props) {
   const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
+  const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
   const selected = agents.find((a) => a.id === value)
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
 
   return (
     <div ref={rootRef} className="relative">

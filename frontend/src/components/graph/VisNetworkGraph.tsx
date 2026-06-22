@@ -13,6 +13,9 @@ interface Props {
   // density: 0.4 (sparse) … 2 (dense). Scales repulsion + spring length.
   density?: number
   onSelect?: (id: string | null) => void
+  // When true, hovering a node dims every non-neighbour node/edge so the
+  // hovered memory and its similar peers stand out (focus + context).
+  highlightNeighbors?: boolean
 }
 
 // buildOptions configures the vis-network instance. Relation mode uses a
@@ -65,7 +68,14 @@ function buildOptions(density = 1, mode: VisMode = 'relation'): Options {
 // *incrementally* (diff add/update/remove by id) so that when the graph changes —
 // a task moves columns, an agent re-bonds to a new task — the physics engine
 // animates the transition instead of resetting every node's position.
-export function VisNetworkGraph({ nodes, edges, mode = 'relation', density = 1, onSelect }: Props) {
+export function VisNetworkGraph({
+  nodes,
+  edges,
+  mode = 'relation',
+  density = 1,
+  onSelect,
+  highlightNeighbors = false,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const networkRef = useRef<Network | null>(null)
   const nodesDSRef = useRef<DataSet<Node> | null>(null)
@@ -75,6 +85,11 @@ export function VisNetworkGraph({ nodes, edges, mode = 'relation', density = 1, 
   const populatedRef = useRef(false)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
+  // Original edge colors, kept so blurNode can restore exactly what the mapper
+  // set (per-edge opacity/width) after a hover dim.
+  const baseEdgeColorRef = useRef<Map<string, Edge['color']>>(new Map())
+  const highlightRef = useRef(highlightNeighbors)
+  highlightRef.current = highlightNeighbors
 
   // Create the network once.
   useEffect(() => {
@@ -91,6 +106,35 @@ export function VisNetworkGraph({ nodes, edges, mode = 'relation', density = 1, 
     networkRef.current = network
     network.on('selectNode', (p: { nodes: string[] }) => onSelectRef.current?.(p.nodes[0] ?? null))
     network.on('deselectNode', () => onSelectRef.current?.(null))
+
+    // Hover neighbour highlight: dim everything but the hovered node, its
+    // direct neighbours and the edges between them. Restores on blur.
+    network.on('hoverNode', (p: { node: string }) => {
+      if (!highlightRef.current) return
+      const nds = nodesDSRef.current
+      const eds = edgesDSRef.current
+      if (!nds || !eds) return
+      const kept = new Set<string>([p.node, ...(network.getConnectedNodes(p.node) as string[])])
+      const keptEdges = new Set<string>(network.getConnectedEdges(p.node) as string[])
+      nds.update((nds.getIds() as string[]).map((id) => ({ id, opacity: kept.has(id) ? 1 : 0.12 })))
+      eds.update(
+        (eds.getIds() as string[]).map((id) =>
+          keptEdges.has(id)
+            ? { id, color: baseEdgeColorRef.current.get(id) }
+            : { id, color: { color: '#334155', opacity: 0.05 } },
+        ),
+      )
+    })
+    network.on('blurNode', () => {
+      if (!highlightRef.current) return
+      const nds = nodesDSRef.current
+      const eds = edgesDSRef.current
+      if (!nds || !eds) return
+      nds.update((nds.getIds() as string[]).map((id) => ({ id, opacity: 1 })))
+      eds.update(
+        (eds.getIds() as string[]).map((id) => ({ id, color: baseEdgeColorRef.current.get(id) })),
+      )
+    })
     return () => {
       network.destroy()
       networkRef.current = null
@@ -129,9 +173,14 @@ export function VisNetworkGraph({ nodes, edges, mode = 'relation', density = 1, 
 
     const edgeIds = new Set(edges.map((e) => e.id as string))
     ;(eds.getIds() as string[]).forEach((id) => {
-      if (!edgeIds.has(id)) eds.remove(id)
+      if (!edgeIds.has(id)) {
+        eds.remove(id)
+        baseEdgeColorRef.current.delete(id)
+      }
     })
     eds.update(edges)
+    // Remember each edge's mapper-set color so hover-dim can restore it.
+    for (const e of edges) baseEdgeColorRef.current.set(e.id as string, e.color)
 
     if (!populatedRef.current && nodes.length > 0) {
       populatedRef.current = true

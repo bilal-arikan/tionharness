@@ -37,7 +37,7 @@ DATA_DIR/
     │   ├── store/               # Workspace 1'in TÜM verisi (JSON/JSONL dosyaları)
     │   ├── config/              # Editlenebilir config: prompts/*.md, instructions.md, README.md
     │   ├── ws-settings.json     # Workspace ayarları (override + instructions)
-    │   └── workspace/           # Workspace 1'in görev dosyaları (ajan fs-sandbox kökü)
+    │   └── workspace/           # Workspace 1'in görev dosyaları (ajan fs/shell çalışma dizini tabanı; artık KİLİT değil — bkz. not)
     └── {id-2}/
         ├── store/
         ├── config/
@@ -165,4 +165,22 @@ prompt cache'i bozmaz.
 
 - **Runtime izolasyonu:** Her workspace'in kendi agent runtime'ı var → bir workspace'in otonom ajanları diğerini etkilemez. Tüm workspace'lerin zamanlayıcıları paralel çalışır.
 - **Silme koruması:** En az bir workspace her zaman kalır.
+- **fs/shell artık kilitli DEĞİL (2026-06-22):** `workspace/` dizini eskiden built-in
+  `read_file`/`write_file`/`edit_file`/`list_dir`/`glob`/`grep`/`shell` araçları için
+  bir **güvenlik kilidiydi** (mutlak yol yasak, `..` kaçışı reddedilir). Bu kilit
+  kullanıcı kararıyla **kaldırıldı**: artık bu araçlar makinedeki herhangi bir yolu
+  okuyup yazabilir ve her yerde komut çalıştırabilir. `Sandbox.Root` yalnızca göreli
+  yolların tabanı (varsayılan çalışma dizini) — bir sınır değil. Güvenlik halkası
+  artık tek başına **izin modu** (salt-okunur / sor / otomatik). Tek istisna:
+  **config araçları** (`read_config`/`write_config`/`list_config`) hâlâ
+  `<workspace>/config/` içine **kilitli** (`Sandbox.Confined=true`, the external agent project benzeri
+  ayrım). Kod: `internal/tools/sandbox.go` (`NewSandbox` kilitsiz / `NewConfinedSandbox`
+  kilitli), kablolama `internal/agent/toolsetup.go`.
+- **Oturum-başına çalışma dizini (2026-06-22):** `workspace/` artık yalnızca
+  **varsayılan** çalışma dizini. Her oturum kendi `Session.WorkingDir`'ini
+  belirleyebilir (Composer'daki klasör rozeti) → fs/shell o dizinden çalışır, ajan
+  cwd'sini + git branch'ini bağlamda görür. Otonom turlar için `autonomousConfine`
+  (varsayılan açık) bu dizine yeniden kilitler; `gitWorktreeIsolation` (kapalı) ise
+  otonom oturuma `<workspace>/worktrees/<sessionID>` altında ayrı git worktree
+  verir. Detay: `_Docs/26-CALISMA-DIZINI.md`.
 - **Gelecek:** Workspace yeniden adlandırma, dışa/içe aktarma (export/import), workspace başına ayrı tema.

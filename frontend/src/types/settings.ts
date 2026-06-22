@@ -42,6 +42,10 @@ export interface AppSettings {
   journalCap: number
   journalMaxLen: number
 
+  // MemGPT-style self-editing memory (C6).
+  memoryPressureWarn: number  // context-fill ratio (0..1) above which the agent is warned; 0 = off
+  coreMemoryTools: boolean    // offer core_memory_replace/append editing tools
+
   autoReflect: boolean
   autoReflectThreshold: number
 
@@ -75,6 +79,10 @@ export interface AppSettings {
   enableDelegation: boolean
   delegationMaxDepth: number
   delegationMaxCalls: number
+
+  // Working-directory guards for the (unconfined) fs/shell tools.
+  autonomousConfine: boolean
+  gitWorktreeIsolation: boolean
 
   logLevel: string
 }

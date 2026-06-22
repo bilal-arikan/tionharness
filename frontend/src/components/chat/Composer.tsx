@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Paperclip, Hash, Brain } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { Paperclip, Brain } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '../../types'
-import { AgentAvatar } from '../agents/AgentAvatar'
 import { AttachmentChip } from './AttachmentChip'
+import { WorkDirBadge } from './WorkDirBadge'
 import { api } from '../../api'
 import { PASTE_AS_FILE_THRESHOLD } from '../../lib/attachments'
+import { BTN_ICON } from './composer/buttonStyles'
+import { AgentSelect } from './composer/AgentSelect'
+import { ComposerPicker } from './composer/ComposerPicker'
+import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './composer/pickerOptions'
+import { AutocompleteMenu } from './composer/AutocompleteMenu'
+import { SendActions } from './composer/SendActions'
+import { detectTrigger, buildMenuItems, type Trigger } from './composer/trigger'
 
 // Cap how much of a referenced artifact is inlined into the turn (the artifact
 // itself stays addressable; very large ones are truncated with a note).
@@ -28,6 +35,12 @@ interface Props {
   // streaming: a turn is currently in flight. Changes the action buttons:
   // empty input → "Durdur"; filled input → Queue / Interrupt / Steer.
   streaming?: boolean
+  // waiting: the turn ended into a pending self-wake (schedule_wake) — no turn is
+  // in flight, but the conversation will auto-resume. The composer adopts the same
+  // "busy" look as streaming and, when empty, offers a Durdur that cancels the wake.
+  waiting?: boolean
+  // onCancelWait disarms the pending self-wake (the waiting-state Durdur button).
+  onCancelWait?: () => void
   onSend: (text: string, attachments: Attachment[]) => void
   onStop?: () => void
   onInterrupt?: (text: string) => void
@@ -42,77 +55,27 @@ interface Props {
   permissionMode?: string
   onPermissionModeChange?: (v: string) => void
   agents: Agent[]
+  // The agent that receives the message (mandatory). Chosen from the composer
+  // dropdown — the "@mention" routing was removed. '' = none selected (send is
+  // blocked until an agent is picked).
+  agentId: string
+  onAgentChange: (id: string) => void
   commands: SlashCommand[]
   // Artifacts in the active session, offered by the "#" picker to include their
   // content in the next turn.
   artifacts?: Artifact[]
 }
 
-// Reasoning levels offered in the composer picker. '' defers to the agent's own
-// ThinkingLevel; the rest override it for the turn (see chatReq.ThinkingLevel).
-const THINKING_OPTIONS: { value: string; label: string; hint: string }[] = [
-  { value: '', label: 'Oto', hint: 'Ajanın kendi ayarı' },
-  { value: 'off', label: 'Kapalı', hint: 'Düşünme yok' },
-  { value: 'low', label: 'Düşük', hint: 'Kısa akıl yürütme' },
-  { value: 'medium', label: 'Orta', hint: 'Dengeli' },
-  { value: 'high', label: 'Yüksek', hint: 'Derin akıl yürütme' },
-]
-
-// Permission modes offered in the composer picker / Shift+Tab cycle. '' defers
-// to the agent's own PermissionMode; the rest override it for the turn (see
-// chatReq.PermissionMode). Order is the Shift+Tab cycle order.
-const PERMISSION_OPTIONS: { value: string; label: string; hint: string; icon: string }[] = [
-  { value: '', label: 'Oto (ajan)', hint: 'Ajanın kendi izin ayarı', icon: '🛡' },
-  { value: 'read-only', label: 'Salt-okunur', hint: 'Yazma/komut engellenir', icon: '🔒' },
-  { value: 'ask', label: 'Sor', hint: 'Yazma/komut için onay iste', icon: '✋' },
-  { value: 'auto', label: 'Otomatik', hint: 'Tüm araçlar onaysız', icon: '⚡' },
-]
-
-// Trigger detection: what (if any) autocomplete menu the caret is currently in.
-type Trigger =
-  | { mode: 'agent'; query: string; from: number } // "@..." token start index
-  | { mode: 'artifact'; query: string; from: number } // "#..." token start index
-  | { mode: 'command'; query: string }
-  | null
-
-// MenuItem is one row in the autocomplete menu: an agent mention, a slash command
-// or an artifact reference. The optional fields let a single array type cover all
-// menu modes.
-type MenuItem = {
-  key: string
-  label: string
-  sub?: string
-  agent?: Agent
-  cmd?: SlashCommand
-  artifact?: Artifact
-}
-
-function detectTrigger(value: string, caret: number): Trigger {
-  const before = value.slice(0, caret)
-  // "/" command palette — only when the whole input is a single "/word".
-  if (before.startsWith('/') && !before.includes(' ')) {
-    return { mode: 'command', query: before.slice(1) }
-  }
-  // "@" agent mention — last token at the caret starting with "@".
-  const m = before.match(/(?:^|\s)@([^\s@]*)$/)
-  if (m) {
-    return { mode: 'agent', query: m[1], from: caret - m[1].length - 1 }
-  }
-  // "#" artifact reference — last token at the caret starting with "#".
-  const a = before.match(/(?:^|\s)#([^\s#]*)$/)
-  if (a) {
-    return { mode: 'artifact', query: a[1], from: caret - a[1].length - 1 }
-  }
-  return null
-}
-
 // Composer is the chat input. Typing "@" opens an agent picker; typing "/" at
 // the start opens the slash-command palette. Arrow keys navigate, Enter/Tab
-// select, Esc closes.
+// select, Esc closes. Send-row controls, pickers and the autocomplete menu live
+// in ./composer/*; this file owns the input state and wires them together.
 export function Composer({
   disabled,
   sessionId,
   streaming = false,
+  waiting = false,
+  onCancelWait,
   onSend,
   onStop,
   onInterrupt,
@@ -123,6 +86,8 @@ export function Composer({
   permissionMode = '',
   onPermissionModeChange,
   agents,
+  agentId,
+  onAgentChange,
   commands,
   artifacts = [],
 }: Props) {
@@ -218,27 +183,13 @@ export function Composer({
   }
 
   // Items currently shown in the open menu (filtered by the trigger query).
-  const items = useMemo<MenuItem[]>(() => {
-    if (!trigger) return []
-    const q = trigger.query.toLowerCase()
-    if (trigger.mode === 'agent') {
-      return agents
-        .filter((a) => a.name.toLowerCase().includes(q))
-        .map((a): MenuItem => ({ key: a.id, label: a.name, sub: a.provider, agent: a }))
-    }
-    if (trigger.mode === 'artifact') {
-      return artifacts
-        .filter((a) => a.title.toLowerCase().includes(q))
-        .map((a): MenuItem => ({ key: a.id, label: a.title || 'İsimsiz', sub: a.kind, artifact: a }))
-    }
-    return commands
-      .filter((c) => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
-      .map((c): MenuItem => ({ key: c.name, label: '/' + c.name, sub: c.description, cmd: c }))
-  }, [trigger, agents, commands, artifacts])
+  const items = useMemo(
+    () => buildMenuItems(trigger, agents, commands, artifacts),
+    [trigger, agents, commands, artifacts],
+  )
 
   const updateTrigger = (value: string, caret: number) => {
-    const t = detectTrigger(value, caret)
-    setTrigger(t)
+    setTrigger(detectTrigger(value, caret))
     setSel(0)
   }
 
@@ -253,8 +204,9 @@ export function Composer({
     const item = items[index]
     if (!item) return
     if (item.agent) {
-      // Insert a "@Name " mention at the trigger position — this turn routes to
-      // the mentioned agent(s) (parsed on send).
+      // Insert a "@Name " NAME REFERENCE at the trigger position. This is plain
+      // text the recipient agent reads — it does NOT route the turn to the
+      // mentioned agent (the recipient stays the composer's dropdown agent).
       if (trigger?.mode === 'agent') {
         const caret = taRef.current?.selectionStart ?? text.length
         const mention = '@' + item.agent.name.replace(/\s+/g, '') + ' '
@@ -286,6 +238,10 @@ export function Composer({
   const readyAttachments = pending.filter((p) => p.attachment && !p.error).map((p) => p.attachment!)
   const anyUploading = pending.some((p) => p.uploading)
   const hasContent = text.trim().length > 0 || readyAttachments.length > 0
+  const hasText = text.trim().length > 0
+  // active = the turn is visually "live": either streaming now, or paused on a
+  // pending self-wake that will auto-resume. Both give the composer the busy look.
+  const active = streaming || waiting
 
   const clearComposer = () => {
     pending.forEach((p) => p.previewURL && URL.revokeObjectURL(p.previewURL))
@@ -296,8 +252,9 @@ export function Composer({
 
   const send = () => {
     const t = text.trim()
-    // Block while uploads are still in flight so attachments are never dropped.
-    if (disabled || anyUploading || (!t && readyAttachments.length === 0)) return
+    // Block while uploads are still in flight so attachments are never dropped,
+    // and require a target agent (selection is mandatory; no "@mention").
+    if (disabled || anyUploading || !agentId || (!t && readyAttachments.length === 0)) return
     // "/name args…" → run the matching slash command with the trailing text as
     // its input, instead of sending a literal message. Unknown "/foo" falls
     // through and is sent as plain text.
@@ -316,8 +273,7 @@ export function Composer({
     clearComposer()
   }
 
-  // Streaming-turn actions (only when a turn is in flight). Each consumes the
-  // input.
+  // Streaming-turn actions (only when a turn is in flight). Each consumes the input.
   const act = (fn?: (t: string) => void) => {
     const t = text.trim()
     if (!t || !fn) return
@@ -325,10 +281,6 @@ export function Composer({
     setText('')
     closeMenu()
   }
-  const doQueue = () => act(onQueue)
-  const doInterrupt = () => act(onInterrupt)
-  const doSteer = () => act(onSteer)
-  const hasText = text.trim().length > 0
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (trigger && items.length > 0) {
@@ -367,7 +319,7 @@ export function Composer({
       // While streaming, Enter queues the typed message (safest default) rather
       // than interrupting the in-flight turn.
       if (streaming) {
-        if (hasText) doQueue()
+        if (hasText) act(onQueue)
       } else {
         send()
       }
@@ -376,8 +328,12 @@ export function Composer({
 
   return (
     <div
-      className={`relative border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4 ${
-        dragOver ? 'ring-2 ring-inset ring-[var(--color-accent)]' : ''
+      className={`relative border-t bg-[var(--color-surface)] px-6 py-4 transition-shadow ${
+        dragOver
+          ? 'border-[var(--color-border)] ring-2 ring-inset ring-[var(--color-accent)]'
+          : active
+            ? 'border-[color-mix(in_srgb,var(--color-accent)_45%,var(--color-border))] ring-1 ring-inset ring-[color-mix(in_srgb,var(--color-accent)_35%,transparent)]'
+            : 'border-[var(--color-border)]'
       }`}
       onDragOver={(e) => {
         if (!sessionId) return
@@ -392,68 +348,57 @@ export function Composer({
         uploadFiles(Array.from(e.dataTransfer.files ?? []))
       }}
     >
-      {/* Autocomplete menu, anchored above the input. */}
       {trigger && items.length > 0 && (
-        <div className="absolute bottom-full left-6 mb-2 max-h-64 w-80 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
-          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            {trigger.mode === 'agent' ? 'Ajanlar' : trigger.mode === 'artifact' ? 'Artifactlar' : 'Komutlar'}
-          </div>
-          {items.map((it, i) => (
-            <button
-              key={it.key}
-              onMouseEnter={() => setSel(i)}
-              onClick={() => choose(i)}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
-                i === sel ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]' : 'text-[var(--color-text-dim)]'
-              }`}
-            >
-              {it.agent ? (
-                <AgentAvatar agent={it.agent} size={22} />
-              ) : it.artifact ? (
-                <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center text-[var(--color-accent)]">
-                  <Hash size={15} />
-                </span>
-              ) : (
-                <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center">
-                  {it.cmd?.icon ?? '⚡'}
-                </span>
-              )}
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate font-medium text-[var(--color-text)]">{it.label}</span>
-                {it.sub && <span className="truncate text-xs opacity-70">{it.sub}</span>}
-              </span>
-            </button>
-          ))}
-        </div>
+        <AutocompleteMenu
+          mode={trigger.mode}
+          items={items}
+          sel={sel}
+          onHover={setSel}
+          onChoose={choose}
+        />
       )}
 
       {/* Attachment tray: chips for files/pasted text staged for the next turn. */}
       {pending.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2.5">
-          {pending.map((p) =>
-            p.attachment ? (
-              <AttachmentChip
-                key={p.localId}
-                attachment={p.attachment}
-                previewURL={p.previewURL}
-                onRemove={() => removePending(p.localId)}
-              />
-            ) : (
-              <AttachmentChip
-                key={p.localId}
-                attachment={{ id: p.localId, name: p.name, mime: '', kind: 'file', size: 0 }}
-                previewURL={p.previewURL}
-                uploading={p.uploading}
-                onRemove={() => removePending(p.localId)}
-              />
-            ),
-          )}
+          {pending.map((p) => (
+            <AttachmentChip
+              key={p.localId}
+              attachment={
+                p.attachment ?? { id: p.localId, name: p.name, mime: '', kind: 'file', size: 0 }
+              }
+              previewURL={p.previewURL}
+              uploading={p.attachment ? undefined : p.uploading}
+              onRemove={() => removePending(p.localId)}
+            />
+          ))}
         </div>
       )}
 
       <div className="flex w-full items-end gap-2">
-        <ThinkingPicker value={thinkingLevel} onChange={onThinkingLevelChange} />
-        <PermissionPicker value={permissionMode} onChange={onPermissionModeChange} />
+        <AgentSelect
+          agents={agents}
+          value={agentId}
+          onChange={onAgentChange}
+          disabled={!sessionId}
+        />
+        <ComposerPicker
+          value={thinkingLevel}
+          onChange={onThinkingLevelChange}
+          options={THINKING_OPTIONS}
+          header="Düşünme seviyesi"
+          title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
+          triggerIcon={<Brain size={15} />}
+        />
+        <ComposerPicker
+          value={permissionMode}
+          onChange={onPermissionModeChange}
+          options={PERMISSION_OPTIONS}
+          header="İzin modu (Shift+Tab)"
+          title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
+          menuWidthClass="w-60"
+        />
+        <WorkDirBadge sessionId={sessionId} />
         {/* Attach button + hidden multi-file input. */}
         <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFiles} />
         <button
@@ -461,7 +406,7 @@ export function Composer({
           onClick={() => fileRef.current?.click()}
           disabled={!sessionId}
           title="Dosya ekle"
-          className="rounded-xl border border-[var(--color-border)] px-2.5 py-3 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-30"
+          className={BTN_ICON}
         >
           <Paperclip size={18} />
         </button>
@@ -472,190 +417,32 @@ export function Composer({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           rows={1}
-          placeholder="Mesaj yaz — @ ajan, # artifact, / komut, 📎 dosya"
-          className="max-h-40 flex-1 resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
+          placeholder={
+            waiting
+              ? 'Otomatik devam bekleniyor — yazarsan konuşmayı devralırsın'
+              : 'Mesaj yaz — @ ajan adı, # artifact, / komut, 📎 dosya'
+          }
+          className={`max-h-40 flex-1 resize-none rounded-xl border bg-[var(--color-bg)] px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)] ${
+            active
+              ? 'border-[color-mix(in_srgb,var(--color-accent)_55%,var(--color-border))]'
+              : 'border-[var(--color-border)]'
+          }`}
         />
-        {!streaming ? (
-          <button
-            onClick={send}
-            disabled={disabled || !hasContent || anyUploading}
-            className="rounded-xl bg-[var(--color-accent)] px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-30"
-          >
-            Gönder
-          </button>
-        ) : hasText ? (
-          // Input filled while streaming → queue / interrupt / steer.
-          <div className="flex items-end gap-1.5">
-            <button
-              onClick={doQueue}
-              title="Bu tur bitince gönder"
-              className="rounded-xl border border-[var(--color-border)] px-3 py-3 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)]"
-            >
-              Sıraya
-            </button>
-            <button
-              onClick={doInterrupt}
-              title="Turu kes ve hemen gönder"
-              className="rounded-xl bg-[var(--color-warning)] px-3 py-3 text-sm font-medium text-white transition hover:opacity-90"
-            >
-              Kes
-            </button>
-            <button
-              onClick={doSteer}
-              title="Çalışan turu canlı yönlendir (araç döngüsünde etkili)"
-              className="rounded-xl bg-[var(--color-accent)] px-3 py-3 text-sm font-medium text-white transition hover:opacity-90"
-            >
-              Yönlendir
-            </button>
-          </div>
-        ) : (
-          // Streaming, empty input → stop.
-          <button
-            onClick={onStop}
-            title="Üretimi durdur"
-            className="rounded-xl bg-[var(--color-danger)] px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            Durdur
-          </button>
-        )}
+        <SendActions
+          streaming={streaming}
+          waiting={waiting}
+          hasText={hasText}
+          hasContent={hasContent}
+          anyUploading={anyUploading}
+          disabled={disabled || !agentId}
+          onSend={send}
+          onStop={onStop}
+          onCancelWait={onCancelWait}
+          onQueue={() => act(onQueue)}
+          onInterrupt={() => act(onInterrupt)}
+          onSteer={() => act(onSteer)}
+        />
       </div>
-    </div>
-  )
-}
-
-// ThinkingPicker is the composer's reasoning-level selector: a compact button
-// (🧠 + current label) that opens a small menu above it. The choice applies to
-// the next message; the menu closes on select or outside click.
-function ThinkingPicker({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange?: (v: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const current = THINKING_OPTIONS.find((o) => o.value === value) ?? THINKING_OPTIONS[0]
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
-
-  return (
-    <div ref={rootRef} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title={`Düşünme seviyesi: ${current.label} — ${current.hint}`}
-        className={`flex items-center gap-1 rounded-xl border px-2.5 py-3 text-sm transition ${
-          value
-            ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-            : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
-        }`}
-      >
-        <Brain size={15} />
-        <span className="hidden sm:inline">{current.label}</span>
-      </button>
-
-      {open && (
-        <div className="absolute bottom-full left-0 mb-2 w-56 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
-          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            Düşünme seviyesi
-          </div>
-          {THINKING_OPTIONS.map((o) => (
-            <button
-              key={o.value || 'auto'}
-              onClick={() => {
-                onChange?.(o.value)
-                setOpen(false)
-              }}
-              className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
-                o.value === value
-                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'
-              }`}
-            >
-              <span className="font-medium text-[var(--color-text)]">{o.label}</span>
-              <span className="truncate text-xs opacity-60">{o.hint}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// PermissionPicker is the composer's per-turn permission-mode selector: a compact
-// button (current icon + label) opening a menu above it. Shift+Tab cycles the
-// same options without opening the menu. The choice applies to the next message.
-function PermissionPicker({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange?: (v: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const current = PERMISSION_OPTIONS.find((o) => o.value === value) ?? PERMISSION_OPTIONS[0]
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
-
-  return (
-    <div ref={rootRef} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title={`İzin modu: ${current.label} — ${current.hint} (Shift+Tab ile değiştir)`}
-        className={`flex items-center gap-1 rounded-xl border px-2.5 py-3 text-sm transition ${
-          value
-            ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-            : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
-        }`}
-      >
-        <span>{current.icon}</span>
-        <span className="hidden sm:inline">{current.label}</span>
-      </button>
-
-      {open && (
-        <div className="absolute bottom-full left-0 mb-2 w-60 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
-          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            İzin modu (Shift+Tab)
-          </div>
-          {PERMISSION_OPTIONS.map((o) => (
-            <button
-              key={o.value || 'auto-default'}
-              onClick={() => {
-                onChange?.(o.value)
-                setOpen(false)
-              }}
-              className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
-                o.value === value
-                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'
-              }`}
-            >
-              <span className="flex items-center gap-1.5 font-medium text-[var(--color-text)]">
-                <span>{o.icon}</span>
-                {o.label}
-              </span>
-              <span className="truncate text-xs opacity-60">{o.hint}</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

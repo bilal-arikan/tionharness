@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useOutsideClick } from '../../hooks/useOutsideClick'
 import { EMOJI_CATEGORIES, searchEmojis, type EmojiEntry } from '../../lib/emojiData'
 
 interface Props {
@@ -18,27 +19,21 @@ interface Props {
 export function EmojiPicker({ value, onSelect, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [cat, setCat] = useState(EMOJI_CATEGORIES[0].id)
-  const rootRef = useRef<HTMLDivElement>(null)
+  // Dismiss on outside-click (the popover is always open while mounted).
+  const rootRef = useOutsideClick<HTMLDivElement>(onClose)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Focus the search box on mount; dismiss on outside-click / Escape.
+  // Focus the search box on mount; dismiss on Escape.
   useEffect(() => {
     inputRef.current?.focus()
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose()
-    }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
         onClose()
       }
     }
-    document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
+    return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
   const searching = query.trim().length > 0

@@ -1,6 +1,14 @@
 // Sessions: listing, titles, on-demand summaries, read state, disk/info and
 // the per-session context meter.
-import type { Session, Message, SessionInfo, SessionContext } from '../types'
+import type {
+  Session,
+  Message,
+  SessionInfo,
+  SessionContext,
+  WorkdirInfo,
+  BrowseResp,
+  GitInfo,
+} from '../types'
 import { req } from './client'
 
 export const sessionApi = {
@@ -47,6 +55,13 @@ export const sessionApi = {
       method: 'PUT',
       body: JSON.stringify({ goal, done }),
     }),
+  // Rebind the session to a different agent (the chat agent dropdown). Every
+  // following turn is answered by this agent.
+  setSessionAgent: (sessionId: string, agentId: string) =>
+    req<{ id: string; agentId: string }>(`/api/sessions/${sessionId}/agent`, {
+      method: 'PUT',
+      body: JSON.stringify({ agentId }),
+    }),
   // On-demand summary/listing posted as an assistant message in the session.
   // kind: 'memory' | 'board' | 'flows' | 'tools'. Returns the new message.
   summarizeSession: (sessionId: string, kind: string) =>
@@ -84,4 +99,30 @@ export const sessionApi = {
 
   sessionContext: (sessionId: string) =>
     req<SessionContext>(`/api/sessions/${sessionId}/context`),
+
+  // Working directory (cwd) for the agent's file/shell tools.
+  getWorkdir: (sessionId: string) =>
+    req<WorkdirInfo>(`/api/sessions/${sessionId}/workdir`),
+  // Set (or clear, when dir is empty) the session's working directory.
+  setWorkdir: (sessionId: string, dir: string) =>
+    req<WorkdirInfo>(`/api/sessions/${sessionId}/workdir`, {
+      method: 'PUT',
+      body: JSON.stringify({ dir }),
+    }),
+  // List subdirectories of a path for the folder picker (empty path = roots).
+  browseDirs: (path: string) =>
+    req<BrowseResp>(`/api/fs/browse?path=${encodeURIComponent(path)}`),
+
+  // Git state of a project path (repo?, branch, remote, identity).
+  gitInfo: (path: string) =>
+    req<GitInfo>(`/api/fs/gitinfo?path=${encodeURIComponent(path)}`),
+  // Initialise a git repo (default branch "main") in an existing directory.
+  gitInit: (path: string) =>
+    req<GitInfo>('/api/git/init', { method: 'POST', body: JSON.stringify({ path }) }),
+  // Apply repo-local git settings (origin remote URL + user.name/email).
+  gitConfig: (path: string, cfg: { remote?: string; userName?: string; userEmail?: string }) =>
+    req<GitInfo>('/api/git/config', {
+      method: 'POST',
+      body: JSON.stringify({ path, ...cfg }),
+    }),
 }

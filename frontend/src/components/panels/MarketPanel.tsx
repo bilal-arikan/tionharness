@@ -19,14 +19,14 @@ interface Props {
 // present) but show a "yakında" (coming soon) hint on the install action.
 const KIND_TABS: { key: PackKind | 'all'; label: string }[] = [
   { key: 'all', label: 'Tümü' },
-  { key: 'skill', label: 'Beceri' },
+  { key: 'skill', label: 'Skill' },
   { key: 'agent', label: 'Ajan' },
   { key: 'provider', label: 'Sağlayıcı' },
   { key: 'flow', label: 'Akış' },
 ]
 
 const KIND_LABEL: Record<PackKind, string> = {
-  skill: 'Beceri',
+  skill: 'Skill',
   agent: 'Ajan',
   provider: 'Sağlayıcı',
   flow: 'Akış',
@@ -66,7 +66,7 @@ function PackPreview({ pack }: { pack: Pack }) {
           <Row k="Model" v={a.model || '(varsayılan)'} />
           <Row k="Düşünme" v={a.thinkingLevel} />
           <Row k="İzin modu" v={a.permissionMode} />
-          <Row k="Beceriler" v={a.skills?.join(', ')} />
+          <Row k="Skills" v={a.skills?.join(', ')} />
         </div>
       </div>
     )

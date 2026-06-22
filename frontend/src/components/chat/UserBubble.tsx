@@ -5,8 +5,9 @@ import { resolveColor } from '../../lib/avatar'
 import { AttachmentChip } from './AttachmentChip'
 import { imageURL } from '../../lib/attachments'
 
-// MENTION_RE matches an "@token" the way the composer inserts mentions: "@" then
-// non-space, non-"@" characters.
+// MENTION_RE matches an "@token" the way the composer inserts a name reference:
+// "@" then non-space, non-"@" characters. A mention is a plain reference to an
+// agent by name (highlighted as a chip) — it does NOT route the turn.
 const MENTION_RE = /@[^\s@]+/g
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
@@ -35,8 +36,8 @@ function quotedCommand(text: string): string | null {
 }
 
 // renderWithMentions splits a user message into plain text and highlighted
-// @mention chips, colouring each chip with the mentioned agent's avatar colour
-// when it resolves to a known agent.
+// @mention chips, colouring each chip with the referenced agent's avatar colour
+// when it resolves to a known agent. The chip is a visual NAME REFERENCE only.
 function renderWithMentions(text: string, agents: Agent[]): ReactNode[] {
   const out: ReactNode[] = []
   let last = 0
@@ -99,8 +100,9 @@ function ImageLightbox({ url, name, onClose }: { url: string; name: string; onCl
 }
 
 // UserBubble renders a user chat message. Plain messages keep the accent bubble;
-// messages that mention agents (@) get highlighted chips + a ring, and messages
-// typed as a command (leading "/") render in a distinct monospaced command style.
+// messages that reference agents (@) get highlighted name chips + a ring, and
+// messages typed as a command (leading "/") render in a distinct monospaced
+// command style.
 export function UserBubble({
   text,
   agents,

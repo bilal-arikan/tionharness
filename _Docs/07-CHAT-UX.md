@@ -103,6 +103,28 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 - `PathText.tsx` — düz metindeki dosya yollarını tıklanabilir çiplere çevirir
   (`lib/paths.ts` tespit eder).
 
+### Modüler yapı (büyük dosyaların bölünmesi)
+İki büyük dosya tek-sorumluluklu küçük parçalara ayrıldı; davranış birebir korundu.
+- `MessageList.tsx` artık yalnız **orkestratör**: scroll-pinleme + tool-izi katlama
+  durumu. Her satırı şu bileşenlere devreder:
+  - `UserTurn.tsx` — gerçek kullanıcı mesajı (balon + sağ meta satırı).
+  - `AutoPromptNote.tsx` — `Message.origin` dolu olduğunda (`wake`/`schedule`)
+    ortalanmış "⏰ Otomatik devam / Zamanlanmış görev" notu (kullanıcı balonu değil).
+  - `AssistantTurn.tsx` — asistan turu (başlık + akıl yürütme + iz + cevap + meta).
+  - `AgentHeader.tsx` (avatar+ad, 2 yerde paylaşılır), `WorkingDots.tsx`,
+    `DeleteButton.tsx` — paylaşılan küçük parçalar.
+- `Composer.tsx` artık yalnız input state + olay kablolaması. Yardımcılar
+  `components/chat/composer/` altında:
+  - `trigger.ts` — `detectTrigger` + `buildMenuItems` (saf mantık), `Trigger`/`MenuItem` tipleri.
+  - `AutocompleteMenu.tsx` — `@`/`#`/`/` açılır menüsü.
+  - `ComposerPicker.tsx` — düşünme + izin seçicisini birleştiren **tek generic** picker;
+    seçenekler `pickerOptions.ts` (`THINKING_OPTIONS`/`PERMISSION_OPTIONS`).
+  - `SendActions.tsx` — Gönder/Durdur/Sıraya/Kes/Yönlendir buton kümesi (tur yaşam
+    döngüsüne göre tek dal seçer); stil sabitleri `buttonStyles.ts`.
+- `hooks/useOutsideClick.ts` — dışarı-tıklama efekti tek hook'a çıkarıldı ve **7
+  bileşende** (Composer pickerları, WorkDirBadge, AgentPicker, FolderPickerButton,
+  WorkspaceSwitcher, SessionsSidebar, EmojiPicker) tekrar yerine kullanıldı.
+
 ### Yardımcılar (`lib/`)
 - `tools.ts` — tool adı → ikon/etiket/özet/`isDiff` meta verisi (MCP namespace'i
   `server · tool` olarak ayrıştırılır).
@@ -116,11 +138,19 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   yolları panoya kopyalar.
 - `index.css` — `.sg-markdown` tipografisi + `github-dark` highlight teması.
 
-### Composer — `@` ajan / `/` komut menüleri
-- `Composer.tsx` otomatik-tamamlama menüsü: caret konumuna göre `detectTrigger`.
-  - **`@`** (herhangi bir token başında) → **ajan seçici**; seçim, metne `@Ad `
-    **mention'ı ekler** (aktif ajanı DEĞİŞTİRMEZ) — bu tur o ajan(lar)a yönlendirilir
-    (bkz. `@` ile tur yönlendirme). Ajanlar `name` ile filtrelenir.
+### Composer — ajan seçici / `#` artifact / `/` komut menüleri
+- **Ajan seçimi (`composer/AgentSelect.tsx`):** mesaj **her zaman** dropdown'dan
+  seçilen ajana gider — **`@` mention yönlendirmesi tamamen kaldırıldı**. Textarea'nın
+  solunda avatar+ad gösteren, yukarı açılan zorunlu seçici. Seçim oturuma kalıcı
+  yazılır (`PUT /api/sessions/{id}/agent` → `db.SetSessionAgent`) ve sonraki her tur o
+  ajana yönlenir. Ajan seçili değilse **Gönder kilitli** (seçici kırmızı kenarlık).
+- `Composer.tsx` otomatik-tamamlama menüsü (`composer/AutocompleteMenu.tsx`): caret
+  konumuna göre `detectTrigger` (yalnız `#` ve `/`).
+  - **`#`** (token başında) → **artifact seçici**; **workspace'teki tüm artifact'lar**
+    listelenir (yalnız bu oturumunkiler değil — `App.tsx` `listArtifacts()`'i sessionId'siz
+    çağırır, aksi halde elle/başka-oturumda oluşturulan sessionId'siz artifact'lar hiç
+    görünmezdi). Seçim `#sorgu` token'ını siler ve artifact'ı içerik eki olarak ekler
+    (içerik satır-içine alınır, `ARTIFACT_INLINE_CAP`).
   - **`/`** (girdinin başında, tek kelime) → **komut paleti**; seçim `SlashCommand.run()`,
     girdi temizlenir. Komutlar `App.tsx`'te `chatCommands` (useMemo): `/reflect` (yansıma),
     `/memory` · `/board` · `/flows` (talep-üzerine özet, `POST /api/sessions/{id}/summary`),
@@ -136,20 +166,23 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   (`swarmgo.thinkingLevel`) ile kalıcı; `chatStream` gövdesine `thinkingLevel` olarak gider
   ve o turun reasoning bütçesini **ajan ayarından bağımsız** belirler (bkz. Notlar).
 
-### Session-bazlı + çok-ajanlı sohbet (`@` yönlendirme)
+### Session-bazlı sohbet (tek ajan, dropdown ile seçim)
 - Sohbet **session-bazlı**: sol panel (`SessionsSidebar.tsx`) oturumları **zaman
   kovalarına** gruplar (Bugün/Dün/Geçen hafta/Geçen ay/Daha eski; ajan altında gruplama
-  yok), `updatedAt` desc; her oturumun bir **varsayılan ajanı** (`Session.AgentID`) vardır ve
-  satırda o ajanın avatarı görünür. Ajan roster'ı ayrı **Ajanlar** view'ine taşındı
+  yok), `updatedAt` desc; her oturum **tek bir ajana bağlıdır** (`Session.AgentID`) ve
+  satırda o ajanın avatarı görünür. Ajan roster'ı ayrı **Ajanlar** view'inde
   (`AgentRoster`/`AgentsView`) = yeni sohbetlerin varsayılan ajan seçicisi.
   `POST /api/sessions` `agentId` opsiyonel (boş → ilk ajan).
-- **`@` ile tur yönlendirme:** composer `@` menüsü metne `@Ad` mention'ı ekler.
-  `App.sendMessage` mention'ları ajanlara çözüp `agentIds[]` üretir (yoksa oturum
-  varsayılanı). `POST /api/chat/stream` `agentIds` alır.
-- **Çok-ajan (sıralı):** birden çok `@` → her ajan **sırayla** yanıtlar, sonrakiler
-  öncekilerin yanıtını görür. SSE: `meta` → (her ajan için) `agent {agentId,index}` →
-  `step`* → `reply {replyMessage}` → `done`. Her asistan turu `Message.AgentID` ile
-  kalıcılaşır; `MessageList` her turu **kendi ajanının avatar+adıyla** çizer.
+- **Ajan seçimi dropdown ile (zorunlu):** composer'daki `AgentSelect` oturumun ajanını
+  gösterir; değiştirince `PUT /api/sessions/{id}/agent` ile kalıcı olur ve `activeAgentId`
+  + sessions listesi güncellenir. `sendMessage` her zaman **oturumun ajanını** tek
+  elemanlı `agentIds=[sessAgent]` olarak gönderir. `POST /api/chat/stream` `agentIds` alır.
+  - **`@` mention yönlendirmesi tamamen kaldırıldı** (frontend parse, composer `@`
+    menüsü, `UserBubble` mention çipleri — hepsi silindi). Bir tur tek ajana gider.
+    Backend `agentIds`'i hâlâ dizi olarak kabul eder (geriye dönük uyumlu); yeni boş
+    oturumda ilk ajan `adoptMentionedAgent` ile oturuma yazılır.
+- Her asistan turu `Message.AgentID` ile kalıcılaşır; `MessageList` her turu **kendi
+  ajanının avatar+adıyla** çizer.
 - **Oturum-bazlı akış durumu:** akış (streaming) artık **oturuma bağlı** — `App.tsx`
   `streamingSessionId` akışın sahibi oturumu izler. Composer'ın akış aksiyonları
   (Durdur/Kes/Yönlendir) ve `AskPrompt` yalnız `streamingSessionId === activeSessionId`

@@ -2,16 +2,26 @@
 // files (runtime prompts, instructions, README) that live under
 // <workspace>/config/. Self-loading + self-saving (own Save button), since these
 // files are written directly rather than through the app-settings patch flow.
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api'
 import type { WorkspaceConfig, WorkspaceConfigPatch } from '../../types'
 import { Field, inputCls } from './primitives'
-import { Button } from '../common'
 import { CopyPathButton } from '../CopyPathButton'
 import { displayPath } from '../../lib/paths'
 
+// FilesSaveState lets the parent (WorkspaceView) render the Save button + status
+// in its top header instead of this panel showing its own.
+export interface FilesSaveState {
+  dirty: boolean
+  saving: boolean
+  save: () => void
+}
+
 interface Props {
   onError: (msg: string) => void
+  // Report dirty/saving + a stable save handler to the parent header. Optional so
+  // the panel still works standalone.
+  onState?: (s: FilesSaveState | null) => void
 }
 
 // Human labels for each runtime prompt key.
@@ -27,7 +37,7 @@ function toDraft(c: WorkspaceConfig): Draft {
   return { prompts: { ...c.prompts }, instructions: c.instructions, readme: c.readme }
 }
 
-export function WorkspaceFilesPanel({ onError }: Props) {
+export function WorkspaceFilesPanel({ onError, onState }: Props) {
   const [config, setConfig] = useState<WorkspaceConfig | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [original, setOriginal] = useState<Draft | null>(null)
@@ -50,23 +60,28 @@ export function WorkspaceFilesPanel({ onError }: Props) {
     [draft, original],
   )
 
-  if (!config || !draft) {
-    return <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
-  }
+  // Latest values for the stable save handler (so the parent-held save closure
+  // never goes stale as the draft changes).
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const originalRef = useRef(original)
+  originalRef.current = original
+  const configRef = useRef(config)
+  configRef.current = config
 
-  const setPrompt = (key: string, val: string) =>
-    setDraft((d) => (d ? { ...d, prompts: { ...d.prompts, [key]: val } } : d))
-
-  const save = async () => {
-    if (!original) return
+  const save = useCallback(async () => {
+    const d = draftRef.current
+    const o = originalRef.current
+    const c = configRef.current
+    if (!d || !o || !c) return
     const patch: WorkspaceConfigPatch = {}
     const changedPrompts: Record<string, string> = {}
-    for (const key of config.promptKeys) {
-      if (draft.prompts[key] !== original.prompts[key]) changedPrompts[key] = draft.prompts[key]
+    for (const key of c.promptKeys) {
+      if (d.prompts[key] !== o.prompts[key]) changedPrompts[key] = d.prompts[key]
     }
     if (Object.keys(changedPrompts).length) patch.prompts = changedPrompts
-    if (draft.instructions !== original.instructions) patch.instructions = draft.instructions
-    if (draft.readme !== original.readme) patch.readme = draft.readme
+    if (d.instructions !== o.instructions) patch.instructions = d.instructions
+    if (d.readme !== o.readme) patch.readme = d.readme
 
     setSaving(true)
     try {
@@ -79,30 +94,26 @@ export function WorkspaceFilesPanel({ onError }: Props) {
     } finally {
       setSaving(false)
     }
+  }, [onError])
+
+  // Report save state to the parent header (Kaydet/Kayıtlı live there now).
+  useEffect(() => {
+    onState?.({ dirty, saving, save })
+  }, [dirty, saving, save, onState])
+  // Clear the parent header state on unmount (tab switch).
+  useEffect(() => () => onState?.(null), [onState])
+
+  if (!config || !draft) {
+    return <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
   }
+
+  const setPrompt = (key: string, val: string) =>
+    setDraft((d) => (d ? { ...d, prompts: { ...d.prompts, [key]: val } } : d))
 
   const reveal = () => api.revealWorkspaceConfig().catch((e) => onError((e as Error).message))
 
   return (
     <>
-      {/* Header styled like the agent "profile" screen: title on the left,
-          Save (+ status) on the right; sticky so it stays reachable while the
-          long prompt/file editors scroll. */}
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-6 py-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">Promptlar &amp; Dosyalar</h2>
-          <p className="text-xs text-[var(--color-text-dim)]">Workspace config dosyaları</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-xs text-[var(--color-text-dim)]">
-            {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
-          </span>
-          <Button onClick={save} disabled={!dirty || saving}>
-            {saving ? 'Kaydediliyor…' : 'Kaydet'}
-          </Button>
-        </div>
-      </div>
-
       <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
         <span className="text-xs text-[var(--color-text-dim)]">
           Bu dosyalar <code className="rounded bg-[var(--color-bg)] px-1">{displayPath(config.dir)}</code> altında. Hem buradan hem doğrudan diskten düzenleyebilirsin.
@@ -154,15 +165,6 @@ export function WorkspaceFilesPanel({ onError }: Props) {
           placeholder="Örn. Tüm cevapları Türkçe ver; commit at ama push'lama."
         />
       </Field>
-      <Field label="Notlar (README.md)" hint="Bu workspace hakkında serbest notlar. Ajanlara enjekte edilmez.">
-        <textarea
-          value={draft.readme}
-          onChange={(e) => setDraft((d) => (d ? { ...d, readme: e.target.value } : d))}
-          rows={5}
-          className={`${inputCls} resize-y font-mono text-xs`}
-        />
-      </Field>
-
     </>
   )
 }

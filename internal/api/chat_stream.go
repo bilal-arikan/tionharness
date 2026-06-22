@@ -231,6 +231,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		sink := newArtifactSink(database, session.ID, agentRow.ID)
 		run.setArtifacts(sink)
 		turnCtx := tools.WithArtifacts(ctx, sink)
+		// Stamp the session id so the runtime can resolve this session's WorkingDir
+		// (cwd) for the fs/shell sandbox and provider cwd.
+		turnCtx = agent.WithSessionID(turnCtx, session.ID)
 
 		// Wire the self-wake scheduler for THIS agent + session, on both tool paths:
 		// the native built-in reads it from the context; the CLI path reaches it via

@@ -112,6 +112,19 @@ graph LR
 - [ ] GitHub Actions: Win/macOS/Linux otomatik derleme
 - **Çıktı:** Dağıtıma hazır masaüstü uygulaması.
 
+> **Fikir (2026-06-22) — Sistem tepsisi (system tray) entegrasyonu.** SwarmGo arka planda
+> çalışan otonom-ajanlı bir runtime; masaüstü dağıtımında **tray'e küçülme + durum göstergesi**
+> (kaç ajan aktif/çalışıyor) + hızlı menü (workspace aç/durdur, çıkış) + mevcut tür-bazlı
+> masaüstü bildirimleriyle bütünleşme doğal bir tamamlayıcı.
+> - **Önce Wails'in yerleşik tray API'sine bak** — varsa ayrı bağımlılığa gerek yok.
+> - **B planı:** [`gogpu/systray`](https://github.com/gogpu/systray) — **saf Go, CGO'suz** tray
+>   kütüphanesi (Win `Shell_NotifyIconW` · macOS `NSStatusBar` · Linux D-Bus
+>   StatusNotifierItem). SwarmGo'nun "tek binary, çapraz-derleme, minimal bağımlılık"
+>   felsefesiyle birebir uyumlu. **Uyarılar:** (1) v0.1.0 — çok genç, üretime erken; (2) Wails'in
+>   kendi event loop'u ile systray message-pump'ı çakışabilir (özellikle macOS main-thread →
+>   deadlock riski), entegrasyonda test şart. Yalnız native masaüstü modunda anlamlı; web
+>   dağıtımında işlevsiz.
+
 > **Not (2026-06-16):** **Connectors fazı (Discord/Slack/Telegram köprüleri) kapsamdan çıkarıldı.** İhtiyaç olursa ayrı bir faz olarak yeniden değerlendirilebilir.
 
 ---
@@ -150,6 +163,24 @@ graph LR
 - [x] **Faz P4** — Hooks (`PreToolUse`/`PostToolUse`, subprocess JSON I/O) ✅ 2026-06-18 — `internal/agent/hooks.go`, Ayarlar → Hooks; bkz. `_Docs/18-HOOKS.md`
 
 ### Bağlam, bellek, trace
+- [ ] **C5** — **Recency + importance ağırlıklı recall** (Generative Agents, Park et al. 2023): mevcut
+  `memory.Recall` saf cosine (yalnız *relevance*). Üzerine iki sinyal eklenir →
+  `score = α·relevance + β·recency + γ·importance`. **recency** = son erişimden bu yana üstel sönüm
+  (`exp(-λ·Δt)`, erişimde `LastAccess` tazelenir); **importance** = belleğe yazılırken 1–10 arası bir önem
+  skoru (ucuz LLM ya da heuristik; `Memory.Importance` alanı). `minScore` eşiği ağırlıklı skora uygulanır.
+  Geri-uyumlu: β=γ=0 → bugünkü davranış. İlham: `didiforgithub/SwarmAgent`'ın taklit ettiği orijinal
+  Generative Agents "memory stream" deseni (o repo'da kod stub; fikir makaleden alındı). İlişkili: **C3**.
+- [ ] **C6** — **MemGPT/Letta tarzı self-editing bellek + memory-pressure sinyali** (`letta-ai/letta`,
+  "LLM as OS" deseni): compaction'ı ajandan gizli tutmak yerine belleği **ajanın açık kontrolüne** ver.
+  İki parça → (a) **memory-pressure sinyali**: `conversation.Manager` bağlam bütçesine yaklaşınca ajana
+  sistem-uyarısı enjekte eder ("bağlam doluyor, önemliyi belleğe yaz") + ajan `memory_write` (C3) ile neyin
+  kalıcı olacağına karar verir (sessiz oto-katlamadan önce); (b) **self-editing core memory bloğu**:
+  `SystemDynamic` içinde ajanın `core_memory_append/replace` araçlarıyla güncelleyebildiği küçük kalıcı
+  "çalışma belleği" bloğu (Letta'nın human/persona memory-block'larına karşılık). SwarmGo'nun iki-parçalı
+  sistem promptu + Faz 6 recall + C3 bunun altyapısı; eksik olan **ajana açık araç yüzeyi + pressure
+  sinyali**. İlişkili: **C2** (compaction), **C3** (memory_write), **HA-1** (kullanıcı modelleme).
+  **Detaylı uygulama planı:** [`26-MEMGPT-CORE-MEMORY.md`](26-MEMGPT-CORE-MEMORY.md) (Mod C — neden doğrudan
+  Letta değil + 3 parça gerçek dosya temas noktalarıyla, 2026-06-22).
 - [ ] **C3** — memdir benzeri bellek **yazma/indeksleme** (`memory_write`, frontmatter türleri) — şu an sadece recall
 - [x] **C4** — Maliyet takibi: `cache_creation` vs `cache_read` ayrımı (uçtan uca) + oturumlar arası kümülatif toplam & `cacheHitRate` (caching ROI) — Bütçe ekranı pencere-kümülatif kartları + trend maliyet/tasarruf (2026-06-19)
 - [~] **E3 kalan** — `subagent` StepKind ✅ (A2 ile tamamlandı); `tombstone`/`tool_delta` (canlı adım güncelleme altyapısı) — kalan

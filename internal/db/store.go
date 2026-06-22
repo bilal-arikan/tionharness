@@ -338,6 +338,15 @@ func (d *DB) SetSessionGoal(ctx context.Context, sessionID, goal string, done bo
 	})
 }
 
+// SetSessionWorkingDir sets (or clears, when empty) a session's working
+// directory (cwd) for the built-in filesystem/shell tools. An empty string
+// resets the session to the workspace default.
+func (d *DB) SetSessionWorkingDir(ctx context.Context, sessionID, dir string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.WorkingDir = dir
+	})
+}
+
 // SetSessionAgent updates a session's default (main) agent — used when the first
 // message of a fresh session @mentions an agent, pinning the thread to it.
 func (d *DB) SetSessionAgent(ctx context.Context, sessionID, agentID string) error {

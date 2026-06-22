@@ -31,26 +31,31 @@ func TestSandboxResolve(t *testing.T) {
 		t.Fatalf("resolve root: got %q err %v", got, err)
 	}
 
-	// Escapes are rejected.
-	for _, bad := range []string{"../escape", "a/../../escape", filepath.Join("..", "x")} {
-		if _, err := sb.Resolve(bad); err == nil {
-			t.Fatalf("expected %q to be rejected", bad)
-		}
+	// Confinement is disabled: ".." escapes resolve without error (relative to
+	// the base dir).
+	if _, err := sb.Resolve("../escape"); err != nil {
+		t.Fatalf("escape should be allowed now: %v", err)
 	}
 
-	// Absolute paths are rejected.
-	if _, err := sb.Resolve(filepath.Join(root, "x")); err == nil {
-		t.Fatal("expected absolute path to be rejected")
+	// Absolute paths are honoured as-is.
+	abs := filepath.Join(root, "x")
+	if got, err := sb.Resolve(abs); err != nil || got != filepath.Clean(abs) {
+		t.Fatalf("absolute path: got %q err %v", got, err)
 	}
 }
 
 func TestSandboxNotReady(t *testing.T) {
 	sb := NewSandbox("")
 	if sb.Ready() {
-		t.Fatal("empty sandbox should not be ready")
+		t.Fatal("empty sandbox should not report a configured base dir")
 	}
-	if _, err := sb.Resolve("anything"); err == nil {
-		t.Fatal("expected resolve to fail when sandbox is not configured")
+	// With no base dir, a relative path resolves against the process cwd, and an
+	// absolute path is honoured as-is.
+	if got, err := sb.Resolve("anything"); err != nil || !filepath.IsAbs(got) {
+		t.Fatalf("relative resolve without base: got %q err %v", got, err)
+	}
+	if got, err := sb.Resolve(filepath.Join(string(filepath.Separator), "tmp", "x")); err != nil || !filepath.IsAbs(got) {
+		t.Fatalf("absolute resolve without base: got %q err %v", got, err)
 	}
 }
 

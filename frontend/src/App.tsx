@@ -27,13 +27,13 @@ const NetworkPanel = lazy(() =>
 )
 import { ExecutionsPanel } from './components/panels/ExecutionsPanel'
 import { ArtifactsPanel } from './components/panels/ArtifactsPanel'
-import { SecretsPanel } from './components/panels/SecretsPanel'
 import { SkillsPanel } from './components/panels/SkillsPanel'
 import { MarketPanel } from './components/panels/MarketPanel'
 import { BudgetPanel } from './components/panels/BudgetPanel'
 import { ChatMeters } from './components/panels/ChatMeters'
 import { SessionDetailPanel } from './components/sessions/SessionDetailPanel'
 import { SettingsPanel } from './components/SettingsPanel'
+import { WorkspaceView } from './components/workspace/WorkspaceView'
 import { LogsPanel } from './components/panels/LogsPanel'
 import { isTypeEnabled } from './lib/notifyPrefs'
 import { useWorkspaces } from './hooks/useWorkspaces'
@@ -68,11 +68,11 @@ const VIEW_TITLE: Record<View, string> = {
   memory: 'Hafıza',
   flows: 'Akışlar',
   artifacts: 'Artifactlar',
-  secrets: 'Sırlar',
-  skills: 'Beceriler',
+  skills: 'Skills',
   budget: 'Bütçe',
   logs: 'Loglar',
   market: 'Market',
+  workspace: 'Workspace',
   settings: 'Ayarlar',
 }
 
@@ -93,9 +93,19 @@ export default function App() {
   const [settingsCat, setSettingsCat] = useState<string | null>(
     INITIAL_ROUTE.view === 'settings' ? INITIAL_ROUTE.id : null,
   )
+  // Active workspace sub-tab (deep-link aware): #/w/{ws}/workspace/{tab}.
+  const [workspaceTab, setWorkspaceTab] = useState<string | null>(
+    INITIAL_ROUTE.view === 'workspace' ? INITIAL_ROUTE.id : null,
+  )
   // Bumped whenever an agent changes app settings (the `settings` SSE event), so
   // an open Settings screen reloads to reflect the change.
   const [settingsNonce, setSettingsNonce] = useState(0)
+  // Secrets moved under Settings as a sub-category: open the Settings screen
+  // focused on the Secrets ("Sırlar") category.
+  const openSecrets = () => {
+    setSettingsCat('secrets')
+    setView('settings')
+  }
   // Entity selection carried by an initial/cross-workspace deep link, consumed
   // once by the workspace-load effect after agents+sessions arrive.
   const pendingRouteRef = useRef<Route | null>(INITIAL_ROUTE)
@@ -254,17 +264,20 @@ export default function App() {
     api.listMessages(activeSessionId).then(setMessages)
   }, [activeSessionId])
 
-  // Artifacts of the active session — offered by the composer's "#" picker so the
-  // user can include an artifact's content in the next turn. Refreshed after each
-  // turn (meterRefresh) since a turn may have created new artifacts.
+  // Artifacts offered by the composer's "#" picker so the user can include an
+  // artifact's content in the next turn. ALL workspace artifacts are referencable
+  // (not just ones produced in this session) — manually-created and other-session
+  // artifacts have an empty/different sessionId and would otherwise never show.
+  // Also used to resolve attachment chips in the transcript (by sourcePath).
+  // Refreshed after each turn (meterRefresh) since a turn may create new artifacts.
   const [sessionArtifacts, setSessionArtifacts] = useState<Artifact[]>([])
   useEffect(() => {
-    if (!activeSessionId) {
+    if (!activeWorkspaceId) {
       setSessionArtifacts([])
       return
     }
-    api.listArtifacts(activeSessionId).then(setSessionArtifacts).catch(() => {})
-  }, [activeSessionId, meterRefresh])
+    api.listArtifacts().then(setSessionArtifacts).catch(() => {})
+  }, [activeWorkspaceId, activeSessionId, meterRefresh])
 
   // Mirror the active session id into a ref so the once-mounted event handler
   // can tell whether an incoming chat completion belongs to the open transcript.
@@ -282,6 +295,19 @@ export default function App() {
   // Reload the session list (fresh order, updated times, unread flags).
   const refreshSessions = useCallback(() => {
     api.listSessions().then(setSessions).catch(() => {})
+  }, [])
+
+  // Change which agent answers the active chat session (the composer's mandatory
+  // agent dropdown — "@mention" routing was removed). Updates the local selection
+  // immediately and persists it to the session so it survives a reload.
+  const changeChatAgent = useCallback((id: string) => {
+    setActiveAgentId(id)
+    const sid = activeSessionIdRef.current
+    if (!sid) return
+    api
+      .setSessionAgent(sid, id)
+      .then(() => setSessions((prev) => prev.map((s) => (s.id === sid ? { ...s, agentId: id } : s))))
+      .catch((e) => setError((e as Error).message))
   }, [])
 
   // Select a session: reflect its default agent and clear its unread flag.
@@ -593,6 +619,8 @@ export default function App() {
         setExecutionTarget(r.id)
       } else if (r.view === 'settings') {
         setSettingsCat(r.id)
+      } else if (r.view === 'workspace') {
+        setWorkspaceTab(r.id)
       }
     },
     [switchWorkspace, selectSession, focusAgent],
@@ -608,6 +636,7 @@ export default function App() {
       artifactId: artifactTarget,
       scheduleId: scheduleTarget,
       settingsCat,
+      workspaceTab,
       executionId: executionTarget,
     }),
   }
@@ -738,6 +767,8 @@ export default function App() {
               disabled={!activeSessionId}
               sessionId={activeSessionId ?? undefined}
               streaming={chat.activeStreaming}
+              waiting={!!chat.activeWakeWait}
+              onCancelWait={chat.cancelWake}
               onSend={(text, attachments) => chat.sendMessage(text, undefined, attachments)}
               onStop={chat.stopTurn}
               onInterrupt={chat.interruptTurn}
@@ -747,6 +778,8 @@ export default function App() {
               onThinkingLevelChange={chat.setThinkingLevel}
               permissionMode={chat.permissionMode}
               onPermissionModeChange={chat.setPermissionMode}
+              agentId={activeAgentId ?? ''}
+              onAgentChange={changeChatAgent}
               agents={agents}
               commands={chat.chatCommands}
               artifacts={sessionArtifacts}
@@ -823,12 +856,11 @@ export default function App() {
             }}
           />
         )}
-        {view === 'secrets' && <SecretsPanel onError={setError} />}
         {view === 'skills' && <SkillsPanel onError={setError} />}
         {view === 'market' && (
           <MarketPanel
             onError={setError}
-            onManageSecrets={() => setView('secrets')}
+            onManageSecrets={openSecrets}
             onInstalled={(kind) => {
               // Refresh the App-level agents list so a freshly installed agent
               // shows on the Agents screen without a manual reload. Flows/skills/
@@ -839,14 +871,20 @@ export default function App() {
         )}
         {view === 'budget' && <BudgetPanel onError={setError} />}
         {view === 'logs' && <LogsPanel onError={setError} />}
+        {view === 'workspace' && (
+          <WorkspaceView
+            onError={setError}
+            onWorkspaceChanged={refreshWorkspaces}
+            onDeleteWorkspace={deleteActiveWorkspace}
+            tab={workspaceTab}
+            onTabChange={setWorkspaceTab}
+          />
+        )}
         {view === 'settings' && (
           <SettingsPanel
             onError={setError}
             onSaved={applyClientPrefs}
-            onWorkspaceChanged={refreshWorkspaces}
-            onDeleteWorkspace={deleteActiveWorkspace}
             commands={chat.chatCommands}
-            onNavigate={setView}
             cat={settingsCat}
             onCatChange={setSettingsCat}
             reloadNonce={settingsNonce}

@@ -14,8 +14,44 @@ export interface Session {
   state: string
   // True when an agent reply landed while this session wasn't open.
   unread?: boolean
+  // Working directory (cwd) override for the agent's file/shell tools. Empty =
+  // workspace default. Set from the composer folder badge.
+  workingDir?: string
   createdAt: number
   updatedAt: number
+}
+
+// WorkdirInfo is the composer folder badge's view of a session's working dir.
+export interface WorkdirInfo {
+  dir: string // session override ("" = none)
+  effective: string // override or workspace default
+  exists: boolean
+  isGitRepo: boolean
+  branch: string
+}
+
+// BrowseEntry is one selectable directory in the folder picker.
+export interface BrowseEntry {
+  name: string
+  path: string
+}
+
+// BrowseResp is the folder picker's view of one directory level.
+export interface BrowseResp {
+  path: string // listed dir ("" = drive/root list)
+  parent: string // parent dir ("" at a root)
+  entries: BrowseEntry[]
+}
+
+// GitInfo is the Project panel's view of a path's git state.
+export interface GitInfo {
+  path: string
+  exists: boolean
+  isGitRepo: boolean
+  branch: string
+  remote: string
+  userName: string
+  userEmail: string
 }
 
 // Execution is one row of the unified executions feed (GET /api/executions): a

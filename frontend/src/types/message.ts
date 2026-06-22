@@ -86,6 +86,11 @@ export interface Message {
   // server died mid-stream): text/trace are partial and the UI flags it as cut
   // off. See backend db.InflightTurn / recoverInflight.
   interrupted?: boolean
+  // How an auto-generated prompt was produced (display only): "wake" = a
+  // schedule_wake auto-resume, "schedule" = a scheduled routine prompt. Empty for
+  // real user messages. The UI renders these as a "⏰ continuation" note instead
+  // of a user bubble so the agent doesn't look like it is asking itself.
+  origin?: string
   reasoningContent?: string
   // User-supplied files / pasted long text sent with this turn (user role only).
   attachments?: Attachment[]

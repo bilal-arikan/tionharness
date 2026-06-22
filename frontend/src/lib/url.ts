@@ -12,8 +12,8 @@ import type { View } from '../components/NavRail'
 
 const VIEWS: View[] = [
   'chat', 'executions', 'agents', 'network', 'board', 'schedules', 'memory',
-  'flows', 'artifacts', 'secrets', 'skills', 'market', 'budget',
-  'logs', 'settings',
+  'flows', 'artifacts', 'skills', 'market', 'budget',
+  'logs', 'workspace', 'settings',
 ]
 
 export interface Route {
@@ -83,6 +83,7 @@ export function routeIdForView(
     artifactId: string | null
     scheduleId: string | null
     settingsCat: string | null
+    workspaceTab: string | null
     executionId: string | null
   },
 ): string | null {
@@ -100,6 +101,8 @@ export function routeIdForView(
       return state.scheduleId
     case 'settings':
       return state.settingsCat
+    case 'workspace':
+      return state.workspaceTab
     default:
       return null
   }

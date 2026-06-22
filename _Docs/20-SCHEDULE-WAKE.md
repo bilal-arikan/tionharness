@@ -245,3 +245,23 @@ event handler'ı bunu `else` dalında "tur bitti" sayıp `clearWakeWait` ile ban
 yalnız `start` (uyandı) ve `cancelled` (iptal) fazları siliyor. Banner, uyanış
 gerçekleşene veya iptal edilene kadar kalıyor (geri sayım + İptal düğmesiyle). Hem
 native hem claude-cli yolu için geçerli (`armed` her iki yolda da yayılıyor).
+
+## Düzeltme: otomatik devam mesajı "kullanıcı balonu" gibi görünüyordu (2026-06-20)
+
+**Belirti:** Wake süresi dolup ajan kendi kendine devam edince, uyanış prompt'u
+sohbette **mor kullanıcı balonu** olarak çıkıyordu — sanki kullanıcı tekrar
+soruyormuş gibi; bu da bekleme UI'ını "bozuyordu".
+
+**Kök neden:** `deliverWake` (ve zamanlanmış teslim) prompt'u `Role:"user"` ile
+kaydediyordu → UI onu UserBubble olarak çiziyordu.
+
+**Çözüm (display-only, model bağlamı değişmez):**
+- `db.Message`'a `Origin` alanı eklendi: `"wake"` (schedule_wake devamı) /
+  `"schedule"` (zamanlanmış görev). Rol "user" kalır → modele giden geçmiş aynı.
+- `scheduler.go` wake/schedule prompt'larını `Origin` ile işaretler.
+- Frontend (`MessageList.tsx`): `role==='user' && origin` olan mesaj, mor balon
+  yerine **ortalanmış "⏰ Otomatik devam / Zamanlanmış görev — <prompt>" notu**
+  olarak çizilir (`Message.origin` tipi + `types/message.ts`).
+
+**Not:** Backend değişikliği (Origin yazımı) için Go sunucusunun yeniden
+başlatılması gerekir; frontend vite HMR ile anında güncellenir.

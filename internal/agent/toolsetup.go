@@ -77,6 +77,17 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewUpdateArtifactTool(),
 	}
 
+	// Core memory (MemGPT-style): the agent edits its own persistent working-memory
+	// block, re-injected into every prompt by composeTurnRequest. Opt-in per
+	// settings (on by default) so a minimal-surface workspace can drop the two
+	// tools. Eager: the model should reach for them readily as facts change.
+	if r.tun.CoreMemoryTools() {
+		builtins = append(builtins,
+			tools.NewCoreMemoryReplaceTool(r.mem, agent.ID),
+			tools.NewCoreMemoryAppendTool(r.mem, agent.ID),
+		)
+	}
+
 	// Skills: an agent may load its ASSIGNED skills plus every SHARED (on-demand)
 	// skill. Their summaries are advertised in the system prompt; bodies stay on
 	// disk until use_skill is called (lazy). The tool is restricted to that set —
@@ -113,8 +124,23 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		)
 	}
 
-	// Workspace-scoped filesystem tools (sandboxed to this workspace's work dir).
-	if sb := tools.NewSandbox(r.workDir); sb.Ready() {
+	// Filesystem tools, rooted at this turn's working directory (the session's
+	// WorkingDir override, else the workspace default). They are UNCONFINED by
+	// default (may touch any path); autonomous turns re-confine them to the working
+	// dir when AutonomousConfine is on — the safety brake. The working dir + the
+	// autonomous flag arrive via ctx (resolvedWorkDirFromCtx); catalog/preview
+	// calls without it fall back to the workspace default, unconfined.
+	wd := r.workDir
+	confine := false
+	if rw, ok := resolvedWorkDirFromCtx(ctx); ok {
+		wd = rw.dir
+		confine = rw.autonomous && r.tun.AutonomousConfine()
+	}
+	sb := tools.NewSandbox(wd)
+	if confine {
+		sb = tools.NewConfinedSandbox(wd)
+	}
+	if sb.Ready() {
 		builtins = append(builtins,
 			tools.NewFSReadFileTool(sb),
 			tools.NewFSWriteFileTool(sb),
@@ -129,9 +155,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		}
 	}
 
-	// Workspace config tools (sandboxed to <workspace>/config/): let an agent
-	// read and edit its OWN runtime prompts / instructions / README.
-	if cb := tools.NewSandbox(r.configDir()); cb.Ready() {
+	// Workspace config tools (confined to <workspace>/config/): let an agent
+	// read and edit its OWN runtime prompts / instructions / README. This stays a
+	// hard confinement boundary even though the workspace fs/shell sandbox is
+	// unconfined — the config tool must not reach outside the agent's own config.
+	if cb := tools.NewConfinedSandbox(r.configDir()); cb.Ready() {
 		builtins = append(builtins,
 			tools.NewConfigReadTool(cb),
 			tools.NewConfigWriteTool(cb),

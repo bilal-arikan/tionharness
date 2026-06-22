@@ -1,6 +1,96 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-19**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
+
+## MemGPT/Letta Tarzı Self-Editing Bellek — Parça 1–3 ✅ (2026-06-22)
+
+**Hedef:** Letta'yı (Docker+Postgres+Python) koşmadan, fikirlerini native Go'da:
+bağlam-basıncı sinyali + ajanın in-place düzenlediği kalıcı **çekirdek bellek**.
+Tek binary / offline / dosya-tabanlı kimliği korunur, migration yok. Plan +
+sapmalar: `_Docs/26-MEMGPT-CORE-MEMORY.md`.
+
+Yapılan (3 parça):
+
+- **(1) Bağlam-basıncı sinyali:** `conversation.Prepared.Pressure`
+  (`ContextTokens/maxTokens`, `maxTokens<=0 → 0`); `composeTurnRequest` eşik
+  (`memoryPressureWarn`, vars. 0.75) aşılınca `SystemDynamic` başına "önemliyi
+  şimdi yaz" uyarısı koyar — sessiz compaction'dan *önce*. Sıfır yeni model çağrısı.
+- **(2) `core` bellek türü + Store API:** `db.MemoryCore` + `db.UpsertKnowledgeByKind`
+  (ajan başına tek satır, ID korunur); `memory.Store.WriteCore/ReadCore/AppendCore`.
+  Recall artık `recallKinds` allowlist'iyle core'u hariç tutar (her turda zaten
+  sabit enjekte edildiğinden tekrar çıkmaz).
+- **(3) `core_memory_*` araçları:** `tools.CoreMemoryTool` (replace/append) — eager,
+  `coreMemoryTools` ayarıyla (vars. açık) gated; core bloğu her turda recall'ın
+  üstünde `SystemDynamic`'e enjekte edilir. Letta'nın "core memory always in
+  context" davranışı.
+- **Ayar/UI:** `memoryPressureWarn` + `coreMemoryTools` → Settings/DTO/Patch/
+  Tunables + `applySettings` canlı push; frontend ContextPanel "Çekirdek bellek
+  (MemGPT)" bölümü.
+- **Doğrulama:** `go build ./...` + ilgili paket testleri (conversation/memory/
+  tools/api/agent/db/settings) yeşil; frontend `tsc --noEmit` temiz.
+- **Sırada:** Parça 4 (persona/human ayrımı + HA-1 kullanıcı modelleme) sonraya.
+
+## Oturum-başına Çalışma Dizini (cwd) + otonomi frenleri ✅ (2026-06-22)
+
+**Hedef:** the external agent project'taki "working directory" mekaniği — her oturumun, ajanın
+dosya/kabuk araçlarının çalışacağı bir cwd'si olsun; UI'dan değiştirilebilsin;
+bağlama enjekte edilsin; ajan git ile repo editleyebilsin. Kilitsiz fs/shell'in
+otonom yolda güvenli kalması için frenler.
+
+Yapılan (4 adım uçtan uca):
+
+- **(1) cwd çözümleme:** `Session.WorkingDir` (db) + `SetSessionWorkingDir`;
+  `agent/workdir_ctx.go` (`effectiveWorkDir` + ctx taşıyıcı); `completeTraced`
+  her turda çözüp `req.WorkDir` + ctx'e koyar; `buildRegistry` sandbox kökünü
+  ctx'ten alır. Chat yollarına `WithSessionID` eklendi.
+- **(2) Bağlam enjeksiyonu:** `api/workdir_context.go` — "Working directory"
+  bloğu (cwd + git branch + CLAUDE.md ipucu) dinamik bağlama (chat_turn.go).
+- **(3) Otonom fren:** `autonomousConfine` ayarı (varsayılan açık) — otonom
+  turlar `NewConfinedSandbox` ile çalışma dizinine kilitlenir; `shell` confined
+  modda `git push`'u reddeder (`isNetworkMutatingGit`).
+- **(4) Worktree izolasyonu:** `gitWorktreeIsolation` ayarı (varsayılan kapalı) —
+  `agent/worktree.go` otonom oturuma `<workspace>/worktrees/<sid>` worktree+dal
+  verir; oturum silinince `RemoveSessionWorktree` temizler.
+- **API:** `GET/PUT /api/sessions/{id}/workdir`, `GET /api/fs/browse` (`api/workdir.go`).
+- **Frontend:** `chat/WorkDirBadge.tsx` (klasör rozeti + dizin gezgini); Ayarlar ▸
+  iki yeni toggle; types/api alanları.
+- **Doğrulama:** `go build ./...` + `go test ./...` + frontend `tsc -b` + `npm run
+  build` yeşil. Detay: `_Docs/26-CALISMA-DIZINI.md`.
+
+### Workspace varsayılan çalışma dizini + canlı doğrulama (2026-06-22)
+- `WSSettings.DefaultWorkingDir` (ws-settings.json) + Runtime `SetDefaultWorkDir`/
+  `WorkspaceDefaultDir`; `effectiveWorkDir` artık oturum → workspace-default →
+  fiziksel workDir sırasıyla çözüyor. Ayarlar ▸ Bu Workspace ▸ "Varsayılan çalışma
+  dizini" alanı (`WorkspacePanel.tsx`, `workspace_settings.go` DTO/patch).
+- **Canlı duman testi (8088):** `GET /api/fs/browse` ✓; bir oturuma SwarmGo deposu
+  set edildi → `{exists:true,isGitRepo:true,branch:"main"}` ✓ (git branch tespiti),
+  sonra sıfırlandı. **Not:** varsayılan 8080 portu mcp-for-unity backend'iyle
+  çakıştığı için bu örnek `SWARMGO_ADDR=127.0.0.1:8088` ile çalışıyor.
+
+## fs/shell sandbox kilidi kaldırıldı (kilitsiz dosya/komut erişimi) ✅ (2026-06-22)
+
+**Hedef:** Built-in dosya/komut araçlarının workspace dizinine kilitli olma
+güvenlik kısıtını kaldırmak — the external agent project (external-agent-oss) gibi araçların makinedeki
+herhangi bir yola erişebilmesi, güvenliği tek başına **izin moduna** bırakmak.
+
+Yapılan:
+
+- **`internal/tools/sandbox.go`** — `Sandbox`'a `Confined bool` eklendi.
+  - `NewSandbox(dir)` artık **kilitsiz**: mutlak yollar olduğu gibi kabul edilir,
+    göreli yollar `Root`'a (boşsa süreç cwd'sine) göre çözülür, `..` kaçışı serbest.
+  - `NewConfinedSandbox(dir)` eski **katı** davranışı korur (mutlak + `..` reddi).
+  - `Resolve` iki kola ayrıldı; `Root` artık bir sınır değil, sadece göreli yol tabanı.
+- **`builtin_fs.go` / `builtin_shell.go`** — araç açıklamaları "mutlak yol veya çalışma
+  dizinine göreli" olacak şekilde güncellendi; shell'in `Ready()` kapısı kaldırıldı
+  (Root boş olsa bile süreç cwd'sinden çalışır).
+- **`internal/agent/toolsetup.go`** — fs/shell sandbox'ı `NewSandbox` (kilitsiz);
+  **config araçları** bilinçli olarak `NewConfinedSandbox` ile `<workspace>/config/`
+  içine **kilitli kaldı** (ajan yalnızca kendi config'ini düzenler).
+- **Testler** — `builtin_fs_test.go` (kaçış/mutlak artık serbest), `builtin_config_test.go`
+  (kilitli sandbox kullanır) güncellendi. `go build` + `go test ./...` yeşil.
+
+**Güvenlik notu:** Artık tek koruma katmanı izin modu (salt-okunur / sor / otomatik).
+Detay: `_Docs/06-WORKSPACES.md` "fs/shell artık kilitli DEĞİL" notu.
 
 ## Faz A2 — Generic ajan yürütme çekirdeği + alt-ajan izolasyonu ✅ (2026-06-19)
 

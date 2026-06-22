@@ -33,9 +33,10 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
     hangi ajanların örtüştüğünü gösterir
   - `mcp` (teal) — MCP-enabled ajan → etkin MCP sunucusu (kaba erişim sinyali;
     SwarmGo araçları ajan başına allowlist ile geçer, sunucu başına değil)
-- **Katman chip'leri (toolbar):** Görevler / Akışlar / Beceriler / MCP — her düğüm
+- **Katman chip'leri (toolbar):** Görevler / Akışlar / Beceriler / MCP / Geçmiş — her düğüm
   türü açılıp kapatılabilir (ajanlar her zaman görünür); gizli düğüme değen kenarlar
-  da düşer. Varsayılan: Görevler + Akışlar açık, Beceriler/MCP kapalı (sade başlangıç).
+  da düşer. Varsayılan açık: Görevler + Akışlar + Geçmiş; Beceriler/MCP kapalı (sade
+  başlangıç). ("Geçmiş" katmanı yalnız Canlı modda etkindir.)
 - **Yoğunluk kaydırıcısı (0.4×–2×):** fizik itme + yay uzunluğunu canlı ölçekler —
   yüksek değer = daha sıkı paketleme, düşük = daha geniş yayılım.
 - **Hafıza neden burada yok?** Bir ajanın hafızaları yüzlerce düğüm olabilir;
@@ -52,11 +53,13 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   > "bozuk" görünür. Hiyerarşi gereken yer **Akışlar** ekranıdır (gerçek DAG). Bu
   > yüzden ağ yalnız fizik düzeni kullanır.
 - Toolbar'da istatistik (ajan/görev/akış/beceri/MCP sayısı) + ilişki türü lejantı +
-  **İlişki / Canlı** mod geçişi + Yenile.
+  **İlişki / Canlı** mod geçişi + Yenile. **Varsayılan mod: Canlı** (animasyonlu,
+  olaylarda kendini yenileyen board akışı birincil görünüm; İlişki web'ine tek tıkla geçilir).
 
 #### Canlı (live) modu
 Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canlandıran ikinci yerleşim:
-- **5 sabit sütun başlığı** üstte (Yapılacak→Başarısız, `fixed:{x,y}`, `physics:false`).
+- **5 sabit sütun başlığı** üstte (Yapılacak→Başarısız, `physics:false` — solver taşımaz
+  ama kullanıcı sürükleyebilir; `fixed` kullanılmaz, bkz. "Sabit alanlar sürüklenebilir").
 - Her görev **kendi durum sütununa** yaylanır (`task→col` kenarı, kesik çizgi) →
   görevler durumlarına göre sütun altlarında kümelenir.
 - **Aktif bağ:** bir ajan yalnız **şu an çalıştığı** göreve bağlanır — `owns` kenarı
@@ -108,6 +111,7 @@ Bir ajanın hafızalarının benzerlik grafiği: her hafıza bir düğüm, lexic
 benzerliği **eşik** üstündeki çiftler bağlanır.
 
 - Hafıza ekranında **Liste / Ağ** geçişi (Ağ sekmesi vis-network'ü lazy yükler).
+  **Varsayılan görünüm: Ağ** (bilgi grafiği birincil; Liste'ye tek tıkla geçilir).
 - Yerleşim: vis-network `forceAtlas2Based` fizik — benzer hafızalar birbirini çeker,
   loose hafızalar eşit yayılır.
 - **İçerik etiketi:** her düğüm kısa bir içerik önizlemesi gösterir (hangi hafıza
@@ -118,6 +122,20 @@ benzerliği **eşik** üstündeki çiftler bağlanır.
 - Düğüm rengi hafıza türü (belge mavi / günlük slate / yansıma yeşil).
 - Kenar kalınlığı/opaklığı benzerlik skoruyla orantılı; kenar hover'da "benzerlik: %X".
 - **Benzerlik eşiği** kaydırıcısı (0.05–0.60): yoğun ağdan yalnız en güçlü bağlara süzme.
+- **Yoğunluk kaydırıcısı (0.4×–2×):** fizik itme + yay uzunluğunu canlı ölçekler
+  (workspace ağındaki ile aynı mekanik; `VisNetworkGraph density` prop'u).
+- **Hover komşu vurgusu:** bir düğümün üstüne gelince yalnız o düğüm, doğrudan
+  komşuları ve aralarındaki kenarlar parlak kalır; geri kalan her şey soldurulur
+  (odak + bağlam). `VisNetworkGraph highlightNeighbors` prop'u; blur'da geri döner.
+- **Tıkla → detay paneli:** bir hafızaya tıklayınca sağ üstte bir kart açılır —
+  tür rozeti, **tam içerik** (kaydırılabilir), bağ sayısı ve tarih; ✕ ile kapanır.
+  Düğüm seçimi `onSelect` → `selectedId` ile sürülür.
+- **Tür çapaları (toggle):** Belge/Günlük/Yansıma için sürüklenebilir, fizik-bağışık
+  çapa kutuları; her hafıza kendi tür çapasına yaylanır → bulut türe göre kümelenir
+  (canlı moddaki sütun mekaniğiyle aynı). `memoryToVis({ kindAnchors })`.
+- **Küme rengi (toggle):** benzerlik kenarları üzerinden union-find ile bağlı
+  bileşenler (konu grupları) hesaplanır; ≥2 üyeli her bileşen altın-açı ile üretilen
+  ayrı bir tonla boyanır (tekil düğümler tür rengini korur). `memoryToVis({ clusterColor })`.
 
 ## Backend
 
@@ -138,13 +156,19 @@ benzerliği **eşik** üstündeki çiftler bağlanır.
 - `types/graph.ts` — `WorkspaceGraph`/`MemoryGraph` DTO'ları (barrel: `types.ts`).
 - `api/graph.ts` — `graphApi.workspaceGraph()` / `memoryGraph()` (barrel: `api.ts`).
 - `lib/relationGraph.ts` — DTO → vis-network `{nodes, edges}` eşleyiciler
-  (`workspaceToVis`, `memoryToVis`) + kenar/lejant/tür renk sabitleri.
+  (`workspaceToVis(graph, visible, mode)`, `memoryToVis(graph, { kindAnchors, clusterColor })`)
+  + kenar/lejant/tür renk sabitleri + yardımcılar (`connectedComponents` union-find,
+  `clusterHue` altın-açı, `tip`/`fmtDate`/`truncate`).
 - `components/graph/VisNetworkGraph.tsx` — vis-network sarmalayıcı: `Network`+`DataSet`
-  yaşam döngüsü, forceAtlas2 fizik düzeni, **`density` prop'u** (itme/yay uzunluğunu
-  ölçekler — canlı `setOptions`), seçim olayı, stabilize sonrası `fit`.
-  `workspaceToVis(graph, visible)` katman filtresi alır.
-- `components/panels/NetworkPanel.tsx` — workspace ağı paneli (App'te lazy).
-- `components/graph/MemoryGraphView.tsx` — hafıza grafiği (MemoryPanel'de lazy).
+  yaşam döngüsü, forceAtlas2 fizik düzeni. Prop'lar: **`mode`** (`relation`|`live` —
+  canlı modda merkez-çekimi düşük), **`density`** (itme/yay uzunluğunu ölçekler — canlı
+  `setOptions`), **`highlightNeighbors`** (hover'da komşu-dışı düğüm/kenarları soldurur),
+  **`onSelect`** (düğüm seçim callback'i). Artımlı DataSet güncellemesi (sürüklenen/fizik
+  konumlarını korur), stabilize sonrası `fit`.
+- `components/panels/NetworkPanel.tsx` — workspace ağı paneli (App'te lazy);
+  İlişki/Canlı mod, yoğunluk kaydırıcısı, katman chip'leri, Canlı modda SSE aboneliği.
+- `components/graph/MemoryGraphView.tsx` — hafıza grafiği (MemoryPanel'de lazy);
+  eşik + yoğunluk kaydırıcıları, Tür çapaları / Küme rengi toggle'ları, tıkla→detay paneli.
 
 > Eski React Flow tabanlı `RelationGraph.tsx`/`EntityNode.tsx` ve saf-TS force
 > layout fonksiyonları (`forcePositions`/`workspaceLayout`/`memoryLayout`) vis-network

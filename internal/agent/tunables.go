@@ -73,6 +73,14 @@ type Tunables struct {
 	compactLLM          bool   // master switch for System B
 	compactLLMThreshold int    // 0 → DefaultCompactLLMThreshold
 	compactModel        string // model id for System B; "" → titleModel, then agent's own model
+
+	// Working-directory guards (fs/shell are otherwise unconfined).
+	autonomousConfine    bool // confine fs/shell to the working dir on autonomous turns (default on)
+	gitWorktreeIsolation bool // give autonomous sessions a per-session git worktree (default off)
+
+	// MemGPT-style self-editing memory (C6).
+	memoryPressureWarn float64 // context-fill ratio (0..1) above which the agent is warned to persist; 0 = off
+	coreMemoryTools    bool    // offer the core_memory_replace/append tools (default on)
 }
 
 // NewTunables constructs a Tunables with the recovery knobs at their built-in
@@ -84,6 +92,13 @@ func NewTunables() *Tunables {
 		reactiveCompact:    true,
 		maxTokenRetries:    DefaultMaxTokenRetries,
 		reactiveKeepRecent: DefaultReactiveKeepRecent,
+		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
+		// dir by default — the safety brake for the otherwise-unconfined tools.
+		autonomousConfine: true,
+		// MemGPT memory defaults: warn at 75% context fill, offer the core tools.
+		// Production overrides both from settings via SetMemoryControls.
+		memoryPressureWarn: 0.75,
+		coreMemoryTools:    true,
 	}
 }
 
@@ -408,5 +423,56 @@ func (t *Tunables) CompactModel() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.compactModel
+}
+
+// SetWorkdirGuards configures the working-directory safety guards: whether
+// autonomous turns re-confine fs/shell to the working dir, and whether
+// autonomous sessions on a git repo get an isolated per-session worktree.
+func (t *Tunables) SetWorkdirGuards(autonomousConfine, gitWorktreeIsolation bool) {
+	t.mu.Lock()
+	t.autonomousConfine = autonomousConfine
+	t.gitWorktreeIsolation = gitWorktreeIsolation
+	t.mu.Unlock()
+}
+
+// AutonomousConfine reports whether autonomous turns confine fs/shell to the
+// working dir (the brake on the otherwise-unconfined tools).
+func (t *Tunables) AutonomousConfine() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.autonomousConfine
+}
+
+// GitWorktreeIsolation reports whether autonomous sessions get a per-session git
+// worktree instead of operating directly on the repository working tree.
+func (t *Tunables) GitWorktreeIsolation() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.gitWorktreeIsolation
+}
+
+// SetMemoryControls configures the MemGPT-style memory knobs: the context-fill
+// ratio above which the agent is warned to persist important facts (0 disables
+// the warning), and whether the core_memory_* editing tools are offered.
+func (t *Tunables) SetMemoryControls(pressureWarn float64, coreTools bool) {
+	t.mu.Lock()
+	t.memoryPressureWarn = pressureWarn
+	t.coreMemoryTools = coreTools
+	t.mu.Unlock()
+}
+
+// MemoryPressureWarn returns the context-fill ratio above which a turn injects a
+// "persist now" warning. A returned 0 means the warning is disabled.
+func (t *Tunables) MemoryPressureWarn() float64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.memoryPressureWarn
+}
+
+// CoreMemoryTools reports whether the core_memory_replace/append tools are offered.
+func (t *Tunables) CoreMemoryTools() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.coreMemoryTools
 }
 

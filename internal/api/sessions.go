@@ -188,6 +188,9 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	if err := ws(r).DB.DeleteSession(r.Context(), id); writeDBError(w, err, "session not found") {
 		return
 	}
+	// Tear down this session's git worktree if isolation ever created one
+	// (no-op otherwise), so deleting a session never leaks a worktree.
+	ws(r).Runtime.RemoveSessionWorktree(id)
 	s.logger.Info("session deleted", "session", id)
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
 }

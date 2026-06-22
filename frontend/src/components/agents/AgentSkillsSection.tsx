@@ -63,13 +63,13 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
   return (
     <div className="border-t border-[var(--color-border)] pt-4">
       <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Beceriler (skills)
+        Skills
       </h3>
       <p className="mb-3 text-xs text-[var(--color-text-dim)]">
-        Bu ajana hangi <strong>kısıtlı</strong> becerilerin verileceğini seç ve sırala. Atanan beceriler
+        Bu ajana hangi <strong>kısıtlı</strong> skill'lerin verileceğini seç ve sırala. Atanan skill'ler
         ajanın sistem promptunda (bu sırayla) görünür ve <code>use_skill</code> ile yüklenebilir.
-        <strong> Gerektiğinde</strong> (paylaşımlı) beceriler ise atama gerekmeden tüm ajanlara zaten
-        açıktır. Beceriler ortak havuzdandır — <strong>Beceriler</strong> ekranından yönetilir.
+        <strong> Gerektiğinde</strong> (paylaşımlı) skill'ler ise atama gerekmeden tüm ajanlara zaten
+        açıktır. Skills ortak havuzdandır — <strong>Skills</strong> ekranından yönetilir.
       </p>
 
       {/* Selected (ordered) */}
@@ -132,8 +132,8 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
       {/* Available to add */}
       {loaded && all.length === 0 && (
         <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-          <Sparkles size={13} className="opacity-50" /> Hiç beceri yok. Önce{' '}
-          <strong>Beceriler</strong> ekranından ekle.
+          <Sparkles size={13} className="opacity-50" /> Hiç skill yok. Önce{' '}
+          <strong>Skills</strong> ekranından ekle.
         </p>
       )}
       {/* Restricted (must-be-assigned) skills: NOT available unless explicitly

@@ -29,10 +29,10 @@ func NewFSReadFileTool(sb Sandbox) FSReadFileTool { return FSReadFileTool{sb: sb
 func (FSReadFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "read_file",
-		Description: "Read a UTF-8 text file from the workspace. Returns up to 256KB. Paths are relative to the workspace root.",
+		Description: "Read a UTF-8 text file. Returns up to 256KB. Accepts an absolute path or one relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
-			"properties":{"path":{"type":"string","description":"File path relative to the workspace root"}},
+			"properties":{"path":{"type":"string","description":"Absolute path, or relative to the working directory"}},
 			"required":["path"],
 			"additionalProperties":false
 		}`),
@@ -82,11 +82,11 @@ func NewFSWriteFileTool(sb Sandbox) FSWriteFileTool { return FSWriteFileTool{sb:
 func (FSWriteFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "write_file",
-		Description: "Create or overwrite a text file in the workspace, creating parent directories as needed. Paths are relative to the workspace root.",
+		Description: "Create or overwrite a text file, creating parent directories as needed. Accepts an absolute path or one relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
-				"path":{"type":"string","description":"File path relative to the workspace root"},
+				"path":{"type":"string","description":"Absolute path, or relative to the working directory"},
 				"content":{"type":"string","description":"Full file content to write"}
 			},
 			"required":["path","content"],
@@ -130,11 +130,11 @@ func NewFSEditFileTool(sb Sandbox) FSEditFileTool { return FSEditFileTool{sb: sb
 func (FSEditFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "edit_file",
-		Description: "Replace an exact string in a workspace file. By default old_string must occur exactly once. Set replace_all to replace every occurrence.",
+		Description: "Replace an exact string in a file. By default old_string must occur exactly once. Set replace_all to replace every occurrence. Accepts an absolute path or one relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
-				"path":{"type":"string","description":"File path relative to the workspace root"},
+				"path":{"type":"string","description":"Absolute path, or relative to the working directory"},
 				"old_string":{"type":"string","description":"Exact text to find"},
 				"new_string":{"type":"string","description":"Replacement text"},
 				"replace_all":{"type":"boolean","description":"Replace every occurrence (default false)"}
@@ -197,10 +197,10 @@ func NewFSListDirTool(sb Sandbox) FSListDirTool { return FSListDirTool{sb: sb} }
 func (FSListDirTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_dir",
-		Description: "List the files and subdirectories of a workspace directory. Use an empty path or \".\" for the workspace root.",
+		Description: "List the files and subdirectories of a directory. Accepts an absolute path or one relative to the working directory. Use an empty path or \".\" for the working directory itself.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
-			"properties":{"path":{"type":"string","description":"Directory path relative to the workspace root (default root)"}},
+			"properties":{"path":{"type":"string","description":"Absolute path, or relative to the working directory (default working directory)"}},
 			"additionalProperties":false
 		}`),
 	}
@@ -260,7 +260,7 @@ func NewFSGlobTool(sb Sandbox) FSGlobTool { return FSGlobTool{sb: sb} }
 func (FSGlobTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "glob",
-		Description: "Find files in the workspace whose path matches a glob pattern (e.g. \"**/*.go\", \"src/*.ts\"). Returns paths relative to the workspace root.",
+		Description: "Find files under the working directory whose path matches a glob pattern (e.g. \"**/*.go\", \"src/*.ts\"). Returns paths relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"pattern":{"type":"string","description":"Glob pattern; ** matches any number of directories"}},
@@ -323,7 +323,7 @@ func NewFSGrepTool(sb Sandbox) FSGrepTool { return FSGrepTool{sb: sb} }
 func (FSGrepTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "grep",
-		Description: "Search workspace file contents for a regular expression. Returns matching lines as path:line:text. Optionally restrict to files matching a glob.",
+		Description: "Search file contents under the working directory for a regular expression. Returns matching lines as path:line:text. Optionally restrict to files matching a glob.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{

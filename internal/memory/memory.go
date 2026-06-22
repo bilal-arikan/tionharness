@@ -11,6 +11,12 @@ import (
 // minScore is the cosine floor below which a memory is considered irrelevant.
 const minScore = 0.04
 
+// recallKinds are the memory kinds eligible for similarity recall. The "core"
+// kind is deliberately excluded: it is the agent-editable working-memory block
+// that is already injected into every prompt verbatim, so surfacing it again via
+// recall would be redundant.
+var recallKinds = []string{db.MemoryDocument, db.MemoryJournal, db.MemoryReflection}
+
 // Store is a thin, stateless wrapper over the DB that adds vector recall on top
 // of knowledge_sources CRUD. Construct one per request; it holds no state.
 type Store struct {
@@ -30,6 +36,43 @@ func (s *Store) Remember(ctx context.Context, agentID, kind, content string) (db
 		Content:   content,
 		Embedding: marshalVector(vec),
 	})
+}
+
+// WriteCore replaces the agent's single "core" working-memory block with content,
+// caching its term vector. Upsert: the existing core row is updated in place (or
+// created on first write), so there is always exactly one core row per agent.
+func (s *Store) WriteCore(ctx context.Context, agentID, content string) error {
+	content = strings.TrimSpace(content)
+	vec := buildVector(content)
+	_, err := s.db.UpsertKnowledgeByKind(ctx, agentID, db.MemoryCore, content, marshalVector(vec))
+	return err
+}
+
+// ReadCore returns the agent's current core working-memory block, or "" if none.
+func (s *Store) ReadCore(ctx context.Context, agentID string) (string, error) {
+	sources, err := s.db.ListKnowledge(ctx, agentID, db.MemoryCore)
+	if err != nil {
+		return "", err
+	}
+	if len(sources) == 0 {
+		return "", nil
+	}
+	return sources[0].Content, nil
+}
+
+// AppendCore appends a line to the agent's core block (read-modify-write). A
+// blank existing block yields just the line, so the first append reads cleanly.
+func (s *Store) AppendCore(ctx context.Context, agentID, line string) error {
+	line = strings.TrimSpace(line)
+	cur, err := s.ReadCore(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	next := line
+	if strings.TrimSpace(cur) != "" {
+		next = strings.TrimRight(cur, "\n") + "\n" + line
+	}
+	return s.WriteCore(ctx, agentID, next)
 }
 
 // List returns an agent's memories (optionally filtered by kind), newest first.
@@ -84,10 +127,14 @@ type Hit struct {
 }
 
 // Recall returns the top-N memories most similar to query, ranked by lexical
-// cosine. kinds optionally restricts the search (defaults to all kinds).
+// cosine. kinds optionally restricts the search; when omitted it defaults to the
+// recallable kinds (everything except the always-injected "core" block).
 func (s *Store) Recall(ctx context.Context, agentID, query string, limit int, kinds ...string) ([]Hit, error) {
 	if limit <= 0 {
 		limit = 5
+	}
+	if len(kinds) == 0 {
+		kinds = recallKinds
 	}
 	sources, err := s.db.ListKnowledge(ctx, agentID, kinds...)
 	if err != nil {

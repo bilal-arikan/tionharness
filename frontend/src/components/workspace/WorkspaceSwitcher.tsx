@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { ExternalLink, Trash2 } from 'lucide-react'
 import type { Workspace } from '../../types'
 import { buildRoute } from '../../lib/url'
+import { useOutsideClick } from '../../hooks/useOutsideClick'
 import { WorkspaceCreateModal, type NewWorkspaceData } from './WorkspaceCreateModal'
 
 interface Props {
@@ -28,23 +29,12 @@ function openInNewWindow(id: string) {
 export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, onSwitch, onCreate, onDelete }: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
+  // Close the dropdown when clicking anywhere outside it (detached while closed).
+  const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
 
   const active = workspaces.find((w) => w.id === activeId)
   // Any non-active workspace with pending activity → the trigger shows a dot.
   const hasUnread = unreadIds.size > 0
-
-  // Close the dropdown when clicking anywhere outside it.
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
 
   const create = (data: NewWorkspaceData) => {
     onCreate(data)

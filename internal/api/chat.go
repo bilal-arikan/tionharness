@@ -132,6 +132,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// create_artifact / update_artifact can persist content this turn.
 	ctx = tools.WithGrants(ctx, s.grants.forSession(session.ID))
 	ctx = tools.WithArtifacts(ctx, newArtifactSink(database, session.ID, agent.ID))
+	ctx = withSessionID(ctx, session.ID) // resolve this session's WorkingDir downstream
 	resp, steps, err := ws(r).Runtime.CompleteWithToolsTraced(ctx, agent, provider, llmReq, false)
 	if err != nil {
 		s.logger.Error("provider completion failed", "error", err, "agent", agent.ID)
