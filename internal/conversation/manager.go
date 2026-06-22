@@ -91,6 +91,13 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	pending := history[start:]
 
 	maxTokens, keepRecent := m.limits()
+	// Lift the budget toward the model's context window when known (Option B): a
+	// big-context model keeps more history before compaction; the configured value
+	// is the floor. Unknown window → unchanged. maxTokens<=0 means the budget is
+	// disabled (no compaction, no pressure) — leave it untouched.
+	if maxTokens > 0 {
+		maxTokens = EffectiveBudget(agent.Provider, agent.Model, maxTokens)
+	}
 	compacted := false
 	if EstimateTokens(summary, pending) > maxTokens && len(pending) > keepRecent {
 		fold := pending[:len(pending)-keepRecent]

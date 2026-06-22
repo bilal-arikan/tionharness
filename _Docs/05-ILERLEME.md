@@ -2,6 +2,24 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## Modele göre akıllı varsayılan bütçe — Option B ✅ (2026-06-22)
+
+**Hedef:** Flat 12K transcript bütçesi büyük modelin (200K–1M) penceresini boşa
+harcıyordu. Pencere metadata'sını (önceki commit) gerçekten kullan.
+
+- **`conversation.EffectiveBudget(provider, model, configured)`**: pencere biliniyorsa
+  bütçe = `clamp(window × 0.10, configured, 32K)` — yapılandırılmış değer **taban**
+  (asla altına inmez), 32K **tavan** (1M modelde maliyet guard'ı), bilinmeyen → değişmez.
+- **`Manager.Prepare`** artık compaction tetiğini + pressure oranını model-aware bütçeyle
+  hesaplıyor. `maxTokens≤0` (bütçe kapalı) dokunulmaz — `TestPrepareZeroPressure...`
+  semantiği korundu (ilk denemede bu testi kırdım, `if maxTokens>0` guard'ıyla düzelttim).
+- **Sonuç:** Claude 200K → 20K · MiniMax/DeepSeek/Gemini 1M → 32K · bilinmeyen → 12K.
+- **Doğrulama:** `budget_test.go` + conversation/providers **51 test** yeşil, `go vet` temiz.
+- **Follow-up:** §5 tool eşikleri hâlâ process-geneli bütçeyle (dormant); per-model
+  `EffectiveBudget`'a bağlamak temiz sonraki adım. Detay: `17-TOKEN-OPTIMIZASYON.md` §7.
+
+---
+
 ## Per-model context-window metadata ✅ (2026-06-22)
 
 **Hedef:** Modellerin context-window boyutunu metadata olarak taşı (UI + gelecekteki
@@ -73,9 +91,11 @@ App Settings'teydi.
 **Ölü alan temizliği:** `db.Agent.Capabilities` (`models.go`) kaldırıldı — hiçbir
 yerde okunmuyordu (yalnız `store.go`'da `"[]"` default'lanıp market install'da
 yazılıyordu, geri-publish yolu yok). 3 nokta: `models.go` alan, `store.go` default
-bloğu, `api/market.go` atama. Pack formatı `AgentPack.Capabilities` (SwarmPack v1
-sözleşmesi) uyumluluk için korundu. Eski agent JSON'larında migrasyon gerekmez
-(okumada yok sayılır). `go build` (db/api/market) + `go vet` temiz, db testleri 20/20.
+bloğu, `api/market.go` atama. Ardından pack formatı
+`market.AgentPayload.Capabilities` (SwarmPack v1) alanı da kaldırıldı — `omitempty`
+olduğu için eski pack JSON'ları sorunsuz parse olur (alan varsa yok sayılır). Eski
+agent JSON'larında migrasyon gerekmez. `go build` (db/api/market) temiz, db testleri
+20/20, market testi geçti.
 
 ---
 

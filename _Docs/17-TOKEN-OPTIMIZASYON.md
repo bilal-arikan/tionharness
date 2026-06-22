@@ -188,6 +188,19 @@ sonucunun **tüm transcript bütçesini aşmasına** yol açardı (tutarsız). B
 istenirse doğru hamle: **modele göre akıllı varsayılan bütçe** (flat 12K yerine `min(window, hedef)`),
 sonra §5 zaten onu ölçekler.
 
+### 7. Modele göre akıllı varsayılan bütçe (Option B) ✅ YAPILDI (2026-06-22)
+
+Flat 12K transcript bütçesi büyük modelin penceresini boşa harcıyordu. `conversation.EffectiveBudget(provider,
+model, configured)`: model penceresi biliniyorsa bütçeyi **`clamp(window × 0.10, configured, 32K)`**'a yükseltir
+— yapılandırılmış değer **taban** (asla altına inmez), 32K **tavan** (1M modelde maliyet patlamasın). Bilinmeyen
+pencere → değişmez. `Manager.Prepare` artık compaction tetiğini ve pressure oranını bu model-aware bütçeyle
+hesaplıyor; `maxTokens≤0` (bütçe kapalı) dokunulmaz. `budget_test.go`.
+
+- Claude 200K → 20K bütçe · MiniMax/DeepSeek/Gemini 1M → 32K (tavan) · bilinmeyen → 12K.
+- **Tool eşikleriyle hizalama (follow-up):** §5 tool eşikleri hâlâ process-geneli bütçeyle ölçekleniyor
+  (zaten dormant — `SetContextBudget` wiring `api` paketi bütünleşince commit'lenecek). Onları da
+  per-model `EffectiveBudget`'a bağlamak temiz bir sonraki adım.
+
 ## Ayrıca Bakınız
 
 - **[19-LAZY-TOOL-LOADING.md](19-LAZY-TOOL-LOADING.md)** — Araç şemalarının talep üzerine yüklenmesi
