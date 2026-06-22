@@ -174,6 +174,20 @@ değişmezi her ölçekte korunur. `tunables_compact_test.go`.
   oturumun MemGPT Parça-4 WIP'iyle geçici kırık olduğundan bu satır o paket bütünleşince commit'lenir
   (dormant — wiring olmadan da davranış birebir mevcut varsayılan).
 
+### 6. Per-model context-window metadata (tokenLimitFor zemini) ✅ YAPILDI (2026-06-22)
+
+`ModelInfo`'ya **`ContextWindow int`** (token) eklendi; `Catalog()` build-time'da merkezi
+**`ContextWindowFor(provider, model)`** aile-tablosundan doldurur (manifest'ler temiz kalır). Aile-bazlı,
+**bilinçli muhafazakâr**: yalnız emin olunan aileler (Claude 200K base; MiniMax/DeepSeek/Gemini 1M),
+gerisi 0 = "bilinmiyor" → çağıran fallback yapar. UI model picker'ı artık pencere boyutunu gösterebilir.
+`context_window_test.go`. **Mimari not — gerçek `tokenLimitFor` neden doğrudan takılmadı:** the external agent project
+eşiği **model penceresine** (window×0.10) ölçekler çünkü tüm pencereyi SDK'ye kullandırır. SwarmGo
+transcript'i **bilinçle 12K token'a** bütçeler (ucuz); eşiği 200K–1M pencereye ölçeklemek, tek bir tool
+sonucunun **tüm transcript bütçesini aşmasına** yol açardı (tutarsız). Bu yüzden tool eşikleri **bütçeye**
+(§5) bağlı kaldı; pencere metadata'sı **UI + bütçe-tavanı guard** için. Pencereyi gerçekten kullanmak
+istenirse doğru hamle: **modele göre akıllı varsayılan bütçe** (flat 12K yerine `min(window, hedef)`),
+sonra §5 zaten onu ölçekler.
+
 ## Ayrıca Bakınız
 
 - **[19-LAZY-TOOL-LOADING.md](19-LAZY-TOOL-LOADING.md)** — Araç şemalarının talep üzerine yüklenmesi

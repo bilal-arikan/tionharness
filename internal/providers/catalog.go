@@ -1,11 +1,14 @@
 package providers
 
 // ModelInfo is one selectable model in the catalog. Description is an optional
-// one-line note shown as a hint under the picker.
+// one-line note shown as a hint under the picker. ContextWindow is the model's
+// approximate context size in tokens (0 = unknown); it is filled at Catalog()
+// build time from ContextWindowFor, so manifests stay free of churning numbers.
 type ModelInfo struct {
-	ID          string `json:"id"`
-	Label       string `json:"label"`
-	Description string `json:"description,omitempty"`
+	ID            string `json:"id"`
+	Label         string `json:"label"`
+	Description   string `json:"description,omitempty"`
+	ContextWindow int    `json:"contextWindow,omitempty"`
 }
 
 // CatalogEntry describes a provider and its known models for the UI's
@@ -29,12 +32,21 @@ func Catalog() []CatalogEntry {
 	out := make([]CatalogEntry, 0, len(kinds))
 	for _, k := range kinds {
 		m := k.Manifest()
+		// Fill each model's context window from the central family table (unless a
+		// manifest set an explicit value). Keeps churning numbers out of manifests.
+		models := make([]ModelInfo, len(m.Models))
+		copy(models, m.Models)
+		for i := range models {
+			if models[i].ContextWindow == 0 {
+				models[i].ContextWindow = ContextWindowFor(m.Kind, models[i].ID)
+			}
+		}
 		out = append(out, CatalogEntry{
 			ID:               m.Kind,
 			Label:            m.Label,
 			NeedsKey:         m.NeedsKey,
 			AllowCustomModel: m.AllowCustomModel,
-			Models:           m.Models,
+			Models:           models,
 		})
 	}
 	return out

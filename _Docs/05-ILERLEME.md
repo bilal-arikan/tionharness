@@ -2,6 +2,25 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## Per-model context-window metadata ✅ (2026-06-22)
+
+**Hedef:** Modellerin context-window boyutunu metadata olarak taşı (UI + gelecekteki
+tokenLimitFor zemini). Kullanıcı isteği.
+
+- **`ModelInfo.ContextWindow int`** (token, `contextWindow,omitempty`). `Catalog()`
+  build-time'da merkezi **`ContextWindowFor(provider, model)`** aile-tablosundan
+  doldurur → manifest'ler churn'den uzak kalır, yine her modelde değer görünür.
+- **Aile-bazlı, muhafazakâr:** Claude 200K (1M tier opt-in beta), MiniMax/DeepSeek/
+  Gemini 1M (web'le doğrulandı: M3 = 1,048,576), gerisi 0 = "bilinmiyor" → fallback.
+  40+ third-party OpenRouter modelini elle yanlış doldurmaktansa emin olunanlar.
+- **Test:** `context_window_test.go` (aile eşleme + Catalog dolduruyor mu) — providers
+  paketi **43 test** yeşil, `go vet` temiz. `api`'ye dokunulmadı (JSON tag otomatik akar).
+- **Phase 2 (tokenLimitFor) bilinçle ertelendi:** model penceresine ölçekleme SwarmGo'nun
+  12K transcript bütçesiyle çelişir (bir tool sonucu tüm bütçeyi aşar); doğru hamle
+  "modele göre akıllı varsayılan bütçe". Detay: `17-TOKEN-OPTIMIZASYON.md` §6.
+
+---
+
 ## CG-9 ikinci yarı — bütçe-orantılı tool eşikleri ✅ (2026-06-22)
 
 **Hedef:** the external agent project'ın `tokenLimitFor` (tool-result eşiği context window'a göre)
@@ -42,6 +61,21 @@ orantıladım — kullanıcının zaten modeline göre ayarladığı knob.
   (1–128 / 1–64) eklendi, patch'e eklendi → uçtan uca bağlandı.
 - **Doğrulama:** `tsc --noEmit` temiz. Skill `swarmgo-settings` zaten tüm alanları
   doğru belgeliyordu (değişiklik gerekmedi).
+
+**Diğer düzenleme ekranlarının denetimi (aynı tur):** Workspace (`WorkspaceView`),
+Ajan (`AgentSettingsForm`), Hooks (`HooksPanel`), Skill (`SkillEditor`), Görev
+(`TaskDetailPanel`) ve Akış (`FlowsPanel`) ekranları tek tek denetlendi — **hepsi
+temiz**: her biri render ettiği tüm alanları kendi create/update payload'una
+gönderiyor (elle-omit yok). Workspace'te `instructions`/`boardColumns`,
+SkillEditor'da `color` bilinçli/dökümante şekilde ayrı yüzeyde. Asıl hata yalnız
+App Settings'teydi.
+
+**Ölü alan temizliği:** `db.Agent.Capabilities` (`models.go`) kaldırıldı — hiçbir
+yerde okunmuyordu (yalnız `store.go`'da `"[]"` default'lanıp market install'da
+yazılıyordu, geri-publish yolu yok). 3 nokta: `models.go` alan, `store.go` default
+bloğu, `api/market.go` atama. Pack formatı `AgentPack.Capabilities` (SwarmPack v1
+sözleşmesi) uyumluluk için korundu. Eski agent JSON'larında migrasyon gerekmez
+(okumada yok sayılır). `go build` (db/api/market) + `go vet` temiz, db testleri 20/20.
 
 ---
 
