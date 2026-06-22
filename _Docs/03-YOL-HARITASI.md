@@ -170,8 +170,11 @@ graph LR
   skoru (ucuz LLM ya da heuristik; `Memory.Importance` alanı). `minScore` eşiği ağırlıklı skora uygulanır.
   Geri-uyumlu: β=γ=0 → bugünkü davranış. İlham: `didiforgithub/SwarmAgent`'ın taklit ettiği orijinal
   Generative Agents "memory stream" deseni (o repo'da kod stub; fikir makaleden alındı). İlişkili: **C3**.
-- [ ] **C6** — **MemGPT/Letta tarzı self-editing bellek + memory-pressure sinyali** (`letta-ai/letta`,
-  "LLM as OS" deseni): compaction'ı ajandan gizli tutmak yerine belleği **ajanın açık kontrolüne** ver.
+- [x] **C6 ✅ (2026-06-23)** — **MemGPT/Letta tarzı self-editing bellek + memory-pressure sinyali**
+  (`letta-ai/letta`, "LLM as OS" deseni): compaction'ı ajandan gizli tutmak yerine belleği **ajanın
+  açık kontrolüne** ver. **Uygulandı:** pressure sinyali + ajanın `core_memory_replace/append`
+  araçlarıyla düzenlediği **adlandırılmış çekirdek bloklar** (persona/human + özel, karakter limitli) +
+  `human` bloğunun dream-cycle'la otomatik doldurulması (HA-1/c). Detay: `26-MEMGPT-CORE-MEMORY.md`.
   İki parça → (a) **memory-pressure sinyali**: `conversation.Manager` bağlam bütçesine yaklaşınca ajana
   sistem-uyarısı enjekte eder ("bağlam doluyor, önemliyi belleğe yaz") + ajan `memory_write` (C3) ile neyin
   kalıcı olacağına karar verir (sessiz oto-katlamadan önce); (b) **self-editing core memory bloğu**:
@@ -265,6 +268,9 @@ graph LR
   (c) **Honcho-benzeri kullanıcı modelleme** — etkileşimlerden kalıcı kullanıcı profili çıkarma
   (tercihler/bağlam/davranış). SwarmGo'nun mevcut lexical-cosine recall'ı (Faz 6) bunun altyapısı;
   üzerine kalıcı kullanıcı-profili entity'si + oto-güncelleme eklenir. İlişkili: **CG-16**, **C3** (memory_write).
+  > ✅ **(c) kullanıcı modelleme TAMAMLANDI (2026-06-23):** `human` çekirdek bloğu dream-cycle'a
+  > piggyback eden bir geçişle journal'dan otomatik doldurulur (C6 / `26-MEMGPT-CORE-MEMORY.md` Parça 4b).
+  > Kalan: (a) FTS5 tam-metin arama + (b) çapraz-oturum kalıcı özet indeksi.
 - [ ] **HA-2 — Kendini-geliştiren prosedürel skill + skill hub** *(yüksek değer — ayırt edici)*:
   harici ajanin en özgün yanı: ajan zor bir görevi tamamladıktan sonra **kendi prosedürel skill'ini
   otonom yazar** ve tekrar kullanımla **iyileştirir** (procedural memory); skill'ler

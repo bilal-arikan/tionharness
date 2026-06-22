@@ -4,6 +4,12 @@
 > bellek **adlandırılmış bloklar + karakter limiti** (Parça 5); `human` bloğu
 > dream-cycle ile **otomatik** doldurulur (Parça 4b/HA-1). Özet + `05-ILERLEME.md`.
 >
+> **Okuma rehberi:** Aşağıdaki **Parça 2–3** (tek `core` kind'i) ve **Parça 4a**
+> (persona/human, `core_persona`/`core_human`, `section`) bölümleri **orijinal
+> plan/tarihçedir** ve sonradan **Parça 5** (adlandırılmış bloklar, `core:<label>`,
+> `label` parametresi) tarafından geçersiz kılınmıştır. Güncel API/tanımlayıcılar
+> için **Parça 5**'i esas al; eski bölümler yalnız tarihsel kayıt.
+>
 > **CLI köprüsü (2026-06-22):** `core_memory_replace`/`core_memory_append` artık
 > claude-cli ajanlarına da Interaction MCP üzerinden sunuluyor (önceden CLI ajanı
 > core-memory bloğunu görüyor ama düzenleyemiyordu). Bkz. `11-INTERACTION-MCP.md`.
@@ -227,6 +233,13 @@ Letta'nın "core memory always in context" davranışı budur.
 
 ### Parça 4a — mekanik bölme ✅ (2026-06-22, UYGULANDI)
 
+> ⚠️ **Parça 5 ile GEÇERSİZ KILINDI (2026-06-23).** Aşağıdaki tanımlayıcılar artık
+> kodda **yok**: `db.MemoryCorePersona`/`MemoryCoreHuman` (`core_persona`/`core_human`)
+> → `db.CoreKind("<label>")` = `core:<label>`; `section` parametresi → `label`
+> (serbest, `section` geriye-alias); `ReadCoreSections → (persona,human)` →
+> `ReadCoreBlocks → []BlockView`; `GET/PUT /core` `{persona,human}` → `{blocks}`.
+> Güncel tasarım için **Parça 5**'e bak. Bölüm tarihsel kayıt olarak duruyor.
+
 Core bloğu iki bağımsız bölüme ayrıldı: **persona** (ajanın kendini tanımı) +
 **human** (kullanıcı modeli). Geri-uyum **gözetilmedi** (kullanıcı onayı) → eski
 tek `core` kind'i kaldırıldı, yerine iki kind geldi.
@@ -307,19 +320,21 @@ açıklama + salt-okunur** taşıyan model. Geri uyum **gerekmedi**; migration y
 
 ```mermaid
 graph LR
-    P1["Parça 1<br/>pressure sinyali"] --> SHIP1{{"sevk edilebilir<br/>(bağımsız)"}}
-    P2["Parça 2<br/>core kind + Store"] --> P3["Parça 3<br/>core_memory_* araçları"]
-    P3 --> SHIP2{{"sevk edilebilir"}}
+    P1["Parça 1<br/>pressure sinyali ✅"] --> SHIP1{{"sevk edildi"}}
+    P2["Parça 2<br/>core kind + Store ✅"] --> P3["Parça 3<br/>core_memory_* araçları ✅"]
     P3 --> P4A["Parça 4a<br/>persona/human ✅"]
-    P4A -.-> P4B["Parça 4b<br/>HA-1 oto-modelleme"]
+    P4A --> P5["Parça 5<br/>adlandırılmış bloklar<br/>+ limit ✅"]
+    P5 --> P4B["Parça 4b<br/>HA-1 oto-modelleme ✅"]
 ```
 
-| Adım | Efor | Bağımlılık | Geri-uyum |
+| Adım | Efor | Bağımlılık | Durum |
 |---|---|---|---|
-| 1. Pressure sinyali | ~1 saat | yok | tam (eşik 0 = kapalı) |
-| 2. `core` kind + Store API | ~yarım gün | yok | tam (yeni kind) |
-| 3. `core_memory_*` araçları | ~yarım gün | Adım 2 | tam (araç opt-in) |
-| 4. persona/human + HA-1 köprüsü | sonraya | Adım 3 + HA-1 | — |
+| 1. Pressure sinyali | ~1 saat | yok | ✅ UYGULANDI |
+| 2. `core` kind + Store API | ~yarım gün | yok | ✅ UYGULANDI (→ Parça 5'te genelleşti) |
+| 3. `core_memory_*` araçları | ~yarım gün | Adım 2 | ✅ UYGULANDI |
+| 4a. persona/human bölme | ~yarım gün | Adım 3 | ✅ UYGULANDI (→ Parça 5 geçersiz kıldı) |
+| 5. Adlandırılmış bloklar + limit | ~yarım gün | Adım 4a | ✅ UYGULANDI |
+| 4b. HA-1 oto-modelleme | ~yarım gün | Parça 5 + Reflect | ✅ UYGULANDI |
 
 **Önerilen sıra:** 1 → 2 → 3. Adım 1 tek başına en yüksek değer/risk oranı;
 Letta'nın asıl fikri ("belleği ajandan gizleme, kontrolü ona ver") 1 + 3 ile gelir.
@@ -338,9 +353,13 @@ Letta'nın asıl fikri ("belleği ajandan gizleme, kontrolü ona ver") 1 + 3 ile
 |---|---|---|---|
 | `memoryPressureWarn` | 1 | `0.75` | 0 (=kapalı) – 1.0 |
 | `coreMemoryTools` | 3 | `true` | — |
+| `autoUserModel` | 4b | `true` | — (Tunables `UserModel()`) |
 
 Hepsi `settings.Settings`/`DTO`/`Patch` + `Tunables` + `applySettings` canlı push,
 mevcut Token-Optimizasyon ayarlarıyla (`17-TOKEN-OPTIMIZASYON.md`) aynı desen.
+
+Ayrıca blok başına **karakter limiti**: blok tanımında `CharLimit` (0 →
+`db.DefaultCoreCharLimit = 2000`); ayar değil, blok tanımının parçası (Parça 5).
 
 ## Doğrulama
 
