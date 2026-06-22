@@ -23,15 +23,16 @@ func TestLabelMultiAgentHistory(t *testing.T) {
 	kai, _ := database.CreateAgent(ctx, db.Agent{Name: "Kai"})
 
 	history := []db.Message{
-		{Role: "user", Text: "selam"},
+		{Role: "user", AgentID: ada.ID, Text: "selam"},
 		{Role: "assistant", AgentID: ada.ID, Text: "ben Ada"},
-		{Role: "user", Text: "sen nasilsin"},
+		{Role: "user", AgentID: kai.ID, Text: "sen nasilsin"},
 		{Role: "assistant", AgentID: kai.ID, Text: "ben Kai"},
 	}
 
 	s := &Server{}
 
-	// Responder is Kai: Ada's turn is tagged "[Ada]", Kai's own is "[Kai (you)]".
+	// Responder is Kai: Ada's turn is tagged "[Ada]", Kai's own is "[Kai (you)]",
+	// and user turns are tagged with the agent they were directed at.
 	out, multi := s.labelMultiAgentHistory(ctx, database, kai.ID, history)
 	if !multi {
 		t.Fatal("expected multiAgent=true for a two-author session")
@@ -42,8 +43,11 @@ func TestLabelMultiAgentHistory(t *testing.T) {
 	if out[3].Text != "[Kai (you)]: ben Kai" {
 		t.Errorf("own turn mislabelled: %q", out[3].Text)
 	}
-	if out[0].Text != "selam" || out[2].Text != "sen nasilsin" {
-		t.Errorf("user turns must be untouched: %q / %q", out[0].Text, out[2].Text)
+	if out[0].Text != "[User → Ada]: selam" {
+		t.Errorf("directed user turn mislabelled: %q", out[0].Text)
+	}
+	if out[2].Text != "[User → Kai (you)]: sen nasilsin" {
+		t.Errorf("directed user turn (to responder) mislabelled: %q", out[2].Text)
 	}
 	// The input slice must not be mutated (labels applied on a copy).
 	if history[1].Text != "ben Ada" {

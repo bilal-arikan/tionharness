@@ -95,10 +95,13 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist the incoming user message.
+	// Persist the incoming user message. Stamp the recipient agent so a multi-agent
+	// thread's history can show which agent each question was directed at (the
+	// "@name" in the text is only informational). Harmless in a 1:1 session.
 	userMsg, err := database.AddMessage(ctx, db.Message{
 		SessionID:   session.ID,
 		Role:        providers.RoleUser,
+		AgentID:     agent.ID,
 		Text:        req.Message,
 		Attachments: req.Attachments,
 	})

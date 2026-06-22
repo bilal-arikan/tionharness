@@ -69,6 +69,9 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	// Headless Interaction MCP: give autonomous (scheduler/spawn) CLI
 	// turns the same use_skill/shell/self-manage bridge chat turns get.
 	manager.SetAutonomousInteraction(s.autonomousInteraction)
+	// History-aware self-wake: let schedule_wake continue with the full
+	// conversation (composed like a chat turn) instead of just the wake prompt.
+	manager.SetWakeTurnRunner(s.wakeTurnRunner)
 	s.applySettings()
 	return s
 }

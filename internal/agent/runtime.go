@@ -82,6 +82,12 @@ type Runtime struct {
 	// Set by the workspace manager once the api server exists; nil before then.
 	autoInteract AutonomousInteraction
 
+	// wakeTurn runs a history-aware chat turn for a self-wake (schedule_wake), so
+	// the woken agent continues with the full conversation instead of just the
+	// wake prompt. Set by the workspace manager once the api server exists; nil
+	// before then (deliverWake falls back to the prompt-only invoke).
+	wakeTurn WakeTurnFunc
+
 	// paused is this workspace's autonomy brake (set from per-workspace
 	// settings); when true, autonomous calls are rejected like the global one.
 	paused atomic.Bool
@@ -277,6 +283,23 @@ type AutonomousInteraction func(ctx context.Context, agent db.Agent, sessionID s
 // SetAutonomousInteraction wires the headless Interaction MCP setup. The
 // workspace manager calls this for every runtime (existing + later-opened).
 func (r *Runtime) SetAutonomousInteraction(fn AutonomousInteraction) { r.autoInteract = fn }
+
+// WakeTurnFunc runs a full, history-aware chat turn for a self-wake: given the
+// originating session (whose history already includes the wake prompt as the
+// last user message) it composes the same rich request an interactive chat turn
+// gets — conversation history, author labels, memory, goal, summary — and runs
+// the agentic loop, returning the reply text and its activity trace. Installed by
+// the api server (which owns chat-turn composition); nil falls back to the
+// prompt-only invoke.
+type WakeTurnFunc func(ctx context.Context, agent db.Agent, sessionID, prompt string) (string, []TurnStep, error)
+
+// SetWakeTurnRunner wires the history-aware wake-turn runner. The workspace
+// manager calls this for every runtime (existing + later-opened).
+func (r *Runtime) SetWakeTurnRunner(fn WakeTurnFunc) { r.wakeTurn = fn }
+
+// WorkspaceID returns this runtime's workspace id, so a wake-turn runner bound to
+// the runtime can resolve its workspace (DB, settings) from the manager.
+func (r *Runtime) WorkspaceID() string { return r.wsID }
 
 // NewShellRunner returns a closure that runs a shell command through the
 // workspace-sandboxed shell tool (PowerShell on Windows, /bin/sh elsewhere), for

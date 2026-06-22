@@ -204,6 +204,18 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   oturumda `chat_turn.go` sistem promptuna kısa bir not ekler (`multiAgentHistoryNote`):
   köşeli-parantez etiketlerinin okuma amaçlı olduğunu ve ajanın **kendi yanıtını
   ön-eksiz** yazması gerektiğini açıklar. Test: `chat_authors_test.go`.
+- **Kullanıcı mesajının hedef ajanı (2026-06-23):** Kullanıcı mesajı kaydedilirken
+  yönlendirildiği ajan `Message.AgentID`'ye damgalanır (`chat_stream.go`/`chat.go` →
+  `agents[0]`); metindeki `@Ad` yalnız bilgi amaçlıdır, yönlendirme yapmaz. Çok-yazarlı
+  geçmişte kullanıcı turları `"[User → Ada]: …"` olarak etiketlenir → ajan **hangi
+  sorunun kime sorulduğunu** da görür. (1:1 oturumda etiket çıkmaz.)
+- **Ardışık aynı-rol birleştirme (2026-06-23):** Bir kullanıcı mesajına iki ajan
+  ardışık yanıt verirse geçmiş `user → assistant → assistant` olur; Anthropic katı
+  şekilde rol-değişimi ister ("roles must alternate") → istek reddedilirdi. `providers`
+  katmanına `coalescePlainSameRole` eklendi: ardışık aynı-rol **düz metin** turlarını
+  tek mesajda birleştirir (araç çağrı/sonucu taşıyan turlara dokunmaz — tool_use↔tool_result
+  eşleşmesi korunur). Hem `anthropic.go` hem OpenAI-uyumlu `minimax.go` çeviricilerinde
+  uygulanır. Test: `providers/coalesce_test.go`.
 - **Oturum-bazlı akış durumu:** akış (streaming) artık **oturuma bağlı** — `App.tsx`
   `streamingSessionId` akışın sahibi oturumu izler. Composer'ın akış aksiyonları
   (Durdur/Kes/Yönlendir) ve `AskPrompt` yalnız `streamingSessionId === activeSessionId`

@@ -86,6 +86,12 @@ type Manager struct {
 	// Wired in after the api server exists; applied to existing + later-opened
 	// runtimes. nil until wired.
 	autoInteractFactory func(*agent.Runtime) agent.AutonomousInteraction
+
+	// wakeTurnFactory builds the history-aware self-wake turn runner for a runtime
+	// (so schedule_wake continues with the full conversation, not just the wake
+	// prompt). Wired in after the api server exists; applied to existing +
+	// later-opened runtimes. nil until wired.
+	wakeTurnFactory func(*agent.Runtime) agent.WakeTurnFunc
 }
 
 // SetAutonomousInteraction wires the headless Interaction MCP factory into every
@@ -97,6 +103,18 @@ func (m *Manager) SetAutonomousInteraction(factory func(*agent.Runtime) agent.Au
 	m.autoInteractFactory = factory
 	for _, ws := range m.workspaces {
 		ws.Runtime.SetAutonomousInteraction(factory(ws.Runtime))
+	}
+}
+
+// SetWakeTurnRunner wires the history-aware self-wake turn runner factory into
+// every existing workspace runtime and remembers it for workspaces opened later.
+// The api server calls this once at startup (it owns chat-turn composition).
+func (m *Manager) SetWakeTurnRunner(factory func(*agent.Runtime) agent.WakeTurnFunc) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.wakeTurnFactory = factory
+	for _, ws := range m.workspaces {
+		ws.Runtime.SetWakeTurnRunner(factory(ws.Runtime))
 	}
 }
 
@@ -207,6 +225,9 @@ func (m *Manager) open(meta Meta) error {
 	}
 	if m.autoInteractFactory != nil {
 		rt.SetAutonomousInteraction(m.autoInteractFactory(rt))
+	}
+	if m.wakeTurnFactory != nil {
+		rt.SetWakeTurnRunner(m.wakeTurnFactory(rt))
 	}
 
 	sched := agent.NewScheduler(database, rt, m.logger)

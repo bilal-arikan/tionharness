@@ -2,6 +2,61 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Çok-ajanlı bağlam sağlamlığı: yazar kimliği + ardışık-rol + geçmiş-duyarlı wake ✅ (2026-06-23)
+
+**Bağlam:** SES29'da iki ajana soru soruldu ama ajanlar "kim ne dedi"yi göremedi.
+Kök neden: `toProviderMessages` geçmişi çevirirken `AgentID`'yi düşürüyordu → tüm
+asistan turları tek ayrımsız "assistant" sesine karışıyordu. Düzeltme + aynı sınıftan
+diğer kusurlar tarandı; en kritik 3'ü (+ kullanıcı-hedefi) kapatıldı:
+
+1. **Yazar etiketleme** (önceki tur) — çok-yazarlı geçmişte her asistan turu yazarıyla
+   ön-eklenir (`api/chat_authors.go`).
+2. **Geçmiş-duyarlı wake** — `schedule_wake` ile uyanan ajan eskiden yalnız wake
+   prompt'unu görüyordu (`invokeTraced`, geçmiş yok). Artık `WakeTurnFunc` hook'u
+   (`api/wake_turn.go`) tam sohbet turunu (geçmiş+özet+hafıza+goal) kurar. Detay:
+   `_Docs\20-SCHEDULE-WAKE.md`.
+3. **Ardışık aynı-rol birleştirme** — bir kullanıcı mesajına 2 ajan ardışık yanıtlarsa
+   `user→assistant→assistant` oluşuyor, Anthropic "roles must alternate" ile reddediyordu.
+   `providers/coalesce.go` ardışık aynı-rol düz-metin turları birleştirir (araç turlarına
+   dokunmaz); anthropic + minimax çeviricilerinde uygulanır.
+4. **Kullanıcı mesajının hedef ajanı** — kullanıcı mesajı artık yönlendirildiği ajanla
+   (`AgentID = agents[0]`) damgalanır; geçmişte `"[User → Ada]: …"` etiketlenir → "hangi
+   soru kime" de görünür. `@Ad` yalnız bilgi amaçlı (yönlendirme değil).
+
+Testler: `chat_authors_test.go`, `providers/coalesce_test.go` (+ mevcutlar). Tüm
+build + 167 test yeşil. Detay: `_Docs\07-CHAT-UX.md`, `_Docs\20-SCHEDULE-WAKE.md`.
+
+## Bilinen kısıt — dinamik MCP araç ekleme (`tools.listChanged`) desteklenmiyor 🔴 (2026-06-23)
+
+**Bulgu (gerçek vaka):** Bir ajan MCP Gateway üzerinden `mcp-chrome`'u kullanmak istedi.
+Gateway'in `activate_tools('mcp-chrome')` çağrısı **"✅ 29 tools activated"** döndü ama
+ardından `chrome_navigate` çağrısı **`No such tool available`** verdi. Gateway'in kendisi
+uyardı: *"Your client did not advertise tools.listChanged support… reconnect with a preset."*
+
+**Kök neden — iki birleşen mimari gerçek:**
+1. **`tools.listChanged` yok:** istemci `initialize`'da `capabilities:{}` gönderir
+   (`internal/mcp/client.go`), yani sunucu "araç listem değişti" bildirimini gönderse bile
+   SwarmGo `tools/list`'i yeniden çağırmaz.
+2. **Dial-per-operation (havuzsuz):** `BuildCatalog`/`CallNamespaced` her işlemde **yeni
+   session** açıp kapatır. Gateway'in `activate_tools`'u **oturum-kapsamlıdır** → araçları
+   o anlık session'a ekler, session `Close()` ile kapanınca kaybolur. Eklenen araçlar
+   SwarmGo'nun kataloğuna hiç girmez → çağrılamaz.
+
+→ Sonuç: **runtime'da araç ekleyen/çıkaran MCP sunucularıyla SwarmGo uyumsuz.**
+
+**Geçici çözüm (uygulandı):** İstenen araçlar sunucunun bağlantı URL'indeki **preset'e**
+konur; preset her taze session'da başlangıçta yüklendiği için dial-per-operation modeliyle
+sorunsuz çalışır. MCP Gateway `swarmgo` preset'ine `mcp-chrome` eklendi
+(`mcp-server/config.json`: `swarmgo: [<remote-service>, mcp-chrome]`); `?preset=swarmgo` artık
+47→**76 araç** döndürüyor. Doğrulandı.
+
+**Kalıcı çözüm (Sırada / öneri):** ya (a) `initialize`'da `tools.listChanged` ilan edip
+**kalıcı session** tut + bildirimde `tools/list`'i yenile, ya da (b) gateway gibi
+dinamik sunucular için kalıcı bağlantı havuzu (Seçenek 2) — böylece `activate_tools`
+etkisi sonraki çağrıda da yaşar. İkisi de aynı `internal/mcp` yeniden tasarımına bağlanır.
+
+---
+
 ## HA-1: human bloğu otomatik kullanıcı modelleme (MemGPT Parça 4b) ✅ (2026-06-23)
 
 `human` çekirdek bloğu artık dream-cycle ile **otomatik** doldurulur. `reflect()`
@@ -531,15 +586,13 @@ Yapılan (3 parça):
   primitifi). Hafıza panelinde **çekirdek bellek kartı** (`CoreMemoryCard` —
   göster/düzenle) + `GET|PUT /api/agents/{id}/core` uç noktaları.
 - **Parça 4a — persona/human ayrımı ✅ (2026-06-22):** çekirdek bellek iki bağımsız
-  bölüme ayrıldı — **persona** (`core_persona`) + **human** (`core_human`), her biri
-  ajan başına tek satır. Geri-uyum gözetilmedi (eski tek `core` kind'i kaldırıldı).
-  `WriteCore/ReadCore/AppendCore` artık `section` alır (+`ReadCoreSections`);
-  `core_memory_*` araçlarına `section` (persona|human, vars. persona) alanı; enjeksiyon
-  iki alt başlıkla (`coreMemoryBlock`); `GET/PUT /core` `{persona,human}`;
-  `CoreMemoryCard` iki bölümlü. Constructor imzaları korundu (CLI köprüsü bozulmadı).
-  Testler yeşil.
-- **Sırada:** Parça 4b — HA-1 Honcho-benzeri kullanıcı modelleme (`core_human`'ı
-  Reflect-benzeri döngüyle otomatik doldurma).
+  bölüme ayrıldı — persona + human, her biri ajan başına tek satır.
+  > ⚠️ **2026-06-23'te Parça 5 ile geçersiz kılındı:** `core_persona`/`core_human`,
+  > `section` parametresi, `ReadCoreSections` ve `{persona,human}` API'si artık
+  > yok → `core:<label>`, `label`, `ReadCoreBlocks`, `{blocks}`. Bu girişin üstündeki
+  > **"adlandırılmış bloklar"** ve **"HA-1"** girişlerine bak.
+- **Devamı:** Parça 5 (adlandırılmış bloklar + limit) ve Parça 4b (HA-1
+  oto-modelleme) **2026-06-23'te tamamlandı** — dosyanın başındaki güncel girişler.
 
 ## Oturum-başına Çalışma Dizini (cwd) + otonomi frenleri ✅ (2026-06-22)
 

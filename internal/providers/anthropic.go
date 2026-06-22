@@ -426,6 +426,10 @@ func (a *Anthropic) systemField(static, dynamic string) any {
 // toAnthropicMessages converts provider messages to content-block form,
 // skipping the system role (passed separately in the Anthropic API).
 func toAnthropicMessages(msgs []Message) []anthropicMessage {
+	// Anthropic requires strictly alternating roles; merge any back-to-back
+	// same-role plain-text turns (e.g. two agents' replies in a shared thread)
+	// into one so the request is valid.
+	msgs = coalescePlainSameRole(msgs)
 	out := make([]anthropicMessage, 0, len(msgs))
 	for _, m := range msgs {
 		if m.Role == RoleSystem {

@@ -155,6 +155,31 @@ schedule_wake güdümlü çok-adımlı async akışlar limit'e takılmadan tamam
 diye. `SWARMGO_MAX_TOOL_ITERS` env değişkeniyle (pozitif tamsayı) override edilebilir
 (`internal/agent/toolloop.go`).
 
+## Geçmiş-duyarlı wake turu (2026-06-23)
+
+Önceden `deliverWake` → `invokeTraced` turu **yalnızca wake prompt'unu**
+gönderiyordu (`Messages: [{user, prompt}]`) — uyanan ajan sürdürmesi gereken
+**sohbeti hiç görmüyordu**. Artık wake, tam bir sohbet turu gibi kurgulanıyor:
+
+- `Runtime.WakeTurnFunc` hook'u (api server kurar; `runtime.SetWakeTurnRunner`,
+  manager `SetWakeTurnRunner` ile her runtime'a dağıtır — `autonomousInteraction`
+  ile aynı desen).
+- `api/wake_turn.go` → `wakeTurnRunner`: oturum geçmişini yükler, yazar
+  etiketlemesi uygular (`labelMultiAgentHistory`), `convo.Prepare` + `composeTurnRequest`
+  ile **tam zengin isteği** (geçmiş + özet + hafıza + goal + workdir + cwd) kurar,
+  `CompleteWithToolsTraced(autonomous=true)` ile çalıştırır.
+- Wake prompt'u `deliverWake` zaten **son kullanıcı mesajı** olarak yazdığı için
+  geçmiş onu taşır — ayrıca eklenmez.
+- Hook kurulu değilse (api server bağlamadan önce) eski prompt-only invoke'a düşer.
+
+| Dosya | Değişiklik |
+|---|---|
+| `internal/agent/runtime.go` | `WakeTurnFunc` tipi, `wakeTurn` alanı, `SetWakeTurnRunner`, `WorkspaceID()` |
+| `internal/agent/scheduler.go` | `deliverWake` hook'u kullanır (yoksa fallback) |
+| `internal/workspace/manager.go` | `wakeTurnFactory` + `SetWakeTurnRunner` + openWorkspace uygulaması |
+| `internal/api/wake_turn.go` | `wakeTurnRunner` (geçmiş-duyarlı tam tur) |
+| `internal/api/server.go` | `manager.SetWakeTurnRunner(s.wakeTurnRunner)` |
+
 ## Bilinen davranışlar
 
 - `ScheduleWakeup` (Claude Code harness aracı) devre dışı bırakıldı. Model bazen hâlâ bu aracı çağırmayı dener; disallowed listesi sayesinde araç çağrısı reddedilir, model `schedule_wake`'e yönelir.

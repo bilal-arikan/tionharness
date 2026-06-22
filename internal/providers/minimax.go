@@ -335,7 +335,10 @@ func toOAIMessages(req Request) []oaiMessage {
 	if sys := strings.TrimSpace(strings.TrimSpace(req.System) + "\n\n" + strings.TrimSpace(req.SystemDynamic)); sys != "" {
 		msgs = append(msgs, oaiMessage{Role: "system", Content: sys})
 	}
-	for _, mm := range req.Messages {
+	// Merge back-to-back same-role plain-text turns (e.g. several agents replying
+	// in one shared thread) so the role sequence stays clean for stricter
+	// OpenAI-compatible backends.
+	for _, mm := range coalescePlainSameRole(req.Messages) {
 		if mm.Role == RoleSystem {
 			continue
 		}

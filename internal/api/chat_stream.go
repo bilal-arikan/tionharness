@@ -116,10 +116,15 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// A fresh session opened by @mentioning an agent adopts it as the main agent.
 	session = s.adoptMentionedAgent(ctx, database, session, req.AgentIDs, agents)
 
-	// Persist the incoming user message once.
+	// Persist the incoming user message once. Stamp the routed recipient agent
+	// (agents[0]) so a multi-agent thread's history can show which agent each
+	// question was directed at — the "@name" in the text is only informational and
+	// does not route. Harmless in a 1:1 session (labelling only kicks in with 2+
+	// agents).
 	userMsg, err := database.AddMessage(ctx, db.Message{
 		SessionID:   session.ID,
 		Role:        providers.RoleUser,
+		AgentID:     agents[0].ID,
 		Text:        req.Message,
 		Attachments: req.Attachments,
 	})

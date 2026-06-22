@@ -39,9 +39,15 @@ func (s *Server) labelMultiAgentHistory(ctx context.Context, database *db.DB, cu
 		return history, false
 	}
 
-	// Resolve each author's display name once (id → name, falling back to the id).
-	names := make(map[string]string, len(authors))
-	for id := range authors {
+	// Resolve an agent's display name once, cached (id → name, falling back to id).
+	names := make(map[string]string)
+	nameOf := func(id string) string {
+		if id == "" {
+			return ""
+		}
+		if n, ok := names[id]; ok {
+			return n
+		}
 		name := id
 		if a, err := database.GetAgent(ctx, id); err == nil {
 			if n := strings.TrimSpace(a.Name); n != "" {
@@ -49,16 +55,26 @@ func (s *Server) labelMultiAgentHistory(ctx context.Context, database *db.DB, cu
 			}
 		}
 		names[id] = name
+		return name
 	}
 
 	out := make([]db.Message, len(history))
 	for i, m := range history {
-		if m.Role == providers.RoleAssistant && m.AgentID != "" {
-			tag := "[" + names[m.AgentID] + "]"
+		switch {
+		case m.Role == providers.RoleAssistant && m.AgentID != "":
+			// Who authored this reply.
+			tag := "[" + nameOf(m.AgentID) + "]"
 			if m.AgentID == currentAgentID {
-				tag = "[" + names[m.AgentID] + " (you)]"
+				tag = "[" + nameOf(m.AgentID) + " (you)]"
 			}
 			m.Text = tag + ": " + m.Text
+		case m.Role == providers.RoleUser && m.AgentID != "":
+			// Who this user message was directed at (the routed recipient agent).
+			rcpt := nameOf(m.AgentID)
+			if m.AgentID == currentAgentID {
+				rcpt += " (you)"
+			}
+			m.Text = "[User → " + rcpt + "]: " + m.Text
 		}
 		out[i] = m
 	}
@@ -68,4 +84,4 @@ func (s *Server) labelMultiAgentHistory(ctx context.Context, database *db.DB, cu
 // multiAgentHistoryNote is the system-prompt note added (only in a multi-author
 // session) that explains the bracket attribution convention applied to the
 // history, and tells the agent not to copy it into its own reply.
-const multiAgentHistoryNote = "This conversation is shared by MULTIPLE agents. In the history each assistant turn is prefixed with its author in brackets — e.g. \"[Ada]: …\" for another agent, and \"[<your name> (you)]: …\" for your own earlier turns — so you can tell exactly who said what (the user may ask). This labelling is only a reading aid: do NOT imitate it — write your own reply as plain text with no name prefix."
+const multiAgentHistoryNote = "This conversation is shared by MULTIPLE agents. In the history each assistant turn is prefixed with its author in brackets — e.g. \"[Ada]: …\" for another agent, and \"[<your name> (you)]: …\" for your own earlier turns — and each user turn is prefixed with the agent it was directed at — e.g. \"[User → Ada]: …\". This lets you tell exactly who said what and who each question was meant for (the user may ask). The labelling is only a reading aid: do NOT imitate it — write your own reply as plain text with no prefix."
