@@ -98,7 +98,7 @@ harcıyordu. Pencere metadata'sını (önceki commit) gerçekten kullan.
 - **`Manager.Prepare`** artık compaction tetiğini + pressure oranını model-aware bütçeyle
   hesaplıyor. `maxTokens≤0` (bütçe kapalı) dokunulmaz — `TestPrepareZeroPressure...`
   semantiği korundu (ilk denemede bu testi kırdım, `if maxTokens>0` guard'ıyla düzelttim).
-- **Sonuç:** Claude 200K → 20K · MiniMax/DeepSeek/Gemini 1M → 32K · bilinmeyen → 12K.
+- **Sonuç:** Opus 4.8/Sonnet 4.6 1M → 32K · Haiku 4.5 200K → 20K · MiniMax/DeepSeek/Gemini 1M → 32K · bilinmeyen → 12K.
 - **Doğrulama:** `budget_test.go` + conversation/providers **51 test** yeşil, `go vet` temiz.
 - **Follow-up:** §5 tool eşikleri hâlâ process-geneli bütçeyle (dormant); per-model
   `EffectiveBudget`'a bağlamak temiz sonraki adım. Detay: `17-TOKEN-OPTIMIZASYON.md` §7.
@@ -113,9 +113,12 @@ tokenLimitFor zemini). Kullanıcı isteği.
 - **`ModelInfo.ContextWindow int`** (token, `contextWindow,omitempty`). `Catalog()`
   build-time'da merkezi **`ContextWindowFor(provider, model)`** aile-tablosundan
   doldurur → manifest'ler churn'den uzak kalır, yine her modelde değer görünür.
-- **Aile-bazlı, muhafazakâr:** Claude 200K (1M tier opt-in beta), MiniMax/DeepSeek/
-  Gemini 1M (web'le doğrulandı: M3 = 1,048,576), gerisi 0 = "bilinmiyor" → fallback.
-  40+ third-party OpenRouter modelini elle yanlış doldurmaktansa emin olunanlar.
+- **Aile-bazlı, muhafazakâr:** Opus 4.8/Sonnet 4.6 **1M**, Haiku 4.5 **200K**,
+  MiniMax/DeepSeek/Gemini 1M (web'le doğrulandı: M3 = 1,048,576; Opus/Sonnet 1M,
+  Haiku 200K), gerisi 0 = "bilinmiyor" → fallback. 40+ third-party OpenRouter
+  modelini elle yanlış doldurmaktansa emin olunanlar.
+  > **Düzeltme (2026-06-22):** İlk sürümde Claude ailesine düz 200K verilmişti; Opus
+  > 4.8 ve Sonnet 4.6 aslında **1M**, sadece Haiku 200K. Per-tier eşlemeyle düzeltildi.
 - **Test:** `context_window_test.go` (aile eşleme + Catalog dolduruyor mu) — providers
   paketi **43 test** yeşil, `go vet` temiz. `api`'ye dokunulmadı (JSON tag otomatik akar).
 - **Phase 2 (tokenLimitFor) bilinçle ertelendi:** model penceresine ölçekleme SwarmGo'nun

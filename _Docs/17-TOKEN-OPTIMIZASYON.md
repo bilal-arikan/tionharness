@@ -178,7 +178,8 @@ değişmezi her ölçekte korunur. `tunables_compact_test.go`.
 
 `ModelInfo`'ya **`ContextWindow int`** (token) eklendi; `Catalog()` build-time'da merkezi
 **`ContextWindowFor(provider, model)`** aile-tablosundan doldurur (manifest'ler temiz kalır). Aile-bazlı,
-**bilinçli muhafazakâr**: yalnız emin olunan aileler (Claude 200K base; MiniMax/DeepSeek/Gemini 1M),
+**bilinçli muhafazakâr**: yalnız emin olunan aileler (Opus 4.8/Sonnet 4.6 **1M**, Haiku 4.5 **200K**;
+MiniMax/DeepSeek/Gemini 1M; Fable/genel Claude 200K),
 gerisi 0 = "bilinmiyor" → çağıran fallback yapar. UI model picker'ı artık pencere boyutunu gösterebilir.
 `context_window_test.go`. **Mimari not — gerçek `tokenLimitFor` neden doğrudan takılmadı:** the external agent project
 eşiği **model penceresine** (window×0.10) ölçekler çünkü tüm pencereyi SDK'ye kullandırır. SwarmGo
@@ -196,7 +197,7 @@ model, configured)`: model penceresi biliniyorsa bütçeyi **`clamp(window × 0.
 pencere → değişmez. `Manager.Prepare` artık compaction tetiğini ve pressure oranını bu model-aware bütçeyle
 hesaplıyor; `maxTokens≤0` (bütçe kapalı) dokunulmaz. `budget_test.go`.
 
-- Claude 200K → 20K bütçe · MiniMax/DeepSeek/Gemini 1M → 32K (tavan) · bilinmeyen → 12K.
+- Opus 4.8/Sonnet 4.6 1M → 32K (tavan) · Haiku 4.5 200K → 20K · MiniMax/DeepSeek/Gemini 1M → 32K · bilinmeyen → 12K.
 - **Tool eşikleriyle hizalama ✅ YAPILDI (2026-06-22):** Compactor artık her tur için
   `conversation.EffectiveBudget(agent.Provider, agent.Model, tun.ContextBudgetTokens())` hesaplayıp
   `Tunables.CompactMaxBytesFor(budget)` / `CompactLLMThresholdFor(budget)` ile **per-model** ölçekliyor.

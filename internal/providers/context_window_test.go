@@ -7,13 +7,14 @@ func TestContextWindowFor(t *testing.T) {
 		model string
 		want  int
 	}{
-		{"claude-opus-4-8", windowClaude},
-		{"claude-haiku-4-5-20251001", windowClaude},
-		{"anthropic/claude-sonnet-4.6", windowClaude},
-		{"opus", windowClaude},
-		{"sonnet", windowClaude},
-		{"haiku", windowClaude},
-		{"claude-fable-5", windowClaude},
+		{"claude-opus-4-8", windowClaudeOpusSonnet},
+		{"claude-haiku-4-5-20251001", windowHaiku},
+		{"anthropic/claude-sonnet-4.6", windowClaudeOpusSonnet},
+		{"anthropic/claude-opus-4.8-fast", windowClaudeOpusSonnet},
+		{"opus", windowClaudeOpusSonnet},
+		{"sonnet", windowClaudeOpusSonnet},
+		{"haiku", windowHaiku},
+		{"claude-fable-5", windowClaudeOther},
 		{"MiniMax-M3", windowMiniMax},
 		{"minimax/minimax-m3", windowMiniMax},
 		{"deepseek/deepseek-v4-flash", windowDeepSeek},
@@ -21,7 +22,7 @@ func TestContextWindowFor(t *testing.T) {
 		{"", 0},                          // claude-cli default → unknown
 		{"openai/gpt-5.5", 0},            // not in a confident family → unknown
 		{"some-unknown-model", 0},        // unknown → 0 (caller falls back)
-		{"  Claude-Opus  ", windowClaude}, // trimmed + case-insensitive
+		{"  Claude-Opus  ", windowClaudeOpusSonnet}, // trimmed + case-insensitive
 	}
 	for _, c := range cases {
 		if got := ContextWindowFor("", c.model); got != c.want {

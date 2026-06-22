@@ -9,16 +9,23 @@ import "strings"
 // guess. The 1M Claude tier is opt-in (beta), so the Claude family reports its
 // 200K base.
 const (
-	windowClaude   = 200_000   // Claude 4.x base (1M is the opt-in beta tier)
-	windowMiniMax  = 1_000_000 // MiniMax M-series (M3 ≈ 1,048,576, ≥512K guaranteed)
-	windowDeepSeek = 1_000_000 // DeepSeek V4 family ("1M context")
-	windowGemini   = 1_000_000 // Gemini long-context family
+	// Claude 4.x is NOT one size: Opus 4.8 and Sonnet 4.6 ship a 1M window (the
+	// long-context surcharge was dropped in 2026), while Haiku 4.5 stays at 200K.
+	// So the Claude family must be matched per-tier, not with one flat value.
+	windowClaudeOpusSonnet = 1_000_000 // Opus 4.8 / Sonnet 4.6
+	windowHaiku            = 200_000   // Haiku 4.5
+	windowClaudeOther      = 200_000   // Fable / generic Claude fallback (conservative)
+	windowMiniMax          = 1_000_000 // MiniMax M-series (M3 ≈ 1,048,576, ≥512K guaranteed)
+	windowDeepSeek         = 1_000_000 // DeepSeek V4 family ("1M context")
+	windowGemini           = 1_000_000 // Gemini long-context family
 )
 
 // ContextWindowFor returns the approximate context-window size in tokens for a
 // provider/model, or 0 when unknown. It is the single source of truth used by
 // the catalog (UI display) and tool-output threshold scaling (CG-9). provider is
 // accepted for future disambiguation; matching is currently by model family.
+// Order matters: the more specific tier (haiku) is checked before the broad
+// opus/sonnet/claude rules.
 func ContextWindowFor(provider, model string) int {
 	m := strings.ToLower(strings.TrimSpace(model))
 	if m == "" {
@@ -32,9 +39,12 @@ func ContextWindowFor(provider, model string) int {
 		return windowDeepSeek
 	case strings.Contains(m, "gemini"):
 		return windowGemini
-	case strings.Contains(m, "claude"), strings.Contains(m, "fable"),
-		m == "opus", m == "sonnet", m == "haiku":
-		return windowClaude
+	case strings.Contains(m, "haiku"):
+		return windowHaiku
+	case strings.Contains(m, "opus"), strings.Contains(m, "sonnet"):
+		return windowClaudeOpusSonnet
+	case strings.Contains(m, "fable"), strings.Contains(m, "claude"):
+		return windowClaudeOther
 	default:
 		return 0
 	}

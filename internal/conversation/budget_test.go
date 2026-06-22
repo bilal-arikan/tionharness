@@ -13,9 +13,14 @@ func TestEffectiveBudget(t *testing.T) {
 		t.Fatalf("zero configured, unknown window: got %d, want %d", got, defaultMaxTokens)
 	}
 
-	// Claude 200K × 0.10 = 20000, above the 12000 floor and below the ceil.
-	if got, want := EffectiveBudget("anthropic", "claude-opus-4-8", 12000), 20000; got != want {
-		t.Fatalf("claude budget: got %d, want %d", got, want)
+	// Haiku 200K × 0.10 = 20000, above the 12000 floor and below the ceil.
+	if got, want := EffectiveBudget("anthropic", "claude-haiku-4-5-20251001", 12000), 20000; got != want {
+		t.Fatalf("haiku budget: got %d, want %d", got, want)
+	}
+
+	// Opus 4.8 is 1M (× 0.10 = 100000) → clamped to the ceil.
+	if got := EffectiveBudget("anthropic", "claude-opus-4-8", 12000); got != budgetAutoCeil {
+		t.Fatalf("opus budget: got %d, want ceil %d", got, budgetAutoCeil)
 	}
 
 	// MiniMax 1M × 0.10 = 100000 → clamped to the ceil.
@@ -23,8 +28,9 @@ func TestEffectiveBudget(t *testing.T) {
 		t.Fatalf("minimax budget: got %d, want ceil %d", got, budgetAutoCeil)
 	}
 
-	// Configured floor always wins when it exceeds the derived value.
-	if got := EffectiveBudget("anthropic", "claude-opus-4-8", 30000); got != 30000 {
-		t.Fatalf("high configured floor: got %d, want 30000", got)
+	// Configured floor wins when it exceeds the derived value (Haiku 200K→20000,
+	// configured 25000 → 25000).
+	if got := EffectiveBudget("anthropic", "claude-haiku-4-5-20251001", 25000); got != 25000 {
+		t.Fatalf("high configured floor: got %d, want 25000", got)
 	}
 }
