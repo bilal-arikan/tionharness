@@ -1,13 +1,26 @@
 // Providers category: default provider/model picker, Anthropic + MiniMax +
 // OpenRouter keys, custom (user-added) providers and connection test. (Anthropic
 // beta toggles now live under the "Bağlam & Bellek" category.)
+//
+// Layout is deliberately table-like: the three built-in providers render as a
+// uniform grid of cards (status badge + aligned key/endpoint columns + test) so
+// the section reads as rows of the same shape, and custom providers render as a
+// real table.
 import { useEffect, useState } from 'react'
-import { Server, Sparkles, Zap, KeyRound, Boxes, Plus, Trash2, Network } from 'lucide-react'
+import { Server, Sparkles, Zap, KeyRound, Boxes, Plus, Trash2, Network, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { AppSettings, ProviderTestResult, Secret } from '../../types'
 import type { CustomProvider, UpsertProviderInput } from '../../api/providers'
 import { ProviderModelSelect } from '../agents/ProviderModelSelect'
 import { Field, inputCls, type AppSet } from './primitives'
+
+function testBadge(test: Props['test'], provider: string) {
+  const r = test[provider]
+  if (!r) return null
+  if (r === 'pending') return <span className="text-xs text-[var(--color-warning)]">test ediliyor…</span>
+  if (r.ok) return <span className="text-xs text-[var(--color-success)]">✓ bağlandı{r.model ? ` (${r.model})` : ''}</span>
+  return <span className="text-xs text-[var(--color-danger)]">✗ {r.error}</span>
+}
 
 interface Props {
   draft: AppSettings
@@ -26,52 +39,153 @@ interface Props {
   onManageSecrets: () => void
 }
 
-function testBadge(test: Props['test'], provider: string) {
-  const r = test[provider]
-  if (!r) return null
-  if (r === 'pending') return <span className="text-xs text-[var(--color-warning)]">test ediliyor…</span>
-  if (r.ok) return <span className="text-xs text-[var(--color-success)]">✓ bağlandı{r.model ? ` (${r.model})` : ''}</span>
-  return <span className="text-xs text-[var(--color-danger)]">✗ {r.error}</span>
-}
-
-// TestConnection is a reusable "test the connection" row for a provider section.
-// It probes the given provider id (optionally with a representative model, since
-// the global default model usually belongs to a different provider) and shows
-// the live result badge. Disabled until the provider has a key configured.
-function TestConnection({
-  test,
-  runTest,
-  provider,
-  model,
-  disabled,
-  disabledHint,
+// KeyPicker is the vault-only key selector (no free text): the key can only be
+// chosen from the secret vault (revealed + applied), reflecting the policy that
+// provider secrets live in the vault, not in a plaintext settings field. A
+// compact variant for the built-in provider cards.
+function KeyPicker({
+  isSet,
+  secrets,
+  onPick,
+  onClear,
 }: {
-  test: Props['test']
-  runTest: Props['runTest']
-  provider: string
-  model?: string
-  disabled?: boolean
-  disabledHint?: string
+  isSet: boolean
+  secrets: Secret[]
+  onPick: (name: string) => void
+  onClear: () => void
 }) {
   return (
-    <div className="mt-1 flex items-center gap-2">
-      <button
-        onClick={() => runTest(provider, model)}
-        disabled={disabled}
-        className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)] disabled:opacity-40 disabled:hover:border-[var(--color-border)]"
+    <div className="flex items-center gap-1.5">
+      <select
+        defaultValue=""
+        disabled={secrets.length === 0}
+        onChange={(e) => {
+          const name = e.target.value
+          e.currentTarget.selectedIndex = 0
+          if (name) onPick(name)
+        }}
+        className={`${inputCls} min-w-0 flex-1`}
       >
-        Bağlantıyı test et
-      </button>
-      {disabled
-        ? <span className="text-xs text-[var(--color-text-dim)]">{disabledHint ?? 'önce anahtar ekle'}</span>
-        : testBadge(test, provider)}
+        <option value="">
+          {secrets.length ? (isSet ? 'Değiştir: sırdan seç…' : 'Sırdan seç…') : 'Sır yok'}
+        </option>
+        {secrets.map((s) => (
+          <option key={s.name} value={s.name}>{s.name}</option>
+        ))}
+      </select>
+      {isSet && (
+        <button
+          onClick={onClear}
+          className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-danger)] hover:border-[var(--color-danger)]"
+        >
+          Sil
+        </button>
+      )}
     </div>
   )
 }
 
-// SecretSource lets the user fill a key field from the workspace secret vault
-// (revealed and imported into the field, then saved encrypted into settings)
-// and jump to the Secrets screen to manage entries.
+// BuiltinProvider is one row of the built-in providers table, rendered as a card
+// with a uniform shape: header (icon + name + kind + status badge), an aligned
+// two-column body (key picker | endpoint), and a footer test row. The endpoint
+// field is generic so Anthropic (claude CLI path) and the OpenAI-compatible
+// providers (base URL) share the exact same layout.
+function BuiltinProvider({
+  icon: Icon,
+  name,
+  kindLabel,
+  keyLabel,
+  isSet,
+  requiredHint,
+  secrets,
+  onPick,
+  onClear,
+  endpointLabel,
+  endpointValue,
+  endpointPlaceholder,
+  onEndpoint,
+  test,
+  runTest,
+  testProvider,
+  testModel,
+  testDisabledHint,
+}: {
+  icon: LucideIcon
+  name: string
+  kindLabel: string
+  keyLabel: string
+  isSet: boolean
+  requiredHint: string
+  secrets: Secret[]
+  onPick: (name: string) => void
+  onClear: () => void
+  endpointLabel: string
+  endpointValue: string
+  endpointPlaceholder: string
+  onEndpoint: (v: string) => void
+  test: Props['test']
+  runTest: Props['runTest']
+  testProvider: string
+  testModel?: string
+  testDisabledHint: string
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon size={15} className="shrink-0 text-[var(--color-accent)]" />
+          <span className="truncate text-sm font-medium">{name}</span>
+          <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">{kindLabel}</span>
+        </div>
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+            isSet ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]' : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+          }`}
+        >
+          {isSet ? '✓ Anahtar kayıtlı' : 'Anahtar yok'}
+        </span>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--color-text-dim)]">{keyLabel}</span>
+          <KeyPicker isSet={isSet} secrets={secrets} onPick={onPick} onClear={onClear} />
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--color-text-dim)]">{endpointLabel}</span>
+          <input
+            value={endpointValue}
+            onChange={(e) => onEndpoint(e.target.value)}
+            placeholder={endpointPlaceholder}
+            className={inputCls}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-[11px] text-[var(--color-text-dim)]">
+          {isSet ? '✓ Kayıtlı (şifreli).' : requiredHint}
+        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {!isSet
+            ? <span className="text-xs text-[var(--color-text-dim)]">{testDisabledHint}</span>
+            : testBadge(test, testProvider)}
+          <button
+            onClick={() => runTest(testProvider, testModel)}
+            disabled={!isSet}
+            className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)] disabled:opacity-40 disabled:hover:border-[var(--color-border)]"
+          >
+            Test et
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// SecretSource lets the user fill the custom-provider key field from the
+// workspace secret vault (revealed and imported into the field, then saved
+// encrypted) and jump to the Secrets screen to manage entries.
 function SecretSource({
   secrets,
   onPick,
@@ -110,58 +224,6 @@ function SecretSource({
   )
 }
 
-// ProviderKeyField is a key control with NO free text entry: the key can only
-// be chosen from the secret vault (revealed + applied), reflecting the policy
-// that provider secrets live in the vault, not in a plaintext settings field.
-function ProviderKeyField({
-  label,
-  isSet,
-  requiredHint,
-  secrets,
-  onPick,
-  onClear,
-  onManage,
-}: {
-  label: string
-  isSet: boolean
-  requiredHint: string
-  secrets: Secret[]
-  onPick: (name: string) => void
-  onClear: () => void
-  onManage: () => void
-}) {
-  return (
-    <Field label={label} hint="Anahtar yalnızca Sır kasasından seçilir — elle giriş kapalı.">
-      <div className="flex items-center gap-2">
-        <select
-          defaultValue=""
-          disabled={secrets.length === 0}
-          onChange={(e) => {
-            const name = e.target.value
-            e.currentTarget.selectedIndex = 0
-            if (name) onPick(name)
-          }}
-          className={`${inputCls} flex-1`}
-        >
-          <option value="">
-            {secrets.length ? (isSet ? '🔑 Kayıtlı — değiştirmek için sırdan seç…' : 'Sırdan seç…') : 'Sır yok — önce ekle'}
-          </option>
-          {secrets.map((s) => (
-            <option key={s.name} value={s.name}>{s.name}</option>
-          ))}
-        </select>
-        {isSet && (
-          <button onClick={onClear} className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-danger)] hover:border-[var(--color-danger)]">Sil</button>
-        )}
-        <button onClick={onManage} className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)]">
-          <KeyRound size={12} /> Sırlar →
-        </button>
-      </div>
-      <div className="mt-1 text-xs text-[var(--color-text-dim)]">{isSet ? '✓ Kayıtlı (şifreli).' : requiredHint}</div>
-    </Field>
-  )
-}
-
 const EMPTY_PROVIDER: UpsertProviderInput = {
   id: '', label: '', kind: 'openai', baseUrl: '', defaultModel: '', models: '', key: '',
 }
@@ -169,6 +231,7 @@ const EMPTY_PROVIDER: UpsertProviderInput = {
 // CustomProviders manages user-added OpenAI/Anthropic-compatible endpoints
 // (OpenRouter, Gemini, Kimi, Ollama, ...). It fetches and mutates the list via
 // the dedicated /api/providers endpoints, independent of the main settings save.
+// The list renders as a real table; the add/edit form sits below it.
 function CustomProviders({
   secrets,
   onImportSecret,
@@ -221,19 +284,43 @@ function CustomProviders({
 
   return (
     <div className="space-y-2">
-      {list.map((p) => (
-        <div key={p.id} className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-xs">
-          <div className="min-w-0 flex-1">
-            <div className="font-medium">
-              {p.label} <span className="font-normal text-[var(--color-text-dim)]">· {p.id} · {p.kind === 'anthropic' ? 'Anthropic-uyumlu' : 'OpenAI-uyumlu'}</span>
-            </div>
-            <div className="truncate text-[var(--color-text-dim)]">{p.baseUrl}{p.defaultModel ? ` · ${p.defaultModel}` : ''}</div>
-          </div>
-          <span className={p.keySet ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'}>{p.keySet ? '🔑' : 'anahtar yok'}</span>
-          <button onClick={() => edit(p)} className="rounded border border-[var(--color-border)] px-2 py-1 hover:border-[var(--color-accent)]">Düzenle</button>
-          <button onClick={() => remove(p.id)} className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"><Trash2 size={13} /></button>
+      {list.length > 0 && (
+        <div className="overflow-x-auto rounded-md border border-[var(--color-border)]">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface)] text-left text-[var(--color-text-dim)]">
+                <th className="px-2 py-1.5 font-medium">Etiket</th>
+                <th className="px-2 py-1.5 font-medium">id</th>
+                <th className="px-2 py-1.5 font-medium">Tür</th>
+                <th className="px-2 py-1.5 font-medium">Uç / Model</th>
+                <th className="px-2 py-1.5 text-center font-medium">Anahtar</th>
+                <th className="px-2 py-1.5 text-right font-medium">İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((p) => (
+                <tr key={p.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface)]">
+                  <td className="px-2 py-1.5 font-medium">{p.label || <span className="text-[var(--color-text-dim)]">—</span>}</td>
+                  <td className="px-2 py-1.5 text-[var(--color-text-dim)]">{p.id}</td>
+                  <td className="px-2 py-1.5">{p.kind === 'anthropic' ? 'Anthropic-uyumlu' : 'OpenAI-uyumlu'}</td>
+                  <td className="max-w-[220px] truncate px-2 py-1.5 text-[var(--color-text-dim)]" title={`${p.baseUrl}${p.defaultModel ? ` · ${p.defaultModel}` : ''}`}>
+                    {p.baseUrl}{p.defaultModel ? ` · ${p.defaultModel}` : ''}
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <span className={p.keySet ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'}>{p.keySet ? '🔑' : '—'}</span>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => edit(p)} className="rounded border border-[var(--color-border)] px-2 py-1 hover:border-[var(--color-accent)]">Düzenle</button>
+                      <button onClick={() => remove(p.id)} className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"><Trash2 size={13} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      ))}
+      )}
 
       <div className="space-y-1.5 rounded-md border border-dashed border-[var(--color-border)] p-2">
         <div className="text-xs font-medium">{editing ? `Düzenle: ${draft.id}` : 'Yeni özel sağlayıcı'}</div>
@@ -305,76 +392,79 @@ export function ProvidersPanel({
         </select>
       </Field>
 
-      <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        <Sparkles size={13} className="text-[var(--color-accent)]" /> Anthropic
+      <div>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Yerleşik sağlayıcılar</span>
+          <button
+            onClick={onManageSecrets}
+            className="flex items-center gap-1 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+          >
+            <KeyRound size={12} /> Sırları yönet →
+          </button>
+        </div>
+        <p className="mb-2 text-xs text-[var(--color-text-dim)]">Anahtarlar yalnızca Sır kasasından seçilir — elle giriş kapalı.</p>
+        <div className="grid gap-2">
+          <BuiltinProvider
+            icon={Sparkles}
+            name="Anthropic"
+            kindLabel="API"
+            keyLabel="API anahtarı"
+            isSet={draft.anthropicKeySet}
+            requiredHint="anthropic sağlayıcısı için gerekli."
+            secrets={secrets}
+            onPick={async (n) => applyKey('anthropic', await onImportSecret(n))}
+            onClear={() => clearKey('anthropic')}
+            endpointLabel="claude CLI yolu"
+            endpointValue={draft.claudeCliPath}
+            endpointPlaceholder="otomatik (PATH)"
+            onEndpoint={(v) => set('claudeCliPath', v)}
+            test={test}
+            runTest={runTest}
+            testProvider="anthropic"
+            testDisabledHint="önce Anthropic anahtarı ekle"
+          />
+          <BuiltinProvider
+            icon={Zap}
+            name="MiniMax"
+            kindLabel="OpenAI-uyumlu"
+            keyLabel="API anahtarı"
+            isSet={draft.minimaxKeySet}
+            requiredHint="MiniMax modelleri için gerekli."
+            secrets={secrets}
+            onPick={async (n) => applyKey('minimax', await onImportSecret(n))}
+            onClear={() => clearKey('minimax')}
+            endpointLabel="base URL"
+            endpointValue={draft.minimaxBaseUrl}
+            endpointPlaceholder="https://api.minimax.io/v1"
+            onEndpoint={(v) => set('minimaxBaseUrl', v)}
+            test={test}
+            runTest={runTest}
+            testProvider="minimax"
+            testModel="MiniMax-M3"
+            testDisabledHint="önce MiniMax anahtarı ekle"
+          />
+          <BuiltinProvider
+            icon={Network}
+            name="OpenRouter"
+            kindLabel="OpenAI-uyumlu"
+            keyLabel="API anahtarı"
+            isSet={draft.openrouterKeySet}
+            requiredHint="OpenRouter modelleri için gerekli (tek anahtar, yüzlerce model)."
+            secrets={secrets}
+            onPick={async (n) => applyKey('openrouter', await onImportSecret(n))}
+            onClear={() => clearKey('openrouter')}
+            endpointLabel="base URL"
+            endpointValue={draft.openrouterBaseUrl}
+            endpointPlaceholder="https://openrouter.ai/api/v1"
+            onEndpoint={(v) => set('openrouterBaseUrl', v)}
+            test={test}
+            runTest={runTest}
+            testProvider="openrouter"
+            testModel="anthropic/claude-sonnet-4.6"
+            testDisabledHint="önce OpenRouter anahtarı ekle"
+          />
+        </div>
       </div>
-      <ProviderKeyField
-        label="API anahtarı"
-        isSet={draft.anthropicKeySet}
-        requiredHint="anthropic sağlayıcısı için gerekli."
-        secrets={secrets}
-        onPick={async (n) => applyKey('anthropic', await onImportSecret(n))}
-        onClear={() => clearKey('anthropic')}
-        onManage={onManageSecrets}
-      />
-      <Field label="claude CLI yolu" hint="Boş = PATH üzerinden otomatik tespit.">
-        <input value={draft.claudeCliPath} onChange={(e) => set('claudeCliPath', e.target.value)} placeholder="otomatik" className={inputCls} />
-      </Field>
-      <TestConnection
-        test={test}
-        runTest={runTest}
-        provider="anthropic"
-        disabled={!draft.anthropicKeySet}
-        disabledHint="önce Anthropic anahtarı ekle"
-      />
-
-      <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        <Zap size={13} className="text-[var(--color-accent)]" /> MiniMax (OpenAI-uyumlu)
-      </div>
-      <ProviderKeyField
-        label="MiniMax API anahtarı"
-        isSet={draft.minimaxKeySet}
-        requiredHint="MiniMax modelleri için gerekli."
-        secrets={secrets}
-        onPick={async (n) => applyKey('minimax', await onImportSecret(n))}
-        onClear={() => clearKey('minimax')}
-        onManage={onManageSecrets}
-      />
-      <Field label="MiniMax base URL" hint="Boş = https://api.minimax.io/v1 (OpenAI-uyumlu uç).">
-        <input value={draft.minimaxBaseUrl} onChange={(e) => set('minimaxBaseUrl', e.target.value)} placeholder="https://api.minimax.io/v1" className={inputCls} />
-      </Field>
-      <TestConnection
-        test={test}
-        runTest={runTest}
-        provider="minimax"
-        model="MiniMax-M3"
-        disabled={!draft.minimaxKeySet}
-        disabledHint="önce MiniMax anahtarı ekle"
-      />
-
-      <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        <Network size={13} className="text-[var(--color-accent)]" /> OpenRouter (OpenAI-uyumlu)
-      </div>
-      <ProviderKeyField
-        label="OpenRouter API anahtarı"
-        isSet={draft.openrouterKeySet}
-        requiredHint="OpenRouter modelleri için gerekli (tek anahtar, yüzlerce model)."
-        secrets={secrets}
-        onPick={async (n) => applyKey('openrouter', await onImportSecret(n))}
-        onClear={() => clearKey('openrouter')}
-        onManage={onManageSecrets}
-      />
-      <Field label="OpenRouter base URL" hint="Boş = https://openrouter.ai/api/v1 (OpenAI-uyumlu uç).">
-        <input value={draft.openrouterBaseUrl} onChange={(e) => set('openrouterBaseUrl', e.target.value)} placeholder="https://openrouter.ai/api/v1" className={inputCls} />
-      </Field>
-      <TestConnection
-        test={test}
-        runTest={runTest}
-        provider="openrouter"
-        model="anthropic/claude-sonnet-4.6"
-        disabled={!draft.openrouterKeySet}
-        disabledHint="önce OpenRouter anahtarı ekle"
-      />
 
       <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         <Boxes size={13} className="text-[var(--color-accent)]" /> Özel sağlayıcılar
