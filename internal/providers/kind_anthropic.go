@@ -29,7 +29,7 @@ func (anthropicKind) Build(cfg ResolvedConfig) (Provider, error) {
 	if cfg.Key == "" {
 		return nil, fmt.Errorf("anthropic provider not configured (set an API key in Settings)")
 	}
-	return NewAnthropic(cfg.Key).WithBetas(cfg.OneMContext, cfg.ExtendedCache), nil
+	return NewAnthropic(cfg.Key).WithBetas(cfg.ExtendedCache), nil
 }
 
 func init() { RegisterKind(anthropicKind{}) }

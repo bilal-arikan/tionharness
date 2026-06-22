@@ -29,7 +29,6 @@ type Registry struct {
 	claudeCLIPath string // resolved path to `claude` binary, or "" if absent
 	defaultModel  string // applied when a request leaves Model empty
 
-	betaOneMContext   bool // anthropic 1M-context beta
 	betaExtendedCache bool // anthropic extended prompt-cache TTL beta
 
 	minimaxKey     string // MiniMax (OpenAI-compatible) API key
@@ -78,9 +77,8 @@ func (r *Registry) SetDefaultModel(model string) {
 
 // SetAnthropicBetas toggles the optional Anthropic beta capabilities applied to
 // anthropic provider instances.
-func (r *Registry) SetAnthropicBetas(oneMContext, extendedCache bool) {
+func (r *Registry) SetAnthropicBetas(extendedCache bool) {
 	r.mu.Lock()
-	r.betaOneMContext = oneMContext
 	r.betaExtendedCache = extendedCache
 	r.mu.Unlock()
 }
@@ -203,7 +201,6 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 	cfg := ResolvedConfig{
 		Model:         r.defaultModel,
 		CLIPath:       r.claudeCLIPath,
-		OneMContext:   r.betaOneMContext,
 		ExtendedCache: r.betaExtendedCache,
 	}
 	switch id {

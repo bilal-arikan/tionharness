@@ -96,7 +96,7 @@ func (s *Server) applySettings() {
 	s.providers.SetAnthropicKey(s.settings.AnthropicKey())
 	s.providers.SetClaudeCLIPath(cur.ClaudeCLIPath)
 	s.providers.SetDefaultModel(cur.DefaultModel)
-	s.providers.SetAnthropicBetas(cur.OneMillionContext, cur.ExtendedPromptCache)
+	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache)
 	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
 	s.providers.SetOpenRouter(s.settings.OpenRouterKey(), cur.OpenRouterBaseURL)
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))

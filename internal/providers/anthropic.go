@@ -73,9 +73,8 @@ func (a *Anthropic) WithEndpoint(name, messagesURL, defaultModel string) *Anthro
 }
 
 // WithBetas enables optional Anthropic beta capabilities and returns the client
-// for chaining. The first parameter (the retired 1M-context beta) is ignored —
-// kept only so existing callers compile until the setting is fully purged.
-func (a *Anthropic) WithBetas(_, extendedCache bool) *Anthropic {
+// for chaining.
+func (a *Anthropic) WithBetas(extendedCache bool) *Anthropic {
 	a.extendedCache = extendedCache
 	return a
 }

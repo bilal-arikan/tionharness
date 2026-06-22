@@ -68,7 +68,7 @@ type Settings struct {
 	CustomProviders []CustomProvider `json:"customProviders"`
 
 	// Anthropic beta capabilities (anthropic provider only; claude-cli ignores).
-	OneMillionContext   bool `json:"oneMillionContext"`   // 1M-token context window beta
+	// (The 1M-context beta was retired — 1M is GA since 2026-03, no toggle needed.)
 	ExtendedPromptCache bool `json:"extendedPromptCache"` // 1h extended prompt cache TTL
 
 	// Desktop / display behaviour (applied client-side).
@@ -253,7 +253,6 @@ type DTO struct {
 
 	CustomProviders []CustomProviderDTO `json:"customProviders"`
 
-	OneMillionContext   bool `json:"oneMillionContext"`
 	ExtendedPromptCache bool `json:"extendedPromptCache"`
 
 	DesktopNotifications bool `json:"desktopNotifications"`
@@ -335,7 +334,6 @@ func (s Settings) ToDTO() DTO {
 		OpenRouterBaseURL:     s.OpenRouterBaseURL,
 		CustomProviders:       customProvidersToDTO(s.CustomProviders),
 
-		OneMillionContext:   s.OneMillionContext,
 		ExtendedPromptCache: s.ExtendedPromptCache,
 
 		DesktopNotifications: s.DesktopNotifications,
@@ -418,7 +416,6 @@ type Patch struct {
 	OpenRouterKey         *string `json:"openrouterKey"` // write-only
 	OpenRouterBaseURL     *string `json:"openrouterBaseUrl"`
 
-	OneMillionContext   *bool `json:"oneMillionContext"`
 	ExtendedPromptCache *bool `json:"extendedPromptCache"`
 
 	DesktopNotifications *bool `json:"desktopNotifications"`

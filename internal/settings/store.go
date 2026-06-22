@@ -248,7 +248,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.DefaultPermissionMode, p.DefaultPermissionMode)
 	applyString(&next.ClaudeCLIPath, p.ClaudeCLIPath)
 
-	applyBool(&next.OneMillionContext, p.OneMillionContext)
 	applyBool(&next.ExtendedPromptCache, p.ExtendedPromptCache)
 	applyBool(&next.DesktopNotifications, p.DesktopNotifications)
 	applyBool(&next.KeepAwake, p.KeepAwake)

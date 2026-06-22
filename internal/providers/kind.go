@@ -39,7 +39,6 @@ type ResolvedConfig struct {
 	BaseURL       string // custom endpoint ("" = kind default)
 	Model         string // default model applied when a request omits one
 	CLIPath       string // resolved `claude` binary path (claude-cli)
-	OneMContext   bool   // anthropic 1M-context beta
 	ExtendedCache bool   // anthropic extended prompt-cache beta
 }
 

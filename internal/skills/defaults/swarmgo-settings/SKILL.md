@@ -50,7 +50,7 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 - `anthropicKey` — **write-only**; `""` clears. Read shows only `anthropicKeySet`.
 - `minimaxKey` (write-only), `minimaxBaseUrl` — MiniMax (OpenAI-compatible).
 - `openrouterKey` (write-only), `openrouterBaseUrl` — OpenRouter (OpenAI-compatible; one key, hundreds of models via `author/model-slug` ids).
-- `oneMillionContext`, `extendedPromptCache` — Anthropic betas (anthropic only).
+- `extendedPromptCache` — Anthropic extended (1h) prompt-cache beta (anthropic only). (The 1M-context beta was retired — 1M is GA since 2026-03, so there is no `oneMillionContext` setting anymore.)
 - Custom providers are managed separately (Providers panel / market), not patched here.
 
 ### User profile (injected so agents address the user correctly)
