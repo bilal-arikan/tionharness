@@ -19,6 +19,17 @@ function loadCatalog(): Promise<CatalogEntry[]> {
 const inputCls =
   'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
 
+// formatContextWindow renders a token count as a compact label (200000 → "200K",
+// 1000000 → "1M"). Returns "" for unknown (0/undefined).
+function formatContextWindow(tokens?: number): string {
+  if (!tokens || tokens <= 0) return ''
+  if (tokens >= 1_000_000) {
+    const m = tokens / 1_000_000
+    return `${Number.isInteger(m) ? m : m.toFixed(1)}M`
+  }
+  return `${Math.round(tokens / 1000)}K`
+}
+
 interface Props {
   provider: string
   model: string
@@ -46,7 +57,9 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
   const models = entry?.models ?? []
   const inList = models.some((m) => m.id === model)
   const showCustom = custom || (!inList && model !== '' && !!entry)
-  const selectedDesc = models.find((m) => m.id === model)?.description
+  const selectedModel = models.find((m) => m.id === model)
+  const selectedDesc = selectedModel?.description
+  const selectedWindow = formatContextWindow(selectedModel?.contextWindow)
 
   const isInherit = allowInherit && provider === ''
 
@@ -115,16 +128,30 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
             }}
             className={inputCls}
           >
-            {models.map((m) => (
-              <option key={m.id || '__default__'} value={m.id}>
-                {m.label}
-              </option>
-            ))}
+            {models.map((m) => {
+              const w = formatContextWindow(m.contextWindow)
+              return (
+                <option key={m.id || '__default__'} value={m.id}>
+                  {m.label}
+                  {w ? ` · ${w}` : ''}
+                </option>
+              )
+            })}
             {(entry?.allowCustomModel ?? true) && <option value="__custom__">Özel…</option>}
           </select>
         )}
-        {!showCustom && selectedDesc && (
-          <span className="block text-xs text-[var(--color-text-dim)]">{selectedDesc}</span>
+        {!showCustom && (selectedDesc || selectedWindow) && (
+          <span className="flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+            {selectedWindow && (
+              <span
+                title="Yaklaşık bağlam penceresi (token)"
+                className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-px font-medium text-[var(--color-text)]"
+              >
+                {selectedWindow} bağlam
+              </span>
+            )}
+            {selectedDesc && <span className="min-w-0 truncate">{selectedDesc}</span>}
+          </span>
         )}
       </label>
     </div>

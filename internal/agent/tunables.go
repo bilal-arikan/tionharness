@@ -405,7 +405,14 @@ const defaultContextBudgetTokens = 12000
 // the external agent project's ~60KB summary ceiling). Both byte thresholds use the SAME factor,
 // so the A-cap > B-threshold invariant holds at every scale. Caller holds the lock.
 func (t *Tunables) budgetScaleLocked() float64 {
-	b := t.contextBudgetTokens
+	return budgetScaleFor(t.contextBudgetTokens)
+}
+
+// budgetScaleFor is the pure scale calculation for an arbitrary budget (tokens),
+// so callers can scale by a per-model budget instead of the stored process-wide
+// one (see the compactor, which knows each turn's agent/model).
+func budgetScaleFor(budgetTokens int) float64 {
+	b := budgetTokens
 	if b <= 0 {
 		b = defaultContextBudgetTokens
 	}
@@ -419,16 +426,32 @@ func (t *Tunables) budgetScaleLocked() float64 {
 	return scale
 }
 
-// CompactMaxBytes returns System A's hard byte cap, scaled to the context budget
-// (default when unset).
-func (t *Tunables) CompactMaxBytes() int {
+// ContextBudgetTokens returns the configured transcript budget (0 = default), so
+// the compactor can derive a per-model effective budget from it.
+func (t *Tunables) ContextBudgetTokens() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.contextBudgetTokens
+}
+
+// CompactMaxBytes returns System A's hard byte cap, scaled to the stored
+// process-wide budget (default when unset).
+func (t *Tunables) CompactMaxBytes() int { return t.CompactMaxBytesFor(0) }
+
+// CompactMaxBytesFor returns System A's hard byte cap scaled to the given budget
+// (tokens); 0 → the stored process-wide budget. Lets the compactor scale by a
+// per-model effective budget.
+func (t *Tunables) CompactMaxBytesFor(budgetTokens int) int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	base := t.compactMaxBytes
 	if base <= 0 {
 		base = DefaultCompactMaxBytes
 	}
-	return int(float64(base) * t.budgetScaleLocked())
+	if budgetTokens <= 0 {
+		budgetTokens = t.contextBudgetTokens
+	}
+	return int(float64(base) * budgetScaleFor(budgetTokens))
 }
 
 // CompactLLM reports whether System B (LLM intent-aware summary) is on.
@@ -438,16 +461,24 @@ func (t *Tunables) CompactLLM() bool {
 	return t.compactLLM
 }
 
-// CompactLLMThreshold returns the byte size above which System B summarizes a
-// tool result, scaled to the context budget (default when unset).
-func (t *Tunables) CompactLLMThreshold() int {
+// CompactLLMThreshold returns the System B summary trigger, scaled to the stored
+// process-wide budget (default when unset).
+func (t *Tunables) CompactLLMThreshold() int { return t.CompactLLMThresholdFor(0) }
+
+// CompactLLMThresholdFor returns the System B summary trigger scaled to the given
+// budget (tokens); 0 → the stored process-wide budget. Lets the compactor scale
+// by a per-model effective budget.
+func (t *Tunables) CompactLLMThresholdFor(budgetTokens int) int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	base := t.compactLLMThreshold
 	if base <= 0 {
 		base = DefaultCompactLLMThreshold
 	}
-	return int(float64(base) * t.budgetScaleLocked())
+	if budgetTokens <= 0 {
+		budgetTokens = t.contextBudgetTokens
+	}
+	return int(float64(base) * budgetScaleFor(budgetTokens))
 }
 
 // SetContextBudget records the transcript token budget (settings.MaxContextTokens)

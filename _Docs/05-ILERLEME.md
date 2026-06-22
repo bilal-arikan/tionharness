@@ -2,6 +2,49 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## Tool eşikleri per-model bütçeye hizalandı + model picker rozeti ✅ (2026-06-22)
+
+**Hedef:** (1) §5 tool eşiklerini de per-model bütçeye bağla (zinciri tutarlı kıl),
+(2) frontend model picker'da context-window'u göster.
+
+- **Tool eşikleri per-model:** `Tunables`'a `CompactMaxBytesFor(budget)` /
+  `CompactLLMThresholdFor(budget)` + `ContextBudgetTokens()` getter + saf
+  `budgetScaleFor(budget)`. Compactor her tur `conversation.EffectiveBudget(
+  provider, model, ContextBudgetTokens())` hesaplayıp For-varyantlarına geçiyor.
+  No-arg getter'lar process-geneli bütçeyle geriye-uyumlu. Zincir: model penceresi
+  → EffectiveBudget → eşik ölçeği. `tunables_compact_test.go` (For). Agent **71 test**.
+- **Model picker rozeti:** `CatalogModel.contextWindow?` (TS) + `ProviderModelSelect`
+  `formatContextWindow` (200000→"200K", 1000000→"1M"); dropdown option'larında
+  "· 200K" + seçili modelde "200K bağlam" rozeti. `tsc` + `npm run build` yeşil.
+- **Not:** Hepsi agent/conversation/providers/frontend'de — `api` paketine dokunulmadı.
+
+---
+
+## SES21 hava-durumu oturumu hata düzeltmeleri ✅ (2026-06-22)
+
+**Hedef:** Bir kullanıcı oturumunda (SES21, claude-cli ajanı) çıkan üç somut hatayı gider.
+
+- **Shell `$` değişkeni bozulması (kök neden):** Ajan komutunu zaten-PowerShell olan
+  `Bash` aracının içinde tekrar `powershell -Command "..."` ile sarmaladı → dış kabuk
+  `$geo` vb. değişkenleri iç kabuğa geçmeden boşaltıp sildi ("An empty pipe element").
+  Çözüm: (1) araç açıklamasına "tekrar `powershell -Command` ile sarmalama" uyarısı,
+  (2) `unwrapRedundantPowershell` ile gereksiz dış sarmalı savunmacı olarak açma (yalnız
+  tüm komut sarmalsa ve iç tarafta kaçışlı tırnak yoksa). `builtin_shell.go` + test.
+- **Artifact geri okunamıyor:** `list_artifacts` yalnız id/başlık veriyordu; ajan
+  içeriği göstermek için dosya yolunu (`.artifacts\...`) tahmin edip "File does not exist"
+  aldı. Çözüm: yeni **`read_artifact`** aracı (id → içerik, bellekten; yol tahmini yok) +
+  `list_artifacts` artık `contentFile` yolunu da döndürüyor. İkisi de `RiskRead`.
+  `builtin_artifactmgmt.go`, `classify.go`, `toolsetup.go`.
+- **Veri uydurma (skill davranışı):** `daily-weather-report` skill'i WebFetch başarısız
+  olunca uydurma tablo yazıyordu. Skill'e eklendi: çok-şehir için Open-Meteo geocoding,
+  weather.com kazımayı yasakla, **asla veri uydurma**, forecast≠iklim ortalaması,
+  alt-ajana da aynı kuralı geçir.
+- **Doğrulama:** `go build ./...` + `internal/tools` & `internal/db` **85 test** yeşil.
+- **Açık kalan:** claude-cli köprüsünde `use_skill` ilk çağrıda "No such tool available"
+  (MCP aracı ilk turda çözülmüyor) — ayrı, daha derin bir köprü konusu; not edildi.
+
+---
+
 ## Modele göre akıllı varsayılan bütçe — Option B ✅ (2026-06-22)
 
 **Hedef:** Flat 12K transcript bütçesi büyük modelin (200K–1M) penceresini boşa

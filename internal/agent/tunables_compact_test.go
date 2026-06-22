@@ -51,3 +51,29 @@ func TestCompactThresholdsScaleWithBudget(t *testing.T) {
 		t.Fatalf("small budget should floor at configured: got %d, want 12288", got)
 	}
 }
+
+// TestCompactThresholdsForBudget covers the per-model ...For variants used by the
+// compactor: they scale by the passed budget regardless of the stored one.
+func TestCompactThresholdsForBudget(t *testing.T) {
+	tun := NewTunables()
+	tun.SetToolCompaction(true, 200, 16384, true, 12288, "")
+	tun.SetContextBudget(defaultContextBudgetTokens) // stored = 1×
+
+	// An explicit 3× budget overrides the stored 1× budget.
+	if got, want := tun.CompactLLMThresholdFor(3*defaultContextBudgetTokens), 3*12288; got != want {
+		t.Fatalf("For(3x): got %d, want %d", got, want)
+	}
+	if got, want := tun.CompactMaxBytesFor(3*defaultContextBudgetTokens), 3*16384; got != want {
+		t.Fatalf("For(3x) A-cap: got %d, want %d", got, want)
+	}
+	// 0 → fall back to the stored budget (1×).
+	if got := tun.CompactLLMThresholdFor(0); got != 12288 {
+		t.Fatalf("For(0) should use stored budget: got %d, want 12288", got)
+	}
+	// Invariant holds at the per-model scale too.
+	b := 4 * defaultContextBudgetTokens
+	if tun.CompactMaxBytesFor(b) <= tun.CompactLLMThresholdFor(b) {
+		t.Fatalf("invariant broken: A-cap %d must exceed B-threshold %d",
+			tun.CompactMaxBytesFor(b), tun.CompactLLMThresholdFor(b))
+	}
+}

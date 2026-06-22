@@ -80,6 +80,10 @@ export interface AppSettings {
   delegationMaxDepth: number
   delegationMaxCalls: number
 
+  // Spawn guards — the detached background surface (run_subagent async + spawn).
+  spawnMaxConcurrent: number
+  spawnMaxPerTurn: number
+
   // Working-directory guards for the (unconfined) fs/shell tools.
   autonomousConfine: boolean
   gitWorktreeIsolation: boolean
@@ -108,6 +112,9 @@ export interface CatalogModel {
   id: string
   label: string
   description?: string
+  // Approximate context window in tokens (0/undefined = unknown). Filled by the
+  // backend catalog from the model-family table.
+  contextWindow?: number
 }
 
 export interface CatalogEntry {

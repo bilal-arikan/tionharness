@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bilal/swarmgo/internal/conversation"
 	"github.com/bilal/swarmgo/internal/db"
 	"github.com/bilal/swarmgo/internal/providers"
 	"github.com/bilal/swarmgo/internal/tools/compact"
@@ -37,13 +38,18 @@ func (r *Runtime) compactToolResult(ctx context.Context, agent db.Agent, toolNam
 	}
 	content := res.Content
 
+	// Per-model effective budget: scale the byte thresholds to this agent's model
+	// window (Option B), so a big-context model tolerates larger tool output before
+	// compaction. Falls back to the configured/default budget when unknown.
+	budget := conversation.EffectiveBudget(agent.Provider, agent.Model, r.tun.ContextBudgetTokens())
+
 	// System A — deterministic, dependency-free.
 	if r.tun.CompactDeterministic() {
 		out, st := compact.Compact(content, compact.Options{
 			Enabled:  true,
 			Dedupe:   true,
 			MaxLines: r.tun.CompactMaxLines(),
-			MaxBytes: r.tun.CompactMaxBytes(),
+			MaxBytes: r.tun.CompactMaxBytesFor(budget),
 		})
 		if st.Applied {
 			r.logger.Debug("tool output compacted (A)",
@@ -58,7 +64,7 @@ func (r *Runtime) compactToolResult(ctx context.Context, agent db.Agent, toolNam
 	}
 
 	// System B — LLM intent-aware summary, gated by size.
-	if r.tun.CompactLLM() && len(content) > r.tun.CompactLLMThreshold() {
+	if r.tun.CompactLLM() && len(content) > r.tun.CompactLLMThresholdFor(budget) {
 		summary, err := r.summarizeToolOutput(ctx, agent, toolName, input, content)
 		switch {
 		case err != nil:

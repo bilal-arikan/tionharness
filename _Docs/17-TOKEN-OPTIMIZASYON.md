@@ -197,9 +197,12 @@ pencere → değişmez. `Manager.Prepare` artık compaction tetiğini ve pressur
 hesaplıyor; `maxTokens≤0` (bütçe kapalı) dokunulmaz. `budget_test.go`.
 
 - Claude 200K → 20K bütçe · MiniMax/DeepSeek/Gemini 1M → 32K (tavan) · bilinmeyen → 12K.
-- **Tool eşikleriyle hizalama (follow-up):** §5 tool eşikleri hâlâ process-geneli bütçeyle ölçekleniyor
-  (zaten dormant — `SetContextBudget` wiring `api` paketi bütünleşince commit'lenecek). Onları da
-  per-model `EffectiveBudget`'a bağlamak temiz bir sonraki adım.
+- **Tool eşikleriyle hizalama ✅ YAPILDI (2026-06-22):** Compactor artık her tur için
+  `conversation.EffectiveBudget(agent.Provider, agent.Model, tun.ContextBudgetTokens())` hesaplayıp
+  `Tunables.CompactMaxBytesFor(budget)` / `CompactLLMThresholdFor(budget)` ile **per-model** ölçekliyor.
+  Zincir tam tutarlı: model penceresi → EffectiveBudget → §5 eşik ölçeği. Büyük-pencere modelde A cap +
+  B eşiği orantılı büyür, A>B değişmezi korunur. No-arg getter'lar process-geneli bütçeyle geriye-uyumlu
+  kaldı. `tunables_compact_test.go` (For varyantları).
 
 ## Ayrıca Bakınız
 
