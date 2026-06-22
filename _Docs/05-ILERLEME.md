@@ -2,6 +2,22 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Peer mesajlaşma (SendMessage/mailbox) — referans inceleme + PLAN 📝 (2026-06-23)
+
+Çok-ajan "kim ne dedi" çözümünü iki referansla karşılaştırdık:
+- **external-agent-oss:** sorunu *yaşamıyor* — bir oturum = tek ajan; çok-ajan ayrı oturum.
+  Mesajlarda per-mesaj yazar alanı yok; Claude Agent SDK döngüyü sürüyor.
+- **Claude Code (`observed-behavior` swarm/teammate):** çok-ajanı **izole bağlam + adresli
+  mailbox** ile çözüyor — `SendMessage({to,message,summary})`, alıcının inbox'ına `from`
+  kimliğiyle `<teammate_message teammate_id>` etiketiyle düşer; plain çıktı diğer ajana
+  görünmez. Kimlik **doğuştan**; ardışık-rol çakışması hiç oluşmaz.
+
+SwarmGo iki modeli birden taşıyor: paylaşılan-thread (etiketleme+coalesce ile sağlamlaştırıldı)
+ve izole `run_subagent`. Eksik olan "akran ajana adresli DM" için **uyarlama planı** yazıldı:
+`_Docs\28-PEER-MESAJLASMA-PLANI.md` (mevcut `GetOrCreateKindSession` inbox + `SpawnSession`
+üzerine). Kavramsal not: `_Docs\10-KAVRAMSAL-TASARIM-NOTLARI.md` §10. **Uygulama kullanıcı
+onayı bekliyor** (tetik/inbox modeli/ayrı-araç kararları planda).
+
 ## Çok-ajanlı bağlam sağlamlığı: yazar kimliği + ardışık-rol + geçmiş-duyarlı wake ✅ (2026-06-23)
 
 **Bağlam:** SES29'da iki ajana soru soruldu ama ajanlar "kim ne dedi"yi göremedi.
