@@ -14,16 +14,22 @@ interface Props {
   onDelete: (id: string) => void
 }
 
-// Open a workspace in a fresh browser window via the hash deep-link scheme
-// (#/w/{id}/chat), so the new window boots scoped to that workspace without
-// disturbing this window's selection.
+// Open a workspace in a fresh window scoped to it (#/w/{id}/chat), without
+// disturbing this window's selection. In the native desktop app (WebView2),
+// window.open would leak to the system browser, so we call the host bridge
+// (swarmgoOpenWindow) to spawn a real SwarmGo window instead; in a browser we
+// keep the standard new-window behaviour.
 function openInNewWindow(id: string) {
-  const url = `${window.location.origin}${window.location.pathname}#${buildRoute({
-    workspaceId: id,
-    view: 'chat',
-    id: null,
-  })}`
-  window.open(url, '_blank', 'noopener')
+  const route = buildRoute({ workspaceId: id, view: 'chat', id: null })
+  const w = window as unknown as {
+    chrome?: { webview?: unknown }
+    swarmgoOpenWindow?: (route: string) => void
+  }
+  if (w.chrome?.webview && typeof w.swarmgoOpenWindow === 'function') {
+    w.swarmgoOpenWindow(route)
+    return
+  }
+  window.open(`${window.location.origin}${window.location.pathname}#${route}`, '_blank', 'noopener')
 }
 
 export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, onSwitch, onCreate, onDelete }: Props) {
