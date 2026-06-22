@@ -73,6 +73,10 @@ type Tunables struct {
 	compactLLM          bool   // master switch for System B
 	compactLLMThreshold int    // 0 → DefaultCompactLLMThreshold
 	compactModel        string // model id for System B; "" → titleModel, then agent's own model
+	// contextBudgetTokens mirrors settings.MaxContextTokens so the byte thresholds
+	// above scale with the budget (CG-9): bigger budget → bigger tool results
+	// tolerated before compaction. 0 → default budget (scale 1).
+	contextBudgetTokens int
 
 	// Working-directory guards (fs/shell are otherwise unconfined).
 	autonomousConfine    bool // confine fs/shell to the working dir on autonomous turns (default on)
@@ -389,14 +393,42 @@ func (t *Tunables) CompactMaxLines() int {
 	return t.compactMaxLines
 }
 
-// CompactMaxBytes returns System A's hard byte cap (default when unset).
+// defaultContextBudgetTokens mirrors conversation.defaultMaxTokens (the transcript
+// budget) so tool-output thresholds can scale relative to it.
+const defaultContextBudgetTokens = 12000
+
+// budgetScaleLocked is the tool-threshold multiplier derived from the context
+// budget (CG-9, second half): a larger MaxContextTokens means a single tool
+// result may be larger before it's worth compacting. scale = budget / default,
+// clamped to [1, 5] so thresholds never drop below the configured defaults and a
+// huge budget can't explode them (5× ≈ 60KB System-B trigger, matching
+// the external agent project's ~60KB summary ceiling). Both byte thresholds use the SAME factor,
+// so the A-cap > B-threshold invariant holds at every scale. Caller holds the lock.
+func (t *Tunables) budgetScaleLocked() float64 {
+	b := t.contextBudgetTokens
+	if b <= 0 {
+		b = defaultContextBudgetTokens
+	}
+	scale := float64(b) / float64(defaultContextBudgetTokens)
+	if scale < 1 {
+		scale = 1
+	}
+	if scale > 5 {
+		scale = 5
+	}
+	return scale
+}
+
+// CompactMaxBytes returns System A's hard byte cap, scaled to the context budget
+// (default when unset).
 func (t *Tunables) CompactMaxBytes() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	if t.compactMaxBytes <= 0 {
-		return DefaultCompactMaxBytes
+	base := t.compactMaxBytes
+	if base <= 0 {
+		base = DefaultCompactMaxBytes
 	}
-	return t.compactMaxBytes
+	return int(float64(base) * t.budgetScaleLocked())
 }
 
 // CompactLLM reports whether System B (LLM intent-aware summary) is on.
@@ -407,14 +439,23 @@ func (t *Tunables) CompactLLM() bool {
 }
 
 // CompactLLMThreshold returns the byte size above which System B summarizes a
-// tool result (default when unset).
+// tool result, scaled to the context budget (default when unset).
 func (t *Tunables) CompactLLMThreshold() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	if t.compactLLMThreshold <= 0 {
-		return DefaultCompactLLMThreshold
+	base := t.compactLLMThreshold
+	if base <= 0 {
+		base = DefaultCompactLLMThreshold
 	}
-	return t.compactLLMThreshold
+	return int(float64(base) * t.budgetScaleLocked())
+}
+
+// SetContextBudget records the transcript token budget (settings.MaxContextTokens)
+// so the tool-output byte thresholds scale with it (CG-9). 0 → default budget.
+func (t *Tunables) SetContextBudget(maxContextTokens int) {
+	t.mu.Lock()
+	t.contextBudgetTokens = maxContextTokens
+	t.mu.Unlock()
 }
 
 // CompactModel returns the dedicated model id for System B's summary, or "" when

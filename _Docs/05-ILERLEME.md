@@ -2,6 +2,49 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## CG-9 ikinci yarı — bütçe-orantılı tool eşikleri ✅ (2026-06-22)
+
+**Hedef:** the external agent project'ın `tokenLimitFor` (tool-result eşiği context window'a göre)
+deseninin SwarmGo karşılığı. Model context-window metadata'sı yok (`ModelInfo`
+sadece ID/Label), o yüzden mevcut **transcript bütçesine** (`MaxContextTokens`)
+orantıladım — kullanıcının zaten modeline göre ayarladığı knob.
+
+- **`Tunables.budgetScaleLocked()`** = `budget/12000`, clamp **[1×,5×]**.
+  `CompactMaxBytes()` ve `CompactLLMThreshold()` artık base × scale döndürüyor.
+  **Aynı faktör** → A-cap(16384) > B-eşik(12288) değişmezi her ölçekte korunur.
+- **5× tavan** → B≈60KB, the external agent project'ın ~60KB özet tavanıyla örtüşür.
+- **Default bütçe (12000) → 1×** → değerler birebir mevcut → **regresyon yok**.
+- **`SetContextBudget`** setter + `applySettings` wiring (`s.convo.SetLimits` yanında).
+- **Doğrulama:** `tunables_compact_test.go` + agent paketi **71 test** yeşil, `go vet` temiz.
+- **Not:** wiring satırı (`server.go`) paralel oturumun MemGPT Parça-4 `/api/agents/{id}/core`
+  route'larıyla aynı dosyada uncommitted → o paket bütünleşince commit'lenecek.
+  Wiring olmadan `contextBudgetTokens=0` → 1× → güvenli no-op (dormant).
+
+---
+
+## Ayarlar ekranı kaydetme tutarsızlığı düzeltildi ✅ (2026-06-22)
+
+**Hedef:** Ayarlar ekranında gösterilen ama Kaydet'e basınca diske yazılmayan
+("sessizce kaybolan") alanları onar — UI/kaydetme tutarsızlığı denetimi.
+
+- **Kök neden:** `SettingsPanel.tsx` `saveApp()` patch nesnesini elle alan-alan
+  kuruyordu; panellerde render edilen 10 kontrol bu listede yoktu. Kullanıcı
+  değiştirip Kaydet'e basınca patch alanı içermiyor, backend değişmemiş değeri
+  döndürüyor ve `setOriginal(updated)` kontrolü eski haline geri alıyordu (hatasız).
+- **Onarılan 10 alan:** `defaultPermissionMode` (Sağlayıcılar) + `reactiveCompact`,
+  `maxTokenRetries`, `reactiveKeepRecent`, `compactToolOutput`, `compactMaxLines`,
+  `compactMaxBytes`, `compactLlmSummary`, `compactLlmThreshold`, `compactModel`
+  (Bağlam — Tur kurtarma + Sistem A/B sıkıştırma bölümlerinin tamamı). Hepsi
+  `saveApp()` patch'ine eklendi.
+- **İkincil:** `spawnMaxConcurrent`/`spawnMaxPerTurn` backend (Patch+store clamp+
+  server canlı uygulama) ve skill dokümanında vardı ama frontend `AppSettings`
+  tipinde, UI'da ve patch'te **yoktu**. Tipe eklendi, Tools paneline kontrol
+  (1–128 / 1–64) eklendi, patch'e eklendi → uçtan uca bağlandı.
+- **Doğrulama:** `tsc --noEmit` temiz. Skill `swarmgo-settings` zaten tüm alanları
+  doğru belgeliyordu (değişiklik gerekmedi).
+
+---
+
 ## CG-9 density-aware estimator + Sistem B varsayılan açık ✅ (2026-06-22)
 
 **Hedef:** the external agent project kıyaslamasında çıkan iki açığı kapat — (1) yoğun içerikte token
@@ -138,7 +181,16 @@ Yapılan (3 parça):
   yüzde + tetikleme-token'ı + "kapalı" durumu + canlı durum kartı (yeni `Slider`
   primitifi). Hafıza panelinde **çekirdek bellek kartı** (`CoreMemoryCard` —
   göster/düzenle) + `GET|PUT /api/agents/{id}/core` uç noktaları.
-- **Sırada:** Parça 4 (persona/human ayrımı + HA-1 kullanıcı modelleme) sonraya.
+- **Parça 4a — persona/human ayrımı ✅ (2026-06-22):** çekirdek bellek iki bağımsız
+  bölüme ayrıldı — **persona** (`core_persona`) + **human** (`core_human`), her biri
+  ajan başına tek satır. Geri-uyum gözetilmedi (eski tek `core` kind'i kaldırıldı).
+  `WriteCore/ReadCore/AppendCore` artık `section` alır (+`ReadCoreSections`);
+  `core_memory_*` araçlarına `section` (persona|human, vars. persona) alanı; enjeksiyon
+  iki alt başlıkla (`coreMemoryBlock`); `GET/PUT /core` `{persona,human}`;
+  `CoreMemoryCard` iki bölümlü. Constructor imzaları korundu (CLI köprüsü bozulmadı).
+  Testler yeşil.
+- **Sırada:** Parça 4b — HA-1 Honcho-benzeri kullanıcı modelleme (`core_human`'ı
+  Reflect-benzeri döngüyle otomatik doldurma).
 
 ## Oturum-başına Çalışma Dizini (cwd) + otonomi frenleri ✅ (2026-06-22)
 

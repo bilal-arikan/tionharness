@@ -151,14 +151,28 @@ eskiden **8192 bayt** ve varsayılan **kapalı**ydı. Artık the external agent 
 eşik 12288 bayt (~12KB)**; A'nın bayt cap'i 16384'e yükseltildi ki A→B sırası korunsun (yukarıdaki
 "Varsayılan politika değişikliği" notu). Mekanizma zaten vardı; bu yalnızca varsayılan + eşik ayarıydı.
 
-### 4. Density-aware token tahmini (CG-9) ✅ YAPILDI (2026-06-22)
+### 4. Density-aware token tahmini (CG-9, birinci yarı) ✅ YAPILDI (2026-06-22)
 
 Transcript bütçesi (`conversation/tokens.go`) eskiden sabit **chars/4** kullanıyordu → base64/hex/
 minified gibi yoğun içerik ~%60 eksik sayılıp gerçek context window'u sessizce taşırıyordu ("session
 poisoning"). Artık `estimateText` **density-aware**: uzun ve neredeyse boşluksuz (`<%3` whitespace,
 ≥256 rune) içerik **~1.5 chars/token** (`runes*2/3`), düz metin **~4 chars/token**. Tek geçiş, bağımlılık
-yok. `tokens_test.go`. **Kalan (CG-9 ikinci yarı):** araç-sonucu eşiğini context window'a göre dinamik
-ölçekleme (`ctx×0.10`, floor 2K / ceil 15K) — ayrı, daha büyük iş.
+yok. `tokens_test.go`.
+
+### 5. Bütçe-orantılı tool eşikleri (CG-9, ikinci yarı) ✅ YAPILDI (2026-06-22)
+
+the external agent project araç-sonucu eşiğini context window'a göre ölçekler (`tokenLimitFor`, ctx×0.10). SwarmGo'nun
+karşılığı: eşikleri **transcript bütçesine** (`settings.MaxContextTokens`) orantıla — büyük bütçe → büyük
+tool sonucu compaction'dan önce tolere edilir. `Tunables.budgetScaleLocked()` = `budget / 12000`, clamp
+**[1×, 5×]**. **Hem** A bayt cap'i **hem** B eşiği **aynı** faktörle çarpılır → `A-cap > B-threshold`
+değişmezi her ölçekte korunur. `tunables_compact_test.go`.
+
+- Varsayılan bütçe (12000) → 1× → tam yapılandırılmış değerler (A=16384, B=12288) — regresyon yok.
+- 5× tavan → B≈60KB tetik, the external agent project'ın ~60KB özet tavanıyla örtüşür.
+- Wiring: `applySettings` → `Tunables.SetContextBudget(MaxContextTokens)` (`s.convo.SetLimits` yanında).
+  `contextBudgetTokens=0` → 1× (güvenli no-op). **Not:** runtime wiring tek satır; `api` paketi paralel
+  oturumun MemGPT Parça-4 WIP'iyle geçici kırık olduğundan bu satır o paket bütünleşince commit'lenir
+  (dormant — wiring olmadan da davranış birebir mevcut varsayılan).
 
 ## Ayrıca Bakınız
 
