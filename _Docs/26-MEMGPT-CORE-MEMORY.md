@@ -304,6 +304,83 @@ Parça 1–3 sevk edildi. Plandan sapmalar:
   (upsert + recall-exclude), `tools/builtin_memory_core_test.go` (replace/append/
   boş/nil).
 
+## Sırada ne var — sonraki adımlar
+
+Parça 1–3 sevk edildi; aşağıdakiler bunun **üstüne** kurulabilecek doğal devamlar.
+Letta sadakati + SwarmGo felsefesi (tek binary, dosya-tabanlı, offline) korunarak
+seçildi. Öncelik: yakın = düşük efor/yüksek değer, sonraki için zemin hazır.
+
+### 🟢 Yakın (küçük, bağımsız sevk edilebilir)
+
+- [ ] **N1 — Core memory boyut sınırı + taşma uyarısı.** Letta core block'lara
+  karakter limiti koyar; bizde `AppendCore` sınırsız büyüyebilir → her turda bağlam
+  yer. `Tunables.CoreMemoryMaxBytes` (vars. ~2KB) ekle; `WriteCore`/`AppendCore`
+  aşımda en eski satırları düşürür **veya** araç `core memory full, replace to trim`
+  hatası döndürür (Letta davranışı). Dosyalar: `memory/memory.go`, settings/tunables.
+  İlişkili: **N4**, **C5**.
+- [ ] **N2 — Core memory görüntüleyici (read-only).** Letta ADE'nin bellek
+  editörünün hafif karşılığı: ajan detay/Ayarlar panelinde mevcut core bloğunu
+  göster (+ son düzenleme zamanı). `GET /api/agents/{id}/core-memory` + frontend
+  panel. Salt-okunur başlar; düzenleme ileride. Dosyalar: `api/agent_context.go`
+  veya yeni handler, `frontend .../settings`.
+- [ ] **N3 — Pressure olay telemetrisi.** Uyarının işe yarayıp yaramadığını ölç:
+  pressure-eşik-aşımı sayısı + ardından ajanın `memory_add`/`core_memory_*` çağırma
+  oranı, günlük usage rollup'una (Token-Optimizasyon'daki `CompactSavedBytes`
+  deseni gibi). Etkinliği veriyle görmeden eşik ayarı körlemesine kalır.
+
+### 🟡 Orta (Letta paritesi)
+
+- [ ] **N4 — Archival bellek için self-editing (replace/delete).** Bugün ajan
+  archival'a (`document`) sadece **ekleyebiliyor** (`memory_add`); Letta
+  `archival_memory` üzerinde arama + düzenleme verir. `memory_replace(id, content)`
+  + `memory_delete(id)` araçları ekle (Store `Delete`/`DeleteIDs` zaten var; yeni
+  `Update` gerekir). Dosyalar: `tools/builtin_memory_*.go`, `db/store_memory.go`.
+  İlişkili: **C3** (memory_write).
+- [ ] **N5 — `conversation_search` aracı.** Letta'nın geçmiş-konuşma arama tool'u.
+  Altyapısı **CG-16** (oturumlar-arası tam-metin arama) — planı çıkarıldı:
+  [`27-CROSS-SESSION-SEARCH.md`](27-CROSS-SESSION-SEARCH.md), `conversation_search`
+  aracı orada **Parça 2** olarak N5'i doğrudan karşılıyor. İlişkili: **CG-16**, **HA-1**.
+- [ ] **N6 — Pressure-tetikli otomatik özet-to-core.** Uyarı pasif; ajan görmezden
+  gelirse bağlam yine sessizce katlanır. `pressure ≥ ~0.9`'da, compaction'dan
+  **önce**, son N önemli turu ucuz modelle özetleyip core/reflection'a otomatik
+  yaz (opt-in, `KindCompact` politikası). Letta paging'inin asıl otomatik yarısı.
+  Dosyalar: `conversation/manager.go`, `agent/compactor.go`. İlişkili: **C2**, **N1**.
+
+### 🔵 İleri / araştırma
+
+- [ ] **N7 — Parça 4: persona/human ayrımı + HA-1 köprüsü.** (Bu dokümanda zaten
+  tanımlı.) Core'u `<persona>`/`<human>` alt-bloklarına böl; `<human>` =
+  Honcho-benzeri kullanıcı modeli. **HA-1 olgunlaşınca** başla. İlişkili: **HA-1**.
+- [ ] **N8 — Importance-ağırlıklı core saklama.** Core dolunca en az-önemli satırı
+  düş (FIFO yerine). **C5 (`Memory.Importance`)** geldiğinde anlamlı; ona bağla.
+  İlişkili: **C5**, **N1**.
+- [ ] **N9 — Embedding-tabanlı core/archival recall (opsiyonel backend).** Eğer
+  ileride semantik recall istenirse, lexical cosine'i opsiyonel embedding sağlayıcıyla
+  **değiştirilebilir** kıl (harici-araç-tespiti deseni: varsa kullan, yoksa lexical'e
+  düş). Bu, "doğrudan Letta" tartışmasının (Mod A) tek gerçekten cazip parçasıdır —
+  ama varsayılan offline kalmalı. İlişkili: Faz 6, Mod A notu (yukarı).
+
+### Bağımlılık haritası
+
+```mermaid
+graph LR
+    DONE["Parça 1-3 ✅"] --> N1["N1 core boyut sınırı"]
+    DONE --> N2["N2 core görüntüleyici"]
+    DONE --> N3["N3 pressure telemetri"]
+    DONE --> N4["N4 archival replace/delete"]
+    DONE --> N6["N6 oto özet-to-core"]
+    N1 --> N8["N8 importance saklama"]
+    C5["C5 importance"] -.-> N8
+    HA1["HA-1 FTS5/kullanıcı modeli"] -.-> N5["N5 conversation_search"]
+    HA1 -.-> N7["N7 persona/human"]
+    N1 --> N6
+```
+
+**Öneri:** Sırayla **N1 → N3 → N2**. N1 mevcut özelliğin tek gerçek açığını (sınırsız
+core büyümesi) kapatır; N3 eşik ayarını veriyle besler; N2 kullanıcıya görünürlük
+verir. N4–N6 Letta paritesini artırır ama daha büyük; N5/N7/N8 başka maddelere
+(HA-1, C5) bağlı, onlar olgunlaşınca açılır.
+
 ## Ayrıca bakınız
 
 - **`03-YOL-HARITASI.md`** — C6 (bu plan), C2 (compaction), C3 (memory_write),

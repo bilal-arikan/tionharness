@@ -113,6 +113,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// context block). Gated per-workspace by the same master toggle.
 	if r.SessionContextEnabled() {
 		builtins = append(builtins, tools.NewListSessionsTool(r.db))
+		// conversation_search: full-text search across the workspace's message
+		// history (deeper than list_sessions' titles+summaries). Same gate.
+		builtins = append(builtins, tools.NewConversationSearchTool(r.db))
 	}
 
 	// Workspace secret vault: let agents discover and fetch stored credentials

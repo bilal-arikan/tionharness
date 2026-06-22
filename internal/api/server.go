@@ -204,6 +204,7 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("GET /api/sessions/active", s.handleActiveSessions)
+	mux.HandleFunc("GET /api/sessions/search", s.handleSearchMessages)
 	mux.HandleFunc("POST /api/sessions", s.handleCreateSession)
 	mux.HandleFunc("POST /api/sessions/spawn", s.handleSpawnSession)
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)

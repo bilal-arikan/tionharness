@@ -21,6 +21,20 @@ export interface Session {
   updatedAt: number
 }
 
+// SearchHit is one message matched by cross-session full-text search
+// (GET /api/sessions/search). Carries sessionId + messageId so a result can
+// deep-link to the originating turn.
+export interface SearchHit {
+  sessionId: string
+  sessionTitle: string
+  messageId: string
+  role: string
+  agentId?: string
+  snippet: string
+  score: number
+  createdAt: number
+}
+
 // WorkdirInfo is the composer folder badge's view of a session's working dir.
 export interface WorkdirInfo {
   dir: string // session override ("" = none)

@@ -2,6 +2,56 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## CG-16 — Oturumlar-arası tam-metin arama ✅ çekirdek+araç+API (2026-06-22)
+
+**Hedef:** Workspace'in tüm oturum mesaj geçmişinde anahtar-kelime araması (bugün
+yalnız başlık+summary üzerinden farkındalık vardı). Plan: `_Docs/27-CROSS-SESSION-SEARCH.md`.
+
+**Kilit karar (RG-6 disiplininin ürünü):** Oturumlar boot'ta `d.messages`'a (RAM)
+yükleniyor → aranacak veri zaten bellekte. Varsaymak yerine depolama modelini
+okuyup **ripgrep/FTS5'i eledim**; saf-Go tarama hem en basit hem yeterli.
+
+Yapılan:
+
+- **`db.SearchMessages`** (`internal/db/store_search.go`): saf-Go RAM-içi tarama,
+  boşlukla bölünmüş terimler AND-eşleşir (case-insensitive), `score = matchCount +
+  recency` (C5 felsefesi), rune-sınırlı Türkçe-güvenli snippet. `SearchHit`/`SearchOpts`.
+- **`conversation_search` aracı (N5)** (`tools/builtin_conversation_search.go`):
+  `ListSessionsTool` deseni; `toolsetup.go`'da `SessionContextEnabled()` gate'i.
+  `exclude_current` plandan düşürüldü (tools→agent import döngüsü); API'de `exclude`
+  query param'ı karşılıyor.
+- **API** `GET /api/sessions/search?q=&limit=&role=&exclude=`
+  (`api/sessions_search.go` + `server.go` route, `active` yanında).
+- **Frontend contract:** `SearchHit` tipi + `sessionApi.searchMessages(...)`.
+- **Doğrulama:** `go build ./...` + db/tools/api/agent testleri **200** yeşil;
+  `tsc --noEmit` temiz. Yeni testler: `store_search_test.go`,
+  `builtin_conversation_search_test.go`.
+- **Kalan:** görsel global-arama UI bileşeni (deep-link). Contract hazır.
+
+---
+
+## RG-6 — Implement-öncesi keşif guard'ı ✅ (2026-06-22)
+
+**Hedef:** Ajanın var olan bir özelliği "yok" sanıp sıfırdan yeniden yazma (veya
+çalışan bir uygulamanın üzerine yazma) riskini önle. Faz R oturum-analizindeki en
+büyük yanlış kararın mekanizma karşılığı; kod değil, skill/system-prompt düzeyi.
+
+Yapılan:
+
+- **`swarmgo-guide` SKILL.md → "Before you build: discover first" bölümü:** uygulamadan
+  ya da "bu yok" demeden önce **search → read → confirm → extend** disiplini;
+  absence iddiası ancak gerçekten arandıktan sonra ("Y ve Z için grepledim, bulamadım"),
+  ve sıfırdan yazmak yerine mevcudu genişletme kuralı. Kod/konfig/agent/flow/skill/
+  memory — hepsine uygulanır.
+- **`swarmgo-self-management` → "Prefer reading first" güçlendirildi:** entity
+  (agent/flow/skill/schedule/hook/MCP) oluşturmadan önce mevcudu kontrol et,
+  duplicate yerine genişlet; guide bölümüne çapraz-referans.
+- **Doğrulama:** `go build ./...` ✅ + `go test ./internal/skills/...` (14 test) yeşil.
+  Skill testleri yalnız seed varlığı/non-overwrite kontrol ediyor; içerik değişimi
+  güvenli.
+
+---
+
 ## MemGPT/Letta Tarzı Self-Editing Bellek — Parça 1–3 ✅ (2026-06-22)
 
 **Hedef:** Letta'yı (Docker+Postgres+Python) koşmadan, fikirlerini native Go'da:

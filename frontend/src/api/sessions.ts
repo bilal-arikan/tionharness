@@ -5,6 +5,7 @@ import type {
   Message,
   SessionInfo,
   SessionContext,
+  SearchHit,
   WorkdirInfo,
   BrowseResp,
   GitInfo,
@@ -36,6 +37,19 @@ export const sessionApi = {
     }),
   listMessages: (sessionId: string) =>
     req<Message[]>(`/api/sessions/${sessionId}/messages`),
+  // Full-text search the workspace's message history. role: 'user' | 'assistant'
+  // | 'all'; exclude skips a session id (e.g. the current one). Each hit carries
+  // sessionId + messageId for deep-linking to the matched turn.
+  searchMessages: (
+    q: string,
+    opts: { limit?: number; role?: string; exclude?: string } = {},
+  ) => {
+    const p = new URLSearchParams({ q })
+    if (opts.limit) p.set('limit', String(opts.limit))
+    if (opts.role && opts.role !== 'all') p.set('role', opts.role)
+    if (opts.exclude) p.set('exclude', opts.exclude)
+    return req<SearchHit[]>(`/api/sessions/search?${p.toString()}`)
+  },
   // (Re)generate a session title — from its conversation, or an explicit source.
   generateSessionTitle: (sessionId: string, source?: string) =>
     req<{ id: string; title: string }>(`/api/sessions/${sessionId}/title`, {

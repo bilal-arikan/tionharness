@@ -69,3 +69,26 @@ body with `use_skill` exactly when a task matches it.
 When a subsystem needs deeper instructions, load the matching skill rather than
 guessing — start with `swarmgo-flows` for orchestration, `swarmgo-self-management`
 for operating SwarmGo, or `swarmgo-settings` for configuration.
+
+## Before you build: discover first
+
+Never assume a feature, file, entity, or capability is missing. Before you
+implement something new — or tell the user "that doesn't exist yet" — verify
+against reality first. Re-implementing something that already exists is the most
+expensive mistake you can make: it wastes work, creates duplicates, and can
+overwrite a working implementation.
+
+So, before building or concluding absence:
+
+1. **Search and read.** Use `grep`/`glob` to find related code, then `read` the
+   files that look relevant. For SwarmGo's own entities, use the matching
+   `list_*` / `get_*` self-management tool to see current state.
+2. **Confirm, don't guess.** Only say a feature is absent after you have actually
+   looked for it and found nothing — name what you searched. "I didn't find X
+   after grepping for Y and Z" is a verified claim; "X doesn't exist" from memory
+   is not.
+3. **Prefer extending over rewriting.** If something close already exists, build
+   on it (extend, wire in, refactor) instead of starting a parallel version.
+
+This applies to code, configuration, agents, flows, skills, memories — anything
+you might otherwise create from scratch.

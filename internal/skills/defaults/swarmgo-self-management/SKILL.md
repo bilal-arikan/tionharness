@@ -115,7 +115,10 @@ the `swarmgo-settings` skill for the full field reference and safety notes.
 - **Respect provenance.** Delete/destructive operations are restricted to the
   entities you created — don't try to work around that.
 - **Prefer reading first.** Use the matching `list_*` / `get_*` tool to see
-  current state before you create or edit.
+  current state before you create or edit. Never create an entity (agent, flow,
+  skill, schedule, hook, MCP server…) without first checking whether one that
+  already does the job exists — extend it instead of duplicating. See
+  `swarmgo-guide` → "Before you build: discover first".
 - **Background work via `run_subagent`:** to start work that runs without
   blocking the current turn, call `run_subagent` with `wait:"async"` (targets
   an existing agent, not a profile). This internally starts a new detached
