@@ -191,12 +191,17 @@ func Default() Settings {
 		MaxTokenRetries:    3,
 		ReactiveKeepRecent: 6,
 
-		// System A on by default (free); System B opt-in (costs a model call).
+		// Both systems on by default, the external agent project-style: System A (free, deterministic)
+		// always runs; System B (cheap-model summary) kicks in for big outputs. A's
+		// byte cap (16KB) sits ABOVE B's threshold (12KB) so A's middle-elision never
+		// pre-empts B's intelligent summary — outputs in the 12–16KB band reach B,
+		// and anything larger is A-truncated to 16KB then B-summarized. Set a cheap
+		// CompactModel (e.g. claude-haiku) so B stays inexpensive.
 		CompactToolOutput:   true,
 		CompactMaxLines:     200,
-		CompactMaxBytes:     12288,
-		CompactLLMSummary:   false,
-		CompactLLMThreshold: 8192,
+		CompactMaxBytes:     16384,
+		CompactLLMSummary:   true,
+		CompactLLMThreshold: 12288,
 		CompactModel:        "",
 
 		DefaultDailyCallLimit:  0,

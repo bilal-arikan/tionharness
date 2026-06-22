@@ -210,7 +210,10 @@ graph LR
 - [ ] **CG-8 — Otomasyon/flow geçmişi cap + compaction**: `flow_runs` sınırla (örn. 20/flow, 1000 global) + periyodik compaction. *(craft v0.7.8)*
 
 ### 🟡 P2 — Sağlamlaştırma (file-based depolama)
-- [ ] **CG-9 — Density-aware token tahmini**: sabit `chars/4` (`tokens.go:8`) base64/yoğun içerikte ~%25 eksik sayıyor → `chars/1.5` dal + tool-result eşiğini context window'a göre dinamik (floor 2K/ceil 15K). *(craft v0.9.1, v0.9.3)*
+- [~] **CG-9 — Density-aware token tahmini** ✅ **birinci yarı YAPILDI** (2026-06-22): `conversation/tokens.go`
+  `estimateText` artık density-aware — yoğun/encoded içerik (`<%3` whitespace, ≥256 rune) **~1.5 chars/token**
+  (`runes*2/3`), düz metin **~4**; "session poisoning" kapandı (`tokens_test.go`). **Kalan:** tool-result eşiğini
+  context window'a göre dinamik ölçekleme (`ctx×0.10`, floor 2K/ceil 15K). *(craft v0.9.1, v0.9.3)*
 - [ ] **CG-10 — Config oto-onarım**: başlangıçta bozuk config/`~/.claude.json` (boş/BOM/invalid) tespit+onarım+backup; Windows file-lock retry. *(craft v0.2.33)*
 - [ ] **CG-11 — Volatile-context kuralını koru**: tarih/saat/session-state eklenirse **yalnız `SystemDynamic`'e veya user-mesaj kuyruğuna** (statik cache prefix'e değil). Mevcut iki-parçalı tasarım zaten doğru — regression'a karşı not. *(craft v0.10.2)* ✅ tasarım uyumlu
 

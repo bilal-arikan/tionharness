@@ -30,8 +30,8 @@ const (
 // threshold. Both default to sane values used by test runtimes.
 const (
 	DefaultCompactMaxLines     = 200   // System A: lines kept before middle elision
-	DefaultCompactMaxBytes     = 12288 // System A: hard byte cap after line work
-	DefaultCompactLLMThreshold = 8192  // System B: only summarize output larger than this
+	DefaultCompactMaxBytes     = 16384 // System A: hard byte cap (above B's threshold so A never pre-empts B)
+	DefaultCompactLLMThreshold = 12288 // System B: only summarize output larger than this (~the external agent project's 12K)
 )
 
 // Tunables holds process-wide, settings-driven knobs that cut across every

@@ -2,6 +2,56 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## CG-9 density-aware estimator + Sistem B varsayılan açık ✅ (2026-06-22)
+
+**Hedef:** the external agent project kıyaslamasında çıkan iki açığı kapat — (1) yoğun içerikte token
+undercount ("session poisoning"), (2) büyük araç-sonucu özetinin kutudan-kapalı olması.
+
+- **CG-9 (birinci yarı):** `conversation/tokens.go` `estimateText` density-aware oldu.
+  Tek geçişte rune+whitespace sayar; uzun & `<%3` boşluklu (≥256 rune) içerik **~1.5
+  chars/token** (`runes*2/3`), düz metin **~4**. `utf8` importu düştü. `tokens_test.go`.
+  Transcript bütçesi (12K) ve UI meter artık base64/hex'i doğru sayıyor. **Kalan:**
+  tool-result eşiğini context window'a göre ölçekleme (CG-9 ikinci yarı).
+- **Sistem B varsayılan açık:** `settings.Default()` + `tunables` sabitleri —
+  `CompactLLMSummary: false→true`, `CompactLLMThreshold: 8192→12288`,
+  `CompactMaxBytes: 12288→16384`. **Kritik:** A'nın cap'i B eşiğinin üstüne çıkarıldı,
+  yoksa A çıktıyı B eşiğinin altına kırpıp B'yi pre-empt ediyordu. Doc 17 güncellendi.
+- **Doğrulama:** conversation/settings/agent **89 test** yeşil; `TestEstimateTextDensity`
+  ayrıca tek tek geçti. **Not:** `go build ./...` şu an paralel oturumun yarım MemGPT
+  Parça-4 işinden (`ReadCore`/`WriteCore` 3-arg, `coreMemoryBlock`) **kırık** — benim
+  paketlerim (api'ye bağımsız) izole derlenip test edildi; bozuk dosyalara dokunulmadı.
+
+---
+
+## Araç hizalama + tarih enjeksiyonu + bellek/arama CLI köprüsü ✅ (2026-06-22)
+
+Üç bağımsız iyileştirme (kullanıcı isteği). Build+vet temiz, **289 test** yeşil,
+`tsc --noEmit` temiz, backend rebuild+restart (127.0.0.1:8090).
+
+1. **`get_current_time` kaldırıldı → tarih sistem prompt'unda.** Ajan saati artık
+   tool round-trip yerine bağlamdan okur. `composeTurnRequest` dinamik bloğuna ve
+   `autonomousSystemPrompt`'a tek satır eklendi (`dateTimeContextBlock`,
+   `"Current date and time: Monday, 2006-01-02 15:04 (-07:00)"`). `builtin_time.go`
+   + testi silindi. Bu, claude-cli'nin zaten yaptığının native eşleniği.
+
+2. **Çekirdek araç isimleri claude-cli ile hizalandı.** `read_file→Read`,
+   `write_file→Write`, `edit_file→Edit`, `list_dir→LS`, `glob→Glob`, `grep→Grep`,
+   `shell→Bash` (`builtin_fs.go`, `builtin_shell.go`). Model bu isimlere yoğun
+   eğitimli → daha güvenilir tool-use. `classify.go`/`permpattern.go` zaten her iki
+   isim setini taşıyordu → tek sete indirgendi (`execArgTools={"Bash"}`). Yan
+   referanslar güncellendi: subagent profilleri, `artifacts_auto.fileWriteTools`,
+   hook şablonları, MarkLazy, bridge dispatch case, frontend (`DiffCard`/`tools.ts`/
+   `stepKinds`). `http_get` kasıtlı korundu (CLI WebFetch'ten farklı; düz GET).
+
+3. **`core_memory_replace/append` + `conversation_search` CLI'ye köprülendi.** Bu
+   eager built-in'ler native-loop ctx bağımlılığı taşımadığından `BridgeTools` def
+   listesine doğrudan eklendi (gate'leri `CoreMemoryTools()`/`SessionContextEnabled()`);
+   dispatch zaten `bridgeCallFor()`→`reg.Call` ile çalışır, ekstra case yok. Native'de
+   eager kalırlar. Artık CLI ajanı gördüğü core-memory bloğunu **düzenleyebilir** ve
+   geçmişte derin arama yapabilir. (Stale `bridgeExcluded` run_subagent yorumu da
+   düzeltildi.) Dokümanlar: `11-INTERACTION-MCP`, `26-MEMGPT`, `27-CROSS-SESSION`,
+   `19-LAZY`, `09-SDK`, `25-SUBAGENT`, `06-WORKSPACES`.
+
 ## CG-16 — Oturumlar-arası tam-metin arama ✅ TAM (çekirdek+araç+API+UI, 2026-06-22)
 
 **Hedef:** Workspace'in tüm oturum mesaj geçmişinde anahtar-kelime araması (bugün

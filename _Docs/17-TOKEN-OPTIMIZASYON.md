@@ -7,7 +7,7 @@
 
 SwarmGo'nun native agentic döngüsünde (`agent/toolloop.go`) her araç çağrısının çıktısı bir
 `ToolResult` olarak konuşmaya eklenir ve sonraki model çağrısında **girdi token'ı** olarak ücretlenir.
-`shell` gibi araçlar 64 KB'ye kadar ham çıktı döndürebilir. `git status`, test runner, `ls -R`, `grep`
+`Bash` gibi araçlar 64 KB'ye kadar ham çıktı döndürebilir. `git status`, test runner, `ls -R`, `grep`
 gibi komutlar context'i hızla şişirir. Bu katman, çıktı transcript'e *girmeden önce* onu kırpar — mevcut
 `internal/conversation` compaction'ı (transcript bütçesi) ve prompt-cache'i tamamlar.
 
@@ -80,14 +80,20 @@ orijinali verir).
 |------|--------|-------|-------|
 | `compactToolOutput` | A aç/kapa | `true` | — |
 | `compactMaxLines` | A satır sınırı | `200` | 0 (=default) – 5000 |
-| `compactMaxBytes` | A bayt sınırı | `12288` | 0 (=default) – 262144 |
-| `compactLlmSummary` | B aç/kapa | `false` | — |
-| `compactLlmThreshold` | B eşik (bayt) | `8192` | 0 (=default) – 262144 |
+| `compactMaxBytes` | A bayt sınırı | `16384` | 0 (=default) – 262144 |
+| `compactLlmSummary` | B aç/kapa | `true` | — |
+| `compactLlmThreshold` | B eşik (bayt) | `12288` | 0 (=default) – 262144 |
 | `compactModel` | B model-id | `""` | trim'lenir; boş = TitleModel → ajan modeli |
 
 Canlı push: `api/server.go::applySettings` → `Tunables.SetToolCompaction(...)`. 0 değerleri Tunables
 getter'larında built-in default'a (`DefaultCompact*`) çevrilir. UI: **Ayarlar → Bağlam** içinde iki
 ayrı bölüm (`frontend/.../settings/appPanels.tsx` `ContextPanel`).
+
+> **Varsayılan politika değişikliği (2026-06-22):** Sistem B artık **varsayılan AÇIK**, the external agent project
+> tarzı (~12KB eşik). Kritik bağımlılık: **A'nın bayt cap'i (16KB) B eşiğinin (12KB) ÜSTÜNDE** olmalı —
+> aksi halde A çıktıyı B eşiğinin altına kırpıp B'yi hiç tetiklenmez bırakır. Yeni varsayılanlar bu
+> sırayı korur: 12–16KB bandı A'dan geçip B'ye ulaşır, >16KB ise A 16KB'ye kırpar sonra B özetler.
+> B bir ucuz model çağrısı maliyetlidir → `compactModel`'i ucuz bir modele (ör. `claude-haiku`) pinle.
 
 ## Harici araç tespiti (presence-only)
 
@@ -124,7 +130,7 @@ komut-özel akıllı kısaltıcı yok.
 - **Yapılacak:** `internal/tools/compact` içine komut-aile tanıyıcı bir katman (ör. `compact/rules_*.go`):
   `git diff`/`git status` → dosya başına özet, `ls -R`/`tree` → derinlik kırpma, test runner → yalnız
   fail+özet satırları, `grep` → eşleşme yoğunluğu kırpma.
-- Tetik: `shell` tool input'undaki komut adına göre kural seçimi; kural yoksa mevcut jenerik A'ya düş.
+- Tetik: `Bash` tool input'undaki komut adına göre kural seçimi; kural yoksa mevcut jenerik A'ya düş.
 - Sistem A ile aynı sözleşme: dep-siz, hata döndürmez, `Stats.Saved()` rollup'a yazılır.
 
 ### 2. `_intent` — açık niyet enjeksiyonu 🔶
@@ -138,15 +144,21 @@ the external agent project her MCP tool çağrısında şemaya bir **`_intent`**
   niyet olarak kullansın. MCP araçlarında şema NormalizeSchema sırasında `_intent` alanı eklenebilir.
 - Düşük maliyet / yüksek fayda: Sistem B özet kalitesini, ekstra model çağrısı olmadan artırır.
 
-### 3. Büyük-sonuç özet eşiğini the external agent project ile hizala (ince ayar) 🔶
+### 3. Büyük-sonuç özet eşiğini the external agent project ile hizala ✅ YAPILDI (2026-06-22)
 
-the external agent project büyük tool sonuçlarını **~15k token (≈60KB)** üstünde Haiku ile otomatik özetler. SwarmGo
-Sistem B eşiği şu an **8192 bayt** (`compactLlmThreshold`) ve varsayılan **kapalı**. Bu bir hata değil,
-farklı politika — ama eşiği token-tabanlı bir referansla yeniden gözden geçirmeye değer.
+the external agent project büyük tool sonuçlarını Haiku ile **varsayılan otomatik** özetler. SwarmGo Sistem B eşiği
+eskiden **8192 bayt** ve varsayılan **kapalı**ydı. Artık the external agent project tarzı: **Sistem B varsayılan AÇIK,
+eşik 12288 bayt (~12KB)**; A'nın bayt cap'i 16384'e yükseltildi ki A→B sırası korunsun (yukarıdaki
+"Varsayılan politika değişikliği" notu). Mekanizma zaten vardı; bu yalnızca varsayılan + eşik ayarıydı.
 
-- **Yapılacak:** `compactLlmThreshold` için token-yaklaşık bir varsayılan (ör. ~12–16KB) değerlendir;
-  ayrıca Ayarlar → Bağlam'da "the external agent project ≈15k token özetler" notu referans olarak gösterilebilir.
-- Not: Bu yalnızca eşik ayarı; mekanizma (Sistem B) zaten mevcut.
+### 4. Density-aware token tahmini (CG-9) ✅ YAPILDI (2026-06-22)
+
+Transcript bütçesi (`conversation/tokens.go`) eskiden sabit **chars/4** kullanıyordu → base64/hex/
+minified gibi yoğun içerik ~%60 eksik sayılıp gerçek context window'u sessizce taşırıyordu ("session
+poisoning"). Artık `estimateText` **density-aware**: uzun ve neredeyse boşluksuz (`<%3` whitespace,
+≥256 rune) içerik **~1.5 chars/token** (`runes*2/3`), düz metin **~4 chars/token**. Tek geçiş, bağımlılık
+yok. `tokens_test.go`. **Kalan (CG-9 ikinci yarı):** araç-sonucu eşiğini context window'a göre dinamik
+ölçekleme (`ctx×0.10`, floor 2K / ceil 15K) — ayrı, daha büyük iş.
 
 ## Ayrıca Bakınız
 
