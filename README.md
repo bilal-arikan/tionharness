@@ -61,6 +61,20 @@ go build -trimpath -ldflags "-s -w" -o swarmgo.exe ./cmd/swarmgo
 > Rota önceliği: `/api/*`, `/health`, `/mcp/*` her zaman önce; `/` ve bilinmeyen yollar SPA
 > kabuğuna (index.html) düşer.
 
+## Native Masaüstü Uygulaması (Windows)
+
+Tarayıcı yerine **kendi penceresinde** açılan sürüm. WebView2 (Windows 11'de yerleşik)
+kullanır; saf Go, CGO yok. Boş bir loopback portunda sunucuyu başlatır, UI'yı pencerede gösterir.
+
+```powershell
+.\scripts\build.ps1 -Desktop   # → swarmgo-desktop.exe (~12 MB)
+.\swarmgo-desktop.exe          # çift tıkla → kendi penceresinde açılır, tarayıcı gerekmez
+```
+
+Detay ve tasarım: [_Docs/17-NATIVE-PENCERE.md](_Docs/17-NATIVE-PENCERE.md). WebView2 runtime
+yoksa (nadir, eski Win10) otomatik olarak varsayılan tarayıcıya düşer. Başsız `swarmgo.exe`
+sürümü değişmeden durur; iki dağıtım yan yana kullanılabilir.
+
 ## Ortam Değişkenleri
 
 | Değişken | Açıklama | Varsayılan |

@@ -2,6 +2,91 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-22**
 
+## Native masaüstü penceresi — WebView2 (CGO'suz) ✅ (2026-06-22)
+
+SwarmGo artık tarayıcı yerine **kendi masaüstü penceresinde** açılabiliyor. Plan:
+[17-NATIVE-PENCERE.md](17-NATIVE-PENCERE.md). **Ön koşul refactor (davranış-korumalı):**
+`cmd/swarmgo/main.go`'nun boot dizisi yeni **`internal/app`** paketine taşındı
+(`SetupLogging` + `Bootstrap`/`Serve`/`Shutdown`/`Addr`/`URL`); `Bootstrap` artık listener'ı
+önden açar (`net.Listen`, `:0` boş port desteği) ve `SetBaseURL`'i çözülen adresle çağırır.
+`main.go` ~130→~50 satır. **Yeni giriş noktası** `cmd/swarmgo-desktop` (`//go:build windows`,
+[`jchv/go-webview2`](https://github.com/jchv/go-webview2) — **saf Go, CGO yok**; Win11'de
+yerleşik WebView2 runtime): sunucuyu `127.0.0.1:0`'da başlatır, `waitForHealth` ile hazır olunca
+1280×800 WebView2 penceresi açar, pencere kapanınca graceful `Shutdown`. WebView2 yoksa →
+varsayılan tarayıcıya fallback (`rundll32 url.dll`). `!windows` stub mevcut. `scripts/build.ps1`
+`-Desktop` bayrağı (`-H windowsgui` → konsolsuz). Bağımlılık: `go-webview2` (direct) +
+`go-winloader`/`x/sys` (indirect) — yalnız desktop hedefinde derlenir; **başsız `swarmgo`
+hâlâ saf-Go/çapraz-derlenebilir**. ✅ `go build ./...`/`vet` yeşil; başsız smoke (refactor sonrası
+`/`+`/health` 200, boot logları aynı); desktop canlı (rastgele port 60385'te boot, `/health`+`/`
+200, pencere açıldı); `-H windowsgui` build 12 MB. README "Native Masaüstü Uygulaması" eklendi.
+
+## Prompt saatine saniye eklendi (SES28 zaman-ölçüm hatası) ✅ (2026-06-22)
+
+**Sorun:** SES28'de bir ajan "30 sn bekle, farkı ölç" görevinde ilk saati **uydurdu**
+(`18:18:48`). Kök neden: sistem-prompt saati yalnız **dakika** hassasiyetindeydi
+(`15:04`), `get_current_time` aracı da kaldırılmıştı → saniye gereken ölçümde ajanın
+gerçek saati yok, uyduruyor. (Not: `schedule_wake` timer'ı doğru — tam 30 sn tetikledi;
+hata zamanlayıcıda değil, uydurmadaydı.)
+
+- **Çözüm (geçici):** `dateTimeContextBlock` (chat) + `autonomousSystemPrompt` (headless)
+  artık `15:04:05` (saniyeli) yazıyor ve satır "tur başında yakalandı, tur içinde ilerlemez"
+  diye etiketli — ajan ölçüm görevinde bunu **baseline** alsın, uydurmasın.
+- **Kalıcı (sırada):** hafif, her-zaman-açık `get_current_time` aracı (saniye + unix epoch)
+  — bilerek kaldırılmıştı; kullanıcı onayı bekliyor.
+- **Doğrulama:** `go build ./...` + `go vet` temiz.
+
+---
+
+## Ajan path/reveal + oturum yolu ~ gösterimi + context-mode dedektörü ✅ (2026-06-22)
+
+Üç küçük UI/UX iyileştirmesi (kullanıcı isteği). Build + `tsc --noEmit` temiz.
+
+1. **Ajan dosya yolu / klasör aç.** Ajan ayarları formuna (`AgentSettingsForm`) sağ
+   üstte **Yolu kopyala** + **Klasörü aç** butonları eklendi. Backend: `db.AgentPath`
+   (ajanın `agents/<id>.json` mutlak yolu) + `GET /api/agents/{id}/path` +
+   `POST /api/agents/{id}/reveal` (`explorer.exe /select,<path>` ile dosyayı vurgular).
+   Frontend api: `agentApi.agentPath`/`revealAgent`. Session reveal deseninin ajan eşleniği.
+2. **Oturum yolu `~` gösterimi.** `SessionDetailPanel` "Klasör" bölümü `info.path`'i ham
+   gösteriyordu; artık `displayPath()` ile `~\...` kısaltmasıyla gösterir (title'da tam yol;
+   "Yolu kopyala" hâlâ tam yolu kopyalar).
+3. **context-mode dedektörü.** Hooks "Harici token araçları" listesine (`external_tools.go`)
+   `context-mode` eklendi (rtk/sqz/headroom yanında).
+
+---
+
+## MCP katalog önbelleği — gateway'de session birikmesi düzeltildi ✅ (2026-06-22)
+
+**Sorun:** Yerel MCP Gateway'de saniyeler içinde 4 ayrı `swarmgo` session açılıyordu
+(her biri `requestCount:3`). Kök neden: native MCP istemcisi **havuzsuz** (`manager.go`
+dial-per-operation) ve `buildRegistry` tek bir sohbet turunda birden çok kez çağrılıyor
+(tur girişi `runtime.go`, native döngü `toolloop.go`, UI/araç önizleme endpoint'leri).
+Her çağrı `BuildCatalog` ile **her enabled MCP server'ı yeniden dial ediyordu**
+(`initialize` + `notifications/initialized` + `tools/list` = requestCount 3), ardından
+`Close()`. Gateway HTTP-köprülü olduğu için her dial yeni bir session açıyor; stdio
+istemci HTTP `DELETE` göndermediğinden gateway session'ları idle olarak birikiyordu.
+
+**Çözüm — workspace başına katalog önbelleği** (`internal/agent/mcpcatalog.go`):
+- `Runtime.mcpCat *mcpCatalog` — dial edilmiş katalogu (entries) bellekte tutar.
+- **Fingerprint-tabanlı geçersizleme:** anahtar = enabled server config'lerinin
+  SHA-256 fingerprint'i (sıra-bağımsız). Server toggle/ekle/sil/düzenle → fingerprint
+  değişir → otomatik rebuild. **Ayrı invalidation hook'u gerekmez.**
+- **TTL:** varsayılan **60 sn** (`SWARMGO_MCP_CATALOG_TTL_SEC` ile override; `0` =
+  önbellek kapalı, eski davranış). Config'in göremediği dış değişiklikleri (server
+  farklı tool sunması) sınırlar.
+- Sadece pahalı dial sonucu (entries) önbelleklenir; ucuz dispatch haritası
+  (`cfgByServer`) her çağrıda canlı server listesinden yeniden hesaplanır → asla
+  drift etmez. Nil-receiver toleranslı (bare `&Runtime{}` testleri önbeklsiz çalışır).
+- **Etki:** tur-başı dial burst'ü her server için **1**'e iner → gateway session
+  birikmesi ~%90 azalır.
+- Test: `mcpcatalog_test.go` (cache hit/miss, fingerprint geçersizleme, TTL süresi,
+  ttl=0, nil-receiver, env parse). `internal/agent` + `internal/mcp` **81 test** yeşil.
+
+> **Kalan (tam çözüm değil):** `CallNamespaced` (gerçek tool çağrısı) hâlâ dial-per-call.
+> Asıl tool kullanımı seyrek olduğu için burst kaynağı değil; kalıcı bağlantı havuzu
+> (Seçenek 2) veya native HTTP transport + `Mcp-Session-Id` reuse ileride değerlendirilebilir.
+
+---
+
 ## Bütçe ceil/fraction artırıldı + eskimiş 1M-token ayarı kaldırıldı ✅ (2026-06-22)
 
 **Hedef:** (1) 1M modelleri daha çok kullan, (2) eskimiş 1M-token beta ayarını temizle.

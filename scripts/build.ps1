@@ -1,13 +1,15 @@
 # SwarmGo — tek binary üretim derlemesi.
 # Frontend'i derler (Vite → internal/web/dist), ardından UI'yı gömen tek bir
-# Go binary'si üretir. Sonuç: swarmgo.exe (çift tıkla → hem API hem UI tek portta).
+# Go binary'si üretir.
 #
-# Kullanım:  .\scripts\build.ps1            # swarmgo.exe üretir
-#            .\scripts\build.ps1 -SkipUI    # yalnız backend (mevcut dist'i gömer)
+# Kullanım:  .\scripts\build.ps1            # swarmgo.exe (başsız sunucu + gömülü UI, tarayıcıda açılır)
+#            .\scripts\build.ps1 -Desktop   # swarmgo-desktop.exe (native WebView2 penceresi, Windows)
+#            .\scripts\build.ps1 -SkipUI    # UI build'ini atla (mevcut dist'i gömer)
 
 param(
     [switch]$SkipUI,
-    [string]$Output = "swarmgo.exe"
+    [switch]$Desktop,
+    [string]$Output
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,9 +34,19 @@ if (-not $SkipUI) {
     }
 }
 
-Write-Host "==> Backend derleniyor (UI gömülü tek binary)..." -ForegroundColor Cyan
-go build -trimpath -ldflags "-s -w" -o $Output ./cmd/swarmgo
+if ($Desktop) {
+    if (-not $Output) { $Output = "swarmgo-desktop.exe" }
+    Write-Host "==> Native masaüstü uygulaması derleniyor (WebView2 penceresi, UI gömülü)..." -ForegroundColor Cyan
+    # -H windowsgui: çift tıkla → konsol penceresi açılmaz, yalnız uygulama penceresi.
+    go build -trimpath -ldflags "-H windowsgui -s -w" -o $Output ./cmd/swarmgo-desktop
+    $hint = "Çift tıkla → kendi penceresinde açılır (tarayıcı gerekmez)."
+} else {
+    if (-not $Output) { $Output = "swarmgo.exe" }
+    Write-Host "==> Başsız sunucu derleniyor (UI gömülü tek binary)..." -ForegroundColor Cyan
+    go build -trimpath -ldflags "-s -w" -o $Output ./cmd/swarmgo
+    $hint = "Çalıştır:  `$env:SWARMGO_ADDR='127.0.0.1:8095'; .\$Output   → http://127.0.0.1:8095"
+}
 
 $size = "{0:N1} MB" -f ((Get-Item $Output).Length / 1MB)
 Write-Host "==> Tamam: $root\$Output ($size)" -ForegroundColor Green
-Write-Host "    Çalıştır:  `$env:SWARMGO_ADDR='127.0.0.1:8095'; .\$Output   → http://127.0.0.1:8095" -ForegroundColor Green
+Write-Host "    $hint" -ForegroundColor Green

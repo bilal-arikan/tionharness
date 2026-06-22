@@ -1,0 +1,188 @@
+// Package app holds the shared SwarmGo bootstrap sequence so multiple entry
+// points (the headless server in cmd/swarmgo and the native desktop window in
+// cmd/swarmgo-desktop) wire up the exact same subsystems without duplicating
+// the boot logic. Bootstrap is behaviour-preserving: it is the former
+// cmd/swarmgo/main.go body, lifted verbatim.
+package app
+
+import (
+	"context"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/bilal/swarmgo/internal/agent"
+	"github.com/bilal/swarmgo/internal/api"
+	"github.com/bilal/swarmgo/internal/config"
+	"github.com/bilal/swarmgo/internal/events"
+	"github.com/bilal/swarmgo/internal/logbuf"
+	"github.com/bilal/swarmgo/internal/providers"
+	"github.com/bilal/swarmgo/internal/settings"
+	"github.com/bilal/swarmgo/internal/workspace"
+)
+
+// App is a fully wired, ready-to-serve SwarmGo instance.
+type App struct {
+	logger   *slog.Logger
+	manager  *workspace.Manager
+	server   *api.Server
+	httpSrv  *http.Server
+	listener net.Listener
+}
+
+// SetupLogging builds the ring-buffer-backed logger used by every entry point
+// and installs it as the slog default. The returned buffer feeds the in-app
+// Logs screen; the logger writes to both the buffer and stdout.
+func SetupLogging() (*logbuf.Buffer, *slog.Logger) {
+	logs := logbuf.New(2000)
+	logger := slog.New(logs.Handler(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	slog.SetDefault(logger)
+	return logs, logger
+}
+
+// Bootstrap wires every subsystem (secret, settings, providers, tunables,
+// workspace manager, API server) and opens the TCP listener. Passing
+// cfg.Addr = "127.0.0.1:0" makes the OS pick a free port; Addr() then reports
+// the resolved address. It does not begin serving — call Serve for that.
+func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*App, error) {
+	secret, err := config.LoadSecret(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Application settings (theme, providers, budgets, ...). One-time migration:
+	// fold an env-provided Anthropic key into the encrypted settings store so the
+	// store becomes the single source of truth thereafter.
+	settingsStore, err := settings.Open(cfg.DataDir, secret)
+	if err != nil {
+		return nil, err
+	}
+	if settingsStore.Get().AnthropicKeyEnc == "" && cfg.AnthropicAPIKey != "" {
+		key := cfg.AnthropicAPIKey
+		if _, err := settingsStore.Apply(settings.Patch{AnthropicKey: &key}); err != nil {
+			logger.Warn("migrate env anthropic key failed", "error", err)
+		}
+	}
+
+	registry := providers.NewRegistry(cfg.AnthropicAPIKey)
+	logger.Info("providers",
+		"anthropic_api", settingsStore.AnthropicKey() != "",
+		"claude_cli", registry.ClaudeCLIAvailable())
+
+	// Process-wide tunables (autonomy pause, title-model override) shared by
+	// every workspace runtime and updated from the settings screen.
+	tun := agent.NewTunables()
+	// The gated tool capabilities (shell / self-management / agent delegation) are
+	// off by default and now live in the Settings screen (persisted settings.json,
+	// pushed live via applySettings). The legacy SWARMGO_ENABLE_* env vars act as a
+	// one-time boot seed: when set truthy they ENABLE the matching capability in
+	// settings (they never disable), so existing dev workflows keep working while
+	// the Settings toggle is the source of truth thereafter.
+	envOn := func(name string) *bool {
+		if v := os.Getenv(name); v == "1" || strings.EqualFold(v, "true") {
+			b := true
+			return &b
+		}
+		return nil
+	}
+	seed := settings.Patch{
+		EnableShell:      envOn("SWARMGO_ENABLE_SHELL"),
+		EnableSelfManage: envOn("SWARMGO_ENABLE_SELFMANAGE"),
+		EnableDelegation: envOn("SWARMGO_ENABLE_DELEGATION"),
+	}
+	if seed.EnableShell != nil || seed.EnableSelfManage != nil || seed.EnableDelegation != nil {
+		if _, err := settingsStore.Apply(seed); err != nil {
+			logger.Warn("seed enable-flags from env failed", "error", err)
+		} else {
+			logger.Warn("gated tool capabilities seeded from SWARMGO_ENABLE_* env into settings (Settings screen is now the source of truth)")
+		}
+	}
+
+	// Process-wide event bus: autonomous runtimes publish notifications here and
+	// the API streams them to the UI over SSE.
+	bus := events.NewBus()
+
+	// Workspace manager: each workspace owns its own DB + agent runtime.
+	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, secret, bus, logs, logger)
+	if err != nil {
+		return nil, err
+	}
+	logger.Info("workspaces ready", "count", len(manager.List()))
+
+	server := api.NewServer(manager, registry, settingsStore, tun, logs, bus, logger)
+	// Wire the application-settings bridge into every workspace runtime so the
+	// get_settings / update_settings self-management tools can read and live-apply
+	// settings (the server owns the apply hook; the manager owns the runtimes).
+	manager.SetSettingsBridge(server.SettingsBridge())
+	// Wire the cross-workspace management bridge so the list/create/rename/
+	// delete_workspace self-management tools can manage workspaces through the
+	// manager (which the server holds) and notify the UI on change.
+	manager.SetWorkspaceBridge(server.WorkspaceBridge())
+
+	// Open the listener up front so a ":0" port is resolved before we report Addr.
+	ln, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
+		manager.Close()
+		return nil, err
+	}
+
+	// Advertise this server's own loopback URL so CLI agents can reach the
+	// in-process Interaction MCP endpoint (ask_user/todo_write) for their turn.
+	// Use the resolved listener address so a ":0" port is correct.
+	server.SetBaseURL(ln.Addr().String())
+
+	httpSrv := &http.Server{
+		Handler:           server.Routes(),
+		ReadHeaderTimeout: 10 * time.Second,
+		// IdleTimeout reaps idle keep-alive connections. WriteTimeout is left
+		// unset on purpose: it would abort long-lived SSE streams.
+		IdleTimeout: 120 * time.Second,
+	}
+
+	return &App{
+		logger:   logger,
+		manager:  manager,
+		server:   server,
+		httpSrv:  httpSrv,
+		listener: ln,
+	}, nil
+}
+
+// Addr returns the resolved listen address (host:port), with the real port even
+// when Bootstrap was given a ":0" port.
+func (a *App) Addr() string { return a.listener.Addr().String() }
+
+// URL returns the loopback base URL a local client (browser or webview) should
+// open. A wildcard/empty bind host is normalised to 127.0.0.1.
+func (a *App) URL() string {
+	host, port, ok := strings.Cut(a.Addr(), ":")
+	if !ok {
+		return "http://" + a.Addr()
+	}
+	// net may report "[::]" for a wildcard bind; collapse to loopback.
+	if host == "" || host == "0.0.0.0" || host == "[::]" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return "http://" + host + ":" + port
+}
+
+// Serve blocks serving HTTP until Shutdown is called (then returns nil) or the
+// server fails.
+func (a *App) Serve() error {
+	a.logger.Info("SwarmGo starting", "addr", a.Addr())
+	if err := a.httpSrv.Serve(a.listener); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
+}
+
+// Shutdown gracefully stops the HTTP server and closes the workspace manager.
+func (a *App) Shutdown(ctx context.Context) error {
+	a.logger.Info("shutting down")
+	err := a.httpSrv.Shutdown(ctx)
+	a.manager.Close()
+	return err
+}
