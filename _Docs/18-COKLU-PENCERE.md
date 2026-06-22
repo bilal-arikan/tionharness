@@ -7,8 +7,15 @@
 >
 > Gerçekleşen wiring: `cmd/swarmgo-desktop/main.go` (`runPrimary`/`runSecondary` + `w.Bind
 > ("swarmgoOpenWindow")` + HTTP `fetchAppearance` ile connect-only başlık teması),
-> `openwindow_windows.go` (`spawnWindow` self-exec, `proc.Command`), frontend
+> `openwindow_windows.go` (`spawnWindow` self-exec), frontend
 > `WorkspaceSwitcher.openInNewWindow` (WebView2 köprüsü + tarayıcı fallback).
+>
+> **Önemli incelik (düzeltildi):** `spawnWindow` **`proc.Command` DEĞİL düz `exec.Command`**
+> kullanır. `proc.Command`, konsol yanıp sönmesini önlemek için `HideWindow`
+> (`STARTF_USESHOWWINDOW`+`SW_HIDE`) ayarlar; bu, GUI çocuğunun WebView2 penceresini de
+> **gizli** başlatırdı → "imleçte loading çıkar ama pencere açılmaz" belirtisi. İkincil zaten
+> `-H windowsgui` (konsolsuz) olduğundan gizlemeye gerek yok. Görünürlük canlı doğrulandı:
+> ikincil başlatınca görünür pencere sayısı 1→2.
 
 ## Sorun (bugün)
 
