@@ -34,4 +34,12 @@ export const mcpApi = {
       method: 'PUT',
       body: JSON.stringify({ disabledTools }),
     }),
+  // Update the visibility override lists (hidden = force load-on-demand, shown =
+  // force a default-hidden tool back into context). The denylist is left
+  // unchanged (the PUT merges per-field).
+  setWorkspaceToolsVisibility: (hiddenTools: string[], shownTools: string[]) =>
+    req<{ hiddenTools: string[]; shownTools: string[] }>('/api/workspace-tools', {
+      method: 'PUT',
+      body: JSON.stringify({ hiddenTools, shownTools }),
+    }),
 }

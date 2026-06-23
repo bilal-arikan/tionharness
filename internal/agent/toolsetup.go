@@ -326,6 +326,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	if agent.PermissionMode == "read-only" {
 		reg.MarkLazy("Write", "Edit") // write_config already lazy above
 	}
+	// Per-tool visibility overrides from the workspace tools screen. HiddenTools
+	// forces a normally-eager tool load-on-demand (the tool analog of a skill's
+	// "Gizli" state); ShownTools is applied last (see below) to force a
+	// default-lazy/hidden tool — e.g. the self-management suite — back into the
+	// every-turn context. Loaded once and reused for both passes.
+	wsToolCfg, _ := r.db.GetWorkspaceToolConfig(ctx)
+	if len(wsToolCfg.HiddenTools) > 0 {
+		reg.MarkLazy(wsToolCfg.HiddenTools...)
+	}
 
 	if servers, err := r.db.ListEnabledMCPServers(ctx); err != nil {
 		r.logger.Warn("list mcp servers failed", "error", err)
@@ -346,6 +355,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			return r.mcpPool.Call(cctx, cfgByServer, namespaced, args)
 		}
 		reg.AttachMCP(entries, cfgByServer, caller)
+	}
+
+	// ShownTools override (applied LAST so it wins over every default + MCP lazy
+	// mark): force these tools eager so they ride in the per-turn context. This is
+	// how a user surfaces otherwise-hidden tools — notably the self-management
+	// suite — via the tools screen's "Göster" toggle.
+	if len(wsToolCfg.ShownTools) > 0 {
+		reg.Unlazy(wsToolCfg.ShownTools...)
 	}
 
 	// Wire the lazy-loading meta-tools once the full lazy catalog (self-management
@@ -514,6 +531,23 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int) string {
 // each tool's active/inactive state is toggled independently of any agent.
 func (r *Runtime) WorkspaceToolCatalog(ctx context.Context) []providers.ToolDef {
 	return r.buildRegistry(ctx, db.Agent{}).Defs(nil)
+}
+
+// WorkspaceToolCatalogWithState is WorkspaceToolCatalog plus, for each tool, its
+// effective "lazy" (load-on-demand / not shipped every turn) state after all
+// marks are applied — code defaults (self-management, MCP, etc.) AND the
+// workspace HiddenTools/ShownTools overrides. The tools screen renders this as
+// the "Gizli" chip so the chip reflects what the agent actually sees in context.
+func (r *Runtime) WorkspaceToolCatalogWithState(ctx context.Context) ([]providers.ToolDef, map[string]bool) {
+	reg := r.buildRegistry(ctx, db.Agent{})
+	defs := reg.Defs(nil)
+	lazy := make(map[string]bool, len(defs))
+	for _, d := range defs {
+		if reg.IsLazy(d.Name) {
+			lazy[d.Name] = true
+		}
+	}
+	return defs, lazy
 }
 
 // ActiveToolCatalog returns the workspace-active tool catalog (full catalog

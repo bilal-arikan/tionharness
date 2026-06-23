@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, Plug, Wrench, ChevronRight } from 'lucide-react'
+import { Search, Plug, Wrench, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { api } from '../../api'
 import type { MCPServer, MCPTransport, WorkspaceTool } from '../../types'
 import { toolSource, toolServer, toolLabel, extractParams, type ParamRow } from './toolMeta'
@@ -28,7 +28,12 @@ export function ToolsPanel({ onError }: Props) {
   // Workspace tool activation + selection.
   const [tools, setTools] = useState<WorkspaceTool[]>([])
   const [disabled, setDisabled] = useState<string[]>([])
+  // Visibility override lists: hiddenOv forces a tool load-on-demand; shownOv
+  // forces a default-hidden tool (e.g. self-management) back into context.
+  const [hiddenOv, setHiddenOv] = useState<string[]>([])
+  const [shownOv, setShownOv] = useState<string[]>([])
   const [savingTool, setSavingTool] = useState<string | null>(null)
+  const [hidingTool, setHidingTool] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   // Collapsed group labels (accordion). Persisted so the choice sticks.
@@ -59,6 +64,8 @@ export function ToolsPanel({ onError }: Props) {
       .then((res) => {
         setTools(res.tools)
         setDisabled(res.disabledTools)
+        setHiddenOv(res.hiddenTools ?? [])
+        setShownOv(res.shownTools ?? [])
       })
       .catch((e) => onError(e.message))
   }, [onError])
@@ -81,6 +88,33 @@ export function ToolsPanel({ onError }: Props) {
       loadTools() // revert on failure
     } finally {
       setSavingTool(null)
+    }
+  }
+
+  // Toggle a tool's effective "hidden" (load-on-demand) state for the whole
+  // workspace. A hidden tool stays active but its schema isn't shipped every turn
+  // — the agent pulls it in via tool_search / activate_tools. Works for any tool,
+  // including ones hidden by default in code (the self-management suite): showing
+  // such a tool writes a "shown" override that forces it back into context.
+  // Mirrors a skill's "Gizli" state.
+  const toggleHidden = async (t: WorkspaceTool) => {
+    const add = (list: string[], n: string) => [...new Set([...list, n])]
+    const rm = (list: string[], n: string) => list.filter((x) => x !== n)
+    // Making it shown → add to shown override, drop any hidden override (and v.v.).
+    const nextHidden = t.hidden ? rm(hiddenOv, t.name) : add(hiddenOv, t.name)
+    const nextShown = t.hidden ? add(shownOv, t.name) : rm(shownOv, t.name)
+    setHidingTool(t.name)
+    // Optimistic update.
+    setTools((ts) => ts.map((x) => (x.name === t.name ? { ...x, hidden: !t.hidden } : x)))
+    setHiddenOv(nextHidden)
+    setShownOv(nextShown)
+    try {
+      await api.setWorkspaceToolsVisibility(nextHidden, nextShown)
+    } catch (e) {
+      onError((e as Error).message)
+      loadTools() // revert on failure
+    } finally {
+      setHidingTool(null)
     }
   }
 
@@ -179,6 +213,7 @@ export function ToolsPanel({ onError }: Props) {
         <div className="border-b border-[var(--color-border)] p-3">
           {/* Prominent, clearly-clickable jump to MCP server management. */}
           <button
+            data-testid="tools-mcp-servers"
             onClick={() => setSelectedName(null)}
             title="MCP sunucularını yönet"
             className={`mb-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
@@ -195,6 +230,7 @@ export function ToolsPanel({ onError }: Props) {
               className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-dim)]"
             />
             <input
+              data-testid="tools-search-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Araç ara…"
@@ -212,6 +248,8 @@ export function ToolsPanel({ onError }: Props) {
             return (
               <div key={g.label} className="mb-1">
                 <button
+                  data-testid="tools-group-toggle"
+                  data-group={g.label}
                   onClick={() => toggleGroup(g.label)}
                   className="flex w-full items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
                 >
@@ -228,6 +266,8 @@ export function ToolsPanel({ onError }: Props) {
                     return (
                       <button
                         key={t.name}
+                        data-testid="tools-list-item"
+                        data-tool-name={t.name}
                         onClick={() => setSelectedName(t.name)}
                         className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition ${
                           active
@@ -246,6 +286,7 @@ export function ToolsPanel({ onError }: Props) {
                         >
                           {toolLabel(t)}
                         </span>
+                        {t.hidden && <HiddenBadge className="ml-auto" />}
                       </button>
                     )
                   })}
@@ -264,7 +305,14 @@ export function ToolsPanel({ onError }: Props) {
       {/* Right: selected tool detail, or MCP server management. */}
       <div className="flex-1 overflow-y-auto p-6">
         {selected ? (
-          <ToolDetail tool={selected} params={params} saving={savingTool === selected.name} onToggle={() => toggleTool(selected)} />
+          <ToolDetail
+            tool={selected}
+            params={params}
+            saving={savingTool === selected.name}
+            hiding={hidingTool === selected.name}
+            onToggle={() => toggleTool(selected)}
+            onToggleHidden={() => toggleHidden(selected)}
+          />
         ) : (
           <ServerManagement
             servers={servers}
@@ -291,17 +339,35 @@ export function ToolsPanel({ onError }: Props) {
   )
 }
 
+// HiddenBadge marks a tool that is hidden (load-on-demand): its schema is not
+// shipped to the agent every turn — it's pulled in via tool_search / activate_
+// tools. The tool analog of a skill's "Gizli" (auto-summary off) state.
+function HiddenBadge({ className = '' }: { className?: string }) {
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-warning,#d97706)_18%,transparent)] text-[var(--color-warning,#d97706)] ${className}`}
+      title="Her tur ajana gönderilmez; gerektiğinde tool_search/activate_tools ile yüklenir (yine de aktif)"
+    >
+      Gizli
+    </span>
+  )
+}
+
 // ToolDetail renders the right-hand detail view for one selected tool.
 function ToolDetail({
   tool,
   params,
   saving,
+  hiding,
   onToggle,
+  onToggleHidden,
 }: {
   tool: WorkspaceTool
   params: ParamRow[]
   saving: boolean
+  hiding: boolean
   onToggle: () => void
+  onToggleHidden: () => void
 }) {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -324,19 +390,37 @@ function ToolDetail({
             >
               {tool.enabled ? 'Aktif' : 'Devre dışı'}
             </span>
+            {tool.hidden && <HiddenBadge />}
           </div>
         </div>
-        <button
-          onClick={onToggle}
-          disabled={saving}
-          className={`flex-shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${
-            tool.enabled
-              ? 'bg-[var(--color-surface-2)] hover:opacity-90'
-              : 'bg-[var(--color-accent)] text-white hover:opacity-90'
-          }`}
-        >
-          {tool.enabled ? 'Devre dışı bırak' : 'Etkinleştir'}
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          <button
+            data-testid="tool-detail-hide"
+            onClick={onToggleHidden}
+            disabled={hiding}
+            title={
+              tool.hidden
+                ? 'Göster: aracın şeması her tur ajana gönderilsin'
+                : 'Gizle: her tur gönderilmesin, gerektiğinde on-demand yüklensin'
+            }
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium transition hover:opacity-90 disabled:opacity-50"
+          >
+            {tool.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+            {tool.hidden ? 'Göster' : 'Gizle'}
+          </button>
+          <button
+            data-testid="tool-detail-toggle"
+            onClick={onToggle}
+            disabled={saving}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${
+              tool.enabled
+                ? 'bg-[var(--color-surface-2)] hover:opacity-90'
+                : 'bg-[var(--color-accent)] text-white hover:opacity-90'
+            }`}
+          >
+            {tool.enabled ? 'Devre dışı bırak' : 'Etkinleştir'}
+          </button>
+        </div>
       </div>
 
       {toolSource(tool) === 'mcp' && (
@@ -452,6 +536,8 @@ function ServerManagement(props: {
               </div>
               <div className="flex flex-shrink-0 items-center gap-2">
                 <button
+                  data-testid="mcp-server-test"
+                  data-server-id={s.id}
                   onClick={() => onTest(s)}
                   disabled={testing === s.id}
                   className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
@@ -459,12 +545,16 @@ function ServerManagement(props: {
                   Test
                 </button>
                 <button
+                  data-testid="mcp-server-toggle"
+                  data-server-id={s.id}
                   onClick={() => onToggle(s)}
                   className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
                 >
                   {s.enabled ? 'Kapat' : 'Aç'}
                 </button>
                 <button
+                  data-testid="mcp-server-delete"
+                  data-server-id={s.id}
                   onClick={() => onRemove(s)}
                   className="rounded px-2 py-1 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
                 >
@@ -487,12 +577,14 @@ function ServerManagement(props: {
         <h3 className="mb-3 text-xs font-semibold text-[var(--color-text-dim)]">Yeni MCP sunucusu</h3>
         <div className="grid grid-cols-2 gap-2">
           <input
+            data-testid="mcp-server-name-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="İsim (ör. filesystem)"
             className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
           />
           <select
+            data-testid="mcp-server-transport-select"
             value={transport}
             onChange={(e) => setTransport(e.target.value as MCPTransport)}
             className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
@@ -504,12 +596,14 @@ function ServerManagement(props: {
           {transport === 'stdio' ? (
             <>
               <input
+                data-testid="mcp-server-command-input"
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
                 placeholder="Komut (ör. npx)"
                 className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               />
               <input
+                data-testid="mcp-server-args-input"
                 value={argsText}
                 onChange={(e) => setArgsText(e.target.value)}
                 placeholder="Argümanlar (boşlukla ayrılmış)"
@@ -518,6 +612,7 @@ function ServerManagement(props: {
             </>
           ) : (
             <input
+              data-testid="mcp-server-url-input"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="URL"
@@ -526,6 +621,7 @@ function ServerManagement(props: {
           )}
         </div>
         <button
+          data-testid="mcp-server-add"
           onClick={onAdd}
           className="mt-3 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
         >

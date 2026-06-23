@@ -95,10 +95,13 @@ export interface WorkspaceTool {
   source: 'builtin' | 'mcp'
   server: string
   enabled: boolean
+  hidden?: boolean
   inputSchema?: unknown
 }
 
 export interface WorkspaceTools {
   tools: WorkspaceTool[]
   disabledTools: string[]
+  hiddenTools: string[]
+  shownTools: string[]
 }

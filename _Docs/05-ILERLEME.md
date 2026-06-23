@@ -2,6 +2,46 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## "Gizli" çip artık gerçek context durumunu yansıtıyor + self-management'ı kapsıyor ✅ (2026-06-23)
+
+Sorun: self-management araçları (ajanın SwarmGo'yu kontrol eden tool'ları) kodda
+zorla `MarkHidden` olduğu için context'te görünmüyordu, ama Araçlar ekranındaki
+"Gizli" çip yalnızca kullanıcının `HiddenTools` listesini yansıtıyordu → bu araçlar
+çipsiz "normal" görünüyordu (yanıltıcı) ve kullanıcı bunları context'e alamıyordu.
+
+Çözüm — çift yönlü görünürlük override'ı:
+- **Çip artık efektif lazy durumunu gösteriyor.** API `hidden` alanı registry'nin
+  gerçek `IsLazy` durumundan geliyor (`WorkspaceToolCatalogWithState`): kod-default
+  lazy (self-management/MCP/read_config/WebFetch…) + kullanıcı override'ları. Yani
+  context'e her tur gitmeyen her araç "Gizli" rozeti alır.
+- **`ShownTools` override'ı eklendi** (`WorkspaceToolConfig`): default gizli bir aracı
+  (özellikle self-management) **zorla context'e** geri alır. `registry.Unlazy` lazy+hidden
+  işaretlerini siler; toolsetup'ta **en son** uygulanır (tüm default + MCP lazy'yi ezer).
+- **Toggle çift yönlü:** "Göster" → `ShownTools`'a ekle / `HiddenTools`'tan çıkar;
+  "Gizle" → tersi. Her araç için çalışır (kod-gizli self-management dahil).
+- API PUT üç listeyi de per-field merge eder (`disabled`/`hidden`/`shown`).
+  Frontend `setWorkspaceToolsVisibility(hidden, shown)`.
+- Test: `TestUnlazyOverridesHidden` (registry), db round-trip'e ShownTools. 238 test yeşil.
+
+## Araçlar ekranında "Gizli" (load-on-demand) çip + toggle ✅ (2026-06-23)
+
+Skills ekranındaki "Gizli" (auto-summary off) deseninin **araçlara** karşılığı eklendi.
+Bir araç "Gizli" işaretlenince **aktif kalır** ama şeması her tur ajana gönderilmez —
+ajan gerektiğinde `tool_search`/`activate_tools` ile çeker (= `MarkLazy`). `enabled`
+(devre dışı) toggle'ından bağımsız, ikinci bir eksen.
+
+- **db** (`store_tools.go`): `WorkspaceToolConfig.HiddenTools []string` (DisabledTools'tan
+  ayrı, persist + reload). 
+- **API** (`workspace_tools.go`): per-tool `hidden` flag + yanıtın `hiddenTools` dizisi;
+  `PUT /api/workspace-tools` artık **per-field merge** (pointer'lı req → yalnız gelen
+  liste değişir, diğerine dokunmaz; enable & hide toggle'ları çakışmaz).
+- **toolsetup** (`toolsetup.go`): tur kurulumunda `reg.MarkLazy(cfg.HiddenTools...)` —
+  builtin + MCP araçlarında çalışır (MarkLazy sıra-bağımsız isim seti).
+- **Frontend** (`ToolsPanel.tsx`): listede ve detayda **"Gizli" çipi** (SkillsPanel'in
+  `SummaryOffBadge` stiliyle aynı warning rengi), detayda **Gizle/Göster** (Eye/EyeOff)
+  toggle'ı (optimistic + revert). `api.setWorkspaceToolsHidden`, tipler `hidden`/`hiddenTools`.
+- Test: `store_tools_test.go` (hidden round-trip + disabled'dan bağımsızlık). Tüm testler yeşil.
+
 ## Self-correcting hata kapsamı taraması — kalan boşluklar kapatıldı ✅ (2026-06-23)
 
 242 builtin tool hata mesajı tarandı. Çoğu zaten iyiydi (`use list_X`, geçerli
@@ -29,10 +69,10 @@ Ayarlar ▸ Hooks ekranı (`HooksPanel.tsx`) iki iyileştirme aldı:
   hâlâ presence-only (`/api/external-tools` → `exec.LookPath`, çalıştırma/kurulum yok).
 - **Tek-tıkla bağla toggle'ı:** Bulunan her hook-tabanlı araç için **Bağla / Aktif /
   Pasif** düğmesi. `TOOL_HOOK_TEMPLATES` şablonundan ilgili hook'u oluşturur
-  (`rtk`→PreToolUse/`Bash` PowerShell rewrite adapter; `sqz`/`headroom`→PostToolUse
-  output sıkıştırma), tekrar tıklayınca `toggleHook` ile aç/kapat (silmez).
-  `context-mode` MCP tabanlı olduğu için toggle yerine **MCP** rozeti gösterilir
-  (hook değil; Ayarlar ▸ MCP'den eklenir). `wiredHook()` eşlemeyi komut içeriğinden
+  (`rtk`→PreToolUse/`Bash` PowerShell rewrite adapter; `sqz`→PreToolUse,
+  komut `sqz hook claude`), tekrar tıklayınca `toggleHook` ile aç/kapat (silmez).
+  `headroom` ve `context-mode` MCP tabanlı (library/proxy/MCP server) olduğu için
+  toggle yerine **MCP** rozeti gösterilir (hook değil; Ayarlar ▸ MCP'den eklenir). `wiredHook()` eşlemeyi komut içeriğinden
   yapar. Otomasyon için `data-testid="tool-toggle"` + `data-tool` eklendi.
 - Doğrulama: frontend `tsc --noEmit` yeşil. Not: prod embed için `npm run build`
   + Go yeniden derleme gerekir (dev'de Vite HMR yeterli).

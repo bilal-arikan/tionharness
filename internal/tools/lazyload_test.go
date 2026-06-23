@@ -97,6 +97,33 @@ func TestMarkHiddenKeepsActivatableButOutOfBlock(t *testing.T) {
 	}
 }
 
+// TestUnlazyOverridesHidden verifies the "show" override forces a default-hidden
+// tool back to eager: it leaves the lazy catalog, drops out of the hidden count,
+// and ships its schema every turn without activation.
+func TestUnlazyOverridesHidden(t *testing.T) {
+	reg := NewRegistry(
+		stubTool{name: "eager_a", desc: "always on"},
+		stubTool{name: "create_agent", desc: "self-mgmt"},
+	)
+	reg.MarkHidden("create_agent")
+	if !reg.IsLazy("create_agent") {
+		t.Fatal("precondition: create_agent should be lazy after MarkHidden")
+	}
+	reg.Unlazy("create_agent") // user's "Göster" override
+
+	if reg.IsLazy("create_agent") {
+		t.Fatal("Unlazy must clear the lazy mark")
+	}
+	if n := names(reg.LazyCatalog(nil)); len(n) != 0 {
+		t.Fatalf("Unlazy'd tool must leave the lazy catalog, got %v", n)
+	}
+	// Ships eagerly with no active set (i.e. it's in the per-turn context now).
+	got := names(reg.ActiveDefs(nil, nil))
+	if !contains(got, "create_agent") {
+		t.Fatalf("Unlazy'd tool must ship eagerly, got %v", got)
+	}
+}
+
 // TestBridgeableDefsExcludesCLINative verifies the CLI Interaction MCP bridge
 // skips lazy built-ins that are CLI-native (WebFetch) or native-loop-context-bound
 // (run_subagent), while still bridging an ordinary lazy self-management tool.

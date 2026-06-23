@@ -10,15 +10,27 @@ const toolConfigFile = "tools-config.json"
 // is a denylist of tool names switched off for the whole workspace; every tool
 // not listed is active. A denylist is used (rather than an allowlist) so newly
 // added tools (e.g. from a freshly enabled MCP server) default to active.
+// HiddenTools is an independent set marking tools as load-on-demand (lazy): they
+// stay active but their schemas are not shipped every turn — the agent pulls them
+// in via tool_search / activate_tools. Mirrors a skill's auto-summary-off state.
 type WorkspaceToolConfig struct {
 	DisabledTools []string `json:"disabledTools"`
+	HiddenTools   []string `json:"hiddenTools"`
+	// ShownTools forces tools that are hidden/lazy by default (e.g. the
+	// self-management suite, marked hidden in code) back into the every-turn
+	// context. It overrides code defaults; an empty list keeps those defaults.
+	ShownTools []string `json:"shownTools"`
 }
 
 // GetWorkspaceToolConfig returns a copy of the workspace tool config.
 func (d *DB) GetWorkspaceToolConfig(ctx context.Context) (WorkspaceToolConfig, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	out := WorkspaceToolConfig{DisabledTools: append([]string{}, d.toolConfig.DisabledTools...)}
+	out := WorkspaceToolConfig{
+		DisabledTools: append([]string{}, d.toolConfig.DisabledTools...),
+		HiddenTools:   append([]string{}, d.toolConfig.HiddenTools...),
+		ShownTools:    append([]string{}, d.toolConfig.ShownTools...),
+	}
 	return out, nil
 }
 
@@ -26,6 +38,12 @@ func (d *DB) GetWorkspaceToolConfig(ctx context.Context) (WorkspaceToolConfig, e
 func (d *DB) SetWorkspaceToolConfig(ctx context.Context, cfg WorkspaceToolConfig) error {
 	if cfg.DisabledTools == nil {
 		cfg.DisabledTools = []string{}
+	}
+	if cfg.HiddenTools == nil {
+		cfg.HiddenTools = []string{}
+	}
+	if cfg.ShownTools == nil {
+		cfg.ShownTools = []string{}
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()

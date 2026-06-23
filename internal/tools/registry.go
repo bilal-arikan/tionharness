@@ -116,6 +116,17 @@ func (r *Registry) MarkHidden(names ...string) {
 	}
 }
 
+// Unlazy forces the named tools eager (shipped every turn): it clears any lazy
+// AND hidden marks, overriding code defaults like the self-management suite's
+// MarkHidden. Used by the workspace "show" override so a user can surface an
+// otherwise-hidden tool. Unknown names are harmless no-ops.
+func (r *Registry) Unlazy(names ...string) {
+	for _, n := range names {
+		delete(r.lazy, n)
+		delete(r.hidden, n)
+	}
+}
+
 // IsLazy reports whether a tool is lazy.
 func (r *Registry) IsLazy(name string) bool { return r.lazy[name] }
 
