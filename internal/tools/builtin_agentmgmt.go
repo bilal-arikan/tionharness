@@ -104,6 +104,14 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	if in.Name == "" {
 		return "", fmt.Errorf("name is required")
 	}
+	// Default the provider so the agent is runnable: an empty provider produced
+	// agents (e.g. flow nodes) whose turns relied on implicit fallback and were
+	// hard to diagnose. claude-cli is the keyless default and matches the app's
+	// defaultProvider.
+	in.Provider = strings.TrimSpace(in.Provider)
+	if in.Provider == "" {
+		in.Provider = "claude-cli"
+	}
 
 	// Resolve the skill set: caller-provided (validated) or, when none given, the
 	// default SwarmGo set. Unknown caller slugs are dropped and reported.

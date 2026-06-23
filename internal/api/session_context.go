@@ -29,10 +29,17 @@ type sessionContextPreview struct {
 }
 
 // previewMessage is one transcript turn as the model would receive it (role + the
-// final text, with author labels / tool recap already folded in).
+// final text, with author labels / tool recap already folded in). Author/Self
+// expose WHO authored the turn so the preview UI can show a per-message badge
+// even in a single-agent session (where the text carries no "[Name]:" prefix):
+// for an assistant turn Author is the authoring agent; for a user turn it is the
+// agent the message was directed at (may be empty). Self marks the responding
+// agent's own turns.
 type previewMessage struct {
-	Role string `json:"role"`
-	Text string `json:"text"`
+	Role   string `json:"role"`
+	Text   string `json:"text"`
+	Author string `json:"author,omitempty"`
+	Self   bool   `json:"self,omitempty"`
 }
 
 // handleSessionContextPreview assembles and returns the next-turn context for a
@@ -72,6 +79,41 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	history, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, agent.ID, history)
 	history = appendRecentToolSummaries(history)
 
+	// Per-message authorship, aligned 1:1 with the user/assistant turns that go on
+	// the wire (composeTurnRequest ships prep.Messages = these turns, same order).
+	// Resolve agent ids to display names once, cached.
+	names := map[string]string{}
+	nameOf := func(id string) string {
+		if id == "" {
+			return ""
+		}
+		if n, ok := names[id]; ok {
+			return n
+		}
+		name := id
+		if a, err := wsp.DB.GetAgent(ctx, id); err == nil {
+			if n := strings.TrimSpace(a.Name); n != "" {
+				name = n
+			}
+		}
+		names[id] = name
+		return name
+	}
+	type authorInfo struct {
+		name string
+		self bool
+	}
+	authorsSeq := make([]authorInfo, 0, len(history))
+	for _, m := range history {
+		if m.Role != providers.RoleUser && m.Role != providers.RoleAssistant {
+			continue
+		}
+		authorsSeq = append(authorsSeq, authorInfo{
+			name: nameOf(m.AgentID),
+			self: m.AgentID != "" && m.AgentID == agent.ID,
+		})
+	}
+
 	// Build the Prepared bundle by hand (no compaction, no provider call): the
 	// transcript as-is plus the session's existing rolling summary.
 	prep := conversation.Prepared{
@@ -89,8 +131,13 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 
 	msgs := make([]previewMessage, 0, len(req.Messages))
 	msgTok := 0
-	for _, m := range req.Messages {
-		msgs = append(msgs, previewMessage{Role: m.Role, Text: m.Text})
+	for i, m := range req.Messages {
+		pm := previewMessage{Role: m.Role, Text: m.Text}
+		if i < len(authorsSeq) {
+			pm.Author = authorsSeq[i].name
+			pm.Self = authorsSeq[i].self
+		}
+		msgs = append(msgs, pm)
 		msgTok += conversation.EstimateText(m.Text)
 	}
 

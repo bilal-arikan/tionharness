@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
+import { RotateCcw } from 'lucide-react'
 import { graphToReactFlow, type FlowRFNode, type NodeStatus } from '../../lib/flowGraph'
 import type { Agent, Flow, FlowGraph, FlowRun, FlowState } from '../../types'
 import { Markdown } from '../markdown/Markdown'
@@ -9,6 +10,10 @@ interface Props {
   run: FlowRun
   flow: Flow | undefined
   agents: Agent[]
+  // Re-run this run's flow with the SAME input (Koşular tab). Absent → no button.
+  onRerun?: (run: FlowRun) => void
+  // True while a re-run kicked off from this view is in flight.
+  rerunning?: boolean
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -56,7 +61,7 @@ function nodeStatuses(run: FlowRun, st: FlowState | null): Record<string, NodeSt
 // RunView is the read-only inspector for a single flow run: a non-interactive
 // canvas annotated with per-node run status (which stage we're at), plus the
 // node-by-node trace with outputs and any error.
-export function RunView({ run, flow, agents }: Props) {
+export function RunView({ run, flow, agents, onRerun, rerunning }: Props) {
   const st = useMemo(() => safeParseState(run.state), [run.state])
   const graph = useMemo(() => (flow ? safeParseGraph(flow.graph) : null), [flow])
   const statuses = useMemo(() => nodeStatuses(run, st), [run, st])
@@ -87,6 +92,22 @@ export function RunView({ run, flow, agents }: Props) {
           <span className="ml-auto text-xs text-[var(--color-text-dim)]">
             {new Date(run.createdAt * 1000).toLocaleString()}
           </span>
+          {onRerun && (
+            <button
+              type="button"
+              onClick={() => onRerun(run)}
+              disabled={rerunning || run.status === 'running' || !flow}
+              title={
+                !flow
+                  ? 'Akış silinmiş — tekrar çalıştırılamaz'
+                  : 'Bu koşuyu aynı girdiyle tekrar çalıştır'
+              }
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RotateCcw size={13} className={rerunning ? 'animate-spin' : ''} />
+              {rerunning ? 'Çalışıyor…' : 'Tekrar çalıştır'}
+            </button>
+          )}
         </div>
         {run.input && (
           <div className="mt-1 truncate text-xs text-[var(--color-text-dim)]">

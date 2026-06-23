@@ -7,6 +7,8 @@ import {
   Activity,
   RefreshCw,
   Copy,
+  Check,
+  FolderOpen,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react'
@@ -91,6 +93,10 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   const [selectedId, setSelectedId] = useState<string | null>(focusId ?? null)
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
+  // Absolute on-disk folder of the selected execution's session (for the
+  // open-folder + copy-path buttons in the detail header).
+  const [sessPath, setSessPath] = useState('')
+  const [copied, setCopied] = useState(false)
   const selectedRef = useRef<string | null>(null)
   selectedRef.current = selectedId
 
@@ -125,6 +131,19 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
     const t = setInterval(() => load(filter), POLL_MS)
     return () => clearInterval(t)
   }, [filter, load])
+
+  // Resolve the selected session's on-disk folder for the header path buttons.
+  useEffect(() => {
+    setSessPath('')
+    setCopied(false)
+    if (!selectedId) return
+    api
+      .sessionPath(selectedId)
+      .then((r) => {
+        if (selectedRef.current === selectedId) setSessPath(r.path)
+      })
+      .catch(() => { /* best-effort; buttons fall back to a fetch on click */ })
+  }, [selectedId])
 
   // Load the selected execution's transcript on selection change.
   useEffect(() => {
@@ -267,6 +286,34 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
         {selected ? (
           <>
             <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
+              {/* Path actions (top-left): open the session folder + copy its path. */}
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => api.revealSession(selected.sessionId).catch((e) => onError((e as Error).message))}
+                  title={sessPath ? `Klasörü aç: ${sessPath}` : 'Klasörü aç'}
+                  className="flex items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                >
+                  <FolderOpen size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const p = sessPath || (await api.sessionPath(selected.sessionId)).path
+                      await navigator.clipboard?.writeText(p)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 1200)
+                    } catch (e) {
+                      onError((e as Error).message)
+                    }
+                  }}
+                  title={sessPath ? `Yolu kopyala: ${sessPath}` : 'Yolu kopyala'}
+                  className="flex items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                >
+                  {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
+                </button>
+              </div>
               {(() => {
                 const Icon = kindMeta(selected.kind).icon
                 return <Icon size={16} className="text-[var(--color-text-dim)]" />

@@ -85,7 +85,7 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
       </button>
 
       {open && (
-        <div className="absolute left-3 right-3 z-10 mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl">
+        <div className="absolute left-3 z-20 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl">
           {workspaces.map((w) => (
             <div
               key={w.id}

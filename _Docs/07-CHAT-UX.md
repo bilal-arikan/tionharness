@@ -217,6 +217,11 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   + şema araç kataloğu, her biri ~token tahminiyle. Opsiyonel örnek "sıradaki mesaj"
   bekleyen kullanıcı turu olarak eklenir. **Yan etkisiz:** `Prepare`'i atlar (compaction/
   özet persist YOK, provider çağrısı YOK) — `Prepared` elle kurulur (`api/session_context.go`).
+  **Per-mesaj yazar rozeti (2026-06-23):** her mesaj satırı rolün yanında **hangi ajana
+  ait** olduğunu gösterir — asistan turu yazan ajan adı (kendisi ise `(siz)`), kullanıcı
+  turu yönlendirildiği ajan (`→ Ad`). Tek-ajan oturumunda da görünür (metinde `[Ad]:`
+  prefix'i yokken bile). `previewMessage.author/self` alanları, modele giden user/assistant
+  turlarıyla 1:1 hizalı kurulur (`composeTurnRequest` `prep.Messages`'i değiştirmez).
 - **Son turların araç I/O özeti (2026-06-23):** Geçmiş provider'a çevrilirken araç
   çağrı/sonuçları düşüyordu (`toProviderMessages` yalnız metin) → ajan "az önce ne
   yaptın / o komut ne döndü" diye soramıyordu. Artık `Prepare`'den önce son **N=4**

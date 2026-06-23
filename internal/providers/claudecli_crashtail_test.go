@@ -20,4 +20,14 @@ func TestStdoutCrashTail(t *testing.T) {
 	if got := stdoutCrashTail(nil); got == "" {
 		t.Fatal("empty tail should still return a note")
 	}
+	// A stream-json result/error event carries the real failure reason and must
+	// be surfaced over benign startup events (e.g. SessionStart hooks).
+	stream := []string{
+		`{"type":"system","subtype":"hook_started","hook_name":"SessionStart:startup"}`,
+		`{"type":"result","subtype":"error_during_execution","is_error":true,"error":"mcp server failed"}`,
+	}
+	got := stdoutCrashTail(stream)
+	if !strings.Contains(got, "mcp server failed") || strings.Contains(got, "hook_started") {
+		t.Fatalf("should surface the result/error event, not startup noise, got: %s", got)
+	}
 }

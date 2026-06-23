@@ -164,6 +164,11 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   `nodeStatuses(run,state)` ile türetilir: `trace`'tekiler `done`, `state.current` çalışırken
   `running` / hata ise `error`), ve **adım izi** listesi (node çıktıları `Markdown`, branch düz
   metin). Seçili koşu `runs` listesinden türetildiği için poll ile canlı tazelenir.
+- **Tekrar çalıştır (2026-06-23):** RunView başlığında **"↺ Tekrar çalıştır"** butonu — koşunun
+  akışını **aynı girdiyle** (`run.input`) yeniden koşar (`runFlowStreamStandalone(run.flowId, …)`;
+  güncel akış tanımıyla). Akış silinmişse veya koşu hâlâ `running` ise buton pasif. Stream
+  ilerledikçe sol liste tazelenir; biten yeni koşu listeye anında upsert edilip seçilir
+  (`FlowsPanel.rerunRun`).
 - **Doğrulama (Playwright):** geçmiş koşular listelendi (✓/✕ rozet); hata koşusu → ⚠️
   `node "classify" … anthropic provider not configured` + boş trace + classify `error` ring;
   başarılı koşu → çalışan node'larda `done` ring + trace çıktıları (paralel çocuklar trace'te

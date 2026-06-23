@@ -39,7 +39,12 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
 
   const copy = () => {
     if (!data) return
-    const transcript = data.messages.map((m) => `### ${m.role}\n${m.text}`).join('\n\n')
+    const transcript = data.messages
+      .map((m) => {
+        const who = m.author ? ` (${m.role === 'user' ? '→ ' : ''}${m.author}${m.self && m.role !== 'user' ? ', siz' : ''})` : ''
+        return `### ${m.role}${who}\n${m.text}`
+      })
+      .join('\n\n')
     const full = `# System\n${data.system}\n\n# Dynamic\n${data.dynamic}\n\n# Messages\n${transcript}`
     navigator.clipboard.writeText(full).then(() => {
       setCopied(true)
@@ -139,8 +144,23 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                       key={i}
                       className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
                     >
-                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
-                        {m.role}
+                      <div className="mb-1 flex items-center gap-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
+                          {m.role}
+                        </span>
+                        {m.author && (
+                          <span
+                            title={
+                              m.role === 'user'
+                                ? `Hedef ajan: ${m.author}`
+                                : `Yazan ajan: ${m.author}`
+                            }
+                            className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-dim)]"
+                          >
+                            {m.role === 'user' ? `→ ${m.author}` : m.author}
+                            {m.self && m.role !== 'user' && ' (siz)'}
+                          </span>
+                        )}
                       </div>
                       <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs text-[var(--color-text)]">
                         {m.text || '(boş)'}

@@ -258,25 +258,38 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 }
 
 // stdoutCrashTail builds a short diagnostic string from the last raw stdout
-// lines when the CLI exits non-zero with empty stderr. It prefers plain
-// (non-JSON) lines, which carry CLI panics / error text, over stream-json
-// events; it falls back to the raw tail so something is always reported.
+// lines when the CLI exits non-zero with empty stderr. The fatal cause is at
+// the END of the stream, so it surfaces the most informative lines — plain
+// (non-JSON) panics/errors and stream-json "result"/error events that carry
+// is_error and the failure reason — and, when truncating, keeps the tail end
+// rather than the (noisy) startup head. Falls back to the raw tail so
+// something is always reported.
 func stdoutCrashTail(lines []string) string {
-	var plain []string
-	for _, l := range lines {
-		if l == "" || l[0] == '{' {
-			continue // skip stream-json events
+	informative := func(l string) bool {
+		if l == "" {
+			return false
 		}
-		plain = append(plain, l)
+		if l[0] != '{' {
+			return true // plain text: panic / error message
+		}
+		return strings.Contains(l, `"is_error":true`) ||
+			strings.Contains(l, `"type":"result"`) ||
+			strings.Contains(l, `"subtype":"error`) ||
+			strings.Contains(l, `"error"`)
 	}
-	pick := plain
-	if len(pick) == 0 {
-		pick = lines
+	var picks []string
+	for _, l := range lines {
+		if informative(l) {
+			picks = append(picks, l)
+		}
 	}
-	out := strings.Join(pick, " | ")
-	const max = 600
+	if len(picks) == 0 {
+		picks = lines // fallback: raw tail
+	}
+	out := strings.TrimSpace(strings.Join(picks, " | "))
+	const max = 800
 	if len(out) > max {
-		out = out[:max] + "…"
+		out = "…" + out[len(out)-max:] // keep the END (the fatal part)
 	}
 	if out == "" {
 		return "(no stderr and empty stdout — CLI exited without output)"

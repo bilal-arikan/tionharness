@@ -103,7 +103,7 @@ export interface SessionContextPreview {
   systemTokens: number
   dynamic: string
   dynamicTokens: number
-  messages: { role: string; text: string }[]
+  messages: { role: string; text: string; author?: string; self?: boolean }[]
   messageTokens: number
   tools: { name: string; description: string }[]
   toolTokens: number

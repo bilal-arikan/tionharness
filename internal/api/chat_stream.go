@@ -350,8 +350,41 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			},
 		)
 		if cerr != nil {
-			s.logger.Error("stream completion failed", "error", cerr, "agent", agentRow.ID)
-			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "provider_error", "provider error: "+cerr.Error())
+			// Distinguish a manual Stop (run.cancel cancelled ctx) from a genuine
+			// provider failure. Either way, PRESERVE the partial trace accumulated so
+			// far (kept) so the tools/text the agent already produced stay visible
+			// instead of vanishing — append an error/stopped step at the end.
+			stopped := ctx.Err() != nil
+			detail := "provider error: " + cerr.Error()
+			reason := "provider_error"
+			if stopped {
+				detail = "Tur manuel olarak durduruldu. O ana kadarki adımlar korundu."
+				reason = "stopped"
+				s.logger.Info("chat turn stopped by user", "session", session.ID, "agent", agentRow.ID)
+			} else {
+				s.logger.Error("stream completion failed", "error", cerr, "agent", agentRow.ID)
+			}
+			trace := append(kept, agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason})
+			// Persist with a detached context so a cancelled (stopped) ctx still saves.
+			persistCtx := context.WithoutCancel(ctx)
+			payload := map[string]any{"error": detail, "reason": reason}
+			if msg, aerr := database.AddMessage(persistCtx, db.Message{
+				ID:          replyID,
+				SessionID:   session.ID,
+				Role:        providers.RoleAssistant,
+				AgentID:     agentRow.ID,
+				Text:        partial.String(),
+				Steps:       marshalSteps(trace),
+				Interrupted: true,
+			}); aerr != nil {
+				s.logger.Error("persist interrupted turn failed", "session", session.ID, "error", aerr)
+			} else {
+				payload["replyMessage"] = msg
+				// Keep any files written before the stop as artifacts.
+				s.captureFileArtifacts(persistCtx, database, session.ID, agentRow.ID, trace)
+			}
+			_ = database.ClearInflight(session.ID)
+			sse("error", payload)
 			return
 		}
 

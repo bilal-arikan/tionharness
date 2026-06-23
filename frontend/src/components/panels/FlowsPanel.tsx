@@ -85,6 +85,8 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   const [running, setRunning] = useState(false)
   const [run, setRun] = useState<FlowRun | null>(null)
   const [liveNodes, setLiveNodes] = useState<FlowNodeEvent[]>([])
+  // True while a re-run kicked off from the Koşular tab (RunView) is in flight.
+  const [rerunning, setRerunning] = useState(false)
 
   const loadFlows = useCallback(() => {
     api.listFlows().then(setFlows).catch((e) => onError(e.message))
@@ -355,6 +357,38 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
     }
   }
 
+  // rerunRun re-executes an already-finished run's flow with the SAME input
+  // (Koşular tab). It streams so the run-list refreshes live, then selects the
+  // freshly produced run in the viewer. Uses the CURRENT flow definition.
+  const rerunRun = useCallback(
+    async (r: FlowRun) => {
+      setRerunning(true)
+      const refresh = () => api.listAllFlowRuns().then(setRuns).catch(() => {})
+      try {
+        await api.runFlowStreamStandalone(r.flowId, r.input, {
+          // Surface the new running run in the left list as it progresses.
+          onNode: () => refresh(),
+          onReply: (res) => {
+            // Upsert the finished run so selection is instant (no poll-gap flicker).
+            setRuns((prev) => {
+              const rest = prev.filter((x) => x.id !== res.run.id)
+              return [res.run, ...rest]
+            })
+            setSelectedRunId(res.run.id)
+            refresh()
+          },
+          onError: (e) => onError(e),
+        })
+      } catch (e) {
+        onError((e as Error).message)
+      } finally {
+        setRerunning(false)
+        refresh()
+      }
+    },
+    [onError],
+  )
+
   // Unsaved-edits (dirty) signal for the nav "Akışlar" item + workspace label:
   // compare the live editor (name/description + structural graph) to the stored
   // flow. Cosmetic-only fields (edgeStyle/animated) are ignored so they don't
@@ -559,6 +593,8 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             run={selectedRun}
             flow={flows.find((f) => f.id === selectedRun.flowId)}
             agents={agents}
+            onRerun={rerunRun}
+            rerunning={rerunning}
           />
         )
       ) : !selectedId ? (
