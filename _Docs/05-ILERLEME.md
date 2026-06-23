@@ -2,6 +2,21 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Fix: "Aktivite" nav göstergesi arka plan oturumlarında yanmıyordu ✅ (2026-06-23)
+
+**Sorun:** Bir flow/schedule/agent **ayrı bir oturum** başlattığında (spawn, inbox
+teslimi, schedule wake, flow node'ları) sol navbar'daki **Aktivite** öğesinde "işlem
+sürüyor" göstergesi çıkmıyordu. Çünkü `handleActivity` yalnızca chat-stream registry'sini
+(`s.runs.activeSessionIDs()`) + çalışan task/flow run'larını sayıyordu; otonom invoke'ları
+izleyen `Runtime.ActiveSessionIDs()`'i (executions feed'in kullandığı sinyal) **hiç
+kullanmıyordu**. Ayrıca `executions` görünümü için bir bayrak yoktu.
+
+**Çözüm:** `activityState`'e `executions` bayrağı eklendi. `handleActivity` artık
+chat-stream + `Runtime.ActiveSessionIDs()` oturumlarını birleştiriyor; **herhangi** biri
+varsa `executions` yanıyor, ek olarak oturum kind'ı (`chat`/`flow`/`schedule`) ilgili
+görünümü de yakıyor. Frontend: `useActivity` → `executions` → `'executions'` View;
+`getActivity` tipi güncellendi. `api/activity.go`, `useActivity.ts`, `api/system.ts`.
+
 ## UI: ID görünürlüğü + disk yolu erişimi (sohbet / akış / zamanlama / log) ✅ (2026-06-23)
 
 Ajan ekranındaki "ID + klasörü aç/kopyala" deseni diğer ekranlara da yayıldı:

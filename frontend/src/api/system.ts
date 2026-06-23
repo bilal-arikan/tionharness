@@ -73,7 +73,9 @@ export const systemApi = {
   // Per-view "work in progress" flags for the left-nav busy indicators
   // (chat stream / running task / running flow / schedule-triggered run).
   getActivity: () =>
-    req<{ chat: boolean; task: boolean; flow: boolean; schedule: boolean }>('/api/activity'),
+    req<{ chat: boolean; task: boolean; flow: boolean; schedule: boolean; executions: boolean }>(
+      '/api/activity',
+    ),
 
   // Detect optional external token-optimization tools (rtk, sqz) on the host
   // PATH. Presence-only — the backend never runs or installs them.

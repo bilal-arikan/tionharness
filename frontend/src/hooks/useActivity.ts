@@ -26,6 +26,9 @@ export function useActivity(activeWorkspaceId: string | null, chatStreaming: boo
         if (a.task) s.add('board')
         if (a.flow) s.add('flows')
         if (a.schedule) s.add('schedules')
+        // The unified "Aktivite" view lights for ANY in-flight run — including
+        // background sessions a flow/schedule/agent spawns that no other view owns.
+        if (a.executions) s.add('executions')
         setBusy(s)
       } catch {
         /* transient fetch failure — keep the last known flags */
