@@ -2,6 +2,34 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## SES5 flow çöküşü teşhisi: crash-tail kuyruğu + create_agent provider default ✅ (2026-06-23)
+
+WS2/SES5'te "Seyahat Planlama Akışı" flow'u node'larda `claude CLI failed: exit
+status 1` veriyordu (sıralıda flight başarılı → hotel hata; paralelde flight hemen
+hata — yani **intermittent**, deterministik değil).
+
+**Eleme:** gsd `SessionStart` hook'ları (`gsd-check-update.js`/`gsd-session-state.sh`)
+exit 0 ile bitiyor → sebep değil. 4× eşzamanlı **düz** claude-cli hepsi exit 0 →
+ham eşzamanlılık/`~/.claude.json` çakışması da değil.
+
+**Asıl yön:** Flow agent'ları (AGT6–9) `mcpEnabled=true` (create_agent'ta
+**hardcoded**) + workspace `enableCliHooks=true` → claude-cli'a fazladan
+`--mcp-config` (interaction MCP) + `--settings` (hook'lar) + `--permission-prompt-tool`
+geçiliyor; çöküş bu kırılgan yolda. Tam başarısız bileşen crash-tail'de gizliydi.
+
+**İki düzeltme:**
+1. **crash-tail artık ölümcül SONU gösteriyor** (`stdoutCrashTail`, `claudecli.go`).
+   Önceki sürüm baştan 600 char kırpıyordu → yalnız hook startup gürültüsü
+   görünüyordu. Yeni sürüm stream-json `result`/`is_error`/`error` event'lerini ve
+   plain panic satırlarını öne çıkarır, kırparken **son 800 char**'ı korur. Böylece
+   "mcp server failed" gibi gerçek sebep mesaja düşer.
+2. **`create_agent` boş provider bırakmıyor** (`builtin_agentmgmt.go`). AGT6–9
+   `provider=""` ile kaydedilmişti (örtük fallback'e bağımlı, teşhisi zor); artık
+   boşsa `claude-cli`'a default'lanır.
+
+> Sıradaki kesin adım: SwarmGo'yu yeniden derleyip flow'u tekrar çalıştır →
+> geliştirilen crash-tail tam başarısız bileşeni (hangi MCP/permission) yazacak.
+
 ## Self-correcting tool hataları (yayma) + claude-cli çöküş teşhisi ✅ (2026-06-23)
 
 Bir önceki flow-graph fix'inin desenini tüm tool yüzeyine yaydık + SES2 turn 19
