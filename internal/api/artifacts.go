@@ -20,6 +20,7 @@ import (
 const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
 	"When asked to produce a file, document, dataset, report, spreadsheet, diagram or code module, write it out with your file tool (write_file / Write) — files are captured as artifacts automatically. " +
 	"If you can't write a file but have create_artifact, call it with the full content. " +
+	"For an image, PDF or other binary FILE you already produced on disk (e.g. a screenshot a tool saved): call create_artifact with kind=image|video|audio|file and sourcePath set to the file path — do NOT read the file or base64-embed its bytes into content (that blows the token budget). Screenshots and exported files are also auto-captured from a tool's saved path, so often you need only confirm the result. " +
 	"Don't deliver substantial output only as inline chat text or via an ad-hoc shell command (that bypasses artifact capture)."
 
 // artifactsContextBlock builds a system-prompt section listing the artifacts a
@@ -65,16 +66,27 @@ func newArtifactSink(database *db.DB, sessionID, agentID string) artifactSink {
 	return artifactSink{db: database, sessionID: sessionID, agentID: agentID}
 }
 
-func (s artifactSink) CreateArtifact(ctx context.Context, title, kind, language, content string) (tools.ArtifactRef, error) {
-	a, err := s.db.CreateArtifact(ctx, db.Artifact{
+func (s artifactSink) CreateArtifact(ctx context.Context, spec tools.CreateArtifactSpec) (tools.ArtifactRef, error) {
+	row := db.Artifact{
 		SessionID: s.sessionID,
 		AgentID:   s.agentID,
-		Title:     title,
-		Kind:      kind,
-		Language:  language,
-		Content:   content,
+		Title:     spec.Title,
+		Kind:      spec.Kind,
+		Language:  spec.Language,
+		Content:   spec.Content,
 		Origin:    "tool",
-	})
+	}
+	// Media/file kinds carry a file path, not inline bytes: resolve it to a
+	// workspace-relative path (copying the file in if it lives outside) so the
+	// viewer can stream it and the artifact owns a stable copy.
+	if spec.SourcePath != "" {
+		rel, err := s.db.ImportMediaSource(s.sessionID, spec.SourcePath)
+		if err != nil {
+			return tools.ArtifactRef{}, err
+		}
+		row.SourcePath = rel
+	}
+	a, err := s.db.CreateArtifact(ctx, row)
 	if err != nil {
 		return tools.ArtifactRef{}, err
 	}
@@ -280,7 +292,8 @@ func (s *Server) handleRevealArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 	path := artifactDiskPath(wsp, a)
 	dir := filepath.Dir(path)
-	if err := exec.CommandContext(r.Context(), "explorer.exe", dir).Start(); err != nil {
+	// Detached from r.Context() so it isn't killed when the handler returns.
+	if err := exec.Command("explorer.exe", dir).Start(); err != nil {
 		// explorer.exe returns a non-zero exit code even on success; only a
 		// failure to *start* the process is a real error.
 		s.logger.Warn("reveal artifact folder failed", "id", a.ID, "error", err)

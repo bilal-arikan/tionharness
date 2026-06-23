@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"os/exec"
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/proc"
@@ -93,7 +94,11 @@ $top = New-Object System.Windows.Forms.Form
 $top.TopMost = $true
 if ($d.ShowDialog($top) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }`
 
-	cmd := proc.CommandContext(r.Context(), "powershell.exe", "-NoProfile", "-STA", "-Command", script)
+	// HideConsole (not proc.Command): suppress the PowerShell console flash but
+	// keep the FolderBrowserDialog visible. proc.Command's HideWindow (SW_HIDE)
+	// would hide the dialog too.
+	cmd := exec.CommandContext(r.Context(), "powershell.exe", "-NoProfile", "-STA", "-Command", script)
+	proc.HideConsole(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "folder picker unavailable: "+err.Error())

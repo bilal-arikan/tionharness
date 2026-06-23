@@ -213,7 +213,8 @@ func (s *Server) handleRevealSession(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "session not found") {
 		return
 	}
-	if err := exec.CommandContext(r.Context(), "explorer.exe", path).Start(); err != nil {
+	// Detached from r.Context() so it isn't killed when the handler returns.
+	if err := exec.Command("explorer.exe", path).Start(); err != nil {
 		// explorer.exe returns a non-zero exit code even on success; only a
 		// failure to *start* the process is a real error.
 		s.logger.Warn("reveal session folder failed", "session", id, "error", err)

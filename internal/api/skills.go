@@ -144,7 +144,8 @@ func (s *Server) handleRevealSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := filepath.Dir(sk.Path)
-	if err := exec.CommandContext(r.Context(), "explorer.exe", dir).Start(); err != nil {
+	// Detached from r.Context() so it isn't killed when the handler returns.
+	if err := exec.Command("explorer.exe", dir).Start(); err != nil {
 		// explorer.exe returns a non-zero exit code even on success; only a
 		// failure to *start* the process is a real error.
 		s.logger.Warn("reveal skill folder failed", "slug", slug, "error", err)

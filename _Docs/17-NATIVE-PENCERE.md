@@ -209,6 +209,23 @@ olarak büyütür → bulanıklık. **Çözüm:** `cmd/swarmgo-desktop/dpi_windo
 gerçek piksel yoğunluğunda **keskin** render eder. DPI farkındalığı süreçte yalnız bir kez
 ayarlanabildiğinden çağrı en başta yapılır (ilk çağrı kazanır). ✅ build yeşil.
 
+## "Path aç" + "Klasör seç" butonları düzeltildi ✅ (2026-06-23)
+
+Masaüstünde iki ayrı kök sebep:
+
+1. **Klasör seç (workspace oluşturma):** `/api/pick-folder` PowerShell FolderBrowserDialog'u
+   `proc.Command` ile başlatıyordu; `proc.Command`'in `HideWindow` (`SW_HIDE`) bayrağı **dialogu da
+   gizliyordu** (ShowDialog modal olarak bloklar ama görünmez → "açılmıyor"). Düzeltme: yeni
+   `proc.HideConsole` (yalnız `CREATE_NO_WINDOW`, GUI penceresini gizlemez) + düz `exec.CommandContext`.
+   Canlı doğrulandı (UIAutomation): `#32770` "Klasöre Gözat" dialogu görünür (count 1).
+2. **Path aç (Explorer reveal — ajan/artifact/oturum/skill/prompt/ws-config):**
+   `exec.CommandContext(r.Context(), "explorer.exe", ...).Start()` ateşle-unut bir launch'ı **istek
+   context'ine** bağlıyordu; handler dönünce context iptal olup explorer **açılmadan öldürülüyordu**
+   (yarış). Düzeltme: `exec.Command(...)` (context'ten ayrık) → explorer handler dönse de yaşar.
+
+`proc.Hide` (HideWindow+CREATE_NO_WINDOW) yalnız saf konsol çocukları (git/claude/sh) için;
+GUI dialog açan konsol çocuğu için `proc.HideConsole`.
+
 ## Çapraz platform yol haritası (sonraki, opsiyonel)
 
 - macOS/Linux için `webview/webview_go` (CGO) ile `cmd/swarmgo-desktop/main_unix.go`

@@ -27,7 +27,9 @@ func (s *Server) handleRevealAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// /select highlights the specific agent file inside the agents/ folder.
-	if err := exec.CommandContext(r.Context(), "explorer.exe", "/select,"+path).Start(); err != nil {
+	// Detached from r.Context(): a fire-and-forget launch must not be killed when
+	// the HTTP handler returns (CommandContext would race explorer to death).
+	if err := exec.Command("explorer.exe", "/select,"+path).Start(); err != nil {
 		// explorer.exe returns a non-zero exit code even on success; only a
 		// failure to *start* the process is a real error.
 		s.logger.Warn("reveal agent folder failed", "agent", id, "error", err)
@@ -47,11 +49,11 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 }
 
 type createAgentReq struct {
-	Name         string `json:"name"`
-	Soul         string `json:"soul"`
-	Identity     string `json:"identity"`
-	Provider      string `json:"provider"`
-	Model         string `json:"model"`
+	Name           string `json:"name"`
+	Soul           string `json:"soul"`
+	Identity       string `json:"identity"`
+	Provider       string `json:"provider"`
+	Model          string `json:"model"`
 	PlanningMode   string `json:"planningMode"`
 	ThinkingLevel  string `json:"thinkingLevel"`
 	PermissionMode string `json:"permissionMode"`
@@ -95,9 +97,9 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agent, err := ws(r).DB.CreateAgent(r.Context(), db.Agent{
-		Name:         req.Name,
-		Soul:         req.Soul,
-		Identity:     req.Identity,
+		Name:           req.Name,
+		Soul:           req.Soul,
+		Identity:       req.Identity,
 		Provider:       req.Provider,
 		Model:          req.Model,
 		PlanningMode:   req.PlanningMode,
@@ -149,13 +151,13 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateAgentReq struct {
-	Name         *string `json:"name"`
-	Soul         *string `json:"soul"`
-	Identity     *string `json:"identity"`
-	Provider      *string `json:"provider"`
-	Model         *string `json:"model"`
-	PlanningMode   *string `json:"planningMode"`
-	ThinkingLevel  *string `json:"thinkingLevel"`
+	Name           *string   `json:"name"`
+	Soul           *string   `json:"soul"`
+	Identity       *string   `json:"identity"`
+	Provider       *string   `json:"provider"`
+	Model          *string   `json:"model"`
+	PlanningMode   *string   `json:"planningMode"`
+	ThinkingLevel  *string   `json:"thinkingLevel"`
 	PermissionMode *string   `json:"permissionMode"`
 	Avatar         *string   `json:"avatar"`
 	Color          *string   `json:"color"`
@@ -174,11 +176,11 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agent, err := ws(r).DB.UpdateAgent(r.Context(), r.PathValue("id"), db.AgentProfilePatch{
-		Name:         req.Name,
-		Soul:         req.Soul,
-		Identity:     req.Identity,
-		Provider:      req.Provider,
-		Model:         req.Model,
+		Name:           req.Name,
+		Soul:           req.Soul,
+		Identity:       req.Identity,
+		Provider:       req.Provider,
+		Model:          req.Model,
 		PlanningMode:   req.PlanningMode,
 		ThinkingLevel:  req.ThinkingLevel,
 		PermissionMode: req.PermissionMode,

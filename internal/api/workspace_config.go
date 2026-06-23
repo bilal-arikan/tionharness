@@ -15,8 +15,8 @@ import (
 // instructions and the free-form README. All live under <workspace>/config/.
 type wsConfigDTO struct {
 	Dir          string            `json:"dir"`
-	Prompts      map[string]string `json:"prompts"`   // key → current file content
-	Defaults     map[string]string `json:"defaults"`  // key → compiled-in default
+	Prompts      map[string]string `json:"prompts"`  // key → current file content
+	Defaults     map[string]string `json:"defaults"` // key → compiled-in default
 	PromptKeys   []string          `json:"promptKeys"`
 	Instructions string            `json:"instructions"`
 	Readme       string            `json:"readme"`
@@ -123,7 +123,8 @@ func (s *Server) handleRevealWorkspaceConfig(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := exec.CommandContext(r.Context(), "explorer.exe", dir).Start(); err != nil {
+	// Detached from r.Context() so it isn't killed when the handler returns.
+	if err := exec.Command("explorer.exe", dir).Start(); err != nil {
 		// explorer.exe returns a non-zero exit code even on success; only a
 		// genuine start failure (missing binary) is logged.
 		s.logger.Warn("reveal workspace config folder failed", "error", err)
