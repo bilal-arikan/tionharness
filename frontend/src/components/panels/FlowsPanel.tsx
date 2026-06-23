@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
 import { Loader2, XCircle, FolderOpen } from 'lucide-react'
 import { api } from '../../api'
 import { CopyPathButton } from '../CopyPathButton'
+import { useRegisterDirty } from '../../lib/dirtySignals'
 import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
 import { FlowCanvas, type EdgeStyle } from '../flow/FlowCanvas'
@@ -353,6 +354,26 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
       setRunning(false)
     }
   }
+
+  // Unsaved-edits (dirty) signal for the nav "Akışlar" item + workspace label:
+  // compare the live editor (name/description + structural graph) to the stored
+  // flow. Cosmetic-only fields (edgeStyle/animated) are ignored so they don't
+  // raise a false amber dot. Best-effort — a parse failure reads as "not dirty".
+  const flowDirty = useMemo(() => {
+    const stored = flows.find((f) => f.id === selectedId)
+    if (!selectedId || !stored) return false
+    if (name !== stored.name || description !== (stored.description ?? '')) return true
+    try {
+      const norm = (g: { start?: string; nodes?: unknown }) =>
+        JSON.stringify({ start: g.start ?? '', nodes: g.nodes ?? [] })
+      const cur = reactFlowToGraph(nodes, edges, start)
+      const prev = stored.graph ? JSON.parse(stored.graph) : {}
+      return norm(cur) !== norm(prev)
+    } catch {
+      return false
+    }
+  }, [flows, selectedId, name, description, nodes, edges, start])
+  useRegisterDirty('flows', flowDirty)
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)?.data.node ?? null
   const trace: FlowState | null = run?.state ? safeParse(run.state) : null

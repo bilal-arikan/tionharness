@@ -31,9 +31,15 @@ interface Props {
   workspaces: Workspace[]
   activeWorkspaceId: string | null
   unreadWorkspaceIds: Set<string>
-  // Views with work currently in progress (chat/board/schedules/flows) — shown
-  // with a pulsing accent indicator on the nav item.
+  // Per-view notification signals, each shown with a distinct dot on the nav item:
+  //   busy   → pulsing accent dot (work running)
+  //   unread → solid accent dot (unseen activity)
+  //   dirty  → amber dot (unsaved local edits)
+  // The sets are scoped to the active workspace; their union also rolls up onto
+  // the workspace label so a glance shows where attention is needed.
   busyViews?: Set<View>
+  unreadViews?: Set<View>
+  dirtyViews?: Set<View>
   onSwitchWorkspace: (id: string) => void
   onCreateWorkspace: (data: NewWorkspaceData) => void
   onDeleteWorkspace: (id: string) => void
@@ -77,6 +83,57 @@ function ActiveBar() {
   )
 }
 
+// NavDots renders the per-item notification cluster: an amber dot for unsaved
+// edits (dirty) plus an accent dot for activity — pulsing when busy, solid when
+// merely unread. Collapsed rail uses corner dots; expanded uses a right cluster.
+function NavDots({
+  busy,
+  unread,
+  dirty,
+  collapsed,
+}: {
+  busy?: boolean
+  unread?: boolean
+  dirty?: boolean
+  collapsed?: boolean
+}) {
+  if (!busy && !unread && !dirty) return null
+  const accentTitle = busy ? 'İşlem sürüyor' : 'Yeni etkinlik'
+  if (collapsed) {
+    return (
+      <>
+        {dirty && (
+          <span
+            className="absolute left-1 top-1 h-2 w-2 rounded-full bg-[var(--color-warning)] ring-2 ring-[var(--color-surface)]"
+            title="Kaydedilmemiş değişiklik"
+          />
+        )}
+        {(busy || unread) && (
+          <span
+            className={`absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface)] ${
+              busy ? 'animate-pulse' : ''
+            }`}
+            title={accentTitle}
+          />
+        )}
+      </>
+    )
+  }
+  return (
+    <span className="ml-auto flex items-center gap-1.5">
+      {dirty && (
+        <span className="h-2 w-2 rounded-full bg-[var(--color-warning)]" title="Kaydedilmemiş değişiklik" />
+      )}
+      {(busy || unread) && (
+        <span
+          className={`h-2 w-2 rounded-full bg-[var(--color-accent)] ${busy ? 'animate-pulse' : ''}`}
+          title={accentTitle}
+        />
+      )}
+    </span>
+  )
+}
+
 // NavRail is the leftmost column: brand, workspace switcher, and the primary
 // view navigation. It collapses to an icon-only rail to maximise content space.
 export function NavRail({
@@ -86,10 +143,16 @@ export function NavRail({
   activeWorkspaceId,
   unreadWorkspaceIds,
   busyViews,
+  unreadViews,
+  dirtyViews,
   onSwitchWorkspace,
   onCreateWorkspace,
   onDeleteWorkspace,
 }: Props) {
+  // The active workspace's signals rolled up for its label: any busy view, any
+  // unsaved edit. (Other workspaces surface via the unread-badge set.)
+  const anyBusy = (busyViews?.size ?? 0) > 0
+  const anyDirty = (dirtyViews?.size ?? 0) > 0
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === '1',
   )
@@ -126,12 +189,26 @@ export function NavRail({
           {unreadWorkspaceIds.size > 0 && (
             <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]" />
           )}
+          {anyDirty && (
+            <span
+              className="absolute left-1 top-1 h-2 w-2 rounded-full bg-[var(--color-warning)] ring-2 ring-[var(--color-surface-2)]"
+              title="Kaydedilmemiş değişiklik"
+            />
+          )}
+          {anyBusy && (
+            <span
+              className="absolute bottom-1 right-1 h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]"
+              title="İşlem sürüyor"
+            />
+          )}
         </button>
       ) : (
         <WorkspaceSwitcher
           workspaces={workspaces}
           activeId={activeWorkspaceId}
           unreadIds={unreadWorkspaceIds}
+          activeBusy={anyBusy}
+          activeDirty={anyDirty}
           onSwitch={onSwitchWorkspace}
           onCreate={onCreateWorkspace}
           onDelete={onDeleteWorkspace}
@@ -144,25 +221,19 @@ export function NavRail({
           const Icon = item.icon
           const isActive = view === item.key
           const busy = busyViews?.has(item.key) ?? false
+          const unread = unreadViews?.has(item.key) ?? false
+          const dirty = dirtyViews?.has(item.key) ?? false
           return (
             <button
               key={item.key}
               onClick={() => onSelectView(item.key)}
-              title={collapsed ? `${item.label}${busy ? ' · işlem sürüyor' : ''}` : undefined}
+              title={collapsed ? `${item.label}${busy ? ' · işlem sürüyor' : unread ? ' · yeni etkinlik' : ''}` : undefined}
               className={navItemClass(isActive, collapsed)}
             >
               {isActive && <ActiveBar />}
               <Icon size={18} strokeWidth={2} className="shrink-0" />
               {!collapsed && <span>{item.label}</span>}
-              {busy &&
-                (collapsed ? (
-                  <span className="absolute right-1 top-1 h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface)]" />
-                ) : (
-                  <span
-                    className="ml-auto h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]"
-                    title="İşlem sürüyor"
-                  />
-                ))}
+              <NavDots busy={busy} unread={unread} dirty={dirty} collapsed={collapsed} />
             </button>
           )
         })}
@@ -178,6 +249,7 @@ export function NavRail({
           {view === 'workspace' && <ActiveBar />}
           <Boxes size={18} strokeWidth={2} className="shrink-0" />
           {!collapsed && <span>Workspace</span>}
+          <NavDots dirty={dirtyViews?.has('workspace')} collapsed={collapsed} />
         </button>
         <button
           onClick={() => onSelectView('settings')}
@@ -187,6 +259,7 @@ export function NavRail({
           {view === 'settings' && <ActiveBar />}
           <Settings size={18} strokeWidth={2} className="shrink-0" />
           {!collapsed && <span>Ayarlar</span>}
+          <NavDots dirty={dirtyViews?.has('settings')} collapsed={collapsed} />
         </button>
       </div>
 

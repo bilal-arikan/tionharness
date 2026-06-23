@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
+import { PanelRight } from 'lucide-react'
 import { api, getActiveWorkspace, setActiveWorkspace } from './api'
 import type { Agent, AgentPatch, Artifact, Session, Message, AppSettings, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
@@ -38,6 +39,9 @@ import { LogsPanel } from './components/panels/LogsPanel'
 import { isTypeEnabled } from './lib/notifyPrefs'
 import { useWorkspaces } from './hooks/useWorkspaces'
 import { useActivity } from './hooks/useActivity'
+import { useUnreadViews } from './hooks/useUnreadViews'
+import { useDirtyViews } from './lib/dirtySignals'
+import { viewForEventType } from './lib/eventViews'
 import { useChatStream } from './hooks/useChatStream'
 import { useUrlSync } from './hooks/useUrlSync'
 import { parseRoute, routeIdForView, routeFromEvent, buildRoute, type Route } from './lib/url'
@@ -286,6 +290,11 @@ export default function App() {
     activeSessionIdRef.current = activeSessionId
   }, [activeSessionId])
 
+  // Mirror the current view so the SSE event handler can decide whether an
+  // event's target view is already being shown (→ no unread badge).
+  const viewRef = useRef<View>(view)
+  viewRef.current = view
+
   // Mirror the open transcript into a ref so the chat hook's retry can read the
   // current messages (to find the user prompt behind a failed turn) without
   // re-binding its callbacks on every message update.
@@ -448,6 +457,10 @@ export default function App() {
       // This window is live-viewing the workspace → the activity has been seen;
       // clear its badge across all windows (a different window may have set it).
       if (e.workspaceId) markWorkspaceRead(e.workspaceId)
+      // Generic per-view unread: badge the event's nav view unless it's already
+      // the one on screen in this window (then the user is seeing it live).
+      const evView = viewForEventType(e.type)
+      if (evView && evView !== viewRef.current) markViewUnread(evView)
       refreshSessions()
       // A chat reply that completed server-side after the SSE stream closed
       // (e.g. the user refreshed mid-turn and the detached turn finished) is not
@@ -628,6 +641,15 @@ export default function App() {
 
   // Per-view "work in progress" flags for the nav-rail busy indicators.
   const busyViews = useActivity(activeWorkspaceId, chat.streamingSessions.size > 0)
+  // Per-view unread (unseen activity from the SSE feed) + unsaved-edit (dirty)
+  // signals — the other two channels of the generic nav notification system.
+  const { unreadViews, markViewUnread, markViewRead } = useUnreadViews(activeWorkspaceId)
+  const dirtyViews = useDirtyViews()
+
+  // Clear a view's unread badge as soon as it is shown (in this window).
+  useEffect(() => {
+    markViewRead(view)
+  }, [view, markViewRead])
 
   // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
   // the app state. A workspace switch defers entity selection to the
@@ -685,6 +707,8 @@ export default function App() {
         activeWorkspaceId={activeWorkspaceId}
         unreadWorkspaceIds={unreadWs}
         busyViews={busyViews}
+        unreadViews={unreadViews}
+        dirtyViews={dirtyViews as Set<View>}
         onSwitchWorkspace={switchWorkspace}
         onCreateWorkspace={createWorkspace}
         onDeleteWorkspace={deleteWorkspace}
@@ -753,13 +777,14 @@ export default function App() {
               <button
                 onClick={toggleDetail}
                 title="Oturum bilgisi panelini aç/kapat"
-                className={`rounded-lg border px-2 py-1 text-sm transition ${
+                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition ${
                   detailOpen
-                    ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white shadow-[var(--shadow-sm)]'
+                    : 'border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]'
                 }`}
               >
-                ℹ
+                <PanelRight size={18} strokeWidth={2.2} className="shrink-0" />
+                <span className="hidden sm:inline">Detay</span>
               </button>
             )}
             {error && (

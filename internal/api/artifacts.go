@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/events"
 	"github.com/bilal-arikan/swarmgo/internal/tools"
 	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
@@ -18,10 +19,8 @@ import (
 // artifacts by default — the user expects deliverables to open in the Artifacts
 // screen, not be buried in chat or written only via an ad-hoc script.
 const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
-	"When asked to produce a file, document, dataset, report, spreadsheet, diagram or code module, write it out with your file tool (write_file / Write) — files are captured as artifacts automatically. " +
-	"If you can't write a file but have create_artifact, call it with the full content. " +
-	"For an image, PDF or other binary FILE you already produced on disk (e.g. a screenshot a tool saved): call create_artifact with kind=image|video|audio|file and sourcePath set to the file path — do NOT read the file or base64-embed its bytes into content (that blows the token budget). Screenshots and exported files are also auto-captured from a tool's saved path, so often you need only confirm the result. " +
-	"Don't deliver substantial output only as inline chat text or via an ad-hoc shell command (that bypasses artifact capture)."
+	"When asked to produce a file/document/dataset/report/diagram/code, write it with your file tool (write_file / Write) or call create_artifact — don't deliver substantial output only as inline chat text or an ad-hoc shell command (that bypasses artifact capture). " +
+	"For a binary FILE already on disk (e.g. a screenshot), call create_artifact with kind=image|file and sourcePath set to the path — never base64-embed bytes into content."
 
 // artifactsContextBlock builds a system-prompt section listing the artifacts a
 // session already has, so the agent can revise them with update_artifact (by id)
@@ -59,11 +58,35 @@ type artifactSink struct {
 	db        *db.DB
 	sessionID string
 	agentID   string
+	// emit publishes a workspace-scoped "artifact" change event so open windows
+	// badge the Artifacts view / workspace label and (per prefs) raise a toast.
+	// Optional (nil-safe) — the generic change-notification signal for agent-made
+	// artifacts, the main "external notification" case.
+	emit func(events.Event)
 }
 
-// newArtifactSink builds a sink bound to the given session/agent.
-func newArtifactSink(database *db.DB, sessionID, agentID string) artifactSink {
-	return artifactSink{db: database, sessionID: sessionID, agentID: agentID}
+// newArtifactSink builds a sink bound to the given session/agent. emit may be nil
+// (no change notification is published then).
+func newArtifactSink(database *db.DB, sessionID, agentID string, emit func(events.Event)) artifactSink {
+	return artifactSink{db: database, sessionID: sessionID, agentID: agentID, emit: emit}
+}
+
+// notifyArtifact publishes the generic artifact change event (best-effort).
+func (s artifactSink) notifyArtifact(a db.Artifact, verb string) {
+	if s.emit == nil {
+		return
+	}
+	s.emit(events.Event{
+		Type:  "artifact",
+		Level: "info",
+		Title: "Artifact " + verb + ": " + a.Title,
+		Body:  a.Kind,
+		Target: map[string]string{
+			"view":       "artifacts",
+			"artifactId": a.ID,
+			"sessionId":  s.sessionID,
+		},
+	})
 }
 
 func (s artifactSink) CreateArtifact(ctx context.Context, spec tools.CreateArtifactSpec) (tools.ArtifactRef, error) {
@@ -90,6 +113,7 @@ func (s artifactSink) CreateArtifact(ctx context.Context, spec tools.CreateArtif
 	if err != nil {
 		return tools.ArtifactRef{}, err
 	}
+	s.notifyArtifact(a, "oluşturuldu")
 	return toArtifactRef(a), nil
 }
 
@@ -98,6 +122,7 @@ func (s artifactSink) UpdateArtifact(ctx context.Context, id, content string) (t
 	if err != nil {
 		return tools.ArtifactRef{}, err
 	}
+	s.notifyArtifact(a, "güncellendi")
 	return toArtifactRef(a), nil
 }
 
@@ -200,6 +225,8 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
+	publishEntityChange(ws(r), "artifact", "Artifact oluşturuldu: "+a.Title, a.Kind,
+		map[string]string{"view": "artifacts", "artifactId": a.ID, "sessionId": a.SessionID})
 	writeJSON(w, http.StatusOK, a)
 }
 
@@ -236,6 +263,8 @@ func (s *Server) handleUpdateArtifact(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "artifact not found") {
 		return
 	}
+	publishEntityChange(ws(r), "artifact", "Artifact güncellendi: "+a.Title, a.Kind,
+		map[string]string{"view": "artifacts", "artifactId": a.ID, "sessionId": a.SessionID})
 	writeJSON(w, http.StatusOK, a)
 }
 

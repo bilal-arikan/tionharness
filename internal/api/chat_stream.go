@@ -241,7 +241,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		// persist content stamped with this session + agent — both on the native
 		// tool path (via context) and the CLI path (via the run, used by the
 		// Interaction MCP backend).
-		sink := newArtifactSink(database, session.ID, agentRow.ID)
+		sink := newArtifactSink(database, session.ID, agentRow.ID, wsp.Runtime.Emit)
 		run.setArtifacts(sink)
 		turnCtx := tools.WithArtifacts(ctx, sink)
 		// Stamp the session id so the runtime can resolve this session's WorkingDir

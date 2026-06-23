@@ -98,6 +98,7 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "task not found") {
 		return
 	}
+	oldBoard := task.BoardState
 
 	var req updateTaskReq
 	if err := decodeJSON(r, &req); err != nil {
@@ -132,6 +133,12 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 
 	if err := wsp.DB.UpdateTask(r.Context(), task); writeDBError(w, err, "task not found") {
 		return
+	}
+	// Board move → generic "board" change event so other windows badge the
+	// Görevler view + workspace label (the user's own window clears it on view).
+	if req.BoardState != nil && *req.BoardState != oldBoard {
+		publishEntityChange(wsp, "board", "Görev taşındı: "+task.Title, *req.BoardState,
+			map[string]string{"view": "board", "taskId": task.ID})
 	}
 	writeJSON(w, http.StatusOK, task)
 }

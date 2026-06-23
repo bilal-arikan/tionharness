@@ -9,6 +9,9 @@ interface Props {
   workspaces: Workspace[]
   activeId: string | null
   unreadIds: Set<string>
+  // Active workspace rollup: any view busy / any unsaved edit (shown on the label).
+  activeBusy?: boolean
+  activeDirty?: boolean
   onSwitch: (id: string) => void
   onCreate: (data: NewWorkspaceData) => void
   onDelete: (id: string) => void
@@ -32,7 +35,7 @@ function openInNewWindow(id: string) {
   window.open(`${window.location.origin}${window.location.pathname}#${route}`, '_blank', 'noopener')
 }
 
-export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, onSwitch, onCreate, onDelete }: Props) {
+export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy, activeDirty, onSwitch, onCreate, onDelete }: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   // Close the dropdown when clicking anywhere outside it (detached while closed).
@@ -62,6 +65,18 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, onSwitch, o
             {active?.icon || '⬡'}
             {hasUnread && (
               <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]" />
+            )}
+            {activeBusy && (
+              <span
+                className="absolute -bottom-1 -right-1 h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]"
+                title="İşlem sürüyor"
+              />
+            )}
+            {activeDirty && (
+              <span
+                className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-warning)] ring-2 ring-[var(--color-surface-2)]"
+                title="Kaydedilmemiş değişiklik"
+              />
             )}
           </span>
           <span className="truncate font-medium">{active?.name || 'Workspace seç'}</span>

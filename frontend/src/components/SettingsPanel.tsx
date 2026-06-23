@@ -27,6 +27,7 @@ import {
   DiagnosticsPanel,
   AboutPanel,
 } from './settings/appPanels'
+import { useRegisterDirty } from '../lib/dirtySignals'
 import { ProvidersPanel } from './settings/ProvidersPanel'
 import { CommandsPanel } from './settings/CommandsPanel'
 import { StepKindsPanel } from './settings/StepKindsPanel'
@@ -106,6 +107,8 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
     [draft, original, keyInput, minimaxKeyInput, openrouterKeyInput],
   )
   const dirty = dirtyApp
+  // Surface unsaved settings on the nav "Ayarlar" item + workspace label.
+  useRegisterDirty('settings', dirty)
 
   // Live reload: when an agent changes app settings (parent bumps reloadNonce),
   // re-fetch and refresh the form — but skip while the user has unsaved edits so

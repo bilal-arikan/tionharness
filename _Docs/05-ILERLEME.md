@@ -2,6 +2,52 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Self-management araçları prompt'tan gizlendi → skill katalog oldu (hidden-lazy tier) ✅ (2026-06-23)
+
+**Sorun:** Self-management araçları zaten lazy'di (şema yok), ama ~40+ aracın **isim+özet
+satırı** her turun "Available Tools (load on demand)" bloğunda (cached prefix) yer alıyordu —
+gereksiz token. **Çözüm:** lazy araçlara **hidden** alt-katmanı eklendi; self-management suite
+artık blokta **listelenmez**, yerine `swarmgo-self-management` skill'ine yönlendiren tek satır
+durur. Araçlar aktive-edilebilir ve aranabilir kalır.
+
+- **`internal/tools/registry.go`:** yeni `hidden map[string]bool` (hidden ⊆ lazy) +
+  `MarkHidden(names…)`; `VisibleLazyCatalog(allow)` (= LazyCatalog − hidden, blok için);
+  `HiddenLazyCount(allow)`. `LazyCatalog` (activate_tools/tool_search kaynağı) **tüm** lazy'yi
+  döndürmeye devam eder → hidden araçlar aktive/aranabilir.
+- **`internal/agent/toolsetup.go`:** self-management suite (`builtins[selfManageStart:]`)
+  `MarkLazy` yerine **`MarkHidden`**. `LazyToolsCatalogBlock` artık `VisibleLazyCatalog` +
+  `HiddenLazyCount` kullanır; `renderLazyToolCatalog(visible, hiddenCount)` hiddenCount>0 ise
+  "**N self-management tools … not listed here … load the `swarmgo-self-management` skill … or
+  `tool_search`**" pointer satırını basar.
+- **Keşif yolu:** Available Skills bloğu `swarmgo-self-management` skill'ini zaten ilan ediyor
+  (giriş noktası). Skill **kataloğun kendisi** oldu; metni güncellendi ("bu skill araçların
+  listesidir; isimleri buradan/`tool_search`'ten al, `activate_tools` et"). On-disk seed kopya
+  da güncel kaynakla senkronlandı (EnsureDefaults üzerine yazmadığı için).
+- **Kapsam dışı (şimdilik):** secret_*/list_sessions/WebFetch/*_config hâlâ görünür-lazy
+  (self-management değil, az sayıda, çapraz-kesen). claude-cli Interaction MCP köprüsü
+  (`BridgeableDefs`) tam şema göndermeye devam ediyor (ayrı yol) — istenirse ayrıca kısılır.
+- Test: `tools` (MarkHidden/VisibleLazyCatalog/HiddenLazyCount + aktive-edilebilirlik) +
+  `agent` (render pointer + boş durum). **`tools`+`agent` 150 test yeşil**, build temiz.
+
+---
+
+## Generic bildirim sinyalleri: busy / unread / dirty (nav + workspace) ✅ (2026-06-23)
+
+"Haber verme" parçaları (flow/schedule/sohbet/board/artifact değişimleri +
+kaydedilmemiş ayar) tek bir generic sisteme toplandı. Her nav görünümü için 3 dik
+sinyal: **busy** (accent nabız), **unread** (accent dolu), **dirty** (amber). Hepsi
+workspace etiketine yukarı toplanır.
+
+- **Backend**: `api/notify.go` `publishEntityChange` + yeni `board` (task taşıma)
+  ve `artifact` (agent sink + UI) event'leri — chat/flow ile aynı SSE borusu.
+- **Frontend**: `lib/eventViews.ts` (event→view), `hooks/useUnreadViews.ts`
+  (workspace-başına, cross-window persist), `lib/dirtySignals.ts`
+  (`useSyncExternalStore` modül store + `useRegisterDirty`). `NavRail` `NavDots`
+  ile 3 durumu çizer; `WorkspaceSwitcher`/collapsed ikon aktif workspace'i toplar.
+- **Kayıtlı dirty ekranlar**: Settings, WorkspaceView, FlowsPanel.
+
+Detay: `_Docs/29-BILDIRIM-SINYALLERI.md`. Build + tsc yeşil.
+
 ## Fix: "Aktivite" nav göstergesi arka plan oturumlarında yanmıyordu ✅ (2026-06-23)
 
 **Sorun:** Bir flow/schedule/agent **ayrı bir oturum** başlattığında (spawn, inbox

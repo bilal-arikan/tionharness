@@ -6,6 +6,7 @@ import { WorkspacePanel } from '../settings/WorkspacePanel'
 import { WorkspaceFilesPanel, type FilesSaveState } from '../settings/WorkspaceFilesPanel'
 import { ProjectPanel } from './ProjectPanel'
 import { Button } from '../common'
+import { useRegisterDirty } from '../../lib/dirtySignals'
 
 type Tab = 'general' | 'project' | 'files'
 
@@ -95,6 +96,9 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
   const onHeaderSave = filesTab ? filesState?.save : save
   const showSave = filesTab ? !!filesState : true
   const activeMeta = TABS.find((t) => t.key === tab)
+
+  // Surface unsaved workspace edits on the nav "Workspace" item + workspace label.
+  useRegisterDirty('workspace', headerDirty)
 
   return (
     <div className="flex min-h-0 flex-1">
