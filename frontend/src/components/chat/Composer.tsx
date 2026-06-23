@@ -411,6 +411,8 @@ export function Composer({
           onClick={() => fileRef.current?.click()}
           disabled={!sessionId}
           title="Dosya ekle"
+          aria-label="Dosya ekle"
+          data-testid="composer-attach"
           className={BTN_ICON}
         >
           <Paperclip size={18} />
@@ -421,6 +423,8 @@ export function Composer({
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
+          data-testid="composer-input"
+          aria-label="Mesaj yaz"
           rows={1}
           placeholder={
             waiting

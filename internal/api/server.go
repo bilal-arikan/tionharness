@@ -108,6 +108,7 @@ func (s *Server) applySettings() {
 	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
 	s.tun.SetTitleModel(cur.TitleModel)
 	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen)
+	s.tun.SetReflectionCap(cur.ReflectionCap)
 	s.tun.SetMemoryControls(cur.MemoryPressureWarn, cur.CoreMemoryTools)
 	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
 	s.tun.SetUserModel(cur.AutoUserModel)

@@ -91,6 +91,7 @@ type Settings struct {
 	// Journal (long-term memory) ring-buffer bounds.
 	JournalCap    int `json:"journalCap"`    // newest journal entries kept per agent (0 = default)
 	JournalMaxLen int `json:"journalMaxLen"` // max runes stored per journal entry (0 = default)
+	ReflectionCap int `json:"reflectionCap"` // newest reflections kept per agent; older pruned each dream cycle (0 = default)
 
 	// MemGPT-style self-editing memory (C6). MemoryPressureWarn is the context-fill
 	// ratio (0..1) above which a turn warns the agent to persist important facts
@@ -182,13 +183,14 @@ func Default() Settings {
 
 		JournalCap:    50,
 		JournalMaxLen: 1024,
+		ReflectionCap: 20,
 
 		// MemGPT memory: warn at 75% context fill, offer the core editing tools.
 		MemoryPressureWarn: 0.75,
 		CoreMemoryTools:    true,
 
 		AutoReflect:          true,
-		AutoReflectThreshold: 30,
+		AutoReflectThreshold: 20,
 		AutoUserModel:        true,
 
 		ReactiveCompact:    true,
@@ -275,6 +277,7 @@ type DTO struct {
 
 	JournalCap    int `json:"journalCap"`
 	JournalMaxLen int `json:"journalMaxLen"`
+	ReflectionCap int `json:"reflectionCap"`
 
 	MemoryPressureWarn float64 `json:"memoryPressureWarn"`
 	CoreMemoryTools    bool    `json:"coreMemoryTools"`
@@ -357,6 +360,7 @@ func (s Settings) ToDTO() DTO {
 
 		JournalCap:    s.JournalCap,
 		JournalMaxLen: s.JournalMaxLen,
+		ReflectionCap: s.ReflectionCap,
 
 		MemoryPressureWarn: s.MemoryPressureWarn,
 		CoreMemoryTools:    s.CoreMemoryTools,
@@ -440,6 +444,7 @@ type Patch struct {
 
 	JournalCap    *int `json:"journalCap"`
 	JournalMaxLen *int `json:"journalMaxLen"`
+	ReflectionCap *int `json:"reflectionCap"`
 
 	MemoryPressureWarn *float64 `json:"memoryPressureWarn"`
 	CoreMemoryTools    *bool    `json:"coreMemoryTools"`

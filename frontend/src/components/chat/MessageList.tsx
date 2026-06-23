@@ -121,10 +121,22 @@ export function MessageList({
   const showStandalonePending = pending && (!last || last.role === 'user')
 
   return (
-    <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+    <div
+      ref={scrollRef}
+      onScroll={onScroll}
+      data-testid="chat-transcript"
+      role="log"
+      aria-live="polite"
+      aria-label="Sohbet geçmişi"
+      className="min-h-0 flex-1 overflow-y-auto px-6 py-6"
+    >
       <div className="flex w-full flex-col gap-4">
         {messages.map((m, i) => {
           let row: ReactNode
+          // isLastLive (assistant): the in-flight bubble while streaming. Hoisted
+          // here so the row wrapper can expose it as a DOM signal (data-streaming)
+          // for external automation to detect turn completion without polling.
+          const rowLive = m.role !== 'user' && !!streaming && i === messages.length - 1
           if (m.role === 'user') {
             row = m.origin ? (
               <AutoPromptNote message={m} onDelete={onDeleteMessage} />
@@ -140,7 +152,7 @@ export function MessageList({
           } else {
             // The in-flight assistant bubble is the last message while streaming; its
             // createdAt marks the turn start, so a live timer counts up from it.
-            const isLastLive = !!streaming && i === messages.length - 1
+            const isLastLive = rowLive
             // Completed-turn working time ≈ this message's createdAt (turn end) minus
             // the triggering user message's (turn start). Only meaningful when the
             // previous message is the user's — injected summaries or consecutive
@@ -166,6 +178,9 @@ export function MessageList({
             <div
               key={m.id}
               data-msg-id={m.id}
+              data-testid="chat-message"
+              data-role={m.role}
+              data-streaming={rowLive ? 'true' : 'false'}
               className={
                 flashId === m.id
                   ? 'rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow'

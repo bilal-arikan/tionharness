@@ -68,6 +68,23 @@ func TestTunables_AutoReflect(t *testing.T) {
 	}
 }
 
+// TestTunables_ReflectionCap verifies the reflection ring-buffer cap default and
+// override (older reflections are pruned each dream cycle past this many).
+func TestTunables_ReflectionCap(t *testing.T) {
+	tun := NewTunables()
+	if got := tun.ReflectionCap(); got != DefaultReflectionCap {
+		t.Errorf("reflectionCap = %d, want default %d", got, DefaultReflectionCap)
+	}
+	tun.SetReflectionCap(7)
+	if got := tun.ReflectionCap(); got != 7 {
+		t.Errorf("reflectionCap = %d, want 7", got)
+	}
+	tun.SetReflectionCap(0) // 0 → default
+	if got := tun.ReflectionCap(); got != DefaultReflectionCap {
+		t.Errorf("reflectionCap after 0 = %d, want default %d", got, DefaultReflectionCap)
+	}
+}
+
 // TestTunables_ConcurrentAccess exercises the RWMutex under the race detector.
 func TestTunables_ConcurrentAccess(t *testing.T) {
 	tun := NewTunables()

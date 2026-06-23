@@ -40,6 +40,7 @@ export interface AppSettings {
 
   journalCap: number
   journalMaxLen: number
+  reflectionCap: number       // newest reflections kept per agent; older pruned each dream cycle
 
   // MemGPT-style self-editing memory (C6).
   memoryPressureWarn: number  // context-fill ratio (0..1) above which the agent is warned; 0 = off

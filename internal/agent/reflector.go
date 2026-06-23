@@ -31,6 +31,16 @@ func (r *Runtime) journalMaxLen() int {
 	return r.tun.JournalMaxLen()
 }
 
+// reflectionCap reads the live cap on how many newest reflections an agent keeps.
+// Reflections are otherwise durable (never consumed like journals), so without a
+// cap a frequently-reflecting agent would accumulate them without bound.
+func (r *Runtime) reflectionCap() int {
+	if r.tun == nil {
+		return DefaultReflectionCap
+	}
+	return r.tun.ReflectionCap()
+}
+
 // reflectPrompt instructs the agent to consolidate its journal into a durable
 // self-reflection — the "dream cycle" that turns raw activity into learning.
 // The journal entries are appended by Reflect, so this template carries no
@@ -161,6 +171,14 @@ func (r *Runtime) reflect(ctx context.Context, agentID string, autonomous bool) 
 	// journals it consolidated, so discard them to keep the store bounded.
 	if err := r.mem.DeleteIDs(ctx, consumed...); err != nil {
 		r.logger.Warn("journal consume failed", "agent", agentID, "error", err)
+	}
+	// Reflections are durable (not consumed), so bound them too: keep only the
+	// newest reflectionCap, pruning older ones. Otherwise frequent dream cycles
+	// (low auto-reflect threshold) would grow the recall pool without limit.
+	if pruned, err := r.mem.PruneKind(ctx, agentID, db.MemoryReflection, r.reflectionCap()); err != nil {
+		r.logger.Warn("reflection prune failed", "agent", agentID, "error", err)
+	} else if pruned > 0 {
+		r.logger.Info("reflections pruned", "agent", agentID, "pruned", pruned)
 	}
 	r.logger.Info("agent reflected", "agent", agentID, "journals", len(journals))
 	return reflection, nil

@@ -106,3 +106,27 @@ func TestPermGate_AskAlwaysScopesExecToCommandFamily(t *testing.T) {
 		t.Errorf("expected a second prompt for the rm command, got %d", prompts)
 	}
 }
+
+// TestEffectivePermissionMode covers the autonomous-turn override: "ask" (which
+// needs a live user the CLI can't reach) becomes unattended "auto", "read-only"
+// is preserved, and chat turns keep the agent's own mode unchanged.
+func TestEffectivePermissionMode(t *testing.T) {
+	cases := []struct {
+		mode       string
+		autonomous bool
+		want       string
+	}{
+		{"ask", true, "auto"},        // autonomous: no user → force auto
+		{"auto", true, "auto"},       // already auto
+		{"", true, "auto"},           // empty → auto
+		{"read-only", true, "read-only"}, // preserved: non-interactive guard
+		{"ask", false, "ask"},        // chat turn: keep agent's mode
+		{"read-only", false, "read-only"},
+		{"auto", false, "auto"},
+	}
+	for _, c := range cases {
+		if got := effectivePermissionMode(c.mode, c.autonomous); got != c.want {
+			t.Errorf("effectivePermissionMode(%q, %v) = %q, want %q", c.mode, c.autonomous, got, c.want)
+		}
+	}
+}

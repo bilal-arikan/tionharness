@@ -53,6 +53,10 @@ export function SpawnSessionModal({ agents, onClose, onSpawned, onError }: Props
       onMouseDown={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Yeni oturum başlat"
+        data-testid="spawn-session-modal"
         className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl"
         onMouseDown={(e) => e.stopPropagation()}
       >

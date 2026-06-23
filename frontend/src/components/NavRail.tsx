@@ -234,6 +234,9 @@ export function NavRail({
             <button
               key={item.key}
               onClick={() => onSelectView(item.key)}
+              data-testid={`nav-${item.key}`}
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
               title={collapsed ? `${item.label}${busy ? ' · işlem sürüyor' : unread ? ' · yeni etkinlik' : ''}` : undefined}
               className={navItemClass(isActive, collapsed)}
             >
@@ -250,6 +253,9 @@ export function NavRail({
       <div className="flex flex-col gap-1 px-2 pb-1">
         <button
           onClick={() => onSelectView('workspace')}
+          data-testid="nav-workspace"
+          aria-label="Workspace"
+          aria-current={view === 'workspace' ? 'page' : undefined}
           title={collapsed ? (active?.name ? `Workspace · ${active.name}` : 'Workspace') : undefined}
           className={`w-full ${navItemClass(view === 'workspace', collapsed)}`}
         >
@@ -260,6 +266,9 @@ export function NavRail({
         </button>
         <button
           onClick={() => onSelectView('settings')}
+          data-testid="nav-settings"
+          aria-label="Ayarlar"
+          aria-current={view === 'settings' ? 'page' : undefined}
           title={collapsed ? 'Ayarlar' : undefined}
           className={`w-full ${navItemClass(view === 'settings', collapsed)}`}
         >

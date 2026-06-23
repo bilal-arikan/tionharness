@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/swarmgo/internal/proc"
 )
@@ -197,6 +199,33 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 
 	prompt := serializeTranscript(req.Messages)
 
+	// The claude CLI occasionally exits non-zero RIGHT AFTER init — before any
+	// assistant output or tool call — with empty stderr (an intermittent crash on
+	// the MCP-delegation path, seen on parallel flow nodes). That failure produced
+	// no content and ran no tools, so it is SAFE to retry with a fresh process. We
+	// retry only that "clean crash" once; any failure that produced output, ran a
+	// tool (possible side effects), or came from context cancellation is returned
+	// as-is.
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		if !retryable || ctx.Err() != nil {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
+// runAttempt runs the claude CLI subprocess once and parses its stream. It
+// returns the response on success (including a salvaged partial), or an error.
+// retryable is true only for a "clean crash": the process exited non-zero, parsed
+// no final result, salvaged no content, AND executed no tool — so re-running has
+// no duplicate side effects.
+func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
 	// Run inside the workspace sandbox so relative paths (e.g. an attachment's
 	// "uploads/<sid>/<file>") resolve there rather than the backend's launch
@@ -209,12 +238,12 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	cmd.Stdin = strings.NewReader(prompt) // pass prompt via stdin to avoid arg limits
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
+	stdout, serr := cmd.StdoutPipe()
+	if serr != nil {
+		return nil, false, serr
 	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
+	if serr := cmd.Start(); serr != nil {
+		return nil, false, serr
 	}
 
 	// Parse events as they stream so OnEvent fires step-by-step. ReadString
@@ -223,10 +252,19 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	rd := bufio.NewReader(stdout)
 	var tail []string // bounded ring of recent raw stdout lines (crash diagnostics)
 	const tailMax = 12
+	// fullOut tees the COMPLETE stdout (bounded) so a failure whose fatal cause
+	// scrolled out of the 12-line tail (e.g. an early exit after SessionStart
+	// hooks, where the tail is all hook noise) is still fully recoverable from the
+	// dumped log file. Capped so a huge successful stream can't balloon memory.
+	var fullOut bytes.Buffer
+	const fullOutCap = 1 << 20 // 1 MiB
 	for {
 		line, rerr := rd.ReadString('\n')
 		if line != "" {
 			p.feed(line)
+			if fullOut.Len() < fullOutCap {
+				fullOut.WriteString(line)
+			}
 			if s := strings.TrimSpace(line); s != "" {
 				tail = append(tail, s)
 				if len(tail) > tailMax {
@@ -240,21 +278,60 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	}
 	runErr := cmd.Wait()
 
-	resp, parseErr := p.finish()
-	if parseErr != nil {
-		if runErr != nil {
-			// The CLI often writes its error to stdout (a non-JSON line) and leaves
-			// stderr empty — surface whatever it printed so the failure is not a
-			// bare "exit status 1" with no diagnostic.
-			detail := strings.TrimSpace(stderr.String())
-			if detail == "" {
-				detail = stdoutCrashTail(tail)
-			}
-			return nil, fmt.Errorf("claude CLI failed: %v %s", runErr, strings.TrimSpace(detail))
-		}
-		return nil, parseErr
+	out, parseErr := p.finish()
+	if parseErr == nil {
+		return out, false, nil
 	}
-	return resp, nil
+	if runErr == nil {
+		return nil, false, parseErr
+	}
+	// Resilience: the CLI can exit non-zero AFTER producing a usable answer — e.g.
+	// an is_error tool result (an interactive tool reached on an autonomous turn)
+	// derails an otherwise-complete turn so no final "result" event arrives. Rather
+	// than fail the whole turn / flow node, salvage the assistant content captured
+	// before the crash. Genuine error results (hadError) are NOT salvaged.
+	if partial := p.salvage(); partial != nil {
+		return partial, false, nil
+	}
+	// The CLI often writes its error to stdout (a non-JSON line) and leaves stderr
+	// empty — surface whatever it printed so the failure is not a bare "exit status
+	// 1" with no diagnostic, plus a full-log dump for the lines the tail missed.
+	detail := strings.TrimSpace(stderr.String())
+	if detail == "" {
+		detail = stdoutCrashTail(tail)
+	}
+	if logPath := dumpCLIFailure(c.binPath, args, req.WorkDir, runErr, fullOut.Bytes(), stderr.Bytes()); logPath != "" {
+		detail = strings.TrimSpace(detail + " | full-log: " + logPath)
+	}
+	// A clean crash (no content, no executed tool) is safe to retry once.
+	retryable = !p.ranTool()
+	return nil, retryable, fmt.Errorf("claude CLI failed: %v %s", runErr, strings.TrimSpace(detail))
+}
+
+// dumpCLIFailure writes the full claude-cli stdout + stderr plus the invocation
+// details to a timestamped log file under the OS temp dir, so a failure whose
+// fatal cause scrolled out of the inline 12-line tail (e.g. an early exit right
+// after SessionStart hooks) is still fully recoverable for diagnosis. Returns
+// the log path, or "" on any error (best-effort — never blocks the failure path).
+func dumpCLIFailure(bin string, args []string, workDir string, runErr error, stdout, stderr []byte) string {
+	name := fmt.Sprintf("swarmgo-cli-fail-%d-%d.log", time.Now().UnixNano(), os.Getpid())
+	path := filepath.Join(os.TempDir(), name)
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "claude-cli failure\n")
+	fmt.Fprintf(&b, "time:    %s\n", time.Now().Format(time.RFC3339))
+	fmt.Fprintf(&b, "bin:     %s\n", bin)
+	fmt.Fprintf(&b, "args:    %v\n", args)
+	fmt.Fprintf(&b, "workDir: %s\n", workDir)
+	fmt.Fprintf(&b, "exit:    %v\n", runErr)
+	b.WriteString("\n===== STDERR =====\n")
+	b.Write(stderr)
+	b.WriteString("\n===== STDOUT (full, capped 1MiB) =====\n")
+	b.Write(stdout)
+	b.WriteString("\n")
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		return ""
+	}
+	return path
 }
 
 // stdoutCrashTail builds a short diagnostic string from the last raw stdout
@@ -450,6 +527,48 @@ func (p *cliStreamParser) finish() (*Response, error) {
 	}
 	p.resp.Text = p.finalText
 	return p.resp, nil
+}
+
+// ranTool reports whether any tool was invoked during the turn — used to decide
+// if a crashed turn is safe to retry (a tool may have side effects, so a turn
+// that reached one is NOT retried).
+func (p *cliStreamParser) ranTool() bool {
+	for i := range p.resp.Trace {
+		if p.resp.Trace[i].Kind == "tool" {
+			return true
+		}
+	}
+	return false
+}
+
+// salvage recovers whatever assistant content the parser accumulated when the
+// stream was cut off before a final "result" event (the CLI crashed/exited at the
+// end of the turn). It lets a long research turn that died on a trailing fault
+// still return its work instead of failing the whole turn / flow node. Returns
+// nil when there is nothing usable, or when the stream carried a genuine error
+// result (hadError) — those must propagate, not be masked as success.
+func (p *cliStreamParser) salvage() *Response {
+	if p.hadError {
+		return nil
+	}
+	text := strings.TrimSpace(p.finalText)
+	if text == "" {
+		text = strings.TrimSpace(p.pending.String())
+	}
+	if text == "" {
+		// Fall back to the last non-empty assistant text step in the trace.
+		for i := len(p.resp.Trace) - 1; i >= 0; i-- {
+			if p.resp.Trace[i].Kind == "text" && strings.TrimSpace(p.resp.Trace[i].Text) != "" {
+				text = strings.TrimSpace(p.resp.Trace[i].Text)
+				break
+			}
+		}
+	}
+	if text == "" {
+		return nil
+	}
+	p.resp.Text = text
+	return p.resp
 }
 
 // toolResultText extracts displayable text from a tool_result content field,

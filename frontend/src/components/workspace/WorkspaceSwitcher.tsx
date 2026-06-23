@@ -58,6 +58,10 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
     <div ref={rootRef} className="relative border-b border-[var(--color-border)] px-3 py-3">
       <button
         onClick={() => setOpen((v) => !v)}
+        data-testid="workspace-switcher"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={active?.name ? `Workspace: ${active.name}` : 'Workspace seç'}
         className="flex w-full items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm hover:opacity-90"
       >
         <span className="flex min-w-0 items-center gap-2">
@@ -91,10 +95,17 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
       </button>
 
       {open && (
-        <div className="absolute left-3 z-20 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl">
+        <div
+          role="listbox"
+          aria-label="Workspace listesi"
+          data-testid="workspace-menu"
+          className="absolute left-3 z-20 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl"
+        >
           {workspaces.map((w) => (
             <div
               key={w.id}
+              data-testid="workspace-row"
+              data-workspace-id={w.id}
               className={`group flex w-full items-center gap-1 rounded pr-1 text-sm transition ${
                 w.id === activeId
                   ? 'bg-[var(--color-accent-soft)]'
@@ -106,6 +117,10 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
                   onSwitch(w.id)
                   setOpen(false)
                 }}
+                role="option"
+                aria-selected={w.id === activeId}
+                data-testid="workspace-switch"
+                aria-label={`Workspace’e geç: ${w.name || 'İsimsiz'}`}
                 className="flex flex-1 items-center gap-2 rounded px-3 py-2 text-left"
               >
                 <span
@@ -154,6 +169,8 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
 
           <button
             onClick={() => setShowCreate(true)}
+            data-testid="workspace-create"
+            aria-label="Yeni workspace"
             className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
           >
             <span>+</span> Yeni workspace

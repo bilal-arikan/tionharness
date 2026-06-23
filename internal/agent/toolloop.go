@@ -95,6 +95,21 @@ func (r *Runtime) CompleteWithToolsStream(ctx context.Context, agent db.Agent, p
 	return r.completeTraced(ctx, agent, provider, req, autonomous, onStep)
 }
 
+// effectivePermissionMode resolves the permission mode a turn actually runs under.
+// On a chat turn it is the agent's own mode. On an autonomous turn (scheduler/
+// spawn/flow) there is no live user to answer a permission prompt, so "ask" mode
+// would stall or fail — the CLI's permission-prompt tool returns an is_error "no
+// interactive session", which a claude-cli child can turn into an exit-1 crash.
+// So autonomous turns are forced to unattended "auto" (risky tools auto-approved,
+// nothing blocks on a human), EXCEPT "read-only", which is non-interactive and a
+// deliberate no-mutation guard worth preserving.
+func effectivePermissionMode(mode string, autonomous bool) string {
+	if autonomous && mode != "read-only" {
+		return "auto"
+	}
+	return mode
+}
+
 // completeTraced is the shared implementation. When onStep is non-nil, steps are
 // emitted live: provider-driven paths (claude CLI) wire it through req.OnEvent;
 // the native loop emits as it appends.
@@ -107,7 +122,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 
 	// Carry the agent's permission mode so provider-driven loops (claude CLI) can
 	// gate their tool use. Empty maps to "auto" downstream.
-	req.PermissionMode = agent.PermissionMode
+	req.PermissionMode = effectivePermissionMode(agent.PermissionMode, autonomous)
 
 	// Resolve this turn's working directory: the session's WorkingDir override
 	// (else the workspace default). Autonomous turns may additionally get an

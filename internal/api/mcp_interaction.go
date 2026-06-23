@@ -36,10 +36,12 @@ func (b *interactionBackend) Valid(token string) bool {
 // definitions in the tools package — the schema is never re-declared here, so the
 // native and CLI paths advertise the identical contract.
 func (b *interactionBackend) Tools(token string) []interaction.ToolSpec {
-	specs := interactionToolSpecs(b.tun)
+	// Resolve the run first so the advertised set matches the turn's mode: an
+	// autonomous turn drops the interactive (ask_user/request_confirmation) tools.
+	run := b.runs.byToken(token)
+	specs := interactionToolSpecs(b.tun, run != nil && run.autonomous)
 	// Append the run's bridged self-management tools (CLI-3), deduped by name
 	// against the static set (spawn_session is advertised by both paths).
-	run := b.runs.byToken(token)
 	if run == nil {
 		return specs
 	}
@@ -64,13 +66,24 @@ func (b *interactionBackend) Tools(token string) []interaction.ToolSpec {
 // server advertises for a turn (gated by self-manage exactly like the specs).
 // The CLI MCP-config writer consumes this via InteractionEndpoint.ToolNames so
 // the advertised set and the CLI allowlist share ONE source — no second list.
-func interactionAdvertisedNames(tun *agent.Tunables) []string {
-	specs := interactionToolSpecs(tun)
+func interactionAdvertisedNames(tun *agent.Tunables, autonomous bool) []string {
+	specs := interactionToolSpecs(tun, autonomous)
 	names := make([]string, 0, len(specs))
 	for _, s := range specs {
 		names = append(names, s.Name)
 	}
 	return names
+}
+
+// interactiveOnlyTools need a live user to answer and therefore CANNOT work on an
+// autonomous (scheduler/spawn/flow) turn: ask_user/request_confirmation block for
+// a human and, with none present, return an is_error "proceed on your own" result
+// — which a claude-cli child can mishandle into an exit-1 failure (the cause of
+// flow parallel-node crashes). So they are omitted from the advertised set on
+// autonomous turns: the agent never sees them and simply proceeds on its own.
+var interactiveOnlyTools = map[string]bool{
+	"ask_user":             true,
+	"request_confirmation": true,
 }
 
 // mergeInteractionToolNames returns the static interaction tool names plus the
@@ -97,7 +110,7 @@ func mergeInteractionToolNames(static []string, bridge []providers.ToolDef) []st
 // interactionToolSpecs builds the Interaction MCP tool specs for a turn. Single
 // source for both Tools() (advertisement) and interactionAdvertisedNames (CLI
 // allowlist). tun may be nil (then self-manage tools are omitted).
-func interactionToolSpecs(tun *agent.Tunables) []interaction.ToolSpec {
+func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.ToolSpec {
 	defs := []providers.ToolDef{
 		tools.NewAskUserTool().Def(),
 		tools.NewTodoWriteTool().Def(),
@@ -135,6 +148,12 @@ func interactionToolSpecs(tun *agent.Tunables) []interaction.ToolSpec {
 	}
 	specs := make([]interaction.ToolSpec, 0, len(defs)+1)
 	for _, d := range defs {
+		// On autonomous turns, omit the interactive tools that need a live user —
+		// the agent can't reach one, so advertising them only invites an is_error
+		// "proceed on your own" result that can crash a claude-cli child.
+		if autonomous && interactiveOnlyTools[d.Name] {
+			continue
+		}
 		specs = append(specs, interaction.ToolSpec{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
 	}
 	// permission_prompt is CLI-only (the claude CLI calls it via

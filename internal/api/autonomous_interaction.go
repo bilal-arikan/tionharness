@@ -77,7 +77,7 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		run.setBridge(bridgeDefs, bridgeCall)
 
 		ctx = tools.WithInteractionEndpoint(ctx, url, run.token,
-			mergeInteractionToolNames(interactionAdvertisedNames(s.tun), bridgeDefs))
+			mergeInteractionToolNames(interactionAdvertisedNames(s.tun, true), bridgeDefs))
 		return ctx, func() { s.runs.unregister(runID) }
 	}
 }

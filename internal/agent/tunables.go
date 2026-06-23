@@ -6,7 +6,8 @@ import "sync"
 const (
 	DefaultJournalCap           = 50   // newest journal entries kept per agent
 	DefaultJournalMaxLen        = 1024 // max runes stored per journal entry
-	DefaultAutoReflectThreshold = 30   // journal count that triggers auto-reflect
+	DefaultAutoReflectThreshold = 20   // journal count that triggers auto-reflect
+	DefaultReflectionCap        = 20   // newest reflections kept per agent (older pruned)
 	DefaultSessionContextRecent = 5    // past sessions listed in the cross-session block
 )
 
@@ -54,6 +55,7 @@ type Tunables struct {
 	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
 	journalCap    int  // 0 → DefaultJournalCap
 	journalMaxLen int  // 0 → DefaultJournalMaxLen
+	reflectionCap int  // 0 → DefaultReflectionCap (newest reflections kept; older pruned each dream cycle)
 
 	autoReflect          bool // run the dream cycle automatically as journals grow
 	autoReflectThreshold int  // 0 → DefaultAutoReflectThreshold
@@ -295,6 +297,24 @@ func (t *Tunables) JournalMaxLen() int {
 		return DefaultJournalMaxLen
 	}
 	return t.journalMaxLen
+}
+
+// SetReflectionCap sets how many newest reflections an agent keeps; older ones
+// are pruned after each dream cycle. A value of 0 selects the built-in default.
+func (t *Tunables) SetReflectionCap(cap int) {
+	t.mu.Lock()
+	t.reflectionCap = cap
+	t.mu.Unlock()
+}
+
+// ReflectionCap returns how many reflections an agent keeps (default when unset).
+func (t *Tunables) ReflectionCap() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.reflectionCap <= 0 {
+		return DefaultReflectionCap
+	}
+	return t.reflectionCap
 }
 
 // SetAutoReflect configures the automatic dream cycle: whether it runs and the

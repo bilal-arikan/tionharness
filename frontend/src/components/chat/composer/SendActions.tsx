@@ -41,7 +41,13 @@ export function SendActions({
   onSteer,
 }: Props) {
   const sendBtn = (
-    <button onClick={onSend} disabled={disabled || !hasContent || anyUploading} className={BTN_PRIMARY}>
+    <button
+      onClick={onSend}
+      disabled={disabled || !hasContent || anyUploading}
+      data-testid="composer-send"
+      aria-label="Gönder"
+      className={BTN_PRIMARY}
+    >
       Gönder
     </button>
   )
@@ -50,7 +56,13 @@ export function SendActions({
     return hasText ? (
       sendBtn
     ) : (
-      <button onClick={onCancelWait} title="Otomatik uyandırmayı durdur" className={BTN_DANGER}>
+      <button
+        onClick={onCancelWait}
+        title="Otomatik uyandırmayı durdur"
+        data-testid="composer-stop"
+        aria-label="Durdur"
+        className={BTN_DANGER}
+      >
         Durdur
       </button>
     )
@@ -62,15 +74,16 @@ export function SendActions({
     // Input filled while streaming → queue / interrupt / steer.
     return (
       <div className="flex items-end gap-1.5">
-        <button onClick={onQueue} title="Bu tur bitince gönder" className={BTN_SECONDARY}>
+        <button onClick={onQueue} title="Bu tur bitince gönder" data-testid="composer-queue" className={BTN_SECONDARY}>
           Sıraya
         </button>
-        <button onClick={onInterrupt} title="Turu kes ve hemen gönder" className={BTN_WARNING}>
+        <button onClick={onInterrupt} title="Turu kes ve hemen gönder" data-testid="composer-interrupt" className={BTN_WARNING}>
           Kes
         </button>
         <button
           onClick={onSteer}
           title="Çalışan turu canlı yönlendir (araç döngüsünde etkili)"
+          data-testid="composer-steer"
           className={BTN_PRIMARY}
         >
           Yönlendir
@@ -81,7 +94,7 @@ export function SendActions({
 
   // Streaming, empty input → stop.
   return (
-    <button onClick={onStop} title="Üretimi durdur" className={BTN_DANGER}>
+    <button onClick={onStop} title="Üretimi durdur" data-testid="composer-stop" aria-label="Durdur" className={BTN_DANGER}>
       Durdur
     </button>
   )

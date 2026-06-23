@@ -16,6 +16,10 @@ export function AgentSettingsModal({ agent, onClose, onSave }: Props) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ajan ayarları"
+        data-testid="agent-settings-modal"
         className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >

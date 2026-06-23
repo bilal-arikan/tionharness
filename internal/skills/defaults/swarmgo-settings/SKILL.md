@@ -60,9 +60,10 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 - `maxContextTokens` (min 500, default 12000), `keepRecentMsgs` (min 1, default 8).
 - `recallTopN` (default 5), `recallMinScore` (0–1, default 0.05).
 - `journalCap` (1–1000, default 50), `journalMaxLen` runes (64–65536, default 1024).
+- `reflectionCap` (1–1000, default 20) — newest reflections kept per agent; older ones are pruned after each dream cycle so reflections (unlike journals) can't accumulate without bound.
 - `memoryPressureWarn` (0–1, default 0.75) — context-fill ratio above which a turn warns the agent to persist important facts before the next silent compaction; `0` disables the warning.
 - `coreMemoryTools` (default true) — offer the `core_memory_replace`/`core_memory_append` tools that edit the agent's persistent **named core blocks** (persona + human by default, plus any custom blocks; each character-limited, re-injected every turn).
-- `autoReflect` (default true), `autoReflectThreshold` (2–1000, default 30).
+- `autoReflect` (default true), `autoReflectThreshold` (2–1000, default 20).
 - `autoUserModel` (default true) — during the dream cycle, refresh the agent's "human" core block from the journal (HA-1 automatic user modelling).
 
 ### Turn recovery

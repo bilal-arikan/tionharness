@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -150,7 +151,11 @@ func (s *Server) handleRunFlow(w http.ResponseWriter, r *http.Request) {
 	var req runFlowReq
 	_ = decodeJSON(r, &req)
 
-	run, sessionID, err := ws(r).Runtime.RunFlowRecorded(r.Context(), id, req.Input, false, nil)
+	// Detach from the request lifecycle: a client disconnect must not cancel
+	// in-flight flow nodes ("context canceled"). The flow finishes and persists
+	// regardless. Mirrors the chat turn's context.WithoutCancel durability.
+	runCtx := context.WithoutCancel(r.Context())
+	run, sessionID, err := ws(r).Runtime.RunFlowRecorded(runCtx, id, req.Input, false, nil)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -198,7 +203,12 @@ func (s *Server) handleRunFlowStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	obs := func(ev orchestration.NodeEvent) { sse("node", ev) }
-	run, sessionID, err := wsp.Runtime.RunFlowRecorded(ctx, id, req.Input, false, obs)
+	// Detach flow execution from the request: a client disconnect mid-run (the SSE
+	// connection dropping, navigation, the "Tekrar çalıştır" caller going away)
+	// must not cancel in-flight nodes with "context canceled". SSE writes to a gone
+	// client simply no-op; the run still completes and persists.
+	runCtx := context.WithoutCancel(ctx)
+	run, sessionID, err := wsp.Runtime.RunFlowRecorded(runCtx, id, req.Input, false, obs)
 	if err != nil {
 		sse("error", map[string]any{"error": err.Error()})
 		return
@@ -266,6 +276,12 @@ func (s *Server) handleSessionRunFlow(w http.ResponseWriter, r *http.Request) {
 	// Fold any attachments into the flow input (same block format chat uses), so
 	// the flow's agent nodes see attached text/files via {{input}}.
 	flowInput := conversation.InlineAttachments(req.Input, req.Attachments)
+
+	// Detach the flow execution from the request lifecycle: a client disconnect
+	// (tab close / navigation / network blip) must NOT cancel in-flight flow nodes,
+	// otherwise a still-running parallel child fails with "context canceled" while
+	// its siblings succeed. Mirrors the chat turn's context.WithoutCancel durability.
+	ctx = context.WithoutCancel(ctx)
 
 	// Manual (user-initiated) run: not budget-gated. Setup errors (bad graph) come
 	// back as runErr; execution failures land in run.Status.
@@ -423,13 +439,20 @@ func (s *Server) handleSessionRunFlowStream(w http.ResponseWriter, r *http.Reque
 
 	flowInput := conversation.InlineAttachments(req.Input, req.Attachments)
 	obs := func(ev orchestration.NodeEvent) { sse("node", ev) }
-	run, runErr := wsp.Runtime.RunFlow(ctx, req.FlowID, flowInput, false, obs)
+	// Detach flow execution from the request: if the client disconnects mid-run,
+	// the flow (and its in-flight parallel nodes) must finish and persist rather
+	// than dying with "context canceled". SSE writes to a gone client simply no-op;
+	// the run still completes and lands in history. Mirrors chat-turn durability.
+	runCtx := context.WithoutCancel(ctx)
+	run, runErr := wsp.Runtime.RunFlow(runCtx, req.FlowID, flowInput, false, obs)
 
 	agentID := finalAgentID(flow, run)
 	if agentID == "" {
 		agentID = session.AgentID
 	}
-	msg, aerr := wsp.DB.AddMessage(ctx, db.Message{
+	// Persist with the detached context so the result lands in history even if the
+	// client already disconnected (the run completed regardless).
+	msg, aerr := wsp.DB.AddMessage(runCtx, db.Message{
 		SessionID: session.ID,
 		Role:      providers.RoleAssistant,
 		AgentID:   agentID,

@@ -69,7 +69,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// endpoint for this turn, carrying the per-run token so its ask_user/todo_write
 	// calls correlate back here. No-op when the base URL is unknown.
 	if url := s.interactionURL(); url != "" {
-		ctx = tools.WithInteractionEndpoint(ctx, url, run.token, interactionAdvertisedNames(s.tun))
+		ctx = tools.WithInteractionEndpoint(ctx, url, run.token, interactionAdvertisedNames(s.tun, false))
 	}
 
 	wsp := ws(r)
@@ -308,7 +308,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		run.setBridge(bridgeDefs, bridgeCall)
 		if url := s.interactionURL(); url != "" {
 			turnCtx = tools.WithInteractionEndpoint(turnCtx, url, run.token,
-				mergeInteractionToolNames(interactionAdvertisedNames(s.tun), bridgeDefs))
+				mergeInteractionToolNames(interactionAdvertisedNames(s.tun, false), bridgeDefs))
 		}
 
 		agentStart := time.Now()

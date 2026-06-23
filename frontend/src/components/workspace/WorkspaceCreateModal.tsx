@@ -79,6 +79,10 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
       onMouseDown={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Yeni workspace"
+        data-testid="workspace-create-modal"
         className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >

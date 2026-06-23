@@ -65,6 +65,32 @@ func TestPruneKindKeepsNewest(t *testing.T) {
 	}
 }
 
+// TestPruneReflectionsKeepsNewest verifies reflections are a prunable ring buffer
+// too (the dream cycle bounds them so frequent reflection can't grow the recall
+// pool without limit), independent of journals.
+func TestPruneReflectionsKeepsNewest(t *testing.T) {
+	ctx := context.Background()
+	s, d, agentID := newTestStore(t)
+	defer d.Close()
+
+	for i := 0; i < 6; i++ {
+		if _, err := s.Remember(ctx, agentID, db.MemoryReflection, "r"); err != nil {
+			t.Fatalf("remember reflection %d: %v", i, err)
+		}
+	}
+	deleted, err := s.PruneKind(ctx, agentID, db.MemoryReflection, 2)
+	if err != nil {
+		t.Fatalf("prune reflections: %v", err)
+	}
+	if deleted != 4 {
+		t.Fatalf("deleted = %d, want 4", deleted)
+	}
+	refs, _ := s.List(ctx, agentID, db.MemoryReflection)
+	if len(refs) != 2 {
+		t.Fatalf("reflections kept = %d, want 2", len(refs))
+	}
+}
+
 // TestCoreMemoryUpsert verifies the per-section single-row invariant: repeated
 // WriteCore replaces a section in place, AppendCore adds a line, persona and
 // human are independent, and ReadCore returns "" before any write.

@@ -152,6 +152,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
       <div className="grid grid-cols-2 gap-3">
         <Field label="Günlük kayıt limiti" hint="Ajan başına saklanan en yeni journal sayısı; eskiler budanır."><input type="number" value={draft.journalCap} onChange={(e) => set('journalCap', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Günlük kayıt uzunluğu" hint="Tek bir journal kaydı için maks. karakter."><input type="number" value={draft.journalMaxLen} onChange={(e) => set('journalMaxLen', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Yansıma limiti" hint="Ajan başına saklanan en yeni reflection sayısı; her dream cycle'da eskiler budanır (sınırsız birikmeyi önler)."><input type="number" value={draft.reflectionCap} onChange={(e) => set('reflectionCap', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Otomatik yansıma eşiği" hint="Journal sayısı bunu aşınca dream cycle kendiliğinden tetiklenir."><input type="number" value={draft.autoReflectThreshold} onChange={(e) => set('autoReflectThreshold', Number(e.target.value))} className={inputCls} /></Field>
       </div>
       <Toggle label="Otomatik yansıma (dream cycle)" hint="Journal eşiği aşılınca ajan kendi günlüğünü arka planda özetler ve özetlenen kayıtları siler. Otonom çağrı sayılır: duraklatma ve günlük bütçeye saygı gösterir." checked={draft.autoReflect} onChange={(v) => set('autoReflect', v)} />

@@ -266,6 +266,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	}
 	applyInt(&next.JournalCap, p.JournalCap)
 	applyInt(&next.JournalMaxLen, p.JournalMaxLen)
+	applyInt(&next.ReflectionCap, p.ReflectionCap)
 	if p.MemoryPressureWarn != nil {
 		next.MemoryPressureWarn = *p.MemoryPressureWarn
 	}
@@ -436,6 +437,12 @@ func normalize(v Settings) Settings {
 	}
 	if v.JournalMaxLen > 65536 {
 		v.JournalMaxLen = 65536
+	}
+	if v.ReflectionCap < 1 {
+		v.ReflectionCap = 1
+	}
+	if v.ReflectionCap > 1000 {
+		v.ReflectionCap = 1000
 	}
 	// Memory-pressure warning ratio: clamp to [0,1]; 0 disables the warning.
 	if v.MemoryPressureWarn < 0 {

@@ -26,6 +26,10 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={disabled}
+        data-testid="agent-select"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={selected ? `Hedef ajan: ${selected.name}` : 'Ajan seç'}
         title={selected ? `Mesajın gönderileceği ajan: ${selected.name}` : 'Ajan seç'}
         className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-3 text-sm transition disabled:opacity-40 ${
           selected
@@ -41,7 +45,12 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
+        <div
+          role="listbox"
+          aria-label="Mesajı gönder"
+          data-testid="agent-select-menu"
+          className="absolute bottom-full left-0 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl"
+        >
           <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
             Mesajı gönder
           </div>
@@ -51,6 +60,10 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
           {agents.map((a) => (
             <button
               key={a.id}
+              role="option"
+              aria-selected={a.id === value}
+              data-testid="agent-option"
+              data-agent-id={a.id}
               onClick={() => {
                 onChange(a.id)
                 setOpen(false)
