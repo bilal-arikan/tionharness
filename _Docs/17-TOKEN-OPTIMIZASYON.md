@@ -209,6 +209,67 @@ hesaplıyor; `maxTokens≤0` (bütçe kapalı) dokunulmaz. `budget_test.go`.
   B eşiği orantılı büyür, A>B değişmezi korunur. No-arg getter'lar process-geneli bütçeyle geriye-uyumlu
   kaldı. `tunables_compact_test.go` (For varyantları).
 
+### 8. Yapılandırılmış konuşma-özeti (Claude Code parite, 1. faz) ✅ YAPILDI (2026-06-23)
+
+Transkript compaction'ının (`conversation/manager.go`) rolling-summary prompt'u eskiden **"under 200
+words"** ile sınırlıydı ve her katlamada **eski özet + yeni mesajları** tekrar 200 kelimeye sıkıştırıyordu
+→ çok katlamada erken bağlam **kademeli eriyordu (decay)**; üretilen özet de kullanıcıya "çok kısa"
+görünüyordu. Claude Code'un compaction motoru incelendi (`observed-behavior/src/services/compact/`) ve
+prompt onun **yapılandırılmış çok-bölümlü** yaklaşımına yakınlaştırıldı.
+
+- **Yeni `compactPrompt`:** sabit **8 bölüm** (Primary Request/Intent · Key Technical Concepts · Files and
+  Code · Errors and Fixes · Decisions and User Feedback · Pending Tasks · Current Work · Next Step) +
+  **açık anti-decay talimatı**: "önceki özetteki her kalıcı gerçeği taşı, yer açmak için kısaltma/yeniden
+  sıkıştırma yapma". 200-kelime cap'i kaldırıldı. Konuşma diline cevap verir. İki `%s` placeholder
+  (mevcut özet, yeni mesajlar) korundu → `reactive.go` (mid-loop reaktif compact) aynı sabiti yeniden
+  kullanmaya devam ediyor.
+- **Output bütçesi:** `compactMaxOutputTokens = 8192` sabiti eklendi; hem `summarize` (rolling) hem
+  reactive yol `Request.MaxTokens` ile bunu geçiyor → uzun yapılandırılmış özet provider default'unda
+  (anthropic 4096) **bölüm ortasında kesilmiyor**. `build ./...` + `conversation` testleri yeşil.
+- **Canlı test bulgusu — kapanış cue'su (2026-06-23):** Gerçek SES2 mesajlarıyla `claude -p` üzerinde test
+  edilince ilk prompt **başarısız**: model transcript ile bittiği için onu "devam ettirilecek konuşma" sanıp
+  özet yerine **son mesaja cevap verdi**. claude-cli `--append-system-prompt` ile Claude Code'un ajan
+  framing'ini (araçlar dahil) koruduğundan summarize çağrısı tam-ajan olarak koşuyor. **Düzeltme:** prompt'a
+  `NEW MESSAGES`'tan **sonra** güçlü kapanış talimatı eklendi ("yukarısı özetlenecek transcript — devam etme,
+  cevap verme, araç çağırma; doğrudan '1. Primary Request and Intent:' ile başla"). Claude Code'un
+  `NO_TOOLS_TRAILER` deseninin karşılığı. Tekrar test: **~7.7KB tam yapılandırılmış 8-bölümlü özet** (eski
+  ~1.1KB digest'e karşı), tüm task/agent/flow/karar yakalandı, model "transcript yalnız özetlenecek" notuna
+  uydu. (Test çıktıları geçiciydi; in-server teyitten sonra temizlendi.)
+- **Uçtan-uca in-server teyit (2026-06-23):** dev binary yeniden derlenip 8090'da başlatıldı, WS2/SES2'de
+  gerçek `POST /api/sessions/SES2/summary {kind:compact}` (=`ForceCompact`, claude-cli provider) tetiklendi.
+  Sonuç: 8 mesaj katlandı, `summaryMsgCount` 12→20, özet **1176→4464 char** (yapılandırılmış 8-bölüm, Türkçe),
+  konuşma-devamı yok, eski digest'te olmayan detaylar (paralel flow şema sözdizimi, validator hatası+fix)
+  yakalandı → anti-decay merge in-server doğrulandı.
+- **Not — fork bilinçli eklenMEdi:** Claude Code özetleyiciye **tüm konuşmayı** yollar (bu yüzden
+  prompt-cache paylaşan fork şart). SwarmGo `summarize` yalnız **katlanan dilim + eski özeti** yollar →
+  çağrı zaten ucuz, fork'un çözeceği pahalılık yok. Birincil provider `claude-cli` (anahtarsız) cache
+  paylaşımını CC gibi kontrol edemez → fork ROI düşük, ertelendi.
+- **Opsiyonel 3. faz:** partial compact (`from`/`up_to`) + boundary marker UI. Decay'i tamamen sıfırlamak
+  isterse: merge yerine her katlamada `history` prefix'inden **sıfırdan** özetleme (CC paritesi, maliyet ↑
+  → fork tartışmasına bağlı).
+
+### 9. Post-compact kurtarma işaretçisi — Claude Code parite 2. faz ✅ YAPILDI (2026-06-23)
+
+CC compaction sonrası özet mesajına bir **transcript pointer** ekler ("pre-compaction detayı lazımsa
+şu transcript'i oku: …") + son okunan dosyaları `createPostCompactFileAttachments` ile geri enjekte eder.
+SwarmGo'ya **birebir port mimariye ters**: SwarmGo turlar arası yalnız `role+text` taşır (`toProviderMessages`),
+tool sonuçları/dosya okumaları **zaten cross-turn context'te değil** → "dosya re-injection" diye geri
+verilecek bir şey yok; ajan serbest fs araçlarıyla istediğinde **yeniden okur**. Ayrıca kalıcı durum
+(artifacts/todos/core-memory/goal/summary) `composeTurnRequest`'te zaten **her tur** re-inject ediliyor.
+
+**Uygulanan (CC mekanizmasının SwarmGo'nun gerçek kurtarma araçlarına uyarlanmışı):** özet bloğu artık
+`conversationSummaryBlock(summary)` ile sarılıyor (`api/chat_turn.go`) — özetin altına **kurtarma notu**
+ekleniyor: "bu özetten önceki turlar katlandı, tam metni context'te yok; kesin detay (kod/hata/dosya
+içeriği/karar) gerekiyorsa **tahmin etme**: `conversation_search` ile ara ya da ilgili dosyaları **fs
+araçlarıyla yeniden aç". Böylece compact sonrası ajan körleşmez — kaybolan her şey ya `conversation_search`
+(`builtin_conversation_search.go`, db tam-metin tarama, LLM'siz) ile ya da re-read ile **geri alınabilir**.
+Sıfır yeni altyapı; readFileState tracker **bilinçle eklenmedi** (mimariye gereksiz). `go build ./...` +
+`internal/api` + `internal/conversation` testleri yeşil.
+
+- **Skill/plan re-injection neden gerekmedi:** skill **kataloğu** (slug+özet) statik prefix'te zaten her
+  tur var (`SkillsCatalogBlockForAgent`) → compact onu silmez (katlanan mesajlarda değil); yüklü skill
+  *gövdesi* `use_skill` ile tekrar çekilir. Plan-mode dosyası SwarmGo'da CC'deki gibi yok.
+
 ## Ayrıca Bakınız
 
 - **[19-LAZY-TOOL-LOADING.md](19-LAZY-TOOL-LOADING.md)** — Araç şemalarının talep üzerine yüklenmesi

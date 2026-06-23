@@ -76,7 +76,8 @@ func summarizeProviderMessages(ctx context.Context, database *db.DB, provider pr
 		b.WriteString("\n")
 	}
 	resp, err := provider.Complete(ctx, providers.Request{
-		Model: agent.Model,
+		Model:     agent.Model,
+		MaxTokens: compactMaxOutputTokens,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: fmt.Sprintf(compactPrompt, "(none)", b.String())},
 		},

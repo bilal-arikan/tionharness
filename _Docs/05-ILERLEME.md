@@ -2,6 +2,46 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Yapılandırılmış konuşma-özeti — Claude Code parite 1. faz (compact decay fix) ✅ (2026-06-23)
+
+WS2/SES2'de kullanıcı compact'in "çok kısa özet" ürettiğini ve "compact sonrası hâlâ
+mesaj eklendiğini" bildirdi. Teşhis: ikincisi tasarım (kayan pencere, `keepRecent=8` +
+yeni turlar birikir — normal); birincisi `conversation/manager.go` `compactPrompt`'undaki
+**"under 200 words"** cap'i + her katlamada **özetin özetini** alan rolling-merge →
+**decay**.
+
+Claude Code compaction motoru incelendi (`Desktop/Projects/observed-behavior/src/services/
+compact/`: `prompt.ts` 9-bölümlü + `<analysis>` scratchpad, `compact.ts`, `autoCompact.ts`,
+~20K output rezervi, fork+prompt-cache paylaşımı, post-compact dosya/skill re-injection).
+
+**1. faz uygulandı (düşük risk, en yüksek etki):**
+- `compactPrompt` → sabit **8 bölümlü** yapı + **anti-decay talimatı** ("önceki özetteki her
+  kalıcı gerçeği taşı, kısaltma"). 200-kelime cap kaldırıldı. İki `%s` korundu → `reactive.go`
+  aynı sabiti kullanmaya devam.
+- `compactMaxOutputTokens = 8192`; `summarize` + reactive yol `Request.MaxTokens` ile geçiyor
+  → uzun özet anthropic 4096 default'unda kesilmiyor.
+- `go build ./...` + `internal/conversation` testleri yeşil. Detay: `_Docs/17` §8.
+
+**Bilinçli ertelendi:** fork/cache (SwarmGo özetleyiciye yalnız katlanan dilimi yollar →
+çağrı zaten ucuz, fork'un çözeceği pahalılık yok; claude-cli cache paylaşımını kontrol edemez).
+
+## Post-compact kurtarma işaretçisi — Claude Code parite 2. faz ✅ (2026-06-23)
+
+CC compact sonrası transcript pointer + son okunan dosya re-injection yapar. SwarmGo'ya
+**birebir port mimariye ters:** turlar arası yalnız `role+text` taşınır (`toProviderMessages`)
+→ tool sonuçları/dosya okumaları zaten cross-turn context'te değil; ajan serbest fs ile
+istediğinde yeniden okur. Kalıcı durum (artifacts/todos/core-memory/goal/summary) zaten her
+tur re-inject ediliyor.
+
+**Uygulanan:** özet bloğu `conversationSummaryBlock(summary)` ile sarıldı (`api/chat_turn.go`)
+→ özetin altına **kurtarma notu**: "önceki turlar katlandı, tam metni yok; kesin detay lazımsa
+tahmin etme — `conversation_search` ile ara veya dosyaları fs araçlarıyla yeniden aç". Compact
+sonrası ajan körleşmez. `readFileState` tracker bilinçle eklenmedi (mimariye gereksiz). `go build`
++ `internal/api` + `internal/conversation` testleri yeşil. Detay: `_Docs/17` §9.
+
+**Sırada (opsiyonel 3. faz):** partial compact (`from`/`up_to`) + boundary UI; veya tam decay-sıfır
+için merge yerine `history` prefix'inden sıfırdan özetleme (fork tartışmasına bağlı).
+
 ## SES5 flow çöküşü teşhisi: crash-tail kuyruğu + create_agent provider default ✅ (2026-06-23)
 
 WS2/SES5'te "Seyahat Planlama Akışı" flow'u node'larda `claude CLI failed: exit
@@ -388,6 +428,19 @@ dinamik sunucular için kalıcı bağlantı havuzu (Seçenek 2) — böylece `ac
 etkisi sonraki çağrıda da yaşar. İkisi de aynı `internal/mcp` yeniden tasarımına bağlanır.
 
 ---
+
+## Reflection budama + auto-reflect eşiği 30→20 ✅ (2026-06-23)
+
+Dream cycle ayarları ince ayarlandı: ham journal gürültüsü daha erken damıtılsın diye
+**`autoReflectThreshold` default 30 → 20**; ve reflection'lar (journal'ların aksine
+budanmıyordu → süresiz birikip recall havuzunu kirletiyordu) artık **bounded**.
+
+- **Yeni `reflectionCap`** (default 20, clamp 1–1000): her dream cycle sonunda
+  `reflect()` en yeni N reflection'ı tutup eskileri budar (`PruneKind(reflection)`).
+- Wiring: `Tunables.SetReflectionCap/ReflectionCap` + `DefaultReflectionCap=20`;
+  `settings` (Settings/DTO/Patch/Default + clamp) + `applySettings`; frontend
+  "Yansıma limiti" alanı. `reflector.go`'da budama + `reflectionCap()` helper.
+- `go build` ✅, **148 test** ✅ (tunable default + reflection-prune), `tsc` ✅.
 
 ## HA-1: human bloğu otomatik kullanıcı modelleme (MemGPT Parça 4b) ✅ (2026-06-23)
 

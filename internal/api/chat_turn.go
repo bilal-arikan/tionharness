@@ -104,8 +104,8 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, message, 5); block != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + block)
 	}
-	if prep.Summary != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n## Conversation summary so far\n" + prep.Summary)
+	if sb := conversationSummaryBlock(prep.Summary); sb != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
 	}
 	// Surface the session's existing artifacts so the agent revises them
 	// (update_artifact by id) instead of creating duplicates.
@@ -161,6 +161,29 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 func dateTimeContextBlock() string {
 	return "Current date and time (captured at the start of this turn; seconds-precise, does not tick mid-turn): " +
 		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)")
+}
+
+// conversationSummaryBlock renders the rolling compaction summary for the dynamic
+// system prompt, wrapped with a post-compaction recovery note. The turns that
+// preceded this summary were folded into it (their verbatim text — code, tool
+// output, file contents — is no longer in context), so the agent is told how to
+// recover exact pre-compaction detail when it actually needs it rather than
+// guessing from the digest: full-text search the past messages (conversation_search)
+// or simply re-open the relevant files (the fs tools are unlocked). This is
+// SwarmGo's equivalent of Claude Code's post-compaction transcript pointer,
+// adapted to the recovery tools SwarmGo already ships — no readFileState tracker
+// is needed because file contents are never cross-turn context here anyway, so a
+// re-read on demand fully restores them. Returns "" for an empty summary so the
+// caller can append it unconditionally.
+func conversationSummaryBlock(summary string) string {
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		return ""
+	}
+	const recovery = "\n\nNote: the turns before this summary were compacted and their full text is no longer in context. " +
+		"If you need exact pre-compaction detail — a code snippet, an error message, file contents, or a specific decision — " +
+		"recover it instead of guessing: use conversation_search to find what was said, or re-open the relevant files with your file tools."
+	return "## Conversation summary so far\n" + summary + recovery
 }
 
 // coreMemoryBlock formats the agent's named core-memory blocks for prompt
