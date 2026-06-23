@@ -125,6 +125,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
             <span className="text-xs text-[var(--color-text-dim)]">Kaydedildi ✓</span>
           )}
           <button
+            data-testid="agent-preview-context"
             onClick={() => setPreviewOpen(true)}
             title="Ajanın sıfırdan aldığı bağlamı (sistem promptu + araçlar) önizle"
             className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -132,6 +133,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
             <Eye size={14} /> Bağlam
           </button>
           <button
+            data-testid="agent-copy-path"
             onClick={copyPath}
             title="Ajanın disk üzerindeki JSON dosya yolunu kopyala"
             className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -140,6 +142,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
             {copiedPath ? 'Kopyalandı' : 'Yolu kopyala'}
           </button>
           <button
+            data-testid="agent-reveal-folder"
             onClick={revealFolder}
             title="Ajanın JSON dosyasının bulunduğu klasörü dosya yöneticisinde aç"
             className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -148,6 +151,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           </button>
           {onCancel && (
             <button
+              data-testid="agent-cancel"
               onClick={onCancel}
               className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
             >
@@ -156,13 +160,14 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           )}
           {onDelete && (
             <button
+              data-testid="agent-delete"
               onClick={onDelete}
               className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
             >
               <Trash2 size={14} /> Sil
             </button>
           )}
-          <Button onClick={save} disabled={saving}>
+          <Button data-testid="agent-save" onClick={save} disabled={saving}>
             {saving ? 'Kaydediliyor…' : 'Kaydet'}
           </Button>
         </div>
@@ -171,6 +176,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
       <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
         <Field label="Ad">
           <input
+            data-testid="agent-name-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
@@ -188,6 +194,8 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         <Field label="Renk">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
+              data-testid="agent-color"
+              data-color=""
               onClick={() => setColor('')}
               className={`flex h-7 w-7 items-center justify-center rounded-full border text-[10px] ${
                 color === ''
@@ -202,6 +210,8 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
             {AVATAR_COLORS.map((c) => (
               <button
                 key={c}
+                data-testid="agent-color"
+                data-color={c}
                 onClick={() => setColor(c)}
                 className={`h-7 w-7 rounded-full ring-offset-2 ring-offset-[var(--color-surface)] ${
                   color === c ? 'ring-2 ring-[var(--color-accent)]' : ''
@@ -225,6 +235,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         <div className="grid grid-cols-2 gap-3">
           <Field label="Planlama modu">
             <select
+              data-testid="agent-planning-mode-select"
               value={planningMode}
               onChange={(e) => setPlanningMode(e.target.value)}
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
@@ -235,6 +246,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           </Field>
           <Field label="Düşünme (thinking) seviyesi">
             <select
+              data-testid="agent-thinking-level-select"
               value={thinkingLevel || 'off'}
               onChange={(e) => setThinkingLevel(e.target.value === 'off' ? '' : e.target.value)}
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
@@ -252,6 +264,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
 
         <Field label="İzin modu (araç kullanımı)">
           <select
+            data-testid="agent-permission-mode-select"
             value={permissionMode}
             onChange={(e) => setPermissionMode(e.target.value)}
             className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
@@ -270,6 +283,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
 
         <Field label="Karakter / sistem promptu (soul)">
           <textarea
+            data-testid="agent-soul-textarea"
             value={soul}
             onChange={(e) => setSoul(e.target.value)}
             rows={4}
@@ -279,6 +293,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
 
         <Field label="Kimlik (identity)">
           <textarea
+            data-testid="agent-identity-textarea"
             value={identity}
             onChange={(e) => setIdentity(e.target.value)}
             rows={2}

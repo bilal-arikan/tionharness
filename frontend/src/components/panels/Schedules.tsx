@@ -240,8 +240,11 @@ export function Schedules({ agents, focusId, onError }: Props) {
       {/* New schedule form */}
       <div className="mb-4 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div className="flex flex-wrap items-start gap-2">
-          <AgentPicker agents={agents} value={agentId} onChange={setAgentId} />
+          <div data-testid="schedule-create-agent-wrap">
+            <AgentPicker agents={agents} value={agentId} onChange={setAgentId} />
+          </div>
           <select
+            data-testid="schedule-create-cron-preset-select"
             value={cronExpr}
             onChange={(e) => setCronExpr(e.target.value)}
             className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
@@ -257,6 +260,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
             ))}
           </select>
           <input
+            data-testid="schedule-create-cron-input"
             value={cronExpr}
             onChange={(e) => setCronExpr(e.target.value)}
             placeholder="cron: dk sa gün ay haftagünü"
@@ -265,6 +269,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
           <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
             Son tarih (ops.):
             <input
+              data-testid="schedule-create-expires-input"
               type="datetime-local"
               value={expiresAt}
               onChange={(e) => setExpiresAt(e.target.value)}
@@ -285,12 +290,15 @@ export function Schedules({ agents, focusId, onError }: Props) {
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <input
+            data-testid="schedule-create-prompt-input"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Prompt (zorunlu) — ajana gönderilecek talimat"
             className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
           />
-          <Button onClick={create}>+ Zamanlama</Button>
+          <div data-testid="schedule-create-submit">
+            <Button onClick={create}>+ Zamanlama</Button>
+          </div>
         </div>
       </div>
 
@@ -324,6 +332,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
                   ))}
                 </select>
                 <input
+                  data-testid="schedule-edit-cron-input"
+                  data-schedule-id={s.id}
                   value={editCronExpr}
                   onChange={(e) => setEditCronExpr(e.target.value)}
                   placeholder="cron: dk sa gün ay haftagünü"
@@ -352,20 +362,28 @@ export function Schedules({ agents, focusId, onError }: Props) {
               </div>
               <div className="flex flex-wrap items-end gap-2">
                 <input
+                  data-testid="schedule-edit-prompt-input"
+                  data-schedule-id={s.id}
                   value={editPrompt}
                   onChange={(e) => setEditPrompt(e.target.value)}
                   placeholder="Prompt (zorunlu) — ajana gönderilecek talimat"
                   className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
                 />
-                <Button onClick={() => saveEdit(s)}>Kaydet</Button>
-                <Button variant="secondary" onClick={cancelEdit}>
-                  İptal
-                </Button>
+                <div data-testid="schedule-edit-save" data-schedule-id={s.id}>
+                  <Button onClick={() => saveEdit(s)}>Kaydet</Button>
+                </div>
+                <div data-testid="schedule-edit-cancel" data-schedule-id={s.id}>
+                  <Button variant="secondary" onClick={cancelEdit}>
+                    İptal
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
           <div
             key={s.id}
+            data-testid="schedule-row"
+            data-schedule-id={s.id}
             ref={s.id === focusId ? focusRef : undefined}
             className={`flex items-center gap-3 rounded-lg border bg-[var(--color-surface)] px-3 py-2 text-sm transition ${
               highlightId === s.id
@@ -374,6 +392,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
             }`}
           >
             <button
+              data-testid="schedule-enable-toggle"
+              data-schedule-id={s.id}
               onClick={() => toggle(s)}
               className={`h-4 w-8 flex-shrink-0 rounded-full transition ${
                 s.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
@@ -439,6 +459,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
               ) : null}
             </div>
             <button
+              data-testid="schedule-run-now"
+              data-schedule-id={s.id}
               onClick={() => runNow(s)}
               disabled={runningId === s.id}
               className="text-[var(--color-text-dim)] hover:text-[var(--color-success)] disabled:opacity-40"
@@ -447,6 +469,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
               {runningId === s.id ? <Hourglass size={15} /> : <Play size={15} />}
             </button>
             <button
+              data-testid="schedule-edit"
+              data-schedule-id={s.id}
               onClick={() => startEdit(s)}
               className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
               title="Düzenle"
@@ -454,6 +478,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
               <Pencil size={15} />
             </button>
             <button
+              data-testid="schedule-delete"
+              data-schedule-id={s.id}
               onClick={() => remove(s)}
               className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
               title="Sil"

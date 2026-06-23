@@ -215,6 +215,7 @@ export function SkillsPanel({ onError }: Props) {
           </span>
           <div className="flex items-center gap-1.5">
             <button
+              data-testid="skills-create"
               onClick={() => setEditor({ mode: 'create' })}
               title="Yeni beceri oluştur"
               className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -222,6 +223,7 @@ export function SkillsPanel({ onError }: Props) {
               <Plus size={13} /> Yeni
             </button>
             <button
+              data-testid="skills-rescan"
               onClick={rescan}
               title="Diskten yeniden tara"
               className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -246,6 +248,8 @@ export function SkillsPanel({ onError }: Props) {
             return (
               <button
                 key={sk.slug}
+                data-testid="skills-list-item"
+                data-skill-slug={sk.slug}
                 onClick={() => setActiveSlug(sk.slug)}
                 className={`group mb-1 flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
                   isActive
@@ -347,6 +351,7 @@ export function SkillsPanel({ onError }: Props) {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button
+                  data-testid="skill-detail-edit"
                   onClick={() => setEditor({ mode: 'edit', initial: active })}
                   title="Bu beceriyi düzenle (ad, simge, açıklama, içerik)"
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -354,6 +359,7 @@ export function SkillsPanel({ onError }: Props) {
                   <Pencil size={14} /> Düzenle
                 </button>
                 <button
+                  data-testid="skill-detail-toggle-access"
                   onClick={toggleAccess}
                   disabled={accessBusy}
                   title={
@@ -367,6 +373,7 @@ export function SkillsPanel({ onError }: Props) {
                   {active.shared ? 'Kısıtla' : 'Paylaş'}
                 </button>
                 <button
+                  data-testid="skill-detail-toggle-summary"
                   onClick={toggleAutoSummary}
                   disabled={summaryBusy}
                   title={
@@ -381,6 +388,7 @@ export function SkillsPanel({ onError }: Props) {
                 </button>
                 <CopyPathButton path={active.dir} />
                 <button
+                  data-testid="skill-detail-reveal"
                   onClick={reveal}
                   title="Skill klasörünü dosya yöneticisinde aç"
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -388,6 +396,7 @@ export function SkillsPanel({ onError }: Props) {
                   <FolderOpen size={14} /> Klasörü aç
                 </button>
                 <button
+                  data-testid="skill-detail-delete"
                   onClick={removeActive}
                   disabled={deleteBusy}
                   title="Bu beceriyi sil (klasörünü diskten kaldırır)"

@@ -100,6 +100,8 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
                 </span>
                 <div className="flex shrink-0 items-center gap-0.5">
                   <button
+                    data-testid="skill-move-up"
+                    data-skill-slug={slug}
                     onClick={() => move(i, -1)}
                     disabled={i === 0}
                     title="Yukarı"
@@ -108,6 +110,8 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
                     <ChevronUp size={14} />
                   </button>
                   <button
+                    data-testid="skill-move-down"
+                    data-skill-slug={slug}
                     onClick={() => move(i, 1)}
                     disabled={i === selected.length - 1}
                     title="Aşağı"
@@ -116,6 +120,8 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
                     <ChevronDown size={14} />
                   </button>
                   <button
+                    data-testid="skill-remove"
+                    data-skill-slug={slug}
                     onClick={() => remove(slug)}
                     title="Kaldır"
                     className="rounded p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-bg)] hover:text-[var(--color-danger)]"
@@ -151,6 +157,8 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
             {available.map((s) => (
               <button
                 key={s.slug}
+                data-testid="skill-add-restricted"
+                data-skill-slug={s.slug}
                 onClick={() => add(s.slug)}
                 title={`${s.description} · Atanmadan ajan bu beceriyi kullanamaz`}
                 className="flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
@@ -180,6 +188,8 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
             {shared.map((s) => (
               <button
                 key={s.slug}
+                data-testid="skill-add-shared"
+                data-skill-slug={s.slug}
                 onClick={() => add(s.slug)}
                 title={`${s.description} · Atayarak prompt sırasına sabitle`}
                 className="flex items-center gap-1 rounded-full border border-[var(--color-success)]/40 bg-[var(--color-surface-2)] px-2.5 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-success)] hover:bg-[var(--color-bg)]"

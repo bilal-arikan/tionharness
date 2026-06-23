@@ -61,6 +61,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
     <div className="space-y-3">
       <label className="flex items-center gap-2.5 text-sm">
         <input
+          data-testid="agent-tools-enable-checkbox"
           type="checkbox"
           checked={data.mcpEnabled}
           disabled={busy}
@@ -77,6 +78,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
             </p>
             <div className="flex gap-2 text-xs">
               <button
+                data-testid="agent-tools-select-all"
                 onClick={() => setAll(true)}
                 disabled={busy}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90"
@@ -84,6 +86,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                 Hepsi
               </button>
               <button
+                data-testid="agent-tools-select-none"
                 onClick={() => save(true, ['__none__'])}
                 disabled={busy}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90"
@@ -105,6 +108,8 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                 className="flex cursor-pointer items-start gap-2.5 rounded px-1 py-1 hover:bg-[var(--color-surface-2)]"
               >
                 <input
+                  data-testid="agent-tool-checkbox"
+                  data-tool-name={t.name}
                   type="checkbox"
                   checked={selected.has(t.name)}
                   disabled={busy}

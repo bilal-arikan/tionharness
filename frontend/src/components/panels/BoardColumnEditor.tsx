@@ -173,6 +173,8 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                   ⠿
                 </span>
                 <input
+                  data-testid="column-label-input"
+                  data-col-index={idx}
                   value={col.label}
                   onChange={(e) => handleLabelChange(idx, e.target.value)}
                   placeholder="Sütun adı"
@@ -181,6 +183,8 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                 {/* Color swatch button */}
                 <div className="relative">
                   <button
+                    data-testid="column-color-toggle"
+                    data-col-index={idx}
                     onClick={() => setColorPickerIdx(isOpen ? -1 : idx)}
                     title="Renk seç"
                     className="h-6 w-6 flex-shrink-0 rounded border border-[var(--color-border)] hover:opacity-80"
@@ -194,6 +198,9 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                         {COLOR_PRESETS.map((preset) => (
                           <button
                             key={preset}
+                            data-testid="column-color-preset"
+                            data-col-index={idx}
+                            data-preset={preset}
                             title={preset}
                             onClick={() => {
                               update(idx, { color: preset })
@@ -207,6 +214,8 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                       {/* Custom hex input */}
                       <div className="flex items-center gap-1 mt-1">
                         <input
+                          data-testid="column-custom-color-input"
+                          data-col-index={idx}
                           type="color"
                           value={col.color || '#6b7280'}
                           onChange={(e) => update(idx, { color: e.target.value })}
@@ -214,6 +223,8 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                           title="Özel renk"
                         />
                         <input
+                          data-testid="column-hex-color-input"
+                          data-col-index={idx}
                           value={col.color}
                           onChange={(e) => update(idx, { color: e.target.value })}
                           placeholder="#rrggbb"
@@ -234,6 +245,8 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                 </div>
                 {/* Delete */}
                 <button
+                  data-testid="column-delete"
+                  data-col-index={idx}
                   onClick={() => removeColumn(idx)}
                   disabled={!canDelete}
                   title={
@@ -268,6 +281,8 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                 )}
                 <div className="ml-auto flex gap-0.5">
                   <button
+                    data-testid="column-move-up"
+                    data-col-index={idx}
                     onClick={() => moveUp(idx)}
                     disabled={idx === 0}
                     className="rounded p-0.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface)] disabled:opacity-20"
@@ -276,6 +291,8 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                     ↑
                   </button>
                   <button
+                    data-testid="column-move-down"
+                    data-col-index={idx}
                     onClick={() => moveDown(idx)}
                     disabled={idx === draft.length - 1}
                     className="rounded p-0.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface)] disabled:opacity-20"
@@ -291,6 +308,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
 
         {/* Add column button */}
         <button
+          data-testid="board-column-add"
           onClick={addColumn}
           className="w-full rounded-lg border border-dashed border-[var(--color-border)] py-2 text-sm text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
         >
@@ -303,9 +321,11 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
         {error && (
           <div className="rounded bg-[var(--color-danger)]/10 px-2 py-1 text-xs text-[var(--color-danger)]">{error}</div>
         )}
-        <Button onClick={handleSave} disabled={saving} className="w-full">
-          {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </Button>
+        <div data-testid="board-column-save">
+          <Button onClick={handleSave} disabled={saving} className="w-full">
+            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          </Button>
+        </div>
       </div>
     </div>
   )

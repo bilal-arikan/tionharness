@@ -22,6 +22,7 @@ export function AgentPicker({ agents, value, onChange, placeholder = 'Ajan seç'
     <div ref={rootRef} className="relative">
       <button
         type="button"
+        data-testid="agent-picker-trigger"
         onClick={() => setOpen((v) => !v)}
         className="flex min-w-40 items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none hover:border-[var(--color-accent)]"
       >
@@ -44,6 +45,8 @@ export function AgentPicker({ agents, value, onChange, placeholder = 'Ajan seç'
             <button
               key={a.id}
               type="button"
+              data-testid="agent-picker-option"
+              data-agent-id={a.id}
               onClick={() => {
                 onChange(a.id)
                 setOpen(false)

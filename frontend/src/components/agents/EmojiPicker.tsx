@@ -52,6 +52,7 @@ export function EmojiPicker({ value, onSelect, onClose }: Props) {
       <div className="border-b border-[var(--color-border)] p-2">
         <input
           ref={inputRef}
+          data-testid="emoji-search-input"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Emoji ara…"
@@ -65,6 +66,8 @@ export function EmojiPicker({ value, onSelect, onClose }: Props) {
           {EMOJI_CATEGORIES.map((c) => (
             <button
               key={c.id}
+              data-testid="emoji-category"
+              data-category={c.id}
               onClick={() => setCat(c.id)}
               title={c.label}
               className={`flex h-7 w-7 items-center justify-center rounded text-base ${
@@ -88,6 +91,8 @@ export function EmojiPicker({ value, onSelect, onClose }: Props) {
             {emojis.map((e) => (
               <button
                 key={e.char}
+                data-testid="emoji-pick"
+                data-emoji={e.char}
                 onClick={() => onSelect(e.char)}
                 title={e.keywords}
                 className={`flex h-8 w-8 items-center justify-center rounded text-lg hover:bg-[var(--color-surface-2)] ${
@@ -104,6 +109,7 @@ export function EmojiPicker({ value, onSelect, onClose }: Props) {
       {/* Footer: clear selection (auto initials) */}
       <div className="border-t border-[var(--color-border)] p-2">
         <button
+          data-testid="emoji-clear"
           onClick={() => onSelect('')}
           className={`w-full rounded px-2 py-1.5 text-xs ${
             value === ''

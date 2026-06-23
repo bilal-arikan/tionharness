@@ -60,6 +60,10 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ajan bağlamı"
+        data-testid="agent-context-modal"
         className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
         onClick={(e) => e.stopPropagation()}
       >

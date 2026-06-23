@@ -54,6 +54,7 @@ export function AgentRoster({
           Ajanlar · varsayılan
         </span>
         <button
+          data-testid="agent-create-toggle"
           onClick={() => setShowForm((v) => !v)}
           className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
           title="Yeni ajan"
@@ -65,27 +66,31 @@ export function AgentRoster({
       {showForm && (
         <div className="mx-3 mb-2 space-y-2 rounded-lg bg-[var(--color-surface-2)] p-3">
           <input
+            data-testid="agent-create-name-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ajan adı"
             className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
           />
           <textarea
+            data-testid="agent-create-soul-textarea"
             value={soul}
             onChange={(e) => setSoul(e.target.value)}
             placeholder="Karakter / sistem promptu (soul)"
             rows={3}
             className="w-full resize-none rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
           />
-          <ProviderModelSelect
-            provider={provider}
-            model={model}
-            onChange={(p, m) => {
-              setProvider(p)
-              setModel(m)
-            }}
-          />
-          <Button onClick={submit} className="w-full">
+          <div data-testid="agent-create-provider-wrap">
+            <ProviderModelSelect
+              provider={provider}
+              model={model}
+              onChange={(p, m) => {
+                setProvider(p)
+                setModel(m)
+              }}
+            />
+          </div>
+          <Button data-testid="agent-create-submit" onClick={submit} className="w-full">
             Oluştur
           </Button>
         </div>
@@ -102,6 +107,8 @@ export function AgentRoster({
             }`}
           >
             <button
+              data-testid="agent-roster-item"
+              data-agent-id={a.id}
               onClick={() => onSelectAgent(a.id)}
               className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
             >
@@ -115,6 +122,8 @@ export function AgentRoster({
               </span>
             </button>
             <button
+              data-testid="agent-settings-open"
+              data-agent-id={a.id}
               onClick={() => setEditingAgent(a)}
               title="Ajan ayarları"
               className="ml-1 shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"

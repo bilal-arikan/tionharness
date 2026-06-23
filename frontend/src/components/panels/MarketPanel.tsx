@@ -317,6 +317,8 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
           {KIND_TABS.map((t) => (
             <button
               key={t.key}
+              data-testid="market-kind-tab"
+              data-kind={t.key}
               onClick={() => setTab(t.key)}
               className={`rounded px-2.5 py-1 text-xs font-medium ${
                 tab === t.key
@@ -340,6 +342,8 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
             return (
               <button
                 key={p.id}
+                data-testid="market-pack"
+                data-pack-id={p.id}
                 onClick={() => void openDetail(p)}
                 className={`flex flex-col gap-2 rounded-lg border p-3 text-left transition hover:border-[var(--color-accent)] ${
                   selected?.id === p.id
@@ -448,13 +452,15 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
                   ? 'Güncelle'
                   : INSTALL_LABEL[selected.kind]
               return (
-                <Button
-                  onClick={() => void install(selected)}
-                  disabled={busy || blocked}
-                  className="mt-3 flex w-full items-center justify-center gap-1.5"
-                >
-                  {blocked ? <Check size={13} /> : <Download size={13} />} {label}
-                </Button>
+                <div data-testid="market-pack-install" data-pack-id={selected.id} className="contents">
+                  <Button
+                    onClick={() => void install(selected)}
+                    disabled={busy || blocked}
+                    className="mt-3 flex w-full items-center justify-center gap-1.5"
+                  >
+                    {blocked ? <Check size={13} /> : <Download size={13} />} {label}
+                  </Button>
+                </div>
               )
             })()}
           </div>

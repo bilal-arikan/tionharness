@@ -194,6 +194,7 @@ export function TaskBoard({ agents, onError }: Props) {
         {/* New task form */}
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
           <button
+            data-testid="task-board-columns-editor"
             onClick={() => setEditorOpen((v) => !v)}
             title="Sütunları düzenle"
             className={`flex-shrink-0 rounded border px-2 py-1 text-xs transition ${
@@ -205,6 +206,7 @@ export function TaskBoard({ agents, onError }: Props) {
             ⊞ Sütunlar
           </button>
           <input
+            data-testid="task-create-description-input"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onKeyDown={(e) => {
@@ -213,14 +215,17 @@ export function TaskBoard({ agents, onError }: Props) {
             placeholder="Görev açıklaması — başlık otomatik oluşturulur"
             className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
           />
-          <AgentPicker
-            agents={agents}
-            value={ownerAgentId}
-            onChange={setOwnerAgentId}
-            placeholder="Ajan (opsiyonel, bilgi)"
-          />
+          <div data-testid="task-create-owner-wrap">
+            <AgentPicker
+              agents={agents}
+              value={ownerAgentId}
+              onChange={setOwnerAgentId}
+              placeholder="Ajan (opsiyonel, bilgi)"
+            />
+          </div>
           {flows.length > 0 && (
             <select
+              data-testid="task-create-flow-select"
               value={newFlowId}
               onChange={(e) => setNewFlowId(e.target.value)}
               title="Akış etiketi (opsiyonel, bilgi amaçlı)"
@@ -234,8 +239,11 @@ export function TaskBoard({ agents, onError }: Props) {
               ))}
             </select>
           )}
-          <Button onClick={createTask}>+ Görev</Button>
+          <div data-testid="task-create-submit">
+            <Button onClick={createTask}>+ Görev</Button>
+          </div>
           <button
+            data-testid="task-sort-by-deps"
             onClick={() => {
               if (!depSort && !confirm('Görevler bağımlılık sırasına göre yeniden dizilecek. Devam edilsin mi?')) return
               setDepSort((v) => !v)
@@ -314,6 +322,8 @@ export function TaskBoard({ agents, onError }: Props) {
                     return (
                       <div
                         key={t.id}
+                        data-testid="task-card"
+                        data-task-id={t.id}
                         draggable={!pending}
                         onDragStart={(e) => {
                           if (pending) return

@@ -98,6 +98,7 @@ export function AgentsView({
               <button
                 onClick={doRefresh}
                 disabled={refreshing}
+                data-testid="agents-refresh"
                 className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-50"
                 title="Listeyi yenile"
               >
@@ -106,6 +107,7 @@ export function AgentsView({
             )}
             <button
               onClick={() => setShowForm((v) => !v)}
+              data-testid="agent-create-toggle"
               className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
               title="Yeni ajan"
             >
@@ -120,6 +122,7 @@ export function AgentsView({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ajan adı"
+              data-testid="agent-create-name-input"
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
             />
             <textarea
@@ -127,17 +130,20 @@ export function AgentsView({
               onChange={(e) => setSoul(e.target.value)}
               placeholder="Karakter / sistem promptu (soul)"
               rows={3}
+              data-testid="agent-create-soul-textarea"
               className="w-full resize-none rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
             />
-            <ProviderModelSelect
-              provider={provider}
-              model={model}
-              onChange={(p, m) => {
-                setProvider(p)
-                setModel(m)
-              }}
-            />
-            <Button onClick={submit} className="w-full">
+            <div data-testid="agent-create-provider-wrap" className="contents">
+              <ProviderModelSelect
+                provider={provider}
+                model={model}
+                onChange={(p, m) => {
+                  setProvider(p)
+                  setModel(m)
+                }}
+              />
+            </div>
+            <Button onClick={submit} data-testid="agent-create-submit" className="w-full">
               Oluştur
             </Button>
           </div>
@@ -147,6 +153,8 @@ export function AgentsView({
           {agents.map((a) => (
             <div
               key={a.id}
+              data-testid="agent-roster-item"
+              data-agent-id={a.id}
               className={`group mb-1 flex w-full items-center rounded-lg pr-1 text-sm transition ${
                 selectedId === a.id
                   ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
@@ -155,6 +163,8 @@ export function AgentsView({
             >
               <button
                 onClick={() => select(a.id)}
+                data-testid="agent-roster-select"
+                data-agent-id={a.id}
                 className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
               >
                 <AgentAvatar agent={a} size={32} active={defaultAgentId === a.id} />
@@ -173,6 +183,8 @@ export function AgentsView({
               </button>
               <button
                 onClick={() => onSetDefault(a.id)}
+                data-testid="agent-set-default"
+                data-agent-id={a.id}
                 title={defaultAgentId === a.id ? 'Varsayılan ajan' : 'Varsayılan yap'}
                 className={`ml-1 shrink-0 rounded p-1 transition ${
                   defaultAgentId === a.id

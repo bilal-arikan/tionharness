@@ -281,6 +281,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             Artifactlar · {filtered.length === list.length ? list.length : `${filtered.length}/${list.length}`}
           </span>
           <button
+            data-testid="artifacts-create-new"
             onClick={createNew}
             title="Yeni artifact"
             className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -294,6 +295,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
           <div className="relative">
             <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-dim)]" />
             <input
+              data-testid="artifacts-search-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Başlıkta ara…"
@@ -319,6 +321,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             ] as const).map(([val, label]) => (
               <button
                 key={val}
+                data-testid="artifacts-filter"
+                data-origin={val}
                 onClick={() => setOriginFilter(val)}
                 className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition ${
                   originFilter === val
@@ -352,6 +356,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             return (
               <button
                 key={a.id}
+                data-testid="artifacts-list-item"
+                data-artifact-id={a.id}
                 onClick={() => setActiveId(a.id)}
                 className={`group mb-1 flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
                   isActive
@@ -405,6 +411,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 {draft ? (
                   <>
                     <button
+                      data-testid="artifact-edit-save"
                       onClick={save}
                       disabled={saving}
                       className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-2.5 py-1.5 text-xs font-medium text-white hover:brightness-110 disabled:opacity-50"
@@ -417,14 +424,15 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                   </>
                 ) : (
                   <>
-                    <button onClick={startEdit} title="Düzenle" className={iconBtn}>
+                    <button data-testid="artifact-detail-edit" onClick={startEdit} title="Düzenle" className={iconBtn}>
                       <Pencil size={15} />
                     </button>
-                    <button onClick={copy} title="İçeriği kopyala" className={iconBtn}>
+                    <button data-testid="artifact-detail-copy" onClick={copy} title="İçeriği kopyala" className={iconBtn}>
                       {copied ? <Check size={15} /> : <Copy size={15} />}
                     </button>
                     <CopyPathButton path={activePath} title="Yolu kopyala" />
                     <button
+                      data-testid="artifact-detail-reveal"
                       onClick={reveal}
                       disabled={!activePath}
                       title="Klasörü aç"
@@ -442,6 +450,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                       </button>
                     )}
                     <button
+                      data-testid="artifact-detail-delete"
                       onClick={() => remove(active.id)}
                       title="Sil"
                       className="rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-dim)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] hover:text-[var(--color-danger)]"
@@ -458,6 +467,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <input
+                    data-testid="artifact-edit-title-input"
                     value={draft.title}
                     onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                     placeholder="Başlık"
@@ -465,6 +475,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                   />
                   {!isMediaKind(draft.kind) && (
                     <select
+                      data-testid="artifact-edit-kind-select"
                       value={draft.kind}
                       onChange={(e) => setDraft({ ...draft, kind: e.target.value as ArtifactKind })}
                       className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
@@ -502,6 +513,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 ) : (
                   <>
                     <textarea
+                      data-testid="artifact-edit-content-textarea"
                       value={draft.content}
                       onChange={(e) => setDraft({ ...draft, content: e.target.value })}
                       placeholder="İçerik…"

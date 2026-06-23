@@ -73,7 +73,7 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
     <div className="grid grid-cols-2 gap-3">
       <label className="block space-y-1">
         <span className="text-xs font-medium text-[var(--color-text-dim)]">Sağlayıcı</span>
-        <select value={provider} onChange={(e) => selectProvider(e.target.value)} className={inputCls}>
+        <select data-testid="provider-select" value={provider} onChange={(e) => selectProvider(e.target.value)} className={inputCls}>
           {allowInherit && <option value="">{inheritLabel}</option>}
           {!entry && provider !== '' && <option value={provider}>{provider}</option>}
           {catalog.map((c) => (
@@ -89,6 +89,7 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
         <span className="text-xs font-medium text-[var(--color-text-dim)]">Model</span>
         {isInherit ? (
           <input
+            data-testid="model-custom-input"
             value={model}
             onChange={(e) => onChange('', e.target.value)}
             placeholder={inheritLabel}
@@ -97,6 +98,7 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
         ) : showCustom ? (
           <div className="flex gap-1">
             <input
+              data-testid="model-custom-input"
               value={model}
               onChange={(e) => onChange(provider, e.target.value)}
               placeholder="model adı"
@@ -105,6 +107,7 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
             {entry && (
               <button
                 type="button"
+                data-testid="model-reset-to-list"
                 onClick={() => {
                   setCustom(false)
                   onChange(provider, models[0]?.id ?? '')
@@ -118,6 +121,7 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
           </div>
         ) : (
           <select
+            data-testid="model-select"
             value={model}
             onChange={(e) => {
               if (e.target.value === '__custom__') {

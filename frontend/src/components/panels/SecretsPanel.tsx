@@ -129,6 +129,7 @@ export function SecretsPanel({ onError }: Props) {
           </h3>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input
+              data-testid="secret-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={editing}
@@ -136,12 +137,14 @@ export function SecretsPanel({ onError }: Props) {
               className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none disabled:opacity-60"
             />
             <input
+              data-testid="secret-description-input"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Açıklama (opsiyonel)"
               className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
             />
             <input
+              data-testid="secret-value-input"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               type="password"
@@ -154,7 +157,7 @@ export function SecretsPanel({ onError }: Props) {
             Ad bir harfle başlamalı; harf, rakam, <code>_</code>, <code>-</code>, <code>.</code> içerebilir.
           </p>
           <div className="mt-3 flex items-center gap-2">
-            <Button onClick={save} disabled={saving || !name.trim() || !value} size="lg">
+            <Button data-testid="secret-save" onClick={save} disabled={saving || !name.trim() || !value} size="lg">
               {editing ? 'Güncelle' : 'Ekle'}
             </Button>
             {editing && (
@@ -191,6 +194,8 @@ export function SecretsPanel({ onError }: Props) {
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-1">
                     <button
+                      data-testid="secret-reveal"
+                      data-secret-name={s.name}
                       onClick={() => toggleReveal(s)}
                       title={revealed[s.name] !== undefined ? 'Gizle' : 'Göster'}
                       className="rounded p-1.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -198,6 +203,8 @@ export function SecretsPanel({ onError }: Props) {
                       {revealed[s.name] !== undefined ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                     <button
+                      data-testid="secret-copy"
+                      data-secret-name={s.name}
                       onClick={() => copyValue(s)}
                       title="Kopyala"
                       className="rounded p-1.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
@@ -211,6 +218,8 @@ export function SecretsPanel({ onError }: Props) {
                       Düzenle
                     </button>
                     <button
+                      data-testid="secret-delete"
+                      data-secret-name={s.name}
                       onClick={() => remove(s)}
                       title="Sil"
                       className="rounded p-1.5 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"

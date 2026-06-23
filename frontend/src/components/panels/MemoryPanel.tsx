@@ -120,14 +120,16 @@ export function MemoryPanel({ agent, onError }: Props) {
       {/* Add memory + reflect */}
       <div className="mb-3 flex gap-2">
         <input
+          data-testid="memory-content-input"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder={`${agent.name} için hatırlanacak bir bilgi ekle…`}
           className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
         />
-        <Button onClick={add}>+ Belge</Button>
+        <Button data-testid="memory-add-document" onClick={add}>+ Belge</Button>
         <button
+          data-testid="memory-reflect"
           onClick={reflect}
           disabled={reflecting}
           className="flex items-center gap-1.5 rounded border border-[var(--color-border)] px-3 py-1 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40"
@@ -144,6 +146,8 @@ export function MemoryPanel({ agent, onError }: Props) {
           FILTERS.map((f) => (
             <button
               key={f.key}
+              data-testid="memory-filter"
+              data-filter={f.key}
               onClick={() => setFilter(f.key)}
               className={`rounded-md px-2 py-0.5 text-xs transition ${
                 filter === f.key
@@ -224,6 +228,8 @@ export function MemoryPanel({ agent, onError }: Props) {
                 )}
                 {isLong && (
                   <button
+                    data-testid="memory-card-expand"
+                    data-memory-id={m.id}
                     onClick={() => toggleExpanded(m.id)}
                     className="mt-1 flex items-center gap-0.5 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
                   >
@@ -233,6 +239,8 @@ export function MemoryPanel({ agent, onError }: Props) {
                 )}
               </div>
               <button
+                data-testid="memory-delete"
+                data-memory-id={m.id}
                 onClick={() => remove(m)}
                 className="flex-shrink-0 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-danger)] group-hover:opacity-100"
                 title="Sil"

@@ -2,6 +2,43 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Lazy araç kataloğu MCP açıklamalarını kısaltıyor (bağlam şişmesi fix) ✅ (2026-06-23)
+
+Sorun: Sistem promptundaki **"Available Tools (load on demand)"** bloğu, lazy MCP
+araçlarının **tam, çok-paragraflı açıklamasını** (`e.Tool.Description`) basıyordu. Gateway
+gibi sunucuların açıklamaları "When to use / When NOT to use" rehberleriyle dolu →
+her lazy araç için bu metin bağlama giriyor, sistem promptu şişiyordu (ve Windows'ta
+claude-cli komut satırını 32K limitine itiyordu — yukarıdaki fix'in tetikleyicisiyle
+aynı kök bloat).
+
+Çözüm (`internal/tools/registry.go` `LazyCatalog`):
+- Lazy blok bir **isim + kısa özet** teaser'ıdır; tam açıklama araç `activate_tools`
+  ile yüklenince zaten şemada (`Defs`) geliyor. Yeni `lazyDescription` helper'ı her
+  açıklamayı **ilk anlamlı satıra** indirip `lazyCatalogDescMaxChars=200` ile kapıyor
+  (UTF-8 sınırında). Hem native hem MCP lazy araçlarına uygulanıyor.
+- Sonuç: gateway gibi yüzlerce araçlı sunucularda load-on-demand bloğu dramatik küçülür.
+- Build + `internal/tools` testleri yeşil.
+
+## claude-cli sistem promptu artık dosyadan veriliyor (Windows 32K arg limiti fix) ✅ (2026-06-23)
+
+Sorun: Otonom/flow turlarında claude.exe başlatılırken
+`provider error: fork/exec ...claude.exe: Dosya adı veya uzantısı çok uzun.`
+(Windows hata 206 / `ERROR_FILENAME_EXCED_RANGE`). Kök neden: `claudecli.go`
+sistem promptunu `--append-system-prompt <sys>` ile **komut satırı argümanı** olarak
+geçiriyordu. Sistem promptu (skills + core memory blokları + dinamik bağlam) büyüyünce
+Windows'un ~32.767 karakterlik komut satırı limiti aşılıp süreç hiç başlamadan çöküyordu.
+Belirti flow'larda ardıl `node "<X>" (agent): context canceled` olarak da görünüyordu
+(paralel düğüm çökünce ortak context iptal edilir).
+
+Çözüm (`internal/providers/claudecli.go` `Complete`):
+- Sistem promptu artık `os.CreateTemp` ile bir temp dosyaya yazılıp
+  **`--append-system-prompt-file <path>`** bayrağıyla veriliyor → komut satırında yalnız
+  kısa bir yol taşınıyor, limit aşımı imkânsız. (Sohbet promptu zaten stdin'den gidiyordu.)
+- Temp dosya `defer os.Remove` ile her iki retry denemesi bitince siliniyor.
+- Gereksinim: claude CLI'nin `--append-system-prompt-file` desteği (2.1.186'da mevcut;
+  `--bare` yardımında `--append-system-prompt[-file]` belgeli).
+- Build + `go vet` + `internal/providers` testleri yeşil.
+
 ## "Gizli" çip artık gerçek context durumunu yansıtıyor + self-management'ı kapsıyor ✅ (2026-06-23)
 
 Sorun: self-management araçları (ajanın SwarmGo'yu kontrol eden tool'ları) kodda
@@ -63,17 +100,18 @@ farklı kelime → toplu değişimde kaçmış), eyleme dönük "fix:" eki yoktu
 ## Hooks paneli: harici araç oto-tespit + tek-tıkla bağla toggle'ı ✅ (2026-06-23)
 
 Ayarlar ▸ Hooks ekranı (`HooksPanel.tsx`) iki iyileştirme aldı:
-- **Oto-tespit:** Harici token araçları (`rtk`/`sqz`/`headroom`/`context-mode`)
+- **Oto-tespit:** Harici token araçları (`rtk`/`sqz`/`context-mode`)
   artık **ekran açılır açılmaz** otomatik kontrol ediliyor (`useEffect`'e `checkTools()`
   eklendi); eski "Kurulu mu kontrol et" butonu yeniden-tarama için korundu. Tespit
   hâlâ presence-only (`/api/external-tools` → `exec.LookPath`, çalıştırma/kurulum yok).
 - **Tek-tıkla bağla toggle'ı:** Bulunan her hook-tabanlı araç için **Bağla / Aktif /
   Pasif** düğmesi. `TOOL_HOOK_TEMPLATES` şablonundan ilgili hook'u oluşturur
-  (`rtk`→PreToolUse/`Bash` PowerShell rewrite adapter; `sqz`→PreToolUse,
-  komut `sqz hook claude`), tekrar tıklayınca `toggleHook` ile aç/kapat (silmez).
-  `headroom` ve `context-mode` MCP tabanlı (library/proxy/MCP server) olduğu için
-  toggle yerine **MCP** rozeti gösterilir (hook değil; Ayarlar ▸ MCP'den eklenir). `wiredHook()` eşlemeyi komut içeriğinden
-  yapar. Otomasyon için `data-testid="tool-toggle"` + `data-tool` eklendi.
+  (`rtk`→PreToolUse/`Bash` PowerShell rewrite adapter; `sqz`→PreToolUse/`Bash`,
+  komut `sqz hook claude` — rtk gibi bash-rewrite, ikisini aynı anda Bash'te açma),
+  tekrar tıklayınca `toggleHook` ile aç/kapat (silmez).
+  `context-mode` MCP tabanlı (sandbox + FTS5 KB) olduğu için toggle yerine **MCP**
+  rozeti gösterilir (hook değil; Ayarlar ▸ MCP'den eklenir). `wiredHook()` eşlemeyi
+  komut içeriğinden yapar. Otomasyon için `data-testid="tool-toggle"` + `data-tool` eklendi.
 - Doğrulama: frontend `tsc --noEmit` yeşil. Not: prod embed için `npm run build`
   + Go yeniden derleme gerekir (dev'de Vite HMR yeterli).
 
@@ -141,7 +179,14 @@ attribute, davranış/stil değişmedi).
   ArtifactsPanel (12), FlowCanvas (2).
 
 `npx tsc --noEmit` yeşil (EXIT=0). Seçici haritası `_Docs\33-DIS-AJAN-OTOMASYONU.md` §B.2'ye işlendi.
-**Sıradaki (ertelendi):** ağa açılırsa API auth katmanı; gerçek playwright/chrome-mcp uçtan-uca koşu.
+
+**Gerçek E2E doğrulama (2026-06-23):** headless Playwright (kurulu Chrome) ile canlı uygulama
+(Vite :5173 → backend :8090) sürüldü; MCP köprüsü o an dalgalandığı için doğrudan Playwright
+kullanıldı. 16/16 kontrol geçti: NavRail 15/15, chat composer (input/send/agent-select), tüm panel
+CRUD testid'leri ve **gerçek etkileşim** (ajan oluştur formuna ad yazıp geri okuma). Test bir boşluk
+yakaladı: "Ajanlar" ekranı `AgentRoster` değil **`AgentsView`** render ediyor; bu bileşen testid'siz
+kalmıştı → AgentsView roster/create formuna testid eklendi (commit eafe718). **Sıradaki (ertelendi):**
+ağa açılırsa API auth katmanı.
 
 ## Yapılandırılmış konuşma-özeti — Claude Code parite 1. faz (compact decay fix) ✅ (2026-06-23)
 
@@ -730,7 +775,7 @@ hata zamanlayıcıda değil, uydurmadaydı.)
    gösteriyordu; artık `displayPath()` ile `~\...` kısaltmasıyla gösterir (title'da tam yol;
    "Yolu kopyala" hâlâ tam yolu kopyalar).
 3. **context-mode dedektörü.** Hooks "Harici token araçları" listesine (`external_tools.go`)
-   `context-mode` eklendi (rtk/sqz/headroom yanında).
+   `context-mode` eklendi (rtk/sqz yanında).
 
 ---
 

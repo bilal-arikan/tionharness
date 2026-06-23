@@ -38,6 +38,7 @@ function CanvasTools({ onAutoLayout }: { onAutoLayout?: () => void }) {
     <Panel position="top-right">
       <div className="flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-xs shadow-lg">
         <button
+          data-testid="flow-canvas-auto-layout"
           onClick={() => {
             onAutoLayout()
             setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 60)
@@ -163,6 +164,7 @@ export function FlowCanvas({
       <NodeActionsContext.Provider value={nodeActions}>
       <ReactFlowProvider>
         <ReactFlow
+          data-testid="flow-canvas-root"
           nodes={nodes}
           edges={styledEdges}
           nodeTypes={nodeTypes}

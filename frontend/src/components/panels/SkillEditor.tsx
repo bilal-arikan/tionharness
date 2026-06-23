@@ -65,6 +65,10 @@ export function SkillEditor({ mode, initial, onClose, onSaved }: Props) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Skill düzenleyici"
+        data-testid="skill-editor-modal"
         className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >

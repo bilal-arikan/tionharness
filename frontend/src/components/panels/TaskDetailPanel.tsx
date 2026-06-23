@@ -174,6 +174,7 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
           Görev detayı
         </span>
         <button
+          data-testid="task-detail-close"
           onClick={onClose}
           title="Paneli kapat"
           className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
@@ -186,11 +187,13 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
         <Field label="Başlık">
           <div className="flex items-center gap-1.5">
             <input
+              data-testid="task-title-input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
             />
             <button
+              data-testid="task-retitle-ai"
               onClick={retitle}
               disabled={retitling}
               title="AI ile başlığı açıklamadan yeniden oluştur"
@@ -203,6 +206,7 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
 
         <Field label="Açıklama — başlık bundan üretilir">
           <textarea
+            data-testid="task-description-textarea"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={6}
@@ -211,12 +215,14 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
         </Field>
 
         <Field label="Ajan (opsiyonel, bilgi)">
-          <AgentPicker
-            agents={agents}
-            value={ownerAgentId}
-            onChange={setOwnerAgentId}
-            placeholder="Ajan seç (opsiyonel)"
-          />
+          <div data-testid="task-detail-owner-wrap">
+            <AgentPicker
+              agents={agents}
+              value={ownerAgentId}
+              onChange={setOwnerAgentId}
+              placeholder="Ajan seç (opsiyonel)"
+            />
+          </div>
         </Field>
 
         <Field label="Akış (opsiyonel, bilgi)">
@@ -238,6 +244,7 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
         <Field label="Bağımlılıklar — önce tamamlanması gereken görevler">
           {/* Drop zone — accepts kanban cards dragged from the board. */}
           <div
+            data-testid="task-detail-deps-dropzone"
             ref={dropZoneRef}
             onDragOver={(e) => {
               e.preventDefault()
@@ -314,7 +321,7 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
         </Field>
 
         <Field label="Durum (kolon)">
-          <div className="flex flex-wrap gap-1.5">
+          <div data-testid="task-boardstate-select" className="flex flex-wrap gap-1.5">
             {columns.map((col) => {
               const active = boardState === col.key
               return (
@@ -342,9 +349,11 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
         </Field>
 
         <div className="flex items-center gap-2 border-t border-[var(--color-border)] pt-3">
-          <Button onClick={save} disabled={!dirty || saving}>
-            {saving ? 'Kaydediliyor…' : 'Kaydet'}
-          </Button>
+          <div data-testid="task-detail-save">
+            <Button onClick={save} disabled={!dirty || saving}>
+              {saving ? 'Kaydediliyor…' : 'Kaydet'}
+            </Button>
+          </div>
           {dirty && !saving && (
             <span className="text-[11px] text-[var(--color-warning)]">kaydedilmemiş değişiklik</span>
           )}
@@ -353,6 +362,7 @@ export function TaskDetailPanel({ task, agents, flows, columns, tasks = [], onCl
         {/* Danger zone */}
         <div className="mt-auto border-t border-[var(--color-border)] pt-3">
           <button
+            data-testid="task-detail-delete"
             onClick={remove}
             className="w-full rounded px-3 py-1.5 text-sm text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
           >

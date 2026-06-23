@@ -48,15 +48,19 @@ function KeyPicker({
   secrets,
   onPick,
   onClear,
+  provider,
 }: {
   isSet: boolean
   secrets: Secret[]
   onPick: (name: string) => void
   onClear: () => void
+  provider: string
 }) {
   return (
     <div className="flex items-center gap-1.5">
       <select
+        data-testid="provider-key-picker"
+        data-provider={provider}
         defaultValue=""
         disabled={secrets.length === 0}
         onChange={(e) => {
@@ -75,6 +79,8 @@ function KeyPicker({
       </select>
       {isSet && (
         <button
+          data-testid="provider-clear-key"
+          data-provider={provider}
           onClick={onClear}
           className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-danger)] hover:border-[var(--color-danger)]"
         >
@@ -149,11 +155,13 @@ function BuiltinProvider({
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-dim)]">{keyLabel}</span>
-          <KeyPicker isSet={isSet} secrets={secrets} onPick={onPick} onClear={onClear} />
+          <KeyPicker isSet={isSet} secrets={secrets} onPick={onPick} onClear={onClear} provider={testProvider} />
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-dim)]">{endpointLabel}</span>
           <input
+            data-testid="provider-endpoint-input"
+            data-provider={testProvider}
             value={endpointValue}
             onChange={(e) => onEndpoint(e.target.value)}
             placeholder={endpointPlaceholder}
@@ -171,6 +179,8 @@ function BuiltinProvider({
             ? <span className="text-xs text-[var(--color-text-dim)]">{testDisabledHint}</span>
             : testBadge(test, testProvider)}
           <button
+            data-testid="provider-test"
+            data-provider={testProvider}
             onClick={() => runTest(testProvider, testModel)}
             disabled={!isSet}
             className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)] disabled:opacity-40 disabled:hover:border-[var(--color-border)]"
@@ -316,8 +326,8 @@ function CustomProviders({
               </div>
 
               <div className="flex items-center justify-end gap-1.5">
-                <button onClick={() => edit(p)} className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]">Düzenle</button>
-                <button onClick={() => remove(p.id)} className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"><Trash2 size={13} /></button>
+                <button data-testid="custom-provider-edit" data-provider-id={p.id} onClick={() => edit(p)} className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]">Düzenle</button>
+                <button data-testid="custom-provider-delete" data-provider-id={p.id} onClick={() => remove(p.id)} className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"><Trash2 size={13} /></button>
               </div>
             </div>
           ))}
@@ -327,26 +337,26 @@ function CustomProviders({
       <div className="space-y-1.5 rounded-md border border-dashed border-[var(--color-border)] p-2">
         <div className="text-xs font-medium">{editing ? `Düzenle: ${draft.id}` : 'Yeni özel sağlayıcı'}</div>
         <div className="grid grid-cols-2 gap-1.5">
-          <input placeholder="id (ör. openrouter)" value={draft.id} disabled={editing} onChange={(e) => upd({ id: e.target.value })} className={inputCls} />
-          <input placeholder="Etiket" value={draft.label} onChange={(e) => upd({ label: e.target.value })} className={inputCls} />
-          <select value={draft.kind} onChange={(e) => upd({ kind: e.target.value })} className={inputCls}>
+          <input data-testid="custom-provider-id-input" placeholder="id (ör. openrouter)" value={draft.id} disabled={editing} onChange={(e) => upd({ id: e.target.value })} className={inputCls} />
+          <input data-testid="custom-provider-label-input" placeholder="Etiket" value={draft.label} onChange={(e) => upd({ label: e.target.value })} className={inputCls} />
+          <select data-testid="custom-provider-kind-select" value={draft.kind} onChange={(e) => upd({ kind: e.target.value })} className={inputCls}>
             <option value="openai">OpenAI-uyumlu (tool-use)</option>
             <option value="anthropic">Anthropic-uyumlu (tool-use + thinking)</option>
           </select>
-          <input placeholder="varsayılan model" value={draft.defaultModel} onChange={(e) => upd({ defaultModel: e.target.value })} className={inputCls} />
+          <input data-testid="custom-provider-default-model-input" placeholder="varsayılan model" value={draft.defaultModel} onChange={(e) => upd({ defaultModel: e.target.value })} className={inputCls} />
         </div>
-        <input placeholder="base URL (ör. https://openrouter.ai/api/v1)" value={draft.baseUrl} onChange={(e) => upd({ baseUrl: e.target.value })} className={inputCls} />
-        <input placeholder="model id'leri — virgülle, opsiyonel" value={draft.models} onChange={(e) => upd({ models: e.target.value })} className={inputCls} />
+        <input data-testid="custom-provider-base-url-input" placeholder="base URL (ör. https://openrouter.ai/api/v1)" value={draft.baseUrl} onChange={(e) => upd({ baseUrl: e.target.value })} className={inputCls} />
+        <input data-testid="custom-provider-models-input" placeholder="model id'leri — virgülle, opsiyonel" value={draft.models} onChange={(e) => upd({ models: e.target.value })} className={inputCls} />
         <SecretSource secrets={secrets} onManage={onManageSecrets} onPick={async (n) => upd({ key: await onImportSecret(n) })} />
         <div className="text-xs text-[var(--color-text-dim)]">
           {draft.key ? '✓ Anahtar sırdan seçildi' : editing ? 'Anahtar korunacak (değiştirmek için sırdan seç)' : 'Anahtar: yalnızca sırdan seçilir (elle giriş kapalı)'}
         </div>
         {err && <div className="text-xs text-[var(--color-danger)]">{err}</div>}
         <div className="flex gap-2">
-          <button onClick={save} disabled={busy || !draft.id || !draft.baseUrl} className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-30">
+          <button data-testid="custom-provider-save" onClick={save} disabled={busy || !draft.id || !draft.baseUrl} className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-30">
             <Plus size={13} /> {editing ? 'Güncelle' : 'Ekle'}
           </button>
-          {editing && <button onClick={reset} className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs">İptal</button>}
+          {editing && <button data-testid="custom-provider-cancel" onClick={reset} className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs">İptal</button>}
         </div>
       </div>
     </div>
