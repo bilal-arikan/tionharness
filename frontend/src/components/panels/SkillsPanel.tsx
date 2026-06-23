@@ -51,7 +51,7 @@ function SummaryOffBadge() {
       className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-warning,#d97706)_18%,transparent)] text-[var(--color-warning,#d97706)]"
       title="Özeti her oturuma otomatik eklenmez (yalnızca atanan ajana görünür)"
     >
-      Özetsiz
+      Gizli
     </span>
   )
 }
