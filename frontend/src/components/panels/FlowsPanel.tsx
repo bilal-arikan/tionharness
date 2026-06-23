@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
-import { Loader2, XCircle } from 'lucide-react'
+import { Loader2, XCircle, FolderOpen } from 'lucide-react'
 import { api } from '../../api'
+import { CopyPathButton } from '../CopyPathButton'
 import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
 import { FlowCanvas, type EdgeStyle } from '../flow/FlowCanvas'
@@ -48,6 +49,8 @@ const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [
 export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   const [flows, setFlows] = useState<Flow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Absolute path of the selected flow's on-disk JSON file (for copy / reveal).
+  const [flowPath, setFlowPath] = useState('')
   // Left-column tab: own flows, read-only template gallery, or run history.
   const [tab, setTab] = useState<'flows' | 'templates' | 'runs'>('flows')
   const [templateId, setTemplateId] = useState<string | null>(null)
@@ -126,6 +129,8 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   const selectFlow = useCallback(
     (f: Flow) => {
       setSelectedId(f.id)
+      setFlowPath('')
+      api.flowPath(f.id).then((r) => setFlowPath(r.path)).catch(() => setFlowPath(''))
       setName(f.name)
       setDescription(f.description)
       setRun(null)
@@ -551,6 +556,22 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               placeholder="Akış adı"
               className="w-56 flex-shrink-0 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium outline-none"
             />
+            {/* Flow id + on-disk location (copy path / open folder). */}
+            <span
+              className="flex-shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-text-dim)]"
+              title="Akış ID (dosya adı)"
+            >
+              {selectedId}
+            </span>
+            <CopyPathButton path={flowPath} title="Akış yolunu kopyala" />
+            <button
+              type="button"
+              onClick={() => selectedId && api.revealFlow(selectedId).catch((e) => onError((e as Error).message))}
+              title="Akış klasörünü aç"
+              className="flex flex-shrink-0 items-center justify-center rounded border border-[var(--color-border)] px-1.5 py-1 text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            >
+              <FolderOpen size={14} />
+            </button>
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}

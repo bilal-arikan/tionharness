@@ -50,6 +50,23 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+// DefaultDataDir resolves the persistent state directory using the same rule as
+// Load ($SWARMGO_DATA_DIR or ~/.swarmgo), without creating it. Exposed so the
+// logging setup can locate the on-disk log file before a full config load.
+func DefaultDataDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".swarmgo"
+	}
+	return envOr("SWARMGO_DATA_DIR", filepath.Join(home, ".swarmgo"))
+}
+
+// LogFilePath is the on-disk log file (under the data dir's logs/ folder) that
+// the in-app Logs screen can reveal in the OS file manager and copy.
+func LogFilePath() string {
+	return filepath.Join(DefaultDataDir(), "logs", "swarmgo.log")
+}
+
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

@@ -7,10 +7,12 @@ package app
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -48,9 +50,26 @@ func (a *App) Appearance() (preset, theme, accent string) {
 // Logs screen; the logger writes to both the buffer and stdout.
 func SetupLogging() (*logbuf.Buffer, *slog.Logger) {
 	logs := logbuf.New(2000)
-	logger := slog.New(logs.Handler(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	// Mirror logs to stdout and (best-effort) an on-disk file under the data dir
+	// so the in-app Logs screen can reveal/copy the full history. If the file
+	// cannot be opened, fall back to stdout-only — logging must never block boot.
+	var w io.Writer = os.Stdout
+	if f, err := openLogFile(); err == nil {
+		w = io.MultiWriter(os.Stdout, f)
+	}
+	logger := slog.New(logs.Handler(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	slog.SetDefault(logger)
 	return logs, logger
+}
+
+// openLogFile opens the append-mode log file (creating its parent dir) that the
+// Logs screen reveals. The handle intentionally lives for the whole process.
+func openLogFile() (*os.File, error) {
+	p := config.LogFilePath()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return nil, err
+	}
+	return os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 }
 
 // Bootstrap wires every subsystem (secret, settings, providers, tunables,

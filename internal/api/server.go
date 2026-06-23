@@ -314,6 +314,9 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/flows", s.handleCreateFlow)
 	mux.HandleFunc("PUT /api/flows/{id}", s.handleUpdateFlow)
 	mux.HandleFunc("DELETE /api/flows/{id}", s.handleDeleteFlow)
+	// Locate the flow on disk: copy its path or open its folder in Explorer.
+	mux.HandleFunc("GET /api/flows/{id}/path", s.handleFlowPath)
+	mux.HandleFunc("POST /api/flows/{id}/reveal", s.handleRevealFlow)
 	mux.HandleFunc("POST /api/flows/{id}/run", s.handleRunFlow)
 	mux.HandleFunc("POST /api/flows/{id}/run-stream", s.handleRunFlowStream)
 	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
@@ -403,6 +406,9 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/uploads", s.handleDeleteUpload)
 	// Application + workspace logs (global ring buffer).
 	mux.HandleFunc("GET /api/logs", s.handleListLogs)
+	// On-disk log file path + reveal in the OS file manager (local desktop).
+	mux.HandleFunc("GET /api/logs/path", s.handleLogsPath)
+	mux.HandleFunc("POST /api/logs/reveal", s.handleRevealLogs)
 	// Frontend error bridge: client-side crashes/rejections funnel into the log
 	// stream so they surface in the Logs screen, not just the browser console.
 	mux.HandleFunc("POST /api/logs", s.handleClientLog)

@@ -62,6 +62,10 @@ export const systemApi = {
     return req<LogEntry[]>(`/api/logs${qs ? `?${qs}` : ''}`)
   },
 
+  // On-disk log file path (copy) + reveal it in the OS file manager (desktop).
+  logsPath: () => req<{ path: string }>('/api/logs/path'),
+  revealLogs: () => req<{ path: string }>('/api/logs/reveal', { method: 'POST' }),
+
   // Workspace-wide budget/usage: today's totals + per-origin breakdown,
   // per-agent table and a daily trend over the last `days` days.
   workspaceUsage: (days = 7) => req<WorkspaceUsage>(`/api/usage?days=${days}`),

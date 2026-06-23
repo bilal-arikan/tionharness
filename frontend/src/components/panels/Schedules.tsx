@@ -398,6 +398,9 @@ export function Schedules({ agents, focusId, onError }: Props) {
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[var(--color-accent)]">{s.cronExpr}</span>
                 <span className="text-xs text-[var(--color-text-dim)]">{agentName(s.agentId)}</span>
+                <span className="ml-auto font-mono text-[10px] text-[var(--color-text-dim)] opacity-60" title="Zamanlama ID">
+                  {s.id}
+                </span>
               </div>
               <div className="text-xs text-[var(--color-text-dim)]">Prompt: {s.prompt}</div>
               <div className="text-xs text-[var(--color-text-dim)]">

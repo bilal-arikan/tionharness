@@ -258,6 +258,9 @@ export function SessionsSidebar({
                           <span className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}>
                             {s.title || 'Yeni sohbet'}
                           </span>
+                          <span className="shrink-0 font-mono text-[9px] opacity-50" title="Oturum ID">
+                            {s.id}
+                          </span>
                         </span>
                         {isStreaming ? (
                           <span className="truncate text-[10px] font-medium text-[var(--color-success)]">yazıyor…</span>

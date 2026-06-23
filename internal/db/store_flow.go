@@ -25,6 +25,17 @@ func (d *DB) CreateFlow(ctx context.Context, f Flow) (Flow, error) {
 	return f, d.persistFlowLocked(f)
 }
 
+// FlowPath returns the absolute path of a flow's on-disk JSON file (one file per
+// flow under the workspace store's flows/ folder).
+func (d *DB) FlowPath(flowID string) (string, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if _, ok := d.flows[flowID]; !ok {
+		return "", ErrNotFound
+	}
+	return d.dir(dirFlows, flowID+".json"), nil
+}
+
 // GetFlow loads a flow by id.
 func (d *DB) GetFlow(ctx context.Context, id string) (Flow, error) {
 	d.mu.RLock()

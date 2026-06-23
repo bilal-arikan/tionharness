@@ -2,6 +2,27 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## UI: ID görünürlüğü + disk yolu erişimi (sohbet / akış / zamanlama / log) ✅ (2026-06-23)
+
+Ajan ekranındaki "ID + klasörü aç/kopyala" deseni diğer ekranlara da yayıldı:
+
+1. **Sohbet listesi (SessionsSidebar)** — her oturum başlığının yanında küçük
+   mono **oturum ID'si** (ajanlardaki gibi).
+2. **Akışlar (FlowsPanel)** — editör araç çubuğunda **akış ID'si** + **yolu kopyala**
+   (`CopyPathButton`) + **klasörü aç** (Explorer `/select`). Yeni backend:
+   `GET /api/flows/{id}/path`, `POST /api/flows/{id}/reveal`, `db.FlowPath`.
+3. **Zamanlamalar (Schedules)** — her satırda cron ifadesinin yanında mono
+   **zamanlama ID'si**.
+4. **Loglar (LogsPanel)** — kontrol çubuğunda **log dosyası yolunu kopyala** +
+   **klasörü aç**. Loglar artık disk dosyasına da yazılıyor: `SetupLogging`
+   stdout + `io.MultiWriter` ile `<dataDir>/logs/swarmgo.log` (append, best-effort).
+   Yeni: `config.DefaultDataDir()`, `config.LogFilePath()`, `GET /api/logs/path`,
+   `POST /api/logs/reveal` (`api/logs_path.go`).
+
+**Not (workspace rengi):** "kullanılmıyorsa kaldır" istendi ama renk **kullanılıyor** —
+NavRail (daraltılmış workspace ikonu) ve WorkspaceSwitcher ikon arkaplan tonu. O yüzden
+ayar korundu. API: `api/flows.ts`, `api/system.ts`. Build + tsc yeşil.
+
 ## Sıradaki-tur bağlam önizleme (debug) + peer mesajlaşma Faz 2–3 ✅ (2026-06-23)
 
 1. **Sıradaki-tur bağlam önizleme** — Agent ekranındaki bağlam önizlemesinin oturum
@@ -142,7 +163,12 @@ asistan turları tek ayrımsız "assistant" sesine karışıyordu. Düzeltme + a
 diğer kusurlar tarandı; en kritik 3'ü (+ kullanıcı-hedefi) kapatıldı:
 
 1. **Yazar etiketleme** (önceki tur) — çok-yazarlı geçmişte her asistan turu yazarıyla
-   ön-eklenir (`api/chat_authors.go`).
+   ön-eklenir (`api/chat_authors.go`); kendi turlarına `(you)` markerı. **Güncelleme
+   (2026-06-23):** etiketleme eşiği "2+ farklı yazar"dan "geçmişte **yanıtlayan ajandan
+   farklı** bir yazar var mı"ya genişletildi → ajanı değiştirilmiş (devredilen) oturumda
+   da (tek önceki yazar A, şimdi B yanıtlıyor) A'nın turları etiketlenir, B onları
+   kendisininki sanmaz. Saf tek-ajan oturumu (yalnız yanıtlayan konuşmuş) hâlâ etiketsiz
+   (doğal transkript + prompt cache korunur).
 2. **Geçmiş-duyarlı wake** — `schedule_wake` ile uyanan ajan eskiden yalnız wake
    prompt'unu görüyordu (`invokeTraced`, geçmiş yok). Artık `WakeTurnFunc` hook'u
    (`api/wake_turn.go`) tam sohbet turunu (geçmiş+özet+hafıza+goal) kurar. Detay:

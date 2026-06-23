@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { FolderOpen } from 'lucide-react'
 import { api } from '../../api'
 import type { LogEntry } from '../../types'
 import { groupConsecutive } from '../../lib/logGroup'
+import { CopyPathButton } from '../CopyPathButton'
 
 interface Props {
   onError: (msg: string) => void
@@ -44,7 +46,14 @@ export function LogsPanel({ onError }: Props) {
   const [q, setQ] = useState('')
   const [follow, setFollow] = useState(true)
   const [group, setGroup] = useState(true)
+  // Absolute path of the on-disk log file (for copy / reveal in Explorer).
+  const [logPath, setLogPath] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Resolve the on-disk log file path once for the copy/open-folder actions.
+  useEffect(() => {
+    api.logsPath().then((r) => setLogPath(r.path)).catch(() => setLogPath(''))
+  }, [])
 
   const load = useCallback(async () => {
     try {
@@ -116,6 +125,15 @@ export function LogsPanel({ onError }: Props) {
           className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
         >
           Yenile
+        </button>
+        {/* On-disk log file: copy its path or open its folder in Explorer. */}
+        <CopyPathButton path={logPath} title="Log dosyası yolunu kopyala" />
+        <button
+          onClick={() => api.revealLogs().catch((e) => onError((e as Error).message))}
+          title="Log klasörünü aç"
+          className="flex items-center justify-center rounded border border-[var(--color-border)] px-1.5 py-1 text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+        >
+          <FolderOpen size={12} />
         </button>
         <span className="text-xs text-[var(--color-text-dim)]">
           {group && rows.length !== logs.length ? `${rows.length} satır · ${logs.length} kayıt` : `${logs.length} kayıt`}
