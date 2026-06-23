@@ -109,7 +109,15 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
       <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-5 py-4">
         <AgentAvatar agent={preview} size={44} />
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">{name || 'Ajan'}</h2>
+          <div className="flex items-baseline gap-2">
+            <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">{name || 'Ajan'}</h2>
+            <span
+              title="Ajan ID — disk klasörünün adı"
+              className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-text-dim)]"
+            >
+              {agent.id}
+            </span>
+          </div>
           <p className="text-xs text-[var(--color-text-dim)]">Ajan ayarları</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

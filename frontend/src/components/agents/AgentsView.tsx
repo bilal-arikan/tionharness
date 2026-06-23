@@ -161,7 +161,12 @@ export function AgentsView({
               >
                 <AgentAvatar agent={a} size={32} active={defaultAgentId === a.id} />
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate font-medium">{a.name}</span>
+                  <span className="flex min-w-0 items-baseline gap-1.5">
+                    <span className="truncate font-medium">{a.name}</span>
+                    <span className="shrink-0 font-mono text-[10px] opacity-60" title="Ajan ID (klasör adı)">
+                      {a.id}
+                    </span>
+                  </span>
                   <span className="truncate text-xs opacity-70">
                     {a.provider}
                     {defaultAgentId === a.id ? ' · varsayılan' : ''}
