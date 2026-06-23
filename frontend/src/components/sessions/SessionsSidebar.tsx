@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, type LucideIcon } from 'lucide-react'
+import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, type LucideIcon } from 'lucide-react'
 import type { Agent, Session, SearchHit } from '../../types'
 import { api } from '../../api'
 import { AgentAvatar } from '../agents/AgentAvatar'
@@ -19,6 +19,8 @@ interface Props {
   // transcript can scroll to that exact turn.
   onSelectSession: (id: string, messageId?: string) => void
   onNewSession: () => void
+  // Re-fetch the session list from the server (manual refresh button).
+  onRefresh: () => void
   onRenameSession: (id: string, title: string) => void
   onGenerateTitle: (id: string) => void
   onCopyPath: (id: string) => void
@@ -37,6 +39,7 @@ export function SessionsSidebar({
   newDisabled,
   onSelectSession,
   onNewSession,
+  onRefresh,
   onRenameSession,
   onGenerateTitle,
   onCopyPath,
@@ -157,12 +160,23 @@ export function SessionsSidebar({
           Oturumlar
         </span>
         <button
+          onClick={onRefresh}
+          className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+          title="Sohbet geçmişini yenile"
+        >
+          <RefreshCw size={14} />
+        </button>
+      </div>
+
+      {/* Prominent new-chat button, above the search. */}
+      <div className="px-3 pb-1 pt-1">
+        <button
           onClick={onNewSession}
           disabled={newDisabled}
-          className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-30"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-accent)] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           title="Yeni oturum (varsayılan ajanla)"
         >
-          +
+          <Plus size={16} /> Yeni Sohbet
         </button>
       </div>
 

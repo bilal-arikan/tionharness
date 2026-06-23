@@ -674,6 +674,7 @@ export default function App() {
           newDisabled={agents.length === 0}
           onSelectSession={selectSession}
           onNewSession={newSession}
+          onRefresh={refreshSessions}
           onRenameSession={renameSession}
           onGenerateTitle={regenerateSessionTitle}
           onCopyPath={copySessionPath}
