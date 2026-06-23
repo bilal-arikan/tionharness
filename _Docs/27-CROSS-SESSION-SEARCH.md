@@ -117,6 +117,18 @@ func NewConversationSearchTool(database *db.DB) ConversationSearchTool
 `- [assistant] "Session Title" · 3d ago — …snippet…`. Sonuç yoksa
 "No matching messages." döndür.
 
+**Güçlendirme — birebir kurtarma (2026-06-24):** compact sonrası **kelime kelime** geri-getirme için araca
+üç parametre eklendi (snippet tek başına kırpık olduğundan §17.10):
+
+| Parametre | Etki |
+|---|---|
+| `full: bool` | Eşleşen mesajın **tam metni** birebir döner (snippet yerine). |
+| `context: int` (0–5) | Her isabetin **N tur öncesi+sonrası** birebir eklenir; isabet `»»` ile işaretlenir. |
+| `session_id: string` | Aramayı tek oturuma daraltır (`db.SearchOpts.OnlyID`). |
+
+Tam/çevre metni `db.MessagesAround(sid, mid, before, after)` ile bellekteki transkriptten çekilir (LLM'siz).
+Çıktı çok-satırlı: başlıkta `session_id` de var (ajan yeniden daraltabilsin). Header'da yaş hâlâ gösterilir.
+
 **Kayıt:** `internal/agent/toolsetup.go` — `NewListSessionsTool`'un yanında
 (satır ~115), **aynı capability gate** (cross-session context / `list_sessions`
 ile birlikte). Lazy-load kataloğuna girebilir (`19-LAZY-TOOL-LOADING.md` deseni)

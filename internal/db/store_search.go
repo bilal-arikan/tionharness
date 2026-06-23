@@ -27,6 +27,7 @@ type SearchOpts struct {
 	Kinds     []string // session kinds to include; empty = ["chat"]
 	Roles     []string // message roles to include; empty = all
 	ExcludeID string   // session id to skip (e.g. the current one)
+	OnlyID    string   // restrict to this single session id; empty = all sessions
 	SinceUnix int64    // only messages created at/after this unix time; 0 = no floor
 	Limit     int      // max hits; <=0 = 20
 }
@@ -67,6 +68,9 @@ func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, err
 	sessions := make([]Session, 0, len(d.sessions))
 	for _, s := range d.sessions {
 		if !kindOK[s.Kind] || s.ID == o.ExcludeID {
+			continue
+		}
+		if o.OnlyID != "" && s.ID != o.OnlyID {
 			continue
 		}
 		sessions = append(sessions, s)
@@ -111,6 +115,39 @@ func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, err
 		hits = hits[:limit]
 	}
 	return hits, nil
+}
+
+// MessagesAround returns the message with id mid in session sid plus up to
+// `before` preceding and `after` following messages, in chronological order.
+// It powers conversation_search's verbatim-context mode: after a compaction has
+// folded early turns into a summary, the agent can pull the EXACT earlier wording
+// (e.g. the user's first question) back out of the raw transcript. Returns nil
+// when the session or message is unknown.
+func (d *DB) MessagesAround(ctx context.Context, sid, mid string, before, after int) []Message {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	msgs := d.messages[sid]
+	idx := -1
+	for i := range msgs {
+		if msgs[i].ID == mid {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return nil
+	}
+	lo := idx - before
+	if lo < 0 {
+		lo = 0
+	}
+	hi := idx + after + 1
+	if hi > len(msgs) {
+		hi = len(msgs)
+	}
+	out := make([]Message, hi-lo)
+	copy(out, msgs[lo:hi])
+	return out
 }
 
 // countTerms returns the total occurrence count of all terms and whether every

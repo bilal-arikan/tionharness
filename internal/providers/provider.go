@@ -98,6 +98,13 @@ type Request struct {
 	// enabling step-by-step streaming to the UI. Ignored by non-streaming
 	// providers. Must be safe to call from the provider's goroutine.
 	OnEvent func(TraceStep)
+	// ResumeSessionID, when set, asks a CLI provider (claude-cli) to RESUME a prior
+	// session (--resume <id>) instead of starting fresh: the CLI reuses its
+	// server-side conversation + prompt cache, so the caller need only send the new
+	// turn(s) rather than the full transcript (much cheaper). Empty = fresh session.
+	// HTTP providers ignore it. See Response.SessionID for the (rotated) id to store
+	// for the next turn.
+	ResumeSessionID string
 }
 
 // Usage reports token consumption. For providers with prompt caching, the cache
@@ -138,6 +145,11 @@ type Response struct {
 	// internally (claude CLI). Empty for the native agentic loop, which the
 	// agent layer traces itself.
 	Trace []TraceStep
+	// SessionID is the CLI provider's session id for this turn (claude-cli emits it
+	// in the stream init/result events). The CLI rotates the id on each `-p --resume`
+	// turn, so the caller must store THIS value to resume on the next turn. Empty for
+	// providers without a resumable server-side session.
+	SessionID string
 }
 
 // Provider is implemented by every LLM backend.

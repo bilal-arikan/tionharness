@@ -34,13 +34,31 @@ func TestConversationSearchTool(t *testing.T) {
 		t.Fatalf("expected a match snippet, got %q", out)
 	}
 
-	// Role filter.
+	// Role filter: exactly one hit, the assistant one.
 	out, _ = tool.Call(ctx, json.RawMessage(`{"query":"deploy","role":"assistant"}`))
-	if strings.Count(out, "\n") != 0 { // single line, single hit
+	if strings.Count(out, "- [") != 1 {
 		t.Fatalf("role filter should give 1 hit, got %q", out)
 	}
-	if !strings.Contains(out, "[assistant]") {
-		t.Fatalf("expected assistant hit, got %q", out)
+	if !strings.Contains(out, "[assistant]") || strings.Contains(out, "[user]") {
+		t.Fatalf("expected only assistant hit, got %q", out)
+	}
+
+	// Full mode returns the whole matched message verbatim.
+	out, _ = tool.Call(ctx, json.RawMessage(`{"query":"gateway","full":true}`))
+	if !strings.Contains(out, "deploy the gateway") {
+		t.Fatalf("full mode should return verbatim text, got %q", out)
+	}
+
+	// Context mode includes surrounding turns with the hit marked »».
+	out, _ = tool.Call(ctx, json.RawMessage(`{"query":"gateway","context":1}`))
+	if !strings.Contains(out, "»»") || !strings.Contains(out, "docker") {
+		t.Fatalf("context mode should include neighbour turns + marker, got %q", out)
+	}
+
+	// session_id scoping: unknown session → no hits.
+	out, _ = tool.Call(ctx, json.RawMessage(`{"query":"deploy","session_id":"NOPE"}`))
+	if !strings.Contains(out, "No matching") {
+		t.Fatalf("unknown session_id should yield no hits, got %q", out)
 	}
 
 	// No match.

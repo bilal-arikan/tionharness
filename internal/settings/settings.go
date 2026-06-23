@@ -87,6 +87,13 @@ type Settings struct {
 	KeepRecentMsgs   int     `json:"keepRecentMsgs"`
 	RecallTopN       int     `json:"recallTopN"`
 	RecallMinScore   float64 `json:"recallMinScore"`
+	// Model-aware transcript budget (see internal/conversation/budget.go). The live
+	// budget is clamp(window * ContextBudgetFraction, MaxContextTokens, ContextBudgetCeil)
+	// when the model's context window is known. ContextBudgetCeil is the operative
+	// cap for big-window (1M) models — raise it to keep more history verbatim before
+	// the first silent compaction (the user's first message survives longer).
+	ContextBudgetCeil     int     `json:"contextBudgetCeil"`
+	ContextBudgetFraction float64 `json:"contextBudgetFraction"`
 
 	// Journal (long-term memory) ring-buffer bounds.
 	JournalCap    int `json:"journalCap"`    // newest journal entries kept per agent (0 = default)
@@ -143,6 +150,11 @@ type Settings struct {
 	EnableShell        bool `json:"enableShell"`        // built-in shell (arbitrary commands in sandbox)
 	EnableSelfManage   bool `json:"enableSelfManage"`   // self-management suite (create/edit/delete entities)
 	EnableCLIHooks     bool `json:"enableCliHooks"`     // pass PreToolUse/PostToolUse hooks to claude-cli agents via --settings
+	// ClaudeResume keeps the claude-cli session warm across turns: each turn passes
+	// --resume <id> and sends only the new turn (not the full transcript), so the
+	// CLI reuses its server-side prompt cache (much cheaper, like Claude Code). Off
+	// by default — opt-in (the resume id is tracked per session in db.Session).
+	ClaudeResume       bool `json:"claudeResume"`
 	EnableDelegation   bool `json:"enableDelegation"`   // run_subagent (isolated subagents / agent→agent delegation)
 	DelegationMaxDepth int  `json:"delegationMaxDepth"` // max subagent nesting (0 = default 3)
 	DelegationMaxCalls int  `json:"delegationMaxCalls"` // max subagent runs per turn (0 = default 8)
@@ -180,6 +192,9 @@ func Default() Settings {
 		KeepRecentMsgs:   8,
 		RecallTopN:       5,
 		RecallMinScore:   0.05,
+		// Big-window default: 1M models keep up to 512K of transcript verbatim.
+		ContextBudgetCeil:     512000,
+		ContextBudgetFraction: 0.6,
 
 		JournalCap:    50,
 		JournalMaxLen: 1024,
@@ -275,6 +290,9 @@ type DTO struct {
 	RecallTopN       int     `json:"recallTopN"`
 	RecallMinScore   float64 `json:"recallMinScore"`
 
+	ContextBudgetCeil     int     `json:"contextBudgetCeil"`
+	ContextBudgetFraction float64 `json:"contextBudgetFraction"`
+
 	JournalCap    int `json:"journalCap"`
 	JournalMaxLen int `json:"journalMaxLen"`
 	ReflectionCap int `json:"reflectionCap"`
@@ -310,6 +328,7 @@ type DTO struct {
 	EnableShell        bool `json:"enableShell"`
 	EnableSelfManage   bool `json:"enableSelfManage"`
 	EnableCLIHooks     bool `json:"enableCliHooks"`
+	ClaudeResume       bool `json:"claudeResume"`
 	EnableDelegation   bool `json:"enableDelegation"`
 	DelegationMaxDepth int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls int  `json:"delegationMaxCalls"`
@@ -358,6 +377,9 @@ func (s Settings) ToDTO() DTO {
 		RecallTopN:       s.RecallTopN,
 		RecallMinScore:   s.RecallMinScore,
 
+		ContextBudgetCeil:     s.ContextBudgetCeil,
+		ContextBudgetFraction: s.ContextBudgetFraction,
+
 		JournalCap:    s.JournalCap,
 		JournalMaxLen: s.JournalMaxLen,
 		ReflectionCap: s.ReflectionCap,
@@ -393,6 +415,7 @@ func (s Settings) ToDTO() DTO {
 		EnableShell:        s.EnableShell,
 		EnableSelfManage:   s.EnableSelfManage,
 		EnableCLIHooks:     s.EnableCLIHooks,
+		ClaudeResume:       s.ClaudeResume,
 		EnableDelegation:   s.EnableDelegation,
 		DelegationMaxDepth: s.DelegationMaxDepth,
 		DelegationMaxCalls: s.DelegationMaxCalls,
@@ -442,6 +465,9 @@ type Patch struct {
 	RecallTopN       *int     `json:"recallTopN"`
 	RecallMinScore   *float64 `json:"recallMinScore"`
 
+	ContextBudgetCeil     *int     `json:"contextBudgetCeil"`
+	ContextBudgetFraction *float64 `json:"contextBudgetFraction"`
+
 	JournalCap    *int `json:"journalCap"`
 	JournalMaxLen *int `json:"journalMaxLen"`
 	ReflectionCap *int `json:"reflectionCap"`
@@ -477,6 +503,7 @@ type Patch struct {
 	EnableShell        *bool `json:"enableShell"`
 	EnableSelfManage   *bool `json:"enableSelfManage"`
 	EnableCLIHooks     *bool `json:"enableCliHooks"`
+	ClaudeResume       *bool `json:"claudeResume"`
 	EnableDelegation   *bool `json:"enableDelegation"`
 	DelegationMaxDepth *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls *int  `json:"delegationMaxCalls"`

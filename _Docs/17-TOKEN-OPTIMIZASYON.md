@@ -98,7 +98,7 @@ ayrı bölüm (`frontend/.../settings/appPanels.tsx` `ContextPanel`).
 ## Harici araç tespiti (presence-only)
 
 Ayarlar → **Tanılama** ekranındaki "Kurulu mu kontrol et" butonu, bu cihazda isteğe bağlı harici
-token araçlarının (`rtk`, `sqz`, `headroom`) **kurulu olup olmadığını** gösterir.
+token araçlarının (`rtk`, `sqz`, `context-mode`) **kurulu olup olmadığını** gösterir.
 
 - Backend: `GET /api/external-tools` (`api/external_tools.go`) → `exec.LookPath` ile PATH'te arar.
   **Araçları kurmaz, çalıştırmaz, değiştirmez** (Windows'ta PATHEXT'e saygılı). Dönüş: `[{name,desc,url,found,path}]`.
@@ -202,6 +202,14 @@ hesaplıyor; `maxTokens≤0` (bütçe kapalı) dokunulmaz. `budget_test.go`.
   Haiku 4.5 **200K → 40K** · bilinmeyen → 12K. 1M modellerde **ceil** operatif sayıdır (window×fraction onu
   aşar) → "1M'i ne kadar kullanırız" knob'u = ceil. 128K ≈ 1M'in %12.8'i. Maliyet: 1M modelde ~10× eski varsayılan
   (prompt-cache ile hafifler); daha çok/az istenirse `budgetAutoCeil` ayarlanır.
+- **Ayarlanabilir + 512K varsayılan (2026-06-23):** `fraction` ve `ceil` artık **settings'ten canlı yapılandırılabilir**
+  (`ContextBudgetFraction` / `ContextBudgetCeil`; env `SWARMGO_CONTEXT_BUDGET_FRACTION` / `SWARMGO_CONTEXT_BUDGET_CEIL`).
+  Yeni varsayılanlar: **`fraction 0.20→0.6`, `ceil 128K→512K`**. Sonuç: 1M model **1M×0.6=600K → 512K** (tavana kırpılır,
+  ≈ pencerenin %51'i) · Haiku 200K → **120K** · bilinmeyen → taban (12K). Amaç: 1M modelde **kullanıcının ilk mesajı
+  ilk sessiz katlamaya kadar çok daha uzun süre aynen kalsın** (External Agent/Claude Code'un "tüm transkripti 1M pencerede
+  tut" davranışına yaklaşır). `EffectiveBudget(provider, model, configured, fraction, ceil)` imzası fraction/ceil alır;
+  ≤0 değerler paket varsayılanına düşer. `Manager.SetBudgetShape` ile canlı güncellenir (`server.go applySettings`).
+  Frontend: Ayarlar ▸ Bağlam penceresi → "Bütçe tavanı" + "Pencere oranı". `budget_test.go` güncellendi.
 - **Tool eşikleriyle hizalama ✅ YAPILDI (2026-06-22):** Compactor artık her tur için
   `conversation.EffectiveBudget(agent.Provider, agent.Model, tun.ContextBudgetTokens())` hesaplayıp
   `Tunables.CompactMaxBytesFor(budget)` / `CompactLLMThresholdFor(budget)` ile **per-model** ölçekliyor.
@@ -269,6 +277,36 @@ Sıfır yeni altyapı; readFileState tracker **bilinçle eklenmedi** (mimariye g
 - **Skill/plan re-injection neden gerekmedi:** skill **kataloğu** (slug+özet) statik prefix'te zaten her
   tur var (`SkillsCatalogBlockForAgent`) → compact onu silmez (katlanan mesajlarda değil); yüklü skill
   *gövdesi* `use_skill` ile tekrar çekilir. Plan-mode dosyası SwarmGo'da CC'deki gibi yok.
+
+### 10. `conversation_search` güçlendirme — birebir kurtarma (2026-06-24)
+
+§9'un kurtarma yolu olan `conversation_search` (`builtin_conversation_search.go`) snippet'le sınırlıydı; compact
+sonrası **kelime kelime** kurtarma için yetersizdi. Eklenenler:
+
+- **`full=true`** → eşleşen mesajın **tam metni** birebir döner (snippet değil). İlk soruyu/kararı aynen geri almak için.
+- **`context=N`** (0–5) → her isabetin **N tur öncesi + sonrası** birebir eklenir; isabet `»»` ile işaretlenir. Çevre
+  diyaloğu görmek için.
+- **`session_id`** → aramayı tek oturuma daraltır (ör. mevcut oturum). `db.SearchOpts.OnlyID` ile.
+- DB: `db.MessagesAround(sid, mid, before, after)` — bellekteki transkriptten çevre turları O(n) çeker (LLM'siz).
+  `builtin_conversation_search_test.go` full/context/session_id senaryolarını kapsar. Detay: `27-CROSS-SESSION-SEARCH.md`.
+
+### 11. claude-cli oturum sürekliliği (`--resume`) — sıcak prompt cache (2026-06-24, opt-in)
+
+External Agent/Claude Code'un "ilk soruyu hatırlama"sının asıl ucuzlatıcısı: tam transkripti her tur **yeniden besleyip**
+prompt cache'ten okumak (cacheRead ≈ girişin %99'u). SwarmGo claude-cli yolu eskiden her tur transkripti stdin'den
+**yeniden serialize** ediyordu → cache reuse yok. Yeni opt-in özellik (`ClaudeResume` ayarı, **varsayılan kapalı**):
+
+- Açıkken her turda CLI **`--resume <id>`** ile önceki oturumu sürdürür; SwarmGo yalnız **delta**yı (CLI'nin görmediği
+  yeni mesajları) gönderir → CLI'nin **server-side geçmişi + sıcak cache**'i tekrar kullanılır.
+- `providers.Request.ResumeSessionID` / `providers.Response.SessionID`; CLI `session_id`'yi stream'in `system/init` ve
+  `result` event'lerinden yakalar (id her resume turunda **rotate olur**, sonuncu saklanır).
+- Durum oturum-başına: `db.Session.CLISessionID` + `CLISentMsgCount` (delta sınırı), `SetSessionCLIResume` ile yazılır.
+- Akış: `api/chat_resume.go planClaudeResume` → ilk tur **cold** (tam transkript, id yakala), sonraki turlar **warm**
+  (delta + `--resume`). Yalnız **tek-ajanlı** sohbette (id oturum-başına; çoklu-ajan çakışırdı). Tutarsızlık (mesaj
+  düzenleme → sınır geçersiz) → otomatik cold fallback.
+- **Mimari gerilim (bilinçli):** warm modda bağlam yönetimini CLI devralır → SwarmGo'nun kendi compaction'ı o oturumda
+  devre dışı kalır. Bu yüzden **opt-in + deneysel**: açtıktan sonra bir sohbette doğrulanmalı. `claudecli_resume_test.go`
+  parser'ın session_id yakalamasını kapsar; canlı `--resume` davranışı kullanıcı doğrulamasına bağlı.
 
 ## Ayrıca Bakınız
 

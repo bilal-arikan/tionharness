@@ -58,6 +58,7 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 
 ### Context & memory
 - `maxContextTokens` (min 500, default 12000), `keepRecentMsgs` (min 1, default 8).
+- `contextBudgetCeil` (8000–2000000, default 512000) — hard cap on the model-aware transcript budget; the operative number for 1M-window models. Raise to keep more history verbatim before the first compaction. `contextBudgetFraction` (0–1, default 0.6) — share of the model's context window spendable on transcript. Effective budget = clamp(window × fraction, maxContextTokens, ceil).
 - `recallTopN` (default 5), `recallMinScore` (0–1, default 0.05).
 - `journalCap` (1–1000, default 50), `journalMaxLen` runes (64–65536, default 1024).
 - `reflectionCap` (1–1000, default 20) — newest reflections kept per agent; older ones are pruned after each dream cycle so reflections (unlike journals) can't accumulate without bound.
@@ -91,6 +92,12 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 - `enableCliHooks` — pass PreToolUse/PostToolUse hooks to claude-cli agents via
   `--settings` (default true). Turn off to keep hooks native-only when a hook
   authored for SwarmGo's shell misbehaves under the CLI's own hook runner.
+- `claudeResume` — keep the claude-cli session warm across turns (default false,
+  experimental). When on, each single-agent turn passes `--resume <id>` and sends
+  only the new delta (not the full transcript), so the CLI reuses its server-side
+  prompt cache (much cheaper). The resume id is tracked per session; warm mode
+  delegates context management to the CLI, so SwarmGo's own compaction is bypassed
+  for that session. Validate on one chat after enabling.
 - `enableDelegation` — `run_subagent` (isolated subagent workers, agent→agent
   delegation); `delegationMaxDepth` (1–10, default 3), `delegationMaxCalls`
   (1–100, default 8).

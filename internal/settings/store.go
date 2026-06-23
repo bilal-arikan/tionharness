@@ -264,6 +264,10 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.RecallMinScore != nil {
 		next.RecallMinScore = *p.RecallMinScore
 	}
+	applyInt(&next.ContextBudgetCeil, p.ContextBudgetCeil)
+	if p.ContextBudgetFraction != nil {
+		next.ContextBudgetFraction = *p.ContextBudgetFraction
+	}
 	applyInt(&next.JournalCap, p.JournalCap)
 	applyInt(&next.JournalMaxLen, p.JournalMaxLen)
 	applyInt(&next.ReflectionCap, p.ReflectionCap)
@@ -318,6 +322,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyBool(&next.EnableShell, p.EnableShell)
 	applyBool(&next.EnableSelfManage, p.EnableSelfManage)
 	applyBool(&next.EnableCLIHooks, p.EnableCLIHooks)
+	applyBool(&next.ClaudeResume, p.ClaudeResume)
 	applyBool(&next.EnableDelegation, p.EnableDelegation)
 	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
@@ -424,6 +429,24 @@ func normalize(v Settings) Settings {
 	}
 	if v.RecallMinScore > 1 {
 		v.RecallMinScore = 1
+	}
+	// Model-aware transcript budget. Ceil 0 → restore the default (a blank field
+	// must not disable big-window budgeting); clamp to a sane band. Fraction is a
+	// window share in (0,1]; 0 → default.
+	if v.ContextBudgetCeil <= 0 {
+		v.ContextBudgetCeil = 512000
+	}
+	if v.ContextBudgetCeil < 8000 {
+		v.ContextBudgetCeil = 8000
+	}
+	if v.ContextBudgetCeil > 2000000 {
+		v.ContextBudgetCeil = 2000000
+	}
+	if v.ContextBudgetFraction <= 0 {
+		v.ContextBudgetFraction = 0.6
+	}
+	if v.ContextBudgetFraction > 1 {
+		v.ContextBudgetFraction = 1
 	}
 	// Journal bounds: keep at least a small buffer; clamp to sane ceilings.
 	if v.JournalCap < 1 {

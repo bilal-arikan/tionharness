@@ -41,7 +41,9 @@ func (r *Runtime) compactToolResult(ctx context.Context, agent db.Agent, toolNam
 	// Per-model effective budget: scale the byte thresholds to this agent's model
 	// window (Option B), so a big-context model tolerates larger tool output before
 	// compaction. Falls back to the configured/default budget when unknown.
-	budget := conversation.EffectiveBudget(agent.Provider, agent.Model, r.tun.ContextBudgetTokens())
+	// 0,0 → EffectiveBudget uses its package-default fraction/ceil; tool-output
+	// threshold scaling does not need the live conversation-budget knobs.
+	budget := conversation.EffectiveBudget(agent.Provider, agent.Model, r.tun.ContextBudgetTokens(), 0, 0)
 
 	// System A — deterministic, dependency-free.
 	if r.tun.CompactDeterministic() {

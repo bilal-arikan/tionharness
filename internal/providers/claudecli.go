@@ -137,6 +137,7 @@ type cliEvent struct {
 	Result     string                     `json:"result"`
 	Usage      *cliUsage                  `json:"usage"`
 	ModelUsage map[string]json.RawMessage `json:"modelUsage"`
+	SessionID  string                     `json:"session_id"` // emitted on system/init and result events
 }
 
 // Complete implements Provider by shelling out to `claude -p` and parsing its
@@ -155,6 +156,13 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	if model != "" {
 		args = append(args, "--model", model)
 	}
+	// Resume a prior CLI session (warm prompt cache + server-side history) when the
+	// caller supplies its id. The caller then sends only the new turn(s) — the CLI
+	// already holds the earlier conversation. The id rotates each resume turn, so the
+	// caller must persist Response.SessionID for the next turn.
+	if req.ResumeSessionID != "" {
+		args = append(args, "--resume", req.ResumeSessionID)
+	}
 	// Permission handling. In "ask" mode with a permission-prompt tool wired, route
 	// tools that need approval through it (CLI default mode + --permission-prompt-
 	// tool → real per-tool approval in the SwarmGo UI). Otherwise map the mode to a
@@ -171,8 +179,29 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	if c.usesInteractionTools() {
 		sys = strings.TrimSpace(sys + "\n\n" + interactionSystemNote)
 	}
+	// The system prompt is handed to the subprocess. Windows caps a process
+	// command line at ~32 KB (ERROR_FILENAME_EXCED_RANGE / errno 206), and a
+	// large system prompt (skills + core memory blocks + dynamic context) blows
+	// past that when passed as a plain --append-system-prompt argument. Write it
+	// to a temp file and pass --append-system-prompt-file so only a short path
+	// rides on the command line. The conversation prompt already goes via stdin
+	// for the same reason (see runAttempt). The temp file is removed once both
+	// retry attempts finish.
 	if sys != "" {
-		args = append(args, "--append-system-prompt", sys)
+		f, ferr := os.CreateTemp("", "swarmgo-sysprompt-*.txt")
+		if ferr != nil {
+			return nil, fmt.Errorf("write system prompt file: %w", ferr)
+		}
+		sysPromptPath := f.Name()
+		defer os.Remove(sysPromptPath)
+		if _, werr := f.WriteString(sys); werr != nil {
+			f.Close()
+			return nil, fmt.Errorf("write system prompt file: %w", werr)
+		}
+		if cerr := f.Close(); cerr != nil {
+			return nil, fmt.Errorf("write system prompt file: %w", cerr)
+		}
+		args = append(args, "--append-system-prompt-file", sysPromptPath)
 	}
 
 	// MCP delegation: load the config and restrict to the allowlist. The
@@ -425,6 +454,12 @@ func (p *cliStreamParser) feed(line string) {
 	var ev cliEvent
 	if json.Unmarshal([]byte(line), &ev) != nil {
 		return
+	}
+	// Capture the CLI session id wherever it appears (system/init first, result
+	// last). The result event's id is the one to resume from next turn, so letting
+	// later events overwrite is correct.
+	if ev.SessionID != "" {
+		p.resp.SessionID = ev.SessionID
 	}
 
 	switch ev.Type {

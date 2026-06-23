@@ -37,6 +37,8 @@ export interface AppSettings {
   keepRecentMsgs: number
   recallTopN: number
   recallMinScore: number
+  contextBudgetCeil: number
+  contextBudgetFraction: number
 
   journalCap: number
   journalMaxLen: number
@@ -77,6 +79,7 @@ export interface AppSettings {
   enableShell: boolean
   enableSelfManage: boolean
   enableCliHooks: boolean
+  claudeResume: boolean
   enableDelegation: boolean
   delegationMaxDepth: number
   delegationMaxCalls: number

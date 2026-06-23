@@ -134,9 +134,12 @@ export function ContextPanel({ draft, set }: PanelProps) {
     <>
       <SubHead icon={Layers}>Bağlam penceresi</SubHead>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Maks. bağlam token" hint="Aşılınca eski turlar özetlenir."><input type="number" value={draft.maxContextTokens} onChange={(e) => set('maxContextTokens', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Maks. bağlam token" hint="Sıkıştırma için taban değer. Aşılınca eski turlar özetlenir."><input type="number" value={draft.maxContextTokens} onChange={(e) => set('maxContextTokens', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Korunan son mesaj" hint="Her zaman aynen gönderilir."><input type="number" value={draft.keepRecentMsgs} onChange={(e) => set('keepRecentMsgs', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Bütçe tavanı (token)" hint="Büyük pencereli (1M) modeller için üst sınır. 512000 ≈ 1M'in yarısı — ilk mesaj çok daha uzun süre aynen kalır."><input type="number" value={draft.contextBudgetCeil} onChange={(e) => set('contextBudgetCeil', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Pencere oranı" hint="Modelin bağlam penceresinin transkripte ayrılan payı (0–1). 0.6 → 1M model 600K üretir, tavana kırpılır."><input type="number" step="0.05" value={draft.contextBudgetFraction} onChange={(e) => set('contextBudgetFraction', Number(e.target.value))} className={inputCls} /></Field>
       </div>
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">Etkin bütçe = clamp(pencere × oran, maks. token, tavan). Bilinmeyen pencere → maks. token kullanılır.</p>
 
       <SubHead icon={FlaskConical}>Anthropic beta</SubHead>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">Yalnız anthropic sağlayıcıda etkili; claude-cli'da etkisizdir. (1M bağlam artık GA — ayar gerekmez.)</p>
@@ -295,6 +298,12 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         hint="Açıkken workspace PreToolUse/PostToolUse hook'ları claude-cli ajanlarına da `--settings` ile uygulanır (yalnız native değil). Uyarı: CLI hook'ları CLI'nin kendi shell'inde koşar; SwarmGo shell'i (PowerShell) için yazılmış bir hook uyumsuz olabilir — sorun çıkarsa kapatın."
         checked={draft.enableCliHooks}
         onChange={(v) => set('enableCliHooks', v)}
+      />
+      <Toggle
+        label="claude-cli oturum sürekliliği (--resume)"
+        hint="Açıkken claude-cli her turda --resume ile önceki oturumu sürdürür ve yalnız yeni mesajı gönderir — CLI'nin sıcak prompt cache'ini tekrar kullanır (Claude Code gibi, çok daha ucuz). Yalnız tek-ajanlı sohbetlerde geçerli. Deneysel: açtıktan sonra bir sohbette doğrulayın."
+        checked={draft.claudeResume}
+        onChange={(v) => set('claudeResume', v)}
       />
       <Toggle
         label="Ajan→ajan delegasyon (run_subagent)"

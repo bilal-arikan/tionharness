@@ -104,6 +104,7 @@ func (s *Server) applySettings() {
 	s.providers.SetOpenRouter(s.settings.OpenRouterKey(), cur.OpenRouterBaseURL)
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
+	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
 	s.tun.SetContextBudget(cur.MaxContextTokens) // scale tool-output thresholds to the budget (CG-9)
 	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
 	s.tun.SetTitleModel(cur.TitleModel)

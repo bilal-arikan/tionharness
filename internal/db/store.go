@@ -362,6 +362,17 @@ func (d *DB) SetSessionWorkingDir(ctx context.Context, sessionID, dir string) er
 	})
 }
 
+// SetSessionCLIResume records the claude-cli resume state for a session: the
+// (rotated) CLI session id to --resume next turn, and how many of the session's
+// messages the CLI has already seen (so the next turn sends only the delta). Does
+// not bump UpdatedAt — bookkeeping must not reorder the session list.
+func (d *DB) SetSessionCLIResume(ctx context.Context, sessionID, cliSessionID string, sentMsgCount int) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.CLISessionID = cliSessionID
+		s.CLISentMsgCount = sentMsgCount
+	})
+}
+
 // SetSessionAgent updates a session's default (main) agent — used when the first
 // message of a fresh session @mentions an agent, pinning the thread to it.
 func (d *DB) SetSessionAgent(ctx context.Context, sessionID, agentID string) error {

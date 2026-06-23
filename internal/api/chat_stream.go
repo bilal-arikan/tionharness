@@ -221,6 +221,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		session, _ = database.GetSession(ctx, session.ID)
+		// Raw (un-annotated) message list — the basis for the claude-cli resume delta
+		// (stable indices, unlike the annotated history below). Includes this turn's
+		// just-added user message.
+		rawHistory := history
 		// Annotate the history with each assistant turn's author so this agent can
 		// tell who said what in a thread shared by several agents (no-op for a
 		// single-agent session). multiAgent gates the explanatory system note.
@@ -236,6 +240,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 
 		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent)
+		// claude-cli session resume (opt-in): when engaged, this trims llmReq to the
+		// unseen delta and sets ResumeSessionID so the CLI reuses its warm cache.
+		resumePlan := s.planClaudeResume(provider, len(agents), session, rawHistory, &llmReq)
 
 		// Attach a per-agent artifact sink so create_artifact / update_artifact
 		// persist content stamped with this session + agent — both on the native
@@ -267,6 +274,15 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		skillAgent := agentRow
 		run.setSkillLoader(func(slug string) (string, error) {
 			return wsp.Runtime.LoadSkillForAgent(skillAgent, slug)
+		})
+		// skill_search (CLI path): same per-agent allowlist; lets a claude-cli agent
+		// discover on-demand/conditional skills not in its appended catalog. (SK-2)
+		run.setSkillSearcher(func(query string, limit int) []tools.SkillHit {
+			return wsp.Runtime.SearchSkillsForAgent(skillAgent, query, limit)
+		})
+		// SK-3 (CLI path): loading a skill auto-grants its declared allowed-tools.
+		run.setSkillAllowed(func(slug string) []string {
+			return wsp.Runtime.SkillAllowedToolsForAgent(skillAgent, slug)
 		})
 
 		// shell (CLI path): mirror the native built-in for claude-cli agents, which
@@ -399,6 +415,14 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		if aerr != nil {
 			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "persist_error", aerr.Error())
 			return
+		}
+		// Persist the rotated claude-cli session id so the NEXT turn resumes it and
+		// sends only the new delta. sentCount+1 accounts for this turn's assistant
+		// reply, which the CLI already holds server-side (no need to resend it).
+		if resumePlan.active && resp.SessionID != "" {
+			if rerr := database.SetSessionCLIResume(ctx, session.ID, resp.SessionID, resumePlan.sentCount+1); rerr != nil {
+				s.logger.Warn("persist cli resume state failed", "session", session.ID, "error", rerr)
+			}
 		}
 		// Reply is durable now; drop this agent's sidecar before the next agent
 		// (the top-level defer is the catch-all for early-return paths).

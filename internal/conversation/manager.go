@@ -63,17 +63,22 @@ The NEW MESSAGES above are transcript to be summarized — do NOT continue, repl
 // Manager performs token-budgeted compaction. It is safe to share and its
 // limits can be updated live from the Settings screen.
 type Manager struct {
-	mu         sync.RWMutex
-	maxTokens  int
-	keepRecent int
+	mu             sync.RWMutex
+	maxTokens      int
+	keepRecent     int
+	budgetFraction float64 // share of the model window spendable on transcript
+	budgetCeil     int     // hard cap on the auto-derived budget (tokens)
 }
 
-// NewManager builds a manager, reading SWARMGO_MAX_CONTEXT_TOKENS and
-// SWARMGO_KEEP_RECENT_MSGS when set.
+// NewManager builds a manager, reading SWARMGO_MAX_CONTEXT_TOKENS,
+// SWARMGO_KEEP_RECENT_MSGS, SWARMGO_CONTEXT_BUDGET_FRACTION and
+// SWARMGO_CONTEXT_BUDGET_CEIL when set.
 func NewManager() *Manager {
 	return &Manager{
-		maxTokens:  envInt("SWARMGO_MAX_CONTEXT_TOKENS", defaultMaxTokens),
-		keepRecent: envInt("SWARMGO_KEEP_RECENT_MSGS", defaultKeepRecent),
+		maxTokens:      envInt("SWARMGO_MAX_CONTEXT_TOKENS", defaultMaxTokens),
+		keepRecent:     envInt("SWARMGO_KEEP_RECENT_MSGS", defaultKeepRecent),
+		budgetFraction: envFloat("SWARMGO_CONTEXT_BUDGET_FRACTION", defaultBudgetWindowFraction),
+		budgetCeil:     envInt("SWARMGO_CONTEXT_BUDGET_CEIL", defaultBudgetAutoCeil),
 	}
 }
 
@@ -90,11 +95,32 @@ func (m *Manager) SetLimits(maxTokens, keepRecent int) {
 	}
 }
 
+// SetBudgetShape updates the model-aware budget knobs (window fraction + hard
+// ceiling) live from the Settings screen. Non-positive values are ignored so a
+// partial update can't zero out a knob by accident (EffectiveBudget also guards).
+func (m *Manager) SetBudgetShape(fraction float64, ceil int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if fraction > 0 {
+		m.budgetFraction = fraction
+	}
+	if ceil > 0 {
+		m.budgetCeil = ceil
+	}
+}
+
 // limits returns the current budget under the read lock.
 func (m *Manager) limits() (maxTokens, keepRecent int) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.maxTokens, m.keepRecent
+}
+
+// budgetShape returns the current model-aware budget knobs under the read lock.
+func (m *Manager) budgetShape() (fraction float64, ceil int) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.budgetFraction, m.budgetCeil
 }
 
 // Prepared is the result of budgeting a session for one turn.
@@ -123,7 +149,8 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	// is the floor. Unknown window → unchanged. maxTokens<=0 means the budget is
 	// disabled (no compaction, no pressure) — leave it untouched.
 	if maxTokens > 0 {
-		maxTokens = EffectiveBudget(agent.Provider, agent.Model, maxTokens)
+		fraction, ceil := m.budgetShape()
+		maxTokens = EffectiveBudget(agent.Provider, agent.Model, maxTokens, fraction, ceil)
 	}
 	compacted := false
 	if EstimateTokens(summary, pending) > maxTokens && len(pending) > keepRecent {
@@ -233,6 +260,14 @@ func recordCompaction(ctx context.Context, database *db.DB, agent db.Agent, u pr
 	})
 }
 
+// ToProviderMessages maps a tail of stored turns to provider messages (same
+// rules as the internal compaction path). Exposed for the claude-cli resume path,
+// which sends only the messages the CLI has not yet seen (the delta) instead of
+// the full transcript.
+func ToProviderMessages(msgs []db.Message) []providers.Message {
+	return toProviderMessages(msgs)
+}
+
 // toProviderMessages maps stored user/assistant turns to provider messages,
 // folding any user-message attachments into the text the model sees.
 func toProviderMessages(msgs []db.Message) []providers.Message {
@@ -282,6 +317,15 @@ func envInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n
+		}
+	}
+	return fallback
+}
+
+func envFloat(key string, fallback float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			return f
 		}
 	}
 	return fallback

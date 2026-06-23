@@ -103,6 +103,14 @@ type Session struct {
 	Summary         string `json:"summary"`
 	SummaryMsgCount int    `json:"summaryMsgCount"`
 
+	// claude-cli session resume (opt-in, ClaudeResume setting). CLISessionID is the
+	// CLI's server-side session to --resume on the next turn (rotates each turn);
+	// CLISentMsgCount is how many of this session's messages the CLI has already
+	// seen, so the next turn sends only the newer ones (the delta). Empty/0 = no
+	// warm CLI session yet (next turn starts cold and captures a fresh id).
+	CLISessionID    string `json:"cliSessionId,omitempty"`
+	CLISentMsgCount int    `json:"cliSentMsgCount,omitempty"`
+
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
 }
