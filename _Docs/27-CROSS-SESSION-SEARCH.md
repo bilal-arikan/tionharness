@@ -10,7 +10,7 @@
 >
 > **Roadmap maddesi:** `03-YOL-HARITASI.md` → **CG-16** (external-agent-oss P4).
 > **Zemin olduğu işler:** **HA-1** (gelişmiş hafıza / FTS) ve **N5**
-> (`conversation_search` aracı, bkz. `26-MEMGPT-CORE-MEMORY.md` — bu araçla kapandı).
+> (`conversation_search` aracı, bkz. `31-MEMGPT-CORE-MEMORY.md` — bu araçla kapandı).
 > İnceleme/karar: 2026-06-22.
 
 ## Amaç
@@ -225,7 +225,7 @@ Parça 1, 2 ve Parça 3'ün backend/contract'ı sevk edildi. Plandan sapma yok.
 
 - **`03-YOL-HARITASI.md`** — CG-16 (bu plan), HA-1 (FTS/kullanıcı modelleme),
   CG-18 (session labels/batch — arama ile bütünleşir).
-- **`26-MEMGPT-CORE-MEMORY.md`** — N5 (`conversation_search`), C5 (recency+importance
+- **`31-MEMGPT-CORE-MEMORY.md`** — N5 (`conversation_search`), C5 (recency+importance
   ağırlıklandırma; arama skoruyla ortak felsefe).
 - **`08-DEPOLAMA.md`** — `session.jsonl` + boot `loadSessions` → `d.messages` (RAM).
 - **`19-LAZY-TOOL-LOADING.md`** — aracın talep-üzerine yüklenmesi.

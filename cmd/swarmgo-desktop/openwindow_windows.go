@@ -10,7 +10,7 @@ import (
 // spawnWindow launches a new connect-only instance of this binary, pointed at
 // the running server's base URL plus the given hash route. go-webview2 is
 // single-window-per-process, so a separate process is how we get a second
-// native window (see _Docs/18-COKLU-PENCERE.md).
+// native window (see _Docs/30-COKLU-PENCERE.md).
 //
 // NOTE: this deliberately uses plain exec.Command, NOT proc.Command. proc.Command
 // sets SysProcAttr.HideWindow (STARTF_USESHOWWINDOW + SW_HIDE) to suppress a

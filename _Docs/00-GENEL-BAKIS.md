@@ -44,7 +44,8 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [02-VERI-MODELI.md](02-VERI-MODELI.md) | Veritabanı tabloları ve veri modeli |
 | [03-YOL-HARITASI.md](03-YOL-HARITASI.md) | Aşama aşama (faz) geliştirme planı |
 | [04-TEKNOLOJI-SECIMLERI.md](04-TEKNOLOJI-SECIMLERI.md) | Kütüphane seçimleri ve gerekçeleri |
-| [05-ILERLEME.md](05-ILERLEME.md) | Yapılanlar / sıradaki adımlar takibi (**canlı durum**) |
+| [05-ILERLEME.md](05-ILERLEME.md) | Yapılanlar / sıradaki adımlar takibi (**canlı durum** — yalnız 2026-06-22+ kayıtları) |
+| [05-ARSIV.md](05-ARSIV.md) | İlerleme arşivi (2026-06-19 ve öncesi tamamlanmış kayıtlar) |
 | [06-WORKSPACES.md](06-WORKSPACES.md) | Workspace izolasyonu tasarımı (fiziksel ayrım) |
 | [07-CHAT-UX.md](07-CHAT-UX.md) | Zengin sohbet arayüzü + SSE adım-adım akış |
 | [08-DEPOLAMA.md](08-DEPOLAMA.md) | Dosya-tabanlı depolama tasarımı (JSON/JSONL, DB yok) |
@@ -52,8 +53,6 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [10-KAVRAMSAL-TASARIM-NOTLARI.md](10-KAVRAMSAL-TASARIM-NOTLARI.md) | Kavramsal tasarım notları kataloğu (ClaudeCode mimarisi → SwarmGo, taslak/yol haritası) |
 | [11-INTERACTION-MCP.md](11-INTERACTION-MCP.md) | Interaction MCP: CLI ajanlara insan-etkileşimli araçlar (ask_user/todo_write/onay) |
 | [12-LOGLAMA.md](12-LOGLAMA.md) | Loglama sistemi: slog ring buffer, /api/logs, access + iş logları, dış erişim |
-| [13-CRAFT-AGENTS-INCELEME.md](13-CRAFT-AGENTS-INCELEME.md) | external-agent-oss release incelemesi → SwarmGo çıkarımları |
-| [14-SWARMCLAW-PROVIDER-INCELEME.md](14-SWARMCLAW-PROVIDER-INCELEME.md) | swarmclaw çoklu-provider mimarisi incelemesi (gelecek plan) |
 | [15-FLOW-CANVAS.md](15-FLOW-CANVAS.md) | Görsel Flow Builder (React Flow canvas) |
 | [16-PROFILLEME.md](16-PROFILLEME.md) | Profilleme (pprof) rehberi |
 | [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md) | Araç çıktısı token optimizasyonu |
@@ -66,6 +65,19 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [24-SELF-MANAGEMENT.md](24-SELF-MANAGEMENT.md) | Self-management + ayarlar alt sistemi |
 | [25-SUBAGENT-ISOLATION.md](25-SUBAGENT-ISOLATION.md) | Generic ajan yürütme çekirdeği + alt-ajan (subagent) izolasyonu |
 | [26-CALISMA-DIZINI.md](26-CALISMA-DIZINI.md) | Çalışma dizini (working directory) — oturum-başına cwd |
+| [27-CROSS-SESSION-SEARCH.md](27-CROSS-SESSION-SEARCH.md) | Oturumlar-arası tam-metin arama (`conversation_search`) |
+| [28-PEER-MESAJLASMA-PLANI.md](28-PEER-MESAJLASMA-PLANI.md) | Ajanlar-arası peer mesajlaşma (send_message / mailbox) |
+| [29-BILDIRIM-SINYALLERI.md](29-BILDIRIM-SINYALLERI.md) | Generic bildirim sinyalleri (nav + workspace) |
+| [30-COKLU-PENCERE.md](30-COKLU-PENCERE.md) | Masaüstünde çoklu pencere (N süreç / N pencere) |
+| [31-MEMGPT-CORE-MEMORY.md](31-MEMGPT-CORE-MEMORY.md) | MemGPT/Letta tarzı self-editing çekirdek bellek |
+| [32-NATIVE-PENCERE.md](32-NATIVE-PENCERE.md) | Native masaüstü penceresi (WebView2, CGO'suz) |
+| **arsiv/** | Tarihsel inceleme dokümanları (referans/appendix) |
+| [arsiv/13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md) | external-agent-oss release incelemesi → SwarmGo çıkarımları |
+| [arsiv/14-SWARMCLAW-PROVIDER-INCELEME.md](arsiv/14-SWARMCLAW-PROVIDER-INCELEME.md) | swarmclaw çoklu-provider mimarisi incelemesi (gelecek plan) |
+
+> **Numara notu:** 13–14 tarihsel inceleme dokümanları `arsiv/` altına taşındı (ana dizinde
+> 13–14 boş). 17/18/26 eski numara çakışmaları giderildi → native pencere **32**, çoklu
+> pencere **30**, MemGPT çekirdek bellek **31**.
 
 ## Kurulu Ortam (2026-06-15 itibarıyla)
 
@@ -73,7 +85,8 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 - ✅ Node.js v24 + npm 11
 - ⏳ Wails v2 (Faz 9'da kurulacak)
 
-## Proje Durumu (2026-06-19)
+## Proje Durumu (2026-06-23)
 
 ✅ **Faz 0–8 + kapsamlı backlog tamamlandı** ve Chrome'da canlı test edildi: İskelet · DB/Config · Provider+Chat (5 kind: anthropic/claude-cli/minimax/minimax-anthropic/openrouter) · React Web UI · Agent Runtime · Workspace İzolasyonu · Tasks+Schedules · Memory · Sağlamlaştırma (compaction + bütçe guardrail) · Tool-use+MCP · Orchestration (akışlar) · Lazy tool yükleme · Prefix'li insan-okunabilir ID'ler (WS/AGT/SES, `cmd/migrate-ids`) · İlişki grafiği · Self-management suite · Hooks · İzin modeli.
-➡️ **Sıradaki: Faz 9 — Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Detay: [05-ILERLEME.md](05-ILERLEME.md).
+✅ **Sonradan eklenenler (06-22 → 06-23):** native masaüstü penceresi (WebView2, CGO'suz) + çoklu pencere · oturum-başına çalışma dizini (cwd) · MemGPT/Letta tarzı self-editing çekirdek bellek · MCP kalıcı bağlantı havuzu · oturumlar-arası tam-metin arama · ajanlar-arası peer mesajlaşma · generic bildirim sinyalleri.
+➡️ **Sıradaki: Faz 9 — Wails paketleme** (native masaüstü pencere zaten WebView2 ile yapıldı; kalan tam Wails sarmalama). (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Detay: [05-ILERLEME.md](05-ILERLEME.md) · arşiv: [05-ARSIV.md](05-ARSIV.md).

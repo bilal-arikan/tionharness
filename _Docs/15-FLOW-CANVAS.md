@@ -2,7 +2,7 @@
 
 > Faz 7 orchestration akışlarının düzenleyicisi, form/liste editöründen **sürükle-bırak
 > node-graph canvas**'a yükseltildi. Referans: SwarmClaw protokol builder'ı (React Flow),
-> ComfyUI/LiteGraph bağlantı UX'i. Bkz. `_Docs/14-SWARMCLAW-PROVIDER-INCELEME.md` çizgisi.
+> ComfyUI/LiteGraph bağlantı UX'i. Bkz. `_Docs/arsiv/14-SWARMCLAW-PROVIDER-INCELEME.md` çizgisi.
 
 ## Neden
 

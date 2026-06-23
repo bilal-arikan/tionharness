@@ -71,7 +71,7 @@ kullanır; saf Go, CGO yok. Boş bir loopback portunda sunucuyu başlatır, UI'y
 .\swarmgo-desktop.exe          # çift tıkla → kendi penceresinde açılır, tarayıcı gerekmez
 ```
 
-Detay ve tasarım: [_Docs/17-NATIVE-PENCERE.md](_Docs/17-NATIVE-PENCERE.md). WebView2 runtime
+Detay ve tasarım: [_Docs/32-NATIVE-PENCERE.md](_Docs/32-NATIVE-PENCERE.md). WebView2 runtime
 yoksa (nadir, eski Win10) otomatik olarak varsayılan tarayıcıya düşer. Başsız `swarmgo.exe`
 sürümü değişmeden durur; iki dağıtım yan yana kullanılabilir.
 

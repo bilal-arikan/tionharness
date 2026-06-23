@@ -174,7 +174,7 @@ graph LR
   (`letta-ai/letta`, "LLM as OS" deseni): compaction'ı ajandan gizli tutmak yerine belleği **ajanın
   açık kontrolüne** ver. **Uygulandı:** pressure sinyali + ajanın `core_memory_replace/append`
   araçlarıyla düzenlediği **adlandırılmış çekirdek bloklar** (persona/human + özel, karakter limitli) +
-  `human` bloğunun dream-cycle'la otomatik doldurulması (HA-1/c). Detay: `26-MEMGPT-CORE-MEMORY.md`.
+  `human` bloğunun dream-cycle'la otomatik doldurulması (HA-1/c). Detay: `31-MEMGPT-CORE-MEMORY.md`.
   İki parça → (a) **memory-pressure sinyali**: `conversation.Manager` bağlam bütçesine yaklaşınca ajana
   sistem-uyarısı enjekte eder ("bağlam doluyor, önemliyi belleğe yaz") + ajan `memory_write` (C3) ile neyin
   kalıcı olacağına karar verir (sessiz oto-katlamadan önce); (b) **self-editing core memory bloğu**:
@@ -182,7 +182,7 @@ graph LR
   "çalışma belleği" bloğu (Letta'nın human/persona memory-block'larına karşılık). SwarmGo'nun iki-parçalı
   sistem promptu + Faz 6 recall + C3 bunun altyapısı; eksik olan **ajana açık araç yüzeyi + pressure
   sinyali**. İlişkili: **C2** (compaction), **C3** (memory_write), **HA-1** (kullanıcı modelleme).
-  **Detaylı uygulama planı:** [`26-MEMGPT-CORE-MEMORY.md`](26-MEMGPT-CORE-MEMORY.md) (Mod C — neden doğrudan
+  **Detaylı uygulama planı:** [`31-MEMGPT-CORE-MEMORY.md`](31-MEMGPT-CORE-MEMORY.md) (Mod C — neden doğrudan
   Letta değil + 3 parça gerçek dosya temas noktalarıyla, 2026-06-22).
 - [ ] **C3** — memdir benzeri bellek **yazma/indeksleme** (`memory_write`, frontmatter türleri) — şu an sadece recall
 - [x] **C4** — Maliyet takibi: `cache_creation` vs `cache_read` ayrımı (uçtan uca) + oturumlar arası kümülatif toplam & `cacheHitRate` (caching ROI) — Bütçe ekranı pencere-kümülatif kartları + trend maliyet/tasarruf (2026-06-19)
@@ -198,7 +198,7 @@ graph LR
 
 ## external-agent-oss İncelemesinden (2026-06-17)
 
-> Kaynak: [external-agent-project/external-agent-oss](https://github.com/external-agent-project/external-agent-oss) v0.2.19→v0.10.3 (71 release) analizi. Tam gerekçe + kod-doğrulama (EXISTS/MISSING) + sürüm-sürüm liste: [13-CRAFT-AGENTS-INCELEME.md](13-CRAFT-AGENTS-INCELEME.md). Maddeler SwarmGo koduna karşı doğrulandı.
+> Kaynak: [external-agent-project/external-agent-oss](https://github.com/external-agent-project/external-agent-oss) v0.2.19→v0.10.3 (71 release) analizi. Tam gerekçe + kod-doğrulama (EXISTS/MISSING) + sürüm-sürüm liste: [13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md). Maddeler SwarmGo koduna karşı doğrulandı.
 
 ### 🔴 P0 — Doğrulanmış boşluklar (yüksek etki)
 - [x] **CG-1 — Tool çıktısı boyut sınırı** ✅ **YAPILDI** (commit `69601ab`, 2026-06-17): `tools/registry.go` `capToolOutput()` (100K bayt, UTF-8 sınırında trunc + `…[truncated N bytes]`) `Registry.Call`/`CallStream`'de built-in + MCP tüm başarılı çıktılara uygulanır. `registry_cap_test.go`. *(craft v0.4.4)*
@@ -244,7 +244,7 @@ graph LR
 
 ## swarmclaw incelemesinden — Provider ekosistemi genişletme (2026-06-18)
 
-> Kaynak + tam analiz: [14-SWARMCLAW-PROVIDER-INCELEME.md](14-SWARMCLAW-PROVIDER-INCELEME.md).
+> Kaynak + tam analiz: [14-SWARMCLAW-PROVIDER-INCELEME.md](arsiv/14-SWARMCLAW-PROVIDER-INCELEME.md).
 > swarmclaw ~70 provider'ı "metadata'yı protokolden ayır" deseniyle düşük eforla ekliyor;
 > SwarmGo zaten aynı mimaride (CG-19). Aşağıdakiler opsiyonel genişletmeler. **Plan — uygulanmadı.**
 
@@ -269,7 +269,7 @@ graph LR
   (tercihler/bağlam/davranış). SwarmGo'nun mevcut lexical-cosine recall'ı (Faz 6) bunun altyapısı;
   üzerine kalıcı kullanıcı-profili entity'si + oto-güncelleme eklenir. İlişkili: **CG-16**, **C3** (memory_write).
   > ✅ **(c) kullanıcı modelleme TAMAMLANDI (2026-06-23):** `human` çekirdek bloğu dream-cycle'a
-  > piggyback eden bir geçişle journal'dan otomatik doldurulur (C6 / `26-MEMGPT-CORE-MEMORY.md` Parça 4b).
+  > piggyback eden bir geçişle journal'dan otomatik doldurulur (C6 / `31-MEMGPT-CORE-MEMORY.md` Parça 4b).
   > Kalan: (a) FTS5 tam-metin arama + (b) çapraz-oturum kalıcı özet indeksi.
 - [ ] **HA-2 — Kendini-geliştiren prosedürel skill + skill hub** *(yüksek değer — ayırt edici)*:
   harici ajanin en özgün yanı: ajan zor bir görevi tamamladıktan sonra **kendi prosedürel skill'ini

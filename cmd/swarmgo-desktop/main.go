@@ -10,7 +10,7 @@
 // is a separate "connect-only" instance of this binary pointed at the already-
 // running server via SWARMGO_WEBVIEW_URL. The primary process owns the server
 // and exposes a JS bridge (swarmgoOpenWindow) that spawns those instances.
-// See _Docs/18-COKLU-PENCERE.md.
+// See _Docs/30-COKLU-PENCERE.md.
 package main
 
 import (

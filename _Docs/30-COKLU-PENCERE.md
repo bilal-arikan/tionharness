@@ -129,7 +129,7 @@ soyutla, ileride başka yerlerde de kullanılsın.)
 3. Title bar connect-only: `fetchAppearance(base)` HTTP yardımcı.
 4. Frontend `WorkspaceSwitcher.openInNewWindow`: WebView2 köprüsü + fallback (+ ops. `lib/desktop.ts`).
 5. Build (UI + desktop) + canlı doğrulama (yukarıdaki 5 madde).
-6. README/`17-NATIVE-PENCERE.md` güncelle, `05-ILERLEME.md` girdisi.
+6. README/`32-NATIVE-PENCERE.md` güncelle, `05-ILERLEME.md` girdisi.
 
 ## Tahmini efor
 
