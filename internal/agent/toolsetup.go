@@ -254,10 +254,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 				tools.NewSecretDeleteTool(r.vault),
 			)
 		}
-		// Skill authoring: create/delete reusable workspace skills.
+		// Skill authoring: create/update/delete reusable workspace skills.
 		if r.skills != nil {
 			builtins = append(builtins,
 				tools.NewCreateSkillTool(agentSkillWriter{store: r.skills}),
+				tools.NewUpdateSkillTool(agentSkillWriter{store: r.skills}),
 				tools.NewDeleteSkillTool(agentSkillWriter{store: r.skills, db: r.db}),
 			)
 		}

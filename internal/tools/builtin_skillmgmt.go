@@ -14,6 +14,10 @@ import (
 // (kept as an interface here so tools need not import the skills package).
 type SkillWriter interface {
 	CreateSkill(slug, name, description, whenToUse, body string, shared bool) error
+	// UpdateSkill edits an existing workspace skill in place. Each field is a
+	// pointer: nil leaves the current value untouched (partial update), so the
+	// caller can change just the body without resupplying the rest.
+	UpdateSkill(slug string, name, description, whenToUse, body *string, shared *bool) error
 	DeleteSkill(slug string) error
 }
 
@@ -79,6 +83,69 @@ func (t CreateSkillTool) Call(_ context.Context, input json.RawMessage) (string,
 		return "", fmt.Errorf("create skill: %w", err)
 	}
 	b, _ := json.Marshal(map[string]string{"slug": in.Slug, "action": "created"})
+	return string(b), nil
+}
+
+// ---- update_skill ----
+
+// UpdateSkillTool edits an existing workspace skill in place.
+type UpdateSkillTool struct{ w SkillWriter }
+
+// NewUpdateSkillTool constructs update_skill over a skill writer.
+func NewUpdateSkillTool(w SkillWriter) UpdateSkillTool { return UpdateSkillTool{w: w} }
+
+func (UpdateSkillTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "update_skill",
+		Description: "Edit an existing workspace skill in place by slug. Pass only the fields to change — name, description, whenToUse, body (full markdown, replaces the old one), or shared. Omitted fields keep their current value. The slug (folder) is immutable; only workspace-tier skills can be edited. Prefer this over delete_skill + create_skill. Takes effect from the next turn. Returns the slug.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"slug":{"type":"string","description":"The skill slug to edit (see use_skill / the catalog)"},
+				"name":{"type":"string","description":"New human-readable name"},
+				"description":{"type":"string","description":"New one-line summary"},
+				"whenToUse":{"type":"string","description":"New when-to-use hint"},
+				"body":{"type":"string","description":"New full markdown instructions (replaces the old body)"},
+				"shared":{"type":"boolean","description":"Share across all agents in the workspace"}
+			},
+			"required":["slug"],
+			"additionalProperties":false
+		}`),
+		Examples: []json.RawMessage{
+			// Replace just the body; everything else untouched.
+			json.RawMessage(`{"slug":"weekly-report","body":"# Weekly report\n\nUpdated steps..."}`),
+			// Rename + retarget without resupplying the body.
+			json.RawMessage(`{"slug":"weekly-report","name":"Weekly status report","whenToUse":"Every Friday before standup"}`),
+		},
+	}
+}
+
+func (t UpdateSkillTool) Call(_ context.Context, input json.RawMessage) (string, error) {
+	if t.w == nil {
+		return "", fmt.Errorf("skill authoring is not available in this context")
+	}
+	var in struct {
+		Slug        string  `json:"slug"`
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+		WhenToUse   *string `json:"whenToUse"`
+		Body        *string `json:"body"`
+		Shared      *bool   `json:"shared"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", argErr(err)
+	}
+	in.Slug = strings.TrimSpace(in.Slug)
+	if in.Slug == "" {
+		return "", fmt.Errorf("slug is required")
+	}
+	if in.Name == nil && in.Description == nil && in.WhenToUse == nil && in.Body == nil && in.Shared == nil {
+		return "", fmt.Errorf("nothing to update — provide at least one of: name, description, whenToUse, body, shared")
+	}
+	if err := t.w.UpdateSkill(in.Slug, in.Name, in.Description, in.WhenToUse, in.Body, in.Shared); err != nil {
+		return "", fmt.Errorf("update skill: %w", err)
+	}
+	b, _ := json.Marshal(map[string]string{"slug": in.Slug, "action": "updated"})
 	return string(b), nil
 }
 

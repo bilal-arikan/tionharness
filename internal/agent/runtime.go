@@ -481,6 +481,47 @@ func (w agentSkillWriter) CreateSkill(slug, name, description, whenToUse, body s
 	return err
 }
 
+// UpdateSkill edits a workspace skill in place. Each pointer field is applied
+// only when non-nil (partial update), merging over the skill's current values
+// so the agent can change just the body. Restricted to workspace-tier skills so
+// bundled/global skills can't be overwritten (parity with DeleteSkill).
+func (w agentSkillWriter) UpdateSkill(slug string, name, description, whenToUse, body *string, shared *bool) error {
+	cur, ok := w.store.Get(slug)
+	if !ok {
+		return fmt.Errorf("no skill with slug %q (check the skill catalog)", slug)
+	}
+	if cur.Source != skills.SourceWorkspace {
+		return fmt.Errorf("skill %q is a %s skill and cannot be edited (only workspace skills are editable)", slug, cur.Source)
+	}
+	curBody, _ := w.store.Body(slug)
+	in := skills.SkillInput{
+		Name:        cur.Name,
+		Description: cur.Description,
+		WhenToUse:   cur.WhenToUse,
+		Icon:        cur.Icon,
+		Color:       cur.Color,
+		Shared:      cur.Shared,
+		Body:        curBody,
+	}
+	if name != nil {
+		in.Name = *name
+	}
+	if description != nil {
+		in.Description = *description
+	}
+	if whenToUse != nil {
+		in.WhenToUse = *whenToUse
+	}
+	if body != nil {
+		in.Body = *body
+	}
+	if shared != nil {
+		in.Shared = *shared
+	}
+	_, err := w.store.Update(slug, in)
+	return err
+}
+
 func (w agentSkillWriter) DeleteSkill(slug string) error {
 	if err := w.store.Delete(slug); err != nil {
 		return err

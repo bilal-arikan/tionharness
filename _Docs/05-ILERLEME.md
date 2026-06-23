@@ -2,6 +2,72 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## `update_skill` self-management aracı ✅ (2026-06-23)
+
+Ajanlar bir skill'i değiştirmek için `delete_skill`+`create_skill` yapmak zorundaydı
+(SES2'de tam bunu yaptı — riskli, dangling-reference doğurabilir). Artık **`update_skill`**
+var: slug ile in-place düzenleme, **partial** semantik (yalnız değişen alanları geç —
+name/description/whenToUse/body/shared; verilmeyen alan korunur). Yalnız **workspace-tier**
+skill düzenlenebilir (global/bundled korunur). Mimari:
+- `tools.SkillWriter` arayüzüne `UpdateSkill(slug, name,desc,when,body *string, shared *bool)`
+  eklendi (pointer = nil → değişme). `UpdateSkillTool` (`builtin_skillmgmt.go`),
+  örnekli şema + boş-güncelleme/slug guard'ları.
+- `agentSkillWriter.UpdateSkill` (`runtime.go`): `store.Get`+`store.Body` ile mevcut
+  değerleri okuyup merge eder, tier guard (`Source==workspace`), `store.Update` çağırır.
+- `toolsetup.go`: create/delete arasına eklendi → self-management aralığında olduğu için
+  otomatik **hidden-lazy** (cached prefix'i şişirmez; `tool_search`/`activate_tools` ile erişilir).
+- Doc: `swarmgo-self-management` SKILL.md güncellendi. Test: `builtin_skillmgmt_test.go`
+  (partial forwarding + validation). Toplam testler yeşil.
+
+## Dış-ajan otomasyon dostluğu — UI seçicileri + API rehberi ✅ (2026-06-23)
+
+Soru: "SwarmGo'yu dışarıdan ajanlar (chrome-mcp/playwright-mcp) baştan sona kullanabilir mi,
+eksik/iyileştirilecek yer var mı?" İki yol değerlendirildi:
+
+- **HTTP API yolu zaten eksiksiz (9/10):** 138+ endpoint tüm alt sistemleri kapsıyor, **auth yok**
+  (`server.go:withCORS`), **CORS wildcard açık**, SSE `chat/stream` net terminal sinyali veriyor
+  (`meta→agent→step→reply→done|error`, `chat_stream.go`). Dış ajan API ile uçtan uca sürebilir.
+- **UI tıklama yolu kırılgandı (6/10):** `data-testid` yok, DOM'da tamamlanma sinyali yok,
+  modaller `role=dialog` taşımıyordu.
+
+**Uygulanan (UI otomasyon dostluğu, additive — yalnız attribute):**
+- **`data-testid` haritası:** NavRail (`nav-{view}`/`nav-workspace`/`nav-settings`), Composer
+  (`composer-input`/`-send`/`-stop`/`-queue`/`-interrupt`/`-steer`/`-attach`), AgentSelect
+  (`agent-select`/`-menu`/`-option`+`data-agent-id`), WorkspaceSwitcher (`workspace-switcher`/
+  `-menu`/`-row`+`data-workspace-id`/`-switch`/`-create`), MessageList (`chat-transcript`/`chat-message`).
+- **Tamamlanma sinyali:** `chat-message` satırında `data-role` + **`data-streaming="true|false"`**
+  (MessageList'te `rowLive` hoisted) → otomasyon turun bittiğini DOM'dan okur, polling yok.
+- **Erişilebilirlik:** `chat-transcript` `role=log`+`aria-live=polite`; AgentSelect/WorkspaceSwitcher
+  `role=listbox`/`option`+`aria-expanded`; 6 modal (`AgentSettings`/`AgentContext`/`SessionContext`/
+  `SkillEditor`/`WorkspaceCreate`/`SpawnSession`) `role=dialog`+`aria-modal`+`aria-label`+testid;
+  NavRail butonları `aria-label`+`aria-current`.
+- `npx tsc --noEmit` yeşil (EXIT=0). Hiç davranış değişmedi, yalnız işaretleme eklendi.
+
+**Yeni doküman:** `_Docs\33-DIS-AJAN-OTOMASYONU.md` — iki yol karşılaştırması, API uçtan-uca akış,
+SSE tüketim örnekleri, testid haritası, playwright/chrome-mcp reçeteleri, bilinen sınırlar.
+
+## Panel-içi form testid'leri — Faz 1+2+3 ✅ (2026-06-23)
+
+Önceki fazda yalnız çekirdek sohbet/nav/workspace/modal akışları testid taşıyordu; panellerin iç
+formları taşımıyordu (dış ajan API'den yönetebiliyor ama UI'dan kırılgan). Tüm panel formlarına
+`data-testid` eklendi — 4 paralel subagent ile (dosyalar disjoint, çakışma yok), additive (yalnız
+attribute, davranış/stil değişmedi).
+
+**Konvansiyon:** statik = `{panel}-{eylem}`; dinamik liste öğesi = sabit `data-testid` + ayrı
+`data-{entity}-id` (nth yerine id ile hedefleme). Özel bileşenlere (`<Button>`/`<AgentPicker>`/
+`<ProviderModelSelect>`) gerekince layout-nötr saran `<div data-testid>` (ör. `*-wrap`).
+
+**Kapsam (~146 yeni, toplam ~183 testid / 32 dosya):**
+- **Agents:** AgentRoster (7), AgentSettingsForm (14), ProviderModelSelect (5), AgentToolsSection (4),
+  AgentSkillsSection (5), AgentPicker (2), EmojiPicker (4).
+- **Tasks:** TaskBoard (7), TaskDetailPanel (9), BoardColumnEditor (10).
+- **Schedules+Settings:** Schedules (15), ProvidersPanel (14), ToolsPanel/MCP (14), HooksPanel (8).
+- **Diğer paneller:** SkillsPanel (8), MarketPanel (3), SecretsPanel (7), MemoryPanel (6),
+  ArtifactsPanel (12), FlowCanvas (2).
+
+`npx tsc --noEmit` yeşil (EXIT=0). Seçici haritası `_Docs\33-DIS-AJAN-OTOMASYONU.md` §B.2'ye işlendi.
+**Sıradaki (ertelendi):** ağa açılırsa API auth katmanı; gerçek playwright/chrome-mcp uçtan-uca koşu.
+
 ## Yapılandırılmış konuşma-özeti — Claude Code parite 1. faz (compact decay fix) ✅ (2026-06-23)
 
 WS2/SES2'de kullanıcı compact'in "çok kısa özet" ürettiğini ve "compact sonrası hâlâ
