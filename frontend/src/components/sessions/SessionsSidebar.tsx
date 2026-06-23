@@ -173,10 +173,10 @@ export function SessionsSidebar({
         <button
           onClick={onNewSession}
           disabled={newDisabled}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-accent)] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
           title="Yeni oturum (varsayılan ajanla)"
         >
-          <Plus size={16} /> Yeni Sohbet
+          <Plus size={15} /> Yeni Sohbet
         </button>
       </div>
 
