@@ -148,8 +148,8 @@ func newWindow() webview2.WebView {
 		Debug: false,
 		WindowOptions: webview2.WindowOptions{
 			Title:  "SwarmGo",
-			Width:  1280,
-			Height: 800,
+			Width:  1600,
+			Height: 1000,
 			Center: true,
 		},
 	})
