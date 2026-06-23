@@ -4,6 +4,7 @@ import type { Agent, AgentPatch } from '../../types'
 import { AgentAvatar } from './AgentAvatar'
 import { AgentSettingsModal } from './AgentSettingsModal'
 import { ProviderModelSelect } from './ProviderModelSelect'
+import { Button } from '../common'
 
 interface Props {
   agents: Agent[]
@@ -84,12 +85,9 @@ export function AgentRoster({
               setModel(m)
             }}
           />
-          <button
-            onClick={submit}
-            className="w-full rounded bg-[var(--color-accent)] py-1 text-sm font-medium text-white hover:opacity-90"
-          >
+          <Button onClick={submit} className="w-full">
             Oluştur
-          </button>
+          </Button>
         </div>
       )}
 

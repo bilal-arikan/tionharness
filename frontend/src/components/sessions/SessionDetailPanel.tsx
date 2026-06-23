@@ -350,7 +350,7 @@ export function SessionDetailPanel({
                 <p
                   className={`whitespace-pre-wrap rounded-lg border px-2.5 py-2 text-xs leading-relaxed ${
                     info.goalDone
-                      ? 'border-[var(--color-border)] bg-[color-mix(in_srgb,#10b981_8%,transparent)] text-[var(--color-text-dim)] line-through decoration-[var(--color-text-dim)]/60'
+                      ? 'border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] text-[var(--color-text-dim)] line-through decoration-[var(--color-text-dim)]/60'
                       : 'border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] text-[var(--color-text)]'
                   }`}
                 >

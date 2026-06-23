@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { BoardColumnDef } from '../../types'
+import { Button } from '../common'
 
 // Palette of preset accent colors for quick selection.
 const COLOR_PRESETS = [
@@ -302,13 +303,9 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
         {error && (
           <div className="rounded bg-[var(--color-danger)]/10 px-2 py-1 text-xs text-[var(--color-danger)]">{error}</div>
         )}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full rounded bg-[var(--color-accent)] py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-        >
+        <Button onClick={handleSave} disabled={saving} className="w-full">
           {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
+        </Button>
       </div>
     </div>
   )

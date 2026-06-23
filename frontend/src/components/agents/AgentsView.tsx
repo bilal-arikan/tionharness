@@ -5,6 +5,7 @@ import { AgentAvatar } from './AgentAvatar'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
+import { Button } from '../common'
 
 interface Props {
   agents: Agent[]
@@ -136,12 +137,9 @@ export function AgentsView({
                 setModel(m)
               }}
             />
-            <button
-              onClick={submit}
-              className="w-full rounded bg-[var(--color-accent)] py-1 text-sm font-medium text-white hover:opacity-90"
-            >
+            <Button onClick={submit} className="w-full">
               Oluştur
-            </button>
+            </Button>
           </div>
         )}
 
