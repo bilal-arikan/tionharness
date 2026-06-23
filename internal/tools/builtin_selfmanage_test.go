@@ -27,7 +27,7 @@ func TestCreateAgentStampsCreatedBy(t *testing.T) {
 	d := openTestDB(t)
 	const actor = "actor-1"
 
-	create := NewCreateAgentTool(d, actor)
+	create := NewCreateAgentTool(d, actor, nil, nil)
 	out, err := create.Call(ctx, json.RawMessage(`{"name":"Helper","soul":"helpful"}`))
 	if err != nil {
 		t.Fatalf("create_agent: %v", err)
@@ -42,6 +42,82 @@ func TestCreateAgentStampsCreatedBy(t *testing.T) {
 	}
 	if got.CreatedBy != actor {
 		t.Fatalf("CreatedBy = %q, want %q", got.CreatedBy, actor)
+	}
+}
+
+// TestCreateAgentSeedsSkills verifies create_agent seeds the default skill set
+// when none is given, and validates caller-supplied slugs (dropping unknowns).
+func TestCreateAgentSeedsSkills(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	known := map[string]bool{"swarmgo-guide": true, "custom": true}
+	exists := func(s string) bool { return known[s] }
+	create := NewCreateAgentTool(d, "actor", []string{"swarmgo-guide"}, exists)
+
+	// No skills → defaults seeded + persisted.
+	out, err := create.Call(ctx, json.RawMessage(`{"name":"A"}`))
+	if err != nil {
+		t.Fatalf("create_agent: %v", err)
+	}
+	var r1 struct {
+		ID     string   `json:"id"`
+		Skills []string `json:"skills"`
+	}
+	if err := json.Unmarshal([]byte(out), &r1); err != nil {
+		t.Fatal(err)
+	}
+	if len(r1.Skills) != 1 || r1.Skills[0] != "swarmgo-guide" {
+		t.Fatalf("default skills = %v", r1.Skills)
+	}
+	got, _ := d.GetAgent(ctx, r1.ID)
+	if len(got.Skills) != 1 || got.Skills[0] != "swarmgo-guide" {
+		t.Fatalf("persisted skills = %v", got.Skills)
+	}
+
+	// Explicit skills with an unknown one → unknown skipped, known kept.
+	out, err = create.Call(ctx, json.RawMessage(`{"name":"B","skills":["custom","nope"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r2 struct {
+		Skills  []string `json:"skills"`
+		Skipped []string `json:"skippedUnknownSkills"`
+	}
+	if err := json.Unmarshal([]byte(out), &r2); err != nil {
+		t.Fatal(err)
+	}
+	if len(r2.Skills) != 1 || r2.Skills[0] != "custom" {
+		t.Fatalf("explicit skills = %v", r2.Skills)
+	}
+	if len(r2.Skipped) != 1 || r2.Skipped[0] != "nope" {
+		t.Fatalf("skipped unknown = %v", r2.Skipped)
+	}
+}
+
+// TestRunScheduleTool verifies run_schedule fires the scheduler's RunNow for an
+// existing schedule and errors on an unknown id.
+func TestRunScheduleTool(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	sc, err := d.CreateSchedule(ctx, db.Schedule{AgentID: "a", CronExpr: "* * * * *", Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("seed schedule: %v", err)
+	}
+	var fired string
+	tool := NewRunScheduleTool(d, func(_ context.Context, id string) error { fired = id; return nil })
+
+	out, err := tool.Call(ctx, json.RawMessage(`{"id":"`+sc.ID+`"}`))
+	if err != nil {
+		t.Fatalf("run_schedule: %v", err)
+	}
+	if fired != sc.ID {
+		t.Fatalf("fired %q, want %q", fired, sc.ID)
+	}
+	if !strings.Contains(out, "fired") {
+		t.Fatalf("output = %q", out)
+	}
+	if _, err := tool.Call(ctx, json.RawMessage(`{"id":"ghost"}`)); err == nil {
+		t.Fatal("expected error for unknown schedule id")
 	}
 }
 

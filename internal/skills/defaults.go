@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 // defaultsFS holds the built-in skills shipped with SwarmGo. They are seeded
@@ -12,6 +13,25 @@ import (
 //
 //go:embed defaults
 var defaultsFS embed.FS
+
+// DefaultSkillSlugs returns the slugs of the shipped default skills (the
+// subdirectories under defaults/), so callers can seed new agents with the
+// baseline SwarmGo skill set. Sorted for a stable order. Single source of truth:
+// the embedded defaults tree.
+func DefaultSkillSlugs() []string {
+	entries, err := fs.ReadDir(defaultsFS, "defaults")
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			out = append(out, e.Name())
+		}
+	}
+	sort.Strings(out)
+	return out
+}
 
 // EnsureDefaults writes the built-in default skills into dir, creating only the
 // ones that are missing. Existing files are never overwritten, so user edits and

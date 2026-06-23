@@ -234,9 +234,9 @@ func TestInteractionBackend_Confirm(t *testing.T) {
 // fakeSink is a minimal ArtifactSink for the artifact dispatch test.
 type fakeSink struct{ created, updated int }
 
-func (f *fakeSink) CreateArtifact(_ context.Context, title, kind, language, content string) (tools.ArtifactRef, error) {
+func (f *fakeSink) CreateArtifact(_ context.Context, spec tools.CreateArtifactSpec) (tools.ArtifactRef, error) {
 	f.created++
-	return tools.ArtifactRef{ID: "art-1", Title: title, Kind: kind}, nil
+	return tools.ArtifactRef{ID: "art-1", Title: spec.Title, Kind: spec.Kind}, nil
 }
 func (f *fakeSink) UpdateArtifact(_ context.Context, id, content string) (tools.ArtifactRef, error) {
 	f.updated++

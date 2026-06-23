@@ -233,6 +233,8 @@ func (m *Manager) open(meta Meta) error {
 	sched := agent.NewScheduler(database, rt, m.logger)
 	// Let self-management schedule tools reload the cron scheduler immediately.
 	rt.SetScheduleReloader(sched.Reload)
+	// Let the run_schedule tool fire a schedule on demand ("Run now").
+	rt.SetScheduleRunner(sched.RunNow)
 	if err := sched.Start(context.Background()); err != nil {
 		m.logger.Warn("start scheduler failed", "workspace", meta.ID, "error", err)
 	}
@@ -326,6 +328,7 @@ func (m *Manager) Delete(id string) error {
 	m.mu.Unlock()
 
 	ws.Scheduler.Stop()
+	ws.Runtime.CloseMCP()
 	_ = ws.DB.Close()
 	if err := os.RemoveAll(ws.DataDir); err != nil {
 		m.logger.Warn("failed to remove workspace dir", "id", id, "error", err)
@@ -339,6 +342,7 @@ func (m *Manager) Close() {
 	defer m.mu.Unlock()
 	for _, ws := range m.workspaces {
 		ws.Scheduler.Stop()
+		ws.Runtime.CloseMCP()
 		_ = ws.DB.Close()
 	}
 }

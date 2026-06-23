@@ -1,9 +1,14 @@
 // Package mcp implements a minimal Model Context Protocol client. It speaks
 // JSON-RPC 2.0 over a stdio transport (the server is launched as a subprocess)
-// and exposes the two calls SwarmGo needs: tools/list and tools/call.
+// and exposes the calls SwarmGo needs: tools/list and tools/call.
 //
 // The protocol is intentionally implemented by hand (no SDK) to stay
 // dependency-light and match the rest of the codebase.
+//
+// The client is safe for a PERSISTENT, concurrently-used connection (see Pool):
+// a single background read loop demultiplexes responses to per-call channels by
+// JSON-RPC id, and server-initiated notifications (notably
+// notifications/tools/list_changed) are delivered to an optional callback.
 package mcp
 
 import (
@@ -13,10 +18,10 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-
-	"github.com/bilal-arikan/swarmgo/internal/proc"
 	"sync"
 	"time"
+
+	"github.com/bilal-arikan/swarmgo/internal/proc"
 )
 
 const (
@@ -32,7 +37,7 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 
-// rpcRequest / rpcResponse mirror the JSON-RPC 2.0 envelope.
+// rpcRequest mirrors the JSON-RPC 2.0 request/notification envelope.
 type rpcRequest struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id,omitempty"`
@@ -40,9 +45,12 @@ type rpcRequest struct {
 	Params  any    `json:"params,omitempty"`
 }
 
-type rpcResponse struct {
+// rpcMessage is a permissive inbound envelope: it is a response when ID is set
+// (Result/Error populated) and a server notification when Method is set.
+type rpcMessage struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      *int            `json:"id"`
+	Method  string          `json:"method"`
 	Result  json.RawMessage `json:"result"`
 	Error   *rpcError       `json:"error"`
 }
@@ -54,14 +62,26 @@ type rpcError struct {
 
 func (e *rpcError) Error() string { return fmt.Sprintf("mcp rpc error %d: %s", e.Code, e.Message) }
 
-// StdioClient is a connected stdio MCP server subprocess.
+// reply is what a pending call receives from the read loop.
+type reply struct {
+	result json.RawMessage
+	err    error
+}
+
+// StdioClient is a connected stdio MCP server subprocess. Obtain one from
+// DialStdio. It is safe for concurrent use.
 type StdioClient struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	reader *bufio.Reader
 
-	mu     sync.Mutex
-	nextID int
+	writeMu sync.Mutex // serializes writes to stdin
+
+	mu       sync.Mutex
+	nextID   int
+	pending  map[int]chan reply
+	closed   bool
+	onChange func() // invoked (async) on notifications/tools/list_changed
 }
 
 // DialStdio launches the given command as an MCP server and performs the
@@ -87,11 +107,13 @@ func DialStdio(ctx context.Context, command string, args, env []string) (*StdioC
 	}
 
 	c := &StdioClient{
-		cmd:    cmd,
-		stdin:  stdin,
-		reader: bufio.NewReaderSize(stdout, 1<<20),
-		nextID: 1,
+		cmd:     cmd,
+		stdin:   stdin,
+		reader:  bufio.NewReaderSize(stdout, 1<<20),
+		nextID:  1,
+		pending: map[int]chan reply{},
 	}
+	go c.readLoop()
 
 	if err := c.initialize(ctx); err != nil {
 		_ = c.Close()
@@ -100,11 +122,90 @@ func DialStdio(ctx context.Context, command string, args, env []string) (*StdioC
 	return c, nil
 }
 
+// SetOnToolsChanged registers a callback invoked (in its own goroutine) whenever
+// the server announces notifications/tools/list_changed.
+func (c *StdioClient) SetOnToolsChanged(fn func()) {
+	c.mu.Lock()
+	c.onChange = fn
+	c.mu.Unlock()
+}
+
+// Alive reports whether the connection is still usable (read loop running and
+// not closed).
+func (c *StdioClient) Alive() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return !c.closed
+}
+
+// readLoop is the single reader: it demultiplexes responses by id and routes
+// notifications. It exits when the pipe closes (or Close kills the process),
+// failing every in-flight call so no caller blocks forever.
+func (c *StdioClient) readLoop() {
+	for {
+		line, err := c.reader.ReadBytes('\n')
+		if len(line) > 0 {
+			c.dispatch(line)
+		}
+		if err != nil {
+			c.failAll(err)
+			return
+		}
+	}
+}
+
+// dispatch parses one inbound line and either delivers a response to its waiting
+// call or handles a server notification. Non-JSON / log lines are ignored.
+func (c *StdioClient) dispatch(line []byte) {
+	var msg rpcMessage
+	if err := json.Unmarshal(line, &msg); err != nil {
+		return // skip non-JSON / log noise
+	}
+	if msg.ID != nil {
+		c.mu.Lock()
+		ch := c.pending[*msg.ID]
+		delete(c.pending, *msg.ID)
+		c.mu.Unlock()
+		if ch == nil {
+			return // late/unknown id
+		}
+		if msg.Error != nil {
+			ch <- reply{err: msg.Error}
+		} else {
+			ch <- reply{result: msg.Result}
+		}
+		return
+	}
+	// Server-initiated notification.
+	if msg.Method == "notifications/tools/list_changed" {
+		c.mu.Lock()
+		fn := c.onChange
+		c.mu.Unlock()
+		if fn != nil {
+			go fn()
+		}
+	}
+}
+
+// failAll marks the client closed and delivers err to every pending call.
+func (c *StdioClient) failAll(err error) {
+	c.mu.Lock()
+	c.closed = true
+	pend := c.pending
+	c.pending = map[int]chan reply{}
+	c.mu.Unlock()
+	for _, ch := range pend {
+		ch <- reply{err: fmt.Errorf("mcp read: %w", err)}
+	}
+}
+
 // initialize performs the MCP handshake: initialize request + initialized note.
+// It advertises tools.listChanged so servers send incremental updates we honor
+// via the onChange callback.
 func (c *StdioClient) initialize(ctx context.Context) error {
 	_, err := c.call(ctx, "initialize", map[string]any{
 		"protocolVersion": protocolVersion,
-		"capabilities":    map[string]any{},
+		"capabilities":    map[string]any{"tools": map[string]any{"listChanged": true}},
 		"clientInfo":      map[string]string{"name": clientName, "version": clientVersion},
 	})
 	if err != nil {
@@ -166,53 +267,35 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, args json.RawMe
 	return CallToolResult{Text: text, IsError: out.IsError}, nil
 }
 
-// call sends a request and waits for the matching response.
+// call sends a request and waits for the matching response (routed by the read
+// loop). It returns promptly on ctx cancellation or connection death.
 func (c *StdioClient) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil, fmt.Errorf("mcp: connection closed")
+	}
 	id := c.nextID
 	c.nextID++
+	ch := make(chan reply, 1)
+	c.pending[id] = ch
 	c.mu.Unlock()
 
 	if err := c.write(rpcRequest{JSONRPC: "2.0", ID: id, Method: method, Params: params}); err != nil {
+		c.mu.Lock()
+		delete(c.pending, id)
+		c.mu.Unlock()
 		return nil, err
 	}
 
-	type result struct {
-		raw json.RawMessage
-		err error
-	}
-	done := make(chan result, 1)
-	go func() {
-		for {
-			var resp rpcResponse
-			line, err := c.reader.ReadBytes('\n')
-			if err != nil {
-				done <- result{err: fmt.Errorf("mcp read: %w", err)}
-				return
-			}
-			if len(line) == 0 {
-				continue
-			}
-			if err := json.Unmarshal(line, &resp); err != nil {
-				continue // skip non-JSON / log lines
-			}
-			if resp.ID == nil || *resp.ID != id {
-				continue // notification or another request's response
-			}
-			if resp.Error != nil {
-				done <- result{err: resp.Error}
-				return
-			}
-			done <- result{raw: resp.Result}
-			return
-		}
-	}()
-
 	select {
 	case <-ctx.Done():
+		c.mu.Lock()
+		delete(c.pending, id)
+		c.mu.Unlock()
 		return nil, ctx.Err()
-	case r := <-done:
-		return r.raw, r.err
+	case r := <-ch:
+		return r.result, r.err
 	}
 }
 
@@ -226,14 +309,23 @@ func (c *StdioClient) write(req rpcRequest) error {
 		return err
 	}
 	b = append(b, '\n')
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	_, err = c.stdin.Write(b)
 	return err
 }
 
-// Close terminates the server subprocess.
+// Close terminates the server subprocess. Pending calls unblock with an error
+// once the read loop observes the closed pipe.
 func (c *StdioClient) Close() error {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil
+	}
+	c.closed = true
+	c.mu.Unlock()
+
 	_ = c.stdin.Close()
 	if c.cmd.Process != nil {
 		// Give it a moment, then kill.

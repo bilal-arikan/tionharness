@@ -40,17 +40,28 @@ func (d agentDeps) requireAgentCreatedByAgent(ctx context.Context, id string) (d
 }
 
 // CreateAgentTool creates a new agent in the workspace.
-type CreateAgentTool struct{ d agentDeps }
+type CreateAgentTool struct {
+	d agentDeps
+	// defaultSkills is the baseline skill-slug set every new agent is seeded with
+	// when the caller doesn't provide its own (the shipped SwarmGo defaults).
+	defaultSkills []string
+	// skillExists reports whether a skill slug is known (global/workspace), so
+	// caller-provided slugs are validated and unknown ones skipped (no dangling
+	// refs). nil accepts any slug.
+	skillExists func(slug string) bool
+}
 
-// NewCreateAgentTool constructs create_agent.
-func NewCreateAgentTool(database *db.DB, actorID string) CreateAgentTool {
-	return CreateAgentTool{d: agentDeps{db: database, actorID: actorID}}
+// NewCreateAgentTool constructs create_agent. defaultSkills seeds new agents when
+// the caller passes none; skillExists validates caller-supplied slugs (nil = allow
+// all). Both may be nil/empty in minimal contexts.
+func NewCreateAgentTool(database *db.DB, actorID string, defaultSkills []string, skillExists func(slug string) bool) CreateAgentTool {
+	return CreateAgentTool{d: agentDeps{db: database, actorID: actorID}, defaultSkills: defaultSkills, skillExists: skillExists}
 }
 
 func (CreateAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_agent",
-		Description: "Create a new AI agent in this workspace. Provide a name and optionally a soul (personality/system prompt), identity, provider and model. The new agent is tagged as created by you, so you can later edit or delete it. Returns the new agent's id.",
+		Description: "Create a new AI agent in this workspace. Provide a name and optionally a soul (personality/system prompt), identity, provider, model and skills. The new agent is tagged as created by you, so you can later edit or delete it. If you omit \"skills\", the agent is seeded with the default SwarmGo skill set. Returns the new agent's id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -60,7 +71,8 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"provider":{"type":"string","description":"LLM provider id (e.g. claude-cli, anthropic, minimax). Defaults to the workspace default if omitted."},
 				"model":{"type":"string","description":"Model id for the chosen provider"},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
-				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"}
+				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"},
+				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default SwarmGo skill set; unknown slugs are skipped."}
 			},
 			"required":["name"],
 			"additionalProperties":false
@@ -76,13 +88,14 @@ func (CreateAgentTool) Def() providers.ToolDef {
 
 func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Name     string `json:"name"`
-		Soul     string `json:"soul"`
-		Identity string `json:"identity"`
-		Provider string `json:"provider"`
-		Model    string `json:"model"`
-		Avatar   string `json:"avatar"`
-		Color    string `json:"color"`
+		Name     string   `json:"name"`
+		Soul     string   `json:"soul"`
+		Identity string   `json:"identity"`
+		Provider string   `json:"provider"`
+		Model    string   `json:"model"`
+		Avatar   string   `json:"avatar"`
+		Color    string   `json:"color"`
+		Skills   []string `json:"skills"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("invalid arguments: %w", err)
@@ -91,6 +104,11 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	if in.Name == "" {
 		return "", fmt.Errorf("name is required")
 	}
+
+	// Resolve the skill set: caller-provided (validated) or, when none given, the
+	// default SwarmGo set. Unknown caller slugs are dropped and reported.
+	skills, skipped := t.resolveSkills(in.Skills)
+
 	created, err := t.d.db.CreateAgent(ctx, db.Agent{
 		Name:       in.Name,
 		Soul:       in.Soul,
@@ -99,14 +117,48 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Model:      in.Model,
 		Avatar:     in.Avatar,
 		Color:      in.Color,
+		Skills:     skills,
 		MCPEnabled: true,
 		CreatedBy:  t.d.actorID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create agent: %w", err)
 	}
-	b, _ := json.Marshal(map[string]string{"id": created.ID, "name": created.Name, "action": "created"})
+	out := map[string]any{"id": created.ID, "name": created.Name, "action": "created", "skills": skills}
+	if len(skipped) > 0 {
+		out["skippedUnknownSkills"] = skipped
+	}
+	b, _ := json.Marshal(out)
 	return string(b), nil
+}
+
+// resolveSkills validates caller-provided slugs (dropping+reporting unknown ones)
+// and falls back to the default skill set when the caller gave none. Order is
+// preserved and duplicates removed.
+func (t CreateAgentTool) resolveSkills(provided []string) (skills, skipped []string) {
+	seen := map[string]bool{}
+	add := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" || seen[s] {
+			return
+		}
+		if t.skillExists != nil && !t.skillExists(s) {
+			skipped = append(skipped, s)
+			return
+		}
+		seen[s] = true
+		skills = append(skills, s)
+	}
+	if len(provided) > 0 {
+		for _, s := range provided {
+			add(s)
+		}
+		return skills, skipped
+	}
+	for _, s := range t.defaultSkills {
+		add(s)
+	}
+	return skills, skipped
 }
 
 // UpdateAgentTool edits an agent-created agent's profile.

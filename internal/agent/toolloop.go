@@ -122,6 +122,16 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	req.WorkDir = workDir
 	ctx = withResolvedWorkDir(ctx, workDir, autonomous)
 
+	// Artifacts everywhere: chat turns install a session-bound sink before calling
+	// in; autonomous turns (scheduler/spawn/flow) don't, so create_artifact would
+	// fail with "artifacts are not available for this turn". Install a fallback sink
+	// here whenever the turn has a session but no sink yet — so artifacts can always
+	// be created, regardless of turn type. (CLI turns get theirs via the Interaction
+	// bridge run; this covers the native loop.)
+	if sid := SessionIDFrom(ctx); sid != "" && !tools.HasArtifactSink(ctx) {
+		ctx = tools.WithArtifacts(ctx, r.NewArtifactSink(sid, agent.ID))
+	}
+
 	// Provider-driven paths (claude CLI) surface their own trace via OnEvent.
 	if onStep != nil {
 		req.OnEvent = func(ts providers.TraceStep) { onStep(traceStepToTurnStep(ts)) }

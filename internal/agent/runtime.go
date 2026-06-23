@@ -20,6 +20,7 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/events"
 	"github.com/bilal-arikan/swarmgo/internal/logbuf"
 	"github.com/bilal-arikan/swarmgo/internal/market"
+	"github.com/bilal-arikan/swarmgo/internal/mcp"
 	"github.com/bilal-arikan/swarmgo/internal/memory"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 	"github.com/bilal-arikan/swarmgo/internal/secrets"
@@ -65,6 +66,11 @@ type Runtime struct {
 	// creates/edits/deletes one via a self-management tool. Wired by the
 	// workspace manager once the scheduler exists; nil before then (no-op).
 	reloadSched func(context.Context) error
+
+	// runSched fires a schedule immediately (the scheduler's RunNow), backing the
+	// run_schedule self-management tool. Wired by the workspace manager once the
+	// scheduler exists; nil before then.
+	runSched func(context.Context, string) error
 
 	// settingsBridge backs the get_settings / update_settings self-management
 	// tools: read and live-apply the application-wide settings. Wired by the
@@ -124,10 +130,12 @@ type Runtime struct {
 	// turn — the fire-and-forget concurrency guard (capped by SpawnMaxConcurrent).
 	spawnActive atomic.Int64
 
-	// mcpCat memoizes the dialed MCP tool catalog (per workspace) so the repeated
-	// buildRegistry calls within a single turn don't re-dial every enabled server
-	// each time. Invalidated by server-config changes (fingerprint) + a TTL.
-	mcpCat *mcpCatalog
+	// mcpPool holds this workspace's persistent MCP connections (one live session
+	// per enabled server). It replaces dial-per-operation: the per-turn catalog
+	// builds reuse live sessions (no gateway session churn) and a server's
+	// session state — e.g. the gateway's activate_tools — survives across calls.
+	// Closed via CloseMCP when the workspace is torn down.
+	mcpPool *mcp.Pool
 }
 
 // trackSession marks a session as actively running an autonomous invoke.
@@ -222,7 +230,15 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		logger:    logger,
 		skills:    skills.New(globalSkillsDir(), workspaceSkillsDir(workDir)),
 		market:    market.New(marketGlobalDir(), workspaceMarketDir(workDir)),
-		mcpCat:    newMCPCatalog(),
+		mcpPool:   mcp.NewPool(),
+	}
+}
+
+// CloseMCP terminates this workspace's persistent MCP connections. Called when
+// the workspace is deleted or the manager shuts down.
+func (r *Runtime) CloseMCP() {
+	if r.mcpPool != nil {
+		r.mcpPool.Close()
 	}
 }
 
@@ -481,6 +497,19 @@ func (w agentSkillWriter) DeleteSkill(slug string) error {
 // tools take effect immediately. Called by the workspace manager after the
 // scheduler is constructed.
 func (r *Runtime) SetScheduleReloader(fn func(context.Context) error) { r.reloadSched = fn }
+
+// SetScheduleRunner wires the scheduler's RunNow so the run_schedule
+// self-management tool can fire a schedule on demand. Called by the workspace
+// manager after the scheduler is constructed. Nil leaves run_schedule a no-op.
+func (r *Runtime) SetScheduleRunner(fn func(context.Context, string) error) { r.runSched = fn }
+
+// runScheduleNow fires a schedule immediately (nil-safe; errors when unwired).
+func (r *Runtime) runScheduleNow(ctx context.Context, id string) error {
+	if r.runSched == nil {
+		return fmt.Errorf("scheduler not available")
+	}
+	return r.runSched(ctx, id)
+}
 
 // SetSettingsBridge wires the application-wide settings store + live-apply hook
 // so the get_settings / update_settings self-management tools become available.

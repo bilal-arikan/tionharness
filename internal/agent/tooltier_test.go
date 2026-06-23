@@ -59,7 +59,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 		{Name: "srvA__alpha", Description: "mcp tool alpha"},
 		{Name: "srvA__beta", Description: "mcp tool beta"},
 	}
-	out := renderLazyToolCatalog(small)
+	out := renderLazyToolCatalog(small, 0)
 	if !strings.Contains(out, "create_agent") || !strings.Contains(out, "srvA__alpha") {
 		t.Fatalf("small catalog should list every tool, got:\n%s", out)
 	}
@@ -72,7 +72,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 			Description: "an mcp tool",
 		})
 	}
-	out = renderLazyToolCatalog(big)
+	out = renderLazyToolCatalog(big, 0)
 	if !strings.Contains(out, "create_agent") {
 		t.Error("built-in lazy tool must still be listed in full")
 	}
@@ -84,6 +84,32 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 	}
 	if !strings.Contains(out, "bigsrv") {
 		t.Error("summary must name the server")
+	}
+}
+
+// TestLazyCatalogHidesSelfManageBehindSkillPointer verifies the rendered block
+// does NOT enumerate hidden self-management tools but emits a single pointer to
+// the swarmgo-self-management skill (and still names the visible lazy tools).
+func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
+	visible := []providers.ToolDef{{Name: "WebFetch", Description: "fetch a page"}}
+	out := renderLazyToolCatalog(visible, 12)
+	if !strings.Contains(out, "WebFetch") {
+		t.Error("visible lazy tools must still be listed")
+	}
+	if !strings.Contains(out, "swarmgo-self-management") {
+		t.Error("hidden suite must be replaced by a pointer to the self-management skill")
+	}
+	if !strings.Contains(out, "12 self-management tools") {
+		t.Errorf("pointer must state the hidden count, got:\n%s", out)
+	}
+	// With no hidden tools, no pointer line.
+	out = renderLazyToolCatalog(visible, 0)
+	if strings.Contains(out, "swarmgo-self-management") {
+		t.Error("no pointer when there are no hidden tools")
+	}
+	// Empty + no hidden → empty block.
+	if renderLazyToolCatalog(nil, 0) != "" {
+		t.Error("empty catalog with no hidden tools must render nothing")
 	}
 }
 

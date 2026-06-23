@@ -777,13 +777,13 @@ export default function App() {
               <button
                 onClick={toggleDetail}
                 title="Oturum bilgisi panelini aç/kapat"
-                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition ${
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
                   detailOpen
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white shadow-[var(--shadow-sm)]'
-                    : 'border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]'
+                    ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
                 }`}
               >
-                <PanelRight size={18} strokeWidth={2.2} className="shrink-0" />
+                <PanelRight size={15} className="shrink-0" />
                 <span className="hidden sm:inline">Detay</span>
               </button>
             )}

@@ -18,11 +18,14 @@ import (
 // would even mistake another agent's words for its own. That is the cause of
 // "agents can't see who sent each message" in a thread shared by two agents.
 //
-// When two or more distinct agents have spoken, every assistant turn's text is
-// prefixed with its author's display name ("[Ada]: …"); the responding agent's
-// own earlier turns get a "(you)" marker so it can still tell its own voice
-// apart. Single-agent sessions are returned unchanged (natural transcript, no
-// labels) so normal 1:1 chats and prompt caching are unaffected.
+// When the history contains an assistant turn authored by an agent OTHER than
+// the one now responding (a thread shared by 2+ agents, or a session handed over
+// from agent A to agent B), every assistant turn's text is prefixed with its
+// author's display name ("[Ada]: …"); the responding agent's own earlier turns
+// get a "(you)" marker so it can still tell its own voice apart. Pure
+// single-agent sessions (only the responder has ever spoken) are returned
+// unchanged (natural transcript, no labels) so normal 1:1 chats and prompt
+// caching are unaffected.
 //
 // It works on a COPY — the stored messages are never mutated — and returns
 // whether the session is multi-author, so the caller can add a one-line system
@@ -35,7 +38,21 @@ func (s *Server) labelMultiAgentHistory(ctx context.Context, database *db.DB, cu
 			authors[m.AgentID] = struct{}{}
 		}
 	}
-	if len(authors) < 2 {
+	// Attribution is needed whenever the history contains an assistant turn
+	// authored by an agent OTHER than the one now responding — otherwise the
+	// responder could mistake another agent's words for its own. This covers
+	// both a thread shared by 2+ agents AND a handed-over session (a single
+	// prior author A, now answered by B). A pure single-agent thread (only the
+	// responder has ever spoken) stays unlabeled to keep the natural transcript
+	// and prompt caching intact.
+	needsLabels := false
+	for id := range authors {
+		if id != currentAgentID {
+			needsLabels = true
+			break
+		}
+	}
+	if !needsLabels {
 		return history, false
 	}
 

@@ -33,6 +33,61 @@ func (d scheduleDeps) requireScheduleCreatedByAgent(ctx context.Context, id stri
 	return sc, nil
 }
 
+// RunScheduleTool fires a schedule immediately on demand — the manual "Run now"
+// trigger — regardless of its cron timing or enabled state, so an agent can
+// kick off a routine itself. Runs synchronously: the schedule's prompt is
+// delivered to its agent. Works on any schedule (running is not destructive, so
+// provenance is not enforced — unlike edit/delete).
+type RunScheduleTool struct {
+	db  *db.DB
+	run func(ctx context.Context, scheduleID string) error
+}
+
+// NewRunScheduleTool constructs run_schedule over the scheduler's RunNow.
+func NewRunScheduleTool(database *db.DB, run func(context.Context, string) error) RunScheduleTool {
+	return RunScheduleTool{db: database, run: run}
+}
+
+func (RunScheduleTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "run_schedule",
+		Description: "Fire a schedule immediately, regardless of its cron timing or enabled state — the manual \"Run now\" trigger. Delivers the schedule's prompt to its agent synchronously. Use list_schedules to find the id. Works on any schedule in the workspace.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"id":{"type":"string","description":"The schedule id to fire now (see list_schedules)"}
+			},
+			"required":["id"],
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t RunScheduleTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	in.ID = strings.TrimSpace(in.ID)
+	if in.ID == "" {
+		return "", fmt.Errorf("id is required")
+	}
+	sc, err := t.db.GetSchedule(ctx, in.ID)
+	if err != nil {
+		return "", fmt.Errorf("no schedule with id %q (use list_schedules)", in.ID)
+	}
+	if t.run == nil {
+		return "", fmt.Errorf("schedule runner is not available in this context")
+	}
+	if err := t.run(ctx, in.ID); err != nil {
+		return "", fmt.Errorf("run schedule: %w", err)
+	}
+	b, _ := json.Marshal(map[string]string{"id": sc.ID, "action": "fired"})
+	return string(b), nil
+}
+
 // CreateScheduleTool creates a cron schedule that delivers a prompt to an agent.
 type CreateScheduleTool struct{ d scheduleDeps }
 

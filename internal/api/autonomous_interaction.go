@@ -33,6 +33,14 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		run := s.runs.register(runID, sessionID, func() {})
 		run.autonomous = true
 
+		// Artifacts (CLI path): bind a session-scoped artifact sink so create_artifact
+		// / update_artifact work on autonomous CLI turns too (otherwise the bridge
+		// reports "artifacts are not available for this turn"). Mirrors the chat path's
+		// setArtifacts. Only when we know the session to stamp artifacts with.
+		if sessionID != "" {
+			run.setArtifacts(rt.NewArtifactSink(sessionID, ag.ID))
+		}
+
 		// use_skill (CLI path): enforce the same per-agent allowlist as the native
 		// built-in, so a restricted skill stays unreachable unless assigned/shared.
 		run.setSkillLoader(func(slug string) (string, error) {

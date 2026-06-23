@@ -54,7 +54,8 @@ func TestLabelMultiAgentHistory(t *testing.T) {
 		t.Errorf("input history was mutated: %q", history[1].Text)
 	}
 
-	// Single-author history → returned unchanged, multiAgent=false.
+	// Single-author history answered by the SAME agent → pure self, returned
+	// unchanged, multiAgent=false (natural transcript + caching preserved).
 	solo := []db.Message{
 		{Role: "user", Text: "selam"},
 		{Role: "assistant", AgentID: ada.ID, Text: "ben Ada"},
@@ -65,5 +66,16 @@ func TestLabelMultiAgentHistory(t *testing.T) {
 	}
 	if out2[1].Text != "ben Ada" {
 		t.Errorf("single-agent turn must be unlabelled: %q", out2[1].Text)
+	}
+
+	// Handover: history authored only by Ada, now answered by Kai. Kai must see
+	// Ada's turn attributed so it doesn't mistake it for its own — even though
+	// only ONE agent has spoken so far.
+	out3, multi3 := s.labelMultiAgentHistory(ctx, database, kai.ID, solo)
+	if !multi3 {
+		t.Fatal("handover (prior author != responder) must report multiAgent=true")
+	}
+	if out3[1].Text != "[Ada]: ben Ada" {
+		t.Errorf("handover prior-author turn mislabelled: %q", out3[1].Text)
 	}
 }

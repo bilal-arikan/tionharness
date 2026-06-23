@@ -18,8 +18,21 @@ type ArtifactRef struct {
 // Kept in the tools package (not agent/api) so built-in tools can reach it
 // without importing those packages (which would cycle).
 type ArtifactSink interface {
-	CreateArtifact(ctx context.Context, title, kind, language, content string) (ArtifactRef, error)
+	CreateArtifact(ctx context.Context, spec CreateArtifactSpec) (ArtifactRef, error)
 	UpdateArtifact(ctx context.Context, id, content string) (ArtifactRef, error)
+}
+
+// CreateArtifactSpec describes a new artifact. For text kinds (markdown/code/
+// html/text/svg/mermaid) Content holds the body. For media/file kinds (image/
+// video/audio/file) SourcePath points at the file on disk — absolute or
+// workspace-relative — and Content is an optional caption; the bytes are never
+// carried through the model context.
+type CreateArtifactSpec struct {
+	Title      string
+	Kind       string
+	Language   string
+	Content    string
+	SourcePath string
 }
 
 type artifactKey struct{}
@@ -36,3 +49,8 @@ func artifactsFrom(ctx context.Context) ArtifactSink {
 	s, _ := ctx.Value(artifactKey{}).(ArtifactSink)
 	return s
 }
+
+// HasArtifactSink reports whether an artifact sink is attached to ctx, so a
+// caller can install a fallback only when one is missing (avoids overriding the
+// chat layer's session-bound sink).
+func HasArtifactSink(ctx context.Context) bool { return artifactsFrom(ctx) != nil }

@@ -10,8 +10,19 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/mcp"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/skills"
 	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
+
+// skillExists reports whether a skill slug is known to this workspace (global or
+// workspace tier). Permissive when no skill store is wired (bare test runtimes).
+func (r *Runtime) skillExists(slug string) bool {
+	if r.skills == nil {
+		return true
+	}
+	_, ok := r.skills.Get(slug)
+	return ok
+}
 
 // toServerConfig converts a stored MCP server row into a transport-agnostic
 // launch spec for the mcp package.
@@ -176,8 +187,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	selfManageStart := len(builtins)
 	if r.tun.SelfManageEnabled() {
 		builtins = append(builtins,
-			// Agents.
-			tools.NewCreateAgentTool(r.db, agent.ID),
+			// Agents. New agents are seeded with the default SwarmGo skill set when
+			// the caller passes none; caller-supplied slugs are validated against the
+			// skill store.
+			tools.NewCreateAgentTool(r.db, agent.ID, skills.DefaultSkillSlugs(), r.skillExists),
 			tools.NewUpdateAgentTool(r.db, agent.ID),
 			tools.NewDeleteAgentTool(r.db, agent.ID, r.reloadSchedules),
 			tools.NewListAgentsTool(r.db, agent.ID),
@@ -206,6 +219,8 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewUpdateScheduleTool(r.db, agent.ID, r.reloadSchedules),
 			tools.NewDeleteScheduleTool(r.db, agent.ID, r.reloadSchedules),
 			tools.NewListSchedulesTool(r.db, agent.ID),
+			// Manually fire a schedule now (the "Run now" trigger).
+			tools.NewRunScheduleTool(r.db, r.runScheduleNow),
 			// Tasks (kanban board). Read/create/edit/move on any task; delete only
 			// agent-created (provenance). The board is passive — no run tool.
 			tools.NewListTasksTool(r.db, agent.ID),
@@ -274,8 +289,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// Lazy tool loading: the self-management suite is large and used in a minority
 	// of turns, so its schemas are loaded on demand (activate_tools) rather than
 	// shipped every turn. MCP tools are marked lazy inside AttachMCP.
+	//
+	// HIDDEN: the self-management family is also kept OUT of the rendered
+	// load-on-demand catalog block — dozens of name+summary lines would otherwise
+	// ride in every turn's cached prefix. Their catalog + usage lives in the
+	// `swarmgo-self-management` skill (advertised in Available Skills); the block
+	// shows a single pointer to it. They stay activatable (activate_tools) and
+	// searchable (tool_search), so the skill is the documented path, not the only one.
 	for _, t := range builtins[selfManageStart:] {
-		reg.MarkLazy(t.Def().Name)
+		reg.MarkHidden(t.Def().Name)
 	}
 	// Trim the eager core further: a handful of always-built tools are themselves
 	// used in only a minority of turns, so they too load on demand. This shrinks
@@ -397,8 +419,11 @@ func (r *Runtime) LazyToolCatalog(ctx context.Context, agent db.Agent) []provide
 // activate (self-management + MCP, minus its denylist). Returns "" when none.
 // Part of the cached static prefix (stable per agent/workspace tool config).
 func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) string {
-	lazy := r.buildRegistry(ctx, agent).LazyCatalog(r.toolFilter(ctx, agent))
-	return renderLazyToolCatalog(lazy)
+	reg := r.buildRegistry(ctx, agent)
+	filter := r.toolFilter(ctx, agent)
+	// Visible lazy tools are enumerated; the hidden self-management suite is folded
+	// into a single skill pointer (rendered when hiddenCount > 0).
+	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter))
 }
 
 // lazyCatalogMCPListLimit caps how many MCP (namespaced) lazy tools are listed
@@ -411,13 +436,15 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 // instead of enumerate once the catalog grows large.
 const lazyCatalogMCPListLimit = 30
 
-// renderLazyToolCatalog builds the load-on-demand tool catalog block from a list
-// of lazy tool defs (name + description). Built-in lazy tools are always listed;
-// namespaced MCP tools are listed individually only while under
+// renderLazyToolCatalog builds the load-on-demand tool catalog block from the
+// VISIBLE lazy tool defs (name + description). Built-in lazy tools are always
+// listed; namespaced MCP tools are listed individually only while under
 // lazyCatalogMCPListLimit, otherwise summarised per server (discover the rest via
-// tool_search). Returns "" for an empty list.
-func renderLazyToolCatalog(lazy []providers.ToolDef) string {
-	if len(lazy) == 0 {
+// tool_search). hiddenCount > 0 appends a single pointer to the
+// `swarmgo-self-management` skill in place of enumerating the hidden suite.
+// Returns "" when there is nothing to show (no visible and no hidden tools).
+func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int) string {
+	if len(lazy) == 0 && hiddenCount == 0 {
 		return ""
 	}
 	// Separate built-in lazy tools from namespaced MCP tools (server__tool).
@@ -466,6 +493,17 @@ func renderLazyToolCatalog(lazy []providers.ToolDef) string {
 		for _, srv := range order {
 			fmt.Fprintf(&b, "- `%s` — %d tools\n", srv, counts[srv])
 		}
+	}
+
+	// Self-management suite: kept out of the per-turn enumeration to save context.
+	// Point the model at the skill (which documents the full catalog + how to
+	// activate) and at tool_search as the quick path.
+	if hiddenCount > 0 {
+		fmt.Fprintf(&b, "\n%d self-management tools (manage agents, flows, schedules, tasks, hooks, "+
+			"MCP servers, skills, workspaces, app settings, secrets, memory, logs) are available but "+
+			"not listed here to save context. Load the `swarmgo-self-management` skill (via `use_skill`) "+
+			"for the full catalog and how to use them, or find one directly with `tool_search(\"keyword\")` "+
+			"— then `activate_tools` the names you need.\n", hiddenCount)
 	}
 	return strings.TrimSpace(b.String())
 }

@@ -175,7 +175,7 @@ erDiagram
 | `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace). **`created_by`** = sunucuyu ekleyen ajan ("" = kullanıcı tanımlı, korumalı; ajan yalnız kendi eklediğini silebilir) |
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node). **`created_by`** = akışı oluşturan ajan ("" = kullanıcı) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
-| `artifacts` | Ajanın ürettiği kalıcı, sürümlenen içerik (doküman/kod/HTML/metin/SVG/Mermaid). `kind`+`language`, güncel `content`/`version` ve **inline revizyon geçmişi** (`revisions`, eskiden yeniye); köken `session_id`/`agent_id`. Workspace-scoped — SwarmGo'nun Claude.ai artifact karşılığı |
+| `artifacts` | Ajanın ürettiği kalıcı içerik. **Sürümlenmez** — `update` içeriği yerinde ezer (revizyon geçmişi yok). `kind` ∈ metin kindleri (`markdown`/`code`/`html`/`text`/`svg`/`mermaid`) **veya** medya/dosya kindleri (`image`/`video`/`audio`/`file`) + `language` (kod için). Metin kindlerinde gövde diskte `artifacts/<session>/<id><ext>` altında tutulur, JSON `content_file` ile referanslar (yükte `content`'e okunur). Medya/dosya kindlerinde bytes diskte yaşar, `source_path` (workspace-göreli) ile referanslanır — `create_artifact sourcePath` ile verilen workspace-dışı dosyalar `artifacts/`'a kopyalanır. `origin` ∈ `chat`/`manual`/`agent`/`tool`; köken `session_id`/`agent_id`. Workspace-scoped — SwarmGo'nun Claude.ai artifact karşılığı |
 
 > **Köken (provenance) konvansiyonu — `created_by`:** Self-management ile ajan
 > tarafından oluşturulabilen entity'ler (`agents`, `tasks`, `schedules`, `flows`,

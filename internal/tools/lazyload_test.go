@@ -58,6 +58,45 @@ func TestRegistryActiveDefsAndLazyCatalog(t *testing.T) {
 	}
 }
 
+// TestMarkHiddenKeepsActivatableButOutOfBlock verifies hidden-lazy tools are
+// excluded from the rendered block (VisibleLazyCatalog) yet remain in the full
+// LazyCatalog (so activate_tools/tool_search still reach them), and that
+// HiddenLazyCount reflects the hidden set.
+func TestMarkHiddenKeepsActivatableButOutOfBlock(t *testing.T) {
+	reg := NewRegistry(
+		stubTool{name: "eager_a", desc: "always on"},
+		stubTool{name: "lazy_visible", desc: "shown in block"},
+		stubTool{name: "create_agent", desc: "self-mgmt"},
+		stubTool{name: "create_flow", desc: "self-mgmt"},
+	)
+	reg.MarkLazy("lazy_visible")
+	reg.MarkHidden("create_agent", "create_flow")
+
+	// Full lazy catalog (activate/search source) includes hidden tools.
+	full := names(reg.LazyCatalog(nil))
+	if !eq(full, []string{"create_agent", "create_flow", "lazy_visible"}) {
+		t.Fatalf("LazyCatalog must include hidden tools, got %v", full)
+	}
+	// Visible catalog (rendered block) excludes hidden tools.
+	vis := names(reg.VisibleLazyCatalog(nil))
+	if !eq(vis, []string{"lazy_visible"}) {
+		t.Fatalf("VisibleLazyCatalog must exclude hidden tools, got %v", vis)
+	}
+	if n := reg.HiddenLazyCount(nil); n != 2 {
+		t.Fatalf("HiddenLazyCount = %d, want 2", n)
+	}
+	// Hidden tools are still activatable (lazy → shippable once active).
+	got := names(reg.ActiveDefs(nil, map[string]bool{"create_agent": true}))
+	if !contains(got, "create_agent") {
+		t.Fatalf("activated hidden tool must ship its schema, got %v", got)
+	}
+	// allow filter applies to the hidden count too.
+	allow := func(n string) bool { return n != "create_flow" }
+	if n := reg.HiddenLazyCount(allow); n != 1 {
+		t.Fatalf("filtered HiddenLazyCount = %d, want 1", n)
+	}
+}
+
 // TestBridgeableDefsExcludesCLINative verifies the CLI Interaction MCP bridge
 // skips lazy built-ins that are CLI-native (WebFetch) or native-loop-context-bound
 // (run_subagent), while still bridging an ordinary lazy self-management tool.

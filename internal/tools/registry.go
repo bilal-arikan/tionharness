@@ -57,16 +57,31 @@ type Registry struct {
 	// ToolDef.Lazy). Lazy tools are omitted from ActiveDefs until activated, but
 	// always listed by LazyCatalog and always returned by Defs (full catalog).
 	lazy map[string]bool
+	// hidden is the subset of lazy tools kept OUT of the rendered "Available Tools
+	// (load on demand)" prompt block — activatable and searchable, but not
+	// enumerated in the cached static prefix. The self-management suite lives here:
+	// its catalog is documented in the `swarmgo-self-management` skill instead, so
+	// dozens of summaries don't ride in every turn's prompt. hidden ⊆ lazy.
+	hidden map[string]bool
 
 	mcpEntries     []mcp.CatalogEntry
 	mcpCfgByServer map[string]mcp.ServerConfig
+	// mcpCaller dispatches a namespaced MCP tool call. When set (the production
+	// path) it routes through the workspace's persistent connection pool so a
+	// server's session state (e.g. the gateway's activate_tools) survives across
+	// calls. Nil falls back to dial-per-call (used by lightweight tests).
+	mcpCaller MCPCaller
 }
+
+// MCPCaller invokes a namespaced MCP tool and returns its flattened result.
+type MCPCaller func(ctx context.Context, namespaced string, args json.RawMessage) (mcp.CallToolResult, error)
 
 // NewRegistry creates a registry seeded with the given built-in tools.
 func NewRegistry(builtins ...Tool) *Registry {
 	r := &Registry{
 		builtins:       map[string]Tool{},
 		lazy:           map[string]bool{},
+		hidden:         map[string]bool{},
 		mcpCfgByServer: map[string]mcp.ServerConfig{},
 	}
 	for _, t := range builtins {
@@ -90,6 +105,17 @@ func (r *Registry) MarkLazy(names ...string) {
 	}
 }
 
+// MarkHidden flags the named tools as hidden-lazy: lazy (loaded on demand) AND
+// omitted from the rendered load-on-demand catalog block. They stay activatable
+// (activate_tools) and searchable (tool_search) — only their per-turn prompt
+// enumeration is dropped. Implies MarkLazy.
+func (r *Registry) MarkHidden(names ...string) {
+	for _, n := range names {
+		r.lazy[n] = true
+		r.hidden[n] = true
+	}
+}
+
 // IsLazy reports whether a tool is lazy.
 func (r *Registry) IsLazy(name string) bool { return r.lazy[name] }
 
@@ -97,9 +123,10 @@ func (r *Registry) IsLazy(name string) bool { return r.lazy[name] }
 // advertise and dispatch namespaced MCP tools. Every MCP tool is marked lazy:
 // external servers can expose hundreds of tools, so their schemas are loaded on
 // demand rather than shipped every turn.
-func (r *Registry) AttachMCP(entries []mcp.CatalogEntry, cfgByServer map[string]mcp.ServerConfig) {
+func (r *Registry) AttachMCP(entries []mcp.CatalogEntry, cfgByServer map[string]mcp.ServerConfig, caller MCPCaller) {
 	r.mcpEntries = entries
 	r.mcpCfgByServer = cfgByServer
+	r.mcpCaller = caller
 	for _, e := range entries {
 		r.lazy[e.NamespacedName] = true
 	}
@@ -208,6 +235,33 @@ func (r *Registry) LazyCatalog(allow func(name string) bool) []providers.ToolDef
 	return out
 }
 
+// VisibleLazyCatalog is LazyCatalog minus hidden tools — the set actually
+// enumerated in the load-on-demand prompt block. Hidden tools (the self-
+// management suite) are excluded here but remain in LazyCatalog (so they stay
+// activatable/searchable). allow filters by name (nil = allow all).
+func (r *Registry) VisibleLazyCatalog(allow func(name string) bool) []providers.ToolDef {
+	full := r.LazyCatalog(allow)
+	out := full[:0:0]
+	for _, d := range full {
+		if !r.hidden[d.Name] {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// HiddenLazyCount returns how many lazy tools are hidden from the prompt block
+// (after the allow filter) — used to decide whether to render the skill pointer.
+func (r *Registry) HiddenLazyCount(allow func(name string) bool) int {
+	n := 0
+	for name := range r.builtins {
+		if r.lazy[name] && r.hidden[name] && (allow == nil || allow(name)) {
+			n++
+		}
+	}
+	return n
+}
+
 // bridgeExcluded names lazy built-ins that must NOT be advertised to the
 // claude-cli Interaction MCP bridge, even though they are lazy and would
 // otherwise qualify. Two reasons, both about keeping the CLI surface lean and
@@ -282,7 +336,13 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 	}
 
 	if _, _, ok := mcp.SplitNamespaced(call.Name); ok {
-		out, err := mcp.CallNamespaced(ctx, r.mcpCfgByServer, call.Name, call.Input)
+		var out mcp.CallToolResult
+		var err error
+		if r.mcpCaller != nil {
+			out, err = r.mcpCaller(ctx, call.Name, call.Input)
+		} else {
+			out, err = mcp.CallNamespaced(ctx, r.mcpCfgByServer, call.Name, call.Input)
+		}
 		if err != nil {
 			res.Content = "mcp tool error: " + err.Error()
 			res.IsError = true

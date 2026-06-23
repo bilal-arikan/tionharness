@@ -14,29 +14,37 @@ entities a user would from the UI. They are **gated** (only present when the
 workspace has the *Self-management* capability on) and **loaded on demand** — they
 do not ship at the start of a turn to keep the prompt lean.
 
+**This skill IS their catalog.** To save context, the self-management tools are NOT
+listed individually in your system prompt's "Available Tools (load on demand)"
+block — that block shows only a one-line pointer here. The full list of names lives
+in the **Tool catalog** section below; read it, pick the exact names you need, then
+activate them.
+
 ## Activating a tool yourself
 
-When self-management is on, every tool below is listed under **"Available Tools
-(load on demand)"** in your prompt — name + one-line summary only, schema not yet
-loaded. To use one:
+The self-management tools are registered but their names+schemas are not in your
+prompt. To use one:
 
-1. Call **`activate_tools`** with the exact tool name(s). Activate everything you
+1. Find its exact name in the **Tool catalog** below (or call **`tool_search`** with
+   a keyword — it searches the on-demand catalog including these hidden tools).
+2. Call **`activate_tools`** with the exact tool name(s). Activate everything you
    expect to need for the task in a single call.
-2. On your next step the full schema is available — call the tool normally.
-3. **`tool_search`** searches the load-on-demand catalog by keyword when you don't
-   know the exact name. **`deactivate_tools`** drops tools you no longer need.
+3. On your next step the full schema is available — call the tool normally.
+4. **`deactivate_tools`** drops tools you no longer need.
 
 > You never wait for permission to activate — activation just loads the schema.
-> If a self-management tool (agents/flows/schedules/tasks/hooks/mcp/skills/settings) is
-> not in the load-on-demand list at all, the workspace does not have
-> self-management enabled (ask the user to turn it on in Settings → Capabilities).
-> The vault/session/web tools below (`secret_*`, `list_sessions`, `WebFetch`) are
-> load-on-demand independently of self-management — they appear when their own
-> capability (secret vault / cross-session context) is on.
+> If `activate_tools` reports a self-management name as unknown, the workspace does
+> not have self-management enabled (ask the user to turn it on in Settings →
+> Capabilities). The vault/session/web tools below (`secret_*`, `list_sessions`,
+> `WebFetch`) are load-on-demand independently of self-management — they appear in
+> the prompt's load-on-demand block (not hidden) when their own capability (secret
+> vault / cross-session context) is on.
 
 ## Tool catalog
 
 **Agents** — `list_agents`, `create_agent`, `update_agent`, `delete_agent`.
+`create_agent` takes an optional `skills` array (slugs); omit it and the new agent
+is seeded with the default SwarmGo skill set, unknown slugs are skipped.
 Provenance enforced: you can delete only agents you created, never the user's and
 never yourself. Deleting an agent cascades: it also removes the agent's sessions,
 the schedules bound to it, and the tasks it owns (with their runs) — so delete
@@ -70,7 +78,10 @@ deliberately, it is not reversible.
 `swarmgo-flows` skill for the graph schema before authoring one.
 
 **Schedules (routines)** — `list_schedules`, `create_schedule`, `update_schedule`,
-`delete_schedule`. Cron-driven prompts delivered to an agent.
+`delete_schedule`, `run_schedule`. Cron-driven prompts delivered to an agent.
+`run_schedule` fires a schedule **immediately** ("Run now"), regardless of its
+cron timing or enabled state — the manual trigger; it works on any schedule, not
+only ones you created (running is not destructive).
 
 **Tasks (kanban board)** — `list_tasks`, `create_task`, `update_task`, `move_task`,
 `delete_task`. The board is passive (no run tool). Read/create/edit/move any task;
@@ -100,7 +111,13 @@ is always available.)
 
 **Artifacts** — `list_artifacts`, `read_artifact` (get content by id — do NOT guess
 the file path), `delete_artifact` (delete only agent-created).
-`create_artifact` / `update_artifact` are always available in chat.
+`create_artifact` / `update_artifact` are always available — on chat AND on
+autonomous (scheduler/spawn/flow) turns (a session-bound sink is installed for
+every turn that has a session). For text use
+`kind=markdown|code|html|text|svg|mermaid` with `content`. For an image/PDF/binary
+FILE you produced on disk (e.g. a screenshot) use `kind=image|video|audio|file` with
+`sourcePath` set to the file path — never base64-embed bytes into `content`.
+(Screenshots and exported files are also auto-captured from a tool's saved path.)
 
 **Memory & logs** — `memory_add` (store a durable fact), `memory_recall` (pull
 matching facts on demand — note recall results are also auto-injected into the

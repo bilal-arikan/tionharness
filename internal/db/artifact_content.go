@@ -1,6 +1,8 @@
 package db
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,6 +105,68 @@ func (d *DB) readArtifactContent(a *Artifact) {
 	if b, err := os.ReadFile(abs); err == nil {
 		a.Content = string(b)
 	}
+}
+
+// ImportMediaSource resolves a media/file artifact's source into a
+// workspace-relative path the file server can stream. src may be absolute or
+// already workspace-relative:
+//   - a file already under <workspace>/ is returned as a clean relative path
+//     (no copy — it is served in place);
+//   - any other path is copied into artifacts/<sessionDir>/ and the new relative
+//     path is returned, so the artifact owns a self-contained, servable copy
+//     even if the original (e.g. a screenshot in Downloads) is later moved.
+//
+// The source must exist and be a regular file. The returned path uses forward
+// slashes (matching Artifact.SourcePath / ContentFile convention).
+func (d *DB) ImportMediaSource(sessionID, src string) (string, error) {
+	src = strings.TrimSpace(src)
+	if src == "" {
+		return "", fmt.Errorf("sourcePath is required for media artifacts")
+	}
+	wsDir := d.workspaceDir()
+	abs := src
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(wsDir, filepath.FromSlash(src))
+	}
+	info, err := os.Stat(abs)
+	if err != nil || info.IsDir() {
+		return "", fmt.Errorf("source file not found: %s", src)
+	}
+	// Already inside the workspace → store a clean relative path, no copy.
+	if rel, err := filepath.Rel(wsDir, abs); err == nil &&
+		rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return filepath.ToSlash(rel), nil
+	}
+	// Outside the workspace → copy in under artifacts/<sessionDir>/.
+	rel := "artifacts/" + artifactSessionDir(sessionID) + "/" +
+		fmt.Sprintf("media-%d%s", now(), filepath.Ext(abs))
+	dst := filepath.Join(wsDir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return "", err
+	}
+	if err := copyFileContents(abs, dst); err != nil {
+		return "", err
+	}
+	return rel, nil
+}
+
+// copyFileContents copies src to dst (truncating dst), streaming so large media
+// files never load fully into memory.
+func copyFileContents(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // removeArtifactContent deletes a text artifact's content file (best-effort).

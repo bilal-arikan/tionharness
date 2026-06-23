@@ -9,18 +9,28 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
-// artifactKinds lists the renderers the UI understands.
-var artifactKinds = map[string]bool{
+// textArtifactKinds lists the renderers whose body is inline text Content.
+var textArtifactKinds = map[string]bool{
 	"markdown": true, "code": true, "html": true,
 	"text": true, "svg": true, "mermaid": true,
 }
 
+// mediaArtifactKinds reference a file on disk via sourcePath instead of carrying
+// inline content: the viewer renders the file (image/video/audio) or links it
+// (file). Content, when present, is an optional caption. This lets an agent turn
+// a screenshot/PDF/binary it produced into an artifact WITHOUT base64-embedding
+// the bytes into the model context (which would blow the token budget).
+var mediaArtifactKinds = map[string]bool{
+	"image": true, "video": true, "audio": true, "file": true,
+}
+
 // createArtifactInput is the ask shape for create_artifact.
 type createArtifactInput struct {
-	Title    string `json:"title"`
-	Kind     string `json:"kind"`
-	Language string `json:"language"`
-	Content  string `json:"content"`
+	Title      string `json:"title"`
+	Kind       string `json:"kind"`
+	Language   string `json:"language"`
+	Content    string `json:"content"`
+	SourcePath string `json:"sourcePath"`
 }
 
 // updateArtifactInput is the ask shape for update_artifact.
@@ -45,17 +55,21 @@ func (CreateArtifactTool) Def() providers.ToolDef {
 		Description: "Save a substantial, self-contained piece of content as a versioned " +
 			"artifact the user can open in a dedicated viewer (like a canvas). Use this for " +
 			"documents, code files, HTML pages, SVG or Mermaid diagrams that the user will " +
-			"want to keep, copy or revisit — NOT for short conversational replies. Returns the " +
-			"artifact id; reference it with update_artifact to revise the same artifact later.",
+			"want to keep, copy or revisit — NOT for short conversational replies. " +
+			"For an image/PDF/binary FILE you already produced on disk (e.g. a screenshot), " +
+			"use kind=image|video|audio|file with sourcePath set to the file path — do NOT " +
+			"base64-embed the bytes into content. Returns the artifact id; reference it with " +
+			"update_artifact to revise the same artifact later.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "title": { "type": "string", "description": "Short descriptive title." },
-    "kind": { "type": "string", "enum": ["markdown", "code", "html", "text", "svg", "mermaid"], "description": "How the content should be rendered." },
+    "kind": { "type": "string", "enum": ["markdown", "code", "html", "text", "svg", "mermaid", "image", "video", "audio", "file"], "description": "How the content should be rendered. Text kinds (markdown/code/html/text/svg/mermaid) use content; media kinds (image/video/audio/file) use sourcePath." },
     "language": { "type": "string", "description": "Programming language for kind=code (e.g. \"go\", \"python\", \"typescript\")." },
-    "content": { "type": "string", "description": "The full artifact content." }
+    "content": { "type": "string", "description": "The full artifact body for text kinds. For media kinds it is an optional caption." },
+    "sourcePath": { "type": "string", "description": "For media kinds (image/video/audio/file): the path to the file on disk (absolute, e.g. \"C:\\Users\\me\\shot.png\", or workspace-relative). Files outside the workspace are copied in so the artifact owns a stable copy." }
   },
-  "required": ["title", "kind", "content"],
+  "required": ["title", "kind"],
   "additionalProperties": false
 }`),
 	}
@@ -70,21 +84,33 @@ func (CreateArtifactTool) Call(ctx context.Context, input json.RawMessage) (stri
 	if in.Title == "" {
 		return "", fmt.Errorf("title is required")
 	}
-	if strings.TrimSpace(in.Content) == "" {
-		return "", fmt.Errorf("content is required")
-	}
 	in.Kind = strings.ToLower(strings.TrimSpace(in.Kind))
 	if in.Kind == "" {
 		in.Kind = "text"
 	}
-	if !artifactKinds[in.Kind] {
-		return "", fmt.Errorf("invalid kind %q (want markdown|code|html|text|svg|mermaid)", in.Kind)
+	isText := textArtifactKinds[in.Kind]
+	isMedia := mediaArtifactKinds[in.Kind]
+	if !isText && !isMedia {
+		return "", fmt.Errorf("invalid kind %q (want markdown|code|html|text|svg|mermaid|image|video|audio|file)", in.Kind)
+	}
+	in.SourcePath = strings.TrimSpace(in.SourcePath)
+	if isText && strings.TrimSpace(in.Content) == "" {
+		return "", fmt.Errorf("content is required for kind %q", in.Kind)
+	}
+	if isMedia && in.SourcePath == "" {
+		return "", fmt.Errorf("sourcePath is required for kind %q (the path to the file on disk)", in.Kind)
 	}
 	sink := artifactsFrom(ctx)
 	if sink == nil {
 		return "", fmt.Errorf("artifacts are not available in this context (only in interactive chat)")
 	}
-	ref, err := sink.CreateArtifact(ctx, in.Title, in.Kind, in.Language, in.Content)
+	ref, err := sink.CreateArtifact(ctx, CreateArtifactSpec{
+		Title:      in.Title,
+		Kind:       in.Kind,
+		Language:   in.Language,
+		Content:    in.Content,
+		SourcePath: in.SourcePath,
+	})
 	if err != nil {
 		return "", fmt.Errorf("save artifact: %w", err)
 	}
