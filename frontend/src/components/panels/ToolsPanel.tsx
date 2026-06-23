@@ -177,6 +177,18 @@ export function ToolsPanel({ onError }: Props) {
       {/* Left: searchable, grouped tool list. */}
       <aside className="flex w-72 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="border-b border-[var(--color-border)] p-3">
+          {/* Prominent, clearly-clickable jump to MCP server management. */}
+          <button
+            onClick={() => setSelectedName(null)}
+            title="MCP sunucularını yönet"
+            className={`mb-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+              !selected
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                : 'border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
+            }`}
+          >
+            <Plug size={15} /> MCP Sunucuları
+          </button>
           <div className="relative">
             <Search
               size={14}
@@ -247,15 +259,6 @@ export function ToolsPanel({ onError }: Props) {
           )}
         </div>
 
-        {/* Footer: jump to MCP server management (clears tool selection). */}
-        <button
-          onClick={() => setSelectedName(null)}
-          className={`flex items-center gap-2 border-t border-[var(--color-border)] px-3 py-2.5 text-sm transition ${
-            selected ? 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]' : 'text-[var(--color-accent)]'
-          }`}
-        >
-          <Plug size={15} /> MCP Sunucuları
-        </button>
       </aside>
 
       {/* Right: selected tool detail, or MCP server management. */}
