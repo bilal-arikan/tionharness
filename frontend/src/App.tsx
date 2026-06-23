@@ -316,8 +316,31 @@ export default function App() {
   // session's transcript has loaded. Cleared after the scroll is consumed.
   const [scrollToMsgId, setScrollToMsgId] = useState<string | null>(null)
 
+  // A freshly-created "new chat" that has received no message yet. If the user
+  // leaves it (opens another session or a new chat) without ever sending anything,
+  // it is auto-deleted on the way out so empty abandoned chats don't pile up.
+  const freshEmptyRef = useRef<string | null>(null)
+
+  // discardEmptyFresh deletes the tracked fresh session when it is the one being
+  // left AND nothing was ever sent in it (its live transcript is empty). leavingId
+  // is the session being navigated away from.
+  const discardEmptyFresh = useCallback(
+    (leavingId: string | null) => {
+      const id = freshEmptyRef.current
+      if (!id || id !== leavingId) return
+      freshEmptyRef.current = null
+      // A message was sent → it's a real conversation, keep it.
+      if ((messagesRef.current ?? []).length > 0) return
+      api.deleteSession(id).catch(() => {})
+      setSessions((prev) => prev.filter((s) => s.id !== id))
+    },
+    [messagesRef],
+  )
+
   const selectSession = useCallback(
     (id: string, messageId?: string) => {
+      // Leaving the current session: clean it up if it was an unused new chat.
+      if (id !== activeSessionIdRef.current) discardEmptyFresh(activeSessionIdRef.current)
       setActiveSessionId(id)
       setScrollToMsgId(messageId ?? null)
       const sess = sessions.find((s) => s.id === id)
@@ -326,7 +349,7 @@ export default function App() {
       setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, unread: false } : s)))
       api.markSessionRead(id).catch(() => {})
     },
-    [sessions],
+    [sessions, discardEmptyFresh, activeSessionIdRef],
   )
 
   // ---- per-session actions (settings menu) ----
@@ -358,6 +381,7 @@ export default function App() {
 
   const deleteSession = useCallback(
     async (id: string) => {
+      if (id === freshEmptyRef.current) freshEmptyRef.current = null
       try {
         await api.deleteSession(id)
         setSessions((prev) => {
@@ -547,12 +571,16 @@ export default function App() {
   const newSession = useCallback(async () => {
     const aid = defaultAgentId ?? agents[0]?.id
     if (!aid) return
+    // Discard the previous new chat if it was left empty, before opening another.
+    discardEmptyFresh(activeSessionIdRef.current)
     const s = await api.createSession(aid)
     setSessions((prev) => [s, ...prev])
     setActiveSessionId(s.id)
     setActiveAgentId(s.agentId)
     setMessages([])
-  }, [defaultAgentId, agents])
+    // Track it as a fresh, unused chat (cleared once a message is sent / it's left).
+    freshEmptyRef.current = s.id
+  }, [defaultAgentId, agents, discardEmptyFresh, activeSessionIdRef])
 
   // Regenerate a session's title from its conversation on demand.
   const regenerateSessionTitle = useCallback(async (sessionId: string) => {

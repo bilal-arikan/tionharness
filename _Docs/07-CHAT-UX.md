@@ -238,6 +238,15 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   satırında **nabız atan nokta** (`animate-ping`, **`emerald-400`**) + **"yazıyor…"** etiketi
   gösterir (başlık kalın); gösterge oturum değişse de akıştaki oturumda kalır.
 
+### Boş yeni-sohbet otomatik temizliği (2026-06-23)
+
+"Yeni Sohbet" ile açılan ama **hiç mesaj gönderilmemiş** oturum, kullanıcı ondan
+ayrılınca (başka oturum seçince veya bir başka yeni sohbet açınca) otomatik silinir
+— boş, terk edilmiş sohbetler birikmesin. `App.tsx`: `freshEmptyRef` yeni-oluşturulan
+boş oturumu izler; `discardEmptyFresh(leavingId)` ayrılırken canlı transcript boşsa
+(`messagesRef.length === 0`) `api.deleteSession` ile siler. Bir mesaj gönderilmişse
+oturum gerçek konuşma sayılır, korunur. (Sidebar'daki yenile butonu silmeyi tetiklemez.)
+
 ### Hata kurtarma ve yeniden deneme
 
 - **Hata adımı:** Bir tur ağ/sağlayıcı hatasıyla sonuçlanırsa `useChatStream` asistan
