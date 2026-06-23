@@ -2,6 +2,29 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Flow graph hata mesajlarına "ne yapmalı" ipucu + paralel node belgelenmesi ✅ (2026-06-23)
+
+**Sorun (WS2/SES2):** Bir agent paralel flow kurarken `parallel` node'unu yanlış
+şemayla (`branches:["id"]` + `next`) kurdu → ham Go hatası
+`cannot unmarshal string into ... Node.nodes.branches of type orchestration.Branch`.
+Hata "ne yapmalı" demediği ve `swarmgo-flows` skill'i node JSON şemasını hiç
+belgelemediği (sadece soyut "steps/edges" anlatıyordu) + `create_flow` örneklerinde
+paralel örnek olmadığı için agent doğru şemayı bulamadı, sıralı flow'a düştü.
+
+**Çözüm — kendini düzelten tool hataları:** `validGraphJSON` artık her graph
+hatasına kısa, eyleme dönük bir ipucu ekliyor (`graphSchemaHint` + `nodeSchemaCheat`):
+hatadaki imzaya göre ("Node.nodes.branches", "has no children", "must be an agent
+node" vb.) doğru alanı 5-6 kelimeyle söyler — ör. *"parallel fan-out uses
+parallel:[...],joinNext — not branches/next"*. Ayrıca `create_flow`'a paralel
+fan-out+join örneği ve `swarmgo-flows` skill'ine node-tipi/alan tablosu + paralel
+örnek eklendi. (`builtin_flowmgmt.go`, `skills/defaults/swarmgo-flows/SKILL.md`.)
+Doğru paralel şema: `{type:"parallel","parallel":["a","b"],"joinNext":"merge"}`
+(çocuklar agent node id'leri; `branches`/`next` DEĞİL).
+
+> Not: SES2'de turn 19'daki `provider error: claude CLI failed: exit status 1`
+> ayrı bir provider/CLI çöküşüdür (tool hatası değil, detay loglanmadı) — bu fix
+> kapsamı dışında.
+
 ## 3 self-management iyileştirmesi: create_agent skills + run_schedule + autonomous artifacts ✅ (2026-06-23)
 
 Üç kullanıcı isteği tek turda:

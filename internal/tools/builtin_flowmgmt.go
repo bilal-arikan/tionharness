@@ -52,12 +52,38 @@ func validGraphJSON(graph string) error {
 	}
 	g, err := orchestration.ParseGraph(graph)
 	if err != nil {
-		return fmt.Errorf("graph must be valid JSON: %w", err)
+		return fmt.Errorf("graph must be valid JSON: %w. %s", err, graphSchemaHint(err.Error()))
 	}
 	if err := g.Validate(); err != nil {
-		return fmt.Errorf("invalid graph: %w", err)
+		return fmt.Errorf("invalid graph: %w. %s", err, graphSchemaHint(err.Error()))
 	}
 	return nil
+}
+
+// nodeSchemaCheat is a compact one-line reminder of the node field names that
+// agents most often get wrong. Appended to graph errors so the fix is visible
+// in the tool result instead of requiring a separate doc lookup.
+const nodeSchemaCheat = `Node fields: agent={type:"agent",agentId,prompt,next}; ` +
+	`parallel={type:"parallel",parallel:["id1","id2"],joinNext}; ` +
+	`branch={type:"branch",branches:[{contains,next}]}.`
+
+// graphSchemaHint inspects a graph error string and returns a short, actionable
+// "do this" hint (a few words) tailored to the most common mistakes, falling
+// back to the field cheat-sheet. Keeps tool errors self-correcting.
+func graphSchemaHint(msg string) string {
+	switch {
+	case strings.Contains(msg, "Node.nodes.branches"):
+		// Tried to use branches:["id"] (strings) — usually a parallel fan-out.
+		return `Fix: parallel fan-out uses "parallel":["id1","id2"],"joinNext":"id" — not "branches"/"next". ` + nodeSchemaCheat
+	case strings.Contains(msg, "has no children"):
+		return `Fix: list child agent node ids in "parallel":["id1","id2"]. ` + nodeSchemaCheat
+	case strings.Contains(msg, "has no branches"):
+		return `Fix: branch node needs "branches":[{"contains":"x","next":"id"}]. ` + nodeSchemaCheat
+	case strings.Contains(msg, "must be an agent node"):
+		return `Fix: parallel children must be type "agent" nodes. ` + nodeSchemaCheat
+	default:
+		return nodeSchemaCheat
+	}
 }
 
 // CreateFlowTool creates a multi-agent orchestration flow.
@@ -87,6 +113,9 @@ func (CreateFlowTool) Def() providers.ToolDef {
 			json.RawMessage(`{"name":"Draft then review","description":"Writer drafts, reviewer critiques","graph":"{\"start\":\"draft\",\"nodes\":[{\"id\":\"draft\",\"type\":\"agent\",\"agentId\":\"agt_writer\",\"prompt\":\"Write a short post about: {{input}}\",\"next\":\"review\"},{\"id\":\"review\",\"type\":\"agent\",\"agentId\":\"agt_reviewer\",\"prompt\":\"Critique this draft: {{node.draft}}\",\"next\":\"\"}]}"}`),
 			// Minimal single-node flow; description omitted.
 			json.RawMessage(`{"name":"Quick classify","graph":"{\"start\":\"c\",\"nodes\":[{\"id\":\"c\",\"type\":\"agent\",\"agentId\":\"agt_triage\",\"prompt\":\"Classify: {{input}}\",\"next\":\"\"}]}"}`),
+			// Parallel fan-out + join: a parallel node lists child agent node ids in
+			// "parallel" (NOT "branches") and continues via "joinNext" (NOT "next").
+			json.RawMessage(`{"name":"Research then synthesize","description":"Run 2 researchers in parallel, then merge","graph":"{\"start\":\"fan\",\"nodes\":[{\"id\":\"fan\",\"type\":\"parallel\",\"parallel\":[\"a\",\"b\"],\"joinNext\":\"merge\"},{\"id\":\"a\",\"type\":\"agent\",\"agentId\":\"agt_x\",\"prompt\":\"Angle A: {{input}}\"},{\"id\":\"b\",\"type\":\"agent\",\"agentId\":\"agt_y\",\"prompt\":\"Angle B: {{input}}\"},{\"id\":\"merge\",\"type\":\"agent\",\"agentId\":\"agt_z\",\"prompt\":\"Merge {{node.a}} and {{node.b}}\",\"next\":\"\"}]}"}`),
 		},
 	}
 }

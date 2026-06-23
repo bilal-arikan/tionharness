@@ -21,6 +21,34 @@ so a flow run is replayable like any chat.
   The graph must be acyclic; SwarmGo deep-validates it before running.
 - **Input** — the flow's initial input is threaded to entry steps.
 
+## Graph JSON schema (node types & fields)
+
+The `graph` argument is a JSON **string** of `{"start":"<id>","nodes":[...]}`.
+Each node's fields depend on its `type` — use the exact field names below
+(common mistake: using `branches`/`next` on a parallel node):
+
+| Type | Required fields | Continues via |
+|------|-----------------|---------------|
+| `agent` | `agentId`, `prompt` | `next` (node id; `""` = end) |
+| `parallel` | `parallel`: **array of child agent node ids** | `joinNext` (node after the join) |
+| `branch` | `branches`: array of `{contains, next}` rules | per-arm `next` |
+| `delay` | `delayMs` | `next` |
+| `transform` | `template` | `next` |
+
+Parallel fan-out + join example (run `a` and `b` concurrently, then `merge`):
+
+```json
+{"start":"fan","nodes":[
+  {"id":"fan","type":"parallel","parallel":["a","b"],"joinNext":"merge"},
+  {"id":"a","type":"agent","agentId":"AGT6","prompt":"Angle A: {{input}}"},
+  {"id":"b","type":"agent","agentId":"AGT7","prompt":"Angle B: {{input}}"},
+  {"id":"merge","type":"agent","agentId":"AGT8","prompt":"Merge {{node.a}} and {{node.b}}","next":""}
+]}
+```
+
+Parallel children must be `agent` nodes. Templates: `{{input}}`, `{{last}}`,
+`{{node.<id>}}`.
+
 ## Building a flow (self-management tools)
 
 These tools require self-management to be enabled for the workspace:
