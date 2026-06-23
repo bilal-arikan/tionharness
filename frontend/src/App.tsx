@@ -120,6 +120,8 @@ export default function App() {
     workspaces,
     activeWorkspaceId,
     unreadWs,
+    favoriteWorkspaceId,
+    setFavoriteWorkspace,
     markWorkspaceUnread,
     markWorkspaceRead,
     switchWorkspace,
@@ -720,6 +722,8 @@ export default function App() {
         busyViews={busyViews}
         unreadViews={unreadViews}
         dirtyViews={dirtyViews as Set<View>}
+        favoriteWorkspaceId={favoriteWorkspaceId}
+        onSetFavoriteWorkspace={setFavoriteWorkspace}
         onSwitchWorkspace={switchWorkspace}
         onCreateWorkspace={createWorkspace}
         onDeleteWorkspace={deleteWorkspace}

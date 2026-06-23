@@ -40,6 +40,9 @@ interface Props {
   busyViews?: Set<View>
   unreadViews?: Set<View>
   dirtyViews?: Set<View>
+  // The workspace that opens on a fresh launch (toggled via the switcher star).
+  favoriteWorkspaceId?: string | null
+  onSetFavoriteWorkspace?: (id: string) => void
   onSwitchWorkspace: (id: string) => void
   onCreateWorkspace: (data: NewWorkspaceData) => void
   onDeleteWorkspace: (id: string) => void
@@ -145,6 +148,8 @@ export function NavRail({
   busyViews,
   unreadViews,
   dirtyViews,
+  favoriteWorkspaceId,
+  onSetFavoriteWorkspace,
   onSwitchWorkspace,
   onCreateWorkspace,
   onDeleteWorkspace,
@@ -209,6 +214,8 @@ export function NavRail({
           unreadIds={unreadWorkspaceIds}
           activeBusy={anyBusy}
           activeDirty={anyDirty}
+          favoriteId={favoriteWorkspaceId}
+          onToggleFavorite={onSetFavoriteWorkspace}
           onSwitch={onSwitchWorkspace}
           onCreate={onCreateWorkspace}
           onDelete={onDeleteWorkspace}

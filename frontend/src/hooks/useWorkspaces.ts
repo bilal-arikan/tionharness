@@ -13,6 +13,18 @@ import type { NewWorkspaceData } from '../components/workspace/WorkspaceCreateMo
 // activity in it) clears the dot everywhere — "seen anywhere = seen".
 const UNREAD_KEY = 'swarmgo.unreadWs'
 
+// The favorite workspace opens on a fresh launch (cold start with no deep-linked
+// workspace in the URL). Device-local, like the active-workspace pointer.
+const FAVORITE_KEY = 'swarmgo.favoriteWs'
+
+function readFavorite(): string | null {
+  try {
+    return localStorage.getItem(FAVORITE_KEY) || null
+  } catch {
+    return null
+  }
+}
+
 function readSharedUnread(): Set<string> {
   try {
     const raw = localStorage.getItem(UNREAD_KEY)
@@ -37,6 +49,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
   // Raw shared unread set (cross-window union, mirrored to localStorage). The
   // displayed set (`unreadWs` below) filters out this window's active workspace.
   const [unreadRaw, setUnreadRaw] = useState<Set<string>>(() => readSharedUnread())
+  const [favoriteWorkspaceId, setFavoriteWorkspaceId] = useState<string | null>(() => readFavorite())
 
   // Sync the badge set when another window mutates it (storage events fire in
   // every same-origin document except the one that wrote the change).
@@ -96,7 +109,12 @@ export function useWorkspaces(setError: (msg: string) => void) {
         setWorkspaces(list)
         const saved = getActiveWorkspace()
         const valid = list.find((w) => w.id === saved)
-        const chosen = valid?.id ?? list[0]?.id ?? null
+        // Cold start (no in-app pointer yet) → favorite wins; otherwise keep the
+        // last-active. A URL-deep-linked workspace is applied afterwards by the
+        // route machinery, so explicit links still override the favorite.
+        const fav = readFavorite()
+        const favValid = fav && list.some((w) => w.id === fav) ? fav : null
+        const chosen = (!saved && favValid) || valid?.id || favValid || list[0]?.id || null
         if (chosen) {
           setActiveWorkspace(chosen)
           setActiveWorkspaceId(chosen)
@@ -179,6 +197,21 @@ export function useWorkspaces(setError: (msg: string) => void) {
     [workspaces, activeWorkspaceId, setError],
   )
 
+  // Toggle a workspace as the startup favorite (clicking the current favorite
+  // clears it). Persisted device-local; consumed by the next cold start.
+  const setFavoriteWorkspace = useCallback((id: string) => {
+    setFavoriteWorkspaceId((prev) => {
+      const next = prev === id ? null : id
+      try {
+        if (next) localStorage.setItem(FAVORITE_KEY, next)
+        else localStorage.removeItem(FAVORITE_KEY)
+      } catch {
+        /* storage unavailable — non-fatal, favorite just won't persist */
+      }
+      return next
+    })
+  }, [])
+
   // Refresh the workspace list (e.g. after a rename in settings).
   const refreshWorkspaces = useCallback(() => {
     api.listWorkspaces().then(setWorkspaces).catch(() => {})
@@ -188,6 +221,8 @@ export function useWorkspaces(setError: (msg: string) => void) {
     workspaces,
     activeWorkspaceId,
     unreadWs,
+    favoriteWorkspaceId,
+    setFavoriteWorkspace,
     markWorkspaceUnread,
     markWorkspaceRead,
     switchWorkspace,

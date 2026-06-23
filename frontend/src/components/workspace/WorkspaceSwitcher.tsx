@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, Trash2 } from 'lucide-react'
+import { ExternalLink, Trash2, Star } from 'lucide-react'
 import type { Workspace } from '../../types'
 import { buildRoute } from '../../lib/url'
 import { useOutsideClick } from '../../hooks/useOutsideClick'
@@ -12,6 +12,9 @@ interface Props {
   // Active workspace rollup: any view busy / any unsaved edit (shown on the label).
   activeBusy?: boolean
   activeDirty?: boolean
+  // Startup-favorite workspace + toggle (star in each dropdown row).
+  favoriteId?: string | null
+  onToggleFavorite?: (id: string) => void
   onSwitch: (id: string) => void
   onCreate: (data: NewWorkspaceData) => void
   onDelete: (id: string) => void
@@ -35,7 +38,7 @@ function openInNewWindow(id: string) {
   window.open(`${window.location.origin}${window.location.pathname}#${route}`, '_blank', 'noopener')
 }
 
-export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy, activeDirty, onSwitch, onCreate, onDelete }: Props) {
+export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy, activeDirty, favoriteId, onToggleFavorite, onSwitch, onCreate, onDelete }: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   // Close the dropdown when clicking anywhere outside it (detached while closed).
@@ -57,7 +60,7 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm hover:opacity-90"
       >
-        <span className="flex items-center gap-2 truncate">
+        <span className="flex min-w-0 items-center gap-2">
           <span
             className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
             style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
@@ -66,19 +69,22 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
             {hasUnread && (
               <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]" />
             )}
-            {activeBusy && (
-              <span
-                className="absolute -bottom-1 -right-1 h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]"
-                title="İşlem sürüyor"
-              />
-            )}
-            {activeDirty && (
-              <span
-                className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-warning)] ring-2 ring-[var(--color-surface-2)]"
-                title="Kaydedilmemiş değişiklik"
-              />
-            )}
           </span>
+          {/* Active-workspace signals sit inline next to the icon so the parent's
+              `truncate` (overflow:hidden) never clips a corner-positioned dot. */}
+          {(activeBusy || activeDirty) && (
+            <span className="flex shrink-0 items-center gap-1">
+              {activeDirty && (
+                <span className="h-2 w-2 rounded-full bg-[var(--color-warning)]" title="Kaydedilmemiş değişiklik" />
+              )}
+              {activeBusy && (
+                <span
+                  className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]"
+                  title="İşlem sürüyor"
+                />
+              )}
+            </span>
+          )}
           <span className="truncate font-medium">{active?.name || 'Workspace seç'}</span>
         </span>
         <span className="text-xs text-[var(--color-text-dim)]">▾</span>
@@ -113,6 +119,19 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
                   <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Yeni etkinlik" />
                 )}
               </button>
+              {onToggleFavorite && (
+                <button
+                  onClick={() => onToggleFavorite(w.id)}
+                  title={favoriteId === w.id ? 'Başlangıç workspace’i (kaldır)' : 'Başlangıçta bunu aç'}
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded transition hover:bg-[var(--color-surface)] ${
+                    favoriteId === w.id
+                      ? 'text-[var(--color-accent)]'
+                      : 'text-[var(--color-text-dim)] opacity-0 hover:text-[var(--color-accent)] focus:opacity-100 group-hover:opacity-100'
+                  }`}
+                >
+                  <Star size={14} strokeWidth={2} fill={favoriteId === w.id ? 'currentColor' : 'none'} />
+                </button>
+              )}
               <button
                 onClick={() => openInNewWindow(w.id)}
                 title="Ayrı pencerede aç"

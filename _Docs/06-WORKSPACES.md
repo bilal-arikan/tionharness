@@ -3,6 +3,16 @@
 > Her workspace **tamamen bağımsızdır**: kendi dosya-tabanlı `store/` dizini + kendi agent runtime'ı. Bir workspace'in içeriği asla diğerine sızmaz.
 > Depolama biçimi (JSON/JSONL) için: **`_Docs/08-DEPOLAMA.md`**.
 
+## Başlangıç (favori) workspace (2026-06-23)
+
+Workspace switcher dropdown'ında her satırda bir **yıldız** ile bir workspace
+"başlangıç favorisi" olarak işaretlenebilir. Soğuk açılışta (URL'de açık bir
+workspace deep-link'i yokken) favori workspace açılır; deep-link verildiğinde
+route makinesi onu sonradan uygular, yani açık linkler favoriyi ezer. Cihaz-yerel
+saklanır (`localStorage: swarmgo.favoriteWs`), aktif-workspace işaretçisiyle aynı
+desen. Seçim sırası: `(işaretçi yoksa) favori → son-aktif → favori → ilk`.
+Kod: `hooks/useWorkspaces.ts`, `WorkspaceSwitcher.tsx`.
+
 ## Neden Ayrı Store Dizini?
 
 Tek depo + `workspace_id` ayrımı yerine **her workspace için ayrı `store/` dizini** seçildi:
