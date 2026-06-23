@@ -68,7 +68,7 @@ func (t RunScheduleTool) Call(ctx context.Context, input json.RawMessage) (strin
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
@@ -128,7 +128,7 @@ func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		Enabled  *bool  `json:"enabled"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.AgentID = strings.TrimSpace(in.AgentID)
 	in.CronExpr = strings.TrimSpace(in.CronExpr)
@@ -154,7 +154,7 @@ func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		return "", fmt.Errorf("create schedule: %w", err)
 	}
 	if err := t.d.reload(ctx); err != nil {
-		return "", fmt.Errorf("schedule saved (%s) but reload failed (check cron syntax): %w", created.ID, err)
+		return "", fmt.Errorf("schedule saved (%s) but reload failed: %w. %s", created.ID, err, cronHint)
 	}
 	b, _ := json.Marshal(map[string]any{"id": created.ID, "enabled": enabled, "action": "created"})
 	return string(b), nil
@@ -202,7 +202,7 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		Enabled  *bool   `json:"enabled"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
@@ -233,7 +233,7 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		}
 	}
 	if err := t.d.reload(ctx); err != nil {
-		return "", fmt.Errorf("schedule updated but reload failed (check cron syntax): %w", err)
+		return "", fmt.Errorf("schedule updated but reload failed: %w. %s", err, cronHint)
 	}
 	b, _ := json.Marshal(map[string]string{"id": in.ID, "action": "updated"})
 	return string(b), nil
@@ -265,7 +265,7 @@ func (t DeleteScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {

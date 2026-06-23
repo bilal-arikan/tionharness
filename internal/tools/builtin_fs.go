@@ -44,7 +44,7 @@ func (t FSReadFileTool) Call(_ context.Context, input json.RawMessage) (string, 
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	abs, err := t.sb.Resolve(args.Path)
 	if err != nil {
@@ -101,7 +101,7 @@ func (t FSWriteFileTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Content string `json:"content"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	abs, err := t.sb.Resolve(args.Path)
 	if err != nil {
@@ -153,7 +153,7 @@ func (t FSEditFileTool) Call(ctx context.Context, input json.RawMessage) (string
 		ReplaceAll bool   `json:"replace_all"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	if args.OldString == args.NewString {
 		return "", fmt.Errorf("old_string and new_string are identical")
@@ -212,7 +212,7 @@ func (t FSListDirTool) Call(_ context.Context, input json.RawMessage) (string, e
 	}
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &args); err != nil {
-			return "", fmt.Errorf("invalid arguments: %w", err)
+			return "", argErr(err)
 		}
 	}
 	abs, err := t.sb.Resolve(args.Path)
@@ -275,7 +275,7 @@ func (t FSGlobTool) Call(_ context.Context, input json.RawMessage) (string, erro
 		Pattern string `json:"pattern"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	if strings.TrimSpace(args.Pattern) == "" {
 		return "", fmt.Errorf("pattern is required")
@@ -342,7 +342,7 @@ func (t FSGrepTool) Call(_ context.Context, input json.RawMessage) (string, erro
 		Glob    string `json:"glob"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	if strings.TrimSpace(args.Pattern) == "" {
 		return "", fmt.Errorf("pattern is required")

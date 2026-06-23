@@ -98,7 +98,7 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Skills   []string `json:"skills"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
@@ -203,7 +203,7 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Color    *string `json:"color"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
@@ -257,7 +257,7 @@ func (t DeleteAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {

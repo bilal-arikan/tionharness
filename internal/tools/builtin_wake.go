@@ -64,7 +64,7 @@ func (ScheduleWakeTool) Call(ctx context.Context, input json.RawMessage) (string
 		Reason       string `json:"reason"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	fn := wakeFrom(ctx)
 	if fn == nil {

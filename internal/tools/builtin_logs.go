@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/logbuf"
@@ -63,7 +62,7 @@ func (t ReadLogsTool) Call(_ context.Context, input json.RawMessage) (string, er
 	}
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &in); err != nil {
-			return "", fmt.Errorf("invalid arguments: %w", err)
+			return "", argErr(err)
 		}
 	}
 	if t.logs == nil {

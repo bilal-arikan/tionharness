@@ -49,7 +49,7 @@ func (t ConfigReadTool) Call(_ context.Context, input json.RawMessage) (string, 
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	abs, err := t.sb.Resolve(args.Path)
 	if err != nil {
@@ -100,7 +100,7 @@ func (t ConfigWriteTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Content string `json:"content"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	abs, err := t.sb.Resolve(args.Path)
 	if err != nil {

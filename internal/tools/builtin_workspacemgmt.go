@@ -137,7 +137,7 @@ func (t CreateWorkspaceTool) Call(_ context.Context, input json.RawMessage) (str
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
@@ -186,7 +186,7 @@ func (t RenameWorkspaceTool) Call(_ context.Context, input json.RawMessage) (str
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	in.Name = strings.TrimSpace(in.Name)
@@ -235,7 +235,7 @@ func (t DeleteWorkspaceTool) Call(_ context.Context, input json.RawMessage) (str
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {

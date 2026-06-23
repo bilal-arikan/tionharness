@@ -81,7 +81,7 @@ func (t SecretGetTool) Call(_ context.Context, input json.RawMessage) (string, e
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	name := strings.TrimSpace(args.Name)
 	if name == "" {

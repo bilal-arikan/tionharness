@@ -46,7 +46,7 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 	}
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &args); err != nil {
-			return "", fmt.Errorf("invalid arguments: %w", err)
+			return "", argErr(err)
 		}
 	}
 	if args.Limit <= 0 {

@@ -92,7 +92,7 @@ func (t UpdateSettingsTool) Call(_ context.Context, input json.RawMessage) (stri
 		Patch json.RawMessage `json:"patch"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	if len(strings.TrimSpace(string(args.Patch))) == 0 || string(args.Patch) == "null" {
 		return "", fmt.Errorf("patch is required (an object of fields to change)")

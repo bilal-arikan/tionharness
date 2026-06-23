@@ -2,6 +2,29 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Self-correcting tool hataları (yayma) + claude-cli çöküş teşhisi ✅ (2026-06-23)
+
+Bir önceki flow-graph fix'inin desenini tüm tool yüzeyine yaydık + SES2 turn 19
+CLI çöküşünün teşhis kara-deliğini kapattık.
+
+**1) Ortak hata-ipucu yardımcıları (`builtin_errhints.go`).**
+- `argErr(err)` — 49 tool çağrı-yerindeki tek-tip `fmt.Errorf("invalid arguments:
+  %w", err)` bununla değişti: Go'nun alan/tip hatasını korur + *"fix: match this
+  tool's input schema (required fields, exact types); see its examples"* ekler.
+- `enumErr(field, got, allowed...)` — geçersiz değeri ve **izinli seti** listeler;
+  task `boardState` kontrollerinde (create/update/move) kullanıldı.
+- `cronHint` — schedule reload hatasına 5-alan cron formatı + örnekler
+  (`"0 * * * *"`=saatlik, `"*/15 * * * *"`, `"@daily"`); `create/update_schedule`'da.
+
+**2) claude-cli çöküşü artık teşhis taşıyor (`claudecli.go`).** Önceden CLI exit 1
++ boş stderr ile öldüğünde agent'a yalnız `claude CLI failed: exit status 1`
+gidiyordu (SES2 turn 19). Artık stdout'un son satırları bounded ring'de tutuluyor;
+stderr boşsa `stdoutCrashTail` JSON-olmayan (gerçek hata/panic) satırları tercih
+edip mesaja ekliyor → *"claude CLI failed: exit status 1 stdout-tail: panic: …"*.
+
+Test: `builtin_errhints_test.go` (graph hint SES2'nin gerçek hatasını eşliyor +
+argErr/enumErr) ve `claudecli_crashtail_test.go`. Toplam 120 test geçer.
+
 ## Flow graph hata mesajlarına "ne yapmalı" ipucu + paralel node belgelenmesi ✅ (2026-06-23)
 
 **Sorun (WS2/SES2):** Bir agent paralel flow kurarken `parallel` node'unu yanlış

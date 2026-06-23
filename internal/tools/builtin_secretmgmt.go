@@ -50,7 +50,7 @@ func (t SecretSetTool) Call(_ context.Context, input json.RawMessage) (string, e
 		Description string `json:"description"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
@@ -97,7 +97,7 @@ func (t SecretDeleteTool) Call(_ context.Context, input json.RawMessage) (string
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {

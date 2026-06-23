@@ -122,7 +122,7 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		Dependencies string `json:"dependencies"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Title = strings.TrimSpace(in.Title)
 	in.Prompt = strings.TrimSpace(in.Prompt)
@@ -130,7 +130,7 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		return "", fmt.Errorf("provide at least one of: prompt, title, flowId")
 	}
 	if in.BoardState != "" && !db.ValidBoardState(in.BoardState) {
-		return "", fmt.Errorf("invalid boardState %q (todo|in_progress|review|done|failed)", in.BoardState)
+		return "", enumErr("boardState", in.BoardState, "todo", "in_progress", "review", "done", "failed")
 	}
 	if in.OwnerAgentID != "" {
 		if _, err := t.d.db.GetAgent(ctx, in.OwnerAgentID); err != nil {
@@ -215,7 +215,7 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		Dependencies *string `json:"dependencies"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
@@ -252,7 +252,7 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	if in.BoardState != nil {
 		if !db.ValidBoardState(*in.BoardState) {
-			return "", fmt.Errorf("invalid boardState %q (todo|in_progress|review|done|failed)", *in.BoardState)
+			return "", enumErr("boardState", *in.BoardState, "todo", "in_progress", "review", "done", "failed")
 		}
 		cur.BoardState = *in.BoardState
 	}
@@ -298,14 +298,14 @@ func (t MoveTaskTool) Call(ctx context.Context, input json.RawMessage) (string, 
 		BoardState string `json:"boardState"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
 	if !db.ValidBoardState(in.BoardState) {
-		return "", fmt.Errorf("invalid boardState %q (todo|in_progress|review|done|failed)", in.BoardState)
+		return "", enumErr("boardState", in.BoardState, "todo", "in_progress", "review", "done", "failed")
 	}
 	if err := t.d.db.MoveTask(ctx, in.ID, in.BoardState); err != nil {
 		return "", fmt.Errorf("move task: %w", err)
@@ -342,7 +342,7 @@ func (t DeleteTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {

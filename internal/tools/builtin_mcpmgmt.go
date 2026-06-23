@@ -115,7 +115,7 @@ func (t CreateMCPServerTool) Call(ctx context.Context, input json.RawMessage) (s
 		Env       string `json:"env"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
@@ -190,7 +190,7 @@ func (t ToggleMCPServerTool) Call(ctx context.Context, input json.RawMessage) (s
 		Enabled bool   `json:"enabled"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
@@ -231,7 +231,7 @@ func (t DeleteMCPServerTool) Call(ctx context.Context, input json.RawMessage) (s
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {

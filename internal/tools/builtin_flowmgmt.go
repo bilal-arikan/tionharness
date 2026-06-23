@@ -127,7 +127,7 @@ func (t CreateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 		Graph       string `json:"graph"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
@@ -189,7 +189,7 @@ func (t UpdateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 		Graph       *string `json:"graph"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
@@ -244,7 +244,7 @@ func (t DeleteFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
@@ -331,7 +331,7 @@ func (t GetFlowTool) Call(ctx context.Context, input json.RawMessage) (string, e
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
@@ -386,7 +386,7 @@ func (t RunFlowTool) Call(ctx context.Context, input json.RawMessage) (string, e
 		Input string `json:"input"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {

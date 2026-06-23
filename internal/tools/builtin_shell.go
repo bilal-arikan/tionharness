@@ -71,7 +71,7 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 		TimeoutSec int    `json:"timeout_sec"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	if strings.TrimSpace(args.Command) == "" {
 		return "", fmt.Errorf("command is required")

@@ -106,7 +106,7 @@ func (t CreateHookTool) Call(ctx context.Context, input json.RawMessage) (string
 		TimeoutSec int    `json:"timeoutSec"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	if in.Event != db.HookPreToolUse && in.Event != db.HookPostToolUse {
 		return "", fmt.Errorf("event must be PreToolUse or PostToolUse")
@@ -158,7 +158,7 @@ func (t DeleteHookTool) Call(ctx context.Context, input json.RawMessage) (string
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {

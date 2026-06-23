@@ -76,7 +76,7 @@ func (t CoreMemoryTool) Call(ctx context.Context, input json.RawMessage) (string
 		Section string `json:"section"` // back-compat alias for label
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Content = strings.TrimSpace(in.Content)
 	if in.Content == "" {

@@ -64,7 +64,7 @@ func (t CreateSkillTool) Call(_ context.Context, input json.RawMessage) (string,
 		Shared      *bool  `json:"shared"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Slug = strings.TrimSpace(in.Slug)
 	in.Name = strings.TrimSpace(in.Name)
@@ -111,7 +111,7 @@ func (t DeleteSkillTool) Call(_ context.Context, input json.RawMessage) (string,
 		Slug string `json:"slug"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	in.Slug = strings.TrimSpace(in.Slug)
 	if in.Slug == "" {

@@ -44,7 +44,7 @@ func (t MemoryRecallTool) Call(ctx context.Context, input json.RawMessage) (stri
 		Limit int    `json:"limit"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	if strings.TrimSpace(args.Query) == "" {
 		return "", fmt.Errorf("query is required")

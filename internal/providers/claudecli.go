@@ -221,10 +221,18 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	// handles arbitrarily long lines (tool results / the init tool list).
 	p := newCLIParser(model, req.OnEvent)
 	rd := bufio.NewReader(stdout)
+	var tail []string // bounded ring of recent raw stdout lines (crash diagnostics)
+	const tailMax = 12
 	for {
 		line, rerr := rd.ReadString('\n')
 		if line != "" {
 			p.feed(line)
+			if s := strings.TrimSpace(line); s != "" {
+				tail = append(tail, s)
+				if len(tail) > tailMax {
+					tail = tail[len(tail)-tailMax:]
+				}
+			}
 		}
 		if rerr != nil {
 			break
@@ -235,11 +243,45 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	resp, parseErr := p.finish()
 	if parseErr != nil {
 		if runErr != nil {
-			return nil, fmt.Errorf("claude CLI failed: %v %s", runErr, strings.TrimSpace(stderr.String()))
+			// The CLI often writes its error to stdout (a non-JSON line) and leaves
+			// stderr empty — surface whatever it printed so the failure is not a
+			// bare "exit status 1" with no diagnostic.
+			detail := strings.TrimSpace(stderr.String())
+			if detail == "" {
+				detail = stdoutCrashTail(tail)
+			}
+			return nil, fmt.Errorf("claude CLI failed: %v %s", runErr, strings.TrimSpace(detail))
 		}
 		return nil, parseErr
 	}
 	return resp, nil
+}
+
+// stdoutCrashTail builds a short diagnostic string from the last raw stdout
+// lines when the CLI exits non-zero with empty stderr. It prefers plain
+// (non-JSON) lines, which carry CLI panics / error text, over stream-json
+// events; it falls back to the raw tail so something is always reported.
+func stdoutCrashTail(lines []string) string {
+	var plain []string
+	for _, l := range lines {
+		if l == "" || l[0] == '{' {
+			continue // skip stream-json events
+		}
+		plain = append(plain, l)
+	}
+	pick := plain
+	if len(pick) == 0 {
+		pick = lines
+	}
+	out := strings.Join(pick, " | ")
+	const max = 600
+	if len(out) > max {
+		out = out[:max] + "…"
+	}
+	if out == "" {
+		return "(no stderr and empty stdout — CLI exited without output)"
+	}
+	return "stdout-tail: " + out
 }
 
 // cliStreamParser incrementally consumes the stream-json event log, building a

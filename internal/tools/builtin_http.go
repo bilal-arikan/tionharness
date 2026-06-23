@@ -101,7 +101,7 @@ func (t WebFetchTool) Call(ctx context.Context, input json.RawMessage) (string, 
 		Raw bool   `json:"raw"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
+		return "", argErr(err)
 	}
 	if args.URL == "" {
 		return "", fmt.Errorf("url is required")
