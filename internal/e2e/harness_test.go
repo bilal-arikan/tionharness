@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -68,7 +69,7 @@ func (p *scriptedProvider) Complete(_ context.Context, req providers.Request) (*
 // signature: exactly one user message carrying the compaction prompt.
 func isCompactionRequest(req providers.Request) bool {
 	return len(req.Messages) == 1 &&
-		strings.Contains(req.Messages[0].Text, "running summary of a conversation")
+		strings.Contains(req.Messages[0].Text, "running, structured summary of a conversation")
 }
 
 // --- response builders -------------------------------------------------------
@@ -296,16 +297,18 @@ func (h *harness) sendMulti(agents []db.Agent, sess db.Session, userText string)
 // by similarity-recalled long-term memory for this turn's query.
 func (h *harness) composeDynamic(ctx context.Context, a db.Agent, query string) string {
 	var parts []string
-	if persona, human, err := h.rt.Memory().ReadCoreSections(ctx, a.ID); err == nil && (persona != "" || human != "") {
+	if blocks, err := h.rt.Memory().ReadCoreBlocks(ctx, a.ID); err == nil {
 		var b strings.Builder
-		b.WriteString("# Core Memory\n")
-		if persona != "" {
-			b.WriteString("## Persona\n" + persona + "\n")
+		for _, blk := range blocks {
+			content := strings.TrimSpace(blk.Content)
+			if content == "" {
+				continue
+			}
+			fmt.Fprintf(&b, "## %s\n%s\n", strings.Title(blk.Label), content)
 		}
-		if human != "" {
-			b.WriteString("## Human\n" + human + "\n")
+		if b.Len() > 0 {
+			parts = append(parts, strings.TrimSpace("# Core Memory\n"+b.String()))
 		}
-		parts = append(parts, strings.TrimSpace(b.String()))
 	}
 	if cb := h.rt.Memory().ContextBlock(ctx, a.ID, query, 5); cb != "" {
 		parts = append(parts, cb)

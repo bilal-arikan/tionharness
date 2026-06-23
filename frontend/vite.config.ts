@@ -20,5 +20,36 @@ export default defineConfig({
     // serves the UI. emptyOutDir is required because the target is outside root.
     outDir: '../internal/web/dist',
     emptyOutDir: true,
+    // The only chunk above the default 500 kB limit is relationGraph
+    // (vis-network) — a monolithic vendor lib that is already lazy-loaded only
+    // when a graph view opens, so it never weighs on the initial bundle.
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // Split heavy vendor libraries out of the main app bundle so no single
+        // chunk trips Vite's 500 kB warning. The graph libs (vis-network,
+        // @xyflow) are already lazy-loaded as their own route chunks.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('highlight.js')) return 'vendor-highlight'
+          if (
+            id.includes('react-markdown') ||
+            id.includes('remark') ||
+            id.includes('rehype') ||
+            id.includes('micromark') ||
+            id.includes('mdast') ||
+            id.includes('hast') ||
+            id.includes('unist') ||
+            id.includes('unified') ||
+            id.includes('property-information') ||
+            id.includes('hastscript') ||
+            id.includes('vfile')
+          )
+            return 'vendor-markdown'
+          if (id.includes('react-dom') || id.includes('/react/') || id.includes('scheduler'))
+            return 'vendor-react'
+        },
+      },
+    },
   },
 })

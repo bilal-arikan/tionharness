@@ -123,7 +123,48 @@ Tam liste handler dosyalarında (`internal/api/server.go` route kayıtları). Ö
 | Market | `GET /api/market`, `POST /api/market/{id}/install` |
 | Logs/Events | `GET /api/logs`, `GET /api/events` (SSE) |
 
-### A.6 API Tarafı Bilinen Boşluklar
+### A.6 Otomatik Smoke Testi (`scripts\e2e-smoke.ps1`)
+
+Yukarıdaki API yolunu **baştan sona doğrulayan** tekrar-çalıştırılabilir test
+(2026-06-23 eklendi). Çalışan bir sunucuya karşı koşar; regresyonları yakalar.
+
+```powershell
+.\scripts\e2e-smoke.ps1                                  # default ws + ilk ajan
+.\scripts\e2e-smoke.ps1 -Workspace WS3 -AgentId AGT3     # belirli ws/ajan
+.\scripts\e2e-smoke.ps1 -BaseUrl http://127.0.0.1:8095   # özel port
+.\scripts\e2e-smoke.ps1 -SkipLLM                         # canlı LLM turlarını atla (hızlı/ucuz)
+```
+
+Adımlar (17): `GET /health` → **OPTIONS preflight** (CORS `*` + auth-yok) →
+**hata sözleşmesi** (eksik alan→`400`, geçersiz oturum→`404`, ikisi de `{error}`)
+→ `GET /api/workspaces` → `GET /api/agents` → `POST /api/sessions` →
+**`PUT+GET /sessions/{id}/workdir`** (cwd set→git-repo doğrula→reset) →
+**`POST /api/chat/stream` (gerçek LLM turu, SSE `done` + boş-olmayan yanıt)** →
+**çok-turlu bağlam sürekliliği** (1. tur bir codeword öğretir, 2. tur hatırlatır →
+recall assert'i) → **`permissionMode=read-only` tek-tur override turu** →
+**flow run-stream** (`POST /api/flows` transform node + `POST /flows/{id}/run-stream`
+SSE → `node`+`reply`, `run.status=success`, `flow-ok: PING` çıktısı doğrula →
+`DELETE`; LLM'siz/deterministik) → **schedule "run now"** (`POST /api/schedules`
+devre-dışı + uzak cron → `POST /schedules/{id}/run` → `lastDeliveryStatus=success`
++ `lastRunAt` doğrula → otonom oturumu temizle → `DELETE`; otonom LLM teslimi) →
+**flow branch routing** (transform→branch→arm; `contains`/`equals`/`regex` üç mod,
+her biri doğru "hit" arm'a yönlenmeli; LLM'siz) → **branch default (else) arm**
+(hiçbir arm tutmayınca boş-`Contains` default'a düşmeli) → **flow parallel
+fan-out + join** (iki agent node eşzamanlı koşar, join çıktısı her ikisini de
+içermeli — `ALPHA`+`BETA`; gerçek LLM) → `GET /sessions/{id}/messages`
+(user+assistant kalıcılığı) → `DELETE /sessions/{id}` (temizlik). Hepsi geçerse
+`exit 0`, biri patlarsa `exit 1` (CI dostu). `-SkipLLM` 5 canlı LLM adımını atlar
+(flow/branch node'ları LLM'siz olduğu için koşmaya devam eder → 12/12). Flow
+testleri ortak `Run-FlowGraph` helper'ından geçer: flow oluştur→`run-stream`→flow
+**ve** ürettiği transcript oturumunu sil (workspace temiz kalır). Notlar: gövde
+**BOM'suz UTF-8** yazılır (Go decoder BOM'u reddeder); SSE curl çıktısı tek string'e
+birleştirilir (PowerShell `-match` boolean'ı için); iç içe gövdeler (flow graph)
+için `ConvertTo-Json -Depth 10` şart (varsayılan derinlik 2 string'e kırpar); curl
+ham HTTP için kullanılır (`Invoke-WebRequest` bazı yanıtlarda NonInteractive modda
+takılır). Script'in kendisi **UTF-8 BOM'lu** tutulmalı (PS 5.1 Türkçe karakterleri
+doğru okusun).
+
+### A.7 API Tarafı Bilinen Boşluklar
 
 - Workspace `icon`/`color` yalnız oluşturmada set edilebilir (PATCH yok).
 - Gönderilmiş mesaj **düzenleme** yok (sil + yeniden gönder var).
