@@ -1,4 +1,4 @@
-// Per-workspace category: identity (icon/color), stats, instructions,
+// Per-workspace category: identity (icon), stats, instructions,
 // provider/model overrides, autonomy pause and the delete danger zone.
 import type { WorkspaceSettings } from '../../types'
 import { Field, Toggle, inputCls, type WsSet } from './primitives'
@@ -37,14 +37,8 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
         <Field label="İkon (emoji)">
           <EmojiField value={ws.icon} onChange={(e) => setWsField('icon', e)} clearLabel="⬡" />
         </Field>
-        <Field label="Renk">
-          <div className="flex items-center gap-2">
-            <input type="color" value={ws.color || '#4f8cff'} onChange={(e) => setWsField('color', e.target.value)} className="h-9 w-12 cursor-pointer rounded border border-[var(--color-border)] bg-[var(--color-bg)]" />
-            <input value={ws.color} onChange={(e) => setWsField('color', e.target.value)} placeholder="(varsayılan)" className={`${inputCls} w-28`} />
-          </div>
-        </Field>
         <div className="flex items-center gap-2 pb-1 text-sm">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg text-lg" style={{ backgroundColor: (ws.color || '#1e3a66') + '33' }}>{ws.icon || '⬡'}</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-surface-2)] text-lg">{ws.icon || '⬡'}</span>
           <span className="text-xs text-[var(--color-text-dim)]">önizleme</span>
         </div>
       </div>
