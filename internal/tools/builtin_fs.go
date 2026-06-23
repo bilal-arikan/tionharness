@@ -156,7 +156,7 @@ func (t FSEditFileTool) Call(ctx context.Context, input json.RawMessage) (string
 		return "", argErr(err)
 	}
 	if args.OldString == args.NewString {
-		return "", fmt.Errorf("old_string and new_string are identical")
+		return "", fmt.Errorf("old_string and new_string are identical — fix: make new_string differ from old_string")
 	}
 	abs, err := t.sb.Resolve(args.Path)
 	if err != nil {
@@ -169,7 +169,7 @@ func (t FSEditFileTool) Call(ctx context.Context, input json.RawMessage) (string
 	old := string(data)
 	n := strings.Count(old, args.OldString)
 	if n == 0 {
-		return "", fmt.Errorf("old_string not found in %s", t.sb.Rel(abs))
+		return "", fmt.Errorf("old_string not found in %s — fix: Read the file first and copy the exact text, incl. whitespace/indentation (no line-number prefixes)", t.sb.Rel(abs))
 	}
 	if n > 1 && !args.ReplaceAll {
 		return "", fmt.Errorf("old_string occurs %d times in %s; set replace_all or make it unique", n, t.sb.Rel(abs))

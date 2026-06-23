@@ -62,7 +62,7 @@ func (TodoWriteTool) Def() providers.ToolDef {
 func (TodoWriteTool) Call(_ context.Context, input json.RawMessage) (string, error) {
 	var in todoInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid todo_write input: %w", err)
+		return "", argErrFor("todo_write", err)
 	}
 	if len(in.Todos) == 0 {
 		return "", fmt.Errorf("todos must not be empty")

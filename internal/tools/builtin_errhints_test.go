@@ -36,6 +36,13 @@ func TestArgErr_HasActionableSuffix(t *testing.T) {
 	}
 }
 
+func TestArgErrFor_KeepsToolNameAndHint(t *testing.T) {
+	msg := argErrFor("create_artifact", errors.New("json: cannot unmarshal")).Error()
+	if !strings.Contains(msg, "create_artifact") || !strings.Contains(msg, "input schema") {
+		t.Fatalf("argErrFor should name the tool and add a schema hint, got: %s", msg)
+	}
+}
+
 func TestEnumErr_ListsAllowed(t *testing.T) {
 	msg := enumErr("boardState", "doing", "todo", "in_progress", "done").Error()
 	if !strings.Contains(msg, "doing") || !strings.Contains(msg, "in_progress") {

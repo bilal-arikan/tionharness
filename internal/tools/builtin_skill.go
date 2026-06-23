@@ -49,7 +49,7 @@ func (t UseSkillTool) Call(ctx context.Context, input json.RawMessage) (string, 
 		Slug string `json:"slug"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid use_skill input: %w", err)
+		return "", argErrFor("use_skill", err)
 	}
 	slug := strings.TrimSpace(in.Slug)
 	if slug == "" {

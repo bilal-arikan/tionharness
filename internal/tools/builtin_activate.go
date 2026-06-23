@@ -67,7 +67,7 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 		Names []string `json:"names"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid activate_tools input: %w", err)
+		return "", argErrFor("activate_tools", err)
 	}
 	var known, unknown []string
 	for _, n := range in.Names {
@@ -139,7 +139,7 @@ func (t DeactivateToolsTool) Call(ctx context.Context, input json.RawMessage) (s
 		Names []string `json:"names"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid deactivate_tools input: %w", err)
+		return "", argErrFor("deactivate_tools", err)
 	}
 	removed := t.active.Deactivate(in.Names...)
 	if len(removed) == 0 {
@@ -188,7 +188,7 @@ func (t ToolSearchTool) Call(ctx context.Context, input json.RawMessage) (string
 		Query string `json:"query"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid tool_search input: %w", err)
+		return "", argErrFor("tool_search", err)
 	}
 	q := strings.ToLower(strings.TrimSpace(in.Query))
 	if q == "" {

@@ -86,7 +86,7 @@ func (AskUserTool) Call(ctx context.Context, input json.RawMessage) (string, err
 	ask := askerFrom(ctx)
 	var in askInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid ask_user input: %w", err)
+		return "", argErrFor("ask_user", err)
 	}
 	if strings.TrimSpace(in.Question) == "" {
 		return "", fmt.Errorf("question is required")

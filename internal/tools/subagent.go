@@ -111,7 +111,7 @@ func (RunSubagentTool) Def() providers.ToolDef {
 func (RunSubagentTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in runSubagentInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid run_subagent input: %w", err)
+		return "", argErrFor("run_subagent", err)
 	}
 	spec := RunAgentSpec{
 		Target:  strings.TrimSpace(in.Target),

@@ -2,6 +2,41 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
 
+## Self-correcting hata kapsamı taraması — kalan boşluklar kapatıldı ✅ (2026-06-23)
+
+242 builtin tool hata mesajı tarandı. Çoğu zaten iyiydi (`use list_X`, geçerli
+değer listeleri, argErr/enumErr/cron/graph hint'leri). Atlanan grup: meta/interaction
+araçları `invalid <tool> input: %w` (argErr'in eşleştiği `invalid arguments: %w`'den
+farklı kelime → toplu değişimde kaçmış), eyleme dönük "fix:" eki yoktu.
+
+- Yeni `argErrFor(tool, err)` (`builtin_errhints.go`): tool adını korur + aynı şema
+  ipucunu ekler. **12 site** dönüştürüldü: activate/deactivate/tool_search,
+  create/update_artifact, ask_user, request_confirmation, send_message, use_skill,
+  spawn_session, todo_write, run_subagent (`subagent.go`).
+- Edit araçları (`builtin_fs.go`): `old_string not found` → "Read the file first,
+  copy exact text incl. whitespace (no line-number prefixes)"; `identical` →
+  "make new_string differ". Kör retry'ı önler.
+- Bilinçli dokunulmayanlar: terse-ama-net `X is required` (çözüm zaten örtük) ve
+  `… not available in this context` (ortam hatası, input'la düzeltilemez).
+- Test: `argErrFor` için case eklendi. Tüm tool/provider testleri yeşil.
+
+## Hooks paneli: harici araç oto-tespit + tek-tıkla bağla toggle'ı ✅ (2026-06-23)
+
+Ayarlar ▸ Hooks ekranı (`HooksPanel.tsx`) iki iyileştirme aldı:
+- **Oto-tespit:** Harici token araçları (`rtk`/`sqz`/`headroom`/`context-mode`)
+  artık **ekran açılır açılmaz** otomatik kontrol ediliyor (`useEffect`'e `checkTools()`
+  eklendi); eski "Kurulu mu kontrol et" butonu yeniden-tarama için korundu. Tespit
+  hâlâ presence-only (`/api/external-tools` → `exec.LookPath`, çalıştırma/kurulum yok).
+- **Tek-tıkla bağla toggle'ı:** Bulunan her hook-tabanlı araç için **Bağla / Aktif /
+  Pasif** düğmesi. `TOOL_HOOK_TEMPLATES` şablonundan ilgili hook'u oluşturur
+  (`rtk`→PreToolUse/`Bash` PowerShell rewrite adapter; `sqz`/`headroom`→PostToolUse
+  output sıkıştırma), tekrar tıklayınca `toggleHook` ile aç/kapat (silmez).
+  `context-mode` MCP tabanlı olduğu için toggle yerine **MCP** rozeti gösterilir
+  (hook değil; Ayarlar ▸ MCP'den eklenir). `wiredHook()` eşlemeyi komut içeriğinden
+  yapar. Otomasyon için `data-testid="tool-toggle"` + `data-tool` eklendi.
+- Doğrulama: frontend `tsc --noEmit` yeşil. Not: prod embed için `npm run build`
+  + Go yeniden derleme gerekir (dev'de Vite HMR yeterli).
+
 ## `update_skill` self-management aracı ✅ (2026-06-23)
 
 Ajanlar bir skill'i değiştirmek için `delete_skill`+`create_skill` yapmak zorundaydı

@@ -60,7 +60,7 @@ func (RequestConfirmationTool) Call(ctx context.Context, input json.RawMessage) 
 	ask := askerFrom(ctx)
 	var in confirmInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid request_confirmation input: %w", err)
+		return "", argErrFor("request_confirmation", err)
 	}
 	if strings.TrimSpace(in.Question) == "" {
 		return "", fmt.Errorf("question is required")

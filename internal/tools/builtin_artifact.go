@@ -78,7 +78,7 @@ func (CreateArtifactTool) Def() providers.ToolDef {
 func (CreateArtifactTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in createArtifactInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid create_artifact input: %w", err)
+		return "", argErrFor("create_artifact", err)
 	}
 	in.Title = strings.TrimSpace(in.Title)
 	if in.Title == "" {
@@ -143,7 +143,7 @@ func (UpdateArtifactTool) Def() providers.ToolDef {
 func (UpdateArtifactTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in updateArtifactInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid update_artifact input: %w", err)
+		return "", argErrFor("update_artifact", err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
