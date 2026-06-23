@@ -51,6 +51,23 @@ graph TD
   collapsed workspace ikonu, aktif workspace'in toplu sinyalini gösterir; diğer
   workspace'ler mevcut unread rozetinden gelir.
 
+## Pencere dışı: tab başlığı + taskbar rozeti
+
+Toplam **görülmemiş** öğe sayısı pencere dışına da taşınır:
+
+- **Tab başlığı**: pencere **odakta değilken** `(N) SwarmGo`, odaktayken sade
+  `SwarmGo`. (`hooks/useUnreadBadge.ts` — `focus`/`blur`/`visibilitychange`.)
+- **Taskbar/dock rozeti**: `navigator.setAppBadge(N)` (Chromium Badging API).
+  Edge/WebView2'de çalıştığı için **native masaüstü penceresi taskbar rozetini
+  bedavaya** alır. Opsiyonel `window.swarmgoSetBadge(N)` host köprüsü de çağrılır
+  (kabuk sağlarsa; yoksa no-op). `lib/appBadge.ts`.
+
+`unreadTotal` = okunmamış sohbet oturumları (aktif ws) + etkinlik olan diğer
+workspace'ler + chat-dışı view rozetleri (`App.tsx`). Hesap chat'i iki kez saymaz.
+
+> Not: native ITaskbarList3 overlay ikonu istenirse `swarmgoSetBadge` köprüsü
+> `cmd/swarmgo-desktop` tarafında uygulanabilir; Badging API çoğu durumu kapsar.
+
 ## Yeni bir event tipi/görünüm eklemek
 
 1. Mutasyon noktasında `publishEntityChange(wsp, "<type>", title, body, target)` çağır.

@@ -40,6 +40,7 @@ import { isTypeEnabled } from './lib/notifyPrefs'
 import { useWorkspaces } from './hooks/useWorkspaces'
 import { useActivity } from './hooks/useActivity'
 import { useUnreadViews } from './hooks/useUnreadViews'
+import { useUnreadBadge } from './hooks/useUnreadBadge'
 import { useDirtyViews } from './lib/dirtySignals'
 import { viewForEventType } from './lib/eventViews'
 import { useChatStream } from './hooks/useChatStream'
@@ -650,6 +651,16 @@ export default function App() {
   useEffect(() => {
     markViewRead(view)
   }, [view, markViewRead])
+
+  // Total unseen items, surfaced on the tab title (while unfocused) + OS taskbar
+  // badge. Sum of: unread chat sessions (active ws) + other workspaces with
+  // activity + non-chat view badges (chat is already counted via sessions).
+  const unreadTotal = useMemo(() => {
+    const sess = chatSessions.filter((s) => s.unread).length
+    const views = [...unreadViews].filter((v) => v !== 'chat').length
+    return sess + unreadWs.size + views
+  }, [chatSessions, unreadViews, unreadWs])
+  useUnreadBadge(unreadTotal)
 
   // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
   // the app state. A workspace switch defers entity selection to the

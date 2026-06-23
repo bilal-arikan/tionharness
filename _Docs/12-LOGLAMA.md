@@ -1,8 +1,20 @@
 # SwarmGo — Loglama Sistemi
 
-> Son güncelleme: **2026-06-18**
-> Uygulama logları tek bir **bellek-içi ring buffer**'a yakalanır, stdout'a da
-> yazılır ve `GET /api/logs` ile UI'a + dış araçlara sunulur.
+> Son güncelleme: **2026-06-23**
+> Uygulama logları bir **bellek-içi ring buffer**'a yakalanır, **stdout'a** ve
+> **disk dosyasına** yazılır ve `GET /api/logs` ile UI'a + dış araçlara sunulur.
+
+## Disk log dosyası + UI'dan erişim (2026-06-23)
+
+`SetupLogging` artık stdout'a ek olarak `io.MultiWriter` ile bir **disk dosyasına**
+da yazar: `<dataDir>/logs/swarmgo.log` (append, best-effort — açılamazsa sessizce
+stdout-only'e düşer). Yol çözümü `config.LogFilePath()` (= `config.DefaultDataDir()`
++ `logs/swarmgo.log`), böylece `api` paketi `app`'i import etmeden yolu bilir.
+
+Loglar ekranında (`LogsPanel`) **yolu kopyala** + **klasörü aç** (Explorer
+`/select`) eklendi. Endpoint'ler: `GET /api/logs/path`, `POST /api/logs/reveal`
+(`api/logs_path.go`). Bellek-içi ring buffer (2000 kayıt) UI'ın canlı akışını,
+disk dosyası ise tam geçmişi tutar.
 
 ## Takip edilmeyen hataları yakalama (son savunma hattı, 2026-06-18)
 

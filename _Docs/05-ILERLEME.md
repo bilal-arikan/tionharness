@@ -80,6 +80,10 @@ workspace etiketine yukarı toplanır.
   (`useSyncExternalStore` modül store + `useRegisterDirty`). `NavRail` `NavDots`
   ile 3 durumu çizer; `WorkspaceSwitcher`/collapsed ikon aktif workspace'i toplar.
 - **Kayıtlı dirty ekranlar**: Settings, WorkspaceView, FlowsPanel.
+- **Pencere dışı**: tab başlığı `(N) SwarmGo` (odak dışıyken) + taskbar/dock
+  rozeti (`navigator.setAppBadge`, Edge/WebView2'de native taskbar). Toplam
+  görülmemiş sayısı `App.tsx` `unreadTotal`. `lib/appBadge.ts`,
+  `hooks/useUnreadBadge.ts`.
 
 Detay: `_Docs/29-BILDIRIM-SINYALLERI.md`. Build + tsc yeşil.
 
