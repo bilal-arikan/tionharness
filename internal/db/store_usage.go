@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // Usage kinds tag every LLM call by its origin so spend can be attributed
@@ -11,18 +13,18 @@ import (
 // defined in terms of these strings. UsageKindOther is the fallback for calls
 // recorded without an explicit kind.
 const (
-	UsageKindChat      = "chat"
-	UsageKindTask      = "task"
-	UsageKindSchedule  = "schedule"
-	UsageKindFlow      = "flow"
-	UsageKindDelegate  = "delegate"
-	UsageKindSpawn     = "spawned"
-	UsageKindSubagent  = "subagent"
-	UsageKindTitle     = "title"
-	UsageKindSummary   = "summary"
-	UsageKindReflect   = "reflect"
-	UsageKindCompact   = "compact"
-	UsageKindOther     = "other"
+	UsageKindChat     = "chat"
+	UsageKindTask     = "task"
+	UsageKindSchedule = "schedule"
+	UsageKindFlow     = "flow"
+	UsageKindDelegate = "delegate"
+	UsageKindSpawn    = "spawned"
+	UsageKindSubagent = "subagent"
+	UsageKindTitle    = "title"
+	UsageKindSummary  = "summary"
+	UsageKindReflect  = "reflect"
+	UsageKindCompact  = "compact"
+	UsageKindOther    = "other"
 )
 
 // KindStat is the per-kind/per-model slice of an agent's daily consumption.
@@ -44,6 +46,20 @@ type UsageDelta struct {
 	OutputTokens     int
 	CacheReadTokens  int
 	CacheWriteTokens int
+}
+
+// DeltaFromUsage builds a one-call UsageDelta from a provider's reported usage.
+// It is the single mapping point between providers.Usage and the stored counters,
+// so every recorder (RecordUsage, compaction) stays in sync as new token classes
+// are added. calls is normally 1.
+func DeltaFromUsage(calls int, u providers.Usage) UsageDelta {
+	return UsageDelta{
+		Calls:            calls,
+		InputTokens:      u.InputTokens,
+		OutputTokens:     u.OutputTokens,
+		CacheReadTokens:  u.CacheReadTokens,
+		CacheWriteTokens: u.CacheWriteTokens,
+	}
 }
 
 // add folds a delta into a KindStat.
@@ -75,6 +91,12 @@ type Usage struct {
 	// System A (deterministic compaction) for this agent on this day. It is a
 	// standalone savings meter, not tied to any LLM call (no token/cost impact).
 	CompactSavedBytes int `json:"compactSavedBytes,omitempty"`
+	// CompactSavedBytesLLM is the cumulative byte count removed from tool output by
+	// System B (LLM intent-aware summary) for this agent on this day — the bytes
+	// that will NOT be re-paid as input tokens on subsequent turns. Tracked apart
+	// from System A because System B itself costs a cheap-model call (recorded
+	// under UsageKindCompact); this is its gross output reduction.
+	CompactSavedBytesLLM int `json:"compactSavedBytesLLM,omitempty"`
 }
 
 // ModelKey builds the ByModel map key from a provider and model id.
@@ -172,6 +194,25 @@ func (d *DB) AddCompactionSavings(ctx context.Context, agentID string, bytes int
 		u = Usage{AgentID: agentID, Day: day}
 	}
 	u.CompactSavedBytes += bytes
+	return d.persistUsageLocked(u)
+}
+
+// AddLLMCompactionSavings folds bytes removed by System B (LLM intent-aware
+// tool-output summary) into today's per-agent rollup (upsert). Like System A's
+// counter it is a standalone savings meter (the System B call's own token cost
+// is recorded separately under UsageKindCompact). A non-positive delta is a no-op.
+func (d *DB) AddLLMCompactionSavings(ctx context.Context, agentID string, bytes int) error {
+	if bytes <= 0 {
+		return nil
+	}
+	day := today()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	u, ok := d.usage[usageKey(agentID, day)]
+	if !ok {
+		u = Usage{AgentID: agentID, Day: day}
+	}
+	u.CompactSavedBytesLLM += bytes
 	return d.persistUsageLocked(u)
 }
 

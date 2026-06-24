@@ -13,12 +13,17 @@ package market
 // SchemaV1 is the current pack envelope schema tag.
 const SchemaV1 = "swarmpack/v1"
 
-// Pack kinds — the four shareable entity types.
+// Pack kinds — the shareable entity types. The first four are the original
+// SwarmPack v1 kinds; workspace/memory/mcp were added so the market can share
+// workspace templates, seed memories and MCP tool servers.
 const (
-	KindSkill    = "skill"
-	KindAgent    = "agent"
-	KindProvider = "provider"
-	KindFlow     = "flow"
+	KindSkill     = "skill"
+	KindAgent     = "agent"
+	KindProvider  = "provider"
+	KindFlow      = "flow"
+	KindWorkspace = "workspace"
+	KindMemory    = "memory"
+	KindMCP       = "mcp"
 )
 
 // Source identifies which tier a pack was resolved from. Higher tiers override
@@ -32,6 +37,9 @@ const (
 	SourceGlobal Source = "global"
 	// SourceWorkspace is this workspace's market dir (<workspace>/market).
 	SourceWorkspace Source = "workspace"
+	// SourceRemote is a pack resolved from a remote registry index (downloaded
+	// on install). It carries RegistryName for display.
+	SourceRemote Source = "remote"
 )
 
 // Pack is one marketplace entry: a manifest envelope plus a kind-specific
@@ -58,6 +66,20 @@ type Pack struct {
 	Source Source `json:"source,omitempty"`
 	// Path is the absolute path of the backing .swarmpack.json (not serialised).
 	Path string `json:"-"`
+
+	// RegistryName is the display name of the remote registry a remote pack came
+	// from (empty for local packs). Set when Source == SourceRemote.
+	RegistryName string `json:"registryName,omitempty"`
+	// InstalledVersion is decorated by the API from the per-workspace install
+	// ledger: the version recorded the last time this pack id was installed here.
+	// Empty = never installed via the market. Compare with Version to detect an
+	// available update.
+	InstalledVersion string `json:"installedVersion,omitempty"`
+
+	// remoteURL/remoteSHA are kept only in-memory for remote packs: the payload
+	// download URL and its optional sha256. Not persisted, not serialised.
+	remoteURL string `json:"-"`
+	remoteSHA string `json:"-"`
 }
 
 // Payload is the kind-specific body of a pack. Only the field matching Kind is
@@ -65,10 +87,13 @@ type Pack struct {
 // so the catalog endpoint can omit it trivially and the typed installers read it
 // directly.
 type Payload struct {
-	Skill    *SkillPayload    `json:"skill,omitempty"`
-	Agent    *AgentPayload    `json:"agent,omitempty"`
-	Provider *ProviderPayload `json:"provider,omitempty"`
-	Flow     *FlowPayload     `json:"flow,omitempty"`
+	Skill     *SkillPayload     `json:"skill,omitempty"`
+	Agent     *AgentPayload     `json:"agent,omitempty"`
+	Provider  *ProviderPayload  `json:"provider,omitempty"`
+	Flow      *FlowPayload      `json:"flow,omitempty"`
+	Workspace *WorkspacePayload `json:"workspace,omitempty"`
+	Memory    *MemoryPayload    `json:"memory,omitempty"`
+	MCP       *MCPPayload       `json:"mcp,omitempty"`
 }
 
 // SkillPayload carries a skill as its portable SKILL.md text (frontmatter +
@@ -112,4 +137,45 @@ type FlowPayload struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Graph       string `json:"graph"` // orchestration.Graph JSON
+}
+
+// BoardColumn mirrors db.BoardColumnDef without importing the db package, so the
+// market envelope stays dependency-free. Used by a workspace template's optional
+// kanban layout. The API layer maps it to db.BoardColumnDef.
+type BoardColumn struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Color string `json:"color,omitempty"`
+}
+
+// WorkspacePayload is a workspace template: visual identity + instructions and an
+// optional kanban layout. Install creates a brand-new workspace from it.
+type WorkspacePayload struct {
+	Name         string        `json:"name"`
+	Icon         string        `json:"icon,omitempty"`
+	Color        string        `json:"color,omitempty"`
+	Instructions string        `json:"instructions,omitempty"`
+	Columns      []BoardColumn `json:"columns,omitempty"`
+}
+
+// MCPPayload is a Model Context Protocol server config. Secrets in EnvConfig are
+// the publisher's responsibility to omit; install adds the server to the workspace.
+type MCPPayload struct {
+	Name      string `json:"name"`
+	Transport string `json:"transport,omitempty"` // stdio | sse | http
+	Command   string `json:"command,omitempty"`   // stdio executable
+	Args      string `json:"args,omitempty"`      // JSON array of args
+	URL       string `json:"url,omitempty"`       // sse/http endpoint
+	EnvConfig string `json:"envConfig,omitempty"` // JSON object of env vars
+}
+
+// MemoryEntry is one seed memory in a memory pack.
+type MemoryEntry struct {
+	Content string `json:"content"`
+	Kind    string `json:"kind,omitempty"` // default "document"
+}
+
+// MemoryPayload seeds a set of memories into the installing workspace's first agent.
+type MemoryPayload struct {
+	Entries []MemoryEntry `json:"entries"`
 }

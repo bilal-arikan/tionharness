@@ -1,0 +1,21 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "mcp.filesystem",
+  "kind": "mcp",
+  "name": "Filesystem MCP",
+  "description": "Local filesystem access via the official Model Context Protocol server (read/write/list files under a root).",
+  "version": "1.0.0",
+  "author": "SwarmGo",
+  "icon": "📁",
+  "color": "#4f8cff",
+  "tags": ["mcp", "filesystem", "tools"],
+  "payload": {
+    "mcp": {
+      "name": "Filesystem",
+      "transport": "stdio",
+      "command": "npx",
+      "args": "[\"-y\", \"@modelcontextprotocol/server-filesystem\", \".\"]",
+      "envConfig": "{}"
+    }
+  }
+}

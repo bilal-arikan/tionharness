@@ -30,6 +30,11 @@ type Skill struct {
 	WhenToUse   string `json:"whenToUse,omitempty"`
 	Icon        string `json:"icon,omitempty"`
 	Color       string `json:"color,omitempty"`
+	// Group is a free-form label used purely for ORGANISATION in the Skills UI:
+	// skills sharing a Group are listed under a collapsible (fold in/out) header.
+	// It has no effect on resolution, advertising, or loading — it is metadata for
+	// humans. Empty means the skill is ungrouped. Set from frontmatter `group`.
+	Group string `json:"group,omitempty"`
 	// Shared marks an "on-demand" skill: its summary is advertised to EVERY agent
 	// and any agent may load it via use_skill, without explicit assignment. A
 	// non-shared (restricted) skill is only visible/usable to agents it is

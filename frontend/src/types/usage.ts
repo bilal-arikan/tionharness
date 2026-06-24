@@ -37,6 +37,9 @@ export interface BudgetAgentRow {
   estimated?: boolean // equivalent-API estimate for subscription providers (e.g. claude-cli)
   dailyCallLimit: number
   dailyTokenLimit: number
+  // Tool-output compaction savings (bytes) for this agent today.
+  compactSavedBytes?: number
+  compactSavedBytesLLM?: number
 }
 
 export interface ProviderStat {
@@ -62,6 +65,8 @@ export interface BudgetTrendPoint {
   cacheWriteTokens: number
   costUSD: number
   savingsUSD: number
+  compactSavedBytes: number
+  compactSavedBytesLLM: number
 }
 
 // Window-cumulative totals across the selected trend window ("oturumlar arası
@@ -77,6 +82,8 @@ export interface BudgetCumulative {
   costUSD: number
   savingsUSD: number
   cacheHitRate: number
+  compactSavedBytes: number
+  compactSavedBytesLLM: number
 }
 
 export interface WorkspaceUsage {
@@ -92,9 +99,31 @@ export interface WorkspaceUsage {
     savingsUSD: number
     priced: boolean
     estimated?: boolean // true when cost includes equivalent-API estimates (e.g. claude-cli)
+    compactSavedBytes: number    // System A: deterministic tool-output trim
+    compactSavedBytesLLM: number // System B: LLM summary trim
   }
   byProvider: ProviderStat[]
   agents: BudgetAgentRow[]
   trend: BudgetTrendPoint[]
   cumulative: BudgetCumulative
+}
+
+// Per-session lifetime spend + savings — GET /api/sessions/{id}/usage-detail.
+// The session-scoped analog of AgentUsage.
+export interface SessionUsageDetail {
+  sessionId: string
+  agentId: string
+  calls: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  byKind?: Record<string, KindStat>
+  byModel?: ModelStat[]
+  costUSD: number
+  savingsUSD: number
+  priced: boolean
+  estimated?: boolean
+  compactSavedBytes: number
+  compactSavedBytesLLM: number
 }

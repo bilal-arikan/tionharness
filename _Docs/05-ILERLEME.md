@@ -1,6 +1,281 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-24**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-25**
+
+## Skill grupları — katlanabilir (fold in/out) gruplama ✅ (2026-06-25)
+
+Skiller artık serbest-metin bir **`group`** etiketiyle organize edilebiliyor; Skills
+ekranında aynı gruptaki beceriler **katlanabilir başlık** altında toplanıyor. Tamamen
+kozmetik — çözümleme/reklam/yükleme davranışını etkilemez.
+
+- **Frontmatter (`group`/`category` alias):** `internal/skills/skill.go` `Skill.Group`,
+  `store.go scanDir` parse eder; `SkillInput.Group` + `fields()` → `Create`/`Update` diske
+  yazar. Import yolu dosyayı verbatim kopyaladığından grup korunur.
+- **API:** `skillInputReq.Group` (`internal/api/skills.go`) → create/update gövdesinde geçer;
+  `Skill` JSON'una `group,omitempty` eklendi.
+- **Self-management araçları:** `create_skill`/`update_skill` artık `group` parametresi alır
+  (`builtin_skillmgmt.go`); `SkillWriter` arayüzü + `agentSkillWriter` adapter (`runtime.go`)
+  güncellendi (partial update'te `cur.Group` korunur, aksi halde silinirdi). Mock + test güncellendi.
+- **UI (`SkillsPanel.tsx`):** `groupSkills()` listeyi gruba göre kovalar (adlandırılmış gruplar
+  alfabetik, "Grupsuz" en sonda); her grup `ChevronDown/Right`'lı, sayaç rozetli katlanabilir
+  başlık. Katlı gruplar `localStorage` (`swarmgo.skillsCollapsedGroups`) ile kalıcı. `SkillEditor`
+  grup input'u + mevcut gruplardan `datalist` önerisi; detay başlığında grup rozeti.
+- **Build/test:** `go build ./...` + `go test ./internal/skills ./internal/tools` ✅, frontend `tsc` ✅.
+
+### Takip iyileştirmeleri (aynı gün)
+
+- **İlişki grafiğinde grup tinti:** `api/graph.go` skill düğümüne `Sub = sk.Group` ekler (store'dan
+  bakılır); `relationGraph.ts` `groupHue()` (etiket→deterministik HSL) ile aynı gruptaki skill
+  yıldızlarını **ortak renkle** boyar, grupsuzlar sarı kalır; tooltip "Skill · <grup>" gösterir.
+- **"Tümünü katla/aç":** SkillsPanel header'ında (>1 grup varken) `ChevronsDownUp`/`ChevronsUpDown`
+  butonu — tüm grupları tek tıkla katlar/açar (`toggleAll`, `allCollapsed` türetimi).
+- **Market:** skill paketi zaten tam `SKILL.md` gövdesini (`SkillPayload.Body`) taşıdığından
+  `group` install/publish ile **kendiliğinden korunuyor** — değişiklik gerekmedi.
+- **Git hijyeni:** `.gitignore`'a `*.log.err`/`*.err`; sızan `vite-run.log.err`/`swarmgo-run.log.err`
+  izlemeden çıkarıldı (`git rm --cached`).
+
+## Bütçe refactor faz 2 — UsageDelta helper + tokenTotals embed + billing paketi ✅ (2026-06-25)
+
+Önceki refactor'un devamı; 3 ek sadeleştirme, davranış korundu.
+
+- **`db.DeltaFromUsage(calls, providers.Usage)`:** `providers.Usage → db.UsageDelta` dönüşümü
+  `RecordUsage` (agent) ve `recordCompaction` (conversation)'da elle kuruluyordu → tek mapping
+  noktası `db`'de (yeni `db→providers` importu; döngü yok, providers leaf). Yeni token sınıfı
+  eklenince tek yer güncellenecek.
+- **`tokenTotals` gömülü struct (`api/budget.go`):** `modelStat`/`providerStat`/`dayPoint` aynı 5
+  sayaç alanını (Calls/In/Out/CacheR/CacheW) tekrar ediyordu → anonim embed; alanlar promote olup
+  inline marshal edilir, **JSON şekli birebir aynı** (alan adları korundu). `kindStat` ayrı kaldı
+  (cache alanı yok). modelRowsFor literal'i `tokenTotals: {...}` biçimine güncellendi.
+- **`internal/billing` paketi:** pricing domain matematiği (`priceStat` → `billing.PriceStat`) api'den
+  çıkarıldı → api yalnız JSON şekillendirir, billing maliyet/tahmin mantığını taşır (db+providers
+  import eder). Test `billing/billing_test.go`'ya taşındı (4 vaka).
+- **Build/test:** `go build ./...` + `go vet` + `go test ./...` → **405 passed (29 paket; +billing)**.
+
+## Bütçe + context refactor — fiyatlama/summarize/fold tekrarları sadeleştirildi ✅ (2026-06-25)
+
+Davranış değiştirmeden 3 tekrar noktası generic'leştirildi (golden testlerle kilitlendi).
+
+- **Tek fiyatlama primitifi (`api/budget.go priceStat`):** "PriceFor→CostDetailed/CacheSavings,
+  yoksa EstimateFor" dallanması 3 yerde (costOf, modelRowsFor, handleWorkspaceUsage inline döngü)
+  kopyalanmıştı → tek `priceStat(provider, model, st) (cost, save, priced, estimated)` çekirdeği;
+  hepsi buradan geçiyor (~60 satır tekrar gitti). Harmonizasyon: sıfır-token slice artık `priced=true`
+  (eskiden inline döngüde `false` olabiliyordu — gerçek harcaması olmayan satır "unpriced" işaretlenmez).
+- **Tek summarize çekirdeği (`conversation/`):** `Manager.summarize` (db.Message) ve reactive'in
+  `summarizeProviderMessages` (providers.Message) aynı provider-call+recordCompaction+trim bloğunu
+  taşıyordu → ortak `summarizeRendered(existing, rendered)` + iki ince renderer
+  (`renderDBMessages`/`renderProviderMessages`). `reactive.go`'dan `fmt` importu düştü.
+- **Fold-sınırı yardımcısı (`conversation/manager.go`):** `Prepare` ve `ForceCompact`'taki
+  `start/pending/fold` deseni → `foldBoundary(history, start, keepRecent) (fold, keepTail, newCount, ok)`
+  + `clampStart`; `ForceCompact` artık "bütçesiz Prepare".
+- **Test/build:** `conversation/manager_test.go` (foldBoundary/clampStart) + `api/budget_test.go`
+  (priceStat 4 vaka) eklendi; `go build ./...` + `go test ./...` → **405 passed (28 paket)**.
+
+## OpenRouter geçmiş cache breakpoint'i + per-model cache fiyatlandırması ✅ (2026-06-25)
+
+Önceki cache çalışmasının üstüne iki iyileştirme.
+
+- **Mesaj geçmişi breakpoint'i (`minimax.go attachHistoryBreakpoint`):** OpenRouter'da System
+  prefix'inin yanına **2.** bir `cache_control` transkriptin sonundaki son düz-metin mesaja konuyor
+  (tool_call taşıyan ve system mesajı atlanır). Böylece System + **tüm sohbet geçmişi** cache'lenir,
+  yalnız en yeni mesaj taze gider (2/4 breakpoint). Uzun sohbetlerde token maliyetini ciddi düşürür;
+  ilk tur cache-write, sonraki turlar cache-read.
+- **Per-model cache çarpanı + OpenRouter fiyatları (`pricing.go`):** `Price`'a
+  `CacheReadMultOverride`/`CacheWriteMultOverride` eklendi (0 → paket varsayılanı 0.10/1.25).
+  `CostDetailed`/`CacheSavings` artık `p.cacheReadMult()`/`cacheWriteMult()` kullanıyor. `priceTable`'a
+  **`openrouter`** bölümü: anthropic-routed modeller (opus/sonnet/haiku) Anthropic pass-through fiyatı +
+  0.10/1.25 cache tier'ı ile; OpenAI/DeepSeek-routed için 0.25 override eklenebilir (yorumda örnek).
+  Listelenmeyen openrouter modelleri unpriced (ekran ballpark).
+- **Önizleme:** `computeCachePreview` openrouter modunda `cachedMsgCount = msgCount-1` (geçmiş yeşil,
+  son mesaj taze) + güncel note.
+- **Test/build:** `pricing_test.go` (override + openrouter fiyat) + `minimax_test.go` (geçmiş
+  breakpoint) eklendi; `go test ./internal/{providers,api}/` 120 passed, `go build ./...` + frontend
+  `tsc -b && vite build` yeşil.
+
+## OpenAI-uyumlu yol prompt-cache — minimax/openrouter cache ölçümü + OpenRouter breakpoint ✅ (2026-06-25)
+
+OpenAI-uyumlu sağlayıcılar (minimax, openrouter, özel OpenAI-compat) artık cache'i hem **ölçüyor**
+hem de OpenRouter'da **istiyor**.
+
+- **Ölçüm (`oaiUsage.toUsage()`):** usage objesinden prompt-cache token'ları ayrıştırılıyor —
+  `prompt_tokens_details.cached_tokens` (OpenAI/OpenRouter) + `prompt_cache_hit_tokens` (MiniMax) →
+  `Usage.CacheReadTokens`. Cached token `prompt_tokens`'in alt kümesi olduğu için **InputTokens'tan
+  düşülüyor** (Anthropic konvansiyonu; `pricing.CostDetailed` cache read'i input üstüne ekler →
+  çift sayım önlendi). `cache_creation_input_tokens` → `CacheWriteTokens` (ayrı sayım, düşülmez).
+  Hem `Complete` hem `Stream` yolunda. → Usage/Budget ekranı minimax/openrouter cache tasarrufunu
+  gösterir (eskiden hep 0'dı).
+- **OpenRouter breakpoint (`buildSystemMessage` + `cachesSystem()`):** OpenRouter'da statik System
+  prefix'ine `cache_control: {type: ephemeral}` konuyor (system content artık parça-dizisi:
+  statik+breakpoint, dinamik breakpoint'siz — native anthropic `systemField` ile birebir). Anthropic/
+  Gemini backend'lerinde cache'li; OpenAI/DeepSeek zaten otomatik. `oaiMessage.Content` `any` oldu;
+  diğer endpoint'ler (MiniMax/Groq/Ollama) düz string content korur (array-form reddini önler).
+- **Önizleme:** `computeCachePreview`'a `openrouter` modu eklendi → System/Tools cache'li gösterilir.
+- **Test/build:** `minimax_test.go`'ya cache-parse (4 vaka: openai-details/minimax-toplevel/write/none) +
+  OpenRouter breakpoint + MiniMax string-content testleri; `go test ./internal/{providers,api}/` 117 passed,
+  `go build ./...` yeşil.
+
+## Yedek arşivlerini UI'dan listeleme + tek-tık geri yükleme ✅ (2026-06-25)
+
+Yedekleme özelliğine **geri yükleme** eklendi (önce yalnız alma vardı).
+
+- **Backend liste/çözümleme (`internal/backup/restore.go`):** `Manager.ListArchives(targets)`
+  (workspace başına arşiv, en yeni önce — ad/bayt/mtime), `Manager.ResolveArchive(wsID, name)`
+  (ad doğrulama: yol ayıracı/`..` reddi → path-traversal guard). `Unzip` (`archive.go`,
+  zip-slip korumalı, exported).
+- **Lifecycle restore (`workspace.Manager.RestoreFromArchive(id, path, extract)`):** workspace'i
+  ayır (scheduler `Stop`/runtime `CloseMCP`/DB `Close`) → arşivi **staging**'e aç → üst-düzey
+  girdileri (store/config/workspace + ws-settings.json) `rename` ile **swap**'le → `open(meta)`
+  ile diskten yeniden aç. Açma hatasında rollback (workspace dokunulmadan reopen). `extract`
+  enjekte (`backup.Unzip`) → `workspace` paketi backup formatına bağımsız.
+- **API:** `GET /api/backups/archives` + `POST /api/backups/restore` (`{workspaceId, archive}`;
+  başarıda `publishWorkspacesChanged` → UI listeleri tazelenir).
+- **UI (`BackupPanel`):** "Mevcut yedekler (N)" bölümü — workspace başına gruplu arşiv listesi
+  (ad + tarih + boyut) + her arşivde **iki-adımlı onaylı "Geri yükle"** + yıkıcı işlem uyarısı.
+  Tipler `BackupArchiveFile`/`WorkspaceArchives`, api `listBackupArchives`/`restoreBackup`.
+- **Koşullu otomatik yenileme:** geri yüklenen workspace o pencerede **aktifse** sayfa otomatik
+  yenilenir (`getActiveWorkspace()===id` → `window.location.reload()`); başka workspace'te yenileme
+  yapılmaz (o workspace'e geçince zaten taze yüklenir → alakasız reload yok).
+- **Ayrı "Yedekleme" sayfası (2026-06-25):** önce Ayarlar ▸ Gelişmiş altında alt-bölümdü; ayarlar +
+  arşiv/geri-yükleme tek yerde toplansın diye **kendi kategori sayfasına** alındı (`primitives.tsx`
+  `APP_CATS`'e `backup` katı + `Archive` ikonu, "Gelişmiş" ile "Komutlar" arası; `SettingsPanel.tsx`
+  `cat==='backup'`). Üstteki ortak Kaydet butonu config'i yazar.
+- **Arşiv silme (2026-06-25):** `Manager.DeleteArchive(wsID, name)` (ResolveArchive guard + `os.Remove`),
+  `DELETE /api/backups/archives`, api `deleteBackupArchive`; UI her arşiv satırında **iki-adımlı onaylı**
+  🗑 "Sil" butonu (Geri yükle'nin yanında). Test `TestDeleteArchive` (geçerli sil + traversal reddi);
+  canlı API+UI: WS1/WS2 5→4 (disk+liste). `go test ./internal/backup` 5/5 yeşil.
+- **Test/doğrulama:** `go test ./internal/backup` (4: +round-trip, +traversal reddi) yeşil; canlı
+  WS1 (5 ajan/26 oturum) ve WS2 (9 ajan/11 oturum) API+UI'dan geri yüklendi → veri korundu,
+  server sağlıklı. Detay: `_Docs\34-YEDEKLEME.md`.
+
+## Workspace yedekleme — periyodik zip snapshot + saklama + manuel tetik ✅ (2026-06-25)
+
+Her workspace'in tüm veri dizini (`store/`, `config/`, `workspace/`, `ws-settings.json`)
+belirli aralıklarla bir zip arşivine alınır; saklanan sayı aşılınca eskiler budanır.
+Süreç-geneli tek `backup.Manager` (workspace'ten bağımsız), ayarlardan canlı yapılandırılır.
+
+- **Yeni paket `internal/backup`:** `backup.go` (Manager: `Configure`/`RunOnce`/`Stop`/`Status`,
+  ticker döngüsü + run-mutex ile çakışma engeli + per-workspace saklama budama `prune`),
+  `archive.go` (`zipDir` — göreli yol korumalı, backups kökünü dışlayıp özyinelemeyi önler).
+  İlk otomatik yedek bir **aralık sonra** alınır (restart başına yedek patlaması yok).
+- **Workspace köprüsü:** `workspace.Manager.BackupTargets()` her workspace'in mutlak veri
+  dizinini döndürür (`open()` ile aynı yol mantığı: kullanıcı `Path`'i ya da varsayılan
+  `rootDir/workspaces/<id>`).
+- **Ayarlar (`settings`):** `backupEnabled` (vars. false), `backupIntervalHours` (≥1, vars. 24),
+  `backupRetain` (≥1, vars. 7), `backupDir` (boş → `<dataDir>/backups`). Settings struct/DTO/Patch/
+  Default/ToDTO/Apply + `normalize` clamp'leri eklendi.
+- **Wiring:** `app.Bootstrap` manager'ı kurup `server.SetBackupManager` ile bağlar; `applySettings`
+  her ayar değişiminde `backups.Configure(...)` çağırır (canlı başlat/durdur/yeniden-yapılandır);
+  `App.Shutdown` döngüyü durdurur.
+- **API:** `GET /api/backups` (durum: config + son koşu) + `POST /api/backups/run` (anında yedek,
+  zamanlama açık olmasa da çalışır). Ajan aracı **değil** — yalnız kullanıcı/UI.
+- **UI:** Ayarlar ▸ Gelişmiş ▸ **Yedekleme** bölümü (`BackupPanel`, `appPanels.tsx`): aç/kapat +
+  aralık/saklama/klasör alanları + canlı durum kartı + **"Şimdi yedekle"** butonu. Tipler
+  `types/settings.ts` (`BackupStatus`/`BackupResult`), api `system.ts` (`getBackupStatus`/`runBackup`).
+  Tek manager **tüm** workspace'leri yedeklediği için app-geneli ayardır (workspace'e özel değil).
+- **Build/test:** `go build ./...` + `go test ./internal/backup` (2: arşivle+budama, backups-kökü
+  dışlama) yeşil; frontend `npm run build` (dist gömüldü). Detay: `_Docs\34-YEDEKLEME.md`.
+
+## Market — uzak kayıt defteri (remote registry) + sürüm/güncelleme + detay popup ✅ (2026-06-25)
+
+Market harici sunuculardan paket çekebilen 4. tier'a kavuştu (Faz 1-4, doğrulama opsiyonel).
+
+- **Index formatı `swarmregistry/v1`:** uzak sunucu tek `registry.json` sunar (manifest + payload `url` + opsiyonel `sha256` + `minAppVersion`). Payload kurulum anında `url`'den lazy indirilir; sha256 verildiyse doğrulanır, yoksa atlanır.
+- **Backend:** `internal/market/remote.go` (fetchIndex/fetchPayload, http(s)-only, boyut limiti 8/4 MiB, 20sn timeout, `compareVersions` semver-lite), `registry_store.go` (kaynak config `registries.json` global + index cache `.remote-cache/` restart-safe + per-workspace install ledger `installed.json`), `store.go` List/Get yerel+uzak birleştirir (`Source=remote`, id çakışmasında yerel gölgeler), `New` artık globalDir saklar. Pack'e `RegistryName`/`InstalledVersion` (+ transient `remoteURL`/`remoteSHA`).
+- **API:** `GET/POST /api/market/registries`, `POST .../delete`, `POST .../refresh`; `GET /api/market` her pack'i ledger'dan `installedVersion` ile dekore eder; install başarısında `statusCaptureWriter` ile ledger'a `version` yazılır (tüm türler için tek nokta).
+- **UI:** `RegistryManager.tsx` modal (kaynak ekle/sil/yenile, `market-registries-modal`); `MarketPanel.tsx`'e "Kaynaklar" butonu, kaynak rozeti (Yerel/registry adı), **"Güncelle (vX→vY)"** rozeti + detay popup'ında güncelleme butonu (overwrite). "Yenile" artık önce uzak index'leri çeker. Ayrıca **detay paneli yan-panelden ortada popup'a** çevrildi (`market-detail-modal`).
+- **Doğrulama (uçtan uca):** yerel HTTP'de registry yayınlandı → ekle → uzak pack `source=remote` listede → kur (indirildi, skill oluştu) → `installedVersion=2.0.0` → registry 3.0.0 + refresh → "güncelleme var"=true. Backend `go build`+`go test` (59) yeşil, `tsc --noEmit` temiz, `npm run build` + binary derlendi, çalışan instance'ta test edildi.
+- Detay: `_Docs\21-MARKET.md` §7.
+
+## Market — 3 yeni paket türü (workspace/memory/mcp) + sol kategori menüsü + import taşıma ✅ (2026-06-24)
+
+Market 4 türden 7 türe çıkarıldı ve ekran yeniden düzenlendi. (Aynı gün kısa süre `board` türü de
+eklendi ama **kaldırıldı** — workspace şablonu zaten opsiyonel kanban düzeni taşıyor; ayrı board paketi
+gereksiz bulundu.)
+
+- **Yeni türler (install çalışır):** `workspace` (yeni workspace oluştur: `Manager.Create`+`UpdateSettings`,
+  opsiyonel kanban düzeni dahil), `memory` (**seçilen ajana** tohum: `Runtime.Memory().Remember`),
+  `mcp` (`db.CreateMCPServer`, enabled → sonraki turda araçlar görünür). Backend: `internal/market/pack.go`'ya
+  kind sabitleri + payload struct'ları (`WorkspacePayload`/`MemoryPayload`/`MCPPayload` + `BoardColumn`
+  [workspace şablonunun kanban düzeni için] + `MemoryEntry`; market paketi db'ye bağımlı kalmasın diye
+  `BoardColumn` ayrı, API katmanı `db.BoardColumnDef`'e map'liyor); install handler'ları
+  `internal/api/market.go` (`installMCPPack`/`installWorkspacePack`/`installMemoryPack` +
+  `toBoardColumnDefs`/`mcpNames` helper'ları).
+- **Memory ajan seçimi:** install body'sine `agentId` eklendi; `installMemoryPack` verilen ajanı hedefler,
+  boşsa ilk ajana düşer, bilinmeyen id → hata. UI'da detay panelinde **hedef ajan dropdown'u**
+  (`market-memory-agent`); ajan yoksa kur butonu pasif.
+- **Gömülü örnekler (+5):** `mcp.filesystem`, `mcp.fetch`, `workspace.software-project`,
+  `workspace.research`, `memory.coding-standards` (`internal/market/defaults/`, `//go:embed` ile gömülü;
+  `EnsureDefaults` eksikleri global market dizinine yazar). Board örnekleri (scrum/bug-triage) eklenip geri
+  silindi; global market dizinindeki kalıntılar da temizlendi.
+- **UI (`MarketPanel.tsx`):** üst sekmeler → **sol dikey kategori menüsü** (7 kategori + paket sayacı);
+  "Tümü" kaldırıldı, ilk kategori (Skills) varsayılan. Yeni türler için `PackPreview` (workspace yönergeleri +
+  kanban chip'leri, MCP komut/args, bellek girdileri), `INSTALL_LABEL`, `KIND_LABEL`. memory "zaten kurulu"
+  işaretlenmez (eylem); workspace/mcp ad-bazlı dedup (`api.listWorkspaces`/`listMCPServers`).
+- **Import taşıma:** Claude Code skill içe aktarma (`SkillImportDialog`) **Skills ekranından markete taşındı**
+  (Skills kategorisi başlığındaki "İçe Aktar" butonu). `SkillsPanel.tsx`'ten buton+dialog+state kaldırıldı.
+- **Built-in tools sorusu:** yerleşik araçlar binary'e derili → markete eklenemez; araç paylaşımının doğru
+  karşılığı **mcp** türü (cevap dokümana da işlendi).
+- **Build:** `go build ./...` + `go test ./internal/market ./internal/api` (59) yeşil; frontend `tsc --noEmit`
+  temiz + `npm run build` (dist gömüldü).
+- Detay: `_Docs\21-MARKET.md`.
+
+## Bütçe geliştirmeleri — Tasarruf Merkezi + session bazlı kullanım ✅ (2026-06-24)
+
+Bütçe sistemi 3 fazda genişletildi: tasarruf görünürlüğü, oturum-başına atıf, birleşik kazanç paneli.
+
+- **Faz 1 — Sıkıştırma tasarrufu görünür:** Sistem B'nin kırptığı bayt artık ölçülüyor
+  (`Usage.CompactSavedBytesLLM` + `db.AddLLMCompactionSavings`; Sistem A'nın `CompactSavedBytes`'ı zaten vardı).
+  `GET /api/usage` totals/cumulative/trend + `GET /api/agents/{id}/usage` bu alanları taşıyor.
+- **Faz 2 — Session bazlı kullanım/maliyet:** yeni `db.SessionUsage` rollup (`internal/db/store_session_usage.go`,
+  **sessionID anahtarlı ömür-boyu**, gün-reset yok; `store/session-usage/<sid>.json`). `RecordUsage` +
+  `compactToolResult` ctx'teki `SessionIDFrom` ile ajan kaydının yanında session'a da yazıyor. Yeni endpoint
+  `GET /api/sessions/{id}/usage-detail` (cost helper'ları workspace ekranıyla paylaşılır). `SessionDetailPanel`
+  "Bu oturumun harcaması" kartı (maliyet + kazanç/tasarruf kırılımı).
+- **Faz 3 — Tasarruf Merkezi:** Bütçe ekranında tüm tasarruf kaynaklarını birleştiren panel (cache USD +
+  Sistem A/B bayt + ~token eşdeğeri).
+- **Notlar:** hook'lar tasarruf ölçmez (CC sözleşmesi); `context-mode`/`rtk`/`sqz` presence-only → ölçülen kazanç yok,
+  yerel eşdeğer Sistem A. Sistem A/B yalnız bayt+~token gösterir (USD'ye çevrilmez — uydurma sayı olmaması için);
+  gerçek USD yalnız prompt-cache'te. Bu cache USD'si az önceki claude-cli cache muhasebesi düzeltmesinden de
+  beslenir (claude-cli turları artık cache read/write raporladığından session rollup'a da yansır).
+- **Build/test:** `go build ./...` + `go vet` yeşil; `internal/db` (`store_session_usage_test.go` +
+  `AddLLMCompactionSavings`), `internal/api`, `internal/agent` testleri (168) geçti; frontend `tsc --noEmit` temiz.
+- Detay: `_Docs\17-TOKEN-OPTIMIZASYON.md` §Bütçe görünürlüğü.
+
+## Bağlam önizleme cache haritası — cache dışı segmentler yeşil + cache sınırı ✅ (2026-06-24)
+
+Önizleme ekranı (`SessionContextModal`) artık isteğin hangi parçasının **sıcak prompt-cache**'ten,
+hangisinin her tur **taze** gittiğini gösterir.
+
+- **Backend (`internal/api/session_context.go`):** `sessionContextPreview`'a `cache cachePreview`
+  alanı + `computeCachePreview(provider, session, …)`:
+  - **anthropic** (ExtendedPromptCache açık): breakpoint statik System bloğunda →
+    `toolsCached`+`systemCached=true`, `dynamicCached=false`; kapalıysa `mode=none`.
+  - **claude-cli** (ClaudeResume warm, `CLISessionID`+`CLISentMsgCount`>0): `systemCached=true`,
+    `cachedMsgCount=CLISentMsgCount` → ilk N mesaj sıcak, delta taze; soğuk/ilk tur `mode=none`.
+  - diğer sağlayıcılar `mode=none`. Her mod insan-okunur `note` taşır.
+- **Frontend (`SessionContextModal.tsx` + `types/session.ts`):** cache dışı segmentler **hafif
+  yeşil** (`text-emerald-500/75`, Markdown düz metni `currentColor`'dan miras alır); her bölümde
+  `cache'li`/`cache dışı` pill (`CacheTag`), üstte yeşil legend (`note` ile), mesaj dizisinde
+  ilk taze mesajdan önce **"cache sınırı — buradan sonrası taze gönderilir"** ayıracı.
+- **Build/test:** `go build ./...` + `go vet` + `go test ./internal/{api,providers}/` (110 passed);
+  frontend `tsc -b && vite build` yeşil, binary'e gömüldü.
+
+## claude-cli cache muhasebesi — Usage ekranında resume tasarrufu görünür ✅ (2026-06-24)
+
+`--resume` (ClaudeResume) modunun asıl faydası **prompt-cache hit**'idir, ama claude-cli
+usage ayrıştırıcısı cache alanlarını okumuyordu → Usage/Budget ekranı her claude-cli turu için
+**0 cache** gösteriyor, resume'un değeri görünmüyordu.
+
+- **Düzeltme (`internal/providers/claudecli.go`):** `cliUsage` struct'ına
+  `cache_read_input_tokens` + `cache_creation_input_tokens` alanları eklendi; `assistant`
+  event'inde max-bağlama (per-message), `result` envelope'unda authoritative aggregate ile
+  `resp.Usage.CacheReadTokens`/`CacheWriteTokens`'e yazılıyor.
+- **Zincir doğrulandı:** `resp.Usage` → `RecordUsage` (budget.go:57) → `AddUsageKind` →
+  `store_usage` aggregation → `GET /api/usage` (`cacheReadTokens`/`cacheWriteTokens`). Anthropic
+  native ile aynı yoldan akar; artık claude-cli turları da cache read/write raporlar.
+- **Build:** `go build ./...` + `go vet ./internal/providers/` yeşil.
+- **Kapsam dışı (sıradaki):** bağlam önizleme ekranında (`context/preview`) cache-breakpoint
+  etiketi + resume modunda "N mesaj CLI cache'inde sıcak, yalnız delta gönderilecek" satırı —
+  henüz eklenmedi.
 
 ## SK-IMP UI — Skills panelinde içe-aktarma akışı ✅ (2026-06-24)
 

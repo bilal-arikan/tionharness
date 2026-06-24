@@ -196,7 +196,10 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Skills: a shared library node per distinct slug used by any agent, with an
-	// agent→skill edge. Reveals which agents share which capabilities.
+	// agent→skill edge. Reveals which agents share which capabilities. The skill's
+	// organisation group (when set) rides along in Sub so the frontend can tint
+	// same-group skills alike.
+	skillStore := wsp.Runtime.Skills()
 	skillSeen := map[string]bool{}
 	skillCount := 0
 	for _, a := range agents {
@@ -207,7 +210,11 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 			if !skillSeen[slug] {
 				skillSeen[slug] = true
 				skillCount++
-				nodes = append(nodes, graphNode{ID: skillPfx + slug, Type: "skill", Label: slug})
+				group := ""
+				if sk, ok := skillStore.Get(slug); ok {
+					group = sk.Group
+				}
+				nodes = append(nodes, graphNode{ID: skillPfx + slug, Type: "skill", Label: slug, Sub: group})
 			}
 			edges = append(edges, graphEdge{Source: agentPfx + a.ID, Target: skillPfx + slug, Kind: "skill"})
 		}

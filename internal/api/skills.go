@@ -60,6 +60,7 @@ type skillInputReq struct {
 	WhenToUse   string `json:"whenToUse"`
 	Icon        string `json:"icon"`
 	Color       string `json:"color"`
+	Group       string `json:"group"`
 	Shared      bool   `json:"shared"`
 	Body        string `json:"body"`
 }
@@ -71,6 +72,7 @@ func (req skillInputReq) input() skills.SkillInput {
 		WhenToUse:   req.WhenToUse,
 		Icon:        req.Icon,
 		Color:       req.Color,
+		Group:       req.Group,
 		Shared:      req.Shared,
 		Body:        req.Body,
 	}

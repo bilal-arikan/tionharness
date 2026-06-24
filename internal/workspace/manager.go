@@ -266,6 +266,36 @@ func (m *Manager) List() []Meta {
 	return out
 }
 
+// BackupTarget describes one workspace's on-disk location for the backup
+// subsystem: its id, label and the absolute data directory that holds all of
+// the workspace's content (store/, config/, workspace/, ws-settings.json).
+type BackupTarget struct {
+	ID   string
+	Name string
+	Dir  string
+}
+
+// BackupTargets returns the data directory of every workspace so the backup
+// manager can snapshot them. The path mirrors open(): a user-chosen Path, or
+// the default per-workspace folder under the manager root.
+func (m *Manager) BackupTargets() []BackupTarget {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]BackupTarget, 0, len(m.order))
+	for _, id := range m.order {
+		ws := m.workspaces[id]
+		dir := ws.DataDir
+		if dir == "" {
+			dir = ws.Meta.Path
+			if dir == "" {
+				dir = filepath.Join(m.rootDir, "workspaces", ws.Meta.ID)
+			}
+		}
+		out = append(out, BackupTarget{ID: ws.Meta.ID, Name: ws.Meta.Name, Dir: dir})
+	}
+	return out
+}
+
 // Get returns a workspace by id.
 func (m *Manager) Get(id string) (*Workspace, error) {
 	m.mu.RLock()
@@ -334,6 +364,90 @@ func (m *Manager) Delete(id string) error {
 		m.logger.Warn("failed to remove workspace dir", "id", id, "error", err)
 	}
 	return m.persist()
+}
+
+// RestoreFromArchive replaces a workspace's on-disk content with the contents of
+// a backup archive and reopens it live. The flow: detach the workspace (stop
+// scheduler, close MCP + DB, remove from the registry) → extract the archive to
+// a staging dir → atomically swap the restored content (store/, config/,
+// workspace/, ws-settings.json) into place → reopen from disk. extract is the
+// archive-format-specific unzip (injected so this package stays decoupled from
+// the backup format). On a failed extraction the original workspace is reopened
+// unchanged. The workspace id/identity is preserved.
+//
+// Caller note: restoring the workspace currently open in a UI desyncs that
+// view's in-memory state; the client should reload after a restore.
+func (m *Manager) RestoreFromArchive(id, archivePath string, extract func(src, dst string) error) error {
+	m.mu.Lock()
+	ws, ok := m.workspaces[id]
+	if !ok {
+		m.mu.Unlock()
+		return errors.New("workspace not found")
+	}
+	meta := ws.Meta
+	dataDir := ws.DataDir
+	// Detach from the registry while we rewrite its files.
+	delete(m.workspaces, id)
+	m.order = removeString(m.order, id)
+	m.mu.Unlock()
+
+	// Release all live handles so the files can be replaced (Windows locks open
+	// files). The scheduler/runtime/DB are recreated by open() at the end.
+	ws.Scheduler.Stop()
+	ws.Runtime.CloseMCP()
+	_ = ws.DB.Close()
+
+	// Stage the extraction in a sibling temp dir so a mid-extraction failure
+	// never leaves the workspace half-wiped.
+	staging := dataDir + ".restore-stage"
+	_ = os.RemoveAll(staging)
+	if err := extract(archivePath, staging); err != nil {
+		_ = os.RemoveAll(staging)
+		m.reopenOrLog(meta) // roll back: reopen the untouched workspace
+		return fmt.Errorf("extract archive: %w", err)
+	}
+
+	// Swap each restored top-level entry into place: remove the live copy then
+	// move the staged copy over it (same volume → fast rename).
+	swapErr := func() error {
+		entries, err := os.ReadDir(staging)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			dst := filepath.Join(dataDir, e.Name())
+			src := filepath.Join(staging, e.Name())
+			if err := os.RemoveAll(dst); err != nil {
+				return err
+			}
+			if err := os.Rename(src, dst); err != nil {
+				return err
+			}
+		}
+		return nil
+	}()
+	_ = os.RemoveAll(staging)
+	if swapErr != nil {
+		// Content may be partially swapped; reopen whatever is on disk so the
+		// workspace is at least live again, and surface the error.
+		m.reopenOrLog(meta)
+		return fmt.Errorf("swap restored content: %w", swapErr)
+	}
+
+	if err := m.open(meta); err != nil {
+		return fmt.Errorf("reopen workspace after restore: %w", err)
+	}
+	m.logger.Info("workspace restored from archive", "id", id, "archive", filepath.Base(archivePath))
+	return nil
+}
+
+// reopenOrLog re-registers a previously detached workspace, logging on failure
+// (used on restore rollback paths where the caller already has an error to
+// return — losing the workspace from the registry would be worse than a log).
+func (m *Manager) reopenOrLog(meta Meta) {
+	if err := m.open(meta); err != nil {
+		m.logger.Error("failed to reopen workspace after restore rollback", "id", meta.ID, "error", err)
+	}
 }
 
 // Close stops every workspace's runtime and closes its database.

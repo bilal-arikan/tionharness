@@ -1,22 +1,38 @@
 # 21 — Uygulama İçi Market Sistemi (Marketplace)
 
-> **Durum:** Tasarım + **dört türde de kurulum çalışır** (skill/agent/provider/flow install).
-> Yayınlama (publish) şimdilik yalnız skill için; agent/provider/flow publish + import/export UI sonraki dilim.
-> **Hedef:** Skiller, Agentlar, Sağlayıcılar (Providers) ve Flow taslakları uygulama
-> içinden paketlenip (publish), gözatılıp (browse) ve kurulabilsin (install).
+> **Durum:** Tasarım + **yedi türde de kurulum çalışır** (skill/agent/provider/flow/
+> **workspace/memory/mcp** install). Yeni türler (workspace/memory/mcp) 2026-06-24'te
+> eklendi. (Board türü kısa süre denendi, 2026-06-24'te **kaldırıldı** — workspace
+> şablonu zaten opsiyonel kanban düzeni taşıyor.)
+> **Uzak kayıt defteri (remote registry) — 2026-06-25:** market artık harici
+> sunuculardan paket çekebilir (`swarmregistry/v1` index). Kaynak ekle/çıkar/yenile,
+> uzak paketleri listele+kur (lazy indirme, opsiyonel sha256), ve **sürüm bazlı
+> "Güncelle"** algısı (install ledger). Detay §7.
+> Yayınlama (publish) şimdilik yalnız skill için; diğer türlerin publish + import/export UI sonraki dilim.
+> **Hedef:** Skiller, Agentlar, Sağlayıcılar, Flow taslakları, **Workspace şablonları,
+> Bellek tohumları ve MCP araç sunucuları** uygulama içinden paketlenip (publish),
+> gözatılıp (browse) ve kurulabilsin (install).
 >
-> **Gömülü örnekler (23 paket):** 10 skill (web-research, code-review, technical-writing,
-> data-analysis, debugging, prompt-engineering, sql-expert, git-workflow, api-design,
-> summarization), 5 agent (researcher/coder/editor/planner/support), 4 provider
-> (openrouter/groq/ollama/deepseek), 4 flow (research-synthesis/review-and-fix/
-> parallel-brainstorm/draft-edit-finalize). Üreteç: `internal/market/gen_examples.py`
-> (in-tree authoring helper; ürettiği JSON'lar `//go:embed` ile gömülür).
+> **Gömülü örnekler (28 paket):** 10 skill, 5 agent (researcher/coder/editor/planner/
+> support), 4 provider (openrouter/groq/ollama/deepseek), 4 flow, **2 mcp
+> (filesystem/fetch), 2 workspace (software-project/research), 1 memory
+> (coding-standards)**. Üreteç: `internal/market/gen_examples.py` (skill/agent/provider/
+> flow için; yeni türlerin default'ları `defaults/` altında elle yazılır; hepsi
+> `//go:embed` ile gömülür).
+>
+> **UI (2026-06-24):** Market ekranı **sol dikey kategori menüsü** kullanır (Skills/
+> Agents/Providers/Flows/Workspaces/Memories/Tools(MCP)); "Tümü" seçeneği yok,
+> ilk kategori varsayılan. **Claude Code skill içe aktarma** Skills ekranından markete
+> taşındı (Skills kategorisi başlığındaki "İçe Aktar" butonu → `SkillImportDialog`).
+> **Memory kurulumu hedef ajan seçtirir** (detayda dropdown; varsayılan ilk ajan).
+> Bir item'a tıklayınca detay **ortada açılan popup/modal** olarak gelir (eski yan-panel
+> yerine; `market-detail-modal`, backdrop'a tıklayınca kapanır).
 
 ---
 
 ## 1. Amaç ve kapsam
 
-SwarmGo'da dört "paylaşılabilir varlık" var:
+SwarmGo'da yedi "paylaşılabilir varlık" var:
 
 | Tür | Kaynak | Depolama | Kurulum hedefi |
 |-----|--------|----------|----------------|
@@ -24,8 +40,21 @@ SwarmGo'da dört "paylaşılabilir varlık" var:
 | **agent** | `db.Agent` | JSON entity | `db.CreateAgent` |
 | **provider** | `settings.CustomProvider` | şifreli settings.json | `settings.Upsert` |
 | **flow** | `db.Flow` (graph JSON) | JSON entity | `db.CreateFlow` |
+| **workspace** | `workspace.Manager` | workspace registry + ws-settings | `Manager.Create` + `UpdateSettings` (yeni workspace; opsiyonel kanban düzeni dahil) |
+| **memory** | `db.KnowledgeSource` | JSON entity (ajan-başına) | `Runtime.Memory().Remember` (**seçilen** ajana tohum) |
+| **mcp** | `db.MCPServer` | JSON entity | `db.CreateMCPServer` (enabled; sonraki turda yüklenir) |
 
-Market, bu dört türü **tek bir paket formatı (SwarmPack)** altında toplar; bir
+**Kurulum semantiği farkları:**
+- **memory** bir **eylem** (tohum ekle), benzersiz-kimlikli varlık yaratmaz → "zaten kurulu" işareti yok, tekrar çalıştırılabilir ("Belleğe ekle").
+- **memory** kurulumu **seçilen ajana** yazar (install body `agentId`; verilmezse ilk ajan; ajan yoksa hata verir, UI'da buton pasif).
+- **workspace** kurulumu **yeni bir workspace oluşturur** (ad çakışırsa engellenir); workspace şablonu opsiyonel kanban kolon düzeni taşıyabilir (`WorkspacePayload.Columns` → `WSSettings.BoardColumns`).
+- **mcp** ve **workspace** ad-bazlı dedup; **agent**/**flow** ad-bazlı; **skill** slug; **provider** id (Upsert → "Güncelle").
+
+**Built-in araçlar markete eklenemez:** yerleşik araçlar (`Read`/`Write`/`Bash`…) Go ile
+binary'e derilidir, dosya-tabanlı değildir. Markete "araç eklemenin" karşılığı **mcp**
+türüdür (harici MCP sunucu config'i).
+
+Market, bu türleri **tek bir paket formatı (SwarmPack)** altında toplar; bir
 varlığı dışa paketler (publish), bir kayıt defterinde (registry) listeler ve bir
 workspace'e geri kurar (install). Mimari, mevcut `skills.Store`'un birebir
 kardeşidir: çok-katmanlı (tier), tembel (lazy) dosya-tabanlı bir mağaza.
@@ -52,7 +81,7 @@ Her paket bir **manifest zarfı + tür-özel payload**'tan oluşur. Tek dosya:
 {
   "schema": "swarmpack/v1",
   "id": "skill.web-research",        // kararlı paket kimliği (kind.slug)
-  "kind": "skill",                   // skill | agent | provider | flow
+  "kind": "skill",                   // skill|agent|provider|flow|workspace|memory|mcp
   "name": "Web Research",
   "description": "Derin web araştırması için adım adım yöntem.",
   "version": "1.0.0",
@@ -274,10 +303,77 @@ Playwright UI smoke, uzak registry (§7).
 
 ---
 
-## 7. Açık sorular / sonraki adımlar
+## 7. Uzak kayıt defteri (Remote Registry) — 2026-06-25
 
-- **Uzak registry**: HTTP index.json + paket indirme (imza/doğrulama?). Tasarım
-  bunu additive bırakıyor (4. tier).
-- **Sürümleme/güncelleme**: kurulu paket sürümü < registry → "güncelle" akışı.
-- **Bağımlılıklar**: agent paketi referans verdiği skill paketlerini de önerebilir.
-- **Çakışma politikası**: slug çakışmasında yeniden adlandırma vs. üzerine yazma.
+Market artık **4. tier** olarak harici sunuculardan paket çekebilir. Yerel tier'lar
+(bundled/global/workspace) uzak paketleri **id çakışmasında gölgeler** (yerel kazanır).
+
+### 7.1 Index formatı — `swarmregistry/v1`
+
+Bir registry, tek bir `registry.json` sunar (HTTP/HTTPS):
+
+```jsonc
+{
+  "schema": "swarmregistry/v1",
+  "name": "Test Registry",
+  "updatedAt": 1750000000,
+  "packs": [
+    {
+      "id": "skill.web-research", "kind": "skill", "name": "...",
+      "description": "...", "version": "2.0.0", "author": "...",
+      "icon": "🔎", "tags": ["research"],
+      "url": "https://.../skill.web-research.swarmpack.json", // payload (lazy indirilir)
+      "sha256": "abc…",          // OPSİYONEL bütünlük (boşsa atlanır)
+      "minAppVersion": "0.9.0"   // taşınır; şimdilik zorlayıcı değil
+    }
+  ]
+}
+```
+
+Index = ucuz (yalnız manifest + `url`); payload **kurulum anında** `url`'den indirilir
+(yerel lazy kalıbının HTTP karşılığı). `sha256` verildiyse indirme doğrulanır, **verilmediyse
+atlanır** (doğrulama opsiyonel, kullanıcı tercihi).
+
+### 7.2 Backend (`internal/market`)
+
+- `remote.go`: index/pack çekme (`fetchIndex`/`fetchPayload`), boyut sınırı (8MiB/4MiB),
+  20sn timeout, yalnız http(s), opsiyonel sha256, `compareVersions` (semver-lite).
+- `registry_store.go`: kaynak config'i `registries.json` (global market dir), index cache'i
+  `<global>/.remote-cache/<hash>.json` (restart-safe; `scanDir` dizinleri atladığı için
+  yerel katalogu kirletmez), per-workspace **install ledger** `<workspace>/market/installed.json`
+  (packID→version → "Güncelle" algısı).
+- `store.go`: `List()` yerel + uzak birleştirir (uzak `Source=remote`, `RegistryName`),
+  `Get()` yerelde yoksa uzaktan indirir. `New(globalDir, workspaceDir)` artık `globalDir`'i saklar.
+- Eşzamanlılık: her workspace'in Store'u aynı global cache'i okur (salt-okunur paylaşım).
+
+### 7.3 API
+
+| Endpoint | İş |
+|----------|-----|
+| `GET /api/market/registries` | kaynakları listele |
+| `POST /api/market/registries` `{name,url}` | ekle (+ ilk refresh, best-effort) |
+| `POST /api/market/registries/delete` `{url}` | kaldır (+ cache temizle) |
+| `POST /api/market/registries/refresh` | tüm enabled kaynakları yeniden çek |
+| `GET /api/market` | yerel+uzak katalog; her pack `installedVersion` ile dekore |
+| `POST /api/market/{id}/install` | yerel/uzak fark etmez; başarıda ledger'a `version` yazılır |
+
+### 7.4 UI (`MarketPanel.tsx` + `RegistryManager.tsx`)
+
+- Header'da **"Kaynaklar"** butonu → `RegistryManager` modal (ekle/sil/yenile,
+  `market-registries-modal`). **"Yenile"** butonu artık önce uzak index'leri çeker.
+- Pack kartında **kaynak rozeti** (Yerel / registry adı) + **"Güncelle (vX→vY)"** rozeti
+  (catalog version > installedVersion).
+- Detay popup'ında install butonu güncelleme varsa **"Güncelle"** (overwrite=true).
+
+### 7.5 Doğrulama (uçtan uca, 2026-06-25)
+
+Yerel HTTP sunucusunda `registry.json` + pack yayınlandı → ekle → uzak pack `source=remote`
+ile listede → kur (payload indirildi, skill oluştu) → ledger `installedVersion=2.0.0` →
+registry sürümü 3.0.0'a çıkarıldı + refresh → "güncelleme var" = true. ✅
+
+### 7.6 Sonraki adımlar
+
+- İmza (ed25519) / publish-to-remote (Faz 5).
+- `minAppVersion` zorlaması (şimdilik yalnız taşınıyor).
+- Bağımlılıklar (agent paketi referans skill paketlerini önersin).
+- Çakışma politikası (slug çakışmasında yeniden adlandırma vs üzerine yazma).

@@ -169,6 +169,13 @@ type Settings struct {
 	AutonomousConfine    bool `json:"autonomousConfine"`    // confine fs/shell to the working dir on autonomous turns (default true)
 	GitWorktreeIsolation bool `json:"gitWorktreeIsolation"` // give autonomous sessions a per-session git worktree (default false)
 
+	// Workspace backups — periodic, retention-bounded zip snapshots of every
+	// workspace's data directory. Off by default.
+	BackupEnabled       bool   `json:"backupEnabled"`
+	BackupIntervalHours int    `json:"backupIntervalHours"` // hours between automatic runs (min 1)
+	BackupRetain        int    `json:"backupRetain"`        // newest archives kept per workspace (min 1)
+	BackupDir           string `json:"backupDir"`           // backups root; "" → <dataDir>/backups
+
 	// Diagnostics (informational; applied on restart).
 	LogLevel string `json:"logLevel"` // info | debug | warn | error
 }
@@ -249,6 +256,12 @@ func Default() Settings {
 		// isolation is opt-in (needs git + has setup cost).
 		AutonomousConfine:    true,
 		GitWorktreeIsolation: false,
+
+		// Workspace backups off by default; daily cadence, keep a week of snapshots.
+		BackupEnabled:       false,
+		BackupIntervalHours: 24,
+		BackupRetain:        7,
+		BackupDir:           "",
 
 		LogLevel: "info",
 	}
@@ -339,6 +352,11 @@ type DTO struct {
 	AutonomousConfine    bool `json:"autonomousConfine"`
 	GitWorktreeIsolation bool `json:"gitWorktreeIsolation"`
 
+	BackupEnabled       bool   `json:"backupEnabled"`
+	BackupIntervalHours int    `json:"backupIntervalHours"`
+	BackupRetain        int    `json:"backupRetain"`
+	BackupDir           string `json:"backupDir"`
+
 	LogLevel string `json:"logLevel"`
 }
 
@@ -425,6 +443,11 @@ func (s Settings) ToDTO() DTO {
 
 		AutonomousConfine:    s.AutonomousConfine,
 		GitWorktreeIsolation: s.GitWorktreeIsolation,
+
+		BackupEnabled:       s.BackupEnabled,
+		BackupIntervalHours: s.BackupIntervalHours,
+		BackupRetain:        s.BackupRetain,
+		BackupDir:           s.BackupDir,
 
 		LogLevel: s.LogLevel,
 	}
@@ -513,6 +536,11 @@ type Patch struct {
 
 	AutonomousConfine    *bool `json:"autonomousConfine"`
 	GitWorktreeIsolation *bool `json:"gitWorktreeIsolation"`
+
+	BackupEnabled       *bool   `json:"backupEnabled"`
+	BackupIntervalHours *int    `json:"backupIntervalHours"`
+	BackupRetain        *int    `json:"backupRetain"`
+	BackupDir           *string `json:"backupDir"`
 
 	LogLevel *string `json:"logLevel"`
 }

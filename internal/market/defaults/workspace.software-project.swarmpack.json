@@ -1,0 +1,27 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "workspace.software-project",
+  "kind": "workspace",
+  "name": "Software Project",
+  "description": "A workspace template for software work: coding-focused instructions and a Scrum kanban layout. Creates a new workspace.",
+  "version": "1.0.0",
+  "author": "SwarmGo",
+  "icon": "💻",
+  "color": "#4f8cff",
+  "tags": ["workspace", "template", "coding"],
+  "payload": {
+    "workspace": {
+      "name": "Software Project",
+      "icon": "💻",
+      "color": "#4f8cff",
+      "instructions": "This workspace is for software engineering work. Prefer small, focused changes. Write code and comments in English. Explain non-obvious decisions. Run and verify before claiming success.",
+      "columns": [
+        { "key": "backlog", "label": "Backlog", "color": "#64748b" },
+        { "key": "todo", "label": "To Do", "color": "#4f8cff" },
+        { "key": "in_progress", "label": "In Progress", "color": "#f59e0b" },
+        { "key": "review", "label": "Review", "color": "#a855f7" },
+        { "key": "done", "label": "Done", "color": "#10b981" }
+      ]
+    }
+  }
+}

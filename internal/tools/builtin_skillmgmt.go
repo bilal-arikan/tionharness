@@ -13,11 +13,11 @@ import (
 // tools need. Implemented by an adapter over *skills.Store in the agent package
 // (kept as an interface here so tools need not import the skills package).
 type SkillWriter interface {
-	CreateSkill(slug, name, description, whenToUse, body string, shared bool) error
+	CreateSkill(slug, name, description, whenToUse, group, body string, shared bool) error
 	// UpdateSkill edits an existing workspace skill in place. Each field is a
 	// pointer: nil leaves the current value untouched (partial update), so the
 	// caller can change just the body without resupplying the rest.
-	UpdateSkill(slug string, name, description, whenToUse, body *string, shared *bool) error
+	UpdateSkill(slug string, name, description, whenToUse, group, body *string, shared *bool) error
 	DeleteSkill(slug string) error
 	// ImportSkill imports a Claude Code skill from source ("local"|"github") at
 	// location (a directory path or a github.com URL) into the workspace tier,
@@ -50,7 +50,7 @@ func NewCreateSkillTool(w SkillWriter) CreateSkillTool { return CreateSkillTool{
 func (CreateSkillTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_skill",
-		Description: "Create a reusable workspace skill: a named set of markdown instructions that agents can later load with use_skill. Provide a slug (kebab-case id), a name, a description, an optional whenToUse hint (when an agent should reach for it), and the body (the full markdown instructions). The skill is available from the next turn. Returns the slug.",
+		Description: "Create a reusable workspace skill: a named set of markdown instructions that agents can later load with use_skill. Provide a slug (kebab-case id), a name, a description, an optional whenToUse hint (when an agent should reach for it), an optional group (organisation label; skills sharing a group are folded together in the Skills UI), and the body (the full markdown instructions). The skill is available from the next turn. Returns the slug.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -58,6 +58,7 @@ func (CreateSkillTool) Def() providers.ToolDef {
 				"name":{"type":"string","description":"Human-readable name"},
 				"description":{"type":"string","description":"One-line summary shown in the catalog"},
 				"whenToUse":{"type":"string","description":"Optional: when an agent should use this skill"},
+				"group":{"type":"string","description":"Optional: organisation label; skills with the same group are folded together in the UI"},
 				"body":{"type":"string","description":"The full markdown instructions"},
 				"shared":{"type":"boolean","description":"Share across all agents in the workspace (default true)"}
 			},
@@ -76,6 +77,7 @@ func (t CreateSkillTool) Call(_ context.Context, input json.RawMessage) (string,
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		WhenToUse   string `json:"whenToUse"`
+		Group       string `json:"group"`
 		Body        string `json:"body"`
 		Shared      *bool  `json:"shared"`
 	}
@@ -91,7 +93,7 @@ func (t CreateSkillTool) Call(_ context.Context, input json.RawMessage) (string,
 	if in.Shared != nil {
 		shared = *in.Shared
 	}
-	if err := t.w.CreateSkill(in.Slug, in.Name, in.Description, in.WhenToUse, in.Body, shared); err != nil {
+	if err := t.w.CreateSkill(in.Slug, in.Name, in.Description, in.WhenToUse, in.Group, in.Body, shared); err != nil {
 		return "", fmt.Errorf("create skill: %w", err)
 	}
 	b, _ := json.Marshal(map[string]string{"slug": in.Slug, "action": "created"})
@@ -109,7 +111,7 @@ func NewUpdateSkillTool(w SkillWriter) UpdateSkillTool { return UpdateSkillTool{
 func (UpdateSkillTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_skill",
-		Description: "Edit an existing workspace skill in place by slug. Pass only the fields to change — name, description, whenToUse, body (full markdown, replaces the old one), or shared. Omitted fields keep their current value. The slug (folder) is immutable; only workspace-tier skills can be edited. Prefer this over delete_skill + create_skill. Takes effect from the next turn. Returns the slug.",
+		Description: "Edit an existing workspace skill in place by slug. Pass only the fields to change — name, description, whenToUse, group (organisation label), body (full markdown, replaces the old one), or shared. Omitted fields keep their current value. The slug (folder) is immutable; only workspace-tier skills can be edited. Prefer this over delete_skill + create_skill. Takes effect from the next turn. Returns the slug.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -117,6 +119,7 @@ func (UpdateSkillTool) Def() providers.ToolDef {
 				"name":{"type":"string","description":"New human-readable name"},
 				"description":{"type":"string","description":"New one-line summary"},
 				"whenToUse":{"type":"string","description":"New when-to-use hint"},
+				"group":{"type":"string","description":"New organisation label (empty string clears it)"},
 				"body":{"type":"string","description":"New full markdown instructions (replaces the old body)"},
 				"shared":{"type":"boolean","description":"Share across all agents in the workspace"}
 			},
@@ -141,6 +144,7 @@ func (t UpdateSkillTool) Call(_ context.Context, input json.RawMessage) (string,
 		Name        *string `json:"name"`
 		Description *string `json:"description"`
 		WhenToUse   *string `json:"whenToUse"`
+		Group       *string `json:"group"`
 		Body        *string `json:"body"`
 		Shared      *bool   `json:"shared"`
 	}
@@ -151,10 +155,10 @@ func (t UpdateSkillTool) Call(_ context.Context, input json.RawMessage) (string,
 	if in.Slug == "" {
 		return "", fmt.Errorf("slug is required")
 	}
-	if in.Name == nil && in.Description == nil && in.WhenToUse == nil && in.Body == nil && in.Shared == nil {
-		return "", fmt.Errorf("nothing to update — provide at least one of: name, description, whenToUse, body, shared")
+	if in.Name == nil && in.Description == nil && in.WhenToUse == nil && in.Group == nil && in.Body == nil && in.Shared == nil {
+		return "", fmt.Errorf("nothing to update — provide at least one of: name, description, whenToUse, group, body, shared")
 	}
-	if err := t.w.UpdateSkill(in.Slug, in.Name, in.Description, in.WhenToUse, in.Body, in.Shared); err != nil {
+	if err := t.w.UpdateSkill(in.Slug, in.Name, in.Description, in.WhenToUse, in.Group, in.Body, in.Shared); err != nil {
 		return "", fmt.Errorf("update skill: %w", err)
 	}
 	b, _ := json.Marshal(map[string]string{"slug": in.Slug, "action": "updated"})

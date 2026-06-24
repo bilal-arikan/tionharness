@@ -11,6 +11,10 @@ export interface Skill {
   whenToUse?: string
   icon?: string
   color?: string
+  // Free-form organisation label. Skills sharing a group are listed under a
+  // collapsible header in the Skills UI. Purely cosmetic — no effect on
+  // resolution or loading. Empty/undefined means ungrouped.
+  group?: string
   alwaysAllow?: string[]
   requiredSources?: string[]
   // Slugs of more detailed skills this one builds on (progressive disclosure).
@@ -41,6 +45,7 @@ export interface SkillInput {
   whenToUse: string
   icon: string
   color: string
+  group: string
   shared: boolean
   body: string
 }

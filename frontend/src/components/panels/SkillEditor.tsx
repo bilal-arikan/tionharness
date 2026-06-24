@@ -8,6 +8,8 @@ interface Props {
   mode: 'create' | 'edit'
   /** Existing skill when editing; undefined when creating. */
   initial?: SkillDetail
+  /** Known group names (from the catalog) offered as autocomplete suggestions. */
+  groups?: string[]
   onClose: () => void
   /** Called with the saved skill so the list + selection can refresh. */
   onSaved: (saved: SkillDetail) => void
@@ -16,12 +18,13 @@ interface Props {
 // SkillEditor is the create/edit dialog for a skill: visual identity (emoji),
 // name + slug, description, when-to-use, on-demand access, and the markdown
 // body. It posts to the skill API and hands the saved skill back to the panel.
-export function SkillEditor({ mode, initial, onClose, onSaved }: Props) {
+export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Props) {
   const [name, setName] = useState(initial?.name ?? '')
   const [slug, setSlug] = useState('')
   const [icon, setIcon] = useState(initial?.icon ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [whenToUse, setWhenToUse] = useState(initial?.whenToUse ?? '')
+  const [group, setGroup] = useState(initial?.group ?? '')
   const [shared, setShared] = useState(initial?.shared ?? false)
   const [body, setBody] = useState(initial?.body ?? '')
   // Color has no picker here yet; preserve the existing value on edit so it is
@@ -43,6 +46,7 @@ export function SkillEditor({ mode, initial, onClose, onSaved }: Props) {
       whenToUse,
       icon,
       color,
+      group: group.trim(),
       shared,
       body,
     }
@@ -143,6 +147,21 @@ export function SkillEditor({ mode, initial, onClose, onSaved }: Props) {
               placeholder="ör. yeni bir görev planlanırken"
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
             />
+          </Field>
+
+          <Field label="Grup (opsiyonel — beceriler bu başlık altında katlanır)">
+            <input
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              list="skill-group-suggestions"
+              placeholder="ör. Geliştirme, Araştırma, Otomasyon"
+              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
+            />
+            <datalist id="skill-group-suggestions">
+              {groups.map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
           </Field>
 
           <label className="flex items-center gap-2 text-sm text-[var(--color-text)]">

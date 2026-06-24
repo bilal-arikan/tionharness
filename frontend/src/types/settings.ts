@@ -92,6 +92,12 @@ export interface AppSettings {
   autonomousConfine: boolean
   gitWorktreeIsolation: boolean
 
+  // Workspace backups — periodic zip snapshots of each workspace's data dir.
+  backupEnabled: boolean
+  backupIntervalHours: number
+  backupRetain: number
+  backupDir: string // "" → <dataDir>/backups
+
   logLevel: string
 }
 
@@ -103,6 +109,48 @@ export type SettingsPatch = Partial<
     openrouterKey: string
   }
 >
+
+// Live backup subsystem status (GET /api/backups). Mirrors backup.Status.
+export interface BackupStatus {
+  enabled: boolean
+  intervalHours: number
+  retain: number
+  dir: string
+  running: boolean
+  lastRun: number // unix seconds; 0 = never
+  lastError?: string
+}
+
+// One archive written by a backup pass.
+export interface BackupArchive {
+  workspaceId: string
+  workspaceName: string
+  path: string
+  bytes: number
+}
+
+// Result of an on-demand backup pass (POST /api/backups/run). Mirrors backup.Result.
+export interface BackupResult {
+  started: string
+  finished: string
+  dir: string
+  archives: BackupArchive[]
+  failures?: Record<string, string>
+}
+
+// One archive file on disk (GET /api/backups/archives). Mirrors backup.ArchiveFile.
+export interface BackupArchiveFile {
+  name: string
+  bytes: number
+  modified: number // unix seconds
+}
+
+// A workspace's archives, newest first. Mirrors backup.WorkspaceArchives.
+export interface WorkspaceArchives {
+  workspaceId: string
+  workspaceName: string
+  archives: BackupArchiveFile[]
+}
 
 export interface ProviderTestResult {
   ok: boolean

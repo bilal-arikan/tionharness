@@ -106,8 +106,9 @@ you're running in, never the last remaining one. A new workspace starts empty
 **Skills** — `create_skill`, `update_skill`, `delete_skill`, `import_skill`. Author a reusable
 workspace skill (markdown instructions other agents load with `use_skill`);
 created skills appear in the catalog next turn. `update_skill` edits one in place
-by slug — pass only the fields to change (name/description/whenToUse/body/shared),
-omitted fields keep their current value; prefer it over delete + recreate. Only
+by slug — pass only the fields to change (name/description/whenToUse/group/body/shared),
+omitted fields keep their current value; prefer it over delete + recreate. `group`
+is an organisation label — skills sharing one are folded together in the Skills UI. Only
 workspace-tier skills can be edited or deleted (global/bundled are protected).
 Deleting a skill also strips its slug from every agent that had it selected, so no
 agent keeps a dangling reference. (`use_skill` itself is always available.)

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/backup"
 	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/events"
@@ -44,6 +45,9 @@ type Server struct {
 	selfURL string
 	// interactionMCP serves the Interaction MCP endpoint (/mcp/interaction).
 	interactionMCP http.Handler
+	// backups runs the periodic workspace-backup loop; reconfigured on every
+	// settings change. nil until wired by SetBackupManager (after construction).
+	backups *backup.Manager
 }
 
 // NewServer constructs an API server and pushes the persisted settings into the
@@ -122,6 +126,22 @@ func (s *Server) applySettings() {
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.GitWorktreeIsolation)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
 	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold, cur.CompactModel)
+	if s.backups != nil {
+		s.backups.Configure(backup.Config{
+			Enabled:       cur.BackupEnabled,
+			IntervalHours: cur.BackupIntervalHours,
+			Retain:        cur.BackupRetain,
+			Dir:           cur.BackupDir,
+		})
+	}
+}
+
+// SetBackupManager wires the process-wide backup manager and immediately pushes
+// the current settings into it. Called once at startup, after NewServer (so the
+// manager can be constructed with the workspace lister the server holds).
+func (s *Server) SetBackupManager(b *backup.Manager) {
+	s.backups = b
+	s.applySettings()
 }
 
 // Routes registers all HTTP routes and returns the handler. Registration is
@@ -285,6 +305,7 @@ func (s *Server) registerUsageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents/{id}/usage", s.handleAgentUsage)
 	mux.HandleFunc("POST /api/agents/{id}/budget", s.handleSetBudget)
 	mux.HandleFunc("GET /api/sessions/{id}/context", s.handleSessionContext)
+	mux.HandleFunc("GET /api/sessions/{id}/usage-detail", s.handleSessionUsageDetail)
 	mux.HandleFunc("GET /api/usage", s.handleWorkspaceUsage)
 }
 
@@ -374,6 +395,13 @@ func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/providers", s.handleListProviders)
 	mux.HandleFunc("PUT /api/providers", s.handleUpsertProvider)
 	mux.HandleFunc("DELETE /api/providers/{id}", s.handleDeleteProvider)
+	// Workspace backups — status + on-demand run (the schedule itself is driven
+	// by the settings document, not these endpoints).
+	mux.HandleFunc("GET /api/backups", s.handleBackupStatus)
+	mux.HandleFunc("POST /api/backups/run", s.handleBackupRun)
+	mux.HandleFunc("GET /api/backups/archives", s.handleListArchives)
+	mux.HandleFunc("POST /api/backups/restore", s.handleRestoreBackup)
+	mux.HandleFunc("DELETE /api/backups/archives", s.handleDeleteArchive)
 }
 
 // registerMemoryRoutes registers per-agent knowledge (documents, journal,

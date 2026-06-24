@@ -1,11 +1,10 @@
-import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useState } from 'react'
-import { Download, Eye, EyeOff, FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
 import { CopyPathButton } from '../CopyPathButton'
 import { SkillEditor } from './SkillEditor'
-import { SkillImportDialog } from './SkillImportDialog'
 
 interface Props {
   onError: (msg: string) => void
@@ -16,6 +15,27 @@ interface Props {
 const SOURCE_LABEL: Record<SkillSource, string> = {
   global: 'Global',
   workspace: 'Workspace',
+}
+
+// Label for the bucket holding skills with no `group` set; always rendered last.
+const UNGROUPED = 'Grupsuz'
+
+// groupSkills buckets a skill list by its `group` field, preserving the incoming
+// (name-sorted) order within each bucket. Returns ordered [groupName, skills]
+// pairs: named groups alphabetically first, the ungrouped bucket last.
+function groupSkills(list: Skill[]): Array<[string, Skill[]]> {
+  const buckets = new Map<string, Skill[]>()
+  for (const sk of list) {
+    const key = sk.group?.trim() || UNGROUPED
+    const arr = buckets.get(key)
+    if (arr) arr.push(sk)
+    else buckets.set(key, [sk])
+  }
+  return [...buckets.entries()].sort(([a], [b]) => {
+    if (a === UNGROUPED) return 1
+    if (b === UNGROUPED) return -1
+    return a.localeCompare(b, 'tr')
+  })
 }
 
 function SourceBadge({ source }: { source: SkillSource }) {
@@ -69,8 +89,6 @@ export function SkillsPanel({ onError }: Props) {
   const [deleteBusy, setDeleteBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
-  // Import dialog open state (SK-IMP).
-  const [importing, setImporting] = useState(false)
   // Resizable left list width (persisted, clamped). 288px == the old w-72.
   const [listWidth, setListWidth] = useState(() => {
     const v = Number(localStorage.getItem('swarmgo.skillsListWidth'))
@@ -79,6 +97,41 @@ export function SkillsPanel({ onError }: Props) {
   useEffect(() => {
     localStorage.setItem('swarmgo.skillsListWidth', String(listWidth))
   }, [listWidth])
+
+  // Collapsed (folded-in) group names, persisted so the layout survives reloads.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('swarmgo.skillsCollapsedGroups')
+      return new Set(raw ? (JSON.parse(raw) as string[]) : [])
+    } catch {
+      return new Set()
+    }
+  })
+  useEffect(() => {
+    localStorage.setItem('swarmgo.skillsCollapsedGroups', JSON.stringify([...collapsed]))
+  }, [collapsed])
+  const toggleGroup = useCallback((name: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }, [])
+
+  // Skills bucketed by group (named groups first, ungrouped last). Recomputed
+  // only when the catalog changes.
+  const grouped = useMemo(() => groupSkills(list), [list])
+  // Distinct existing group names, offered as editor autocomplete suggestions.
+  const groupNames = useMemo(
+    () => grouped.map(([name]) => name).filter((n) => n !== UNGROUPED),
+    [grouped],
+  )
+  // All groups currently folded? Drives the collapse/expand-all toggle.
+  const allCollapsed = grouped.length > 0 && grouped.every(([name]) => collapsed.has(name))
+  const toggleAll = useCallback(() => {
+    setCollapsed(() => (allCollapsed ? new Set() : new Set(grouped.map(([name]) => name))))
+  }, [allCollapsed, grouped])
 
   // Drag the divider to resize the list panel; tracks the pointer on document so
   // the drag continues even when the cursor leaves the thin handle.
@@ -217,6 +270,16 @@ export function SkillsPanel({ onError }: Props) {
             Skills · {list.length}
           </span>
           <div className="flex items-center gap-1.5">
+            {grouped.length > 1 && (
+              <button
+                data-testid="skills-toggle-all"
+                onClick={toggleAll}
+                title={allCollapsed ? 'Tüm grupları aç' : 'Tüm grupları katla'}
+                className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+              >
+                {allCollapsed ? <ChevronsUpDown size={13} /> : <ChevronsDownUp size={13} />}
+              </button>
+            )}
             <button
               data-testid="skills-create"
               onClick={() => setEditor({ mode: 'create' })}
@@ -224,14 +287,6 @@ export function SkillsPanel({ onError }: Props) {
               className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
               <Plus size={13} /> Yeni
-            </button>
-            <button
-              data-testid="skills-import"
-              onClick={() => setImporting(true)}
-              title="Claude Code skill içe aktar (yerel klasör / GitHub)"
-              className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-            >
-              <Download size={13} /> İçe Aktar
             </button>
             <button
               data-testid="skills-rescan"
@@ -254,33 +309,58 @@ export function SkillsPanel({ onError }: Props) {
               </p>
             </div>
           )}
-          {list.map((sk) => {
-            const isActive = sk.slug === activeSlug
+          {grouped.map(([groupName, items]) => {
+            const isCollapsed = collapsed.has(groupName)
             return (
-              <button
-                key={sk.slug}
-                data-testid="skills-list-item"
-                data-skill-slug={sk.slug}
-                onClick={() => setActiveSlug(sk.slug)}
-                className={`group mb-1 flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
-                  isActive
-                    ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                    : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
-                }`}
-              >
-                <span className="mt-0.5 shrink-0 text-base leading-none">{sk.icon || '✨'}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate font-medium">{sk.name}</span>
-                    {!sk.shared && <RestrictedBadge />}
-                    {sk.autoSummary === false && <SummaryOffBadge />}
-                    <SourceBadge source={sk.source} />
+              <div key={groupName} className="mb-1">
+                <button
+                  data-testid="skills-group-header"
+                  data-group-name={groupName}
+                  data-collapsed={isCollapsed}
+                  onClick={() => toggleGroup(groupName)}
+                  title={isCollapsed ? 'Grubu aç' : 'Grubu katla'}
+                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                >
+                  {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                  <span className="min-w-0 flex-1 truncate">{groupName}</span>
+                  <span className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--color-text-dim)]">
+                    {items.length}
                   </span>
-                  <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
-                    {sk.description || sk.slug}
-                  </span>
-                </span>
-              </button>
+                </button>
+                {!isCollapsed && (
+                  <div className="mt-1 space-y-1 pl-1.5">
+                    {items.map((sk) => {
+                      const isActive = sk.slug === activeSlug
+                      return (
+                        <button
+                          key={sk.slug}
+                          data-testid="skills-list-item"
+                          data-skill-slug={sk.slug}
+                          onClick={() => setActiveSlug(sk.slug)}
+                          className={`group flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
+                            isActive
+                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                              : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
+                          }`}
+                        >
+                          <span className="mt-0.5 shrink-0 text-base leading-none">{sk.icon || '✨'}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5">
+                              <span className="min-w-0 flex-1 truncate font-medium">{sk.name}</span>
+                              {!sk.shared && <RestrictedBadge />}
+                              {sk.autoSummary === false && <SummaryOffBadge />}
+                              <SourceBadge source={sk.source} />
+                            </span>
+                            <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
+                              {sk.description || sk.slug}
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
@@ -308,6 +388,11 @@ export function SkillsPanel({ onError }: Props) {
                 <div className="flex items-center gap-2">
                   <span className="text-lg leading-none">{active.icon || '✨'}</span>
                   <h2 className="truncate text-base font-semibold">{active.name}</h2>
+                  {active.group && (
+                    <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
+                      {active.group}
+                    </span>
+                  )}
                   {!active.shared && <RestrictedBadge />}
                   {active.autoSummary === false && <SummaryOffBadge />}
                   <SourceBadge source={active.source} />
@@ -432,18 +517,9 @@ export function SkillsPanel({ onError }: Props) {
         <SkillEditor
           mode={editor.mode}
           initial={editor.initial}
+          groups={groupNames}
           onClose={() => setEditor(null)}
           onSaved={onEditorSaved}
-        />
-      )}
-
-      {importing && (
-        <SkillImportDialog
-          onClose={() => setImporting(false)}
-          onImported={(slug) => {
-            reload()
-            setActiveSlug(slug)
-          }}
         />
       )}
     </div>

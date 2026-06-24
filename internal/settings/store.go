@@ -332,6 +332,13 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyBool(&next.AutonomousConfine, p.AutonomousConfine)
 	applyBool(&next.GitWorktreeIsolation, p.GitWorktreeIsolation)
 
+	applyBool(&next.BackupEnabled, p.BackupEnabled)
+	applyInt(&next.BackupIntervalHours, p.BackupIntervalHours)
+	applyInt(&next.BackupRetain, p.BackupRetain)
+	if p.BackupDir != nil {
+		next.BackupDir = strings.TrimSpace(*p.BackupDir)
+	}
+
 	applyString(&next.LogLevel, p.LogLevel)
 
 	applyString(&next.MinimaxBaseURL, p.MinimaxBaseURL)
@@ -547,6 +554,19 @@ func normalize(v Settings) Settings {
 	}
 	if v.SpawnMaxPerTurn > 64 {
 		v.SpawnMaxPerTurn = 64
+	}
+	// Workspace backups: interval ≥ 1h, retention ≥ 1 archive; clamp ceilings.
+	if v.BackupIntervalHours < 1 {
+		v.BackupIntervalHours = 1
+	}
+	if v.BackupIntervalHours > 8760 { // one year
+		v.BackupIntervalHours = 8760
+	}
+	if v.BackupRetain < 1 {
+		v.BackupRetain = 1
+	}
+	if v.BackupRetain > 1000 {
+		v.BackupRetain = 1000
 	}
 	switch v.LogLevel {
 	case "debug", "warn", "error", "info":

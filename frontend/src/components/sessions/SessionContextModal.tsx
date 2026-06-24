@@ -109,6 +109,17 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
           </div>
         )}
 
+        {/* Cache legend */}
+        {data && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[var(--color-border)] px-5 py-1.5 text-[11px]">
+            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 font-medium text-emerald-500">
+              <span className="h-2 w-2 rounded-sm bg-emerald-500/70" />
+              cache'li (sıcak, yeniden kullanılır)
+            </span>
+            <span className="text-[var(--color-text-dim)]">{data.cache.note}</span>
+          </div>
+        )}
+
         {/* Sample "next" message */}
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-2">
           <input
@@ -129,10 +140,10 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
           {!err && !data && <p className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>}
           {data && (
             <>
-              <Section title="Sistem promptu">
+              <Section title="Sistem promptu" cached={data.cache.systemCached}>
                 <Markdown>{data.system || '(boş)'}</Markdown>
               </Section>
-              <Section title="Dinamik bağlam">
+              <Section title="Dinamik bağlam" cached={data.cache.dynamicCached}>
                 {data.dynamic ? <Markdown>{data.dynamic}</Markdown> : <Dim>(boş)</Dim>}
               </Section>
 
@@ -143,39 +154,62 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                 <Dim>Henüz mesaj yok.</Dim>
               ) : (
                 <div className="space-y-2">
-                  {data.messages.map((m, i) => (
-                    <div
-                      key={i}
-                      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-                    >
-                      <div className="mb-1 flex items-center gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
-                          {m.role}
-                        </span>
-                        {m.author && (
-                          <span
-                            title={
-                              m.role === 'user'
-                                ? `Hedef ajan: ${m.author}`
-                                : `Yazan ajan: ${m.author}`
-                            }
-                            className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-dim)]"
-                          >
-                            {m.role === 'user' ? `→ ${m.author}` : m.author}
-                            {m.self && m.role !== 'user' && ' (siz)'}
-                          </span>
+                  {data.messages.map((m, i) => {
+                    const cached = i < data.cache.cachedMsgCount
+                    // Draw the cache boundary right after the last cached message,
+                    // but only when there is actually a warm prefix to divide.
+                    const boundary =
+                      data.cache.cachedMsgCount > 0 && i === data.cache.cachedMsgCount
+                    return (
+                      <div key={i}>
+                        {boundary && (
+                          <div className="my-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-emerald-500">
+                            <span className="h-px flex-1 bg-emerald-500/30" />
+                            cache sınırı — buraya kadar cache'li (sıcak)
+                            <span className="h-px flex-1 bg-emerald-500/30" />
+                          </div>
                         )}
+                        <div
+                          className={`rounded-lg border bg-[var(--color-bg)] px-3 py-2 ${
+                            cached ? 'border-emerald-500/30' : 'border-[var(--color-border)]'
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center gap-1.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
+                              {m.role}
+                            </span>
+                            {m.author && (
+                              <span
+                                title={
+                                  m.role === 'user'
+                                    ? `Hedef ajan: ${m.author}`
+                                    : `Yazan ajan: ${m.author}`
+                                }
+                                className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-dim)]"
+                              >
+                                {m.role === 'user' ? `→ ${m.author}` : m.author}
+                                {m.self && m.role !== 'user' && ' (siz)'}
+                              </span>
+                            )}
+                            <CacheTag cached={cached} />
+                          </div>
+                          <pre
+                            className={`overflow-x-auto whitespace-pre-wrap break-words text-xs ${
+                              cached ? CACHED : 'text-[var(--color-text)]'
+                            }`}
+                          >
+                            {m.text || '(boş)'}
+                          </pre>
+                        </div>
                       </div>
-                      <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs text-[var(--color-text)]">
-                        {m.text || '(boş)'}
-                      </pre>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
 
-              <h3 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+              <h3 className="mb-1.5 mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
                 Araçlar — her tur şema gönderilen · {data.tools.length}
+                <CacheTag cached={data.cache.toolsCached} />
               </h3>
               {data.tools.length === 0 ? (
                 <Dim>Bu ajana şema gönderilen araç yok.</Dim>
@@ -185,7 +219,11 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                     <li
                       key={t.name}
                       title={t.description}
-                      className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-dim)]"
+                      className={`rounded border px-1.5 py-0.5 text-[11px] ${
+                        data.cache.toolsCached
+                          ? `border-emerald-500/30 ${CACHED}`
+                          : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
+                      }`}
                     >
                       {t.name}
                     </li>
@@ -200,16 +238,51 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// CACHED is the soft-green tint applied to request segments served from the warm
+// prompt cache (reused across turns). Markdown plain text inherits this via
+// currentColor; code/links keep their own colour. Uncached segments stay the
+// default text colour.
+const CACHED = 'text-emerald-200/80'
+
+function Section({
+  title,
+  cached,
+  children,
+}: {
+  title: string
+  cached?: boolean
+  children: React.ReactNode
+}) {
   return (
     <div className="mb-4">
-      <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+      <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         {title}
+        <CacheTag cached={!!cached} />
       </h3>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
+      <div
+        className={`rounded-lg border bg-[var(--color-bg)] px-3 py-1 ${
+          cached
+            ? `border-emerald-500/30 ${CACHED}`
+            : 'border-[var(--color-border)]'
+        }`}
+      >
         {children}
       </div>
     </div>
+  )
+}
+
+// CacheTag is the per-segment pill: green "cache'li" (served warm) or a neutral
+// "cache dışı" (sent fresh).
+function CacheTag({ cached }: { cached: boolean }) {
+  return cached ? (
+    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-medium normal-case text-emerald-500">
+      cache'li
+    </span>
+  ) : (
+    <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[9px] font-medium normal-case text-[var(--color-text-dim)]">
+      cache dışı
+    </span>
   )
 }
 

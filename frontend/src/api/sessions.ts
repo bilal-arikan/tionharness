@@ -10,6 +10,7 @@ import type {
   WorkdirInfo,
   BrowseResp,
   GitInfo,
+  SessionUsageDetail,
 } from '../types'
 import { req } from './client'
 
@@ -114,6 +115,12 @@ export const sessionApi = {
 
   sessionContext: (sessionId: string) =>
     req<SessionContext>(`/api/sessions/${sessionId}/context`),
+
+  // Per-session lifetime spend + savings (cost, per-origin/model breakdown,
+  // cache savings, tool-output compaction bytes). The session-scoped analog of
+  // agentUsage — this conversation's own cost, not the agent's whole-day total.
+  sessionUsageDetail: (sessionId: string) =>
+    req<SessionUsageDetail>(`/api/sessions/${sessionId}/usage-detail`),
 
   // Debug: preview the exact next-turn context (system + dynamic + transcript +
   // tools) the session's agent would be sent. Optional sample "next" user message.

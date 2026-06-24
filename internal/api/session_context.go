@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/conversation"
@@ -26,6 +27,86 @@ type sessionContextPreview struct {
 	Tools         []toolSummary    `json:"tools"`
 	ToolTokens    int              `json:"toolTokens"`
 	TotalTokens   int              `json:"totalTokens"`
+	Cache         cachePreview     `json:"cache"`
+}
+
+// cachePreview tells the UI which segments of the next request are served from a
+// warm prompt cache vs sent fresh, so it can dim/colour the uncached parts and
+// draw the cache boundary. The model is provider-specific: anthropic places a
+// cache_control breakpoint on the static System prefix (Tools + System cached,
+// Dynamic + messages fresh) only when ExtendedPromptCache is on; claude-cli has
+// no breakpoint of its own, but --resume (ClaudeResume, warm) keeps the system +
+// the first CachedMsgCount messages server-side, sending only the newest delta.
+type cachePreview struct {
+	Mode           string `json:"mode"` // "anthropic" | "claude-resume" | "none"
+	Note           string `json:"note"` // one-line human explanation
+	SystemCached   bool   `json:"systemCached"`
+	DynamicCached  bool   `json:"dynamicCached"`
+	ToolsCached    bool   `json:"toolsCached"`
+	CachedMsgCount int    `json:"cachedMsgCount"` // leading messages served warm
+}
+
+// computeCachePreview derives the per-segment cache map from the provider, the
+// relevant settings, and (for claude-cli resume) the session's recorded warm
+// boundary. msgCount is the number of transcript turns the preview will show.
+func (s *Server) computeCachePreview(provider string, session db.Session, msgCount int, hasSystem, hasDynamic, hasTools bool) cachePreview {
+	set := s.settings.Get()
+	switch provider {
+	case "anthropic":
+		if !set.ExtendedPromptCache {
+			return cachePreview{Mode: "none", Note: "Genişletilmiş prompt-cache kapalı → cache breakpoint yok; tüm istek her tur taze gönderilir."}
+		}
+		// Breakpoint sits on the static System prefix (and the tool defs that
+		// precede it). If there is no static System, it falls to Dynamic.
+		c := cachePreview{Mode: "anthropic", ToolsCached: hasTools}
+		if hasSystem {
+			c.SystemCached = true
+			c.Note = "Anthropic genişletilmiş cache: Araçlar + Sistem promptu cache'li (1s TTL); Dinamik bağlam + mesajlar cache dışı, her tur yeniden gönderilir."
+		} else {
+			c.DynamicCached = hasDynamic
+			c.Note = "Anthropic genişletilmiş cache: statik Sistem promptu yok → breakpoint Dinamik bloğa düştü; mesajlar cache dışı."
+		}
+		return c
+	case "openrouter":
+		// SwarmGo sends an Anthropic-style cache_control breakpoint on the static
+		// System prefix for OpenRouter. It is honoured by Anthropic/Gemini backends;
+		// OpenAI/DeepSeek models cache implicitly anyway. Either way the Tools +
+		// System prefix is the warm part; Dynamic + messages go fresh.
+		c := cachePreview{Mode: "openrouter", ToolsCached: hasTools}
+		// Two breakpoints: one on the static System prefix, one on the tail of the
+		// transcript → in steady state the whole history except the newest message
+		// is a cache hit (the first turn pays a cache write).
+		if msgCount > 1 {
+			c.CachedMsgCount = msgCount - 1
+		}
+		if hasSystem {
+			c.SystemCached = true
+			c.Note = "OpenRouter prompt-cache: Araçlar + Sistem + mesaj geçmişi cache breakpoint'li (Anthropic/Gemini'de cache'li, OpenAI/DeepSeek'te otomatik); yalnız en yeni mesaj taze (ilk turda cache yazılır)."
+		} else {
+			c.DynamicCached = hasDynamic
+			c.Note = "OpenRouter prompt-cache: statik Sistem yok → breakpoint Dinamik + mesaj geçmişine düştü; yalnız en yeni mesaj taze."
+		}
+		return c
+	case "claude-cli":
+		warm := set.ClaudeResume && session.CLISessionID != "" && session.CLISentMsgCount > 0
+		if !warm {
+			return cachePreview{Mode: "none", Note: "claude-cli ilk/soğuk tur: kendi prompt-cache breakpoint'i yok → bu tur cache dışı (resume sıcak cache'i sonraki turda devreye girer)."}
+		}
+		cached := session.CLISentMsgCount
+		if cached > msgCount {
+			cached = msgCount
+		}
+		return cachePreview{
+			Mode:           "claude-resume",
+			SystemCached:   true,
+			ToolsCached:    hasTools,
+			DynamicCached:  false, // volatile (bellek+özet) — her tur yenilenir
+			CachedMsgCount: cached,
+			Note:           "claude-cli --resume (sıcak): Sistem + ilk " + strconv.Itoa(cached) + " mesaj CLI'da server-side sıcak; yalnız bunun sonrasındaki delta taze gönderilir.",
+		}
+	default:
+		return cachePreview{Mode: "none", Note: "Bu sağlayıcı için SwarmGo cache breakpoint göndermez → istek her tur taze."}
+	}
 }
 
 // previewMessage is one transcript turn as the model would receive it (role + the
@@ -145,6 +226,13 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	dynTok := conversation.EstimateText(req.SystemDynamic)
 	toolTok := estimateToolCatalog(defs)
 
+	cache := s.computeCachePreview(
+		agent.Provider, session, len(msgs),
+		strings.TrimSpace(req.System) != "",
+		strings.TrimSpace(req.SystemDynamic) != "",
+		len(defs) > 0,
+	)
+
 	writeJSON(w, http.StatusOK, sessionContextPreview{
 		AgentName:     agent.Name,
 		MultiAgent:    multiAgent,
@@ -157,6 +245,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		Tools:         toolList,
 		ToolTokens:    toolTok,
 		TotalTokens:   sysTok + dynTok + msgTok + toolTok,
+		Cache:         cache,
 	})
 }
 

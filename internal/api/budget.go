@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bilal-arikan/swarmgo/internal/billing"
 	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
 // kindStat is one origin's slice of consumption in a budget response.
@@ -35,6 +35,22 @@ type agentBudgetRow struct {
 	Estimated       bool                `json:"estimated"` // true when cost is an equivalent-API estimate (subscription provider)
 	DailyCallLimit  int                 `json:"dailyCallLimit"`
 	DailyTokenLimit int                 `json:"dailyTokenLimit"`
+	// Tool-output compaction savings (bytes) for this agent today — System A
+	// (deterministic) and System B (LLM summary), standalone meters with no cost.
+	CompactSavedBytes    int `json:"compactSavedBytes"`
+	CompactSavedBytesLLM int `json:"compactSavedBytesLLM"`
+}
+
+// tokenTotals is the shared token-counter block carried by every spend slice
+// (per-model, per-provider, per-day). Embedded anonymously so its fields promote
+// to the parent and marshal inline — the JSON shape is unchanged, but the five
+// counters are declared once instead of repeated in each DTO.
+type tokenTotals struct {
+	Calls            int `json:"calls"`
+	InputTokens      int `json:"inputTokens"`
+	OutputTokens     int `json:"outputTokens"`
+	CacheReadTokens  int `json:"cacheReadTokens"`
+	CacheWriteTokens int `json:"cacheWriteTokens"`
 }
 
 // modelStat is one provider+model's slice of the spend — the detail row under a
@@ -43,16 +59,12 @@ type agentBudgetRow struct {
 // when the cost is an equivalent-API estimate (subscription provider such as
 // claude-cli) rather than a real billed amount.
 type modelStat struct {
-	Model            string  `json:"model"`
-	Calls            int     `json:"calls"`
-	InputTokens      int     `json:"inputTokens"`
-	OutputTokens     int     `json:"outputTokens"`
-	CacheReadTokens  int     `json:"cacheReadTokens"`
-	CacheWriteTokens int     `json:"cacheWriteTokens"`
-	CostUSD          float64 `json:"costUSD"`
-	SavingsUSD       float64 `json:"savingsUSD"`
-	Priced           bool    `json:"priced"`
-	Estimated        bool    `json:"estimated"` // equivalent-API estimate (subscription)
+	Model string `json:"model"`
+	tokenTotals
+	CostUSD    float64 `json:"costUSD"`
+	SavingsUSD float64 `json:"savingsUSD"`
+	Priced     bool    `json:"priced"`
+	Estimated  bool    `json:"estimated"` // equivalent-API estimate (subscription)
 }
 
 // providerStat is one provider's slice of the workspace's spend, with the USD
@@ -61,36 +73,30 @@ type modelStat struct {
 // subscription, or a custom/unknown model). Estimated is true when the cost
 // shown is an equivalent-API estimate (subscription provider).
 type providerStat struct {
-	Provider         string      `json:"provider"`
-	Calls            int         `json:"calls"`
-	InputTokens      int         `json:"inputTokens"`
-	OutputTokens     int         `json:"outputTokens"`
-	CacheReadTokens  int         `json:"cacheReadTokens"`
-	CacheWriteTokens int         `json:"cacheWriteTokens"`
-	CostUSD          float64     `json:"costUSD"`
-	SavingsUSD       float64     `json:"savingsUSD"`
-	Priced           bool        `json:"priced"`
-	Estimated        bool        `json:"estimated"` // equivalent-API estimate (subscription)
-	Models           []modelStat `json:"models"`
+	Provider string `json:"provider"`
+	tokenTotals
+	CostUSD    float64     `json:"costUSD"`
+	SavingsUSD float64     `json:"savingsUSD"`
+	Priced     bool        `json:"priced"`
+	Estimated  bool        `json:"estimated"` // equivalent-API estimate (subscription)
+	Models     []modelStat `json:"models"`
 }
 
 // costOf sums the USD cost (including cache tiers) of a usage rollup's per-model
-// breakdown. It also tries EstimateFor on unpriced (subscription) entries so that
-// providers like claude-cli contribute an equivalent-API estimate.
-// priced is false when any spend lacks a real list price (subscription/custom).
-// estimated is true when at least one unpriced entry had an equivalent-API estimate.
+// breakdown. priced is false when any spend lacks a real list price
+// (subscription/custom); estimated is true when an unpriced entry had an
+// equivalent-API estimate. Pricing math lives in the billing package.
 func costOf(byModel map[string]db.KindStat) (cost float64, priced bool, estimated bool) {
 	priced = true
 	for key, st := range byModel {
 		provider, model, _ := strings.Cut(key, "|")
-		if p, ok := providers.PriceFor(provider, model); ok {
-			cost += p.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
-		} else if st.InputTokens+st.OutputTokens+st.CacheReadTokens+st.CacheWriteTokens > 0 {
+		c, _, p, e := billing.PriceStat(provider, model, st)
+		cost += c
+		if !p {
 			priced = false
-			if p, ok := providers.EstimateFor(provider, model); ok {
-				cost += p.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
-				estimated = true
-			}
+		}
+		if e {
+			estimated = true
 		}
 	}
 	return cost, priced, estimated
@@ -104,26 +110,17 @@ func modelRowsFor(byModel map[string]db.KindStat) (rows []modelStat, totalCost, 
 	priced = true
 	for key, st := range byModel {
 		provider, model, _ := strings.Cut(key, "|")
-		var cost, save float64
-		modelPriced := true
-		var modelEstimated bool
-		if p, ok := providers.PriceFor(provider, model); ok {
-			cost = p.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
-			save = p.CacheSavings(st.CacheReadTokens)
-		} else if st.InputTokens+st.OutputTokens+st.CacheReadTokens+st.CacheWriteTokens > 0 {
-			modelPriced = false
+		cost, save, modelPriced, modelEstimated := billing.PriceStat(provider, model, st)
+		if !modelPriced {
 			priced = false
-			if ep, eok := providers.EstimateFor(provider, model); eok {
-				cost = ep.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
-				modelEstimated = true
-				estimated = true
-			}
+		}
+		if modelEstimated {
+			estimated = true
 		}
 		rows = append(rows, modelStat{
-			Model: model, Calls: st.Calls,
-			InputTokens: st.InputTokens, OutputTokens: st.OutputTokens,
-			CacheReadTokens: st.CacheReadTokens, CacheWriteTokens: st.CacheWriteTokens,
-			CostUSD: cost, SavingsUSD: save, Priced: modelPriced, Estimated: modelEstimated,
+			Model:       model,
+			tokenTotals: tokenTotals{Calls: st.Calls, InputTokens: st.InputTokens, OutputTokens: st.OutputTokens, CacheReadTokens: st.CacheReadTokens, CacheWriteTokens: st.CacheWriteTokens},
+			CostUSD:     cost, SavingsUSD: save, Priced: modelPriced, Estimated: modelEstimated,
 		})
 		totalCost += cost
 		totalSavings += save
@@ -144,14 +141,12 @@ func modelRowsFor(byModel map[string]db.KindStat) (rows []modelStat, totalCost, 
 // (not just token volume) and so the window-cumulative totals can be summed
 // straight off the trend.
 type dayPoint struct {
-	Day              string  `json:"day"`
-	Calls            int     `json:"calls"`
-	InputTokens      int     `json:"inputTokens"`
-	OutputTokens     int     `json:"outputTokens"`
-	CacheReadTokens  int     `json:"cacheReadTokens"`
-	CacheWriteTokens int     `json:"cacheWriteTokens"`
-	CostUSD          float64 `json:"costUSD"`
-	SavingsUSD       float64 `json:"savingsUSD"`
+	Day string `json:"day"`
+	tokenTotals
+	CostUSD              float64 `json:"costUSD"`
+	SavingsUSD           float64 `json:"savingsUSD"`
+	CompactSavedBytes    int     `json:"compactSavedBytes"`
+	CompactSavedBytesLLM int     `json:"compactSavedBytesLLM"`
 }
 
 // handleWorkspaceUsage returns the data behind the Budget screen: today's
@@ -183,6 +178,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	byModel := map[string]map[string]*modelStat{}
 	var totalCost, totalSavings float64
 	var totalCacheRead, totalCacheWrite int
+	var totalCompactBytes, totalCompactBytesLLM int
 	totalPriced := true
 	totalEstimated := false
 	rows := make([]agentBudgetRow, 0, len(agents))
@@ -194,20 +190,24 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		}
 		cost, priced, estimated := costOf(u.ByModel)
 		row := agentBudgetRow{
-			AgentID:         a.ID,
-			Name:            a.Name,
-			Avatar:          a.Avatar,
-			Color:           a.Color,
-			Provider:        a.Provider,
-			Calls:           u.Calls,
-			InputTokens:     u.InputTokens,
-			OutputTokens:    u.OutputTokens,
-			CostUSD:         cost,
-			Priced:          priced,
-			Estimated:       estimated,
-			DailyCallLimit:  a.DailyCallLimit,
-			DailyTokenLimit: a.DailyTokenLimit,
+			AgentID:              a.ID,
+			Name:                 a.Name,
+			Avatar:               a.Avatar,
+			Color:                a.Color,
+			Provider:             a.Provider,
+			Calls:                u.Calls,
+			InputTokens:          u.InputTokens,
+			OutputTokens:         u.OutputTokens,
+			CostUSD:              cost,
+			Priced:               priced,
+			Estimated:            estimated,
+			DailyCallLimit:       a.DailyCallLimit,
+			DailyTokenLimit:      a.DailyTokenLimit,
+			CompactSavedBytes:    u.CompactSavedBytes,
+			CompactSavedBytesLLM: u.CompactSavedBytesLLM,
 		}
+		totalCompactBytes += u.CompactSavedBytes
+		totalCompactBytesLLM += u.CompactSavedBytesLLM
 		if len(u.ByKind) > 0 {
 			row.ByKind = map[string]kindStat{}
 			for k, st := range u.ByKind {
@@ -223,16 +223,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		// and into the per-model detail grouped under each provider.
 		for key, st := range u.ByModel {
 			provider, model, _ := strings.Cut(key, "|")
-			price, ok := providers.PriceFor(provider, model)
-			var mCost, mSave float64
-			var mEstimated bool
-			if ok {
-				mCost = price.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
-				mSave = price.CacheSavings(st.CacheReadTokens)
-			} else if ep, eok := providers.EstimateFor(provider, model); eok && st.InputTokens+st.OutputTokens > 0 {
-				mCost = ep.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
-				mEstimated = true
-			}
+			mCost, mSave, mPriced, mEstimated := billing.PriceStat(provider, model, st)
 
 			ps := byProvider[provider]
 			if ps == nil {
@@ -246,7 +237,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			ps.CacheWriteTokens += st.CacheWriteTokens
 			ps.CostUSD += mCost
 			ps.SavingsUSD += mSave
-			if !ok && st.InputTokens+st.OutputTokens+st.CacheReadTokens+st.CacheWriteTokens > 0 {
+			if !mPriced {
 				ps.Priced = false
 			}
 			if mEstimated {
@@ -260,7 +251,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			}
 			ms := mm[model]
 			if ms == nil {
-				ms = &modelStat{Model: model, Priced: ok}
+				ms = &modelStat{Model: model, Priced: true}
 				mm[model] = ms
 			}
 			ms.Calls += st.Calls
@@ -270,7 +261,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			ms.CacheWriteTokens += st.CacheWriteTokens
 			ms.CostUSD += mCost
 			ms.SavingsUSD += mSave
-			if !ok && st.InputTokens+st.OutputTokens+st.CacheReadTokens+st.CacheWriteTokens > 0 {
+			if !mPriced {
 				ms.Priced = false
 			}
 			if mEstimated {
@@ -345,6 +336,8 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		p.SavingsUSD += daySavings
 		p.CacheReadTokens += dayCacheRead
 		p.CacheWriteTokens += dayCacheWrite
+		p.CompactSavedBytes += u.CompactSavedBytes
+		p.CompactSavedBytesLLM += u.CompactSavedBytesLLM
 	}
 	trend := make([]dayPoint, 0, len(perDay))
 	for _, p := range perDay {
@@ -360,6 +353,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	// is being reused instead of re-paid.
 	var cumCalls, cumIn, cumOut, cumCacheRead, cumCacheWrite int
 	var cumCost, cumSavings float64
+	var cumCompactBytes, cumCompactBytesLLM int
 	for _, p := range trend {
 		cumCalls += p.Calls
 		cumIn += p.InputTokens
@@ -368,6 +362,8 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		cumCacheWrite += p.CacheWriteTokens
 		cumCost += p.CostUSD
 		cumSavings += p.SavingsUSD
+		cumCompactBytes += p.CompactSavedBytes
+		cumCompactBytesLLM += p.CompactSavedBytesLLM
 	}
 	var cacheHitRate float64
 	if denom := cumCacheRead + cumIn + cumCacheWrite; denom > 0 {
@@ -377,30 +373,34 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"day": today,
 		"totals": map[string]any{
-			"calls":            totals.Calls,
-			"inputTokens":      totals.InputTokens,
-			"outputTokens":     totals.OutputTokens,
-			"cacheReadTokens":  totalCacheRead,
-			"cacheWriteTokens": totalCacheWrite,
-			"byKind":           byKind,
-			"costUSD":          totalCost,
-			"savingsUSD":       totalSavings,    // saved by prompt-cache reads vs full input price
-			"priced":           totalPriced,     // false when some spend is unpriced (subscription/custom)
-			"estimated":        totalEstimated,  // true when cost includes equivalent-API estimates (e.g. claude-cli)
+			"calls":                totals.Calls,
+			"inputTokens":          totals.InputTokens,
+			"outputTokens":         totals.OutputTokens,
+			"cacheReadTokens":      totalCacheRead,
+			"cacheWriteTokens":     totalCacheWrite,
+			"byKind":               byKind,
+			"costUSD":              totalCost,
+			"savingsUSD":           totalSavings,         // saved by prompt-cache reads vs full input price
+			"priced":               totalPriced,          // false when some spend is unpriced (subscription/custom)
+			"estimated":            totalEstimated,       // true when cost includes equivalent-API estimates (e.g. claude-cli)
+			"compactSavedBytes":    totalCompactBytes,    // System A: bytes trimmed from tool output (deterministic)
+			"compactSavedBytesLLM": totalCompactBytesLLM, // System B: bytes trimmed by LLM summary
 		},
 		"byProvider": providerRows,
 		"agents":     rows,
 		"trend":      trend,
 		"cumulative": map[string]any{
-			"days":             days,
-			"calls":            cumCalls,
-			"inputTokens":      cumIn,
-			"outputTokens":     cumOut,
-			"cacheReadTokens":  cumCacheRead,
-			"cacheWriteTokens": cumCacheWrite,
-			"costUSD":          cumCost,
-			"savingsUSD":       cumSavings,    // total saved by prompt-cache reads over the window
-			"cacheHitRate":     cacheHitRate,  // cacheRead / (cacheRead + input + cacheWrite)
+			"days":                 days,
+			"calls":                cumCalls,
+			"inputTokens":          cumIn,
+			"outputTokens":         cumOut,
+			"cacheReadTokens":      cumCacheRead,
+			"cacheWriteTokens":     cumCacheWrite,
+			"costUSD":              cumCost,
+			"savingsUSD":           cumSavings,         // total saved by prompt-cache reads over the window
+			"cacheHitRate":         cacheHitRate,       // cacheRead / (cacheRead + input + cacheWrite)
+			"compactSavedBytes":    cumCompactBytes,    // System A bytes trimmed over the window
+			"compactSavedBytesLLM": cumCompactBytesLLM, // System B bytes trimmed over the window
 		},
 	})
 }

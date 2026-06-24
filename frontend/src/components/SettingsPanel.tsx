@@ -24,6 +24,7 @@ import {
   AutoTitlePanel,
   McpPanel,
   ToolsPanel,
+  BackupPanel,
   DiagnosticsPanel,
   AboutPanel,
 } from './settings/appPanels'
@@ -158,6 +159,8 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
       spawnMaxConcurrent: draft.spawnMaxConcurrent, spawnMaxPerTurn: draft.spawnMaxPerTurn,
       autonomousConfine: draft.autonomousConfine, gitWorktreeIsolation: draft.gitWorktreeIsolation,
+      backupEnabled: draft.backupEnabled, backupIntervalHours: draft.backupIntervalHours,
+      backupRetain: draft.backupRetain, backupDir: draft.backupDir,
     }
     if (keyInput) patch.anthropicKey = keyInput
     if (minimaxKeyInput) patch.minimaxKey = minimaxKeyInput
@@ -297,6 +300,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
               {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'budget' && <BudgetPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'tools' && <ToolsPanel draft={draft} set={set} setDraft={setDraft} />}
+              {cat === 'backup' && <BackupPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'hooks' && <HooksPanel onError={onError} />}
               {cat === 'advanced' && (
                 <>

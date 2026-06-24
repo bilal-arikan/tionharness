@@ -67,6 +67,14 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 
+// groupHue maps an arbitrary group label to a stable HSL color (deterministic
+// hash → hue), so every skill sharing a group gets the same tint across renders.
+function groupHue(label: string, lightness: number): string {
+  let h = 0
+  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0
+  return `hsl(${h % 360}, 62%, ${lightness}%)`
+}
+
 function truncate(s: string, max = 28): string {
   const t = s.replace(/\s+/g, ' ').trim()
   return t.length > max ? t.slice(0, max - 1) + '…' : t
@@ -157,13 +165,19 @@ function nodeFor(n: WorkspaceGraph['nodes'][number]): Node {
     }
     if (n.type === 'skill') {
       // Skills get a distinct star icon with the slug as a small label below.
+      // When a skill carries an organisation group (n.sub), same-group skills are
+      // tinted with a shared, group-derived hue so clusters read at a glance;
+      // ungrouped skills keep the default yellow.
+      const grouped = !!n.sub
+      const bg = grouped ? groupHue(n.sub!, 58) : '#eab308'
+      const border = grouped ? groupHue(n.sub!, 72) : '#fde047'
       return {
         id: n.id,
         label: truncate(n.label, 20),
-        title: tip(n.label, ['Skill']),
+        title: tip(n.label, [n.sub ? `Skill · ${n.sub}` : 'Skill']),
         shape: 'star',
         size: 14,
-        color: { background: '#eab308', border: '#fde047', highlight: { background: '#facc15', border: '#fff' } },
+        color: { background: bg, border, highlight: { background: border, border: '#fff' } },
         font: { color: '#fde68a', size: 11 },
       }
     }

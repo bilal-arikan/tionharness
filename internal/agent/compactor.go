@@ -57,9 +57,13 @@ func (r *Runtime) compactToolResult(ctx context.Context, agent db.Agent, toolNam
 			r.logger.Debug("tool output compacted (A)",
 				"agent", agent.ID, "tool", toolName,
 				"before", st.BeforeBytes, "after", st.AfterBytes, "saved", st.Saved())
-			// Persist the free savings into today's usage rollup (standalone meter).
+			// Persist the free savings into today's usage rollup (standalone meter)
+			// and into the originating session's lifetime rollup (blank sid = no-op).
 			if err := r.db.AddCompactionSavings(ctx, agent.ID, st.Saved()); err != nil {
 				r.logger.Warn("record compaction savings failed", "agent", agent.ID, "error", err)
+			}
+			if sid := SessionIDFrom(ctx); sid != "" {
+				_ = r.db.AddSessionCompactionSavings(ctx, sid, agent.ID, st.Saved())
 			}
 		}
 		content = out
@@ -76,8 +80,17 @@ func (r *Runtime) compactToolResult(ctx context.Context, agent db.Agent, toolNam
 			r.logger.Warn("tool output summary empty; keeping deterministic output",
 				"agent", agent.ID, "tool", toolName)
 		default:
+			savedB := len(content) - len(summary)
 			r.logger.Debug("tool output summarized (B)",
-				"agent", agent.ID, "tool", toolName, "before", len(content), "after", len(summary))
+				"agent", agent.ID, "tool", toolName, "before", len(content), "after", len(summary), "saved", savedB)
+			// Persist System B's gross output reduction into today's rollup (standalone
+			// meter; the summary call's own token cost is already recorded as KindCompact).
+			if err := r.db.AddLLMCompactionSavings(ctx, agent.ID, savedB); err != nil {
+				r.logger.Warn("record llm compaction savings failed", "agent", agent.ID, "error", err)
+			}
+			if sid := SessionIDFrom(ctx); sid != "" {
+				_ = r.db.AddSessionLLMCompactionSavings(ctx, sid, agent.ID, savedB)
+			}
 			content = summary
 		}
 	}

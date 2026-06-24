@@ -18,6 +18,7 @@ import (
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
 	"github.com/bilal-arikan/swarmgo/internal/api"
+	"github.com/bilal-arikan/swarmgo/internal/backup"
 	"github.com/bilal-arikan/swarmgo/internal/config"
 	"github.com/bilal-arikan/swarmgo/internal/events"
 	"github.com/bilal-arikan/swarmgo/internal/logbuf"
@@ -34,6 +35,7 @@ type App struct {
 	httpSrv  *http.Server
 	listener net.Listener
 	settings *settings.Store
+	backups  *backup.Manager
 }
 
 // Appearance returns the current UI appearance settings (preset id, theme
@@ -151,6 +153,19 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	// manager (which the server holds) and notify the UI on change.
 	manager.SetWorkspaceBridge(server.WorkspaceBridge())
 
+	// Periodic workspace backups: one process-wide manager that snapshots every
+	// workspace's data dir on the interval from settings. Wiring it into the
+	// server pushes the live config and starts/stops the loop via applySettings.
+	backups := backup.New(cfg.DataDir, func() []backup.Target {
+		targets := manager.BackupTargets()
+		out := make([]backup.Target, 0, len(targets))
+		for _, t := range targets {
+			out = append(out, backup.Target{ID: t.ID, Name: t.Name, Dir: t.Dir})
+		}
+		return out
+	}, logger)
+	server.SetBackupManager(backups)
+
 	// Open the listener up front so a ":0" port is resolved before we report Addr.
 	ln, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
@@ -178,6 +193,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		httpSrv:  httpSrv,
 		listener: ln,
 		settings: settingsStore,
+		backups:  backups,
 	}, nil
 }
 
@@ -212,6 +228,9 @@ func (a *App) Serve() error {
 // Shutdown gracefully stops the HTTP server and closes the workspace manager.
 func (a *App) Shutdown(ctx context.Context) error {
 	a.logger.Info("shutting down")
+	if a.backups != nil {
+		a.backups.Stop()
+	}
 	err := a.httpSrv.Shutdown(ctx)
 	a.manager.Close()
 	return err

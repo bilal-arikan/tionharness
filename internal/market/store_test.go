@@ -32,7 +32,9 @@ func TestDefaultsAndInstall(t *testing.T) {
 		t.Error("ListKind(skill) returned nothing")
 	}
 	total := len(st.ListKind(KindSkill)) + len(st.ListKind(KindAgent)) +
-		len(st.ListKind(KindProvider)) + len(st.ListKind(KindFlow))
+		len(st.ListKind(KindProvider)) + len(st.ListKind(KindFlow)) +
+		len(st.ListKind(KindWorkspace)) + len(st.ListKind(KindMemory)) +
+		len(st.ListKind(KindMCP))
 	if total != len(list) {
 		t.Errorf("kind lists sum to %d, want %d (every pack has a known kind)", total, len(list))
 	}

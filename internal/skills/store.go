@@ -112,6 +112,7 @@ func scanDir(t tier) []Skill {
 			WhenToUse:       fm.scalar("when_to_use", "whentouse", "when"),
 			Icon:            fm.scalar("icon"),
 			Color:           fm.scalar("color"),
+			Group:           fm.scalar("group", "category"),
 			AlwaysAllow:     fm.list("alwaysallow", "always_allow"),
 			RequiredSources: fm.list("requiredsources", "required_sources"),
 			SubSkills:       fm.list("subskills", "sub_skills", "related"),
@@ -382,6 +383,7 @@ type SkillInput struct {
 	WhenToUse   string
 	Icon        string
 	Color       string
+	Group       string
 	Shared      bool
 	Body        string
 }
@@ -399,6 +401,7 @@ func (in SkillInput) fields() []fmField {
 		{"when_to_use", oneLine(in.WhenToUse)},
 		{"icon", strings.TrimSpace(in.Icon)},
 		{"color", strings.TrimSpace(in.Color)},
+		{"group", strings.TrimSpace(in.Group)},
 		{"access", access},
 	}
 }

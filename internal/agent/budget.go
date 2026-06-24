@@ -50,15 +50,18 @@ func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string,
 	if model == "" {
 		model = agent.Model
 	}
-	delta := db.UsageDelta{
-		Calls:            1,
-		InputTokens:      u.InputTokens,
-		OutputTokens:     u.OutputTokens,
-		CacheReadTokens:  u.CacheReadTokens,
-		CacheWriteTokens: u.CacheWriteTokens,
-	}
-	if err := r.db.AddUsageKind(ctx, agent.ID, string(callKindFrom(ctx)), agent.Provider, model, delta); err != nil {
+	delta := db.DeltaFromUsage(1, u)
+	kind := string(callKindFrom(ctx))
+	if err := r.db.AddUsageKind(ctx, agent.ID, kind, agent.Provider, model, delta); err != nil {
 		r.logger.Warn("record usage failed", "agent", agent.ID, "error", err)
+	}
+	// Also attribute the same call to its originating session (lifetime rollup),
+	// so spend can be broken down per-conversation. A blank session id (e.g. a
+	// detached auxiliary call without a session stamp) is a no-op in the DB layer.
+	if sid := SessionIDFrom(ctx); sid != "" {
+		if err := r.db.AddSessionUsageKind(ctx, sid, agent.ID, kind, agent.Provider, model, delta); err != nil {
+			r.logger.Warn("record session usage failed", "agent", agent.ID, "session", sid, "error", err)
+		}
 	}
 }
 

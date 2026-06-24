@@ -43,6 +43,8 @@ func (s *Server) handleAgentUsage(w http.ResponseWriter, r *http.Request) {
 		"estimated":        estimated,
 		"dailyCallLimit":   agent.DailyCallLimit,
 		"dailyTokenLimit":  agent.DailyTokenLimit,
+		"compactSavedBytes":    usage.CompactSavedBytes,
+		"compactSavedBytesLLM": usage.CompactSavedBytesLLM,
 	})
 }
 

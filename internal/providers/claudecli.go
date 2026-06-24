@@ -109,6 +109,13 @@ func (c *ClaudeCLI) usesInteractionTools() bool {
 type cliUsage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
+	// The CLI's stream-json reports Anthropic prompt-cache accounting too. These
+	// are the savings that --resume (warm server-side cache) produces; without
+	// parsing them the Usage screen shows 0 cache for every claude-cli turn and
+	// the value of resume is invisible. cache_read = cheap (served from cache),
+	// cache_creation = premium (written to cache this turn).
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 }
 
 type cliBlock struct {
@@ -475,6 +482,12 @@ func (p *cliStreamParser) feed(line string) {
 			if ev.Message.Usage.InputTokens > p.resp.Usage.InputTokens {
 				p.resp.Usage.InputTokens = ev.Message.Usage.InputTokens
 			}
+			if v := ev.Message.Usage.CacheReadInputTokens; v > p.resp.Usage.CacheReadTokens {
+				p.resp.Usage.CacheReadTokens = v
+			}
+			if v := ev.Message.Usage.CacheCreationInputTokens; v > p.resp.Usage.CacheWriteTokens {
+				p.resp.Usage.CacheWriteTokens = v
+			}
 		}
 		for _, b := range ev.Message.Content {
 			switch b.Type {
@@ -523,6 +536,13 @@ func (p *cliStreamParser) feed(line string) {
 			}
 			if ev.Usage.OutputTokens > 0 {
 				p.resp.Usage.OutputTokens = ev.Usage.OutputTokens
+			}
+			// The result envelope carries the authoritative aggregate; let it win.
+			if ev.Usage.CacheReadInputTokens > 0 {
+				p.resp.Usage.CacheReadTokens = ev.Usage.CacheReadInputTokens
+			}
+			if ev.Usage.CacheCreationInputTokens > 0 {
+				p.resp.Usage.CacheWriteTokens = ev.Usage.CacheCreationInputTokens
 			}
 		}
 		for k := range ev.ModelUsage {

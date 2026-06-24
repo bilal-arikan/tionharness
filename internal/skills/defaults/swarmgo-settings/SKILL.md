@@ -115,6 +115,16 @@ for autonomous (no-human) turns; interactive chat is unaffected.
   the shared tree (parallel agents never clobber each other). Needs git; the
   worktree is removed when the session is deleted.
 
+### Workspace backups
+Periodic, retention-bounded zip snapshots of every workspace's data dir.
+- `backupEnabled` (default false) — master switch for the automatic schedule.
+- `backupIntervalHours` (≥1, default 24) — hours between automatic runs; the first
+  run happens one interval after the setting takes effect (no run on every restart).
+- `backupRetain` (≥1, default 7) — newest archives kept per workspace; older pruned.
+- `backupDir` (default "" → `<dataDir>/backups`) — absolute path of the backups root.
+Live: changing these reconfigures the loop immediately. An on-demand run is also
+available over `POST /api/backups/run` (not an agent tool).
+
 ### Diagnostics
 - `logLevel` — `"info"` | `"debug"` | `"warn"` | `"error"` (applied on restart).
 

@@ -2,7 +2,6 @@ package conversation
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
@@ -54,10 +53,18 @@ func CompactInFlightMessages(ctx context.Context, database *db.DB, provider prov
 	return out, true, nil
 }
 
-// summarizeProviderMessages renders provider messages (text plus a terse note of
-// any tool calls/results) into the compact prompt and asks the model for a single
-// rolling summary. Mirrors Manager.summarize but works on provider messages.
+// summarizeProviderMessages folds in-flight provider messages into a single
+// summary via the shared compaction core. It has no prior rolling summary (the
+// loop's messages are transient), so existing is "". renderProviderMessages adds a
+// terse note of any tool calls/results so the summary keeps that signal.
 func summarizeProviderMessages(ctx context.Context, database *db.DB, provider providers.Provider, agent db.Agent, msgs []providers.Message) (string, error) {
+	return summarizeRendered(ctx, database, provider, agent, "", renderProviderMessages(msgs))
+}
+
+// renderProviderMessages flattens provider messages to the transcript the
+// compaction prompt expects: each turn's text plus a terse marker for any tool
+// calls and tool results.
+func renderProviderMessages(msgs []providers.Message) string {
 	var b strings.Builder
 	for _, m := range msgs {
 		b.WriteString(m.Role)
@@ -75,16 +82,5 @@ func summarizeProviderMessages(ctx context.Context, database *db.DB, provider pr
 		}
 		b.WriteString("\n")
 	}
-	resp, err := provider.Complete(ctx, providers.Request{
-		Model:     agent.Model,
-		MaxTokens: compactMaxOutputTokens,
-		Messages: []providers.Message{
-			{Role: providers.RoleUser, Text: fmt.Sprintf(compactPrompt, "(none)", b.String())},
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-	recordCompaction(ctx, database, agent, resp.Usage)
-	return strings.TrimSpace(resp.Text), nil
+	return b.String()
 }

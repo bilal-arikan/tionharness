@@ -11,6 +11,9 @@ import type {
   WorkspaceUsage,
   ExternalToolStatus,
   VersionInfo,
+  BackupStatus,
+  BackupResult,
+  WorkspaceArchives,
 } from '../types'
 import { req } from './client'
 
@@ -84,4 +87,22 @@ export const systemApi = {
   // Build / version info (injected via ldflags at build time; falls back to
   // "dev" for local development builds without explicit versioning).
   getVersion: () => req<VersionInfo>('/api/version'),
+
+  // Workspace backups: live status (config + last run) and an on-demand run.
+  // The periodic schedule itself is driven by the settings document.
+  getBackupStatus: () => req<BackupStatus>('/api/backups'),
+  runBackup: () => req<BackupResult>('/api/backups/run', { method: 'POST' }),
+  // Per-workspace archive list and one-click restore (destructive: overwrites
+  // the workspace's current data with the archive, then reopens it live).
+  listBackupArchives: () => req<WorkspaceArchives[]>('/api/backups/archives'),
+  restoreBackup: (workspaceId: string, archive: string) =>
+    req<{ ok: boolean; workspaceId: string; archive: string }>('/api/backups/restore', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, archive }),
+    }),
+  deleteBackupArchive: (workspaceId: string, archive: string) =>
+    req<{ ok: boolean; workspaceId: string; archive: string }>('/api/backups/archives', {
+      method: 'DELETE',
+      body: JSON.stringify({ workspaceId, archive }),
+    }),
 }

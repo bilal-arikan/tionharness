@@ -3,7 +3,7 @@
 import { type ReactNode } from 'react'
 import {
   User, Palette, KeyRound, Brain, Shield, Command,
-  Blocks, Info, Boxes, FileText, FolderOpen, Wrench, SlidersHorizontal, Webhook, Plug, type LucideIcon,
+  Blocks, Info, Boxes, FileText, FolderOpen, Wrench, SlidersHorizontal, Webhook, Plug, Archive, type LucideIcon,
 } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '../../types'
 import { CopyPathButton } from '../CopyPathButton'
@@ -21,6 +21,7 @@ export type Cat =
   | 'mcptools'
   | 'hooks'
   | 'advanced'
+  | 'backup'
   | 'commands'
   | 'stepkinds'
   | 'about'
@@ -45,6 +46,8 @@ export const APP_CATS: CatMeta[] = [
   { key: 'hooks', label: 'Hooks', icon: Webhook },
   // Combined screen: notifications, autonomy, auto-title, MCP, diagnostics.
   { key: 'advanced', label: 'Gelişmiş', icon: SlidersHorizontal },
+  // Dedicated page: backup schedule + archive list / restore.
+  { key: 'backup', label: 'Yedekleme', icon: Archive },
   { key: 'commands', label: 'Komutlar', icon: Command },
   { key: 'stepkinds', label: 'Adım Türleri', icon: Blocks },
   { key: 'about', label: 'Hakkında', icon: Info },

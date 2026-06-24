@@ -1,0 +1,21 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "mcp.fetch",
+  "kind": "mcp",
+  "name": "Fetch MCP",
+  "description": "Fetch and convert web pages to Markdown for the model, via the mcp-server-fetch Python server (run with uvx).",
+  "version": "1.0.0",
+  "author": "SwarmGo",
+  "icon": "🌐",
+  "color": "#10b981",
+  "tags": ["mcp", "web", "fetch", "tools"],
+  "payload": {
+    "mcp": {
+      "name": "Fetch",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": "[\"mcp-server-fetch\"]",
+      "envConfig": "{}"
+    }
+  }
+}

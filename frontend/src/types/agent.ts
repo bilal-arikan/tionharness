@@ -59,6 +59,8 @@ export interface AgentUsage {
   estimated?: boolean
   dailyCallLimit: number
   dailyTokenLimit: number
+  compactSavedBytes?: number
+  compactSavedBytesLLM?: number
 }
 
 export interface AgentTools {

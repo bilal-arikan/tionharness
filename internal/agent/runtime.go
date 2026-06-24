@@ -524,11 +524,12 @@ type agentSkillWriter struct {
 	db    *db.DB
 }
 
-func (w agentSkillWriter) CreateSkill(slug, name, description, whenToUse, body string, shared bool) error {
+func (w agentSkillWriter) CreateSkill(slug, name, description, whenToUse, group, body string, shared bool) error {
 	_, err := w.store.Create(slug, skills.SkillInput{
 		Name:        name,
 		Description: description,
 		WhenToUse:   whenToUse,
+		Group:       group,
 		Body:        body,
 		Shared:      shared,
 	})
@@ -549,7 +550,7 @@ func (w agentSkillWriter) ImportSkill(source, location, slug string, shared bool
 // only when non-nil (partial update), merging over the skill's current values
 // so the agent can change just the body. Restricted to workspace-tier skills so
 // bundled/global skills can't be overwritten (parity with DeleteSkill).
-func (w agentSkillWriter) UpdateSkill(slug string, name, description, whenToUse, body *string, shared *bool) error {
+func (w agentSkillWriter) UpdateSkill(slug string, name, description, whenToUse, group, body *string, shared *bool) error {
 	cur, ok := w.store.Get(slug)
 	if !ok {
 		return fmt.Errorf("no skill with slug %q (check the skill catalog)", slug)
@@ -564,6 +565,7 @@ func (w agentSkillWriter) UpdateSkill(slug string, name, description, whenToUse,
 		WhenToUse:   cur.WhenToUse,
 		Icon:        cur.Icon,
 		Color:       cur.Color,
+		Group:       cur.Group,
 		Shared:      cur.Shared,
 		Body:        curBody,
 	}
@@ -575,6 +577,9 @@ func (w agentSkillWriter) UpdateSkill(slug string, name, description, whenToUse,
 	}
 	if whenToUse != nil {
 		in.WhenToUse = *whenToUse
+	}
+	if group != nil {
+		in.Group = *group
 	}
 	if body != nil {
 		in.Body = *body

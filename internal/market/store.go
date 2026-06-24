@@ -1,6 +1,7 @@
 package market
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -28,12 +29,19 @@ type Store struct {
 
 	mu     sync.RWMutex
 	loaded bool
-	byID   map[string]Pack // id -> resolved (highest-priority) pack manifest
-	order  []string        // ids, display order (sorted by name)
+	byID   map[string]Pack // id -> resolved (highest-priority) LOCAL pack manifest
+	order  []string        // local ids, display order (sorted by name)
 
-	// writeDir is the workspace tier dir; Publish writes here. Falls back to the
-	// global dir when there is no workspace dir.
+	// remote holds pack manifests resolved from cached remote registry indexes,
+	// keyed by id. Local packs override remote ones of the same id in List().
+	remote map[string]Pack
+
+	// writeDir is the workspace tier dir; Publish writes here + holds the install
+	// ledger. Falls back to the global dir when there is no workspace dir.
 	writeDir string
+	// globalDir is the data-dir-level market dir; it holds registries.json and the
+	// remote-index cache (shared across workspaces).
+	globalDir string
 }
 
 // New builds a store over the global + workspace market tiers. Bundled packs are
@@ -51,7 +59,13 @@ func New(globalDir, workspaceDir string) *Store {
 	if writeDir == "" {
 		writeDir = globalDir
 	}
-	return &Store{tiers: tiers, byID: map[string]Pack{}, writeDir: writeDir}
+	return &Store{
+		tiers:     tiers,
+		byID:      map[string]Pack{},
+		remote:    map[string]Pack{},
+		writeDir:  writeDir,
+		globalDir: globalDir,
+	}
 }
 
 // ensure lazily loads the catalog on first use.
@@ -85,9 +99,12 @@ func (s *Store) Reload() {
 		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 	})
 
+	remote := s.loadRemoteCache()
+
 	s.mu.Lock()
 	s.byID = byID
 	s.order = order
+	s.remote = remote
 	s.loaded = true
 	s.mu.Unlock()
 }
@@ -128,16 +145,31 @@ func scanDir(t tier) []Pack {
 	return out
 }
 
-// List returns the resolved pack manifests in display order.
+// List returns the resolved pack manifests in display order: local packs first
+// (workspace>global>bundled), then remote packs whose id is not shadowed by a
+// local one. Sorted by name within each group.
 func (s *Store) List() []Pack {
 	s.ensure()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]Pack, 0, len(s.order))
+	out := make([]Pack, 0, len(s.order)+len(s.remote))
 	for _, id := range s.order {
 		out = append(out, s.byID[id])
 	}
-	return out
+	rem := make([]Pack, 0, len(s.remote))
+	for id, p := range s.remote {
+		if _, shadowed := s.byID[id]; shadowed {
+			continue
+		}
+		rem = append(rem, p)
+	}
+	sort.Slice(rem, func(i, j int) bool {
+		if strings.EqualFold(rem[i].Name, rem[j].Name) {
+			return rem[i].ID < rem[j].ID
+		}
+		return strings.ToLower(rem[i].Name) < strings.ToLower(rem[j].Name)
+	})
+	return append(out, rem...)
 }
 
 // ListKind returns only packs of the given kind, in display order.
@@ -157,9 +189,21 @@ func (s *Store) Get(id string) (Pack, bool) {
 	s.ensure()
 	s.mu.RLock()
 	meta, ok := s.byID[id]
+	rmeta, rok := s.remote[id]
 	s.mu.RUnlock()
 	if !ok {
-		return Pack{}, false
+		// Not local — try a remote pack: download its payload lazily (optional
+		// sha256 verification happens inside fetchPayload).
+		if !rok {
+			return Pack{}, false
+		}
+		full, err := fetchPayload(context.Background(), rmeta.remoteURL, rmeta.remoteSHA)
+		if err != nil {
+			return Pack{}, false
+		}
+		full.Source = SourceRemote
+		full.RegistryName = rmeta.RegistryName
+		return full, true
 	}
 	data, err := os.ReadFile(meta.Path)
 	if err != nil {

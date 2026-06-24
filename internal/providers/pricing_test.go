@@ -33,6 +33,43 @@ func TestCostDetailed_CacheTiers(t *testing.T) {
 	}
 }
 
+// TestCacheMultOverride verifies a per-model cache multiplier overrides the
+// package default (OpenRouter's general 0.25× read tier vs Anthropic's 0.10×).
+func TestCacheMultOverride(t *testing.T) {
+	// Base input $10/Mtok, cache-read override 0.25 → 1M read = $2.50 (not $1.00).
+	p := Price{InputPerMTok: 10, OutputPerMTok: 30, CacheReadMultOverride: 0.25}
+	if got := p.CostDetailed(0, 0, 1_000_000, 0); !approx(got, 2.5) {
+		t.Errorf("override cache-read cost = %v, want 2.5", got)
+	}
+	// Savings = 10 * (1 - 0.25) = $7.50 per 1M (vs $9 at the 0.10 default).
+	if got := p.CacheSavings(1_000_000); !approx(got, 7.5) {
+		t.Errorf("override savings = %v, want 7.5", got)
+	}
+	// Zero override falls back to the package default (0.10 → $1.00).
+	d := Price{InputPerMTok: 10, OutputPerMTok: 30}
+	if got := d.CostDetailed(0, 0, 1_000_000, 0); !approx(got, 1.0) {
+		t.Errorf("default cache-read cost = %v, want 1.0", got)
+	}
+}
+
+// TestPriceFor_OpenRouter confirms the namespaced OpenRouter models are priced
+// with Anthropic's pass-through cache tier.
+func TestPriceFor_OpenRouter(t *testing.T) {
+	p, ok := PriceFor("openrouter", "anthropic/claude-sonnet-4.6")
+	if !ok {
+		t.Fatal("openrouter default model should be priced")
+	}
+	if p.InputPerMTok != 3 || p.OutputPerMTok != 15 {
+		t.Errorf("unexpected price: in=%v out=%v", p.InputPerMTok, p.OutputPerMTok)
+	}
+	if p.cacheReadMult() != 0.10 {
+		t.Errorf("anthropic-routed cache-read mult = %v, want 0.10", p.cacheReadMult())
+	}
+	if _, ok := PriceFor("openrouter", "some/unlisted-model"); ok {
+		t.Error("unlisted openrouter model should be unpriced (ballpark screen)")
+	}
+}
+
 // TestPriceFor_Subscription confirms claude-cli is unpriced (subscription).
 func TestPriceFor_Subscription(t *testing.T) {
 	if _, ok := PriceFor("claude-cli", "opus"); ok {

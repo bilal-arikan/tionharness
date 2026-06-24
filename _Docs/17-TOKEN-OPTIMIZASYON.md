@@ -55,7 +55,8 @@ orijinali verir).
 - **Kalıcı tasarruf sayacı:** `Stats.Saved()` (Sistem A'nın kazandırdığı bayt) `compactToolResult` içinde
   `db.AddCompactionSavings(agentID, bytes)` ile günlük usage rollup'una yazılır →
   `Usage.CompactSavedBytes` (ajan+gün başına, `compactSavedBytes` JSON). LLM çağrısı/token sayaçlarından
-  **bağımsız** bir ölçer (maliyet etkisi yok). Henüz UI'da gösterilmiyor (Bütçe ekranı bağlama işi sonraya bırakıldı).
+  **bağımsız** bir ölçer (maliyet etkisi yok). **Bütçe ekranında gösteriliyor (2026-06-24):** bkz.
+  [§Bütçe görünürlüğü](#bütçe-görünürlüğü--tasarruf-merkezi--session-bazlı-2026-06-24).
 
 ## Sistem B — `agent/compactor.go`
 
@@ -69,6 +70,9 @@ orijinali verir).
   **Niyet** = tool adı + (varsa) input özeti (`intentInputRunes=300`).
   Sistem prompt: olguları (yol/kimlik/hata/sayı/sonuç) koru, uydurma yapma, sadece sonucu döndür.
 - Bütçeyi **gate'lemez** (autonomous=false) — titler/summary/reflect ile aynı politika; usage yine işlenir.
+- **Tasarruf sayacı (2026-06-24):** özet başarılıysa `len(içerik)-len(özet)` bayt `db.AddLLMCompactionSavings`
+  ile günlük rollup'a (`Usage.CompactSavedBytesLLM`, `compactSavedBytesLLM` JSON) yazılır — Sistem A ölçerinden
+  **ayrı** (özet çağrısının kendi token maliyeti `UsageKindCompact` altında zaten kayıtlı; bu, brüt çıktı azaltımı).
 - Yalnız **native döngüde** (Anthropic/MiniMax) etkilidir; claude-cli delegasyonu kendi döngüsünü sürdürür
   (çıktıları SwarmGo'nun `ToolResult` katmanından geçmez).
 
@@ -307,6 +311,47 @@ prompt cache'ten okumak (cacheRead ≈ girişin %99'u). SwarmGo claude-cli yolu 
 - **Mimari gerilim (bilinçli):** warm modda bağlam yönetimini CLI devralır → SwarmGo'nun kendi compaction'ı o oturumda
   devre dışı kalır. Bu yüzden **opt-in + deneysel**: açtıktan sonra bir sohbette doğrulanmalı. `claudecli_resume_test.go`
   parser'ın session_id yakalamasını kapsar; canlı `--resume` davranışı kullanıcı doğrulamasına bağlı.
+
+## Bütçe görünürlüğü — Tasarruf Merkezi + session bazlı (2026-06-24)
+
+Önceden tüm tasarruf mekanizmaları (cache, Sistem A/B) toplanıyordu ama dağınık/gizliydi; kullanım yalnız
+**ajan+gün** anahtarlıydı (oturum-başına atfedilemiyordu). Üç fazlık geliştirme:
+
+### Faz 1 — Sıkıştırma tasarrufunu görünür kıl
+- DB: `Usage.CompactSavedBytesLLM` alanı + `AddLLMCompactionSavings` (Sistem B brüt çıktı azaltımı). Sistem A'nın
+  `CompactSavedBytes`'ı zaten vardı.
+- API: `GET /api/usage` totals + cumulative + trend artık `compactSavedBytes`/`compactSavedBytesLLM` taşır;
+  `GET /api/agents/{id}/usage` de ekledi.
+- UI: Bütçe ekranında **Tasarruf Merkezi** bölümü (3 hücre: Prompt-cache USD · Sistem A bayt · Sistem B bayt +
+  token-eşdeğeri tahmini). Bayt ölçerdir, gerçek faturalandırma değil.
+
+### Faz 2 — Session bazlı kullanım/maliyet
+- DB: yeni `SessionUsage` rollup (`internal/db/store_session_usage.go`) — **sessionID anahtarlı, ömür-boyu**
+  (gün-reset YOK); ByKind/ByModel + cache + her iki compaction ölçeri. Dosya `store/session-usage/<sid>.json`.
+  Metotlar: `AddSessionUsageKind` · `AddSessionCompactionSavings` · `AddSessionLLMCompactionSavings` ·
+  `GetSessionUsage`. Boş sessionID = no-op.
+- Wiring: `RecordUsage` + `compactToolResult` ctx'teki `SessionIDFrom`'u okuyup ajan kaydının **yanında** session
+  rollup'a da yazar (chat/schedule/spawn/flow yolları zaten `WithSessionID` damgalı; chat_stream.go:256).
+- API: `GET /api/sessions/{id}/usage-detail` (cost helper'ları `modelRowsFor` ile paylaşılır → workspace ekranıyla
+  birebir tutarlı). UI: `SessionDetailPanel`'de **"Bu oturumun harcaması"** kartı (maliyet + kazanç/tasarruf
+  kırılımı) — eskiden yalnız "ajanın bugünkü toplamı" gösteriliyordu.
+
+### Faz 3 — Tasarruf Merkezi (birleşik kazanç görünümü)
+- Tüm tasarruf kaynakları tek panelde: cache (gerçek USD) + Sistem A (ücretsiz bayt) + Sistem B (LLM bayt) +
+  toplam context tasarrufu (bayt → ~token tahmini, `bytes/4`). Bütçe ekranı kümülatif penceresinden beslenir.
+- **Trend metrik seçici (2026-06-25):** günlük trend grafiği artık 4 seri arasında geçiş yapar —
+  **Token · Maliyet · Cache tasarrufu · Sıkıştırma** (`TREND_METRICS`, `BudgetPanel`). Backend her `dayPoint`'e
+  `compactSavedBytes`/`compactSavedBytesLLM` ekledi → trend bunları gün-bazında çizebiliyor; bar rengi+formatlayıcı
+  metriğe göre değişir, altta pencere-toplamı gösterilir.
+
+**Notlar / sınırlar:**
+- Hook'lar (`PreToolUse`/`PostToolUse`) hâlâ tasarruf **ölçmez** (Claude Code sözleşmesi; gerçek token-tasarruf
+  mekanizması Sistem A/B'dir). `context-mode`/`rtk`/`sqz` harici araçları yalnız **presence-only** tespit edilir,
+  SwarmGo çıktıları onlardan geçirmez → ölçülen kazanç yok; yerel eşdeğer = Sistem A.
+- Bayt→token→USD: Sistem A/B için yalnız bayt + ~token gösterilir, **USD'ye çevrilmez** (uydurma sayı olmaması
+  için). Gerçek USD yalnız prompt-cache'te.
+- Geriye-uyumlu: eski usage dosyaları yeni alanları taşımaz (omitempty → 0); session rollup yeni turlardan dolar.
+- Testler: `store_session_usage_test.go` (session attribution + reload), `store_usage_test.go` (`AddLLMCompactionSavings`).
 
 ## Ayrıca Bakınız
 

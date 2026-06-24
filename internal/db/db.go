@@ -48,6 +48,7 @@ type DB struct {
 	artifacts map[string]Artifact
 	hooks     map[string]Hook
 	usage     map[string]Usage // keyed by agentID + "|" + day
+	sessionUsage map[string]SessionUsage // keyed by session id (lifetime rollup)
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
 
@@ -76,7 +77,8 @@ func Open(path string) (*DB, error) {
 		flowRuns:  map[string]FlowRun{},
 		artifacts: map[string]Artifact{},
 		hooks:     map[string]Hook{},
-		usage:     map[string]Usage{},
+		usage:        map[string]Usage{},
+		sessionUsage: map[string]SessionUsage{},
 		counters:  map[string]int64{},
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
@@ -110,6 +112,7 @@ const (
 	dirArtifacts = "artifacts"
 	dirHooks     = "hooks"
 	dirUsage     = "usage"
+	dirSessionUsage = "session-usage"
 )
 
 // countersFile stores the per-entity id sequence at the workspace store root.
@@ -334,6 +337,9 @@ func (d *DB) load() error {
 		return err
 	}
 	if err := d.loadUsage(); err != nil {
+		return err
+	}
+	if err := d.loadSessionUsage(); err != nil {
 		return err
 	}
 	if err := d.loadToolConfig(); err != nil {

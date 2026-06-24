@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, CheckCircle2, Circle, ScanEye, type LucideIcon } from 'lucide-react'
+import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
-import type { SessionInfo, AgentUsage } from '../../types'
+import type { SessionInfo, AgentUsage, SessionUsageDetail } from '../../types'
 import { SessionContextModal } from './SessionContextModal'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { roleColor } from '../../lib/palette'
@@ -65,6 +65,7 @@ export function SessionDetailPanel({
 }: Props) {
   const [info, setInfo] = useState<SessionInfo | null>(null)
   const [agentUsage, setAgentUsage] = useState<AgentUsage | null>(null)
+  const [sessionUsage, setSessionUsage] = useState<SessionUsageDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [titling, setTitling] = useState(false)
@@ -95,6 +96,19 @@ export function SessionDetailPanel({
       alive = false
     }
   }, [sessionId, refreshKey, localRefresh, onError])
+
+  // This session's own lifetime spend + savings. Refetched on the same triggers
+  // so a finished turn updates the figure.
+  useEffect(() => {
+    let alive = true
+    api
+      .sessionUsageDetail(sessionId)
+      .then((u) => alive && setSessionUsage(u))
+      .catch(() => alive && setSessionUsage(null))
+    return () => {
+      alive = false
+    }
+  }, [sessionId, refreshKey, localRefresh])
 
   // The primary agent's daily spend (Motor B). Refetched on the same triggers so
   // a finished turn updates the figure.
@@ -492,6 +506,42 @@ export function SessionDetailPanel({
             </div>
           </Section>
 
+          {/* This session's own lifetime spend + savings — the per-conversation
+              cost (the session-scoped analog of the agent's daily total below). */}
+          {sessionUsage && (sessionUsage.calls > 0 || sessionUsage.compactSavedBytes > 0 || sessionUsage.compactSavedBytesLLM > 0) && (
+            <Section title="Bu oturumun harcaması">
+              <p className="mb-2 text-[10px] text-[var(--color-text-dim)]">
+                Bu sohbetin ömür boyu toplamı (yalnız bu oturum).
+              </p>
+              <div className="mb-2 flex items-baseline gap-2">
+                <span className="text-lg font-semibold text-[var(--color-text)]">
+                  {(sessionUsage.estimated ? '~' : '') + usd(sessionUsage.costUSD)}
+                </span>
+                <span className="text-[10px] text-[var(--color-text-dim)]">
+                  {sessionUsage.calls} çağrı · {fmtTok(sessionUsage.inputTokens + sessionUsage.outputTokens)} token
+                </span>
+              </div>
+              {/* Savings breakdown: prompt-cache USD + tool-output compaction bytes */}
+              <div className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-success)_6%,transparent)] px-2.5 py-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-success)]">
+                  <PiggyBank size={12} /> Kazanç / tasarruf
+                </div>
+                {sessionUsage.savingsUSD > 0 && (
+                  <SaveRow label="Prompt-cache" value={usd(sessionUsage.savingsUSD)} />
+                )}
+                {sessionUsage.compactSavedBytes > 0 && (
+                  <SaveRow label="Sıkıştırma (kural)" value={formatBytes(sessionUsage.compactSavedBytes)} hint="araç çıktısından kırpılan" />
+                )}
+                {sessionUsage.compactSavedBytesLLM > 0 && (
+                  <SaveRow label="Sıkıştırma (LLM)" value={formatBytes(sessionUsage.compactSavedBytesLLM)} hint="özetle kırpılan" />
+                )}
+                {sessionUsage.savingsUSD === 0 && sessionUsage.compactSavedBytes === 0 && sessionUsage.compactSavedBytesLLM === 0 && (
+                  <span className="text-[11px] text-[var(--color-text-dim)]">Henüz tasarruf yok.</span>
+                )}
+              </div>
+            </Section>
+          )}
+
           {/* Agent daily spend (Motor B) — the agent's whole-day total across all
               sessions, not this session's cost. Clearly labelled to avoid the
               "this chat costs $X" misread. */}
@@ -605,6 +655,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </div>
       {children}
     </section>
+  )
+}
+
+// SaveRow is one savings line in the session spend card: a label, an optional
+// hint, and a green value (USD or bytes).
+function SaveRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="flex items-center justify-between text-[11px]">
+      <span className="text-[var(--color-text-dim)]">
+        {label}
+        {hint && <span className="ml-1 opacity-60">· {hint}</span>}
+      </span>
+      <span className="ml-2 shrink-0 font-medium" style={{ color: 'var(--color-success)' }}>
+        {value}
+      </span>
+    </div>
   )
 }
 

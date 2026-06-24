@@ -59,13 +59,38 @@ func NewMinimax(apiKey, baseURL string) *OpenAICompat {
 // Name implements Provider.
 func (m *OpenAICompat) Name() string { return m.name }
 
+// cachesSystem reports whether this endpoint should attach a cache_control
+// breakpoint to the system prefix. Only OpenRouter forwards Anthropic-style
+// cache_control to its (Anthropic/Gemini) backends; other OpenAI-compatible
+// endpoints (MiniMax, Groq, Ollama, …) cache automatically or not at all and may
+// reject array-form content, so they keep plain string content. OpenAI/DeepSeek
+// models via OpenRouter cache implicitly — the extra breakpoint is harmless there.
+func (m *OpenAICompat) cachesSystem() bool { return m.name == "openrouter" }
+
 type oaiMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content,omitempty"`
+	Role string `json:"role"`
+	// Content is a plain string for ordinary messages, or a []oaiContentPart when
+	// a cache_control breakpoint must be attached (OpenRouter prompt caching for
+	// Anthropic/Gemini models). interface{} lets one field carry both shapes.
+	Content any `json:"content,omitempty"`
 	// Assistant tool-call requests (role "assistant").
 	ToolCalls []oaiToolCall `json:"tool_calls,omitempty"`
 	// Tool result link (role "tool").
 	ToolCallID string `json:"tool_call_id,omitempty"`
+}
+
+// oaiContentPart is one block of a structured (array) message content. Used only
+// when a cache_control breakpoint is needed; ordinary messages keep string content.
+type oaiContentPart struct {
+	Type         string        `json:"type"` // "text"
+	Text         string        `json:"text"`
+	CacheControl *oaiCacheCtrl `json:"cache_control,omitempty"`
+}
+
+// oaiCacheCtrl is the Anthropic-style cache breakpoint OpenRouter forwards to
+// Anthropic/Gemini backends ("ephemeral" = standard prompt cache).
+type oaiCacheCtrl struct {
+	Type string `json:"type"` // "ephemeral"
 }
 
 // oaiToolCall is a function call the model requested / we echo back. Arguments
@@ -110,10 +135,45 @@ type oaiStreamChunk struct {
 		} `json:"delta"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
-	Usage *struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-	} `json:"usage"`
+	Usage *oaiUsage `json:"usage"`
+}
+
+// oaiUsage is the OpenAI-compatible usage object, extended with the prompt-cache
+// fields the various backends report. cached prompt tokens are a SUBSET of
+// prompt_tokens (already counted there), so toUsage subtracts them out to get the
+// fresh input count — matching the Anthropic convention the rest of the codebase
+// and the pricing table assume (input + cacheRead are billed separately).
+type oaiUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	// OpenAI / OpenRouter: cache reads live under prompt_tokens_details.
+	PromptTokensDetails *struct {
+		CachedTokens int `json:"cached_tokens"`
+	} `json:"prompt_tokens_details"`
+	// MiniMax reports the cache hit count at the top level instead.
+	PromptCacheHitTokens int `json:"prompt_cache_hit_tokens"`
+	// OpenRouter (Anthropic/Gemini models): tokens WRITTEN to cache this turn — a
+	// separate count, not part of prompt_tokens, so it is not subtracted.
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+}
+
+// toUsage maps the OpenAI-compatible usage object to the provider Usage, pulling
+// cache reads out of the prompt-token total so cost/savings are computed right.
+func (u oaiUsage) toUsage() Usage {
+	cached := u.PromptCacheHitTokens
+	if u.PromptTokensDetails != nil && u.PromptTokensDetails.CachedTokens > cached {
+		cached = u.PromptTokensDetails.CachedTokens
+	}
+	input := u.PromptTokens - cached // cached is a subset of prompt_tokens
+	if input < 0 {
+		input = 0
+	}
+	return Usage{
+		InputTokens:      input,
+		OutputTokens:     u.CompletionTokens,
+		CacheReadTokens:  cached,
+		CacheWriteTokens: u.CacheCreationInputTokens,
+	}
 }
 
 type oaiResp struct {
@@ -124,11 +184,8 @@ type oaiResp struct {
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
-	Model string `json:"model"`
-	Usage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-	} `json:"usage"`
+	Model string   `json:"model"`
+	Usage oaiUsage `json:"usage"`
 	// MiniMax wraps errors in base_resp (status_code 0 = success).
 	BaseResp *struct {
 		StatusCode int    `json:"status_code"`
@@ -156,7 +213,7 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 
 	body := oaiReq{
 		Model:     model,
-		Messages:  toOAIMessages(req),
+		Messages:  toOAIMessages(req, m.cachesSystem()),
 		MaxTokens: req.MaxTokens,
 		Tools:     toOAITools(req.Tools),
 	}
@@ -213,10 +270,7 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 		StopReason: oaiStopReason(choice.FinishReason),
 		Model:      usedModel,
 		Trace:      trace,
-		Usage: Usage{
-			InputTokens:  parsed.Usage.PromptTokens,
-			OutputTokens: parsed.Usage.CompletionTokens,
-		},
+		Usage:      parsed.Usage.toUsage(),
 	}, nil
 }
 
@@ -236,7 +290,7 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 
 	body := oaiReq{
 		Model:         model,
-		Messages:      toOAIMessages(req),
+		Messages:      toOAIMessages(req, m.cachesSystem()),
 		MaxTokens:     req.MaxTokens,
 		Stream:        true,
 		StreamOptions: &oaiStreamOpts{IncludeUsage: true},
@@ -276,8 +330,7 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 			}
 		}
 		if ch.Usage != nil {
-			out.Usage.InputTokens = ch.Usage.PromptTokens
-			out.Usage.OutputTokens = ch.Usage.CompletionTokens
+			out.Usage = ch.Usage.toUsage()
 		}
 		return true
 	})
@@ -324,16 +377,19 @@ func toOAITools(tools []ToolDef) []oaiTool {
 	return out
 }
 
-// toOAIMessages converts a provider Request into OpenAI-style messages: the
-// static + dynamic system prompt becomes the leading system message (OpenAI has
-// no cache breakpoint, so the two parts are concatenated). Assistant turns with
-// tool calls carry an OpenAI tool_calls array; user turns answering them are
-// expanded into one "tool" role message per result. In-band system-role turns
-// and empty text-only turns are dropped.
-func toOAIMessages(req Request) []oaiMessage {
+// toOAIMessages converts a provider Request into OpenAI-style messages. The
+// static + dynamic system prompt becomes the leading system message. When
+// cacheSystem is true (OpenRouter), the static prefix carries a cache_control
+// breakpoint so it is cached across turns while the volatile dynamic suffix stays
+// outside the cached prefix — mirroring the native Anthropic provider. Otherwise
+// the two parts are concatenated into a plain string (no breakpoint). Assistant
+// turns with tool calls carry an OpenAI tool_calls array; user turns answering
+// them are expanded into one "tool" role message per result. In-band system-role
+// turns and empty text-only turns are dropped.
+func toOAIMessages(req Request, cacheSystem bool) []oaiMessage {
 	msgs := make([]oaiMessage, 0, len(req.Messages)+1)
-	if sys := strings.TrimSpace(strings.TrimSpace(req.System) + "\n\n" + strings.TrimSpace(req.SystemDynamic)); sys != "" {
-		msgs = append(msgs, oaiMessage{Role: "system", Content: sys})
+	if sysMsg, ok := buildSystemMessage(req.System, req.SystemDynamic, cacheSystem); ok {
+		msgs = append(msgs, sysMsg)
 	}
 	// Merge back-to-back same-role plain-text turns (e.g. several agents replying
 	// in one shared thread) so the role sequence stays clean for stricter
@@ -372,5 +428,58 @@ func toOAIMessages(req Request) []oaiMessage {
 		}
 		msgs = append(msgs, oaiMessage{Role: mm.Role, Content: mm.Text})
 	}
+	if cacheSystem {
+		// Second breakpoint on the tail of the transcript so the whole conversation
+		// prefix (system + history) is cached and reused next turn — not just the
+		// system prefix. OpenRouter/Anthropic allow up to 4 breakpoints; we use 2.
+		attachHistoryBreakpoint(msgs)
+	}
 	return msgs
+}
+
+// attachHistoryBreakpoint places a cache_control breakpoint on the last plain-text
+// message (user/assistant text or a tool result) by converting its string content
+// to a single text part. Messages carrying tool_calls and the system message
+// (index 0, which already has its own breakpoint) are skipped. No-op when there is
+// no eligible message.
+func attachHistoryBreakpoint(msgs []oaiMessage) {
+	for i := len(msgs) - 1; i >= 1; i-- {
+		if len(msgs[i].ToolCalls) > 0 {
+			continue
+		}
+		s, ok := msgs[i].Content.(string)
+		if !ok || strings.TrimSpace(s) == "" {
+			continue
+		}
+		msgs[i].Content = []oaiContentPart{{Type: "text", Text: s, CacheControl: &oaiCacheCtrl{Type: "ephemeral"}}}
+		return
+	}
+}
+
+// buildSystemMessage assembles the leading system message from a static prefix
+// and a volatile dynamic suffix. Without caching the two are concatenated into a
+// plain string. With caching (OpenRouter) they become two text parts and a
+// cache_control breakpoint is placed on the static prefix (or, if there is no
+// static prefix, on the dynamic block) so the cached prefix is reused next turn.
+// ok is false when both parts are empty (no system message at all).
+func buildSystemMessage(static, dynamic string, cache bool) (oaiMessage, bool) {
+	static = strings.TrimSpace(static)
+	dynamic = strings.TrimSpace(dynamic)
+	if static == "" && dynamic == "" {
+		return oaiMessage{}, false
+	}
+	if !cache {
+		return oaiMessage{Role: "system", Content: strings.TrimSpace(static + "\n\n" + dynamic)}, true
+	}
+
+	bp := &oaiCacheCtrl{Type: "ephemeral"}
+	var parts []oaiContentPart
+	if static != "" {
+		parts = append(parts, oaiContentPart{Type: "text", Text: static, CacheControl: bp})
+		bp = nil // breakpoint already placed on the static prefix
+	}
+	if dynamic != "" {
+		parts = append(parts, oaiContentPart{Type: "text", Text: dynamic, CacheControl: bp})
+	}
+	return oaiMessage{Role: "system", Content: parts}, true
 }

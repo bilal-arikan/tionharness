@@ -137,10 +137,7 @@ type Prepared struct {
 // provider is used only when a compaction is needed.
 func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider providers.Provider, session db.Session, agent db.Agent, history []db.Message) (Prepared, error) {
 	summary := session.Summary
-	start := session.SummaryMsgCount
-	if start > len(history) {
-		start = len(history) // defensive: history shorter than recorded (e.g. after edits)
-	}
+	start := clampStart(session.SummaryMsgCount, len(history))
 	pending := history[start:]
 
 	maxTokens, keepRecent := m.limits()
@@ -153,19 +150,19 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		maxTokens = EffectiveBudget(agent.Provider, agent.Model, maxTokens, fraction, ceil)
 	}
 	compacted := false
-	if EstimateTokens(summary, pending) > maxTokens && len(pending) > keepRecent {
-		fold := pending[:len(pending)-keepRecent]
-		newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
-		if err != nil {
-			return Prepared{}, err
+	if EstimateTokens(summary, pending) > maxTokens {
+		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok {
+			newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
+			if err != nil {
+				return Prepared{}, err
+			}
+			summary = newSummary
+			if err := database.SetSessionSummary(ctx, session.ID, summary, newCount); err != nil {
+				return Prepared{}, err
+			}
+			pending = keepTail
+			compacted = true
 		}
-		summary = newSummary
-		newCount := start + len(fold)
-		if err := database.SetSessionSummary(ctx, session.ID, summary, newCount); err != nil {
-			return Prepared{}, err
-		}
-		pending = pending[len(fold):]
-		compacted = true
 	}
 
 	contextTokens := EstimateTokens(summary, pending)
@@ -192,40 +189,59 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 // nothing (folded == 0) when there are not enough pending messages.
 func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider providers.Provider, session db.Session, agent db.Agent, history []db.Message) (folded int, summary string, err error) {
 	summary = session.Summary
-	start := session.SummaryMsgCount
-	if start > len(history) {
-		start = len(history)
-	}
-	pending := history[start:]
-
+	start := clampStart(session.SummaryMsgCount, len(history))
 	_, keepRecent := m.limits()
-	if len(pending) <= keepRecent {
+	fold, _, newCount, ok := foldBoundary(history, start, keepRecent)
+	if !ok {
 		return 0, summary, nil // not enough to compact
 	}
-	fold := pending[:len(pending)-keepRecent]
 	newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
 	if err != nil {
 		return 0, "", err
 	}
-	newCount := start + len(fold)
 	if err := database.SetSessionSummary(ctx, session.ID, newSummary, newCount); err != nil {
 		return 0, "", err
 	}
 	return len(fold), newSummary, nil
 }
 
-// summarize folds messages into the existing summary via the provider. The
-// compaction call spends real tokens, so its usage is recorded against the
-// agent under UsageKindCompact — otherwise rolling-summary spend would be
-// invisible to the daily meter and budget planning.
-func (m *Manager) summarize(ctx context.Context, database *db.DB, provider providers.Provider, agent db.Agent, existing string, msgs []db.Message) (string, error) {
-	var b strings.Builder
-	for _, msg := range msgs {
-		b.WriteString(msg.Role)
-		b.WriteString(": ")
-		b.WriteString(msg.Text)
-		b.WriteString("\n")
+// clampStart caps a recorded SummaryMsgCount at the current history length —
+// defensive against a history shorter than recorded (e.g. after message edits).
+func clampStart(start, n int) int {
+	if start > n {
+		return n
 	}
+	return start
+}
+
+// foldBoundary computes the compaction split for a session's pending history.
+// Given the start index (clamped SummaryMsgCount) and keepRecent, it returns the
+// older slice to fold into the summary (fold), the newest turns to keep verbatim
+// (keepTail), and the resulting SummaryMsgCount after the fold (newCount). ok is
+// false when there are not enough pending messages to fold (<= keepRecent), in
+// which case nothing should be compacted.
+func foldBoundary(history []db.Message, start, keepRecent int) (fold, keepTail []db.Message, newCount int, ok bool) {
+	start = clampStart(start, len(history))
+	pending := history[start:]
+	if len(pending) <= keepRecent {
+		return nil, pending, start, false
+	}
+	cut := len(pending) - keepRecent
+	return pending[:cut], pending[cut:], start + cut, true
+}
+
+// summarize folds stored messages into the existing summary via the provider.
+func (m *Manager) summarize(ctx context.Context, database *db.DB, provider providers.Provider, agent db.Agent, existing string, msgs []db.Message) (string, error) {
+	return summarizeRendered(ctx, database, provider, agent, existing, renderDBMessages(msgs))
+}
+
+// summarizeRendered is the single compaction core shared by the rolling-summary
+// path (Manager.summarize) and the reactive mid-loop path (reactive.go): it folds
+// an already-rendered transcript into the existing summary with the structured
+// compactPrompt and records the call's token usage under UsageKindCompact —
+// otherwise compaction spend would be invisible to the daily meter. An empty
+// existing summary is rendered as "(none)".
+func summarizeRendered(ctx context.Context, database *db.DB, provider providers.Provider, agent db.Agent, existing, rendered string) (string, error) {
 	if existing == "" {
 		existing = "(none)"
 	}
@@ -233,7 +249,7 @@ func (m *Manager) summarize(ctx context.Context, database *db.DB, provider provi
 		Model:     agent.Model,
 		MaxTokens: compactMaxOutputTokens,
 		Messages: []providers.Message{
-			{Role: providers.RoleUser, Text: fmt.Sprintf(compactPrompt, existing, b.String())},
+			{Role: providers.RoleUser, Text: fmt.Sprintf(compactPrompt, existing, rendered)},
 		},
 	})
 	if err != nil {
@@ -241,6 +257,19 @@ func (m *Manager) summarize(ctx context.Context, database *db.DB, provider provi
 	}
 	recordCompaction(ctx, database, agent, resp.Usage)
 	return strings.TrimSpace(resp.Text), nil
+}
+
+// renderDBMessages flattens stored turns to the "role: text" transcript the
+// compaction prompt expects.
+func renderDBMessages(msgs []db.Message) string {
+	var b strings.Builder
+	for _, msg := range msgs {
+		b.WriteString(msg.Role)
+		b.WriteString(": ")
+		b.WriteString(msg.Text)
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 // recordCompaction attributes a compaction provider call's token usage to the
@@ -251,13 +280,7 @@ func recordCompaction(ctx context.Context, database *db.DB, agent db.Agent, u pr
 	if database == nil {
 		return
 	}
-	_ = database.AddUsageKind(ctx, agent.ID, db.UsageKindCompact, agent.Provider, agent.Model, db.UsageDelta{
-		Calls:            1,
-		InputTokens:      u.InputTokens,
-		OutputTokens:     u.OutputTokens,
-		CacheReadTokens:  u.CacheReadTokens,
-		CacheWriteTokens: u.CacheWriteTokens,
-	})
+	_ = database.AddUsageKind(ctx, agent.ID, db.UsageKindCompact, agent.Provider, agent.Model, db.DeltaFromUsage(1, u))
 }
 
 // ToProviderMessages maps a tail of stored turns to provider messages (same

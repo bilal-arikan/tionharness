@@ -108,6 +108,20 @@ export interface SessionContextPreview {
   tools: { name: string; description: string }[]
   toolTokens: number
   totalTokens: number
+  cache: CachePreview
+}
+
+// Which segments of the next request are served from a warm prompt cache vs sent
+// fresh. anthropic caches the Tools + System prefix (when ExtendedPromptCache is
+// on); claude-cli --resume keeps System + the first cachedMsgCount messages warm
+// server-side and sends only the newest delta. mode "none" = nothing cached.
+export interface CachePreview {
+  mode: 'anthropic' | 'claude-resume' | 'none'
+  note: string
+  systemCached: boolean
+  dynamicCached: boolean
+  toolsCached: boolean
+  cachedMsgCount: number
 }
 
 // A labelled bucket of the live context window (summary or a message role).

@@ -28,6 +28,8 @@ credential-secret
 
 # Local dev logs + scratch (not part of the project)
 *.log
+*.log.err
+*.err
 /_be.log
 /_be.err.log
 /.backend.log

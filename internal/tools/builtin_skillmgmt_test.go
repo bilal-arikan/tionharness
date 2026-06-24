@@ -9,22 +9,22 @@ import (
 // fakeSkillWriter records the last UpdateSkill call so tests can assert the
 // tool forwards exactly the fields the caller supplied (nil = unchanged).
 type fakeSkillWriter struct {
-	gotSlug                            string
-	name, description, whenToUse, body *string
-	shared                             *bool
-	updateCalled                       bool
+	gotSlug                                   string
+	name, description, whenToUse, group, body *string
+	shared                                    *bool
+	updateCalled                              bool
 }
 
-func (f *fakeSkillWriter) CreateSkill(string, string, string, string, string, bool) error {
+func (f *fakeSkillWriter) CreateSkill(string, string, string, string, string, string, bool) error {
 	return nil
 }
 func (f *fakeSkillWriter) DeleteSkill(string) error { return nil }
 func (f *fakeSkillWriter) ImportSkill(source, location, slug string, shared bool) (SkillImportResult, error) {
 	return SkillImportResult{Slug: "imported"}, nil
 }
-func (f *fakeSkillWriter) UpdateSkill(slug string, name, description, whenToUse, body *string, shared *bool) error {
+func (f *fakeSkillWriter) UpdateSkill(slug string, name, description, whenToUse, group, body *string, shared *bool) error {
 	f.updateCalled = true
-	f.gotSlug, f.name, f.description, f.whenToUse, f.body, f.shared = slug, name, description, whenToUse, body, shared
+	f.gotSlug, f.name, f.description, f.whenToUse, f.group, f.body, f.shared = slug, name, description, whenToUse, group, body, shared
 	return nil
 }
 
@@ -44,9 +44,9 @@ func TestUpdateSkill_PartialForwarding(t *testing.T) {
 	if f.body == nil || *f.body != "new body" {
 		t.Fatalf("body should be forwarded, got %v", f.body)
 	}
-	if f.name != nil || f.description != nil || f.whenToUse != nil || f.shared != nil {
-		t.Fatalf("omitted fields must stay nil (unchanged), got name=%v desc=%v when=%v shared=%v",
-			f.name, f.description, f.whenToUse, f.shared)
+	if f.name != nil || f.description != nil || f.whenToUse != nil || f.group != nil || f.shared != nil {
+		t.Fatalf("omitted fields must stay nil (unchanged), got name=%v desc=%v when=%v group=%v shared=%v",
+			f.name, f.description, f.whenToUse, f.group, f.shared)
 	}
 }
 

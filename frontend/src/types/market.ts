@@ -3,8 +3,15 @@
 // manifest only; the kind-specific payload is fetched on demand via the detail
 // endpoint and used at install time. See _Docs/21-MARKET.md.
 
-export type PackKind = 'skill' | 'agent' | 'provider' | 'flow'
-export type PackSource = 'bundled' | 'global' | 'workspace'
+export type PackKind =
+  | 'skill'
+  | 'agent'
+  | 'provider'
+  | 'flow'
+  | 'workspace'
+  | 'memory'
+  | 'mcp'
+export type PackSource = 'bundled' | 'global' | 'workspace' | 'remote'
 
 export interface SkillPayload {
   slug: string
@@ -42,11 +49,46 @@ export interface FlowPayload {
   graph: string
 }
 
+export interface BoardColumn {
+  key: string
+  label: string
+  color?: string
+}
+
+export interface WorkspacePayload {
+  name: string
+  icon?: string
+  color?: string
+  instructions?: string
+  columns?: BoardColumn[]
+}
+
+export interface MCPPayload {
+  name: string
+  transport?: string
+  command?: string
+  args?: string
+  url?: string
+  envConfig?: string
+}
+
+export interface MemoryEntry {
+  content: string
+  kind?: string
+}
+
+export interface MemoryPayload {
+  entries: MemoryEntry[]
+}
+
 export interface PackPayload {
   skill?: SkillPayload
   agent?: AgentPayload
   provider?: ProviderPayload
   flow?: FlowPayload
+  workspace?: WorkspacePayload
+  memory?: MemoryPayload
+  mcp?: MCPPayload
 }
 
 export interface Pack {
@@ -64,6 +106,20 @@ export interface Pack {
   // Populated only on the detail endpoint (GET /api/market/{id}).
   payload?: PackPayload
   source?: PackSource
+  // Set when source === 'remote': the display name of the registry it came from.
+  registryName?: string
+  // Decorated by the API from the per-workspace install ledger: the version last
+  // installed here. Empty = never installed via the market. Compare with version
+  // to detect an available update.
+  installedVersion?: string
+}
+
+// Registry is a configured remote pack source (a registry index URL).
+export interface Registry {
+  name: string
+  url: string
+  enabled: boolean
+  addedAt: number
 }
 
 export interface InstallResult {
