@@ -344,6 +344,56 @@ Seviye 2 importer'ın ilk iki increment'i. Önkoşullar SK-1..SK-4 hazırdı.
 - **Kalan (SK-IMP.3):** GitHub kaynağı (URL→fetch), `import_skill` self-management aracı (agent-usable),
   Market/Skills UI akışı. Detay: `03-YOL-HARITASI.md` SK-IMP.
 
+## Skill sistemi geliştirmeleri SK-1..SK-4 (CC skill importer önkoşulları) ✅ (2026-06-23)
+
+Claude Code skill importer'a (Seviye 2, `03-YOL-HARITASI.md` SK-IMP) hazırlık olarak, kendi skill
+sistemimizde 4 önkoşul uygulandı. Kaynak desen: `observed-behavior/src/skills/loadSkillsDir.ts`.
+
+- **SK-1 — Çok-dosyalı skill:** `Store.UseSkillBody` gövdede `${SKILL_DIR}` (+ CC `${CLAUDE_SKILL_DIR}`)
+  ikamesi yapıyor → skill kendi klasöründeki dosyalara atıf verir; **sibling dosyalar** "## Bundled files"
+  footer'ıyla ajana ilan edilir (Read ile on-demand). Raw `Body` (edit/detay) literal kalır.
+  `substituteSkillVars`/`bundledFilesFooter` (`store.go`).
+- **SK-2 — Ölçeklenebilir keşif:** `Skill.Paths` (`paths:`) → **koşullu skill** auto-advertise'dan çıkar
+  (prompt şişmez), loadable kalır; `Store.Search` + yeni **`skill_search`** aracı (`builtin_skillsearch.go`,
+  native `toolsetup.go` + CLI bridge `mcp_interaction.go`). fs-touch OTOMATİK aktivasyon ertelendi
+  (session-scoped state gerekir).
+- **SK-3 — `allowed_tools` enforcement:** `use_skill` yüklenince skill'in `always_allow` desenlerini
+  `ParsePermRule` ile oturum grant'larına (`GrantsFrom(ctx)`) ekler → araçlar re-prompt'suz; çıktıya
+  şeffaflık notu. `SkillLibrary.AllowedTools` + `agentSkillLib.AllowedTools`.
+- **SK-4 — Provenance frontmatter:** `Skill.Version/SourceURL/License/UserInvocable` parse + serialize
+  (importer'da köken/güncellik izi). `user-invocable` default true.
+- **CLI bridge (canlı testte bulunup tamamlandı):** `skill_search` ve SK-3 auto-grant ilk uygulamada
+  yalnız native yoldaydı; claude-cli ajanlarının Interaction MCP köprüsünde eksikti. Eklendi:
+  `Runtime.SearchSkillsForAgent`/`SkillAllowedToolsForAgent`, `chatRun.skillSearch`/`skillAllow`
+  setter'ları (chat_stream + autonomous_interaction'da kurulur), `mcp_interaction.go` dispatch
+  case `skill_search` + `callSkillSearch` + `grantSkillToolsCLI`. `renderCatalog` ajana skill_search'ü
+  hatırlatan satır ekler (koşullu skill'ler katalogda yok). **Not:** CLI bridge yalnız streaming
+  `/api/chat/stream` yolunda kurulur; non-streaming `/api/chat` interaction tool'larını bağlamaz.
+- **Doğrulama:** `go build ./...` + `go test ./internal/{skills,tools,agent,api}/` yeşil; yeni testler
+  `TestUseSkillBodySK1`/`TestSearchAndConditionalSK2`/`TestUseSkillGrantsToolsSK3`/`TestRichFrontmatterSK4`.
+  **Canlı (claude-cli, /api/chat/stream):** SK-1 `${SKILL_DIR}`+bundled path, SK-2 `skill_search`→koşullu
+  `sk-demo` (katalogda yok), SK-3 "_auto-allowed: Bash(git *)_", SK-4 API parse — hepsi doğrulandı.
+  Sırada: **SK-IMP** (gömülü importer).
+
+## Vite bundle temizliği + API E2E smoke testi ✅ (2026-06-23)
+
+**Vite:** Production build'in "chunks larger than 500 kB" uyarısı temizlendi.
+`vite.config.ts`'e `manualChunks` eklendi — ağır vendor kütüphaneleri ana
+bundle'dan ayrıldı: `vendor-highlight` (highlight.js ~152 kB), `vendor-markdown`
+(react-markdown/remark/rehype ~161 kB), `vendor-react` (~359 kB). Ana `index`
+chunk'ı **969 kB → 472 kB**'a indi (artık limitin altında). Tek kalan büyük chunk
+`relationGraph` (vis-network ~522 kB, zaten lazy) için `chunkSizeWarningLimit: 600`
+ayarlandı — bilinçli lazy vendor chunk'ı için dürüst susturma. Build temiz, uyarı yok.
+
+**E2E smoke testi:** Repodaki ilk otomatik test — `scripts\e2e-smoke.ps1` (**12 adım**).
+Doc 33'teki HTTP API yolunu baştan sona doğrular: health → **CORS preflight (`*`+auth-yok)**
+→ **hata sözleşmesi (400/404 `{error}`)** → workspaces → agents → session →
+**workdir round-trip (cwd set→git→reset)** → **gerçek LLM chat turu (SSE `done`+yanıt)**
+→ **çok-turlu bağlam sürekliliği (codeword recall)** → **`permissionMode=read-only`
+override turu** → kalıcılık (8 mesaj/4 tur) → cleanup. Canlı sunucuya karşı `AGT3`
+(claude-cli/haiku) ile **12/12 geçti** (LLM `ZEPHYR-7` codeword'ünü 2. turda hatırladı);
+`-SkipLLM` ile 9/9 (smoke-only, ucuz). CI dostu exit kodu. Detay: `_Docs/33` §A.6.
+
 ## Lazy araç kataloğu MCP açıklamalarını kısaltıyor (bağlam şişmesi fix) ✅ (2026-06-23)
 
 Sorun: Sistem promptundaki **"Available Tools (load on demand)"** bloğu, lazy MCP
