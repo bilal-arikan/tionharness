@@ -105,7 +105,7 @@ func (s *Server) applySettings() {
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
-	s.tun.SetContextBudget(cur.MaxContextTokens) // scale tool-output thresholds to the budget (CG-9)
+	s.tun.SetContextBudget(cur.MaxContextTokens)                             // scale tool-output thresholds to the budget (CG-9)
 	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
 	s.tun.SetTitleModel(cur.TitleModel)
 	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen)
@@ -352,6 +352,7 @@ func (s *Server) registerArtifactRoutes(mux *http.ServeMux) {
 func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/skills", s.handleListSkills)
 	mux.HandleFunc("POST /api/skills", s.handleCreateSkill)
+	mux.HandleFunc("POST /api/skills/import", s.handleImportSkill)
 	mux.HandleFunc("POST /api/skills/reload", s.handleReloadSkills)
 	mux.HandleFunc("GET /api/skills/{slug}", s.handleGetSkill)
 	mux.HandleFunc("PUT /api/skills/{slug}", s.handleUpdateSkill)

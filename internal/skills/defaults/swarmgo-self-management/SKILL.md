@@ -103,7 +103,7 @@ agents/sessions/flows/secrets) the switcher hops between. List/create/rename any
 you're running in, never the last remaining one. A new workspace starts empty
 (seeded with the blank template); switch to it in the UI to use it.
 
-**Skills** — `create_skill`, `update_skill`, `delete_skill`. Author a reusable
+**Skills** — `create_skill`, `update_skill`, `delete_skill`, `import_skill`. Author a reusable
 workspace skill (markdown instructions other agents load with `use_skill`);
 created skills appear in the catalog next turn. `update_skill` edits one in place
 by slug — pass only the fields to change (name/description/whenToUse/body/shared),
@@ -111,6 +111,22 @@ omitted fields keep their current value; prefer it over delete + recreate. Only
 workspace-tier skills can be edited or deleted (global/bundled are protected).
 Deleting a skill also strips its slug from every agent that had it selected, so no
 agent keeps a dangling reference. (`use_skill` itself is always available.)
+
+A skill's SKILL.md frontmatter supports more than the basics: `paths:` makes it
+**conditional** (kept out of the catalog, found via `skill_search` — good for niche
+skills that shouldn't bloat every prompt), `always_allow:` lists tool patterns
+auto-granted to the session when the skill loads (e.g. `Bash(git *)`), and
+`version`/`source_url`/`license` record provenance. Drop extra files in the skill's
+folder and reference them from the body with `${SKILL_DIR}/<file>` — they are
+advertised on load and read on demand. Use `skill_search <keywords>` to find skills
+not shown in the catalog.
+
+`import_skill` brings in an existing **Claude Code skill** from `source:"local"` (a
+folder path with SKILL.md) or `source:"github"` (a github.com folder URL, e.g.
+`https://github.com/owner/repo/tree/main/skills/x`). It maps the CC frontmatter
+(allowed-tools→always_allow, paths, version/license/source), copies bundled files,
+and reports warnings for unsupported CC features (context:fork, hooks, slash-command
+args) — so you can reuse the large CC skill ecosystem without rewriting.
 
 **Artifacts** — `list_artifacts`, `read_artifact` (get content by id — do NOT guess
 the file path), `delete_artifact` (delete only agent-created).

@@ -46,6 +46,14 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		run.setSkillLoader(func(slug string) (string, error) {
 			return rt.LoadSkillForAgent(ag, slug)
 		})
+		// skill_search (CLI path): discover on-demand/conditional skills. (SK-2)
+		run.setSkillSearcher(func(query string, limit int) []tools.SkillHit {
+			return rt.SearchSkillsForAgent(ag, query, limit)
+		})
+		// SK-3 (CLI path): loading a skill auto-grants its declared allowed-tools.
+		run.setSkillAllowed(func(slug string) []string {
+			return rt.SkillAllowedToolsForAgent(ag, slug)
+		})
 		// shell (CLI path): sandboxed PowerShell shell so the CLI's POSIX Bash can be
 		// disallowed; nil when shell is off (then native Bash stays available).
 		run.setShellRunner(rt.NewShellRunner())

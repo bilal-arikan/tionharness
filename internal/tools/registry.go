@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/bilal-arikan/swarmgo/internal/mcp"
@@ -224,7 +225,34 @@ func (r *Registry) ActiveDefs(allow func(name string) bool, active map[string]bo
 	return out
 }
 
-// LazyCatalog returns the lazy tools (name + description only) for the
+// lazyCatalogDescMaxChars bounds a single tool's description in the rendered
+// "Available Tools (load on demand)" block. The lazy block is a name+summary
+// teaser only — the FULL description ships later, in the activated tool's schema
+// (Defs). MCP servers (notably the gateway) attach multi-paragraph descriptions
+// full of "When to use / When NOT to use" guidance; dumping all of that for every
+// lazy tool bloats the system prompt (and on Windows pushes the claude-cli
+// command line past the ~32 KB limit). We keep just the first meaningful line.
+const lazyCatalogDescMaxChars = 200
+
+// lazyDescription reduces a (possibly multi-paragraph) tool description to a
+// single short summary line for the load-on-demand catalog. It takes the first
+// non-empty line and hard-caps its length on a UTF-8 boundary.
+func lazyDescription(desc string) string {
+	summary := ""
+	for _, line := range strings.Split(desc, "\n") {
+		if s := strings.TrimSpace(line); s != "" {
+			summary = s
+			break
+		}
+	}
+	if utf8.RuneCountInString(summary) <= lazyCatalogDescMaxChars {
+		return summary
+	}
+	runes := []rune(summary)
+	return strings.TrimSpace(string(runes[:lazyCatalogDescMaxChars])) + "…"
+}
+
+// LazyCatalog returns the lazy tools (name + short summary) for the
 // load-on-demand prompt block. allow filters by name (nil = allow all).
 func (r *Registry) LazyCatalog(allow func(name string) bool) []providers.ToolDef {
 	keep := func(name string) bool {
@@ -234,12 +262,12 @@ func (r *Registry) LazyCatalog(allow func(name string) bool) []providers.ToolDef
 	for name, t := range r.builtins {
 		if keep(name) {
 			d := t.Def()
-			out = append(out, providers.ToolDef{Name: d.Name, Description: d.Description})
+			out = append(out, providers.ToolDef{Name: d.Name, Description: lazyDescription(d.Description)})
 		}
 	}
 	for _, e := range r.mcpEntries {
 		if keep(e.NamespacedName) {
-			out = append(out, providers.ToolDef{Name: e.NamespacedName, Description: e.Tool.Description})
+			out = append(out, providers.ToolDef{Name: e.NamespacedName, Description: lazyDescription(e.Tool.Description)})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

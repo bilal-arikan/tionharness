@@ -94,6 +94,11 @@ hızla şişiyor. Ajan çoğu turda bu araçların küçük bir kısmını kulla
 Skill sisteminde bunu zaten çözdük: katalogta yalnızca **özet** durur, tam gövde
 `use_skill` ile talep üzerine yüklenir. Aynı deseni araçlara uygulayalım.
 
+> Simetri (SK-2, 2026-06-23): skill tarafı da araçlardaki `tool_search`'ün ikizini
+> kazandı — **`skill_search`**. `paths:` taşıyan **koşullu skill** katalogda hiç
+> görünmez (özeti bile prompt'a girmez), gerektiğinde `skill_search` ile bulunup
+> `use_skill` ile yüklenir. Böylece yüzlerce skill içe aktarılsa bile prompt şişmez.
+
 ## Hedef
 
 Ajana başlangıçta sadece **hafif bir araç kataloğu** (ad + tek satır açıklama)

@@ -39,7 +39,11 @@ workspaces never leaks content between them.
   journal and merged into it (HA-1, toggleable). When context fills up a turn warns
   you to persist anything important before it is compacted away.
 - **Skills** — reusable instruction sets (like this one). Their summaries are
-  advertised in the prompt; full bodies load on demand via `use_skill`.
+  advertised in the prompt; load a full body on demand with `use_skill`. Some
+  skills are deliberately kept OUT of the prompt (on-demand or file-conditional,
+  via `paths:`) to save context — discover them with `skill_search <keywords>`. A
+  skill may also ship **bundled files** (templates, references); loading it lists
+  them so you can `read` them when the task needs them.
 - **MCP servers** — external tool providers attached per workspace.
 - **Secrets** — an encrypted per-workspace vault, read via `secret_list` /
   `secret_get` (both load-on-demand — activate them when a task needs a credential).
@@ -52,7 +56,9 @@ workspaces never leaks content between them.
    context, when enabled.
 
 Skills keep the context lean: only summaries sit in the prompt; you pull a full
-body with `use_skill` exactly when a task matches it.
+body with `use_skill` exactly when a task matches it. If a task seems to need a
+skill you don't see listed, call `skill_search` — conditional/on-demand skills are
+discoverable but not advertised.
 
 ## How to get things done
 

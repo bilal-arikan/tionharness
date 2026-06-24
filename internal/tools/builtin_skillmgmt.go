@@ -19,6 +19,18 @@ type SkillWriter interface {
 	// caller can change just the body without resupplying the rest.
 	UpdateSkill(slug string, name, description, whenToUse, body *string, shared *bool) error
 	DeleteSkill(slug string) error
+	// ImportSkill imports a Claude Code skill from source ("local"|"github") at
+	// location (a directory path or a github.com URL) into the workspace tier,
+	// mapping its frontmatter and copying bundled files. (SK-IMP)
+	ImportSkill(source, location, slug string, shared bool) (SkillImportResult, error)
+}
+
+// SkillImportResult is the tools-package view of an import outcome (mirrors
+// skills.ImportResult, kept here so tools need not import the skills package).
+type SkillImportResult struct {
+	Slug     string
+	Warnings []string
+	Files    []string
 }
 
 // Skill self-management tools let an agent author and remove reusable skills in
@@ -188,5 +200,70 @@ func (t DeleteSkillTool) Call(_ context.Context, input json.RawMessage) (string,
 		return "", fmt.Errorf("delete skill: %w", err)
 	}
 	b, _ := json.Marshal(map[string]string{"slug": in.Slug, "action": "deleted"})
+	return string(b), nil
+}
+
+// ---- import_skill ----
+
+// ImportSkillTool imports a Claude Code skill (from a local directory or a GitHub
+// URL) into the workspace, mapping its frontmatter and copying bundled files so
+// the rich CC skill ecosystem can be reused inside SwarmGo. (SK-IMP)
+type ImportSkillTool struct{ w SkillWriter }
+
+// NewImportSkillTool constructs import_skill over a skill writer.
+func NewImportSkillTool(w SkillWriter) ImportSkillTool { return ImportSkillTool{w: w} }
+
+func (ImportSkillTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name: "import_skill",
+		Description: "Import a Claude Code skill into this workspace. source \"local\" reads a skill " +
+			"folder from disk (path = directory containing SKILL.md); source \"github\" fetches a " +
+			"github.com folder URL (e.g. https://github.com/owner/repo/tree/main/skills/my-skill). " +
+			"Frontmatter is mapped (allowed-tools→always_allow, paths→conditional, version/license/source " +
+			"recorded); unsupported CC features (context:fork, hooks, slash-command args) are dropped with " +
+			"warnings. Bundled files are copied. Returns the new slug + warnings.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"source":{"type":"string","enum":["local","github"],"description":"Where to import from (default local)"},
+				"location":{"type":"string","description":"Local directory path (local) or github.com folder URL (github)"},
+				"slug":{"type":"string","description":"Optional slug override; derived from the skill name when omitted"},
+				"shared":{"type":"boolean","description":"Advertise to all agents (default false = restricted)"}
+			},
+			"required":["location"],
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t ImportSkillTool) Call(_ context.Context, input json.RawMessage) (string, error) {
+	if t.w == nil {
+		return "", fmt.Errorf("skill import is not available in this context")
+	}
+	var in struct {
+		Source   string `json:"source"`
+		Location string `json:"location"`
+		Slug     string `json:"slug"`
+		Shared   bool   `json:"shared"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", argErr(err)
+	}
+	in.Location = strings.TrimSpace(in.Location)
+	if in.Location == "" {
+		return "", fmt.Errorf("location is required (a local directory path or a github.com URL)")
+	}
+	res, err := t.w.ImportSkill(in.Source, in.Location, strings.TrimSpace(in.Slug), in.Shared)
+	if err != nil {
+		return "", fmt.Errorf("import skill: %w", err)
+	}
+	out := map[string]any{"slug": res.Slug, "action": "imported"}
+	if len(res.Files) > 0 {
+		out["bundledFiles"] = res.Files
+	}
+	if len(res.Warnings) > 0 {
+		out["warnings"] = res.Warnings
+	}
+	b, _ := json.Marshal(out)
 	return string(b), nil
 }

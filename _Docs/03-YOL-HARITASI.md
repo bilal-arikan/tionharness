@@ -288,6 +288,70 @@ graph LR
 
 ---
 
+## Claude Code skill içe-aktarma (porter) — Seviye 2 (2026-06-23)
+
+> Kaynak: bu oturumda caveman (juliusbrussee/caveman) + genel CC skill ekosistemi
+> (anthropics/skills, agentskills.io, tonsofskills, alirezarezvani/claude-skills…) incelemesi.
+> CC ile SwarmGo skill formatının **çekirdeği aynı** (SKILL.md = frontmatter + markdown gövde)
+> → "talimat" skill'leri ~kopyala-yapıştır portlanır. **Kısmen uygulandı (2026-06-24).**
+
+- [x] **SK-IMP — Gömülü CC skill importer** *(Seviye 2)* ✅ **TAMAMLANDI (2026-06-24)** — çekirdek + local + GitHub + agent tool + UI:
+  `internal/skills/import.go` (`mapCCSkill`+`Store.ImportCCSkill`): frontmatter eşler (name/description/
+  when_to_use→aynı; `allowed-tools`→`always_allow`; `paths`→koşullu; version/license→aynı; source_url
+  provenance; `disable-model-invocation:true`→shared değil; `user-invocable`→`user_invocable`),
+  uyumsuzu (`context:fork`/`hooks`/`model`/`agent`/`effort`/slash-arg/`!`+inline-shell) **ayıklayıp
+  warning** döndürür, bundled dosyaları (path-traversal reddiyle) kopyalar, workspace tier'a yazıp reload
+  eder. API `POST /api/skills/import` (`source:local`, path+slug?+shared?). Testler: `import_test.go`.
+  **GitHub kaynağı ✅:** `github.go` (`fetchGitHubSkill`+`parseGitHubURL`) github.com tree/blob URL'sini
+  contents API ile çeker (host-allowlist; 8MB cap), `Store.ImportFromSource(source,location,…)` local|github
+  ayrımını yapar. **`import_skill` aracı ✅:** self-management tool (`SkillWriter.ImportSkill` + `ImportSkillTool`,
+  `toolsetup`'ta create/update/delete yanında), CLI bridge üzerinden de çalışır.
+  **Canlı doğrulandı:** local `~/.claude/skills/gsd-add-tests`, GitHub `anthropics/skills/.../skill-creator`
+  (bundled LICENSE.txt kopyalandı), ve claude-cli ajanı `import_skill` ile `gsd-capture` import etti.
+  **UI ✅:** Skills panelinde "İçe Aktar" butonu + `SkillImportDialog` (GitHub/yerel seçici, slug, paylaşımlı
+  toggle) → sonuçta slug + kopyalanan dosyalar + uyarılar gösterilir, liste yenilenip skill seçilir
+  (`SkillImportDialog.tsx`, `skillApi.importSkill`). agentskills.io açık standardını hedefler. İlişkili:
+  **HA-2**, `21-MARKET.md`.
+  - **(eski hedef tanımı)** Market (SwarmPack) içine "Claude Code skill
+  içe aktar" akışı — GitHub URL / yerel klasör → backend çeker, frontmatter eşler (name/description→aynı;
+  `allowed-tools`→`always_allow`; `disable-model-invocation`→`access`; version/license/source passthrough),
+  uyumsuzu (`context:fork`, `hooks:`, slash-komut, bundled script) ayıklayıp **rapor eder**, `skill_validate`
+  ile doğrular, workspace tier'a kurar. agentskills.io açık standardını hedefler. İlişkili: **HA-2**, `21-MARKET.md`.
+  - **Önkoşul iyileştirmeler (entegrasyondan ÖNCE — kendi skill sistemimizde).**
+    > Kanıtlı desen kaynağı: `C:\Users\user\Desktop\Projects\observed-behavior` (CC'nin gerçek
+    > skill loader'ı `src/skills/loadSkillsDir.ts` — birebir örnek alınabilir).
+    - [x] **SK-1 ✅ (2026-06-23) — Çok-dosyalı skill (bundled resources):** skill bir KLASÖR olabilsin; SKILL.md gövdesinin
+      atıf yaptığı ek dosyalar (reference.md, şablon, script) on-demand `fs` ile okunsun. Bugün skill tek-dosya
+      → birçok CC skill'i tam portlanamaz. **CC deseni:** `createSkillCommand` `baseDir` taşır + gövdede
+      `${CLAUDE_SKILL_DIR}`/`${CLAUDE_SESSION_ID}` ikamesi → gömülü dosyalara/scriptlere atıf. SwarmGo'da
+      `Store.Body`'ye `${SKILL_DIR}` ikamesi + ajanın sibling dosyaları `fs` ile okuması. **Porter için ön-şart.**
+    - [x] **SK-2 ✅ (2026-06-23) — Ölçeklenebilir keşif (`skill_search` + koşullu `paths:`):**
+      Uygulandı: `paths:` taşıyan skill auto-advertise'dan çıkar + `Store.Search` + `skill_search`
+      aracı (native + CLI bridge). **Ertelendi (alt-madde):** fs-touch ile OTOMATİK koşullu aktivasyon —
+      Store workspace-singleton olduğundan session-scoped aktivasyon state'i gerekir; şu an koşullu
+      skill'ler `skill_search`/explicit assignment ile erişilir. Detay (orijinal hedef): yüzlerce skill içe aktarınca tüm
+      shared özetleri her tura enjekte etmek prompt'u şişirir. **CC iki mekanizma kullanıyor (örnek al):**
+      (a) `paths:` frontmatter ile **koşullu skill** — skill yalnız eşleşen dosyaya dokunulunca aktive olur
+      (`activateConditionalSkillsForPaths`, gitignore-tarzı eşleşme); (b) dosya yolundan yukarı yürüyüp
+      `.claude/skills` keşfi. SwarmGo'da: `paths:` koşullu aktivasyon (PostToolUse/fs-touch ile) + `skill_search`
+      aracı (`tool_search` ikizi) + `estimateSkillFrontmatterTokens` benzeri özet-token ölçümü. **Ölçek ön-şartı.**
+    - [x] **SK-3 ✅ (2026-06-23) — `allowed_tools` enforcement:** `AlwaysAllow` bugün yalnız UI'da, **uygulanmıyor**. **CC deseni:**
+      skill çalışırken `allowedTools` → `alwaysAllowRules.command`'a enjekte edilir (skill kapsamında auto-allow).
+      SwarmGo'da skill yüklenince ilan ettiği araçları oturum/skill kapsamında scope/auto-allow et.
+    - [x] **SK-4 ✅ (2026-06-23) — Zengin frontmatter passthrough:** CC `version`/`disable-model-invocation`/`user-invocable`/
+      `context: fork`/`agent`/`model`/`effort`/`hooks`/`paths` taşıyor. En azından `version`/`source_url`/`license`
+      (provenance) + `user-invocable` SwarmGo'ya eklensin; gerisi degrade-gracefully korunur (parser zaten bilinmeyen
+      anahtarı tutuyor).
+    - [ ] **SK-5 — Kategori/etiket + onay-guard + dedup:** etiketli filtreli katalog; `disable-model-invocation`
+      muadili "yan-etkili skill, otomatik tetikleme yok" guard'ı; **realpath ile dedup** (CC `getFileIdentity` —
+      symlink/çift-dizin aynı skill'i bir kez yükler).
+
+> Seviye 1 (offline dönüştürücü script, `Progs` altı) bu oturumda PoC olarak önerildi; Seviye 2 onun
+> ürünleşmiş/gömülü hali. İlişkili: **HA-2** (kendini-geliştiren skill — CC `skillify` bundled skill'i örnek),
+> `mcpSkillBuilders.ts` (MCP kaynağından skill üretimi — ileri fikir).
+
+---
+
 ## Faz R — Çok-ajan yarış & kurtarma guard'ları (oturum analizinden, 2026-06-19)
 
 > Kaynak: bir dev-oturumunun (`260617-gentle-coyote`) analizi. Oturumda agent'ın

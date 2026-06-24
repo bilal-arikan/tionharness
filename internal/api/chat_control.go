@@ -38,15 +38,17 @@ type chatRun struct {
 	// mu serialises SSE writes: the stream handler goroutine and the Interaction
 	// MCP handler goroutine both emit steps onto the same ResponseWriter. It also
 	// guards artifacts (swapped per responding agent in a multi-agent turn).
-	mu        sync.Mutex
-	write     func(event string, data any) // installed by the stream handler; nil once the turn ends
-	artifacts tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
-	grants    *tools.PermissionGrants      // session "Always allow" set, for the CLI permission-prompt tool
-	wake      tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
-	spawn     *tools.SpawnSessionTool      // current agent's spawn tool (self-manage on), for the Interaction MCP spawn_session tool
-	skill     skillLoader                  // current agent's skill loader, for the Interaction MCP use_skill tool
-	shell     shellRunner                  // current agent's shell runner, for the Interaction MCP shell tool
-	runAgent  runAgentRunner               // current agent's run_subagent runner (delegation on), for the Interaction MCP run_subagent tool
+	mu          sync.Mutex
+	write       func(event string, data any) // installed by the stream handler; nil once the turn ends
+	artifacts   tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
+	grants      *tools.PermissionGrants      // session "Always allow" set, for the CLI permission-prompt tool
+	wake        tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
+	spawn       *tools.SpawnSessionTool      // current agent's spawn tool (self-manage on), for the Interaction MCP spawn_session tool
+	skill       skillLoader                  // current agent's skill loader, for the Interaction MCP use_skill tool
+	skillSearch skillSearcher                // current agent's skill searcher, for the Interaction MCP skill_search tool
+	skillAllow  skillAllowedFunc             // current agent's skill allowed-tools lookup, for use_skill auto-grant (SK-3)
+	shell       shellRunner                  // current agent's shell runner, for the Interaction MCP shell tool
+	runAgent    runAgentRunner               // current agent's run_subagent runner (delegation on), for the Interaction MCP run_subagent tool
 	// bridge exposes the responding agent's lazy self-management tools to the CLI
 	// path (CLI-3): bridgeDefs are advertised in tools/list + the allowlist, and
 	// bridgeCall dispatches them through the native registry. Empty when
@@ -96,6 +98,43 @@ func (r *chatRun) skillLoaderFor() skillLoader {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.skill
+}
+
+// skillSearcher finds skills the responding agent may load, for the Interaction
+// MCP skill_search tool (CLI path) — mirrors the native skill_search built-in over
+// the same store + per-agent allowlist. (SK-2)
+type skillSearcher func(query string, limit int) []tools.SkillHit
+
+// setSkillSearcher installs the per-agent skill searcher. A nil value disables it.
+func (r *chatRun) setSkillSearcher(fn skillSearcher) {
+	r.mu.Lock()
+	r.skillSearch = fn
+	r.mu.Unlock()
+}
+
+// skillSearcherFor returns the current skill searcher (nil if none installed).
+func (r *chatRun) skillSearcherFor() skillSearcher {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.skillSearch
+}
+
+// skillAllowedFunc returns a skill's declared allowed-tools, for the Interaction
+// MCP use_skill tool (CLI path) to auto-grant on load — SK-3 parity. (SK-3)
+type skillAllowedFunc func(slug string) []string
+
+// setSkillAllowed installs the per-agent skill allowed-tools lookup. nil disables.
+func (r *chatRun) setSkillAllowed(fn skillAllowedFunc) {
+	r.mu.Lock()
+	r.skillAllow = fn
+	r.mu.Unlock()
+}
+
+// skillAllowedFor returns the current skill allowed-tools lookup (nil if none).
+func (r *chatRun) skillAllowedFor() skillAllowedFunc {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.skillAllow
 }
 
 // shellRunner runs a shell command for the responding agent (CLI path), bound to

@@ -104,7 +104,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// a restricted skill is unreachable unless explicitly assigned.
 	if r.skills != nil {
 		if allow := r.skills.AllowedFor(agent.Skills); len(allow) > 0 {
-			builtins = append(builtins, tools.NewUseSkillTool(agentSkillLib{store: r.skills, allow: allow}))
+			lib := agentSkillLib{store: r.skills, allow: allow}
+			builtins = append(builtins, tools.NewUseSkillTool(lib))
+			// SK-2: skill_search lets the agent discover on-demand/conditional skills
+			// that are deliberately kept out of the per-turn catalog.
+			builtins = append(builtins, tools.NewSkillSearchTool(lib))
 		}
 	}
 
@@ -254,12 +258,13 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 				tools.NewSecretDeleteTool(r.vault),
 			)
 		}
-		// Skill authoring: create/update/delete reusable workspace skills.
+		// Skill authoring: create/update/delete/import reusable workspace skills.
 		if r.skills != nil {
 			builtins = append(builtins,
 				tools.NewCreateSkillTool(agentSkillWriter{store: r.skills}),
 				tools.NewUpdateSkillTool(agentSkillWriter{store: r.skills}),
 				tools.NewDeleteSkillTool(agentSkillWriter{store: r.skills, db: r.db}),
+				tools.NewImportSkillTool(agentSkillWriter{store: r.skills}), // SK-IMP
 			)
 		}
 		// Application-wide settings: read + live-apply the settings.json document

@@ -115,6 +115,11 @@ func scanDir(t tier) []Skill {
 			AlwaysAllow:     fm.list("alwaysallow", "always_allow"),
 			RequiredSources: fm.list("requiredsources", "required_sources"),
 			SubSkills:       fm.list("subskills", "sub_skills", "related"),
+			Paths:           fm.list("paths", "path"),
+			Version:         fm.scalar("version"),
+			SourceURL:       fm.scalar("source_url", "sourceurl", "repo", "homepage"),
+			License:         fm.scalar("license"),
+			UserInvocable:   isUserInvocable(fm),
 			Shared:          isShared(fm),
 			AutoSummary:     isAutoSummary(fm),
 			Source:          t.source,
@@ -140,6 +145,16 @@ func isShared(fm frontmatter) bool {
 // explicit `auto_summary: false` (or no/off/0) disables it.
 func isAutoSummary(fm frontmatter) bool {
 	switch strings.ToLower(strings.TrimSpace(fm.scalar("auto_summary", "autosummary", "auto_include", "autoinclude"))) {
+	case "false", "no", "off", "0":
+		return false
+	}
+	return true
+}
+
+// isUserInvocable mirrors Claude Code's user-invocable (default TRUE). Only an
+// explicit false/no/off/0 disables it. (SK-4)
+func isUserInvocable(fm frontmatter) bool {
+	switch strings.ToLower(strings.TrimSpace(fm.scalar("user_invocable", "user-invocable", "userinvocable"))) {
 	case "false", "no", "off", "0":
 		return false
 	}
@@ -209,10 +224,68 @@ func (s *Store) UseSkillBody(slug string, allow map[string]bool) (string, error)
 		return "", err
 	}
 	sk, _ := s.Get(slug)
-	if footer := s.subskillFooter(sk, allow); footer != "" {
-		body = strings.TrimSpace(body) + "\n\n" + footer
+	// SK-1: expand ${SKILL_DIR} so the body can point at bundled resources, then
+	// advertise any sibling files + sub-skills as on-demand footers.
+	body = substituteSkillVars(body, sk)
+	var footers []string
+	if f := bundledFilesFooter(sk); f != "" {
+		footers = append(footers, f)
+	}
+	if f := s.subskillFooter(sk, allow); f != "" {
+		footers = append(footers, f)
+	}
+	if len(footers) > 0 {
+		body = strings.TrimSpace(body) + "\n\n" + strings.Join(footers, "\n\n")
 	}
 	return body, nil
+}
+
+// substituteSkillVars expands ${SKILL_DIR} (and the Claude Code-compatible
+// ${CLAUDE_SKILL_DIR} alias) in a skill body to the absolute directory holding the
+// skill's SKILL.md, so the body can reference bundled resource files (reference
+// docs, templates, scripts) the agent then reads with the fs tools. The path is
+// forward-slashed so it is safe to embed in shell/markdown on Windows. Mirrors
+// Claude Code's createSkillCommand baseDir substitution.
+func substituteSkillVars(body string, sk Skill) string {
+	if sk.Path == "" {
+		return body
+	}
+	dir := filepath.ToSlash(filepath.Dir(sk.Path))
+	return strings.NewReplacer("${SKILL_DIR}", dir, "${CLAUDE_SKILL_DIR}", dir).Replace(body)
+}
+
+// bundledFilesFooter lists the resource files shipped alongside a skill's SKILL.md
+// (templates, reference docs, scripts) so the agent knows they exist and can load
+// them on demand with the Read tool — the multi-file half of progressive
+// disclosure. The SKILL.md itself is excluded; nested dirs are listed as a path.
+// Returns "" for a lone-SKILL.md skill.
+func bundledFilesFooter(sk Skill) string {
+	if sk.Path == "" {
+		return ""
+	}
+	dir := filepath.Dir(sk.Path)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var items []string
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() {
+			items = append(items, fmt.Sprintf("- `%s/` (directory)", filepath.ToSlash(filepath.Join(dir, name))))
+			continue
+		}
+		if strings.EqualFold(name, "SKILL.md") {
+			continue
+		}
+		items = append(items, fmt.Sprintf("- `%s`", filepath.ToSlash(filepath.Join(dir, name))))
+	}
+	if len(items) == 0 {
+		return ""
+	}
+	return "---\n## Bundled files\n" +
+		"This skill ships with extra resource files. Read them with the `Read` tool " +
+		"only when the task needs them:\n" + strings.Join(items, "\n")
 }
 
 // subskillFooter renders the "Related skills" block for a skill's declared
@@ -519,6 +592,34 @@ func (s *Store) SharedList() []Skill {
 	return out
 }
 
+// Search returns skills whose slug/name/description/when-to-use contains EVERY
+// whitespace-separated term of the query (case-insensitive), in display order,
+// capped at limit (<=0 → uncapped). Powers the skill_search tool so an agent can
+// discover on-demand and conditional (paths-gated) skills that are deliberately
+// kept out of the per-turn catalog. An empty query returns the full list. (SK-2)
+func (s *Store) Search(query string, limit int) []Skill {
+	terms := strings.Fields(strings.ToLower(query))
+	all := s.List()
+	out := make([]Skill, 0, len(all))
+	for _, sk := range all {
+		hay := strings.ToLower(sk.Slug + " " + sk.Name + " " + sk.Description + " " + sk.WhenToUse)
+		match := true
+		for _, t := range terms {
+			if !strings.Contains(hay, t) {
+				match = false
+				break
+			}
+		}
+		if match {
+			out = append(out, sk)
+			if limit > 0 && len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out
+}
+
 // effectiveFor returns the skills visible to an agent: its assigned skills first
 // (in the given order, known + de-duplicated), then any shared skills it has not
 // already assigned. This is the set advertised in the agent's prompt.
@@ -540,6 +641,12 @@ func (s *Store) effectiveFor(assigned []string) []Skill {
 		// automatically — it only reaches an agent via explicit assignment
 		// (handled by the assigned loop above, which already ran).
 		if !sk.AutoSummary {
+			continue
+		}
+		// SK-2: a CONDITIONAL skill (non-empty paths) is never auto-advertised —
+		// it stays out of the prompt and is reached via skill_search or explicit
+		// assignment. This is what keeps the catalog lean as skill count grows.
+		if len(sk.Paths) > 0 {
 			continue
 		}
 		if !seen[sk.Slug] {
@@ -604,5 +711,9 @@ func renderCatalog(list []Skill, skillTool string) string {
 		}
 		b.WriteString("\n")
 	}
+	// SK-2: not every skill is listed here — on-demand/conditional skills are kept
+	// out to save context. Point the model at skill_search so it can find them.
+	b.WriteString("Some skills are not listed above (on-demand/conditional). " +
+		"If a task seems to need a skill you don't see, call `skill_search` with keywords to find it.")
 	return strings.TrimSpace(b.String())
 }

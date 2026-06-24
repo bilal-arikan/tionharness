@@ -1,10 +1,11 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useState } from 'react'
-import { Eye, EyeOff, FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { Download, Eye, EyeOff, FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
 import { CopyPathButton } from '../CopyPathButton'
 import { SkillEditor } from './SkillEditor'
+import { SkillImportDialog } from './SkillImportDialog'
 
 interface Props {
   onError: (msg: string) => void
@@ -68,6 +69,8 @@ export function SkillsPanel({ onError }: Props) {
   const [deleteBusy, setDeleteBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
+  // Import dialog open state (SK-IMP).
+  const [importing, setImporting] = useState(false)
   // Resizable left list width (persisted, clamped). 288px == the old w-72.
   const [listWidth, setListWidth] = useState(() => {
     const v = Number(localStorage.getItem('swarmgo.skillsListWidth'))
@@ -221,6 +224,14 @@ export function SkillsPanel({ onError }: Props) {
               className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
               <Plus size={13} /> Yeni
+            </button>
+            <button
+              data-testid="skills-import"
+              onClick={() => setImporting(true)}
+              title="Claude Code skill içe aktar (yerel klasör / GitHub)"
+              className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            >
+              <Download size={13} /> İçe Aktar
             </button>
             <button
               data-testid="skills-rescan"
@@ -423,6 +434,16 @@ export function SkillsPanel({ onError }: Props) {
           initial={editor.initial}
           onClose={() => setEditor(null)}
           onSaved={onEditorSaved}
+        />
+      )}
+
+      {importing && (
+        <SkillImportDialog
+          onClose={() => setImporting(false)}
+          onImported={(slug) => {
+            reload()
+            setActiveSlug(slug)
+          }}
         />
       )}
     </div>

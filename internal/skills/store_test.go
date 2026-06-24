@@ -461,3 +461,97 @@ func TestEnsureDefaultsSeeds(t *testing.T) {
 		t.Errorf("EnsureDefaults overwrote a user edit: %q", got)
 	}
 }
+
+// TestUseSkillBodySK1 covers SK-1: ${SKILL_DIR} expansion + bundled-files footer.
+func TestUseSkillBodySK1(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "demo", "---\nname: Demo\ndescription: d\naccess: shared\n---\nSee ${SKILL_DIR}/ref.md for details.")
+	if err := os.WriteFile(filepath.Join(dir, "demo", "ref.md"), []byte("ref"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := New("", dir)
+	body, err := s.UseSkillBody("demo", map[string]bool{"demo": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDir := filepath.ToSlash(filepath.Join(dir, "demo"))
+	if !strings.Contains(body, wantDir+"/ref.md") {
+		t.Errorf("${SKILL_DIR} not expanded to %q in: %q", wantDir, body)
+	}
+	if strings.Contains(body, "${SKILL_DIR}") {
+		t.Errorf("placeholder left unexpanded: %q", body)
+	}
+	if !strings.Contains(body, "Bundled files") || !strings.Contains(body, wantDir+"/ref.md") {
+		t.Errorf("bundled-files footer missing ref.md: %q", body)
+	}
+	// The raw Body (edit/detail view) must stay literal — no expansion.
+	raw, err := s.Body("demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(raw, "${SKILL_DIR}") {
+		t.Errorf("raw Body should keep ${SKILL_DIR} literal: %q", raw)
+	}
+}
+
+// TestSearchAndConditionalSK2 covers SK-2: conditional (paths) skills stay out of
+// the auto-advertised catalog but remain loadable and discoverable via Search.
+func TestSearchAndConditionalSK2(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "commit-helper", "---\nname: Commit Helper\ndescription: write git commits\naccess: shared\n---\nbody")
+	writeSkill(t, dir, "go-tester", "---\nname: Go Tester\ndescription: run go tests\naccess: shared\npaths:\n  - \"**/*.go\"\n---\nbody")
+	s := New("", dir)
+
+	cat := s.CatalogBlockForAgent(nil)
+	if !strings.Contains(cat, "commit-helper") {
+		t.Errorf("non-conditional shared skill should be advertised: %q", cat)
+	}
+	if strings.Contains(cat, "go-tester") {
+		t.Errorf("conditional skill must NOT be auto-advertised: %q", cat)
+	}
+	if !s.AllowedFor(nil)["go-tester"] {
+		t.Errorf("conditional shared skill should still be loadable")
+	}
+	found := false
+	for _, h := range s.Search("go tests", 10) {
+		if h.Slug == "go-tester" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Search should find the conditional skill")
+	}
+	if len(s.Search("zzz-nomatch-term", 10)) != 0 {
+		t.Errorf("expected no matches for nonsense query")
+	}
+}
+
+// TestRichFrontmatterSK4 covers SK-4: provenance fields parse; user-invocable
+// defaults true and can be disabled.
+func TestRichFrontmatterSK4(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "imported", "---\nname: Imported\ndescription: d\nversion: 1.2.3\nsource_url: https://github.com/x/y\nlicense: MIT\nuser-invocable: false\n---\nbody")
+	writeSkill(t, dir, "plain", "---\nname: Plain\ndescription: d\n---\nbody")
+	s := New("", dir)
+
+	sk, ok := s.Get("imported")
+	if !ok {
+		t.Fatal("imported skill not loaded")
+	}
+	if sk.Version != "1.2.3" {
+		t.Errorf("version: got %q", sk.Version)
+	}
+	if sk.SourceURL != "https://github.com/x/y" {
+		t.Errorf("source_url: got %q", sk.SourceURL)
+	}
+	if sk.License != "MIT" {
+		t.Errorf("license: got %q", sk.License)
+	}
+	if sk.UserInvocable {
+		t.Errorf("user-invocable:false should disable")
+	}
+	pl, _ := s.Get("plain")
+	if !pl.UserInvocable {
+		t.Errorf("user-invocable should default true when absent")
+	}
+}

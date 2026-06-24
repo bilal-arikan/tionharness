@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/skills"
 )
@@ -101,6 +102,47 @@ func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, skillDetailFor(store, sk))
+}
+
+// importSkillReq is the import payload. source "local" reads a skill directory
+// from disk (path); source "github" fetches a github.com tree/blob URL. (SK-IMP)
+type importSkillReq struct {
+	Source string `json:"source"` // "local" (default) | "github"
+	Path   string `json:"path"`   // local skill directory (source=local)
+	URL    string `json:"url"`    // github skill URL (source=github)
+	Slug   string `json:"slug"`   // optional slug override
+	Shared bool   `json:"shared"` // advertise as on-demand (default restricted)
+}
+
+// handleImportSkill imports a Claude Code skill into the workspace tier, mapping
+// its frontmatter (allowed-tools→always_allow, paths, provenance…) and copying its
+// bundled files. Returns the ImportResult (mapped fields + warnings) plus the
+// created skill detail. (SK-IMP)
+func (s *Server) handleImportSkill(w http.ResponseWriter, r *http.Request) {
+	var req importSkillReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	source := req.Source
+	if source == "" {
+		source = "local"
+	}
+	location := req.Path
+	if source == "github" {
+		location = req.URL
+	}
+	if strings.TrimSpace(location) == "" {
+		writeError(w, http.StatusBadRequest, "path (local) or url (github) is required")
+		return
+	}
+	store := ws(r).Runtime.Skills()
+	sk, res, err := store.ImportFromSource(source, location, req.Slug, req.Shared)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"result": res, "skill": skillDetailFor(store, sk)})
 }
 
 // handleUpdateSkill rewrites an existing skill's frontmatter + body in place.

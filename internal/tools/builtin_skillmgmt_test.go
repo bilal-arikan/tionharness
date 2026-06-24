@@ -19,6 +19,9 @@ func (f *fakeSkillWriter) CreateSkill(string, string, string, string, string, bo
 	return nil
 }
 func (f *fakeSkillWriter) DeleteSkill(string) error { return nil }
+func (f *fakeSkillWriter) ImportSkill(source, location, slug string, shared bool) (SkillImportResult, error) {
+	return SkillImportResult{Slug: "imported"}, nil
+}
 func (f *fakeSkillWriter) UpdateSkill(slug string, name, description, whenToUse, body *string, shared *bool) error {
 	f.updateCalled = true
 	f.gotSlug, f.name, f.description, f.whenToUse, f.body, f.shared = slug, name, description, whenToUse, body, shared

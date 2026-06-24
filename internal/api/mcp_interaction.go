@@ -125,6 +125,9 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		// catalog in its appended system prompt but has no native way to load a
 		// body; this bridge gives it the same lazy-load path native agents use.
 		tools.NewUseSkillTool(nil).Def(),
+		// skill_search lets a claude-cli agent discover on-demand/conditional skills
+		// not advertised in its appended catalog, mirroring the native path. (SK-2)
+		tools.NewSkillSearchTool(nil).Def(),
 	}
 	// shell is bridged only when enabled, mirroring the native tool loop's shell
 	// gate. It lets a claude-cli agent run commands through SwarmGo's sandboxed
@@ -196,6 +199,8 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callSpawn(ctx, run, args)
 	case "use_skill":
 		return b.callUseSkill(run, args)
+	case "skill_search":
+		return b.callSkillSearch(run, args)
 	case "Bash":
 		return b.callShell(ctx, run, args)
 	case "run_subagent":
@@ -418,10 +423,71 @@ func (b *interactionBackend) callUseSkill(run *chatRun, args json.RawMessage) (i
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}
+	// SK-3 parity: auto-grant the skill's declared allowed-tools to the session,
+	// mirroring the native use_skill tool, so the CLI agent runs them without a
+	// permission re-prompt.
+	note := b.grantSkillToolsCLI(run, slug)
 	if strings.TrimSpace(body) == "" {
 		return interaction.CallResult{Text: "Skill \"" + slug + "\" has no instructions."}, nil
 	}
-	return interaction.CallResult{Text: "# Skill: " + slug + "\n\n" + body}, nil
+	return interaction.CallResult{Text: "# Skill: " + slug + "\n\n" + body + note}, nil
+}
+
+// grantSkillToolsCLI registers the skill's declared allowed-tools as session
+// grants (CLI path SK-3) and returns a transparency note for the tool output.
+func (b *interactionBackend) grantSkillToolsCLI(run *chatRun, slug string) string {
+	lookup := run.skillAllowedFor()
+	g := run.grantStore()
+	if lookup == nil || g == nil {
+		return ""
+	}
+	var granted []string
+	for _, p := range lookup(slug) {
+		if p = strings.TrimSpace(p); p == "" {
+			continue
+		}
+		g.GrantRule(tools.ParsePermRule(p))
+		granted = append(granted, p)
+	}
+	if len(granted) == 0 {
+		return ""
+	}
+	return "\n\n---\n_Tools auto-allowed for this session by this skill: " + strings.Join(granted, ", ") + "._"
+}
+
+// callSkillSearch runs the skill_search tool over the run's per-agent searcher
+// (CLI path), enforcing the same allowlist as the native skill_search tool and
+// formatting results identically. (SK-2)
+func (b *interactionBackend) callSkillSearch(run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	search := run.skillSearcherFor()
+	if search == nil {
+		return interaction.CallResult{Text: "skills are not available for this turn", IsError: true}, nil
+	}
+	var in struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return interaction.CallResult{Text: "invalid skill_search input: " + err.Error(), IsError: true}, nil
+	}
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	hits := search(strings.TrimSpace(in.Query), limit)
+	if len(hits) == 0 {
+		return interaction.CallResult{Text: "No skills match \"" + in.Query + "\"."}, nil
+	}
+	var sb strings.Builder
+	sb.WriteString("Found skill(s). Load one with use_skill <slug>:\n")
+	for _, h := range hits {
+		sb.WriteString("- `" + h.Slug + "` — " + h.Description)
+		if h.WhenToUse != "" {
+			sb.WriteString(" (when: " + h.WhenToUse + ")")
+		}
+		sb.WriteString("\n")
+	}
+	return interaction.CallResult{Text: strings.TrimSpace(sb.String())}, nil
 }
 
 // callShell runs a shell command through the run's per-agent shell runner (CLI

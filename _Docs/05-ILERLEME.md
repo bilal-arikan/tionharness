@@ -1,6 +1,58 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-23**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-24**
+
+## SK-IMP UI — Skills panelinde içe-aktarma akışı ✅ (2026-06-24)
+
+SK-IMP'in son parçası: importer artık UI'dan kullanılıyor (SK-IMP tamamen tamamlandı).
+
+- **Frontend:** `SkillImportDialog.tsx` (kaynak seçici GitHub/yerel, location, opsiyonel slug, paylaşımlı
+  toggle) → `api.importSkill` → sonuç kartı (slug + kopyalanan dosyalar + uyarı listesi). Skills panelinde
+  ("İçe Aktar" butonu, `skills-import` testid) açılır; başarıda liste yenilenir + içe-aktarılan skill seçilir.
+- **API client:** `skillApi.importSkill` + `SkillImportResult`/`SkillImportResponse`/`SkillImportInput`
+  tipleri (`api/skills.ts`).
+- **Doğrulama:** `tsc --noEmit` + `vite build` yeşil; full build (frontend gömülü) 8090'a deploy edildi.
+  Çağrılan endpoint (`POST /api/skills/import`) zaten SK-IMP.2/3'te canlı doğrulanmıştı.
+- Not: `Github` ikonu lucide sürümünde yok → `Globe` kullanıldı (build hatası giderildi).
+
+## SK-IMP.3 — Importer: GitHub kaynağı + import_skill aracı ✅ (2026-06-24)
+
+- **GitHub kaynağı (`internal/skills/github.go`):** `parseGitHubURL` (tree/blob → owner/repo/ref/dir,
+  blob+SKILL.md → parent), `fetchGitHubSkill` GitHub contents API ile SKILL.md + top-level bundled
+  dosyaları çeker (host-allowlist: api.github.com/github.com/raw.githubusercontent.com/codeload; 8MB cap,
+  30sn timeout, anon). `Store.ImportFromSource(source, location, slug, shared)` local|github ayrımını yapar;
+  `readLocalSkillDir` api'den buraya taşındı. API `POST /api/skills/import` artık `url` alanını da kabul eder.
+- **`import_skill` self-management aracı:** `SkillWriter.ImportSkill` + `tools.SkillImportResult` +
+  `ImportSkillTool` (`builtin_skillmgmt.go`); `agentSkillWriter.ImportSkill` → `ImportFromSource`;
+  `toolsetup`'ta create/update/delete yanında kayıtlı (CLI bridge üzerinden de erişilir).
+- **Testler:** `import_test.go` yeşil; `builtin_skillmgmt_test.go` fake'e `ImportSkill` eklendi.
+  `go build ./...` + `go test ./internal/{skills,tools,agent,api}/` yeşil.
+- **Canlı doğrulandı (8090):** (1) GitHub `anthropics/skills/.../skill-creator` → source_url + bundled
+  LICENSE.txt kopyalandı, sıfır uyarı; (2) claude-cli ajanı `import_skill`(local `gsd-capture`) → slug +
+  `$ARGUMENTS` uyarısı birebir döndü. Test artefaktları silindi.
+- **Kalan:** Market/Skills UI içe-aktarma akışı.
+
+## SK-IMP — Claude Code skill importer: çekirdek + local API ✅ (2026-06-24)
+
+Seviye 2 importer'ın ilk iki increment'i. Önkoşullar SK-1..SK-4 hazırdı.
+
+- **Çekirdek (`internal/skills/import.go`):** `mapCCSkill(raw, sourceURL, shared)` CC frontmatter'ını
+  SwarmGo'ya eşler — name/description/when_to_use→aynı, `allowed-tools`→`always_allow`, `paths`→koşullu,
+  version/license→aynı, source_url=import kaynağı (provenance), `disable-model-invocation:true`→shared
+  değil, `user-invocable`→`user_invocable`. Uyumsuzu (`context:fork`, `hooks`, `model`/`agent`/`effort`,
+  slash-arg `$ARGUMENTS`/`$1`, inline-shell `` !` ``) ayıklayıp **warning** döndürür. `Store.ImportCCSkill`
+  rendered SKILL.md + bundled dosyaları (yalnız düz dosya adı; path-traversal reddi; SKILL.md hariç)
+  workspace tier'a yazıp reload eder, slug çakışmasında hata verir.
+- **API:** `POST /api/skills/import` (`source:"local"`, `path`, opsiyonel `slug`/`shared`) →
+  `readLocalSkillDir` (SKILL.md + sibling dosyalar) → `ImportCCSkill` → `{result, skill}` döner
+  (`handleImportSkill`, `server.go` route).
+- **Testler:** `import_test.go` (mapping + disable-invocation downgrade + write/resolve + path-traversal
+  reddi + duplicate). `go build ./...` + `go test ./internal/{skills,api}/` yeşil.
+- **Canlı doğrulandı:** gerçek `~/.claude/skills/gsd-add-tests` 8090'a import edildi →
+  `always_allow=Read;Write;Edit;Bash;Glob;Grep;Agent;AskUserQuestion`, source_url set, `$ARGUMENTS` uyarısı,
+  shared=false. Test artefaktı silindi.
+- **Kalan (SK-IMP.3):** GitHub kaynağı (URL→fetch), `import_skill` self-management aracı (agent-usable),
+  Market/Skills UI akışı. Detay: `03-YOL-HARITASI.md` SK-IMP.
 
 ## Lazy araç kataloğu MCP açıklamalarını kısaltıyor (bağlam şişmesi fix) ✅ (2026-06-23)
 

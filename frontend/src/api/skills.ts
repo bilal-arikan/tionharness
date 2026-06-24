@@ -1,8 +1,34 @@
 import type { Skill, SkillDetail, SkillInput } from '../types'
 import { req } from './client'
 
+// SkillImportResult mirrors the backend skills.ImportResult (SK-IMP): the new
+// slug, which CC frontmatter fields were carried over, the bundled files copied,
+// and warnings about unsupported CC features that were dropped.
+export interface SkillImportResult {
+  slug: string
+  name: string
+  mappedFields: string[]
+  files: string[]
+  warnings: string[]
+}
+
+export interface SkillImportResponse {
+  result: SkillImportResult
+  skill: SkillDetail
+}
+
+export interface SkillImportInput {
+  source: 'local' | 'github'
+  path?: string // local directory (source=local)
+  url?: string // github.com folder URL (source=github)
+  slug?: string
+  shared?: boolean
+}
+
 export const skillApi = {
   listSkills: () => req<Skill[]>('/api/skills'),
+  importSkill: (input: SkillImportInput) =>
+    req<SkillImportResponse>('/api/skills/import', { method: 'POST', body: JSON.stringify(input) }),
   getSkill: (slug: string) => req<SkillDetail>(`/api/skills/${encodeURIComponent(slug)}`),
   createSkill: (input: SkillInput & { slug?: string }) =>
     req<SkillDetail>('/api/skills', { method: 'POST', body: JSON.stringify(input) }),

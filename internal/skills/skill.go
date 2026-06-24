@@ -24,12 +24,12 @@ const (
 // Skill is one resolved skill. Only the frontmatter metadata is held in memory;
 // the body lives on disk at Path and is read on demand (see Store.Body).
 type Skill struct {
-	Slug        string   `json:"slug"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	WhenToUse   string   `json:"whenToUse,omitempty"`
-	Icon        string   `json:"icon,omitempty"`
-	Color       string   `json:"color,omitempty"`
+	Slug        string `json:"slug"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	WhenToUse   string `json:"whenToUse,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+	Color       string `json:"color,omitempty"`
 	// Shared marks an "on-demand" skill: its summary is advertised to EVERY agent
 	// and any agent may load it via use_skill, without explicit assignment. A
 	// non-shared (restricted) skill is only visible/usable to agents it is
@@ -41,12 +41,28 @@ type Skill struct {
 	// bloating every prompt) — it can still be assigned to an agent explicitly,
 	// which always advertises it. Set from frontmatter `auto_summary: false`.
 	AutoSummary bool `json:"autoSummary"`
+	// Version/SourceURL/License are provenance metadata (SK-4) — important for
+	// imported skills so their origin and currency are traceable. From frontmatter
+	// `version` / `source_url` (alias `repo`/`homepage`) / `license`.
+	Version   string `json:"version,omitempty"`
+	SourceURL string `json:"sourceUrl,omitempty"`
+	License   string `json:"license,omitempty"`
+	// UserInvocable mirrors Claude Code's `user-invocable` (default true): a
+	// background-knowledge skill sets it false. Informational in SwarmGo today
+	// (skills load via use_skill, not slash commands); carried for import fidelity.
+	UserInvocable bool `json:"userInvocable"`
 	// AlwaysAllow lists tool-name patterns a skill expects to be auto-allowed.
 	// Carried for parity / future enforcement; surfaced in the UI today.
 	AlwaysAllow []string `json:"alwaysAllow,omitempty"`
 	// RequiredSources lists source slugs the skill leans on (parity with the
 	// craft convention; informational today).
 	RequiredSources []string `json:"requiredSources,omitempty"`
+	// Paths marks a skill CONDITIONAL: when non-empty, the skill is NOT advertised
+	// in the per-turn catalog automatically (so it never bloats the prompt), even if
+	// shared — it is found on demand via the skill_search tool or reached by explicit
+	// assignment. The patterns mirror Claude Code's `paths:` frontmatter (the file
+	// globs the skill is relevant to). Set from frontmatter `paths:`. (SK-2)
+	Paths []string `json:"paths,omitempty"`
 	// SubSkills lists slugs of more detailed skills this one builds on. They are
 	// advertised in a footer when the body is loaded via use_skill, so the model
 	// can progressively load deeper instructions on demand (e.g. an overview skill

@@ -401,6 +401,29 @@ func (r *Runtime) LoadSkillForAgent(agent db.Agent, slug string) (string, error)
 	return agentSkillLib{store: r.skills, allow: allow}.Body(slug)
 }
 
+// SearchSkillsForAgent powers the CLI-path skill_search bridge: it searches the
+// library but returns only skills the agent may load (assigned + shared), so a
+// claude-cli agent can discover on-demand/conditional skills the same way native
+// agents do via the skill_search tool. (SK-2)
+func (r *Runtime) SearchSkillsForAgent(agent db.Agent, query string, limit int) []tools.SkillHit {
+	if r.skills == nil {
+		return nil
+	}
+	allow := r.skills.AllowedFor(agent.Skills)
+	return agentSkillLib{store: r.skills, allow: allow}.SearchSkills(query, limit)
+}
+
+// SkillAllowedToolsForAgent returns the allowed-tools the named skill declares,
+// for the CLI-path use_skill bridge to auto-grant — SK-3 parity with the native
+// use_skill tool.
+func (r *Runtime) SkillAllowedToolsForAgent(agent db.Agent, slug string) []string {
+	if r.skills == nil {
+		return nil
+	}
+	allow := r.skills.AllowedFor(agent.Skills)
+	return agentSkillLib{store: r.skills, allow: allow}.AllowedTools(slug)
+}
+
 // BridgeTools builds the per-agent tool registry and returns the bridgeable
 // (lazy built-in = self-management) tool schemas plus a dispatcher, for the CLI
 // path's Interaction MCP bridge (CLI-3). claude-cli has no native activate_tools
@@ -461,6 +484,37 @@ func (l agentSkillLib) Body(slug string) (string, error) {
 	return l.store.UseSkillBody(slug, l.allow)
 }
 
+// AllowedTools returns the tool-permission patterns the named skill declares,
+// restricted to skills this agent may load. Powers SK-3 (loading a skill
+// auto-grants its tools for the session).
+func (l agentSkillLib) AllowedTools(slug string) []string {
+	if !l.allow[slug] {
+		return nil
+	}
+	sk, ok := l.store.Get(slug)
+	if !ok {
+		return nil
+	}
+	return sk.AlwaysAllow
+}
+
+// SearchSkills powers the skill_search tool: it searches the full library but
+// returns only skills this agent may load (assigned + shared), so discovery never
+// reveals a skill the agent could not then use. (SK-2)
+func (l agentSkillLib) SearchSkills(query string, limit int) []tools.SkillHit {
+	out := []tools.SkillHit{}
+	for _, sk := range l.store.Search(query, 0) {
+		if !l.allow[sk.Slug] {
+			continue
+		}
+		out = append(out, tools.SkillHit{Slug: sk.Slug, Description: sk.Description, WhenToUse: sk.WhenToUse})
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
 // agentSkillWriter adapts *skills.Store to the tools.SkillWriter interface so the
 // create_skill / delete_skill self-management tools can author workspace skills
 // without the tools package importing the skills package. db (optional) lets
@@ -479,6 +533,16 @@ func (w agentSkillWriter) CreateSkill(slug, name, description, whenToUse, body s
 		Shared:      shared,
 	})
 	return err
+}
+
+// ImportSkill imports a Claude Code skill (local dir or github URL) into the
+// workspace tier and maps the skills.ImportResult onto the tools view. (SK-IMP)
+func (w agentSkillWriter) ImportSkill(source, location, slug string, shared bool) (tools.SkillImportResult, error) {
+	_, res, err := w.store.ImportFromSource(source, location, slug, shared)
+	if err != nil {
+		return tools.SkillImportResult{}, err
+	}
+	return tools.SkillImportResult{Slug: res.Slug, Warnings: res.Warnings, Files: res.Files}, nil
 }
 
 // UpdateSkill edits a workspace skill in place. Each pointer field is applied

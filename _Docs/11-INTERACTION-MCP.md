@@ -241,7 +241,8 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `create_artifact` / `update_artifact` | bloklamayan | Faz 2 |
 | `request_confirmation` (evet/hayır) | bloklayan | Faz 2 |
 | `schedule_wake` | bloklamayan | Faz 2 |
-| `use_skill` | bloklamayan (skill gövdesi döndürür) | Faz 4 |
+| `use_skill` | bloklamayan (skill gövdesi döndürür; yüklerken skill'in `always_allow` araçlarını oturum grant'larına ekler — SK-3) | Faz 4 |
+| `skill_search` | bloklamayan (anahtar kelimeyle skill bulur; koşullu/on-demand skill'leri keşfeder) | 2026-06-23 (SK-2) |
 | `Bash` (CLI köprüsü, eski `shell`) | bloklamayan (komut çıktısı) | 2026-06-19 |
 | `spawn_session` (CLI köprüsü) | bloklamayan (fire-and-forget) | Faz 4 |
 | `run_subagent` (CLI köprüsü) | **bloklayan (cevabı bu turda döndürür)** | 2026-06-22 |
@@ -302,6 +303,16 @@ ve çıktıyı native `UseSkillTool.Call` ile birebir aynı biçimde döndürür
 (`# Skill: <slug>\n\n<body>`). Erişim kontrolü, sub-skill footer'ı ve lazy disk
 okuma native yolla tam parite. Tek kaynak SwarmGo skill store'u kalır —
 dosya kopyası/symlink yok.
+
+**`skill_search` + SK-3 auto-grant (2026-06-23):** SK-2 ile gelen `skill_search`
+ve SK-3 auto-grant başta yalnız native yoldaydı; canlı testte CLI köprüsünde eksik
+çıktı, tamamlandı. Stream handler `setSkillSearcher` (→ `Runtime.SearchSkillsForAgent`)
++ `setSkillAllowed` (→ `Runtime.SkillAllowedToolsForAgent`) kurar; backend
+`skill_search` dispatch'i `callSkillSearch` ile arama yapar, `callUseSkill` ise
+`grantSkillToolsCLI` ile skill'in `always_allow` desenlerini oturum grant'larına
+ekler (native `UseSkillTool` ile tam parite). **Uyarı:** köprü yalnız streaming
+`/api/chat/stream` (ve autonomous) yolunda kurulur; non-streaming `/api/chat`
+interaction tool'larını bağlamaz — CLI ajanı orada use_skill/skill_search göremez.
 
 **Self-management köprüsü (CLI-3, 2026-06-19):** claude-cli'nin native
 `activate_tools` döngüsü yok; bu yüzden lazy self-management ailesi (agents/flows/
