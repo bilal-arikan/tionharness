@@ -50,3 +50,38 @@ func TestPriceStat(t *testing.T) {
 		t.Errorf("unlisted: cost=%v priced=%v est=%v, want 0/false/false", cost, priced, est)
 	}
 }
+
+// TestRollupOf verifies the merged costOf/modelRowsFor primitive: rows sorted
+// costliest first, aggregate cost/cache totals, and the priced/estimated flags
+// reflecting a mix of priced + unpriced spend.
+func TestRollupOf(t *testing.T) {
+	roll := RollupOf(map[string]db.KindStat{
+		// Cheap haiku (1 in / 5 out): 1M+1M = 6 USD.
+		"anthropic|claude-haiku-4-5-20251001": {Calls: 1, InputTokens: 1_000_000, OutputTokens: 1_000_000},
+		// Pricey opus (15 in / 75 out): 1M+1M = 90 USD.
+		"anthropic|claude-opus-4-8": {Calls: 1, InputTokens: 1_000_000, OutputTokens: 1_000_000, CacheReadTokens: 500_000},
+		// Unpriced/unknown model with real spend → flips Priced false.
+		"openrouter|some/unknown": {Calls: 1, InputTokens: 100, OutputTokens: 10},
+	})
+
+	if len(roll.Rows) != 3 {
+		t.Fatalf("rows = %d, want 3", len(roll.Rows))
+	}
+	// Costliest first: opus (90) > haiku (6) > unknown (0).
+	if roll.Rows[0].Model != "claude-opus-4-8" || roll.Rows[2].Model != "some/unknown" {
+		t.Errorf("sort order wrong: %s ... %s", roll.Rows[0].Model, roll.Rows[2].Model)
+	}
+	// Aggregate cost = 90 + 6 + opus cache read (15 * 0.10 * 0.5M/1M = 0.75) = 96.75.
+	if !approxUSD(roll.CostUSD, 96.75) {
+		t.Errorf("total cost = %v, want 96.75", roll.CostUSD)
+	}
+	if roll.CacheReadTokens != 500_000 {
+		t.Errorf("cacheRead = %d, want 500000", roll.CacheReadTokens)
+	}
+	if roll.Priced {
+		t.Error("Priced should be false (unknown model has real spend)")
+	}
+	if roll.Estimated {
+		t.Error("Estimated should be false (no subscription provider here)")
+	}
+}

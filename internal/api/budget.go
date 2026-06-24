@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/bilal-arikan/swarmgo/internal/billing"
@@ -82,58 +81,22 @@ type providerStat struct {
 	Models     []modelStat `json:"models"`
 }
 
-// costOf sums the USD cost (including cache tiers) of a usage rollup's per-model
-// breakdown. priced is false when any spend lacks a real list price
-// (subscription/custom); estimated is true when an unpriced entry had an
-// equivalent-API estimate. Pricing math lives in the billing package.
-func costOf(byModel map[string]db.KindStat) (cost float64, priced bool, estimated bool) {
-	priced = true
-	for key, st := range byModel {
-		provider, model, _ := strings.Cut(key, "|")
-		c, _, p, e := billing.PriceStat(provider, model, st)
-		cost += c
-		if !p {
-			priced = false
-		}
-		if e {
-			estimated = true
-		}
-	}
-	return cost, priced, estimated
-}
-
-// modelRowsFor turns a usage rollup's per-model breakdown into sorted detail
-// rows (costliest first) plus aggregate cost/savings/cache totals. Mirrors the
-// workspace screen's per-model logic (real price, else equivalent-API estimate)
-// so the per-agent usage endpoint computes model cost identically.
+// modelRowsFor maps a usage rollup's per-model breakdown to sorted modelStat DTO
+// rows plus the aggregate cost/savings/cache totals. The pricing + sorting math
+// lives in billing.RollupOf (the merged costOf/modelRowsFor primitive); this is a
+// thin adapter that shapes billing.Row into the api JSON DTO. Cost-only callers
+// (per-agent rows, daily trend) skip this and read billing.RollupOf directly.
 func modelRowsFor(byModel map[string]db.KindStat) (rows []modelStat, totalCost, totalSavings float64, priced, estimated bool, cacheRead, cacheWrite int) {
-	priced = true
-	for key, st := range byModel {
-		provider, model, _ := strings.Cut(key, "|")
-		cost, save, modelPriced, modelEstimated := billing.PriceStat(provider, model, st)
-		if !modelPriced {
-			priced = false
+	roll := billing.RollupOf(byModel)
+	rows = make([]modelStat, len(roll.Rows))
+	for i, r := range roll.Rows {
+		rows[i] = modelStat{
+			Model:       r.Model,
+			tokenTotals: tokenTotals{Calls: r.Stat.Calls, InputTokens: r.Stat.InputTokens, OutputTokens: r.Stat.OutputTokens, CacheReadTokens: r.Stat.CacheReadTokens, CacheWriteTokens: r.Stat.CacheWriteTokens},
+			CostUSD:     r.CostUSD, SavingsUSD: r.SavingsUSD, Priced: r.Priced, Estimated: r.Estimated,
 		}
-		if modelEstimated {
-			estimated = true
-		}
-		rows = append(rows, modelStat{
-			Model:       model,
-			tokenTotals: tokenTotals{Calls: st.Calls, InputTokens: st.InputTokens, OutputTokens: st.OutputTokens, CacheReadTokens: st.CacheReadTokens, CacheWriteTokens: st.CacheWriteTokens},
-			CostUSD:     cost, SavingsUSD: save, Priced: modelPriced, Estimated: modelEstimated,
-		})
-		totalCost += cost
-		totalSavings += save
-		cacheRead += st.CacheReadTokens
-		cacheWrite += st.CacheWriteTokens
 	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].CostUSD != rows[j].CostUSD {
-			return rows[i].CostUSD > rows[j].CostUSD
-		}
-		return rows[i].InputTokens+rows[i].OutputTokens > rows[j].InputTokens+rows[j].OutputTokens
-	})
-	return rows, totalCost, totalSavings, priced, estimated, cacheRead, cacheWrite
+	return rows, roll.CostUSD, roll.SavingsUSD, roll.Priced, roll.Estimated, roll.CacheReadTokens, roll.CacheWriteTokens
 }
 
 // dayPoint is one day's workspace-wide totals for the trend chart. Cache and
@@ -188,7 +151,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		if uerr != nil {
 			continue
 		}
-		cost, priced, estimated := costOf(u.ByModel)
+		roll := billing.RollupOf(u.ByModel)
 		row := agentBudgetRow{
 			AgentID:              a.ID,
 			Name:                 a.Name,
@@ -198,9 +161,9 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			Calls:                u.Calls,
 			InputTokens:          u.InputTokens,
 			OutputTokens:         u.OutputTokens,
-			CostUSD:              cost,
-			Priced:               priced,
-			Estimated:            estimated,
+			CostUSD:              roll.CostUSD,
+			Priced:               roll.Priced,
+			Estimated:            roll.Estimated,
 			DailyCallLimit:       a.DailyCallLimit,
 			DailyTokenLimit:      a.DailyTokenLimit,
 			CompactSavedBytes:    u.CompactSavedBytes,
@@ -219,11 +182,11 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 				byKind[k] = agg
 			}
 		}
-		// Aggregate this agent's per-model rows up to per-provider totals + cost,
-		// and into the per-model detail grouped under each provider.
-		for key, st := range u.ByModel {
-			provider, model, _ := strings.Cut(key, "|")
-			mCost, mSave, mPriced, mEstimated := billing.PriceStat(provider, model, st)
+		// Aggregate this agent's already-priced rows up to per-provider totals + cost,
+		// and into the per-model detail grouped under each provider. Reuses roll.Rows
+		// (priced once above) instead of re-pricing u.ByModel.
+		for _, r := range roll.Rows {
+			provider, model, st := r.Provider, r.Model, r.Stat
 
 			ps := byProvider[provider]
 			if ps == nil {
@@ -235,12 +198,12 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			ps.OutputTokens += st.OutputTokens
 			ps.CacheReadTokens += st.CacheReadTokens
 			ps.CacheWriteTokens += st.CacheWriteTokens
-			ps.CostUSD += mCost
-			ps.SavingsUSD += mSave
-			if !mPriced {
+			ps.CostUSD += r.CostUSD
+			ps.SavingsUSD += r.SavingsUSD
+			if !r.Priced {
 				ps.Priced = false
 			}
-			if mEstimated {
+			if r.Estimated {
 				ps.Estimated = true
 			}
 
@@ -259,27 +222,27 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			ms.OutputTokens += st.OutputTokens
 			ms.CacheReadTokens += st.CacheReadTokens
 			ms.CacheWriteTokens += st.CacheWriteTokens
-			ms.CostUSD += mCost
-			ms.SavingsUSD += mSave
-			if !mPriced {
+			ms.CostUSD += r.CostUSD
+			ms.SavingsUSD += r.SavingsUSD
+			if !r.Priced {
 				ms.Priced = false
 			}
-			if mEstimated {
+			if r.Estimated {
 				ms.Estimated = true
 			}
 
-			totalSavings += mSave
+			totalSavings += r.SavingsUSD
 			totalCacheRead += st.CacheReadTokens
 			totalCacheWrite += st.CacheWriteTokens
 		}
 		totals.Calls += u.Calls
 		totals.InputTokens += u.InputTokens
 		totals.OutputTokens += u.OutputTokens
-		totalCost += cost
-		if !priced {
+		totalCost += roll.CostUSD
+		if !roll.Priced {
 			totalPriced = false
 		}
-		if estimated {
+		if roll.Estimated {
 			totalEstimated = true
 		}
 		rows = append(rows, row)
@@ -328,14 +291,14 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		p.Calls += u.Calls
 		p.InputTokens += u.InputTokens
 		p.OutputTokens += u.OutputTokens
-		// Cost/savings/cache per day come from the same per-model logic the
-		// today screen uses (real price, else equivalent-API estimate), so the
-		// trend plots caching ROI consistently with the headline figures.
-		_, dayCost, daySavings, _, _, dayCacheRead, dayCacheWrite := modelRowsFor(u.ByModel)
-		p.CostUSD += dayCost
-		p.SavingsUSD += daySavings
-		p.CacheReadTokens += dayCacheRead
-		p.CacheWriteTokens += dayCacheWrite
+		// Cost/savings/cache per day come from the same pricing logic the today
+		// screen uses (real price, else equivalent-API estimate), so the trend plots
+		// caching ROI consistently with the headline figures.
+		day := billing.RollupOf(u.ByModel)
+		p.CostUSD += day.CostUSD
+		p.SavingsUSD += day.SavingsUSD
+		p.CacheReadTokens += day.CacheReadTokens
+		p.CacheWriteTokens += day.CacheWriteTokens
 		p.CompactSavedBytes += u.CompactSavedBytes
 		p.CompactSavedBytesLLM += u.CompactSavedBytesLLM
 	}

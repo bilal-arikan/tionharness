@@ -34,6 +34,21 @@ kozmetik — çözümleme/reklam/yükleme davranışını etkilemez.
 - **Git hijyeni:** `.gitignore`'a `*.log.err`/`*.err`; sızan `vite-run.log.err`/`swarmgo-run.log.err`
   izlemeden çıkarıldı (`git rm --cached`).
 
+## Bütçe refactor faz 3 — RollupOf birleştirmesi (costOf+modelRowsFor → billing) ✅ (2026-06-25)
+
+Pricing aggregation tümüyle billing'e taşındı, iki fonksiyon tek primitife indi.
+
+- **`billing.RollupOf(byModel) Rollup`:** eski `costOf` + `modelRowsFor` çiftinin birleşik çekirdeği —
+  her satırı fiyatlar (`PriceStat`), maliyete göre sıralar (input+output tiebreak) ve toplam
+  cost/savings/cache + priced/estimated bayraklarını döner. Yeni `billing.Row` (provider/model/Stat +
+  cost/save/priced/estimated) DTO-bağımsız.
+- **api sadeleşti:** `costOf` silindi; `modelRowsFor` artık `RollupOf` çıktısını `modelStat` DTO'ya
+  haritalayan ince adaptör. Cost-only çağıranlar (per-agent satır, günlük trend) doğrudan `RollupOf`
+  okur. Per-agent provider/model aggregation `roll.Rows`'u tekrar kullanır → **çift fiyatlama kalktı**
+  (eskiden u.ByModel ikinci kez PriceStat'tan geçiyordu). `strings` importu budget.go'dan düştü.
+- **Test/build:** `billing_test.go`'ya `TestRollupOf` (sıralama + toplam + priced bayrağı); `go build
+  ./...` + `go vet` + `go test ./...` → **407 passed (29 paket)**.
+
 ## Bütçe refactor faz 2 — UsageDelta helper + tokenTotals embed + billing paketi ✅ (2026-06-25)
 
 Önceki refactor'un devamı; 3 ek sadeleştirme, davranış korundu.

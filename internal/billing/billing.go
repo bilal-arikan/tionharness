@@ -5,6 +5,9 @@
 package billing
 
 import (
+	"sort"
+	"strings"
+
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
@@ -32,4 +35,67 @@ func PriceStat(provider, model string, st db.KindStat) (cost, save float64, pric
 			0, false, true
 	}
 	return 0, 0, false, false
+}
+
+// Row is one provider+model's priced usage slice: the stored token counters plus
+// the USD cost/savings derived by PriceStat. Stat carries the raw counts so the
+// caller can shape its own per-model DTO without re-reading the rollup map.
+type Row struct {
+	Provider   string
+	Model      string
+	Stat       db.KindStat
+	CostUSD    float64
+	SavingsUSD float64
+	Priced     bool // a real list price applied (vs an estimate / unpriced)
+	Estimated  bool // cost is an equivalent-API estimate (subscription provider)
+}
+
+// Rollup is the aggregate of a usage rollup's per-model breakdown: the priced
+// rows (sorted costliest first) plus the workspace-level totals. It is the single
+// merged primitive behind every budget surface — both the "just the cost" callers
+// (per-agent rows, daily trend) and the "rows + totals" callers (the usage
+// endpoints) read what they need from one computation.
+type Rollup struct {
+	Rows             []Row
+	CostUSD          float64
+	SavingsUSD       float64
+	CacheReadTokens  int
+	CacheWriteTokens int
+	Priced           bool // false when ANY spend lacks a real list price
+	Estimated        bool // true when ANY cost is an equivalent-API estimate
+}
+
+// RollupOf prices every entry of a "<provider>|<model>" → KindStat map and returns
+// the per-model rows (costliest first, input+output as the tiebreak) plus the
+// aggregate cost/savings/cache totals and priced/estimated flags. Replaces the old
+// costOf + modelRowsFor pair: cost-only callers read Rollup.CostUSD/Priced/...,
+// row callers map Rollup.Rows to their DTO.
+func RollupOf(byModel map[string]db.KindStat) Rollup {
+	roll := Rollup{Priced: true}
+	for key, st := range byModel {
+		provider, model, _ := strings.Cut(key, "|")
+		cost, save, priced, estimated := PriceStat(provider, model, st)
+		if !priced {
+			roll.Priced = false
+		}
+		if estimated {
+			roll.Estimated = true
+		}
+		roll.Rows = append(roll.Rows, Row{
+			Provider: provider, Model: model, Stat: st,
+			CostUSD: cost, SavingsUSD: save, Priced: priced, Estimated: estimated,
+		})
+		roll.CostUSD += cost
+		roll.SavingsUSD += save
+		roll.CacheReadTokens += st.CacheReadTokens
+		roll.CacheWriteTokens += st.CacheWriteTokens
+	}
+	sort.SliceStable(roll.Rows, func(i, j int) bool {
+		if roll.Rows[i].CostUSD != roll.Rows[j].CostUSD {
+			return roll.Rows[i].CostUSD > roll.Rows[j].CostUSD
+		}
+		return roll.Rows[i].Stat.InputTokens+roll.Rows[i].Stat.OutputTokens >
+			roll.Rows[j].Stat.InputTokens+roll.Rows[j].Stat.OutputTokens
+	})
+	return roll
 }
