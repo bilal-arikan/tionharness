@@ -73,6 +73,7 @@ sonrası canlı uygulanır.
 | POST | `/api/backups/run` | Anında yedek koşusu; sonuç (`archives[]` + `failures{}`) döner. Zamanlama kapalı olsa da çalışır |
 | GET | `/api/backups/archives` | Workspace başına arşiv listesi (en yeni önce): `[{workspaceId, workspaceName, archives:[{name, bytes, modified}]}]` |
 | POST | `/api/backups/restore` | `{workspaceId, archive}` → workspace'i o arşivden geri yükler (yıkıcı: mevcut veriyi ezer, workspace canlı yeniden açılır) |
+| DELETE | `/api/backups/archives` | `{workspaceId, archive}` → tek bir arşiv dosyasını siler (`ResolveArchive` ile ad doğrulanır) |
 
 > Yedekleme bir **ajan aracı değildir** — yalnız kullanıcı/UI tetikler. (Otonom
 > ajanların kendi yedeklerini fırlatması bilinçle kapsam dışı.)
@@ -86,7 +87,8 @@ hem arşivler** toplu: otomatik yedekleme toggle'ı, aralık/saklama/klasör ala
 durum kartı (açık/kapalı + son yedek zamanı + klasör + son hata), **"Şimdi yedekle"** butonu
 ve altında **"Mevcut yedekler"** bölümü — workspace başına gruplanmış arşiv listesi
 (ad + tarih + boyut, en yeni önce) + her arşiv için **iki-adımlı onaylı "Geri yükle"**
-(tıkla → "Eminim, geri yükle"/"İptal"). Üstteki **Kaydet** butonu config alanlarını yazar.
+(tıkla → "Eminim, geri yükle"/"İptal") ve **iki-adımlı onaylı "Sil"** (🗑 → "Eminim,
+sil"/"İptal", `deleteBackupArchive`). Üstteki **Kaydet** butonu config alanlarını yazar.
 Tipler `types/settings.ts`
 (`BackupStatus`/`BackupResult`/`BackupArchive`/`BackupArchiveFile`/`WorkspaceArchives`),
 api `api/system.ts` (`getBackupStatus`/`runBackup`/`listBackupArchives`/`restoreBackup`).

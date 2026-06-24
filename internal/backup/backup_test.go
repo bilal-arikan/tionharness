@@ -129,6 +129,30 @@ func TestResolveArchiveRejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestDeleteArchive(t *testing.T) {
+	tmp := t.TempDir()
+	m := New(tmp, func() []Target { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m.Configure(Config{Enabled: false, Dir: filepath.Join(tmp, "backups")})
+
+	p := filepath.Join(tmp, "backups", "WS1", "WS1-20260625-000000.zip")
+	writeFile(t, p, "z")
+
+	// Traversal is rejected and leaves the real file intact.
+	if err := m.DeleteArchive("WS1", "../evil.zip"); err == nil {
+		t.Fatal("expected traversal rejection")
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatalf("file should still exist after rejected delete: %v", err)
+	}
+	// Valid delete removes the file.
+	if err := m.DeleteArchive("WS1", "WS1-20260625-000000.zip"); err != nil {
+		t.Fatalf("DeleteArchive: %v", err)
+	}
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Fatalf("file should be gone, stat err = %v", err)
+	}
+}
+
 func TestZipDirSkipsBackupsRoot(t *testing.T) {
 	tmp := t.TempDir()
 	writeFile(t, filepath.Join(tmp, "data.txt"), "keep")
