@@ -85,8 +85,8 @@ func permissionModeArgs(mode string) []string {
 // (which surface in the SwarmGo UI) instead of its own built-ins, which can't be
 // answered in non-interactive print mode.
 const interactionSystemNote = "To ask the user a clarifying question, call the ask_user tool and wait for the reply. " +
-	"To show or update a task checklist, call todo_write. " +
-	"Do not use the built-in AskUserQuestion or TodoWrite tools."
+	"To create, show, or update a task checklist, ALWAYS call the todo_write tool — it persists to the session's progress file. " +
+	"Do NOT use any built-in checklist or task tool (AskUserQuestion, TodoWrite, TaskCreate, TaskUpdate, TaskList, TaskGet): they do not reach SwarmGo and the progress view stays empty."
 
 // usesInteractionTools reports whether the SwarmGo Interaction MCP tools are in
 // the allowlist for this call.

@@ -81,6 +81,15 @@ kopyası), böylece `todo_write` aracı bağımlılık-hafif kalır:
 - **CLI yol:** `mcp_interaction.go::callTodo` run'ın todo sink'ini ctx'e takıp
   kanonik aracı çağırır; sink `chat_stream.go` (chat) + `autonomous_interaction.go`
   (scheduler/spawn/flow) tarafından run'a kurulur.
+- **Native araç gölgeleme (2026-06-25, fix):** claude-cli kendi built-in checklist
+  aracını sunar; eski sürümlerde `TodoWrite`, yenilerde **`TaskCreate`/`TaskUpdate`/
+  `TaskList`/`TaskGet`** ailesi. Bu native araç SwarmGo'nun bridged `todo_write`'ını
+  **gölgeler** → model native'i çağırır, sink'e hiçbir şey gitmez, progress kartı boş
+  kalır. `climcp.go::writeCLIMCPConfig` artık `--disallowedTools` ile her iki ad
+  ailesini de bastırır (CLI'da olmayan adı disallow etmek zararsız) ve
+  `claudecli.go::interactionSystemNote` modele yalnız `todo_write` kullanmasını açıkça
+  söyler. E2E doğrulandı: "checklist ile takip et" gibi araç-adı içermeyen doğal
+  istemde bile artık `todo_write` çağrılıp progress.json yazılıyor.
 
 ## Geri yükleme
 

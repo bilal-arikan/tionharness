@@ -95,10 +95,20 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 			allowed = append(allowed, "mcp__"+interactionServerKey+"__"+t)
 		}
 		// Suppress the CLI's own equivalents, which can't be answered/honored in
-		// one-shot -p mode: AskUserQuestion/TodoWrite have no live client, and
-		// ScheduleWakeup schedules a wake the CLI subprocess never lives to fire —
-		// SwarmGo's own schedule_wake (above) replaces it with a real timer.
-		disallowed = append(disallowed, "AskUserQuestion", "TodoWrite", "ScheduleWakeup")
+		// one-shot -p mode: AskUserQuestion has no live client, and ScheduleWakeup
+		// schedules a wake the CLI subprocess never lives to fire — SwarmGo's own
+		// schedule_wake (above) replaces it with a real timer.
+		//
+		// The checklist family is the subtle one: newer Claude Code CLIs renamed the
+		// old TodoWrite into a TaskCreate/TaskUpdate/TaskList/TaskGet family. Whichever
+		// the CLI version exposes, it SHADOWS SwarmGo's bridged todo_write — the model
+		// reaches for the native tool, so nothing reaches the progress sink and the
+		// progress card stays empty. Suppress BOTH names (disallowing a tool the CLI
+		// doesn't have is harmless) so todo_write is the only checklist path.
+		disallowed = append(disallowed,
+			"AskUserQuestion",
+			"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet",
+			"ScheduleWakeup")
 		// Skill: the CLI's native skill tool only sees its own .claude/skills dirs,
 		// never SwarmGo's workspace skills — so a weak model reaching for it fails
 		// with "Unknown skill". The bridged use_skill (above) is the correct path,
