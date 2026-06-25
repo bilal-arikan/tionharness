@@ -86,7 +86,8 @@ func permissionModeArgs(mode string) []string {
 // answered in non-interactive print mode.
 const interactionSystemNote = "To ask the user a clarifying question, call the ask_user tool and wait for the reply. " +
 	"To create, show, or update a task checklist, ALWAYS call the todo_write tool — it persists to the session's progress file. " +
-	"Do NOT use any built-in checklist or task tool (AskUserQuestion, TodoWrite, TaskCreate, TaskUpdate, TaskList, TaskGet): they do not reach SwarmGo and the progress view stays empty."
+	"Do NOT use any built-in checklist or task tool (AskUserQuestion, TodoWrite, TaskCreate, TaskUpdate, TaskList, TaskGet): they do not reach SwarmGo and the progress view stays empty. " +
+	"To delegate a focused sub-task to another agent, use the run_subagent tool when it is available; never use the built-in Task or Agent subagent launcher, which runs invisibly to SwarmGo."
 
 // usesInteractionTools reports whether the SwarmGo Interaction MCP tools are in
 // the allowlist for this call.

@@ -145,6 +145,14 @@ Bu yüzden `run_subagent` şemasına **üç opsiyonel alan** eklendi:
   boundaries'ini uygular. Named-agent hedefi için de aynı.
 - **İki yol da** (native tool-loop + CLI köprüsü) `runAgent`'tan geçtiği için tek
   noktada enjeksiyon her iki yürütmeyi kapsar.
+- **Native launcher gölgeleme (2026-06-25, fix):** claude-cli'ın kendi delegasyon
+  aracı (eski sürüm `Task`, yeni sürüm `Agent`) çocuğu **tamamen CLI süreci içinde**
+  başlatır → SwarmGo'ya görünmez, bridged `run_subagent`'ı baypas eder (`subagent`
+  trace yok, SwarmGo ajan/profil hedefi yok, bütçe muhasebesi yok). `climcp.go::
+  writeCLIMCPConfig` artık `--disallowedTools` ile `Task` + `Agent`'ı bastırır
+  (delegasyon açıkken `run_subagent` gated muadildir; kapalıyken ajan zaten delege
+  etmemeli). `TodoWrite`/`Skill` ile aynı gölgeleme sınıfı (bkz. `_Docs\36` native
+  araç gölgeleme notu).
 - **Açık karar (async):** sözleşme şu an yalnız **sync** dalda enjekte edilir (kritik
   izole-sync subagent senaryosu). `async` dal `SpawnSession`'a gider; istenirse
   ileride sözleşme `spec.Task` önüne eklenebilir.

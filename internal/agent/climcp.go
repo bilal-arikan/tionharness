@@ -114,6 +114,14 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		// with "Unknown skill". The bridged use_skill (above) is the correct path,
 		// so suppress the native one to force it.
 		disallowed = append(disallowed, "Skill")
+		// Subagent launcher: the CLI's native delegation tool (older CLIs call it
+		// `Task`, newer ones `Agent`) spawns a child entirely inside the CLI process —
+		// invisible to SwarmGo, so it bypasses the bridged run_subagent (no `subagent`
+		// trace, no SwarmGo agent/profile target, no budget accounting). When
+		// delegation is enabled run_subagent is the gated replacement; when it is
+		// disabled the agent should not delegate at all. Either way the native launcher
+		// must be suppressed — same shadowing class as TodoWrite/Skill above.
+		disallowed = append(disallowed, "Task", "Agent")
 		// Bash: only suppress the CLI's native POSIX Bash when SwarmGo's own shell is
 		// bridged (shell enabled) as its replacement — otherwise the agent would lose
 		// shell entirely (SwarmGo's shell is not bridged when disabled). With the
