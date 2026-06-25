@@ -112,8 +112,8 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
         {/* Cache legend */}
         {data && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[var(--color-border)] px-5 py-1.5 text-[11px]">
-            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 font-medium text-emerald-500">
-              <span className="h-2 w-2 rounded-sm bg-emerald-500/70" />
+            <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-success)]">
+              <span className="h-2 w-2 rounded-sm bg-[color-mix(in_srgb,var(--color-success)_70%,transparent)]" />
               cache'li (sıcak, yeniden kullanılır)
             </span>
             <span className="text-[var(--color-text-dim)]">{data.cache.note}</span>
@@ -163,15 +163,15 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                     return (
                       <div key={i}>
                         {boundary && (
-                          <div className="my-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-emerald-500">
-                            <span className="h-px flex-1 bg-emerald-500/30" />
+                          <div className="my-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-[var(--color-success)]">
+                            <span className="h-px flex-1 bg-[color-mix(in_srgb,var(--color-success)_30%,transparent)]" />
                             cache sınırı — buraya kadar cache'li (sıcak)
-                            <span className="h-px flex-1 bg-emerald-500/30" />
+                            <span className="h-px flex-1 bg-[color-mix(in_srgb,var(--color-success)_30%,transparent)]" />
                           </div>
                         )}
                         <div
                           className={`rounded-lg border bg-[var(--color-bg)] px-3 py-2 ${
-                            cached ? 'border-emerald-500/30' : 'border-[var(--color-border)]'
+                            cached ? 'border-[color-mix(in_srgb,var(--color-success)_30%,transparent)]' : 'border-[var(--color-border)]'
                           }`}
                         >
                           <div className="mb-1 flex items-center gap-1.5">
@@ -221,7 +221,7 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                       title={t.description}
                       className={`rounded border px-1.5 py-0.5 text-[11px] ${
                         data.cache.toolsCached
-                          ? `border-emerald-500/30 ${CACHED}`
+                          ? `border-[color-mix(in_srgb,var(--color-success)_30%,transparent)] ${CACHED}`
                           : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
                       }`}
                     >
@@ -242,7 +242,7 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
 // prompt cache (reused across turns). Markdown plain text inherits this via
 // currentColor; code/links keep their own colour. Uncached segments stay the
 // default text colour.
-const CACHED = 'text-emerald-200/80'
+const CACHED = 'text-[color-mix(in_srgb,var(--color-success)_60%,var(--color-text))]'
 
 function Section({
   title,
@@ -262,7 +262,7 @@ function Section({
       <div
         className={`rounded-lg border bg-[var(--color-bg)] px-3 py-1 ${
           cached
-            ? `border-emerald-500/30 ${CACHED}`
+            ? `border-[color-mix(in_srgb,var(--color-success)_30%,transparent)] ${CACHED}`
             : 'border-[var(--color-border)]'
         }`}
       >
@@ -276,7 +276,7 @@ function Section({
 // "cache dışı" (sent fresh).
 function CacheTag({ cached }: { cached: boolean }) {
   return cached ? (
-    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-medium normal-case text-emerald-500">
+    <span className="rounded bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] px-1.5 py-0.5 text-[9px] font-medium normal-case text-[var(--color-success)]">
       cache'li
     </span>
   ) : (
