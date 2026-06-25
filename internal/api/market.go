@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
@@ -140,11 +141,8 @@ type installRequest struct {
 	AgentID   string `json:"agentId"`
 }
 
-// handleInstallMarketPack installs a pack into the workspace. Each kind lands in
-// its own store: skill → workspace skills dir (+catalog reload); agent →
-// db.CreateAgent (provenance cleared, unknown skills dropped); flow →
-// db.CreateFlow (empty agent slots auto-assigned to the first agent so it runs);
-// provider → settings.UpsertCustomProvider (+ live push, optional API key).
+// handleInstallMarketPack installs a pack into the workspace via the shared install
+// authority, writes the result and stamps the install ledger on success.
 func (s *Server) handleInstallMarketPack(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
 	pack, ok := wsp.Runtime.Market().Get(r.PathValue("id"))
@@ -156,73 +154,77 @@ func (s *Server) handleInstallMarketPack(w http.ResponseWriter, r *http.Request)
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&req) // body optional
 	}
+	res, err := s.installPackInto(r, wsp, pack, req)
+	if err != nil {
+		writeError(w, statusOf(err), err.Error())
+		return
+	}
+	wsp.Runtime.Market().RecordInstall(pack.ID, pack.Version)
+	writeJSON(w, http.StatusOK, res)
+}
 
-	// Capture the response status so we can stamp the install ledger (packID →
-	// version) once, for any kind, on success — this drives "Kuruldu"/"Güncelle".
-	rec := &statusCaptureWriter{ResponseWriter: w, status: http.StatusOK}
-	w = rec
-
+// installPackInto is the SINGLE install authority: it routes a pack to its per-kind
+// installer and returns the result or an error. Shared by the market install
+// endpoint AND the generic ingest import endpoint — so importing a foreign repo and
+// installing a native pack land in exactly the same place, per entity kind. Each
+// kind writes to its own store: skill → workspace skills dir (+catalog reload);
+// agent → db.CreateAgent (provenance cleared, unknown skills dropped); flow →
+// db.CreateFlow (empty agent slots auto-assigned); provider → UpsertCustomProvider;
+// mcp/workspace/memory likewise.
+func (s *Server) installPackInto(r *http.Request, wsp *workspace.Workspace, pack market.Pack, req installRequest) (market.InstallResult, error) {
 	switch pack.Kind {
 	case market.KindSkill:
 		res, err := market.InstallSkill(pack, wsp.Runtime.WorkspaceSkillsDir(), req.Overwrite)
 		if err != nil {
-			writeError(w, http.StatusConflict, err.Error())
-			return
+			return res, httpErr{http.StatusConflict, err.Error()}
 		}
 		wsp.Runtime.Skills().Reload() // surface the new skill immediately
-		writeJSON(w, http.StatusOK, res)
-
+		return res, nil
 	case market.KindAgent:
-		s.installAgentPack(w, r, wsp, pack)
-
+		return s.installAgentPack(r, wsp, pack)
 	case market.KindFlow:
-		s.installFlowPack(w, r, wsp, pack)
-
+		return s.installFlowPack(r, wsp, pack)
 	case market.KindProvider:
-		s.installProviderPack(w, wsp, pack, req.APIKey)
-
+		return s.installProviderPack(wsp, pack, req.APIKey)
 	case market.KindMCP:
-		s.installMCPPack(w, r, wsp, pack)
-
+		return s.installMCPPack(r, wsp, pack)
 	case market.KindWorkspace:
-		s.installWorkspacePack(w, pack)
-
+		return s.installWorkspacePack(pack)
 	case market.KindMemory:
-		s.installMemoryPack(w, r, wsp, pack, req.AgentID)
-
+		return s.installMemoryPack(r, wsp, pack, req.AgentID)
 	default:
-		writeError(w, http.StatusNotImplemented, "installing "+pack.Kind+" packs is not yet supported")
-	}
-
-	if rec.status == http.StatusOK {
-		wsp.Runtime.Market().RecordInstall(pack.ID, pack.Version)
+		return market.InstallResult{}, httpErr{http.StatusNotImplemented, "installing " + pack.Kind + " packs is not yet supported"}
 	}
 }
 
-// statusCaptureWriter records the HTTP status written by a handler so the caller
-// can branch on success after delegating the response.
-type statusCaptureWriter struct {
-	http.ResponseWriter
-	status int
+// httpErr carries an HTTP status alongside an install error so the market endpoint
+// can preserve precise codes (409 conflict, 400 bad payload…) while the ingest
+// batch path treats any error simply as a per-item skip.
+type httpErr struct {
+	code int
+	msg  string
 }
 
-func (s *statusCaptureWriter) WriteHeader(code int) {
-	s.status = code
-	s.ResponseWriter.WriteHeader(code)
+func (e httpErr) Error() string { return e.msg }
+
+// statusOf extracts the HTTP status from an httpErr, defaulting to 400.
+func statusOf(err error) int {
+	if he, ok := err.(httpErr); ok && he.code != 0 {
+		return he.code
+	}
+	return http.StatusBadRequest
 }
 
 // installMCPPack registers an MCP tool server from a pack payload. The server is
 // created enabled; the persistent MCP pool picks it up on the next turn. Dedup is
 // by name so re-installing the same pack doesn't spawn a duplicate.
-func (s *Server) installMCPPack(w http.ResponseWriter, r *http.Request, wsp *workspace.Workspace, pack market.Pack) {
+func (s *Server) installMCPPack(r *http.Request, wsp *workspace.Workspace, pack market.Pack) (market.InstallResult, error) {
 	mp := pack.Payload.MCP
 	if mp == nil || mp.Name == "" {
-		writeError(w, http.StatusBadRequest, "MCP pack is missing its payload")
-		return
+		return market.InstallResult{}, httpErr{http.StatusBadRequest, "MCP pack is missing its payload"}
 	}
 	if existing, _ := wsp.DB.ListMCPServers(r.Context()); nameExists(mp.Name, mcpNames(existing)) {
-		writeError(w, http.StatusConflict, "\""+mp.Name+"\" adlı MCP sunucusu zaten kurulu")
-		return
+		return market.InstallResult{}, httpErr{http.StatusConflict, "\"" + mp.Name + "\" adlı MCP sunucusu zaten kurulu"}
 	}
 	created, err := wsp.DB.CreateMCPServer(r.Context(), db.MCPServer{
 		Name:      mp.Name,
@@ -235,33 +237,29 @@ func (s *Server) installMCPPack(w http.ResponseWriter, r *http.Request, wsp *wor
 		Scope:     "shared",
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return market.InstallResult{}, httpErr{http.StatusInternalServerError, err.Error()}
 	}
-	writeJSON(w, http.StatusOK, market.InstallResult{
+	return market.InstallResult{
 		Kind: market.KindMCP, Ref: created.ID,
 		Message: "MCP server \"" + created.Name + "\" installed",
-	})
+	}, nil
 }
 
 // installWorkspacePack creates a brand-new workspace from a template pack and
 // applies its identity/instructions/board layout. Dedup is by workspace name.
-func (s *Server) installWorkspacePack(w http.ResponseWriter, pack market.Pack) {
+func (s *Server) installWorkspacePack(pack market.Pack) (market.InstallResult, error) {
 	wp := pack.Payload.Workspace
 	if wp == nil || wp.Name == "" {
-		writeError(w, http.StatusBadRequest, "workspace pack is missing its payload")
-		return
+		return market.InstallResult{}, httpErr{http.StatusBadRequest, "workspace pack is missing its payload"}
 	}
 	for _, m := range s.workspaces.List() {
 		if strings.EqualFold(strings.TrimSpace(m.Name), strings.TrimSpace(wp.Name)) {
-			writeError(w, http.StatusConflict, "\""+wp.Name+"\" adlı workspace zaten var")
-			return
+			return market.InstallResult{}, httpErr{http.StatusConflict, "\"" + wp.Name + "\" adlı workspace zaten var"}
 		}
 	}
 	created, err := s.workspaces.Create(wp.Name, "", "")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return market.InstallResult{}, httpErr{http.StatusInternalServerError, err.Error()}
 	}
 	patch := workspace.WSSettingsPatch{}
 	if wp.Icon != "" {
@@ -280,25 +278,23 @@ func (s *Server) installWorkspacePack(w http.ResponseWriter, pack market.Pack) {
 	if _, err := s.workspaces.UpdateSettings(created.ID, patch); err != nil {
 		s.logger.Warn("workspace pack: apply settings failed", "id", created.ID, "error", err)
 	}
-	writeJSON(w, http.StatusOK, market.InstallResult{
+	return market.InstallResult{
 		Kind: market.KindWorkspace, Ref: created.ID,
 		Message: "Workspace \"" + wp.Name + "\" oluşturuldu",
-	})
+	}, nil
 }
 
 // installMemoryPack seeds memory entries into a target agent (memory is per-agent).
 // agentID selects the target; an empty agentID falls back to the first agent. It
 // errors if no agent exists, or if a supplied agentID is unknown.
-func (s *Server) installMemoryPack(w http.ResponseWriter, r *http.Request, wsp *workspace.Workspace, pack market.Pack, agentID string) {
+func (s *Server) installMemoryPack(r *http.Request, wsp *workspace.Workspace, pack market.Pack, agentID string) (market.InstallResult, error) {
 	mp := pack.Payload.Memory
 	if mp == nil || len(mp.Entries) == 0 {
-		writeError(w, http.StatusBadRequest, "memory pack has no entries")
-		return
+		return market.InstallResult{}, httpErr{http.StatusBadRequest, "memory pack has no entries"}
 	}
 	agents, _ := wsp.DB.ListAgents(r.Context())
 	if len(agents) == 0 {
-		writeError(w, http.StatusBadRequest, "önce bir ajan oluştur (bellek girdileri ajana eklenir)")
-		return
+		return market.InstallResult{}, httpErr{http.StatusBadRequest, "önce bir ajan oluştur (bellek girdileri ajana eklenir)"}
 	}
 	target := agents[0]
 	if agentID != "" {
@@ -311,8 +307,7 @@ func (s *Server) installMemoryPack(w http.ResponseWriter, r *http.Request, wsp *
 			}
 		}
 		if !found {
-			writeError(w, http.StatusBadRequest, "seçili ajan bulunamadı")
-			return
+			return market.InstallResult{}, httpErr{http.StatusBadRequest, "seçili ajan bulunamadı"}
 		}
 	}
 	n := 0
@@ -328,10 +323,10 @@ func (s *Server) installMemoryPack(w http.ResponseWriter, r *http.Request, wsp *
 			n++
 		}
 	}
-	writeJSON(w, http.StatusOK, market.InstallResult{
+	return market.InstallResult{
 		Kind: market.KindMemory, Ref: target.ID,
 		Message: fmt.Sprintf("%d bellek girdisi \"%s\" ajanına eklendi", n, target.Name),
-	})
+	}, nil
 }
 
 // toBoardColumnDefs maps the dependency-free market columns to db.BoardColumnDef.
@@ -354,16 +349,14 @@ func mcpNames(in []db.MCPServer) []string {
 // installAgentPack creates an agent from a pack payload. Provenance is cleared
 // (CreatedBy=""=user) and skills are filtered to those resolvable in this
 // workspace so a missing skill never blocks the install.
-func (s *Server) installAgentPack(w http.ResponseWriter, r *http.Request, wsp *workspace.Workspace, pack market.Pack) {
+func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pack market.Pack) (market.InstallResult, error) {
 	ap := pack.Payload.Agent
 	if ap == nil || ap.Name == "" {
-		writeError(w, http.StatusBadRequest, "agent pack is missing its payload")
-		return
+		return market.InstallResult{}, httpErr{http.StatusBadRequest, "agent pack is missing its payload"}
 	}
 	// Skip if an agent with the same name already exists (don't create duplicates).
 	if existing, _ := wsp.DB.ListAgents(r.Context()); nameExists(ap.Name, agentNames(existing)) {
-		writeError(w, http.StatusConflict, "\""+ap.Name+"\" adlı ajan zaten kurulu")
-		return
+		return market.InstallResult{}, httpErr{http.StatusConflict, "\"" + ap.Name + "\" adlı ajan zaten kurulu"}
 	}
 	skillStore := wsp.Runtime.Skills()
 	known := make([]string, 0, len(ap.Skills))
@@ -388,24 +381,22 @@ func (s *Server) installAgentPack(w http.ResponseWriter, r *http.Request, wsp *w
 		Skills:         known,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return market.InstallResult{}, httpErr{http.StatusInternalServerError, err.Error()}
 	}
-	writeJSON(w, http.StatusOK, market.InstallResult{
+	return market.InstallResult{
 		Kind: market.KindAgent, Ref: created.ID,
 		Message: "Agent \"" + created.Name + "\" installed",
-	})
+	}, nil
 }
 
 // installFlowPack creates a flow from a pack payload. The graph is agent-agnostic
 // (empty agentId slots); to make it runnable immediately, empty slots are filled
 // with the workspace's first agent (mirrors the template-instantiation rule that
 // the engine rejects empty agentIds). The user can reassign in the canvas.
-func (s *Server) installFlowPack(w http.ResponseWriter, r *http.Request, wsp *workspace.Workspace, pack market.Pack) {
+func (s *Server) installFlowPack(r *http.Request, wsp *workspace.Workspace, pack market.Pack) (market.InstallResult, error) {
 	fp := pack.Payload.Flow
 	if fp == nil || fp.Graph == "" {
-		writeError(w, http.StatusBadRequest, "flow pack is missing its graph")
-		return
+		return market.InstallResult{}, httpErr{http.StatusBadRequest, "flow pack is missing its graph"}
 	}
 	wantName := fp.Name
 	if wantName == "" {
@@ -413,8 +404,7 @@ func (s *Server) installFlowPack(w http.ResponseWriter, r *http.Request, wsp *wo
 	}
 	// Skip if a flow with the same name already exists (don't create duplicates).
 	if existing, _ := wsp.DB.ListFlows(r.Context()); nameExists(wantName, flowNames(existing)) {
-		writeError(w, http.StatusConflict, "\""+wantName+"\" adlı akış zaten kurulu")
-		return
+		return market.InstallResult{}, httpErr{http.StatusConflict, "\"" + wantName + "\" adlı akış zaten kurulu"}
 	}
 	graph := fp.Graph
 	if g, err := orchestration.ParseGraph(fp.Graph); err == nil {
@@ -438,23 +428,21 @@ func (s *Server) installFlowPack(w http.ResponseWriter, r *http.Request, wsp *wo
 		Name: name, Description: fp.Description, Graph: graph,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return market.InstallResult{}, httpErr{http.StatusInternalServerError, err.Error()}
 	}
-	writeJSON(w, http.StatusOK, market.InstallResult{
+	return market.InstallResult{
 		Kind: market.KindFlow, Ref: created.ID,
 		Message: "Flow \"" + created.Name + "\" installed",
-	})
+	}, nil
 }
 
 // installProviderPack registers a custom provider from a pack payload and pushes
 // it live. The API key (never carried in a pack) is supplied by the user here;
 // an empty key still installs (the user can add it later in Settings).
-func (s *Server) installProviderPack(w http.ResponseWriter, wsp *workspace.Workspace, pack market.Pack, apiKey string) {
+func (s *Server) installProviderPack(wsp *workspace.Workspace, pack market.Pack, apiKey string) (market.InstallResult, error) {
 	pp := pack.Payload.Provider
 	if pp == nil || pp.BaseURL == "" {
-		writeError(w, http.StatusBadRequest, "provider pack is missing its payload")
-		return
+		return market.InstallResult{}, httpErr{http.StatusBadRequest, "provider pack is missing its payload"}
 	}
 	id := providerIDFromPack(pack)
 	var keyPtr *string
@@ -468,15 +456,16 @@ func (s *Server) installProviderPack(w http.ResponseWriter, wsp *workspace.Works
 		BaseURL:      pp.BaseURL,
 		DefaultModel: pp.DefaultModel,
 		Models:       pp.Models,
+		Reasoning:    pp.Reasoning,
+		PromptCache:  pp.PromptCache,
 	}, keyPtr); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		return market.InstallResult{}, httpErr{http.StatusBadRequest, err.Error()}
 	}
 	s.applySettings() // push the new provider into the live registry
-	writeJSON(w, http.StatusOK, market.InstallResult{
+	return market.InstallResult{
 		Kind: market.KindProvider, Ref: id,
 		Message: "Provider \"" + pp.Label + "\" installed",
-	})
+	}, nil
 }
 
 // providerIDFromPack derives a settings provider id from a pack id. Pack ids are
@@ -547,7 +536,9 @@ func (s *Server) handlePublishMarket(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		pack, err := market.BuildSkillPack(sk.Slug, sk.Name, sk.Description, sk.Icon, sk.Color, string(raw), "", 0)
+		// Collect bundled resource files (nested dirs) so publish is lossless too.
+		files := collectSkillFiles(filepath.Dir(sk.Path))
+		pack, err := market.BuildSkillPack(sk.Slug, sk.Name, sk.Description, sk.Icon, sk.Color, string(raw), "", 0, files)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -561,6 +552,30 @@ func (s *Server) handlePublishMarket(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusNotImplemented, "publishing "+req.Kind+" is not yet supported")
 	}
+}
+
+// collectSkillFiles reads a skill folder's bundled resource files (every file
+// except SKILL.md, nested dirs included) keyed by forward-slashed relative path, so
+// publish carries them into the pack. Returns nil when only SKILL.md is present.
+func collectSkillFiles(dir string) map[string][]byte {
+	files := map[string][]byte{}
+	_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, werr error) error {
+		if werr != nil || d.IsDir() {
+			return nil
+		}
+		rel, rerr := filepath.Rel(dir, p)
+		if rerr != nil || strings.EqualFold(rel, "SKILL.md") {
+			return nil
+		}
+		if b, rderr := os.ReadFile(p); rderr == nil {
+			files[filepath.ToSlash(rel)] = b
+		}
+		return nil
+	})
+	if len(files) == 0 {
+		return nil
+	}
+	return files
 }
 
 // handleImportMarket stores a raw pasted SwarmPack JSON into the registry.

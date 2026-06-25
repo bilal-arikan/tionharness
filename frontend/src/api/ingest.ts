@@ -1,0 +1,65 @@
+import { req } from './client'
+
+// Generic import (ingest) pipeline: scan a foreign source (GitHub repo/plugin or a
+// local folder tree), then bulk-install the selected artifacts (skills/agents/
+// commands/MCP) through the same install authority the market uses. (SK-IMP3)
+
+export type IngestKind = 'skill' | 'agent' | 'flow' | 'provider' | 'workspace' | 'memory' | 'mcp'
+
+// Discovered is one artifact found in a source, with preview metadata + a unique
+// selection key.
+export interface Discovered {
+  key: string
+  kind: IngestKind
+  slug: string
+  name: string
+  description: string
+  relPath: string
+  files: string[]
+  warnings?: string[]
+  exists: boolean
+}
+
+export interface IngestScanResult {
+  source: string
+  location: string
+  items: Discovered[]
+  warnings: string[]
+}
+
+export interface IngestSource {
+  source: 'github' | 'local'
+  path?: string // local folder (source=local)
+  url?: string // github repo/tree URL or owner/repo (source=github)
+}
+
+export interface IngestInstallInput extends IngestSource {
+  keys?: string[] // selected Discovered.key values (empty = all)
+  slugPrefix?: string
+  shared?: boolean
+}
+
+export interface InstallResult {
+  kind: string
+  ref: string
+  message: string
+}
+
+export interface IngestSkipNote {
+  key: string
+  slug: string
+  reason: string
+}
+
+export interface IngestInstallResult {
+  installed: InstallResult[]
+  skipped: IngestSkipNote[]
+  warnings: string[]
+}
+
+export const ingestApi = {
+  ingestScan: (input: IngestSource) =>
+    req<IngestScanResult>('/api/ingest/scan', { method: 'POST', body: JSON.stringify(input) }),
+  ingestInstall: (input: IngestInstallInput) =>
+    req<IngestInstallResult>('/api/ingest/install', { method: 'POST', body: JSON.stringify(input) }),
+}

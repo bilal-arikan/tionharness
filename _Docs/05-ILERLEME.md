@@ -2,6 +2,169 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-25**
 
+## Generic import pipeline — internal/ingest (SK-IMP3) ✅ (2026-06-25)
+
+İçe aktarma **skill-özel olmaktan çıkıp jenerik, çok-türlü** bir boru hattına dönüştü.
+Tek hat artık GitHub repo / plugin / local klasörden **skill + agent + command + MCP**
+keşfedip hepsini market ile **aynı kurulum otoritesine** bağlıyor. Beş fazda yapıldı:
+
+- **Faz 1 — `internal/fetch` (edinme):** tarball indirme + local tree walk + GitHub URL
+  ayrıştırma tek pakete çıkarıldı (`TreeFrom`/`GroupByMarker`/`FindFiles`). `skills` ve
+  `ingest` ortak kullanır; eski `skills/github.go` (contents-API) silindi.
+- **Faz 2 — `market.Pack.Files`:** pack envelope'una `Files map[string][]byte` eklendi;
+  `InstallSkill` nested kaynakları (`safeRelPath`) yazar, publish (`collectSkillFiles`)
+  toplar → yayınla/kur kaybsız.
+- **Faz 3 — `internal/ingest` + Adapter:** `Adapter{Kind,Scan}` arayüzü + `Discovered`
+  (preview + `build` closure) + orchestrator (`Scan`/`BuildPacks`). Skill adapter
+  `skills.RenderImportedSkill`'i sarmalar; `skills`'ten helper'lar export edildi
+  (`RenderImportedSkill`/`Slugify`/`SuggestSlug`/`FrontmatterField|List|Body`).
+- **Faz 4 — tek install otoritesi + kind-agnostik UI:** `api/market.go` kind switch'i
+  `installPackInto(...) (InstallResult, error)`'a çıkarıldı (alt-installer'lar `httpErr`
+  ile HTTP kodu taşır); market install **ve** yeni `POST /api/ingest/{scan,install}`
+  ortak çağırır. `SkillImportDialog` kind-agnostik. Eski `/api/skills/import/{scan,bulk}`
+  kaldırıldı; `/api/skills/import` (tek) korundu.
+- **Faz 5 — agent/command/mcp adapter'ları:** `**/agents/*.md`→AgentPayload (body→Soul,
+  tools→AllowedTools; CC model uyarıyla eşlenmez), `**/commands/*.md`→loadable skill
+  (`.toml` atlanır), `.mcp.json`→MCPPayload. **`(kind,slug)` dedup** (repo'nun `plugins/`/
+  `dist/` aynası → en sığ yol).
+
+**İlke:** import market'in **içine taşınmadı**; ayrı `internal/ingest` paketi market'i
+bağımlılık olarak kullanır (döngüsüz: `ingest→{fetch,skills,market}`, yalnız `api→ingest`).
+**Canlı:** caveman **10** (3 agent + 7 skill; `plugins/` aynası dedup'landı), taste-skill
+**13**, marketingskills **45**. Go vet temiz, **460 test**, tsc + prod build temiz.
+Detay: **`_Docs\37-INGEST-MIMARISI.md`**, `21-MARKET.md` §4.1.
+
+## Generic AgentIdentity bileşeni + agent ayar pill seçicileri ✅ (2026-06-25)
+
+**AgentIdentity (`components/agents/AgentIdentity.tsx`):** Uygulama genelinde agent
+gösterimini (avatar + ad + opsiyonel alt satır) tek bileşene topladı. `size`
+(sm/md/lg), `subtitle` ('model' → katalogdan çözülmüş model etiketi · 'none' ·
+özel ReactNode), `active` (avatar halkası), `dim`, `nameSuffix`, `trailing`
+props'ları. `AgentAvatar` düşük seviyeli primitif olarak kalır; AgentIdentity onu
++ `resolveModelLabel`'i sarmalar. Taşınan yerler: composer **AgentSelect**
+dropdown'ı, **AgentHeader** (sohbet balonu), **SessionDetailPanel** "Konuşmadaki
+ajanlar", **TaskBoard** kart sahibi, **AgentPicker** (board kart-detay sahip
+seçici — trigger+seçenekler, artık model alt satırı), **AgentRoster**,
+**AgentsView**. (Avatar-only ikon kullanımları — SessionsSidebar/Executions/
+Schedules/Artifacts/Budget/Autocomplete/flow AgentNode — primitif AgentAvatar'da
+bırakıldı; isim ayrı/karmaşık satırda.)
+
+**Agent ayar formu pill seçiciler:** Planlama/Düşünme/İzin `<select>`'leri ikon+
+etiketli `OptionPills` (radiogroup) ile değiştirildi; ikon dili composer ile
+ortak (`components/agents/agentOptions.ts`). Düşünme "Kapalı" = boş string
+(depolama korunur).
+
+## Default skill: `swarmgo-doc-improver` (6-ölçütlü doküman denetimi) ✅ (2026-06-25)
+
+**Ne:** Yeni gömülü default skill — SwarmGo'nun kendi bağlam dokümanlarını (skill'ler,
+workspace CLAUDE.md/AGENTS.md kuralları, `_Docs`) denetleyip iyileştiren tekrarlanabilir
+iş akışı. Anthropic'in resmi `claude-md-improver` skill'inden ilham; SwarmGo'nun daha
+geniş doküman yüzeyine genelleştirildi.
+
+**İçerik:** 6 ölçüt (komutlar / mimari açıklığı / açık-olmayan gotcha'lar / kısalık /
+güncellik / uygulanabilirlik, her biri /5) + puanlı rapor formatı. SwarmGo'ya özgü
+çekirdek içgörü: **changelog-leak anti-pattern** — referans dokümanların (`swarmgo-project`,
+`_Docs` mekanik bölümleri) tarih damgalı geçmişi biriktirmesi; çözüm "1 cümle güncel durum
++ → `_Docs/NN`" kalıbı. **Doc-type kalibrasyonu:** referans/her-tur-yüklenen dokümanda
+kısalık sert, on-demand action skill gövdesinde işlevsel yoğunluk normal → sağlıklı
+dokümanı zorla kesme.
+
+**Gömme:** Go değişikliği **gerekmedi** — `internal/skills/defaults.go` `//go:embed defaults`
+tüm ağacı gömer ve slug'ları alt-dizinlerden türetir; yalnız `defaults/swarmgo-doc-improver/SKILL.md`
+eklendi. Build + 29 test yeşil.
+
+**Yan iş (aynı oturum, davranışsız doküman temizliği):** `swarmgo-project` referans skill'i
+~%11 kısaltıldı (changelog-leak temizlendi + PowerShell çalıştırma komut bloğu eklendi);
+`swarmgo-guide` Memory maddesi okunabilirlik için alt-maddelere bölündü; default-skill listesi
+güncellendi (progress/gan-loop/doc-improver eklendi).
+
+## Agent avatar mojibake onarımı + model adı gösterimi ✅ (2026-06-25)
+
+**Sorun:** claude-cli `create_agent` yoluyla (bir agent'ın başka agent oluşturması)
+yaratılan agent'larda emoji avatar + soul/identity metinleri **mojibake**'ye
+dönüşüyordu (UTF-8 baytları Latin-1 olarak yanlış çözülüyor; ör. 🗺️ → `ðºï¸`).
+UI'da ikon bozuk kutucuklar olarak görünüyordu (AGT1–5 UI'dan temiz, AGT6–9
+agent-üretimi bozuk). CLI/MCP transport katmanından geliyor.
+
+**Üç katmanlı çözüm:**
+1. **Frontend (görüntü):** `lib/avatar.ts` → `normalizeAvatar` + `repairMojibake`;
+   gerçek emoji aynen, mojibake onarılır, onarılamazsa **baş harflere** düşer
+   (asla çöp glyph). `AgentAvatar` `isEmoji` boyutlandırması normalize'a bağlandı.
+2. **Backend (kök neden):** `tools/builtin_agentmgmt.go` → `repairMojibake`
+   (Türkçe ş/ğ/ı korunur; rastgele Latin-1 katı UTF-8 re-decode'da elenir);
+   `create_agent` + `update_agent`'ta `name`/`soul`/`identity`/`avatar` kaydedilmeden
+   onarılır. Test `builtin_agentmgmt_test.go` (9 vaka).
+3. **Veri:** WS2/AGT6–9 dosyaları onarıldı (✈️🏨📍🗺️), `.bak` yedekleriyle.
+
+**Model adı:** Agent gösterilen yerlerde ad altında **soluk** model adı (boşsa
+provider): composer `AgentSelect` dropdown'ı + `AgentRoster`. Composer tetik butonu
+avatar + **ajan adı** gösteriyor.
+
+**Yan onarım (build kıran önceki sorun):** `providers/pricing.go` mükerrer `"minimax"`
+map anahtarı tek bloğa birleştirildi (M2.1/lightning/M2/M1/Text-01, 0.25× cache).
+
+## Mermaid diyagram render desteği (chat) ✅ (2026-06-25)
+
+Sohbet markdown'ında ```` ```mermaid ```` fenced blokları artık tema-duyarlı SVG
+olarak çizilir (akış/sıra/durum/sınıf/ER/gantt vb.). `diff` bloklarının
+`DiffView`'a yönlenmesiyle aynı kalıp.
+
+- **Bağımlılık:** `mermaid@^11` (`frontend/package.json`). Ağır (~3MB) →
+  **dinamik `import()`** ile lazy yüklenir; `vite.config.ts` `manualChunks`'a
+  `vendor-mermaid` (mermaid + d3/dagre/cytoscape/khroma/elkjs) eklendi → ana
+  bundle'a binmez (yalnız bir diyagram render edilince iner; `relationGraph`
+  kalıbı). Build doğrulandı: `vendor-mermaid` ≈ 3.1MB ayrı chunk, `index` sabit.
+- **Bileşen:** `frontend/src/components/markdown/MermaidDiagram.tsx` — tema base'i
+  `<html data-theme>`'ten (`light`→`default`, yok→`dark`) seçilir, `themeVariables`
+  CSS değişkenlerinden (`--color-accent`/`-surface`/`-text`/…) türetilir;
+  `MutationObserver` ile tema değişiminde yeniden çizer. **Akış-dayanıklı:** 120ms
+  debounce + render hatasında ham kaynağa düşer (yarım kalan diyagram
+  patlatmaz); ayrıca geçersiz sözdiziminde mermaid'in `<body>`'ye iliştirdiği
+  hata/"bomba" SVG'si `finally`'de id ile temizlenir (orphan leak yok). Toolbar:
+  Source/Diagram toggle, Expand (tam-ekran overlay), Copy. `securityLevel: 'strict'`.
+- **Entegrasyon:** `CodeBlock.tsx` `lang === 'mermaid'` → `MermaidDiagram`.
+- **Test (Playwright, 2026-06-25):** geçici harness ile flowchart/sequence/state
+  render, dark+light tema geçişinde yeniden renklenme ve geçersiz blok → kaynak
+  fallback (crash yok, bomba leak yok) gerçek tarayıcıda doğrulandı.
+- **Ajan farkındalığı:** `swarmgo-guide` default skill'ine "Rich replies"
+  bölümü eklendi (mermaid/diff/kod render edildiğini ajana öğretir).
+- Detay: `_Docs\07-CHAT-UX.md`.
+
+## Workspace'e özel görünüm/tema + Dil → Profil ✅ (2026-06-25)
+
+Ayarlar ▸ **Görünüm** kategorisi uygulama-geneli olmaktan çıkıp **aktif
+workspace'e özel** hâle getirildi: her workspace kendi tema paleti / temel mod /
+accent'ini saklar ve **workspace değiştirilince UI teması da değişir**.
+
+- **Backend:** `WSSettings`'e `Theme`/`Accent`/`ThemePreset` alanları (+ patch +
+  `UpdateSettings`) ve `workspaceSettingsDTO`'ya aynı alanlar eklendi. Boş alan =
+  uygulama-geneli görünümü miras alır. `ws-settings.json`'da kalıcı.
+- **Frontend:** `lib/theme.ts`'e `Appearance` tipi + `resolveAppearance`
+  (workspace override'ı global üstüne katmanlar) + `applyAppearance`. `App.tsx`
+  global+workspace görünümünü iki ref'te tutar, workspace değişiminde
+  `GET /api/workspace-settings` çekip `applyResolvedTheme()` çağırır; global
+  ayar kaydı workspace seçimini ezmez. `AppearancePanel` self-contained yeniden
+  yazıldı: doğrudan `PUT /api/workspace-settings`, canlı önizleme, unmount'ta
+  kaydedilmemiş önizlemeyi geri alma, "Genele sıfırla" butonu.
+- **Dil** seçeneği Görünüm'den **Profil** kategorisine taşındı (uygulama-geneli
+  kalır). Detay: `_Docs/06-WORKSPACES.md`.
+
+## Composer otomatik-büyüyen giriş + araç çubuğu düzeni ✅ (2026-06-25)
+
+Sohbet giriş alanı (`Composer.tsx`) yeniden düzenlendi. Eskiden tüm kontroller
+(ajan seçici, düşünme/izin picker'ları, çalışma dizini, ekle, textarea, gönder)
+**tek satırda** `items-end` ile yan yana duruyordu; textarea büyüdüğünde yanındaki
+butonlar da uzayıp düzeni bozuyordu. Ayrıca textarea otomatik büyümüyordu
+(`rows=1` + `max-h-40`, JS yok).
+
+Yeni tasarım **kart + iki satır**: (1) tam-genişlik **textarea** üstte, (2) altta
+sabit yükseklikli **araç çubuğu** (sol = ajan/picker/dizin/ekle, sağ = gönder
+kümesi, arada `flex-1` boşluk). Kenarlık/odak halkası artık kartta
+(`focus-within:border-accent`). **Otomatik büyüme:** `useLayoutEffect` her
+`text` değişiminde `height='auto'`→`scrollHeight` ile textarea'yı içeriğe göre
+büyütür; `max-h-[5.5rem]` (~3 satır) sınırlar, üstünde iç kaydırma açılır →
+butonlar **asla** itelenmez/uzamaz. Dosya: `frontend/src/components/chat/Composer.tsx`.
+
 ## Skill koleksiyon içe aktarma (SK-IMP2) ✅ (2026-06-25)
 
 İçe aktarma artık **tek skill klasörü** yerine **çok-skilli koleksiyonları** (GitHub repo /

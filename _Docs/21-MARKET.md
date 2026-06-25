@@ -18,10 +18,58 @@
 > (`<DataDir>/market`, ~/.swarmgo/market) ve **uzak registry'lerde** yaşar.
 > `//go:embed defaults` + `EnsureDefaults` + `internal/market/defaults/` silindi →
 > binary market item taşımıyor, workspace'te market klasörü yok. Mevcut başlangıç
-> paketleri (31 adet; 2026-06-25'te **GAN üçlüsü** eklendi — `flow.gan-generator-evaluator`
+> paketleri (52 adet; 2026-06-25'te **GAN üçlüsü** eklendi — `flow.gan-generator-evaluator`
 > + `agent.skeptical-evaluator` + `mcp.playwright`, generator↔evaluator döngüsü için, bkz.
 > `_Docs/15-FLOW-CANVAS.md`) global dizinde duruyor; yeni kurulumlarda market boş başlar
 > ve global dizine elle paket konarak ya da uzak registry eklenerek doldurulur.
+>
+> **Provider preset kataloğu (2026-06-25):** 21 yeni provider pack'i global dizine
+> eklendi (toplam **25 sağlayıcı**). Hepsi OpenAI- veya Anthropic-uyumlu uç noktalar,
+> **anahtarsız** (key kurulumda sır kasasından gelir). Kapsam: xAI/Grok, Mistral,
+> Google Gemini (OpenAI-compat), Together, Fireworks, Perplexity/Sonar, Cerebras,
+> SambaNova, DeepInfra, Hyperbolic, Novita, Nebius, NVIDIA NIM, Cohere, Moonshot/Kimi,
+> Qwen (DashScope Intl), Zhipu GLM (Z.AI), SiliconFlow, GitHub Models, ve
+> iki Anthropic-uyumlu uç (`kimi-anthropic`, `glm-anthropic`). MiniMax **eklenmedi**
+> (slug yerleşik `minimax` provider id'siyle çakışıyor — reserved). Bu, yol haritası
+> **SC-1**'i (built-in API provider preset kataloğu) karşılar. Üretici betik:
+> `sessions/.../data/gen_providers.py`. Model listeleri kurulumda düzenlenebilir.
+>
+> **Sistem entegrasyonu (2026-06-25):** Provider pack'leri artık **capability metadata**
+> taşır ve SwarmGo'nun token/maliyet/cache/düşünme sistemlerine bağlanır:
+> - **`payload.provider.reasoning`** (bool) — `true` ise OpenAI-uyumlu uç için
+>   `reasoning_effort` (ajanın ThinkingLevel'ından `low/medium/high`) gönderilir
+>   (`OpenAICompat`, gated; bilinmeyen alan 400'ünü önlemek için varsayılan kapalı).
+>   Anthropic-kind uçlar (`kimi-anthropic`, `glm-anthropic`) thinking'i native destekler.
+> - **`payload.provider.promptCache`** (`native`|`auto`|`none`) — UI'da cache rozeti
+>   gösterir; `native` ise sistem prefix'ine `cache_control` breakpoint enjekte edilir
+>   (OpenRouter + Anthropic uçları). Token-bazlı cache muhasebesi (`cached_tokens` vb.)
+>   zaten tüm OpenAI-uyumlu uçlarda parse ediliyor.
+> - **Fiyatlandırma** — `internal/providers/pricing.go` `priceTable`'a her sağlayıcı
+>   slug'ı → model fiyatları eklendi (yaklaşık, USD/1M, ~Haziran 2026). Bütçe/usage
+>   ekranı bu sağlayıcılar için artık maliyet + cache tasarrufu gösterir. `cacheRead`
+>   çarpanı auto-cache uçlarda ~0.25, Anthropic uçlarda 0.10×.
+>
+> Capability zinciri: `market.ProviderPayload` → install → `settings.CustomProvider`
+> → `providers.CustomSpec` → `buildCustom` → `OpenAICompat.WithCaps()`. Metadata
+> hem MarketPanel önizlemesinde (cache/düşünme rozetleri) hem `CustomProviderDTO`'da
+> yüzeyleniyor.
+>
+> **Model listeleri + fiyat gösterimi (2026-06-25):** Her provider pack'i artık
+> **~8-13 güncel model** taşır (önceden 3-5). Önizlemede modeller **fiyatlarıyla**
+> listelenir (giriş/çıkış $/1M token). Bunun için yeni **`GET /api/prices`** endpoint'i
+> `providers.AllPrices()` ile tüm `priceTable`'ı döndürür; MarketPanel bir kez çekip
+> her modelin yanında gösterir (bilinmeyen → "—"). **Tek kaynak:** `data/gen_providers.py`
+> hem pack JSON'larını hem **üretilen `internal/providers/pricing_market.go`**'yu
+> (`var marketPrices`, init'te `priceTable`'a merge) yazar — pack ve fiyatlar drift etmez.
+> NVIDIA NIM ve GitHub Models fiyatsız (GPU/kota bazlı) → "—" gösterilir.
+>
+> **ProvidersPanel entegrasyonu (2026-06-25):** Ayarlar → Sağlayıcılar'daki özel
+> sağlayıcı **edit formu** artık `reasoning` (checkbox) + `promptCache` (native/auto/
+> none) alanlarını taşır; kaydedince `UpsertProviderInput` ile backend'e gider
+> (handler zaten destekliyordu). Liste kartlarında **Düşünme / Cache rozetleri** ve
+> **varsayılan modelin fiyatı** gösterilir; düzenlerken modellerin **fiyat listesi**
+> (`/api/prices`'ten) görünür. Böylece market-kurulumu olmayan, elle eklenen
+> sağlayıcılar da bu sistemlere bağlanabilir.
 >
 > **UI (2026-06-24):** Market ekranı **sol dikey kategori menüsü** kullanır (Skills/
 > Agents/Providers/Flows/Workspaces/Memories/Tools(MCP)); "Tümü" seçeneği yok,
@@ -31,20 +79,19 @@
 > Bir item'a tıklayınca detay **ortada açılan popup/modal** olarak gelir (eski yan-panel
 > yerine; `market-detail-modal`, backdrop'a tıklayınca kapanır).
 >
-> **Koleksiyon içe aktarma (SK-IMP2, 2026-06-25):** içe aktarma artık **çok-skilli
-> koleksiyonları** destekler — tek skill klasörü yerine bir **GitHub repo / Claude
-> Code plugin / `skills/` klasörü** (ör. `juliusbrussee/caveman`, `leonxlnx/taste-skill`,
-> `coreyhaines31/marketingskills`) baştan sona taranır, içindeki **her `SKILL.md`**
-> keşfedilir. Akış üç adım: **Tara → Seç → İçe aktar** (`SkillImportDialog` artık
-> önizleme + çoklu seçim taşır). GitHub yolu repo'yu **tek tarball indirmeyle**
-> (`codeload.github.com`, API rate-limit'ine tabi DEĞİL) çeker → 1 istekle tüm
-> skill'leri isim/açıklama + dosyalarıyla keşfeder. **Nested kaynaklar** (`references/`,
-> `evals/`, `scripts/` …) korunur (artık düz dosya değil ağaç kopyalanır). Slug
-> çakışmaları **batch'i durdurmaz**, atlanır ve raporlanır; opsiyonel **slug öneki**
-> ile koleksiyon isim-uzayına alınabilir (ör. `caveman-commit`). `owner/repo` kısayolu
-> + `> / |` YAML block-scalar açıklamalar desteklenir. crossaitools.com / skillsmp.com /
-> claudeskillsmarket.com gibi dizinler **doğrudan kazınmaz** ama oraların işaret ettiği
-> GitHub repo URL'si yapıştırılarak içe aktarılır. Detay: §"Skill içe aktarma" aşağıda.
+> **Generic içe aktarma (SK-IMP2→SK-IMP3, 2026-06-25):** içe aktarma artık **jenerik ve
+> çok-türlü** — tek skill klasörü değil, bir **GitHub repo / Claude Code plugin / `skills/`
+> klasörü / local ağaç** (ör. `juliusbrussee/caveman`, `leonxlnx/taste-skill`,
+> `coreyhaines31/marketingskills`) baştan sona taranır ve içindeki **skill + agent +
+> command + MCP** artifact'larının hepsi keşfedilir. Akış üç adım: **Tara → Seç (kind'e
+> gruplu) → İçe aktar** (`SkillImportDialog` kind-agnostik). GitHub yolu repo'yu **tek
+> tarball** (`codeload.github.com`, API rate-limit'ine tabi DEĞİL) çeker. **Nested
+> kaynaklar** (`references/`/`evals/`/`scripts/`) korunur; `(kind,slug)` kopyalar
+> dedup'lanır (en sığ yol); slug çakışması batch'i durdurmaz; opsiyonel **slug öneki**.
+> `owner/repo` kısayolu + `>`/`|` block-scalar açıklamalar desteklenir. Çıktı `[]market.Pack`
+> → market ile **aynı kurulum otoritesi** (`installPackInto`). Kod `internal/ingest`'te
+> (market'in içinde değil). Dizin siteleri doğrudan kazınmaz; GitHub repo URL'si yapıştırılır.
+> Detay: §4.1 ve **`_Docs\37-INGEST-MIMARISI.md`**.
 
 ---
 
@@ -252,43 +299,44 @@ ile global dizine yazar. Sanitize = secret/ID/CreatedBy temizliği (§1.2).
 `Runtime`'a `Market() *market.Store` accessor'ı (Skills() aynası); dizinler
 `marketGlobalDir()` / `workspaceMarketDir(workDir)`.
 
-### 4.1 Skill içe aktarma (SK-IMP / SK-IMP2)
+### 4.1 İçe aktarma — generic ingest (SK-IMP3)
 
-Skill içe aktarma kodu **markette değil** `internal/skills`'tedir (market UI'ı yalnız
-`SkillImportDialog`'u barındırır). Endpoint'ler `internal/api/skills.go`:
+> İçe aktarma artık **skill-özel değil, jenerik**: tek bir boru hattı GitHub repo /
+> plugin / local klasörden **skill + agent + command + MCP** keşfeder ve hepsini market
+> ile **aynı kurulum otoritesine** bağlar. Tam mimari: **`_Docs\37-INGEST-MIMARISI.md`**.
+
+Boru hattı: `internal/fetch` (edinme) → `internal/ingest` (adapter'lar: keşif+çeviri) →
+`[]market.Pack` → `api.installPackInto` (tek kurulum otoritesi). Import kodu market'in
+**içinde değil**; market'i bağımlılık olarak kullanır. Endpoint'ler `internal/api/ingest.go`:
 
 | Metot | Yol | İş |
 |-------|-----|-----|
+| POST | `/api/ingest/scan` | `{source, path\|url}` → keşfedilen artifact'lar (kind/slug/name/desc/files/warnings/exists); yazma yok |
+| POST | `/api/ingest/install` | `{source, path\|url, keys[], slugPrefix?, shared?}` → seçilenleri kur (installed + skipped + warnings) |
 | POST | `/api/skills/import` | **tek** skill (geriye uyumlu): `{source, path\|url, slug?, shared?}` |
-| POST | `/api/skills/import/scan` | **koleksiyon önizleme**: `{source, path\|url}` → keşfedilen skill listesi (yazma yok) |
-| POST | `/api/skills/import/bulk` | **toplu içe aktar**: `{source, path\|url, paths[], slugPrefix?, shared?}` |
 
-- `source` = `github` (repo/tree URL ya da `owner/repo` kısayolu) veya `local` (klasör ağacı).
-- **GitHub yolu** (`internal/skills/collection.go`): `fetchGitHubArchive` repo'yu
-  `codeload.github.com/<owner>/<repo>/tar.gz/<ref>` üzerinden **tek tarball** indirir
-  (`main`→`master` fallback), `archive/tar`+`compress/gzip` ile bellek-içi ayıklar
-  (yeni bağımlılık yok). Bu, contents-API'yi klasör-klasör gezmeye göre **anonim
-  rate-limit'e çok daha dostudur** (1 istek = tüm keşif + içerik). Üst dizin (`repo-ref/`)
-  soyulur; `skipDirs` (.git/.github/node_modules/dist/build/benchmarks…) elenir;
-  dosya başına 4 MB / toplam 64 MB cap.
-- **Keşif** (`discoverInTree`): her `SKILL.md`'nin ebeveyni bir skill klasörüdür;
-  her kaynak dosya **en derin** ata-skill klasörüne atanır → nested sub-skill kendi
-  kaynaklarını korur, ebeveyn onları sahiplenmez. Kök-skill (`SKILL.md` repo kökünde)
-  de desteklenir. `prefix` (URL'deki alt-yol) ile alt-ağaca daraltılır.
-- **Nested kaynaklar korunur:** `ImportCCSkill` artık alt klasörleri (`references/`,
-  `evals/`, `scripts/`) yazar; `safeBundledPath` mutlak yol + `..` kaçışını reddeder,
-  nested göreli yola izin verir. `readLocalSkillDir` de tek-skill local import'ta ağacı
-  `WalkDir` ile toplar.
-- **Slug çakışması batch'i durdurmaz:** çakışan skill `Skipped`'a (sebep ile) düşer,
-  diğerleri devam eder. Opsiyonel `slugPrefix` koleksiyonu isim-uzayına alır.
-- **Frontmatter `>`/`|` block-scalar** (folded/literal) açıklamalar artık parse edilir
-  (`frontmatter.go::collectBlockScalar`) — community SKILL.md'lerinde yaygın.
-- **Dizin siteleri** (crossaitools.com / skillsmp.com / claudeskillsmarket.com)
-  doğrudan kazınmaz; oraların işaret ettiği **GitHub repo URL'si** yapıştırılarak
-  içe aktarılır (hepsi GitHub-tabanlı). İleride: bu dizinleri **uzak registry**
-  (`swarmregistry/v1`) olarak köprüleyen bir adaptör eklenebilir.
-- Testler: `collection_test.go` (gruplama/prefix/kök-skill/çakışma/block-scalar),
-  `collection_live_test.go` (network-gated, `SWARMGO_LIVE_TEST=1`).
+- **Edinme** (`internal/fetch`): `TreeFrom` repo'yu `codeload.github.com/.../tar.gz/<ref>`
+  ile **tek tarball** çeker (`main`→`master`, `archive/tar`+`gzip`, **yeni bağımlılık yok**,
+  rate-limit dostu) ya da local ağacı `WalkDir` ile toplar. `GroupByMarker` (SKILL.md) +
+  `FindFiles` (agent/command/mcp) ortak gruplama.
+- **Adapter'lar** (`internal/ingest`, registry'ye eklenir): `skill` (`**/SKILL.md`),
+  `agent` (`**/agents/*.md` → AgentPayload, body→Soul, tools→AllowedTools), `command`
+  (`**/commands/*.md` → loadable skill; `.toml` atlanır), `mcp` (`.mcp.json` `mcpServers`
+  → MCPPayload). Yeni özellik = yeni `Adapter`.
+- **Dedup:** `(kind, slug)` aynı olan kopyalar elenir, **en sığ** yol tutulur (repo'nun
+  `plugins/`/`dist/` altında kendini aynalaması). Slug çakışması batch'i durdurmaz; install
+  conflict'i `Skipped`'a düşer.
+- **Nested kaynaklar:** `market.Pack.Files` (Faz 2) ile taşınır; `InstallSkill`
+  `safeRelPath` ile (`..`/mutlak yol reddi) alt klasörleri yazar.
+- **Frontmatter `>`/`|` block-scalar** açıklamalar parse edilir (`frontmatter.go::collectBlockScalar`).
+- **Tek install otoritesi:** `installPackInto` kind switch'i; market install **ve** ingest install
+  ortak çağırır.
+- **UI:** `SkillImportDialog` kind-agnostik (Tara → Seç (kind'e gruplu) → İçe aktar); "İçe Aktar"
+  butonu her market kategorisinde.
+- **Dizin siteleri** (crossaitools/skillsmp/claudeskillsmarket) doğrudan kazınmaz; işaret
+  ettikleri GitHub repo URL'si yapıştırılır. İleride registry köprüsü.
+- Testler: `fetch/*_test.go`, `ingest/*_test.go` (+ network-gated `ingest_live_test.go`),
+  `market/install_test.go`. Canlı: caveman 10 (3 agent+7 skill), taste-skill 13, marketingskills 45.
 
 ---
 

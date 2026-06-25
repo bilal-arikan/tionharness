@@ -6,6 +6,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/bilal-arikan/swarmgo/internal/fetch"
 )
 
 // ImportResult reports the outcome of importing a Claude Code skill: the resulting
@@ -97,9 +99,30 @@ func mapCCSkill(raw, sourceURL string, shared bool) (content string, res ImportR
 	return b.String(), res
 }
 
-// ImportFromSource imports a Claude Code skill from a source ("local" reads a
-// directory; "github" fetches a github.com tree/blob URL) into the workspace tier.
-// location is the directory path (local) or the URL (github). (SK-IMP)
+// RenderImportedSkill maps a Claude Code SKILL.md to the equivalent SwarmGo
+// SKILL.md (frontmatter remapped, unsupported features stripped with warnings) and
+// returns the rendered content plus the mapping result. Exposed for the ingest
+// pipeline, which packages the rendered body into a market pack. (SK-IMP2)
+func RenderImportedSkill(raw, sourceURL string, shared bool) (string, ImportResult) {
+	return mapCCSkill(raw, sourceURL, shared)
+}
+
+// SuggestSlug derives a slug from a folder path (its base name), falling back to a
+// name, then "skill". Exposed for the ingest pipeline.
+func SuggestSlug(relPath, name string) string {
+	return suggestSlug(relPath, name)
+}
+
+// Slugify converts a free-form string into a lowercase kebab-case slug (Turkish
+// letters transliterated). Exposed for the ingest pipeline.
+func Slugify(s string) string {
+	return slugify(s)
+}
+
+// ImportFromSource imports a SINGLE Claude Code skill from a source ("local" reads
+// a directory; "github" points at one skill folder) into the workspace tier.
+// location is the directory path (local) or the URL (github). For multi-skill
+// repos use ImportCollection. (SK-IMP)
 func (s *Store) ImportFromSource(source, location, slug string, shared bool) (Skill, ImportResult, error) {
 	source = strings.ToLower(strings.TrimSpace(source))
 	if source == "" {
@@ -107,17 +130,35 @@ func (s *Store) ImportFromSource(source, location, slug string, shared bool) (Sk
 	}
 	var raw string
 	var files map[string][]byte
-	var err error
 	switch source {
 	case "local":
+		var err error
 		raw, files, err = readLocalSkillDir(location)
+		if err != nil {
+			return Skill{}, ImportResult{}, err
+		}
 	case "github":
-		raw, files, err = fetchGitHubSkill(location)
+		tree, prefix, _, ferr := fetch.TreeFrom("github", location)
+		if ferr != nil {
+			return Skill{}, ImportResult{}, ferr
+		}
+		found := groupSkills(tree, prefix)
+		var pick *discoveredSkill
+		for i := range found {
+			if found[i].relPath == prefix {
+				pick = &found[i]
+				break
+			}
+		}
+		if pick == nil && len(found) == 1 {
+			pick = &found[0]
+		}
+		if pick == nil {
+			return Skill{}, ImportResult{}, fmt.Errorf("point the URL at a single skill folder (found %d skills here; use collection import for the whole repo)", len(found))
+		}
+		raw, files = pick.raw, pick.files
 	default:
 		return Skill{}, ImportResult{}, fmt.Errorf("unsupported source %q (use local|github)", source)
-	}
-	if err != nil {
-		return Skill{}, ImportResult{}, err
 	}
 	return s.ImportCCSkill(slug, raw, location, files, shared)
 }

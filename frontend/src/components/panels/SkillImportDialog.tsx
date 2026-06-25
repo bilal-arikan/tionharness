@@ -1,23 +1,33 @@
 import { useMemo, useState } from 'react'
 import { Download, Globe, FolderInput, AlertTriangle, CheckCircle2, Search, ChevronLeft } from 'lucide-react'
 import { api } from '../../api'
-import type { ScannedSkill, CollectionImportResult } from '../../api/skills'
+import type { Discovered, IngestInstallResult, IngestKind } from '../../api/ingest'
 import { Button } from '../common'
 
 interface Props {
   onClose: () => void
-  /** Called after a successful import so the list + selection can refresh. */
-  onImported: (slug: string) => void
+  /** Called after a successful import so the host can refresh its collections. */
+  onImported: (kinds: IngestKind[]) => void
 }
 
 type Source = 'local' | 'github'
 type Step = 'locate' | 'select' | 'done'
 
-// SkillImportDialog imports Claude Code skills into the workspace (SK-IMP/SK-IMP2).
-// It scans a source — a GitHub repo/plugin URL (or owner/repo shorthand) or a local
-// folder TREE — discovers every SKILL.md inside (single skill or a whole collection
-// like caveman / taste-skill / marketing-skills), then lets the user pick which to
-// import. Nested resources (references/, evals/…) are preserved; unsupported CC
+const KIND_LABEL: Record<IngestKind, string> = {
+  skill: 'Skills',
+  agent: 'Agents',
+  flow: 'Flows',
+  provider: 'Providers',
+  workspace: 'Workspaces',
+  memory: 'Memories',
+  mcp: 'MCP araçları',
+}
+
+// SkillImportDialog is the generic IMPORT dialog (SK-IMP3): it scans a source — a
+// GitHub repo/plugin URL (or owner/repo shorthand) or a local folder TREE — and
+// discovers every importable artifact inside (Claude Code skills, subagents, slash
+// commands, MCP configs), grouped by kind, then installs the selected ones through
+// the same authority the market uses. Nested resources are preserved; unsupported
 // features are stripped with a warning.
 export function SkillImportDialog({ onClose, onImported }: Props) {
   const [step, setStep] = useState<Step>('locate')
@@ -28,12 +38,21 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  const [scanned, setScanned] = useState<ScannedSkill[]>([])
+  const [items, setItems] = useState<Discovered[]>([])
   const [scanWarnings, setScanWarnings] = useState<string[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [result, setResult] = useState<CollectionImportResult | null>(null)
+  const [result, setResult] = useState<IngestInstallResult | null>(null)
 
-  const selectableCount = useMemo(() => scanned.filter((s) => !s.exists).length, [scanned])
+  // Group discovered items by kind for display.
+  const groups = useMemo(() => {
+    const m = new Map<IngestKind, Discovered[]>()
+    for (const it of items) {
+      const arr = m.get(it.kind) ?? []
+      arr.push(it)
+      m.set(it.kind, arr)
+    }
+    return Array.from(m.entries())
+  }, [items])
 
   const doScan = async () => {
     if (!location.trim()) {
@@ -43,15 +62,14 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
     setBusy(true)
     setErr(null)
     try {
-      const resp = await api.scanCollection({
+      const resp = await api.ingestScan({
         source,
         path: source === 'local' ? location.trim() : undefined,
         url: source === 'github' ? location.trim() : undefined,
       })
-      setScanned(resp.skills)
+      setItems(resp.items)
       setScanWarnings(resp.warnings || [])
-      // Default selection: everything not already installed.
-      setSelected(new Set(resp.skills.filter((s) => !s.exists).map((s) => s.relPath)))
+      setSelected(new Set(resp.items.filter((i) => !i.exists).map((i) => i.key)))
       setStep('select')
     } catch (e) {
       setErr((e as Error).message)
@@ -60,37 +78,37 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
     }
   }
 
-  const toggle = (relPath: string) => {
+  const toggle = (key: string) =>
     setSelected((prev) => {
       const next = new Set(prev)
-      if (next.has(relPath)) next.delete(relPath)
-      else next.add(relPath)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
-  }
 
-  const selectAll = () => setSelected(new Set(scanned.filter((s) => !s.exists).map((s) => s.relPath)))
+  const selectAll = () => setSelected(new Set(items.filter((i) => !i.exists).map((i) => i.key)))
   const selectNone = () => setSelected(new Set())
 
   const doImport = async () => {
     if (selected.size === 0) {
-      setErr('En az bir skill seç.')
+      setErr('En az bir öğe seç.')
       return
     }
     setBusy(true)
     setErr(null)
     try {
-      const resp = await api.importCollection({
+      const resp = await api.ingestInstall({
         source,
         path: source === 'local' ? location.trim() : undefined,
         url: source === 'github' ? location.trim() : undefined,
-        paths: Array.from(selected),
+        keys: Array.from(selected),
         slugPrefix: slugPrefix.trim() || undefined,
         shared,
       })
       setResult(resp)
       setStep('done')
-      if (resp.imported.length > 0) onImported(resp.imported[0].slug)
+      const kinds = Array.from(new Set(resp.installed.map((i) => i.kind))) as IngestKind[]
+      if (kinds.length > 0) onImported(kinds)
     } catch (e) {
       setErr((e as Error).message)
     } finally {
@@ -106,7 +124,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Skill içe aktar"
+        aria-label="İçe aktar"
         data-testid="skill-import-modal"
         className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -116,10 +134,10 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
             <Download size={18} className="text-[var(--color-accent)]" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-[var(--color-text)]">Claude Code skill içe aktar</h2>
+            <h2 className="text-sm font-semibold text-[var(--color-text)]">GitHub / klasörden içe aktar</h2>
             <p className="text-xs text-[var(--color-text-dim)]">
-              GitHub repo/plugin veya yerel klasör — tek skill ya da koleksiyon. Frontmatter eşlenir, nested
-              kaynaklar (references/, evals/…) korunur, uyumsuz özellikler ayıklanır.
+              Repo, plugin veya yerel klasör — skill, agent, komut ve MCP araçları keşfedilir. Nested kaynaklar
+              korunur, uyumsuz özellikler ayıklanır.
             </p>
           </div>
         </div>
@@ -158,13 +176,13 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                   placeholder={
                     source === 'github'
                       ? 'owner/repo  ·  github.com/owner/repo/tree/main/skills'
-                      : 'C:\\path\\to\\skills-repo'
+                      : 'C:\\path\\to\\repo'
                   }
                   className={`${inputCls} font-mono`}
                 />
                 {source === 'github' && (
                   <span className="mt-1 block text-[10px] text-[var(--color-text-dim)]">
-                    Bir repo, bir <code>skills/</code> klasörü, bir plugin ya da tek skill klasörü olabilir.
+                    Bir repo, plugin, <code>skills/</code> klasörü ya da tek skill klasörü olabilir.
                   </span>
                 )}
               </label>
@@ -176,13 +194,11 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
             <>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-[var(--color-text)]">
-                  {scanned.length} skill bulundu
-                  <span className="ml-2 text-xs font-normal text-[var(--color-text-dim)]">
-                    {selected.size} seçili
-                  </span>
+                  {items.length} öğe bulundu
+                  <span className="ml-2 text-xs font-normal text-[var(--color-text-dim)]">{selected.size} seçili</span>
                 </p>
                 <div className="flex gap-2 text-xs">
-                  <button onClick={selectAll} className="text-[var(--color-accent)] hover:underline" disabled={selectableCount === 0}>
+                  <button onClick={selectAll} className="text-[var(--color-accent)] hover:underline">
                     Tümü
                   </button>
                   <button onClick={selectNone} className="text-[var(--color-text-dim)] hover:underline">
@@ -201,41 +217,55 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                 </div>
               )}
 
-              <div data-testid="import-scan-list" className="max-h-72 space-y-1 overflow-y-auto rounded-md border border-[var(--color-border)] p-1">
-                {scanned.map((sk) => (
-                  <label
-                    key={sk.relPath}
-                    data-testid="import-scan-item"
-                    className={`flex cursor-pointer items-start gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-[var(--color-surface-2)] ${
-                      sk.exists ? 'opacity-50' : ''
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1 shrink-0"
-                      checked={selected.has(sk.relPath)}
-                      disabled={sk.exists}
-                      onChange={() => toggle(sk.relPath)}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs font-medium text-[var(--color-text)]">
-                          {slugPrefix.trim() ? `${slugPrefix.trim()}-${sk.slug}` : sk.slug}
-                        </code>
-                        {sk.exists && (
-                          <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[9px] uppercase text-[var(--color-text-dim)]">
-                            zaten var
-                          </span>
-                        )}
-                        {sk.files.length > 0 && (
-                          <span className="text-[10px] text-[var(--color-text-dim)]">+{sk.files.length} dosya</span>
-                        )}
-                      </div>
-                      {sk.description && (
-                        <p className="line-clamp-2 text-[11px] text-[var(--color-text-dim)]">{sk.description}</p>
-                      )}
+              <div data-testid="import-scan-list" className="max-h-72 space-y-3 overflow-y-auto rounded-md border border-[var(--color-border)] p-2">
+                {groups.map(([kind, list]) => (
+                  <div key={kind}>
+                    <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                      {KIND_LABEL[kind]} ({list.length})
                     </div>
-                  </label>
+                    <div className="space-y-1">
+                      {list.map((it) => (
+                        <label
+                          key={it.key}
+                          data-testid="import-scan-item"
+                          className={`flex cursor-pointer items-start gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-[var(--color-surface-2)] ${
+                            it.exists ? 'opacity-50' : ''
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 shrink-0"
+                            checked={selected.has(it.key)}
+                            disabled={it.exists}
+                            onChange={() => toggle(it.key)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs font-medium text-[var(--color-text)]">
+                                {slugPrefix.trim() ? `${slugPrefix.trim()}-${it.slug}` : it.slug}
+                              </code>
+                              {it.exists && (
+                                <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[9px] uppercase text-[var(--color-text-dim)]">
+                                  zaten var
+                                </span>
+                              )}
+                              {it.files.length > 0 && (
+                                <span className="text-[10px] text-[var(--color-text-dim)]">+{it.files.length} dosya</span>
+                              )}
+                              {it.warnings && it.warnings.length > 0 && (
+                                <span className="flex items-center gap-0.5 text-[10px] text-[var(--color-warning,#d97706)]">
+                                  <AlertTriangle size={10} /> {it.warnings.length}
+                                </span>
+                              )}
+                            </div>
+                            {it.description && (
+                              <p className="line-clamp-2 text-[11px] text-[var(--color-text-dim)]">{it.description}</p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
 
@@ -257,7 +287,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                     checked={shared}
                     onChange={(e) => setShared(e.target.checked)}
                   />
-                  <span className="text-sm text-[var(--color-text)]" title="Tüm ajanlara on-demand sun; kapalıysa kısıtlı (atama gerekir)">
+                  <span className="text-sm text-[var(--color-text)]" title="Skill'leri tüm ajanlara on-demand sun">
                     Paylaşımlı
                   </span>
                 </label>
@@ -269,18 +299,18 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
           {step === 'done' && result && (
             <div data-testid="import-result" className="space-y-3">
               <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-success,#16a34a)]">
-                <CheckCircle2 size={16} /> {result.imported.length} skill içe aktarıldı
+                <CheckCircle2 size={16} /> {result.installed.length} öğe içe aktarıldı
                 {result.skipped.length > 0 && (
                   <span className="text-[var(--color-text-dim)]">· {result.skipped.length} atlandı</span>
                 )}
               </p>
 
-              {result.imported.length > 0 && (
+              {result.installed.length > 0 && (
                 <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
                   <div className="flex flex-wrap gap-1.5">
-                    {result.imported.map((ir) => (
-                      <code key={ir.slug} className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px]">
-                        {ir.slug}
+                    {result.installed.map((ir, i) => (
+                      <code key={i} className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px]">
+                        {ir.message}
                       </code>
                     ))}
                   </div>
@@ -300,30 +330,18 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                 </div>
               )}
 
-              {/* Aggregate any per-skill mapping warnings. */}
-              {(() => {
-                const warns = result.imported.flatMap((ir) => ir.warnings.map((w) => ({ slug: ir.slug, w })))
-                if (warns.length === 0 && result.warnings.length === 0) {
-                  return <p className="text-xs text-[var(--color-text-dim)]">Uyumsuz özellik yok — temiz içe aktarma.</p>
-                }
-                return (
-                  <div className="text-xs text-[var(--color-warning,#d97706)]">
-                    <p className="mb-1 flex items-center gap-1.5 font-medium">
-                      <AlertTriangle size={13} /> Uyarılar ({warns.length + result.warnings.length})
-                    </p>
-                    <ul className="list-disc space-y-0.5 pl-5">
-                      {result.warnings.map((w, i) => (
-                        <li key={`g${i}`}>{w}</li>
-                      ))}
-                      {warns.map((x, i) => (
-                        <li key={i}>
-                          <code>{x.slug}</code>: {x.w}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
-              })()}
+              {result.warnings.length > 0 && (
+                <div className="text-xs text-[var(--color-warning,#d97706)]">
+                  <p className="mb-1 flex items-center gap-1.5 font-medium">
+                    <AlertTriangle size={13} /> Uyarılar
+                  </p>
+                  <ul className="list-disc space-y-0.5 pl-5">
+                    {result.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

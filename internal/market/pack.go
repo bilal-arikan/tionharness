@@ -62,6 +62,12 @@ type Pack struct {
 	// envelope level; install/publish decode it into the typed payloads below.
 	Payload Payload `json:"payload,omitempty"`
 
+	// Files are bundled resource files shipped with the pack, keyed by path relative
+	// to the entity's folder (e.g. "references/guide.md"). Consumed by the skill
+	// installer to recreate nested resources (progressive-disclosure docs, templates,
+	// scripts). JSON base64-encodes the []byte values automatically.
+	Files map[string][]byte `json:"files,omitempty"`
+
 	// Source is the tier this pack was resolved from (not persisted in files).
 	Source Source `json:"source,omitempty"`
 	// Path is the absolute path of the backing .swarmpack.json (not serialised).
@@ -129,6 +135,17 @@ type ProviderPayload struct {
 	BaseURL      string `json:"baseUrl"`
 	DefaultModel string `json:"defaultModel,omitempty"`
 	Models       string `json:"models,omitempty"`
+	// Reasoning declares the endpoint accepts a reasoning-effort control: for
+	// "openai" kind a `reasoning_effort` field is sent (mapped from the agent's
+	// ThinkingLevel); "anthropic" kind always supports thinking natively. False =
+	// the field is omitted (safe default — many OpenAI-compatible servers 400 on
+	// an unknown param for non-reasoning models).
+	Reasoning bool `json:"reasoning,omitempty"`
+	// PromptCache documents prompt-cache behaviour for the budget/usage UI and
+	// drives cache_control breakpoint injection: "native" (forwards Anthropic-style
+	// cache_control — e.g. OpenRouter, Anthropic endpoints), "auto" (server caches
+	// implicitly, no client action), "none" (no prompt caching), "" (unknown).
+	PromptCache string `json:"promptCache,omitempty"`
 }
 
 // FlowPayload is an agent-agnostic flow draft. Graph node agentId slots are

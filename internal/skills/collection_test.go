@@ -1,7 +1,6 @@
 package skills
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -26,7 +25,7 @@ func TestDiscoverInTreeGrouping(t *testing.T) {
 		"README.md":               []byte("top"),
 		"LICENSE":                 []byte("mit"),
 	}
-	found := discoverInTree(files, "")
+	found := groupSkills(files, "")
 	if len(found) != 3 {
 		t.Fatalf("want 3 skills, got %d: %+v", len(found), found)
 	}
@@ -64,7 +63,7 @@ func TestDiscoverInTreePrefixFilter(t *testing.T) {
 		"other/drop/SKILL.md":   skillMD("Drop", "d"),
 		"plugins/p/x/SKILL.md":  skillMD("X", "x"),
 	}
-	found := discoverInTree(files, "skills")
+	found := groupSkills(files, "skills")
 	if len(found) != 1 || found[0].relPath != "skills/keep" {
 		t.Fatalf("prefix filter failed: %+v", found)
 	}
@@ -77,7 +76,7 @@ func TestDiscoverInTreeRootSkill(t *testing.T) {
 		"reference.md":  []byte("ref"),
 		"scripts/go.sh": []byte("echo"),
 	}
-	found := discoverInTree(files, "")
+	found := groupSkills(files, "")
 	if len(found) != 1 {
 		t.Fatalf("want 1 root skill, got %d", len(found))
 	}
@@ -117,77 +116,6 @@ func TestSafeBundledPath(t *testing.T) {
 	}
 }
 
-func TestImportCollectionLocalNested(t *testing.T) {
-	root := t.TempDir()
-	// Build a small collection on disk.
-	writeFile(t, root, "skills/alpha/SKILL.md", skillMD("Alpha", "first"))
-	writeFile(t, root, "skills/alpha/references/r.md", []byte("ref"))
-	writeFile(t, root, "skills/beta/SKILL.md", skillMD("Beta", "second"))
-
-	ws := t.TempDir()
-	s := New("", ws)
-	res, err := s.ImportCollection("local", root, nil, "", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Imported) != 2 {
-		t.Fatalf("want 2 imported, got %d (skipped=%v)", len(res.Imported), res.Skipped)
-	}
-	// Nested resource must be written under the skill folder.
-	if _, err := os.Stat(filepath.Join(ws, "alpha", "references", "r.md")); err != nil {
-		t.Errorf("nested resource not written: %v", err)
-	}
-	if _, ok := s.Get("alpha"); !ok {
-		t.Errorf("alpha not resolved after import")
-	}
-	if _, ok := s.Get("beta"); !ok {
-		t.Errorf("beta not resolved after import")
-	}
-}
-
-func TestImportCollectionPrefixAndSelectionAndCollision(t *testing.T) {
-	root := t.TempDir()
-	writeFile(t, root, "skills/alpha/SKILL.md", skillMD("Alpha", "a"))
-	writeFile(t, root, "skills/beta/SKILL.md", skillMD("Beta", "b"))
-
-	ws := t.TempDir()
-	s := New("", ws)
-	// Select only alpha, namespaced with a prefix.
-	res, err := s.ImportCollection("local", root, []string{"skills/alpha"}, "pack", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Imported) != 1 || res.Imported[0].Slug != "pack-alpha" {
-		t.Fatalf("prefix/selection failed: %+v", res.Imported)
-	}
-	if _, ok := s.Get("pack-beta"); ok {
-		t.Errorf("beta should not have been imported")
-	}
-	// Re-import all without prefix → alpha/beta succeed; a second run collides.
-	res2, _ := s.ImportCollection("local", root, nil, "", false)
-	if len(res2.Imported) != 2 {
-		t.Fatalf("want 2 imported on first unprefixed run, got %d", len(res2.Imported))
-	}
-	res3, _ := s.ImportCollection("local", root, nil, "", false)
-	if len(res3.Imported) != 0 || len(res3.Skipped) != 2 {
-		t.Errorf("collision run should skip both: imported=%d skipped=%d", len(res3.Imported), len(res3.Skipped))
-	}
-}
-
-func TestNormalizeRepoRef(t *testing.T) {
-	cases := map[string]string{
-		"owner/repo":                          "https://github.com/owner/repo",
-		"owner/repo/tree/main/skills":         "https://github.com/owner/repo/tree/main/skills",
-		"https://github.com/owner/repo":       "https://github.com/owner/repo",
-		"github.com/owner/repo":               "github.com/owner/repo",
-	}
-	for in, want := range cases {
-		if got := normalizeRepoRef(in); got != want {
-			t.Errorf("normalizeRepoRef(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestParseFrontmatterBlockScalar(t *testing.T) {
 	// Folded (>) description spanning multiple indented lines, as caveman uses.
 	raw := "---\nname: caveman\ndescription: >\n  Ultra-compressed mode. Cuts tokens ~75%\n  while keeping accuracy.\nversion: 1.0\n---\nbody"
@@ -223,15 +151,4 @@ func keysOf(m map[string][]byte) []string {
 		out = append(out, k)
 	}
 	return out
-}
-
-func writeFile(t *testing.T, root, rel string, data []byte) {
-	t.Helper()
-	p := filepath.Join(root, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(p, data, 0o644); err != nil {
-		t.Fatal(err)
-	}
 }

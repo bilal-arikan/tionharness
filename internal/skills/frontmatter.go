@@ -27,6 +27,28 @@ func (f frontmatter) list(keys ...string) []string {
 	return nil
 }
 
+// FrontmatterField returns a scalar frontmatter value (first matching key) from raw
+// SKILL.md/markdown text. Exposed for the ingest adapters, which read a handful of
+// fields (name/description/tools/model) without needing the parser type.
+func FrontmatterField(raw string, keys ...string) string {
+	fm, _ := parseFrontmatter(raw)
+	return fm.scalar(keys...)
+}
+
+// FrontmatterList returns a list frontmatter value (first matching key) from raw
+// markdown text. Exposed for the ingest adapters.
+func FrontmatterList(raw string, keys ...string) []string {
+	fm, _ := parseFrontmatter(raw)
+	return fm.list(keys...)
+}
+
+// FrontmatterBody returns the markdown body (frontmatter stripped) of raw text.
+// Exposed for the ingest adapters.
+func FrontmatterBody(raw string) string {
+	_, body := parseFrontmatter(raw)
+	return strings.TrimSpace(body)
+}
+
 // splitFrontmatter separates a leading `---`-delimited frontmatter block from the
 // markdown body. When no well-formed block is present, fm is empty and body is
 // the whole input.

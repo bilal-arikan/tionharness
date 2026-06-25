@@ -81,7 +81,7 @@ func TestStoreInstallPublish(t *testing.T) {
 	}
 
 	// Publish a fresh skill pack — it lands in the global dir now (no workspace tier).
-	np, err := BuildSkillPack("my-skill", "Mine", "x", "", "", "---\nname: \"Mine\"\n---\n# Mine\n", "tester", 0)
+	np, err := BuildSkillPack("my-skill", "Mine", "x", "", "", "---\nname: \"Mine\"\n---\n# Mine\n", "tester", 0, nil)
 	if err != nil {
 		t.Fatalf("BuildSkillPack: %v", err)
 	}

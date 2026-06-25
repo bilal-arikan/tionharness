@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { Agent, Pack, PackKind, Secret } from '../../types'
 import { api } from '../../api'
+import type { PriceTable } from '../../api/providers'
 import { Markdown } from '../markdown/Markdown'
 import { Button } from '../common'
 import { SkillImportDialog } from './SkillImportDialog'
@@ -100,6 +101,36 @@ function Row({ k, v }: { k: string; v?: string }) {
   )
 }
 
+// cacheLabel turns a provider's promptCache mode into a human label for the badge.
+function cacheLabel(mode?: string): string {
+  switch (mode) {
+    case 'native':
+      return 'Cache: ✅ cache_control'
+    case 'auto':
+      return 'Cache: ✅ otomatik'
+    case 'none':
+      return 'Cache: ❌ yok'
+    default:
+      return 'Cache: ? bilinmiyor'
+  }
+}
+
+// CapBadge is a small capability pill (green when the capability is on, muted
+// otherwise) used in the provider preview for cache / reasoning support.
+function CapBadge({ label, on }: { label: string; on: boolean }) {
+  return (
+    <span
+      className="rounded px-2 py-0.5 text-[11px]"
+      style={{
+        background: on ? 'var(--color-success, #16a34a)22' : 'var(--color-surface-2)',
+        color: on ? 'var(--color-success, #16a34a)' : 'var(--color-text-dim)',
+      }}
+    >
+      {label}
+    </span>
+  )
+}
+
 // ColumnsPreview renders a kanban column layout as colored chips (shared by the
 // board and workspace previews).
 function ColumnsPreview({ columns }: { columns?: { key: string; label: string; color?: string }[] }) {
@@ -122,8 +153,46 @@ function ColumnsPreview({ columns }: { columns?: { key: string; label: string; c
   )
 }
 
+// fmtPrice formats a USD/1M-token figure compactly (e.g. "$0.30", "$15").
+function fmtPrice(n: number): string {
+  if (n === 0) return 'ücretsiz'
+  return '$' + (n < 1 ? n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') : String(n))
+}
+
+// ModelList renders a provider pack's models, each with its ballpark price
+// (input / output per 1M tokens) when known. providerId is the pack slug used to
+// look up prices[providerId][model].
+function ModelList({ models, providerId, prices }: { models?: string; providerId: string; prices: PriceTable }) {
+  if (!models) return null
+  const ids = models.split('\n').map((s) => s.trim()).filter(Boolean)
+  const table = prices[providerId] || {}
+  return (
+    <div className="pt-1">
+      <span className="text-xs text-[var(--color-text-dim)]">Modeller ({ids.length})</span>
+      <div className="mt-1 max-h-64 overflow-y-auto rounded bg-[var(--color-surface-2)] p-1.5">
+        {ids.map((id) => {
+          const pr = table[id]
+          return (
+            <div key={id} className="flex items-center justify-between gap-3 px-1 py-0.5 text-[11px]">
+              <span className="min-w-0 break-all font-mono">{id}</span>
+              {pr ? (
+                <span className="shrink-0 tabular-nums text-[var(--color-text-dim)]" title="giriş / çıkış — $/1M token">
+                  {fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)}
+                </span>
+              ) : (
+                <span className="shrink-0 text-[var(--color-text-dim)] opacity-50">—</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">$/1M token (giriş / çıkış) — yaklaşık liste fiyatı.</p>
+    </div>
+  )
+}
+
 // PackPreview renders a kind-appropriate preview of the selected pack's payload.
-function PackPreview({ pack }: { pack: Pack }) {
+function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }) {
   const p = pack.payload
   if (pack.kind === 'skill' && p?.skill?.body) {
     return <Markdown>{stripFrontmatter(p.skill.body)}</Markdown>
@@ -150,12 +219,11 @@ function PackPreview({ pack }: { pack: Pack }) {
         <Row k="Tür" v={pr.kind} />
         <Row k="Base URL" v={pr.baseUrl} />
         <Row k="Varsayılan model" v={pr.defaultModel} />
-        {pr.models && (
-          <div className="pt-1">
-            <span className="text-xs text-[var(--color-text-dim)]">Modeller</span>
-            <pre className="mt-1 whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-[11px]">{pr.models}</pre>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-1.5 pt-1.5">
+          <CapBadge label={cacheLabel(pr.promptCache)} on={pr.promptCache === 'native' || pr.promptCache === 'auto'} />
+          <CapBadge label={pr.reasoning ? 'Düşünme: ✅ destekli' : 'Düşünme: —'} on={!!pr.reasoning} />
+        </div>
+        <ModelList models={pr.models} providerId={pack.id.replace(/^provider\./, '')} prices={prices} />
       </div>
     )
   }
@@ -325,6 +393,9 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   const [importing, setImporting] = useState(false)
   // Remote registry manager modal ("Kaynaklar").
   const [managingRegistries, setManagingRegistries] = useState(false)
+  // Ballpark list prices (provider id → model → price), loaded once for the
+  // provider preview's per-model cost hints.
+  const [prices, setPrices] = useState<PriceTable>({})
 
   const load = useCallback(async () => {
     try {
@@ -372,6 +443,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
     void load()
     void loadSecrets()
     void loadExisting()
+    void api.prices().then(setPrices).catch(() => {})
   }, [load, loadSecrets, loadExisting])
 
   // Default the memory-pack target to the first agent whenever the selection or
@@ -498,16 +570,14 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
             <span className="text-xs text-[var(--color-text-dim)]">{visible.length} paket</span>
           </div>
           <div className="flex items-center gap-1.5">
-            {tab === 'skill' && (
-              <button
-                data-testid="market-import"
-                onClick={() => setImporting(true)}
-                title="Claude Code skill içe aktar (yerel klasör / GitHub)"
-                className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
-              >
-                <Download size={13} /> İçe Aktar
-              </button>
-            )}
+            <button
+              data-testid="market-import"
+              onClick={() => setImporting(true)}
+              title="GitHub repo / plugin veya yerel klasörden içe aktar (skill / agent / komut / MCP)"
+              className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
+            >
+              <Download size={13} /> İçe Aktar
+            </button>
             <button
               data-testid="market-registries"
               onClick={() => setManagingRegistries(true)}
@@ -714,7 +784,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
 
             {/* Payload preview — kind-specific */}
             <div className="flex-1 overflow-y-auto p-4">
-              <PackPreview pack={selected} />
+              <PackPreview pack={selected} prices={prices} />
             </div>
           </div>
         </div>
@@ -723,8 +793,9 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
       {importing && (
         <SkillImportDialog
           onClose={() => setImporting(false)}
-          onImported={() => {
-            void loadExisting() // mark the imported skill as installed in the catalog
+          onImported={(kinds) => {
+            void loadExisting() // re-mark installed entities in the catalog
+            kinds.forEach((k) => onInstalled?.(k)) // let the host refresh matching collections
           }}
         />
       )}
