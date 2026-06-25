@@ -94,8 +94,14 @@ type Discovered struct {
 |---------|--------|--------|--------|
 | `skillAdapter` | `**/SKILL.md` | `skill` pack | `skills.RenderImportedSkill` ile eşler; nested kaynaklar `Pack.Files`'a |
 | `agentAdapter` | `**/agents/*.md` (frontmatter `name`) | `agent` pack | body→Soul, `tools`→AllowedTools; CC `model` **eşlenmez** (uyarı) |
-| `commandAdapter` | `**/commands/*.md` | `skill` pack | CC slash-command → loadable skill (SwarmGo'da "command" entity yok); `.toml` atlanır |
+| `commandAdapter` | `**/commands/*.md` **ve** `*.toml` | `skill` pack | CC slash-command → loadable skill; `.md` (YAML frontmatter) + `.toml` (`description`/`prompt`, mini parser `toml.go`) |
 | `mcpAdapter` | `.mcp.json` / `mcp.json` (`mcpServers`) | `mcp` pack | sunucu başına bir pack; args/env JSON string |
+
+**marketplace.json güdümlü keşif** (`marketplace.go`): repo kökünde
+`.claude-plugin/marketplace.json` varsa (ve kullanıcı alt-yol vermediyse), manifest'in
+`plugins[].source` yolları **gerçek plugin kökleri** olarak hedeflenir → kör tarama
+yerine isabetli keşif (aynalar/ilgisiz alt-ağaçlar baştan elenir) + marketplace adı
+provenance. En **sığ** manifest seçilir (nested kopya kök'ü ezmez).
 
 ## 5. `Pack.Files` — nested kaynaklar
 
@@ -138,5 +144,7 @@ import" ile "registry'den install" aynı yere düşer.
 
 - **Dizin-sitesi adaptörü:** crossaitools/skillsmp/claudeskillsmarket'i `swarmregistry/v1`
   uzak registry olarak köprülemek.
-- **`.toml` command** + **`.claude-plugin/marketplace.json`** desteği.
 - CC `model` → SwarmGo provider/model eşleme tablosu (agent adapter).
+- **Yapıldı (2026-06-25):** `.toml` command desteği (`toml.go`) + `marketplace.json`
+  güdümlü keşif (`marketplace.go`). Canlı: caveman artık 11 (3 agent + 8 skill; `.toml`
+  komutlardan `caveman-init` eklendi, kalan 3 skill-folder ile dedup'landı).

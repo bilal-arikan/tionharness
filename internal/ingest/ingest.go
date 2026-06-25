@@ -83,9 +83,17 @@ func Scan(source, location string) (ScanResult, error) {
 	}
 	base := provenanceBase(source, location)
 	res := ScanResult{Source: source, Location: location, Warnings: warnings}
+	// A marketplace.json (when present and the user didn't narrow the path) pins the
+	// real plugin roots, so mirrored copies and unrelated subtrees are excluded.
+	roots, marketName := pluginRoots(tree, prefix)
+	if marketName != "" && !(len(roots) == 1 && roots[0] == "") {
+		res.Warnings = append(res.Warnings, "marketplace.json \""+marketName+"\": "+plural(len(roots), "plugin root")+" targeted")
+	}
 	var all []Discovered
-	for _, a := range registry {
-		all = append(all, a.Scan(tree, prefix, base)...)
+	for _, root := range roots {
+		for _, a := range registry {
+			all = append(all, a.Scan(tree, root, base)...)
+		}
 	}
 	var dropped int
 	res.Items, dropped = dedupItems(all)

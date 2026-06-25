@@ -120,6 +120,67 @@ func TestAdaptersAgentCommandMCPAndDedup(t *testing.T) {
 	}
 }
 
+func TestParseSimpleTOML(t *testing.T) {
+	raw := "" +
+		"description = \"Switch level\"\n" +
+		"# a comment\n" +
+		"prompt = \"\"\"\nLine one {{args}}\nLine two\n\"\"\"\n" +
+		"name = 'caveman'\n"
+	kv := parseSimpleTOML(raw)
+	if kv["description"] != "Switch level" {
+		t.Errorf("description = %q", kv["description"])
+	}
+	if kv["name"] != "caveman" {
+		t.Errorf("name = %q", kv["name"])
+	}
+	if !containsStr(kv["prompt"], "Line one {{args}}") || !containsStr(kv["prompt"], "Line two") {
+		t.Errorf("prompt multiline = %q", kv["prompt"])
+	}
+}
+
+func TestTOMLCommandImported(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "commands/caveman.toml",
+		"description = \"Switch caveman level\"\nprompt = \"Switch to caveman {{args}} mode. Be terse.\"\n")
+
+	sr, err := Scan("local", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sr.Items) != 1 || sr.Items[0].Kind != market.KindSkill || sr.Items[0].Slug != "caveman" {
+		t.Fatalf("toml command not discovered as skill: %+v", sr.Items)
+	}
+	if len(sr.Items[0].Warnings) == 0 {
+		t.Errorf("expected {{args}} warning")
+	}
+	packs, _, _, err := BuildPacks("local", root, nil, Options{})
+	if err != nil || len(packs) != 1 {
+		t.Fatalf("build: %v packs=%d", err, len(packs))
+	}
+	if !containsStr(packs[0].Payload.Skill.Body, "Switch to caveman {{args}} mode") {
+		t.Errorf("toml prompt not in skill body: %q", packs[0].Payload.Skill.Body)
+	}
+}
+
+func TestMarketplaceRootsTargeting(t *testing.T) {
+	root := t.TempDir()
+	// marketplace.json pins the real plugin to ./pkg; a mirror lives under dist-like
+	// subtree that should be excluded by the targeted root.
+	write(t, root, ".claude-plugin/marketplace.json",
+		`{"name":"mp","plugins":[{"name":"pkg","source":"./pkg"}]}`)
+	write(t, root, "pkg/skills/alpha/SKILL.md", "---\nname: Alpha\ndescription: a\n---\nbody")
+	write(t, root, "other/skills/beta/SKILL.md", "---\nname: Beta\ndescription: b\n---\nbody")
+
+	sr, err := Scan("local", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only the manifest-pinned pkg/ skill is discovered; other/ is excluded.
+	if len(sr.Items) != 1 || sr.Items[0].Slug != "alpha" {
+		t.Fatalf("marketplace targeting failed: %+v", sr.Items)
+	}
+}
+
 func containsStr(haystack, needle string) bool {
 	return len(haystack) >= len(needle) && (func() bool {
 		for i := 0; i+len(needle) <= len(haystack); i++ {

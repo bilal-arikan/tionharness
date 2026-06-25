@@ -2,6 +2,23 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-25**
 
+## Ingest: TOML command + marketplace.json keşfi ✅ (2026-06-25)
+
+Generic import boru hattına iki ekleme:
+
+- **`.toml` slash-command desteği:** `commandAdapter` artık `commands/*.toml`'u da okur
+  (önceden yalnız `.md`). Yeni bağımlılık yok — `ingest/toml.go` mini parser'ı
+  `description`/`prompt` (tek + `"""`/`'''` çok-satır) çıkarır; loadable skill'e çevrilir.
+- **marketplace.json güdümlü keşif:** `ingest/marketplace.go` repo kökündeki
+  `.claude-plugin/marketplace.json`'u okur; `plugins[].source` yolları **gerçek plugin
+  kökleri** olarak hedeflenir (kullanıcı alt-yol vermediyse) → kör tarama yerine isabet,
+  aynalar/ilgisiz alt-ağaçlar baştan elenir. En sığ manifest seçilir. `Scan` artık kök
+  listesi üzerinde döner.
+
+Canlı: caveman **11** (3 agent + 8 skill; `.toml` komutlardan `caveman-init` eklendi,
+kalan 3'ü skill-folder'larla dedup'landı), taste-skill 13, marketingskills 45. vet temiz,
+**463 test**. Detay: `_Docs\37-INGEST-MIMARISI.md` §4, §9.
+
 ## Generic import pipeline — internal/ingest (SK-IMP3) ✅ (2026-06-25)
 
 İçe aktarma **skill-özel olmaktan çıkıp jenerik, çok-türlü** bir boru hattına dönüştü.
@@ -132,9 +149,12 @@ olarak çizilir (akış/sıra/durum/sınıf/ER/gantt vb.). `diff` bloklarının
 
 ## Workspace'e özel görünüm/tema + Dil → Profil ✅ (2026-06-25)
 
-Ayarlar ▸ **Görünüm** kategorisi uygulama-geneli olmaktan çıkıp **aktif
-workspace'e özel** hâle getirildi: her workspace kendi tema paleti / temel mod /
-accent'ini saklar ve **workspace değiştirilince UI teması da değişir**.
+Görünüm ayarları uygulama-geneli Ayarlar'dan çıkıp **NavRail ▸ Workspace ▸
+Görünüm sekmesine** taşındı ve **aktif workspace'e özel** hâle getirildi: her
+workspace kendi tema paleti / temel mod / accent'ini saklar ve **workspace
+değiştirilince UI teması da değişir**. (`AppearancePanel` artık tamamen
+self-contained — global+workspace ayarını kendi çekiyor — ve `WorkspaceView`
+sekmelerinde gömülü; APP_CATS'ten `appearance` kaldırıldı.)
 
 - **Backend:** `WSSettings`'e `Theme`/`Accent`/`ThemePreset` alanları (+ patch +
   `UpdateSettings`) ve `workspaceSettingsDTO`'ya aynı alanlar eklendi. Boş alan =
