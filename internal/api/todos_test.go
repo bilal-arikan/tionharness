@@ -6,6 +6,7 @@ import (
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
 	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/progress"
 )
 
 func todoMsg(steps string) db.Message { return db.Message{Role: "assistant", Steps: steps} }
@@ -52,5 +53,37 @@ func TestRenderTodoBlock(t *testing.T) {
 	// All-completed → empty (nothing left to track).
 	if renderTodoBlock([]agent.TodoItem{{Content: "done", Status: "completed"}}) != "" {
 		t.Fatal("expected empty block for all-completed list")
+	}
+}
+
+func TestRenderResumedBlock(t *testing.T) {
+	rec := progress.Record{Todos: []progress.TodoItem{
+		{Content: "ported", Status: "completed"},
+		{Content: "wire ui", Status: "pending"},
+	}}
+	out := renderResumedBlock(rec)
+	for _, want := range []string{"Resumed progress", "- [x] ported", "- [ ] wire ui", "previous session"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("resumed block missing %q\n%s", want, out)
+		}
+	}
+	// All-completed → empty (nothing left to resume).
+	if renderResumedBlock(progress.Record{Todos: []progress.TodoItem{{Content: "x", Status: "completed"}}}) != "" {
+		t.Fatal("expected empty resumed block for all-completed list")
+	}
+	// Empty record → empty.
+	if renderResumedBlock(progress.Record{}) != "" {
+		t.Fatal("expected empty resumed block for empty record")
+	}
+}
+
+func TestProgressDir(t *testing.T) {
+	// cwd set → used verbatim.
+	if got := progressDir(nil, "C:/proj", "AGT1"); got != "C:/proj" {
+		t.Fatalf("cwd should win: %q", got)
+	}
+	// cwd empty + no agent → empty (no fallback possible).
+	if got := progressDir(nil, "", ""); got != "" {
+		t.Fatalf("expected empty fallback, got %q", got)
 	}
 }

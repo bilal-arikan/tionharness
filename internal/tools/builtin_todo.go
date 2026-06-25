@@ -11,8 +11,10 @@ import (
 
 // todoItem is a single entry in the agent's working checklist.
 type todoItem struct {
-	Content string `json:"content"`
-	Status  string `json:"status"` // pending | in_progress | completed
+	Content  string   `json:"content"`
+	Status   string   `json:"status"` // pending | in_progress | completed
+	Category string   `json:"category,omitempty"`
+	Steps    []string `json:"steps,omitempty"`
 }
 
 // todoInput is the ask shape for the todo_write tool.
@@ -46,7 +48,9 @@ func (TodoWriteTool) Def() providers.ToolDef {
         "type": "object",
         "properties": {
           "content": { "type": "string", "description": "Short imperative description of the step." },
-          "status": { "type": "string", "enum": ["pending", "in_progress", "completed"] }
+          "status": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
+          "category": { "type": "string", "description": "Optional grouping label (e.g. 'functional', 'tests', 'docs')." },
+          "steps": { "type": "array", "items": { "type": "string" }, "description": "Optional verification sub-steps for this item." }
         },
         "required": ["content", "status"],
         "additionalProperties": false
@@ -59,7 +63,7 @@ func (TodoWriteTool) Def() providers.ToolDef {
 	}
 }
 
-func (TodoWriteTool) Call(_ context.Context, input json.RawMessage) (string, error) {
+func (TodoWriteTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in todoInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErrFor("todo_write", err)
@@ -82,6 +86,16 @@ func (TodoWriteTool) Call(_ context.Context, input json.RawMessage) (string, err
 		default:
 			return "", fmt.Errorf("todo %d: invalid status %q (want pending|in_progress|completed)", i+1, t.Status)
 		}
+	}
+	// Persist the list to the project's durable progress file when a sink is
+	// attached, so it survives across sessions. Best-effort: a persistence
+	// failure never fails the tool — the live UI checklist still updates.
+	if sink := todoSinkFrom(ctx); sink != nil {
+		items := make([]TodoSinkItem, len(in.Todos))
+		for i, t := range in.Todos {
+			items[i] = TodoSinkItem{Content: t.Content, Status: t.Status, Category: t.Category, Steps: t.Steps}
+		}
+		_ = sink.SaveTodos(ctx, items)
 	}
 	return fmt.Sprintf("Checklist updated: %d total — %d completed, %d in progress, %d pending.",
 		len(in.Todos), done, active, pending), nil
