@@ -275,6 +275,24 @@ playwright-mcp `browser_network_request` veya sayfa içi `fetch` ile `/api/chat/
 
 ---
 
+## Otonom Boot Sırası (otonom turların açılış disiplini)
+
+Otonom bir tur (zamanlama/spawn/flow/subagent) **taze bağlamla** başlar — önceki turun
+hafızası yoktur. Anthropic'in uzun-koşu-ajanı "harness" disiplinini uygulamak için bu
+turlara bir **açılış (boot) sırası** dayatılır: yönelim → hatırlama → **tek** görev seç →
+**temel testi (smoke/e2e) doğrula** → işi yap → döngüyü kapat (git commit + append-only not).
+
+- **Enjeksiyon:** `agent/runtime.go autonomousSystemPrompt` her otonom turun sistem-promptuna
+  kısa bir `autonomousBootReminder` (skill'e yönlendiren pointer) ekler. Tek nokta dört otonom
+  yolu da kapsar (`executor.go` + `subagent.go` ortak kurucu); interaktif sohbet etkilenmez.
+- **Tam reçete:** `swarmgo-autonomous-ops` becerisi **§10**. Ajan ihtiyaç duyarsa
+  `use_skill "swarmgo-autonomous-ops"` ile açar.
+- **Ayar:** `autonomousBootSeq` (vars. açık) — Ayarlar ▸ Çalışma dizini frenleri altında
+  "Otonom boot doğrulama sırası" toggle'ı; kapatınca tur başına birkaç token geri kazanılır.
+- **Dış-ajan açısından:** Bir schedule'ı `POST /api/schedules/{id}/run` ("Run now") ile
+  tetikleyip turun ilk adımlarının orient/recall/**verify** sırasını izleyip izlemediği
+  transkriptten (Aktivite/Executions) gözlemlenebilir — UI regresyon doğrulaması için kullanışlı.
+
 ## Sınırlar & Sıradaki İyileştirmeler
 
 - **API auth yok:** Ağa açılırsa (`SWARMGO_ADDR=0.0.0.0`) öncesinde token/proxy katmanı şart.

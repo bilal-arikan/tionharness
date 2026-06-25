@@ -17,6 +17,12 @@ export interface Session {
   // Working directory (cwd) override for the agent's file/shell tools. Empty =
   // workspace default. Set from the composer folder badge.
   workingDir?: string
+  // Context-reset lineage: when this session was born from a /handoff, it points
+  // back to the session it continues; handoffArtifactId is the handoff written
+  // into THIS session at the moment work was reset out of it. Both empty for an
+  // ordinary session.
+  parentSessionId?: string
+  handoffArtifactId?: string
   createdAt: number
   updatedAt: number
 }
@@ -42,6 +48,38 @@ export interface WorkdirInfo {
   exists: boolean
   isGitRepo: boolean
   branch: string
+}
+
+// ProgressTodo is one persisted checklist item (durable todo_write entry).
+export interface ProgressTodo {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+  category?: string
+  steps?: string[]
+}
+
+// ProgressLogEntry is one line of the rolling progress journal.
+export interface ProgressLogEntry {
+  ts: number
+  sessionId?: string
+  note: string
+}
+
+// ProgressRecord is the decoded persistent-progress file (todos + log).
+export interface ProgressRecord {
+  version: number
+  updatedAt: number
+  sessionId?: string
+  agentId?: string
+  todos: ProgressTodo[]
+  log?: ProgressLogEntry[]
+}
+
+// SessionProgress is the read-only viewer's view of a session's progress file.
+export interface SessionProgress {
+  path: string
+  exists: boolean
+  record: ProgressRecord | null
 }
 
 // BrowseEntry is one selectable directory in the folder picker.
@@ -161,6 +199,10 @@ export interface SessionInfo {
   // True when the goal is marked done: it stays visible but is no longer
   // injected into context.
   goalDone: boolean
+  // Context-reset lineage: the session this one continues (born from /handoff)
+  // and the handoff artifact written into this session at reset.
+  parentSessionId?: string
+  handoffArtifactId?: string
   createdAt: number
   updatedAt: number
 

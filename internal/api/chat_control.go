@@ -41,6 +41,7 @@ type chatRun struct {
 	mu          sync.Mutex
 	write       func(event string, data any) // installed by the stream handler; nil once the turn ends
 	artifacts   tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
+	todos       tools.TodoSink               // current agent's todo sink, for Interaction MCP todo_write persistence
 	grants      *tools.PermissionGrants      // session "Always allow" set, for the CLI permission-prompt tool
 	wake        tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
 	spawn       *tools.SpawnSessionTool      // current agent's spawn tool (self-manage on), for the Interaction MCP spawn_session tool
@@ -240,6 +241,21 @@ func (r *chatRun) artifactSink() tools.ArtifactSink {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.artifacts
+}
+
+// setTodoSink installs the todo sink for the currently responding agent so the
+// Interaction MCP todo_write tool (CLI path) persists the checklist to disk.
+func (r *chatRun) setTodoSink(sink tools.TodoSink) {
+	r.mu.Lock()
+	r.todos = sink
+	r.mu.Unlock()
+}
+
+// todoSink returns the current todo sink (nil if none installed).
+func (r *chatRun) todoSink() tools.TodoSink {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.todos
 }
 
 // emit writes one SSE event through the run's writer under the lock, so the

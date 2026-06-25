@@ -983,6 +983,7 @@ export default function App() {
           onSummarize={(_, kind) => chat.summarize(kind as 'memory' | 'board' | 'flows' | 'tools')}
           onDeleteSession={deleteSession}
           onOpenBudget={() => setView('budget')}
+          onSelectSession={selectSession}
         />
       )}
     </div>

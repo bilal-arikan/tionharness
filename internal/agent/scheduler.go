@@ -411,7 +411,8 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		return session.ID, err
 	}
 	s.rt.trackSession(session.ID)
-	output, steps, err := s.rt.invokeTraced(WithSessionID(WithCallKind(ctx, KindSchedule), session.ID), agent, sc.Prompt, true) // scheduled = autonomous
+	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(ctx, KindSchedule), session.ID))
+	output, steps, err := s.rt.invokeTraced(turnCtx, agent, sc.Prompt, true) // scheduled = autonomous
 	s.rt.untrackSession(session.ID)
 	if err != nil {
 		// Log the provider/tool-loop failure with the agent + its provider/model,
@@ -450,6 +451,9 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		Text:      output,
 		Steps:     encodeSteps(steps),
 	})
+	// Context-reset handoff: if this scheduled turn hit the context limit, optionally
+	// continue the work in a fresh session. No-op unless HandoffAuto is enabled.
+	s.rt.maybeAutoHandoff(ctx, session.ID, agent, overflow.Load())
 	return session.ID, err
 }
 

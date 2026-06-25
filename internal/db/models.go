@@ -103,6 +103,16 @@ type Session struct {
 	Summary         string `json:"summary"`
 	SummaryMsgCount int    `json:"summaryMsgCount"`
 
+	// Context-reset / handoff lineage (see internal/agent/handoff.go). When a
+	// session nears its context limit it is not just compacted in place: a handoff
+	// artifact is written and a FRESH session is spawned to continue the work in a
+	// clean window (Anthropic "context reset" pattern). ParentSessionID points back
+	// to the session this one continues, so the UI can walk the reset chain;
+	// HandoffArtifactID is the handoff artifact written into the PARENT at reset.
+	// Both empty for an ordinary (non-handoff) session.
+	ParentSessionID   string `json:"parentSessionId,omitempty"`
+	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
+
 	// claude-cli session resume (opt-in, ClaudeResume setting). CLISessionID is the
 	// CLI's server-side session to --resume on the next turn (rotates each turn);
 	// CLISentMsgCount is how many of this session's messages the CLI has already

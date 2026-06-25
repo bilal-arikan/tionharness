@@ -55,8 +55,11 @@ deliberately, it is not reversible.
   agent) and get back only the final result, so the sub-task's tool output never
   floods the current context. Supports sync (wait for reply, default) and async
   (detached background run). Multiple calls in one turn run in parallel.
-  Gated by the *Delegation* capability (`enableDelegation`). Use when you need a
-  RESULT back.
+  For sharper delegation, also pass `objective`, `output_format` and `boundaries`
+  (all optional) — they are injected as a "Task contract" into the subagent's
+  system prompt so it has a clear goal, a required reply shape and explicit scope
+  limits (prevents duplicated work and gaps). Gated by the *Delegation* capability
+  (`enableDelegation`). Use when you need a RESULT back.
 - `send_message` — send a direct, addressed message (`{to, message, summary?}`) to
   ANOTHER agent. It lands in that agent's persistent inbox tagged with your name,
   and the agent processes it on its own in the background — you do NOT wait, and
@@ -64,6 +67,13 @@ deliberately, it is not reversible.
   in YOUR inbox). Your plain reply text is not visible to other agents; to reach
   one you must use this tool. Use for ONGOING peer collaboration (vs `run_subagent`
   for a result-in-this-turn).
+- `handoff_session` — **context reset**: when THIS conversation is getting long and
+  you are nearing the context limit, write a structured handoff document (objective,
+  progress done/pending, environment, next concrete step) as an artifact and continue
+  the work in a FRESH session with a clean window — instead of letting older turns be
+  silently summarized. The new session runs on its own (activity feed); THIS
+  conversation does not continue, so finish your current thought first and do not
+  promise more work here. Optional `{reason}`.
 
 > Built-in run_subagent profiles: `explore` (read-only search), `coder` (write/edit
 > code), `reviewer` (read-only review). Pass an existing agent's name or ID as

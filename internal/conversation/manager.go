@@ -77,7 +77,7 @@ func NewManager() *Manager {
 	return &Manager{
 		maxTokens:      envInt("SWARMGO_MAX_CONTEXT_TOKENS", defaultMaxTokens),
 		keepRecent:     envInt("SWARMGO_KEEP_RECENT_MSGS", defaultKeepRecent),
-		budgetFraction: envFloat("SWARMGO_CONTEXT_BUDGET_FRACTION", defaultBudgetWindowFraction),
+		budgetFraction: envFloat("SWARMGO_CONTEXT_BUDGET_FRACTION", 0), // 0 = auto (per-family adaptive)
 		budgetCeil:     envInt("SWARMGO_CONTEXT_BUDGET_CEIL", defaultBudgetAutoCeil),
 	}
 }
@@ -96,12 +96,14 @@ func (m *Manager) SetLimits(maxTokens, keepRecent int) {
 }
 
 // SetBudgetShape updates the model-aware budget knobs (window fraction + hard
-// ceiling) live from the Settings screen. Non-positive values are ignored so a
-// partial update can't zero out a knob by accident (EffectiveBudget also guards).
+// ceiling) live from the Settings screen. A fraction of exactly 0 is a meaningful
+// value ("auto" → per-family adaptive, see EffectiveBudget) and is stored as-is;
+// only a negative (invalid) fraction is ignored. ceil<=0 is ignored so a partial
+// update can't zero the ceiling by accident (validate clamps it to >=8000 anyway).
 func (m *Manager) SetBudgetShape(fraction float64, ceil int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if fraction > 0 {
+	if fraction >= 0 {
 		m.budgetFraction = fraction
 	}
 	if ceil > 0 {

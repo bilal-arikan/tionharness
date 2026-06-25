@@ -100,6 +100,92 @@ func TestRunParallel_RecoversChildPanic(t *testing.T) {
 	}
 }
 
+// verdictRunner drives a generator↔evaluator (GAN) loop: the "eval" agent emits
+// REFINE for the first refineRounds evaluations, then SHIP. Every other agent
+// echoes its id. Used to exercise a cyclic graph (evaluate → branch → generate).
+type verdictRunner struct {
+	evalCalls    int
+	refineRounds int
+}
+
+func (r *verdictRunner) RunAgentNode(_ context.Context, agentID, _ string) (string, error) {
+	if agentID == "eval" {
+		r.evalCalls++
+		if r.evalCalls > r.refineRounds {
+			return "all criteria pass\nVERDICT: SHIP", nil
+		}
+		return "found issues\nVERDICT: REFINE", nil
+	}
+	return "out:" + agentID, nil
+}
+
+// ganGraph is the minimal generator↔evaluator loop: generate → evaluate →
+// decide(branch), where decide routes SHIP→finalize, PIVOT→pivot, default→back to
+// generate. The back edges (decide→generate, pivot→generate) make it cyclic on
+// purpose — the engine allows cycles and bounds them with maxSteps.
+func ganGraph() Graph {
+	return Graph{
+		Start: "gen",
+		Nodes: []Node{
+			{ID: "gen", Type: NodeAgent, AgentID: "gen", Prompt: "build {{input}}", Next: "eval"},
+			{ID: "eval", Type: NodeAgent, AgentID: "eval", Prompt: "judge {{node.gen}}", Next: "decide"},
+			{ID: "decide", Type: NodeBranch, MatchMode: "regex", Branches: []Branch{
+				{Contains: `(?m)^VERDICT:\s*SHIP`, Next: "finalize"},
+				{Contains: `(?m)^VERDICT:\s*PIVOT`, Next: "pivot"},
+				{Contains: "", Next: "gen"},
+			}},
+			{ID: "pivot", Type: NodeAgent, AgentID: "gen", Prompt: "pivot", Next: "gen"},
+			{ID: "finalize", Type: NodeTransform, Template: "done:{{node.eval}}", Next: ""},
+		},
+	}
+}
+
+// TestValidate_AllowsCyclicGraph verifies the validator accepts a cyclic graph (a
+// branch routing back to an earlier node), since iteration loops are a supported
+// pattern (e.g. the generator↔evaluator GAN loop).
+func TestValidate_AllowsCyclicGraph(t *testing.T) {
+	if err := ganGraph().Validate(); err != nil {
+		t.Fatalf("cyclic GAN graph should validate, got: %v", err)
+	}
+}
+
+// TestRun_GANLoop_RefinesThenShips drives the loop through two REFINE iterations
+// and a final SHIP, ending at the finalize transform node. Proves the back edge
+// (decide → generate) loops and that the SHIP verdict exits the loop.
+func TestRun_GANLoop_RefinesThenShips(t *testing.T) {
+	g := ganGraph()
+	r := &verdictRunner{refineRounds: 2}
+	eng := NewEngine(r)
+
+	final, err := eng.Run(context.Background(), g, "a button", NewState(g), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r.evalCalls != 3 {
+		t.Errorf("expected 3 evaluations (2 refine + 1 ship), got %d", r.evalCalls)
+	}
+	if final.Current != "" {
+		t.Errorf("expected a finished run (Current==\"\"), got %q", final.Current)
+	}
+	if !strings.Contains(final.Last, "done:") || !strings.Contains(final.Last, "VERDICT: SHIP") {
+		t.Errorf("expected finalize output from the SHIP branch, got %q", final.Last)
+	}
+}
+
+// TestRun_GANLoop_StepCapBackstop verifies an evaluator that never ships is
+// stopped by the step cap rather than looping forever — the safety backstop for
+// a cyclic graph.
+func TestRun_GANLoop_StepCapBackstop(t *testing.T) {
+	g := ganGraph()
+	r := &verdictRunner{refineRounds: 1 << 30} // never ships
+	eng := NewEngine(r)
+
+	_, err := eng.Run(context.Background(), g, "x", NewState(g), nil)
+	if err == nil || !strings.Contains(err.Error(), "step cap") {
+		t.Fatalf("expected a step-cap error from the runaway loop, got %v", err)
+	}
+}
+
 // TestRunParallel_HappyPath is a sanity check that the recover wrapper does not
 // disturb a normal parallel run.
 func TestRunParallel_HappyPath(t *testing.T) {

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/tools"
@@ -14,17 +15,17 @@ import (
 type CallKind string
 
 const (
-	KindChat      CallKind = db.UsageKindChat
-	KindTask      CallKind = db.UsageKindTask
-	KindSchedule  CallKind = db.UsageKindSchedule
-	KindFlow      CallKind = db.UsageKindFlow
-	KindDelegate  CallKind = db.UsageKindDelegate
-	KindSpawn     CallKind = db.UsageKindSpawn
-	KindSubagent  CallKind = db.UsageKindSubagent
-	KindTitle     CallKind = db.UsageKindTitle
-	KindSummary   CallKind = db.UsageKindSummary
-	KindReflect   CallKind = db.UsageKindReflect
-	KindCompact   CallKind = db.UsageKindCompact
+	KindChat     CallKind = db.UsageKindChat
+	KindTask     CallKind = db.UsageKindTask
+	KindSchedule CallKind = db.UsageKindSchedule
+	KindFlow     CallKind = db.UsageKindFlow
+	KindDelegate CallKind = db.UsageKindDelegate
+	KindSpawn    CallKind = db.UsageKindSpawn
+	KindSubagent CallKind = db.UsageKindSubagent
+	KindTitle    CallKind = db.UsageKindTitle
+	KindSummary  CallKind = db.UsageKindSummary
+	KindReflect  CallKind = db.UsageKindReflect
+	KindCompact  CallKind = db.UsageKindCompact
 )
 
 type callKindKey struct{}
@@ -61,6 +62,26 @@ func SessionIDFrom(ctx context.Context) string {
 		return id
 	}
 	return ""
+}
+
+type overflowKey struct{}
+
+// withOverflowFlag attaches a context-overflow flag to the context and returns
+// it alongside the flag. An autonomous caller installs it before a turn so that,
+// after the turn, it can tell whether the tool loop had to reactively compact its
+// in-flight history (the SwarmGo signal that the turn ran up against the context
+// limit) — the trigger for an automatic context-reset handoff.
+func withOverflowFlag(ctx context.Context) (context.Context, *atomic.Bool) {
+	var flag atomic.Bool
+	return context.WithValue(ctx, overflowKey{}, &flag), &flag
+}
+
+// markContextOverflow sets the overflow flag if one is installed on the context.
+// Called by the tool loop when it performs a reactive in-flight compaction.
+func markContextOverflow(ctx context.Context) {
+	if f, ok := ctx.Value(overflowKey{}).(*atomic.Bool); ok && f != nil {
+		f.Store(true)
+	}
 }
 
 // callKindFrom returns the call origin stamped on the context, defaulting to

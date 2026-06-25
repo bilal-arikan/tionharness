@@ -39,6 +39,12 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// setArtifacts. Only when we know the session to stamp artifacts with.
 		if sessionID != "" {
 			run.setArtifacts(rt.NewArtifactSink(sessionID, ag.ID))
+			// Persistent progress (CLI path): persist the todo_write checklist to the
+			// project's progress file on autonomous turns too. Keyed to the session's
+			// working dir; gated by ProgressPersist.
+			if s.tun.ProgressPersist() {
+				run.setTodoSink(rt.NewTodoSink(sessionID, ag.ID, rt.SessionWorkdir(sessionID)))
+			}
 		}
 
 		// use_skill (CLI path): enforce the same per-agent allowlist as the native

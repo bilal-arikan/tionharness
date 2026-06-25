@@ -99,6 +99,11 @@ func (d *DB) dir(parts ...string) string {
 	return filepath.Join(append([]string{d.root}, parts...)...)
 }
 
+// Root returns the store root directory for this workspace. Used by callers that
+// need to place auxiliary files (e.g. per-agent progress fallback) alongside the
+// entity store without importing internal paths.
+func (d *DB) Root() string { return d.root }
+
 const (
 	dirAgents    = "agents"
 	dirSessions  = "sessions"

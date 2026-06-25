@@ -58,11 +58,11 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 
 ### Context & memory
 - `maxContextTokens` (min 500, default 12000), `keepRecentMsgs` (min 1, default 8).
-- `contextBudgetCeil` (8000–2000000, default 512000) — hard cap on the model-aware transcript budget; the operative number for 1M-window models. Raise to keep more history verbatim before the first compaction. `contextBudgetFraction` (0–1, default 0.6) — share of the model's context window spendable on transcript. Effective budget = clamp(window × fraction, maxContextTokens, ceil).
+- `contextBudgetCeil` (8000–2000000, default 262144 ≈ 256K) — hard cap on the model-aware transcript budget; the operative number for 1M-window models. Lowered from 512K to keep the live window in the context-rot gradient's high-precision zone; raise to keep more history verbatim (trades recall precision for raw history). `contextBudgetFraction` (0–1, default **0 = auto**) — share of the model's context window spendable on transcript. **0 selects a per-family adaptive share** (Opus/Sonnet 0.45, Haiku 0.40, MiniMax/DeepSeek/Gemini 0.35); a positive value pins a fixed manual share. Effective budget = clamp(window × fraction, maxContextTokens, ceil). Rationale: see `_Docs/17` §12.
 - `recallTopN` (default 5), `recallMinScore` (0–1, default 0.05).
 - `journalCap` (1–1000, default 50), `journalMaxLen` runes (64–65536, default 1024).
 - `reflectionCap` (1–1000, default 20) — newest reflections kept per agent; older ones are pruned after each dream cycle so reflections (unlike journals) can't accumulate without bound.
-- `memoryPressureWarn` (0–1, default 0.75) — context-fill ratio above which a turn warns the agent to persist important facts before the next silent compaction; `0` disables the warning.
+- `memoryPressureWarn` (0–1, default 0.70) — context-fill ratio above which a turn warns the agent to persist important facts before the next silent compaction; `0` disables the warning. (Lowered 0.75→0.70 to pair with the smaller raw budget — see `_Docs/17` §12.)
 - `coreMemoryTools` (default true) — offer the `core_memory_replace`/`core_memory_append` tools that edit the agent's persistent **named core blocks** (persona + human by default, plus any custom blocks; each character-limited, re-injected every turn).
 - `autoReflect` (default true), `autoReflectThreshold` (2–1000, default 20).
 - `autoUserModel` (default true) — during the dream cycle, refresh the agent's "human" core block from the journal (HA-1 automatic user modelling).
@@ -114,6 +114,11 @@ for autonomous (no-human) turns; interactive chat is unaffected.
   give each autonomous session its own git worktree + branch instead of editing
   the shared tree (parallel agents never clobber each other). Needs git; the
   worktree is removed when the session is deleted.
+- `autonomousBootSeq` (default true) — on scheduler/spawn/flow/subagent turns,
+  inject a short boot/verification-sequence reminder (orient → recall → select one
+  task → verify the baseline → work → close the loop) into the system prompt. The
+  full recipe is in the `swarmgo-autonomous-ops` skill (§10). Costs a few tokens per
+  headless turn; turn off to reclaim them. Interactive chat is unaffected.
 
 ### Workspace backups
 Periodic, retention-bounded zip snapshots of every workspace's data dir.

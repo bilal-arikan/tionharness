@@ -373,6 +373,15 @@ func (d *DB) SetSessionCLIResume(ctx context.Context, sessionID, cliSessionID st
 	})
 }
 
+// SetSessionHandoffArtifact records, on the PARENT session, the id of the handoff
+// artifact written when work was reset into a fresh child session. Bookkeeping
+// only, so it does not bump UpdatedAt (recording a reset must not reorder the list).
+func (d *DB) SetSessionHandoffArtifact(ctx context.Context, sessionID, artifactID string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.HandoffArtifactID = artifactID
+	})
+}
+
 // SetSessionAgent updates a session's default (main) agent — used when the first
 // message of a fresh session @mentions an agent, pinning the thread to it.
 func (d *DB) SetSessionAgent(ctx context.Context, sessionID, agentID string) error {

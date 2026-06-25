@@ -159,6 +159,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
       spawnMaxConcurrent: draft.spawnMaxConcurrent, spawnMaxPerTurn: draft.spawnMaxPerTurn,
       autonomousConfine: draft.autonomousConfine, gitWorktreeIsolation: draft.gitWorktreeIsolation,
+      autonomousBootSeq: draft.autonomousBootSeq,
       backupEnabled: draft.backupEnabled, backupIntervalHours: draft.backupIntervalHours,
       backupRetain: draft.backupRetain, backupDir: draft.backupDir,
     }

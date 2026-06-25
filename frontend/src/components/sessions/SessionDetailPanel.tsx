@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, type LucideIcon } from 'lucide-react'
+import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, ListChecks, Square, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
-import type { SessionInfo, AgentUsage, SessionUsageDetail } from '../../types'
+import type { SessionInfo, AgentUsage, SessionUsageDetail, SessionProgress } from '../../types'
 import { SessionContextModal } from './SessionContextModal'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { roleColor } from '../../lib/palette'
@@ -26,6 +26,8 @@ interface Props {
   onDeleteSession: (id: string) => void
   // Deep-link to the Budget screen for the full per-agent / workspace view.
   onOpenBudget?: () => void
+  // Navigate to another session (used by the context-reset lineage link).
+  onSelectSession?: (id: string) => void
 }
 
 function usd(n: number): string {
@@ -62,10 +64,12 @@ export function SessionDetailPanel({
   onSummarize,
   onDeleteSession,
   onOpenBudget,
+  onSelectSession,
 }: Props) {
   const [info, setInfo] = useState<SessionInfo | null>(null)
   const [agentUsage, setAgentUsage] = useState<AgentUsage | null>(null)
   const [sessionUsage, setSessionUsage] = useState<SessionUsageDetail | null>(null)
+  const [progress, setProgress] = useState<SessionProgress | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [titling, setTitling] = useState(false)
@@ -105,6 +109,19 @@ export function SessionDetailPanel({
       .sessionUsageDetail(sessionId)
       .then((u) => alive && setSessionUsage(u))
       .catch(() => alive && setSessionUsage(null))
+    return () => {
+      alive = false
+    }
+  }, [sessionId, refreshKey, localRefresh])
+
+  // Persistent progress (durable todo_write checklist + log). Refetched on the
+  // same triggers so a finished turn that updated the list reflects here.
+  useEffect(() => {
+    let alive = true
+    api
+      .sessionProgress(sessionId)
+      .then((p) => alive && setProgress(p))
+      .catch(() => alive && setProgress(null))
     return () => {
       alive = false
     }
@@ -305,6 +322,18 @@ export function SessionDetailPanel({
               {info.kind && <Pill>{info.kind}</Pill>}
               {info.unread && <Pill accent>okunmadı</Pill>}
             </div>
+            {/* Context-reset lineage: this session continues an earlier one. */}
+            {info.parentSessionId && (
+              <button
+                type="button"
+                onClick={() => onSelectSession?.(info.parentSessionId!)}
+                disabled={!onSelectSession}
+                className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] disabled:cursor-default disabled:hover:text-[var(--color-text-dim)]"
+                title="Bu oturum bir context reset (handoff) ile önceki oturumdan devraldı"
+              >
+                ↩ Devraldığı oturum: <span className="font-mono">{info.parentSessionId}</span>
+              </button>
+            )}
           </div>
 
           {/* Goal ("north star") — persistent objective injected into context */}
@@ -434,6 +463,11 @@ export function SessionDetailPanel({
               </SmallBtn>
             </div>
           </Section>
+
+          {/* Persistent progress (durable todo_write checklist + rolling log) */}
+          {progress?.exists && progress.record && progress.record.todos.length > 0 && (
+            <ProgressCard progress={progress} />
+          )}
 
           {/* Context window usage (/context-style) */}
           <Section title={`Bağlam penceresi · ${formatTokens(ctxUsed)}/${formatTokens(ctxWindow)} (${ctxPct}%)`}>
@@ -646,6 +680,51 @@ export function SessionDetailPanel({
 }
 
 // ---- presentational helpers ----
+
+// ProgressCard renders the session's persistent progress file read-only: a count
+// summary, each checklist item with its status marker (and optional category),
+// and the most recent rolling-log lines. Surfaces the cross-session note-taking
+// that the agent maintains via todo_write.
+function ProgressCard({ progress }: { progress: SessionProgress }) {
+  const rec = progress.record!
+  const total = rec.todos.length
+  const done = rec.todos.filter((t) => t.status === 'completed').length
+  const log = (rec.log ?? []).slice(-3).reverse()
+  return (
+    <section>
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+        <ListChecks size={12} className="shrink-0" />
+        <span>Kalıcı ilerleme · {done}/{total}</span>
+      </div>
+      <div className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-2">
+        {rec.todos.map((t, i) => (
+          <div key={i} className="flex items-start gap-1.5 text-[11px] leading-relaxed">
+            {t.status === 'completed' ? (
+              <CheckCircle2 size={13} className="mt-px shrink-0" style={{ color: 'var(--color-success)' }} />
+            ) : t.status === 'in_progress' ? (
+              <Loader2 size={13} className="mt-px shrink-0 text-[var(--color-accent)]" />
+            ) : (
+              <Square size={13} className="mt-px shrink-0 text-[var(--color-text-dim)]" />
+            )}
+            <span className={t.status === 'completed' ? 'text-[var(--color-text-dim)] line-through' : 'text-[var(--color-text)]'}>
+              {t.content}
+              {t.category && <span className="ml-1 opacity-50">· {t.category}</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+      {log.length > 0 && (
+        <div className="mt-1.5 flex flex-col gap-0.5">
+          {log.map((l, i) => (
+            <div key={i} className="truncate text-[10px] text-[var(--color-text-dim)] opacity-70" title={l.note}>
+              {l.note}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

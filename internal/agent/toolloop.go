@@ -147,6 +147,16 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		ctx = tools.WithArtifacts(ctx, r.NewArtifactSink(sid, agent.ID))
 	}
 
+	// Persistent progress: when todo_write runs, persist the checklist to the
+	// project's progress file so it survives across sessions (Claude Code's
+	// claude-progress convention). Install a fallback sink whenever the turn has a
+	// session but no sink yet — covering native chat + autonomous (scheduler/spawn/
+	// flow) turns. (CLI turns get theirs via the Interaction bridge run.) Gated by
+	// the ProgressPersist setting (default on); workDir was resolved just above.
+	if sid := SessionIDFrom(ctx); sid != "" && r.tun.ProgressPersist() && !tools.HasTodoSink(ctx) {
+		ctx = tools.WithTodoSink(ctx, r.NewTodoSink(sid, agent.ID, workDir))
+	}
+
 	// Provider-driven paths (claude CLI) surface their own trace via OnEvent.
 	if onStep != nil {
 		req.OnEvent = func(ts providers.TraceStep) { onStep(traceStepToTurnStep(ts)) }
@@ -310,6 +320,9 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 					req.Messages = folded
 					ls.compacted = true
 					ls.lastContinue = d.reason
+					// Signal the autonomous caller that this turn hit the context
+					// limit, so it can decide on an automatic context-reset handoff.
+					markContextOverflow(ctx)
 					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
 					steps = append(steps, rec)
 					emit(rec)

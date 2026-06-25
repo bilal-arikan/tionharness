@@ -34,8 +34,17 @@ func resolvedWorkDirFromCtx(ctx context.Context) (resolvedWorkDir, bool) {
 // workspace dir). It reads the session id from the context, so it works on every
 // path that stamps one (chat, scheduler, spawn, flow).
 func (r *Runtime) effectiveWorkDir(ctx context.Context) string {
-	if sid := SessionIDFrom(ctx); sid != "" {
-		if s, err := r.db.GetSession(ctx, sid); err == nil {
+	return r.SessionWorkdir(SessionIDFrom(ctx))
+}
+
+// SessionWorkdir resolves a session's working directory the same way the turn
+// loop does (session override when valid, else workspace default), taking an
+// explicit id instead of reading it from the context. Used by the CLI Interaction
+// bridge to bind a progress sink before the turn context is built. Empty id → the
+// workspace default.
+func (r *Runtime) SessionWorkdir(sessionID string) string {
+	if sessionID != "" {
+		if s, err := r.db.GetSession(context.Background(), sessionID); err == nil {
 			if d := strings.TrimSpace(s.WorkingDir); d != "" {
 				if info, statErr := os.Stat(d); statErr == nil && info.IsDir() {
 					return d

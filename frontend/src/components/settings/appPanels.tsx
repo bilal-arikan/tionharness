@@ -2,7 +2,7 @@
 // categories (providers, commands, step kinds, workspace) live in their own
 // files; these are pure draft+setter forms.
 import { useState, useEffect } from 'react'
-import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, FlaskConical, ShieldCheck, Archive, RotateCcw, Trash2, type LucideIcon } from 'lucide-react'
+import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, FlaskConical, ShieldCheck, Archive, RotateCcw, ListChecks, Trash2, type LucideIcon } from 'lucide-react'
 import type { VersionInfo, BackupStatus, WorkspaceArchives } from '../../types'
 import { api, getActiveWorkspace } from '../../api'
 import type { AppSettings } from '../../types'
@@ -136,10 +136,10 @@ export function ContextPanel({ draft, set }: PanelProps) {
       <div className="grid grid-cols-2 gap-3">
         <Field label="Maks. bağlam token" hint="Sıkıştırma için taban değer. Aşılınca eski turlar özetlenir."><input type="number" value={draft.maxContextTokens} onChange={(e) => set('maxContextTokens', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Korunan son mesaj" hint="Her zaman aynen gönderilir."><input type="number" value={draft.keepRecentMsgs} onChange={(e) => set('keepRecentMsgs', Number(e.target.value))} className={inputCls} /></Field>
-        <Field label="Bütçe tavanı (token)" hint="Büyük pencereli (1M) modeller için üst sınır. 512000 ≈ 1M'in yarısı — ilk mesaj çok daha uzun süre aynen kalır."><input type="number" value={draft.contextBudgetCeil} onChange={(e) => set('contextBudgetCeil', Number(e.target.value))} className={inputCls} /></Field>
-        <Field label="Pencere oranı" hint="Modelin bağlam penceresinin transkripte ayrılan payı (0–1). 0.6 → 1M model 600K üretir, tavana kırpılır."><input type="number" step="0.05" value={draft.contextBudgetFraction} onChange={(e) => set('contextBudgetFraction', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Bütçe tavanı (token)" hint="Büyük pencereli (1M) modeller için üst sınır. Varsayılan 262144 (256K) — ham pencereyi gradyanın yüksek-hassasiyet bölgesinde tutar (context-rot). Yükseltmek daha çok ham geçmiş tutar ama recall hassasiyetiyle takas eder."><input type="number" value={draft.contextBudgetCeil} onChange={(e) => set('contextBudgetCeil', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Pencere oranı" hint="Transkripte ayrılan pay (0–1). 0 = otomatik (model-ailesine göre adaptif, önerilen). Pozitif değer sabit pay sabitler (ör. 0.45 → 1M model 450K, tavana kırpılır)."><input type="number" step="0.05" value={draft.contextBudgetFraction} onChange={(e) => set('contextBudgetFraction', Number(e.target.value))} className={inputCls} /></Field>
       </div>
-      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">Etkin bütçe = clamp(pencere × oran, maks. token, tavan). Bilinmeyen pencere → maks. token kullanılır.</p>
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">Etkin bütçe = clamp(pencere × oran, maks. token, tavan). Oran 0 = otomatik adaptif; bilinmeyen pencere → maks. token kullanılır.</p>
 
       <SubHead icon={FlaskConical}>Anthropic beta</SubHead>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">Yalnız anthropic sağlayıcıda etkili; claude-cli'da etkisizdir. (1M bağlam artık GA — ayar gerekmez.)</p>
@@ -192,6 +192,68 @@ export function ContextPanel({ draft, set }: PanelProps) {
           {draft.memoryPressureWarn > 0 ? `Uyarı %${Math.round(draft.memoryPressureWarn * 100)}'te` : 'Uyarı kapalı'}
         </span>
       </div>
+
+      <SubHead icon={RotateCcw}>Context reset (handoff)</SubHead>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+        Anthropic "harness design" deseni: uzun otonom görevlerde yerinde sıkıştırma tek başına "context anxiety"yi (modelin limite yaklaşınca işi erken
+        toparlaması) çözmez. Açıkken, bağlam sınırına çarpan otonom bir tur özetlenmek yerine bir <span className="font-medium text-[var(--color-text)]">handoff
+        dosyası</span> yazar ve işi <span className="font-medium text-[var(--color-text)]">temiz bir pencerede</span> sürdürmek için yeni bir oturum başlatır.
+        Manuel <code>/handoff</code> komutu ve <code>handoff_session</code> aracı bu ayardan bağımsız her zaman çalışır.
+      </div>
+      <Toggle
+        label="Otomatik context reset"
+        hint="Bağlam sınırına çarpan (reactive compaction tetikleyen) otonom tur, handoff yazıp temiz oturumda devam eder. Yalnız otonom turlar; manuel sohbet etkilenmez."
+        checked={draft.handoffAuto}
+        onChange={(v) => set('handoffAuto', v)}
+      />
+      <Slider
+        label="Otomatik reset basınç eşiği"
+        min={0.5}
+        max={0.99}
+        step={0.01}
+        value={draft.handoffPressure || 0.9}
+        onChange={(v) => set('handoffPressure', v)}
+        badge={`%${Math.round((draft.handoffPressure || 0.9) * 100)}`}
+        hint="Otomatik reset yalnız bağlam doluluğu bu oranın üstündeyken yapılır (bellek-basıncı uyarısının üstünde tutun)."
+      />
+      <Field
+        label="Maks. reset zinciri"
+        hint="Art arda kaç context reset'e izin verilir; aşılınca normal sıkıştırmaya düşer (sonsuz zincir freni)."
+      >
+        <input
+          type="number"
+          min={1}
+          max={100}
+          className={inputCls}
+          value={draft.handoffMaxChain || 20}
+          onChange={(e) => set('handoffMaxChain', Number(e.target.value))}
+        />
+      </Field>
+      <Toggle
+        label="Handoff'u dosyaya da yaz"
+        hint="Artifact'ın yanı sıra çalışma dizinine <workdir>/.swarmgo/handoff.md olarak yazar (disk üstü progress dosyası deseni)."
+        checked={draft.handoffWriteFile}
+        onChange={(v) => set('handoffWriteFile', v)}
+      />
+
+      <SubHead icon={ListChecks}>Kalıcı ilerleme (progress)</SubHead>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+        Anthropic'in <span className="font-medium text-[var(--color-text)]">claude-progress</span> konvansiyonu: <code>todo_write</code> kontrol listesi proje çalışma dizinine
+        <code> &lt;cwd&gt;/.swarmgo/progress.json</code> olarak yazılır (cwd yoksa ajan-başına depo dosyasına). Böylece liste oturumlar arası kaybolmaz; yeni bir oturum
+        açıldığında kaldığı yerden devralınır. Dosya git-commit'lenebilir ve ajan dosya araçlarıyla okunabilir.
+      </div>
+      <Toggle
+        label="İlerlemeyi diske yaz"
+        hint="todo_write çağrıldığında kontrol listesi proje progress dosyasına kalıcılaşır. Kapalıyken bugünkü (oturum-içi efemeral) davranışa dönülür."
+        checked={draft.progressPersist}
+        onChange={(v) => set('progressPersist', v)}
+      />
+      <Toggle
+        label="Yeni oturumda geri yükle"
+        hint="Kendi listesi olmayan yeni bir oturuma, önceki oturumun progress dosyasındaki tamamlanmamış liste bağlam olarak enjekte edilir."
+        checked={draft.progressResume}
+        onChange={(v) => set('progressResume', v)}
+      />
 
       <SubHead icon={LifeBuoy}>Tur kurtarma & sıkıştırma</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
@@ -352,6 +414,12 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         hint="Açıkken çalışma dizini bir git deposuysa, otonom oturumlar depoyu doğrudan değiştirmek yerine oturuma özel bir git worktree + dal alır. Paralel ajanların birbirinin dosyalarını ezmesini önler. Git gerektirir; oturum silinince worktree temizlenir."
         checked={draft.gitWorktreeIsolation}
         onChange={(v) => set('gitWorktreeIsolation', v)}
+      />
+      <Toggle
+        label="Otonom boot doğrulama sırası"
+        hint="Açıkken zamanlama/spawn/flow/subagent turlarına kısa bir açılış sırası hatırlatıcısı enjekte edilir (yönelim → hatırlama → tek görev seç → temel testi doğrula → işi yap → döngüyü kapat). Tam reçete: swarmgo-autonomous-ops becerisi (§10). Otonom tur başına birkaç token; kapatınca geri kazanılır. Önerilen: AÇIK."
+        checked={draft.autonomousBootSeq}
+        onChange={(v) => set('autonomousBootSeq', v)}
       />
     </>
   )

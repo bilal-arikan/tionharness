@@ -23,6 +23,10 @@ type SpawnOptions struct {
 	ModelOverride string
 	Title         string
 	CreatedBy     string
+	// ParentSessionID links a spawned session back to the one it continues, set by
+	// a context-reset handoff so the UI can walk the reset chain. "" for an
+	// ordinary spawn with no lineage.
+	ParentSessionID string
 }
 
 // SpawnResult is what a spawn returns to its caller immediately — the new
@@ -71,10 +75,11 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	// Each spawn is its own independent session — a fresh sourceID (not GetOrCreate)
 	// so two spawns never collapse into one thread.
 	session, err := r.db.CreateSession(ctx, db.Session{
-		AgentID:  agent.ID,
-		Kind:     "spawned",
-		SourceID: "spawn:" + uuid.NewString(),
-		Title:    title,
+		AgentID:         agent.ID,
+		Kind:            "spawned",
+		SourceID:        "spawn:" + uuid.NewString(),
+		Title:           title,
+		ParentSessionID: strings.TrimSpace(opts.ParentSessionID),
 	})
 	if err != nil {
 		r.releaseSpawnSlot()
@@ -113,7 +118,8 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 	defer cancel()
 
 	r.trackSession(sessionID)
-	output, steps, err := r.invokeTraced(WithSessionID(WithCallKind(ctx, KindSpawn), sessionID), agent, prompt, true)
+	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(ctx, KindSpawn), sessionID))
+	output, steps, err := r.invokeTraced(turnCtx, agent, prompt, true)
 	r.untrackSession(sessionID)
 
 	if err != nil {
@@ -147,6 +153,11 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 	}
 	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID)
 	r.emitSpawnEvent(agent, sessionID, prompt, true)
+
+	// Context-reset handoff: if this autonomous turn ran up against the context
+	// limit (reactive compaction fired), optionally write a handoff and continue
+	// the work in a fresh session. No-op unless HandoffAuto is enabled.
+	r.maybeAutoHandoff(ctx, sessionID, agent, overflow.Load())
 }
 
 // emitSpawnEvent publishes a "spawned"-typed notification for a finished spawn,

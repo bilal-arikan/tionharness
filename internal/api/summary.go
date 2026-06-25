@@ -109,6 +109,53 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"userMessage": userMsg, "replyMessage": msg})
 }
 
+// handleSessionHandoff performs a manual context reset (/handoff): it writes a
+// handoff artifact for the session and spawns a FRESH session to continue the
+// work in a clean window, then returns the new session id so the UI can switch to
+// it. Unlike /compact (which folds in place and keeps the same session), this is
+// the Anthropic "context reset" pattern. Powers the chat "/handoff" command.
+func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+	ctx := r.Context()
+
+	session, err := wsp.DB.GetSession(ctx, id)
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
+	if writeDBError(w, err, "agent not found") {
+		return
+	}
+
+	// Record the command itself as a user message so the thread shows what was run.
+	userMsg, err := wsp.DB.AddMessage(ctx, db.Message{
+		SessionID: session.ID,
+		Role:      providers.RoleUser,
+		Text:      "/handoff",
+	})
+	if writeDBError(w, err, "session not found") {
+		return
+	}
+
+	res, herr := wsp.Runtime.HandoffSession(ctx, session, agentRow, agent.HandoffOptions{
+		Reason: agent.HandoffReasonManual,
+	})
+	if herr != nil {
+		writeError(w, http.StatusInternalServerError, "handoff failed: "+herr.Error())
+		return
+	}
+
+	// HandoffSession already dropped a tombstone (with the new session link) into
+	// the old session; return it as the reply message so the chat renders it.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"userMessage":  userMsg,
+		"newSessionId": res.NewSessionID,
+		"agentName":    res.AgentName,
+		"artifactId":   res.ArtifactID,
+	})
+}
+
 // compactSession forces a conversation compaction now: it folds older history
 // into the rolling summary (via the conversation Manager) and returns a short
 // human-readable report for the chat.

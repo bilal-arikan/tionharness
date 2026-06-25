@@ -89,9 +89,11 @@ type Settings struct {
 	RecallMinScore   float64 `json:"recallMinScore"`
 	// Model-aware transcript budget (see internal/conversation/budget.go). The live
 	// budget is clamp(window * ContextBudgetFraction, MaxContextTokens, ContextBudgetCeil)
-	// when the model's context window is known. ContextBudgetCeil is the operative
-	// cap for big-window (1M) models — raise it to keep more history verbatim before
-	// the first silent compaction (the user's first message survives longer).
+	// when the model's context window is known. ContextBudgetFraction = 0 means "auto"
+	// → a context-rot-aware per-family share (providers.AdaptiveBudgetFraction); a
+	// positive value pins a fixed manual share. ContextBudgetCeil is the operative cap
+	// for big-window (1M) models — raise it to keep more history verbatim before the
+	// first silent compaction (trades recall precision for raw history, _Docs/17 §12).
 	ContextBudgetCeil     int     `json:"contextBudgetCeil"`
 	ContextBudgetFraction float64 `json:"contextBudgetFraction"`
 
@@ -106,6 +108,24 @@ type Settings struct {
 	// offers the core_memory_replace/append editing tools.
 	MemoryPressureWarn float64 `json:"memoryPressureWarn"`
 	CoreMemoryTools    bool    `json:"coreMemoryTools"`
+
+	// Context reset / handoff (Anthropic "harness design"). When HandoffAuto is on,
+	// an autonomous turn that hits the context limit writes a handoff artifact and
+	// continues in a FRESH session instead of only compacting in place.
+	// HandoffPressure is the context-fill ratio that allows it; HandoffMaxChain caps
+	// consecutive resets; HandoffWriteFile also drops the handoff to a file in the
+	// working dir. 0 values select the built-in defaults.
+	HandoffAuto      bool    `json:"handoffAuto"`
+	HandoffPressure  float64 `json:"handoffPressure"`
+	HandoffMaxChain  int     `json:"handoffMaxChain"`
+	HandoffWriteFile bool    `json:"handoffWriteFile"`
+
+	// Persistent progress (Anthropic claude-progress convention). When
+	// ProgressPersist is on, the todo_write checklist is persisted to
+	// <cwd>/.swarmgo/progress.json so it survives across sessions; ProgressResume
+	// injects it back into a fresh session's context at start.
+	ProgressPersist bool `json:"progressPersist"`
+	ProgressResume  bool `json:"progressResume"`
 
 	// Auto-reflect (dream cycle): consolidate journals into a reflection once the
 	// journal count crosses AutoReflectThreshold.
@@ -168,6 +188,7 @@ type Settings struct {
 	// touch any path); these brake that power on autonomous (no-human) turns.
 	AutonomousConfine    bool `json:"autonomousConfine"`    // confine fs/shell to the working dir on autonomous turns (default true)
 	GitWorktreeIsolation bool `json:"gitWorktreeIsolation"` // give autonomous sessions a per-session git worktree (default false)
+	AutonomousBootSeq    bool `json:"autonomousBootSeq"`    // inject the boot/verification-sequence reminder on autonomous turns (default true)
 
 	// Workspace backups — periodic, retention-bounded zip snapshots of every
 	// workspace's data directory. Off by default.
@@ -199,17 +220,34 @@ func Default() Settings {
 		KeepRecentMsgs:   8,
 		RecallTopN:       5,
 		RecallMinScore:   0.05,
-		// Big-window default: 1M models keep up to 512K of transcript verbatim.
-		ContextBudgetCeil:     512000,
-		ContextBudgetFraction: 0.6,
+		// Context-rot-aware default (2026-06-25, _Docs/17 §12): ceil 256K keeps the
+		// live window in the gradient's high-precision zone; fraction 0 = "auto"
+		// (per-family adaptive). Durability of folded detail comes from retrieval
+		// (memory / conversation_search / core blocks), not from a huge raw window.
+		ContextBudgetCeil:     262144,
+		ContextBudgetFraction: 0,
 
 		JournalCap:    50,
 		JournalMaxLen: 1024,
 		ReflectionCap: 20,
 
-		// MemGPT memory: warn at 75% context fill, offer the core editing tools.
-		MemoryPressureWarn: 0.75,
+		// MemGPT memory: warn at 70% context fill, offer the core editing tools. Lowered
+		// 0.75→0.70 (2026-06-25) to bring the "persist now" window earlier — pairs with
+		// the smaller raw budget so important facts are written before the earlier fold.
+		MemoryPressureWarn: 0.70,
 		CoreMemoryTools:    true,
+
+		// Context reset / handoff: off by default; the manual /handoff command and the
+		// handoff_session tool work regardless. Defaults match agent.DefaultHandoff*.
+		HandoffAuto:      false,
+		HandoffPressure:  0.90,
+		HandoffMaxChain:  20,
+		HandoffWriteFile: false,
+
+		// Persistent progress: on by default — only adds a per-project file and is
+		// transparent to existing behaviour.
+		ProgressPersist: true,
+		ProgressResume:  true,
 
 		AutoReflect:          true,
 		AutoReflectThreshold: 20,
@@ -256,6 +294,7 @@ func Default() Settings {
 		// isolation is opt-in (needs git + has setup cost).
 		AutonomousConfine:    true,
 		GitWorktreeIsolation: false,
+		AutonomousBootSeq:    true,
 
 		// Workspace backups off by default; daily cadence, keep a week of snapshots.
 		BackupEnabled:       false,
@@ -313,6 +352,14 @@ type DTO struct {
 	MemoryPressureWarn float64 `json:"memoryPressureWarn"`
 	CoreMemoryTools    bool    `json:"coreMemoryTools"`
 
+	HandoffAuto      bool    `json:"handoffAuto"`
+	HandoffPressure  float64 `json:"handoffPressure"`
+	HandoffMaxChain  int     `json:"handoffMaxChain"`
+	HandoffWriteFile bool    `json:"handoffWriteFile"`
+
+	ProgressPersist bool `json:"progressPersist"`
+	ProgressResume  bool `json:"progressResume"`
+
 	AutoReflect          bool `json:"autoReflect"`
 	AutoReflectThreshold int  `json:"autoReflectThreshold"`
 	AutoUserModel        bool `json:"autoUserModel"`
@@ -351,6 +398,7 @@ type DTO struct {
 
 	AutonomousConfine    bool `json:"autonomousConfine"`
 	GitWorktreeIsolation bool `json:"gitWorktreeIsolation"`
+	AutonomousBootSeq    bool `json:"autonomousBootSeq"`
 
 	BackupEnabled       bool   `json:"backupEnabled"`
 	BackupIntervalHours int    `json:"backupIntervalHours"`
@@ -405,6 +453,14 @@ func (s Settings) ToDTO() DTO {
 		MemoryPressureWarn: s.MemoryPressureWarn,
 		CoreMemoryTools:    s.CoreMemoryTools,
 
+		HandoffAuto:      s.HandoffAuto,
+		HandoffPressure:  s.HandoffPressure,
+		HandoffMaxChain:  s.HandoffMaxChain,
+		HandoffWriteFile: s.HandoffWriteFile,
+
+		ProgressPersist: s.ProgressPersist,
+		ProgressResume:  s.ProgressResume,
+
 		AutoReflect:          s.AutoReflect,
 		AutoReflectThreshold: s.AutoReflectThreshold,
 		AutoUserModel:        s.AutoUserModel,
@@ -443,6 +499,7 @@ func (s Settings) ToDTO() DTO {
 
 		AutonomousConfine:    s.AutonomousConfine,
 		GitWorktreeIsolation: s.GitWorktreeIsolation,
+		AutonomousBootSeq:    s.AutonomousBootSeq,
 
 		BackupEnabled:       s.BackupEnabled,
 		BackupIntervalHours: s.BackupIntervalHours,
@@ -498,6 +555,14 @@ type Patch struct {
 	MemoryPressureWarn *float64 `json:"memoryPressureWarn"`
 	CoreMemoryTools    *bool    `json:"coreMemoryTools"`
 
+	HandoffAuto      *bool    `json:"handoffAuto"`
+	HandoffPressure  *float64 `json:"handoffPressure"`
+	HandoffMaxChain  *int     `json:"handoffMaxChain"`
+	HandoffWriteFile *bool    `json:"handoffWriteFile"`
+
+	ProgressPersist *bool `json:"progressPersist"`
+	ProgressResume  *bool `json:"progressResume"`
+
 	AutoReflect          *bool `json:"autoReflect"`
 	AutoReflectThreshold *int  `json:"autoReflectThreshold"`
 	AutoUserModel        *bool `json:"autoUserModel"`
@@ -536,6 +601,7 @@ type Patch struct {
 
 	AutonomousConfine    *bool `json:"autonomousConfine"`
 	GitWorktreeIsolation *bool `json:"gitWorktreeIsolation"`
+	AutonomousBootSeq    *bool `json:"autonomousBootSeq"`
 
 	BackupEnabled       *bool   `json:"backupEnabled"`
 	BackupIntervalHours *int    `json:"backupIntervalHours"`

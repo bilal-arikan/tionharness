@@ -115,6 +115,8 @@ func (s *Server) applySettings() {
 	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen)
 	s.tun.SetReflectionCap(cur.ReflectionCap)
 	s.tun.SetMemoryControls(cur.MemoryPressureWarn, cur.CoreMemoryTools)
+	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffPressure, cur.HandoffMaxChain, cur.HandoffWriteFile)
+	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
 	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
 	s.tun.SetUserModel(cur.AutoUserModel)
 	s.tun.SetShellEnabled(cur.EnableShell)
@@ -123,7 +125,7 @@ func (s *Server) applySettings() {
 	s.tun.SetDelegationEnabled(cur.EnableDelegation)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
-	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.GitWorktreeIsolation)
+	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.GitWorktreeIsolation, cur.AutonomousBootSeq)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
 	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold, cur.CompactModel)
 	if s.backups != nil {
@@ -250,10 +252,12 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/git/init", s.handleGitInit)
 	mux.HandleFunc("POST /api/git/config", s.handleGitConfig)
 	mux.HandleFunc("POST /api/sessions/{id}/summary", s.handleSessionSummary)
+	mux.HandleFunc("POST /api/sessions/{id}/handoff", s.handleSessionHandoff)
 	mux.HandleFunc("POST /api/sessions/{id}/run-flow", s.handleSessionRunFlow)
 	mux.HandleFunc("POST /api/sessions/{id}/run-flow-stream", s.handleSessionRunFlowStream)
 	mux.HandleFunc("POST /api/sessions/{id}/read", s.handleMarkSessionRead)
 	mux.HandleFunc("GET /api/sessions/{id}/info", s.handleSessionInfo)
+	mux.HandleFunc("GET /api/sessions/{id}/progress", s.handleSessionProgress)
 	// Debug: preview the EXACT next-turn context (system + dynamic + transcript +
 	// tools) this session's agent would be sent. Optional ?message= sample turn.
 	mux.HandleFunc("GET /api/sessions/{id}/context-preview", s.handleSessionContextPreview)

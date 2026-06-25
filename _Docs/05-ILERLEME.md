@@ -2,6 +2,154 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-25**
 
+## Generator↔Evaluator (GAN-benzeri) flow şablonu ✅ (2026-06-25)
+
+Anthropic *"harness design"* makalesindeki **self-evaluation problemi** (ajan kendi işini
+körü körüne över) için sözleşmeli **generator↔evaluator** iterasyon döngüsü: işi yapan
+generator ile yargılayan **ayrı, şüpheci** evaluator; sprint contract + gerçek Playwright
+testi + kod-konumlu bug raporu + skora göre **refine/pivot**. **Yeni motor kodu yok** —
+mevcut node tipleriyle, döngünün (cycle) bilinçli kullanımıyla kuruldu.
+
+- **Motor teyidi:** `orchestration.Validate()` acyclicity kontrol **etmiyor**, engine döngüye
+  izin verip `maxSteps=50` ile sınırlıyor → `evaluate → decide → generate` geri-kenarı
+  doğrudan kurulabiliyor. (Eski `swarmgo-flows` skill'i "must be acyclic" diyordu — **yanlıştı**,
+  düzeltildi.)
+- **Kısıt → karar:** branch yalnız string eşler (sayısal eşik yok) → skor→pivot kararı
+  **keyword verdict** (`VERDICT: SHIP|REFINE|PIVOT`, `decide` `matchMode:regex` son satıra
+  demirli); döngüde graf çıktısı üzerine yazıldığından skor **trend'i** `core:sprint-scorelog`
+  çekirdek belleğe append edilir, sözleşme `core:sprint-contract`'ta yaşar.
+- **Dağıtım:** gömülü gallery şablonu `gan-loop` (`frontend/src/lib/flowTemplates.ts`) +
+  market paketleri `flow.gan-generator-evaluator` / `agent.skeptical-evaluator` /
+  `mcp.playwright` (global market dizinine yazıldı) + yeni default skill
+  `swarmgo-gan-loop`. Şablon agent-bağımsız → kurulumdan sonra **iki ayrı ajan** atanır.
+- **Test:** `engine_test.go` — `TestValidate_AllowsCyclicGraph`, `TestRun_GANLoop_RefinesThenShips`
+  (2× REFINE → SHIP → finalize), `TestRun_GANLoop_StepCapBackstop` (hiç ship etmeyen →
+  `step cap` hatası). `go build`/`vet`/`test ./internal/orchestration` ✅; `tsc -b`/`vite build` ✅.
+- Detay: [`15-FLOW-CANVAS.md`](15-FLOW-CANVAS.md) §Generator↔Evaluator döngü şablonu;
+  kullanım kılavuzu: `swarmgo-gan-loop` skill.
+
+## Yapılandırılmış subagent görev sözleşmesi ✅ (2026-06-25)
+
+Anthropic *"Multi-agent research system"* rehberi: her subagent'a **objective +
+output format + tool/source guidance + boundaries** verilmezse iş tekrarı/boşluk
+oluşur. SwarmGo'da `run_subagent` yalnız serbest-metin `task` alıyordu; bu 4 alanı
+yapısal teşvik etmiyordu.
+
+- **Şema:** `run_subagent` input'una **üç opsiyonel alan** eklendi — `objective`,
+  `output_format`, `boundaries` (`tools/subagent.go`: `runSubagentInput` + `RunAgentSpec`
+  + JSON şema + `Call()` parse). `target`+`task` hâlâ tek zorunlu çift.
+- **Enjeksiyon:** `agent/subagent.go::delegationContract()` dolu alanlardan bir
+  **"Task contract"** bloğu üretir, `runAgent()` bunu subagent system-prompt'una
+  persona'dan **sonra** ekler (`req.System`). Hiçbir alan yoksa blok boş → eski düz-`task`
+  davranışı bayt-bazında korunur. Native + CLI köprüsü ikisi de `runAgent`'tan geçtiği
+  için tek nokta yeterli. Açık karar: sözleşme şu an yalnız **sync** dalda (async →
+  `SpawnSession`, ileride genişletilebilir).
+- **Teşvik:** tool description + `input_examples`'a yapılandırılmış örnek eklendi →
+  model 4 alanı doldurmaya yönlendirilir.
+- **Test** `agent/subagent_test.go::TestDelegationContract` (boş→"", dolu→satırlar,
+  tek-alan izolasyonu). `go build`/`vet`/`test ./...` ✅.
+- Detay: [`25-SUBAGENT-ISOLATION.md`](25-SUBAGENT-ISOLATION.md) §Yapılandırılmış görev sözleşmesi.
+
+## Kalıcı todo / PROGRESS dosyası ✅ (2026-06-25)
+
+Anthropic *"Effective harnesses for long-running agents"* + *"Effective context
+engineering"* makalelerindeki **kalıcı not dosyası** (`claude-progress.txt` +
+`feature_list.json` `passes` boolean) konvansiyonu SwarmGo'ya getirildi. `todo_write`
+listesi artık **diske kalıcı**: oturumlar arası kaybolmuyor, yeni oturum devralıyor.
+
+- **Sorun:** `todo_write` stateless'tı; liste yalnız oturum-içi (mesaj trace'inden
+  `todoContextBlock` ile yeniden inşa) yaşıyordu. Oturum restart/yeni oturum/ajan
+  değişiminde kayboluyordu. Core memory (serbest persona/human) bunu karşılamıyor.
+- **Çözüm:** Liste, çalışma dizinine bağlı **`<cwd>/.swarmgo/progress.json`**'a
+  yazılır (cwd yoksa `<store>/progress/<agentID>/`); fresh oturum açılışında
+  geri yüklenip "Resumed progress" bloğu olarak `SystemDynamic`'e enjekte edilir.
+  `completed` ≡ Anthropic `passes:true`. Rolling `log` = `claude-progress.txt`.
+- **Yeni paket** `internal/progress` (atomik JSON oku/yaz). **Sink** ArtifactSink
+  deseninin ikizi: `tools/todosink.go` (ctx) + `agent/todosink.go` (`NewTodoSink`).
+  Native (`toolloop.go` fallback) + chat (`chat_stream.go`) + CLI
+  (`mcp_interaction.go callTodo` + `chat_control.go` run sink + autonomous) yolları.
+- **Geri yükleme** `api/todos.go::todoContextBlock` (cwd+agentID+resume); fresh
+  oturumda diskten devralır (`renderResumedBlock`). `agent/workdir_ctx.go` →
+  `SessionWorkdir`; `db.DB.Root()`.
+- **Ayar** `progressPersist`/`progressResume` (vars. açık) — settings/DTO/Patch +
+  `Tunables.SetProgress` + `applySettings` + UI (Ayarlar ▸ Bağlam ▸ "Kalıcı
+  ilerleme"). Migration yok, opt-in (kapalı → eski efemeral davranış).
+- **Test** `progress` (round-trip/trim/missing), `agent` (cwd+store fallback),
+  `tools` (sink çağrısı/no-op/hata-yutma), `api` (resumed block/progressDir). `go
+  test ./...` ✅, `go vet` ✅, frontend build ✅.
+
+**İkinci tur (aynı gün) — zenginleştirmeler:**
+- **`feature_list` zenginliği:** `todo_write` öğelerine opsiyonel `category` +
+  `steps` (Anthropic feature_list paritesi); şema + `TodoSinkItem` +
+  `progress.TodoItem` + sink mapping uçtan uca taşır (`omitempty`).
+- **`swarmgo-progress` default skill'i:** ajana otomatik progress.json + insan-okunur
+  `PROGRESS.md` konvansiyonunu öğretir (`internal/skills/defaults/swarmgo-progress/`;
+  `//go:embed` ile otomatik, baseline skill setine girer).
+- **UI görüntüleyici:** `GET /api/sessions/{id}/progress` (`api/progress.go`) +
+  `SessionDetailPanel` "Kalıcı ilerleme" salt-okunur kartı (`ProgressCard` — statü
+  işaretçili maddeler + category + son log satırları). `go test ./...` 438 ✅.
+- Detay: [`36-KALICI-ILERLEME.md`](36-KALICI-ILERLEME.md).
+
+## Otonom turda boot-verification sırası ✅ (2026-06-25)
+
+Anthropic *"Effective harnesses for long-running agents"* makalesindeki **standart
+oturum açılış sırası** (yönelim → hatırlama → tek görev seç → temel testi doğrula →
+işi yap → döngüyü kapat) SwarmGo'nun otonom turlarına getirildi. Kayıp bağlamı telafi
+eden, düşük-riskli, çoğunlukla skill+doküman değişikliği.
+
+- **Skill reçetesi (ana iş):** `swarmgo-autonomous-ops/SKILL.md` → yeni **§10 "The
+  autonomous boot sequence"** (Step 0 Orient → Step 5 Close); referans setup'a `0.` adımı
+  ve Pitfalls'a "Skipping the boot sequence" maddesi. Reçete `.swarmgo/progress.json`
+  (progressPersist) + `list_tasks` (append-only board) + git log'u "hafıza" olarak
+  okur; kapanışta git commit + append-only not. One-task-per-run + append-only kullanıcı
+  tercihiyle hizalı.
+- **Minimal kod kancası:** `runtime.go autonomousSystemPrompt` artık `autonomousBootReminder`
+  (6 satırlık, skill'e yönlendiren pointer) enjekte eder — tek noktadan **dört otonom yol**
+  (scheduler/spawn/flow/subagent; `executor.go`+`subagent.go` ortak kurucu). Chat turları
+  (composeTurnRequest) etkilenmez. Pointer-only → cache'li statik prefix şişmez.
+- **Gate:** `autonomousBootSeq` ayarı (vars. **true**) — `settings.go` (struct+default+DTO+patch)
+  + `store.go` apply + `tunables.go` (alan/default/`SetWorkdirGuards`/`AutonomousBootSeq()`)
+  + `server.go applySettings`. Eski config'lerde `Default()` backfill'i ile true kalır.
+  Frontend: `types/settings.ts` + `SettingsPanel.tsx` payload + `appPanels.tsx` toggle
+  ("Otonom boot doğrulama sırası").
+- **Test:** `bootseq_test.go` (gate default+SetWorkdirGuards köprüsü + reminder içeriği);
+  `go build ./...` + `go test` (159 vaka: agent/settings/api) + `tsc --noEmit` yeşil.
+- İlişki: Görev #2 kalıcı PROGRESS (`progressPersist`/`progressResume` zaten mevcut) bu
+  reçetenin Recall/Close adımlarını besler; dosya yoksa git log + board'a düşer.
+- Detay: `_Docs\33-DIS-AJAN-OTOMASYONU.md` §Otonom Boot Sırası.
+
+## Context-rot farkındalığı + adaptif bütçe stratejisi ✅ (2026-06-25)
+
+Anthropic *Effective context engineering* makalesi: token arttıkça recall hassasiyeti düşer ("context rot", `n²` dikkat ilişkisi → **performans gradyanı**, uçurum değil). SwarmGo'nun önceki "her şeyi ham tut" bahsi (512K/0.6) bu rot ile bilinçli bir takastı. Dayanıklılığın aslında **retrieval katmanında** (memory/`conversation_search`/core blocks) olduğu, ham pencere boyutunda olmadığı tespit edildi → ham pencere küçültülebilir, recall kaybetmeden.
+
+- **Adaptif fraction:** `providers.AdaptiveBudgetFraction(provider, model)` — `ContextWindowFor`'un aile sınıflamasını yeniden kullanır; Opus/Sonnet 0.45, Haiku/Fable 0.40, MiniMax/DeepSeek/Gemini 0.35, bilinmeyen 0 (caller fallback).
+- **Yeni semantik:** `ContextBudgetFraction = 0` → **otomatik/adaptif** (pozitif = manuel sabit). `EffectiveBudget` `fraction<=0`'da adaptif tabloyu kullanır; `Manager.SetBudgetShape` artık 0'ı (auto) saklar; `store.go` validate 0'ı korur (negatif → 0).
+- **Yeni varsayılanlar:** `ContextBudgetCeil` 512K→**256K** (`262144`), `ContextBudgetFraction` 0.6→**0 (auto)**, `memoryPressureWarn` 0.75→**0.70** (`settings.go`+`tunables.go`). Eski `0.6` persisted değer manuel sabit olarak yaşar; yeni kurulum adaptif başlar.
+- **Frontend:** Ayarlar▸Bağlam "Pencere oranı"/"Bütçe tavanı" hint'leri auto+rot açıklamasıyla güncellendi (`appPanels.tsx`).
+- **Test:** `budget_test.go` (`TestEffectiveBudgetAdaptive`) + `context_window_test.go` (`TestAdaptiveBudgetFraction`); `go build ./...` + `go test ./internal/conversation ./internal/providers ./internal/settings` yeşil (83 test).
+- **Doküman:** `_Docs\17` yeni **§12** (takas analizi + strateji + tablolar + mermaid) + §7 çapraz-referans; `swarmgo-settings` skill + `swarmgo-project` skill güncellendi.
+
+## Context Reset + Handoff Artifact ✅ (2026-06-25)
+
+Anthropic "harness design for long-running apps" bulgusu: in-place compaction tek başına **"context anxiety"**yi (model limite yaklaşınca erken toparlama) çözmez. Çözüm = **context reset** + **handoff artifact**: pencereyi özetlemek yerine, devamı taşıyan bir handoff dosyası yazıp **temiz bir oturumda** sürdür. SwarmGo'da önceden yalnız in-place rolling-summary vardı; bu, onun opt-in tamamlayıcısı.
+
+- **Çekirdek:** `internal/conversation/handoff.go` (`handoffPrompt` 10-bölüm + DONE/TODO + Next Step, `HandoffEnv`, `BuildHandoff` — compaction çekirdeğini `KindCompact` ile yeniden kullanır) + `internal/agent/handoff.go` (`HandoffSession`: üret→artifact yaz→(ops.) `<workdir>/.swarmgo/handoff.md`→`SpawnSession(ParentSessionID)` ile taze oturum→tombstone; `maybeAutoHandoff`/`handoffChainDepth`/`handoffEnv`/`buildContinuationPrompt`).
+- **Üç tetik:** manuel `/handoff` (`POST /api/sessions/{id}/handoff` → `summary.go handleSessionHandoff`); ajan aracı `handoff_session` (`tools/builtin_handoff.go`, self-manage gated, `toolsetup.go` kapanışı); **otomatik** (yalnız otonom tur — `runSpawn`/`deliverPrompt` tur-sonu; overflow sinyali `callkind.go withOverflowFlag`/`markContextOverflow`, tetik `toolloop.go` reactive compaction'da).
+- **Ayarlar:** `HandoffAuto` (vars. **kapalı**) / `HandoffPressure` (0.90) / `HandoffMaxChain` (20) / `HandoffWriteFile` (kapalı) — `settings.go`+`store.go` clamp + `server.go applySettings → tun.SetHandoff`; UI Ayarlar▸Bağlam "Context reset (handoff)" bölümü. Tunables `DefaultHandoffPressure`/`DefaultHandoffMaxChain`.
+- **Soyağacı:** `db.Session.ParentSessionID`/`HandoffArtifactID` (+`SetSessionHandoffArtifact`); `GET .../info` döner; UI `SessionDetailPanel` "↩ Devraldığı oturum" tıklanır link + `useChatStream` `/handoff` komutu yeni oturuma geçer.
+- **Test:** `conversation/handoff_test.go` (env+transcript enjeksiyonu, boş-transcript guard) + `agent/handoff_test.go` (chain-depth, `maybeAutoHandoff` no-op yolları, continuation prompt, title). `go build`/`vet` temiz; `go test ./internal/conversation ./internal/agent` yeşil (mevcut paralel `TestEffectiveBudget` WIP'i hariç). Frontend `tsc`+`vite build` yeşil.
+- claude-cli `--resume` ile uyumlu (reset zaten cold yeni oturum açar). Detay: **`_Docs\35-CONTEXT-RESET-HANDOFF.md`**.
+
+## Market — katman sadeleştirme: bundled + workspace tier'ları kaldırıldı ✅ (2026-06-25)
+
+Market pack katmanları üçten (bundled/global/workspace) **bir yerele** (global) indirildi; uzak registry 4. kaynak olarak kalır.
+
+- **Kaldırılanlar:** `internal/market/defaults.go` (`//go:embed defaults`) + `internal/market/defaults/` klasörü + `EnsureDefaults` çağrısı (runtime.go) + workspace pack tier'ı. Binary artık market item taşımaz, workspace'te `market/` klasörü oluşmaz.
+- **`market.New(globalDir, ledgerDir)`:** tek yerel tier = global; `Publish` global dizine yazar; install ledger (`installed.json`) per-workspace **kökte** (eski `<workspace>/market/` yerine; `workspaceLedgerDir`). Store'da `writeDir` → `globalDir`+`ledgerDir` ayrımı.
+- **Mevcut paketler korundu:** 28 başlangıç paketi zaten global dizinde (`~/.swarmgo/market`); silinmedi. Yeni kurulumlarda market boş başlar → global'e elle paket konur veya uzak registry eklenir.
+- **Test:** `store_test.go` `EnsureDefaults`'tan arındırıldı (global'e elle pack yazıp test eder) + ledger/semver testleri eklendi; `go build ./...` + `go test` (145, market/api/agent) yeşil. Çalışan instance global'den 28 paket (`source=global`) döndürüyor.
+- Detay: `_Docs\21-MARKET.md` §3.1.
+
 ## Skill grupları — katlanabilir (fold in/out) gruplama ✅ (2026-06-25)
 
 Skiller artık serbest-metin bir **`group`** etiketiyle organize edilebiliyor; Skills

@@ -206,6 +206,24 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewSendMessageTool(agent.ID, func(ctx context.Context, to, summary, message string) (string, error) {
 				return r.DeliverAgentMessage(ctx, agent.ID, to, summary, message)
 			}),
+			// Context reset: let the agent hand off to a fresh session when it nears
+			// the context limit (Anthropic "context reset" pattern) — operates on the
+			// CURRENT session (resolved from the context) and the running agent.
+			tools.NewHandoffSessionTool(func(ctx context.Context, reason string) (tools.HandoffResult, error) {
+				sid := SessionIDFrom(ctx)
+				if sid == "" {
+					return tools.HandoffResult{}, fmt.Errorf("no active session to hand off")
+				}
+				sess, err := r.db.GetSession(ctx, sid)
+				if err != nil {
+					return tools.HandoffResult{}, err
+				}
+				res, err := r.HandoffSession(ctx, sess, agent, HandoffOptions{Reason: HandoffReasonAgent, CreatedBy: agent.ID})
+				if err != nil {
+					return tools.HandoffResult{}, err
+				}
+				return tools.HandoffResult{NewSessionID: res.NewSessionID, AgentName: res.AgentName, ArtifactID: res.ArtifactID}, nil
+			}),
 			// Flows.
 			tools.NewCreateFlowTool(r.db, agent.ID),
 			tools.NewUpdateFlowTool(r.db, agent.ID),

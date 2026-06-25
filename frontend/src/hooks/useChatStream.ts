@@ -578,6 +578,40 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionId, activeAgentId, setMessages, setError],
   )
 
+  // Context reset (/handoff): write a handoff artifact for the current session and
+  // spawn a fresh one to continue in a clean window, then switch the UI to it. The
+  // old session keeps a tombstone linking forward; the new session opens with the
+  // handoff inline.
+  const handoff = useCallback(() => {
+    const sid = activeSessionId
+    if (!sid) return
+    const now = Math.floor(Date.now() / 1000)
+    const userTmp = `cmd-u-${Date.now()}`
+    const botTmp = `cmd-a-${Date.now()}`
+    const cmdBubble: Message = { id: userTmp, sessionId: sid, role: 'user', text: '/handoff', createdAt: now }
+    const placeholder: Message = {
+      id: botTmp,
+      sessionId: sid,
+      role: 'assistant',
+      agentId: activeAgentId ?? undefined,
+      text: '⏳ Context reset — handoff yazılıyor ve temiz oturum başlatılıyor…',
+      steps: '[]',
+      createdAt: now,
+    }
+    setMessages((prev) => [...prev, cmdBubble, placeholder])
+    api
+      .handoffSession(sid)
+      .then(({ newSessionId }) => {
+        // Refresh the list (old tombstone + new session) and jump to the fresh one.
+        refreshSessions()
+        if (newSessionId) selectSession(newSessionId)
+      })
+      .catch((e) => {
+        setMessages((prev) => prev.filter((m) => m.id !== userTmp && m.id !== botTmp))
+        setError((e as Error).message)
+      })
+  }, [activeSessionId, activeAgentId, setMessages, setError, refreshSessions, selectSession])
+
   // Run a flow from the chat composer, streaming node-by-node progress over SSE:
   // an optimistic user bubble + a live assistant bubble whose transcript grows as
   // each node finishes, replaced by the persisted reply when the run completes.
@@ -666,6 +700,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     () => [
       { name: 'reflect', icon: '✦', description: 'Ajana yansıma (dream cycle) ürettir', run: () => summarize('reflect') },
       { name: 'compact', icon: '🗜', description: 'Sohbeti şimdi özete sıkıştır', run: () => summarize('compact') },
+      { name: 'handoff', icon: '↪', description: 'Context reset — temiz pencerede devam et', run: () => handoff() },
       { name: 'memory', icon: '⛁', description: 'Hafıza kayıtlarını özetle', run: () => summarize('memory') },
       { name: 'tools', icon: '🔌', description: 'Kullanılabilir araçları listele', run: () => summarize('tools') },
       { name: 'board', icon: '🗂', description: 'Görev panosunu özetle', run: () => summarize('board') },
@@ -681,7 +716,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         }),
       ),
     ],
-    [summarize, flows, runFlow],
+    [summarize, handoff, flows, runFlow],
   )
 
   // Derive the active session's view of the per-session streaming state.

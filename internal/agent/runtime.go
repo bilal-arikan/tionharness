@@ -213,9 +213,8 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	// Seed the shipped default skills into the global dir (idempotent, never
 	// overwrites) so every workspace inherits the SwarmGo guide skills.
 	_ = skills.EnsureDefaults(globalSkillsDir())
-	// Seed the bundled marketplace starter packs into the global market dir
-	// (idempotent, never overwrites) so every workspace can browse them.
-	_ = market.EnsureDefaults(marketGlobalDir())
+	// The marketplace has no bundled/workspace tiers: packs live only in the
+	// global market dir (<DataDir>/market) and remote registries. No seeding.
 	return &Runtime{
 		db:        database,
 		providers: registry,
@@ -229,7 +228,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		logs:      logs,
 		logger:    logger,
 		skills:    skills.New(globalSkillsDir(), workspaceSkillsDir(workDir)),
-		market:    market.New(marketGlobalDir(), workspaceMarketDir(workDir)),
+		market:    market.New(marketGlobalDir(), workspaceLedgerDir(workDir)),
 		mcpPool:   mcp.NewPool(),
 	}
 }
@@ -351,13 +350,15 @@ func marketGlobalDir() string {
 	return filepath.Join(home, ".swarmgo", "market")
 }
 
-// workspaceMarketDir is this workspace's market directory (<workspace>/market),
-// a sibling of store/, skills/ and config/. Empty when workDir is unknown.
-func workspaceMarketDir(workDir string) string {
+// workspaceLedgerDir is the workspace root where the market install ledger
+// (installed.json) is kept — per-workspace, since installs (skills/agents/…) are
+// per-workspace. The market itself no longer keeps a per-workspace pack tier;
+// only this small tracking file lives here. Empty when workDir is unknown.
+func workspaceLedgerDir(workDir string) string {
 	if workDir == "" {
 		return ""
 	}
-	return filepath.Join(filepath.Dir(workDir), "market")
+	return filepath.Dir(workDir)
 }
 
 // SkillsCatalogBlockForAgent renders the Available Skills system-prompt section
@@ -809,6 +810,14 @@ func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
 	if sb := r.SkillsCatalogBlockForAgent(a); sb != "" {
 		out = strings.TrimSpace(out + "\n\n" + sb)
 	}
+	// Boot/verification sequence (Anthropic long-running-agent harness discipline):
+	// a headless turn starts with a fresh context, so nudge it through the fixed
+	// orient → recall → select-one → verify-baseline → work → close-the-loop routine
+	// before acting. We inject only a pointer to keep the cached prefix small; the
+	// full recipe lives in the swarmgo-autonomous-ops skill.
+	if r.tun.AutonomousBootSeq() {
+		out = strings.TrimSpace(out + "\n\n" + autonomousBootReminder)
+	}
 	// Wall-clock awareness for headless runs: chat turns get this via
 	// composeTurnRequest's dynamic suffix; autonomous turns build their own request,
 	// so inject the date/time line here too (replaces the removed get_current_time).
@@ -816,3 +825,16 @@ func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
 		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)"))
 	return out
 }
+
+// autonomousBootReminder nudges every headless turn (schedule/spawn/flow/subagent)
+// to run the fixed boot/verification sequence before acting. The full recipe lives
+// in the swarmgo-autonomous-ops skill (§10); we inject only this pointer so the
+// cached system prefix stays small. Mirrors the long-running-agent "open the
+// project the same way every time" discipline that compensates for lost context.
+const autonomousBootReminder = "# Autonomous boot sequence\n" +
+	"This is a headless turn with a fresh context. Before acting, run the boot " +
+	"sequence: orient (pwd/branch) → recall (git log + the persisted progress file " +
+	"if any + list_tasks) → select ONE task → verify the baseline (smoke/e2e) and " +
+	"fix it first if it is red → do the one task → close the loop (git commit + " +
+	"append a board/progress note, never overwrite a prior note). " +
+	"Full recipe: use_skill \"swarmgo-autonomous-ops\" (§10)."

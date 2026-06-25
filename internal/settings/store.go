@@ -277,6 +277,22 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.CoreMemoryTools != nil {
 		next.CoreMemoryTools = *p.CoreMemoryTools
 	}
+	if p.HandoffAuto != nil {
+		next.HandoffAuto = *p.HandoffAuto
+	}
+	if p.HandoffPressure != nil {
+		next.HandoffPressure = *p.HandoffPressure
+	}
+	applyInt(&next.HandoffMaxChain, p.HandoffMaxChain)
+	if p.HandoffWriteFile != nil {
+		next.HandoffWriteFile = *p.HandoffWriteFile
+	}
+	if p.ProgressPersist != nil {
+		next.ProgressPersist = *p.ProgressPersist
+	}
+	if p.ProgressResume != nil {
+		next.ProgressResume = *p.ProgressResume
+	}
 	if p.AutoReflect != nil {
 		next.AutoReflect = *p.AutoReflect
 	}
@@ -331,6 +347,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 
 	applyBool(&next.AutonomousConfine, p.AutonomousConfine)
 	applyBool(&next.GitWorktreeIsolation, p.GitWorktreeIsolation)
+	applyBool(&next.AutonomousBootSeq, p.AutonomousBootSeq)
 
 	applyBool(&next.BackupEnabled, p.BackupEnabled)
 	applyInt(&next.BackupIntervalHours, p.BackupIntervalHours)
@@ -439,9 +456,9 @@ func normalize(v Settings) Settings {
 	}
 	// Model-aware transcript budget. Ceil 0 → restore the default (a blank field
 	// must not disable big-window budgeting); clamp to a sane band. Fraction is a
-	// window share in (0,1]; 0 → default.
+	// window share in [0,1]: 0 = "auto" (per-family adaptive, preserved), >0 = fixed.
 	if v.ContextBudgetCeil <= 0 {
-		v.ContextBudgetCeil = 512000
+		v.ContextBudgetCeil = 262144
 	}
 	if v.ContextBudgetCeil < 8000 {
 		v.ContextBudgetCeil = 8000
@@ -449,8 +466,8 @@ func normalize(v Settings) Settings {
 	if v.ContextBudgetCeil > 2000000 {
 		v.ContextBudgetCeil = 2000000
 	}
-	if v.ContextBudgetFraction <= 0 {
-		v.ContextBudgetFraction = 0.6
+	if v.ContextBudgetFraction < 0 {
+		v.ContextBudgetFraction = 0 // negative is invalid → auto
 	}
 	if v.ContextBudgetFraction > 1 {
 		v.ContextBudgetFraction = 1
@@ -480,6 +497,25 @@ func normalize(v Settings) Settings {
 	}
 	if v.MemoryPressureWarn > 1 {
 		v.MemoryPressureWarn = 1
+	}
+	// Handoff pressure ratio: 0 selects the default; otherwise clamp to a sane band
+	// (well above the memory-pressure warning, below a full window).
+	if v.HandoffPressure != 0 {
+		if v.HandoffPressure < 0.5 {
+			v.HandoffPressure = 0.5
+		}
+		if v.HandoffPressure > 0.99 {
+			v.HandoffPressure = 0.99
+		}
+	}
+	// Handoff chain depth cap: 0 selects the default; otherwise clamp to [1,100].
+	if v.HandoffMaxChain != 0 {
+		if v.HandoffMaxChain < 1 {
+			v.HandoffMaxChain = 1
+		}
+		if v.HandoffMaxChain > 100 {
+			v.HandoffMaxChain = 100
+		}
 	}
 	// Auto-reflect threshold: at least 2 entries to summarize; cap at 1000.
 	if v.AutoReflectThreshold < 2 {

@@ -491,3 +491,7 @@ verir. N4–N6 Letta paritesini artırır ama daha büyük; N5/N7/N8 başka madd
   C5 (recency+importance recall), HA-1 (kullanıcı modelleme).
 - **`17-TOKEN-OPTIMIZASYON.md`** — bağlam bütçesi ve compaction'ın diğer yarısı.
 - **`08-DEPOLAMA.md`** — `knowledge_sources` dosya-tabanlı depolama.
+- **`36-KALICI-ILERLEME.md`** — kalıcı todo/PROGRESS dosyası. Core memory'nin
+  **tamamlayıcısıdır, ikamesi değil**: core = serbest persona/human (ajan kim,
+  kullanıcı kim); progress = yapılandırılmış görev durumu (ne bitti / sırada ne var),
+  proje çalışma dizinine bağlı, oturumlar arası devralınır.

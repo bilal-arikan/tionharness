@@ -251,6 +251,14 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		sink := newArtifactSink(database, session.ID, agentRow.ID, wsp.Runtime.Emit)
 		run.setArtifacts(sink)
 		turnCtx := tools.WithArtifacts(ctx, sink)
+		// Persistent progress: bind a todo sink so todo_write persists the checklist
+		// to the project's progress file on both tool paths (native via context, CLI
+		// via the run). Keyed to this session's working dir. Gated by ProgressPersist.
+		if s.tun.ProgressPersist() {
+			todoSink := wsp.Runtime.NewTodoSink(session.ID, agentRow.ID, wsp.Runtime.SessionWorkdir(session.ID))
+			run.setTodoSink(todoSink)
+			turnCtx = tools.WithTodoSink(turnCtx, todoSink)
+		}
 		// Stamp the session id so the runtime can resolve this session's WorkingDir
 		// (cwd) for the fs/shell sandbox and provider cwd.
 		turnCtx = agent.WithSessionID(turnCtx, session.ID)

@@ -11,6 +11,7 @@ import type {
   BrowseResp,
   GitInfo,
   SessionUsageDetail,
+  SessionProgress,
 } from '../types'
 import { req } from './client'
 
@@ -85,6 +86,14 @@ export const sessionApi = {
       method: 'POST',
       body: JSON.stringify({ kind }),
     }),
+  // Context reset (/handoff): write a handoff artifact for this session and spawn
+  // a FRESH session to continue the work in a clean window. Returns the new
+  // session id (the UI switches to it) and the user "/handoff" bubble.
+  handoffSession: (sessionId: string) =>
+    req<{ userMessage: Message; newSessionId: string; agentName: string; artifactId: string }>(
+      `/api/sessions/${sessionId}/handoff`,
+      { method: 'POST' },
+    ),
   // Run a flow and record its result as a turn in this session (user input +
   // assistant transcript). Powers triggering flows from the chat "/" menu.
   runFlowInSession: (sessionId: string, flowId: string, input: string) =>
@@ -121,6 +130,11 @@ export const sessionApi = {
   // agentUsage — this conversation's own cost, not the agent's whole-day total.
   sessionUsageDetail: (sessionId: string) =>
     req<SessionUsageDetail>(`/api/sessions/${sessionId}/usage-detail`),
+
+  // Persistent progress (durable todo_write checklist + rolling log) for the
+  // read-only viewer card. Resolved from the session's working dir / store fallback.
+  sessionProgress: (sessionId: string) =>
+    req<SessionProgress>(`/api/sessions/${sessionId}/progress`),
 
   // Debug: preview the exact next-turn context (system + dynamic + transcript +
   // tools) the session's agent would be sent. Optional sample "next" user message.

@@ -85,10 +85,36 @@ type Tunables struct {
 	autonomousConfine    bool // confine fs/shell to the working dir on autonomous turns (default on)
 	gitWorktreeIsolation bool // give autonomous sessions a per-session git worktree (default off)
 
+	// Autonomous boot/verification sequence (Anthropic long-running-agent harness
+	// discipline). When on, headless turns get a short reminder to orient → recall
+	// → select one task → verify the baseline → work → close the loop before acting.
+	autonomousBootSeq bool // inject the boot-sequence reminder on autonomous turns (default on)
+
 	// MemGPT-style self-editing memory (C6).
 	memoryPressureWarn float64 // context-fill ratio (0..1) above which the agent is warned to persist; 0 = off
 	coreMemoryTools    bool    // offer the core_memory_replace/append tools (default on)
+
+	// Context reset / handoff (Anthropic "harness design" pattern). When a long
+	// autonomous turn runs up against the context limit, in-place compaction alone
+	// leaves "context anxiety"; instead the runtime can write a handoff artifact and
+	// spawn a FRESH session to continue in a clean window.
+	handoffAuto      bool    // auto-reset after an autonomous turn that hit the context limit (default off)
+	handoffPressure  float64 // context-fill ratio above which auto-reset is allowed (0 → DefaultHandoffPressure)
+	handoffMaxChain  int     // max reset-chain depth before falling back to plain compaction (0 → DefaultHandoffMaxChain)
+	handoffWriteFile bool    // also write the handoff to <workdir>/.swarmgo/handoff.md (default off)
+
+	// Persistent progress (Anthropic claude-progress convention). When on, the
+	// todo_write checklist is persisted to <cwd>/.swarmgo/progress.json so it
+	// survives across sessions; a fresh session reads it back at start.
+	progressPersist bool // persist the checklist to disk (default on)
+	progressResume  bool // inject a resumed-progress block on a fresh session (default on)
 }
+
+// Default context-reset / handoff bounds.
+const (
+	DefaultHandoffPressure = 0.90 // auto-reset only well above the memory-pressure warning (0.70)
+	DefaultHandoffMaxChain = 20   // cap consecutive context resets so a loop can't chain forever
+)
 
 // NewTunables constructs a Tunables with the recovery knobs at their built-in
 // defaults (the other knobs default to their zero value = off/unset). Production
@@ -102,12 +128,19 @@ func NewTunables() *Tunables {
 		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
 		// dir by default — the safety brake for the otherwise-unconfined tools.
 		autonomousConfine: true,
-		// MemGPT memory defaults: warn at 75% context fill, offer the core tools,
+		// Boot-sequence reminder on by default: a few tokens per headless turn buys
+		// orient → verify-baseline discipline. Production overrides from settings.
+		autonomousBootSeq: true,
+		// MemGPT memory defaults: warn at 70% context fill, offer the core tools,
 		// and auto-model the user during the dream cycle. Production overrides these
 		// from settings via SetMemoryControls / SetUserModel.
-		memoryPressureWarn: 0.75,
+		memoryPressureWarn: 0.70,
 		coreMemoryTools:    true,
 		autoUserModel:      true,
+		// Persistent progress on by default: it only adds a per-project file and is
+		// transparent to existing behaviour. Production overrides from settings.
+		progressPersist: true,
+		progressResume:  true,
 	}
 }
 
@@ -539,12 +572,14 @@ func (t *Tunables) CompactModel() string {
 }
 
 // SetWorkdirGuards configures the working-directory safety guards: whether
-// autonomous turns re-confine fs/shell to the working dir, and whether
-// autonomous sessions on a git repo get an isolated per-session worktree.
-func (t *Tunables) SetWorkdirGuards(autonomousConfine, gitWorktreeIsolation bool) {
+// autonomous turns re-confine fs/shell to the working dir, whether autonomous
+// sessions on a git repo get an isolated per-session worktree, and whether the
+// boot/verification-sequence reminder is injected on autonomous turns.
+func (t *Tunables) SetWorkdirGuards(autonomousConfine, gitWorktreeIsolation, autonomousBootSeq bool) {
 	t.mu.Lock()
 	t.autonomousConfine = autonomousConfine
 	t.gitWorktreeIsolation = gitWorktreeIsolation
+	t.autonomousBootSeq = autonomousBootSeq
 	t.mu.Unlock()
 }
 
@@ -562,6 +597,14 @@ func (t *Tunables) GitWorktreeIsolation() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.gitWorktreeIsolation
+}
+
+// AutonomousBootSeq reports whether autonomous turns get the boot/verification
+// sequence reminder injected into their system prompt.
+func (t *Tunables) AutonomousBootSeq() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.autonomousBootSeq
 }
 
 // SetMemoryControls configures the MemGPT-style memory knobs: the context-fill
@@ -587,5 +630,78 @@ func (t *Tunables) CoreMemoryTools() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.coreMemoryTools
+}
+
+// SetHandoff configures the context-reset/handoff knobs: whether autonomous turns
+// that hit the context limit auto-reset into a fresh session, the context-fill
+// ratio that allows it, the max reset-chain depth, and whether the handoff is also
+// written to a file in the working dir. Zero pressure/chain select the defaults.
+func (t *Tunables) SetHandoff(auto bool, pressure float64, maxChain int, writeFile bool) {
+	t.mu.Lock()
+	t.handoffAuto = auto
+	t.handoffPressure = pressure
+	t.handoffMaxChain = maxChain
+	t.handoffWriteFile = writeFile
+	t.mu.Unlock()
+}
+
+// HandoffAuto reports whether automatic context-reset handoff is enabled.
+func (t *Tunables) HandoffAuto() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.handoffAuto
+}
+
+// HandoffPressure returns the context-fill ratio above which an autonomous turn
+// may auto-reset (default when unset).
+func (t *Tunables) HandoffPressure() float64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.handoffPressure <= 0 {
+		return DefaultHandoffPressure
+	}
+	return t.handoffPressure
+}
+
+// HandoffMaxChain returns the max reset-chain depth (default when unset).
+func (t *Tunables) HandoffMaxChain() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.handoffMaxChain <= 0 {
+		return DefaultHandoffMaxChain
+	}
+	return t.handoffMaxChain
+}
+
+// HandoffWriteFile reports whether the handoff is also written to a file in the
+// session's working directory.
+func (t *Tunables) HandoffWriteFile() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.handoffWriteFile
+}
+
+// SetProgress configures the persistent-progress knobs: whether the todo_write
+// checklist is persisted to the project's progress file, and whether a fresh
+// session injects a resumed-progress block from it.
+func (t *Tunables) SetProgress(persist, resume bool) {
+	t.mu.Lock()
+	t.progressPersist = persist
+	t.progressResume = resume
+	t.mu.Unlock()
+}
+
+// ProgressPersist reports whether the checklist is persisted to disk.
+func (t *Tunables) ProgressPersist() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.progressPersist
+}
+
+// ProgressResume reports whether a fresh session injects a resumed-progress block.
+func (t *Tunables) ProgressResume() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.progressResume
 }
 

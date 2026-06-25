@@ -27,8 +27,12 @@ type sessionInfoResp struct {
 	Unread       bool   `json:"unread"`
 	Goal         string `json:"goal"`
 	GoalDone     bool   `json:"goalDone"`
-	CreatedAt    int64  `json:"createdAt"`
-	UpdatedAt    int64  `json:"updatedAt"`
+	// Context-reset lineage: the session this one continues (if born from a
+	// /handoff) and the handoff artifact written into this session at reset.
+	ParentSessionID   string `json:"parentSessionId,omitempty"`
+	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
+	CreatedAt         int64  `json:"createdAt"`
+	UpdatedAt         int64  `json:"updatedAt"`
 
 	Path      string `json:"path"`
 	SizeBytes int64  `json:"sizeBytes"`
@@ -107,8 +111,10 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		AgentID:         session.AgentID,
 		MessageCount:    session.MessageCount,
 		Unread:          session.Unread,
-		Goal:            session.Goal,
-		GoalDone:        session.GoalDone,
+		Goal:              session.Goal,
+		GoalDone:          session.GoalDone,
+		ParentSessionID:   session.ParentSessionID,
+		HandoffArtifactID: session.HandoffArtifactID,
 		CreatedAt:       session.CreatedAt,
 		UpdatedAt:       session.UpdatedAt,
 		HasSummary:      session.Summary != "",

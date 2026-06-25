@@ -190,7 +190,7 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 	case "permission_prompt":
 		return b.callPermission(ctx, run, args)
 	case "todo_write":
-		return b.callTodo(args)
+		return b.callTodo(run, args)
 	case "schedule_wake":
 		return b.callWake(ctx, run, args)
 	case "create_artifact", "update_artifact":
@@ -331,9 +331,15 @@ func permDecision(allow bool, input json.RawMessage, message string) string {
 
 // callTodo validates the checklist (reusing the canonical tool) and returns the
 // confirmation text. No live emit — the CLI's stream-json trace surfaces the
-// todo_write call, which traceStepToTurnStep promotes to a checklist card.
-func (b *interactionBackend) callTodo(args json.RawMessage) (interaction.CallResult, error) {
-	text, err := tools.NewTodoWriteTool().Call(context.Background(), args)
+// todo_write call, which traceStepToTurnStep promotes to a checklist card. When
+// the run carries a todo sink, the checklist is also persisted to the project's
+// progress file so it survives across sessions (same as the native path).
+func (b *interactionBackend) callTodo(run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	ctx := context.Background()
+	if sink := run.todoSink(); sink != nil {
+		ctx = tools.WithTodoSink(ctx, sink)
+	}
+	text, err := tools.NewTodoWriteTool().Call(ctx, args)
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}
