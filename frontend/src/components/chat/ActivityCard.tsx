@@ -57,7 +57,7 @@ export function ActivityCard({ step, onOpenFile }: Props) {
     <div className="overflow-hidden rounded-md">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 rounded-md px-3 py-1 text-left text-xs hover:bg-[var(--color-surface-2)]"
+        className="flex w-full items-center gap-2 rounded-md px-3 py-1 text-left text-[11px] hover:bg-[var(--color-surface-2)]"
       >
         <span className="shrink-0">{meta.icon}</span>
         <span className="shrink-0 font-medium text-[var(--color-text)]">{meta.label}</span>
@@ -74,10 +74,10 @@ export function ActivityCard({ step, onOpenFile }: Props) {
       </button>
 
       {open && (
-        <div className="space-y-2 border-t border-[var(--color-border)] px-3 py-2 text-xs">
+        <div className="space-y-2 border-t border-[var(--color-border)] px-3 py-2 text-[11px]">
           {step.input != null && (
             <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+              <div className="mb-1 text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
                 Girdi
               </div>
               <pre className="overflow-x-auto rounded bg-[var(--color-bg)] p-2 text-[var(--color-text-dim)]">
@@ -89,7 +89,7 @@ export function ActivityCard({ step, onOpenFile }: Props) {
           )}
           {diffText ? (
             <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+              <div className="mb-1 text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
                 Değişiklik
               </div>
               <DiffView text={diffText} />
@@ -97,7 +97,7 @@ export function ActivityCard({ step, onOpenFile }: Props) {
           ) : (
             output && (
               <div>
-                <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                <div className="mb-1 text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
                   Çıktı
                 </div>
                 <pre
