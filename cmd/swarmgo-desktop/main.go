@@ -100,6 +100,7 @@ func runPrimary(logs *logbuf.Buffer, logger *slog.Logger) {
 	get := func() (string, string) { p, t, _ := application.Appearance(); return p, t }
 	p, t := get()
 	applyTitleBar(hwnd, p, t)
+	maximizeWindow(hwnd) // open maximized by default
 	go watchTitleBar(w, hwnd, get, p, t)
 
 	w.Navigate(base)
@@ -135,6 +136,7 @@ func runSecondary(logger *slog.Logger, target string) {
 	get := func() (string, string) { return fetchAppearance(base) }
 	p, t := get()
 	applyTitleBar(hwnd, p, t)
+	maximizeWindow(hwnd) // open maximized by default
 	go watchTitleBar(w, hwnd, get, p, t)
 
 	w.Navigate(target)
