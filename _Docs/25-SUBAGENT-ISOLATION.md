@@ -102,6 +102,53 @@ varsayılanlarla → en yaygın kullanım = izole senkron alt-ajan):
   hedef için **tercih: tek `run_subagent`**, diğer ikisi kaldırılır.
 - **Paralel:** Tek turda birden çok `run_subagent` çağrısı eşzamanlı koşar.
 
+## Yapılandırılmış görev sözleşmesi (objective / output_format / boundaries) — 2026-06-25
+
+Anthropic'in [Multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system)
+rehberi: bir subagent'a **objective + output format + tool/source guidance + boundaries**
+verilmezse iş tekrarı ve boşluk oluşur ("research the X" gibi belirsiz talimat →
+ajanlar aynı işi yapar, boşluk bırakır). [Context-engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+makalesi de subagent'ın dar kapsamlı görev alıp **damıtılmış** (1–2K token) özet
+döndürmesini ister.
+
+Bu yüzden `run_subagent` şemasına **üç opsiyonel alan** eklendi:
+
+```jsonc
+{
+  "target": "explore",
+  "task": "Map how sessions are persisted.",
+  "objective":     "Locate every read/write of session JSONL files",  // hedef (tek cümle)
+  "output_format": "bulleted file:line list, one per call site",      // dönüş şekli
+  "boundaries":    "only internal/db; no frontend; no code edits"     // kapsam sınırı
+}
+```
+
+- **Enjeksiyon:** üçü de `RunAgentSpec`'e taşınır; `runAgent()` bunlardan bir
+  **"Task contract"** bloğu üretir (`delegationContract()`, `subagent.go`) ve
+  subagent system-prompt'una persona'dan **sonra** ekler (en spesifik talimat en sonda):
+
+  ```
+  ## Task contract
+  This work was delegated to you. Honor every clause below; your single reply is all the caller sees.
+  - Objective: <objective>
+  - Output format: <output_format>
+  - Boundaries (do NOT exceed): <boundaries>
+  Stay strictly within the boundaries and return your result in exactly the requested output format.
+  ```
+
+- **Yalnız dolu alanlar** satır olur; **hiçbiri yoksa blok boştur** → eski düz-`task`
+  davranışı bayt-bazında korunur (geriye-uyumlu).
+- **Tool/source guidance** (4. alan) için yeni alan eklenmedi; SwarmGo'da profil
+  allowlist'leri (explore/coder/reviewer) + `task` bunu zaten karşılıyor.
+- **Profil etkileşimi:** persona (kim olduğun) **kalır**, sözleşme (bu çağrıda ne/nasıl)
+  altına eklenir — `explore` yine read-only davranır ama bu çağrının objective/format/
+  boundaries'ini uygular. Named-agent hedefi için de aynı.
+- **İki yol da** (native tool-loop + CLI köprüsü) `runAgent`'tan geçtiği için tek
+  noktada enjeksiyon her iki yürütmeyi kapsar.
+- **Açık karar (async):** sözleşme şu an yalnız **sync** dalda enjekte edilir (kritik
+  izole-sync subagent senaryosu). `async` dal `SpawnSession`'a gider; istenirse
+  ileride sözleşme `spec.Task` önüne eklenebilir.
+
 ## Çekirdek yapılar
 
 ```go

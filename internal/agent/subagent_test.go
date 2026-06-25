@@ -106,3 +106,36 @@ func TestResolveSubagentProfile(t *testing.T) {
 		t.Fatalf("explore profile must set an allowlist, got %q", eph.AllowedTools)
 	}
 }
+
+// TestDelegationContract verifies the structured task contract renders only set
+// fields and stays empty (back-compat) when no field is provided.
+func TestDelegationContract(t *testing.T) {
+	if got := delegationContract(tools.RunAgentSpec{Task: "do x"}); got != "" {
+		t.Fatalf("empty contract expected for a plain task, got %q", got)
+	}
+
+	full := delegationContract(tools.RunAgentSpec{
+		Objective:    "find the bug",
+		OutputFormat: "bulleted list",
+		Boundaries:   "internal/db only",
+	})
+	for _, want := range []string{
+		"## Task contract",
+		"- Objective: find the bug",
+		"- Output format: bulleted list",
+		"- Boundaries (do NOT exceed): internal/db only",
+	} {
+		if !strings.Contains(full, want) {
+			t.Fatalf("contract missing %q in:\n%s", want, full)
+		}
+	}
+
+	// A single field renders that line only — the others must not appear.
+	one := delegationContract(tools.RunAgentSpec{OutputFormat: "JSON"})
+	if !strings.Contains(one, "- Output format: JSON") {
+		t.Fatalf("expected output-format line, got %q", one)
+	}
+	if strings.Contains(one, "Objective:") || strings.Contains(one, "Boundaries") {
+		t.Fatalf("unset fields must be omitted, got %q", one)
+	}
+}

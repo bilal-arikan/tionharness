@@ -198,9 +198,13 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	} else {
 		msgs = []providers.Message{{Role: providers.RoleUser, Text: task}}
 	}
+	sys := r.autonomousSystemPrompt(agent)
+	if contract := delegationContract(spec); contract != "" {
+		sys = strings.TrimSpace(sys + "\n\n" + contract)
+	}
 	req := providers.Request{
 		Model:    agent.Model,
-		System:   r.autonomousSystemPrompt(agent),
+		System:   sys,
 		Messages: msgs,
 	}
 
@@ -296,6 +300,32 @@ func (r *Runtime) launchParallelSubagents(ctx context.Context, reg *tools.Regist
 	}
 	r.logger.Info("subagent parallel fan-out", "count", n)
 	return futures
+}
+
+// delegationContract renders the optional structured task contract (objective /
+// output format / boundaries) the caller attached to a run_subagent call into a
+// system-prompt block. It gives the subagent the clear objective, required output
+// shape and explicit scope limits that Anthropic's multi-agent guidance calls for
+// to avoid duplicated work and gaps. Only set fields become lines; when none are
+// set it returns "" so the legacy plain-task path stays byte-identical.
+func delegationContract(spec tools.RunAgentSpec) string {
+	var b strings.Builder
+	if spec.Objective != "" {
+		fmt.Fprintf(&b, "- Objective: %s\n", spec.Objective)
+	}
+	if spec.OutputFormat != "" {
+		fmt.Fprintf(&b, "- Output format: %s\n", spec.OutputFormat)
+	}
+	if spec.Boundaries != "" {
+		fmt.Fprintf(&b, "- Boundaries (do NOT exceed): %s\n", spec.Boundaries)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "## Task contract\n" +
+		"This work was delegated to you. Honor every clause below; your single reply is all the caller sees.\n" +
+		b.String() +
+		"Stay strictly within the boundaries and return your result in exactly the requested output format."
 }
 
 // orDefault returns v, or def when v is empty.

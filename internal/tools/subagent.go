@@ -28,6 +28,15 @@ type RunAgentSpec struct {
 	Wait    string // "sync" (default) | "async"
 	Context string // "isolated" (default) | "inherited"
 	Model   string
+
+	// Structured task contract (all optional). When any is set, the runner injects
+	// a "Task contract" block into the subagent's system prompt so the work has a
+	// clear objective, a required output shape and explicit scope limits — the four
+	// elements Anthropic's multi-agent guidance calls for to avoid duplicated work
+	// and gaps. Empty fields are omitted, so the plain-task path stays unchanged.
+	Objective    string // the specific goal the subagent must accomplish
+	OutputFormat string // how the reply must be structured (the caller sees only this)
+	Boundaries   string // explicit scope limits — what to exclude / not touch
 }
 
 // RunAgentFunc executes one (sub)agent run. It is implemented in the agent
@@ -57,11 +66,14 @@ func RunAgentFrom(ctx context.Context) RunAgentFunc {
 
 // runSubagentInput is the argument shape for the run_subagent tool.
 type runSubagentInput struct {
-	Target  string `json:"target"`
-	Task    string `json:"task"`
-	Wait    string `json:"wait"`
-	Context string `json:"context"`
-	Model   string `json:"model"`
+	Target       string `json:"target"`
+	Task         string `json:"task"`
+	Wait         string `json:"wait"`
+	Context      string `json:"context"`
+	Model        string `json:"model"`
+	Objective    string `json:"objective"`
+	OutputFormat string `json:"output_format"`
+	Boundaries   string `json:"boundaries"`
 }
 
 // RunSubagentTool launches an isolated subagent to carry out a self-contained
@@ -88,7 +100,8 @@ func (RunSubagentTool) Def() providers.ToolDef {
 			"clean context (`context`:\"isolated\"). Set `wait`:\"async\" to detach it into a background " +
 			"session (existing agents only). Set `context`:\"inherited\" to let it see the current " +
 			"conversation. Call this several times in one turn to run subagents in parallel. Keep nesting " +
-			"shallow; prefer doing trivial work yourself.",
+			"shallow; prefer doing trivial work yourself. For best results give the subagent an " +
+			"`objective`, an `output_format` and `boundaries` — vague tasks cause duplicated work and gaps.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
@@ -96,7 +109,10 @@ func (RunSubagentTool) Def() providers.ToolDef {
     "task": { "type": "string", "description": "A clear, self-contained instruction. The subagent does not see your context unless context=inherited." },
     "wait": { "type": "string", "enum": ["sync", "async"], "description": "\"sync\" (default): run now and return the reply. \"async\": detach into a background session (existing agents only)." },
     "context": { "type": "string", "enum": ["isolated", "inherited"], "description": "\"isolated\" (default): clean context, only the task. \"inherited\": also pass the current conversation." },
-    "model": { "type": "string", "description": "Optional model id to use instead of the target's default." }
+    "model": { "type": "string", "description": "Optional model id to use instead of the target's default." },
+    "objective": { "type": "string", "description": "Optional. The specific goal this subagent must accomplish (one sentence). Prevents scope drift and duplicated work." },
+    "output_format": { "type": "string", "description": "Optional. How the reply must be structured (e.g. \"bulleted file:line list\", \"a 5-line summary\", \"JSON with keys x,y\"). The caller sees only this reply." },
+    "boundaries": { "type": "string", "description": "Optional. Explicit scope limits — what to exclude, how deep to go, what NOT to touch. Keeps the subagent from over-reaching." }
   },
   "required": ["target", "task"],
   "additionalProperties": false
@@ -104,6 +120,7 @@ func (RunSubagentTool) Def() providers.ToolDef {
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"target":"explore","task":"Find every place the auth token is validated and list file:line for each."}`),
 			json.RawMessage(`{"target":"reviewer","task":"Review internal/agent/subagent.go for race conditions; report only real issues.","context":"isolated"}`),
+			json.RawMessage(`{"target":"explore","task":"Map how sessions are persisted.","objective":"Locate every read/write of session JSONL files","output_format":"bulleted file:line list, one per call site","boundaries":"only internal/db; do not read frontend; no code edits"}`),
 		},
 	}
 }
@@ -114,11 +131,14 @@ func (RunSubagentTool) Call(ctx context.Context, input json.RawMessage) (string,
 		return "", argErrFor("run_subagent", err)
 	}
 	spec := RunAgentSpec{
-		Target:  strings.TrimSpace(in.Target),
-		Task:    strings.TrimSpace(in.Task),
-		Wait:    strings.ToLower(strings.TrimSpace(in.Wait)),
-		Context: strings.ToLower(strings.TrimSpace(in.Context)),
-		Model:   strings.TrimSpace(in.Model),
+		Target:       strings.TrimSpace(in.Target),
+		Task:         strings.TrimSpace(in.Task),
+		Wait:         strings.ToLower(strings.TrimSpace(in.Wait)),
+		Context:      strings.ToLower(strings.TrimSpace(in.Context)),
+		Model:        strings.TrimSpace(in.Model),
+		Objective:    strings.TrimSpace(in.Objective),
+		OutputFormat: strings.TrimSpace(in.OutputFormat),
+		Boundaries:   strings.TrimSpace(in.Boundaries),
 	}
 	if spec.Target == "" || spec.Task == "" {
 		return "", fmt.Errorf("both \"target\" and \"task\" are required")
