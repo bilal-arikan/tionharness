@@ -117,14 +117,16 @@ token araçlarının (`rtk`, `sqz`, `context-mode`) **kurulu olup olmadığını
 - Komut-özel akıllı kısaltıcılar (git/test/grep'e özgü) henüz yok; A jeneriktir. → bkz. [Yapılacak](#yapılacak--craftagenttan-aktarılacak-fikirler).
 - claude-cli delegasyon yolu kapsam dışıdır (yukarıdaki sebep).
 
-## Yapılacak — the external agent project'tan Aktarılacak Fikirler
+## the external agent project'tan Aktarılan Fikirler
 
 > Kaynak: `external-agent-oss` ([repo](https://github.com/external-agent-project/external-agent-oss)) bağlam-yönetimi
 > incelemesi (2026-06-22). the external agent project çoğu bağlam işini Claude Agent SDK'ye devreder; SwarmGo'nun açık
-> motoru genel olarak daha kontrollü. Aşağıdakiler the external agent project'ta işe yarayan, SwarmGo'ya değer katacak
-> birkaç pratik dokunuş — **henüz yapılmadı**.
+> motoru genel olarak daha kontrollü. Aşağıda **sırada bekleyen** dokunuşlar (TODO) + **tamamlananların**
+> tek-satır özeti (tam tarihçe → [05-ILERLEME.md](05-ILERLEME.md)).
 
-### 1. Komut-aile-bazlı deterministik bash sıkıştırıcı (RTK tarzı) 🔶
+### Sırada (TODO)
+
+#### 1. Komut-aile-bazlı deterministik bash sıkıştırıcı (RTK tarzı) 🔶
 
 the external agent project yerel **RTK (Rewrite Toolkit)** binary'siyle `git diff`, `ls -R`, `bun test`, `npm install`,
 `grep` gibi gürültülü bash çıktılarını **model'e gitmeden önce** komut-ailesine özel kurallarla yeniden yazar
@@ -137,7 +139,7 @@ komut-özel akıllı kısaltıcı yok.
 - Tetik: `Bash` tool input'undaki komut adına göre kural seçimi; kural yoksa mevcut jenerik A'ya düş.
 - Sistem A ile aynı sözleşme: dep-siz, hata döndürmez, `Stats.Saved()` rollup'a yazılır.
 
-### 2. `_intent` — açık niyet enjeksiyonu 🔶
+#### 2. `_intent` — açık niyet enjeksiyonu 🔶
 
 the external agent project her MCP tool çağrısında şemaya bir **`_intent`** alanı enjekte eder; bu, büyük-sonuç
 özetlemesinin **neye odaklanacağını** açıkça söyler. SwarmGo'da Sistem B niyeti *çıkarımla* buluyor
@@ -148,170 +150,19 @@ the external agent project her MCP tool çağrısında şemaya bir **`_intent`**
   niyet olarak kullansın. MCP araçlarında şema NormalizeSchema sırasında `_intent` alanı eklenebilir.
 - Düşük maliyet / yüksek fayda: Sistem B özet kalitesini, ekstra model çağrısı olmadan artırır.
 
-### 3. Büyük-sonuç özet eşiğini the external agent project ile hizala ✅ YAPILDI (2026-06-22)
+### Tamamlanan iyileştirmeler (özet)
 
-the external agent project büyük tool sonuçlarını Haiku ile **varsayılan otomatik** özetler. SwarmGo Sistem B eşiği
-eskiden **8192 bayt** ve varsayılan **kapalı**ydı. Artık the external agent project tarzı: **Sistem B varsayılan AÇIK,
-eşik 12288 bayt (~12KB)**; A'nın bayt cap'i 16384'e yükseltildi ki A→B sırası korunsun (yukarıdaki
-"Varsayılan politika değişikliği" notu). Mekanizma zaten vardı; bu yalnızca varsayılan + eşik ayarıydı.
+> Tam tarihçe (test adları, canlı-test bulguları, ara-revizeler) → [05-ILERLEME.md](05-ILERLEME.md).
 
-### 4. Density-aware token tahmini (CG-9, birinci yarı) ✅ YAPILDI (2026-06-22)
-
-Transcript bütçesi (`conversation/tokens.go`) eskiden sabit **chars/4** kullanıyordu → base64/hex/
-minified gibi yoğun içerik ~%60 eksik sayılıp gerçek context window'u sessizce taşırıyordu ("session
-poisoning"). Artık `estimateText` **density-aware**: uzun ve neredeyse boşluksuz (`<%3` whitespace,
-≥256 rune) içerik **~1.5 chars/token** (`runes*2/3`), düz metin **~4 chars/token**. Tek geçiş, bağımlılık
-yok. `tokens_test.go`.
-
-### 5. Bütçe-orantılı tool eşikleri (CG-9, ikinci yarı) ✅ YAPILDI (2026-06-22)
-
-the external agent project araç-sonucu eşiğini context window'a göre ölçekler (`tokenLimitFor`, ctx×0.10). SwarmGo'nun
-karşılığı: eşikleri **transcript bütçesine** (`settings.MaxContextTokens`) orantıla — büyük bütçe → büyük
-tool sonucu compaction'dan önce tolere edilir. `Tunables.budgetScaleLocked()` = `budget / 12000`, clamp
-**[1×, 5×]**. **Hem** A bayt cap'i **hem** B eşiği **aynı** faktörle çarpılır → `A-cap > B-threshold`
-değişmezi her ölçekte korunur. `tunables_compact_test.go`.
-
-- Varsayılan bütçe (12000) → 1× → tam yapılandırılmış değerler (A=16384, B=12288) — regresyon yok.
-- 5× tavan → B≈60KB tetik, the external agent project'ın ~60KB özet tavanıyla örtüşür.
-- Wiring: `applySettings` → `Tunables.SetContextBudget(MaxContextTokens)` (`s.convo.SetLimits` yanında).
-  `contextBudgetTokens=0` → 1× (güvenli no-op). **Not:** runtime wiring tek satır; `api` paketi paralel
-  oturumun MemGPT Parça-4 WIP'iyle geçici kırık olduğundan bu satır o paket bütünleşince commit'lenir
-  (dormant — wiring olmadan da davranış birebir mevcut varsayılan).
-
-### 6. Per-model context-window metadata (tokenLimitFor zemini) ✅ YAPILDI (2026-06-22)
-
-`ModelInfo`'ya **`ContextWindow int`** (token) eklendi; `Catalog()` build-time'da merkezi
-**`ContextWindowFor(provider, model)`** aile-tablosundan doldurur (manifest'ler temiz kalır). Aile-bazlı,
-**bilinçli muhafazakâr**: yalnız emin olunan aileler (Opus 4.8/Sonnet 4.6 **1M**, Haiku 4.5 **200K**;
-MiniMax/DeepSeek/Gemini 1M; Fable/genel Claude 200K),
-gerisi 0 = "bilinmiyor" → çağıran fallback yapar. UI model picker'ı artık pencere boyutunu gösterebilir.
-`context_window_test.go`. **Mimari not — gerçek `tokenLimitFor` neden doğrudan takılmadı:** the external agent project
-eşiği **model penceresine** (window×0.10) ölçekler çünkü tüm pencereyi SDK'ye kullandırır. SwarmGo
-transcript'i **bilinçle 12K token'a** bütçeler (ucuz); eşiği 200K–1M pencereye ölçeklemek, tek bir tool
-sonucunun **tüm transcript bütçesini aşmasına** yol açardı (tutarsız). Bu yüzden tool eşikleri **bütçeye**
-(§5) bağlı kaldı; pencere metadata'sı **UI + bütçe-tavanı guard** için. Pencereyi gerçekten kullanmak
-istenirse doğru hamle: **modele göre akıllı varsayılan bütçe** (flat 12K yerine `min(window, hedef)`),
-sonra §5 zaten onu ölçekler.
-
-### 7. Modele göre akıllı varsayılan bütçe (Option B) ✅ YAPILDI (2026-06-22)
-
-Flat 12K transcript bütçesi büyük modelin penceresini boşa harcıyordu. `conversation.EffectiveBudget(provider,
-model, configured)`: model penceresi biliniyorsa bütçeyi **`clamp(window × 0.10, configured, 32K)`**'a yükseltir
-— yapılandırılmış değer **taban** (asla altına inmez), 32K **tavan** (1M modelde maliyet patlamasın). Bilinmeyen
-pencere → değişmez. `Manager.Prepare` artık compaction tetiğini ve pressure oranını bu model-aware bütçeyle
-hesaplıyor; `maxTokens≤0` (bütçe kapalı) dokunulmaz. `budget_test.go`.
-
-- **Değerler (2026-06-22, 1M kullanımı artırıldı):** `fraction 0.10→0.20`, `ceil 32K→128K`, tool-eşik scale
-  clamp `[1×,5×]→[1×,12×]`. Sonuç: Opus 4.8/Sonnet 4.6/MiniMax/DeepSeek/Gemini **1M → 128K** (tavan) ·
-  Haiku 4.5 **200K → 40K** · bilinmeyen → 12K. 1M modellerde **ceil** operatif sayıdır (window×fraction onu
-  aşar) → "1M'i ne kadar kullanırız" knob'u = ceil. 128K ≈ 1M'in %12.8'i. Maliyet: 1M modelde ~10× eski varsayılan
-  (prompt-cache ile hafifler); daha çok/az istenirse `budgetAutoCeil` ayarlanır.
-- **Ayarlanabilir + 512K varsayılan (2026-06-23) — ⚠️ rot-bilinçli revize edildi, bkz. [§12](#12--context-rot-farkındalığı-ve-bütçe-stratejisi-2026-06-25):** `fraction` ve `ceil` artık **settings'ten canlı yapılandırılabilir**
-  (`ContextBudgetFraction` / `ContextBudgetCeil`; env `SWARMGO_CONTEXT_BUDGET_FRACTION` / `SWARMGO_CONTEXT_BUDGET_CEIL`).
-  Bu fazın varsayılanları: **`fraction 0.20→0.6`, `ceil 128K→512K`**. Sonuç: 1M model **1M×0.6=600K → 512K** (tavana kırpılır,
-  ≈ pencerenin %51'i) · Haiku 200K → **120K** · bilinmeyen → taban (12K). Amaç: 1M modelde **kullanıcının ilk mesajı
-  ilk sessiz katlamaya kadar çok daha uzun süre aynen kalsın** (External Agent/Claude Code'un "tüm transkripti 1M pencerede
-  tut" davranışına yaklaşır). `EffectiveBudget(provider, model, configured, fraction, ceil)` imzası fraction/ceil alır;
-  ≤0 değerler paket varsayılanına düşer. `Manager.SetBudgetShape` ile canlı güncellenir (`server.go applySettings`).
-  Frontend: Ayarlar ▸ Bağlam penceresi → "Bütçe tavanı" + "Pencere oranı". `budget_test.go` güncellendi.
-  **Not (2026-06-25):** bu 512K/0.6 varsayılanları context-rot takası nedeniyle **256K + adaptif fraction**'a çekildi → §12.
-- **Tool eşikleriyle hizalama ✅ YAPILDI (2026-06-22):** Compactor artık her tur için
-  `conversation.EffectiveBudget(agent.Provider, agent.Model, tun.ContextBudgetTokens())` hesaplayıp
-  `Tunables.CompactMaxBytesFor(budget)` / `CompactLLMThresholdFor(budget)` ile **per-model** ölçekliyor.
-  Zincir tam tutarlı: model penceresi → EffectiveBudget → §5 eşik ölçeği. Büyük-pencere modelde A cap +
-  B eşiği orantılı büyür, A>B değişmezi korunur. No-arg getter'lar process-geneli bütçeyle geriye-uyumlu
-  kaldı. `tunables_compact_test.go` (For varyantları).
-
-### 8. Yapılandırılmış konuşma-özeti (Claude Code parite, 1. faz) ✅ YAPILDI (2026-06-23)
-
-Transkript compaction'ının (`conversation/manager.go`) rolling-summary prompt'u eskiden **"under 200
-words"** ile sınırlıydı ve her katlamada **eski özet + yeni mesajları** tekrar 200 kelimeye sıkıştırıyordu
-→ çok katlamada erken bağlam **kademeli eriyordu (decay)**; üretilen özet de kullanıcıya "çok kısa"
-görünüyordu. Claude Code'un compaction motoru incelendi (`observed-behavior/src/services/compact/`) ve
-prompt onun **yapılandırılmış çok-bölümlü** yaklaşımına yakınlaştırıldı.
-
-- **Yeni `compactPrompt`:** sabit **8 bölüm** (Primary Request/Intent · Key Technical Concepts · Files and
-  Code · Errors and Fixes · Decisions and User Feedback · Pending Tasks · Current Work · Next Step) +
-  **açık anti-decay talimatı**: "önceki özetteki her kalıcı gerçeği taşı, yer açmak için kısaltma/yeniden
-  sıkıştırma yapma". 200-kelime cap'i kaldırıldı. Konuşma diline cevap verir. İki `%s` placeholder
-  (mevcut özet, yeni mesajlar) korundu → `reactive.go` (mid-loop reaktif compact) aynı sabiti yeniden
-  kullanmaya devam ediyor.
-- **Output bütçesi:** `compactMaxOutputTokens = 8192` sabiti eklendi; hem `summarize` (rolling) hem
-  reactive yol `Request.MaxTokens` ile bunu geçiyor → uzun yapılandırılmış özet provider default'unda
-  (anthropic 4096) **bölüm ortasında kesilmiyor**. `build ./...` + `conversation` testleri yeşil.
-- **Canlı test bulgusu — kapanış cue'su (2026-06-23):** Gerçek SES2 mesajlarıyla `claude -p` üzerinde test
-  edilince ilk prompt **başarısız**: model transcript ile bittiği için onu "devam ettirilecek konuşma" sanıp
-  özet yerine **son mesaja cevap verdi**. claude-cli `--append-system-prompt` ile Claude Code'un ajan
-  framing'ini (araçlar dahil) koruduğundan summarize çağrısı tam-ajan olarak koşuyor. **Düzeltme:** prompt'a
-  `NEW MESSAGES`'tan **sonra** güçlü kapanış talimatı eklendi ("yukarısı özetlenecek transcript — devam etme,
-  cevap verme, araç çağırma; doğrudan '1. Primary Request and Intent:' ile başla"). Claude Code'un
-  `NO_TOOLS_TRAILER` deseninin karşılığı. Tekrar test: **~7.7KB tam yapılandırılmış 8-bölümlü özet** (eski
-  ~1.1KB digest'e karşı), tüm task/agent/flow/karar yakalandı, model "transcript yalnız özetlenecek" notuna
-  uydu. (Test çıktıları geçiciydi; in-server teyitten sonra temizlendi.)
-- **Uçtan-uca in-server teyit (2026-06-23):** dev binary yeniden derlenip 8090'da başlatıldı, WS2/SES2'de
-  gerçek `POST /api/sessions/SES2/summary {kind:compact}` (=`ForceCompact`, claude-cli provider) tetiklendi.
-  Sonuç: 8 mesaj katlandı, `summaryMsgCount` 12→20, özet **1176→4464 char** (yapılandırılmış 8-bölüm, Türkçe),
-  konuşma-devamı yok, eski digest'te olmayan detaylar (paralel flow şema sözdizimi, validator hatası+fix)
-  yakalandı → anti-decay merge in-server doğrulandı.
-- **Not — fork bilinçli eklenMEdi:** Claude Code özetleyiciye **tüm konuşmayı** yollar (bu yüzden
-  prompt-cache paylaşan fork şart). SwarmGo `summarize` yalnız **katlanan dilim + eski özeti** yollar →
-  çağrı zaten ucuz, fork'un çözeceği pahalılık yok. Birincil provider `claude-cli` (anahtarsız) cache
-  paylaşımını CC gibi kontrol edemez → fork ROI düşük, ertelendi.
-- **Opsiyonel 3. faz:** partial compact (`from`/`up_to`) + boundary marker UI. Decay'i tamamen sıfırlamak
-  isterse: merge yerine her katlamada `history` prefix'inden **sıfırdan** özetleme (CC paritesi, maliyet ↑
-  → fork tartışmasına bağlı).
-
-### 9. Post-compact kurtarma işaretçisi — Claude Code parite 2. faz ✅ YAPILDI (2026-06-23)
-
-CC compaction sonrası özet mesajına bir **transcript pointer** ekler ("pre-compaction detayı lazımsa
-şu transcript'i oku: …") + son okunan dosyaları `createPostCompactFileAttachments` ile geri enjekte eder.
-SwarmGo'ya **birebir port mimariye ters**: SwarmGo turlar arası yalnız `role+text` taşır (`toProviderMessages`),
-tool sonuçları/dosya okumaları **zaten cross-turn context'te değil** → "dosya re-injection" diye geri
-verilecek bir şey yok; ajan serbest fs araçlarıyla istediğinde **yeniden okur**. Ayrıca kalıcı durum
-(artifacts/todos/core-memory/goal/summary) `composeTurnRequest`'te zaten **her tur** re-inject ediliyor.
-
-**Uygulanan (CC mekanizmasının SwarmGo'nun gerçek kurtarma araçlarına uyarlanmışı):** özet bloğu artık
-`conversationSummaryBlock(summary)` ile sarılıyor (`api/chat_turn.go`) — özetin altına **kurtarma notu**
-ekleniyor: "bu özetten önceki turlar katlandı, tam metni context'te yok; kesin detay (kod/hata/dosya
-içeriği/karar) gerekiyorsa **tahmin etme**: `conversation_search` ile ara ya da ilgili dosyaları **fs
-araçlarıyla yeniden aç". Böylece compact sonrası ajan körleşmez — kaybolan her şey ya `conversation_search`
-(`builtin_conversation_search.go`, db tam-metin tarama, LLM'siz) ile ya da re-read ile **geri alınabilir**.
-Sıfır yeni altyapı; readFileState tracker **bilinçle eklenmedi** (mimariye gereksiz). `go build ./...` +
-`internal/api` + `internal/conversation` testleri yeşil.
-
-- **Skill/plan re-injection neden gerekmedi:** skill **kataloğu** (slug+özet) statik prefix'te zaten her
-  tur var (`SkillsCatalogBlockForAgent`) → compact onu silmez (katlanan mesajlarda değil); yüklü skill
-  *gövdesi* `use_skill` ile tekrar çekilir. Plan-mode dosyası SwarmGo'da CC'deki gibi yok.
-
-### 10. `conversation_search` güçlendirme — birebir kurtarma (2026-06-24)
-
-§9'un kurtarma yolu olan `conversation_search` (`builtin_conversation_search.go`) snippet'le sınırlıydı; compact
-sonrası **kelime kelime** kurtarma için yetersizdi. Eklenenler:
-
-- **`full=true`** → eşleşen mesajın **tam metni** birebir döner (snippet değil). İlk soruyu/kararı aynen geri almak için.
-- **`context=N`** (0–5) → her isabetin **N tur öncesi + sonrası** birebir eklenir; isabet `»»` ile işaretlenir. Çevre
-  diyaloğu görmek için.
-- **`session_id`** → aramayı tek oturuma daraltır (ör. mevcut oturum). `db.SearchOpts.OnlyID` ile.
-- DB: `db.MessagesAround(sid, mid, before, after)` — bellekteki transkriptten çevre turları O(n) çeker (LLM'siz).
-  `builtin_conversation_search_test.go` full/context/session_id senaryolarını kapsar. Detay: `27-CROSS-SESSION-SEARCH.md`.
-
-### 11. claude-cli oturum sürekliliği (`--resume`) — sıcak prompt cache (2026-06-24, opt-in)
-
-External Agent/Claude Code'un "ilk soruyu hatırlama"sının asıl ucuzlatıcısı: tam transkripti her tur **yeniden besleyip**
-prompt cache'ten okumak (cacheRead ≈ girişin %99'u). SwarmGo claude-cli yolu eskiden her tur transkripti stdin'den
-**yeniden serialize** ediyordu → cache reuse yok. Yeni opt-in özellik (`ClaudeResume` ayarı, **varsayılan kapalı**):
-
-- Açıkken her turda CLI **`--resume <id>`** ile önceki oturumu sürdürür; SwarmGo yalnız **delta**yı (CLI'nin görmediği
-  yeni mesajları) gönderir → CLI'nin **server-side geçmişi + sıcak cache**'i tekrar kullanılır.
-- `providers.Request.ResumeSessionID` / `providers.Response.SessionID`; CLI `session_id`'yi stream'in `system/init` ve
-  `result` event'lerinden yakalar (id her resume turunda **rotate olur**, sonuncu saklanır).
-- Durum oturum-başına: `db.Session.CLISessionID` + `CLISentMsgCount` (delta sınırı), `SetSessionCLIResume` ile yazılır.
-- Akış: `api/chat_resume.go planClaudeResume` → ilk tur **cold** (tam transkript, id yakala), sonraki turlar **warm**
-  (delta + `--resume`). Yalnız **tek-ajanlı** sohbette (id oturum-başına; çoklu-ajan çakışırdı). Tutarsızlık (mesaj
-  düzenleme → sınır geçersiz) → otomatik cold fallback.
-- **Mimari gerilim (bilinçli):** warm modda bağlam yönetimini CLI devralır → SwarmGo'nun kendi compaction'ı o oturumda
-  devre dışı kalır. Bu yüzden **opt-in + deneysel**: açtıktan sonra bir sohbette doğrulanmalı. `claudecli_resume_test.go`
-  parser'ın session_id yakalamasını kapsar; canlı `--resume` davranışı kullanıcı doğrulamasına bağlı.
+- **✅ B özet eşiğini the external agent project ile hizala** (2026-06-22) — Sistem B varsayılan AÇIK, eşik 12288 bayt; A bayt-cap 16384'e çıkarıldı (A→B sırası korunur).
+- **✅ Density-aware token tahmini** (CG-9/1, 2026-06-22) — `estimateText` yoğun içerikte ~1.5 chars/token, düz metinde ~4; `tokens_test.go`.
+- **✅ Bütçe-orantılı tool eşikleri** (CG-9/2, 2026-06-22) — A-cap + B-eşik `budget/12000` (clamp [1×,5×]) ile ölçeklenir, A>B değişmezi korunur.
+- **✅ Per-model context-window metadata** (2026-06-22) — `ModelInfo.ContextWindow` + `ContextWindowFor(provider,model)` aile-tablosu; UI + bütçe-tavanı guard için.
+- **✅ Modele göre akıllı varsayılan bütçe** (2026-06-22) — `EffectiveBudget` model penceresine göre ölçekler; fraction/ceil canlı yapılandırılabilir. **Güncel değerler → [§12](#12--context-rot-farkındalığı-ve-bütçe-stratejisi-2026-06-25)** (256K + adaptif).
+- **✅ Yapılandırılmış konuşma-özeti** (Claude Code parite, 2026-06-23) — `compactPrompt` 8-bölümlü yapı + anti-decay; `compactMaxOutputTokens=8192`; kapanış-cue'su claude-cli framing'ini bastırır.
+- **✅ Post-compact kurtarma işaretçisi** (2026-06-23) — özet bloğu `conversationSummaryBlock` ile sarılır ("tahmin etme; `conversation_search` veya fs ile yeniden oku").
+- **✅ `conversation_search` güçlendirme** (2026-06-24) — `full=true` (birebir tam metin) + `context=N` (çevre turlar) + `session_id`; bkz. [27-CROSS-SESSION-SEARCH.md](27-CROSS-SESSION-SEARCH.md).
+- **✅ claude-cli oturum sürekliliği `--resume`** (2026-06-24, opt-in) — `ClaudeResume` ile sıcak prompt-cache; warm modda compaction CLI'a geçer (deneysel). Akış: `api/chat_resume.go`.
 
 ## Bütçe görünürlüğü — Tasarruf Merkezi + session bazlı (2026-06-24)
 

@@ -5,10 +5,41 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
+
+// repairMojibake undoes the classic corruption where UTF-8 bytes were mis-decoded
+// as Latin-1 before reaching us (e.g. an emoji "🗺️" arriving as "ðºï¸"). Agent
+// fields created over the claude-cli tool path occasionally suffer this in the
+// CLI/MCP transport. It only acts when every rune fits in the Latin-1 range (so
+// genuine multi-byte glyphs are untouched) and the byte reinterpretation is
+// itself valid UTF-8 that differs from the input; otherwise the original is
+// returned unchanged. This guards real prose: Turkish ş/ğ/ı sit above U+00FF and
+// fail the range check, and arbitrary Latin-1 text fails the strict UTF-8
+// re-decode.
+func repairMojibake(s string) string {
+	if s == "" {
+		return s
+	}
+	buf := make([]byte, 0, len(s))
+	for _, r := range s {
+		if r > 0xFF {
+			return s // a genuine high codepoint → not mojibake
+		}
+		buf = append(buf, byte(r))
+	}
+	if !utf8.Valid(buf) {
+		return s
+	}
+	out := string(buf)
+	if out == s {
+		return s // pure ASCII / nothing to repair
+	}
+	return out
+}
 
 // Agent self-management tools let an agent create, edit, delete and list the
 // OTHER agents in its workspace. Provenance is enforced: every agent created
@@ -100,6 +131,12 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
 	}
+	// Repair any UTF-8→Latin-1 mojibake introduced by the CLI/MCP transport so
+	// emoji avatars and prose are stored correctly (no garbled glyphs in the UI).
+	in.Name = repairMojibake(in.Name)
+	in.Soul = repairMojibake(in.Soul)
+	in.Identity = repairMojibake(in.Identity)
+	in.Avatar = repairMojibake(in.Avatar)
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
 		return "", fmt.Errorf("name is required")
@@ -219,6 +256,12 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	}
 	if _, err := t.d.requireAgentCreatedByAgent(ctx, in.ID); err != nil {
 		return "", err
+	}
+	// Repair any UTF-8→Latin-1 mojibake from the CLI/MCP transport before saving.
+	for _, p := range []*string{in.Name, in.Soul, in.Identity, in.Avatar} {
+		if p != nil {
+			*p = repairMojibake(*p)
+		}
 	}
 	patch := db.AgentProfilePatch{
 		Name:     in.Name,

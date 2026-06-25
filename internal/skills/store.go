@@ -702,11 +702,27 @@ func renderCatalog(list []Skill, skillTool string) string {
 	if strings.TrimSpace(skillTool) == "" {
 		skillTool = DefaultSkillTool
 	}
+	// Sibling skill_search tool name + deferred-activation guidance. A claude-cli
+	// agent reaches these through the Interaction MCP bridge, where the names are
+	// namespaced (mcp__swarmgo_interaction__use_skill) AND may be DEFERRED by the CLI
+	// when many MCP tools are present (e.g. a large gateway): a direct call then
+	// fails with "No such tool available: use_skill" until the schema is activated.
+	// When the tool is namespaced, point the model at ToolSearch up front so it does
+	// not waste its first call on a rejected/unloaded name. Native (bare) agents get
+	// the schema eagerly, so no note is needed there.
+	searchTool := "skill_search"
+	var deferNote string
+	if i := strings.LastIndex(skillTool, "__"); i > 0 && strings.HasPrefix(skillTool, "mcp__") {
+		searchTool = skillTool[:i+2] + searchTool // share the namespace prefix
+		deferNote = fmt.Sprintf("\nThese are MCP tools and may be DEFERRED (schema not preloaded). Before your "+
+			"first call, run `ToolSearch` with `select:%s,%s` to load them; calling the bare/unloaded name "+
+			"returns \"No such tool available\".", skillTool, searchTool)
+	}
 	var b strings.Builder
 	b.WriteString("# Available Skills\n")
 	fmt.Fprintf(&b, "Reusable instruction sets, listed as slug + summary. When a task matches one, "+
 		"call the `%s` tool with its slug to load the full instructions BEFORE acting — "+
-		"don't guess from the summary.\n", skillTool)
+		"don't guess from the summary.%s\n", skillTool, deferNote)
 	for _, sk := range list {
 		fmt.Fprintf(&b, "- `%s` — %s", sk.Slug, sk.Description)
 		if sk.WhenToUse != "" {
@@ -716,7 +732,7 @@ func renderCatalog(list []Skill, skillTool string) string {
 	}
 	// SK-2: not every skill is listed here — on-demand/conditional skills are kept
 	// out to save context. Point the model at skill_search so it can find them.
-	b.WriteString("Some skills are not listed above (on-demand/conditional). " +
-		"If a task seems to need a skill you don't see, call `skill_search` with keywords to find it.")
+	fmt.Fprintf(&b, "Some skills are not listed above (on-demand/conditional). "+
+		"If a task seems to need a skill you don't see, call `%s` with keywords to find it.", searchTool)
 	return strings.TrimSpace(b.String())
 }

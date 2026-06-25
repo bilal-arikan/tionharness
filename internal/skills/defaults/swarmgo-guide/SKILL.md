@@ -25,19 +25,18 @@ workspaces never leaks content between them.
 - **Flows** — multi-step / multi-agent orchestration graphs (see the
   `swarmgo-flows` skill for details).
 - **Schedules (routines)** — cron-driven prompts delivered to an agent.
-- **Memory** — durable facts an agent recalls across sessions. Recall results are
-  auto-injected into the prompt each turn; the explicit `memory_recall` tool (and
-  `memory_add` when self-management is on) is load-on-demand — `activate_tools` it
-  for a targeted lookup. A MemGPT-style **core memory** (re-injected verbatim every
-  turn) is organised into **named blocks** — **persona** (about yourself) and
-  **human** (about the user) by default, plus any custom blocks the agent defines —
-  edited in place with `core_memory_replace`/`core_memory_append` (pass
-  `label:"persona"|"human"|…`, default persona). Each block has a **character
-  limit**; a write past it is refused so you condense rather than grow context
-  unbounded. The **human** block is also kept current automatically: during the
-  dream cycle (reflection), durable facts about the user are distilled from the
-  journal and merged into it (HA-1, toggleable). When context fills up a turn warns
-  you to persist anything important before it is compacted away.
+- **Memory** — durable facts an agent recalls across sessions. Two layers:
+  - *Recall memory* — auto-injected into the prompt each turn; the explicit
+    `memory_recall`/`memory_add` tools are load-on-demand (`activate_tools` for a
+    targeted lookup).
+  - *Core memory* (MemGPT-style, re-injected verbatim every turn) — **named blocks**:
+    **persona** (about yourself) + **human** (about the user) by default, plus custom
+    blocks. Edit in place with `core_memory_replace`/`core_memory_append` (pass
+    `label`, default persona). Each block is **character-limited** — a write past it
+    is refused, so you condense rather than grow context unbounded.
+  - The **human** block is also auto-refreshed: the dream cycle distills durable user
+    facts from the journal into it (HA-1, toggleable). When context fills up, a turn
+    warns you to persist anything important before it is compacted away.
 - **Skills** — reusable instruction sets (like this one). Their summaries are
   advertised in the prompt; load a full body on demand with `use_skill`. Some
   skills are deliberately kept OUT of the prompt (on-demand or file-conditional,
@@ -59,6 +58,23 @@ Skills keep the context lean: only summaries sit in the prompt; you pull a full
 body with `use_skill` exactly when a task matches it. If a task seems to need a
 skill you don't see listed, call `skill_search` — conditional/on-demand skills are
 discoverable but not advertised.
+
+## Rich replies (chat rendering)
+
+The chat UI renders your markdown richly, so use it when it helps the reader:
+
+- **Mermaid diagrams** — a ```` ```mermaid ```` fenced block renders as a themed
+  SVG (flowchart, sequence, state, class, ER, gantt, …). Prefer a small diagram
+  over an ASCII sketch when explaining architecture, flows, or relationships.
+  Keep one concept per diagram; the rendered block has Source/Expand/Copy
+  controls and re-themes with the app.
+- **Diffs** — a ```` ```diff ```` block renders as a colored diff view.
+- **Code** — fenced blocks get syntax highlighting and a copy button.
+- Standard GFM (tables, task lists, headings, inline images via local paths)
+  renders too.
+
+While a reply streams, an incomplete mermaid block shows its source until the
+syntax is complete, then swaps to the diagram — so partial output never breaks.
 
 ## How to get things done
 
