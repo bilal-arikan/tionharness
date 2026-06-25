@@ -41,6 +41,7 @@ type chatRun struct {
 	mu          sync.Mutex
 	write       func(event string, data any) // installed by the stream handler; nil once the turn ends
 	artifacts   tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
+	notify      tools.NotifySink             // current agent's notify sink, for Interaction MCP notify (desktop notification)
 	todos       tools.TodoSink               // current agent's todo sink, for Interaction MCP todo_write persistence
 	grants      *tools.PermissionGrants      // session "Always allow" set, for the CLI permission-prompt tool
 	wake        tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
@@ -241,6 +242,22 @@ func (r *chatRun) artifactSink() tools.ArtifactSink {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.artifacts
+}
+
+// setNotify installs the notify sink for the currently responding agent so the
+// notify tool (native via context, CLI via the Interaction MCP) can raise a
+// desktop notification stamped with this session + agent.
+func (r *chatRun) setNotify(sink tools.NotifySink) {
+	r.mu.Lock()
+	r.notify = sink
+	r.mu.Unlock()
+}
+
+// notifySink returns the current notify sink (nil if none installed).
+func (r *chatRun) notifySink() tools.NotifySink {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.notify
 }
 
 // setTodoSink installs the todo sink for the currently responding agent so the

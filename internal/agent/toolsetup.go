@@ -85,6 +85,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// the user can open in a dedicated viewer (no-op outside interactive chat).
 		tools.NewCreateArtifactTool(),
 		tools.NewUpdateArtifactTool(),
+		// notify: raise a non-blocking desktop notification to get the user's
+		// attention (no-op outside interactive chat — the sink is only wired onto a
+		// chat turn's context).
+		tools.NewNotifyTool(),
 	}
 
 	// Core memory (MemGPT-style): the agent edits its own persistent working-memory

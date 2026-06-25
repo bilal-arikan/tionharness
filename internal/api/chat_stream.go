@@ -251,6 +251,13 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		sink := newArtifactSink(database, session.ID, agentRow.ID, wsp.Runtime.Emit)
 		run.setArtifacts(sink)
 		turnCtx := tools.WithArtifacts(ctx, sink)
+		// Attach a per-agent notify sink so the notify tool can raise a desktop
+		// notification on both tool paths (native via context, CLI via the run, used
+		// by the Interaction MCP backend). It publishes an "agent" event onto the
+		// workspace bus → SSE → OS toast (per device prefs).
+		nsink := newNotifySink(session.ID, agentRow.ID, wsp.Runtime.Emit)
+		run.setNotify(nsink)
+		turnCtx = tools.WithNotify(turnCtx, nsink)
 		// Persistent progress: bind a todo sink so todo_write persists the checklist
 		// to the project's progress file on both tool paths (native via context, CLI
 		// via the run). Keyed to this session's working dir. Gated by ProgressPersist.

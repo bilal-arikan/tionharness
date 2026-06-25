@@ -117,6 +117,10 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		tools.NewRequestConfirmationTool().Def(),
 		tools.NewCreateArtifactTool().Def(),
 		tools.NewUpdateArtifactTool().Def(),
+		// notify raises a non-blocking desktop notification so a CLI agent can get
+		// the user's attention (job done, attention needed). Stays advertised on
+		// autonomous turns too — it never blocks for a live user.
+		tools.NewNotifyTool().Def(),
 		// schedule_wake replaces the CLI's native ScheduleWakeup (which SwarmGo
 		// disallows): the CLI runs one-shot, so its built-in wake never fires —
 		// ours arms a real SwarmGo timer that re-delivers into this session.
@@ -195,6 +199,8 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callWake(ctx, run, args)
 	case "create_artifact", "update_artifact":
 		return b.callArtifact(run, bareToolName(name), args)
+	case "notify":
+		return b.callNotify(run, args)
 	case "spawn_session":
 		return b.callSpawn(ctx, run, args)
 	case "use_skill":
@@ -386,6 +392,21 @@ func (b *interactionBackend) callArtifact(run *chatRun, name string, args json.R
 	} else {
 		text, err = tools.NewUpdateArtifactTool().Call(actx, args)
 	}
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: text}, nil
+}
+
+// callNotify raises a non-blocking desktop notification through the run's notify
+// sink (CLI path). Returns immediately; a graceful result when no sink is wired
+// (autonomous turn with no open client) so the CLI agent simply proceeds.
+func (b *interactionBackend) callNotify(run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	sink := run.notifySink()
+	if sink == nil {
+		return interaction.CallResult{Text: "no notification channel is available for this turn", IsError: true}, nil
+	}
+	text, err := tools.NewNotifyTool().Call(tools.WithNotify(context.Background(), sink), args)
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}
