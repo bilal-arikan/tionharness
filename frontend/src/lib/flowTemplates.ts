@@ -98,4 +98,67 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
       ],
     },
   },
+  {
+    // Generator↔Evaluator (GAN-like) sprint loop. Anthropic "harness design"
+    // pattern: separate the agent doing the work (generator) from a skeptical,
+    // independent evaluator so quality is judged honestly instead of self-praised.
+    // The loop is INTENTIONALLY cyclic — evaluate → decide → generate is a back
+    // edge; the engine allows cycles and bounds them with maxSteps. Assign the
+    // generator role (contract/generate/pivot) and the evaluator role
+    // (review-contract/evaluate) to TWO DIFFERENT agents after instantiating.
+    id: 'gan-loop',
+    name: 'Generator↔Evaluator (GAN)',
+    description: 'Sözleşmeli üret→değerlendir→rafine döngüsü. Üreten ajan ile ayrı şüpheci değerlendirici; skora göre rafine et veya yön değiştir (pivot). UI/E2E için Playwright ile gerçek test. İki ayrı ajan ata.',
+    graph: {
+      start: 'contract',
+      edgeStyle: 'smoothstep',
+      animated: true,
+      nodes: [
+        {
+          id: 'contract', type: 'agent', title: 'Generator: Sözleşme', agentId: '',
+          prompt:
+            'You are the GENERATOR. Before building anything, turn this goal into a written sprint contract.\nGoal: {{input}}\n\nProduce a contract with: (1) deliverable — one sentence; (2) success criteria — a numbered list of specific, TESTABLE checks, each with a weight (high/med/low) and how to verify it (Playwright / API / code); (3) grading weights. Save it to your core memory block "sprint-contract" using core_memory_replace so it survives the whole loop, then output it.',
+          next: 'review-contract', x: 100, y: 40,
+        },
+        {
+          id: 'review-contract', type: 'agent', title: 'Evaluator: Sözleşmeyi İncele', agentId: '',
+          prompt:
+            'You are the skeptical EVALUATOR. Review the generator\'s sprint contract — the PLAN, not the work yet.\nContract:\n{{last}}\n\nAre the success criteria specific and verifiable? Is this the right thing to build? Flag any vague or untestable criterion and tighten it. End with APPROVED or REVISE followed by the corrected contract.',
+          next: 'generate', x: 100, y: 180,
+        },
+        {
+          id: 'generate', type: 'agent', title: 'Generator: Üret', agentId: '',
+          prompt:
+            'You are the GENERATOR. Build or iterate the deliverable against the sprint contract.\nContract (core:sprint-contract):\n{{node.contract}}\n\nPrevious evaluation (empty on the first pass):\n{{node.evaluate}}\n\nPivot direction (empty unless pivoting):\n{{node.pivot}}\n\nProduce the concrete deliverable. Address EVERY failed criterion from the previous evaluation. State what you changed and why.',
+          next: 'evaluate', x: 100, y: 320,
+        },
+        {
+          id: 'evaluate', type: 'agent', title: 'Evaluator: Değerlendir', agentId: '',
+          prompt:
+            'You are an INDEPENDENT, SKEPTICAL evaluator. You did NOT write this work — find what is wrong, do not praise it. A criterion is PASS only if you can OBSERVE it passing.\nSprint contract:\n{{node.contract}}\nWork to evaluate:\n{{node.generate}}\n\nFor EACH success criterion, actually verify it: use the Playwright MCP tools to click through the running app like a user for UI/E2E checks, call the endpoint for API checks, or read the exact code path otherwise. Mark each PASS or FAIL; for every FAIL give a CODE-LOCATED bug report (file:line or function, observed vs expected, the concrete fix). Append one line to core:sprint-scorelog with core_memory_append: "ITER n | SCORE x/total (pct%) | TREND up|flat|down | VERDICT ...".\n\nDecide from the score TREND (recall core:sprint-scorelog): all high/med criteria PASS -> SHIP; scores improving and gaps fixable -> REFINE; scores flat or declining for 2+ iterations -> PIVOT.\n\nThe LAST line of your reply MUST be exactly one of:\nVERDICT: SHIP\nVERDICT: REFINE\nVERDICT: PIVOT',
+          next: 'decide', x: 100, y: 460,
+        },
+        {
+          id: 'decide', type: 'branch', title: 'Karar', matchMode: 'regex',
+          branches: [
+            { contains: '(?m)^VERDICT:\\s*SHIP', next: 'finalize' },
+            { contains: '(?m)^VERDICT:\\s*PIVOT', next: 'pivot' },
+            { contains: '', next: 'generate' },
+          ],
+          x: 100, y: 600,
+        },
+        {
+          id: 'pivot', type: 'agent', title: 'Generator: Yön Değiştir', agentId: '',
+          prompt:
+            'You are the GENERATOR. The current approach is not converging. Choose a DIFFERENT strategy or aesthetic to satisfy the contract.\nContract:\n{{node.contract}}\nLatest evaluation:\n{{node.evaluate}}\n\nDescribe the new direction in 2-3 sentences, then it will be built next.',
+          next: 'generate', x: 380, y: 540,
+        },
+        {
+          id: 'finalize', type: 'transform', title: 'Sonuçlandır',
+          template: '## Final deliverable\n{{node.generate}}\n\n## Final evaluation\n{{node.evaluate}}',
+          next: '', x: 380, y: 680,
+        },
+      ],
+    },
+  },
 ]

@@ -18,7 +18,10 @@ so a flow run is replayable like any chat.
 - **Steps (nodes)** — each step delegates a prompt to a chosen agent. A step may
   consume the output of earlier steps it depends on.
 - **Edges (dependencies)** — declare which steps must finish before a step runs.
-  The graph must be acyclic; SwarmGo deep-validates it before running.
+  SwarmGo deep-validates the graph before running. **Cycles are allowed** — a
+  `branch` can route back to an earlier node to form an iteration loop; the engine
+  bounds any loop with a step cap (`maxSteps`, 50). See `[[swarmgo-gan-loop]]` for
+  the generator↔evaluator refine/pivot loop built on a back edge.
 - **Input** — the flow's initial input is threaded to entry steps.
 
 ## Graph JSON schema (node types & fields)
@@ -64,8 +67,9 @@ These tools require self-management to be enabled for the workspace:
 
 1. **Decompose** the goal into discrete steps, each with a single clear intent.
 2. **Assign** each step to the agent best suited for it.
-3. **Wire dependencies** so a step only starts once its inputs exist. Keep the
-   graph acyclic.
+3. **Wire dependencies** so a step only starts once its inputs exist. Cycles are
+   allowed for iteration loops (a `branch` routing back to an earlier node); the
+   engine caps total steps so a runaway loop always terminates.
 4. **Validate** before running — fix any cycle or dangling-dependency error the
    graph validator reports.
 5. **Run** via `run_flow`, then review the recorded run session.

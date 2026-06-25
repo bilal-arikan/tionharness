@@ -222,6 +222,45 @@ regex: "error 503"+"^err"→MATCHED, "all ok"→DEFAULT. (Ayrıca transform `{{i
 delay wait doğrulandı.) **Playwright:** palet 5 tip (Switch yok); branch inspector "Eşleşme"
 dropdown'u (İçerir/Eşittir/Regex); transform/delay node'ları canvas'ta doğru render.
 
+## Generator↔Evaluator (GAN-benzeri) döngü şablonu (2026-06-25)
+
+Anthropic *harness design* makalesindeki **self-evaluation problemi**ne (ajan kendi işini
+körü körüne över) çözüm: işi yapan **generator** ile yargılayan **ayrı, şüpheci evaluator**
+ajanını birbirinden ayıran sözleşmeli iterasyon döngüsü. **Yeni kod yok** — mevcut motorun
+node tipleriyle kuruldu; tek "yenilik" döngünün (cycle) bilinçli kullanımı.
+
+**Döngü engine'de İZİNLİDİR (acyclic değil).** `orchestration.Validate()` acyclicity kontrol
+**etmez**; `engine.go` döngüye izin verip `maxSteps` (50) ile sınırlar (*"a cyclic graph
+(loops are allowed)"*). Frontend flow editöründe de cycle reddi yok (`TaskDetailPanel`'deki
+`hasCycle` yalnız kanban görev bağımlılıkları içindir, flow'a değmez). Bu yüzden
+`evaluate → decide → generate` **geri-kenarı** doğrudan kurulabilir. _(Düzeltme: `swarmgo-flows`
+skill'i eskiden "graph must be acyclic" diyordu — yanlıştı, düzeltildi.)_
+
+**Graf:** `contract(gen) → review-contract(eval) → generate(gen) → evaluate(eval) →
+decide(branch)`; `decide` → `VERDICT: SHIP` ise `finalize(transform)`, `VERDICT: PIVOT` ise
+`pivot(gen) → generate`, aksi halde (default = REFINE) → `generate`.
+
+**Motor kısıtı → tasarım kararları:**
+- `branch` yalnız string eşler (sayısal eşik yok) → skor→pivot kararı **keyword verdict**
+  (`VERDICT: SHIP|REFINE|PIVOT`) olarak kodlanır; `decide` `matchMode:regex` ile
+  `(?m)^VERDICT:\s*SHIP` desenini son satıra demirler.
+- Döngüde `Outputs[id]` üzerine yazılır → skor **trend'i** graf state'inde tutulamaz →
+  evaluator trend'i `core:sprint-scorelog` çekirdek bellek bloğuna **append** eder ve oradan
+  okur. Sözleşme `core:sprint-contract` bloğunda yaşar.
+- Loop sayacı branch'e açık değil → döngü evaluator SHIP dediğinde biter; `maxSteps=50`
+  (~15 iterasyon) sert backstop.
+
+**Dağıtım:** gömülü gallery şablonu `gan-loop` ("Generator↔Evaluator (GAN)",
+`lib/flowTemplates.ts`) + market paketleri (`flow.gan-generator-evaluator`,
+`agent.skeptical-evaluator`, `mcp.playwright`) + yeni default skill `swarmgo-gan-loop`.
+Şablon agent-bağımsız; kurulumdan sonra **iki ayrı ajan** atanır (generator vs evaluator) —
+aynı ajanı iki role atamak deseni bozar. UI/E2E hedeflerinde evaluator `mcp.playwright` ile
+gerçek tarayıcı testi yapar; saf metin/kod hedeflerinde kod okuma + `Bash`'e düşer (opsiyonel).
+
+**Doğrulama:** `engine_test.go` cyclic-GAN testleri — `Validate` cyclic grafı kabul eder;
+loop 2× REFINE → SHIP ile `finalize`'a varır; hiç ship etmeyen evaluator `step cap` hatasıyla
+durur. `go build`/`vet` + `tsc -b`/`vite build` yeşil.
+
 ## Notlar / sıradaki adımlar
 
 - SwarmClaw'daki gibi şablonları **kategorilere** ayırma / arama eklenebilir.
