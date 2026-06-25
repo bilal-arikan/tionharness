@@ -43,12 +43,19 @@ Tek çalıştırma noktası. İmza:
 func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opts SpawnOptions) (SpawnResult, error)
 
 type SpawnOptions struct {
-    ModelOverride string // "" → ajanın kendi modeli
-    Title         string // "" → prompt'tan üretilir
-    CreatedBy     string // provenance: ajan id (otonom spawn) ya da "" (kullanıcı/API)
+    ModelOverride   string // "" → ajanın kendi modeli
+    Title           string // "" → prompt'tan üretilir
+    CreatedBy       string // provenance: ajan id (otonom spawn) ya da "" (kullanıcı/API)
+    ParentSessionID string // context-reset soyağacı (handoff); "" → bağsız spawn
 }
 type SpawnResult struct { SessionID, AgentName string }
 ```
+
+> **Context reset motoru (2026-06-25):** `SpawnOptions.ParentSessionID` eklendi.
+> Context reset / handoff (`_Docs/35`) SpawnSession'ı **temiz pencere** motoru
+> olarak kullanır: handoff artifact yazıldıktan sonra `ParentSessionID = eski`
+> ile taze bir oturum spawn edilir, yeni oturum handoff'u inline taşıyan bir
+> continuation prompt'la açılır. Soyağacı `db.Session.ParentSessionID`'de tutulur.
 
 Akış:
 1. `prompt` boşsa hata. `resolveAgent(agentRef)` (id veya isim).
