@@ -206,14 +206,15 @@ hesaplıyor; `maxTokens≤0` (bütçe kapalı) dokunulmaz. `budget_test.go`.
   Haiku 4.5 **200K → 40K** · bilinmeyen → 12K. 1M modellerde **ceil** operatif sayıdır (window×fraction onu
   aşar) → "1M'i ne kadar kullanırız" knob'u = ceil. 128K ≈ 1M'in %12.8'i. Maliyet: 1M modelde ~10× eski varsayılan
   (prompt-cache ile hafifler); daha çok/az istenirse `budgetAutoCeil` ayarlanır.
-- **Ayarlanabilir + 512K varsayılan (2026-06-23):** `fraction` ve `ceil` artık **settings'ten canlı yapılandırılabilir**
+- **Ayarlanabilir + 512K varsayılan (2026-06-23) — ⚠️ rot-bilinçli revize edildi, bkz. [§12](#12--context-rot-farkındalığı-ve-bütçe-stratejisi-2026-06-25):** `fraction` ve `ceil` artık **settings'ten canlı yapılandırılabilir**
   (`ContextBudgetFraction` / `ContextBudgetCeil`; env `SWARMGO_CONTEXT_BUDGET_FRACTION` / `SWARMGO_CONTEXT_BUDGET_CEIL`).
-  Yeni varsayılanlar: **`fraction 0.20→0.6`, `ceil 128K→512K`**. Sonuç: 1M model **1M×0.6=600K → 512K** (tavana kırpılır,
+  Bu fazın varsayılanları: **`fraction 0.20→0.6`, `ceil 128K→512K`**. Sonuç: 1M model **1M×0.6=600K → 512K** (tavana kırpılır,
   ≈ pencerenin %51'i) · Haiku 200K → **120K** · bilinmeyen → taban (12K). Amaç: 1M modelde **kullanıcının ilk mesajı
   ilk sessiz katlamaya kadar çok daha uzun süre aynen kalsın** (External Agent/Claude Code'un "tüm transkripti 1M pencerede
   tut" davranışına yaklaşır). `EffectiveBudget(provider, model, configured, fraction, ceil)` imzası fraction/ceil alır;
   ≤0 değerler paket varsayılanına düşer. `Manager.SetBudgetShape` ile canlı güncellenir (`server.go applySettings`).
   Frontend: Ayarlar ▸ Bağlam penceresi → "Bütçe tavanı" + "Pencere oranı". `budget_test.go` güncellendi.
+  **Not (2026-06-25):** bu 512K/0.6 varsayılanları context-rot takası nedeniyle **256K + adaptif fraction**'a çekildi → §12.
 - **Tool eşikleriyle hizalama ✅ YAPILDI (2026-06-22):** Compactor artık her tur için
   `conversation.EffectiveBudget(agent.Provider, agent.Model, tun.ContextBudgetTokens())` hesaplayıp
   `Tunables.CompactMaxBytesFor(budget)` / `CompactLLMThresholdFor(budget)` ile **per-model** ölçekliyor.
@@ -353,8 +354,100 @@ prompt cache'ten okumak (cacheRead ≈ girişin %99'u). SwarmGo claude-cli yolu 
 - Geriye-uyumlu: eski usage dosyaları yeni alanları taşımaz (omitempty → 0); session rollup yeni turlardan dolar.
 - Testler: `store_session_usage_test.go` (session attribution + reload), `store_usage_test.go` (`AddLLMCompactionSavings`).
 
+## Context reset (handoff) — in-place compaction'ın tamamlayıcısı
+
+Bu doküman **in-place** compaction'ı anlatır (aynı oturum, rolling-summary). Anthropic'in
+"harness design" bulgusu: uzun otonom görevlerde in-place compaction tek başına **"context
+anxiety"**yi (model limite yaklaşınca erken toparlama) çözmez. Tamamlayıcı = **context reset**:
+özetlemek yerine bir **handoff artifact** yaz + **temiz bir pencerede** (yeni oturum) devam et.
+
+- **Ne zaman compact?** İnteraktif sohbet, çok-turlu gidip-gelme, kullanıcı sürücü. (Bu doküman.)
+- **Ne zaman reset?** Uzun otonom iş, net kilometre taşları, "temiz sayfa" gerektiğinde — manuel
+  `/handoff`, `handoff_session` aracı veya basınç eşiğinde otomatik. Detay: **[35-CONTEXT-RESET-HANDOFF.md](35-CONTEXT-RESET-HANDOFF.md)**.
+
+Reset, compaction çekirdeğini (`summarizeRendered`/`compactMaxOutputTokens`) yeniden kullanır;
+yalnız devam-odaklı bir prompt (`conversation.handoffPrompt`, 10 bölüm + DONE/TODO + Next Step) ve
+bir env snapshot ekler.
+
+## 12 — Context-rot farkındalığı ve bütçe stratejisi (2026-06-25)
+
+**Bağlam.** Anthropic *Effective context engineering for AI agents* makalesi bir gerçeği netleştirir:
+token sayısı arttıkça modelin o bağlamdan **doğru geri-çağırma** yeteneği düşer ("context rot").
+Sebep transformer mimarisi — *"every token attends to every other token… n² pairwise relationships
+for n tokens"*: `n` token → `n²` ikili dikkat ilişkisi; sabit "attention budget" daha çok ilişkiye
+yayılır. Bu bir **uçurum değil, performans gradyanıdır** (*"a performance gradient rather than a hard
+cliff: models remain highly capable at longer contexts but may show reduced precision for information
+retrieval and long-range reasoning"*) — model uzun bağlamda hâlâ yetkin ama **hassasiyet kaybeder**.
+İlke: *"the smallest possible set of high-signal tokens"* — bağlam değerli, sonlu bir kaynaktır.
+Ham pencereye alternatifler: compaction · structured note-taking · just-in-time retrieval · sub-agent
+izolasyonu.
+
+**SwarmGo'nun önceki bahsi (§7, 2026-06-23).** `EffectiveBudget` `fraction=0.6 / ceil=512K`'ye
+çıkarılmıştı ("1M pencerede her şeyi ham tut" → Claude Code/External Agent davranışına yaklaşmak). Bu,
+**bilinçli olarak rot ile takastı**: ham pencere büyüdükçe `n²` yüzeyi ve recall hassasiyeti kaybı
+büyür. Ayrıca Claude Code o davranışı **prompt-cache + fork**'la ucuzlatır; SwarmGo'nun birincil yolu
+(`claude-cli`, anahtarsız) bu paylaşımı CC gibi kontrol edemez → büyük ham pencerenin getiri/maliyet
+oranı SwarmGo'da daha zayıf.
+
+**Kritik içgörü — dayanıklılık ≠ ham pencere boyutu.** Bir detayın kaybolmaması için 512K ham
+transkript *gerekmez*. SwarmGo'nun dayanıklılığı zaten **retrieval katmanında**: `memory_add` + lexical
+recall (uzun-dönem) · `core_memory_replace/append` (her tur enjekte working memory) · `conversation_search`
+(`full=true`/`context=N` ile **birebir** kurtarma, §10) · post-compact kurtarma notu ("tahmin etme;
+ara ya da yeniden oku", §9) · `memoryPressureWarn` ("şimdi yaz" uyarısı). Katlanan detay **birebir geri
+alınabilir** → ham pencereyi küçültmek recall **kaybettirmez**, sadece dayanıklılığı "büyük pencere"den
+"ucuz retrieval"a kaydırır ve `n²` rot yükünü azaltır.
+
+```mermaid
+graph LR
+    A["Ham pencere ↑ (512K)"] --> B["n² ilişki ↑"]
+    B --> C["recall hassasiyeti ↓ (context rot)"]
+    A --> D["dayanıklılık (kaybolmama)"]
+    E["retrieval katmanı:<br/>memory · conv_search · core"] --> D
+    E -.zaten var.-> F["ham pencere küçülse de<br/>detay birebir kurtarılır"]
+    style C fill:#d66,stroke:#900,color:#fff
+    style E fill:#2d6,stroke:#093
+```
+
+**Benimsenen strateji — retrieval-destekli adaptif pencere.** Üç seçenek tartıldı: (A) sabit 512K
+"her şeyi ham tut" — yüksek rot; (C) note-taking ağırlıklı agresif kısma (0.25/128K) — sık katlama,
+"neden bu kadar erken özetledi" hissi; (B) **orta, retrieval-destekli pencere** — seçilen. Gradyan
+uçurum değil → ne aşırı büyük (rot) ne aşırı küçük (gereksiz sık katlama) optimaldir.
+
+| Knob | Eski | Yeni | Gerekçe |
+|---|---|---|---|
+| `ContextBudgetCeil` | 512K | **256K** (`262144`) | `n²` yükü ~¼; gradyanın yüksek-hassasiyet bölgesi |
+| `ContextBudgetFraction` | 0.6 (sabit) | **0 = otomatik** → adaptif 0.35–0.45 | aile-bazlı rot toleransı |
+| `memoryPressureWarn` | 0.75 | **0.70** | "şimdi yaz" penceresini katlamadan önce öne al |
+
+**Adaptif fraction (`providers.AdaptiveBudgetFraction`).** `ContextWindowFor`'un aile sınıflamasını
+yeniden kullanır → yeni model ailesi eklenince tek yerde güncellenir. Uzun-bağlam-güvenilir aileler
+daha yüksek pay alır, küçük/bilinmeyen modeller muhafazakâr kalır:
+
+| Aile | Pencere | Fraction | Etkin (ceil 256K) |
+|---|---|---|---|
+| Opus 4.8 / Sonnet 4.6 | 1M | 0.45 | 450K → **256K** (tavan) |
+| Haiku 4.5 | 200K | 0.40 | **80K** |
+| MiniMax / DeepSeek / Gemini | 1M | 0.35 | 350K → **256K** (tavan) |
+| Fable / genel Claude | 200K | 0.40 | **80K** |
+| Bilinmeyen | 0 | — | taban (`MaxContextTokens`) |
+
+**Semantik & geriye-uyumluluk.** `ContextBudgetFraction = 0` artık **"otomatik/adaptif"** anlamına gelir
+(negatif → 0'a clamp'lenir; pozitif → manuel sabit pay). `MaxContextTokens` (configured) **taban** olarak
+korunur → kimse mevcut tabanının altına düşmez. `EffectiveBudget(provider, model, configured, fraction,
+ceil)`: `fraction<=0` ise `AdaptiveBudgetFraction`, o da 0 ise paket fallback (0.4). `SetBudgetShape`
+artık fraction 0'ı (auto) saklar (eskiden yok sayardı). Eski `settings.json`'larda kalan açık `0.6` değeri
+**manuel sabit** olarak yaşamaya devam eder (kullanıcı sıfırlayana dek); yeni kurulumlar adaptif başlar —
+her iki durumda da **ceil 256K** rot getirisini sağlar. Büyük ham pencere isteyen kullanıcı Ayarlar'dan
+`ContextBudgetCeil`/`ContextBudgetFraction`'ı yükseltebilir; varsayılan artık **rot-bilinçli**.
+
+**Sınırlar.** Bu bir *varsayılan politika* ayarıdır, sert sınır değil. claude-cli `--resume` warm modunda
+bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen gerilim, §11). Testler:
+`budget_test.go` (`TestEffectiveBudgetAdaptive`), `context_window_test.go` (`TestAdaptiveBudgetFraction`).
+
 ## Ayrıca Bakınız
 
+- **[35-CONTEXT-RESET-HANDOFF.md](35-CONTEXT-RESET-HANDOFF.md)** — Context reset + handoff artifact
+  (bu in-place compaction'ın tamamlayıcısı: özet yerine temiz pencerede devam).
 - **[19-LAZY-TOOL-LOADING.md](19-LAZY-TOOL-LOADING.md)** — Araç şemalarının talep üzerine yüklenmesi
   (sistem promptundan araç token yükü azaltmanın tamamlayıcı yolu): self-management + MCP araçları
   katalog özetiyle yayımlanır, `activate_tools` çağrılınca tam şema gelir.

@@ -49,3 +49,37 @@ func ContextWindowFor(provider, model string) int {
 		return 0
 	}
 }
+
+// AdaptiveBudgetFraction returns the share of a model's context window to keep as
+// raw live transcript before compaction, chosen per family. It is a context-rot
+// mitigation: a bigger raw window grows the n² attention surface and erodes recall
+// precision (a gradient, not a cliff — see _Docs/17 §12), so long-context-reliable
+// families get a larger share while smaller/unknown models stay conservative.
+// Durability of folded-away detail is carried by the retrieval layer (memory /
+// conversation_search / core blocks), NOT by the raw window size — so a smaller
+// fraction loses no recall, it only shifts recovery from "huge window" to "cheap
+// retrieval". A fraction of 0 in settings/Manager means "auto" and resolves here.
+// Returns 0 for unknown families so the caller falls back to its own default; for
+// those the window is also unknown (0), so the fraction is moot anyway.
+func AdaptiveBudgetFraction(provider, model string) float64 {
+	m := strings.ToLower(strings.TrimSpace(model))
+	if m == "" {
+		return 0
+	}
+	switch {
+	case strings.Contains(m, "minimax"):
+		return 0.35
+	case strings.Contains(m, "deepseek"):
+		return 0.35
+	case strings.Contains(m, "gemini"):
+		return 0.35
+	case strings.Contains(m, "haiku"):
+		return 0.40
+	case strings.Contains(m, "opus"), strings.Contains(m, "sonnet"):
+		return 0.45
+	case strings.Contains(m, "fable"), strings.Contains(m, "claude"):
+		return 0.40
+	default:
+		return 0
+	}
+}

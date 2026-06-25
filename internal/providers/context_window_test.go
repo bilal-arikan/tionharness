@@ -31,6 +31,28 @@ func TestContextWindowFor(t *testing.T) {
 	}
 }
 
+func TestAdaptiveBudgetFraction(t *testing.T) {
+	cases := []struct {
+		model string
+		want  float64
+	}{
+		{"claude-opus-4-8", 0.45},
+		{"anthropic/claude-sonnet-4.6", 0.45},
+		{"claude-haiku-4-5-20251001", 0.40},
+		{"claude-fable-5", 0.40},
+		{"MiniMax-M3", 0.35},
+		{"deepseek/deepseek-v4-flash", 0.35},
+		{"google/gemini-3.5-flash", 0.35},
+		{"", 0},               // claude-cli default → unknown → 0 (caller falls back)
+		{"openai/gpt-5.5", 0}, // not in a confident family → unknown
+	}
+	for _, c := range cases {
+		if got := AdaptiveBudgetFraction("", c.model); got != c.want {
+			t.Errorf("AdaptiveBudgetFraction(%q) = %v, want %v", c.model, got, c.want)
+		}
+	}
+}
+
 func TestCatalogFillsContextWindow(t *testing.T) {
 	for _, entry := range Catalog() {
 		for _, m := range entry.Models {

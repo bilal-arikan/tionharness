@@ -10,19 +10,22 @@ import "github.com/bilal-arikan/swarmgo/internal/providers"
 // are settings-configurable (ContextBudgetFraction / ContextBudgetCeil) and
 // default to the values below.
 const (
-	// defaultBudgetWindowFraction is the share of a model's context window we are
-	// willing to spend on live transcript before compacting. The rest of the window
-	// is headroom for tool output, the system prompt and the reply. At 0.6 a 1M
-	// window yields 600K (clamped down to the ceil), a 200K window yields 120K.
-	defaultBudgetWindowFraction = 0.6
+	// defaultBudgetWindowFraction is the *fallback* share of a model's window kept
+	// as raw transcript before compacting, used only when neither settings nor the
+	// per-family adaptive table (providers.AdaptiveBudgetFraction) supplies one — in
+	// practice only for families whose window is also unknown, where the fraction is
+	// moot. A fraction of 0 in settings/Manager means "auto" → the adaptive table
+	// picks a family-appropriate value (see _Docs/17 §12).
+	defaultBudgetWindowFraction = 0.4
 	// defaultBudgetAutoCeil caps the auto-derived budget (tokens) so a 1M-window
 	// model can't silently run runaway-expensive turns. For 1M models this ceiling
 	// is the operative number (window*fraction exceeds it), so it is the main knob
-	// for "how much of a big window we actually use": 512K ≈ 51% of a 1M window —
-	// so a 1M model keeps far more history verbatim (the user's first message
-	// survives much longer before the first silent fold). Users who want more raise
-	// it from Settings (or SWARMGO_CONTEXT_BUDGET_CEIL); MaxContextTokens is the floor.
-	defaultBudgetAutoCeil = 512000
+	// for "how much of a big window we actually use". Lowered 512K→256K (2026-06-25,
+	// _Docs/17 §12): 256K keeps the live window in the gradient's high-precision zone
+	// (~¼ of 512K's n² attention surface) while the retrieval layer carries durability
+	// of folded detail. Users who want more raise it from Settings (or
+	// SWARMGO_CONTEXT_BUDGET_CEIL); MaxContextTokens is the floor.
+	defaultBudgetAutoCeil = 262144
 )
 
 // EffectiveBudget returns the transcript token budget for an agent's model. The
@@ -36,15 +39,20 @@ func EffectiveBudget(provider, model string, configured int, fraction float64, c
 	if configured <= 0 {
 		configured = defaultMaxTokens
 	}
-	if fraction <= 0 {
-		fraction = defaultBudgetWindowFraction
-	}
 	if ceil <= 0 {
 		ceil = defaultBudgetAutoCeil
 	}
 	window := providers.ContextWindowFor(provider, model)
 	if window <= 0 {
 		return configured
+	}
+	// fraction<=0 means "auto": pick a family-appropriate share (context-rot aware),
+	// falling back to the package default only for families the table doesn't cover.
+	if fraction <= 0 {
+		fraction = providers.AdaptiveBudgetFraction(provider, model)
+		if fraction <= 0 {
+			fraction = defaultBudgetWindowFraction
+		}
 	}
 	derived := int(float64(window) * fraction)
 	if derived > ceil {
