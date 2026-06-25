@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Agent } from '../../../types'
 import { useOutsideClick } from '../../../hooks/useOutsideClick'
 import { AgentAvatar } from '../../agents/AgentAvatar'
+import { AgentIdentity } from '../../agents/AgentIdentity'
 
 interface Props {
   agents: Agent[]
@@ -38,7 +39,10 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
         }`}
       >
         {selected ? (
-          <AgentAvatar agent={selected} size={18} />
+          <>
+            <AgentAvatar agent={selected} size={18} />
+            <span className="hidden max-w-[120px] truncate sm:inline">{selected.name}</span>
+          </>
         ) : (
           <span>Ajan seç</span>
         )}
@@ -74,8 +78,7 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
                   : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'
               }`}
             >
-              <AgentAvatar agent={a} size={20} />
-              <span className="truncate font-medium text-[var(--color-text)]">{a.name}</span>
+              <AgentIdentity agent={a} size="sm" subtitle="model" />
             </button>
           ))}
         </div>

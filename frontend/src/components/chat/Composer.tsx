@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Paperclip } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '../../types'
 import { AttachmentChip } from './AttachmentChip'
@@ -104,6 +104,17 @@ export function Composer({
   const fileRef = useRef<HTMLInputElement>(null)
   // Monotonic id for pending attachments (avoids Date.now collisions on bursts).
   const seq = useRef(0)
+
+  // Auto-grow the textarea with its content: reset to a single row, then expand to
+  // fit the text. A CSS max-height (max-h-[5.5rem] ≈ 3 lines) caps the growth and
+  // turns on the internal scrollbar beyond that, so the composer never pushes the
+  // toolbar around. Runs on every text change (typing, draft restore, clear).
+  useLayoutEffect(() => {
+    const el = taRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [text])
 
   // uploadFiles uploads each file, tracking per-file progress in `pending`. Image
   // files get a local object-URL preview shown immediately. Requires a session.
@@ -379,44 +390,16 @@ export function Composer({
         </div>
       )}
 
-      <div className="flex w-full items-end gap-2">
-        <AgentSelect
-          agents={agents}
-          value={agentId}
-          onChange={onAgentChange}
-          disabled={!sessionId}
-        />
-        <ComposerPicker
-          value={thinkingLevel}
-          onChange={onThinkingLevelChange}
-          options={THINKING_OPTIONS}
-          header="Düşünme seviyesi"
-          title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
-          iconOnly
-        />
-        <ComposerPicker
-          value={permissionMode}
-          onChange={onPermissionModeChange}
-          options={PERMISSION_OPTIONS}
-          header="İzin modu (Shift+Tab)"
-          title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
-          menuWidthClass="w-60"
-          iconOnly
-        />
-        <WorkDirBadge sessionId={sessionId} />
-        {/* Attach button + hidden multi-file input. */}
-        <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFiles} />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={!sessionId}
-          title="Dosya ekle"
-          aria-label="Dosya ekle"
-          data-testid="composer-attach"
-          className={BTN_ICON}
-        >
-          <Paperclip size={18} />
-        </button>
+      {/* Input card: the textarea grows (up to ~3 lines) on its own full-width row;
+          the controls live on a fixed toolbar row beneath it, so they never stretch
+          or shift as the text area expands. The card carries the border/focus ring. */}
+      <div
+        className={`flex flex-col gap-2 rounded-2xl border bg-[var(--color-bg)] px-3 pb-2 pt-2.5 transition-colors focus-within:border-[var(--color-accent)] ${
+          active
+            ? 'border-[color-mix(in_srgb,var(--color-accent)_55%,var(--color-border))]'
+            : 'border-[var(--color-border)]'
+        }`}
+      >
         <textarea
           ref={taRef}
           value={text}
@@ -431,26 +414,67 @@ export function Composer({
               ? 'Otomatik devam bekleniyor — yazarsan konuşmayı devralırsın'
               : 'Mesaj yaz — @ ajan adı, # artifact, / komut, 📎 dosya'
           }
-          className={`max-h-40 flex-1 resize-none rounded-xl border bg-[var(--color-bg)] px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)] ${
-            active
-              ? 'border-[color-mix(in_srgb,var(--color-accent)_55%,var(--color-border))]'
-              : 'border-[var(--color-border)]'
-          }`}
+          className="max-h-[5.5rem] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 text-sm leading-5 outline-none placeholder:text-[var(--color-text-dim)]"
         />
-        <SendActions
-          streaming={streaming}
-          waiting={waiting}
-          hasText={hasText}
-          hasContent={hasContent}
-          anyUploading={anyUploading}
-          disabled={disabled || !agentId}
-          onSend={send}
-          onStop={onStop}
-          onCancelWait={onCancelWait}
-          onQueue={() => act(onQueue)}
-          onInterrupt={() => act(onInterrupt)}
-          onSteer={() => act(onSteer)}
-        />
+
+        {/* Toolbar row: left = target agent + per-turn pickers + workdir + attach;
+            right = send/streaming actions. Fixed height regardless of input size. */}
+        <div className="flex items-center gap-1.5">
+          <AgentSelect
+            agents={agents}
+            value={agentId}
+            onChange={onAgentChange}
+            disabled={!sessionId}
+          />
+          <ComposerPicker
+            value={thinkingLevel}
+            onChange={onThinkingLevelChange}
+            options={THINKING_OPTIONS}
+            header="Düşünme seviyesi"
+            title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
+          />
+          <ComposerPicker
+            value={permissionMode}
+            onChange={onPermissionModeChange}
+            options={PERMISSION_OPTIONS}
+            header="İzin modu (Shift+Tab)"
+            title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
+            menuWidthClass="w-60"
+            iconOnly
+          />
+          <WorkDirBadge sessionId={sessionId} />
+          {/* Attach button + hidden multi-file input. */}
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFiles} />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={!sessionId}
+            title="Dosya ekle"
+            aria-label="Dosya ekle"
+            data-testid="composer-attach"
+            className={BTN_ICON}
+          >
+            <Paperclip size={18} />
+          </button>
+
+          {/* Spacer pushes the send cluster to the right edge. */}
+          <div className="flex-1" />
+
+          <SendActions
+            streaming={streaming}
+            waiting={waiting}
+            hasText={hasText}
+            hasContent={hasContent}
+            anyUploading={anyUploading}
+            disabled={disabled || !agentId}
+            onSend={send}
+            onStop={onStop}
+            onCancelWait={onCancelWait}
+            onQueue={() => act(onQueue)}
+            onInterrupt={() => act(onInterrupt)}
+            onSteer={() => act(onSteer)}
+          />
+        </div>
       </div>
     </div>
   )

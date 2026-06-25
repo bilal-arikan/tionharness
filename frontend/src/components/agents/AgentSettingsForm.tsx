@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Eye, Trash2, FolderOpen, ClipboardCopy, Check } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, AgentPatch } from '../../types'
-import { AVATAR_COLORS, resolveColor } from '../../lib/avatar'
+import { AVATAR_COLORS, normalizeAvatar, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
 import { EmojiField } from '../common/EmojiField'
 import { ProviderModelSelect } from './ProviderModelSelect'
@@ -10,6 +10,8 @@ import { AgentToolsSection } from './AgentToolsSection'
 import { AgentSkillsSection } from './AgentSkillsSection'
 import { AgentContextModal } from './AgentContextModal'
 import { Button } from '../common'
+import { OptionPills } from '../common/OptionPills'
+import { PLANNING_OPTIONS, THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
 
 interface Props {
   agent: Agent
@@ -29,7 +31,9 @@ interface Props {
 // the selected agent resets the field state.
 export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabel = 'İptal', onDelete }: Props) {
   const [name, setName] = useState(agent.name)
-  const [avatar, setAvatar] = useState(agent.avatar ?? '')
+  // Seed with a normalized avatar so an existing mojibake value is repaired on
+  // open and persisted clean when the form is saved.
+  const [avatar, setAvatar] = useState(normalizeAvatar(agent.avatar) ?? '')
   const [color, setColor] = useState(agent.color ?? '')
   const [soul, setSoul] = useState(agent.soul ?? '')
   const [identity, setIdentity] = useState(agent.identity ?? '')
@@ -232,47 +236,37 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           }}
         />
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Planlama modu">
-            <select
-              data-testid="agent-planning-mode-select"
-              value={planningMode}
-              onChange={(e) => setPlanningMode(e.target.value)}
-              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-            >
-              <option value="standard">standard</option>
-              <option value="deep">deep</option>
-            </select>
-          </Field>
-          <Field label="Düşünme (thinking) seviyesi">
-            <select
-              data-testid="agent-thinking-level-select"
-              value={thinkingLevel || 'off'}
-              onChange={(e) => setThinkingLevel(e.target.value === 'off' ? '' : e.target.value)}
-              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-            >
-              <option value="off">Kapalı</option>
-              <option value="low">Düşük (~2K)</option>
-              <option value="medium">Orta (~8K)</option>
-              <option value="high">Yüksek (~16K)</option>
-            </select>
-          </Field>
-        </div>
+        <Field label="Planlama modu">
+          <OptionPills
+            value={planningMode}
+            onChange={setPlanningMode}
+            options={PLANNING_OPTIONS}
+            ariaLabel="Planlama modu"
+            testid="agent-planning-mode"
+          />
+        </Field>
+
+        <Field label="Düşünme (thinking) seviyesi">
+          <OptionPills
+            value={thinkingLevel}
+            onChange={setThinkingLevel}
+            options={THINKING_OPTIONS}
+            ariaLabel="Düşünme seviyesi"
+            testid="agent-thinking-level"
+          />
+        </Field>
         <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
           Uzatılmış akıl yürütme yalnız <strong>anthropic</strong> sağlayıcıda ve araçsız sohbette etkilidir.
         </p>
 
         <Field label="İzin modu (araç kullanımı)">
-          <select
-            data-testid="agent-permission-mode-select"
+          <OptionPills
             value={permissionMode}
-            onChange={(e) => setPermissionMode(e.target.value)}
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-          >
-            <option value="auto">Otomatik — tüm araçlar onaysız çalışır</option>
-            <option value="ask">Sor — dosya yazma/komut için onay iste</option>
-            <option value="read-only">Salt-okunur — yazma/komut engellenir</option>
-          </select>
+            onChange={setPermissionMode}
+            options={PERMISSION_OPTIONS}
+            ariaLabel="İzin modu"
+            testid="agent-permission-mode"
+          />
         </Field>
         <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
           <strong>Salt-okunur</strong> yalnız okuma araçlarına izin verir. <strong>Sor</strong> modunda yazma/komut

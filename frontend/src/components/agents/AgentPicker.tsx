@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Agent } from '../../types'
 import { useOutsideClick } from '../../hooks/useOutsideClick'
-import { AgentAvatar } from './AgentAvatar'
+import { AgentIdentity } from './AgentIdentity'
 
 interface Props {
   agents: Agent[]
@@ -27,10 +27,7 @@ export function AgentPicker({ agents, value, onChange, placeholder = 'Ajan seç'
         className="flex min-w-40 items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none hover:border-[var(--color-accent)]"
       >
         {selected ? (
-          <>
-            <AgentAvatar agent={selected} size={20} />
-            <span className="truncate">{selected.name}</span>
-          </>
+          <AgentIdentity agent={selected} size="sm" subtitle="model" />
         ) : (
           <span className="text-[var(--color-text-dim)]">{placeholder}</span>
         )}
@@ -51,12 +48,11 @@ export function AgentPicker({ agents, value, onChange, placeholder = 'Ajan seç'
                 onChange(a.id)
                 setOpen(false)
               }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[var(--color-bg)] ${
-                a.id === value ? 'text-[var(--color-accent)]' : ''
+              className={`flex w-full items-center px-3 py-1.5 text-left text-sm hover:bg-[var(--color-bg)] ${
+                a.id === value ? 'bg-[var(--color-accent-soft)]' : ''
               }`}
             >
-              <AgentAvatar agent={a} size={20} />
-              <span className="truncate">{a.name}</span>
+              <AgentIdentity agent={a} size="sm" subtitle="model" />
             </button>
           ))}
         </div>

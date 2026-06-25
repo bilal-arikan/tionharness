@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Settings } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
-import { AgentAvatar } from './AgentAvatar'
+import { AgentIdentity } from './AgentIdentity'
 import { AgentSettingsModal } from './AgentSettingsModal'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { Button } from '../common'
+import { useCatalog, resolveModelLabel } from '../../lib/catalog'
 
 interface Props {
   agents: Agent[]
@@ -35,6 +36,7 @@ export function AgentRoster({
   const [provider, setProvider] = useState('claude-cli')
   const [model, setModel] = useState('')
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
+  const catalog = useCatalog()
 
   const submit = () => {
     if (!name.trim()) return
@@ -112,14 +114,15 @@ export function AgentRoster({
               onClick={() => onSelectAgent(a.id)}
               className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
             >
-              <AgentAvatar agent={a} size={32} active={defaultAgentId === a.id} />
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate font-medium">{a.name}</span>
-                <span className="truncate text-xs opacity-70">
-                  {a.provider}
-                  {defaultAgentId === a.id ? ' · varsayılan' : ''}
-                </span>
-              </span>
+              <AgentIdentity
+                agent={a}
+                size="md"
+                active={defaultAgentId === a.id}
+                subtitle={
+                  resolveModelLabel(catalog, a.provider, a.model) +
+                  (defaultAgentId === a.id ? ' · varsayılan' : '')
+                }
+              />
             </button>
             <button
               data-testid="agent-settings-open"

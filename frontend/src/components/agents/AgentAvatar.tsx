@@ -1,5 +1,5 @@
 import type { Agent } from '../../types'
-import { avatarGlyph, resolveColor } from '../../lib/avatar'
+import { avatarGlyph, normalizeAvatar, resolveColor } from '../../lib/avatar'
 
 interface Props {
   agent: Pick<Agent, 'id' | 'name' | 'avatar' | 'color'>
@@ -13,7 +13,9 @@ interface Props {
 export function AgentAvatar({ agent, size = 32, active = false }: Props) {
   const color = resolveColor(agent)
   const glyph = avatarGlyph(agent)
-  const isEmoji = !!agent.avatar
+  // Only size up as an emoji when the custom avatar is actually a usable glyph;
+  // a corrupted/empty avatar falls back to initials, which render smaller + bold.
+  const isEmoji = !!normalizeAvatar(agent.avatar)
 
   return (
     <span

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Smile } from 'lucide-react'
 import { EmojiPicker } from '../agents/EmojiPicker'
+import { normalizeAvatar } from '../../lib/avatar'
 
 interface Props {
   /** Currently selected emoji ('' = none / default). */
@@ -32,7 +33,9 @@ export function EmojiField({ value, onChange, clearLabel = 'Aa', label }: Props)
         className="flex items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm hover:border-[var(--color-accent)]"
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-lg leading-none">
-          {value || clearLabel}
+          {/* Normalize so a corrupted/mojibake stored value never shows as garbage
+              (real emoji pass through, mojibake is repaired, junk → clearLabel). */}
+          {normalizeAvatar(value) || clearLabel}
         </span>
         {text ? (
           <span className="text-[var(--color-text-dim)]">{text}</span>

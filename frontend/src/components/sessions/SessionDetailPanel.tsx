@@ -3,7 +3,7 @@ import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy,
 import { api } from '../../api'
 import type { SessionInfo, AgentUsage, SessionUsageDetail, SessionProgress } from '../../types'
 import { SessionContextModal } from './SessionContextModal'
-import { AgentAvatar } from '../agents/AgentAvatar'
+import { AgentIdentity } from '../agents/AgentIdentity'
 import { roleColor } from '../../lib/palette'
 import { displayPath } from '../../lib/paths'
 
@@ -521,21 +521,20 @@ export function SessionDetailPanel({
           <Section title={`Konuşmadaki ajanlar (${info.agents.length})`}>
             <div className="flex flex-col gap-2">
               {info.agents.map((a) => (
-                <div key={a.agentId} className="flex items-center gap-2">
-                  <AgentAvatar
-                    agent={{ id: a.agentId, name: a.name, avatar: a.avatar, color: a.color }}
-                    size={24}
-                  />
-                  <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                    <span className={`truncate text-xs ${a.disabled ? 'italic text-[var(--color-text-dim)]' : 'text-[var(--color-text)]'}`}>
-                      {a.name}
-                      {a.isOwner && <span className="ml-1 text-[var(--color-accent)]" title="Varsayılan ajan">★</span>}
-                    </span>
-                    <span className="text-[10px] text-[var(--color-text-dim)]">
-                      {a.turns} tur · ~{formatTokens(a.tokens)} token
-                    </span>
-                  </span>
-                </div>
+                <AgentIdentity
+                  key={a.agentId}
+                  agent={{ id: a.agentId, name: a.name, avatar: a.avatar, color: a.color }}
+                  size="sm"
+                  dim={a.disabled}
+                  nameSuffix={
+                    a.isOwner ? (
+                      <span className="ml-1 text-[var(--color-accent)]" title="Varsayılan ajan">
+                        ★
+                      </span>
+                    ) : undefined
+                  }
+                  subtitle={`${a.turns} tur · ~${formatTokens(a.tokens)} token`}
+                />
               ))}
             </div>
           </Section>

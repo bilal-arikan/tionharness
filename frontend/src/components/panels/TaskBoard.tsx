@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import type { Agent, Task, Flow, BoardColumnDef } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
-import { AgentAvatar } from '../agents/AgentAvatar'
+import { AgentIdentity } from '../agents/AgentIdentity'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { BoardColumnEditor } from './BoardColumnEditor'
 import { Button } from '../common'
@@ -358,12 +358,7 @@ export function TaskBoard({ agents, onError }: Props) {
                         )}
                         {(owner || t.flowId || depIds.length > 0) && (
                           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-                            {owner && (
-                              <span className="flex items-center gap-1.5">
-                                <AgentAvatar agent={owner} size={16} />
-                                <span className="truncate">{owner.name}</span>
-                              </span>
-                            )}
+                            {owner && <AgentIdentity agent={owner} size="sm" className="max-w-[160px]" />}
                             {t.flowId && (
                               <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
                                 🔀 {flow?.name ?? 'Akış'}

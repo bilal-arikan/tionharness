@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
-import { AgentAvatar } from './AgentAvatar'
+import { AgentIdentity } from './AgentIdentity'
 import { ProviderModelSelect } from './ProviderModelSelect'
+import { useCatalog, resolveModelLabel } from '../../lib/catalog'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
 import { Button } from '../common'
@@ -44,6 +45,7 @@ export function AgentsView({
   const [internalId, setInternalId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const catalog = useCatalog()
 
   const doRefresh = async () => {
     if (!onRefresh || refreshing) return
@@ -167,19 +169,20 @@ export function AgentsView({
                 data-agent-id={a.id}
                 className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
               >
-                <AgentAvatar agent={a} size={32} active={defaultAgentId === a.id} />
-                <span className="flex min-w-0 flex-col">
-                  <span className="flex min-w-0 items-baseline gap-1.5">
-                    <span className="truncate font-medium">{a.name}</span>
-                    <span className="shrink-0 font-mono text-[10px] opacity-60" title="Ajan ID (klasör adı)">
+                <AgentIdentity
+                  agent={a}
+                  size="md"
+                  active={defaultAgentId === a.id}
+                  nameSuffix={
+                    <span className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60" title="Ajan ID (klasör adı)">
                       {a.id}
                     </span>
-                  </span>
-                  <span className="truncate text-xs opacity-70">
-                    {a.provider}
-                    {defaultAgentId === a.id ? ' · varsayılan' : ''}
-                  </span>
-                </span>
+                  }
+                  subtitle={
+                    resolveModelLabel(catalog, a.provider, a.model) +
+                    (defaultAgentId === a.id ? ' · varsayılan' : '')
+                  }
+                />
               </button>
               <button
                 onClick={() => onSetDefault(a.id)}
