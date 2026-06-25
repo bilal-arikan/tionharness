@@ -378,6 +378,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   const [tab, setTab] = useState<PackKind>(KIND_NAV[0].key)
   const [selected, setSelected] = useState<Pack | null>(null)
   const [busy, setBusy] = useState(false)
+  const [query, setQuery] = useState('') // catalog search (name/description/author)
   const [installed, setInstalled] = useState<Set<string>>(new Set())
   const [existing, setExisting] = useState<ExistingKeys>(emptyExisting)
   // Provider key, resolved from the secret vault (never typed). pickedSecret is
@@ -481,7 +482,18 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
     [onError],
   )
 
-  const visible = useMemo(() => packs.filter((p) => p.kind === tab), [packs, tab])
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return packs.filter((p) => {
+      if (p.kind !== tab) return false
+      if (!q) return true
+      return (
+        p.name.toLowerCase().includes(q) ||
+        (p.description ?? '').toLowerCase().includes(q) ||
+        (p.author ?? '').toLowerCase().includes(q)
+      )
+    })
+  }, [packs, tab, query])
 
   const openDetail = useCallback(
     async (pack: Pack) => {
@@ -570,6 +582,13 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
             <span className="text-xs text-[var(--color-text-dim)]">{visible.length} paket</span>
           </div>
           <div className="flex items-center gap-1.5">
+            <input
+              data-testid="market-search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ara…"
+              className="w-40 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+            />
             <button
               data-testid="market-import"
               onClick={() => setImporting(true)}

@@ -4,8 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 )
+
+// maxConnectorBytes caps a connector's site response. crossaitools' listing is ~12 MB
+// (the whole catalog comes in one call; it ignores ?q=/?limit=), so this is larger
+// than a swarmregistry index's cap.
+const maxConnectorBytes = 24 << 20 // 24 MiB
+
+// crossaitoolsTopN bounds how many of crossaitools' ~21.7k listings are surfaced in
+// the catalog (by popularity), so a single connector doesn't flood the market. The
+// long tail is reachable later via server-side search (Faz C/D).
+const crossaitoolsTopN = 300
 
 // Connectors bridge external skill DIRECTORY SITES (whose listings point at GitHub)
 // into the market: a connector queries the site's API and transforms each listing
@@ -37,6 +48,13 @@ var connectors = map[string]connectorDef{
 			Detail: "skillsmp.com skill marketplace (GitHub-backed)",
 		},
 		fetch: fetchSkillsMP,
+	},
+	"crossaitools": {
+		info: ConnectorInfo{
+			ID: "crossaitools", Name: "CrossAITools", URL: "https://crossaitools.com/api/skills",
+			Detail: "crossaitools.com — top skills by popularity (GitHub-backed)",
+		},
+		fetch: fetchCrossAITools,
 	},
 }
 
@@ -133,6 +151,124 @@ func fetchSkillsMP(ctx context.Context, apiURL string) ([]RegistryEntry, error) 
 		})
 	}
 	return out, nil
+}
+
+// --- crossaitools ---
+
+// crossaitoolsItem is the subset of crossaitools.com's /api/skills entry we consume.
+type crossaitoolsItem struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Repo          string `json:"repo"` // "owner/repo"
+	Path          string `json:"path"` // skill folder within the repo ("" = root)
+	Stars         int    `json:"stars"`
+	Installs      int    `json:"installs"`
+	ListingStatus string `json:"listingStatus"`
+}
+
+// fetchCrossAITools queries crossaitools.com's full listing (it ignores ?q/?limit,
+// returning the whole ~12 MB catalog) and maps the TOP-N most popular listed skills
+// to source-ref entries. repo+path → a GitHub tree URL the ingest pipeline resolves.
+func fetchCrossAITools(ctx context.Context, apiURL string) ([]RegistryEntry, error) {
+	data, err := httpGet(ctx, apiURL, maxConnectorBytes)
+	if err != nil {
+		return nil, err
+	}
+	items, err := decodeCrossAITools(data)
+	if err != nil {
+		return nil, err
+	}
+	// Keep listed entries with a usable repo, sort by popularity, cap to TOP-N.
+	listed := items[:0]
+	for _, it := range items {
+		if strings.TrimSpace(it.Repo) == "" {
+			continue
+		}
+		if it.ListingStatus != "" && !strings.EqualFold(it.ListingStatus, "listed") {
+			continue
+		}
+		listed = append(listed, it)
+	}
+	sort.SliceStable(listed, func(i, j int) bool {
+		if listed[i].Stars != listed[j].Stars {
+			return listed[i].Stars > listed[j].Stars
+		}
+		return listed[i].Installs > listed[j].Installs
+	})
+	if len(listed) > crossaitoolsTopN {
+		listed = listed[:crossaitoolsTopN]
+	}
+	out := make([]RegistryEntry, 0, len(listed))
+	for _, it := range listed {
+		gh := githubTreeURL(it.Repo, it.Path)
+		slug := it.ID
+		if slug == "" {
+			slug = it.Repo + "-" + it.Path
+		}
+		out = append(out, RegistryEntry{
+			ID:          "skill.crossaitools-" + strings.Trim(slugifyID(slug), "-"),
+			Kind:        KindSkill,
+			Name:        it.Name,
+			Description: it.Description,
+			Source:      &SourceRef{Type: "github", URL: gh},
+		})
+	}
+	return out, nil
+}
+
+// decodeCrossAITools parses crossaitools' response (bare array or wrapped).
+func decodeCrossAITools(data []byte) ([]crossaitoolsItem, error) {
+	var arr []crossaitoolsItem
+	if json.Unmarshal(data, &arr) == nil && len(arr) > 0 {
+		return arr, nil
+	}
+	var wrap struct {
+		Skills []crossaitoolsItem `json:"skills"`
+		Data   []crossaitoolsItem `json:"data"`
+		Items  []crossaitoolsItem `json:"items"`
+	}
+	if err := json.Unmarshal(data, &wrap); err != nil {
+		return nil, fmt.Errorf("invalid crossaitools response: %w", err)
+	}
+	switch {
+	case len(wrap.Skills) > 0:
+		return wrap.Skills, nil
+	case len(wrap.Data) > 0:
+		return wrap.Data, nil
+	case len(wrap.Items) > 0:
+		return wrap.Items, nil
+	}
+	return arr, nil
+}
+
+// githubTreeURL builds a github.com tree URL from "owner/repo" + a folder path
+// ("" = repo root). Ref defaults to main; the ingest fetch falls back to master.
+func githubTreeURL(repo, path string) string {
+	repo = strings.Trim(strings.TrimSpace(repo), "/")
+	path = strings.Trim(strings.TrimSpace(path), "/")
+	if path == "" {
+		return "https://github.com/" + repo
+	}
+	return "https://github.com/" + repo + "/tree/main/" + path
+}
+
+// slugifyID lower-cases an id and keeps only [a-z0-9-], collapsing other runs to "-".
+// (market is dependency-free; this mirrors skills.Slugify without the import.)
+func slugifyID(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	prevDash := false
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			prevDash = false
+		} else if b.Len() > 0 && !prevDash {
+			b.WriteByte('-')
+			prevDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 // decodeSkillsMP parses skillsmp's response, tolerating either a bare array or an

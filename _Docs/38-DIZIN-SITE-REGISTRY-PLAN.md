@@ -13,9 +13,16 @@
 > `GET/POST /api/market/connectors[/add]`, UI `RegistryManager` "Hazır kaynaklar"
 > quick-add. Canlı: skillsmp 12 entry. Testler: `connectors_test.go` (+live).
 >
-> **Kalan (planlı):** Faz C — crossaitools connector + arama/sayfalama (21.7k ölçek);
-> Faz D — market arama kutusu + source-ref "Kuruldu" cross-session işaretleme
-> (şu an ledger pack-id ile, isInstalled slug eşleşmesi MVP'de eksik); Faz E —
+> **Faz C** ✅ — crossaitools connector (`market/connectors.go::fetchCrossAITools`):
+> ~12 MB tam liste tek çağrıda gelir (site `?q`/`?limit` yok sayar) → **popülerliğe göre
+> (stars, installs) top-300** kırpılır (`crossaitoolsTopN`), `repo`+`path` → GitHub tree
+> URL'i (`githubTreeURL`). `maxConnectorBytes=24MB`. Canlı: 21.7k → 300.
+> **Faz D** ✅ — market **arama kutusu** (`MarketPanel` `query` state; name/description/
+> author client-side filtre).
+>
+> **Kalan (planlı):** source-ref "Kuruldu" cross-session işaretleme (şu an ledger
+> pack-id ile; `isInstalled` slug eşleşmesi MVP'de eksik); crossaitools **server-side
+> live search** (cap yerine sorgu-bazlı, arch değişikliği gerektirir); Faz E —
 > claudeskillsmarket sitemap/scrape; Faz F — harici statik köprü generator.
 
 ## 1. Problem

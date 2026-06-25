@@ -1,6 +1,22 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-25**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
+
+## Dizin-sitesi köprüsü: crossaitools connector + market arama ✅ (2026-06-26)
+
+`_Docs\38` Faz C+D:
+
+- **Faz C — crossaitools connector:** `market/connectors.go::fetchCrossAITools`.
+  crossaitools.com `/api/skills` tüm kataloğu (**~12 MB**, site `?q`/`?limit` yok sayar)
+  tek çağrıda döner → **popülerliğe göre (stars, sonra installs) top-300** kırpılır
+  (`crossaitoolsTopN`); `repo`+`path` → GitHub tree URL'i (`githubTreeURL`, root path →
+  bare repo). `maxConnectorBytes=24MB`. Canlı: 21.7k → 300 source-ref entry.
+- **Faz D — market arama kutusu:** `MarketPanel` header'ına `query` state + client-side
+  filtre (name/description/author); büyük kataloglar (crossaitools 300) için kullanılabilirlik.
+- **Test:** `connectors_test.go` (sort/cap/skip + githubTreeURL) + canlı `TestLiveCrossAITools`
+  (21.7k→300). **480 test**, vet/tsc/prod build temiz.
+- **Kalan (planlı):** source-ref "Kuruldu" cross-session işaretleme; crossaitools server-side
+  live search; claudeskillsmarket scrape; harici köprü generator. Detay: `_Docs\38`.
 
 ## Dizin-sitesi köprüsü: kaynak-ref + skillsmp connector ✅ (2026-06-25)
 
