@@ -13,6 +13,33 @@ saklanır (`localStorage: swarmgo.favoriteWs`), aktif-workspace işaretçisiyle 
 desen. Seçim sırası: `(işaretçi yoksa) favori → son-aktif → favori → ilk`.
 Kod: `hooks/useWorkspaces.ts`, `WorkspaceSwitcher.tsx`.
 
+## Workspace'e Özel Görünüm/Tema (2026-06-25)
+
+Görünüm ayarları artık **uygulama-geneli Ayarlar'da değil**, NavRail ▸ **Workspace**
+penceresinin **Görünüm** sekmesindedir (`WorkspaceView.tsx` sekmeleri: Genel ▸
+**Görünüm** ▸ Proje ▸ Promptlar & Dosyalar). Ayar **aktif workspace'e özeldir**:
+her workspace kendi tema paletini, temel modunu (koyu/açık/sistem) ve vurgu
+rengini (accent) saklar; **workspace değiştirince arayüz teması da değişir**.
+
+- **Saklama:** `ws-settings.json` içinde `theme`/`accent`/`themePreset` alanları
+  (`internal/workspace/settings.go` → `WSSettings`). Boş alan = **uygulama-geneli
+  görünümü miras alır** (`settings.json`'daki `theme`/`accent`/`themePreset`
+  varsayılan rolünü sürdürür).
+- **Çözümleme:** `frontend/src/lib/theme.ts::resolveAppearance(ws, global)` her
+  alanı tek tek birleştirir (boş → global). `applyAppearance` belgeye uygular.
+- **Uygulama akışı:** `App.tsx` global görünümü ve aktif workspace override'ını
+  iki ref'te tutar; workspace değişiminde `GET /api/workspace-settings` ile
+  override çekilip `applyResolvedTheme()` çağrılır. Global ayar kaydı (örn. Profil)
+  workspace seçimini ezmez.
+- **Düzenleme:** `AppearancePanel` (self-contained; global+workspace ayarını kendi
+  çeker) override'ı doğrudan `PUT /api/workspace-settings` ile kaydeder, düzenlerken
+  **canlı önizleme** uygular, kaydedilmeden çıkılırsa önizlemeyi geri alır. "Genele
+  sıfırla" butonu alanları temizleyip workspace'i tekrar global görünüme döndürür.
+  Panel `WorkspaceView`'in Görünüm sekmesinde gömülüdür (kendi Kaydet/Sıfırla
+  butonlarını taşır → ortak header Kaydet'i bu sekmede gizli).
+- **Dil seçeneği** Görünüm'den çıkarılıp uygulama-geneli **Profil** kategorisine
+  (Ayarlar) taşındı; dil uygulama-geneli kalır (workspace'e özel değildir).
+
 ## Neden Ayrı Store Dizini?
 
 Tek depo + `workspace_id` ayrımı yerine **her workspace için ayrı `store/` dizini** seçildi:

@@ -22,6 +22,11 @@ type workspaceSettingsDTO struct {
 	DefaultWorkingDir string `json:"defaultWorkingDir"`
 	CreatedAt         int64  `json:"createdAt"`
 
+	// Per-workspace appearance overrides (empty = inherit global).
+	Theme       string `json:"theme"`
+	Accent      string `json:"accent"`
+	ThemePreset string `json:"themePreset"`
+
 	SessionContextEnabled     bool `json:"sessionContextEnabled"`
 	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`
 	SessionContextRecentCount int  `json:"sessionContextRecentCount"`
@@ -52,6 +57,10 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		PauseAutonomy:     s.PauseAutonomy,
 		DefaultWorkingDir: s.DefaultWorkingDir,
 		CreatedAt:         w.CreatedAt,
+
+		Theme:       s.Theme,
+		Accent:      s.Accent,
+		ThemePreset: s.ThemePreset,
 
 		SessionContextEnabled:     s.SessionContextEnabled,
 		SessionContextEveryTurn:   s.SessionContextEveryTurn,

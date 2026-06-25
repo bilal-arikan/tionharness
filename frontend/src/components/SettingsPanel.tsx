@@ -17,7 +17,6 @@ import {
 import {
   ProfilePanel,
   NotificationsPanel,
-  AppearancePanel,
   ContextPanel,
   BudgetPanel,
   AutonomyPanel,
@@ -283,7 +282,6 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
           ) : (
             <>
               {cat === 'profile' && <ProfilePanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'appearance' && <AppearancePanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'providers' && (
                 <ProvidersPanel
                   draft={draft}

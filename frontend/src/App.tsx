@@ -47,7 +47,7 @@ import { useChatStream } from './hooks/useChatStream'
 import { useUrlSync } from './hooks/useUrlSync'
 import { parseRoute, routeIdForView, routeFromEvent, buildRoute, type Route } from './lib/url'
 import { isImagePath, mediaUrl } from './lib/paths'
-import { applyTheme } from './lib/theme'
+import { applyAppearance, resolveAppearance, type Appearance } from './lib/theme'
 import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clientPrefs'
 
 // isChatKind reports whether a session is a manual chat (shown in the chat
@@ -175,18 +175,53 @@ export default function App() {
     setView('executions')
   }, [])
 
-  // Apply the client-side preferences carried by app settings.
+  // Appearance is per-workspace: the app-global appearance is the inherited
+  // default, and each workspace may override theme/accent/preset. We keep both
+  // in refs so a global-settings save and a workspace switch can each re-resolve
+  // and re-apply the effective theme without racing each other.
+  const globalAppearanceRef = useRef<Appearance>({ theme: 'dark', accent: '#8b5cf6', themePreset: 'midnight-violet' })
+  const wsAppearanceRef = useRef<Partial<Appearance> | null>(null)
+  const applyResolvedTheme = useCallback(() => {
+    applyAppearance(resolveAppearance(wsAppearanceRef.current, globalAppearanceRef.current))
+  }, [])
+
+  // Apply the client-side preferences carried by app settings. Theme resolution
+  // honors the active workspace's override on top of these global defaults.
   const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; themePreset?: string; keepAwake: boolean; desktopNotifications: boolean }) => {
-    applyTheme(s.theme, s.accent, s.themePreset)
+    globalAppearanceRef.current = { theme: s.theme, accent: s.accent, themePreset: s.themePreset ?? '' }
+    applyResolvedTheme()
     applyKeepAwake(s.keepAwake)
     ensureNotificationPermission(s.desktopNotifications)
     notifyEnabled.current = s.desktopNotifications
-  }, [])
+  }, [applyResolvedTheme])
+
+  // onAppearanceSaved is invoked by the Settings "Görünüm" panel after it persists
+  // the active workspace's appearance override, so App's ref + the live theme stay
+  // in sync (a later global save must not clobber the workspace choice).
+  const onAppearanceSaved = useCallback((a: Partial<Appearance>) => {
+    wsAppearanceRef.current = a
+    applyResolvedTheme()
+  }, [applyResolvedTheme])
 
   // Load global settings once and apply theme + client-side behaviours.
   useEffect(() => {
     api.getSettings().then(applyClientPrefs).catch((e) => setError(e.message))
   }, [applyClientPrefs])
+
+  // Re-theme whenever the active workspace changes: fetch that workspace's
+  // appearance override and apply it on top of the global defaults.
+  useEffect(() => {
+    if (!activeWorkspaceId) return
+    let cancelled = false
+    api.getWorkspaceSettings()
+      .then((w) => {
+        if (cancelled) return
+        wsAppearanceRef.current = { theme: w.theme as Appearance['theme'], accent: w.accent, themePreset: w.themePreset }
+        applyResolvedTheme()
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activeWorkspaceId, applyResolvedTheme])
 
   // Load agents + ALL sessions whenever the active workspace changes (the chat
   // is session-based: sessions are listed flat, not nested under an agent).
@@ -953,6 +988,7 @@ export default function App() {
             onError={setError}
             onWorkspaceChanged={refreshWorkspaces}
             onDeleteWorkspace={deleteActiveWorkspace}
+            onAppearanceSaved={onAppearanceSaved}
             tab={workspaceTab}
             onTabChange={setWorkspaceTab}
           />

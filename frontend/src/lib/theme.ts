@@ -71,3 +71,31 @@ export function applyTheme(
 
   if (accent) root.style.setProperty('--color-accent', accent)
 }
+
+// Appearance is the visual subset of settings that can be overridden per
+// workspace. The app-global values act as the inherited defaults.
+export interface Appearance {
+  theme: AppSettings['theme']
+  accent: string
+  themePreset: string
+}
+
+// resolveAppearance merges a workspace's appearance override onto the global
+// appearance: each empty field inherits the global value. This is what drives
+// the UI re-theming itself when the active workspace changes — a workspace with
+// no overrides looks exactly like the global default.
+export function resolveAppearance(
+  ws: Partial<Appearance> | null | undefined,
+  global: Appearance,
+): Appearance {
+  return {
+    theme: (ws?.theme as AppSettings['theme']) || global.theme,
+    accent: ws?.accent || global.accent,
+    themePreset: ws?.themePreset || global.themePreset,
+  }
+}
+
+// applyAppearance applies a resolved appearance to the document root.
+export function applyAppearance(a: Appearance) {
+  applyTheme(a.theme, a.accent, a.themePreset)
+}

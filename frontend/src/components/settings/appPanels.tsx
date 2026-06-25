@@ -1,12 +1,13 @@
 // The simple app-global setting categories (form fields only). The stateful
 // categories (providers, commands, step kinds, workspace) live in their own
 // files; these are pure draft+setter forms.
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, FlaskConical, ShieldCheck, Archive, RotateCcw, ListChecks, Trash2, type LucideIcon } from 'lucide-react'
 import type { VersionInfo, BackupStatus, WorkspaceArchives } from '../../types'
 import { api, getActiveWorkspace } from '../../api'
 import type { AppSettings } from '../../types'
 import { THEME_PRESETS } from '../../lib/themePresets'
+import { applyAppearance, resolveAppearance, type Appearance } from '../../lib/theme'
 import { NOTIFY_TYPES, mutedTypes, setTypeEnabled } from '../../lib/notifyPrefs'
 import { Field, Toggle, Slider, inputCls, type AppSet } from './primitives'
 
@@ -40,6 +41,12 @@ export function ProfilePanel({ draft, set }: PanelProps) {
         <Field label="Ülke"><input value={draft.userCountry} onChange={(e) => set('userCountry', e.target.value)} placeholder="örn. Türkiye" className={inputCls} /></Field>
       </div>
       <Field label="Notlar" hint="Tercihlerini anlatan serbest metin (talimatlar, çalışma şekli…)."><textarea value={draft.userNotes} onChange={(e) => set('userNotes', e.target.value)} rows={5} className={`${inputCls} resize-none`} placeholder="Ajanların bilmesi gereken tercihlerin…" /></Field>
+      <Field label="Dil" hint="UI dili tercihi — tüm workspace'ler için geçerli (tam çeviri kademeli ekleniyor).">
+        <select value={draft.language} onChange={(e) => set('language', e.target.value as AppSettings['language'])} className={inputCls}>
+          <option value="tr">Türkçe</option>
+          <option value="en">English</option>
+        </select>
+      </Field>
     </>
   )
 }
@@ -73,9 +80,120 @@ export function NotificationsPanel({ draft, set }: PanelProps) {
   )
 }
 
-export function AppearancePanel({ draft, set, setDraft }: PanelProps) {
+// AppearancePanel edits the ACTIVE WORKSPACE's appearance override (theme,
+// accent, palette). It is self-contained — it loads/saves the per-workspace
+// settings directly and applies a live preview as the user edits — so the
+// shared app-global Save button is hidden for this category. Empty fields
+// inherit the app-global appearance, so switching workspaces re-themes the UI.
+const FALLBACK_APPEARANCE: Appearance = { theme: 'dark', accent: '#8b5cf6', themePreset: 'midnight-violet' }
+
+export function AppearancePanel({
+  onError,
+  onAppearanceSaved,
+}: {
+  onError: (msg: string) => void
+  onAppearanceSaved?: (a: Appearance) => void
+}) {
+  // The app-global appearance acts as the inherited default for empty fields.
+  const [globalAppearance, setGlobalAppearance] = useState<Appearance>(FALLBACK_APPEARANCE)
+  const [draft, setDraft] = useState<Appearance>(FALLBACK_APPEARANCE)
+  const [saved, setSaved] = useState<Appearance>(FALLBACK_APPEARANCE)
+  const [hasOverride, setHasOverride] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  // The appearance to restore on unmount when the user leaves with an unsaved
+  // live preview (so the previewed theme reverts to what is actually persisted).
+  const revertRef = useRef<Appearance>(FALLBACK_APPEARANCE)
+
+  // Load the app-global appearance (inherited default) and this workspace's
+  // override, then seed the draft with the effective values.
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([api.getSettings(), api.getWorkspaceSettings()])
+      .then(([g, w]) => {
+        if (cancelled) return
+        const global: Appearance = { theme: g.theme, accent: g.accent, themePreset: g.themePreset }
+        const override: Partial<Appearance> = {
+          theme: w.theme as Appearance['theme'],
+          accent: w.accent,
+          themePreset: w.themePreset,
+        }
+        const eff = resolveAppearance(override, global)
+        setGlobalAppearance(global)
+        setDraft(eff)
+        setSaved(eff)
+        setHasOverride(!!(w.theme || w.accent || w.themePreset))
+        revertRef.current = eff
+      })
+      .catch((e) => onError((e as Error).message))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // On unmount, revert any unsaved live preview to the persisted appearance.
+  useEffect(() => {
+    return () => applyAppearance(revertRef.current)
+  }, [])
+
+  // Live-preview an edit immediately, then track it in the draft.
+  const update = (patch: Partial<Appearance>) =>
+    setDraft((d) => {
+      const next = { ...d, ...patch }
+      applyAppearance(next)
+      return next
+    })
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved)
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await api.updateWorkspaceSettings({
+        theme: draft.theme,
+        accent: draft.accent,
+        themePreset: draft.themePreset,
+      })
+      setSaved(draft)
+      setHasOverride(true)
+      revertRef.current = draft
+      onAppearanceSaved?.(draft)
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Clear the override so this workspace inherits the app-global appearance.
+  const resetToGlobal = async () => {
+    setSaving(true)
+    try {
+      await api.updateWorkspaceSettings({ theme: '', accent: '', themePreset: '' })
+      setDraft(globalAppearance)
+      setSaved(globalAppearance)
+      setHasOverride(false)
+      revertRef.current = globalAppearance
+      applyAppearance(globalAppearance)
+      onAppearanceSaved?.(globalAppearance)
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
+
   return (
     <>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+        Bu görünüm ayarları <span className="font-medium text-[var(--color-text)]">yalnızca bu workspace</span> için geçerlidir. Workspace değiştirdiğinde tema da değişir. Değişiklikler anında önizlenir; kalıcı olması için <span className="font-medium text-[var(--color-text)]">Kaydet</span> de.
+      </div>
       <Field label="Tema paleti" hint="Hazır bir palet seç; tüm arayüz yeniden renklenir. Vurgu rengini aşağıdan ince ayarlayabilirsin.">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {THEME_PRESETS.map((p) => {
@@ -84,7 +202,7 @@ export function AppearancePanel({ draft, set, setDraft }: PanelProps) {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setDraft((d) => (d ? { ...d, themePreset: p.id, accent: p.tokens.accent } : d))}
+                onClick={() => update({ themePreset: p.id, accent: p.tokens.accent })}
                 className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition ${
                   sel
                     ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
@@ -107,7 +225,7 @@ export function AppearancePanel({ draft, set, setDraft }: PanelProps) {
         </div>
       </Field>
       <Field label="Temel mod" hint="Yalnızca özel palet kullanılmadığında (sistem otomatik açık/koyu) etkilidir.">
-        <select value={draft.theme} onChange={(e) => set('theme', e.target.value as AppSettings['theme'])} className={inputCls}>
+        <select value={draft.theme} onChange={(e) => update({ theme: e.target.value as Appearance['theme'] })} className={inputCls}>
           <option value="dark">Koyu</option>
           <option value="light">Açık</option>
           <option value="system">Sistem</option>
@@ -115,16 +233,30 @@ export function AppearancePanel({ draft, set, setDraft }: PanelProps) {
       </Field>
       <Field label="Vurgu rengi (accent)">
         <div className="flex items-center gap-2">
-          <input type="color" value={draft.accent} onChange={(e) => set('accent', e.target.value)} className="h-9 w-12 cursor-pointer rounded border border-[var(--color-border)] bg-[var(--color-bg)]" />
-          <input value={draft.accent} onChange={(e) => set('accent', e.target.value)} className={`${inputCls} w-32`} />
+          <input type="color" value={draft.accent} onChange={(e) => update({ accent: e.target.value })} className="h-9 w-12 cursor-pointer rounded border border-[var(--color-border)] bg-[var(--color-bg)]" />
+          <input value={draft.accent} onChange={(e) => update({ accent: e.target.value })} className={`${inputCls} w-32`} />
         </div>
       </Field>
-      <Field label="Dil" hint="UI dili tercihi (tam çeviri kademeli ekleniyor).">
-        <select value={draft.language} onChange={(e) => set('language', e.target.value as AppSettings['language'])} className={inputCls}>
-          <option value="tr">Türkçe</option>
-          <option value="en">English</option>
-        </select>
-      </Field>
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          onClick={save}
+          disabled={!dirty || saving}
+          className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-30"
+        >
+          {saving ? 'Kaydediliyor…' : 'Kaydet'}
+        </button>
+        <button
+          onClick={resetToGlobal}
+          disabled={saving || !hasOverride}
+          className="rounded border border-[var(--color-border)] px-3 py-1.5 text-sm hover:border-[var(--color-accent)] disabled:opacity-30"
+          title="Bu workspace'in görünümünü uygulama-geneli varsayılana döndür"
+        >
+          Genele sıfırla
+        </button>
+        <span className="text-xs text-[var(--color-text-dim)]">
+          {hasOverride ? 'Bu workspace özel görünüm kullanıyor' : 'Uygulama-geneli görünüm kullanılıyor'}
+        </span>
+      </div>
     </>
   )
 }

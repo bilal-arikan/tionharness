@@ -2,7 +2,7 @@
 // rail button, the read-only prompt viewer and the category taxonomy.
 import { type ReactNode } from 'react'
 import {
-  User, Palette, KeyRound, Brain, Shield, Command,
+  User, KeyRound, Brain, Shield, Command,
   Blocks, Info, Boxes, FileText, FolderOpen, Wrench, SlidersHorizontal, Webhook, Plug, Archive, type LucideIcon,
 } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '../../types'
@@ -36,7 +36,6 @@ export interface CatMeta {
 
 export const APP_CATS: CatMeta[] = [
   { key: 'profile', label: 'Profil', icon: User },
-  { key: 'appearance', label: 'Görünüm', icon: Palette },
   { key: 'providers', label: 'Sağlayıcılar', icon: KeyRound },
   { key: 'secrets', label: 'Sırlar', icon: Shield },
   { key: 'context', label: 'Bağlam & Bellek', icon: Brain },

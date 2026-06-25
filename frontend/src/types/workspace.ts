@@ -37,6 +37,10 @@ export interface WorkspaceSettings {
   defaultModel: string
   pauseAutonomy: boolean
   defaultWorkingDir: string
+  // Per-workspace appearance overrides (empty = inherit the app-global appearance).
+  theme: string
+  accent: string
+  themePreset: string
   sessionContextEnabled: boolean
   sessionContextEveryTurn: boolean
   sessionContextRecentCount: number
@@ -58,6 +62,9 @@ export type WorkspaceSettingsPatch = Partial<
     | 'defaultModel'
     | 'pauseAutonomy'
     | 'defaultWorkingDir'
+    | 'theme'
+    | 'accent'
+    | 'themePreset'
     | 'sessionContextEnabled'
     | 'sessionContextEveryTurn'
     | 'sessionContextRecentCount'

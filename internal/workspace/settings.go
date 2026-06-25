@@ -27,6 +27,14 @@ type WSSettings struct {
 	DefaultModel    string `json:"defaultModel"`
 	PauseAutonomy   bool   `json:"pauseAutonomy"`
 
+	// Per-workspace appearance overrides (client-side visual only). Empty fields
+	// inherit the application-global appearance, so the UI re-themes itself when
+	// the active workspace changes. Theme is the legacy base mode (dark/light/
+	// system), ThemePreset a curated palette id, Accent a hex accent override.
+	Theme       string `json:"theme"`
+	Accent      string `json:"accent"`
+	ThemePreset string `json:"themePreset"`
+
 	// DefaultWorkingDir is the working directory (cwd) new sessions in this
 	// workspace start with, for the built-in fs/shell tools. Empty = the physical
 	// workspace dir. A session's own WorkingDir overrides it. the external agent project parity.
@@ -66,6 +74,10 @@ type WSSettingsPatch struct {
 	DefaultModel      *string `json:"defaultModel"`
 	PauseAutonomy     *bool   `json:"pauseAutonomy"`
 	DefaultWorkingDir *string `json:"defaultWorkingDir"`
+
+	Theme       *string `json:"theme"`
+	Accent      *string `json:"accent"`
+	ThemePreset *string `json:"themePreset"`
 
 	SessionContextEnabled     *bool `json:"sessionContextEnabled"`
 	SessionContextEveryTurn   *bool `json:"sessionContextEveryTurn"`
@@ -176,6 +188,15 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	if patch.DefaultWorkingDir != nil {
 		ws.settings.cur.DefaultWorkingDir = *patch.DefaultWorkingDir
+	}
+	if patch.Theme != nil {
+		ws.settings.cur.Theme = *patch.Theme
+	}
+	if patch.Accent != nil {
+		ws.settings.cur.Accent = *patch.Accent
+	}
+	if patch.ThemePreset != nil {
+		ws.settings.cur.ThemePreset = *patch.ThemePreset
 	}
 	if patch.SessionContextEnabled != nil {
 		ws.settings.cur.SessionContextEnabled = *patch.SessionContextEnabled
