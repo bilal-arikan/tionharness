@@ -29,6 +29,23 @@ type OpenAICompat struct {
 	baseURL      string
 	defaultModel string
 	client       *http.Client
+	// reasoning, when true, sends a `reasoning_effort` field (mapped from the
+	// request's ThinkingBudget) so reasoning-capable models honour the agent's
+	// thinking level. Off by default: many endpoints 400 on an unknown param.
+	reasoning bool
+	// cacheMode is "native" | "auto" | "none" | "". "native" attaches an
+	// Anthropic-style cache_control breakpoint to the system prefix (forwarded by
+	// proxies like OpenRouter to Anthropic/Gemini backends).
+	cacheMode string
+}
+
+// WithCaps sets the optional capability flags (reasoning-effort passthrough and
+// prompt-cache mode) and returns the client for chaining. Used by buildCustom to
+// apply a market provider pack's declared capabilities.
+func (m *OpenAICompat) WithCaps(reasoning bool, promptCache string) *OpenAICompat {
+	m.reasoning = reasoning
+	m.cacheMode = strings.TrimSpace(promptCache)
+	return m
 }
 
 // NewOpenAICompat creates a client. An empty baseURL falls back to MiniMax's
@@ -65,7 +82,34 @@ func (m *OpenAICompat) Name() string { return m.name }
 // endpoints (MiniMax, Groq, Ollama, …) cache automatically or not at all and may
 // reject array-form content, so they keep plain string content. OpenAI/DeepSeek
 // models via OpenRouter cache implicitly — the extra breakpoint is harmless there.
-func (m *OpenAICompat) cachesSystem() bool { return m.name == "openrouter" }
+func (m *OpenAICompat) cachesSystem() bool {
+	return m.name == "openrouter" || m.cacheMode == "native"
+}
+
+// reasoningEffortFor maps a thinking-token budget (the agent's ThinkingLevel,
+// already resolved to 0/2048/8192/16384 by the tool loop) to an OpenAI-style
+// reasoning_effort label. 0 → "" (omit the field entirely).
+func reasoningEffortFor(budget int) string {
+	switch {
+	case budget <= 0:
+		return ""
+	case budget <= 2048:
+		return "low"
+	case budget <= 8192:
+		return "medium"
+	default:
+		return "high"
+	}
+}
+
+// effortFor returns the reasoning_effort to send for this request: "" unless the
+// provider declared reasoning support AND the request carries a thinking budget.
+func (m *OpenAICompat) effortFor(req Request) string {
+	if !m.reasoning {
+		return ""
+	}
+	return reasoningEffortFor(req.ThinkingBudget)
+}
 
 type oaiMessage struct {
 	Role string `json:"role"`
@@ -115,12 +159,13 @@ type oaiTool struct {
 }
 
 type oaiReq struct {
-	Model         string         `json:"model"`
-	Messages      []oaiMessage   `json:"messages"`
-	MaxTokens     int            `json:"max_tokens,omitempty"`
-	Tools         []oaiTool      `json:"tools,omitempty"`
-	Stream        bool           `json:"stream,omitempty"`
-	StreamOptions *oaiStreamOpts `json:"stream_options,omitempty"`
+	Model           string         `json:"model"`
+	Messages        []oaiMessage   `json:"messages"`
+	MaxTokens       int            `json:"max_tokens,omitempty"`
+	Tools           []oaiTool      `json:"tools,omitempty"`
+	Stream          bool           `json:"stream,omitempty"`
+	StreamOptions   *oaiStreamOpts `json:"stream_options,omitempty"`
+	ReasoningEffort string         `json:"reasoning_effort,omitempty"`
 }
 
 type oaiStreamOpts struct {
@@ -212,10 +257,11 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 	}
 
 	body := oaiReq{
-		Model:     model,
-		Messages:  toOAIMessages(req, m.cachesSystem()),
-		MaxTokens: req.MaxTokens,
-		Tools:     toOAITools(req.Tools),
+		Model:           model,
+		Messages:        toOAIMessages(req, m.cachesSystem()),
+		MaxTokens:       req.MaxTokens,
+		Tools:           toOAITools(req.Tools),
+		ReasoningEffort: m.effortFor(req),
 	}
 	headers := map[string]string{"Authorization": "Bearer " + m.apiKey}
 
@@ -289,11 +335,12 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 	}
 
 	body := oaiReq{
-		Model:         model,
-		Messages:      toOAIMessages(req, m.cachesSystem()),
-		MaxTokens:     req.MaxTokens,
-		Stream:        true,
-		StreamOptions: &oaiStreamOpts{IncludeUsage: true},
+		Model:           model,
+		Messages:        toOAIMessages(req, m.cachesSystem()),
+		MaxTokens:       req.MaxTokens,
+		Stream:          true,
+		StreamOptions:   &oaiStreamOpts{IncludeUsage: true},
+		ReasoningEffort: m.effortFor(req),
 	}
 	headers := map[string]string{"Authorization": "Bearer " + m.apiKey}
 

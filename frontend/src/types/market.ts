@@ -41,6 +41,10 @@ export interface ProviderPayload {
   baseUrl: string
   defaultModel?: string
   models?: string
+  // Capability metadata: reasoning-effort support and prompt-cache behaviour
+  // ("native" | "auto" | "none" | undefined = unknown). Drives the preview badges.
+  reasoning?: boolean
+  promptCache?: string
 }
 
 export interface FlowPayload {

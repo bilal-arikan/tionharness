@@ -138,14 +138,28 @@ type cliMessage struct {
 }
 
 type cliEvent struct {
-	Type       string                     `json:"type"`
-	Subtype    string                     `json:"subtype"`
-	Message    *cliMessage                `json:"message"`
-	IsError    bool                       `json:"is_error"`
-	Result     string                     `json:"result"`
-	Usage      *cliUsage                  `json:"usage"`
-	ModelUsage map[string]json.RawMessage `json:"modelUsage"`
-	SessionID  string                     `json:"session_id"` // emitted on system/init and result events
+	Type           string                     `json:"type"`
+	Subtype        string                     `json:"subtype"`
+	Message        *cliMessage                `json:"message"`
+	IsError        bool                       `json:"is_error"`
+	APIErrorStatus string                     `json:"api_error_status"` // result envelope: upstream API error (e.g. rate_limit)
+	Result         string                     `json:"result"`
+	Usage          *cliUsage                  `json:"usage"`
+	ModelUsage     map[string]json.RawMessage `json:"modelUsage"`
+	SessionID      string                     `json:"session_id"`      // emitted on system/init and result events
+	RateLimit      *cliRateLimit              `json:"rate_limit_info"` // emitted on rate_limit_event
+}
+
+// cliRateLimit mirrors the rate_limit_info object the CLI emits on a
+// "rate_limit_event". status is "allowed" in the normal case; anything else
+// (e.g. "rejected"/"blocked") means the subscription window is exhausted and,
+// when overage is disabled, the turn cannot proceed.
+type cliRateLimit struct {
+	Status                string `json:"status"`
+	RateLimitType         string `json:"rateLimitType"`
+	OverageStatus         string `json:"overageStatus"`
+	OverageDisabledReason string `json:"overageDisabledReason"`
+	ResetsAt              int64  `json:"resetsAt"`
 }
 
 // Complete implements Provider by shelling out to `claude -p` and parsing its
@@ -340,6 +354,25 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	if logPath := dumpCLIFailure(c.binPath, args, req.WorkDir, runErr, fullOut.Bytes(), stderr.Bytes()); logPath != "" {
 		detail = strings.TrimSpace(detail + " | full-log: " + logPath)
 	}
+	// Usage / rate-limit rejection: the subscription window is exhausted (overage
+	// disabled), so the request was refused before any answer. Retrying immediately
+	// only burns the next attempt against the same wall — classify it clearly and
+	// mark it NON-retryable so the flow fails fast with an actionable reason.
+	if p.rateLimited {
+		msg := strings.TrimSpace(p.rateLimitMsg)
+		if msg == "" {
+			msg = "subscription usage window exhausted"
+		}
+		return nil, false, fmt.Errorf("claude CLI usage/rate limit reached: %s (exit: %v)", msg, runErr)
+	}
+	// Died right after init with zero model output (only system/hook/init events).
+	// This is the signature of a usage-limit rejection that emitted no rate_limit
+	// event, a login lapse ("Not logged in"), or an MCP startup failure — name those
+	// likely causes instead of a bare "exit status 1".
+	if !p.sawModelTurn {
+		retryable = !p.ranTool()
+		return nil, retryable, fmt.Errorf("claude CLI exited after init with no model output (likely usage/rate limit, login, or MCP startup failure): %v %s", runErr, strings.TrimSpace(detail))
+	}
 	// A clean crash (no content, no executed tool) is safe to retry once.
 	retryable = !p.ranTool()
 	return nil, retryable, fmt.Errorf("claude CLI failed: %v %s", runErr, strings.TrimSpace(detail))
@@ -416,15 +449,18 @@ func stdoutCrashTail(lines []string) string {
 // ready: thinking immediately, intermediate text on flush, a tool step once its
 // result arrives. The trailing text is the final answer (not emitted as a step).
 type cliStreamParser struct {
-	resp      *Response
-	onEvent   func(TraceStep)
-	toolIdx   map[string]int // tool_use id → index in resp.Trace
-	emitted   map[int]bool   // trace index → already delivered via onEvent
-	pending   strings.Builder
-	finalText string
-	sawResult bool
-	hadError  bool
-	errText   string
+	resp         *Response
+	onEvent      func(TraceStep)
+	toolIdx      map[string]int // tool_use id → index in resp.Trace
+	emitted      map[int]bool   // trace index → already delivered via onEvent
+	pending      strings.Builder
+	finalText    string
+	sawResult    bool
+	hadError     bool
+	errText      string
+	sawModelTurn bool   // any assistant/tool/result content seen (vs. only system/init noise)
+	rateLimited  bool   // the turn was rejected by a subscription usage / rate limit
+	rateLimitMsg string // human-readable detail for the rate-limit failure
 }
 
 func newCLIParser(model string, onEvent func(TraceStep)) *cliStreamParser {
@@ -471,7 +507,18 @@ func (p *cliStreamParser) feed(line string) {
 	}
 
 	switch ev.Type {
+	case "rate_limit_event":
+		// The CLI reports the subscription rate-limit window on every turn. status
+		// "allowed" is the normal case; anything else means the window is exhausted.
+		// With overage disabled the upstream request is then rejected and the process
+		// exits non-zero before any assistant output — classify it so the caller sees
+		// a usage-limit error instead of a bare "exit status 1".
+		if rl := ev.RateLimit; rl != nil && rl.Status != "" && !strings.EqualFold(rl.Status, "allowed") {
+			p.rateLimited = true
+			p.rateLimitMsg = describeRateLimit(rl)
+		}
 	case "assistant":
+		p.sawModelTurn = true
 		if ev.Message == nil {
 			return
 		}
@@ -525,9 +572,19 @@ func (p *cliStreamParser) feed(line string) {
 		}
 	case "result":
 		p.sawResult = true
+		p.sawModelTurn = true
 		if ev.IsError {
 			p.hadError = true
 			p.errText = ev.Result
+			// A usage/rate-limit rejection often surfaces here as the result error
+			// (api_error_status == "rate_limit" or wording in the result text) rather
+			// than a separate rate_limit_event — classify it either way.
+			if isRateLimitText(ev.APIErrorStatus) || isRateLimitText(ev.Result) {
+				p.rateLimited = true
+				if p.rateLimitMsg == "" {
+					p.rateLimitMsg = strings.TrimSpace(ev.APIErrorStatus + " " + ev.Result)
+				}
+			}
 			return
 		}
 		p.finalText = ev.Result
@@ -595,6 +652,42 @@ func (p *cliStreamParser) ranTool() bool {
 		}
 	}
 	return false
+}
+
+// describeRateLimit renders a compact, human-readable summary of a rate-limit
+// window for the failure message (type, status, overage state, reset time).
+func describeRateLimit(rl *cliRateLimit) string {
+	parts := []string{}
+	if rl.RateLimitType != "" {
+		parts = append(parts, rl.RateLimitType+" window")
+	}
+	if rl.Status != "" {
+		parts = append(parts, "status="+rl.Status)
+	}
+	if rl.OverageStatus != "" {
+		parts = append(parts, "overage="+rl.OverageStatus)
+	}
+	if rl.OverageDisabledReason != "" {
+		parts = append(parts, rl.OverageDisabledReason)
+	}
+	if rl.ResetsAt > 0 {
+		parts = append(parts, "resets "+time.Unix(rl.ResetsAt, 0).Format("2006-01-02 15:04"))
+	}
+	if len(parts) == 0 {
+		return "rate limit reached"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// isRateLimitText reports whether a result/api-error string signals a usage or
+// rate-limit rejection (used to classify a result-error envelope).
+func isRateLimitText(s string) bool {
+	s = strings.ToLower(s)
+	return strings.Contains(s, "rate_limit") ||
+		strings.Contains(s, "rate limit") ||
+		strings.Contains(s, "usage limit") ||
+		strings.Contains(s, "usage_limit") ||
+		strings.Contains(s, "quota")
 }
 
 // salvage recovers whatever assistant content the parser accumulated when the

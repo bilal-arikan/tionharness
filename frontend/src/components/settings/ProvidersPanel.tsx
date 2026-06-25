@@ -10,9 +10,25 @@ import { useEffect, useState } from 'react'
 import { Server, Sparkles, Zap, KeyRound, Boxes, Plus, Trash2, Network, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { AppSettings, ProviderTestResult, Secret } from '../../types'
-import type { CustomProvider, UpsertProviderInput } from '../../api/providers'
+import type { CustomProvider, UpsertProviderInput, PriceTable } from '../../api/providers'
 import { ProviderModelSelect } from '../agents/ProviderModelSelect'
 import { inputCls, type AppSet } from './primitives'
+
+// fmtPrice formats a USD/1M-token figure compactly (e.g. "$0.30", "$15", "ücretsiz").
+function fmtPrice(n: number): string {
+  if (n === 0) return 'ücretsiz'
+  return '$' + (n < 1 ? n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') : String(n))
+}
+
+// cacheModeLabel describes a prompt-cache mode for the capability badge.
+function cacheModeLabel(mode?: string): string {
+  switch (mode) {
+    case 'native': return 'Cache: ✅ cache_control'
+    case 'auto': return 'Cache: ✅ otomatik'
+    case 'none': return 'Cache: ❌ yok'
+    default: return 'Cache: ? bilinmiyor'
+  }
+}
 
 function testBadge(test: Props['test'], provider: string) {
   const r = test[provider]
@@ -236,6 +252,7 @@ function SecretSource({
 
 const EMPTY_PROVIDER: UpsertProviderInput = {
   id: '', label: '', kind: 'openai', baseUrl: '', defaultModel: '', models: '', key: '',
+  reasoning: false, promptCache: '',
 }
 
 // CustomProviders manages user-added OpenAI/Anthropic-compatible endpoints
@@ -256,9 +273,12 @@ function CustomProviders({
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // Ballpark list prices (provider id → model → price) for the per-provider cost hint.
+  const [prices, setPrices] = useState<PriceTable>({})
 
   useEffect(() => {
     api.listCustomProviders().then(setList).catch(() => {})
+    api.prices().then(setPrices).catch(() => {})
   }, [])
 
   const reset = () => { setDraft(EMPTY_PROVIDER); setEditing(false); setErr('') }
@@ -280,7 +300,7 @@ function CustomProviders({
   }
 
   const edit = (p: CustomProvider) => {
-    setDraft({ id: p.id, label: p.label, kind: p.kind, baseUrl: p.baseUrl, defaultModel: p.defaultModel, models: p.models, key: '' })
+    setDraft({ id: p.id, label: p.label, kind: p.kind, baseUrl: p.baseUrl, defaultModel: p.defaultModel, models: p.models, key: '', reasoning: !!p.reasoning, promptCache: p.promptCache ?? '' })
     setEditing(true); setErr('')
   }
   const remove = async (id: string) => {
@@ -321,8 +341,25 @@ function CustomProviders({
                 </div>
                 <div className="min-w-0 truncate" title={p.defaultModel}>
                   <span className="text-[var(--color-text-dim)]">model: </span>{p.defaultModel || '—'}
+                  {(() => {
+                    const pr = prices[p.id]?.[p.defaultModel]
+                    return pr ? (
+                      <span className="ml-1 tabular-nums text-[var(--color-text-dim)]" title="giriş / çıkış — $/1M token">
+                        ({fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)})
+                      </span>
+                    ) : null
+                  })()}
                 </div>
                 <div className="col-span-full min-w-0 truncate text-[var(--color-text-dim)]" title={p.baseUrl}>{p.baseUrl}</div>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: p.reasoning ? 'var(--color-success, #16a34a)22' : 'var(--color-surface-2)', color: p.reasoning ? 'var(--color-success, #16a34a)' : 'var(--color-text-dim)' }}>
+                  {p.reasoning ? 'Düşünme: ✅' : 'Düşünme: —'}
+                </span>
+                <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: (p.promptCache === 'native' || p.promptCache === 'auto') ? 'var(--color-success, #16a34a)22' : 'var(--color-surface-2)', color: (p.promptCache === 'native' || p.promptCache === 'auto') ? 'var(--color-success, #16a34a)' : 'var(--color-text-dim)' }}>
+                  {cacheModeLabel(p.promptCache)}
+                </span>
               </div>
 
               <div className="flex items-center justify-end gap-1.5">
@@ -347,6 +384,47 @@ function CustomProviders({
         </div>
         <input data-testid="custom-provider-base-url-input" placeholder="base URL (ör. https://openrouter.ai/api/v1)" value={draft.baseUrl} onChange={(e) => upd({ baseUrl: e.target.value })} className={inputCls} />
         <input data-testid="custom-provider-models-input" placeholder="model id'leri — virgülle, opsiyonel" value={draft.models} onChange={(e) => upd({ models: e.target.value })} className={inputCls} />
+
+        {/* Capability flags: reasoning passthrough + prompt-cache mode. */}
+        <div className="grid grid-cols-2 items-center gap-1.5">
+          <label className="flex items-center gap-1.5 text-xs" title="Açıksa OpenAI-uyumlu uca reasoning_effort gönderilir (ajanın Düşünme seviyesinden). Anthropic-uyumlu uçlar thinking'i native destekler.">
+            <input data-testid="custom-provider-reasoning" type="checkbox" checked={!!draft.reasoning} onChange={(e) => upd({ reasoning: e.target.checked })} />
+            Düşünme (reasoning_effort)
+          </label>
+          <select data-testid="custom-provider-cache-select" value={draft.promptCache || ''} onChange={(e) => upd({ promptCache: e.target.value })} className={inputCls} title="Prompt-cache davranışı: native = cache_control enjekte; auto = sunucu otomatik; none = yok.">
+            <option value="">Cache: bilinmiyor</option>
+            <option value="native">Cache: native (cache_control)</option>
+            <option value="auto">Cache: otomatik</option>
+            <option value="none">Cache: yok</option>
+          </select>
+        </div>
+
+        {/* Per-model price view (read-only) — shown when prices are known for this id. */}
+        {editing && (() => {
+          const table = prices[draft.id]
+          const ids = draft.models.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
+          if (!table || ids.length === 0) return null
+          const priced = ids.filter((m) => table[m])
+          if (priced.length === 0) return null
+          return (
+            <div className="rounded bg-[var(--color-surface-2)] p-1.5">
+              <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">Fiyatlar — $/1M token (giriş / çıkış)</div>
+              <div className="max-h-40 overflow-y-auto">
+                {priced.map((m) => {
+                  const pr = table[m]
+                  return (
+                    <div key={m} className="flex items-center justify-between gap-3 px-1 py-0.5 text-[11px]">
+                      <span className="min-w-0 break-all font-mono">{m}</span>
+                      <span className="shrink-0 tabular-nums text-[var(--color-text-dim)]">{fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">Yaklaşık liste fiyatı; bütçe ekranı bu değerlerle maliyet hesaplar.</p>
+            </div>
+          )
+        })()}
+
         <SecretSource secrets={secrets} onManage={onManageSecrets} onPick={async (n) => upd({ key: await onImportSecret(n) })} />
         <div className="text-xs text-[var(--color-text-dim)]">
           {draft.key ? '✓ Anahtar sırdan seçildi' : editing ? 'Anahtar korunacak (değiştirmek için sırdan seç)' : 'Anahtar: yalnızca sırdan seçilir (elle giriş kapalı)'}

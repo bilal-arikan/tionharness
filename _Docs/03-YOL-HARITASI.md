@@ -248,7 +248,7 @@ graph LR
 > swarmclaw ~70 provider'ı "metadata'yı protokolden ayır" deseniyle düşük eforla ekliyor;
 > SwarmGo zaten aynı mimaride (CG-19). Aşağıdakiler opsiyonel genişletmeler. **Plan — uygulanmadı.**
 
-- [ ] **SC-1 — Built-in API provider preset kataloğu** (CLI değil): `OpenAICompat` handler'ı hazır; DeepSeek/Groq/Together/xAI/Fireworks/Nebius/DeepInfra/OpenRouter/Mistral/Google-compat'i **preset katalog** girişi (yalnız `{id, label, baseURL, defaultModel, models}`) olarak ekle → sıfır yeni protokol kodu, tek-tıkla ekle. **Düşük efor / yüksek değer.**
+- [x] **SC-1 — Built-in API provider preset kataloğu** (CLI değil) ✅ (2026-06-25): market'e **22 provider pack'i** eklendi (toplam 26), her biri `{id,label,kind,baseUrl,defaultModel,models}` — DeepSeek/Groq/OpenRouter/Ollama (mevcut) + xAI/Mistral/Gemini/Together/Fireworks/Perplexity/Cerebras/SambaNova/DeepInfra/Hyperbolic/Novita/Nebius/NVIDIA-NIM/Cohere/Moonshot/Qwen/Zhipu-GLM/MiniMax/SiliconFlow/GitHub-Models + Anthropic-uyumlu kimi/glm. Sıfır yeni protokol kodu; tek-tıkla market kurulumu. Betik: `gen_providers.py`. bkz. `21-MARKET.md`.
 - [ ] **SC-2 — Generic CLI factory** (CLI ailesi): swarmclaw `streamGenericCliChat` deseni (binary spawn + stdout satır-stream, JSON parse yok) ile yapısal çıktısı olmayan onlarca coding-CLI'yi tek handler + veri listesiyle ekle. Yeni `kind_genericcli.go` + `[]genericCLI{id,label,binary}`. **CLI işi — CLI fazı açılınca, SC-1'den sonra.**
 
 ---

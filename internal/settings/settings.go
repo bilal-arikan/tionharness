@@ -22,6 +22,10 @@ type CustomProvider struct {
 	DefaultModel string `json:"defaultModel"` // applied when a request omits one
 	Models       string `json:"models"`       // optional model-id suggestions (comma/newline)
 	KeyEnc       string `json:"keyEnc"`       // AES-GCM, never exposed
+	// Reasoning: endpoint accepts a reasoning-effort control (see market.ProviderPayload).
+	Reasoning bool `json:"reasoning,omitempty"`
+	// PromptCache: "native" | "auto" | "none" | "" (unknown) — see market.ProviderPayload.
+	PromptCache string `json:"promptCache,omitempty"`
 }
 
 // CustomProviderDTO is the masked, client-facing view of a CustomProvider.
@@ -33,6 +37,8 @@ type CustomProviderDTO struct {
 	DefaultModel string `json:"defaultModel"`
 	Models       string `json:"models"`
 	KeySet       bool   `json:"keySet"`
+	Reasoning    bool   `json:"reasoning,omitempty"`
+	PromptCache  string `json:"promptCache,omitempty"`
 }
 
 // Settings is the full, persisted configuration document. The encrypted
@@ -144,9 +150,9 @@ type Settings struct {
 	// Tool-output token optimization — two independent, parallel systems applied
 	// to tool results before they re-enter the model context.
 	// System A: deterministic, free, rule-based (dedupe/group/truncate).
-	CompactToolOutput  bool `json:"compactToolOutput"`  // System A master switch
-	CompactMaxLines    int  `json:"compactMaxLines"`    // lines kept before middle elision (0 = default)
-	CompactMaxBytes    int  `json:"compactMaxBytes"`    // hard byte cap after line work (0 = default)
+	CompactToolOutput bool `json:"compactToolOutput"` // System A master switch
+	CompactMaxLines   int  `json:"compactMaxLines"`   // lines kept before middle elision (0 = default)
+	CompactMaxBytes   int  `json:"compactMaxBytes"`   // hard byte cap after line work (0 = default)
 	// System B: LLM intent-aware summary (costs a cheap model call, size-gated).
 	CompactLLMSummary   bool   `json:"compactLlmSummary"`   // System B master switch
 	CompactLLMThreshold int    `json:"compactLlmThreshold"` // only summarize output larger than this (bytes, 0 = default)
@@ -167,9 +173,9 @@ type Settings struct {
 	MCPGatewayURL string `json:"mcpGatewayUrl"`
 
 	// Gated tool capabilities — off by default; each expands agent power/cost.
-	EnableShell        bool `json:"enableShell"`        // built-in shell (arbitrary commands in sandbox)
-	EnableSelfManage   bool `json:"enableSelfManage"`   // self-management suite (create/edit/delete entities)
-	EnableCLIHooks     bool `json:"enableCliHooks"`     // pass PreToolUse/PostToolUse hooks to claude-cli agents via --settings
+	EnableShell      bool `json:"enableShell"`      // built-in shell (arbitrary commands in sandbox)
+	EnableSelfManage bool `json:"enableSelfManage"` // self-management suite (create/edit/delete entities)
+	EnableCLIHooks   bool `json:"enableCliHooks"`   // pass PreToolUse/PostToolUse hooks to claude-cli agents via --settings
 	// ClaudeResume keeps the claude-cli session warm across turns: each turn passes
 	// --resume <id> and sends only the new turn (not the full transcript), so the
 	// CLI reuses its server-side prompt cache (much cheaper, like Claude Code). Off
@@ -623,6 +629,8 @@ func customProvidersToDTO(in []CustomProvider) []CustomProviderDTO {
 			DefaultModel: c.DefaultModel,
 			Models:       c.Models,
 			KeySet:       c.KeyEnc != "",
+			Reasoning:    c.Reasoning,
+			PromptCache:  c.PromptCache,
 		})
 	}
 	return out

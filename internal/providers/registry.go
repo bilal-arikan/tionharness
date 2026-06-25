@@ -18,6 +18,11 @@ type CustomSpec struct {
 	DefaultModel string
 	Models       string // optional model-id suggestions (comma/newline)
 	Key          string
+	// Reasoning: send reasoning_effort (openai kind) mapped from ThinkingBudget.
+	Reasoning bool
+	// PromptCache: "native" | "auto" | "none" | "" — "native" injects an
+	// Anthropic-style cache_control breakpoint on the system prefix (openai kind).
+	PromptCache string
 }
 
 // Registry builds providers by name using configured credentials and
@@ -165,9 +170,12 @@ func buildCustom(c CustomSpec) (Provider, error) {
 	}
 	if c.Kind == "anthropic" {
 		endpoint := strings.TrimRight(strings.TrimSpace(c.BaseURL), "/") + "/messages"
+		// Anthropic-protocol endpoints support thinking + cache_control natively;
+		// no extra capability wiring needed here.
 		return NewAnthropic(c.Key).WithEndpoint(c.ID, endpoint, c.DefaultModel), nil
 	}
-	return NewOpenAICompat(c.ID, c.Key, c.BaseURL, c.DefaultModel), nil
+	return NewOpenAICompat(c.ID, c.Key, c.BaseURL, c.DefaultModel).
+		WithCaps(c.Reasoning, c.PromptCache), nil
 }
 
 // MinimaxConfigured reports whether a MiniMax key is set.

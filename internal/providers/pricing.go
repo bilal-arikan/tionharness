@@ -79,9 +79,11 @@ var priceTable = map[string]map[string]Price{
 		"claude-fable-5":            {InputPerMTok: 3, OutputPerMTok: 15},
 	},
 	"minimax": {
-		"MiniMax-M2.1":           {InputPerMTok: 0.30, OutputPerMTok: 1.20},
-		"MiniMax-M2.1-lightning": {InputPerMTok: 0.20, OutputPerMTok: 0.80},
-		"MiniMax-M2":             {InputPerMTok: 0.30, OutputPerMTok: 1.20},
+		"MiniMax-M2.1":           {InputPerMTok: 0.30, OutputPerMTok: 1.20, CacheReadMultOverride: 0.25},
+		"MiniMax-M2.1-lightning": {InputPerMTok: 0.20, OutputPerMTok: 0.80, CacheReadMultOverride: 0.25},
+		"MiniMax-M2":             {InputPerMTok: 0.30, OutputPerMTok: 1.20, CacheReadMultOverride: 0.25},
+		"MiniMax-M1":             {InputPerMTok: 0.30, OutputPerMTok: 1.20, CacheReadMultOverride: 0.25},
+		"MiniMax-Text-01":        {InputPerMTok: 0.20, OutputPerMTok: 1.10, CacheReadMultOverride: 0.25},
 	},
 	// OpenRouter is keyed by its namespaced model ids. Anthropic-routed models keep
 	// Anthropic's pass-through pricing, including the 0.10× cache-read / 1.25× write
@@ -94,6 +96,24 @@ var priceTable = map[string]map[string]Price{
 		"anthropic/claude-sonnet-4.6": {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-haiku-4.5":  {InputPerMTok: 1, OutputPerMTok: 5, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 	},
+	// NOTE: market provider-pack prices (xai, mistral, gemini, … ~25 providers, up to
+	// 15 models each) live in the generated pricing_market.go (var marketPrices,
+	// merged into priceTable at init). Single source: data/gen_providers.py.
+}
+
+// AllPrices returns a copy of the full list-price table (provider id → model →
+// Price). Used by the API to surface ballpark $/1M-token figures in the UI (e.g.
+// the market provider preview), so the screen can show prices without a request.
+func AllPrices() map[string]map[string]Price {
+	out := make(map[string]map[string]Price, len(priceTable))
+	for prov, models := range priceTable {
+		m := make(map[string]Price, len(models))
+		for id, p := range models {
+			m[id] = p
+		}
+		out[prov] = m
+	}
+	return out
 }
 
 // PriceFor returns the list price for a provider+model and whether one is known.

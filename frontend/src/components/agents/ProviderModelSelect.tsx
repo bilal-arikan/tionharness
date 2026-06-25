@@ -1,20 +1,5 @@
-import { useEffect, useState } from 'react'
-import { api } from '../../api'
-import type { CatalogEntry } from '../../types'
-
-// Module-level cache so the catalog is fetched once across all pickers.
-let catalogCache: CatalogEntry[] | null = null
-let catalogPromise: Promise<CatalogEntry[]> | null = null
-function loadCatalog(): Promise<CatalogEntry[]> {
-  if (catalogCache) return Promise.resolve(catalogCache)
-  if (!catalogPromise) {
-    catalogPromise = api.getCatalog().then((c) => {
-      catalogCache = c
-      return c
-    })
-  }
-  return catalogPromise
-}
+import { useState } from 'react'
+import { useCatalog } from '../../lib/catalog'
 
 const inputCls =
   'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
@@ -46,12 +31,8 @@ interface Props {
 // `allowInherit`, an empty provider is selectable and means "use the app
 // default" (model becomes a free, optional text field).
 export function ProviderModelSelect({ provider, model, onChange, allowInherit, inheritLabel = '(uygulama varsayılanı)' }: Props) {
-  const [catalog, setCatalog] = useState<CatalogEntry[]>(catalogCache ?? [])
+  const catalog = useCatalog()
   const [custom, setCustom] = useState(false)
-
-  useEffect(() => {
-    loadCatalog().then(setCatalog).catch(() => {})
-  }, [])
 
   const entry = catalog.find((c) => c.id === provider)
   const models = entry?.models ?? []

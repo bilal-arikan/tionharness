@@ -10,6 +10,10 @@ export interface CustomProvider {
   defaultModel: string
   models: string
   keySet: boolean
+  // Capability metadata: reasoning-effort support + prompt-cache behaviour
+  // ("native" | "auto" | "none" | undefined = unknown).
+  reasoning?: boolean
+  promptCache?: string
 }
 
 // UpsertProviderInput mirrors the backend payload. key is write-only: omit to
@@ -22,7 +26,21 @@ export interface UpsertProviderInput {
   defaultModel: string
   models: string
   key?: string
+  reasoning?: boolean
+  promptCache?: string
 }
+
+// ModelPrice is one model's approximate list price (USD per 1M tokens).
+export interface ModelPrice {
+  inputPerMTok: number
+  outputPerMTok: number
+  cacheReadMult?: number
+  cacheWriteMult?: number
+}
+
+// PriceTable maps provider id → model id → price. Ballpark figures from the
+// backend (providers.priceTable), surfaced so the UI can show $/1M-token costs.
+export type PriceTable = Record<string, Record<string, ModelPrice>>
 
 export const providerApi = {
   listCustomProviders: () => req<CustomProvider[]>('/api/providers'),
@@ -30,4 +48,5 @@ export const providerApi = {
     req<CustomProvider[]>('/api/providers', { method: 'PUT', body: JSON.stringify(p) }),
   deleteCustomProvider: (id: string) =>
     req<CustomProvider[]>(`/api/providers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  prices: () => req<PriceTable>('/api/prices'),
 }

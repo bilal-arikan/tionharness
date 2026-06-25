@@ -155,6 +155,8 @@ func (s *Store) UpsertCustomProvider(p CustomProvider, key *string) (Settings, e
 		BaseURL:      strings.TrimSpace(p.BaseURL),
 		DefaultModel: strings.TrimSpace(p.DefaultModel),
 		Models:       p.Models,
+		Reasoning:    p.Reasoning,
+		PromptCache:  strings.TrimSpace(p.PromptCache),
 	}
 	if entry.Label == "" {
 		entry.Label = id

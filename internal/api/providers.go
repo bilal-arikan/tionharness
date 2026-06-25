@@ -20,6 +20,8 @@ func (s *Server) customProviderSpecs(cur settings.Settings) []providers.CustomSp
 			DefaultModel: c.DefaultModel,
 			Models:       c.Models,
 			Key:          s.settings.CustomProviderKey(c.ID),
+			Reasoning:    c.Reasoning,
+			PromptCache:  c.PromptCache,
 		})
 	}
 	return out
@@ -35,11 +37,21 @@ type upsertProviderReq struct {
 	DefaultModel string  `json:"defaultModel"`
 	Models       string  `json:"models"`
 	Key          *string `json:"key"`
+	Reasoning    bool    `json:"reasoning"`
+	PromptCache  string  `json:"promptCache"`
 }
 
 // handleListProviders returns the masked custom-provider list.
 func (s *Server) handleListProviders(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.settings.DTO().CustomProviders)
+}
+
+// handlePrices returns the ballpark list-price table (provider id → model →
+// {inputPerMTok, outputPerMTok, ...}) so the UI can show approximate $/1M-token
+// costs (e.g. next to each model in the market provider preview). These are
+// estimates, not billing-grade — see providers.priceTable.
+func (s *Server) handlePrices(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, providers.AllPrices())
 }
 
 // handleUpsertProvider creates or updates a custom provider, then re-applies
@@ -57,6 +69,8 @@ func (s *Server) handleUpsertProvider(w http.ResponseWriter, r *http.Request) {
 		BaseURL:      req.BaseURL,
 		DefaultModel: req.DefaultModel,
 		Models:       req.Models,
+		Reasoning:    req.Reasoning,
+		PromptCache:  req.PromptCache,
 	}, req.Key)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
