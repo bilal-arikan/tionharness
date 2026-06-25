@@ -30,6 +30,21 @@
 > **Memory kurulumu hedef ajan seçtirir** (detayda dropdown; varsayılan ilk ajan).
 > Bir item'a tıklayınca detay **ortada açılan popup/modal** olarak gelir (eski yan-panel
 > yerine; `market-detail-modal`, backdrop'a tıklayınca kapanır).
+>
+> **Koleksiyon içe aktarma (SK-IMP2, 2026-06-25):** içe aktarma artık **çok-skilli
+> koleksiyonları** destekler — tek skill klasörü yerine bir **GitHub repo / Claude
+> Code plugin / `skills/` klasörü** (ör. `juliusbrussee/caveman`, `leonxlnx/taste-skill`,
+> `coreyhaines31/marketingskills`) baştan sona taranır, içindeki **her `SKILL.md`**
+> keşfedilir. Akış üç adım: **Tara → Seç → İçe aktar** (`SkillImportDialog` artık
+> önizleme + çoklu seçim taşır). GitHub yolu repo'yu **tek tarball indirmeyle**
+> (`codeload.github.com`, API rate-limit'ine tabi DEĞİL) çeker → 1 istekle tüm
+> skill'leri isim/açıklama + dosyalarıyla keşfeder. **Nested kaynaklar** (`references/`,
+> `evals/`, `scripts/` …) korunur (artık düz dosya değil ağaç kopyalanır). Slug
+> çakışmaları **batch'i durdurmaz**, atlanır ve raporlanır; opsiyonel **slug öneki**
+> ile koleksiyon isim-uzayına alınabilir (ör. `caveman-commit`). `owner/repo` kısayolu
+> + `> / |` YAML block-scalar açıklamalar desteklenir. crossaitools.com / skillsmp.com /
+> claudeskillsmarket.com gibi dizinler **doğrudan kazınmaz** ama oraların işaret ettiği
+> GitHub repo URL'si yapıştırılarak içe aktarılır. Detay: §"Skill içe aktarma" aşağıda.
 
 ---
 
@@ -236,6 +251,44 @@ ile global dizine yazar. Sanitize = secret/ID/CreatedBy temizliği (§1.2).
 
 `Runtime`'a `Market() *market.Store` accessor'ı (Skills() aynası); dizinler
 `marketGlobalDir()` / `workspaceMarketDir(workDir)`.
+
+### 4.1 Skill içe aktarma (SK-IMP / SK-IMP2)
+
+Skill içe aktarma kodu **markette değil** `internal/skills`'tedir (market UI'ı yalnız
+`SkillImportDialog`'u barındırır). Endpoint'ler `internal/api/skills.go`:
+
+| Metot | Yol | İş |
+|-------|-----|-----|
+| POST | `/api/skills/import` | **tek** skill (geriye uyumlu): `{source, path\|url, slug?, shared?}` |
+| POST | `/api/skills/import/scan` | **koleksiyon önizleme**: `{source, path\|url}` → keşfedilen skill listesi (yazma yok) |
+| POST | `/api/skills/import/bulk` | **toplu içe aktar**: `{source, path\|url, paths[], slugPrefix?, shared?}` |
+
+- `source` = `github` (repo/tree URL ya da `owner/repo` kısayolu) veya `local` (klasör ağacı).
+- **GitHub yolu** (`internal/skills/collection.go`): `fetchGitHubArchive` repo'yu
+  `codeload.github.com/<owner>/<repo>/tar.gz/<ref>` üzerinden **tek tarball** indirir
+  (`main`→`master` fallback), `archive/tar`+`compress/gzip` ile bellek-içi ayıklar
+  (yeni bağımlılık yok). Bu, contents-API'yi klasör-klasör gezmeye göre **anonim
+  rate-limit'e çok daha dostudur** (1 istek = tüm keşif + içerik). Üst dizin (`repo-ref/`)
+  soyulur; `skipDirs` (.git/.github/node_modules/dist/build/benchmarks…) elenir;
+  dosya başına 4 MB / toplam 64 MB cap.
+- **Keşif** (`discoverInTree`): her `SKILL.md`'nin ebeveyni bir skill klasörüdür;
+  her kaynak dosya **en derin** ata-skill klasörüne atanır → nested sub-skill kendi
+  kaynaklarını korur, ebeveyn onları sahiplenmez. Kök-skill (`SKILL.md` repo kökünde)
+  de desteklenir. `prefix` (URL'deki alt-yol) ile alt-ağaca daraltılır.
+- **Nested kaynaklar korunur:** `ImportCCSkill` artık alt klasörleri (`references/`,
+  `evals/`, `scripts/`) yazar; `safeBundledPath` mutlak yol + `..` kaçışını reddeder,
+  nested göreli yola izin verir. `readLocalSkillDir` de tek-skill local import'ta ağacı
+  `WalkDir` ile toplar.
+- **Slug çakışması batch'i durdurmaz:** çakışan skill `Skipped`'a (sebep ile) düşer,
+  diğerleri devam eder. Opsiyonel `slugPrefix` koleksiyonu isim-uzayına alır.
+- **Frontmatter `>`/`|` block-scalar** (folded/literal) açıklamalar artık parse edilir
+  (`frontmatter.go::collectBlockScalar`) — community SKILL.md'lerinde yaygın.
+- **Dizin siteleri** (crossaitools.com / skillsmp.com / claudeskillsmarket.com)
+  doğrudan kazınmaz; oraların işaret ettiği **GitHub repo URL'si** yapıştırılarak
+  içe aktarılır (hepsi GitHub-tabanlı). İleride: bu dizinleri **uzak registry**
+  (`swarmregistry/v1`) olarak köprüleyen bir adaptör eklenebilir.
+- Testler: `collection_test.go` (gruplama/prefix/kök-skill/çakışma/block-scalar),
+  `collection_live_test.go` (network-gated, `SWARMGO_LIVE_TEST=1`).
 
 ---
 

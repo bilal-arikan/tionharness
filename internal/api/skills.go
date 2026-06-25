@@ -147,6 +147,85 @@ func (s *Server) handleImportSkill(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"result": res, "skill": skillDetailFor(store, sk)})
 }
 
+// scanCollectionReq is the payload to preview a multi-skill collection (a GitHub
+// repo/plugin or a local folder tree) before importing. (SK-IMP2)
+type scanCollectionReq struct {
+	Source string `json:"source"` // "github" (default) | "local"
+	Path   string `json:"path"`   // local directory tree (source=local)
+	URL    string `json:"url"`    // github repo/tree URL or owner/repo (source=github)
+}
+
+func (req scanCollectionReq) location() (source, location string) {
+	source = req.Source
+	if source == "" {
+		source = "github"
+	}
+	if source == "local" {
+		return source, strings.TrimSpace(req.Path)
+	}
+	return source, strings.TrimSpace(req.URL)
+}
+
+// handleScanCollection discovers every skill in a collection and returns preview
+// metadata (slug, name, description, bundled files, whether the slug already
+// exists) so the UI can let the user pick which to import. Nothing is written.
+func (s *Server) handleScanCollection(w http.ResponseWriter, r *http.Request) {
+	var req scanCollectionReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	source, location := req.location()
+	if location == "" {
+		writeError(w, http.StatusBadRequest, "path (local) or url (github) is required")
+		return
+	}
+	res, err := ws(r).Runtime.Skills().ScanCollection(source, location)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// importCollectionReq is the bulk-import payload: the same source/location plus the
+// selected skill folder paths (empty = all), an optional slug prefix to namespace
+// the collection, and whether to advertise the imported skills on-demand. (SK-IMP2)
+type importCollectionReq struct {
+	Source     string   `json:"source"`
+	Path       string   `json:"path"`
+	URL        string   `json:"url"`
+	Paths      []string `json:"paths"`      // selected skill folder relPaths (empty = all)
+	SlugPrefix string   `json:"slugPrefix"` // optional namespace prefix for slugs
+	Shared     bool     `json:"shared"`
+}
+
+func (req importCollectionReq) location() (source, location string) {
+	return scanCollectionReq{Source: req.Source, Path: req.Path, URL: req.URL}.location()
+}
+
+// handleImportCollection bulk-imports the selected skills of a collection into the
+// workspace tier, copying nested bundled resources and skipping (not aborting on)
+// slug collisions. Returns the aggregate result (imported + skipped + warnings).
+func (s *Server) handleImportCollection(w http.ResponseWriter, r *http.Request) {
+	var req importCollectionReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	source, location := req.location()
+	if location == "" {
+		writeError(w, http.StatusBadRequest, "path (local) or url (github) is required")
+		return
+	}
+	res, err := ws(r).Runtime.Skills().ImportCollection(source, location, req.Paths, req.SlugPrefix, req.Shared)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, res)
+}
+
 // handleUpdateSkill rewrites an existing skill's frontmatter + body in place.
 func (s *Server) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
 	var req skillInputReq

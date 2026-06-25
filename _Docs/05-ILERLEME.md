@@ -2,6 +2,37 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-25**
 
+## Skill koleksiyon içe aktarma (SK-IMP2) ✅ (2026-06-25)
+
+İçe aktarma artık **tek skill klasörü** yerine **çok-skilli koleksiyonları** (GitHub repo /
+Claude Code plugin / `skills/` klasörü) destekler. Hedef: `juliusbrussee/caveman`,
+`leonxlnx/taste-skill`, `coreyhaines31/marketingskills` gibi repoların ve
+crossaitools.com / skillsmp.com / claudeskillsmarket.com dizinlerinin işaret ettiği
+GitHub-tabanlı skill'lerin toplu eklenmesi.
+
+- **Tek-tarball indirme:** `internal/skills/collection.go` repo'yu `codeload.github.com/
+  …/tar.gz/<ref>` üzerinden **bir** istekle çeker (`main`→`master` fallback), `archive/tar`
+  +`compress/gzip` ile bellek-içi ayıklar (**yeni bağımlılık yok**, go.mod hâlâ uuid+cron).
+  Contents-API klasör-gezmesine göre anonim rate-limit'e çok daha dostu (1 istek = keşif+içerik).
+- **Keşif** (`discoverInTree`): her `SKILL.md`'nin ebeveyni skill klasörü; dosyalar **en derin**
+  ata-skill'e atanır → nested sub-skill kendi kaynaklarını korur. Kök-skill + URL alt-yol
+  prefix filtresi desteklenir. `skipDirs` ile repo gürültüsü (.git/.github/dist/…) elenir;
+  4 MB/dosya, 64 MB/toplam cap.
+- **Nested kaynaklar korunur:** `ImportCCSkill` artık `references/`/`evals/`/`scripts/` alt
+  klasörlerini yazar (`safeBundledPath` mutlak yol + `..` reddeder, nested'a izin verir);
+  `readLocalSkillDir` tek-skill local import'ta da ağacı `WalkDir` ile toplar.
+- **YAML block-scalar açıklama** (`description: >` folded / `|` literal) parse edilir
+  (`frontmatter.go::collectBlockScalar`) — caveman vb. community skill'lerinde yaygındı, eskiden `>` çıkıyordu.
+- **API:** `POST /api/skills/import/scan` (önizleme) + `POST /api/skills/import/bulk`
+  (seçili `paths[]` + `slugPrefix` + `shared`; çakışma batch'i durdurmaz, `Skipped`'a düşer).
+  `owner/repo` kısayolu kabul edilir. Eski `/api/skills/import` (tek) korundu.
+- **UI:** `SkillImportDialog` üç adımlı (**Tara → Seç → İçe aktar**): keşfedilen skill listesi,
+  çoklu seçim + tümü/hiçbiri, "zaten var" rozeti, slug öneki, sonuç (içe aktarılan + atlanan + uyarılar).
+- **Test:** `collection_test.go` (gruplama/prefix/kök-skill/çakışma/block-scalar; 29 birim test),
+  `collection_live_test.go` (network-gated). **Canlı doğrulama:** caveman 11, taste-skill 13,
+  marketingskills **45 skill + 155 nested dosya** sorunsuz içe aktarıldı.
+- **Detay:** `_Docs\21-MARKET.md` §4.1.
+
 ## Generator↔Evaluator (GAN-benzeri) flow şablonu ✅ (2026-06-25)
 
 Anthropic *"harness design"* makalesindeki **self-evaluation problemi** (ajan kendi işini

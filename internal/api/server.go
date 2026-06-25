@@ -378,6 +378,8 @@ func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/skills", s.handleListSkills)
 	mux.HandleFunc("POST /api/skills", s.handleCreateSkill)
 	mux.HandleFunc("POST /api/skills/import", s.handleImportSkill)
+	mux.HandleFunc("POST /api/skills/import/scan", s.handleScanCollection)
+	mux.HandleFunc("POST /api/skills/import/bulk", s.handleImportCollection)
 	mux.HandleFunc("POST /api/skills/reload", s.handleReloadSkills)
 	mux.HandleFunc("GET /api/skills/{slug}", s.handleGetSkill)
 	mux.HandleFunc("PUT /api/skills/{slug}", s.handleUpdateSkill)

@@ -69,7 +69,8 @@ func parseFrontmatter(content string) (frontmatter, string) {
 
 	lines := strings.Split(fmText, "\n")
 	var curList string // key currently accumulating block-list items
-	for _, raw := range lines {
+	for i := 0; i < len(lines); i++ {
+		raw := lines[i]
 		line := strings.TrimRight(raw, " \t")
 		if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
@@ -96,6 +97,14 @@ func parseFrontmatter(content string) (frontmatter, string) {
 		}
 
 		switch {
+		case isBlockScalarIndicator(val):
+			// YAML block scalar: `key: >` (folded) or `key: |` (literal), optionally
+			// with a chomping indicator (-/+). The value is the indented lines that
+			// follow, common in community SKILL.md descriptions.
+			folded := strings.HasPrefix(val, ">")
+			text, consumed := collectBlockScalar(lines[i+1:], folded)
+			fm.scalars[key] = text
+			i += consumed
 		case val == "":
 			// Begin a block list (or an empty value); record the key so following
 			// "- item" lines attach to it.
@@ -107,6 +116,76 @@ func parseFrontmatter(content string) (frontmatter, string) {
 		}
 	}
 	return fm, body
+}
+
+// isBlockScalarIndicator reports whether a value is a YAML block-scalar header:
+// ">" (folded) or "|" (literal), optionally followed by a chomping/indentation
+// indicator (-, +, or a digit).
+func isBlockScalarIndicator(val string) bool {
+	if val != ">" && val != "|" &&
+		!strings.HasPrefix(val, "> ") && !strings.HasPrefix(val, "| ") {
+		switch val {
+		case ">-", ">+", "|-", "|+":
+			return true
+		default:
+			// "|2", ">2-" etc. — first char is the style, rest are indicators.
+			if len(val) >= 2 && (val[0] == '>' || val[0] == '|') {
+				for _, c := range val[1:] {
+					if c != '-' && c != '+' && (c < '0' || c > '9') {
+						return false
+					}
+				}
+				return true
+			}
+			return false
+		}
+	}
+	return val == ">" || val == "|"
+}
+
+// collectBlockScalar consumes the indented continuation lines of a block scalar,
+// returning the joined text and how many lines were consumed. Folded (>) joins
+// non-blank lines with single spaces (blank lines separate paragraphs); literal
+// (|) preserves line breaks. De-indents to the first content line's indentation.
+func collectBlockScalar(rest []string, folded bool) (string, int) {
+	indent := -1
+	var out []string
+	consumed := 0
+	for _, ln := range rest {
+		if strings.TrimSpace(ln) == "" {
+			out = append(out, "")
+			consumed++
+			continue
+		}
+		lead := len(ln) - len(strings.TrimLeft(ln, " \t"))
+		if indent < 0 {
+			if lead == 0 {
+				break // not indented → block scalar had no body
+			}
+			indent = lead
+		}
+		if lead < indent {
+			break // dedent → end of the block scalar
+		}
+		out = append(out, ln[indent:])
+		consumed++
+	}
+	// Trim trailing blank lines that belong to the block.
+	for len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+		out = out[:len(out)-1]
+	}
+	if folded {
+		// Fold: join non-blank lines with single spaces (callers one-line scalars
+		// anyway, so paragraph breaks collapse to a space too).
+		var parts []string
+		for _, ln := range out {
+			if strings.TrimSpace(ln) != "" {
+				parts = append(parts, strings.TrimSpace(ln))
+			}
+		}
+		return strings.Join(parts, " "), consumed
+	}
+	return strings.Join(out, "\n"), consumed
 }
 
 // parseInlineArray parses `[a, "b", 'c']` into its trimmed, unquoted items.

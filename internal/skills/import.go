@@ -3,6 +3,7 @@ package skills
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -122,22 +123,27 @@ func (s *Store) ImportFromSource(source, location, slug string, shared bool) (Sk
 }
 
 // readLocalSkillDir reads a skill directory: SKILL.md (required) plus every other
-// top-level file as a bundled resource.
+// file (including nested sub-directories like references/ or scripts/) as a bundled
+// resource, keyed by its path relative to the skill folder.
 func readLocalSkillDir(dir string) (raw string, files map[string][]byte, err error) {
 	data, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
 	if err != nil {
 		return "", nil, fmt.Errorf("read SKILL.md in %q: %w", dir, err)
 	}
 	files = map[string][]byte{}
-	entries, _ := os.ReadDir(dir)
-	for _, e := range entries {
-		if e.IsDir() || strings.EqualFold(e.Name(), "SKILL.md") {
-			continue
+	_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, werr error) error {
+		if werr != nil || d.IsDir() {
+			return nil
 		}
-		if b, rerr := os.ReadFile(filepath.Join(dir, e.Name())); rerr == nil {
-			files[e.Name()] = b
+		rel, rerr := filepath.Rel(dir, p)
+		if rerr != nil || strings.EqualFold(rel, "SKILL.md") {
+			return nil
 		}
-	}
+		if b, rderr := os.ReadFile(p); rderr == nil {
+			files[filepath.ToSlash(rel)] = b
+		}
+		return nil
+	})
 	return string(data), files, nil
 }
 
@@ -175,18 +181,22 @@ func (s *Store) ImportCCSkill(slug, raw, sourceURL string, files map[string][]by
 		return Skill{}, res, fmt.Errorf("write SKILL.md: %w", err)
 	}
 	// Copy bundled resource files (SK-1). SKILL.md is rendered above, never copied
-	// raw; path traversal is refused so an import can't escape the skill folder.
+	// raw. Nested sub-directories (references/, evals/, scripts/ …) are preserved so
+	// progressive-disclosure resources survive the import; path traversal (absolute
+	// paths or a ".." segment) is refused so an import can't escape the skill folder.
 	for name, data := range files {
-		// Accept ONLY plain top-level filenames: anything with a path component (a
-		// separator or "..") is refused so an import can't escape the skill folder
-		// or smuggle nested paths. SKILL.md is rendered above, never copied raw.
-		if filepath.Base(name) != name || name == "." || name == ".." || strings.EqualFold(name, "SKILL.md") {
+		rel, ok := safeBundledPath(name)
+		if !ok {
 			continue
 		}
-		if err := os.WriteFile(filepath.Join(skillDir, name), data, 0o644); err != nil {
-			return Skill{}, res, fmt.Errorf("write bundled file %q: %w", name, err)
+		dest := filepath.Join(skillDir, rel)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return Skill{}, res, fmt.Errorf("create dir for bundled file %q: %w", rel, err)
 		}
-		res.Files = append(res.Files, name)
+		if err := os.WriteFile(dest, data, 0o644); err != nil {
+			return Skill{}, res, fmt.Errorf("write bundled file %q: %w", rel, err)
+		}
+		res.Files = append(res.Files, filepath.ToSlash(rel))
 	}
 	s.Reload()
 	sk, ok := s.Get(slug)
@@ -240,6 +250,26 @@ func boolScalarFalse(v string) bool {
 		return true
 	}
 	return false
+}
+
+// safeBundledPath validates a bundled-resource path relative to a skill folder.
+// It rejects SKILL.md (rendered separately), absolute paths, and any path that
+// escapes the folder via a ".." segment, returning a cleaned forward-slashed
+// relative path on success. Nested sub-directories are allowed and preserved.
+func safeBundledPath(name string) (string, bool) {
+	name = strings.TrimSpace(strings.ReplaceAll(name, "\\", "/"))
+	name = strings.TrimPrefix(name, "./")
+	if name == "" || name == "." || strings.EqualFold(name, "SKILL.md") {
+		return "", false
+	}
+	if path.IsAbs(name) || strings.HasPrefix(name, "/") {
+		return "", false
+	}
+	clean := path.Clean(name)
+	if clean == ".." || strings.HasPrefix(clean, "../") || strings.Contains(clean, "/../") {
+		return "", false
+	}
+	return filepath.FromSlash(clean), true
 }
 
 // hasPositionalArg reports whether the body uses a $1..$9 slash-command argument.
