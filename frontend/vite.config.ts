@@ -32,6 +32,18 @@ export default defineConfig({
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return
           if (id.includes('highlight.js')) return 'vendor-highlight'
+          // mermaid + its deps (d3, dagre, cytoscape, …) are lazy-loaded only
+          // when a diagram renders — keep them out of the main bundle.
+          if (
+            id.includes('mermaid') ||
+            id.includes('/d3') ||
+            id.includes('d3-') ||
+            id.includes('dagre') ||
+            id.includes('cytoscape') ||
+            id.includes('khroma') ||
+            id.includes('elkjs')
+          )
+            return 'vendor-mermaid'
           if (
             id.includes('react-markdown') ||
             id.includes('remark') ||

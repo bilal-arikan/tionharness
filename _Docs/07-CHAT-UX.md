@@ -84,9 +84,16 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   sanılıp yerel yollar düşürülür); Windows ters-bölü yolları parse öncesi `/`'e
   normalize edilir.
 - `CodeBlock.tsx` — dil etiketi + kopyala düğmesi + `highlight.js` vurgusu;
-  `diff` blokları `DiffView`'e gider.
+  `diff` blokları `DiffView`'e, `mermaid` blokları `MermaidDiagram`'a gider.
 - `DiffView.tsx` — unified diff'i satır bazlı +/- renkli ve `+N / −M` istatistik
   başlığıyla çizer (`lib/diff.ts` ayrıştırır).
+- `MermaidDiagram.tsx` — ```` ```mermaid ```` blokunu **tema-duyarlı SVG**'ye
+  çevirir. `mermaid@^11` **dinamik `import()`** ile lazy yüklenir (`vite.config.ts`
+  `vendor-mermaid` chunk'ı → ana bundle'a binmez). Tema base'i `<html data-theme>`'ten
+  seçilir, renkler CSS değişkenlerinden türetilir, `MutationObserver` tema değişiminde
+  yeniden çizer. **Akış-dayanıklı:** 120ms debounce + hatada ham kaynağa düşer →
+  yarım kalan diyagram patlatmaz. Toolbar: Source/Diagram, Expand (tam-ekran), Copy.
+  `securityLevel: 'strict'`.
 
 ### Sohbet bileşenleri (`components/chat/`)
 - `TurnSteps.tsx` — bir turun iz listesini sırayla çizer; `parseSteps` JSON'u
