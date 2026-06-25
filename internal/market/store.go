@@ -193,6 +193,11 @@ func (s *Store) Get(id string) (Pack, bool) {
 		if !rok {
 			return Pack{}, false
 		}
+		// A source-ref pack (directory-site bridge) has no payload to download — its
+		// install runs the ingest pipeline against SourceRef.URL. Return the manifest.
+		if rmeta.SourceRef != nil {
+			return rmeta, true
+		}
 		full, err := fetchPayload(context.Background(), rmeta.remoteURL, rmeta.remoteSHA)
 		if err != nil {
 			return Pack{}, false

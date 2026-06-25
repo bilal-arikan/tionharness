@@ -168,7 +168,13 @@ func (s *Store) RefreshRemote(ctx context.Context) error {
 		if !r.Enabled {
 			continue
 		}
-		idx, err := fetchIndex(ctx, r.URL)
+		var idx RegistryIndex
+		var err error
+		if r.Connector != "" {
+			idx, err = fetchConnectorIndex(ctx, r) // directory-site bridge
+		} else {
+			idx, err = fetchIndex(ctx, r.URL) // swarmregistry/v1 index
+		}
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", r.Name, err))
 			continue
@@ -223,7 +229,8 @@ func (s *Store) loadRemoteCache() map[string]Pack {
 			continue // registry removed/disabled — skip its stale cache
 		}
 		for _, pe := range ci.Index.Packs {
-			if pe.ID == "" || pe.Kind == "" || pe.URL == "" {
+			// An entry needs an id+kind and EITHER a payload URL or a Source ref.
+			if pe.ID == "" || pe.Kind == "" || (pe.URL == "" && pe.Source == nil) {
 				continue
 			}
 			out[pe.ID] = entryToPack(pe, ci.RegistryName)

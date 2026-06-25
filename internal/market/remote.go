@@ -33,23 +33,38 @@ type Registry struct {
 	URL     string `json:"url"`
 	Enabled bool   `json:"enabled"`
 	AddedAt int64  `json:"addedAt"`
+	// Connector, when set, names a built-in directory-site connector (e.g. "skillsmp")
+	// whose refresh queries a site API and transforms its listing into source-ref
+	// entries, instead of fetching a swarmregistry/v1 index from URL.
+	Connector string `json:"connector,omitempty"`
+}
+
+// SourceRef marks a registry entry (or catalog pack) as an INGEST source rather
+// than a prebuilt pack: instead of downloading a .swarmpack.json, install runs the
+// ingest pipeline against URL (a GitHub repo/tree). This is what bridges directory
+// sites (crossaitools/skillsmp/…) — whose listings point at GitHub — into the market.
+type SourceRef struct {
+	Type string   `json:"type"`           // "github"
+	URL  string   `json:"url"`            // owner/repo[/tree/<ref>/<path>]
+	Keys []string `json:"keys,omitempty"` // specific artifact keys (empty = all discovered)
 }
 
 // RegistryEntry is one pack listed in a registry index: the cheap manifest plus
-// the payload download URL and an optional sha256 for integrity verification.
+// EITHER a payload download URL (+optional sha256) OR a Source ref (ingest on install).
 type RegistryEntry struct {
-	ID            string   `json:"id"`
-	Kind          string   `json:"kind"`
-	Name          string   `json:"name"`
-	Description   string   `json:"description"`
-	Version       string   `json:"version,omitempty"`
-	Author        string   `json:"author,omitempty"`
-	Icon          string   `json:"icon,omitempty"`
-	Color         string   `json:"color,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
-	URL           string   `json:"url"`              // payload (.swarmpack.json) download URL
-	SHA256        string   `json:"sha256,omitempty"` // optional integrity hash (hex)
-	MinAppVersion string   `json:"minAppVersion,omitempty"`
+	ID            string     `json:"id"`
+	Kind          string     `json:"kind"`
+	Name          string     `json:"name"`
+	Description   string     `json:"description"`
+	Version       string     `json:"version,omitempty"`
+	Author        string     `json:"author,omitempty"`
+	Icon          string     `json:"icon,omitempty"`
+	Color         string     `json:"color,omitempty"`
+	Tags          []string   `json:"tags,omitempty"`
+	URL           string     `json:"url,omitempty"`    // payload (.swarmpack.json) download URL
+	SHA256        string     `json:"sha256,omitempty"` // optional integrity hash (hex)
+	Source        *SourceRef `json:"source,omitempty"` // ingest source (alternative to URL)
+	MinAppVersion string     `json:"minAppVersion,omitempty"`
 }
 
 // RegistryIndex is the document a remote registry serves at its URL.
@@ -151,6 +166,7 @@ func entryToPack(e RegistryEntry, registryName string) Pack {
 		Tags:         e.Tags,
 		Source:       SourceRemote,
 		RegistryName: registryName,
+		SourceRef:    e.Source,
 		remoteURL:    e.URL,
 		remoteSHA:    e.SHA256,
 	}

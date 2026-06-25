@@ -1,9 +1,22 @@
-# 38 — Dizin-Sitesi Köprüsü (Catalog Connector) — PLAN
+# 38 — Dizin-Sitesi Köprüsü (Catalog Connector)
 
-> **Durum: PLAN (henüz uygulanmadı).** crossaitools.com / skillsmp.com /
-> claudeskillsmarket.com gibi **skill dizin sitelerini** SwarmGo market'ine bağlama
-> tasarımı. Mevcut `internal/ingest` (SK-IMP3) ve uzak registry (`swarmregistry/v1`,
-> `21-MARKET.md` §3) üzerine kurulur.
+> **Durum: Faz A + B UYGULANDI (2026-06-25); Faz C-F planlı.** crossaitools.com /
+> skillsmp.com / claudeskillsmarket.com gibi **skill dizin sitelerini** SwarmGo
+> market'ine bağlama. Mevcut `internal/ingest` (SK-IMP3) ve uzak registry
+> (`swarmregistry/v1`, `21-MARKET.md` §3) üzerine kurulur.
+>
+> **Yapıldı:** **Faz A** — `RegistryEntry.Source`/`Pack.SourceRef` (kaynak-ref) +
+> install yönlendirmesi (`installSourceRefPack` → `ingest.BuildPacks` + `installPackInto`);
+> `Get` kaynak-ref'i payload indirmeden döner; `loadRemoteCache` Source'lu entry kabul eder.
+> **Faz B** — skillsmp connector (`market/connectors.go`: `/api/skills` → source-ref
+> entry'leri), `Registry.Connector` + `RefreshRemote` connector dalı, API
+> `GET/POST /api/market/connectors[/add]`, UI `RegistryManager` "Hazır kaynaklar"
+> quick-add. Canlı: skillsmp 12 entry. Testler: `connectors_test.go` (+live).
+>
+> **Kalan (planlı):** Faz C — crossaitools connector + arama/sayfalama (21.7k ölçek);
+> Faz D — market arama kutusu + source-ref "Kuruldu" cross-session işaretleme
+> (şu an ledger pack-id ile, isInstalled slug eşleşmesi MVP'de eksik); Faz E —
+> claudeskillsmarket sitemap/scrape; Faz F — harici statik köprü generator.
 
 ## 1. Problem
 

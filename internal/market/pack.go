@@ -76,6 +76,11 @@ type Pack struct {
 	// RegistryName is the display name of the remote registry a remote pack came
 	// from (empty for local packs). Set when Source == SourceRemote.
 	RegistryName string `json:"registryName,omitempty"`
+	// SourceRef, when set, marks this pack as an INGEST source (a GitHub repo/tree)
+	// rather than a downloadable payload: install runs the ingest pipeline instead of
+	// fetching a .swarmpack.json. Set for catalog entries from directory-site bridges.
+	SourceRef *SourceRef `json:"sourceRef,omitempty"`
+
 	// InstalledVersion is decorated by the API from the per-workspace install
 	// ledger: the version recorded the last time this pack id was installed here.
 	// Empty = never installed via the market. Compare with Version to detect an

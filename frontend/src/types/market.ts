@@ -124,6 +124,8 @@ export interface Registry {
   url: string
   enabled: boolean
   addedAt: number
+  /** Built-in directory-site connector id (e.g. "skillsmp"); empty for plain registries. */
+  connector?: string
 }
 
 export interface InstallResult {

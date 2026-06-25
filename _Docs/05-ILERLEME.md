@@ -2,6 +2,25 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-25**
 
+## Dizin-sitesi köprüsü: kaynak-ref + skillsmp connector ✅ (2026-06-25)
+
+Dizin-sitelerini market'e bağlama (`_Docs\38`) Faz A+B uygulandı:
+
+- **Faz A — kaynak-ref (source-ref) çekirdeği:** `market.RegistryEntry.Source`
+  (`SourceRef{Type,URL,Keys}`) + `Pack.SourceRef`; bir kayıt pack indirme yerine bir
+  **GitHub kaynağına** işaret eder. Install yönlendirmesi (`installSourceRefPack`):
+  kaynak-ref ise **mevcut `ingest.BuildPacks` + `installPackInto`** çalışır (import
+  dialog'uyla aynı hat). `Store.Get` kaynak-ref'i payload indirmeden manifest olarak
+  döner; `loadRemoteCache` URL'siz ama Source'lu entry kabul eder.
+- **Faz B — skillsmp connector:** `market/connectors.go` skillsmp.com `/api/skills`
+  cevabını **source-ref entry'lerine** çevirir (her skill'in `githubUrl`'i). `Registry`
+  artık `Connector` taşır; `RefreshRemote` connector dalı site API'sini swarmregistry
+  index'i gibi cache'ler. API `GET /api/market/connectors` + `POST .../connectors/add`;
+  UI `RegistryManager`'da "Hazır kaynaklar" quick-add (skillsmp tek tıkla eklenir).
+- **Canlı:** skillsmp 12 source-ref entry. **478 test**, vet/tsc/prod build temiz.
+- **Kalan (planlı):** crossaitools connector (21.7k, arama/sayfalama), market arama
+  kutusu + cross-session "Kuruldu", claudeskillsmarket scrape, harici köprü. Detay: `_Docs\38`.
+
 ## Ingest: CC model eşleme + dizin-sitesi köprü planı (2026-06-25)
 
 - **CC model → SwarmGo provider/model eşleme** ✅: `agentAdapter` artık CC subagent
@@ -16,6 +35,23 @@
   GitHub-tabanlı (crossaitools `/api/skills` ~21.7k `repo`+`path`; skillsmp `githubUrl`
   doğrudan; claudeskillsmarket yalnız sitemap). Çekirdek değişiklik: `RegistryEntry.Source`
   (kaynak-ref) → kurulum = mevcut `ingest.BuildPacks` + `installPackInto`. Henüz uygulanmadı.
+
+## Interaction MCP Faz 3 — `focus_view` (UI navigasyon) ✅ (2026-06-25)
+
+`notify`'ın tamamlayıcısı: ajan UI'ı **aktif olarak** bir ekrana/entity'ye sürer
+("yaptığım artifact'ı aç"). `notify` pasif (toast→tıkla→git); `focus_view` anında navige
+eder. Mevcut deep-link makinesini yeniden kullanır: araç `events.Event{Type:"navigate"}`
+yayınlar → SSE → `App.tsx onEvent` `navigate` tipini anında uygular (`routeFromEvent`→
+`buildRoute`→`window.location.hash`). Toast/rozet yok (eylemin kendisi).
+
+- **Araç (`tools/builtin_focusview.go` + `navigatesink.go`):** `focus_view(view*, sessionId?,
+  agentId?)`; view enum doğrulama; sink yoksa graceful no-op. `NavigateSink` köprüsü.
+- **Concrete sink:** `api/notifysink.go`'daki `notifySink` artık hem `NotifySink` hem
+  `NavigateSink` (tek instance, iki arayüz) → wiring çoğaltılmadı.
+- **Wiring:** native registry + chat_stream + autonomous_interaction `setNav`; CLI köprüsü
+  `mcp_interaction.go` spec+`callFocus`; frontend `App.tsx` navigate handler.
+- **Test:** 5 yeni birim test; `go build`/`vet`/`test`+`tsc`/`vite` yeşil. Canlı claude-cli
+  (Fasty `focus_view{view:artifacts}`) uçtan uca doğrulandı. Detay: `_Docs\11` §18.
 
 ## Interaction MCP Faz 3 — `notify` (masaüstü bildirim) ✅ (2026-06-25)
 

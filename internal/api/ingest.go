@@ -92,6 +92,7 @@ type ingestInstallReq struct {
 // ingestInstallResult aggregates a bulk import: installed entities, skipped items
 // (build errors or install conflicts) and any warnings.
 type ingestInstallResult struct {
+	Message   string                 `json:"message"`
 	Installed []market.InstallResult `json:"installed"`
 	Skipped   []ingest.SkipNote      `json:"skipped"`
 	Warnings  []string               `json:"warnings"`

@@ -1,6 +1,15 @@
 import type { InstallResult, Pack, PackKind, Registry } from '../types'
 import { req } from './client'
 
+// ConnectorInfo describes a built-in directory-site connector (skillsmp …) for the
+// quick-add list. Adding one enables it as a registry that ingests on install.
+export interface ConnectorInfo {
+  id: string
+  name: string
+  url: string
+  detail: string
+}
+
 export const marketApi = {
   listRegistries: () => req<Registry[]>('/api/market/registries'),
   addRegistry: (name: string, url: string) =>
@@ -14,6 +23,9 @@ export const marketApi = {
       body: JSON.stringify({ url }),
     }),
   refreshRegistries: () => req<void>('/api/market/registries/refresh', { method: 'POST' }),
+  listConnectors: () => req<ConnectorInfo[]>('/api/market/connectors'),
+  addConnector: (id: string) =>
+    req<Registry[]>('/api/market/connectors/add', { method: 'POST', body: JSON.stringify({ id }) }),
   listMarket: (kind?: PackKind) =>
     req<Pack[]>(`/api/market${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`),
   getPack: (id: string) => req<Pack>(`/api/market/${encodeURIComponent(id)}`),

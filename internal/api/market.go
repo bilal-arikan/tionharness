@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/ingest"
 	"github.com/bilal-arikan/swarmgo/internal/market"
 	"github.com/bilal-arikan/swarmgo/internal/orchestration"
 	"github.com/bilal-arikan/swarmgo/internal/settings"
@@ -30,6 +31,8 @@ func (s *Server) registerMarketRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/market/registries", s.handleAddRegistry)
 	mux.HandleFunc("POST /api/market/registries/delete", s.handleRemoveRegistry)
 	mux.HandleFunc("POST /api/market/registries/refresh", s.handleRefreshRegistries)
+	mux.HandleFunc("GET /api/market/connectors", s.handleListConnectors)
+	mux.HandleFunc("POST /api/market/connectors/add", s.handleAddConnector)
 	mux.HandleFunc("GET /api/market/{id}", s.handleGetMarketPack)
 	mux.HandleFunc("POST /api/market/{id}/install", s.handleInstallMarketPack)
 }
@@ -79,6 +82,32 @@ func (s *Server) handleRemoveRegistry(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	writeJSON(w, http.StatusOK, regs)
+}
+
+// handleListConnectors returns the built-in directory-site connectors (skillsmp …)
+// for the UI's quick-add list.
+func (s *Server) handleListConnectors(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, market.ListConnectors())
+}
+
+// handleAddConnector enables a built-in connector as a registry, then refreshes it so
+// its catalog appears immediately.
+func (s *Server) handleAddConnector(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	store := ws(r).Runtime.Market()
+	regs, err := store.AddConnector(req.ID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	_ = store.RefreshRemote(r.Context()) // best-effort initial fetch
 	writeJSON(w, http.StatusOK, regs)
 }
 
@@ -139,6 +168,9 @@ type installRequest struct {
 	Overwrite bool   `json:"overwrite"`
 	APIKey    string `json:"apiKey"`
 	AgentID   string `json:"agentId"`
+	// Used only by source-ref (directory-site) installs that run the ingest pipeline.
+	Shared     bool   `json:"shared"`
+	SlugPrefix string `json:"slugPrefix"`
 }
 
 // handleInstallMarketPack installs a pack into the workspace via the shared install
@@ -154,6 +186,12 @@ func (s *Server) handleInstallMarketPack(w http.ResponseWriter, r *http.Request)
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&req) // body optional
 	}
+	// A source-ref pack (directory-site bridge) installs by running the ingest
+	// pipeline against its GitHub source, not by writing a single payload.
+	if pack.SourceRef != nil {
+		s.installSourceRefPack(w, r, wsp, pack, req)
+		return
+	}
 	res, err := s.installPackInto(r, wsp, pack, req)
 	if err != nil {
 		writeError(w, statusOf(err), err.Error())
@@ -161,6 +199,42 @@ func (s *Server) handleInstallMarketPack(w http.ResponseWriter, r *http.Request)
 	}
 	wsp.Runtime.Market().RecordInstall(pack.ID, pack.Version)
 	writeJSON(w, http.StatusOK, res)
+}
+
+// installSourceRefPack installs a directory-site catalog entry by ingesting its
+// GitHub source (the same fetch→adapt→pack→installPackInto pipeline the import
+// dialog uses), then stamps the registry pack id in the ledger so the catalog shows
+// "Kuruldu". Per-artifact failures are reported as skips, never fatal.
+func (s *Server) installSourceRefPack(w http.ResponseWriter, r *http.Request, wsp *workspace.Workspace, pack market.Pack, req installRequest) {
+	src := pack.SourceRef
+	if src.Type != "" && !strings.EqualFold(src.Type, "github") {
+		writeError(w, http.StatusBadRequest, "unsupported source type: "+src.Type)
+		return
+	}
+	packs, skipped, warnings, err := ingest.BuildPacks("github", src.URL, src.Keys, ingest.Options{
+		Shared: req.Shared, SlugPrefix: req.SlugPrefix,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	out := ingestInstallResult{Skipped: skipped, Warnings: warnings}
+	for _, p := range packs {
+		res, ierr := s.installPackInto(r, wsp, p, installRequest{})
+		if ierr != nil {
+			out.Skipped = append(out.Skipped, ingest.SkipNote{Key: p.Kind + ":" + p.ID, Slug: p.Name, Reason: ierr.Error()})
+			continue
+		}
+		out.Installed = append(out.Installed, res)
+	}
+	if len(out.Installed) > 0 {
+		wsp.Runtime.Market().RecordInstall(pack.ID, pack.Version)
+	}
+	out.Message = fmt.Sprintf("%d öğe içe aktarıldı", len(out.Installed))
+	if len(out.Skipped) > 0 {
+		out.Message += fmt.Sprintf(" (%d atlandı)", len(out.Skipped))
+	}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // installPackInto is the SINGLE install authority: it routes a pack to its per-kind

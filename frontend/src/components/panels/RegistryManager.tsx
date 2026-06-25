@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Globe, Plus, RefreshCw, Trash2, AlertTriangle, Server } from 'lucide-react'
+import { Globe, Plus, RefreshCw, Trash2, AlertTriangle, Server, Sparkles } from 'lucide-react'
 import type { Registry } from '../../types'
+import type { ConnectorInfo } from '../../api/market'
 import { api } from '../../api'
 import { Button } from '../common'
 
@@ -15,6 +16,7 @@ interface Props {
 // swarmregistry/v1 index (registry.json) listing downloadable packs.
 export function RegistryManager({ onClose, onChanged }: Props) {
   const [registries, setRegistries] = useState<Registry[]>([])
+  const [connectors, setConnectors] = useState<ConnectorInfo[]>([])
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,11 +28,35 @@ export function RegistryManager({ onClose, onChanged }: Props) {
     } catch (e) {
       setErr((e as Error).message)
     }
+    try {
+      setConnectors(await api.listConnectors())
+    } catch {
+      // connectors are optional
+    }
   }, [])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  // addedConnectorIds: which built-in connectors are already enabled as registries.
+  const addedConnectorIds = new Set(registries.map((r) => r.connector).filter(Boolean) as string[])
+
+  const addConnector = useCallback(
+    async (id: string) => {
+      setBusy(true)
+      setErr(null)
+      try {
+        setRegistries(await api.addConnector(id))
+        onChanged()
+      } catch (e) {
+        setErr((e as Error).message)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [onChanged],
+  )
 
   const add = useCallback(async () => {
     if (!url.trim()) {
@@ -116,6 +142,42 @@ export function RegistryManager({ onClose, onChanged }: Props) {
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+          {/* Built-in directory-site connectors (quick add) */}
+          {connectors.length > 0 && (
+            <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-dim)]">
+                <Sparkles size={13} /> Hazır kaynaklar (skill dizin siteleri)
+              </div>
+              <div className="space-y-1.5">
+                {connectors.map((c) => {
+                  const added = addedConnectorIds.has(c.id)
+                  return (
+                    <div
+                      key={c.id}
+                      data-testid="market-connector"
+                      className="flex items-center gap-2 rounded border border-[var(--color-border)] p-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{c.name}</div>
+                        <div className="truncate text-[11px] text-[var(--color-text-dim)]">{c.detail}</div>
+                      </div>
+                      <button
+                        onClick={() => void addConnector(c.id)}
+                        disabled={busy || added}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
+                      >
+                        <Plus size={12} /> {added ? 'Ekli' : 'Ekle'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] text-[var(--color-text-dim)]">
+                Bu kaynaklar GitHub-tabanlıdır; kurulumda skill ingest edilir.
+              </p>
+            </div>
+          )}
+
           {/* Add form */}
           <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
             <label className="block">
