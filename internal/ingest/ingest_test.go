@@ -120,6 +120,40 @@ func TestAdaptersAgentCommandMCPAndDedup(t *testing.T) {
 	}
 }
 
+func TestMapCCModel(t *testing.T) {
+	cases := []struct {
+		in, prov, model string
+		warn            bool
+	}{
+		{"haiku", "claude-cli", "claude-haiku-4-5-20251001", false},
+		{"sonnet", "claude-cli", "claude-sonnet-4-6", false},
+		{"opus", "claude-cli", "claude-opus-4-8", false},
+		{"claude-3-5-sonnet-20241022", "claude-cli", "claude-sonnet-4-6", false}, // family substring
+		{"inherit", "", "", false},
+		{"", "", "", false},
+		{"gpt-4o", "", "", true},
+	}
+	for _, c := range cases {
+		prov, model, warn := mapCCModel(c.in)
+		if prov != c.prov || model != c.model || (warn != "") != c.warn {
+			t.Errorf("mapCCModel(%q) = (%q,%q,warn=%v), want (%q,%q,warn=%v)", c.in, prov, model, warn != "", c.prov, c.model, c.warn)
+		}
+	}
+}
+
+func TestAgentModelMappedIntoPack(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "agents/finder.md", "---\nname: Finder\ndescription: d\nmodel: haiku\ntools: [Read]\n---\nbody")
+	packs, _, _, err := BuildPacks("local", root, nil, Options{})
+	if err != nil || len(packs) != 1 {
+		t.Fatalf("build: %v packs=%d", err, len(packs))
+	}
+	a := packs[0].Payload.Agent
+	if a.Provider != "claude-cli" || a.Model != "claude-haiku-4-5-20251001" {
+		t.Errorf("agent model not mapped: provider=%q model=%q", a.Provider, a.Model)
+	}
+}
+
 func TestParseSimpleTOML(t *testing.T) {
 	raw := "" +
 		"description = \"Switch level\"\n" +

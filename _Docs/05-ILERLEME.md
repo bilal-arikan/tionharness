@@ -2,6 +2,46 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-25**
 
+## Ingest: CC model eşleme + dizin-sitesi köprü planı (2026-06-25)
+
+- **CC model → SwarmGo provider/model eşleme** ✅: `agentAdapter` artık CC subagent
+  `model:` değerini eşliyor (`mapCCModel`): aile anahtar kelimesi → keysiz `claude-cli`
+  provider + kanonik model id (`opus`→`claude-opus-4-8`, `sonnet`→`claude-sonnet-4-6`,
+  `haiku`→`claude-haiku-4-5-20251001`, `fable`→`claude-fable-5`). `inherit`/boş → workspace
+  varsayılanı; tanınmayan (gpt/gemini vb.) → boş + uyarı. İçe aktarılan ajan artık **kutudan
+  çıktığı gibi** çalışır (eskiden model uyarıyla atlanıyordu). Test: `TestMapCCModel`,
+  `TestAgentModelMappedIntoPack`.
+- **Dizin-sitesi köprüsü (PLAN)** 📋: crossaitools/skillsmp/claudeskillsmarket'i market'e
+  bağlama tasarımı `_Docs\38-DIZIN-SITE-REGISTRY-PLAN.md`'ye yazıldı. Bulgu: üçü de
+  GitHub-tabanlı (crossaitools `/api/skills` ~21.7k `repo`+`path`; skillsmp `githubUrl`
+  doğrudan; claudeskillsmarket yalnız sitemap). Çekirdek değişiklik: `RegistryEntry.Source`
+  (kaynak-ref) → kurulum = mevcut `ingest.BuildPacks` + `installPackInto`. Henüz uygulanmadı.
+
+## Interaction MCP Faz 3 — `notify` (masaüstü bildirim) ✅ (2026-06-25)
+
+Interaction MCP'ye **bloklamayan masaüstü bildirimi** aracı (`notify`) eklendi; native
+ajanlar (anthropic/minimax) ve CLI ajanları (claude-cli) artık kullanıcı uygulamaya
+bakmıyorken haber verebilir ("uzun iş bitti", "dikkat gerek", "hata oluştu"). Mevcut
+bildirim altyapısı (event bus → SSE → OS toast → per-tip susturma) zaten hazır olduğundan
+yalnız aracı + iki yola wiring gerekti; **yeni event tipi/transport yok** (mevcut `agent`
+tipi). Tek-şema kuralı korundu — tanım `tools` paketinde tek yerde, iki adaptör enumerate eder.
+
+- **Araç (`internal/tools/builtin_notify.go` + `notifysink.go`):** `notify(title*, body, level)`,
+  bloklamaz; `level∈{info,success,error}` (boş/geçersiz → info). `NotifySink` context köprüsü
+  (`WithNotify`/`notifyFrom`, `WithArtifacts` deseni). Sink yoksa **graceful no-op** (tur bozulmaz).
+- **Native:** `agent/toolsetup.go` registry'ye eager built-in olarak eklendi.
+- **Concrete sink (`api/notifysink.go`):** `events.Event{Type:"agent"}` yayını
+  (Target=`{view:chat, sessionId, agentId}` → tıklayınca sohbete deep-link).
+- **Chat wiring (`api/chat_stream.go`):** her turda `run.setNotify` + `tools.WithNotify`.
+- **CLI köprüsü (`api/mcp_interaction.go`):** spec + `Call` case + `callNotify`; `interactiveOnlyTools`
+  **değil** → otonom turlarda da advertise edilir (bloklamaz). Allowlist tek-kaynaktan otomatik (CLI-2).
+- **Otonom wiring (`api/autonomous_interaction.go`):** scheduler/spawn/flow CLI ajanları da
+  `setNotify` alır (UI açıkken toast düşer).
+- **Test:** 5 yeni notify birim testi (dispatch/level default/bilinmeyen level/title zorunlu/sink-yok);
+  `go build`/`vet`/`go test ./...` yeşil (**468 test, 32 paket**). Canlı claude-cli testi beklemede.
+
+Detay: `_Docs\11-INTERACTION-MCP.md` §17. Kalan Faz 3: workspace/oturum etkileşimleri (ileride).
+
 ## Ingest: TOML command + marketplace.json keşfi ✅ (2026-06-25)
 
 Generic import boru hattına iki ekleme:
