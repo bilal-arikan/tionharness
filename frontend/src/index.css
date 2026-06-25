@@ -7,10 +7,10 @@
    (External Agents inspired). The default token set mirrors the "midnight-violet"
    preset; curated presets override these inline at runtime (see lib/theme.ts). */
 @theme {
-  --color-bg: #0c0c10;
-  --color-surface: #161619;
-  --color-surface-2: #212129;
-  --color-border: #2a2a33;
+  --color-bg: #0e0e10;
+  --color-surface: #17171a;
+  --color-surface-2: #202024;
+  --color-border: #2b2b30;
   --color-accent: #8b5cf6;
   --color-accent-soft: #2c2545;
   --color-text: #e7e7ea;
@@ -31,14 +31,14 @@
 /* Light theme — activated via <html data-theme="light">. Overrides the dark
    custom properties; components reference var(--color-*) so they re-theme. */
 [data-theme='light'] {
-  --color-bg: #f6f8fb;
+  --color-bg: #f5f6f8;
   --color-surface: #ffffff;
-  --color-surface-2: #eef1f6;
-  --color-border: #d7dde6;
+  --color-surface-2: #eceef2;
+  --color-border: #d8dce3;
   --color-accent: #2f6fed;
   --color-accent-soft: #d8e4fb;
   --color-text: #16202c;
-  --color-text-dim: #5a6b7d;
+  --color-text-dim: #5a6470;
 
   --color-success: #15915b;
   --color-warning: #b45309;
