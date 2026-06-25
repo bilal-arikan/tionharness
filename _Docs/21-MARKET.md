@@ -13,12 +13,15 @@
 > Bellek tohumları ve MCP araç sunucuları** uygulama içinden paketlenip (publish),
 > gözatılıp (browse) ve kurulabilsin (install).
 >
-> **Gömülü örnekler (28 paket):** 10 skill, 5 agent (researcher/coder/editor/planner/
-> support), 4 provider (openrouter/groq/ollama/deepseek), 4 flow, **2 mcp
-> (filesystem/fetch), 2 workspace (software-project/research), 1 memory
-> (coding-standards)**. Üreteç: `internal/market/gen_examples.py` (skill/agent/provider/
-> flow için; yeni türlerin default'ları `defaults/` altında elle yazılır; hepsi
-> `//go:embed` ile gömülür).
+> **Katman sadeleştirme (2026-06-25):** bundled (binary'e gömülü) ve workspace
+> pack tier'ları **kaldırıldı**. Paketler artık **yalnız global dizinde**
+> (`<DataDir>/market`, ~/.swarmgo/market) ve **uzak registry'lerde** yaşar.
+> `//go:embed defaults` + `EnsureDefaults` + `internal/market/defaults/` silindi →
+> binary market item taşımıyor, workspace'te market klasörü yok. Mevcut başlangıç
+> paketleri (31 adet; 2026-06-25'te **GAN üçlüsü** eklendi — `flow.gan-generator-evaluator`
+> + `agent.skeptical-evaluator` + `mcp.playwright`, generator↔evaluator döngüsü için, bkz.
+> `_Docs/15-FLOW-CANVAS.md`) global dizinde duruyor; yeni kurulumlarda market boş başlar
+> ve global dizine elle paket konarak ya da uzak registry eklenerek doldurulur.
 >
 > **UI (2026-06-24):** Market ekranı **sol dikey kategori menüsü** kullanır (Skills/
 > Agents/Providers/Flows/Workspaces/Memories/Tools(MCP)); "Tümü" seçeneği yok,
@@ -149,37 +152,39 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
 
 ```
 internal/market/
-├── pack.go          # SwarmPack + payload tipleri, schema sabitleri
-├── store.go         # Store: tier tarama + lazy payload (skills.Store kardeşi)
-├── install.go       # her tür için Install* (skill→dosya, flow/agent→db, provider→settings)
-├── publish.go       # var olan varlık → SwarmPack paketleme (sanitize)
-├── defaults.go      # //go:embed defaults — gömülü başlangıç paketleri
-├── defaults/        # *.swarmpack.json başlangıç paketleri
+├── pack.go            # SwarmPack + payload tipleri, schema sabitleri
+├── store.go           # Store: global tier tarama + lazy payload + remote birleştirme
+├── remote.go          # uzak registry çekme (fetchIndex/fetchPayload) + semver
+├── registry_store.go  # kaynak config + remote cache + install ledger
+├── install.go         # InstallSkill (dosya); diğerleri API handler'ında
+├── publish.go         # var olan varlık → SwarmPack paketleme (sanitize)
 └── *_test.go
 ```
 
-### 3.1 Registry katmanları (tier)
+### 3.1 Registry katmanları (tier) — sadeleştirildi (2026-06-25)
 
-`skills` ile aynı: artan öncelik, sonraki kazanır.
+Eskiden bundled/global/workspace üçlüsü vardı; **bundled ve workspace pack tier'ları
+kaldırıldı**. Kalan yerel tek tier **global**; uzak registry'ler 4. (en düşük öncelikli)
+kaynaktır. Yerel (global) paketler, id çakışmasında uzak paketleri gölgeler.
 
 | Tier | Dizin | İçerik |
 |------|-------|--------|
-| **bundled** | `//go:embed defaults` | SwarmGo ile gelen başlangıç paketleri |
-| **global** | `<DataDir>/market` | makine-geneli (publish edilen / indirilen) |
-| **workspace** | `<workspace>/market` | workspace'e özel publish edilenler |
+| **global** | `<DataDir>/market` | tek yerel kaynak (publish edilen / elle konan) |
+| **remote** | uzak `registry.json` | harici registry'lerden çekilenler (§7) |
 
-`market.EnsureDefaults(globalDir)` boot'ta gömülü paketleri global dizine yazar
-(skills.EnsureDefaults aynası; mevcut dosyanın üzerine yazmaz).
+Embed/seed yok: binary market item taşımaz, workspace'te market klasörü yok. Install
+ledger (`installed.json`) per-workspace olarak workspace kökünde tutulur (pack değil,
+yalnız "hangi sürüm kuruldu" takibi).
 
 ### 3.2 Store API
 
 ```go
-func New(bundledFS, globalDir, workspaceDir string) *Store
-func (s *Store) List() []Pack                  // manifestler (payload'sız)
+func New(globalDir, ledgerDir string) *Store   // tek yerel tier = global; ledger per-workspace
+func (s *Store) List() []Pack                  // global + remote manifestler (payload'sız)
 func (s *Store) ListKind(kind string) []Pack
-func (s *Store) Get(id string) (Pack, bool)    // payload dâhil (lazy okur)
+func (s *Store) Get(id string) (Pack, bool)    // payload dâhil (yerel disk / uzak indir)
 func (s *Store) Reload()
-func (s *Store) Publish(p Pack) error           // workspace tier'a yazar
+func (s *Store) Publish(p Pack) error           // global dizine yazar
 ```
 
 ### 3.3 Install (kurulum) — ✅ dört tür de çalışır
@@ -211,7 +216,7 @@ zaten varsa **409** döner (`nameExists` + `agentNames`/`flowNames`) — kullan�
 
 `PublishSkill(slug)`, `PublishAgent(id)`, `PublishProvider(id)`, `PublishFlow(id)`
 → ilgili store/db'den varlığı çekip **sanitize** ederek `Pack` üretir, `Store.Publish`
-ile workspace tier'a yazar. Sanitize = secret/ID/CreatedBy temizliği (§1.2).
+ile global dizine yazar. Sanitize = secret/ID/CreatedBy temizliği (§1.2).
 
 ---
 
@@ -305,8 +310,8 @@ Playwright UI smoke, uzak registry (§7).
 
 ## 7. Uzak kayıt defteri (Remote Registry) — 2026-06-25
 
-Market artık **4. tier** olarak harici sunuculardan paket çekebilir. Yerel tier'lar
-(bundled/global/workspace) uzak paketleri **id çakışmasında gölgeler** (yerel kazanır).
+Market artık uzak sunuculardan paket çekebilir — yerel tek tier (**global**) uzak
+paketleri **id çakışmasında gölgeler** (yerel kazanır).
 
 ### 7.1 Index formatı — `swarmregistry/v1`
 

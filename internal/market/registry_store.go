@@ -235,10 +235,10 @@ func (s *Store) loadRemoteCache() map[string]Pack {
 // --- Install ledger (per workspace) ---
 
 func (s *Store) ledgerPath() string {
-	if s.writeDir == "" {
+	if s.ledgerDir == "" {
 		return ""
 	}
-	return filepath.Join(s.writeDir, installedLedgerFile)
+	return filepath.Join(s.ledgerDir, installedLedgerFile)
 }
 
 // InstalledVersions returns the recorded packID→version map for this workspace.

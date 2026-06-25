@@ -36,35 +36,31 @@ type Store struct {
 	// keyed by id. Local packs override remote ones of the same id in List().
 	remote map[string]Pack
 
-	// writeDir is the workspace tier dir; Publish writes here + holds the install
-	// ledger. Falls back to the global dir when there is no workspace dir.
-	writeDir string
-	// globalDir is the data-dir-level market dir; it holds registries.json and the
-	// remote-index cache (shared across workspaces).
+	// globalDir is the only local pack tier and the data-dir-level market dir; it
+	// holds the pack files, registries.json and the remote-index cache. Publish
+	// writes here.
 	globalDir string
+	// ledgerDir is the per-workspace root where the install ledger (installed.json)
+	// lives — installs are per-workspace, so update status is tracked per workspace.
+	ledgerDir string
 }
 
-// New builds a store over the global + workspace market tiers. Bundled packs are
-// seeded into the global dir by EnsureDefaults (called before New), so a single
-// global scan covers both bundled and global tiers. Any dir may be empty/missing.
-func New(globalDir, workspaceDir string) *Store {
+// New builds a store over a single local pack tier — the global market dir
+// (<DataDir>/market) — plus remote registries. There is no bundled (embedded) or
+// per-workspace pack tier: packs live only in the global dir and remote sources.
+// ledgerDir is the per-workspace root where the install ledger is kept. Any dir
+// may be empty/missing.
+func New(globalDir, ledgerDir string) *Store {
 	var tiers []tier
 	if globalDir != "" {
 		tiers = append(tiers, tier{globalDir, SourceGlobal})
-	}
-	if workspaceDir != "" {
-		tiers = append(tiers, tier{workspaceDir, SourceWorkspace})
-	}
-	writeDir := workspaceDir
-	if writeDir == "" {
-		writeDir = globalDir
 	}
 	return &Store{
 		tiers:     tiers,
 		byID:      map[string]Pack{},
 		remote:    map[string]Pack{},
-		writeDir:  writeDir,
 		globalDir: globalDir,
+		ledgerDir: ledgerDir,
 	}
 }
 
@@ -221,21 +217,21 @@ func (s *Store) Get(id string) (Pack, bool) {
 	return full, true
 }
 
-// Publish writes a pack to the writable (workspace, else global) tier and
-// reloads the catalog. The file is named <id>.swarmpack.json; an existing pack
-// with the same id in that tier is overwritten (re-publish updates in place).
+// Publish writes a pack to the global market dir and reloads the catalog. The
+// file is named <id>.swarmpack.json; an existing pack with the same id is
+// overwritten (re-publish updates in place).
 func (s *Store) Publish(p Pack) (Pack, error) {
-	if s.writeDir == "" {
+	if s.globalDir == "" {
 		return Pack{}, fmt.Errorf("no writable market directory")
 	}
 	if p.ID == "" || p.Kind == "" {
 		return Pack{}, fmt.Errorf("pack id and kind are required")
 	}
 	p.Schema = SchemaV1
-	if err := os.MkdirAll(s.writeDir, 0o755); err != nil {
+	if err := os.MkdirAll(s.globalDir, 0o755); err != nil {
 		return Pack{}, fmt.Errorf("create market dir: %w", err)
 	}
-	path := filepath.Join(s.writeDir, safeFileName(p.ID)+packFileSuffix)
+	path := filepath.Join(s.globalDir, safeFileName(p.ID)+packFileSuffix)
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return Pack{}, fmt.Errorf("marshal pack: %w", err)
