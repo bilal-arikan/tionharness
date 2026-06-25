@@ -204,8 +204,67 @@ a flow, or a skill that says which agent to hand off to at each stage.
 - **Provenance** — destructive self-management ops are limited to entities the
   agent created. Lean on it; don't work around it.
 
+## 10. The autonomous boot sequence (run this first, every time)
+
+A scheduled / spawned / flow turn starts with **no memory of the last run** — the
+context window is fresh. Before touching any code, walk this fixed startup routine
+so a lost context never means lost orientation (the long-running-agent harness
+discipline). It is the autonomous mirror of a human opening the project each morning.
+Headless turns get a short reminder of this sequence injected automatically (gated by
+the `autonomousBootSeq` setting, default on); this section is the full recipe behind it.
+
+> One turn = **one task**. Orient, verify, do exactly one unit of work, then close
+> the loop. Do not batch many tasks into a single autonomous turn (see [[swarmgo-automation-prefs]]).
+
+### Step 0 — Orient
+- Confirm where you are: `Bash` → `pwd` (or the cwd badge / `Session.WorkingDir`),
+  and the git branch + dirty state (`git status -sb`).
+- Note your file scope: built-in fs/shell tools reach the whole machine, but
+  `autonomousConfine` (default on) keeps writes inside the working dir and blocks
+  `git push`. Stay inside the working dir.
+
+### Step 1 — Recall (git + progress file + board are your memory)
+- `Bash` → `git log --oneline -15` — what shipped recently and in what state.
+- Read the **persisted progress file** if the workspace keeps one
+  (`<cwd>/.swarmgo/progress.json`, written when `progressPersist` is on — SwarmGo's
+  `claude-progress` analog); it records what the previous turn left half-done. With
+  `progressResume` on, a fresh session already gets this injected.
+- `list_tasks` — the append-only Kanban board is the workspace's feature/work ledger.
+  Treat task notes as the canonical "what's left" record.
+
+### Step 2 — Select ONE task
+- Pick the **single highest-priority unfinished item**: the lowest-numbered `todo`
+  on the board (or the explicit goal in the schedule prompt). Move it to
+  `in_progress` (append-only: never rewrite a title or delete a prior note).
+
+### Step 3 — Verify the baseline BEFORE you build
+- Run the project's smoke / e2e check first — a `Bash` test command, or a
+  hand-testable **flow** (`run_flow`). This catches an *undocumented* broken state
+  the previous turn may have left behind.
+- **If the baseline is red, that broken state IS this turn's task.** Fix it (or
+  revert the offending commit — `git` is your undo), re-verify green, then stop.
+  A clean baseline is worth more than a half-built feature on a broken tree.
+
+### Step 4 — Do the one task
+- Implement only the selected unit. Stay within budget (`daily_*_limit`) and the
+  permission mode you were launched in.
+
+### Step 5 — Close the loop (leave a clean handoff)
+- Re-run the baseline check; require green before you finish.
+- `git commit` with a descriptive message (a clean commit = the next turn's
+  recoverable state). Remember `autonomousConfine` blocks `git push` — commit locally.
+- **Append** an outcome note to the board task (and the progress file): what changed,
+  what's still open. Append-only — never overwrite the prior note.
+- Move the task to `done` only if it is fully verified; otherwise leave it
+  `in_progress` with a note on where it stands.
+
+> Why this order matters: orientation + baseline-first is what lets autonomous turns
+> compound instead of drift. Skipping the verify step is the single most common way a
+> long-running loop silently builds on top of a broken tree.
+
 ## Putting it together (a reference setup)
 
+0. On every autonomous turn, run the **boot sequence** (§10) before anything else.
 1. Write the **rules** (per-agent instructions) so every agent talks/codes your way.
 2. Turn each repeated procedure into a **skill** (tests gate, deploy checklist, API recipe).
 3. Add standing **schedules**: nightly docs sweep, coverage check, production error sweep.
@@ -224,3 +283,6 @@ a flow, or a skill that says which agent to hand off to at each stage.
 - **MCP/server changes apply next turn** — a newly created server's tools aren't
   available until the following turn.
 - **No git merge/deploy layer** — handle real-repo merges outside SwarmGo.
+- **Skipping the boot sequence** — an autonomous turn that dives straight into code
+  without orient → recall → baseline-verify will eventually build on a broken tree.
+  Always run §10 first.
