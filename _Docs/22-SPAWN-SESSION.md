@@ -1,6 +1,6 @@
 # Faz / Özellik 22 — Spawn Session (Fire-and-Forget Paralel İşçi)
 
-> the external agent project/SwarmClaw'daki `spawn_session` benzeri: bir prompt'tan **yeni,
+> `spawn_session` deseni: bir prompt'tan **yeni,
 > bağımsız bir oturum** başlatıp **beklemeden** bırakmak. Çıktı, Faz U "Birleşik
 > Yürütme/Aktivite" feed'inde canlı görünür.
 

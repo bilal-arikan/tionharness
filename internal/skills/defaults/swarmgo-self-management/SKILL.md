@@ -98,7 +98,7 @@ only ones you created (running is not destructive).
 delete only tasks you created.
 
 **Hooks** — `list_hooks`, `create_hook`, `delete_hook`. PreToolUse/PostToolUse
-external commands that intercept native tool calls (Claude Code hook contract).
+external commands that intercept native tool calls (standard hook contract).
 Read/create any; delete only ones you created.
 
 **MCP servers** — `list_mcp_servers`, `create_mcp_server`, `toggle_mcp_server`,
@@ -132,9 +132,9 @@ folder and reference them from the body with `${SKILL_DIR}/<file>` — they are
 advertised on load and read on demand. Use `skill_search <keywords>` to find skills
 not shown in the catalog.
 
-`import_skill` brings in an existing **Claude Code skill** from `source:"local"` (a
+`import_skill` brings in an existing **external skill** from `source:"local"` (a
 folder path with SKILL.md) or `source:"github"` (a github.com folder URL, e.g.
-`https://github.com/owner/repo/tree/main/skills/x`). It maps the CC frontmatter
+`https://github.com/owner/repo/tree/main/skills/x`). It maps the skill frontmatter
 (allowed-tools→always_allow, paths, version/license/source), copies bundled files,
 and reports warnings for unsupported CC features (context:fork, hooks, slash-command
 args) — so you can reuse the large CC skill ecosystem without rewriting.

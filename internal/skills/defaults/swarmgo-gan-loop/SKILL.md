@@ -9,7 +9,7 @@ auto_summary: false
 ---
 # Generator↔Evaluator Loop (GAN-benzeri) — Detaylı Kılavuz
 
-Bu desen, Anthropic'in *harness design* makalesindeki **self-evaluation problemi**ne
+Bu desen, bilinen **self-evaluation problemi**ne
 çözümdür: ajanlar kendi ürettikleri işi değerlendirmeleri istendiğinde, kalite vasat olsa
 bile **körü körüne överler**. Çözüm mimari ayrımdır — işi yapan ajanı (**generator**) işi
 yargılayan ayrı, **şüpheci** ajandan (**evaluator**) tamamen ayırmak. GAN'lardaki

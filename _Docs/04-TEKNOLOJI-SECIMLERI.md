@@ -1,6 +1,6 @@
 # SwarmGo — Teknoloji Seçimleri
 
-Her seçim, SwarmClaw'daki TypeScript karşılığının Go ekosistemindeki en uygun eşleniğidir.
+Her seçim, TypeScript dünyasındaki karşılığının Go ekosistemindeki en uygun eşleniğidir.
 
 > ⚠️ **GÜNCEL (2026-06-15):** **Depolama SQLite'tan dosya sistemine taşındı.** Aşağıdaki
 > tablolarda **modernc.org/sqlite / sqlc / golang-migrate / `:memory:` test** satırları
@@ -16,7 +16,7 @@ Her seçim, SwarmClaw'daki TypeScript karşılığının Go ekosistemindeki en u
 | Veritabanı | **modernc.org/sqlite** | Saf Go, CGO yok → çapraz derleme kolay |
 | SQL kod üretimi | **sqlc** | Tip güvenli sorgular, derleme anında kontrol |
 | Migration | **golang-migrate** veya basit runner | Sürümlü şema yönetimi |
-| Zamanlama | **robfig/cron** | Cron ifadeleri, SwarmClaw node-cron karşılığı |
+| Zamanlama | **robfig/cron** | Cron ifadeleri, node-cron karşılığı |
 | Eşzamanlılık | **golang.org/x/sync/errgroup** | Paralel görev + hata yayılımı |
 | Anthropic SDK | **anthropics/anthropic-sdk-go** | Resmi SDK |
 | OpenAI SDK | **sashabaranov/go-openai** | En yaygın, olgun |

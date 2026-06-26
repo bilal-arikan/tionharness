@@ -1,6 +1,6 @@
 // Package main is the SwarmGo entry point.
-// SwarmGo is a self-hosted multi-agent AI runtime, a Go reimplementation
-// of SwarmClaw with a custom UI/UX.
+// SwarmGo is a self-hosted multi-agent AI runtime written in Go with a
+// custom UI/UX.
 package main
 
 import (

@@ -1,13 +1,13 @@
-# swarmclaw — Çoklu Provider Mimarisi İncelemesi (gelecek plan)
+# Çoklu Provider Mimarisi İncelemesi (gelecek plan)
 
-> Kaynak: [bilal-arikan/swarmclaw](https://github.com/bilal-arikan/swarmclaw) (TypeScript /
-> Next.js / Electron). İnceleme tarihi: **2026-06-18**. Amaç: swarmclaw'un ~70 provider'ı
-> nasıl düşük eforla eklediğini anlamak ve SwarmGo'ya taşınabilir desenleri çıkarmak.
+> Kaynak: bir TypeScript / Next.js / Electron referans projesi. İnceleme tarihi: **2026-06-18**.
+> Amaç: o projenin ~70 provider'ı nasıl düşük eforla eklediğini anlamak ve SwarmGo'ya
+> taşınabilir desenleri çıkarmak.
 > **Durum: yalnız plan — uygulamaya geçilmedi.**
 
 ## Ana bulgu: "metadata'yı protokolden ayır"
 
-swarmclaw'da ~70 provider var ama **sadece 4 paylaşılan handler** üzerine oturuyor.
+Referans projede ~70 provider var ama **sadece 4 paylaşılan handler** üzerine oturuyor.
 Provider eklemek çoğunlukla kod yazmak değil, **bir satır/blok metadata** eklemek.
 Tanımlar `src/lib/providers/index.ts` `PROVIDERS` map'inde ve
 `src/lib/providers/cli-provider-metadata.ts`'te.
@@ -78,7 +78,7 @@ birleşiyor; UI, model-discovery, health-check, kimlik bilgisi eşleme aynı `id
 > tek API key ile sunar; ~25 model önerisi kataloğa dahil. Bu, aşağıdaki planın ilk
 > somut adımıdır.
 
-**Fikir:** `OpenAICompat` handler'ı zaten hazır. swarmclaw'un `PROVIDERS` map'indeki
+**Fikir:** `OpenAICompat` handler'ı zaten hazır. Referans projenin `PROVIDERS` map'indeki
 OpenAI-uyumlu girişleri (DeepSeek, Groq, Together, xAI, Fireworks, Nebius, DeepInfra,
 OpenRouter, Mistral, Google-compat…) SwarmGo'da **önceden-tanımlı preset katalog** girişi
 olarak eklemek = yalnız `{id, label, baseURL, defaultModel, models}` verisi, **sıfır yeni
@@ -86,12 +86,12 @@ protokol kodu**. Kullanıcı yalnız anahtarını (sır kasası) seçer.
 
 **Dokunulacak yerler (tahmini):** `providers/catalog.go` `CustomCatalog` veya yeni bir
 `presetCatalog`; UI'da "Hazır sağlayıcılar" listesi (tek tıkla ekle). Migration gerekmez.
-**Risk:** düşük — mevcut OpenAICompat yolunu kullanır. swarmclaw `PROVIDERS` map'i birebir
+**Risk:** düşük — mevcut OpenAICompat yolunu kullanır. Referans projenin `PROVIDERS` map'i birebir
 şablon.
 
 ### SC-2 — Generic CLI factory (CLI ailesi)
 
-**Fikir:** Şu an SwarmGo'da yalnız `claude-cli` var. swarmclaw'un `streamGenericCliChat`
+**Fikir:** Şu an SwarmGo'da yalnız `claude-cli` var. Referans projenin `streamGenericCliChat`
 deseni (binary spawn + stdout satır-stream, JSON parse yok) ile yapısal çıktısı olmayan
 onlarca coding-CLI'yi **tek handler + veri listesiyle** eklenebilir hale getirmek.
 

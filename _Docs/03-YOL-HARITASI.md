@@ -84,7 +84,7 @@ graph LR
 - [x] Dream cycle (`Reflect`) — journal'ı provider'a özetletip reflection üret
 - **Çıktı:** Hatırlayan, yansıtan ajanlar; sohbet+göreve otomatik enjeksiyon. ✅
 
-## Faz 6.5 — Sağlamlaştırma ✅ (plan dışı, SwarmClaw kıyas açığı)
+## Faz 6.5 — Sağlamlaştırma ✅ (plan dışı, kıyas açığı kapatma)
 - [x] `internal/conversation`: token-bütçeli **compaction** (rolling summary)
 - [x] Otonom döngü **bütçe guardrail'i** (`guardedComplete` + `agent_usage`, ajan başına günlük limit)
 - [x] UI: context + bütçe meter; 3 kolonlu yerleşim (NavRail)
@@ -242,14 +242,14 @@ graph LR
 
 ---
 
-## swarmclaw incelemesinden — Provider ekosistemi genişletme (2026-06-18)
+## Provider ekosistemi genişletme (2026-06-18)
 
-> Kaynak + tam analiz: [14-SWARMCLAW-PROVIDER-INCELEME.md](arsiv/14-SWARMCLAW-PROVIDER-INCELEME.md).
-> swarmclaw ~70 provider'ı "metadata'yı protokolden ayır" deseniyle düşük eforla ekliyor;
+> Kaynak + tam analiz: [14-PROVIDER-MIMARISI-INCELEME.md](arsiv/14-PROVIDER-MIMARISI-INCELEME.md).
+> İncelenen referans proje ~70 provider'ı "metadata'yı protokolden ayır" deseniyle düşük eforla ekliyor;
 > SwarmGo zaten aynı mimaride (CG-19). Aşağıdakiler opsiyonel genişletmeler. **Plan — uygulanmadı.**
 
 - [x] **SC-1 — Built-in API provider preset kataloğu** (CLI değil) ✅ (2026-06-25): market'e **22 provider pack'i** eklendi (toplam 26), her biri `{id,label,kind,baseUrl,defaultModel,models}` — DeepSeek/Groq/OpenRouter/Ollama (mevcut) + xAI/Mistral/Gemini/Together/Fireworks/Perplexity/Cerebras/SambaNova/DeepInfra/Hyperbolic/Novita/Nebius/NVIDIA-NIM/Cohere/Moonshot/Qwen/Zhipu-GLM/MiniMax/SiliconFlow/GitHub-Models + Anthropic-uyumlu kimi/glm. Sıfır yeni protokol kodu; tek-tıkla market kurulumu. Betik: `gen_providers.py`. bkz. `21-MARKET.md`.
-- [ ] **SC-2 — Generic CLI factory** (CLI ailesi): swarmclaw `streamGenericCliChat` deseni (binary spawn + stdout satır-stream, JSON parse yok) ile yapısal çıktısı olmayan onlarca coding-CLI'yi tek handler + veri listesiyle ekle. Yeni `kind_genericcli.go` + `[]genericCLI{id,label,binary}`. **CLI işi — CLI fazı açılınca, SC-1'den sonra.**
+- [ ] **SC-2 — Generic CLI factory** (CLI ailesi): referans projenin `streamGenericCliChat` deseni (binary spawn + stdout satır-stream, JSON parse yok) ile yapısal çıktısı olmayan onlarca coding-CLI'yi tek handler + veri listesiyle ekle. Yeni `kind_genericcli.go` + `[]genericCLI{id,label,binary}`. **CLI işi — CLI fazı açılınca, SC-1'den sonra.**
 
 ---
 

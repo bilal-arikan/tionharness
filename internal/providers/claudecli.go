@@ -18,7 +18,7 @@ import (
 // non-interactive print mode. It authenticates via the user's existing
 // OAuth/subscription login — no API key required.
 //
-// This mirrors SwarmClaw's "CLI provider" approach (Claude Code, Codex, ...).
+// This is the "CLI provider" approach: a local coding CLI driven as a provider.
 type ClaudeCLI struct {
 	binPath string
 	model   string // optional alias/name override, e.g. "sonnet"

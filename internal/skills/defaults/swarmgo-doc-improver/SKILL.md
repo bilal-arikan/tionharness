@@ -11,12 +11,10 @@ Context documents are part of the agent's runtime: skills sit in the prompt, the
 workspace CLAUDE.md shapes every turn, and `_Docs` is the project's memory. When
 they bloat or drift, every turn pays for it. This skill is a repeatable audit that
 scores a doc on six dimensions and applies **only the edits that earn their place**
-— the same discipline as Anthropic's `claude-md-improver`, adapted to SwarmGo's
-own doc surfaces.
+— a repeatable discipline adapted to SwarmGo's own doc surfaces.
 
-> **Inspired by** the official `claude-md-improver` skill (claude-plugins-official),
-> which audits `CLAUDE.md` files. SwarmGo's context lives in more places than that —
-> this skill generalises the idea to skills, workspace rules, and `_Docs`.
+> SwarmGo's context lives in many places (skills, workspace rules, `_Docs`), so this
+> audit generalises `CLAUDE.md`-style hygiene across all of them.
 
 ## What this skill audits
 

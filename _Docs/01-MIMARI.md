@@ -26,7 +26,7 @@ graph TD
 - Backend ile yalnızca **JSON API + SSE** üzerinden konuşur.
 - Frontend `dist/` çıktısı `go:embed all:dist` ile Go binary'sine gömülür (`internal/web/embed.go`) → tek çalıştırılabilir dosya, ayrı statik sunucu gerekmez.
 - Wails (Faz 9) opsiyonel native pencere sarmalayıcısı olarak eklenecek.
-- UI/UX SwarmClaw'a benzer ama tamamen kendi tasarım dilimiz.
+- UI/UX tamamen kendi tasarım dilimizdir.
 
 ### 2. API Katmanı (`internal/api`)
 - HTTP router: **stdlib `net/http` ServeMux** (Go 1.22+ method+path pattern → Chi/Echo gerekmedi). Rotalar domain-bazlı `register*Routes` yardımcılarına bölünmüştür (`server.go`).

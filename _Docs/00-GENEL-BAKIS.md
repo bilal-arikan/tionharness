@@ -1,6 +1,6 @@
 # SwarmGo — Genel Bakış
 
-> **SwarmGo**, [SwarmClaw](https://github.com/swarmclawai/swarmclaw) projesinin Go diliyle, kendi UI/UX tasarımımızla, sıfırdan yeniden yazımıdır.
+> **SwarmGo**, Go diliyle, kendi UI/UX tasarımıyla sıfırdan yazılmış çok-ajanlı AI runtime'ıdır.
 
 ## Amaç
 
@@ -12,19 +12,19 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 |--------|---------|
 | **Eşzamanlılık (concurrency)** | Goroutine + channel modeli, çoklu-ajan orkestrasyonu için doğal |
 | **Tek binary** | Bağımlılıksız, kolay dağıtım |
-| **Düşük RAM / yüksek performans** | SwarmClaw'un Electron/Node yükü olmadan |
+| **Düşük RAM / yüksek performans** | Electron/Node yükü olmadan |
 | **Çapraz derleme** | Tek komutla Windows / macOS / Linux |
 
-## Orijinal (SwarmClaw) vs SwarmGo
+## Teknoloji Özeti
 
-| Bileşen | SwarmClaw | SwarmGo |
-|---------|-----------|---------|
-| Dil | TypeScript / Node.js 22 | Go 1.26+ |
-| Masaüstü kabuk | Electron | Wails v2 (Faz 9, opsiyonel) |
-| Web framework | Next.js | Bağımsız frontend + Go API; `dist/` binary'e `go:embed` ile gömülü |
-| Depolama | better-sqlite3 | Dosya sistemi — JSON/JSONL, DB yok (bkz. `08-DEPOLAMA.md`) |
-| Orkestrasyon | LangGraph | Kendi state-machine + goroutine/channel |
-| Boyut | ~100-150 MB | ~10-20 MB hedef |
+| Bileşen | SwarmGo |
+|---------|---------|
+| Dil | Go 1.26+ |
+| Masaüstü kabuk | Wails v2 (Faz 9, opsiyonel) |
+| Web framework | Bağımsız frontend + Go API; `dist/` binary'e `go:embed` ile gömülü |
+| Depolama | Dosya sistemi — JSON/JSONL, DB yok (bkz. `08-DEPOLAMA.md`) |
+| Orkestrasyon | Kendi state-machine + goroutine/channel |
+| Boyut | ~10-20 MB hedef |
 
 ## Temel Kavramlar
 
@@ -77,7 +77,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [36-KALICI-ILERLEME.md](36-KALICI-ILERLEME.md) | Kalıcı todo/PROGRESS dosyası (oturumlar-arası devralma) |
 | **arsiv/** | Tarihsel inceleme dokümanları (referans/appendix) |
 | [arsiv/13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md) | external-agent-oss release incelemesi → SwarmGo çıkarımları |
-| [arsiv/14-SWARMCLAW-PROVIDER-INCELEME.md](arsiv/14-SWARMCLAW-PROVIDER-INCELEME.md) | swarmclaw çoklu-provider mimarisi incelemesi (gelecek plan) |
+| [arsiv/14-PROVIDER-MIMARISI-INCELEME.md](arsiv/14-PROVIDER-MIMARISI-INCELEME.md) | Çoklu-provider mimarisi incelemesi (gelecek plan) |
 
 > **Numara notu:** 13–14 tarihsel inceleme dokümanları `arsiv/` altına taşındı (ana dizinde
 > 13–14 boş). 17/18/26 eski numara çakışmaları giderildi → native pencere **32**, çoklu

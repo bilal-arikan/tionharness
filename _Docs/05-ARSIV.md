@@ -780,7 +780,7 @@ Provider kurulumunda API anahtarı artık **serbest metin değil**, Ayarlar→Sa
 
 ## Spawn Session — fire-and-forget paralel işçi ✅ (2026-06-18)
 
-**İstek:** the external agent project/SwarmClaw'daki `spawn_session` benzeri: bir prompt'tan **yeni, bağımsız bir oturum** başlatıp **beklemeden** bırakmak (paralel otonom işçi). Mevcut tetiklemeler (flow/schedule/`call_agent`/`send_agent_message`) bunu karşılamıyordu — spawn, FRESH bir oturum açıp turu arka planda koşar. Çıktı Faz U Aktivite feed'inde canlı görünür. Tasarım: `_Docs/22-SPAWN-SESSION.md`.
+**İstek:** `spawn_session` deseni: bir prompt'tan **yeni, bağımsız bir oturum** başlatıp **beklemeden** bırakmak (paralel otonom işçi). Mevcut tetiklemeler (flow/schedule/`call_agent`/`send_agent_message`) bunu karşılamıyordu — spawn, FRESH bir oturum açıp turu arka planda koşar. Çıktı Faz U Aktivite feed'inde canlı görünür. Tasarım: `_Docs/22-SPAWN-SESSION.md`.
 
 **Mimari (iki katman):**
 - **Çekirdek `Runtime.SpawnSession` (`internal/agent/spawn.go`, yeni):** `scheduler.deliverPrompt` kalıbını genelleştirir — `resolveAgent` (id/isim, workspace-scoped) → `kind:"spawned"` + taze `sourceID` ile **bağımsız** session (GetOrCreate değil) → `AddMessage(user)` → **fire-and-forget goroutine** (`runSpawn`): `trackSession` (feed'de canlı "running") → `invokeTraced(KindSpawn, autonomous=true)` → `AddMessage(assistant, steps)` → tamamlanma event'i. Çağıranın ctx'i goroutine'i iptal etmez (`context.WithoutCancel`+10dk timeout) — HTTP/tur kapanınca spawn ölmesin. `SpawnOptions{ModelOverride,Title,CreatedBy}`.
@@ -1212,14 +1212,14 @@ her event'te `Flush()` + `X-Accel-Buffering: no` + ping ticker ile doğru kurulm
 vektör+norm bellek cache'i (`unmarshalVector` JSON parse'ı her recall'da tekrar ediyor);
 pprof'u `SWARMGO_PPROF=1` env-gate ile ekleyip gerçek yük altında baseline profil.
 
-## swarmclaw provider incelemesi → gelecek plan (2026-06-18)
+## Provider mimarisi incelemesi → gelecek plan (2026-06-18)
 
-[bilal-arikan/swarmclaw](https://github.com/bilal-arikan/swarmclaw)'un ~70 provider'ı
+İncelenen TS referans projesinin ~70 provider'ı
 nasıl düşük eforla eklediği incelendi: **"metadata'yı protokolden ayır"** deseni — ~25
 OpenAI-uyumlu API tek `streamOpenAiChat` handler'ını paylaşıyor (fark sadece baseURL),
 ~30 CLI 4'lü diziden üretilip tek `streamGenericCliChat`'i kullanıyor, yalnız ~10 yapısal
 CLI bespoke parser alıyor. Tam analiz + SwarmGo çıkarımları yeni dokümanda:
-[14-SWARMCLAW-PROVIDER-INCELEME.md](arsiv/14-SWARMCLAW-PROVIDER-INCELEME.md). Yol haritasına iki
+[14-PROVIDER-MIMARISI-INCELEME.md](arsiv/14-PROVIDER-MIMARISI-INCELEME.md). Yol haritasına iki
 plan maddesi eklendi: **SC-1** (built-in API preset kataloğu — düşük efor) ve **SC-2**
 (generic CLI factory — CLI fazı). **Yalnız plan; uygulamaya geçilmedi.**
 
@@ -3155,7 +3155,7 @@ Yapılandırılmış **çok-ajanlı akışlar**: bir akış = node grafiği (age
 ### Faz 8 — Tool-use + MCP ✅ (2026-06-15)
 
 Ajanlara **araç kullanımı** kazandırıldı: hem yerleşik (built-in) hem **MCP sunucu** araçları.
-SwarmClaw deseni: built-in + MCP tek katalogda, ajan başına atanır. İki yol birlikte kuruldu.
+Desen: built-in + MCP tek katalogda, ajan başına atanır. İki yol birlikte kuruldu.
 
 **1) Provider native tool-use protokolü (gerçek motor)**
 - [x] `providers/provider.go`: `ToolDef`/`ToolCall`/`ToolResult`; `Request.Tools`, `Message.ToolCalls`/`ToolResults`, `Response.ToolCalls`+`StopReason`
@@ -3235,7 +3235,7 @@ başlık otomatik oluşur. Her ikisi de istenildiğinde ⟳ ile yeniden üretile
 
 ### Faz 6.5 — Sağlamlaştırma ✅ (2026-06-15)
 
-SwarmClaw kıyaslamasında öne çıkan iki kritik açık kapatıldı: **bağlam (context) yönetimi** ve **otonom döngü maliyet guardrail'i**.
+Kıyaslamada öne çıkan iki kritik açık kapatıldı: **bağlam (context) yönetimi** ve **otonom döngü maliyet guardrail'i**.
 
 **1) Bağlam yönetimi + compaction (`internal/conversation`)**
 - [x] `tokens.go`: tokenizer-bağımsız token tahmini (~4 char/token)
@@ -3426,7 +3426,7 @@ cd frontend; npm run dev   # http://localhost:5173
 ## ESKİ: Faz 2 TAMAMLANDI ✅ (CANLI TEST GEÇTİ)
 
 ### 🎉 Önemli: API anahtarı OLMADAN çalışıyor (claude-cli provider)
-SwarmClaw'un "CLI provider" yaklaşımı eklendi. Yerel `claude` (Claude Code) CLI'ı
+"CLI provider" yaklaşımı eklendi. Yerel `claude` CLI'ı
 kullanıcının OAuth/abonelik girişiyle çalışır — **API anahtarı gerekmez.**
 
 - [x] `internal/providers/claudecli.go`: `claude -p --output-format json` ile shell-out
@@ -3633,5 +3633,5 @@ Dört adet düşük-riskli, davranış-korumalı refactor uygulandı (`go build`
 
 ### 2026-06-15
 - Proje başlatıldı.
-- SwarmClaw mimarisi analiz edildi, Go karşılıkları belirlendi.
+- Referans mimari analiz edildi, Go karşılıkları belirlendi.
 - Klasör yapısı + go.mod + plan dokümanları oluşturuldu.

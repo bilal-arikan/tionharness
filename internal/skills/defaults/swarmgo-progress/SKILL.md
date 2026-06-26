@@ -1,6 +1,6 @@
 ---
 name: "SwarmGo Progress Notes"
-description: "How to keep durable, cross-session progress for long-running work in SwarmGo: the automatic todo_write progress file (<cwd>/.swarmgo/progress.json) that the next session resumes from, plus the human-readable PROGRESS.md convention you maintain with the file tools. The SwarmGo-native translation of Anthropic's claude-progress.txt + feature_list.json note-taking pattern for long-horizon agents."
+description: "How to keep durable, cross-session progress for long-running work in SwarmGo: the automatic todo_write progress file (<cwd>/.swarmgo/progress.json) that the next session resumes from, plus the human-readable PROGRESS.md convention you maintain with the file tools. A progress.txt + feature_list.json style note-taking pattern for long-horizon agents."
 when_to_use: "When a task spans more than one session, may be interrupted, or is large enough that you will lose context — and you want the next session (or a different agent) to pick up exactly where you left off. Use it to record what is done, what is in progress, and what is next, so progress survives compaction and restarts."
 icon: "🗒️"
 color: "#0ea5e9"
@@ -8,8 +8,8 @@ access: shared
 ---
 # SwarmGo — Progress Notes (durable, cross-session)
 
-Long tasks outlive a single context window. Anthropic's harness research is blunt
-about it: agents that keep **structured notes on disk** — a progress log plus a
+Long tasks outlive a single context window. The lesson from long-horizon agent
+practice is blunt: agents that keep **structured notes on disk** — a progress log plus a
 checked feature list — can run for hours and hand off cleanly, because the next
 session *reads the notes to get up to speed* instead of starting blind. SwarmGo
 gives you two complementary layers for this. Use them.
@@ -34,7 +34,7 @@ You do not manage this file by hand; just call `todo_write` and keep it honest:
 - `completed` is the equivalent of a feature-list `passes: true`. Do **not**
   delete items to make the list look finished — an unchecked item is information
   the next session needs.
-- Each item may carry optional richer fields (Anthropic feature_list style):
+- Each item may carry optional richer fields (feature_list style):
   - `category` — a grouping label, e.g. `"functional"`, `"tests"`, `"docs"`.
   - `steps` — verification sub-steps for that item, e.g. how to confirm it passes.
 

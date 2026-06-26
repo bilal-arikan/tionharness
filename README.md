@@ -1,6 +1,6 @@
 # SwarmGo
 
-> [SwarmClaw](https://github.com/swarmclawai/swarmclaw) projesinin **Go** ile, kendi UI/UX tasarımıyla yeniden yazımı.
+> **Go** ile, kendi UI/UX tasarımıyla yazılmış çok-ajanlı AI runtime'ı.
 
 Açık kaynaklı, kendi sunucunda barındırılan **çoklu-ajan (multi-agent) AI çalışma ortamı** ve kontrol düzlemi. Tek binary, **dosya-tabanlı depolama** (JSON/JSONL, veritabanı yok — bkz. `_Docs/08-DEPOLAMA.md`), `claude-cli` ile **anahtarsız** çalışabilir.
 

@@ -29,7 +29,7 @@ workspaces never leaks content between them.
   - *Recall memory* — auto-injected into the prompt each turn; the explicit
     `memory_recall`/`memory_add` tools are load-on-demand (`activate_tools` for a
     targeted lookup).
-  - *Core memory* (MemGPT-style, re-injected verbatim every turn) — **named blocks**:
+  - *Core memory* (re-injected verbatim every turn) — **named blocks**:
     **persona** (about yourself) + **human** (about the user) by default, plus custom
     blocks. Edit in place with `core_memory_replace`/`core_memory_append` (pass
     `label`, default persona). Each block is **character-limited** — a write past it

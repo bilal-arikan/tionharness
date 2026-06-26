@@ -5,7 +5,7 @@
 > entity-başına **JSON dosyaları** (oturumlar `session.jsonl`) olarak saklanıyor. Diske
 > yazım biçimi, dizin yapısı ve eşzamanlılık için: **`_Docs/08-DEPOLAMA.md`**.
 
-Entity modeli SwarmClaw'un şemasından türetilmiştir (başta SQLite tabloları olarak tasarlandı, sonra dosya-store'a taşındı).
+Entity modeli başta SQLite tabloları olarak tasarlandı, sonra dosya-store'a taşındı.
 
 ## Tablolar (ER Diyagramı)
 

@@ -1,15 +1,14 @@
 # 15 — Görsel Flow Builder (React Flow Canvas)
 
 > Faz 7 orchestration akışlarının düzenleyicisi, form/liste editöründen **sürükle-bırak
-> node-graph canvas**'a yükseltildi. Referans: SwarmClaw protokol builder'ı (React Flow),
-> ComfyUI/LiteGraph bağlantı UX'i. Bkz. `_Docs/arsiv/14-SWARMCLAW-PROVIDER-INCELEME.md` çizgisi.
+> node-graph canvas**'a yükseltildi. Referans: React Flow tabanlı node-graph builder deseni,
+> ComfyUI/LiteGraph bağlantı UX'i. Bkz. `_Docs/arsiv/14-PROVIDER-MIMARISI-INCELEME.md` çizgisi.
 
 ## Neden
 
 Eski `FlowsPanel` node'ları üst üste kartlar olarak gösteriyor, bağlantıları `next`
-dropdown'larıyla kuruyordu — graf topolojisi görünmüyordu. SwarmClaw'un (yeniden yazdığımız
-ana proje) builder'ı React Flow canvas kullanıyor. Aynı kütüphaneyle, kodu kopyalamadan
-aynı deneyim kuruldu.
+dropdown'larıyla kuruyordu — graf topolojisi görünmüyordu. Yaygın node-graph builder'lar
+React Flow canvas kullanıyor. Aynı kütüphaneyle, kodu kopyalamadan aynı deneyim kuruldu.
 
 ## Mimari — backend'e neredeyse dokunmadan
 
@@ -263,7 +262,7 @@ durur. `go build`/`vet` + `tsc -b`/`vite build` yeşil.
 
 ## Notlar / sıradaki adımlar
 
-- SwarmClaw'daki gibi şablonları **kategorilere** ayırma / arama eklenebilir.
+- Şablonları **kategorilere** ayırma / arama eklenebilir.
 - Koşu **silme / temizleme (cap)** ve koşudan **yeniden çalıştır** ileride eklenebilir.
 - Paperclip-tarzı statik "ajan ilişki haritası" (run_subagent kenarları)
   ayrı bir ekran olarak değerlendirilebilir.
