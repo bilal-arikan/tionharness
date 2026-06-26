@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -154,6 +155,10 @@ func (s *Server) handleIngestInstall(w http.ResponseWriter, r *http.Request) {
 		}
 		wsp.Runtime.Market().RecordInstall(pack.ID, pack.Version)
 		out.Installed = append(out.Installed, res)
+	}
+	out.Message = fmt.Sprintf("%d öğe içe aktarıldı", len(out.Installed))
+	if len(out.Skipped) > 0 {
+		out.Message += fmt.Sprintf(" (%d atlandı)", len(out.Skipped))
 	}
 	writeJSON(w, http.StatusCreated, out)
 }
