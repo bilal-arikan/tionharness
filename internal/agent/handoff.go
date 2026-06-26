@@ -100,6 +100,9 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 		CreatedBy:       opts.CreatedBy,
 		ParentSessionID: session.ID,
 		Title:           "↪ " + handoffTitle(session),
+		// Continue in the same directory the parent worked in (its explicit
+		// override, else the workspace default seeded by SpawnSession).
+		WorkingDir: strings.TrimSpace(session.WorkingDir),
 	})
 	if err != nil {
 		return HandoffResult{}, fmt.Errorf("spawn continuation session: %w", err)

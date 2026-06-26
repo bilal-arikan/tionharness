@@ -27,6 +27,10 @@ type SpawnOptions struct {
 	// a context-reset handoff so the UI can walk the reset chain. "" for an
 	// ordinary spawn with no lineage.
 	ParentSessionID string
+	// WorkingDir optionally pins the spawned session's cwd. When empty, the spawn
+	// inherits the workspace's configured default working directory (Path), same
+	// as a UI-created session — so spawns/handoffs start scoped to that folder.
+	WorkingDir string
 }
 
 // SpawnResult is what a spawn returns to its caller immediately — the new
@@ -72,6 +76,17 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 		title = "✨ " + spawnTitle(prompt)
 	}
 
+	// Seed the cwd like a UI-created session: an explicit option wins (e.g. a
+	// handoff continuing in the parent's dir); otherwise inherit the workspace's
+	// configured default working directory (Path). Empty leaves it unset so the
+	// runtime falls back to the physical workspace dir, matching effectiveWorkDir.
+	cwd := strings.TrimSpace(opts.WorkingDir)
+	if cwd == "" {
+		if p := r.defaultWorkDir.Load(); p != nil {
+			cwd = strings.TrimSpace(*p)
+		}
+	}
+
 	// Each spawn is its own independent session — a fresh sourceID (not GetOrCreate)
 	// so two spawns never collapse into one thread.
 	session, err := r.db.CreateSession(ctx, db.Session{
@@ -80,6 +95,7 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 		SourceID:        "spawn:" + uuid.NewString(),
 		Title:           title,
 		ParentSessionID: strings.TrimSpace(opts.ParentSessionID),
+		WorkingDir:      cwd,
 	})
 	if err != nil {
 		r.releaseSpawnSlot()

@@ -92,11 +92,22 @@ the external agent project paritesi: workspace başına "varsayılan çalışma 
 - Runtime'a `SetDefaultWorkDir` ile uygulanır; `Runtime.WorkspaceDefaultDir()`
   geçerli ve var olan bir dizinse onu, değilse fiziksel `workDir`'i döndürür.
 - `effectiveWorkDir` çözüm sırası: **oturum `WorkingDir`** → **workspace
-  `DefaultWorkingDir`** → fiziksel `workDir`. Yani yeni oturumlar otomatik
-  workspace varsayılanını kullanır (ayrı seeding yok); varsayılanı değiştirmek,
-  override'ı olmayan tüm oturumları etkiler.
-- Composer rozetinde override'ı olmayan oturum bu varsayılanı `effective` olarak
-  gösterir.
+  `DefaultWorkingDir`** → fiziksel `workDir`.
+- **Yeni oturuma seeding (2026-06-26):** `handleCreateSession` artık yeni oturumun
+  `WorkingDir`'ini workspace'in `DefaultWorkingDir`'i ile **tohumlar** (istek kendi
+  `workingDir`'ini vermezse). Böylece her yeni oturum o path'e **kilitli başlar** ve
+  Composer rozeti yolu `Dir` olarak (yalnız `effective` fallback değil) gösterir.
+  Path boşsa eskisi gibi fiziksel `workDir`'e düşer. Not: bu bir kopyadır —
+  varsayılanı sonradan değiştirmek, zaten tohumlanmış eski oturumların `WorkingDir`'ini
+  geriye dönük değiştirmez (runtime fallback yalnız `WorkingDir` boş kalan oturumlarda
+  varsayılanı izlemeye devam eder).
+- **Spawn/handoff seeding (2026-06-26):** `SpawnOptions.WorkingDir` eklendi;
+  `Runtime.SpawnSession` yeni oturumun `WorkingDir`'ini açık seçenek varsa onunla,
+  yoksa workspace'in yapılandırılmış default'u (`defaultWorkDir`) ile tohumlar →
+  spawn edilen (ve `spawn_session` aracı/UI ile açılan) oturumlar da Path'e kilitli
+  başlar. **Handoff** continuation'ı ayrıca ebeveyn oturumun `WorkingDir`'ini geçirir
+  → context-reset sonrası taze oturum **aynı dizinde** devam eder. Default boşsa alan
+  boş kalır (runtime fiziksel `workDir`'e düşer).
 
 ## Workspace penceresi + Proje sekmesi (2026-06-22)
 

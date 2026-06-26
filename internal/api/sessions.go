@@ -54,6 +54,10 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 type createSessionReq struct {
 	AgentID string `json:"agentId"`
 	Title   string `json:"title"`
+	// WorkingDir optionally pins this session's cwd. When omitted, the session
+	// inherits the workspace's configured default working directory (Path), so a
+	// fresh session starts already scoped to that folder.
+	WorkingDir string `json:"workingDir"`
 }
 
 func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
@@ -77,9 +81,18 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Seed the cwd: an explicit request value wins; otherwise inherit the
+	// workspace's configured default working directory (Path) so every new
+	// session starts already scoped to that folder.
+	cwd := strings.TrimSpace(req.WorkingDir)
+	if cwd == "" {
+		cwd = strings.TrimSpace(ws(r).Settings().DefaultWorkingDir)
+	}
+
 	session, err := ws(r).DB.CreateSession(r.Context(), db.Session{
-		AgentID: req.AgentID,
-		Title:   req.Title,
+		AgentID:    req.AgentID,
+		Title:      req.Title,
+		WorkingDir: cwd,
 	})
 	if writeDBError(w, err, "") {
 		return
