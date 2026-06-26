@@ -74,5 +74,15 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error(await errorFromResponse(res))
   }
-  return res.json() as Promise<T>
+  // Tolerate empty bodies (204 No Content, or any handler that writes no JSON):
+  // parsing "" would throw "Unexpected end of JSON input". Endpoints typed as
+  // req<void> rely on this.
+  if (res.status === 204) {
+    return undefined as T
+  }
+  const text = await res.text()
+  if (text.trim() === '') {
+    return undefined as T
+  }
+  return JSON.parse(text) as T
 }
