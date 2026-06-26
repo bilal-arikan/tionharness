@@ -2,6 +2,107 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## Bağlam önizlemesi: eager araçların tam şeması (açılır-kapanır) ✅ (2026-06-26)
+
+Session bağlam önizlemesinde "Araçlar — her tur şema gönderilen" bölümü artık düz isim
+chip'leri yerine **açılır-kapanır** (`<details>`) öğeler gösteriyor: ad → genişletince
+**tam açıklama + tam JSON input şeması** (her tur gönderilen gerçek payload). Böylece bir
+eager aracın her tur ne kadar yer kapladığı birebir görülebiliyor.
+
+- **Backend:** `toolSummary`'ye `inputSchema` alanı eklendi; `handleAgentContext` ve
+  `handleSessionContextPreview` eager araçlar için `d.InputSchema`'yı (folded examples dahil)
+  doldurur. Lazy araçlarda boş (şema tura girmez).
+- **Frontend:** `SessionContextPreview.tools[].inputSchema`; `SessionContextModal` her aracı
+  `<details>` ile render eder (ad/summary + açıklama + `JSON.stringify(schema, null, 2)`).
+- AgentContextModal eager araçları bilinçli listelemez (değişmedi).
+- Canlı (WS5/AGT1): 20/20 eager araç inputSchema döndürüyor. Go build+test ✅, tsc ✅.
+
+## Market detay popup'ı genişledi: zengin pack önizlemesi ✅ (2026-06-26)
+
+Market item'ına tıklayınca açılan detay popup'ı genişletildi (`max-w-lg`→`max-w-2xl`) ve özellikle
+**workspace pack'leri** için çok daha fazla detay gösteriyor (yeni payload alanları artık görünür).
+
+- **Genel meta satırı** (her kind): kaynak (📦 Gömülü / 💾 Yerel / 🌐 Uzak + registry adı), kurulu sürüm,
+  oluşturma tarihi, `#tag`'ler — açıklamanın altında çip olarak (`PackMeta`).
+- **Zengin workspace önizlemesi** (`WorkspacePackPreview`): stat şeridi (Ajan/Akış/Zamanlama/Skill
+  sayıları) + **Ajanlar** (avatar, isim, izin/thinking/MCP çipleri, sağlayıcı·model, soul, skill çipleri)
+  + **Akışlar** (node-tipi zinciri + branch/parallel rozetleri; lineer `steps` veya tam `graph`'tan)
+  + **Zamanlamalar** (cron + agent-key + prompt) + **Gömülü skill'ler** (frontmatter'dan ad/açıklama) +
+  board kolonları + yönergeler. Frontend tipleri (`types/market.ts`) yeni payload alanlarıyla genişletildi.
+- **Doğrulama:** `tsc` + `vite build` yeşil. Canlı (8090, tarayıcı): Market ▸ Workspaces ▸ "Yazılım
+  Geliştirme" → geniş popup; meta (Gömülü·SwarmGo + #template #workspace), stat (4 ajan/2 akış/0 zam/1 skill),
+  ajan kartları (read-only/auto + thinking + sw-conventions çipleri), akış zincirleri render edildi.
+
+## Workspace'i şablon olarak publish (seeding'in tersi) ✅ (2026-06-26)
+
+Mevcut bir workspace artık tek tıkla bir **market workspace-pack'ine** dönüştürülebiliyor; paket
+hem markette hem workspace oluşturma picker'ında belirir ve ondan yeni workspace üretilebilir
+(tam round-trip).
+
+- **Backend:** `handlePublishMarket`'e `KindWorkspace` case + `buildWorkspaceTemplatePayload`
+  (seeding'in TERSİ): agent'ları stabil local key'lere eşler, flow graph'larındaki gerçek agent id'lerini
+  `tmpl:<key>`'e yeniden yazar (non-lineer yapı korunur), schedule'ları key'e bağlar, **workspace-tier**
+  skill'leri (SKILL.md + nested files) gömer, identity/instructions/board'u taşır. **Sırlar/oturum/runtime
+  verisi DAHİL EDİLMEZ.** `market.BuildWorkspacePack` (id=`workspace-<slug>`), `slugify`/`uniqueAgentKey`
+  yardımcıları. Publish sonrası `s.market.Reload()` (picker server-store'u bayat kalmasın). (`internal/api/market.go`, `internal/market/publish.go`)
+- **Frontend:** `WorkspacePanel`'e "Şablon olarak yayınla" bölümü (`api.publishPack('workspace', ws.id)`),
+  başarı/hata geri bildirimi. Workspace ▸ Genel sekmesinde, silme danger-zone'unun üstünde.
+- **Doğrulama:** `go build/vet/test` + `tsc` yeşil. Canlı round-trip (fresh 8091): `workspace-software`'tan
+  oluştur → **publish** → picker'da `workspace-mydevteam` belirdi (6 template) → ondan yeni workspace üret
+  → agent richness (read-only/auto/thinking/skills), **2 flow** (branch dahil, `tmpl:` key'leri çözülmüş) ve
+  gömülü `sw-conventions/SKILL.md` birebir geri geldi.
+
+## Prompt editörlerine Markdown önizleme + kopyalama ✅ (2026-06-26)
+
+Uygulamadaki prompt/talimat girilen tüm metin alanlarına ortak bir Markdown-farkında
+editör eklendi. Tek yeniden kullanılabilir bileşen `common/PromptEditor.tsx`:
+
+- **Toolbar:** Düzenle/Önizleme geçiş düğmeleri (`Pencil`/`Eye`) + tek tık **Kopyala**
+  (`Copy`→`Check` 1.5s geri-bildirim, `navigator.clipboard`, güvensiz bağlamda sessiz düşer) +
+  **Tam ekran** büyüteç (`Maximize2`/`Minimize2`).
+- **Tam ekran modu:** büyüteç tıklanınca `fixed inset-0` overlay'de aynı editör büyür (toolbar +
+  önizleme/düzenleme paylaşılır; overlay'de içerik `flex-1` ile ekranı doldurur). Esc veya backdrop
+  tıklaması kapatır; açıkken `body` scroll kilitlenir. Hem önizleme hem düzenleme tam ekranda çalışır.
+- **Önizleme:** mevcut `markdown/Markdown` bileşeniyle render (GFM, kod blokları, görseller);
+  boşsa "Önizlenecek içerik yok." Düzenleme modu bare `<textarea>` korur (resize-y, outline).
+- **API:** `value/onChange` + tüm `<textarea>` attribute'leri passthrough (`rows`, `placeholder`,
+  `maxLength`, `autoFocus`, `data-testid`). `mono` (monospace), `textareaClassName` (min-height vb.),
+  `className` (kapsayıcı). Kendi border/bg/focus stilini taşır → call-site sade.
+- **Entegre alanlar (9 alan / 9 call-site):** agent soul + identity (`AgentSettingsForm`), yeni-agent
+  soul (`AgentRoster`/`AgentsView`), skill markdown body (`SkillEditor`), flow agent prompt + transform
+  template (`NodeInspector`), workspace runtime promptları + instructions (`WorkspaceFilesPanel`),
+  background spawn prompt (`SpawnSessionModal`), **core memory blokları** (`CoreMemoryCard` — karakter
+  sayacı/usage-bar korunur, `maxLength` passthrough), **oturum hedefi** (`SessionDetailPanel` — accent
+  kenarlık `className` ile, Ctrl/Cmd+Enter kaydet & Escape `onKeyDown` passthrough, `maxLength=2000`),
+  **kullanıcı tercih notları** (`appPanels` Profil).
+- **Doğrulama:** `tsc -b` temiz; eklediğim alanlarda yeni lint hatası yok (dosyalardaki mevcut
+  ref/useEffect uyarıları ilgisiz/dokunulmadı). (`frontend/src/components/common/PromptEditor.tsx` + 9 call-site)
+
+## Workspace template kapsamı genişledi: zengin agent + gömülü skill + çoklu/non-lineer flow ✅ (2026-06-26)
+
+`market.WorkspacePayload` artık tam bir başlangıç ekosistemi taşıyor (önceden yalnız identity +
+name/soul agent + tek lineer flow):
+
+- **Agent zenginliği:** `WorkspaceTemplateAgent` `AgentPayload` ile hizalandı — provider/model,
+  planning/thinking/permission modu, `MCPEnabled`, `AllowedTools`/`BlockedTools`, `Skills[]` atamaları,
+  günlük bütçe. Boş provider/model seed'de workspace/app default'una düşer. Seeding tek `db.CreateAgent`
+  çağrısında tüm alanları persist eder.
+- **Gömülü skill'ler:** `WorkspacePayload.Skills []WorkspaceTemplateSkill{Slug,Body,Files}` — seed'de
+  **agent'lardan ÖNCE** workspace skills dizinine yazılır (`market.InstallSkill` sentetik pack ile) ve
+  katalog reload edilir, böylece agent `Skills[]` referansları çözülür.
+- **Çoklu + non-lineer flow:** tekil `Flow` → `Flows []WorkspaceTemplateFlow`. Her flow ya lineer
+  (`Steps`) ya da tam **orchestration graph** (`Graph`, branch/parallel/delay/transform). Graph'ta agent
+  düğümleri `agentId="tmpl:<key>"` taşır; seed'de gerçek id'ye çevrilir (`TemplateAgentKeyPrefix`).
+  Saf `resolveTemplateFlowGraph` (lineer + graph) birim-test edilir.
+- **Seed sırası:** skills → agents → flows → schedules. `seedWorkspaceTeam` hem create-picker hem
+  market-install yolunda ortak. (`internal/api/templates.go`, `internal/market/pack.go`)
+- **Bundled paketler:** 5 template `flow`→`flows` migrate edildi; `workspace-software` üç yeteneği de
+  sergiliyor (gömülü `sw-conventions` skill'i + read-only/auto + thinking=medium agent'lar + ikinci
+  **branch'li** flow "Verify → FIX→Execute | SHIP").
+- **Doğrulama:** `go build/vet/test` + integrity testi (branch graph dahil) yeşil. Canlı (fresh 8091):
+  `workspace-software`'tan oluşturma → agent permission/thinking/skill alanları, `sw-conventions/SKILL.md`
+  diske yazıldı, **2 flow** seed edildi (biri `[agent,branch,agent]`, tmpl-key'leri çözülmüş).
+
 ## Tool tier UI chip'leri: Self-mgmt vs NameOnly ayrımı ✅ (2026-06-26)
 
 Workspace Tools ekranı artık üç tier'ı ayrı chip ile gösteriyor (önceden hidden ve

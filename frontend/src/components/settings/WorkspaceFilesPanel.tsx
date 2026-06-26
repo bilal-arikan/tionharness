@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api'
 import type { WorkspaceConfig, WorkspaceConfigPatch } from '../../types'
-import { Field, inputCls } from './primitives'
+import { Field } from './primitives'
+import { PromptEditor } from '../common'
 import { CopyPathButton } from '../CopyPathButton'
 import { displayPath } from '../../lib/paths'
 
@@ -135,11 +136,12 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
         const isDefault = draft.prompts[key].trim() === (config.defaults[key] ?? '').trim()
         return (
           <Field key={key} label={meta.label} hint={meta.hint}>
-            <textarea
+            <PromptEditor
               value={draft.prompts[key]}
-              onChange={(e) => setPrompt(key, e.target.value)}
+              onChange={(v) => setPrompt(key, v)}
               rows={4}
-              className={`${inputCls} resize-y font-mono text-xs`}
+              mono
+              textareaClassName="text-xs"
             />
             <div className="mt-1 flex items-center gap-2">
               <button
@@ -157,11 +159,10 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
 
       <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Workspace dosyaları</div>
       <Field label="Talimatlar (instructions.md)" hint="Bu workspace'teki tüm ajanlara eklenen yönergeler. 'Genel' sekmesindeki talimatlarla senkronizedir.">
-        <textarea
+        <PromptEditor
           value={draft.instructions}
-          onChange={(e) => setDraft((d) => (d ? { ...d, instructions: e.target.value } : d))}
+          onChange={(v) => setDraft((d) => (d ? { ...d, instructions: v } : d))}
           rows={4}
-          className={`${inputCls} resize-y`}
           placeholder="Örn. Tüm cevapları Türkçe ver; commit at ama push'lama."
         />
       </Field>

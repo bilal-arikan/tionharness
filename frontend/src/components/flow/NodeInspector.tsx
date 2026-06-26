@@ -1,5 +1,6 @@
 import type { Agent, BranchMatchMode, FlowNode, FlowNodeType } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
+import { PromptEditor } from '../common'
 
 interface Props {
   node: FlowNode
@@ -83,12 +84,13 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
           </div>
           <label className="block">
             <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Prompt</span>
-            <textarea
+            <PromptEditor
               value={node.prompt ?? ''}
-              onChange={(e) => onPatch({ prompt: e.target.value })}
+              onChange={(v) => onPatch({ prompt: v })}
               placeholder="{{input}}, {{last}}, {{node.<id>}}"
               rows={10}
-              className={`${input} min-h-48 resize-y font-mono`}
+              mono
+              textareaClassName="min-h-48 text-xs"
             />
           </label>
         </>
@@ -180,12 +182,13 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
       {node.type === 'transform' && (
         <label className="block">
           <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Şablon (çıktı)</span>
-          <textarea
+          <PromptEditor
             value={node.template ?? ''}
-            onChange={(e) => onPatch({ template: e.target.value })}
+            onChange={(v) => onPatch({ template: v })}
             placeholder="{{input}}, {{last}}, {{node.<id>}} — LLM çağırmadan çıktı üretir"
             rows={8}
-            className={`${input} min-h-32 resize-y font-mono`}
+            mono
+            textareaClassName="min-h-32 text-xs"
           />
         </label>
       )}

@@ -3,7 +3,7 @@ import { Sparkles, X, Loader2 } from 'lucide-react'
 import type { Agent } from '../../types'
 import { api } from '../../api'
 import { AgentPicker } from '../agents/AgentPicker'
-import { Button } from '../common'
+import { Button, PromptEditor } from '../common'
 
 interface Props {
   agents: Agent[]
@@ -83,13 +83,13 @@ export function SpawnSessionModal({ agents, onClose, onSpawned, onError }: Props
         </div>
 
         <label className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">Prompt</label>
-        <textarea
+        <PromptEditor
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={setPrompt}
           rows={5}
           autoFocus
           placeholder="Ajanın üzerinde çalışacağı görev…"
-          className="mb-3 w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+          className="mb-3"
         />
 
         <label className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">

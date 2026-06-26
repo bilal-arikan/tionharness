@@ -5,6 +5,7 @@ import type { SessionInfo, AgentUsage, SessionUsageDetail, SessionProgress } fro
 import { SessionContextModal } from './SessionContextModal'
 import { SessionDebugCard } from './SessionDebugCard'
 import { AgentIdentity } from '../agents/AgentIdentity'
+import { PromptEditor } from '../common'
 import { roleColor } from '../../lib/palette'
 
 interface Props {
@@ -344,10 +345,10 @@ export function SessionDetailPanel({
             </div>
             {editingGoal ? (
               <div className="flex flex-col gap-1.5">
-                <textarea
+                <PromptEditor
                   autoFocus
                   value={goalDraft}
-                  onChange={(e) => setGoalDraft(e.target.value)}
+                  onChange={setGoalDraft}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) commitGoal()
                     else if (e.key === 'Escape') setEditingGoal(false)
@@ -356,7 +357,8 @@ export function SessionDetailPanel({
                   rows={4}
                   maxLength={2000}
                   placeholder="Bu sohbet için kalıcı bir hedef yaz — ajan her turda buna göre ilerler. Örn: 'X özelliğini test ederek bitir ve PR aç.'"
-                  className="w-full resize-y rounded border border-[var(--color-accent)] bg-[var(--color-bg)] px-2 py-1.5 text-xs text-[var(--color-text)] outline-none disabled:opacity-50"
+                  className="border-[var(--color-accent)]"
+                  textareaClassName="text-xs"
                 />
                 <div className="flex items-center gap-2">
                   <button

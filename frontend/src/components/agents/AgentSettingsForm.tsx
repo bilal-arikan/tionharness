@@ -9,7 +9,7 @@ import { ProviderModelSelect } from './ProviderModelSelect'
 import { AgentToolsSection } from './AgentToolsSection'
 import { AgentSkillsSection } from './AgentSkillsSection'
 import { AgentContextModal } from './AgentContextModal'
-import { Button } from '../common'
+import { Button, PromptEditor } from '../common'
 import { OptionPills } from '../common/OptionPills'
 import { PLANNING_OPTIONS, THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
 
@@ -276,22 +276,20 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         </p>
 
         <Field label="Karakter / sistem promptu (soul)">
-          <textarea
+          <PromptEditor
             data-testid="agent-soul-textarea"
             value={soul}
-            onChange={(e) => setSoul(e.target.value)}
+            onChange={setSoul}
             rows={4}
-            className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
           />
         </Field>
 
         <Field label="Kimlik (identity)">
-          <textarea
+          <PromptEditor
             data-testid="agent-identity-textarea"
             value={identity}
-            onChange={(e) => setIdentity(e.target.value)}
+            onChange={setIdentity}
             rows={2}
-            className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
           />
         </Field>
 

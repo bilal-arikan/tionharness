@@ -10,6 +10,7 @@ import { THEME_PRESETS } from '../../lib/themePresets'
 import { applyAppearance, resolveAppearance, type Appearance } from '../../lib/theme'
 import { NOTIFY_TYPES, mutedTypes, setTypeEnabled } from '../../lib/notifyPrefs'
 import { Field, Toggle, Slider, inputCls, type AppSet } from './primitives'
+import { PromptEditor } from '../common'
 
 interface PanelProps {
   draft: AppSettings
@@ -40,7 +41,7 @@ export function ProfilePanel({ draft, set }: PanelProps) {
         <Field label="Şehir"><input value={draft.userCity} onChange={(e) => set('userCity', e.target.value)} placeholder="örn. İstanbul" className={inputCls} /></Field>
         <Field label="Ülke"><input value={draft.userCountry} onChange={(e) => set('userCountry', e.target.value)} placeholder="örn. Türkiye" className={inputCls} /></Field>
       </div>
-      <Field label="Notlar" hint="Tercihlerini anlatan serbest metin (talimatlar, çalışma şekli…)."><textarea value={draft.userNotes} onChange={(e) => set('userNotes', e.target.value)} rows={5} className={`${inputCls} resize-none`} placeholder="Ajanların bilmesi gereken tercihlerin…" /></Field>
+      <Field label="Notlar" hint="Tercihlerini anlatan serbest metin (talimatlar, çalışma şekli…)."><PromptEditor value={draft.userNotes} onChange={(v) => set('userNotes', v)} rows={5} placeholder="Ajanların bilmesi gereken tercihlerin…" /></Field>
       <Field label="Dil" hint="UI dili tercihi — tüm workspace'ler için geçerli (tam çeviri kademeli ekleniyor).">
         <select value={draft.language} onChange={(e) => set('language', e.target.value as AppSettings['language'])} className={inputCls}>
           <option value="tr">Türkçe</option>

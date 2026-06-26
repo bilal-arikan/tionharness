@@ -4,7 +4,7 @@ import type { Agent, AgentPatch } from '../../types'
 import { AgentIdentity } from './AgentIdentity'
 import { AgentSettingsModal } from './AgentSettingsModal'
 import { ProviderModelSelect } from './ProviderModelSelect'
-import { Button } from '../common'
+import { Button, PromptEditor } from '../common'
 import { useCatalog, resolveModelLabel } from '../../lib/catalog'
 
 interface Props {
@@ -78,13 +78,12 @@ export function AgentRoster({
             placeholder="Ajan adı"
             className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
           />
-          <textarea
+          <PromptEditor
             data-testid="agent-create-soul-textarea"
             value={soul}
-            onChange={(e) => setSoul(e.target.value)}
+            onChange={setSoul}
             placeholder="Karakter / sistem promptu (soul)"
             rows={3}
-            className="w-full resize-none rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
           />
           <div data-testid="agent-create-provider-wrap">
             <ProviderModelSelect

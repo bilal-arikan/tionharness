@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { Brain, ChevronDown, ChevronRight, Pencil, Check, X, Plus, Trash2, Lock } from 'lucide-react'
 import { api } from '../../api'
 import type { CoreBlock } from '../../types'
-import { Button } from '../common'
+import { Button, PromptEditor } from '../common'
 
 interface Props {
   agentId: string
@@ -237,11 +237,12 @@ function CoreBlockRow({
 
       {editing ? (
         <div className="flex flex-col gap-2">
-          <textarea
+          <PromptEditor
             value={draft}
-            onChange={(e) => onDraft(e.target.value)}
+            onChange={onDraft}
             rows={5}
-            className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
+            mono
+            textareaClassName="text-xs"
           />
           <div className="flex items-center gap-2">
             <Button onClick={onSave} disabled={saving} size="sm" className="flex items-center gap-1">
