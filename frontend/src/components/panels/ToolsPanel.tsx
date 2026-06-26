@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, Plug, Wrench, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { Search, Plug, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { api } from '../../api'
 import type { MCPServer, MCPTransport, WorkspaceTool } from '../../types'
 import { toolSource, toolServer, toolLabel, extractParams, type ParamRow } from './toolMeta'
+import { toolIcon } from '../../lib/toolIcons'
 
 interface Props {
   onError: (msg: string) => void
@@ -263,6 +264,7 @@ export function ToolsPanel({ onError }: Props) {
                 {!isCollapsed &&
                   g.tools.map((t) => {
                     const active = selectedName === t.name
+                    const ToolIcon = toolIcon(t.name)
                     return (
                       <button
                         key={t.name}
@@ -280,6 +282,10 @@ export function ToolsPanel({ onError }: Props) {
                           className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
                             t.enabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-border)]'
                           }`}
+                        />
+                        <ToolIcon
+                          size={14}
+                          className={`shrink-0 ${active ? '' : 'text-[var(--color-text-dim)]'}`}
                         />
                         <span
                           className={`min-w-0 truncate ${t.enabled ? '' : 'text-[var(--color-text-dim)]'}`}
@@ -369,12 +375,13 @@ function ToolDetail({
   onToggle: () => void
   onToggleHidden: () => void
 }) {
+  const ToolIcon = toolIcon(tool.name)
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Wrench size={18} className="flex-shrink-0 text-[var(--color-text-dim)]" />
+            <ToolIcon size={18} className="flex-shrink-0 text-[var(--color-accent)]" />
             <h2 className="truncate text-lg font-semibold">{toolLabel(tool)}</h2>
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">

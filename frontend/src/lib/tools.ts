@@ -1,36 +1,18 @@
 // Display metadata for tool activity cards. Maps a (possibly namespaced) tool
-// name to a short human label, an icon glyph and a one-line intent extracted
-// from its JSON input — mirroring how the External Agent chat renders tool steps.
+// name to a short human label, a themed lucide icon and a one-line intent
+// extracted from its JSON input — mirroring how the External Agent chat renders
+// tool steps.
+import type { LucideIcon } from 'lucide-react'
+import { toolIcon } from './toolIcons'
 
 export interface ToolMeta {
   label: string
-  icon: string
+  /** Themed lucide icon component for the tool (inherits currentColor). */
+  icon: LucideIcon
   /** Short summary of what the call does, derived from its input. */
   summary: string
   /** When true the card body should render output as a unified diff. */
   isDiff: boolean
-}
-
-// Per-tool icon glyphs (emoji keeps us dependency-free vs. an icon set).
-const ICONS: Record<string, string> = {
-  webfetch: '🌐',
-  http_get: '🌐',
-  http_request: '🌐',
-  memory_recall: '🧠',
-  memory_remember: '🧠',
-  conversation_search: '🔎',
-  read: '📄',
-  write: '✏️',
-  edit: '✏️',
-  bash: '▶️',
-  terminal: '▶️',
-  grep: '🔎',
-  glob: '🗂️',
-  ls: '🗂️',
-  browser: '🧭',
-  todo_write: '✅',
-  ask_user: '💬',
-  run_subagent: '🤖',
 }
 
 /** Strip an MCP namespace prefix (`server__tool`) for display. */
@@ -48,15 +30,6 @@ export function toolBase(name: string): string {
 export function isReadTool(name: string): boolean {
   const base = toolBase(name)
   return base === 'read' || base === 'read_file'
-}
-
-function pickIcon(name: string): string {
-  const base = baseName(name).toLowerCase()
-  for (const key of Object.keys(ICONS)) {
-    if (base === key || base.startsWith(key) || base.includes(key)) return ICONS[key]
-  }
-  if (name.startsWith('mcp__') || name.includes('__')) return '🧩'
-  return '🛠️'
 }
 
 /** A readable label: "Memory Recall", "server · tool" for MCP. */
@@ -97,7 +70,7 @@ export function toolMeta(name: string, input: unknown): ToolMeta {
   const base = baseName(name).toLowerCase()
   return {
     label: pickLabel(name),
-    icon: pickIcon(name),
+    icon: toolIcon(name),
     summary: summarize(input),
     isDiff: DIFF_TOOLS.some((t) => base === t || base.includes(t)),
   }
