@@ -296,6 +296,10 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	// nil handler; NewServer always installs it.
 	if s.interactionMCP != nil {
 		mux.Handle("/mcp/interaction", s.interactionMCP)
+		// Subtree mount so the CLI's two tier entries (/mcp/interaction/core and
+		// /mcp/interaction/extended) reach the same handler; it derives the tier from
+		// the path's last segment (see interaction.tierFromPath).
+		mux.Handle("/mcp/interaction/", s.interactionMCP)
 	}
 }
 

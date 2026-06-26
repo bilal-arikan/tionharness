@@ -785,8 +785,37 @@ arşivin **görünür etkisi yoktu**. UI tamamlandı:
   `App.setSessionArchived` → `api.setSessionState` + lokal güncelleme (arşivlenen aktif oturumsa
   başka aktif oturuma düşülür). Agent-driven archive zaten `session` SSE event'iyle canlı yansır.
 
+## İki-tier endpoint (claude-cli 2.1.x+ eager/lazy araç yükleme, 2026-06-26)
+
+claude-cli 2.1.x, MCP araç şemalarının toplamı bağlam penceresinin **%10**'unu aşınca
+tümünü erteler (Tool Search / deferred tools). Tek Interaction sunucusu tüm bridged
+araçları (eager + self-management) full-şema sunduğundan eager araçlar (Bash, use_skill)
+da erteleniyordu → ilk turda `No such tool available`.
+
+**Çözüm:** Aynı in-process handler **iki mcp-config sunucu anahtarı** olarak ilan edilir
+(path son-ek'iyle ayrışır):
+
+| Anahtar | Path | `alwaysLoad` | İçerik |
+|---------|------|--------------|--------|
+| `swarmgo_interaction` (CORE) | `/mcp/interaction/core` | **true** | eager: `Bash`, `ask_user`, `request_confirmation`, `todo_write`, `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`, `core_memory_replace`/`append`, `permission_prompt` |
+| `swarmgo_extended` (EXTENDED) | `/mcp/interaction/extended` | yok | self-management suite + NameOnly: `notify`, `focus_view`, `set_session_goal`/`complete_goal`, `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`, `spawn_session`, `conversation_search`, `read_session_debug` |
+
+- `alwaysLoad: true` → CORE tool-search'ten muaf (her zaman inline). CLI process env'ine
+  `ENABLE_TOOL_SEARCH=auto` geçilir (`claudecli.go runAttempt`) → EXTENDED %10 eşiğini
+  aşınca lazy ertelenir.
+- **Tier tek kaynak:** `coreInteractionTools` / `interactionTier` (api/mcp_interaction.go).
+  Advertise: `Backend.Tools(token, tier)`; allowlist: `splitInteractionTiers`; endpoint
+  tier'ı `interaction.tierFromPath` (path son-eki). Bridged self-management **daima**
+  extended. `bareToolName` her iki prefix'i de soyar; lazy katalog extended built-in'leri
+  `extendedToolPrefix` ile namespace'ler (`toolsetup.go`), `trace.go` ikisini de soyar.
+- CORE anahtarı **eski `swarmgo_interaction` adını korur** → mevcut namespaced referanslar
+  (use_skill, core_memory, trace) bozulmaz; yalnız EXTENDED yeni prefix alır.
+- **Kapsam:** 2.1.x ve üzeri (sürüm guard yok). Test: `TestWriteCLIMCPConfigTwoTierInteraction`,
+  `TestInteractionTierSplit`. Detay: `_Docs/19`.
+
 ## İlgili dokümanlar
 - `09-CLAUDE-AGENT-SDK.md` — SDK paritesi ADR (native vs CLI yol ayrımı)
+- `19-LAZY-TOOL-LOADING.md` — eager/lazy tier mimarisi + iki-tier köprü
 - `07-CHAT-UX.md` — SSE adım akışı, `ask_user` (Faz P1) mevcut native mekaniği
 - `SKILL.md` — Faz P1 (ask_user/todo_write), Faz 8 (MCP delegasyon) bağlamı
 

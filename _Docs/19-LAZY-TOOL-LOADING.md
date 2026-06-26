@@ -80,8 +80,37 @@
   NameOnly araçların `Description`'ını boşaltır, `renderLazyToolCatalog` boş özetli
   satırı `- \`ad\`` (özetsiz) basar (`writeLazyToolLine`). `Unlazy` ("Göster")
   `nameOnly` işaretini de temizler. Native yolda token kazandırır; **claude-cli
-  yolunda etkisiz** (bridge tam şema ilan eder, MCP'ler zaten CLI deferral'ına
-  tabi). Test: `TestMarkNameOnlyKeepsNameDropsSummary`.
+  yolunda NameOnly tek başına etkisiz** (bridge tam şema ilan eder) — ama bu artık
+  aşağıdaki **iki-tier köprü** ile çözüldü: lazy/NameOnly araçlar `swarmgo_extended`
+  sunucusuna gidip CLI'ın kendi ToolSearch deferral'ına tabi olur.
+  Test: `TestMarkNameOnlyKeepsNameDropsSummary`.
+- **claude-cli 2.1.x+ iki-tier köprü (`alwaysLoad` + `ENABLE_TOOL_SEARCH`, 2026-06-26):**
+  CLI'da eager/lazy ayrımı artık gerçekten uygulanıyor. `writeCLIMCPConfig` Interaction
+  MCP'yi **iki sunucu anahtarına** böler (aynı in-process endpoint'e farklı path
+  son-ek'leriyle bağlanır):
+  - **`swarmgo_interaction`** (CORE, `alwaysLoad: true`) → eager tier
+    (`coreInteractionTools`: `Bash`, `ask_user`, `request_confirmation`, `todo_write`,
+    `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`,
+    `core_memory_replace`/`append`, `permission_prompt`). CLI tool-search'ten **muaf**
+    → ilk turda `ToolSearch` gerekmeden hazır. Eski anahtar adı korundu → mevcut
+    namespaced referanslar (`use_skill`, `core_memory`, trace stripping) bozulmaz.
+  - **`swarmgo_extended`** (EXTENDED) → self-management suite + NameOnly oturum
+    araçları (`notify`, `focus_view`, `set_session_goal`/`complete_goal`,
+    `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`,
+    `spawn_session`, `conversation_search`, `read_session_debug`, …). `alwaysLoad`
+    yok → `ENABLE_TOOL_SEARCH=auto` (CLI process env'inde) ile %10 eşiğini aşınca
+    CLI ToolSearch ile **lazy** keşfeder.
+  - Tier sınıflandırması tek kaynak: `interactionTier(name)` / `splitInteractionTiers`
+    (allowlist) + `Backend.Tools(token, tier)` (advertise). Bridged self-management
+    def'leri **daima extended**. Endpoint: `interaction.tierFromPath` path son-ek'ini
+    (`/core`,`/extended`) okur; `api/server.go` subtree mount (`/mcp/interaction/`).
+    Lazy katalog extended built-in'leri `extendedToolPrefix` ile namespace'ler;
+    `trace.go` her iki prefix'i de soyar.
+  - **Kapsam:** yalnız claude-cli 2.1.x ve üzeri (kurulu: 2.1.186). Sürüm guard'ı yok;
+    2.1.x öncesinde `alwaysLoad`/`ENABLE_TOOL_SEARCH` sessiz yok sayılır.
+  - Test: `TestWriteCLIMCPConfigTwoTierInteraction` (config çıktısı + alwaysLoad +
+    tier-namespaced allowlist), `TestInteractionTierSplit` (tier partisyonu),
+    `TestLazyCatalogCLIFormNamespacesNames` (extended prefix). Detay: `_Docs/11`.
 - **Default NameOnly seti (2026-06-26):** `buildRegistry` artık küçük, kendini
   açıklayan ve turların azınlığında kullanılan bir grup built-in aracı **kod
   varsayılanı** olarak `MarkNameOnly` ile işaretler (eski `MarkLazy` bloğunun

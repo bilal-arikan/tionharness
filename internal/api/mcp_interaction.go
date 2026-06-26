@@ -32,34 +32,74 @@ func (b *interactionBackend) Valid(token string) bool {
 	return b.runs.byToken(token) != nil
 }
 
+// coreInteractionTools is the eager tier of Interaction MCP tools: the ones the
+// CLI MCP-config advertises on the alwaysLoad `swarmgo_interaction` server so they
+// are NEVER deferred by the CLI's tool search (Bash, ask_user, the artifact/skill
+// path, working-memory edits, permission_prompt). Everything else (notify,
+// focus_view, the session-lifecycle setters, schedule_wake, spawn_session) plus the
+// entire bridged self-management suite is the EXTENDED tier → a separate
+// `swarmgo_extended` server subject to ToolSearch deferral. This mirrors the native
+// registry's eager-vs-lazy split (see _Docs/19) and is the single source for both
+// the tier filter below and the per-tier CLI allowlist.
+var coreInteractionTools = map[string]bool{
+	"Bash":                 true,
+	"ask_user":             true,
+	"request_confirmation": true,
+	"todo_write":           true,
+	"create_artifact":      true,
+	"update_artifact":      true,
+	"use_skill":            true,
+	"skill_search":         true,
+	"run_subagent":         true,
+	"core_memory_replace":  true,
+	"core_memory_append":   true,
+	"permission_prompt":    true,
+}
+
+// interactionTier classifies a bare tool name into "core" or "extended".
+func interactionTier(name string) string {
+	if coreInteractionTools[name] {
+		return "core"
+	}
+	return "extended"
+}
+
 // Tools implements interaction.Backend. The specs come from the single tool
 // definitions in the tools package — the schema is never re-declared here, so the
-// native and CLI paths advertise the identical contract.
-func (b *interactionBackend) Tools(token string) []interaction.ToolSpec {
+// native and CLI paths advertise the identical contract. tier filters the result
+// so each CLI MCP server entry (alwaysLoad core / deferred extended) gets its own
+// subset; tier "" returns the full set.
+func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 	// Resolve the run first so the advertised set matches the turn's mode: an
 	// autonomous turn drops the interactive (ask_user/request_confirmation) tools.
 	run := b.runs.byToken(token)
 	specs := interactionToolSpecs(b.tun, run != nil && run.autonomous)
 	// Append the run's bridged self-management tools (CLI-3), deduped by name
 	// against the static set (spawn_session is advertised by both paths).
-	if run == nil {
-		return specs
-	}
-	defs := run.bridgeDefsFor()
-	if len(defs) == 0 {
-		return specs
-	}
-	seen := make(map[string]bool, len(specs))
-	for _, s := range specs {
-		seen[s.Name] = true
-	}
-	for _, d := range defs {
-		if seen[d.Name] {
-			continue
+	if run != nil {
+		if defs := run.bridgeDefsFor(); len(defs) > 0 {
+			seen := make(map[string]bool, len(specs))
+			for _, s := range specs {
+				seen[s.Name] = true
+			}
+			for _, d := range defs {
+				if seen[d.Name] {
+					continue
+				}
+				specs = append(specs, interaction.ToolSpec{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
+			}
 		}
-		specs = append(specs, interaction.ToolSpec{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
 	}
-	return specs
+	if tier == "" {
+		return specs
+	}
+	filtered := make([]interaction.ToolSpec, 0, len(specs))
+	for _, s := range specs {
+		if interactionTier(s.Name) == tier {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
 }
 
 // interactionAdvertisedNames returns the bare tool names the Interaction MCP
@@ -86,25 +126,30 @@ var interactiveOnlyTools = map[string]bool{
 	"request_confirmation": true,
 }
 
-// mergeInteractionToolNames returns the static interaction tool names plus the
-// bridged self-management tool names (CLI-3), deduped — the CLI allowlist source.
-// Mirrors what Tools(token) advertises so allowlist and tools/list agree.
-func mergeInteractionToolNames(static []string, bridge []providers.ToolDef) []string {
+// splitInteractionTiers returns the static interaction tool names plus the bridged
+// self-management tool names (CLI-3), deduped and split into the core (eager,
+// alwaysLoad) and extended (deferred) tiers — the CLI allowlist source. Mirrors
+// what Tools(token, tier) advertises so allowlist and tools/list agree per tier.
+func splitInteractionTiers(static []string, bridge []providers.ToolDef) (core, extended []string) {
 	seen := make(map[string]bool, len(static)+len(bridge))
-	out := make([]string, 0, len(static)+len(bridge))
-	for _, n := range static {
-		if !seen[n] {
-			seen[n] = true
-			out = append(out, n)
+	add := func(name string) {
+		if seen[name] {
+			return
 		}
+		seen[name] = true
+		if interactionTier(name) == "core" {
+			core = append(core, name)
+		} else {
+			extended = append(extended, name)
+		}
+	}
+	for _, n := range static {
+		add(n)
 	}
 	for _, d := range bridge {
-		if !seen[d.Name] {
-			seen[d.Name] = true
-			out = append(out, d.Name)
-		}
+		add(d.Name)
 	}
-	return out
+	return core, extended
 }
 
 // interactionToolSpecs builds the Interaction MCP tool specs for a turn. Single
@@ -188,9 +233,13 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 }
 
 // bareToolName strips the Interaction MCP namespace so dispatch matches whether
-// the CLI sends the namespaced (mcp__swarmgo_interaction__ask_user) or bare name.
+// the CLI sends a namespaced name (core: mcp__swarmgo_interaction__ask_user,
+// extended: mcp__swarmgo_extended__create_agent) or the bare name.
 func bareToolName(name string) string {
-	return strings.TrimPrefix(name, "mcp__swarmgo_interaction__")
+	if s := strings.TrimPrefix(name, "mcp__swarmgo_interaction__"); s != name {
+		return s
+	}
+	return strings.TrimPrefix(name, "mcp__swarmgo_extended__")
 }
 
 // Call implements interaction.Backend.

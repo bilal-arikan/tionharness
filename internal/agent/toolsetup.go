@@ -603,7 +603,10 @@ func catalogDisplayName(name string, cli bool) (string, bool) {
 	if cliLazyBridgeExcluded[name] {
 		return "", false // not bridged to the CLI (CLI-native)
 	}
-	return interactionToolPrefix + name, true // built-in via the Interaction MCP bridge
+	// Lazy built-ins are the EXTENDED tier (deferred via the CLI's ToolSearch), so
+	// they are namespaced under the extended server key. Eager built-ins never reach
+	// this catalog (they are inlined on the alwaysLoad core server).
+	return extendedToolPrefix + name, true // built-in via the Interaction MCP bridge (extended tier)
 }
 
 // renderLazyToolCatalog builds the load-on-demand tool catalog block from the

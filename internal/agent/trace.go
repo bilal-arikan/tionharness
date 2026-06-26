@@ -7,11 +7,16 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
-// interactionToolPrefix is the MCP namespace the Interaction MCP server uses. The
-// CLI reports its tools namespaced (mcp__swarmgo_interaction__ask_user); we strip
-// it so the persisted trace shows the bare tool name and renders with the same
-// cards as the native tool path (todo checklist, artifact card, ask).
-const interactionToolPrefix = "mcp__swarmgo_interaction__"
+// interactionToolPrefix / extendedToolPrefix are the two MCP namespaces the
+// Interaction MCP server uses (core eager tier vs extended deferred tier). The CLI
+// reports its tools namespaced (mcp__swarmgo_interaction__ask_user,
+// mcp__swarmgo_extended__create_agent); we strip either so the persisted trace shows
+// the bare tool name and renders with the same cards as the native tool path (todo
+// checklist, artifact card, ask).
+const (
+	interactionToolPrefix = "mcp__swarmgo_interaction__"
+	extendedToolPrefix    = "mcp__swarmgo_extended__"
+)
 
 // StepKind tags the kind of activity captured in a turn trace.
 type StepKind string
@@ -142,7 +147,12 @@ func parseTodos(input json.RawMessage) []TodoItem {
 // and a todo_write call is promoted to a first-class checklist step, matching the
 // native tool loop so the CLI path renders the same cards.
 func traceStepToTurnStep(t providers.TraceStep) TurnStep {
-	tool := strings.TrimPrefix(t.Tool, interactionToolPrefix)
+	tool := t.Tool
+	if s := strings.TrimPrefix(tool, interactionToolPrefix); s != tool {
+		tool = s
+	} else {
+		tool = strings.TrimPrefix(tool, extendedToolPrefix)
+	}
 	st := TurnStep{
 		Kind:    StepKind(t.Kind),
 		Text:    t.Text,

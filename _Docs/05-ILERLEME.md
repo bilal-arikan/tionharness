@@ -2,6 +2,37 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## claude-cli 2.1.x+ iki-tier araç köprüsü: eager-core + lazy-extended ✅ (2026-06-26)
+
+**Sorun:** claude-cli ajanlarında (ör. WS5/AGT4) `Bash` ilk turda `No such tool
+available` veriyordu. Kök neden: SwarmGo tüm bridged araçları (eager + tüm
+self-management suite) **tek** `swarmgo_interaction` MCP sunucusuna full-şema koyuyor;
+toplam şema bağlam penceresinin %10'unu aşınca claude-cli 2.1.x **hepsini erteliyordu**
+(Bash dahil). UI'daki "her tur şema gönderilen · 19" metriği **native** yola aitti;
+CLI yolunda lazy-loading kazanımı gerçekleşmiyordu.
+
+**Çözüm:** Interaction MCP'yi **iki sunucuya** böldük (claude-cli'ın native Tool
+Search mekanizmasını doğru kullanarak):
+- `swarmgo_interaction` (CORE, `alwaysLoad: true`) → eager tier, tool-search'ten muaf
+  → Bash/ask_user/use_skill ilk turdan hazır. Eski anahtar korundu (namespaced
+  referanslar bozulmadı).
+- `swarmgo_extended` (EXTENDED) → self-management + NameOnly oturum araçları;
+  `ENABLE_TOOL_SEARCH=auto` (CLI env) ile lazy keşfedilir.
+
+**Dosyalar:** `internal/tools/interaction.go` (Core/ExtendedToolNames), `internal/
+interaction/server.go` (`Tools(token,tier)` + `tierFromPath`), `internal/api/
+mcp_interaction.go` (`coreInteractionTools`/`interactionTier`/`splitInteractionTiers`,
+çift-prefix `bareToolName`), `internal/agent/climcp.go` (`AlwaysLoad` + iki anahtar),
+`internal/agent/trace.go` + `toolsetup.go` (extended prefix), `internal/providers/
+claudecli.go` (`ENABLE_TOOL_SEARCH=auto` env), `internal/api/server.go` (subtree mount),
+çağıranlar `chat_stream.go`/`autonomous_interaction.go`.
+
+**Kapsam:** yalnız claude-cli **2.1.x ve üzeri** (kurulu: 2.1.186). Sürüm guard'ı yok.
+**Test:** `TestWriteCLIMCPConfigTwoTierInteraction`, `TestInteractionTierSplit`,
+`TestLazyCatalogCLIFormNamespacesNames` + tüm suite (504 test) yeşil. Canlı doğrulandı
+(WS5/AGT4, Playwright): `Bash` tek adımda (ToolSearch'süz), `list_agents` ise
+`mcp__swarmgo_extended__` namespace'inden ToolSearch ile lazy yüklendi. Detay: `_Docs/19`.
+
 ## Oturum bilgisi panelinden "Ajanın bugünkü harcaması" kaldırıldı ✅ (2026-06-26)
 
 Kullanıcı isteğiyle, oturum detay (Oturum bilgisi) panelindeki **"Ajanın bugünkü

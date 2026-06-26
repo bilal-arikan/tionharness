@@ -16,6 +16,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -48,7 +49,10 @@ type Backend interface {
 	// Tools returns the tool set advertised for the run identified by token: the
 	// static interaction tools plus any per-run bridged tools (e.g. the CLI
 	// self-management catalog). token is always valid here (checked before call).
-	Tools(token string) []ToolSpec
+	// tier ("core" | "extended" | "") selects the advertised subset so the CLI can
+	// wire each tier to its own MCP server entry (alwaysLoad core vs deferred
+	// extended); "" returns the full set (legacy / single-endpoint callers).
+	Tools(token, tier string) []ToolSpec
 	// Call dispatches a tool call for the run identified by token. A blocking
 	// tool (ask_user) returns once the user answers, ctx is cancelled, or the
 	// turn ends.
@@ -129,7 +133,7 @@ func (h *mcpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "notifications/initialized":
 		w.WriteHeader(http.StatusAccepted)
 	case "tools/list":
-		specs := h.backend.Tools(token)
+		specs := h.backend.Tools(token, tierFromPath(r.URL.Path))
 		tools := make([]map[string]any, 0, len(specs))
 		for _, s := range specs {
 			tools = append(tools, map[string]any{
@@ -176,6 +180,21 @@ func (h *mcpHandler) writeRPC(w http.ResponseWriter, id json.RawMessage, result 
 		return
 	}
 	_, _ = w.Write(b)
+}
+
+// tierFromPath derives the advertised tier from the request path's last segment
+// so two CLI MCP-config entries (.../core, .../extended) pointing at the same
+// in-process handler get different tool subsets. Any other segment (e.g. the bare
+// /mcp/interaction mount) yields "" → the full set. Decoupled from the mount path.
+func tierFromPath(p string) string {
+	switch path.Base(p) {
+	case "core":
+		return "core"
+	case "extended":
+		return "extended"
+	default:
+		return ""
+	}
 }
 
 // bearer extracts the token from an "Authorization: Bearer <token>" header.

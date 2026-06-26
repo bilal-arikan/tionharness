@@ -114,19 +114,20 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 }
 
 // TestLazyCatalogCLIFormNamespacesNames verifies the claude-cli rendering of the
-// load-on-demand catalog: built-in tools carry the Interaction MCP prefix, MCP
-// tools carry the mcp__ prefix, CLI-native built-ins (WebFetch) are dropped, and
-// the guidance points at ToolSearch instead of the native activate_tools.
+// load-on-demand catalog: lazy built-in tools carry the EXTENDED Interaction MCP
+// prefix (the deferred tier), MCP tools carry the mcp__ prefix, CLI-native built-ins
+// (WebFetch) are dropped, and the guidance points at ToolSearch instead of the
+// native activate_tools.
 func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	lazy := []providers.ToolDef{
-		{Name: "set_session_goal"},               // built-in → namespaced
+		{Name: "set_session_goal"},               // lazy built-in → extended namespace
 		{Name: "WebFetch", Description: "fetch"},  // CLI-native → dropped
 		{Name: "srvA__alpha", Description: "mcp"}, // MCP → mcp__ prefix
 	}
 	out := renderLazyToolCatalog(lazy, 3, true)
 
-	if !strings.Contains(out, "mcp__swarmgo_interaction__set_session_goal") {
-		t.Errorf("CLI form must namespace built-ins:\n%s", out)
+	if !strings.Contains(out, "mcp__swarmgo_extended__set_session_goal") {
+		t.Errorf("CLI form must namespace lazy built-ins under the extended tier:\n%s", out)
 	}
 	if !strings.Contains(out, "mcp__srvA__alpha") {
 		t.Errorf("CLI form must prefix MCP tools with mcp__:\n%s", out)
