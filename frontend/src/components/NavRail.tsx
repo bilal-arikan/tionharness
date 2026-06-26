@@ -16,7 +16,6 @@ import {
   Boxes,
   Settings,
   ChevronLeft,
-  ChevronRight,
   type LucideIcon,
 } from 'lucide-react'
 import type { Workspace } from '../types'
@@ -219,6 +218,16 @@ export function NavRail({
           onSwitch={onSwitchWorkspace}
           onCreate={onCreateWorkspace}
           onDelete={onDeleteWorkspace}
+          trailing={
+            <button
+              onClick={() => setCollapsed(true)}
+              title="Daralt"
+              aria-label="Navbarı daralt"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            >
+              <ChevronLeft size={18} />
+            </button>
+          }
         />
       )}
 
@@ -278,15 +287,6 @@ export function NavRail({
           <NavDots dirty={dirtyViews?.has('settings')} collapsed={collapsed} />
         </button>
       </div>
-
-      {/* Collapse toggle */}
-      <button
-        onClick={() => setCollapsed((v) => !v)}
-        title={collapsed ? 'Genişlet' : 'Daralt'}
-        className="m-2 flex items-center justify-center rounded-lg py-2 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-      >
-        {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-      </button>
     </nav>
   )
 }

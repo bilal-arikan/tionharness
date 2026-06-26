@@ -106,11 +106,14 @@ func (r *Runtime) runPreToolHooks(ctx context.Context, sessionID string, call pr
 			ToolName:      call.Name,
 			ToolInput:     input,
 		}
+		hookStart := time.Now()
 		dec, derr := r.execHook(ctx, h, payload)
 		if derr != nil {
 			r.logger.Warn("pre hook failed (fail-open)", "hook", h.ID, "tool", call.Name, "error", derr)
+			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPreToolUse, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":error", Err: true})
 			continue
 		}
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPreToolUse, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":" + hookDecisionLabel(dec)})
 		if len(dec.UpdatedInput) > 0 {
 			input = dec.UpdatedInput
 			out.input = dec.UpdatedInput
@@ -156,11 +159,14 @@ func (r *Runtime) runPostToolHooks(ctx context.Context, sessionID string, call p
 			ToolInput:     call.Input,
 			ToolResponse:  &hookToolResp{Content: content, IsError: res.IsError},
 		}
+		hookStart := time.Now()
 		dec, derr := r.execHook(ctx, h, payload)
 		if derr != nil {
 			r.logger.Warn("post hook failed (fail-open)", "hook", h.ID, "tool", call.Name, "error", derr)
+			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPostToolUse, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":error", Err: true})
 			continue
 		}
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPostToolUse, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":" + hookDecisionLabel(dec)})
 		if dec.UpdatedOutput != nil {
 			content = *dec.UpdatedOutput
 			out.output = dec.UpdatedOutput
@@ -250,6 +256,27 @@ func hookStep(h db.Hook, tool, reason, text, detail string, isErr bool) TurnStep
 		Output:  detail,
 		IsError: isErr,
 	}
+}
+
+// hookDecisionLabel reduces a hook decision to a short tag for the debug journal
+// (allow | block | approve | modify | <perm>), so the per-session debug stream
+// shows what each hook actually did without the full payload.
+func hookDecisionLabel(dec hookDecision) string {
+	if dec.Decision == "block" {
+		return "block"
+	}
+	if dec.HookSpecificOutput != nil {
+		if p := strings.ToLower(dec.HookSpecificOutput.PermissionDecision); p != "" {
+			return p
+		}
+	}
+	if dec.Decision == "approve" {
+		return "approve"
+	}
+	if len(dec.UpdatedInput) > 0 || dec.UpdatedOutput != nil || dec.AdditionalContext != "" {
+		return "modify"
+	}
+	return "allow"
 }
 
 func firstNonEmpty(vals ...string) string {

@@ -76,14 +76,3 @@ func TestRenderResumedBlock(t *testing.T) {
 		t.Fatal("expected empty resumed block for empty record")
 	}
 }
-
-func TestProgressDir(t *testing.T) {
-	// cwd set → used verbatim.
-	if got := progressDir(nil, "C:/proj", "AGT1"); got != "C:/proj" {
-		t.Fatalf("cwd should win: %q", got)
-	}
-	// cwd empty + no agent → empty (no fallback possible).
-	if got := progressDir(nil, "", ""); got != "" {
-		t.Fatalf("expected empty fallback, got %q", got)
-	}
-}

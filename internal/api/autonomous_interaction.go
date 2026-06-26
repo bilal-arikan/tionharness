@@ -39,11 +39,23 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// setArtifacts. Only when we know the session to stamp artifacts with.
 		if sessionID != "" {
 			run.setArtifacts(rt.NewArtifactSink(sessionID, ag.ID))
+			// notify (CLI path): bind a notify sink so an autonomous claude-cli agent
+			// can raise a desktop notification (e.g. "long job finished"). Publishes an
+			// "agent" event onto the workspace bus → SSE → OS toast when a window is open.
+			nsink := newNotifySink(sessionID, ag.ID, rt.Emit)
+			run.setNotify(nsink)
+			// focus_view (CLI path): same sink drives the UI (no-op when no window open).
+			run.setNav(nsink)
+			// Session sink (CLI path): goal + title + working dir + archive, all bound
+			// to this session (SessionSink is a superset of GoalSink).
+			ssink := rt.NewSessionSink(sessionID)
+			run.setGoal(ssink)
+			run.setSession(ssink)
 			// Persistent progress (CLI path): persist the todo_write checklist to the
 			// project's progress file on autonomous turns too. Keyed to the session's
 			// working dir; gated by ProgressPersist.
 			if s.tun.ProgressPersist() {
-				run.setTodoSink(rt.NewTodoSink(sessionID, ag.ID, rt.SessionWorkdir(sessionID)))
+				run.setTodoSink(rt.NewTodoSink(sessionID, ag.ID))
 			}
 		}
 

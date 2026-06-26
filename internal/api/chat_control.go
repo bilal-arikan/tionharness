@@ -42,6 +42,9 @@ type chatRun struct {
 	write       func(event string, data any) // installed by the stream handler; nil once the turn ends
 	artifacts   tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
 	notify      tools.NotifySink             // current agent's notify sink, for Interaction MCP notify (desktop notification)
+	nav         tools.NavigateSink           // current agent's navigate sink, for Interaction MCP focus_view (UI navigation)
+	goal        tools.GoalSink               // current session's goal sink, for Interaction MCP set_session_goal/complete_goal
+	session     tools.SessionSink            // current session's edit sink, for Interaction MCP set_session_title/set_working_dir/archive_session
 	todos       tools.TodoSink               // current agent's todo sink, for Interaction MCP todo_write persistence
 	grants      *tools.PermissionGrants      // session "Always allow" set, for the CLI permission-prompt tool
 	wake        tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
@@ -258,6 +261,54 @@ func (r *chatRun) notifySink() tools.NotifySink {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.notify
+}
+
+// setNav installs the navigate sink for the currently responding agent so the
+// focus_view tool (native via context, CLI via the Interaction MCP) can drive
+// the UI to a view/entity.
+func (r *chatRun) setNav(sink tools.NavigateSink) {
+	r.mu.Lock()
+	r.nav = sink
+	r.mu.Unlock()
+}
+
+// navSink returns the current navigate sink (nil if none installed).
+func (r *chatRun) navSink() tools.NavigateSink {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.nav
+}
+
+// setGoal installs the goal sink for this session so the set_session_goal /
+// complete_goal tools (native via context, CLI via the Interaction MCP) can read
+// and write the session's persistent objective.
+func (r *chatRun) setGoal(sink tools.GoalSink) {
+	r.mu.Lock()
+	r.goal = sink
+	r.mu.Unlock()
+}
+
+// goalSinkFor returns the current goal sink (nil if none installed).
+func (r *chatRun) goalSinkFor() tools.GoalSink {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.goal
+}
+
+// setSession installs the session edit sink so the set_session_title /
+// set_working_dir / archive_session tools (native via context, CLI via the
+// Interaction MCP) can mutate this session.
+func (r *chatRun) setSession(sink tools.SessionSink) {
+	r.mu.Lock()
+	r.session = sink
+	r.mu.Unlock()
+}
+
+// sessionSinkFor returns the current session edit sink (nil if none installed).
+func (r *chatRun) sessionSinkFor() tools.SessionSink {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.session
 }
 
 // setTodoSink installs the todo sink for the currently responding agent so the

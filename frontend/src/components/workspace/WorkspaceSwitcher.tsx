@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ExternalLink, Trash2, Star } from 'lucide-react'
 import type { Workspace } from '../../types'
 import { buildRoute } from '../../lib/url'
@@ -18,6 +18,9 @@ interface Props {
   onSwitch: (id: string) => void
   onCreate: (data: NewWorkspaceData) => void
   onDelete: (id: string) => void
+  // Optional control rendered inline to the right of the trigger (e.g. the rail
+  // collapse toggle), so it shares the workspace row instead of a separate line.
+  trailing?: ReactNode
 }
 
 // Open a workspace in a fresh window scoped to it (#/w/{id}/chat), without
@@ -38,7 +41,7 @@ function openInNewWindow(id: string) {
   window.open(`${window.location.origin}${window.location.pathname}#${route}`, '_blank', 'noopener')
 }
 
-export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy, activeDirty, favoriteId, onToggleFavorite, onSwitch, onCreate, onDelete }: Props) {
+export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy, activeDirty, favoriteId, onToggleFavorite, onSwitch, onCreate, onDelete, trailing }: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   // Close the dropdown when clicking anywhere outside it (detached while closed).
@@ -56,13 +59,14 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
 
   return (
     <div ref={rootRef} className="relative border-b border-[var(--color-border)] px-3 py-3">
+      <div className="flex items-center gap-1">
       <button
         onClick={() => setOpen((v) => !v)}
         data-testid="workspace-switcher"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={active?.name ? `Workspace: ${active.name}` : 'Workspace seç'}
-        className="flex w-full items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm hover:opacity-90"
+        className="flex min-w-0 flex-1 items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm hover:opacity-90"
       >
         <span className="flex min-w-0 items-center gap-2">
           <span
@@ -93,6 +97,8 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
         </span>
         <span className="text-xs text-[var(--color-text-dim)]">▾</span>
       </button>
+        {trailing}
+      </div>
 
       {open && (
         <div

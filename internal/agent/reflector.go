@@ -144,6 +144,14 @@ func (r *Runtime) reflect(ctx context.Context, agentID string, autonomous bool) 
 	// appended here so the workspace prompt file needs no format placeholder.
 	userText := strings.TrimRight(r.readPrompt("reflect"), "\n") + "\n\nJournal:\n" + sb.String()
 
+	// Self-improvement (Faz 3): fold recent debug-journal anomalies into the
+	// reflection so the agent turns its own performance data (slow/failing tools,
+	// error bursts, frequent compaction) into a durable lesson. Best-effort; only
+	// appended when something notable was found.
+	if notes := r.debugPerfNotes(ctx, agentID); notes != "" {
+		userText += "\n\nPerformance observations (from your debug journal — consider these when reflecting on how to work better):\n" + notes
+	}
+
 	// Usage is always recorded via guardedComplete; autonomous auto-reflects are
 	// additionally gated on pause + daily budget.
 	resp, err := r.guardedComplete(WithCallKind(ctx, KindReflect), agent, providers.Request{

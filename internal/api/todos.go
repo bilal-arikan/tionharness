@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
@@ -20,11 +19,11 @@ import (
 // dynamic (uncached) suffix since it changes whenever the list is updated.
 //
 // When the session has no checklist of its own yet (a fresh session) and resume
-// is enabled, it falls back to the durable progress file persisted by a previous
-// session (Claude Code's claude-progress convention) — so the agent picks up
-// where the last session left off. cwd is the session's working dir ("" → the
-// per-agent store fallback, matching NewTodoSink).
-func todoContextBlock(ctx context.Context, database *db.DB, sessionID, cwd, agentID string, resume bool) string {
+// is enabled, it falls back to the durable progress file at dir (resolved by
+// agent.Runtime.ProgressDir: the project dir shared across sessions, else the
+// per-session fallback) — so the agent picks up where the last session on this
+// project left off (Claude Code's claude-progress convention).
+func todoContextBlock(ctx context.Context, database *db.DB, sessionID, dir string, resume bool) string {
 	if sessionID == "" {
 		return ""
 	}
@@ -36,24 +35,11 @@ func todoContextBlock(ctx context.Context, database *db.DB, sessionID, cwd, agen
 	if !resume {
 		return ""
 	}
-	rec, ok, err := progress.Load(progressDir(database, cwd, agentID))
+	rec, ok, err := progress.Load(dir)
 	if err != nil || !ok {
 		return ""
 	}
 	return renderResumedBlock(rec)
-}
-
-// progressDir resolves where a session's progress file lives: the working
-// directory when set, else a per-agent directory under the workspace store. Must
-// match agent.Runtime.NewTodoSink's resolution so persist and resume agree.
-func progressDir(database *db.DB, cwd, agentID string) string {
-	if strings.TrimSpace(cwd) != "" {
-		return cwd
-	}
-	if agentID == "" {
-		return ""
-	}
-	return filepath.Join(database.Root(), "progress", agentID)
 }
 
 // renderResumedBlock formats a previous session's persisted checklist as a

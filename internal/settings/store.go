@@ -295,6 +295,10 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.ProgressResume != nil {
 		next.ProgressResume = *p.ProgressResume
 	}
+	if p.DebugJournalEnabled != nil {
+		next.DebugJournalEnabled = *p.DebugJournalEnabled
+	}
+	applyInt(&next.DebugJournalCap, p.DebugJournalCap)
 	if p.AutoReflect != nil {
 		next.AutoReflect = *p.AutoReflect
 	}

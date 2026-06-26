@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, FileText, Trash2, Loader2, ChevronDown, Check, ClipboardCopy, FolderOpen, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, ListChecks, Square, type LucideIcon } from 'lucide-react'
+import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, ListChecks, Square, Database, Workflow, Wrench, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionInfo, AgentUsage, SessionUsageDetail, SessionProgress } from '../../types'
 import { SessionContextModal } from './SessionContextModal'
+import { SessionDebugCard } from './SessionDebugCard'
 import { AgentIdentity } from '../agents/AgentIdentity'
 import { roleColor } from '../../lib/palette'
-import { displayPath } from '../../lib/paths'
 
 interface Props {
   sessionId: string
@@ -18,8 +18,6 @@ interface Props {
   refreshKey?: number
   onClose: () => void
   onError: (msg: string) => void
-  onCopyPath: (id: string) => void
-  onRevealFolder: (id: string) => void
   onGenerateTitle: (id: string) => void | Promise<void>
   onRename: (id: string, title: string) => void | Promise<void>
   onSummarize: (id: string, kind: string) => void
@@ -42,11 +40,11 @@ function fmtTok(n: number): string {
   return `${n}`
 }
 
-const SUMMARY_KINDS: { kind: string; label: string }[] = [
-  { kind: 'memory', label: 'Hafıza' },
-  { kind: 'board', label: 'Görev panosu' },
-  { kind: 'flows', label: 'Akışlar' },
-  { kind: 'tools', label: 'Araçlar' },
+const SUMMARY_KINDS: { kind: string; label: string; icon: LucideIcon }[] = [
+  { kind: 'memory', label: 'Hafıza özeti', icon: Database },
+  { kind: 'board', label: 'Görev panosu özeti', icon: ListChecks },
+  { kind: 'flows', label: 'Akışlar özeti', icon: Workflow },
+  { kind: 'tools', label: 'Araçlar özeti', icon: Wrench },
 ]
 
 // SessionDetailPanel is the right-hand inspector for the active chat session:
@@ -57,8 +55,6 @@ export function SessionDetailPanel({
   refreshKey,
   onClose,
   onError,
-  onCopyPath,
-  onRevealFolder,
   onGenerateTitle,
   onRename,
   onSummarize,
@@ -71,7 +67,6 @@ export function SessionDetailPanel({
   const [sessionUsage, setSessionUsage] = useState<SessionUsageDetail | null>(null)
   const [progress, setProgress] = useState<SessionProgress | null>(null)
   const [loading, setLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [titling, setTitling] = useState(false)
   // Manual rename: when editing, hold the draft text; saving persists verbatim.
   const [editingTitle, setEditingTitle] = useState(false)
@@ -224,12 +219,6 @@ export function SessionDetailPanel({
     } finally {
       setSavingGoal(false)
     }
-  }
-
-  const copyPath = () => {
-    onCopyPath(sessionId)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
   }
 
   // Context window figures (/context-style): used vs. the compaction threshold,
@@ -445,24 +434,6 @@ export function SessionDetailPanel({
             <Row label="Boyut" value={`${formatBytes(info.sizeBytes)} · ${info.fileCount} dosya`} />
           </Section>
 
-          {/* Folder */}
-          <Section title="Klasör">
-            <code
-              title={info.path || undefined}
-              className="block break-all rounded bg-[var(--color-bg)] px-2 py-1.5 font-mono text-[11px] text-[var(--color-text-dim)]"
-            >
-              {info.path ? displayPath(info.path) : '—'}
-            </code>
-            <div className="mt-2 flex gap-2">
-              <SmallBtn onClick={copyPath}>
-                {copied ? <Check size={13} /> : <ClipboardCopy size={13} />}
-                {copied ? 'Kopyalandı' : 'Yolu kopyala'}
-              </SmallBtn>
-              <SmallBtn onClick={() => onRevealFolder(sessionId)}>
-                <FolderOpen size={13} /> Aç
-              </SmallBtn>
-            </div>
-          </Section>
 
           {/* Persistent progress (durable todo_write checklist + rolling log) */}
           {progress?.exists && progress.record && progress.record.todos.length > 0 && (
@@ -575,6 +546,10 @@ export function SessionDetailPanel({
             </Section>
           )}
 
+          {/* Per-session debug journal (parallel observability stream): timings,
+              token spend, tool latency/errors, compaction/recovery + raw log. */}
+          <SessionDebugCard sessionId={sessionId} refreshKey={(refreshKey ?? 0) + localRefresh} />
+
           {/* Agent daily spend (Motor B) — the agent's whole-day total across all
               sessions, not this session's cost. Clearly labelled to avoid the
               "this chat costs $X" misread. */}
@@ -635,26 +610,16 @@ export function SessionDetailPanel({
                 label="Bağlam önizle (debug)"
                 onClick={() => setCtxPreview(true)}
               />
-              {/* Summary kinds rendered as direct buttons (no dropdown): one
-                  tap fires the summarize action for that context bucket. */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2 px-0.5 text-xs text-[var(--color-text-dim)]">
-                  <FileText size={14} className="shrink-0" />
-                  <span>Özete çevir</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {SUMMARY_KINDS.map((s) => (
-                    <button
-                      key={s.kind}
-                      onClick={() => onSummarize(sessionId, s.kind)}
-                      title={`${s.label} özeti ekle`}
-                      className="rounded-lg border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Summary kinds rendered as full-width action rows (like the other
+                  tool buttons above): one tap fires the summarize action. */}
+              {SUMMARY_KINDS.map((s) => (
+                <ActionBtn
+                  key={s.kind}
+                  icon={s.icon}
+                  label={s.label}
+                  onClick={() => onSummarize(sessionId, s.kind)}
+                />
+              ))}
               <ActionBtn
                 icon={Trash2}
                 label="Oturumu sil"
@@ -772,17 +737,6 @@ function Pill({ children, accent }: { children: React.ReactNode; accent?: boolea
     >
       {children}
     </span>
-  )
-}
-
-function SmallBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2 py-1.5 text-[11px] text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-    >
-      {children}
-    </button>
   )
 }
 

@@ -68,6 +68,15 @@ workspace'ler + chat-dışı view rozetleri (`App.tsx`). Hesap chat'i iki kez sa
 > Not: native ITaskbarList3 overlay ikonu istenirse `swarmgoSetBadge` köprüsü
 > `cmd/swarmgo-desktop` tarafında uygulanabilir; Badging API çoğu durumu kapsar.
 
+## Ajan güdümlü bildirim: `notify` aracı
+
+Ajan, bu boruyu **programatik** olarak `notify(title, body, level)` aracıyla tetikler
+(Interaction MCP Faz 3, 2026-06-25 — `_Docs\11` §17). Araç `events.Event{Type:"agent"}`
+yayınlar → aynı SSE borusu → OS toast (`agent` tipi `NOTIFY_TYPES`'ta, susturulabilir).
+Bloklamaz; sink yoksa (otonom, açık client yok) graceful no-op. Native + claude-cli
+yollarının ikisinde de çalışır; kaynak `internal/api/notifysink.go`. Kullanım: ajanın
+kullanıcı uygulamaya bakmıyorken haber vermesi gereken durumlar ("uzun iş bitti", "hata").
+
 ## Yeni bir event tipi/görünüm eklemek
 
 1. Mutasyon noktasında `publishEntityChange(wsp, "<type>", title, body, target)` çağır.

@@ -20,7 +20,8 @@ Your working checklist is no longer ephemeral. Every `todo_write` call is
 persisted to a progress file tied to the **project working directory**:
 
 - **Location:** `<cwd>/.swarmgo/progress.json` (when the session has a working
-  directory), else a per-agent file under the workspace store.
+  directory), else a per-SESSION file under the workspace store (so unrelated
+  sessions without a project dir don't share one progress file).
 - **Resume:** when a fresh session starts with no checklist of its own, the most
   recent persisted list is injected into your context as a **"Resumed progress"**
   block. That is your cue to continue from where the last session stopped — not to
@@ -79,7 +80,7 @@ Suggested shape:
 ## 2026-06-25
 - DONE: persistent progress file + cross-session resume (go test green)
 - NEXT: UI viewer card for the progress file
-- NOTE: progress.json is keyed to cwd; falls back to per-agent store when no cwd
+- NOTE: progress.json is keyed to the project cwd (shared across sessions on it); falls back to a per-session store file when there is no project cwd
 ```
 
 ## How this relates to your other memory
@@ -88,7 +89,10 @@ Suggested shape:
   — free-form, persistent persona/human. Not task state.
 - **Progress (this skill)** = what is done / in progress / next — structured task
   state, tied to the project.
-- **Goal** = the session's single north-star objective.
+- **Goal** = the session's single north-star objective. Set it with
+  `set_session_goal` and mark it achieved with `complete_goal` — it is the SAME
+  goal the user edits in the UI (shared, not parallel), injected into every turn
+  until done. One durable objective, not a task checklist (that's progress/todos).
 
 Keep them distinct: don't dump task checklists into core memory, and don't put
 durable user facts in PROGRESS.md.

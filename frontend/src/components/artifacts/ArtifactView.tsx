@@ -1,8 +1,28 @@
+import { useState } from 'react'
 import { File as FileIcon } from 'lucide-react'
 import type { ArtifactKind } from '../../types'
 import { Markdown } from '../markdown/Markdown'
 import { CodeBlock } from '../markdown/CodeBlock'
+import { Lightbox } from '../common'
 import { fileURL } from '../../lib/attachments'
+
+// ImageArtifact renders an image artifact with click-to-zoom into the shared
+// Lightbox (zoom + pan). Kept as its own component so the hook is valid even
+// though ArtifactView itself is a switch with early returns.
+function ImageArtifact({ url, alt }: { url: string; alt: string }) {
+  const [zoom, setZoom] = useState(false)
+  return (
+    <div className="flex justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+      <img
+        src={url}
+        alt={alt}
+        onClick={() => setZoom(true)}
+        className="max-h-[70vh] max-w-full cursor-zoom-in rounded transition hover:opacity-90"
+      />
+      {zoom && <Lightbox imageSrc={url} imageAlt={alt} title={alt} onClose={() => setZoom(false)} />}
+    </div>
+  )
+}
 
 interface Props {
   kind: ArtifactKind
@@ -42,17 +62,11 @@ export function ArtifactView({ kind, language, content, sourcePath }: Props) {
         />
       )
     case 'mermaid':
-      // No Mermaid renderer bundled yet — show the source so it's still useful.
+      // Renders as a diagram via CodeBlock → MermaidDiagram (with Source/Expand/Copy).
       return <CodeBlock code={content} lang="mermaid" />
     case 'image': {
       const url = fileURL(sourcePath)
-      return url ? (
-        <div className="flex justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
-          <img src={url} alt={content || 'image artifact'} className="max-h-[70vh] max-w-full rounded" />
-        </div>
-      ) : (
-        <MissingMedia />
-      )
+      return url ? <ImageArtifact url={url} alt={content || 'image artifact'} /> : <MissingMedia />
     }
     case 'video': {
       const url = fileURL(sourcePath)

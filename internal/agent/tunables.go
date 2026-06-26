@@ -108,7 +108,19 @@ type Tunables struct {
 	// survives across sessions; a fresh session reads it back at start.
 	progressPersist bool // persist the checklist to disk (default on)
 	progressResume  bool // inject a resumed-progress block on a fresh session (default on)
+
+	// Per-session debug journal (parallel observability stream). When on, the
+	// runtime appends structured events (turn timings, llm-call token spend, tool
+	// latency/size, hook decisions, errors, compaction, recovery) to each
+	// session's debug.jsonl, readable by the agent (read_session_debug) and the
+	// UI for optimisation + self-improvement. debugJournalCap bounds the file.
+	debugJournal    bool // emit the parallel debug stream (default on)
+	debugJournalCap int  // newest events kept per session (0 = default)
 }
+
+// DefaultDebugJournalCap mirrors db.DefaultDebugJournalCap as the resolved
+// default when no explicit cap is configured.
+const DefaultDebugJournalCap = 5000
 
 // Default context-reset / handoff bounds.
 const (
@@ -141,6 +153,10 @@ func NewTunables() *Tunables {
 		// transparent to existing behaviour. Production overrides from settings.
 		progressPersist: true,
 		progressResume:  true,
+		// Debug journal on by default: it only adds a per-session file and is
+		// transparent to existing behaviour. Production overrides from settings.
+		debugJournal:    true,
+		debugJournalCap: DefaultDebugJournalCap,
 	}
 }
 
@@ -703,5 +719,33 @@ func (t *Tunables) ProgressResume() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.progressResume
+}
+
+// SetDebugJournal configures the per-session debug journal: whether structured
+// observability events are emitted, and how many newest events are kept per
+// session before the file is pruned (0 selects the built-in default).
+func (t *Tunables) SetDebugJournal(enabled bool, cap int) {
+	t.mu.Lock()
+	t.debugJournal = enabled
+	t.debugJournalCap = cap
+	t.mu.Unlock()
+}
+
+// DebugJournalEnabled reports whether the parallel debug stream is emitted.
+func (t *Tunables) DebugJournalEnabled() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.debugJournal
+}
+
+// DebugJournalCap returns how many newest debug events are kept per session
+// (default when unset).
+func (t *Tunables) DebugJournalCap() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.debugJournalCap <= 0 {
+		return DefaultDebugJournalCap
+	}
+	return t.debugJournalCap
 }
 

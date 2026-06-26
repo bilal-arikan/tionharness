@@ -116,7 +116,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// the original todo_write message scrolls out of context / is compacted away.
 	// On a fresh session it falls back to the durable progress file from a previous
 	// session (persistent-progress / claude-progress convention), keyed to the cwd.
-	if tb := todoContextBlock(ctx, wsp.DB, session.ID, cwd, agentRow.ID, s.tun.ProgressResume()); tb != "" {
+	if tb := todoContextBlock(ctx, wsp.DB, session.ID, wsp.Runtime.ProgressDir(session.ID), s.tun.ProgressResume()); tb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + tb)
 	}
 	// Cross-session awareness: a short summary of the workspace's active + recent

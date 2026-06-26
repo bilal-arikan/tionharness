@@ -2,6 +2,26 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## Oturum detayı UI rötuşları + per-session kalıcı ilerleme ✅ (2026-06-26)
+
+Kullanıcı geri bildirimiyle 4 iyileştirme:
+1. **Kalıcı ilerleme artık oturum-başına.** Eskiden proje dizini olmayan oturumlar
+   workspace-default `<cwd>/.swarmgo/progress.json`'u paylaşıyordu → detay-panelde
+   "ajan-bazlı" görünüyordu. Tek resolver **`Runtime.ProgressDir(sessionID)`**:
+   explicit proje dizini varsa onu (cross-session paylaşım korunur), yoksa
+   per-session fallback `<store>/progress/<sessionID>`. Yaz (NewTodoSink, artık
+   2-arg) + oku (resume bloğu + detay-panel) hepsi tek resolver'dan; api'deki
+   `progressDir` kaldırıldı. Test güncellendi (`todosink_test` per-session izolasyon).
+2. **Debug / Gözlemlenebilirlik kartı katlanabilir** (`SessionDebugCard`): başlık
+   tıkla-aç/kapa (chevron), kapalıyken tek-satır özet (tur + uyarı sayısı), seçim
+   localStorage'da kalıcı (vars. kapalı).
+3. **"Özete çevir" komutları "Araçlar" butonları gibi** — grid yerine tam-genişlik
+   `ActionBtn` satırları (ikon + etiket: Hafıza/Görev panosu/Akışlar/Araçlar özeti).
+4. **Klasör kartı kaldırıldı; "Yolu kopyala" + "Aç" butonları sohbet header'ına**
+   "Detay"nın yanına taşındı (App.tsx; path metni artık panelde yazmıyor).
+
+Build + vet + 161 test (agent/api/progress) + frontend `tsc -b` temiz.
+
 ## Dizin-sitesi: canlı arama + source-ref önizleme ✅ (2026-06-26)
 
 Connector'lar "statik katalog"tan **canlı arama**ya geçti + source-ref önizleme eklendi

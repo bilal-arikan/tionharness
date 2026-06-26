@@ -58,6 +58,10 @@ export interface AppSettings {
   progressPersist: boolean    // persist the todo_write checklist to <cwd>/.swarmgo/progress.json
   progressResume: boolean     // inject a resumed-progress block into a fresh session at start
 
+  // Per-session debug journal (parallel observability stream).
+  debugJournalEnabled: boolean // emit structured debug events to debug.jsonl
+  debugJournalCap: number      // newest events kept per session (0 = default 5000)
+
   autoReflect: boolean
   autoReflectThreshold: number
   autoUserModel: boolean      // HA-1: refresh the "human" core block from journals during the dream cycle

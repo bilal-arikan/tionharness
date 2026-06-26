@@ -71,6 +71,10 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 - `reactiveCompact` (default true) — fold history + retry on context overflow.
 - `maxTokenRetries` (0–10, default 3), `reactiveKeepRecent` (2–50, default 6).
 
+### Session debug journal (observability)
+- `debugJournalEnabled` (default true) — write the parallel `debug.jsonl` stream per session (turn timings, per-call token spend, per-tool latency/size/errors, hook decisions, compaction/recovery). Off = no debug events written.
+- `debugJournalCap` (default 5000, `0` = default) — newest events kept per session; older ones are pruned once the file passes cap + cap/4. Read it with the `read_session_debug` tool or `GET /api/sessions/{id}/debug`. See `_Docs/38-SESSION-DEBUG.md`.
+
 ### Tool-output compaction
 - System A (deterministic, free): `compactToolOutput` (default true),
   `compactMaxLines` (0–5000, default 200), `compactMaxBytes` (0–262144, default 12288).

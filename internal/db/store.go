@@ -362,6 +362,16 @@ func (d *DB) SetSessionWorkingDir(ctx context.Context, sessionID, dir string) er
 	})
 }
 
+// SetSessionState sets a session's lifecycle state ("active"/"archived"). An
+// archived session drops out of the active list + the cross-session context
+// block but is never deleted. Bumps UpdatedAt so the change is reflected.
+func (d *DB) SetSessionState(ctx context.Context, sessionID, state string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.State = state
+		s.UpdatedAt = now()
+	})
+}
+
 // SetSessionCLIResume records the claude-cli resume state for a session: the
 // (rotated) CLI session id to --resume next turn, and how many of the session's
 // messages the CLI has already seen (so the next turn sends only the delta). Does

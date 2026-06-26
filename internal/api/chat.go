@@ -191,7 +191,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// buildSystemPrompt composes the agent's system prompt from soul + identity.
+// buildSystemPrompt composes the agent's system prompt from soul + identity, plus
+// the shared goal-usage hint in the cached static prefix (so chat turns nudge the
+// agent to use set_session_goal/complete_goal without loading a skill). Mirrors
+// the agent package's assembler; both append the same agent.GoalUsageHint.
 func buildSystemPrompt(a db.Agent) string {
 	var b strings.Builder
 	if a.Soul != "" {
@@ -200,6 +203,8 @@ func buildSystemPrompt(a db.Agent) string {
 	}
 	if a.Identity != "" {
 		b.WriteString(a.Identity)
+		b.WriteString("\n\n")
 	}
+	b.WriteString(agent.GoalUsageHint)
 	return strings.TrimSpace(b.String())
 }

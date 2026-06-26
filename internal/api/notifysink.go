@@ -7,10 +7,10 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
-// notifySink adapts the workspace event bus into a tools.NotifySink for one chat
-// turn. An agent-raised notify call becomes a workspace-scoped "agent" event that
-// flows through the same SSE pipeline as task/flow/artifact notifications, so open
-// windows (per device prefs) raise an OS toast that deep-links to the session.
+// notifySink adapts the workspace event bus into a tools.NotifySink AND a
+// tools.NavigateSink for one chat turn. notify raises a workspace-scoped "agent"
+// event (OS toast); focus_view raises a "navigate" event open windows apply at
+// once. Both flow through the same SSE pipeline as task/flow/artifact events.
 type notifySink struct {
 	sessionID string
 	agentID   string
@@ -47,5 +47,31 @@ func (s notifySink) Notify(_ context.Context, spec tools.NotifySpec) error {
 			"agentId":   s.agentID,
 		},
 	})
+	return nil
+}
+
+// Navigate publishes a "navigate" event that open windows apply immediately to
+// drive the UI to the requested view/entity (no toast). Empty entity hints fall
+// back to this turn's session/agent so "focus_view chat" focuses this session.
+func (s notifySink) Navigate(_ context.Context, spec tools.NavigateSpec) error {
+	if s.emit == nil {
+		return nil
+	}
+	target := map[string]string{"view": spec.View}
+	sid := spec.SessionID
+	if sid == "" {
+		sid = s.sessionID
+	}
+	if sid != "" {
+		target["sessionId"] = sid
+	}
+	aid := spec.AgentID
+	if aid == "" {
+		aid = s.agentID
+	}
+	if aid != "" {
+		target["agentId"] = aid
+	}
+	s.emit(events.Event{Type: "navigate", Level: "info", Target: target})
 	return nil
 }

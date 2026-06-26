@@ -16,10 +16,10 @@ export function TextStep({ text, onOpenFile }: Props) {
   const preview = text.replace(/\s+/g, ' ').trim()
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className="overflow-hidden rounded-lg bg-[var(--color-surface)]">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"
+        className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"
       >
         <MessageSquare size={14} className="shrink-0 text-[var(--color-text-dim)]" />
         <span className="shrink-0 font-medium text-[var(--color-text)]">Düşünce</span>
@@ -32,7 +32,7 @@ export function TextStep({ text, onOpenFile }: Props) {
       </button>
 
       {open && (
-        <div className="border-t border-[var(--color-border)] px-3 py-2 text-[var(--color-text-dim)]">
+        <div className="px-3 pb-2 text-[var(--color-text-dim)]">
           <Markdown onOpenFile={onOpenFile}>{text}</Markdown>
         </div>
       )}

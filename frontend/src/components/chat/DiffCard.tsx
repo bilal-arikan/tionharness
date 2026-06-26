@@ -31,10 +31,10 @@ export function DiffCard({ step, onOpenFile }: Props) {
   const hasPatch = !!step.patch?.trim()
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className="overflow-hidden rounded-lg bg-[var(--color-surface)]">
       <button
         onClick={() => setOpen((o) => hasPatch ? !o : o)}
-        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${
+        className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs ${
           hasPatch ? 'hover:bg-[var(--color-surface-2)]' : 'cursor-default'
         }`}
       >
@@ -73,7 +73,7 @@ export function DiffCard({ step, onOpenFile }: Props) {
       </button>
 
       {open && hasPatch && (
-        <div className="border-t border-[var(--color-border)] p-2">
+        <div className="px-2 pb-2">
           <DiffView text={step.patch || ''} />
         </div>
       )}

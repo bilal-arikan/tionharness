@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, type LucideIcon } from 'lucide-react'
+import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, Archive, ArchiveRestore, type LucideIcon } from 'lucide-react'
 import type { Agent, Session, SearchHit } from '../../types'
 import { api } from '../../api'
 import { AgentAvatar } from '../agents/AgentAvatar'
@@ -26,6 +26,8 @@ interface Props {
   onCopyPath: (id: string) => void
   onRevealFolder: (id: string) => void
   onDeleteSession: (id: string) => void
+  // Archive (true) or restore (false) a session — drives the Active/Archived filter.
+  onSetArchived: (id: string, archived: boolean) => void
 }
 
 // SessionsSidebar is the chat column: a flat, time-bucketed list of every
@@ -45,8 +47,12 @@ export function SessionsSidebar({
   onCopyPath,
   onRevealFolder,
   onDeleteSession,
+  onSetArchived,
 }: Props) {
   const [menuId, setMenuId] = useState<string | null>(null)
+  // Active vs Archived view. Archiving a session moves it out of the default
+  // (active) list into the Archived filter — it is never deleted.
+  const [showArchived, setShowArchived] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
   const [query, setQuery] = useState('')
@@ -93,12 +99,17 @@ export function SessionsSidebar({
   }
 
 
+  // How many sessions are archived (drives the Archived filter's count badge).
+  const archivedCount = useMemo(() => sessions.filter((s) => s.state === 'archived').length, [sessions])
+
   // Group the (already newest-first) sessions into recency buckets, preserving
-  // order. A title search narrows the list first.
+  // order. The Active/Archived filter narrows by state first, then a title search.
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
+      const isArchived = s.state === 'archived'
+      if (showArchived !== isArchived) continue
       if (q && !(s.title || 'Yeni sohbet').toLowerCase().includes(q)) continue
       const b = bucketOf(s.updatedAt)
       const arr = map.get(b) ?? []
@@ -106,7 +117,7 @@ export function SessionsSidebar({
       map.set(b, arr)
     }
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
-  }, [sessions, query])
+  }, [sessions, query, showArchived])
 
   // Debounced full-text message search. Runs only for queries of 2+ chars so a
   // single keystroke doesn't hit the backend; cleared when the box empties.
@@ -198,6 +209,31 @@ export function SessionsSidebar({
             <X size={13} />
           </button>
         )}
+      </div>
+
+      {/* Active / Archived filter. The Archived pill carries a count so archived
+          work is discoverable without cluttering the default list. */}
+      <div className="flex gap-1 px-3 pb-2">
+        <button
+          onClick={() => setShowArchived(false)}
+          className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition ${
+            !showArchived
+              ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+          }`}
+        >
+          Aktif
+        </button>
+        <button
+          onClick={() => setShowArchived(true)}
+          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
+            showArchived
+              ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+          }`}
+        >
+          <Archive size={12} /> Arşiv{archivedCount > 0 ? ` (${archivedCount})` : ''}
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -309,6 +345,25 @@ export function SessionsSidebar({
                           setMenuId(null)
                         }}
                       />
+                      {s.state === 'archived' ? (
+                        <MenuItem
+                          icon={ArchiveRestore}
+                          label="Arşivden çıkar"
+                          onClick={() => {
+                            onSetArchived(s.id, false)
+                            setMenuId(null)
+                          }}
+                        />
+                      ) : (
+                        <MenuItem
+                          icon={Archive}
+                          label="Arşivle"
+                          onClick={() => {
+                            onSetArchived(s.id, true)
+                            setMenuId(null)
+                          }}
+                        />
+                      )}
                       <div className="my-1 border-t border-[var(--color-border)]" />
                       <MenuItem
                         icon={Trash2}
@@ -326,11 +381,10 @@ export function SessionsSidebar({
             })}
           </div>
         ))}
-        {sessions.length === 0 && (
-          <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">Oturum yok. + ile başlat.</p>
-        )}
-        {sessions.length > 0 && groups.length === 0 && query.trim().length < 2 && (
-          <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">Aramayla eşleşen oturum yok.</p>
+        {groups.length === 0 && query.trim().length < 2 && (
+          <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
+            {showArchived ? 'Arşivlenmiş oturum yok.' : 'Oturum yok. + ile başlat.'}
+          </p>
         )}
 
         {/* Cross-session message matches (CG-16) — shown whenever a search is active. */}

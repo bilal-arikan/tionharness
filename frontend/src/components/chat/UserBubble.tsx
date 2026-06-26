@@ -1,8 +1,8 @@
-import { useState, useEffect, type ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import type { Agent, Artifact, Attachment } from '../../types'
 import { resolveColor } from '../../lib/avatar'
 import { AttachmentChip } from './AttachmentChip'
+import { Lightbox } from '../common'
 import { imageURL } from '../../lib/attachments'
 
 // MENTION_RE matches an "@token" the way the composer inserts a name reference:
@@ -66,38 +66,8 @@ function renderWithMentions(text: string, agents: Agent[]): ReactNode[] {
   return out
 }
 
-// ImageLightbox shows a full-screen overlay with a single image. Closes on
-// backdrop click, close button, or Escape key.
-function ImageLightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+// Attachment images open in the shared Lightbox (zoom + pan + Escape/backdrop).
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        title="Kapat"
-        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
-      >
-        <X size={18} />
-      </button>
-      <img
-        src={url}
-        alt={name}
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
-      />
-      <span className="absolute bottom-4 text-xs text-white/50">{name}</span>
-    </div>
-  )
-}
 
 // UserBubble renders a user chat message. Plain messages keep the accent bubble;
 // messages that reference agents (@) get highlighted name chips + a ring, and
@@ -152,7 +122,7 @@ export function UserBubble({
   if (isCommand) {
     return (
       <>
-        {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
+        {lightbox && <Lightbox imageSrc={lightbox.url} imageAlt={lightbox.name} title={lightbox.name} onClose={() => setLightbox(null)} />}
         <div className="flex flex-col items-end">
           <div className="flex max-w-[80%] min-w-0 items-center gap-2 rounded-2xl border border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] px-4 py-2.5 font-mono text-sm break-words text-[var(--color-text)]">
             <span className="text-[var(--color-accent)]">⌘</span>
@@ -166,7 +136,7 @@ export function UserBubble({
 
   return (
     <>
-      {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
+      {lightbox && <Lightbox imageSrc={lightbox.url} imageAlt={lightbox.name} title={lightbox.name} onClose={() => setLightbox(null)} />}
       <div className="flex flex-col items-end">
         {text.trim() && (
           <div

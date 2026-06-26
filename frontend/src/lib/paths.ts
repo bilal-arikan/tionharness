@@ -2,6 +2,7 @@
 // the renderer can make paths clickable and show images inline.
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
+const VIDEO_EXT = /\.(mp4|webm|ogg|ogv|mov|m4v)$/i
 
 // Matches Windows (C:\...) and POSIX (/abs/..., ./rel/...) paths, plus bare
 // dotted file names like internal/agent/titler.go. Kept deliberately strict to
@@ -11,6 +12,15 @@ const PATH_RE =
 
 export function isImagePath(p: string): boolean {
   return IMAGE_EXT.test(p)
+}
+
+export function isVideoPath(p: string): boolean {
+  return VIDEO_EXT.test(p)
+}
+
+/** True for any inline-displayable media (image or video) by extension. */
+export function isMediaPath(p: string): boolean {
+  return IMAGE_EXT.test(p) || VIDEO_EXT.test(p)
 }
 
 /** Build the backend URL that streams a local image for inline display. */

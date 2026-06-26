@@ -127,3 +127,65 @@ export interface SessionUsageDetail {
   compactSavedBytes: number
   compactSavedBytesLLM: number
 }
+
+// Per-session debug journal — GET /api/sessions/{id}/debug. The parallel
+// observability stream (separate from the conversation): turn timings, per-call
+// token spend, per-tool latency/size/errors, hook decisions, compaction/recovery.
+export interface SessionDebugToolStat {
+  calls: number
+  errors: number
+  durMs: number
+  outBytes: number
+}
+
+export interface SessionDebugSummary {
+  sessionId: string
+  events: number
+  turns: number
+  llmCalls: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  toolCalls: number
+  errors: number
+  compactions: number
+  recoveries: number
+  savedBytes: number
+  turnDurMs: number
+  byTool?: Record<string, SessionDebugToolStat>
+  byModel?: Record<string, number>
+  topTools?: string[]
+  lastError?: string
+  firstTs?: number
+  lastTs?: number
+  turnDurSeries?: number[]
+  tokenSeries?: number[]
+  anomalies?: SessionDebugAnomaly[]
+}
+
+export interface SessionDebugAnomaly {
+  severity: 'warn' | 'info'
+  code: string
+  message: string
+}
+
+export interface SessionDebugEvent {
+  ts: number
+  type: 'turn' | 'llm_call' | 'tool' | 'hook' | 'error' | 'compaction' | 'recovery'
+  sessionId?: string
+  agentId?: string
+  kind?: string
+  name?: string
+  model?: string
+  durMs?: number
+  in?: number
+  out?: number
+  cacheRead?: number
+  cacheWrite?: number
+  outBytes?: number
+  savedBytes?: number
+  stop?: string
+  err?: boolean
+  detail?: string
+}

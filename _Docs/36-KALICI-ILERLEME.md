@@ -31,10 +31,15 @@ hedeftir, adım listesi değil.
 `todo_write` listesi **çalışma dizinine** (proje) bağlı bir progress dosyasına
 yazılır ve fresh oturum açılışında geri yüklenir.
 
-- **Konum:** `<cwd>/.swarmgo/progress.json` — session'ın working dir'i ayarlıysa
-  (git-commit'lenebilir, proje'ye bağlı). cwd yoksa fallback: `<store>/progress/
-  <agentID>/.swarmgo/progress.json` (ajan-başına devamlılık). Aynı `.swarmgo/`
-  dizini handoff dosyasıyla (`handoff.md`) paylaşılır.
+- **Konum:** `<cwd>/.swarmgo/progress.json` — session'ın **explicit** working
+  dir'i ayarlıysa (git-commit'lenebilir, proje'ye bağlı; **aynı projedeki tüm
+  oturumlar paylaşır** = cross-session resume). Explicit proje dizini yoksa
+  fallback **per-session**: `<store>/progress/<sessionID>/.swarmgo/progress.json`
+  (önceden ajan-başına idi → proje dizini olmayan farklı oturumlar tek dosyayı
+  ezeyordu; 2026-06-26'da oturum-başına izole edildi, detay-paneldeki "Kalıcı
+  ilerleme" kartı artık oturuma özel görünür). Tek resolver: `Runtime.ProgressDir`
+  (yaz=NewTodoSink + oku=resume bloğu + detay-panel hep onu kullanır). Aynı
+  `.swarmgo/` dizini handoff dosyasıyla (`handoff.md`) paylaşılır.
 - **Format:** `internal/progress` paketi, `Record{Version, UpdatedAt, SessionID,
   AgentID, Todos[], Log[]}`. `Todos[].Status` = `pending|in_progress|completed`;
   `completed` ≡ Anthropic `feature_list` `passes:true`. `Log[]` = rolling ilerleme

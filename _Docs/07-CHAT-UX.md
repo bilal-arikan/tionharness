@@ -94,6 +94,25 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   yeniden çizer. **Akış-dayanıklı:** 120ms debounce + hatada ham kaynağa düşer →
   yarım kalan diyagram patlatmaz. Toolbar: Source/Diagram, Expand (tam-ekran), Copy.
   `securityLevel: 'strict'`.
+- `Gallery.tsx` — ```` ```gallery ```` (alias `image-preview`/`images`) bloğunu
+  **thumbnail grid + Lightbox** olarak çizer (the external agent project tarzı, 2026-06-26). Gövde
+  JSON `{"title","images":[{"src","alt"}]}` ya da düz satır/virgül-ayrık yol listesi;
+  yerel yollar `mediaUrl` (`/api/files`) ile çözülür. Thumbnail'a tık → Lightbox o
+  index'te açılır, ok/←→ ile gezinilir. **Video** (mp4/webm/…) item'ı thumbnail'da
+  `<video>` + play ikonu, Lightbox'ta oynatıcı olur (`LightboxImage.type`). Tekil
+  `![alt](yol)` markdown medyası inline render olur (görsel→tıkla-zoom, video→inline
+  player). **Ardışık `![]()` otomatik gruplama:** `Markdown.tsx::groupMediaRuns` art
+  arda gelen tam-satır medya satırlarını tek ```gallery'ye çevirir (fence-farkında;
+  tek/satır-içi medya inline kalır).
+- `common/Lightbox.tsx` — **paylaşılan tam-ekran zoom+pan** önizleyici (2026-06-26):
+  tekerlek ile imlece-doğru zoom (translate düzeltmeli), sürükle-pan, toolbar
+  (uzaklaştır/yüzde/yakınlaştır/sıfırla/kapat), çift-tık toggle, Escape + `0` (reset),
+  temiz backdrop tıklamasıyla kapanır (pan'dan sonra kapanmaz). `imageSrc` (görsel) ya
+  da `children` (mermaid SVG) **ya da `images[]` + `index` (galeri, ←/→ + ok
+  butonları + "n / N" sayaç)** alır. Kullananlar: mermaid Expand, Markdown inline
+  görselleri (tıkla→zoom), `Gallery` (çoklu görsel), `UserBubble` attachment
+  önizlemesi (eski yerel ImageLightbox kaldırıldı), `ArtifactView` görsel artifact
+  (`ImageArtifact`).
 
 ### Sohbet bileşenleri (`components/chat/`)
 - `TurnSteps.tsx` — bir turun iz listesini sırayla çizer; `parseSteps` JSON'u

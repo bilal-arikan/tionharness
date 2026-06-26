@@ -133,6 +133,15 @@ type Settings struct {
 	ProgressPersist bool `json:"progressPersist"`
 	ProgressResume  bool `json:"progressResume"`
 
+	// Per-session debug journal (parallel observability stream). When
+	// DebugJournalEnabled is on, the runtime appends structured events (turn
+	// timings, token spend, tool latency/size, hook decisions, errors, compaction,
+	// recovery) to each session's debug.jsonl for optimisation + agent
+	// self-improvement. DebugJournalCap bounds the newest events kept per session
+	// (0 = default).
+	DebugJournalEnabled bool `json:"debugJournalEnabled"`
+	DebugJournalCap     int  `json:"debugJournalCap"`
+
 	// Auto-reflect (dream cycle): consolidate journals into a reflection once the
 	// journal count crosses AutoReflectThreshold.
 	AutoReflect          bool `json:"autoReflect"`
@@ -255,6 +264,11 @@ func Default() Settings {
 		ProgressPersist: true,
 		ProgressResume:  true,
 
+		// Debug journal on by default: only adds a per-session file, transparent to
+		// existing behaviour. 5000 newest events kept per session.
+		DebugJournalEnabled: true,
+		DebugJournalCap:     5000,
+
 		AutoReflect:          true,
 		AutoReflectThreshold: 20,
 		AutoUserModel:        true,
@@ -366,6 +380,9 @@ type DTO struct {
 	ProgressPersist bool `json:"progressPersist"`
 	ProgressResume  bool `json:"progressResume"`
 
+	DebugJournalEnabled bool `json:"debugJournalEnabled"`
+	DebugJournalCap     int  `json:"debugJournalCap"`
+
 	AutoReflect          bool `json:"autoReflect"`
 	AutoReflectThreshold int  `json:"autoReflectThreshold"`
 	AutoUserModel        bool `json:"autoUserModel"`
@@ -466,6 +483,9 @@ func (s Settings) ToDTO() DTO {
 
 		ProgressPersist: s.ProgressPersist,
 		ProgressResume:  s.ProgressResume,
+
+		DebugJournalEnabled: s.DebugJournalEnabled,
+		DebugJournalCap:     s.DebugJournalCap,
 
 		AutoReflect:          s.AutoReflect,
 		AutoReflectThreshold: s.AutoReflectThreshold,
@@ -568,6 +588,9 @@ type Patch struct {
 
 	ProgressPersist *bool `json:"progressPersist"`
 	ProgressResume  *bool `json:"progressResume"`
+
+	DebugJournalEnabled *bool `json:"debugJournalEnabled"`
+	DebugJournalCap     *int  `json:"debugJournalCap"`
 
 	AutoReflect          *bool `json:"autoReflect"`
 	AutoReflectThreshold *int  `json:"autoReflectThreshold"`

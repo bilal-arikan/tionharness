@@ -48,6 +48,10 @@ func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt strin
 	resp, steps, err := r.CompleteWithToolsTraced(ctx, agent, provider, providers.Request{
 		Model:  agent.Model,
 		System: r.autonomousSystemPrompt(agent),
+		// The session's persistent goal steers headless runs too (scheduler/spawn/
+		// peer stamp the session id in ctx). Kept in the volatile dynamic suffix —
+		// "" when the session has no active goal, so it's a safe no-op.
+		SystemDynamic: r.autonomousGoalBlock(ctx),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: prompt},
 		},

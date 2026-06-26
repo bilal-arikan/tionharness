@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { Lightbox } from '../common'
 
 interface Props {
   code: string
@@ -170,20 +171,12 @@ export function MermaidDiagram({ code }: Props) {
       </div>
 
       {expanded && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
-          onClick={() => setExpanded(false)}
-        >
+        <Lightbox title="mermaid" onClose={() => setExpanded(false)}>
           <div
-            className="max-h-full max-w-full overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="sg-mermaid [&_svg]:h-auto [&_svg]:max-w-[88vw]"
-              dangerouslySetInnerHTML={{ __html: svg }}
-            />
-          </div>
-        </div>
+            className="sg-mermaid rounded-lg bg-[var(--color-bg)] p-6 [&_svg]:h-auto [&_svg]:max-w-[88vw]"
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        </Lightbox>
       )}
     </>
   )

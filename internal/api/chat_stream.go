@@ -258,11 +258,25 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		nsink := newNotifySink(session.ID, agentRow.ID, wsp.Runtime.Emit)
 		run.setNotify(nsink)
 		turnCtx = tools.WithNotify(turnCtx, nsink)
+		// focus_view shares the same sink (it implements NavigateSink too): an agent
+		// can drive the UI to a view/entity on both tool paths.
+		run.setNav(nsink)
+		turnCtx = tools.WithNavigate(turnCtx, nsink)
+		// Session sink: one sink for every session-scoped mutation — goal (the same
+		// db.Session.Goal the user edits), title, working dir, archive — on both tool
+		// paths. It is a SessionSink (superset of GoalSink), so it serves the goal
+		// tools and the session-edit tools alike; each mutation emits a "session"
+		// event so open windows refresh live.
+		ssink := wsp.Runtime.NewSessionSink(session.ID)
+		run.setGoal(ssink)
+		run.setSession(ssink)
+		turnCtx = tools.WithGoal(turnCtx, ssink)
+		turnCtx = tools.WithSession(turnCtx, ssink)
 		// Persistent progress: bind a todo sink so todo_write persists the checklist
 		// to the project's progress file on both tool paths (native via context, CLI
 		// via the run). Keyed to this session's working dir. Gated by ProgressPersist.
 		if s.tun.ProgressPersist() {
-			todoSink := wsp.Runtime.NewTodoSink(session.ID, agentRow.ID, wsp.Runtime.SessionWorkdir(session.ID))
+			todoSink := wsp.Runtime.NewTodoSink(session.ID, agentRow.ID)
 			run.setTodoSink(todoSink)
 			turnCtx = tools.WithTodoSink(turnCtx, todoSink)
 		}

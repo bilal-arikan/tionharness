@@ -456,12 +456,26 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	if r.SessionContextEnabled() {
 		extra = append(extra, tools.NewConversationSearchTool(r.db).Def())
 	}
+	//   - read_session_debug : let a CLI agent read its OWN session's debug journal
+	//     (timings, token spend, tool latency, anomalies) for self-improvement —
+	//     the same always-on observability tool the native path gets. Only needs
+	//     r.db; the session id is injected into the call ctx below.
+	if r.tun.DebugJournalEnabled() {
+		extra = append(extra, tools.NewReadSessionDebugTool(r.db).Def())
+	}
 	for _, d := range extra {
 		if allow == nil || allow(d.Name) {
 			defs = append(defs, d)
 		}
 	}
+	// The bridged call closure runs on the Interaction server's request ctx, which
+	// lacks the turn's current-session id; inject it (captured from the build ctx)
+	// so session-scoped bridged tools (read_session_debug) default to this session.
+	sid := SessionIDFrom(ctx)
 	call := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+		if sid != "" {
+			ctx = tools.WithCurrentSession(ctx, sid)
+		}
 		res := reg.Call(ctx, providers.ToolCall{Name: name, Input: args})
 		if res.IsError {
 			return "", fmt.Errorf("%s", res.Content)
@@ -780,8 +794,23 @@ func buildSystemPrompt(a db.Agent) string {
 		}
 		out += a.Identity
 	}
+	// One-line nudge to use the session's north-star goal, in the cached static
+	// prefix for autonomous/flow turns (this is the agent-package assembler; the
+	// chat path's parallel api.buildSystemPrompt appends the same line).
+	if out != "" {
+		out += "\n\n"
+	}
+	out += GoalUsageHint
 	return out
 }
+
+// GoalUsageHint is a single cached-prefix line teaching proactive goal use. The
+// tools are always available (eager); this nudges the agent to actually reach for
+// them on substantial work. Full guidance lives in the swarmgo-guide skill.
+// Exported so the api package's parallel buildSystemPrompt (chat + preview path)
+// appends the identical line — both prompt assemblers share ONE source.
+const GoalUsageHint = "For substantial multi-turn work, set a durable objective with `set_session_goal` " +
+	"(one north star, not a checklist) and `complete_goal` when it is met; keep replies aligned with the session's active goal."
 
 // systemPrompt builds an agent's static system prefix: its soul+identity persona
 // followed by this workspace's instructions (when set). Both are stable, so they

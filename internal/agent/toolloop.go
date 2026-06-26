@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
@@ -113,7 +114,26 @@ func effectivePermissionMode(mode string, autonomous bool) string {
 // completeTraced is the shared implementation. When onStep is non-nil, steps are
 // emitted live: provider-driven paths (claude CLI) wire it through req.OnEvent;
 // the native loop emits as it appends.
+// completeTraced wraps the turn machinery with a debug-journal turn boundary: it
+// times the whole turn and appends one "turn" event (duration + stop reason +
+// error) to the session's debug.jsonl. It covers every path (native loop,
+// claude-cli, plain completion) since they all funnel through completeTracedInner.
 func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool, onStep func(TurnStep)) (*providers.Response, []TurnStep, error) {
+	start := time.Now()
+	resp, steps, err := r.completeTracedInner(ctx, agent, provider, req, autonomous, onStep)
+	ev := db.DebugEvent{Type: db.DebugTurn, AgentID: agent.ID, DurMs: time.Since(start).Milliseconds()}
+	if resp != nil {
+		ev.Stop = string(resp.StopReason)
+	}
+	if err != nil {
+		ev.Err = true
+		ev.Detail = err.Error()
+	}
+	r.emitDebug(ctx, ev)
+	return resp, steps, err
+}
+
+func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool, onStep func(TurnStep)) (*providers.Response, []TurnStep, error) {
 	if autonomous {
 		if err := r.ensureBudget(ctx, agent); err != nil {
 			return nil, nil, err
@@ -137,6 +157,12 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	req.WorkDir = workDir
 	ctx = withResolvedWorkDir(ctx, workDir, autonomous)
 
+	// Expose the current session id to session-scoped tools (read_session_debug)
+	// so they default to the running session without an explicit arg.
+	if sid := SessionIDFrom(ctx); sid != "" {
+		ctx = tools.WithCurrentSession(ctx, sid)
+	}
+
 	// Artifacts everywhere: chat turns install a session-bound sink before calling
 	// in; autonomous turns (scheduler/spawn/flow) don't, so create_artifact would
 	// fail with "artifacts are not available for this turn". Install a fallback sink
@@ -154,7 +180,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	// flow) turns. (CLI turns get theirs via the Interaction bridge run.) Gated by
 	// the ProgressPersist setting (default on); workDir was resolved just above.
 	if sid := SessionIDFrom(ctx); sid != "" && r.tun.ProgressPersist() && !tools.HasTodoSink(ctx) {
-		ctx = tools.WithTodoSink(ctx, r.NewTodoSink(sid, agent.ID, workDir))
+		ctx = tools.WithTodoSink(ctx, r.NewTodoSink(sid, agent.ID))
 	}
 
 	// Provider-driven paths (claude CLI) surface their own trace via OnEvent.
@@ -287,6 +313,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		st := TurnStep{Kind: StepError, Reason: reason, Text: err.Error(), IsError: true}
 		steps = append(steps, st)
 		emit(st)
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugError, AgentID: agent.ID, Detail: reason + ": " + err.Error(), Err: true})
 	}
 	for i := 0; i < maxToolIters; i++ {
 		if autonomous {
@@ -326,6 +353,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
 					steps = append(steps, rec)
 					emit(rec)
+					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugCompaction, AgentID: agent.ID, Detail: string(d.reason)})
 					continue
 				}
 			}
@@ -350,6 +378,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 				rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
 				steps = append(steps, rec)
 				emit(rec)
+				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugRecovery, AgentID: agent.ID, Detail: string(d.reason)})
 				continue
 			}
 			// Stitch any earlier capped fragments onto the final answer.
@@ -426,6 +455,7 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 
 			// Stream long-running tool output live as tool_delta chunks (keyed by
 			// the call id) when the tool and the live sink both support it.
+			toolStart := time.Now()
 			var res providers.ToolResult
 			streamed := false
 			if f := subFutures[call.ID]; f != nil {
@@ -448,6 +478,16 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 			if streamed {
 				emit(TurnStep{Kind: StepTombstone, Ref: call.ID})
 			}
+			// Debug journal: record this tool's latency, output size and outcome
+			// (pre-compaction size, the true tool output) for optimisation.
+			r.emitDebug(ctx, db.DebugEvent{
+				Type:     db.DebugTool,
+				AgentID:  agent.ID,
+				Name:     call.Name,
+				DurMs:    time.Since(toolStart).Milliseconds(),
+				OutBytes: len(res.Content),
+				Err:      res.IsError,
+			})
 			// Cancellation mid-tool (user stop / timeout): record it and end the
 			// turn cleanly instead of feeding a half-result back to the model.
 			// A3 (cancellation hierarchy): the assistant's tool_use turn was already

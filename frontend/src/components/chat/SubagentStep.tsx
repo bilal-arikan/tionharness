@@ -33,7 +33,7 @@ export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
   const reply = step.output || ''
 
   return (
-    <div className="overflow-hidden rounded-md border border-[var(--color-border)]/60">
+    <div className="overflow-hidden rounded-md">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 rounded-md px-3 py-1 text-left text-xs hover:bg-[var(--color-surface-2)]"
@@ -57,7 +57,7 @@ export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
       </button>
 
       {open && (
-        <div className="space-y-2 border-t border-[var(--color-border)] px-3 py-2 text-xs">
+        <div className="space-y-2 px-3 pb-2 text-xs">
           {sub.length > 0 && (
             <div className="border-l-2 border-[var(--color-border)] pl-2">
               <TurnSteps steps={sub} onOpenFile={onOpenFile} onOpenArtifact={onOpenArtifact} />

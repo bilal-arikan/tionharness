@@ -121,6 +121,19 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		// the user's attention (job done, attention needed). Stays advertised on
 		// autonomous turns too — it never blocks for a live user.
 		tools.NewNotifyTool().Def(),
+		// focus_view drives the user's UI to a view/entity to direct attention.
+		// Non-blocking; advertised on autonomous turns too (no-op with no open window).
+		tools.NewFocusViewTool().Def(),
+		// set_session_goal / complete_goal write THIS session's persistent objective
+		// (the same db.Session.Goal the user edits). Non-blocking; advertised on
+		// autonomous turns too (a scheduled run can set/complete its own goal).
+		tools.NewSetSessionGoalTool().Def(),
+		tools.NewCompleteGoalTool().Def(),
+		// set_session_title / set_working_dir / archive_session mutate THIS session's
+		// own metadata. Non-blocking; advertised on autonomous turns too.
+		tools.NewSetSessionTitleTool().Def(),
+		tools.NewSetWorkingDirTool().Def(),
+		tools.NewArchiveSessionTool().Def(),
 		// schedule_wake replaces the CLI's native ScheduleWakeup (which SwarmGo
 		// disallows): the CLI runs one-shot, so its built-in wake never fires —
 		// ours arms a real SwarmGo timer that re-delivers into this session.
@@ -201,6 +214,12 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callArtifact(run, bareToolName(name), args)
 	case "notify":
 		return b.callNotify(run, args)
+	case "focus_view":
+		return b.callFocus(run, args)
+	case "set_session_goal", "complete_goal":
+		return b.callGoal(ctx, run, bareToolName(name), args)
+	case "set_session_title", "set_working_dir", "archive_session":
+		return b.callSessionEdit(ctx, run, bareToolName(name), args)
 	case "spawn_session":
 		return b.callSpawn(ctx, run, args)
 	case "use_skill":
@@ -407,6 +426,71 @@ func (b *interactionBackend) callNotify(run *chatRun, args json.RawMessage) (int
 		return interaction.CallResult{Text: "no notification channel is available for this turn", IsError: true}, nil
 	}
 	text, err := tools.NewNotifyTool().Call(tools.WithNotify(context.Background(), sink), args)
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: text}, nil
+}
+
+// callFocus drives the user's UI to a view/entity through the run's navigate
+// sink (CLI path). Returns immediately; graceful when no sink is wired.
+func (b *interactionBackend) callFocus(run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	sink := run.navSink()
+	if sink == nil {
+		return interaction.CallResult{Text: "no UI is available to navigate for this turn", IsError: true}, nil
+	}
+	text, err := tools.NewFocusViewTool().Call(tools.WithNavigate(context.Background(), sink), args)
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: text}, nil
+}
+
+// callGoal sets or completes this session's persistent goal through the run's
+// goal sink (CLI path), writing the same db.Session.Goal the user edits. Returns
+// immediately; graceful when no sink is wired.
+func (b *interactionBackend) callGoal(ctx context.Context, run *chatRun, name string, args json.RawMessage) (interaction.CallResult, error) {
+	sink := run.goalSinkFor()
+	if sink == nil {
+		return interaction.CallResult{Text: "no session goal is available for this turn", IsError: true}, nil
+	}
+	gctx := tools.WithGoal(ctx, sink)
+	var (
+		text string
+		err  error
+	)
+	if name == "complete_goal" {
+		text, err = tools.NewCompleteGoalTool().Call(gctx, args)
+	} else {
+		text, err = tools.NewSetSessionGoalTool().Call(gctx, args)
+	}
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: text}, nil
+}
+
+// callSessionEdit dispatches a session-metadata mutation (rename / set working
+// dir / archive) through the run's session sink (CLI path). Returns immediately;
+// graceful when no sink is wired.
+func (b *interactionBackend) callSessionEdit(ctx context.Context, run *chatRun, name string, args json.RawMessage) (interaction.CallResult, error) {
+	sink := run.sessionSinkFor()
+	if sink == nil {
+		return interaction.CallResult{Text: "no session is available to edit for this turn", IsError: true}, nil
+	}
+	sctx := tools.WithSession(ctx, sink)
+	var (
+		text string
+		err  error
+	)
+	switch name {
+	case "set_session_title":
+		text, err = tools.NewSetSessionTitleTool().Call(sctx, args)
+	case "set_working_dir":
+		text, err = tools.NewSetWorkingDirTool().Call(sctx, args)
+	default: // archive_session
+		text, err = tools.NewArchiveSessionTool().Call(sctx, args)
+	}
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}

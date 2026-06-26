@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
-import { PanelRight } from 'lucide-react'
+import { PanelRight, ClipboardCopy, Check, FolderOpen } from 'lucide-react'
 import { api, getActiveWorkspace, setActiveWorkspace } from './api'
 import type { Agent, AgentPatch, Artifact, Session, Message, AppSettings, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
@@ -142,6 +142,8 @@ export default function App() {
       return next
     })
   }, [])
+  // Header "copy path" feedback: briefly show a check after copying.
+  const [pathCopied, setPathCopied] = useState(false)
   // Default agent for NEW sessions (chosen from the roster). Persisted so it
   // survives reloads; unmentioned turns in a session use the session's own agent.
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(
@@ -409,6 +411,29 @@ export default function App() {
     }
   }, [])
 
+  // Archive / restore a session (the sidebar Active/Archived filter). Archiving
+  // updates state locally so the row leaves the active list at once; when the
+  // archived session is the open one, fall back to another active session.
+  const setSessionArchived = useCallback(
+    async (id: string, archived: boolean) => {
+      try {
+        await api.setSessionState(id, archived ? 'archived' : 'active')
+        setSessions((prev) => {
+          const next = prev.map((s) => (s.id === id ? { ...s, state: archived ? 'archived' : 'active' } : s))
+          if (archived && activeSessionId === id) {
+            const fallback = next.find((s) => s.id !== id && s.state !== 'archived')
+            setActiveSessionId(fallback?.id ?? null)
+            setActiveAgentId(fallback?.agentId ?? null)
+          }
+          return next
+        })
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [activeSessionId],
+  )
+
   const copySessionPath = useCallback(async (id: string) => {
     try {
       const { path } = await api.sessionPath(id)
@@ -425,6 +450,14 @@ export default function App() {
       setError((e as Error).message)
     }
   }, [])
+
+  // Header shortcut: copy the active session's folder path (with a brief check).
+  const copyActiveSessionPath = useCallback(async () => {
+    if (!activeSessionId) return
+    await copySessionPath(activeSessionId)
+    setPathCopied(true)
+    setTimeout(() => setPathCopied(false), 1500)
+  }, [activeSessionId, copySessionPath])
 
   const deleteSession = useCallback(
     async (id: string) => {
@@ -481,6 +514,26 @@ export default function App() {
     // App-global → no workspace badge, no toast.
     if (e.type === 'workspaces') {
       refreshWorkspaces()
+      return
+    }
+    // An agent drove the UI here (focus_view). Apply the navigation immediately
+    // — set the hash so the URL→state machinery switches workspace/view and
+    // selects the entity — rather than waiting for a notification click. No
+    // toast or badge: this IS the action, not a passive signal.
+    if (e.type === 'navigate') {
+      const r = routeFromEvent(e)
+      if (r) window.location.hash = buildRoute(r)
+      return
+    }
+    // An agent mutated this session's metadata (goal/title/working dir/archive
+    // via the session tools). Refresh the session list (title/order/archived) and,
+    // when it's the open session, bump the detail panel so its goal/title/cwd card
+    // updates live. No toast — it's a quiet live-refresh signal.
+    if (e.type === 'session') {
+      refreshSessions()
+      if (e.target?.sessionId === activeSessionIdRef.current) {
+        setMeterRefresh((n) => n + 1)
+      }
       return
     }
     // Badge any non-active workspace that produced activity (incl. completed
@@ -782,6 +835,7 @@ export default function App() {
           onCopyPath={copySessionPath}
           onRevealFolder={revealSession}
           onDeleteSession={deleteSession}
+          onSetArchived={setSessionArchived}
         />
       )}
 
@@ -824,18 +878,37 @@ export default function App() {
               />
             )}
             {view === 'chat' && activeSessionId && (
-              <button
-                onClick={toggleDetail}
-                title="Oturum bilgisi panelini aç/kapat"
-                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
-                  detailOpen
-                    ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
-                }`}
-              >
-                <PanelRight size={15} className="shrink-0" />
-                <span className="hidden sm:inline">Detay</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                {/* Folder shortcuts (moved here from the detail panel's Klasör card). */}
+                <button
+                  onClick={copyActiveSessionPath}
+                  title="Oturum klasörü yolunu kopyala"
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                >
+                  {pathCopied ? <Check size={15} className="shrink-0" /> : <ClipboardCopy size={15} className="shrink-0" />}
+                  <span className="hidden sm:inline">{pathCopied ? 'Kopyalandı' : 'Yolu kopyala'}</span>
+                </button>
+                <button
+                  onClick={() => revealSession(activeSessionId)}
+                  title="Oturum klasörünü aç"
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                >
+                  <FolderOpen size={15} className="shrink-0" />
+                  <span className="hidden sm:inline">Aç</span>
+                </button>
+                <button
+                  onClick={toggleDetail}
+                  title="Oturum bilgisi panelini aç/kapat"
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
+                    detailOpen
+                      ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                      : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+                  }`}
+                >
+                  <PanelRight size={15} className="shrink-0" />
+                  <span className="hidden sm:inline">Detay</span>
+                </button>
+              </div>
             )}
             {error && (
               <span className="rounded bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] px-2 py-1 text-xs text-[var(--color-danger)]">
@@ -1012,8 +1085,6 @@ export default function App() {
           refreshKey={meterRefresh}
           onClose={toggleDetail}
           onError={setError}
-          onCopyPath={copySessionPath}
-          onRevealFolder={revealSession}
           onGenerateTitle={regenerateSessionTitle}
           onRename={renameSession}
           onSummarize={(_, kind) => chat.summarize(kind as 'memory' | 'board' | 'flows' | 'tools')}

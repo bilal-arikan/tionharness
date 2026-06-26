@@ -89,6 +89,20 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// attention (no-op outside interactive chat — the sink is only wired onto a
 		// chat turn's context).
 		tools.NewNotifyTool(),
+		// focus_view: drive the user's UI to a screen/entity to direct attention
+		// (no-op outside interactive chat — the navigate sink is only wired onto a
+		// chat turn's context).
+		tools.NewFocusViewTool(),
+		// Session goal: set/complete this session's persistent "north star" — the
+		// SAME field the user edits in the UI, injected into every turn (no-op
+		// without a goal sink, i.e. outside a session-bound turn).
+		tools.NewSetSessionGoalTool(),
+		tools.NewCompleteGoalTool(),
+		// Session edit: rename / set working dir / archive THIS session (no-op
+		// without a session sink, i.e. outside a session-bound turn).
+		tools.NewSetSessionTitleTool(),
+		tools.NewSetWorkingDirTool(),
+		tools.NewArchiveSessionTool(),
 	}
 
 	// Core memory (MemGPT-style): the agent edits its own persistent working-memory
@@ -134,6 +148,16 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// conversation_search: full-text search across the workspace's message
 		// history (deeper than list_sessions' titles+summaries). Same gate.
 		builtins = append(builtins, tools.NewConversationSearchTool(r.db))
+	}
+
+	// read_session_debug: the agent reads its OWN session's structured debug
+	// journal (turn timings, token spend, tool latency/errors, anomalies) to
+	// self-diagnose and optimise. Always-on (read-only, the sibling of
+	// conversation_search for self-improvement) whenever the debug journal is on,
+	// so it works out of the box — including for the default keyless claude-cli
+	// agent — rather than being buried in the hidden-lazy self-manage tier.
+	if r.tun != nil && r.tun.DebugJournalEnabled() {
+		builtins = append(builtins, tools.NewReadSessionDebugTool(r.db))
 	}
 
 	// Workspace secret vault: let agents discover and fetch stored credentials

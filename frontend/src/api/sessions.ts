@@ -12,6 +12,8 @@ import type {
   GitInfo,
   SessionUsageDetail,
   SessionProgress,
+  SessionDebugSummary,
+  SessionDebugEvent,
 } from '../types'
 import { req } from './client'
 
@@ -71,6 +73,13 @@ export const sessionApi = {
     req<{ id: string; goal: string; goalDone: boolean }>(`/api/sessions/${sessionId}/goal`, {
       method: 'PUT',
       body: JSON.stringify({ goal, done }),
+    }),
+  // Set the session's lifecycle state ("active" | "archived"). Archiving drops it
+  // from the active sidebar list but never deletes it; "active" restores it.
+  setSessionState: (sessionId: string, state: 'active' | 'archived') =>
+    req<{ id: string; state: string }>(`/api/sessions/${sessionId}/state`, {
+      method: 'PUT',
+      body: JSON.stringify({ state }),
     }),
   // Rebind the session to a different agent (the chat agent dropdown). Every
   // following turn is answered by this agent.
@@ -135,6 +144,21 @@ export const sessionApi = {
   // read-only viewer card. Resolved from the session's working dir / store fallback.
   sessionProgress: (sessionId: string) =>
     req<SessionProgress>(`/api/sessions/${sessionId}/progress`),
+
+  // Per-session debug journal aggregate (turn timings, token spend by model,
+  // per-tool latency/size/errors, compaction/recovery counts) for the Debug tab.
+  sessionDebugSummary: (sessionId: string) =>
+    req<{ summary: SessionDebugSummary }>(`/api/sessions/${sessionId}/debug`).then(
+      (r) => r.summary,
+    ),
+  // Raw per-session debug events (newest last), optionally filtered by type.
+  sessionDebugEvents: (sessionId: string, type = '', limit = 200) => {
+    const p = new URLSearchParams({ summary: '0', limit: String(limit) })
+    if (type) p.set('type', type)
+    return req<{ events: SessionDebugEvent[] }>(
+      `/api/sessions/${sessionId}/debug?${p.toString()}`,
+    ).then((r) => r.events ?? [])
+  },
 
   // Debug: preview the exact next-turn context (system + dynamic + transcript +
   // tools) the session's agent would be sent. Optional sample "next" user message.

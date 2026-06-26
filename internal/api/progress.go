@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/progress"
 )
@@ -17,21 +16,17 @@ type progressView struct {
 
 // handleSessionProgress returns the session's persistent progress (the durable
 // todo_write checklist + rolling log) for the read-only viewer card. Resolves the
-// same directory the todo sink writes to: the session's effective working dir,
-// else the per-agent store fallback.
+// SAME directory the todo sink writes to via Runtime.ProgressDir: the session's
+// explicit project working dir (shared across sessions on that project), else a
+// per-session fallback (so unrelated sessions don't share one progress file).
 func (s *Server) handleSessionProgress(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 	wsp := ws(r)
-	session, err := wsp.DB.GetSession(ctx, id)
-	if writeDBError(w, err, "session not found") {
+	if _, err := wsp.DB.GetSession(ctx, id); writeDBError(w, err, "session not found") {
 		return
 	}
-	cwd := strings.TrimSpace(session.WorkingDir)
-	if cwd == "" {
-		cwd = wsp.Runtime.WorkspaceDefaultDir()
-	}
-	dir := progressDir(wsp.DB, cwd, session.AgentID)
+	dir := wsp.Runtime.ProgressDir(id)
 	view := progressView{Path: progress.File(dir)}
 	if rec, ok, loadErr := progress.Load(dir); loadErr == nil && ok {
 		view.Exists = true

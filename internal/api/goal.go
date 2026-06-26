@@ -3,28 +3,19 @@ package api
 import (
 	"net/http"
 	"strings"
+
+	"github.com/bilal-arikan/swarmgo/internal/agent"
 )
 
 // maxGoalLen bounds a session goal so it can never blow up the context window;
 // the UI mirrors this. Goals are meant to be a short objective, not a document.
 const maxGoalLen = 2000
 
-// goalContextBlock renders a session's persistent objective as a system-prompt
-// section. Inspired by Claude Code's /goal: a single durable "north star" the
-// agent should keep steering toward across turns. Kept in the dynamic (uncached)
-// suffix and placed first so it leads the volatile context. Returns "" when no
-// goal is set OR when the goal is marked done (a completed objective stops
-// steering future turns — the /goal checker convergence: once achieved, drop it).
+// goalContextBlock is the renderer for a session's persistent objective. It now
+// lives in the agent package (agent.GoalContextBlock) so the chat and autonomous
+// prompt paths share ONE source; this thin alias keeps the api call sites stable.
 func goalContextBlock(goal string, done bool) string {
-	goal = strings.TrimSpace(goal)
-	if goal == "" || done {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("## Session goal (north star)\n")
-	b.WriteString("Keep every reply aligned with this persistent objective and make steady progress toward it; flag when it is achieved or blocked. It persists across turns.\n\n")
-	b.WriteString(goal)
-	return strings.TrimSpace(b.String())
+	return agent.GoalContextBlock(goal, done)
 }
 
 type setGoalReq struct {

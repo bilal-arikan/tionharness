@@ -2,7 +2,7 @@
 // categories (providers, commands, step kinds, workspace) live in their own
 // files; these are pure draft+setter forms.
 import { useState, useEffect, useRef } from 'react'
-import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, FlaskConical, ShieldCheck, Archive, RotateCcw, ListChecks, Trash2, type LucideIcon } from 'lucide-react'
+import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, FlaskConical, ShieldCheck, Archive, RotateCcw, ListChecks, Trash2, Bug, type LucideIcon } from 'lucide-react'
 import type { VersionInfo, BackupStatus, WorkspaceArchives } from '../../types'
 import { api, getActiveWorkspace } from '../../api'
 import type { AppSettings } from '../../types'
@@ -386,6 +386,30 @@ export function ContextPanel({ draft, set }: PanelProps) {
         checked={draft.progressResume}
         onChange={(v) => set('progressResume', v)}
       />
+
+      <SubHead icon={Bug}>Debug günlüğü (gözlemlenebilirlik)</SubHead>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+        Her oturum için <code>session.jsonl</code>'in yanına paralel bir <code>debug.jsonl</code> akışı yazılır: tur süreleri, çağrı-başına token tüketimi, araç gecikme/boyut/hataları,
+        hook kararları, sıkıştırma ve kurtarma olayları. Ajan bunu <code>read_session_debug</code> aracıyla okuyup kendini optimize edebilir; UI'da oturum detayında "Debug" kartı gösterir.
+      </div>
+      <Toggle
+        label="Debug günlüğünü yaz"
+        hint="Yapılandırılmış gözlemlenebilirlik olaylarını oturum-başına debug.jsonl'e ekler. Kapalıyken hiçbir debug olayı yazılmaz."
+        checked={draft.debugJournalEnabled}
+        onChange={(v) => set('debugJournalEnabled', v)}
+      />
+      <Field
+        label="Olay limiti"
+        hint="Oturum başına saklanan en yeni debug olayı sayısı; aşıldığında en eskiler budanır (0 = varsayılan 5000)."
+      >
+        <input
+          type="number"
+          min={0}
+          value={draft.debugJournalCap}
+          onChange={(e) => set('debugJournalCap', Number(e.target.value))}
+          className="w-28 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm text-[var(--color-text)]"
+        />
+      </Field>
 
       <SubHead icon={LifeBuoy}>Tur kurtarma & sıkıştırma</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">

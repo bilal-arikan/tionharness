@@ -249,7 +249,9 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `core_memory_replace` / `core_memory_append` (CLI köprüsü) | bloklamayan (working-memory düzenler) | 2026-06-22 |
 | `conversation_search` (CLI köprüsü) | bloklamayan (geçmiş tam-metin arama) | 2026-06-22 |
 | `notify` (masaüstü bildirim) | bloklamayan | Faz 3 |
-| workspace/oturum etkileşimleri | — | Faz 3+ |
+| `focus_view` (UI navigasyon) | bloklamayan | Faz 3 |
+| `set_session_goal` / `complete_goal` (oturum hedefi) | bloklamayan | Faz 3 |
+| `set_session_title` / `set_working_dir` / `archive_session` | bloklamayan | Faz 3 |
 
 Yeni tool eklemek = `tools.Registry`'de tek tanım → her iki adaptöre (native +
 MCP) otomatik yansır (tek şema kuralı, §2).
@@ -389,7 +391,8 @@ allowlist ikisi de aynı koşula uyar.) Değişmez: `mcp_interaction_test.go`
 - **Faz 2: ✅ TAMAMLANDI (2026-06-16, §16).** `create_artifact`/`update_artifact`
   + `request_confirmation`; CLI izinde todo/artifact kart paritesi (namespace strip
   + todo promotion). Canlı claude-cli testi geçti.
-- **Faz 3:** `notify` + workspace/oturum etkileşimleri; doküman + skill güncelleme.
+- **Faz 3:** `notify` ✅ **TAMAMLANDI (2026-06-25, §17).** Kalan: workspace/oturum
+  etkileşimleri (ileride, ayrı iş).
 - **Faz 4 (CLI genişleme):** Codex / Gemini / Mistral Vibe provider + adaptör;
   her biri aynı Interaction MCP'ye bağlanır; per-CLI built-in-disable + token taşıma
   matristen (§7.1) uygulanır.
@@ -618,6 +621,169 @@ shell'i için yazılmış bir hook komutu burada uyarlama gerektirebilir.
 
 **Test:** `go build`/`vet`/`go test ./...` yeşil; yeni test:
 otonom ask_user bail (`TestInteractionBackend_AutonomousAskBails`).
+
+## 17. Faz 3 sonucu — `notify` (2026-06-25 — TAMAMLANDI ✅)
+
+Ajanlara **bloklamayan masaüstü bildirimi** aracı eklendi. Asıl ihtiyaç: kullanıcı
+uygulamaya bakmıyorken ("uzun iş bitti", "dikkat gerek", "hata oluştu") haber verme.
+Bildirim altyapısı (`events.Event` → `events.Bus` → SSE `/api/events` → `App.tsx`
+`isTypeEnabled` → OS toast; `_Docs/29`) **zaten mevcuttu** → yalnız tetikleyen araç +
+iki yola wiring gerekti. Yeni event tipi/transport **yok** (mevcut `agent` tipi).
+
+**Araç sözleşmesi:** `notify(title* , body, level∈{info,success,error})` — bloklamaz,
+toast'u fırlatır ve hemen döner (`ask_user`/`request_confirmation`'ın aksine; sadece
+*bilgilendirir*, cevap beklemez). `level` boş/geçersizse `info`. Sink yoksa (otonom,
+açık client yok) **graceful**: hata değil, "kanal yok" mesajı döner → tur bozulmaz.
+
+**Yeni dosyalar:**
+- `internal/tools/notifysink.go` — `NotifySink` arayüzü (`Notify(ctx, NotifySpec)`) +
+  `WithNotify`/`notifyFrom` context köprüsü + `NotifySpec` (`WithArtifacts` deseni).
+- `internal/tools/builtin_notify.go` — `NotifyTool` (Def + Call); title zorunlu, level
+  normalize, sink-yok graceful. `builtin_notify_test.go` (5 test).
+- `internal/api/notifysink.go` — concrete sink: `events.Event{Type:"agent", Level, Title,
+  Body, Target:{view:chat, sessionId, agentId}}` yayını (`newArtifactSink` ikizi).
+
+**Değişen dosyalar:**
+- `internal/agent/toolsetup.go` — native registry'ye `NewNotifyTool()` (eager built-in).
+- `internal/api/chat_control.go` — `chatRun.notify` + `setNotify`/`notifySink()`.
+- `internal/api/chat_stream.go` — her ajan turunda `run.setNotify` + `tools.WithNotify`.
+- `internal/api/mcp_interaction.go` — `interactionToolSpecs`'e `NewNotifyTool().Def()`
+  (autonomous'ta da kalır — `interactiveOnlyTools` değil); `Call` case `notify` →
+  `callNotify` (sink yoksa graceful is_error). Allowlist tek-kaynaktan otomatik (CLI-2).
+- `internal/api/autonomous_interaction.go` — scheduler/spawn/flow CLI ajanlarına da
+  `setNotify` (`rt.Emit` ile); UI açıkken otonom iş bitimi toast'u düşer.
+
+**Test:** `go build`/`vet`/`go test ./...` yeşil (**468 test, 32 paket**). Advertise==allowlist
+invariant (`TestInteractionAdvertisedNames`) dinamik türediği için kendiliğinden korundu.
+**Açık iş:** canlı claude-cli uçtan-uca toast doğrulaması (beklemede).
+
+## 18. Faz 3 — `focus_view` (UI navigasyon) (2026-06-25 — TAMAMLANDI ✅)
+
+`notify`'ın tamamlayıcısı: ajan kullanıcının dikkatini **aktif olarak** bir ekrana/
+entity'ye yönlendirir ("yaptığım artifact'ı aç", "panoya bak"). `notify` pasif sinyal
+(toast → tıklayınca git); `focus_view` ise UI'ı **anında** sürer (tıklama beklemez).
+
+**Araç sözleşmesi:** `focus_view(view*, sessionId?, agentId?)` — bloklamaz. `view` NavRail
+view kümesinden (chat/agents/board/flows/artifacts/…); bilinmeyen view reddedilir. chat/
+executions için `sessionId` (varsayılan = bu oturum), agents/memory için `agentId`
+(varsayılan = yanıtlayan ajan) — sink doldurur. Sink yoksa graceful no-op.
+
+**Mekanizma — mevcut deep-link makinesini yeniden kullanır:** araç `events.Event{
+Type:"navigate", Target:{view, sessionId, agentId}}` yayınlar → SSE `/api/events` →
+`App.tsx onEvent` `navigate` tipini **anında** uygular: `routeFromEvent(e)` → `buildRoute`
+→ `window.location.hash` (URL→state makinesi workspace/view/entity'yi ayarlar). Toast/rozet
+**yok** — bu pasif sinyal değil, eylemin kendisi. Açık pencere yoksa SSE event'i düşer (no-op).
+
+**Dosyalar:**
+- `internal/tools/navigatesink.go` — `NavigateSink` (`Navigate(ctx, NavigateSpec)`) +
+  `WithNavigate`/`navigateFrom` köprüsü.
+- `internal/tools/builtin_focusview.go` — `FocusViewTool` (Def + Call; view enum doğrulama).
+  `builtin_focusview_test.go` (5 test).
+- `internal/api/notifysink.go` — concrete `notifySink` artık **hem** `NotifySink` **hem**
+  `NavigateSink` (tek instance iki arayüz); `Navigate` → `events.Event{Type:"navigate"}`.
+- `internal/agent/toolsetup.go` — native registry'ye `NewFocusViewTool()`.
+- `internal/api/chat_control.go` — `chatRun.nav` + `setNav`/`navSink()`.
+- `internal/api/chat_stream.go` + `autonomous_interaction.go` — aynı sink `setNav` ile bağlanır.
+- `internal/api/mcp_interaction.go` — spec + `Call` case + `callFocus`.
+- `frontend/src/App.tsx` — `onEvent`'te `e.type==='navigate'` → hash uygula, return (toast yok).
+
+**Test:** `go build`/`vet`/`go test ./...` + `tsc`/`vite build` yeşil. Canlı: Fasty
+(claude-cli) `focus_view{view:artifacts}` çağırdı → `navigate` event SSE'de yakalandı →
+"navigated the UI to artifacts". Uçtan uca doğrulandı.
+
+> **Faz 3 kalan:** oturum metadata yazımı (`set_session_title`/`set_session_goal`+
+> `complete_goal`/cwd/archive) — ayrı iş; bkz. §8 tablosu son satır.
+
+## 19. Faz 3 — `set_session_goal` / `complete_goal` (oturum hedefi) (2026-06-26 — TAMAMLANDI ✅)
+
+Ajan artık oturumun kalıcı **"north star" hedefini** kendisi koyabilir/tamamlayabilir —
+**mevcut `db.Session.Goal`/`GoalDone` ile paylaşımlı** (ayrı bir ajan-goal açılmadı). Daha
+önce yalnız kullanıcı UI'dan set ediyordu; ajan hedefi sistem prompt'unda (`goalContextBlock`)
+**görüyor** ama yazamıyordu. Artık iki araçla yazabilir; aynı alan, tek north-star.
+
+**Araç sözleşmesi:**
+- `set_session_goal(goal*)` → `Goal=goal, GoalDone=false`. Mevcut hedefi **ezer** ama yanıt
+  "replaced the previous goal: …" diye **şeffaf** bildirir (paylaşımlı alan, kullanıcının
+  hedefini sessizce ezmemek için). maxlen 2000.
+- `complete_goal()` (argümansız) → mevcut metni koruyup `GoalDone=true`; hedef kalır ama
+  context'e enjekte olmaz. Hedef yoksa/zaten done ise graceful mesaj (hata değil).
+- Sink yoksa (oturumsuz tur) graceful no-op.
+
+**Mekanizma:** `goalContextBlock` (`api/goal.go`) hedefi zaten her turun dinamik (cache-dışı)
+ekine enjekte ediyor; done olunca düşüyor. Araçlar yalnız bu mevcut alana yazar → ajanın
+koyduğu hedef **sonraki turdan** itibaren onu yönlendirir.
+
+**Dosyalar:**
+- `internal/tools/goalsink.go` — `GoalSink` (`Goal`/`SetGoal`) + `GoalState` + `WithGoal` köprüsü.
+- `internal/tools/builtin_goal.go` — `SetSessionGoalTool` + `CompleteGoalTool`.
+  `builtin_goal_test.go` (7 test: yaz/replace-flag/boş-red/sink-yok/complete/no-goal/already-done).
+- `internal/agent/goalsink.go` — concrete `Runtime.NewGoalSink(sessionID)` → `db.GetSession`/
+  `db.SetSessionGoal` (`artifactsink.go` deseni; "boş hedef done olamaz" guard'ı mirror).
+- `internal/agent/toolsetup.go` — native registry'ye iki eager built-in.
+- `internal/api/chat_control.go` — `chatRun.goal` + `setGoal`/`goalSinkFor()`.
+- `internal/api/chat_stream.go` + `autonomous_interaction.go` — `wsp.Runtime.NewGoalSink` / `rt.NewGoalSink` ile bağlanır.
+- `internal/api/mcp_interaction.go` — spec ×2 + `Call` case + `callGoal` (set/complete dispatch).
+- Skill: `swarmgo-progress` (north-star satırı genişletildi) + `swarmgo-guide` (interaction bölümü).
+
+**Yetki nüansı:** Hedef kullanıcıyla **paylaşımlı**. `set_session_goal` üzerine yazabilir ama
+değişikliği yanıtta açıkça bildirir (provenance ayrımı veri modelinde yok; şeffaflık yeterli
+görüldü). İleride sıkı guard istenirse `Session`'a "goal owner" alanı eklenebilir.
+
+**UI notu:** Goal kartı `SessionDetailPanel` yan panelinde; ajan set edince **canlı refresh
+event'i bu fazda eklenmedi** (panel yeniden açılınca/oturum değişince tazelenir). Kalıcılık +
+context enjeksiyonu anında çalışır. Canlı refresh istenirse ayrı küçük iş (SSE + panel handler).
+
+**Test:** `go build`/`vet`/`go test` (tools/agent/api) yeşil; 7 yeni birim test.
+
+> **Faz 3 kalan:** `set_session_title` / cwd / archive_session — ayrı iş (§8 tablosu son satır).
+
+## 20. Faz 3 — oturum metadata araçları + goal canlı-refresh (2026-06-26 — TAMAMLANDI ✅, Faz 3 KAPANDI)
+
+Faz 3'ün son artığı: ajanın **kendi oturumunu** düzenleyebilmesi + agent-set goal/metadata'nın
+UI'da **canlı** görünmesi.
+
+**Yeni araçlar (hepsi bloklamayan, oturum-bağlı; sink yoksa graceful):**
+- `set_session_title(title*)` — oturumu yeniden adlandır (sidebar etiketi; maxlen 200).
+- `set_working_dir(path*)` — oturumun cwd'sini ayarla (fs/shell için, `cd` gibi). Path **var
+  olan dizin** olmalı (`os.Stat` doğrulaması); boş = workspace varsayılanına dön. Sonraki turda etkili.
+- `archive_session()` — oturumu arşivle (aktif listeden + cross-session bloktan düşer, **silinmez**).
+
+**Konsolide sink:** `tools.SessionSink` = `GoalSink` **superset**'i (Goal/SetGoal + SetTitle/
+SetWorkingDir/Archive). Tek concrete `agent/sessionSink` (eski `goalSink` yeniden adlandırıldı)
+hepsini uygular; `Runtime.NewSessionSink` döndürür. chat_stream + autonomous tek instance'ı hem
+`WithGoal` hem `WithSession` olarak bağlar. Goal araçları **dokunulmadan** dar `GoalSink`'i kullanmaya
+devam eder.
+
+**Canlı refresh (Part 1):** Her sink mutasyonu (goal **dahil**) `events.Event{Type:"session",
+Target:{sessionId}}` yayınlar → SSE → `App.tsx onEvent` `session` tipini erken yakalar:
+`refreshSessions()` (liste: başlık/sıra/arşiv) + aktif oturumsa `setMeterRefresh(n+1)` (detay panel
+`refreshKey` prop'u → goal/başlık kartı yeniden çekilir). **Toast yok** (sessiz sinyal). Böylece
+önceki fazdaki "goal kartı ajan set edince güncellenmiyor" eksiği de kapandı.
+
+**DB:** `SetSessionState(ctx, id, state)` eklendi (archive; UpdatedAt bump). `SetSessionTitle`/
+`SetSessionWorkingDir` zaten vardı.
+
+**Dosyalar:** `tools/sessionsink.go` (SessionSink+köprü), `tools/builtin_sessionedit.go` (+test, 7),
+`agent/sessionsink.go` (goalsink.go→bu; emit'li, 5 metod), `agent/toolsetup.go`, `api/chat_control.go`
+(`session` alanı), `api/chat_stream.go` + `autonomous_interaction.go`, `api/mcp_interaction.go`
+(spec ×3 + `callSessionEdit`), `db/store.go` (`SetSessionState`), `frontend/App.tsx` (`session` event),
+skill `swarmgo-guide`.
+
+**Test:** tools/agent/api/db `build`/`vet`/`test` + `tsc`/`vite` yeşil. Canlı claude-cli doğrulaması.
+
+> **FAZ 3 TAMAMEN KAPANDI.** notify + focus_view + goal (set/complete) + oturum metadata
+> (title/cwd/archive) + canlı-refresh hepsi native+CLI+otonom. Kalan: Faz 4 (Codex/Gemini adaptörleri).
+
+### 20.1 Arşiv UI (2026-06-26)
+
+`archive_session` ajan tarafında durumu yazıyordu ama sidebar tüm state'leri gösterdiğinden
+arşivin **görünür etkisi yoktu**. UI tamamlandı:
+- **Backend:** `PUT /api/sessions/{id}/state {state:"active"|"archived"}` (`handleSetSessionState`
+  → `db.SetSessionState`; geçersiz state 400). Ajan `archive_session` ile aynı mutasyon.
+- **Frontend:** `SessionsSidebar`'a **Aktif / Arşiv (n)** segment toggle'ı; liste artık state'e göre
+  filtreleniyor (varsayılan arşivlileri gizler). Satır menüsünde **Arşivle** / **Arşivden çıkar**.
+  `App.setSessionArchived` → `api.setSessionState` + lokal güncelleme (arşivlenen aktif oturumsa
+  başka aktif oturuma düşülür). Agent-driven archive zaten `session` SSE event'iyle canlı yansır.
 
 ## İlgili dokümanlar
 - `09-CLAUDE-AGENT-SDK.md` — SDK paritesi ADR (native vs CLI yol ayrımı)

@@ -5,18 +5,23 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/progress"
 	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // TestNewTodoSinkPersistsToCwd verifies the todo sink writes the checklist to the
-// project's progress file when a working directory is given.
+// project's progress file when the session has an explicit working directory
+// (shared across sessions on that project).
 func TestNewTodoSinkPersistsToCwd(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
 	cwd := t.TempDir()
+	ag, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "A", Provider: "anthropic"})
+	sess, _ := rt.db.CreateSession(ctx, db.Session{AgentID: ag.ID, WorkingDir: cwd})
 
-	sink := rt.NewTodoSink("SES1", "AGT1", cwd)
-	err := sink.SaveTodos(context.Background(), []tools.TodoSinkItem{
+	sink := rt.NewTodoSink(sess.ID, ag.ID)
+	err := sink.SaveTodos(ctx, []tools.TodoSinkItem{
 		{Content: "build", Status: "completed"},
 		{Content: "test", Status: "in_progress"},
 	})
@@ -28,7 +33,7 @@ func TestNewTodoSinkPersistsToCwd(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("load: ok=%v err=%v", ok, err)
 	}
-	if rec.SessionID != "SES1" || rec.AgentID != "AGT1" {
+	if rec.SessionID != sess.ID || rec.AgentID != ag.ID {
 		t.Fatalf("ids not stamped: %+v", rec)
 	}
 	if len(rec.Todos) != 2 || rec.Todos[0].Status != "completed" {
@@ -39,23 +44,33 @@ func TestNewTodoSinkPersistsToCwd(t *testing.T) {
 	}
 }
 
-// TestNewTodoSinkFallsBackToStore verifies that with no cwd the sink writes to a
-// per-agent file under the workspace store, so an agent still resumes its own
-// progress.
-func TestNewTodoSinkFallsBackToStore(t *testing.T) {
+// TestNewTodoSinkFallsBackPerSession verifies that with no explicit project dir
+// the sink writes to a PER-SESSION file under the workspace store, so unrelated
+// sessions don't collide on one shared progress file.
+func TestNewTodoSinkFallsBackPerSession(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	ag, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "A", Provider: "anthropic"})
+	sess, _ := rt.db.CreateSession(ctx, db.Session{AgentID: ag.ID}) // no WorkingDir
 
-	sink := rt.NewTodoSink("SES2", "AGT9", "")
-	if err := sink.SaveTodos(context.Background(), []tools.TodoSinkItem{{Content: "x", Status: "pending"}}); err != nil {
+	sink := rt.NewTodoSink(sess.ID, ag.ID)
+	if err := sink.SaveTodos(ctx, []tools.TodoSinkItem{{Content: "x", Status: "pending"}}); err != nil {
 		t.Fatalf("save todos: %v", err)
 	}
 
-	fallback := filepath.Join(rt.db.Root(), "progress", "AGT9")
+	fallback := filepath.Join(rt.db.Root(), "progress", sess.ID)
 	rec, ok, err := progress.Load(fallback)
 	if err != nil || !ok {
 		t.Fatalf("load fallback: ok=%v err=%v", ok, err)
 	}
 	if len(rec.Todos) != 1 || rec.Todos[0].Content != "x" {
 		t.Fatalf("fallback todos wrong: %+v", rec.Todos)
+	}
+
+	// A SECOND session (same agent, no project dir) must get its OWN file, not
+	// the first session's — this is the per-session isolation the fix provides.
+	sess2, _ := rt.db.CreateSession(ctx, db.Session{AgentID: ag.ID})
+	if rt.ProgressDir(sess2.ID) == rt.ProgressDir(sess.ID) {
+		t.Fatalf("two sessions resolved to the SAME progress dir: %s", rt.ProgressDir(sess.ID))
 	}
 }

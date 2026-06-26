@@ -117,6 +117,7 @@ func (s *Server) applySettings() {
 	s.tun.SetMemoryControls(cur.MemoryPressureWarn, cur.CoreMemoryTools)
 	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffPressure, cur.HandoffMaxChain, cur.HandoffWriteFile)
 	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
+	s.tun.SetDebugJournal(cur.DebugJournalEnabled, cur.DebugJournalCap)
 	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
 	s.tun.SetUserModel(cur.AutoUserModel)
 	s.tun.SetShellEnabled(cur.EnableShell)
@@ -245,6 +246,7 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/sessions/{id}/messages/{msgId}", s.handleDeleteMessage)
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
 	mux.HandleFunc("PUT /api/sessions/{id}/goal", s.handleSetSessionGoal)
+	mux.HandleFunc("PUT /api/sessions/{id}/state", s.handleSetSessionState)
 	mux.HandleFunc("PUT /api/sessions/{id}/agent", s.handleSetSessionAgent)
 	mux.HandleFunc("GET /api/sessions/{id}/workdir", s.handleGetSessionWorkdir)
 	mux.HandleFunc("PUT /api/sessions/{id}/workdir", s.handleSetSessionWorkdir)
@@ -311,6 +313,7 @@ func (s *Server) registerUsageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/agents/{id}/budget", s.handleSetBudget)
 	mux.HandleFunc("GET /api/sessions/{id}/context", s.handleSessionContext)
 	mux.HandleFunc("GET /api/sessions/{id}/usage-detail", s.handleSessionUsageDetail)
+	mux.HandleFunc("GET /api/sessions/{id}/debug", s.handleSessionDebug)
 	mux.HandleFunc("GET /api/usage", s.handleWorkspaceUsage)
 }
 

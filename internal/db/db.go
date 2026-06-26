@@ -52,6 +52,14 @@ type DB struct {
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
 
+	// debugCount tracks the on-disk line count of each session's debug.jsonl so
+	// the append path can cap the file (oldest events pruned) without re-reading
+	// it every write. Guarded by its own mutex (independent of mu) so a debug
+	// emit never contends with the store hot path — debug.jsonl is a separate
+	// file, just like the inflight sidecar.
+	debugMu    sync.Mutex
+	debugCount map[string]int
+
 	// counters holds the per-entity monotonic id sequence (prefix -> last n).
 	// It is persisted to counters.json so a number is never reused, even across
 	// deletions or restarts. Guarded by its own mutex (independent of mu) so it
@@ -79,6 +87,7 @@ func Open(path string) (*DB, error) {
 		hooks:     map[string]Hook{},
 		usage:        map[string]Usage{},
 		sessionUsage: map[string]SessionUsage{},
+		debugCount:   map[string]int{},
 		counters:  map[string]int64{},
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {

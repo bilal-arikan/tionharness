@@ -8,6 +8,37 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
+type setStateReq struct {
+	State string `json:"state"`
+}
+
+// handleSetSessionState sets a session's lifecycle state ("active"/"archived").
+// Archiving drops it from the active sidebar list + cross-session context block
+// but never deletes it; the user can restore it (state="active"). The same
+// mutation an agent makes via archive_session.
+func (s *Server) handleSetSessionState(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req setStateReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	state := strings.TrimSpace(req.State)
+	if state != "active" && state != "archived" {
+		writeError(w, http.StatusBadRequest, "state must be \"active\" or \"archived\"")
+		return
+	}
+	ctx := r.Context()
+	database := ws(r).DB
+	if _, err := database.GetSession(ctx, id); writeDBError(w, err, "session not found") {
+		return
+	}
+	if err := database.SetSessionState(ctx, id, state); writeDBError(w, err, "") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"id": id, "state": state})
+}
+
 func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	agentID := r.URL.Query().Get("agentId")
 	sessions, err := ws(r).DB.ListSessions(r.Context(), agentID)

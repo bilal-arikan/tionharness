@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import hljs from 'highlight.js/lib/common'
 import { DiffView } from './DiffView'
 import { MermaidDiagram } from './MermaidDiagram'
+import { Gallery } from './Gallery'
 import { looksLikeDiff } from '../../lib/diff'
 
 interface Props {
@@ -17,9 +18,10 @@ export function CodeBlock({ code, lang }: Props) {
 
   const isDiff = lang === 'diff' || (!lang && looksLikeDiff(code))
   const isMermaid = lang === 'mermaid'
+  const isGallery = lang === 'gallery' || lang === 'image-preview' || lang === 'images'
 
   const html = useMemo(() => {
-    if (isDiff || isMermaid) return ''
+    if (isDiff || isMermaid || isGallery) return ''
     try {
       if (lang && hljs.getLanguage(lang)) {
         return hljs.highlight(code, { language: lang }).value
@@ -28,10 +30,11 @@ export function CodeBlock({ code, lang }: Props) {
     } catch {
       return ''
     }
-  }, [code, lang, isDiff, isMermaid])
+  }, [code, lang, isDiff, isMermaid, isGallery])
 
   if (isDiff) return <DiffView text={code} />
   if (isMermaid) return <MermaidDiagram code={code} />
+  if (isGallery) return <Gallery code={code} />
 
   const copy = () => {
     navigator.clipboard.writeText(code).then(() => {
