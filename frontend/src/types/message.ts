@@ -86,6 +86,19 @@ export interface Message {
   // server died mid-stream): text/trace are partial and the UI flags it as cut
   // off. See backend db.InflightTurn / recoverInflight.
   interrupted?: boolean
+  // True when the USER stopped this assistant turn mid-stream (distinct from
+  // interrupted, which is a crash-recovered partial). Text/trace are whatever
+  // completed before the stop.
+  cancelled?: boolean
+  // Per-turn enrichment (assistant role): the model that actually answered, why
+  // generation ended, this turn's token usage, and its wall-clock duration. All
+  // optional/absent for user/system or older messages.
+  model?: string
+  stopReason?: string
+  usage?: MessageUsage
+  durationMs?: number
+  // The user's rating of this assistant turn (👍/👎 + optional note). Absent = none.
+  feedback?: MessageFeedback
   // How an auto-generated prompt was produced (display only): "wake" = a
   // schedule_wake auto-resume, "schedule" = a scheduled routine prompt. Empty for
   // real user messages. The UI renders these as a "⏰ continuation" note instead
@@ -95,6 +108,22 @@ export interface Message {
   // User-supplied files / pasted long text sent with this turn (user role only).
   attachments?: Attachment[]
   createdAt: number
+}
+
+// MessageUsage is an assistant turn's token consumption (compact keys mirror the
+// backend db.MessageUsage).
+export interface MessageUsage {
+  in: number
+  out: number
+  cacheRead?: number
+  cacheWrite?: number
+}
+
+// MessageFeedback is the user's rating of an assistant turn.
+export interface MessageFeedback {
+  rating: number // +1 | -1 | 0
+  note?: string
+  at: number
 }
 
 export interface Usage {

@@ -300,6 +300,9 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 	if s.State == "" {
 		s.State = "active"
 	}
+	if s.SchemaVersion == 0 {
+		s.SchemaVersion = SessionSchemaVersion
+	}
 	d.messages[s.ID] = nil
 	return s, d.persistSessionLocked(s)
 }
@@ -373,6 +376,61 @@ func (d *DB) SetSessionState(ctx context.Context, sessionID, state string) error
 		s.State = state
 		s.UpdatedAt = now()
 	})
+}
+
+// SetSessionLabels replaces a session's free-form tag set (filtering/automation).
+// Does not bump UpdatedAt — labelling must not reorder the session list.
+func (d *DB) SetSessionLabels(ctx context.Context, sessionID string, labels []string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Labels = labels
+	})
+}
+
+// SetSessionStatus sets a session's free-form WORKFLOW status ("in_progress",
+// "blocked", "done", …) — orthogonal to State (lifecycle). An empty string
+// clears it. Does not bump UpdatedAt (status changes must not reorder the list).
+func (d *DB) SetSessionStatus(ctx context.Context, sessionID, status string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Status = status
+	})
+}
+
+// SetSessionPinned pins/unpins a session to the top of the sidebar list. Does not
+// bump UpdatedAt (pinning is a view preference, not activity).
+func (d *DB) SetSessionPinned(ctx context.Context, sessionID string, pinned bool) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Pinned = pinned
+	})
+}
+
+// SetMessageFeedback sets (or clears, when rating==0 and note=="") a user rating
+// on an assistant message, rewriting the session's JSONL file. Returns ErrNotFound
+// if the session or message is absent.
+func (d *DB) SetMessageFeedback(ctx context.Context, sessionID, messageID string, rating int, note string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s, ok := d.sessions[sessionID]
+	if !ok {
+		return ErrNotFound
+	}
+	msgs := d.messages[sessionID]
+	idx := -1
+	for i := range msgs {
+		if msgs[i].ID == messageID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return ErrNotFound
+	}
+	if rating == 0 && note == "" {
+		msgs[idx].Feedback = nil
+	} else {
+		msgs[idx].Feedback = &MessageFeedback{Rating: rating, Note: note, At: now()}
+	}
+	d.messages[sessionID] = msgs
+	return d.writeSessionFileLocked(s)
 }
 
 // SetSessionCLIResume records the claude-cli resume state for a session: the
@@ -472,7 +530,14 @@ func (d *DB) ListSessions(ctx context.Context, agentID string) ([]Session, error
 			out = append(out, s)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt > out[j].UpdatedAt })
+	// Pinned sessions float to the top; within each group, most-recently-updated
+	// first. A view preference, so it never changes the underlying activity order.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Pinned != out[j].Pinned {
+			return out[i].Pinned
+		}
+		return out[i].UpdatedAt > out[j].UpdatedAt
+	})
 	return out, nil
 }
 

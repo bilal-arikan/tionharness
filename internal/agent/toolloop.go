@@ -130,6 +130,12 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 		ev.Detail = err.Error()
 	}
 	r.emitDebug(ctx, ev)
+	// Autonomous callers install a turn-meta sink on ctx; record this completion's
+	// model/stop-reason/usage so they can stamp it onto the persisted assistant
+	// message (chat paths read it from the returned response directly instead).
+	if err == nil {
+		turnMetaFrom(ctx).capture(resp)
+	}
 	return resp, steps, err
 }
 

@@ -349,6 +349,10 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
             <MessageList
               messages={messages}
               pending={loading || selected.running}
+              // A running execution (scheduled task / flow / spawn) is live: mark
+              // it streaming so the last assistant bubble keeps the working
+              // indicator through its tool steps until the turn completes.
+              streaming={selected.running}
               pendingAgentId={selected.agentId}
               agents={agents}
               onOpenFile={onOpenFile}

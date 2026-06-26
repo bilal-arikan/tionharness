@@ -34,6 +34,8 @@ interface Props {
   onDeleteMessage?: (id: string) => void
   // Retry the failed turn behind an assistant bubble that errored.
   onRetry?: (id: string) => void
+  // Rate an assistant turn (👍/👎): rating +1 / -1 / 0 (clear).
+  onFeedback?: (id: string, rating: number) => void
 }
 
 // MessageList is the scrolling transcript. It owns scroll-pinning and per-message
@@ -53,6 +55,7 @@ export function MessageList({
   onOpenArtifact,
   onDeleteMessage,
   onRetry,
+  onFeedback,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Transiently highlighted message (from a search deep-link); cleared after the
@@ -171,6 +174,7 @@ export function MessageList({
                 onOpenArtifact={onOpenArtifact}
                 onDelete={onDeleteMessage}
                 onRetry={onRetry}
+                onFeedback={onFeedback}
               />
             )
           }

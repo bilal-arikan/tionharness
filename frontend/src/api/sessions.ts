@@ -81,6 +81,30 @@ export const sessionApi = {
       method: 'PUT',
       body: JSON.stringify({ state }),
     }),
+  // Replace the session's free-form tag set (filtering/automation).
+  setSessionLabels: (sessionId: string, labels: string[]) =>
+    req<{ id: string; labels: string[] }>(`/api/sessions/${sessionId}/labels`, {
+      method: 'PUT',
+      body: JSON.stringify({ labels }),
+    }),
+  // Set the session's free-form WORKFLOW status (orthogonal to state). "" clears it.
+  setSessionStatus: (sessionId: string, status: string) =>
+    req<{ id: string; status: string }>(`/api/sessions/${sessionId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    }),
+  // Pin/unpin the session to the top of the sidebar list.
+  setSessionPinned: (sessionId: string, pinned: boolean) =>
+    req<{ id: string; pinned: boolean }>(`/api/sessions/${sessionId}/pin`, {
+      method: 'PUT',
+      body: JSON.stringify({ pinned }),
+    }),
+  // Rate an assistant message (👍/👎 + optional note). rating: +1 | -1 | 0 (clear).
+  setMessageFeedback: (sessionId: string, messageId: string, rating: number, note = '') =>
+    req<{ id: string; rating: number; note: string }>(
+      `/api/sessions/${sessionId}/messages/${messageId}/feedback`,
+      { method: 'PUT', body: JSON.stringify({ rating, note }) },
+    ),
   // Rebind the session to a different agent (the chat agent dropdown). Every
   // following turn is answered by this agent.
   setSessionAgent: (sessionId: string, agentId: string) =>

@@ -2,6 +2,47 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## "Çalışıyor" (zıplayan nokta) indikatörü tüm tur boyunca kalıcı ✅ (2026-06-26)
+
+**Sorun:** Sohbette ajan yanıtı başlamadan önce zıplayan 3-nokta ("yazıyor")
+gösteriliyordu, ama **ilk tool adımı gelir gelmez kayboluyordu** —
+`AssistantTurn.tsx`'te WorkingDots yalnız `steps.length === 0 && !text &&
+!reasoning` iken çiziliyordu. Kullanıcı, indikatörün **tur tamamen bitene
+kadar** (tool kullanımları + kısmi metin dahil) ve **scheduled_task/flow/spawn
+koşularında da** görünmesini istedi.
+
+**Çözüm:**
+- `AssistantTurn.tsx`: WorkingDots koşulu `isLastLive && !interrupted &&
+  !cancelled` oldu → tur canlı olduğu sürece (adımlar/metin olsa bile) balonun
+  altında kalır, içerik varsa `mt-1.5` ile aralıklı; tur bitince (`isLastLive`
+  false) kaybolur. Tamamlanmış boş balon artık sonsuza dek zıplamaz.
+- `ExecutionsPanel.tsx`: `MessageList`'e `streaming={selected.running}`
+  eklendi → koşan scheduled_task/flow/spawn'ın son asistan balonu "canlı"
+  sayılır ve indikatör orada da tur bitene kadar devam eder.
+- `tsc --noEmit` temiz.
+
+## session.jsonl zenginleştirme: per-turn metadata + oturum etiket/durum/pin + feedback ✅ (2026-06-26)
+
+`session.jsonl`'ye kullanıcıya-görünür, kalıcı alanlar eklendi (debug.jsonl ≠ bu;
+gözlemlenebilirlik orada kalır):
+
+**Message (asistan turu):** `model` (cevaplayan gerçek model), `stopReason`
+(kesilme/red), `usage{in,out,cacheRead,cacheWrite}` (per-balon maliyet),
+`durationMs`, `cancelled` (kullanıcı durdurması — `interrupted` crash'ten ayrı),
+`feedback{rating±1,note,at}` (👍/👎). chat (sync+stream) yollarında populate;
+otonom turlar `omitempty` boş. UI: balon-altı `model · ↑in ↓out ⚡cache` rozeti +
+stopReason uyarısı + cancelled banner + hover'da 👍/👎 thumbs (optimistic).
+
+**Session header:** `v` (SchemaVersion=1, ileri-migration), `labels[]`, `status`
+(workflow — state/lifecycle'dan ayrı), `pinned` (ListSessions öne alır). UI:
+sidebar pin menüsü + 📌 gösterge + status badge + label chip'leri; detay-panelde
+"Etiketler & Durum" editörü (blur/Enter ile kaydeder).
+
+**Backend:** db setter'ları (SetSessionLabels/Status/Pinned, SetMessageFeedback) +
+API `PUT /api/sessions/{id}/{labels,status,pin}` + `.../messages/{msgId}/feedback`.
+Test `db/session_meta_test.go` (round-trip + clear). Build+vet+test + frontend
+`tsc -b` temiz. Detay: `_Docs\08-DEPOLAMA.md`.
+
 ## claude-cli 2.1.x+ iki-tier araç köprüsü: eager-core + lazy-extended ✅ (2026-06-26)
 
 **Sorun:** claude-cli ajanlarında (ör. WS5/AGT4) `Bash` ilk turda `No such tool
