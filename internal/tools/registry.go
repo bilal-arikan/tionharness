@@ -64,6 +64,13 @@ type Registry struct {
 	// its catalog is documented in the `swarmgo-self-management` skill instead, so
 	// dozens of summaries don't ride in every turn's prompt. hidden ⊆ lazy.
 	hidden map[string]bool
+	// nameOnly is the subset of lazy tools rendered in the load-on-demand catalog
+	// as NAME ONLY (summary suppressed) — the Claude Code "deferred tool" style.
+	// They stay listed (unlike hidden, which is dropped entirely), so the model
+	// sees the name and discovers what it does via tool_search before activating.
+	// nameOnly ⊆ lazy and is disjoint from hidden. The workspace tools screen's
+	// "NameOnly" chip maps here.
+	nameOnly map[string]bool
 
 	mcpEntries     []mcp.CatalogEntry
 	mcpCfgByServer map[string]mcp.ServerConfig
@@ -83,6 +90,7 @@ func NewRegistry(builtins ...Tool) *Registry {
 		builtins:       map[string]Tool{},
 		lazy:           map[string]bool{},
 		hidden:         map[string]bool{},
+		nameOnly:       map[string]bool{},
 		mcpCfgByServer: map[string]mcp.ServerConfig{},
 	}
 	for _, t := range builtins {
@@ -117,19 +125,37 @@ func (r *Registry) MarkHidden(names ...string) {
 	}
 }
 
-// Unlazy forces the named tools eager (shipped every turn): it clears any lazy
-// AND hidden marks, overriding code defaults like the self-management suite's
-// MarkHidden. Used by the workspace "show" override so a user can surface an
-// otherwise-hidden tool. Unknown names are harmless no-ops.
+// MarkNameOnly flags lazy tools to render in the load-on-demand catalog as NAME
+// ONLY (summary suppressed), the Claude Code "deferred tool" style. They stay
+// listed (the model sees the name), activatable (activate_tools) and searchable
+// (tool_search) — only the per-turn summary line is dropped. Implies MarkLazy.
+// The workspace tools screen's "NameOnly" chip maps here.
+func (r *Registry) MarkNameOnly(names ...string) {
+	for _, n := range names {
+		r.lazy[n] = true
+		r.nameOnly[n] = true
+	}
+}
+
+// Unlazy forces the named tools eager (shipped every turn): it clears any lazy,
+// hidden AND name-only marks, overriding code defaults like the self-management
+// suite's MarkHidden. Used by the workspace "show" override so a user can surface
+// an otherwise-hidden tool. Unknown names are harmless no-ops.
 func (r *Registry) Unlazy(names ...string) {
 	for _, n := range names {
 		delete(r.lazy, n)
 		delete(r.hidden, n)
+		delete(r.nameOnly, n)
 	}
 }
 
 // IsLazy reports whether a tool is lazy.
 func (r *Registry) IsLazy(name string) bool { return r.lazy[name] }
+
+// IsHidden reports whether a tool is in the HIDDEN tier: lazy AND folded out of
+// the per-turn catalog into the self-management skill pointer (not enumerated by
+// name). Distinct from a plain name-only tool, which stays listed by name.
+func (r *Registry) IsHidden(name string) bool { return r.hidden[name] }
 
 // AttachMCP records the MCP catalog and per-server configs so the registry can
 // advertise and dispatch namespaced MCP tools. Every MCP tool is marked lazy:
@@ -282,9 +308,15 @@ func (r *Registry) VisibleLazyCatalog(allow func(name string) bool) []providers.
 	full := r.LazyCatalog(allow)
 	out := full[:0:0]
 	for _, d := range full {
-		if !r.hidden[d.Name] {
-			out = append(out, d)
+		if r.hidden[d.Name] {
+			continue
 		}
+		// NameOnly tools stay listed but shed their summary — the renderer emits
+		// just the backticked name (Claude Code deferred-tool style).
+		if r.nameOnly[d.Name] {
+			d.Description = ""
+		}
+		out = append(out, d)
 	}
 	return out
 }

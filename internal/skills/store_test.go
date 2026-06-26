@@ -111,6 +111,56 @@ func TestCatalogBlockAndEmpty(t *testing.T) {
 	}
 }
 
+// TestNameOnlySkillRendersSlugOnly verifies a name_only skill is listed by slug
+// alone (description + when-to-use suppressed) while a normal skill keeps its
+// summary — and that SetNameOnly flips the frontmatter and reloads.
+func TestNameOnlySkillRendersSlugOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "triage", "---\nname: Triage\ndescription: sort issues\nwhen_to_use: on new issues\nshared: true\n---\nbody")
+	writeSkill(t, dir, "deploy", "---\nname: Deploy\ndescription: ship the build\nwhen_to_use: on release\nshared: true\nname_only: true\n---\nbody")
+	s := New("", dir)
+
+	// Parsed flag.
+	if d, _ := s.Get("deploy"); !d.NameOnly {
+		t.Fatal("deploy should parse name_only: true")
+	}
+	if tr, _ := s.Get("triage"); tr.NameOnly {
+		t.Fatal("triage should default to NameOnly=false")
+	}
+
+	block := s.CatalogBlock()
+	// NameOnly skill: slug present, but its summary text absent.
+	if !contains(block, "`deploy`") {
+		t.Errorf("name-only skill must still be listed by slug:\n%s", block)
+	}
+	if contains(block, "ship the build") || contains(block, "on release") {
+		t.Errorf("name-only skill must NOT show description/when:\n%s", block)
+	}
+	// Normal skill keeps its summary.
+	if !contains(block, "sort issues") {
+		t.Errorf("normal skill must keep its summary:\n%s", block)
+	}
+
+	// Toggle off via SetNameOnly → summary returns.
+	if _, err := s.SetNameOnly("deploy", false); err != nil {
+		t.Fatalf("SetNameOnly off: %v", err)
+	}
+	if d, _ := s.Get("deploy"); d.NameOnly {
+		t.Fatal("deploy NameOnly should be false after toggle off")
+	}
+	if !contains(s.CatalogBlock(), "ship the build") {
+		t.Error("summary must return after NameOnly toggled off")
+	}
+
+	// Toggle back on → summary suppressed again.
+	if _, err := s.SetNameOnly("deploy", true); err != nil {
+		t.Fatalf("SetNameOnly on: %v", err)
+	}
+	if contains(s.CatalogBlock(), "ship the build") {
+		t.Error("summary must be suppressed after NameOnly toggled on")
+	}
+}
+
 // TestCatalogBlockForAgentTool verifies the block names the skill tool exactly as
 // given (e.g. the namespaced identifier a claude-cli agent must call), instead of
 // the bare default.

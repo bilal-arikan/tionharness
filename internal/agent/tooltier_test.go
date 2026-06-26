@@ -59,7 +59,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 		{Name: "srvA__alpha", Description: "mcp tool alpha"},
 		{Name: "srvA__beta", Description: "mcp tool beta"},
 	}
-	out := renderLazyToolCatalog(small, 0)
+	out := renderLazyToolCatalog(small, 0, false)
 	if !strings.Contains(out, "create_agent") || !strings.Contains(out, "srvA__alpha") {
 		t.Fatalf("small catalog should list every tool, got:\n%s", out)
 	}
@@ -72,7 +72,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 			Description: "an mcp tool",
 		})
 	}
-	out = renderLazyToolCatalog(big, 0)
+	out = renderLazyToolCatalog(big, 0, false)
 	if !strings.Contains(out, "create_agent") {
 		t.Error("built-in lazy tool must still be listed in full")
 	}
@@ -92,7 +92,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 // the swarmgo-self-management skill (and still names the visible lazy tools).
 func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 	visible := []providers.ToolDef{{Name: "WebFetch", Description: "fetch a page"}}
-	out := renderLazyToolCatalog(visible, 12)
+	out := renderLazyToolCatalog(visible, 12, false)
 	if !strings.Contains(out, "WebFetch") {
 		t.Error("visible lazy tools must still be listed")
 	}
@@ -103,13 +103,55 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 		t.Errorf("pointer must state the hidden count, got:\n%s", out)
 	}
 	// With no hidden tools, no pointer line.
-	out = renderLazyToolCatalog(visible, 0)
+	out = renderLazyToolCatalog(visible, 0, false)
 	if strings.Contains(out, "swarmgo-self-management") {
 		t.Error("no pointer when there are no hidden tools")
 	}
 	// Empty + no hidden → empty block.
-	if renderLazyToolCatalog(nil, 0) != "" {
+	if renderLazyToolCatalog(nil, 0, false) != "" {
 		t.Error("empty catalog with no hidden tools must render nothing")
+	}
+}
+
+// TestLazyCatalogCLIFormNamespacesNames verifies the claude-cli rendering of the
+// load-on-demand catalog: built-in tools carry the Interaction MCP prefix, MCP
+// tools carry the mcp__ prefix, CLI-native built-ins (WebFetch) are dropped, and
+// the guidance points at ToolSearch instead of the native activate_tools.
+func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
+	lazy := []providers.ToolDef{
+		{Name: "set_session_goal"},               // built-in → namespaced
+		{Name: "WebFetch", Description: "fetch"},  // CLI-native → dropped
+		{Name: "srvA__alpha", Description: "mcp"}, // MCP → mcp__ prefix
+	}
+	out := renderLazyToolCatalog(lazy, 3, true)
+
+	if !strings.Contains(out, "mcp__swarmgo_interaction__set_session_goal") {
+		t.Errorf("CLI form must namespace built-ins:\n%s", out)
+	}
+	if !strings.Contains(out, "mcp__srvA__alpha") {
+		t.Errorf("CLI form must prefix MCP tools with mcp__:\n%s", out)
+	}
+	if strings.Contains(out, "WebFetch") {
+		t.Errorf("CLI-native WebFetch must be dropped from the CLI catalog:\n%s", out)
+	}
+	if strings.Contains(out, "activate_tools") {
+		t.Errorf("CLI form must NOT reference native activate_tools:\n%s", out)
+	}
+	if !strings.Contains(out, "ToolSearch") {
+		t.Errorf("CLI form must point at ToolSearch:\n%s", out)
+	}
+	// Self-management pointer uses the namespaced use_skill on the CLI path.
+	if !strings.Contains(out, "mcp__swarmgo_interaction__use_skill") {
+		t.Errorf("CLI self-management pointer must namespace use_skill:\n%s", out)
+	}
+
+	// Native form keeps bare names + activate_tools (regression guard).
+	nat := renderLazyToolCatalog(lazy, 0, false)
+	if !strings.Contains(nat, "- `set_session_goal`") || !strings.Contains(nat, "- `WebFetch`") {
+		t.Errorf("native form keeps bare names incl. WebFetch:\n%s", nat)
+	}
+	if !strings.Contains(nat, "activate_tools") {
+		t.Errorf("native form keeps activate_tools guidance:\n%s", nat)
 	}
 }
 

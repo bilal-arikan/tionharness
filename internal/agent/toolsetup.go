@@ -369,24 +369,45 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	for _, t := range builtins[selfManageStart:] {
 		reg.MarkHidden(t.Def().Name)
 	}
-	// Trim the eager core further: a handful of always-built tools are themselves
-	// used in only a minority of turns, so they too load on demand. This shrinks
-	// the per-turn tool schema shipped to every agent (and, via the Interaction
-	// MCP bridge, advertised to every claude-cli run) without losing capability —
-	// the model pulls them through activate_tools / find_tools when needed.
-	//   - read/write/list_config : workspace prompt+instruction editing (rare)
-	//   - secret_list/secret_get  : only credential-backed tasks
-	//   - list_sessions           : cross-session pull (the context block is pushed)
-	//   - memory_recall           : recall is already auto-injected via ContextBlock
-	//   - WebFetch                 : most turns make no outbound web request
-	// MarkLazy on a name not present in this agent's builtins is a harmless no-op,
-	// so gated tools (vault/config off) need no extra guarding here.
-	reg.MarkLazy(
+	// Default NAME-ONLY tier: a curated set of always-built tools that are
+	// self-descriptive AND used in only a minority of turns. They are listed in the
+	// load-on-demand catalog by NAME ALONE (no schema, no summary) — the Claude Code
+	// "deferred tool" style: the model recognises them by name and pulls the schema
+	// via tool_search / activate_tools when it actually needs one. This strips their
+	// schemas (and, for the formerly-eager ones, their per-turn cost entirely) from
+	// EVERY turn's cached prefix, while keeping them fully reachable. On the
+	// claude-cli path the Interaction MCP bridge still advertises the bridgeable ones
+	// with full schemas, so capability is unchanged there. MarkNameOnly on a name not
+	// present in this agent's builtins is a harmless no-op, so gated tools
+	// (vault/config/session-context off) need no extra guarding here.
+	//
+	// Deliberately kept EAGER (behavioral nudges or high-frequency): todo_write,
+	// ask_user, request_confirmation, create_artifact/update_artifact,
+	// core_memory_*, use_skill/skill_search, run_subagent, Read/Write/Edit/list_dir/
+	// Glob/Grep, shell. The self-management suite stays MarkHidden (dropped from the
+	// catalog entirely — more aggressive than name-only).
+	reg.MarkNameOnly(
+		// Session lifecycle & navigation — names say it all; rarely the turn's point.
+		"set_session_goal", "complete_goal",
+		"set_session_title", "set_working_dir", "archive_session",
+		"notify", "focus_view", "schedule_wake",
+		// Cross-session & self-diagnostics — occasional, discoverable by name.
+		"list_sessions", "conversation_search", "read_session_debug",
+		// Web + memory recall — most turns need neither; recall is auto-injected.
+		"WebFetch", "memory_recall",
+	)
+	// Admin-rare tools fold into the HIDDEN self-management group (not enumerated
+	// per turn — surfaced via the swarmgo-self-management skill / tool_search). These
+	// are confined config edits and secret reads: used in a tiny fraction of turns,
+	// and their WRITE siblings (secret_set/secret_delete via the self-manage suite)
+	// are already hidden — so hiding the reads keeps the secret/config family
+	// consistent instead of split across the name-only and hidden tiers.
+	//   - read/write/list_config : the agent editing its OWN prompts/instructions
+	//   - secret_list/secret_get  : vault reads, only on credential-backed tasks
+	// MarkHidden on a name not built for this agent is a harmless no-op.
+	reg.MarkHidden(
 		"read_config", "write_config", "list_config",
 		"secret_list", "secret_get",
-		"list_sessions",
-		"memory_recall",
-		"WebFetch",
 	)
 	// Role-aware eager trim: a read-only agent can never have a write approved, so
 	// shipping the mutating tools' schemas every turn is pure waste. Demote them to
@@ -396,13 +417,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		reg.MarkLazy("Write", "Edit") // write_config already lazy above
 	}
 	// Per-tool visibility overrides from the workspace tools screen. HiddenTools
-	// forces a normally-eager tool load-on-demand (the tool analog of a skill's
-	// "Gizli" state); ShownTools is applied last (see below) to force a
-	// default-lazy/hidden tool — e.g. the self-management suite — back into the
-	// every-turn context. Loaded once and reused for both passes.
+	// (the "NameOnly" chip) demotes a tool to load-on-demand AND renders it as
+	// name-only in the catalog (Claude Code deferred-tool style — name shown,
+	// schema pulled via activate_tools/tool_search). ShownTools is applied last
+	// (see below) to force a default-lazy/hidden tool — e.g. the self-management
+	// suite — back into the every-turn context. Loaded once for both passes.
 	wsToolCfg, _ := r.db.GetWorkspaceToolConfig(ctx)
 	if len(wsToolCfg.HiddenTools) > 0 {
-		reg.MarkLazy(wsToolCfg.HiddenTools...)
+		reg.MarkNameOnly(wsToolCfg.HiddenTools...)
 	}
 
 	if servers, err := r.db.ListEnabledMCPServers(ctx); err != nil {
@@ -514,9 +536,14 @@ func (r *Runtime) LazyToolCatalog(ctx context.Context, agent db.Agent) []provide
 func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) string {
 	reg := r.buildRegistry(ctx, agent)
 	filter := r.toolFilter(ctx, agent)
+	// A claude-cli agent reaches these tools as MCP tools (namespaced) via the CLI's
+	// own ToolSearch — NOT SwarmGo's native activate_tools. Render the block in CLI
+	// form for it (mirrors how the skills block uses skillToolNameFor). The empty
+	// provider is the keyless claude-cli default; native API providers take false.
+	cli := agent.Provider == "" || agent.Provider == "claude-cli"
 	// Visible lazy tools are enumerated; the hidden self-management suite is folded
 	// into a single skill pointer (rendered when hiddenCount > 0).
-	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter))
+	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), cli)
 }
 
 // lazyCatalogMCPListLimit caps how many MCP (namespaced) lazy tools are listed
@@ -529,14 +556,45 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 // instead of enumerate once the catalog grows large.
 const lazyCatalogMCPListLimit = 30
 
+// cliLazyBridgeExcluded names built-in lazy tools NOT advertised to the claude-cli
+// Interaction MCP bridge, so the CLI-form catalog must not list them (the CLI uses
+// its OWN equivalent). Mirrors tools.bridgeExcluded — keep in sync. run_subagent is
+// eager (never in the lazy catalog), so WebFetch is the only one that surfaces here.
+var cliLazyBridgeExcluded = map[string]bool{"WebFetch": true, "run_subagent": true}
+
+// catalogDisplayName maps a registry tool name to the identifier the target agent
+// must actually call. Native agents call the bare/registry name as-is. A claude-cli
+// agent reaches everything as MCP tools, so the name is namespaced: a namespaced
+// MCP tool (server__tool) gains the CLI's "mcp__" prefix, and a built-in gains the
+// Interaction MCP prefix. Returns ok=false for built-ins the CLI does not bridge
+// (it has its own), so the caller skips them.
+func catalogDisplayName(name string, cli bool) (string, bool) {
+	if !cli {
+		return name, true
+	}
+	if _, _, ok := mcp.SplitNamespaced(name); ok {
+		return "mcp__" + name, true // server__tool → mcp__server__tool
+	}
+	if cliLazyBridgeExcluded[name] {
+		return "", false // not bridged to the CLI (CLI-native)
+	}
+	return interactionToolPrefix + name, true // built-in via the Interaction MCP bridge
+}
+
 // renderLazyToolCatalog builds the load-on-demand tool catalog block from the
 // VISIBLE lazy tool defs (name + description). Built-in lazy tools are always
 // listed; namespaced MCP tools are listed individually only while under
-// lazyCatalogMCPListLimit, otherwise summarised per server (discover the rest via
-// tool_search). hiddenCount > 0 appends a single pointer to the
-// `swarmgo-self-management` skill in place of enumerating the hidden suite.
-// Returns "" when there is nothing to show (no visible and no hidden tools).
-func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int) string {
+// lazyCatalogMCPListLimit, otherwise summarised per server. hiddenCount > 0 appends
+// a single pointer to the `swarmgo-self-management` skill in place of enumerating
+// the hidden suite. Returns "" when there is nothing to show.
+//
+// cli renders the block for a claude-cli agent, which reaches these tools as MCP
+// tools: names are namespaced (mcp__swarmgo_interaction__<name> for built-ins,
+// mcp__<server>__<tool> for MCP) and loaded via the CLI's own ToolSearch — NOT
+// SwarmGo's native activate_tools (the CLI has neither activate_tools nor
+// tool_search). CLI-native built-ins (WebFetch) are dropped. This mirrors how the
+// skills block (CatalogBlockForAgentTool) already adapts to the CLI.
+func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool) string {
 	if len(lazy) == 0 && hiddenCount == 0 {
 		return ""
 	}
@@ -552,12 +610,21 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int) string {
 
 	var b strings.Builder
 	b.WriteString("# Available Tools (load on demand)\n")
-	b.WriteString("These tools are NOT loaded yet — only their names and summaries are shown. " +
-		"To use one, first call `activate_tools` with its exact name(s); its full schema becomes " +
-		"available on your next step. Use `tool_search` to find a tool by keyword. Activate " +
-		"everything you expect to need for a task in one call.\n")
+	if cli {
+		b.WriteString("These SwarmGo tools are exposed as MCP tools and may be DEFERRED (schema not " +
+			"preloaded). They are listed by their EXACT namespaced names below (some with a short summary). " +
+			"Before your first call, load one with `ToolSearch` (e.g. `select:<name>`); calling an unloaded " +
+			"name returns \"No such tool available\". Load everything you expect to need in one call.\n")
+	} else {
+		b.WriteString("These tools are NOT loaded yet — only their names (and a short summary for some) are shown. " +
+			"Entries listed by name alone are deferred: use `tool_search` to discover what they do by keyword. " +
+			"To use any tool, first call `activate_tools` with its exact name(s); its full schema becomes " +
+			"available on your next step. Activate everything you expect to need for a task in one call.\n")
+	}
 	for _, d := range builtin {
-		fmt.Fprintf(&b, "- `%s` — %s\n", d.Name, d.Description)
+		if name, ok := catalogDisplayName(d.Name, cli); ok {
+			writeLazyToolLine(&b, name, d.Description)
+		}
 	}
 
 	switch {
@@ -565,11 +632,13 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int) string {
 		// nothing more to add
 	case len(mcpTools) <= lazyCatalogMCPListLimit:
 		for _, d := range mcpTools {
-			fmt.Fprintf(&b, "- `%s` — %s\n", d.Name, d.Description)
+			if name, ok := catalogDisplayName(d.Name, cli); ok {
+				writeLazyToolLine(&b, name, d.Description)
+			}
 		}
 	default:
 		// Too many MCP tools to enumerate without bloating the cached prefix:
-		// summarise per server and defer individual discovery to tool_search.
+		// summarise per server and defer individual discovery to search.
 		counts := map[string]int{}
 		var order []string
 		for _, d := range mcpTools {
@@ -580,25 +649,51 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int) string {
 			counts[srv]++
 		}
 		sort.Strings(order)
+		findHint, actHint := "tool_search(\"keyword\")", "activate_tools"
+		if cli {
+			findHint, actHint = "ToolSearch", "load"
+		}
 		fmt.Fprintf(&b, "\n%d more tools are available from MCP servers but not listed individually "+
-			"(to save context). Find one with `tool_search(\"keyword\")`, then `activate_tools` it. "+
-			"Servers:\n", len(mcpTools))
+			"(to save context). Find one with `%s`, then `%s` it. Servers:\n", len(mcpTools), findHint, actHint)
 		for _, srv := range order {
-			fmt.Fprintf(&b, "- `%s` — %d tools\n", srv, counts[srv])
+			label := srv
+			if cli {
+				label = "mcp__" + srv
+			}
+			fmt.Fprintf(&b, "- `%s` — %d tools\n", label, counts[srv])
 		}
 	}
 
 	// Self-management suite: kept out of the per-turn enumeration to save context.
-	// Point the model at the skill (which documents the full catalog + how to
-	// activate) and at tool_search as the quick path.
+	// Point the model at the skill (which documents the full catalog + how to load
+	// them) and at the search tool as the quick path. The skill + search names are
+	// namespaced for the CLI, bare for native.
 	if hiddenCount > 0 {
+		skillTool, findHint, actHint := "use_skill", "tool_search(\"keyword\")", "activate_tools"
+		if cli {
+			skillTool = interactionToolPrefix + "use_skill"
+			findHint, actHint = "ToolSearch", "load"
+		}
 		fmt.Fprintf(&b, "\n%d self-management tools (manage agents, flows, schedules, tasks, hooks, "+
-			"MCP servers, skills, workspaces, app settings, secrets, memory, logs) are available but "+
-			"not listed here to save context. Load the `swarmgo-self-management` skill (via `use_skill`) "+
-			"for the full catalog and how to use them, or find one directly with `tool_search(\"keyword\")` "+
-			"— then `activate_tools` the names you need.\n", hiddenCount)
+			"MCP servers, skills, workspaces, app settings, your own prompts/config, secrets, memory, logs) are available but "+
+			"not listed here to save context. Load the `swarmgo-self-management` skill (via `%s`) "+
+			"for the full catalog and how to use them, or find one directly with `%s` "+
+			"— then `%s` the names you need.\n", hiddenCount, skillTool, findHint, actHint)
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// writeLazyToolLine renders one load-on-demand catalog entry. A tool with a
+// summary gets "- `name` — summary"; a NameOnly tool (summary suppressed in
+// VisibleLazyCatalog) gets just "- `name`" — the Claude Code deferred-tool style,
+// where the model sees the name and discovers the rest via search. name is the
+// already-resolved display identifier (namespaced for the CLI path).
+func writeLazyToolLine(b *strings.Builder, name, description string) {
+	if strings.TrimSpace(description) == "" {
+		fmt.Fprintf(b, "- `%s`\n", name)
+		return
+	}
+	fmt.Fprintf(b, "- `%s` — %s\n", name, description)
 }
 
 // WorkspaceToolCatalog returns the full, unfiltered tool catalog (every built-in
@@ -609,20 +704,28 @@ func (r *Runtime) WorkspaceToolCatalog(ctx context.Context) []providers.ToolDef 
 }
 
 // WorkspaceToolCatalogWithState is WorkspaceToolCatalog plus, for each tool, its
-// effective "lazy" (load-on-demand / not shipped every turn) state after all
-// marks are applied — code defaults (self-management, MCP, etc.) AND the
-// workspace HiddenTools/ShownTools overrides. The tools screen renders this as
-// the "Gizli" chip so the chip reflects what the agent actually sees in context.
-func (r *Runtime) WorkspaceToolCatalogWithState(ctx context.Context) ([]providers.ToolDef, map[string]bool) {
+// effective load-on-demand state after all marks are applied — code defaults
+// (self-management, MCP, etc.) AND the workspace HiddenTools/ShownTools overrides.
+// It returns two sets so the tools screen can distinguish the tiers:
+//   - lazy:   any load-on-demand tool (not shipped every turn). Drives the
+//     "NameOnly" chip for name-only / MCP tools.
+//   - hidden: the subset folded OUT of the per-turn catalog into the
+//     self-management skill pointer (not enumerated by name). Drives the distinct
+//     "Self-mgmt" chip. hidden ⊆ lazy.
+func (r *Runtime) WorkspaceToolCatalogWithState(ctx context.Context) ([]providers.ToolDef, map[string]bool, map[string]bool) {
 	reg := r.buildRegistry(ctx, db.Agent{})
 	defs := reg.Defs(nil)
 	lazy := make(map[string]bool, len(defs))
+	hidden := make(map[string]bool, len(defs))
 	for _, d := range defs {
 		if reg.IsLazy(d.Name) {
 			lazy[d.Name] = true
 		}
+		if reg.IsHidden(d.Name) {
+			hidden[d.Name] = true
+		}
 	}
-	return defs, lazy
+	return defs, lazy, hidden
 }
 
 // ActiveToolCatalog returns the workspace-active tool catalog (full catalog

@@ -18,7 +18,8 @@ type workspaceTool struct {
 	Source      string          `json:"source"` // "builtin" | "mcp"
 	Server      string          `json:"server"` // MCP server display name (empty for built-ins)
 	Enabled     bool            `json:"enabled"`
-	Hidden      bool            `json:"hidden"` // load-on-demand (lazy): not shipped every turn
+	Hidden      bool            `json:"hidden"`      // load-on-demand (lazy): not shipped every turn
+	SelfManaged bool            `json:"selfManaged"` // hidden tier: folded into the self-management skill pointer (not even name-listed)
 	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
 }
 
@@ -49,8 +50,10 @@ func (s *Server) handleWorkspaceTools(w http.ResponseWriter, r *http.Request) {
 
 	// hidden reflects the EFFECTIVE load-on-demand state per tool (code defaults
 	// like the self-management suite + the workspace Hidden/Shown overrides), not
-	// just the HiddenTools list — so the "Gizli" chip matches what the agent sees.
-	catalog, lazy := ws(r).Runtime.WorkspaceToolCatalogWithState(r.Context())
+	// just the HiddenTools list — so the "NameOnly" chip matches what the agent sees.
+	// selfManaged is the subset folded into the self-management skill pointer (the
+	// hidden tier), drawn with a distinct chip from the name-only/MCP lazy tools.
+	catalog, lazy, hidden := ws(r).Runtime.WorkspaceToolCatalogWithState(r.Context())
 	out := make([]workspaceTool, 0, len(catalog))
 	for _, t := range catalog {
 		wt := workspaceTool{
@@ -60,6 +63,7 @@ func (s *Server) handleWorkspaceTools(w http.ResponseWriter, r *http.Request) {
 			Source:      "builtin",
 			Enabled:     !disabled[t.Name],
 			Hidden:      lazy[t.Name],
+			SelfManaged: hidden[t.Name],
 			InputSchema: t.InputSchema,
 		}
 		// MCP tools are namespaced "<server>__<tool>"; recover origin and label.

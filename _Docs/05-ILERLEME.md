@@ -2,6 +2,87 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## Tool tier UI chip'leri: Self-mgmt vs NameOnly ayrımı ✅ (2026-06-26)
+
+Workspace Tools ekranı artık üç tier'ı ayrı chip ile gösteriyor (önceden hidden ve
+nameOnly ikisi de "NameOnly" görünüyordu):
+
+- **eager** → chip yok (her tur tam şema)
+- **NameOnly** (amber) → lazy + isimle listelenir (örn. set_session_goal, notify)
+- **Self-mgmt** (gri) → hidden tier: katalogda ismi bile yok, `swarmgo-self-management`
+  skill pointer'a katlanır, tool_search ile keşfedilir (örn. create_agent… + Part A'da
+  taşınan read/write/list_config, secret_list/get)
+
+- **Backend:** `Registry.IsHidden`; `WorkspaceToolCatalogWithState` → `(defs, lazy, hidden)`;
+  `workspaceTool.selfManaged` (json) = hidden[name]. **Frontend:** `WorkspaceTool.selfManaged`,
+  `SelfMgmtBadge` (ToolsPanel liste + detay).
+- **Canlı (WS5):** eager 20 · NameOnly 13 · Self-mgmt 51. Go build+test ✅, tsc ✅.
+- Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
+
+## Workspace template'leri markete taşındı (bundled tier) ✅ (2026-06-26)
+
+Workspace oluşturma picker'ı artık **market'in workspace-pack'lerini** gösteriyor; 5 built-in
+template (Boş/Bilimsel Araştırma/Yazılım Geliştirme/Günlük Rutin/Link Kısaltma) hard-coded Go
+listesinden çıkarılıp **gömülü market paketlerine** taşındı.
+
+- **Pack şeması genişledi:** `market.WorkspacePayload` artık opsiyonel `agents[] + flow + schedules[]`
+  taşıyor (`WorkspaceTemplateAgent/Step/Flow/Schedule`). Önceden yalnız identity+instructions+columns
+  vardı → zengin template'leri temsil edemiyordu. (`internal/market/pack.go`)
+- **Bundled tier geri geldi (sadece template'ler için):** `internal/market/embed.go` `//go:embed
+  defaults/*.swarmpack.json` → `SourceBundled` (en düşük öncelik, global/remote override eder).
+  `store.go`: `tier.fsys` + `scanDir`/`Get` embed-FS okuma. 5 paket `internal/market/defaults/`.
+- **Picker kaynağı market:** `/api/workspace-templates`'in JSON şekli **aynı kaldı** (frontend modal
+  değişmedi) ama kaynağı Server-seviyesi workspace-bağımsız market store (`s.market = market.New(
+  agent.MarketGlobalDir(), "")`) — onboarding'de sıfır workspace'te de çalışır. Blank ilk sıraya pinli.
+- **Seeding birleşti:** `seedWorkspaceFromTemplate` (picker) + `installWorkspacePack` (market install)
+  ortak `seedWorkspaceTeam` ile agent+flow+schedule seed eder. Market'ten kurulan workspace artık
+  takımıyla geliyor. Eski `workspaceTemplates`/`templateByID`/`seedTemplate` kaldırıldı.
+- **Frontend:** `WorkspaceCreateModal` yüklemede blank'i (market id `workspace-blank`) auto-select eder.
+- **Doğrulama:** `go build/vet/test ./...` + `tsc` yeşil; bundled-pack integrity testi (eski in-code
+  test yerine). Canlı: fresh 8091 → picker 5 bundled template gösterdi; `workspace-research`'ten
+  oluşturma → 4 agent + 1 flow seed; tarayıcıda create-modal picker market template'lerini render etti.
+
+## Tier rafine: admin-nadir araçlar hidden gruba taşındı ✅ (2026-06-26)
+
+NameOnly seti gözden geçirildi. Admin/nadir araçlar her turdan enumerate edilmek yerine
+**hidden self-management** grubuna (pointer + skill + tool_search) taşındı:
+`read_config`/`write_config`/`list_config` (ajanın kendi promptunu düzenler) +
+`secret_list`/`secret_get` (kasa okuma — yazma kardeşleri zaten hidden'dı, tutarlılık).
+Pointer metnine "your own prompts/config" eklendi.
+
+- **Karar (Part B = HAYIR):** self-management ailesinin tamamını (46) name-only enumerate
+  ETMEDİK. Patlamalı/nadir admin araçları; her tur 46 satır (CLI'de ~600 token) düşük
+  getiri. Kategori-pointer + `swarmgo-self-management` skill + tool_search zaten keşfi
+  sağlıyor. **Kural:** NameOnly = "var olduğunu bil, ara sıra kullan"; hidden = "toplu/
+  nadir admin, per-turn ödeme yok".
+- **Kod:** `toolsetup.go` — config+secret-read'ler `MarkNameOnly`'den `MarkHidden`'a.
+- `internal/agent` + `internal/tools` derleniyor, testleri geçiyor.
+- ⚠️ **Canlı doğrulama bekliyor:** `internal/api` şu an dışarıda süren market/templates
+  refactor'ü yüzünden derlenmiyor (`workspace_bridge.go` → `seedTemplate`/`templateByID`
+  tanımsız), bu yüzden tam backend rebuild + canlı kontrol o refactor bitince yapılacak.
+
+## CLI-uyumlu "Available Tools" kataloğu (claude-cli namespaced adlar) ✅ (2026-06-26)
+
+SES12 (WS2, claude-cli ajan) incelemesinde fark edildi: "# Available Tools (load on
+demand)" bloğu built-in araçları **bare adlarla** (`set_session_goal`, `notify`…) +
+native `activate_tools` yönergesiyle listeliyordu. Ama claude-cli bu araçları MCP aracı
+olarak (`mcp__swarmgo_interaction__*`) görür ve kendi ToolSearch'üyle yükler — yani blok
+yanıltıcıydı (skills bloğu zaten doğru namespaced biçimi kullanıyordu, tools bloğu değil).
+Default-NameOnly değişikliği 10 built-in'i daha bu bloğa eklediği için fark belirginleşti.
+
+- **Düzeltme:** `LazyToolsCatalogBlock` artık ajanın `provider`'ına göre dallanır.
+  claude-cli formunda: built-in → `mcp__swarmgo_interaction__<ad>`, MCP → `mcp__<server>__<tool>`,
+  yönerge `ToolSearch` (native `activate_tools` değil), CLI-native built-in'ler (WebFetch)
+  düşürülür. Native (anthropic/minimax) form **değişmedi** (bare ad + activate_tools).
+- **Kod:** `catalogDisplayName` ad eşlemesi + `renderLazyToolCatalog(..., cli bool)` +
+  `writeLazyToolLine(name, desc)`. `cliLazyBridgeExcluded` = tools.bridgeExcluded ayna.
+- **Not (önemli):** Bu davranış değişikliği değil bir **netleştirme** — eskiden de
+  çalışıyordu (model namespaced adı kendi çıkarıp ToolSearch'lüyordu, SES12'de görüldü),
+  ama artık blok doğru adları + doğru yöntemi söylüyor.
+- **Canlı doğrulama:** WS2/AGT4 (cli) → namespaced + ToolSearch, WebFetch yok; WS1/AGT2
+  (minimax/native) → bare + activate_tools, WebFetch var. Test:
+  `TestLazyCatalogCLIFormNamespacesNames`. Go build+test ✅. Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
+
 ## İlk-yükleme (onboarding) akışı + splash ekranı ✅ (2026-06-26)
 
 Taze kurulumda (hiç workspace yokken) artık **otomatik "Varsayılan" workspace
@@ -47,6 +128,28 @@ boş karşılama ekranında bekler.
   ad girip **Oluştur** → URL `#/w/WS1/chat`, uygulama yüklendi; Workspace ▸ "Workspace'i sil"
   → yeni "son workspace" onay metni çıktı → kabul → **onboarding canlı geri döndü** (popup
   yeniden açıldı), `GET /api/workspaces` → `[]`. Gerçek veri (`~/.swarmgo`, 4 ws) izole tutuldu.
+
+## Skill NameOnly: skill'ler için slug-only katman ✅ (2026-06-26)
+
+Araçlardaki NameOnly mekaniğinin skill muadili. Frontmatter `name_only: true` ile
+işaretlenen skill, "# Available Skills" bloğunda **yalnız slug** olarak listelenir
+(`- \`slug\``); açıklama+when bastırılır. Skill **listede kalır** — model varlığını
+görür, detayı `skill_search` ile keşfeder, `use_skill` ile yükler. "Tam özet" ile
+"tamamen düşür" (`auto_summary:false`/`paths`) arasındaki eksik orta katman.
+
+- **Default KAPALI, skill-başına opt-in.** Araçlardaki gibi küratörlü default-açık
+  set YOK: skill'lerde açıklama ana tetikleme sinyali olduğundan toptan kaldırmak
+  keşfi zayıflatır (bilinçli tasarım kararı).
+- **Backend:** `Skill.NameOnly` alanı; `isNameOnly` parse (`name_only`/`nameonly`);
+  `renderCatalog` slug-only satır + footer `skill_search` yönlendirmesi;
+  `Store.SetNameOnly` + `setFrontmatterNameOnly` (`auto_summary` desenini yansıtır);
+  `PUT /api/skills/{slug}/name-only` (`handleSetSkillNameOnly`).
+- **Frontend:** `Skill.nameOnly` tipi, `api.setSkillNameOnly`, SkillsPanel "NameOnly"
+  badge + toggle butonu (liste + detay).
+- **Etki (canlı ölçüm, WS5):** `swarmgo-autonomous-ops` NameOnly → satır **839→26
+  karakter**, Available Skills bloğu **3376→2563** (~813 karakter ≈ ~200 token, tek skill).
+- Test: `TestNameOnlySkillRendersSlugOnly`. Go build+test ✅, `tsc` ✅. Canlı
+  toggle on/off doğrulandı, config geri alındı. Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
 
 ## Default NameOnly seti: built-in araçlar için varsayılan ✅ (2026-06-26)
 

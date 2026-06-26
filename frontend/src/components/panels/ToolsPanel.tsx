@@ -292,7 +292,11 @@ export function ToolsPanel({ onError }: Props) {
                         >
                           {toolLabel(t)}
                         </span>
-                        {t.hidden && <HiddenBadge className="ml-auto" />}
+                        {t.selfManaged ? (
+                          <SelfMgmtBadge className="ml-auto" />
+                        ) : (
+                          t.hidden && <HiddenBadge className="ml-auto" />
+                        )}
                       </button>
                     )
                   })}
@@ -345,16 +349,33 @@ export function ToolsPanel({ onError }: Props) {
   )
 }
 
-// HiddenBadge marks a tool that is hidden (load-on-demand): its schema is not
-// shipped to the agent every turn — it's pulled in via tool_search / activate_
-// tools. The tool analog of a skill's "Gizli" (auto-summary off) state.
+// NameOnlyBadge marks a tool rendered as name-only (Claude Code deferred-tool
+// style): its summary + schema are not shipped every turn — only the name is
+// listed, and the schema is pulled in via tool_search / activate_tools. The tool
+// analog of a skill's "Gizli" (auto-summary off) state.
 function HiddenBadge({ className = '' }: { className?: string }) {
   return (
     <span
       className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-warning,#d97706)_18%,transparent)] text-[var(--color-warning,#d97706)] ${className}`}
-      title="Her tur ajana gönderilmez; gerektiğinde tool_search/activate_tools ile yüklenir (yine de aktif)"
+      title="Katalogda yalnızca ismi listelenir (özet gönderilmez); şema gerektiğinde tool_search/activate_tools ile yüklenir (yine de aktif)"
     >
-      Gizli
+      NameOnly
+    </span>
+  )
+}
+
+// SelfMgmtBadge marks a tool in the HIDDEN tier: not even listed by name in the
+// per-turn catalog — folded into the single `swarmgo-self-management` skill pointer
+// and discovered via tool_search. More aggressive than NameOnly (which still shows
+// the name). The bulk admin family (manage agents/flows/schedules/…) plus confined
+// config edits and secret reads live here. Still callable once activated.
+function SelfMgmtBadge({ className = '' }: { className?: string }) {
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-text-dim)_22%,transparent)] text-[var(--color-text-dim)] ${className}`}
+      title="Gizli (self-management tier): katalogda ismi bile listelenmez — tek bir 'swarmgo-self-management' skill işaretçisine katlanır, tool_search ile keşfedilir (yine de aktif edilince çağrılabilir)"
+    >
+      Self-mgmt
     </span>
   )
 }
@@ -397,7 +418,7 @@ function ToolDetail({
             >
               {tool.enabled ? 'Aktif' : 'Devre dışı'}
             </span>
-            {tool.hidden && <HiddenBadge />}
+            {tool.selfManaged ? <SelfMgmtBadge /> : tool.hidden && <HiddenBadge />}
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
@@ -408,12 +429,12 @@ function ToolDetail({
             title={
               tool.hidden
                 ? 'Göster: aracın şeması her tur ajana gönderilsin'
-                : 'Gizle: her tur gönderilmesin, gerektiğinde on-demand yüklensin'
+                : 'NameOnly: katalogda yalnız ismi görünsün, şema gerektiğinde on-demand yüklensin'
             }
             className="flex items-center gap-1.5 rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium transition hover:opacity-90 disabled:opacity-50"
           >
             {tool.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-            {tool.hidden ? 'Göster' : 'Gizle'}
+            {tool.hidden ? 'Göster' : 'NameOnly'}
           </button>
           <button
             data-testid="tool-detail-toggle"
