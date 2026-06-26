@@ -3,7 +3,7 @@
 // This is a barrel: the endpoints live in domain modules under ./api/* (mirroring
 // the backend's internal/api/ split) and are composed into the single `api`
 // object here so existing `import { api } from './api'` sites keep working.
-import { setActiveWorkspace, getActiveWorkspace } from './api/client'
+import { setActiveWorkspace, getActiveWorkspace, clearActiveWorkspace } from './api/client'
 import { workspaceApi } from './api/workspaces'
 import { agentApi } from './api/agents'
 import { sessionApi } from './api/sessions'
@@ -24,7 +24,7 @@ import { marketApi } from './api/market'
 import { systemApi } from './api/system'
 import { providerApi } from './api/providers'
 
-export { setActiveWorkspace, getActiveWorkspace }
+export { setActiveWorkspace, getActiveWorkspace, clearActiveWorkspace }
 export type { ChatStreamHandlers } from './api/chat'
 
 export const api = {

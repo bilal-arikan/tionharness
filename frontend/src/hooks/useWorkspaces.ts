@@ -2,7 +2,7 @@
 // into the api client + localStorage) and the cross-workspace "unread activity"
 // badge set. Switch/create/delete are exposed as stable callbacks.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, setActiveWorkspace, getActiveWorkspace } from '../api'
+import { api, setActiveWorkspace, getActiveWorkspace, clearActiveWorkspace } from '../api'
 import type { Workspace } from '../types'
 import type { NewWorkspaceData } from '../components/workspace/WorkspaceCreateModal'
 
@@ -45,6 +45,10 @@ function writeSharedUnread(set: Set<string>) {
 
 export function useWorkspaces(setError: (msg: string) => void) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  // True until the initial workspace list resolves. Drives the first-run splash
+  // and the "zero workspaces → onboarding" decision in App (we must not show the
+  // onboarding screen until we actually know the list is empty).
+  const [loading, setLoading] = useState(true)
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(getActiveWorkspace())
   // Raw shared unread set (cross-window union, mirrored to localStorage). The
   // displayed set (`unreadWs` below) filters out this window's active workspace.
@@ -121,6 +125,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
         }
       })
       .catch((e) => setError((e as Error).message))
+      .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -148,12 +153,17 @@ export function useWorkspaces(setError: (msg: string) => void) {
     }
   }, [setError])
 
-  // Delete the active workspace, then switch to another (backend forbids
-  // deleting the last one).
+  // Delete the active workspace, then switch to another. Deleting the LAST one is
+  // allowed: with nothing remaining we clear the active pointer so App falls back
+  // to the onboarding screen (no default workspace is re-seeded).
   const deleteActiveWorkspace = useCallback(async () => {
     if (!activeWorkspaceId) return
     const target = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!confirm(`"${target?.name ?? 'Bu workspace'}" ve tüm verisi kalıcı olarak silinsin mi?`)) return
+    const last = workspaces.length <= 1
+    const msg = last
+      ? `"${target?.name ?? 'Bu workspace'}" son workspace — silinince ilk kurulum ekranına dönersin. Tüm verisiyle silinsin mi?`
+      : `"${target?.name ?? 'Bu workspace'}" ve tüm verisi kalıcı olarak silinsin mi?`
+    if (!confirm(msg)) return
     try {
       await api.deleteWorkspace(activeWorkspaceId)
       const remaining = workspaces.filter((w) => w.id !== activeWorkspaceId)
@@ -162,6 +172,9 @@ export function useWorkspaces(setError: (msg: string) => void) {
       if (next) {
         setActiveWorkspace(next)
         setActiveWorkspaceId(next)
+      } else {
+        clearActiveWorkspace()
+        setActiveWorkspaceId(null)
       }
     } catch (e) {
       setError((e as Error).message)
@@ -169,16 +182,16 @@ export function useWorkspaces(setError: (msg: string) => void) {
   }, [activeWorkspaceId, workspaces, setError])
 
   // Delete any workspace by id (used by the switcher's per-row trash button).
-  // The backend forbids deleting the last one; if the active workspace is
-  // removed, switch to whatever remains.
+  // Deleting the last one is allowed: when the removed workspace was active and
+  // nothing remains, clear the active pointer so App shows the onboarding screen.
   const deleteWorkspace = useCallback(
     async (id: string) => {
       const target = workspaces.find((w) => w.id === id)
-      if (workspaces.length <= 1) {
-        setError('Son workspace silinemez.')
-        return
-      }
-      if (!confirm(`"${target?.name ?? 'Bu workspace'}" ve tüm verisi kalıcı olarak silinsin mi?`)) return
+      const last = workspaces.length <= 1
+      const msg = last
+        ? `"${target?.name ?? 'Bu workspace'}" son workspace — silinince ilk kurulum ekranına dönersin. Tüm verisiyle silinsin mi?`
+        : `"${target?.name ?? 'Bu workspace'}" ve tüm verisi kalıcı olarak silinsin mi?`
+      if (!confirm(msg)) return
       try {
         await api.deleteWorkspace(id)
         const remaining = workspaces.filter((w) => w.id !== id)
@@ -188,6 +201,9 @@ export function useWorkspaces(setError: (msg: string) => void) {
           if (next) {
             setActiveWorkspace(next)
             setActiveWorkspaceId(next)
+          } else {
+            clearActiveWorkspace()
+            setActiveWorkspaceId(null)
           }
         }
       } catch (e) {
@@ -219,6 +235,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
 
   return {
     workspaces,
+    loading,
     activeWorkspaceId,
     unreadWs,
     favoriteWorkspaceId,

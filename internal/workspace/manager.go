@@ -180,13 +180,13 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 		}
 	}
 
-	// Ensure a default workspace exists.
-	if len(m.order) == 0 {
-		if _, err := m.Create("Varsayılan", "", ""); err != nil {
-			return nil, fmt.Errorf("create default workspace: %w", err)
-		}
-	}
-
+	// First-run onboarding owns workspace creation: when none exist we deliberately
+	// leave the manager EMPTY rather than seeding a default one. The web UI shows a
+	// splash + "create workspace" popup on a fresh install; if the user dismisses it
+	// without creating one, nothing is provisioned. With zero workspaces, ws(r) in
+	// the API resolves to nil for workspace-scoped routes — the frontend gates those
+	// behind an active workspace, and withRecover turns any stray call into a 500
+	// instead of a crash.
 	return m, nil
 }
 
@@ -340,14 +340,11 @@ func (m *Manager) Create(name, parentPath, createdBy string) (*Workspace, error)
 	return m.Get(meta.ID)
 }
 
-// Delete removes a workspace and all its data. The last workspace cannot be
-// deleted (there must always be at least one).
+// Delete removes a workspace and all its data. Deleting the last workspace IS
+// allowed: the manager then holds zero workspaces and the web UI falls back to
+// the first-run onboarding screen (no default workspace is re-seeded).
 func (m *Manager) Delete(id string) error {
 	m.mu.Lock()
-	if len(m.order) <= 1 {
-		m.mu.Unlock()
-		return errors.New("cannot delete the last workspace")
-	}
 	ws, ok := m.workspaces[id]
 	if !ok {
 		m.mu.Unlock()

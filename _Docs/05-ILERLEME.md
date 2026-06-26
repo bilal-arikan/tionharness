@@ -2,6 +2,96 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## İlk-yükleme (onboarding) akışı + splash ekranı ✅ (2026-06-26)
+
+Taze kurulumda (hiç workspace yokken) artık **otomatik "Varsayılan" workspace
+oluşturulmuyor**; bunun yerine kullanıcı bir splash + workspace-oluşturma popup'ı
+ile karşılanıyor. Popup kapatılırsa **hiçbir varsayılan kurulum yapılmaz** — uygulama
+boş karşılama ekranında bekler.
+
+- **Backend:** `workspace.NewManager` içindeki "len(order)==0 → Create(\"Varsayılan\")"
+  bloğu kaldırıldı; manager sıfır workspace ile açılabilir. Sıfır workspace'te API'nin
+  `ws(r)` çözümlemesi workspace-scoped rotalarda `nil` döner; frontend bunları aktif
+  workspace arkasına gate'ler, `withRecover` stray çağrıyı 500'e çevirir (panik yok).
+  (`internal/workspace/manager.go`)
+- **Frontend gate:** `useWorkspaces` artık `loading` bayrağı taşır (ilk liste çözülene
+  kadar `true`). `App.tsx` tüm hook'lardan SONRA gate'ler:
+  `loading && !hadSetupAtBoot` → `SplashScreen`; `!loading && workspaces.length===0` →
+  `OnboardingScreen`. `swarmgo.hasSetup` localStorage bayrağı bir workspace var olunca
+  set edilir → splash yalnız **taze kurulumda** (kurulum yapılmamışken) görünür, dönen
+  kullanıcı doğrudan uygulamaya girer.
+- **Yeni bileşenler:** `components/SplashScreen.tsx` (self-contained, tema-değişkenli),
+  `components/workspace/OnboardingScreen.tsx` (karşılama kartı + mevcut
+  `WorkspaceCreateModal`'ı açar; popup başta açık, kapatılırsa kurulum yapılmaz).
+- **Splash marka + min-süre (2026-06-26):** Splash gerçek logoyu (`/favicon.svg` — mor gradyan
+  swarm markası, hem Vite dev hem embed binary'de servis ediliyor) dönen aksan halkası +
+  "SwarmGo" wordmark + "Yükleniyor…" ile gösterir (logoda pulse + ekran fade-in keyframe'leri
+  bileşene gömülü). **Minimum görünme süresi** `SPLASH_MIN_MS=1100` (App.tsx): liste anında
+  çözülse bile splash en az bu kadar kalır → tek-kare flaş olmaz. Gate:
+  `!hadSetupAtBoot && (wsLoading || !minSplashElapsed)`; dönen kullanıcı min-süreyi de atlar.
+  Canlı doğrulandı: min geçici 4s'ye çekilip Playwright ekran görüntüsüyle logo+halka+wordmark
+  teyit edildi, sonra 1100'e döndürüldü.
+- **Son workspace silinince onboarding'e dönüş (2026-06-26):** `Manager.Delete`'teki
+  "son workspace silinemez" guard'ı **kaldırıldı** — silince manager sıfır workspace'e
+  düşer ve `persist()` `workspaces.json`'a `[]` yazar (reboot'ta yine onboarding). Frontend:
+  yeni `clearActiveWorkspace()` (api/client) aktif işaretçiyi temizler; `useWorkspaces`'teki
+  `deleteWorkspace`/`deleteActiveWorkspace` "son" guard'larını kaldırdı, kalan yoksa
+  `activeWorkspaceId=null` → App gate `workspaces.length===0` ile **canlı (reload'suz)**
+  onboarding'e döner. Son workspace için onay metni farklı: "… son workspace — silinince ilk
+  kurulum ekranına dönersin."
+- **Doğrulama:** `go build ./...` + frontend `tsc --noEmit` yeşil. Taze `SWARMGO_DATA_DIR`
+  ile canlı test (8091): `GET /api/workspaces` → `count=0` + `workspaces.json` yok (otomatik
+  oluşturma gerçekten kalktı), ardından `POST /api/workspaces` → WS1 oluştu, `count=1`.
+- **Canlı UI smoke testi (2026-06-26, tek-binary 8091 + Playwright):** taze örnekte tarayıcı
+  `http://127.0.0.1:8091` → **onboarding + create popup** render edildi (snapshot doğrulandı);
+  ad girip **Oluştur** → URL `#/w/WS1/chat`, uygulama yüklendi; Workspace ▸ "Workspace'i sil"
+  → yeni "son workspace" onay metni çıktı → kabul → **onboarding canlı geri döndü** (popup
+  yeniden açıldı), `GET /api/workspaces` → `[]`. Gerçek veri (`~/.swarmgo`, 4 ws) izole tutuldu.
+
+## Default NameOnly seti: built-in araçlar için varsayılan ✅ (2026-06-26)
+
+Kullanıcı isteğiyle projedeki built-in araçlar tarandı ve **küçük, kendini açıklayan,
+turların azınlığında kullanılan** bir grup, **kod varsayılanı** olarak NameOnly yapıldı
+(`toolsetup.go`'daki eski `MarkLazy` bloğu `MarkNameOnly` ile değiştirildi). Kod
+varsayılanı olduğu için **tüm workspace'lere (mevcut WS1/2/4/5 + yeni) otomatik** uygulanır;
+per-workspace config yazmaya gerek yok.
+
+- **Önceden eager → NameOnly (10 araç, her turdan şema kalktı):** `set_session_goal`,
+  `complete_goal`, `set_session_title`, `set_working_dir`, `archive_session`, `notify`,
+  `focus_view`, `schedule_wake`, `list_sessions`, `conversation_search`, `read_session_debug`.
+- **Önceden lazy+özet → NameOnly (özet satırı kalktı):** `read_config`, `write_config`,
+  `list_config`, `secret_list`, `secret_get`, `WebFetch`, `memory_recall`.
+- **Eager kalan** (davranışsal/sık): `todo_write`, `ask_user`, `request_confirmation`,
+  `create_artifact`/`update_artifact`, `core_memory_*`, `use_skill`/`skill_search`,
+  `run_subagent`, `Read`/`Write`/`Edit`/`list_dir`/`Glob`/`Grep`, `shell`. Self-management
+  ailesi `MarkHidden` kalır.
+- **Çalıştırma etkilemez:** `Registry.Call` aracı lazy/nameOnly'den bağımsız çalıştırır;
+  aktivasyon yalnız şema gönderimini etkiler (schedule_wake e2e testi bozulmadı).
+- **Ölçüm (WS5/AGT1):** eager 30→20 araç, eager şema **~5931→3857 token** (≈ turn/agent
+  başına **~2074 token** tasarruf). 4 workspace'te de canlı doğrulandı.
+- Testler: `go test ./internal/agent ./internal/tools ./internal/e2e` geçti.
+  Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
+
+## Tool görünürlüğü: "NameOnly" katmanı (Claude Code deferred-tool stili) ✅ (2026-06-26)
+
+Kullanıcı isteğiyle workspace Tools ekranındaki **"Gizle" çipi "NameOnly" oldu** ve
+davranışı değişti. Eskiden "Gizli" işareti aracı `MarkLazy` ile **ad+özet** satırı olarak
+gösteriyordu; artık `MarkNameOnly` ile **yalnız adıyla** listeleniyor (özet bastırılır) —
+Claude Code'un "deferred tool" mekaniğinin muadili. Model adı görür, ne yaptığını
+`tool_search` ile keşfeder, şemayı `activate_tools` ile çeker.
+
+- **Registry:** yeni `nameOnly` set + `MarkNameOnly` (implies lazy). `nameOnly ⊆ lazy`,
+  `hidden`'dan ayrık. `VisibleLazyCatalog` NameOnly araçların `Description`'ını boşaltır;
+  `LazyCatalog` (activate/search kaynağı) açıklamayı korur. `Unlazy` ("Göster") nameOnly'yi
+  de temizler. (`internal/tools/registry.go`)
+- **Render:** `renderLazyToolCatalog` boş özetli satırı `- \`ad\`` olarak basar
+  (`writeLazyToolLine`). Workspace `HiddenTools` → `MarkNameOnly` (`toolsetup.go`).
+  Veri modeli (`HiddenTools`/`hidden`) **değişmedi** — yalnız sunum + UI etiketi.
+- **UI:** `ToolsPanel.tsx` çip "NameOnly", buton/tooltip metinleri güncellendi.
+- **Kapsam:** native yolda (anthropic/minimax) token kazandırır; **claude-cli yolunda
+  etkisiz** (bridge tam şema ilan eder, MCP'ler zaten CLI deferral'ına tabi).
+- Test: `TestMarkNameOnlyKeepsNameDropsSummary`. Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
+
 ## Ajan araç erişimi: allowlist → denylist + skill sıralaması kaldırıldı ✅ (2026-06-26)
 
 Kullanıcı geri bildirimiyle ajan-düzeyi araç yönetimi modeli sadeleşti:

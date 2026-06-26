@@ -14,6 +14,14 @@ export function getActiveWorkspace(): string | null {
   return activeWorkspaceId
 }
 
+// clearActiveWorkspace drops the active-workspace pointer entirely (used when the
+// last workspace is deleted → the app returns to the onboarding screen). After
+// this, requests carry no X-Workspace-Id and the backend resolves no workspace.
+export function clearActiveWorkspace() {
+  activeWorkspaceId = null
+  localStorage.removeItem(WS_KEY)
+}
+
 // wsHeaders returns the base JSON headers plus X-Workspace-Id when a workspace
 // is active. Used by req() and the streaming/SSE callers that bypass it.
 export function wsHeaders(): Record<string, string> {

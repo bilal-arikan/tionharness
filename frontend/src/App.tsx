@@ -35,6 +35,8 @@ import { ChatMeters } from './components/panels/ChatMeters'
 import { SessionDetailPanel } from './components/sessions/SessionDetailPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { WorkspaceView } from './components/workspace/WorkspaceView'
+import { OnboardingScreen } from './components/workspace/OnboardingScreen'
+import { SplashScreen } from './components/SplashScreen'
 import { LogsPanel } from './components/panels/LogsPanel'
 import { isTypeEnabled } from './lib/notifyPrefs'
 import { useWorkspaces } from './hooks/useWorkspaces'
@@ -62,6 +64,10 @@ function isChatKind(kind: string): boolean {
 // workspace (an unknown id is validated away to the first workspace there).
 const INITIAL_ROUTE: Route = parseRoute(window.location.hash)
 if (INITIAL_ROUTE.workspaceId) setActiveWorkspace(INITIAL_ROUTE.workspaceId)
+
+// Minimum time the first-run splash stays on screen (ms), so an instant workspace
+// load doesn't flash the logo for a single frame. Only applies on a fresh install.
+const SPLASH_MIN_MS = 1100
 
 const VIEW_TITLE: Record<View, string> = {
   chat: 'Sohbet',
@@ -118,6 +124,7 @@ export default function App() {
 
   const {
     workspaces,
+    loading: wsLoading,
     activeWorkspaceId,
     unreadWs,
     favoriteWorkspaceId,
@@ -130,6 +137,39 @@ export default function App() {
     deleteWorkspace,
     refreshWorkspaces,
   } = useWorkspaces(setError)
+
+  // First-run gating. `hadSetupAtBoot` is captured ONCE at mount: a returning
+  // user (who has had at least one workspace before) skips the splash entirely
+  // and lands in the app shell, while a truly fresh install shows the splash
+  // during the initial load and then the onboarding screen. The flag is set the
+  // moment a workspace exists, so the splash never reappears after setup.
+  const [hadSetupAtBoot] = useState(() => {
+    try {
+      return localStorage.getItem('swarmgo.hasSetup') === '1'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    if (workspaces.length > 0) {
+      try {
+        localStorage.setItem('swarmgo.hasSetup', '1')
+      } catch {
+        /* storage unavailable — non-fatal, splash logic just falls back to load timing */
+      }
+    }
+  }, [workspaces.length])
+
+  // Minimum splash duration: even if the workspace list resolves instantly, hold
+  // the splash for SPLASH_MIN_MS so a fresh launch never flashes the logo for a
+  // single frame. Returning users (hadSetupAtBoot) skip the splash entirely, so
+  // the gate starts already-elapsed for them.
+  const [minSplashElapsed, setMinSplashElapsed] = useState(hadSetupAtBoot)
+  useEffect(() => {
+    if (hadSetupAtBoot) return
+    const t = setTimeout(() => setMinSplashElapsed(true), SPLASH_MIN_MS)
+    return () => clearTimeout(t)
+  }, [hadSetupAtBoot])
 
   // Right-hand session detail panel visibility (persisted).
   const [detailOpen, setDetailOpen] = useState(
@@ -798,6 +838,18 @@ export default function App() {
     }),
   }
   useUrlSync(route, !!activeWorkspaceId, applyRoute)
+
+  // ---- First-run gating (must stay AFTER every hook above) ----
+  // Fresh install → splash while the list is loading AND until the minimum
+  // duration elapses (only when no prior setup). Returning users skip it.
+  if (!hadSetupAtBoot && (wsLoading || !minSplashElapsed)) {
+    return <SplashScreen />
+  }
+  // List resolved and there are zero workspaces → onboarding. Closing the popup
+  // without creating one provisions nothing (no default workspace).
+  if (!wsLoading && workspaces.length === 0) {
+    return <OnboardingScreen onCreate={createWorkspace} />
+  }
 
   return (
     <div className="flex h-full">
