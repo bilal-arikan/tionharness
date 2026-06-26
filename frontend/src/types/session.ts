@@ -143,7 +143,7 @@ export interface SessionContextPreview {
   dynamicTokens: number
   messages: { role: string; text: string; author?: string; self?: boolean }[]
   messageTokens: number
-  tools: { name: string; description: string }[]
+  tools: { name: string; description: string; inputSchema?: unknown }[]
   toolTokens: number
   totalTokens: number
   cache: CachePreview

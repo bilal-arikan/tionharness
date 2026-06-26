@@ -2,6 +2,24 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## Tier ince ayarı: 6 aracın yeniden atanması ✅ (2026-06-26)
+
+Kullanıcı isteğiyle altı aracın tier'ı değişti:
+
+- **eager → NameOnly:** `update_artifact` (create_artifact eager kalır), `deactivate_tools`
+- **NameOnly → eager:** `WebFetch` (artık tam şema her tur)
+- **Self-mgmt (hidden) → NameOnly:** `handoff_session`, `memory_add`, `send_message`
+  (artık katalogda adıyla görünür; pointer 51→48)
+
+- **Registry:** `MarkNameOnly`/`MarkHidden` artık karşılıklı dışlıyor (`delete` ile;
+  disjointness, son işaret kazanır) — self-mgmt→NameOnly flip'i için gerekliydi.
+- **deactivate_tools incelik:** meta-tool buildRegistry sonunda eklendiği için
+  `activate_tools`'un bildiği lazyCat'e elle eklendi (yoksa aktive edilemezdi). CLI'de
+  bridge'lenmediğinden `cliLazyBridgeExcluded`'a kondu (CLI katalogunda görünmez).
+- **Canlı doğrulama (WS5+WS2):** 6 atama hem native hem CLI yolunda doğru; CLI'de
+  handoff/send_message/update_artifact namespaced, deactivate_tools dışlanmış, WebFetch
+  eager. Go build+test ✅, tsc ✅.
+
 ## Bağlam önizlemesi: eager araçların tam şeması (açılır-kapanır) ✅ (2026-06-26)
 
 Session bağlam önizlemesinde "Araçlar — her tur şema gönderilen" bölümü artık düz isim

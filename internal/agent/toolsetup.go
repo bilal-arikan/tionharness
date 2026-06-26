@@ -393,8 +393,16 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		"notify", "focus_view", "schedule_wake",
 		// Cross-session & self-diagnostics — occasional, discoverable by name.
 		"list_sessions", "conversation_search", "read_session_debug",
-		// Web + memory recall — most turns need neither; recall is auto-injected.
-		"WebFetch", "memory_recall",
+		// Memory recall — recall is already auto-injected via ContextBlock.
+		"memory_recall",
+		// Artifact revise + meta — create_artifact stays eager (behavioral); revise
+		// and the deactivate meta-tool are reached on demand.
+		"update_artifact", "deactivate_tools",
+		// Promoted out of the hidden self-management group: common enough to advertise
+		// by name (handoff at context limit, add a memory, DM a peer agent) rather than
+		// fold into the self-management skill pointer. MarkNameOnly clears the earlier
+		// MarkHidden on these (disjoint tiers, last mark wins).
+		"handoff_session", "memory_add", "send_message",
 	)
 	// Admin-rare tools fold into the HIDDEN self-management group (not enumerated
 	// per turn — surfaced via the swarmgo-self-management skill / tool_search). These
@@ -461,9 +469,19 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// discover and activate on-demand tools. Skipped when nothing is lazy.
 	if lazyCat := reg.LazyCatalog(nil); len(lazyCat) > 0 {
 		active := activeToolsFromCtx(ctx) // nil for catalog/preview calls (no-op meta-tools)
+		deact := tools.NewDeactivateToolsTool(active)
+		// deactivate_tools is itself name-only on the native path (marked above), so it
+		// is added AFTER LazyCatalog was snapshotted and would be missing from the
+		// activate/search meta-tools' known set — making it impossible to activate. Add
+		// its entry to the catalog those meta-tools see so it activates like any other
+		// load-on-demand tool.
+		if reg.IsLazy(deact.Def().Name) {
+			d := deact.Def()
+			lazyCat = append(lazyCat, providers.ToolDef{Name: d.Name, Description: d.Description})
+		}
 		reg.Add(
 			tools.NewActivateToolsTool(active, lazyCat),
-			tools.NewDeactivateToolsTool(active),
+			deact,
 			tools.NewToolSearchTool(lazyCat),
 		)
 	}
@@ -560,7 +578,14 @@ const lazyCatalogMCPListLimit = 30
 // Interaction MCP bridge, so the CLI-form catalog must not list them (the CLI uses
 // its OWN equivalent). Mirrors tools.bridgeExcluded — keep in sync. run_subagent is
 // eager (never in the lazy catalog), so WebFetch is the only one that surfaces here.
-var cliLazyBridgeExcluded = map[string]bool{"WebFetch": true, "run_subagent": true}
+var cliLazyBridgeExcluded = map[string]bool{
+	"WebFetch":     true, // CLI has its own native WebFetch
+	"run_subagent": true, // bridged explicitly via interactionToolSpecs, not the lazy path
+	// deactivate_tools is a SwarmGo-native meta-tool (paired with activate_tools);
+	// the CLI uses its OWN ToolSearch, so this is never bridged — keep it out of the
+	// CLI catalog even though it is name-only on the native path.
+	"deactivate_tools": true,
+}
 
 // catalogDisplayName maps a registry tool name to the identifier the target agent
 // must actually call. Native agents call the bare/registry name as-is. A claude-cli

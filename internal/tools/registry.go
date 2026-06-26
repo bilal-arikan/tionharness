@@ -122,6 +122,7 @@ func (r *Registry) MarkHidden(names ...string) {
 	for _, n := range names {
 		r.lazy[n] = true
 		r.hidden[n] = true
+		delete(r.nameOnly, n) // hidden and nameOnly are disjoint; last mark wins
 	}
 }
 
@@ -134,6 +135,7 @@ func (r *Registry) MarkNameOnly(names ...string) {
 	for _, n := range names {
 		r.lazy[n] = true
 		r.nameOnly[n] = true
+		delete(r.hidden, n) // nameOnly and hidden are disjoint; last mark wins
 	}
 }
 
