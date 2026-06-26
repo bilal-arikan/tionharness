@@ -378,23 +378,6 @@ func (d *DB) SetSessionState(ctx context.Context, sessionID, state string) error
 	})
 }
 
-// SetSessionLabels replaces a session's free-form tag set (filtering/automation).
-// Does not bump UpdatedAt — labelling must not reorder the session list.
-func (d *DB) SetSessionLabels(ctx context.Context, sessionID string, labels []string) error {
-	return d.mutateSessionLocked(sessionID, func(s *Session) {
-		s.Labels = labels
-	})
-}
-
-// SetSessionStatus sets a session's free-form WORKFLOW status ("in_progress",
-// "blocked", "done", …) — orthogonal to State (lifecycle). An empty string
-// clears it. Does not bump UpdatedAt (status changes must not reorder the list).
-func (d *DB) SetSessionStatus(ctx context.Context, sessionID, status string) error {
-	return d.mutateSessionLocked(sessionID, func(s *Session) {
-		s.Status = status
-	})
-}
-
 // SetSessionPinned pins/unpins a session to the top of the sidebar list. Does not
 // bump UpdatedAt (pinning is a view preference, not activity).
 func (d *DB) SetSessionPinned(ctx context.Context, sessionID string, pinned bool) error {

@@ -258,8 +258,6 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
 	mux.HandleFunc("PUT /api/sessions/{id}/goal", s.handleSetSessionGoal)
 	mux.HandleFunc("PUT /api/sessions/{id}/state", s.handleSetSessionState)
-	mux.HandleFunc("PUT /api/sessions/{id}/labels", s.handleSetSessionLabels)
-	mux.HandleFunc("PUT /api/sessions/{id}/status", s.handleSetSessionStatus)
 	mux.HandleFunc("PUT /api/sessions/{id}/pin", s.handleSetSessionPin)
 	mux.HandleFunc("PUT /api/sessions/{id}/messages/{msgId}/feedback", s.handleSetMessageFeedback)
 	mux.HandleFunc("PUT /api/sessions/{id}/agent", s.handleSetSessionAgent)

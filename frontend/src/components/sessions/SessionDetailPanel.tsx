@@ -13,12 +13,6 @@ interface Props {
   // Bumped by the parent whenever the conversation changes, so size/context
   // figures refresh without reselecting the session.
   refreshKey?: number
-  // Current session metadata (from the live session list) + setters for the
-  // labels/status editor. Optional so the panel degrades gracefully.
-  labels?: string[]
-  status?: string
-  onSetLabels?: (id: string, labels: string[]) => void
-  onSetStatus?: (id: string, status: string) => void
   onClose: () => void
   onError: (msg: string) => void
   onGenerateTitle: (id: string) => void | Promise<void>
@@ -45,10 +39,6 @@ function fmtTok(n: number): string {
 export function SessionDetailPanel({
   sessionId,
   refreshKey,
-  labels,
-  status,
-  onSetLabels,
-  onSetStatus,
   onClose,
   onError,
   onGenerateTitle,
@@ -70,11 +60,6 @@ export function SessionDetailPanel({
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalDraft, setGoalDraft] = useState('')
   const [savingGoal, setSavingGoal] = useState(false)
-  // Labels + workflow status editor drafts (synced from props when they change).
-  const [labelsDraft, setLabelsDraft] = useState((labels ?? []).join(', '))
-  const [statusDraft, setStatusDraft] = useState(status ?? '')
-  useEffect(() => setLabelsDraft((labels ?? []).join(', ')), [labels, sessionId])
-  useEffect(() => setStatusDraft(status ?? ''), [status, sessionId])
   // Manual-refresh nonce: bumped by the refresh button (and after a title
   // regeneration) to re-fetch without touching the parent's refreshKey.
   const [localRefresh, setLocalRefresh] = useState(0)
@@ -407,44 +392,6 @@ export function SessionDetailPanel({
               </button>
             )}
           </section>
-
-          {/* Labels + workflow status (sidebar filtering / automation). Saved on
-              blur or Enter; comma-separated labels, free-text status. */}
-          {(onSetLabels || onSetStatus) && (
-            <Section title="Etiketler & Durum">
-              <div className="flex flex-col gap-2">
-                {onSetStatus && (
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-[var(--color-text-dim)]">Durum (workflow)</label>
-                    <input
-                      value={statusDraft}
-                      onChange={(e) => setStatusDraft(e.target.value)}
-                      onBlur={() => statusDraft !== (status ?? '') && onSetStatus(sessionId, statusDraft.trim())}
-                      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                      placeholder="örn. in_progress, blocked, done"
-                      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-                    />
-                  </div>
-                )}
-                {onSetLabels && (
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-[var(--color-text-dim)]">Etiketler (virgülle)</label>
-                    <input
-                      value={labelsDraft}
-                      onChange={(e) => setLabelsDraft(e.target.value)}
-                      onBlur={() => {
-                        const next = labelsDraft.split(',').map((l) => l.trim()).filter(Boolean)
-                        if (next.join(',') !== (labels ?? []).join(',')) onSetLabels(sessionId, next)
-                      }}
-                      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                      placeholder="örn. bug, acil, araştırma"
-                      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-                    />
-                  </div>
-                )}
-              </div>
-            </Section>
-          )}
 
           {/* Meta */}
           <Section title="Genel">

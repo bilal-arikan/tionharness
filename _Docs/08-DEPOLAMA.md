@@ -130,10 +130,8 @@ uygulama numaralamaya kaldığı yerden devam eder.
 
 - **Satır 1** = `Session` header'ı (id, agentId, kind, title, messageCount, state,
   summary, summaryMsgCount, zaman damgaları). **Zenginleştirilmiş alanlar (2026-06-26):**
-  `v` (SchemaVersion — header format sürümü, ileri-migration için), `labels[]`
-  (serbest etiket, filtre/otomasyon), `status` (serbest **workflow** durumu —
-  state=lifecycle'dan ayrı), `pinned` (sidebar'da üste sabitleme; `ListSessions`
-  pinned'leri öne alır).
+  `v` (SchemaVersion — header format sürümü, ileri-migration için), `pinned`
+  (sidebar'da üste sabitleme; `ListSessions` pinned'leri öne alır).
 - **Satır 2+** = `Message` kayıtları (role, text, toolCalls, reasoningContent,
   steps, createdAt) — kronolojik. **Asistan turu zenginleştirmesi (2026-06-26):**
   `model` (turu cevaplayan gerçek model), `stopReason` (`end_turn|max_tokens|

@@ -488,27 +488,6 @@ export default function App() {
     }
   }, [refreshSessions])
 
-  // Set a session's workflow status (detail panel). Optimistic.
-  const setSessionStatusVal = useCallback(async (id: string, status: string) => {
-    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)))
-    try {
-      await api.setSessionStatus(id, status)
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [])
-
-  // Replace a session's labels (detail panel). Optimistic.
-  const setSessionLabelsVal = useCallback(async (id: string, labels: string[]) => {
-    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, labels } : s)))
-    try {
-      const res = await api.setSessionLabels(id, labels)
-      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, labels: res.labels } : s)))
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [])
-
   const copySessionPath = useCallback(async (id: string) => {
     try {
       const { path } = await api.sessionPath(id)
@@ -1190,10 +1169,6 @@ export default function App() {
         <SessionDetailPanel
           sessionId={activeSessionId}
           refreshKey={meterRefresh}
-          labels={sessions.find((s) => s.id === activeSessionId)?.labels}
-          status={sessions.find((s) => s.id === activeSessionId)?.status}
-          onSetLabels={setSessionLabelsVal}
-          onSetStatus={setSessionStatusVal}
           onClose={toggleDetail}
           onError={setError}
           onGenerateTitle={regenerateSessionTitle}

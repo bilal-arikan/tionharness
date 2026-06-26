@@ -14,11 +14,6 @@ export interface Session {
   state: string
   // Session-header format version (db.SessionSchemaVersion); 0 = pre-versioning.
   v?: number
-  // Free-form tags for filtering/automation (distinct from state/status).
-  labels?: string[]
-  // Free-form WORKFLOW status ("in_progress", "blocked", "done", …) — orthogonal
-  // to state (active/archived lifecycle). Empty = none.
-  status?: string
   // Pins the session to the top of the sidebar list regardless of recency.
   pinned?: boolean
   // True when an agent reply landed while this session wasn't open.

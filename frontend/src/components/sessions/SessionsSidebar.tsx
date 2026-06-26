@@ -300,14 +300,6 @@ export function SessionsSidebar({
                           <span className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}>
                             {s.title || 'Yeni sohbet'}
                           </span>
-                          {s.status && (
-                            <span
-                              className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--color-accent)_18%,transparent)] px-1.5 py-px text-[9px] font-medium text-[var(--color-accent)]"
-                              title="Durum"
-                            >
-                              {s.status}
-                            </span>
-                          )}
                           {s.kind === 'spawned' && (
                             <span
                               className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[9px] text-[var(--color-text-dim)]"
@@ -325,18 +317,6 @@ export function SessionsSidebar({
                         ) : (
                           <span className="truncate text-[10px] opacity-60">
                             {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
-                          </span>
-                        )}
-                        {s.labels && s.labels.length > 0 && (
-                          <span className="mt-0.5 flex flex-wrap gap-1">
-                            {s.labels.map((l) => (
-                              <span
-                                key={l}
-                                className="rounded bg-[var(--color-surface-2)] px-1 py-px text-[9px] text-[var(--color-text-dim)]"
-                              >
-                                {l}
-                              </span>
-                            ))}
                           </span>
                         )}
                       </span>

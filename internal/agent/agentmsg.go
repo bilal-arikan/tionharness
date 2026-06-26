@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/events"
@@ -138,6 +139,8 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	// Mark as async chat (a human may read the inbox) + autonomous, and stamp the
 	// session so the history-aware runner targets it.
 	turnCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(ctx, KindSpawn), inboxID))
+	turnCtx, meta := WithTurnMeta(turnCtx)
+	turnStart := time.Now()
 
 	r.trackSession(inboxID)
 	output, steps, err := r.runSessionTurn(turnCtx, agent, inboxID, prompt, true)
@@ -147,13 +150,15 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 		r.logger.Error("agent message: invoke failed",
 			"session", inboxID, "agent", agent.ID,
 			"provider", agent.Provider, "model", agent.Model, "error", err)
-		if _, addErr := r.db.AddMessage(ctx, db.Message{
+		errMsg := db.Message{
 			SessionID: inboxID,
 			AgentID:   agent.ID,
 			Role:      "assistant",
 			Text:      "⚠️ Inbox mesajı işlenemedi:\n\n" + err.Error(),
 			Steps:     encodeSteps(steps),
-		}); addErr != nil {
+		}
+		meta.apply(&errMsg, time.Since(turnStart).Milliseconds())
+		if _, addErr := r.db.AddMessage(ctx, errMsg); addErr != nil {
 			r.logger.Warn("agent message: failed to record error reply", "session", inboxID, "error", addErr)
 		}
 		r.emitInboxEvent(agent, inboxID, false)
@@ -162,13 +167,15 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	if strings.TrimSpace(output) == "" {
 		output = "ℹ️ Ajan bu mesaj için boş yanıt döndürdü."
 	}
-	if _, err := r.db.AddMessage(ctx, db.Message{
+	replyMsg := db.Message{
 		SessionID: inboxID,
 		AgentID:   agent.ID,
 		Role:      "assistant",
 		Text:      output,
 		Steps:     encodeSteps(steps),
-	}); err != nil {
+	}
+	meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
+	if _, err := r.db.AddMessage(ctx, replyMsg); err != nil {
 		r.logger.Warn("agent message: failed to record reply", "session", inboxID, "error", err)
 	}
 	r.logger.Info("agent message: processed", "session", inboxID, "agent", agent.ID)

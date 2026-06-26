@@ -1,6 +1,29 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-27**
+
+## Otonom turlarda per-message metadata + label/status geri çekildi ✅ (2026-06-27)
+
+**Otonom turlarda per-message metadata.** Önceden yalnız chat (sync+stream)
+asistan mesajları `model/stopReason/usage/durationMs` taşıyordu; otonom turlar
+(scheduler/spawn/inbox/wake) bunu atıyordu çünkü sarmalayıcılar (`invokeTraced`/
+`runSessionTurn`/`complete`) provider `Response`'unu düşürüyor. **ctx-tabanlı
+turn-meta yakalama** eklendi (imza değişmeden): `internal/agent/turnmeta.go`
+(`WithTurnMeta(ctx)→*turnMeta`, `capture(resp)`, `apply(&msg,durMs)` + `usageMsg`);
+`completeTraced` her başarılı completion'da ctx'teki sink'e yazar (tüm yollar
+oradan geçer). Bağlanan persist siteleri: spawn (başarı+hata), inbox-delivery
+(başarı+hata), schedule-delivery (başarı+hata), schedule-wake (başarı+hata) —
+hepsi süre + model/stop/usage stamp'ler. Flow (kompozit transkript, per-node model
+değişir) ve handoff (tombstone) bilinçli atlandı.
+
+**Session `labels` + `status` GERİ ÇEKİLDİ (kullanıcı talebi).** Önceki gün eklenen
+oturum etiket/durum alanları + editör + sidebar chip/filtre tamamen kaldırıldı
+(model alanları, db setter'ları `SetSessionLabels/Status`, API `PUT .../labels|status`,
+`SessionDetailPanel` "Etiketler & Durum" editörü, sidebar badge/chip/filtre). **Kalan
+session.jsonl zenginleştirmesi:** per-message (`model/stopReason/usage/durationMs/
+cancelled/feedback`) + session header `pinned` + `v` (SchemaVersion).
+
+Build+vet+505 test + frontend `tsc -b` temiz.
 
 ## "Çalışıyor" (zıplayan nokta) indikatörü tüm tur boyunca kalıcı ✅ (2026-06-26)
 
@@ -33,13 +56,12 @@ gözlemlenebilirlik orada kalır):
 otonom turlar `omitempty` boş. UI: balon-altı `model · ↑in ↓out ⚡cache` rozeti +
 stopReason uyarısı + cancelled banner + hover'da 👍/👎 thumbs (optimistic).
 
-**Session header:** `v` (SchemaVersion=1, ileri-migration), `labels[]`, `status`
-(workflow — state/lifecycle'dan ayrı), `pinned` (ListSessions öne alır). UI:
-sidebar pin menüsü + 📌 gösterge + status badge + label chip'leri; detay-panelde
-"Etiketler & Durum" editörü (blur/Enter ile kaydeder).
+**Session header:** `v` (SchemaVersion=1, ileri-migration), `pinned` (ListSessions
+öne alır). UI: sidebar pin menüsü + 📌 gösterge. _(Not: aynı gün eklenen `labels`+
+`status` ertesi gün kullanıcı talebiyle geri çekildi — yukarıdaki 2026-06-27 girdisi.)_
 
-**Backend:** db setter'ları (SetSessionLabels/Status/Pinned, SetMessageFeedback) +
-API `PUT /api/sessions/{id}/{labels,status,pin}` + `.../messages/{msgId}/feedback`.
+**Backend:** db setter'ları (SetSessionPinned, SetMessageFeedback) +
+API `PUT /api/sessions/{id}/pin` + `.../messages/{msgId}/feedback`.
 Test `db/session_meta_test.go` (round-trip + clear). Build+vet+test + frontend
 `tsc -b` temiz. Detay: `_Docs\08-DEPOLAMA.md`.
 

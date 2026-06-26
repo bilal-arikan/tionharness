@@ -70,7 +70,7 @@ type Agent struct {
 // SessionSchemaVersion is the current session-header format version, stamped on
 // new sessions (Session.SchemaVersion). Bump it whenever header fields are added
 // so a future loader can branch on the version. 1 = first versioned header
-// (added labels/status/pinned + the enriched per-message fields).
+// (added pinned + the enriched per-message fields).
 const SessionSchemaVersion = 1
 
 // Session is a conversation thread belonging to an agent.
@@ -122,13 +122,6 @@ type Session struct {
 	// 0 = pre-versioning (sessions created before this field). Set at creation.
 	SchemaVersion int `json:"v,omitempty"`
 
-	// Labels are free-form tags on the session for filtering and automation
-	// (user- or agent-set). Distinct from State (lifecycle) and Status (workflow).
-	Labels []string `json:"labels,omitempty"`
-	// Status is a free-form WORKFLOW state for the session ("in_progress",
-	// "blocked", "done", "review", …) — orthogonal to State, which is the lifecycle
-	// (active/archived). Empty = none. Drives sidebar filters and status automations.
-	Status string `json:"status,omitempty"`
 	// Pinned keeps the session at the top of the sidebar list regardless of recency.
 	Pinned bool `json:"pinned,omitempty"`
 

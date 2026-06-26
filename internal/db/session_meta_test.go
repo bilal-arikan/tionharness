@@ -26,12 +26,6 @@ func TestSessionMetaAndMessageFields(t *testing.T) {
 	}
 
 	// Header setters.
-	if err := d.SetSessionLabels(ctx, sess.ID, []string{"bug", "urgent"}); err != nil {
-		t.Fatalf("labels: %v", err)
-	}
-	if err := d.SetSessionStatus(ctx, sess.ID, "in_progress"); err != nil {
-		t.Fatalf("status: %v", err)
-	}
 	if err := d.SetSessionPinned(ctx, sess.ID, true); err != nil {
 		t.Fatalf("pin: %v", err)
 	}
@@ -66,12 +60,6 @@ func TestSessionMetaAndMessageFields(t *testing.T) {
 	}
 	if got.SchemaVersion != SessionSchemaVersion {
 		t.Errorf("schema version not persisted: %d", got.SchemaVersion)
-	}
-	if len(got.Labels) != 2 || got.Labels[0] != "bug" {
-		t.Errorf("labels = %v", got.Labels)
-	}
-	if got.Status != "in_progress" {
-		t.Errorf("status = %q", got.Status)
 	}
 	if !got.Pinned {
 		t.Errorf("pinned not persisted")
