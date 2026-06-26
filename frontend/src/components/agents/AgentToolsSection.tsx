@@ -7,11 +7,11 @@ interface Props {
   onError?: (msg: string) => void
 }
 
-// AgentToolsSection lets you pick which of the workspace-ACTIVE tools a given
-// agent may use. The master switch toggles tool use entirely; when on, each
-// active tool can be allowed individually. An empty selection means "all active
-// tools" (the default), so tools later activated workspace-wide extend to the
-// agent automatically. Changes auto-save.
+// AgentToolsSection controls which workspace-ACTIVE tools an agent may use. The
+// master switch toggles tool use entirely. By default an agent reaches EVERY
+// active tool (including ones enabled workspace-wide later); unchecking a tool
+// adds it to the agent's denylist, switching it off for this agent only. An
+// empty denylist means "all tools". Changes auto-save.
 export function AgentToolsSection({ agentId, onError }: Props) {
   const [data, setData] = useState<AgentTools | null>(null)
   const [busy, setBusy] = useState(false)
@@ -22,18 +22,18 @@ export function AgentToolsSection({ agentId, onError }: Props) {
 
   useEffect(() => load(), [load])
 
-  // Build the selected set: empty allowlist => all active tools selected.
+  // A tool is enabled unless it is on the denylist. Default (empty denylist) =>
+  // every tool enabled.
   const names = data?.catalog.map((t) => t.name) ?? []
-  const allowed = data?.allowedTools ?? []
-  const selected = new Set(allowed.length === 0 ? names : allowed)
-  const selectedCount = names.filter((n) => selected.has(n)).length
+  const blocked = new Set(data?.blockedTools ?? [])
+  const enabledCount = names.filter((n) => !blocked.has(n)).length
 
-  const save = async (mcpEnabled: boolean, allowedTools: string[]) => {
+  const save = async (mcpEnabled: boolean, blockedTools: string[]) => {
     if (!data) return
     setBusy(true)
-    // If every active tool is selected, store [] (= all) so new tools extend automatically.
-    const next = allowedTools.length === names.length ? [] : allowedTools
-    setData({ ...data, mcpEnabled, allowedTools: next }) // optimistic
+    // Drop denylist entries for tools that no longer exist in the catalog.
+    const next = blockedTools.filter((n) => names.includes(n))
+    setData({ ...data, mcpEnabled, blockedTools: next }) // optimistic
     try {
       await api.setAgentTools(agentId, mcpEnabled, next)
     } catch (e) {
@@ -45,13 +45,14 @@ export function AgentToolsSection({ agentId, onError }: Props) {
   }
 
   const toggleTool = (name: string) => {
-    const next = new Set(selected)
+    const next = new Set(blocked)
     if (next.has(name)) next.delete(name)
     else next.add(name)
     save(data?.mcpEnabled ?? true, Array.from(next))
   }
 
-  const setAll = (on: boolean) => save(data?.mcpEnabled ?? true, on ? names : [])
+  // "Hepsi" = clear the denylist (all enabled); "Hiçbiri" = block every tool.
+  const setAll = (enabled: boolean) => save(data?.mcpEnabled ?? true, enabled ? [] : names)
 
   if (!data) {
     return <p className="text-xs text-[var(--color-text-dim)]">Araçlar yükleniyor…</p>
@@ -65,7 +66,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
           type="checkbox"
           checked={data.mcpEnabled}
           disabled={busy}
-          onChange={(e) => save(e.target.checked, data.allowedTools)}
+          onChange={(e) => save(e.target.checked, data.blockedTools)}
         />
         <span className="font-medium">Bu ajan için araç kullanımını etkinleştir</span>
       </label>
@@ -74,23 +75,24 @@ export function AgentToolsSection({ agentId, onError }: Props) {
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs text-[var(--color-text-dim)]">
-              Kullanılabilir araçlar ({selectedCount}/{names.length} seçili)
+              Araçlar ({enabledCount}/{names.length} açık) · işareti kaldırılan araç bu ajanda engellenir
             </p>
             <div className="flex gap-2 text-xs">
               <button
-                data-testid="agent-tools-select-all"
+                data-testid="agent-tools-enable-all"
                 onClick={() => setAll(true)}
                 disabled={busy}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90"
+                title="Hiçbir aracı engelleme"
               >
                 Hepsi
               </button>
               <button
-                data-testid="agent-tools-select-none"
-                onClick={() => save(true, ['__none__'])}
+                data-testid="agent-tools-block-all"
+                onClick={() => setAll(false)}
                 disabled={busy}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90"
-                title="Hiçbir aracı kullanma"
+                title="Tüm araçları engelle"
               >
                 Hiçbiri
               </button>
@@ -111,7 +113,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                   data-testid="agent-tool-checkbox"
                   data-tool-name={t.name}
                   type="checkbox"
-                  checked={selected.has(t.name)}
+                  checked={!blocked.has(t.name)}
                   disabled={busy}
                   onChange={() => toggleTool(t.name)}
                   className="mt-1"

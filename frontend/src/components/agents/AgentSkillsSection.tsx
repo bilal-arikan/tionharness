@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Plus, Sparkles, X } from 'lucide-react'
+import { Plus, Sparkles, X } from 'lucide-react'
 import type { Skill, SkillSource } from '../../types'
 import { api } from '../../api'
 
 interface Props {
-  // Ordered, controlled selection of skill slugs.
+  // Controlled selection of skill slugs (unordered — selection is a set).
   selected: string[]
   onChange: (slugs: string[]) => void
   onError?: (msg: string) => void
@@ -15,8 +15,8 @@ const SOURCE_LABEL: Record<SkillSource, string> = {
   workspace: 'Workspace',
 }
 
-// AgentSkillsSection lets the user pick which shared skills an agent gets and in
-// what order. Selection + order is lifted to the parent form (saved with the
+// AgentSkillsSection lets the user pick which shared skills an agent gets.
+// Selection is a set (no ordering) lifted to the parent form (saved with the
 // rest of the profile). Skills are a shared library — this only selects, it
 // never authors per-agent skills.
 export function AgentSkillsSection({ selected, onChange, onError }: Props) {
@@ -52,13 +52,6 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
 
   const add = (slug: string) => onChange([...selected, slug])
   const remove = (slug: string) => onChange(selected.filter((s) => s !== slug))
-  const move = (i: number, dir: -1 | 1) => {
-    const j = i + dir
-    if (j < 0 || j >= selected.length) return
-    const next = [...selected]
-    ;[next[i], next[j]] = [next[j], next[i]]
-    onChange(next)
-  }
 
   return (
     <div className="border-t border-[var(--color-border)] pt-4">
@@ -66,29 +59,26 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
         Skills
       </h3>
       <p className="mb-3 text-xs text-[var(--color-text-dim)]">
-        Bu ajana hangi <strong>kısıtlı</strong> skill'lerin verileceğini seç ve sırala. Atanan skill'ler
-        ajanın sistem promptunda (bu sırayla) görünür ve <code>use_skill</code> ile yüklenebilir.
+        Bu ajana hangi <strong>kısıtlı</strong> skill'lerin verileceğini seç. Atanan skill'ler
+        ajanın sistem promptunda görünür ve <code>use_skill</code> ile yüklenebilir.
         <strong> Gerektiğinde</strong> (paylaşımlı) skill'ler ise atama gerekmeden tüm ajanlara zaten
         açıktır. Skills ortak havuzdandır — <strong>Skills</strong> ekranından yönetilir.
       </p>
 
-      {/* Selected (ordered) */}
+      {/* Selected (unordered set) */}
       {selected.length === 0 ? (
         <p className="mb-3 rounded border border-dashed border-[var(--color-border)] px-3 py-3 text-center text-xs text-[var(--color-text-dim)]">
           Henüz beceri seçilmedi. Aşağıdan ekle.
         </p>
       ) : (
-        <ol className="mb-3 space-y-1">
-          {selected.map((slug, i) => {
+        <ul className="mb-3 space-y-1">
+          {selected.map((slug) => {
             const sk = bySlug.get(slug)
             return (
               <li
                 key={slug}
                 className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5"
               >
-                <span className="w-4 shrink-0 text-center text-[11px] text-[var(--color-text-dim)]">
-                  {i + 1}
-                </span>
                 <span className="shrink-0 text-base leading-none">{sk?.icon || '✨'}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{sk?.name || slug}</span>
@@ -98,41 +88,19 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
                     </span>
                   )}
                 </span>
-                <div className="flex shrink-0 items-center gap-0.5">
-                  <button
-                    data-testid="skill-move-up"
-                    data-skill-slug={slug}
-                    onClick={() => move(i, -1)}
-                    disabled={i === 0}
-                    title="Yukarı"
-                    className="rounded p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)] disabled:opacity-30"
-                  >
-                    <ChevronUp size={14} />
-                  </button>
-                  <button
-                    data-testid="skill-move-down"
-                    data-skill-slug={slug}
-                    onClick={() => move(i, 1)}
-                    disabled={i === selected.length - 1}
-                    title="Aşağı"
-                    className="rounded p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)] disabled:opacity-30"
-                  >
-                    <ChevronDown size={14} />
-                  </button>
-                  <button
-                    data-testid="skill-remove"
-                    data-skill-slug={slug}
-                    onClick={() => remove(slug)}
-                    title="Kaldır"
-                    className="rounded p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-bg)] hover:text-[var(--color-danger)]"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
+                <button
+                  data-testid="skill-remove"
+                  data-skill-slug={slug}
+                  onClick={() => remove(slug)}
+                  title="Kaldır"
+                  className="shrink-0 rounded p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-bg)] hover:text-[var(--color-danger)]"
+                >
+                  <X size={14} />
+                </button>
               </li>
             )
           })}
-        </ol>
+        </ul>
       )}
 
       {/* Available to add */}

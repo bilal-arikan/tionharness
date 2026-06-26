@@ -2,6 +2,31 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## Ajan araç erişimi: allowlist → denylist + skill sıralaması kaldırıldı ✅ (2026-06-26)
+
+Kullanıcı geri bildirimiyle ajan-düzeyi araç yönetimi modeli sadeleşti:
+
+1. **Ajan araçları artık denylist.** Eskiden ajan-başına **allowlist** (`Agent.AllowedTools`,
+   boş = hepsi) vardı; kısmî seçim yapınca sonradan workspace'e eklenen araçlar ajana
+   gelmiyordu. Yeni model: **her ajan varsayılan olarak TÜM workspace-aktif araçlara erişir**;
+   agent detayından istenen araçlar **engellenir** (`Agent.BlockedTools`, JSON denylist,
+   boş = hiçbiri engelli). Sonradan eklenen araçlar otomatik erişilebilir kalır.
+   - `toolFilter` artık üç katmanı besteliyor: workspace denylist ∪ ajan denylist çıkarılır,
+     ardından (varsa) legacy allowlist daraltır.
+   - **Legacy allowlist korunuyor** ama yalnız built-in **subagent profilleri**
+     (explore/coder/reviewer izolasyonu, `subagent.go`) için — kullanıcı ajanları boş bırakır.
+   - **Otomatik migrasyon:** eski allowlist'i olan bir ajanda `GET /api/agents/{id}/tools`
+     allowlist'i eşdeğer denylist'e çevirip döner (UI doğru efektif seti gösterir); ilk
+     kaydetmede (`UpdateAgentTools`) allowlist temizlenir, ajan tamamen denylist ile tanımlanır.
+   - UI (`AgentToolsSection`): checkbox işaretli = araç açık; işareti kaldır = bu ajanda engelle.
+     "Hepsi" = denylist'i temizle, "Hiçbiri" = tümünü engelle.
+
+2. **Skill sıralaması kaldırıldı.** `AgentSkillsSection`'daki yukarı/aşağı (move) butonları ve
+   sıra numarası kaldırıldı — skill seçimi artık sırasız bir **küme**. `Agent.Skills` listesi
+   ekleme sırasını korur ama kullanıcı sıralamaz; ilgili metinler güncellendi.
+
+Backend `go build`/`vet` + agent/db/api testleri (185) + frontend `tsc --noEmit` temiz.
+
 ## Oturum detayı UI rötuşları + per-session kalıcı ilerleme ✅ (2026-06-26)
 
 Kullanıcı geri bildirimiyle 4 iyileştirme:

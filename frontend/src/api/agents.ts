@@ -49,9 +49,9 @@ export const agentApi = {
     req<{ path: string }>(`/api/agents/${agentId}/reveal`, { method: 'POST' }),
 
   agentTools: (agentId: string) => req<AgentTools>(`/api/agents/${agentId}/tools`),
-  setAgentTools: (agentId: string, mcpEnabled: boolean, allowedTools: string[]) =>
-    req<{ mcpEnabled: boolean; allowedTools: string[] }>(
+  setAgentTools: (agentId: string, mcpEnabled: boolean, blockedTools: string[]) =>
+    req<{ mcpEnabled: boolean; blockedTools: string[] }>(
       `/api/agents/${agentId}/tools`,
-      { method: 'POST', body: JSON.stringify({ mcpEnabled, allowedTools }) },
+      { method: 'POST', body: JSON.stringify({ mcpEnabled, blockedTools }) },
     ),
 }

@@ -93,14 +93,19 @@ func (d *DB) DeleteMCPServer(ctx context.Context, id string) error {
 }
 
 // UpdateAgentTools sets an agent's tool access: whether MCP tools are offered
-// and an optional allowlist of tool-name patterns (JSON array).
-func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bool, allowedTools string) error {
-	if allowedTools == "" {
-		allowedTools = "[]"
+// and a per-agent denylist of tool-name patterns (JSON array). Agents reach all
+// workspace-active tools by default; blockedTools switches specific ones off for
+// this agent only. The legacy allowlist is cleared here so a user-facing agent
+// is fully described by its denylist (the allowlist remains for subagent
+// profiles, which never go through this endpoint).
+func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bool, blockedTools string) error {
+	if blockedTools == "" {
+		blockedTools = "[]"
 	}
 	_, err := d.mutateAgentLocked(agentID, func(a *Agent) {
 		a.MCPEnabled = mcpEnabled
-		a.AllowedTools = allowedTools
+		a.BlockedTools = blockedTools
+		a.AllowedTools = "[]"
 	})
 	return err
 }

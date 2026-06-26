@@ -18,9 +18,14 @@ export interface Agent {
   avatar?: string
   color?: string
   mcpEnabled: boolean
+  // Legacy allowlist (JSON array); retained for subagent profiles. User-facing
+  // agents leave it empty and use blockedTools instead.
   allowedTools: string
-  // Ordered list of skill slugs enabled for this agent (picked from the shared
-  // skill library; agents never own skills).
+  // Per-agent denylist (JSON array): tools switched off for this agent. Empty =
+  // all workspace-active tools available.
+  blockedTools: string
+  // List of skill slugs enabled for this agent (picked from the shared skill
+  // library; agents never own skills).
   skills?: string[]
   createdAt: number
   updatedAt: number
@@ -65,7 +70,8 @@ export interface AgentUsage {
 
 export interface AgentTools {
   mcpEnabled: boolean
-  allowedTools: string[]
+  // Per-agent denylist of tool names. Empty = all catalog tools available.
+  blockedTools: string[]
   catalog: ToolDef[]
 }
 

@@ -28,15 +28,27 @@ type Agent struct {
 	DailyCallLimit  int `json:"dailyCallLimit"`
 	DailyTokenLimit int `json:"dailyTokenLimit"`
 
-	// Tool access. MCPEnabled gates whether the agent is offered tools at all;
-	// AllowedTools is an optional JSON allowlist of tool-name patterns.
+	// Tool access. MCPEnabled gates whether the agent is offered tools at all.
+	//
+	// Agents reach EVERY workspace-active tool by default. Access is narrowed two
+	// independent ways:
+	//   - BlockedTools: per-agent denylist (the user-facing model in agent
+	//     detail). Empty = nothing blocked = all tools. New tools added later are
+	//     reachable automatically unless explicitly blocked here.
+	//   - AllowedTools: a legacy allowlist of tool-name patterns. Retained because
+	//     the built-in subagent profiles (explore/coder/reviewer) restrict an
+	//     isolated worker to a fixed tool set. Empty = allow all. User-facing
+	//     agents leave this empty and use the denylist instead.
+	// Both compose: a tool is offered iff it is not blocked AND (the allowlist is
+	// empty OR matches it).
 	MCPEnabled   bool   `json:"mcpEnabled"`
-	AllowedTools string `json:"allowedTools"` // JSON array
+	AllowedTools string `json:"allowedTools"` // JSON array (legacy allowlist; subagent profiles)
+	BlockedTools string `json:"blockedTools"` // JSON array (per-agent denylist)
 
-	// Skills is the ordered list of skill slugs enabled for this agent. Only
-	// these skills are advertised to the agent (in this order) and loadable via
-	// use_skill. Empty means the agent has no skills. Skills themselves are a
-	// shared library (global/workspace/project tiers) — never agent-owned.
+	// Skills is the list of skill slugs enabled for this agent. Only these skills
+	// are advertised to the agent and loadable via use_skill. Empty means the
+	// agent has no assigned skills. Skills themselves are a shared library
+	// (global/workspace/project tiers) — never agent-owned.
 	Skills []string `json:"skills"`
 
 	// CoreBlocks defines this agent's named core-memory blocks (MemGPT memory

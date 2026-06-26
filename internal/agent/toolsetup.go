@@ -41,14 +41,12 @@ func toServerConfig(m db.MCPServer) mcp.ServerConfig {
 	}
 }
 
-// allowFunc builds a tool-name predicate from an agent's allowed_tools JSON
-// allowlist. An empty list means "allow everything". A pattern ending in "*"
-// matches by prefix; otherwise it matches exactly.
-func allowFunc(agent db.Agent) func(string) bool {
-	var patterns []string
-	_ = json.Unmarshal([]byte(agent.AllowedTools), &patterns)
+// patternPredicate compiles a list of tool-name patterns into a matcher. A
+// pattern ending in "*" matches by prefix; otherwise it matches exactly. An
+// empty list yields a nil predicate (caller treats nil as "no constraint").
+func patternPredicate(patterns []string) func(string) bool {
 	if len(patterns) == 0 {
-		return nil // nil predicate => allow all
+		return nil
 	}
 	return func(name string) bool {
 		for _, p := range patterns {
@@ -62,6 +60,26 @@ func allowFunc(agent db.Agent) func(string) bool {
 		}
 		return false
 	}
+}
+
+// allowFunc builds a tool-name predicate from an agent's allowed_tools JSON
+// allowlist. An empty list means "allow everything" (nil predicate). This is the
+// legacy allowlist used by built-in subagent profiles; user-facing agents leave
+// it empty and rely on the denylist (blockFunc) instead.
+func allowFunc(agent db.Agent) func(string) bool {
+	var patterns []string
+	_ = json.Unmarshal([]byte(agent.AllowedTools), &patterns)
+	return patternPredicate(patterns)
+}
+
+// blockFunc builds a tool-name predicate from an agent's blocked_tools JSON
+// denylist — it reports whether a tool is BLOCKED for this agent. An empty list
+// means "nothing blocked" (nil predicate). This is the per-agent denylist driven
+// from agent detail: agents reach all tools by default, minus these.
+func blockFunc(agent db.Agent) func(string) bool {
+	var patterns []string
+	_ = json.Unmarshal([]byte(agent.BlockedTools), &patterns)
+	return patternPredicate(patterns)
 }
 
 // buildRegistry assembles the tool registry for an agent: built-in tools plus
@@ -446,16 +464,22 @@ func (r *Runtime) workspaceDisabledSet(ctx context.Context) map[string]bool {
 }
 
 // toolFilter is the effective tool predicate for an agent: a tool is offered
-// only when it is active at the workspace level AND permitted by the agent's
-// own allowlist (empty allowlist = all workspace-active tools).
+// only when it is active at the workspace level AND not on the agent's denylist
+// AND permitted by the agent's allowlist. The denylist is the user-facing model
+// (empty = all tools); the allowlist is the legacy subagent-profile restriction
+// (empty = all). Both empty + no workspace denylist => nil (offer everything).
 func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) bool {
 	disabled := r.workspaceDisabledSet(ctx)
 	agentAllow := allowFunc(agent) // nil => agent allows all
-	if disabled == nil && agentAllow == nil {
+	agentBlock := blockFunc(agent) // nil => agent blocks nothing
+	if disabled == nil && agentAllow == nil && agentBlock == nil {
 		return nil
 	}
 	return func(name string) bool {
 		if disabled[name] {
+			return false
+		}
+		if agentBlock != nil && agentBlock(name) {
 			return false
 		}
 		return agentAllow == nil || agentAllow(name)
