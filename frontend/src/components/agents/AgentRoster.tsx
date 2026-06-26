@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Settings } from 'lucide-react'
+import { Plus, Settings } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AgentIdentity } from './AgentIdentity'
 import { AgentSettingsModal } from './AgentSettingsModal'
@@ -48,20 +48,24 @@ export function AgentRoster({
 
   const body = (
     <>
-      <div className="flex items-center justify-between px-4 pt-4 pb-1">
+      <div className="px-4 pt-4 pb-1">
         <span
           className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]"
           title="Seçili ajan = yeni sohbetlerin varsayılanı. Sohbette @ ile başka ajanları da çağırabilirsin."
         >
           Ajanlar · varsayılan
         </span>
+      </div>
+
+      {/* Prominent new-agent button, mirroring the "Yeni Sohbet" button. */}
+      <div className="px-3 pb-1 pt-1">
         <button
           data-testid="agent-create-toggle"
           onClick={() => setShowForm((v) => !v)}
-          className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
           title="Yeni ajan"
         >
-          +
+          <Plus size={15} /> Yeni Ajan
         </button>
       </div>
 

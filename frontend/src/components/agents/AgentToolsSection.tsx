@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Ban, Plus, X } from 'lucide-react'
 import { api } from '../../api'
 import type { AgentTools } from '../../types'
 
@@ -7,14 +8,15 @@ interface Props {
   onError?: (msg: string) => void
 }
 
-// AgentToolsSection controls which workspace-ACTIVE tools an agent may use. The
-// master switch toggles tool use entirely. By default an agent reaches EVERY
-// active tool (including ones enabled workspace-wide later); unchecking a tool
-// adds it to the agent's denylist, switching it off for this agent only. An
-// empty denylist means "all tools". Changes auto-save.
+// AgentToolsSection manages an agent's tool DENYLIST. An agent reaches every
+// workspace-ACTIVE tool by default (including ones enabled workspace-wide
+// later); this panel only collects the tools to switch OFF for this agent.
+// The master switch toggles tool use entirely. Empty denylist = all tools.
+// Changes auto-save.
 export function AgentToolsSection({ agentId, onError }: Props) {
   const [data, setData] = useState<AgentTools | null>(null)
   const [busy, setBusy] = useState(false)
+  const [query, setQuery] = useState('')
 
   const load = useCallback(() => {
     api.agentTools(agentId).then(setData).catch((e) => onError?.(e.message))
@@ -22,11 +24,8 @@ export function AgentToolsSection({ agentId, onError }: Props) {
 
   useEffect(() => load(), [load])
 
-  // A tool is enabled unless it is on the denylist. Default (empty denylist) =>
-  // every tool enabled.
   const names = data?.catalog.map((t) => t.name) ?? []
-  const blocked = new Set(data?.blockedTools ?? [])
-  const enabledCount = names.filter((n) => !blocked.has(n)).length
+  const blocked = useMemo(() => new Set(data?.blockedTools ?? []), [data])
 
   const save = async (mcpEnabled: boolean, blockedTools: string[]) => {
     if (!data) return
@@ -44,19 +43,27 @@ export function AgentToolsSection({ agentId, onError }: Props) {
     }
   }
 
-  const toggleTool = (name: string) => {
-    const next = new Set(blocked)
-    if (next.has(name)) next.delete(name)
-    else next.add(name)
-    save(data?.mcpEnabled ?? true, Array.from(next))
-  }
+  const block = (name: string) => save(data?.mcpEnabled ?? true, [...blocked, name])
+  const unblock = (name: string) =>
+    save(data?.mcpEnabled ?? true, Array.from(blocked).filter((n) => n !== name))
+  const blockAll = () => save(data?.mcpEnabled ?? true, names)
+  const clearAll = () => save(data?.mcpEnabled ?? true, [])
 
-  // "Hepsi" = clear the denylist (all enabled); "Hiçbiri" = block every tool.
-  const setAll = (enabled: boolean) => save(data?.mcpEnabled ?? true, enabled ? [] : names)
+  // Tools still available to ban (not blocked yet), filtered by the search box.
+  const available = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return (data?.catalog ?? []).filter(
+      (t) =>
+        !blocked.has(t.name) &&
+        (!q || t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)),
+    )
+  }, [data, blocked, query])
 
   if (!data) {
     return <p className="text-xs text-[var(--color-text-dim)]">Araçlar yükleniyor…</p>
   }
+
+  const blockedList = data.catalog.filter((t) => blocked.has(t.name))
 
   return (
     <div className="space-y-3">
@@ -73,57 +80,102 @@ export function AgentToolsSection({ agentId, onError }: Props) {
 
       {data.mcpEnabled && (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
+          {/* Blocked tools (the denylist) */}
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs text-[var(--color-text-dim)]">
-              Araçlar ({enabledCount}/{names.length} açık) · işareti kaldırılan araç bu ajanda engellenir
+              Yasaklı araçlar ({blockedList.length}/{names.length})
             </p>
             <div className="flex gap-2 text-xs">
               <button
-                data-testid="agent-tools-enable-all"
-                onClick={() => setAll(true)}
-                disabled={busy}
-                className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90"
-                title="Hiçbir aracı engelleme"
+                data-testid="agent-tools-clear-blocks"
+                onClick={clearAll}
+                disabled={busy || blockedList.length === 0}
+                className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90 disabled:opacity-40"
+                title="Tüm yasakları kaldır (ajan her aracı kullanabilir)"
               >
-                Hepsi
+                Yasakları temizle
               </button>
               <button
                 data-testid="agent-tools-block-all"
-                onClick={() => setAll(false)}
-                disabled={busy}
-                className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90"
-                title="Tüm araçları engelle"
+                onClick={blockAll}
+                disabled={busy || names.length === 0 || blockedList.length === names.length}
+                className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90 disabled:opacity-40"
+                title="Tüm araçları yasakla"
               >
-                Hiçbiri
+                Tümünü yasakla
               </button>
             </div>
           </div>
-          <div className="max-h-64 space-y-1 overflow-y-auto">
-            {names.length === 0 && (
-              <p className="text-xs text-[var(--color-text-dim)]">
-                Bu workspace'te aktif araç yok. Araçlar ekranından etkinleştir.
-              </p>
-            )}
-            {data.catalog.map((t) => (
-              <label
-                key={t.name}
-                className="flex cursor-pointer items-start gap-2.5 rounded px-1 py-1 hover:bg-[var(--color-surface-2)]"
-              >
-                <input
-                  data-testid="agent-tool-checkbox"
+
+          {blockedList.length === 0 ? (
+            <p className="mb-3 rounded border border-dashed border-[var(--color-border)] px-3 py-3 text-center text-xs text-[var(--color-text-dim)]">
+              Hiçbir araç yasaklı değil — bu ajan tüm araçları kullanabilir. Aşağıdan yasaklamak
+              istediklerini ekle.
+            </p>
+          ) : (
+            <ul className="mb-3 flex flex-wrap gap-1.5">
+              {blockedList.map((t) => (
+                <li
+                  key={t.name}
+                  data-testid="agent-tool-blocked"
                   data-tool-name={t.name}
-                  type="checkbox"
-                  checked={!blocked.has(t.name)}
+                  className="flex items-center gap-1.5 rounded-full border border-[var(--color-danger)]/40 bg-[var(--color-surface-2)] px-2.5 py-1 text-xs"
+                  title={t.description}
+                >
+                  <Ban size={12} className="shrink-0 text-[var(--color-danger)]" />
+                  <code className="text-xs">{t.name}</code>
+                  <button
+                    data-testid="agent-tool-unblock"
+                    data-tool-name={t.name}
+                    onClick={() => unblock(t.name)}
+                    disabled={busy}
+                    title="Yasağı kaldır"
+                    className="rounded text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+                  >
+                    <X size={13} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Add-to-denylist picker */}
+          <div className="border-t border-[var(--color-border)] pt-2">
+            <input
+              data-testid="agent-tools-search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Yasaklamak için araç ara…"
+              className="mb-2 w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
+            />
+            <div className="max-h-56 space-y-1 overflow-y-auto">
+              {names.length === 0 && (
+                <p className="text-xs text-[var(--color-text-dim)]">
+                  Bu workspace'te aktif araç yok. Araçlar ekranından etkinleştir.
+                </p>
+              )}
+              {names.length > 0 && available.length === 0 && (
+                <p className="px-1 py-1 text-xs text-[var(--color-text-dim)]">
+                  {query.trim() ? 'Eşleşen araç yok.' : 'Tüm araçlar zaten yasaklı.'}
+                </p>
+              )}
+              {available.map((t) => (
+                <button
+                  key={t.name}
+                  data-testid="agent-tool-block-add"
+                  data-tool-name={t.name}
+                  onClick={() => block(t.name)}
                   disabled={busy}
-                  onChange={() => toggleTool(t.name)}
-                  className="mt-1"
-                />
-                <span className="min-w-0">
-                  <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">{t.name}</code>
-                  <span className="ml-2 text-xs text-[var(--color-text-dim)]">{t.description}</span>
-                </span>
-              </label>
-            ))}
+                  className="flex w-full items-start gap-2.5 rounded px-1 py-1 text-left hover:bg-[var(--color-surface-2)]"
+                >
+                  <Plus size={13} className="mt-1 shrink-0 text-[var(--color-text-dim)]" />
+                  <span className="min-w-0">
+                    <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">{t.name}</code>
+                    <span className="ml-2 text-xs text-[var(--color-text-dim)]">{t.description}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

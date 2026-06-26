@@ -299,11 +299,12 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
 
         <div className="border-t border-[var(--color-border)] pt-4">
           <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Araçlar
+            Yasaklı Araçlar
           </h3>
           <p className="mb-3 text-xs text-[var(--color-text-dim)]">
-            Bu ajanın kullanabileceği araçları seç. Yalnız workspace'te aktif olan araçlar listelenir;
-            workspace aktivasyonu <strong>Araçlar</strong> ekranından yönetilir. (Değişiklikler anında kaydedilir.)
+            Bu ajan varsayılan olarak <strong>tüm</strong> workspace-aktif araçlara erişir. Burada
+            yalnızca <strong>kullanmasını istemediğin</strong> araçları yasakla. Yalnız workspace'te aktif
+            araçlar listelenir (aktivasyon <strong>Araçlar</strong> ekranından). Değişiklikler anında kaydedilir.
           </p>
           <AgentToolsSection agentId={agent.id} onError={setErr} />
         </div>

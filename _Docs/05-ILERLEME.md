@@ -25,6 +25,13 @@ Kullanıcı geri bildirimiyle ajan-düzeyi araç yönetimi modeli sadeleşti:
    sıra numarası kaldırıldı — skill seçimi artık sırasız bir **küme**. `Agent.Skills` listesi
    ekleme sırasını korur ama kullanıcı sıralamaz; ilgili metinler güncellendi.
 
+**UI rötuşu (2. tur):** Araçlar bölümü tamamen denylist odaklı yeniden tasarlandı
+(`AgentToolsSection`) — eskiden 118 aracı işaretli liste yerine artık başlık "Yasaklı Araçlar";
+yasaklı araçlar kırmızı çip listesi (kaldır = X), altında yasaklamak için aranabilir ekleme listesi;
+"Yasakları temizle" / "Tümünü yasakla" kısayolları. **Yeni ajan butonu** sohbet ekranındaki
+"Yeni Sohbet" butonu gibi belirgin tam-genişlik `+ Yeni Ajan` butonu oldu (`AgentRoster` +
+`AgentsView`; eski küçük "+" toggle kaldırıldı). Frontend `tsc --noEmit` + `npm run build` temiz.
+
 Backend `go build`/`vet` + agent/db/api testleri (185) + frontend `tsc --noEmit` temiz.
 
 ## Oturum detayı UI rötuşları + per-session kalıcı ilerleme ✅ (2026-06-26)

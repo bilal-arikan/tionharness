@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AgentIdentity } from './AgentIdentity'
 import { ProviderModelSelect } from './ProviderModelSelect'
@@ -107,15 +107,19 @@ export function AgentsView({
                 <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
               </button>
             )}
-            <button
-              onClick={() => setShowForm((v) => !v)}
-              data-testid="agent-create-toggle"
-              className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
-              title="Yeni ajan"
-            >
-              +
-            </button>
           </div>
+        </div>
+
+        {/* Prominent new-agent button, mirroring the "Yeni Sohbet" button. */}
+        <div className="px-3 pb-1 pt-1">
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            data-testid="agent-create-toggle"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            title="Yeni ajan"
+          >
+            <Plus size={15} /> Yeni Ajan
+          </button>
         </div>
 
         {showForm && (
