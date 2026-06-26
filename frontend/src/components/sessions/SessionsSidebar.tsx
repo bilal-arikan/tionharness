@@ -294,6 +294,14 @@ export function SessionsSidebar({
                           <span className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}>
                             {s.title || 'Yeni sohbet'}
                           </span>
+                          {s.kind === 'spawned' && (
+                            <span
+                              className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[9px] text-[var(--color-text-dim)]"
+                              title={s.parentSessionId ? 'Bir devralma (handoff) ile oluşturuldu' : 'Spawn ile oluşturuldu'}
+                            >
+                              {s.parentSessionId ? '↩ handoff' : '✦ spawn'}
+                            </span>
+                          )}
                           <span className="shrink-0 font-mono text-[9px] opacity-50" title="Oturum ID">
                             {s.id}
                           </span>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, ListChecks, Square, Database, Workflow, Wrench, type LucideIcon } from 'lucide-react'
+import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, ListChecks, Square, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
-import type { SessionInfo, AgentUsage, SessionUsageDetail, SessionProgress } from '../../types'
+import type { SessionInfo, SessionUsageDetail, SessionProgress } from '../../types'
 import { SessionContextModal } from './SessionContextModal'
 import { SessionDebugCard } from './SessionDebugCard'
 import { AgentIdentity } from '../agents/AgentIdentity'
@@ -10,10 +10,6 @@ import { roleColor } from '../../lib/palette'
 
 interface Props {
   sessionId: string
-  // The session's primary agent — used to show that agent's daily spend (Motor
-  // B). This is the agent's whole-day total across all sessions, not this
-  // session's cost (usage is recorded per agent+day, not per session).
-  agentId?: string | null
   // Bumped by the parent whenever the conversation changes, so size/context
   // figures refresh without reselecting the session.
   refreshKey?: number
@@ -21,10 +17,7 @@ interface Props {
   onError: (msg: string) => void
   onGenerateTitle: (id: string) => void | Promise<void>
   onRename: (id: string, title: string) => void | Promise<void>
-  onSummarize: (id: string, kind: string) => void
   onDeleteSession: (id: string) => void
-  // Deep-link to the Budget screen for the full per-agent / workspace view.
-  onOpenBudget?: () => void
   // Navigate to another session (used by the context-reset lineage link).
   onSelectSession?: (id: string) => void
 }
@@ -41,30 +34,19 @@ function fmtTok(n: number): string {
   return `${n}`
 }
 
-const SUMMARY_KINDS: { kind: string; label: string; icon: LucideIcon }[] = [
-  { kind: 'memory', label: 'Hafıza özeti', icon: Database },
-  { kind: 'board', label: 'Görev panosu özeti', icon: ListChecks },
-  { kind: 'flows', label: 'Akışlar özeti', icon: Workflow },
-  { kind: 'tools', label: 'Araçlar özeti', icon: Wrench },
-]
-
 // SessionDetailPanel is the right-hand inspector for the active chat session:
 // on-disk footprint, context composition, participating agents and quick actions.
 export function SessionDetailPanel({
   sessionId,
-  agentId,
   refreshKey,
   onClose,
   onError,
   onGenerateTitle,
   onRename,
-  onSummarize,
   onDeleteSession,
-  onOpenBudget,
   onSelectSession,
 }: Props) {
   const [info, setInfo] = useState<SessionInfo | null>(null)
-  const [agentUsage, setAgentUsage] = useState<AgentUsage | null>(null)
   const [sessionUsage, setSessionUsage] = useState<SessionUsageDetail | null>(null)
   const [progress, setProgress] = useState<SessionProgress | null>(null)
   const [loading, setLoading] = useState(false)
@@ -122,23 +104,6 @@ export function SessionDetailPanel({
       alive = false
     }
   }, [sessionId, refreshKey, localRefresh])
-
-  // The primary agent's daily spend (Motor B). Refetched on the same triggers so
-  // a finished turn updates the figure.
-  useEffect(() => {
-    if (!agentId) {
-      setAgentUsage(null)
-      return
-    }
-    let alive = true
-    api
-      .agentUsage(agentId)
-      .then((u) => alive && setAgentUsage(u))
-      .catch(() => alive && setAgentUsage(null))
-    return () => {
-      alive = false
-    }
-  }, [agentId, refreshKey, localRefresh])
 
   // Regenerate the title, showing an inline spinner, then refresh the panel so
   // the new title is reflected here too.
@@ -552,50 +517,6 @@ export function SessionDetailPanel({
               token spend, tool latency/errors, compaction/recovery + raw log. */}
           <SessionDebugCard sessionId={sessionId} refreshKey={(refreshKey ?? 0) + localRefresh} />
 
-          {/* Agent daily spend (Motor B) — the agent's whole-day total across all
-              sessions, not this session's cost. Clearly labelled to avoid the
-              "this chat costs $X" misread. */}
-          {agentUsage && (agentUsage.calls > 0 || (agentUsage.costUSD ?? 0) > 0) && (
-            <Section title="Ajanın bugünkü harcaması">
-              <p className="mb-2 text-[10px] text-[var(--color-text-dim)]">
-                Bu ajanın bugün tüm oturumlardaki toplamı (bu sohbete özel değil).
-              </p>
-              <div className="mb-2 flex items-baseline gap-2">
-                <span className="text-lg font-semibold text-[var(--color-text)]">
-                  {(agentUsage.estimated ? '~' : '') + usd(agentUsage.costUSD ?? 0)}
-                </span>
-                <span className="text-[10px] text-[var(--color-text-dim)]">
-                  {agentUsage.calls} çağrı · {fmtTok(agentUsage.inputTokens + agentUsage.outputTokens)} token
-                  {(agentUsage.savingsUSD ?? 0) > 0 && (
-                    <span style={{ color: 'var(--color-success)' }}> · cache {usd(agentUsage.savingsUSD ?? 0)} tasarruf</span>
-                  )}
-                </span>
-              </div>
-              {agentUsage.byModel && agentUsage.byModel.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  {agentUsage.byModel.slice(0, 4).map((m) => (
-                    <div key={m.model} className="flex items-center justify-between text-[11px]">
-                      <span className="truncate text-[var(--color-text-dim)]" title={m.model}>
-                        {m.model || '(varsayılan)'}
-                      </span>
-                      <span className="ml-2 shrink-0 text-[var(--color-text)]">
-                        {m.priced || m.estimated ? (m.estimated ? '~' : '') + usd(m.costUSD) : 'abonelik'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {onOpenBudget && (
-                <button
-                  onClick={onOpenBudget}
-                  className="mt-2 text-[11px] text-[var(--color-accent)] underline-offset-2 hover:underline"
-                >
-                  Bütçe ekranı →
-                </button>
-              )}
-            </Section>
-          )}
-
           {/* Actions / tools */}
           <Section title="Araçlar">
             <div className="flex flex-col gap-1.5">
@@ -612,16 +533,6 @@ export function SessionDetailPanel({
                 label="Bağlam önizle (debug)"
                 onClick={() => setCtxPreview(true)}
               />
-              {/* Summary kinds rendered as full-width action rows (like the other
-                  tool buttons above): one tap fires the summarize action. */}
-              {SUMMARY_KINDS.map((s) => (
-                <ActionBtn
-                  key={s.kind}
-                  icon={s.icon}
-                  label={s.label}
-                  onClick={() => onSummarize(sessionId, s.kind)}
-                />
-              ))}
               <ActionBtn
                 icon={Trash2}
                 label="Oturumu sil"

@@ -2,6 +2,65 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## Oturum bilgisi panelinden "Ajanın bugünkü harcaması" kaldırıldı ✅ (2026-06-26)
+
+Kullanıcı isteğiyle, oturum detay (Oturum bilgisi) panelindeki **"Ajanın bugünkü
+harcaması"** bölümü (Motor B — ajanın gün içi tüm-oturum toplamı + model kırılımı
++ "Bütçe ekranı →" linki) kaldırıldı.
+
+- `SessionDetailPanel.tsx`: ilgili `Section` bloğu + `agentUsage` state + onu
+  besleyen `useEffect` + `agentId`/`onOpenBudget` prop'ları + kullanılmayan
+  `AgentUsage` type importu silindi. (Bu oturumun kendi harcaması "Bu oturumun
+  harcaması" bölümü **korundu**.)
+- `App.tsx`: `SessionDetailPanel`'e geçilen `agentId` ve `onOpenBudget`
+  prop'ları kaldırıldı.
+- Ajanın günlük harcaması zaten **Bütçe** ekranında tam haliyle duruyor;
+  `api.agentUsage` ve `AgentUsage` tipi orada kullanıldığı için korundu.
+- `tsc --noEmit` temiz.
+
+## spawned/handoff oturumları sohbet ekranından devam ettirilebilir ✅ (2026-06-26)
+
+Bağlam-reset (handoff) ile açılan oturumlar artık sohbet ekranından konuşulabiliyor.
+
+**Sorun:** handoff komutu yeni session'ı `kind:"spawned"` ile açar (`spawn.go:94`,
+`ParentSessionID` ile eski oturuma bağlı). Ama sol sohbet listesi yalnız
+`chat`/boş kind'ı gösterdiği için (`App.tsx isChatKind`), handoff/spawn
+oturumları yalnız Aktivite (Executions) ekranında salt-okunur görünüyordu —
+kullanıcı devam ettiremiyordu. Backend `chat/stream`'de **kind kontrolü yok**;
+AgentID dolu olan her oturuma tur çalıştırabiliyor (spawned'da AgentID dolu),
+yani tıkanma tamamen frontend kapısındaydı.
+
+**Çözüm (minimal, frontend-only):**
+- `App.tsx`: `isChatKind` artık `spawned`'ı da kabul ediyor → spawn ve handoff
+  (context-reset) çocukları sohbet listesinde görünür ve composer ile devam
+  ettirilebilir. Tek-ajanlı doğrusal transcript oldukları için sohbete uygun.
+- `SessionsSidebar.tsx`: spawned oturumlara ayırt edici rozet — `↩ handoff`
+  (ParentSessionID varsa) veya `✦ spawn`.
+- `schedule`/`flow`/`task` **bilinçli olarak dışarıda** kaldı: bunlar
+  paylaşılan/çok-koşulu/çok-ajanlı birikimli loglar; sohbete yazmak otonom
+  turlarla karışma + ajan belirsizliği yaratır. Onlar için ileride "Sohbete
+  fork" yaklaşımı düşünülebilir (bkz. tasarım tartışması).
+- `tsc --noEmit` temiz.
+
+**Not / sıradaki olası iyileştirmeler:** (a) tur-devam-ediyor kilidi (otonom +
+manuel tur aynı session'a çakışmasın), (b) manuel devralınan turun bütçe/confine
+muafiyetinin netleştirilmesi, (c) spawned oturumların Executions'tan
+kaldırılıp kaldırılmayacağı (şimdilik her iki yerde de görünüyor).
+
+## Oturum detay panelinden özet butonları kaldırıldı ✅ (2026-06-26)
+
+Kullanıcı isteğiyle, sohbet detay (oturum bilgisi) panelindeki "Araçlar"
+bölümünden dört özet butonu (`Hafıza özeti` / `Görev panosu özeti` /
+`Akışlar özeti` / `Araçlar özeti`) kaldırıldı.
+
+- `SessionDetailPanel.tsx`: `SUMMARY_KINDS` sabiti + butonları render eden blok,
+  `onSummarize` prop'u ve artık kullanılmayan importlar (`Database`,
+  `Workflow`, `Wrench`) silindi.
+- `App.tsx`: `SessionDetailPanel`'e geçilen `onSummarize` prop'u kaldırıldı.
+- Aynı özetleri tetikleyen **`/` slash komutları** (`/memory`, `/board`,
+  `/flows`, `/tools`) `useChatStream.ts` içinde **korundu** — yalnız panel
+  butonları kaldırıldı. `tsc --noEmit` temiz.
+
 ## Tier ince ayarı: 6 aracın yeniden atanması ✅ (2026-06-26)
 
 Kullanıcı isteğiyle altı aracın tier'ı değişti:
