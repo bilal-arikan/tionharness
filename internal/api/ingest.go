@@ -13,7 +13,29 @@ import (
 // (skills/agents/commands/MCP) through the same install authority the market uses.
 func (s *Server) registerIngestRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/ingest/scan", s.handleIngestScan)
+	mux.HandleFunc("POST /api/ingest/preview", s.handleIngestPreview)
 	mux.HandleFunc("POST /api/ingest/install", s.handleIngestInstall)
+}
+
+// handleIngestPreview fetches a source and returns its first artifacts WITH rendered
+// bodies, so a source-ref (directory-site) catalog entry can be previewed before install.
+func (s *Server) handleIngestPreview(w http.ResponseWriter, r *http.Request) {
+	var req ingestSource
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	source, location := req.resolve()
+	if location == "" {
+		writeError(w, http.StatusBadRequest, "path (local) or url (github) is required")
+		return
+	}
+	items, err := ingest.Preview(source, location)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 // ingestSource is the shared source descriptor for scan/install.

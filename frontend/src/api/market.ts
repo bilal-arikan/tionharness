@@ -10,6 +10,13 @@ export interface ConnectorInfo {
   detail: string
 }
 
+// ConnectorSearchResult is the live directory-site search response: matching
+// source-ref packs + per-connector warnings.
+export interface ConnectorSearchResult {
+  results: Pack[]
+  warnings: string[]
+}
+
 export const marketApi = {
   listRegistries: () => req<Registry[]>('/api/market/registries'),
   addRegistry: (name: string, url: string) =>
@@ -24,8 +31,10 @@ export const marketApi = {
     }),
   refreshRegistries: () => req<void>('/api/market/registries/refresh', { method: 'POST' }),
   listConnectors: () => req<ConnectorInfo[]>('/api/market/connectors'),
-  addConnector: (id: string) =>
-    req<Registry[]>('/api/market/connectors/add', { method: 'POST', body: JSON.stringify({ id }) }),
+  searchConnectors: (q: string, limit = 40) =>
+    req<ConnectorSearchResult>(
+      `/api/market/connectors/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    ),
   listMarket: (kind?: PackKind) =>
     req<Pack[]>(`/api/market${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`),
   getPack: (id: string) => req<Pack>(`/api/market/${encodeURIComponent(id)}`),

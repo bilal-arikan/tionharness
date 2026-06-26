@@ -116,6 +116,9 @@ export interface Pack {
   // installed here. Empty = never installed via the market. Compare with version
   // to detect an available update.
   installedVersion?: string
+  // Set for directory-site (connector) entries: install runs ingest against this
+  // GitHub source instead of downloading a payload. Preview is fetched on demand.
+  sourceRef?: { type: string; url: string; keys?: string[] }
 }
 
 // Registry is a configured remote pack source (a registry index URL).

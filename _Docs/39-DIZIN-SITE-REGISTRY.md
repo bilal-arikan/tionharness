@@ -1,29 +1,36 @@
-# 38 — Dizin-Sitesi Köprüsü (Catalog Connector)
+# 39 — Dizin-Sitesi Köprüsü (Search Connector)
 
-> **Durum: Faz A + B UYGULANDI (2026-06-25); Faz C-F planlı.** crossaitools.com /
-> skillsmp.com / claudeskillsmarket.com gibi **skill dizin sitelerini** SwarmGo
-> market'ine bağlama. Mevcut `internal/ingest` (SK-IMP3) ve uzak registry
-> (`swarmregistry/v1`, `21-MARKET.md` §3) üzerine kurulur.
+> **Durum: UYGULANDI (canlı arama + önizleme, 2026-06-26).** crossaitools.com /
+> skillsmp.com gibi **skill dizin sitelerini** SwarmGo market'ine bağlar. Mevcut
+> `internal/ingest` (SK-IMP3) + uzak registry (`swarmregistry/v1`, `21-MARKET.md` §3)
+> üzerine kurulur.
 >
-> **Yapıldı:** **Faz A** — `RegistryEntry.Source`/`Pack.SourceRef` (kaynak-ref) +
-> install yönlendirmesi (`installSourceRefPack` → `ingest.BuildPacks` + `installPackInto`);
-> `Get` kaynak-ref'i payload indirmeden döner; `loadRemoteCache` Source'lu entry kabul eder.
-> **Faz B** — skillsmp connector (`market/connectors.go`: `/api/skills` → source-ref
-> entry'leri), `Registry.Connector` + `RefreshRemote` connector dalı, API
-> `GET/POST /api/market/connectors[/add]`, UI `RegistryManager` "Hazır kaynaklar"
-> quick-add. Canlı: skillsmp 12 entry. Testler: `connectors_test.go` (+live).
+> **Mimari (özet):**
+> - **Kaynak-ref (source-ref):** `market.RegistryEntry.Source` / `Pack.SourceRef`
+>   (`SourceRef{Type,URL,Keys}`) — bir kayıt pack indirme yerine bir **GitHub kaynağına**
+>   işaret eder. Install yönlendirmesi `installSourceRefPack` → mevcut
+>   `ingest.BuildPacks` + `installPackInto`. `Get` payload indirmeden manifest döner.
+> - **Connector'lar SEARCH-ONLY (canlı):** siteler **binlerce** skill barındırdığından
+>   toplu katalog YOK; market arama çubuğu connector'ları **canlı** sorgular
+>   (`SearchConnectors`). `RefreshRemote`/`loadRemoteCache` connector registry'lerini
+>   atlar; connector'lar registry olarak "eklenmez", `ListConnectors` ile bilinir.
+> - **skillsmp:** gerçek arama API'si `/api/v1/skills/search?q=` (`githubUrl` doğrudan).
+> - **crossaitools:** site `?q` yok sayar → tüm liste (~12 MB) **bir kez** indirilip
+>   `<DataDir>/market/.remote-cache/crossaitools-lite.json`'a (24s TTL) cache'lenir,
+>   arama lokal filtre + stars sıralaması (`filterCrossAITools`).
+> - **Önizleme:** source-ref için `ingest.Preview` GitHub'dan SKILL.md çekip render eder;
+>   `POST /api/ingest/preview`; UI detay modalında gösterir (`SourceRefPreview`).
+> - **API:** `GET /api/market/connectors` (liste) + `GET /api/market/connectors/search?q=`
+>   (canlı arama) + `POST /api/ingest/{preview,install}`.
+> - **UI:** Market arama kutusu skill sekmesinde 2+ karakterde connector'ları debounced
+>   sorgular → "İnternet sonuçları" bölümü; kart → detay (önizleme) → "Bu workspace'e
+>   kur" (ingest). `RegistryManager` connector'ları yalnız bilgilendirme listeler.
+> - Testler: `connectors_test.go` (decode/filter/sort/source-ref) + canlı
+>   `connectors_live_test.go` (skillsmp search, crossaitools cache+filter).
 >
-> **Faz C** ✅ — crossaitools connector (`market/connectors.go::fetchCrossAITools`):
-> ~12 MB tam liste tek çağrıda gelir (site `?q`/`?limit` yok sayar) → **popülerliğe göre
-> (stars, installs) top-300** kırpılır (`crossaitoolsTopN`), `repo`+`path` → GitHub tree
-> URL'i (`githubTreeURL`). `maxConnectorBytes=24MB`. Canlı: 21.7k → 300.
-> **Faz D** ✅ — market **arama kutusu** (`MarketPanel` `query` state; name/description/
-> author client-side filtre).
->
-> **Kalan (planlı):** source-ref "Kuruldu" cross-session işaretleme (şu an ledger
-> pack-id ile; `isInstalled` slug eşleşmesi MVP'de eksik); crossaitools **server-side
-> live search** (cap yerine sorgu-bazlı, arch değişikliği gerektirir); Faz E —
-> claudeskillsmarket sitemap/scrape; Faz F — harici statik köprü generator.
+> **Kalan (planlı):** source-ref "Kuruldu" cross-session işaretleme (ledger pack-id ile;
+> `isInstalled` slug eşleşmesi eksik); claudeskillsmarket (JSON API yok → sitemap/scrape);
+> harici statik köprü generator; arama sonuçlarında sayfalama.
 
 ## 1. Problem
 

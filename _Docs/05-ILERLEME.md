@@ -2,6 +2,146 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
 
+## Dizin-sitesi: canlı arama + source-ref önizleme ✅ (2026-06-26)
+
+Connector'lar "statik katalog"tan **canlı arama**ya geçti + source-ref önizleme eklendi
+(`_Docs\39`):
+
+- **Canlı arama:** siteler binlerce skill barındırıyor → toplu yükleme kaldırıldı.
+  `market.SearchConnectors(q)`: **skillsmp** gerçek arama API'si (`/api/v1/skills/search`),
+  **crossaitools** tüm listeyi (~12MB) bir kez cache'leyip (`crossaitools-lite.json`, 24s TTL)
+  lokal filtre (`filterCrossAITools`). `RefreshRemote`/`loadRemoteCache` connector'ları atlar.
+  API `GET /api/market/connectors/search?q=`. UI: Market arama kutusu 2+ karakterde debounced
+  sorgular → "İnternet sonuçları" bölümü.
+- **Önizleme:** `ingest.Preview` source-ref için GitHub'dan SKILL.md çekip render eder;
+  `POST /api/ingest/preview`; detay modalında `SourceRefPreview` (kaynak linki + gövde).
+  Install yine `ingest.BuildPacks` ile.
+- **Bugfix:** `req()` istemcisi 204/boş gövdeyi artık tolere ediyor (eskiden "Unexpected
+  end of JSON input" → katalog yenilenmiyordu).
+- **Doğrulama:** my-paketler **47 test** + tsc temiz; canlı skillsmp/crossaitools arama OK.
+  Not: çalışma ağacında **paralel iş** (`App.tsx`, `todos_test.go`) yarım olduğundan tam
+  prod build/`go test ./...` o dosyalarda kırık — benim değişikliklerim ayrık ve yeşil.
+- **Kalan:** source-ref "Kuruldu" cross-session; claudeskillsmarket scrape; sayfalama. `_Docs\39`.
+
+## Debug günlüğü — claude-cli köprü düzeltmesi + canlı E2E doğrulama ✅ (2026-06-26)
+
+Canlı test (gerçek claude-cli LLM, izole datadir, 8097) sırasında bulunan ve
+düzeltilen gerçek bir eksik: `read_session_debug` aracı yalnız native registry'de
+kayıtlıydı; **claude-cli ajanı interaction köprüsünde göremiyordu** (köprü yalnız
+`reg.BridgeableDefs` + birkaç açık `extra` builtin sunar). Düzeltme:
+- `Runtime.BridgeTools`'ta `extra` listesine `read_session_debug` eklendi
+  (`conversation_search` gibi, yalnız `r.db` gerektiren eager builtin; gated
+  `DebugJournalEnabled`). Köprü çağrı closure'ı build ctx'inden yakalanan oturum
+  id'yi `tools.WithCurrentSession` ile enjekte eder (interaction request ctx'inde yok).
+- Araç hidden-lazy self-manage tier'ından **çıkarılıp** core/her-zaman-açık yapıldı
+  (toolsetup, `conversation_search` yanında, `DebugJournalEnabled` gated) → native
+  yolda da eager.
+- **Canlı sonuç:** ajan `mcp__swarmgo_interaction__read_session_debug`'i araç
+  listesinde gördü, çağırdı ve `turns=2, llmCalls=2, anomalies=0` raporladı; API
+  ground-truth tur bitince `turns=3` (fark beklenen: araç tur-içinde çağrıldı).
+  Özet/seri/cache muhasebesi (read 41956 / write 67146) gerçek veriyle doğrulandı.
+
+## Goal mekanizması — otonom enjeksiyon + cached ipucu ✅ (2026-06-26)
+
+Goal'ün iki eksiği kapatıldı:
+- **Otonom turlar artık goal'ü görüyor:** `goalContextBlock` yalnız chat'te enjekte oluyordu;
+  scheduler/spawn/peer turları görmüyordu. Renderer agent paketine taşındı
+  (`agent.GoalContextBlock`, api ince alias). Yeni `Runtime.autonomousGoalBlock(ctx)` ctx'teki
+  sessionID'den (WithSessionID) goal'ü çözüp `invokeTraced`'de `SystemDynamic`'e enjekte eder
+  (goal yoksa/spawn'da boş = no-op).
+- **Cached prefix ipucu:** her ajan (chat+otonom) statik prefix'inde tek satır
+  `agent.GoalUsageHint` ("uzun çok-turlu işte `set_session_goal` ile north-star koy…") →
+  proaktif goal kullanımını dürtüyor (araçlar zaten eager; ipucu skill yüklemeden görünür).
+  **Kök neden notu:** **iki** `buildSystemPrompt` var (`api/chat.go` chat+preview,
+  `agent/runtime.go` otonom/flow); ikisi de aynı export `agent.GoalUsageHint`'i ekler (drift yok).
+- **Test:** `TestAutonomousGoalBlock` (goal→render, done→boş, session-yok→boş) + `TestSystemPrompt…`
+  (ipucu var); izole instance'ta chat preview'de ipucu + goal bloğu canlı doğrulandı.
+  `go test` (agent/api/db) yeşil.
+
+## Debug günlüğü Faz 3 — anomali + zaman serisi + reflektör self-improvement ✅ (2026-06-26)
+
+Oturum debug günlüğünün üstüne üç yetenek:
+- **Anomali tespiti:** `db.computeDebugAnomalies` (saf/no-I/O) `GetDebugSummary`'ye
+  `anomalies []DebugAnomaly` ekler — `tool_time_dominant` (≥%60 araç süresi),
+  `tool_failing` (>%30 hata), `tool_large_output` (>64KB ort.), `frequent_compaction`
+  (≥3), `error_burst` (≥3), `slow_turns` (>45s ort.). severity+code+Türkçe mesaj.
+- **Zaman serisi:** `turnDurSeries` + `tokenSeries` (en yeni 40 nokta) → UI'da
+  bağımlılıksız SVG sparkline (`Sparkline` bileşeni `SessionDebugCard`'da).
+- **Reflektör entegrasyonu:** `reflect()` → `r.debugPerfNotes(agentID)` ajanın son
+  ≤5 oturumunun dedup'lı anomalilerini reflect prompt'una "Performance observations"
+  olarak ekler → kalıcı reflection belleğine ders olarak yedirilir (gated, best-effort).
+- UI: kartta anomaliler (warn=kırmızı/info=gri) + sparkline'lar; tool `read_session_debug`
+  ve API özeti otomatik içerir. Skill `swarmgo-self-debug` + `_Docs\38` güncellendi.
+- Test: `db/debug_journal_test.go` +2 (`AnomaliesAndSeries`, `NoAnomaliesOnHealthy`).
+  Build + vet + frontend `tsc` temiz.
+
+## Oturum debug günlüğü (paralel gözlemlenebilirlik akışı) ✅ (2026-06-26)
+
+Her oturum için `session.jsonl`'in yanına append-only **`debug.jsonl`** yazılır:
+yapılandırılmış olaylar — `turn` (süre+stop+hata), `llm_call` (model+in/out/cache
+token), `tool` (gecikme+boyut+hata), `hook` (karar+süre), `error`, `compaction`,
+`recovery`. Amaç: debug, token/gecikme optimizasyonu ve **ajanın kendi kendini
+geliştirmesi** (kendi metriklerini okuyup davranış ayarı).
+
+- **DB katmanı** (`internal/db/debug_journal.go`): `DebugEvent` + `AppendDebugEvent`
+  (inflight deseni, store-kilitsiz O(1) append, tembel cap budama `cap+cap/4` →
+  en yeni `cap` atomik rewrite; satır sayacı `DB.debugCount` kendi mutex'iyle) +
+  `ReadDebugEvents` (tip filtresi) + `GetDebugSummary` (turlar/token/`byTool`/
+  `byModel`/`topTools`/hata/compaction). `DeleteSession` RemoveAll'ı dosyayı da siler.
+- **Emit hunisi** (`internal/agent/debugjournal.go` `emitDebug`): oturum+köken
+  ctx'ten; `toolloop.go` (`completeTraced` wrapper turu zamanlar → tüm yollar;
+  native döngü tool timing + compaction/recovery + `fail` error), `budget.go
+  RecordUsage` (her provider çağrısı), `hooks.go` (her Pre/Post hook + `hookDecisionLabel`).
+- **Okuma:** ajan aracı **`read_session_debug`** (özet/ham, self-management suite,
+  `read_logs` yanında; mevcut oturum `tools.CurrentSessionID` ile) · API
+  `GET /api/sessions/{id}/debug` (`?summary=0&type=&limit=`) · UI ayrı bileşen
+  `SessionDebugCard.tsx` (metrik ızgarası + sağlık rozetleri + en yavaş araçlar +
+  modele göre token + tembel ham olay log'u), oturum detayında harcama kartından sonra.
+- **Ayar:** `debugJournalEnabled` (vars. açık) + `debugJournalCap` (vars. 5000);
+  `Tunables.SetDebugJournal`, `applySettings` canlı uygular; UI Ayarlar ▸ Uygulama.
+- **Default skill** `swarmgo-self-debug` (ajana metriklerini optimize için nasıl
+  okuyacağını öğretir). **Test** `db/debug_journal_test.go` (round-trip + cap budama).
+- Detay: `_Docs\38-SESSION-DEBUG.md`. Build + `go vet` + 311 test (5 paket) + frontend `tsc` temiz.
+
+## Otomatik galeri gruplama + video ✅ (2026-06-26)
+
+İki ekleme: (1) **Ardışık `![]()` otomatik gruplama** — `Markdown.tsx::groupMediaRuns`
+art arda gelen (aralarında boş satır olabilen) tam-satır `![]()` medya satırlarını
+**tek ```gallery bloğuna** dönüştürür (fence-farkında: kod blokları korunur; tek
+medya/satır-içi medya inline kalır). (2) **Video desteği** — `lib/paths.ts`'e
+`isVideoPath`/`isMediaPath` (mp4/webm/ogg/mov/m4v); tekil `![alt](klip.mp4)` inline
+`<video controls>` olur, galeri item'ı video ise thumbnail `<video>` + **play ikonu**
+ve Lightbox'ta `<video autoPlay controls>` (kendi kontrolleri pan'ı çalmaz). `Lightbox`
+`LightboxImage.type` ('image'|'video'), `Gallery` ext'ten tip türetir. Guidance +
+`swarmgo-guide` güncellendi. Playwright doğrulaması: 2 görsel+1 video ardışık → tek
+galeri (1 video thumbnail), tek video satırı → inline player, metinle ayrılmış tek
+görsel → gruplanmadı. Binary :8090 restart.
+
+## Sohbette görsel + galeri (the external agent project tarzı) ✅ (2026-06-26)
+
+Mesaj akışında görsel gösterimi: (1) tekil `![alt](yol)` markdown görseli zaten
+inline render olur (yerel yollar `/api/files` ile, tıkla→Lightbox zoom); (2) **çoklu
+görsel için ```gallery bloğu** (`Gallery.tsx`, alias `image-preview`/`images`) —
+gövde JSON `{"title","images":[{"src","alt"}]}` veya düz satır/virgül-ayrık yol
+listesi → **thumbnail grid**, tık→**Lightbox o index'te** açılır, ←/→ + ok butonları +
+"n / N" sayaç ile gezinilir. `Lightbox` `images[]`+`index` desteğiyle genişletildi
+(`go(delta)` sarmalı navigasyon, ArrowLeft/Right). `CodeBlock` `gallery`/`image-preview`/
+`images` → `Gallery`. Ajan guidance'ı (`artifactDeliverableGuidance` + `swarmgo-guide`
+Rich replies) inline görsel + galeri bloğunu öğretecek şekilde güncellendi. Playwright
+ile grid + index'li açılış + ileri-geri navigasyon doğrulandı; binary :8090 restart.
+
+## Paylaşılan Lightbox (zoom + pan) ✅ (2026-06-26)
+
+Görsel/diyagram önizlemeleri için tek paylaşılan **tam-ekran zoom+pan** bileşeni
+(`frontend/src/components/common/Lightbox.tsx`): tekerlekle imlece-doğru zoom
+(translate düzeltmeli), sürükle-pan, toolbar (uzaklaştır/%/yakınlaştır/sıfırla/kapat),
+çift-tık toggle, Escape + `0` reset, temiz-tık backdrop kapatma (pan'dan sonra kapanmaz).
+`imageSrc` ya da `children` (mermaid SVG) alır. **Kullananlar:** mermaid Expand (eski
+statik overlay yerine), Markdown inline görselleri (tıkla→zoom, `cursor-zoom-in`),
+`UserBubble` attachment önizlemesi (yerel `ImageLightbox` kaldırıldı → DRY),
+`ArtifactView` görsel artifact (`ImageArtifact` alt-bileşeni). Playwright ile görsel
+zoom (%125) + mermaid Expand gerçek tarayıcıda doğrulandı; binary :8090'da restart edildi.
+
 ## Dizin-sitesi köprüsü: crossaitools connector + market arama ✅ (2026-06-26)
 
 `_Docs\38` Faz C+D:
@@ -51,6 +191,50 @@ Dizin-sitelerini market'e bağlama (`_Docs\38`) Faz A+B uygulandı:
   GitHub-tabanlı (crossaitools `/api/skills` ~21.7k `repo`+`path`; skillsmp `githubUrl`
   doğrudan; claudeskillsmarket yalnız sitemap). Çekirdek değişiklik: `RegistryEntry.Source`
   (kaynak-ref) → kurulum = mevcut `ingest.BuildPacks` + `installPackInto`. Henüz uygulanmadı.
+
+## Interaction MCP Faz 3 KAPANDI — oturum metadata araçları + goal canlı-refresh ✅ (2026-06-26)
+
+Faz 3'ün son artığı bitti: ajan **kendi oturumunu** düzenleyebiliyor + agent-set goal/metadata
+UI'da **canlı** yansıyor.
+
+- **Yeni araçlar (bloklamayan, oturum-bağlı):** `set_session_title(title*)` (yeniden adlandır,
+  maxlen 200), `set_working_dir(path*)` (cwd; `os.Stat` var-olan-dizin doğrulaması, boş=reset,
+  sonraki tur), `archive_session()` (aktif listeden düşür, silme yok).
+- **Konsolide sink:** `tools.SessionSink` = `GoalSink` superset'i; tek `agent/sessionSink`
+  (goalsink.go→sessionsink.go) hepsini uygular, `Runtime.NewSessionSink`. Goal araçları dokunulmadı.
+- **Canlı refresh:** her mutasyon (goal dahil) `events.Event{Type:"session"}` yayınlar →
+  `App.tsx` `session` event'i: `refreshSessions` + aktif oturumsa `meterRefresh` bump (detay panel
+  goal/başlık kartı canlı). Toast yok. → önceki fazın "goal kartı güncellenmiyor" eksiği de kapandı.
+- **DB:** `SetSessionState` (archive) eklendi.
+- **Test:** 7 yeni birim test (sessionedit); tools/agent/api/db + tsc/vite yeşil. Canlı claude-cli
+  doğrulandı. Detay: `_Docs\11` §20.
+
+**FAZ 3 TAMAMEN KAPANDI** — notify + focus_view + goal + oturum metadata + canlı-refresh hepsi
+native+CLI+otonom. Kalan: Faz 4 (Codex/Gemini).
+
+### Arşiv UI (2026-06-26)
+`archive_session`'ın UI karşılığı: sidebar artık state'e göre filtreliyor. **Backend:**
+`PUT /api/sessions/{id}/state` (`handleSetSessionState`, geçersiz state 400). **Frontend:**
+`SessionsSidebar`'da **Aktif / Arşiv (n)** toggle + satır menüsünde Arşivle/Arşivden-çıkar;
+`App.setSessionArchived` → `api.setSessionState`. Canlı: PUT state (active↔archived, 400-reddi)
+doğrulandı. `tsc`/`go test` yeşil. Detay: `_Docs\11` §20.1.
+
+## Interaction MCP Faz 3 — `set_session_goal` / `complete_goal` (oturum hedefi) ✅ (2026-06-26)
+
+Ajan artık oturumun kalıcı **north-star hedefini** kendisi koyabilir/tamamlayabilir —
+**mevcut `db.Session.Goal`/`GoalDone` paylaşımlı** (ayrı ajan-goal açılmadı; kullanıcı UI'da
+aynı alanı düzenliyor). Daha önce ajan hedefi `goalContextBlock` ile **görüyor** ama yazamıyordu.
+
+- **Araçlar (`tools/builtin_goal.go` + `goalsink.go`):** `set_session_goal(goal*)` (Goal yaz,
+  done=false; üzerine yazınca "replaced previous goal" şeffaf bildirimi; maxlen 2000) +
+  `complete_goal()` (metni koru, done=true; hedef yok/zaten-done graceful). Sink yoksa no-op.
+- **Concrete sink (`agent/goalsink.go`):** `Runtime.NewGoalSink` → `db.GetSession`/`SetSessionGoal`
+  (`artifactsink.go` deseni). chat_stream + autonomous_interaction `setGoal`; CLI köprüsü
+  `mcp_interaction.go` `callGoal`. Native registry'ye iki eager built-in.
+- **Skill:** `swarmgo-progress` north-star satırı + `swarmgo-guide` interaction bölümü güncellendi.
+- **Test:** 7 yeni birim test; tools/agent/api `build`/`vet`/`test` yeşil. Detay: `_Docs\11` §19.
+- **Not:** Goal kartı canlı-refresh event'i bu fazda yok (panel yeniden açılınca tazelenir;
+  kalıcılık+context enjeksiyonu anında). Faz 3 kalan: `set_session_title`/cwd/archive.
 
 ## Interaction MCP Faz 3 — `focus_view` (UI navigasyon) ✅ (2026-06-25)
 
@@ -237,6 +421,17 @@ olarak çizilir (akış/sıra/durum/sınıf/ER/gantt vb.). `diff` bloklarının
   fallback (crash yok, bomba leak yok) gerçek tarayıcıda doğrulandı.
 - **Ajan farkındalığı:** `swarmgo-guide` default skill'ine "Rich replies"
   bölümü eklendi (mermaid/diff/kod render edildiğini ajana öğretir).
+- **Davranış fix'i (2026-06-26):** Ajan "diyagram çiz" deyince mermaid'i mesaja
+  gömmek yerine `create_artifact(kind=mermaid)` yapıyordu (ART11/ART12). Kök neden:
+  her turda enjekte edilen `artifactDeliverableGuidance` sabiti (`api/artifacts.go`)
+  "produce a ...**diagram**... → create_artifact" diyordu → skill notunu eziyordu.
+  Düzeltme: "diagram" deliverable listesinden çıkarıldı + açık **istisna** eklendi
+  ("diyagram istenince ```mermaid bloğunu mesaja inline koy, sadece artifact yapma");
+  hem chat (`chat_turn.go:60`) hem claude-cli (`agent_context.go:120`) yolunu kapsar.
+  Ayrıca default skill'ler diske bir kez **seed** edildiğinden (`skills.EnsureDefaults`,
+  "existing files never overwritten") disk kopyası eski kalıyordu → disk kopyası elle
+  güncellendi (skill gövdesi her `use_skill`'de diskten okunur → anında geçerli).
+  Binary yeniden derlenip :8090'da restart edildi (eski binary `swarmgo.bak.exe`).
 - Detay: `_Docs\07-CHAT-UX.md`.
 
 ## Workspace'e özel görünüm/tema + Dil → Profil ✅ (2026-06-25)

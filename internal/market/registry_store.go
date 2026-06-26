@@ -165,16 +165,10 @@ func (s *Store) RefreshRemote(ctx context.Context) error {
 	}
 	var errs []string
 	for _, r := range s.loadRegistries() {
-		if !r.Enabled {
-			continue
+		if !r.Enabled || r.Connector != "" {
+			continue // connectors are search-only (queried live), never bulk-cached
 		}
-		var idx RegistryIndex
-		var err error
-		if r.Connector != "" {
-			idx, err = fetchConnectorIndex(ctx, r) // directory-site bridge
-		} else {
-			idx, err = fetchIndex(ctx, r.URL) // swarmregistry/v1 index
-		}
+		idx, err := fetchIndex(ctx, r.URL) // swarmregistry/v1 index
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", r.Name, err))
 			continue
@@ -205,7 +199,7 @@ func (s *Store) loadRemoteCache() map[string]Pack {
 	}
 	enabled := map[string]bool{}
 	for _, r := range s.loadRegistries() {
-		if r.Enabled {
+		if r.Enabled && r.Connector == "" { // connectors are search-only, not catalog tiers
 			enabled[strings.ToLower(r.URL)] = true
 		}
 	}

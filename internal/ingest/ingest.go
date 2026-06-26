@@ -181,6 +181,58 @@ func plural(n int, noun string) string {
 	return strconv.Itoa(n) + " " + s
 }
 
+// PreviewItem is a discovered artifact WITH its rendered body, for the detail view
+// of a source-ref (directory-site) catalog entry before install.
+type PreviewItem struct {
+	Kind        string   `json:"kind"`
+	Slug        string   `json:"slug"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Body        string   `json:"body"`
+	Files       []string `json:"files"`
+	Warnings    []string `json:"warnings"`
+}
+
+// Preview scans a source and returns its first few artifacts WITH rendered bodies, so
+// the UI can show what a source-ref entry contains before installing. Capped to keep
+// the single fetch cheap.
+func Preview(source, location string) ([]PreviewItem, error) {
+	sr, err := Scan(source, location)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PreviewItem, 0, len(sr.Items))
+	for i, it := range sr.Items {
+		if i >= 8 {
+			break
+		}
+		body := ""
+		if it.build != nil {
+			if p, berr := it.build(Options{}); berr == nil {
+				body = previewBody(p)
+			}
+		}
+		out = append(out, PreviewItem{
+			Kind: it.Kind, Slug: it.Slug, Name: it.Name, Description: it.Description,
+			Body: body, Files: it.Files, Warnings: it.Warnings,
+		})
+	}
+	return out, nil
+}
+
+// previewBody extracts a human-readable body from a built pack for the preview.
+func previewBody(p market.Pack) string {
+	switch {
+	case p.Payload.Skill != nil:
+		return p.Payload.Skill.Body
+	case p.Payload.Agent != nil:
+		return p.Payload.Agent.Soul
+	case p.Payload.MCP != nil:
+		return strings.TrimSpace(p.Payload.MCP.Command + " " + p.Payload.MCP.Args + " " + p.Payload.MCP.URL)
+	}
+	return ""
+}
+
 // --- shared adapter helpers ---
 
 // provenanceBase returns the base URL recorded as an imported entity's source_url.

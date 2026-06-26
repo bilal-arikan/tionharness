@@ -52,14 +52,29 @@ export interface IngestSkipNote {
 }
 
 export interface IngestInstallResult {
+  message?: string
   installed: InstallResult[]
   skipped: IngestSkipNote[]
   warnings: string[]
 }
 
+// PreviewItem is a discovered artifact with its rendered body, for the detail view
+// of a source-ref (directory-site) catalog entry before install.
+export interface PreviewItem {
+  kind: IngestKind
+  slug: string
+  name: string
+  description: string
+  body: string
+  files: string[]
+  warnings?: string[]
+}
+
 export const ingestApi = {
   ingestScan: (input: IngestSource) =>
     req<IngestScanResult>('/api/ingest/scan', { method: 'POST', body: JSON.stringify(input) }),
+  ingestPreview: (input: IngestSource) =>
+    req<{ items: PreviewItem[] }>('/api/ingest/preview', { method: 'POST', body: JSON.stringify(input) }),
   ingestInstall: (input: IngestInstallInput) =>
     req<IngestInstallResult>('/api/ingest/install', { method: 'POST', body: JSON.stringify(input) }),
 }

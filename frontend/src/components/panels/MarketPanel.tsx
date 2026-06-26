@@ -14,11 +14,13 @@ import {
   Wrench,
   Server,
   ArrowUpCircle,
+  Globe2,
   type LucideIcon,
 } from 'lucide-react'
 import type { Agent, Pack, PackKind, Secret } from '../../types'
 import { api } from '../../api'
 import type { PriceTable } from '../../api/providers'
+import type { PreviewItem } from '../../api/ingest'
 import { Markdown } from '../markdown/Markdown'
 import { Button } from '../common'
 import { SkillImportDialog } from './SkillImportDialog'
@@ -309,6 +311,44 @@ function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }) {
   return <p className="text-xs text-[var(--color-text-dim)]">Önizleme yok.</p>
 }
 
+// SourceRefPreview renders the GitHub-fetched preview of a directory-site (source-ref)
+// catalog entry: the source link plus each discovered artifact's rendered body.
+function SourceRefPreview({ url, items, loading }: { url: string; items: PreviewItem[] | null; loading: boolean }) {
+  return (
+    <div className="space-y-3">
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-1.5 text-xs text-[var(--color-accent)] hover:underline"
+      >
+        <Globe2 size={12} /> {url}
+      </a>
+      {loading && <p className="text-xs text-[var(--color-text-dim)]">Önizleme GitHub'dan yükleniyor…</p>}
+      {!loading && items && items.length === 0 && (
+        <p className="text-xs text-[var(--color-text-dim)]">Önizleme alınamadı (kurulumda yine de denenir).</p>
+      )}
+      {!loading &&
+        items &&
+        items.map((it, i) => (
+          <div key={i} className="space-y-1">
+            {items.length > 1 && (
+              <div className="flex items-center gap-1.5 text-xs font-medium">
+                <KindBadge kind={it.kind} /> <code>{it.slug}</code>
+              </div>
+            )}
+            {it.warnings && it.warnings.length > 0 && (
+              <p className="text-[10px] text-[var(--color-warning,#d97706)]">{it.warnings.join(' · ')}</p>
+            )}
+            <div className="text-xs">
+              <Markdown>{stripFrontmatter(it.body || it.description || '')}</Markdown>
+            </div>
+          </div>
+        ))}
+    </div>
+  )
+}
+
 // flowNodeSummary safely parses a flow graph JSON string into a node list for
 // the preview. Returns [] on any parse error.
 function flowNodeSummary(graph: string): { id: string; type: string; title?: string }[] {
@@ -379,6 +419,13 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   const [selected, setSelected] = useState<Pack | null>(null)
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('') // catalog search (name/description/author)
+  // Live directory-site (connector) search results — skill tab only.
+  const [remoteResults, setRemoteResults] = useState<Pack[]>([])
+  const [remoteWarnings, setRemoteWarnings] = useState<string[]>([])
+  const [searching, setSearching] = useState(false)
+  // Preview body for a selected source-ref pack (fetched on demand from GitHub).
+  const [preview, setPreview] = useState<PreviewItem[] | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const [installed, setInstalled] = useState<Set<string>>(new Set())
   const [existing, setExisting] = useState<ExistingKeys>(emptyExisting)
   // Provider key, resolved from the secret vault (never typed). pickedSecret is
@@ -453,6 +500,31 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
     if (selected?.kind === 'memory') setPickedAgent(agents[0]?.id ?? '')
   }, [selected, agents])
 
+  // Live directory-site (connector) search — skill tab only, debounced. The sites
+  // hold thousands of skills, so results come from a search query, not a bulk list.
+  useEffect(() => {
+    const q = query.trim()
+    if (tab !== 'skill' || q.length < 2) {
+      setRemoteResults([])
+      setRemoteWarnings([])
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    const handle = setTimeout(async () => {
+      try {
+        const res = await api.searchConnectors(q)
+        setRemoteResults(res.results ?? [])
+        setRemoteWarnings(res.warnings ?? [])
+      } catch {
+        setRemoteResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 400)
+    return () => clearTimeout(handle)
+  }, [query, tab])
+
   // isInstalled reports whether the entity a pack would create already exists.
   const isInstalled = useCallback(
     (pack: Pack) => {
@@ -499,6 +571,22 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
     async (pack: Pack) => {
       setApiKey('')
       setPickedSecret('')
+      setPreview(null)
+      // A source-ref pack (directory-site result) isn't in the catalog and has no
+      // downloadable payload — use it as-is and fetch its preview from GitHub.
+      if (pack.sourceRef?.url) {
+        setSelected(pack)
+        setPreviewLoading(true)
+        try {
+          const res = await api.ingestPreview({ source: 'github', url: pack.sourceRef.url })
+          setPreview(res.items)
+        } catch {
+          setPreview([])
+        } finally {
+          setPreviewLoading(false)
+        }
+        return
+      }
       try {
         setSelected(await api.getPack(pack.id))
       } catch (e) {
@@ -524,6 +612,16 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
     async (pack: Pack, overwrite = false) => {
       setBusy(true)
       try {
+        // A source-ref pack (directory-site result) installs by ingesting its GitHub
+        // source, not by downloading a payload.
+        if (pack.sourceRef?.url) {
+          const res = await api.ingestInstall({ source: 'github', url: pack.sourceRef.url })
+          setInstalled((prev) => new Set(prev).add(pack.id))
+          onError(`✓ ${res.message}`)
+          await loadExisting()
+          onInstalled?.('skill')
+          return
+        }
         const body: { overwrite?: boolean; apiKey?: string; agentId?: string } = { overwrite }
         if (pack.kind === 'provider' && apiKey.trim()) body.apiKey = apiKey.trim()
         if (pack.kind === 'memory' && pickedAgent) body.agentId = pickedAgent
@@ -672,6 +770,57 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
               </button>
             )
           })}
+
+          {/* Live directory-site search results (skill tab) */}
+          {tab === 'skill' && (searching || remoteResults.length > 0 || remoteWarnings.length > 0) && (
+            <div className="col-span-full mt-2 border-t border-[var(--color-border)] pt-3">
+              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-[var(--color-text-dim)]">
+                <Globe2 size={13} />
+                İnternet sonuçları (SkillsMP · CrossAITools)
+                {searching && <span className="text-[var(--color-text-dim)]">aranıyor…</span>}
+                {!searching && <span>· {remoteResults.length}</span>}
+              </div>
+              {remoteWarnings.length > 0 && (
+                <p className="mb-2 text-[10px] text-[var(--color-warning,#d97706)]">{remoteWarnings.join(' · ')}</p>
+              )}
+            </div>
+          )}
+          {tab === 'skill' &&
+            remoteResults.map((p) => {
+              const done = installed.has(p.id)
+              return (
+                <button
+                  key={p.id}
+                  data-testid="market-remote-pack"
+                  data-pack-id={p.id}
+                  onClick={() => void openDetail(p)}
+                  className={`flex flex-col gap-2 rounded-lg border p-3 text-left transition hover:border-[var(--color-accent)] ${
+                    selected?.id === p.id ? 'border-[var(--color-accent)] bg-[var(--color-surface-2)]' : 'border-[var(--color-border)]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-lg bg-[var(--color-surface-2)]">
+                      {p.icon || '🌐'}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{p.name}</div>
+                      <KindBadge kind={p.kind} />
+                    </div>
+                  </div>
+                  <p className="line-clamp-3 text-xs text-[var(--color-text-dim)]">{p.description}</p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                      {p.registryName || 'Uzak'}
+                    </span>
+                    {done && (
+                      <span className="flex items-center gap-1 text-[10px] text-[var(--color-success)]">
+                        <Check size={11} /> Kuruldu
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
         </div>
       </div>
 
@@ -801,9 +950,13 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
             })()}
           </div>
 
-            {/* Payload preview — kind-specific */}
+            {/* Payload preview — kind-specific, or a fetched GitHub preview for source-ref */}
             <div className="flex-1 overflow-y-auto p-4">
-              <PackPreview pack={selected} prices={prices} />
+              {selected.sourceRef?.url ? (
+                <SourceRefPreview url={selected.sourceRef.url} items={preview} loading={previewLoading} />
+              ) : (
+                <PackPreview pack={selected} prices={prices} />
+              )}
             </div>
           </div>
         </div>

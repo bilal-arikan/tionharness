@@ -6,41 +6,39 @@ import (
 	"testing"
 )
 
-// TestLiveSkillsMP hits the real skillsmp.com API. Network-gated:
-// SWARMGO_LIVE_TEST=1 go test -run TestLiveSkillsMP ./internal/market/
-func TestLiveSkillsMP(t *testing.T) {
+// TestLiveSkillsMPSearch hits the real skillsmp.com search API. Network-gated:
+// SWARMGO_LIVE_TEST=1 go test -run TestLiveSkillsMPSearch ./internal/market/
+func TestLiveSkillsMPSearch(t *testing.T) {
 	if os.Getenv("SWARMGO_LIVE_TEST") != "1" {
-		t.Skip("set SWARMGO_LIVE_TEST=1 to run the live skillsmp fetch")
+		t.Skip("set SWARMGO_LIVE_TEST=1 to run the live skillsmp search")
 	}
-	entries, err := fetchSkillsMP(context.Background(), connectors["skillsmp"].info.URL)
+	entries, err := searchSkillsMP(context.Background(), "seo", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("skillsmp: %d source-ref entries", len(entries))
-	if len(entries) == 0 {
-		t.Fatal("expected at least one entry")
-	}
+	t.Logf("skillsmp 'seo': %d source-ref entries", len(entries))
 	for i, e := range entries {
 		if i >= 3 {
 			break
 		}
-		t.Logf("  - %s | %s | %s", e.ID, e.Name, e.Source.URL)
+		t.Logf("  - %s | %s", e.Name, e.Source.URL)
 	}
 }
 
-// TestLiveCrossAITools hits the real (~12 MB) crossaitools.com listing and verifies
-// the top-N cap + mapping. Network-gated.
-func TestLiveCrossAITools(t *testing.T) {
+// TestLiveCrossAIToolsSearch fetches+caches the real (~12 MB) crossaitools listing
+// and searches it locally. Network-gated.
+func TestLiveCrossAIToolsSearch(t *testing.T) {
 	if os.Getenv("SWARMGO_LIVE_TEST") != "1" {
-		t.Skip("set SWARMGO_LIVE_TEST=1 to run the live crossaitools fetch")
+		t.Skip("set SWARMGO_LIVE_TEST=1 to run the live crossaitools search")
 	}
-	entries, err := fetchCrossAITools(context.Background(), connectors["crossaitools"].info.URL)
+	s := New(t.TempDir(), t.TempDir())
+	entries, err := s.searchCrossAITools(context.Background(), "commit", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("crossaitools: %d source-ref entries (capped at %d)", len(entries), crossaitoolsTopN)
-	if len(entries) == 0 || len(entries) > crossaitoolsTopN {
-		t.Fatalf("unexpected entry count %d (cap %d)", len(entries), crossaitoolsTopN)
+	t.Logf("crossaitools 'commit': %d source-ref entries", len(entries))
+	if len(entries) == 0 {
+		t.Fatal("expected matches for 'commit'")
 	}
 	for i, e := range entries {
 		if i >= 3 {

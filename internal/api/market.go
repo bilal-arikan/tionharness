@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
@@ -32,7 +33,7 @@ func (s *Server) registerMarketRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/market/registries/delete", s.handleRemoveRegistry)
 	mux.HandleFunc("POST /api/market/registries/refresh", s.handleRefreshRegistries)
 	mux.HandleFunc("GET /api/market/connectors", s.handleListConnectors)
-	mux.HandleFunc("POST /api/market/connectors/add", s.handleAddConnector)
+	mux.HandleFunc("GET /api/market/connectors/search", s.handleSearchConnectors)
 	mux.HandleFunc("GET /api/market/{id}", s.handleGetMarketPack)
 	mux.HandleFunc("POST /api/market/{id}/install", s.handleInstallMarketPack)
 }
@@ -91,24 +92,38 @@ func (s *Server) handleListConnectors(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, market.ListConnectors())
 }
 
-// handleAddConnector enables a built-in connector as a registry, then refreshes it so
-// its catalog appears immediately.
-func (s *Server) handleAddConnector(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ID string `json:"id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid body")
+// connectorSearchResult is the search response: matching source-ref packs plus any
+// per-connector warnings (one site down doesn't fail the whole search).
+type connectorSearchResult struct {
+	Results  []market.Pack `json:"results"`
+	Warnings []string      `json:"warnings"`
+}
+
+// handleSearchConnectors queries the built-in directory-site connectors (skillsmp,
+// crossaitools) for a term and returns matching skills as source-ref packs. The
+// directory sites hold thousands of skills, so they are searched live rather than
+// bulk-listed in the catalog.
+func (s *Server) handleSearchConnectors(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		writeJSON(w, http.StatusOK, connectorSearchResult{Results: []market.Pack{}})
 		return
 	}
-	store := ws(r).Runtime.Market()
-	regs, err := store.AddConnector(req.ID)
+	limit := 40
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	results, warnings, err := ws(r).Runtime.Market().SearchConnectors(r.Context(), q, limit)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = store.RefreshRemote(r.Context()) // best-effort initial fetch
-	writeJSON(w, http.StatusOK, regs)
+	if results == nil {
+		results = []market.Pack{}
+	}
+	writeJSON(w, http.StatusOK, connectorSearchResult{Results: results, Warnings: warnings})
 }
 
 // handleRefreshRegistries re-fetches every enabled registry index. Per-registry
