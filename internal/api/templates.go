@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
+	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/swarmgo/internal/market"
 	"github.com/bilal-arikan/swarmgo/internal/orchestration"
 	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
@@ -14,201 +17,20 @@ import (
 // agents, an orchestration flow connecting them, and optional schedules — so a
 // new workspace arrives ready for a specific kind of work (research, software
 // development, daily routine) instead of an empty roster.
+//
+// Templates now live in the MARKET as workspace-kind packs (bundled tier +
+// global dir + remote registries), not in a hard-coded Go list. The
+// create-workspace picker lists them via the market store; seeding reads the
+// chosen pack's WorkspacePayload. This keeps templates shareable/installable like
+// any other pack while still shipping a default set embedded in the binary.
 
-// tmplAgent is a template agent definition. Key is a local reference used to
-// wire flow nodes to the agent's real ID after creation.
-type tmplAgent struct {
-	Key    string
-	Name   string
-	Soul   string
-	Avatar string
-	Color  string
-}
+// blankTemplateID is the id of the embedded "blank" template — the safe default
+// when no template is chosen or a requested id is unknown.
+const blankTemplateID = "workspace-blank"
 
-// tmplStep is one node of a linear flow pipeline. AgentKey points at a
-// tmplAgent.Key; Prompt is an orchestration template ({{input}}, {{last}}).
-type tmplStep struct {
-	ID       string
-	Title    string
-	AgentKey string
-	Prompt   string
-}
-
-// tmplFlow is a linear (sequential) flow built from steps.
-type tmplFlow struct {
-	Name        string
-	Description string
-	Steps       []tmplStep
-}
-
-// tmplSchedule is a starter cron schedule. It is always seeded DISABLED so it
-// never fires until the user opts in via the Schedules screen.
-type tmplSchedule struct {
-	AgentKey string
-	CronExpr string
-	Prompt   string
-}
-
-// workspaceTemplate is a complete workspace blueprint.
-type workspaceTemplate struct {
-	ID          string
-	Name        string
-	Description string
-	Icon        string
-	Agents      []tmplAgent
-	Flow        *tmplFlow
-	Schedules   []tmplSchedule
-}
-
-// workspaceTemplates is the registry of available templates, in display order.
-// The first entry ("blank") reproduces the legacy single-assistant default.
-var workspaceTemplates = []workspaceTemplate{
-	{
-		ID:          "blank",
-		Name:        "Boş",
-		Description: "Tek bir genel asistan ile başla. Kendi ajanlarını ve akışlarını sıfırdan kur.",
-		Icon:        "⬡",
-		Agents: []tmplAgent{
-			{Key: "assistant", Name: "Asistan", Soul: "You are a helpful assistant."},
-		},
-		Schedules: []tmplSchedule{
-			{AgentKey: "assistant", CronExpr: "0 * * * *", Prompt: "Review the task board for unfinished or stuck tasks and send a notification summarizing them."},
-		},
-	},
-	{
-		ID:          "research",
-		Name:        "Bilimsel Araştırma",
-		Description: "Literatür taraması, metodoloji, analiz ve hakem değerlendirmesi ajanları + uçtan uca araştırma akışı.",
-		Icon:        "🔬",
-		Agents: []tmplAgent{
-			{Key: "scout", Name: "Literatür Tarayıcı", Avatar: "📚", Color: "#6366f1",
-				Soul: "You are a research literature scout. Given a research question, you find, gather and summarize the most relevant prior work, papers and sources. You cite sources, extract key findings, and surface gaps in the existing literature."},
-			{Key: "method", Name: "Metodolog", Avatar: "🧪", Color: "#0ea5e9",
-				Soul: "You are a research methodologist. You design rigorous methodology: clear hypotheses, variables, experiment or analysis design, sampling, and threats to validity. You favor reproducible, well-justified designs."},
-			{Key: "analyst", Name: "Analist", Avatar: "📊", Color: "#10b981",
-				Soul: "You are a data and results analyst. You analyze findings, choose appropriate statistical or qualitative methods, interpret results honestly, and draw evidence-based conclusions while stating uncertainty."},
-			{Key: "critic", Name: "Hakem", Avatar: "🧐", Color: "#f59e0b",
-				Soul: "You are a peer reviewer. You critically evaluate research for rigor, bias, reproducibility and gaps. You give constructive, specific feedback and concrete suggestions for improvement."},
-		},
-		Flow: &tmplFlow{
-			Name:        "Araştırma Akışı",
-			Description: "Tarama → Metodoloji → Analiz → Hakem değerlendirmesi",
-			Steps: []tmplStep{
-				{ID: "scan", Title: "Literatür Tarama", AgentKey: "scout",
-					Prompt: "Research question:\n{{input}}\n\nFind and summarize the most relevant prior work and sources. List key findings, cite them, and note open gaps."},
-				{ID: "design", Title: "Metodoloji", AgentKey: "method",
-					Prompt: "Research question:\n{{input}}\n\nPrior work summary:\n{{last}}\n\nDesign a rigorous methodology to investigate this question."},
-				{ID: "analyze", Title: "Analiz", AgentKey: "analyst",
-					Prompt: "Given the research context and methodology below, outline the analysis plan and interpret what the expected results would mean.\n\n{{last}}"},
-				{ID: "review", Title: "Hakem Değerlendirmesi", AgentKey: "critic",
-					Prompt: "Critically review the following research plan and analysis. Identify weaknesses, biases and gaps, and propose concrete improvements.\n\n{{last}}"},
-			},
-		},
-	},
-	{
-		ID:          "software",
-		Name:        "Yazılım Geliştirme",
-		Description: "Search · Plan · Execute · Verify ajanları ve bu adımları sırayla yürüten geliştirme akışı.",
-		Icon:        "🛠",
-		Agents: []tmplAgent{
-			{Key: "search", Name: "Araştırmacı (Search)", Avatar: "🔍", Color: "#6366f1",
-				Soul: "You explore the codebase and gather context before any change: relevant files, existing patterns, conventions and constraints. You output a concise, well-organized findings report and never edit code."},
-			{Key: "plan", Name: "Planlayıcı (Plan)", Avatar: "🗺", Color: "#8b5cf6",
-				Soul: "You turn findings into a concrete, step-by-step implementation plan: which files to change, in what order, the approach, and the risks. You do not write the final code — you produce an actionable plan."},
-			{Key: "execute", Name: "Geliştirici (Execute)", Avatar: "⚙", Color: "#10b981",
-				Soul: "You implement the plan with clean, idiomatic code and small, atomic changes. You follow existing conventions and keep edits focused on the plan."},
-			{Key: "verify", Name: "Doğrulayıcı (Verify)", Avatar: "✅", Color: "#f59e0b",
-				Soul: "You verify the implementation: run or inspect tests, check that the original goal is met, and report any remaining issues or regressions clearly."},
-		},
-		Flow: &tmplFlow{
-			Name:        "Search → Plan → Execute → Verify",
-			Description: "Yazılım görevlerini dört aşamada yürüten akış",
-			Steps: []tmplStep{
-				{ID: "search", Title: "Search", AgentKey: "search",
-					Prompt: "Task:\n{{input}}\n\nExplore the relevant code and context. Produce a concise findings report."},
-				{ID: "plan", Title: "Plan", AgentKey: "plan",
-					Prompt: "Task:\n{{input}}\n\nFindings:\n{{last}}\n\nProduce a concrete step-by-step implementation plan."},
-				{ID: "execute", Title: "Execute", AgentKey: "execute",
-					Prompt: "Implement the following plan with clean, atomic changes.\n\n{{last}}"},
-				{ID: "verify", Title: "Verify", AgentKey: "verify",
-					Prompt: "Verify the implementation below against the original task. Run/inspect tests and report remaining issues.\n\nTask:\n{{input}}\n\nImplementation:\n{{last}}"},
-			},
-		},
-	},
-	{
-		ID:          "daily",
-		Name:        "Günlük Rutin",
-		Description: "Planlayıcı, koç ve hatırlatıcı ajanlarla günlük rutinleri optimize et. Sabah planı + akşam değerlendirmesi zamanlamaları hazır gelir.",
-		Icon:        "🌙",
-		Agents: []tmplAgent{
-			{Key: "planner", Name: "Planlayıcı", Avatar: "🗓", Color: "#6366f1",
-				Soul: "You are a daily planner. You help organize the day: prioritize tasks, time-block the schedule, and set realistic, achievable goals. You keep plans concise and actionable."},
-			{Key: "coach", Name: "Koç", Avatar: "🎯", Color: "#10b981",
-				Soul: "You are a productivity and habit coach. You optimize routines, suggest small habit improvements, remove friction, and keep motivation high with encouraging, practical advice."},
-			{Key: "reminder", Name: "Hatırlatıcı", Avatar: "⏰", Color: "#f59e0b",
-				Soul: "You are a reminder assistant. You track commitments and surface timely, friendly reminders and follow-ups so nothing important slips."},
-		},
-		Flow: &tmplFlow{
-			Name:        "Günlük Optimizasyon",
-			Description: "Plan → Koçluk: günü planla, ardından rutini iyileştir",
-			Steps: []tmplStep{
-				{ID: "plan", Title: "Günü Planla", AgentKey: "planner",
-					Prompt: "Today's context, goals and tasks:\n{{input}}\n\nProduce a prioritized, time-blocked plan for the day."},
-				{ID: "coach", Title: "Rutini İyileştir", AgentKey: "coach",
-					Prompt: "Given today's plan below, suggest concrete improvements to the routine and habits to make the day smoother and more productive.\n\n{{last}}"},
-			},
-		},
-		Schedules: []tmplSchedule{
-			{AgentKey: "planner", CronExpr: "0 8 * * *", Prompt: "Plan today: review priorities and propose a prioritized, time-blocked schedule, then send it as a notification."},
-			{AgentKey: "coach", CronExpr: "0 20 * * *", Prompt: "Reflect on today: review what was done, note wins and friction points, and suggest one improvement for tomorrow."},
-		},
-	},
-	{
-		ID:          "linkshortener",
-		Name:        "Link Kısaltma (Otonom Ops)",
-		Description: "Basit bir URL kısaltma sitesi üzerinde çalışmaya hazır: Plan → Yaz → İncele çok-modelli pipeline + gece çalışan döküman/test/log sweep zamanlamaları. `swarmgo-autonomous-ops` skill'ini somutlaştırır.",
-		Icon:        "🔗",
-		Agents: []tmplAgent{
-			{Key: "architect", Name: "Mimar (Plan)", Avatar: "🗺", Color: "#8b5cf6",
-				Soul: "You are the architect for a URL shortener web app (short-code generation, the redirect endpoint, click analytics, a small REST API and web UI). You explore the codebase and turn a feature request into a concrete, step-by-step implementation plan: which files to change, in what order, the approach, and the risks. You favor small, atomic changes and existing conventions, and you do not write the final code. Load the `swarmgo-autonomous-ops` skill for the team's operating playbook."},
-			{Key: "builder", Name: "Geliştirici (Write)", Avatar: "⚙", Color: "#10b981",
-				Soul: "You implement plans for a URL shortener web app with clean, idiomatic code and small, focused changes. You follow the plan and existing conventions, write tests alongside the code, and keep edits scoped. Load the `swarmgo-autonomous-ops` skill for conventions and quality gates."},
-			{Key: "reviewer", Name: "İnceleyici (Review)", Avatar: "🧐", Color: "#f59e0b",
-				Soul: "You review code for the URL shortener app from an independent viewpoint: correctness, security (open-redirect, injection, SSRF), edge cases, and test coverage. You give specific, actionable feedback and a clear merge-confidence verdict. Load the `swarmgo-autonomous-ops` skill."},
-			{Key: "ops", Name: "Bakım (Ops)", Avatar: "♻️", Color: "#6366f1",
-				Soul: "You keep the URL shortener project healthy: sweep docs for staleness, ensure test coverage, and mine logs for errors. You open small fixes and report what changed. Load the `swarmgo-autonomous-ops` skill for the docs/tests/logs flywheel."},
-		},
-		Flow: &tmplFlow{
-			Name:        "Plan → Yaz → İncele",
-			Description: "URL kısaltma özelliklerini üç aşamada yürüten çok-modelli pipeline",
-			Steps: []tmplStep{
-				{ID: "plan", Title: "Plan", AgentKey: "architect",
-					Prompt: "Feature for the URL shortener app:\n{{input}}\n\nExplore the relevant code and produce a concrete, step-by-step implementation plan."},
-				{ID: "write", Title: "Yaz", AgentKey: "builder",
-					Prompt: "Implement the following plan with clean, atomic changes and tests.\n\n{{last}}"},
-				{ID: "review", Title: "İncele", AgentKey: "reviewer",
-					Prompt: "Independently review the implementation below against the feature request. Check correctness, security (open-redirect/injection/SSRF), edge cases and tests, then give a merge-confidence verdict.\n\nFeature:\n{{input}}\n\nImplementation:\n{{last}}"},
-			},
-		},
-		Schedules: []tmplSchedule{
-			{AgentKey: "ops", CronExpr: "0 1 * * *", Prompt: "Overnight docs sweep: compare the day's code changes against the docs (README + internal docs), update anything stale or missing, and report what changed."},
-			{AgentKey: "ops", CronExpr: "0 2 * * *", Prompt: "Test coverage sweep: find untested code paths in the URL shortener app and add tests until the coverage target is met. Report any gaps you could not close."},
-			{AgentKey: "ops", CronExpr: "0 3 * * *", Prompt: "Production error sweep: read the logs, find errors, diagnose the most likely cause of each, and propose a concrete fix. Summarize findings as a notification."},
-		},
-	},
-}
-
-// templateByID returns the named template, falling back to the "blank" default.
-func templateByID(id string) workspaceTemplate {
-	for _, t := range workspaceTemplates {
-		if t.ID == id {
-			return t
-		}
-	}
-	return workspaceTemplates[0]
-}
-
-// templateListItem is the catalog view sent to the frontend.
+// templateListItem is the catalog view sent to the create-workspace picker. The
+// shape is unchanged from the legacy in-code template list so the frontend modal
+// works without modification.
 type templateListItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -218,35 +40,125 @@ type templateListItem struct {
 	HasFlow     bool   `json:"hasFlow"`
 }
 
-// handleListWorkspaceTemplates returns the available workspace templates.
+// handleListWorkspaceTemplates returns the available workspace templates, sourced
+// from the market's workspace-kind packs (bundled + global + remote). The blank
+// default is pinned first; the rest keep the market's name-sorted order.
 func (s *Server) handleListWorkspaceTemplates(w http.ResponseWriter, _ *http.Request) {
-	out := make([]templateListItem, 0, len(workspaceTemplates))
-	for _, t := range workspaceTemplates {
-		out = append(out, templateListItem{
-			ID: t.ID, Name: t.Name, Description: t.Description, Icon: t.Icon,
-			AgentCount: len(t.Agents), HasFlow: t.Flow != nil,
-		})
+	packs := s.market.ListKind(market.KindWorkspace)
+	out := make([]templateListItem, 0, len(packs))
+	for _, meta := range packs {
+		item := templateListItem{ID: meta.ID, Name: meta.Name, Description: meta.Description, Icon: meta.Icon}
+		// Counts need the payload (manifests omit it); Get reads it lazily.
+		if full, ok := s.market.Get(meta.ID); ok && full.Payload.Workspace != nil {
+			wp := full.Payload.Workspace
+			item.AgentCount = len(wp.Agents)
+			item.HasFlow = len(wp.Flows) > 0
+		}
+		out = append(out, item)
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		// Pin blank first; otherwise preserve the incoming (name-sorted) order.
+		return out[i].ID == blankTemplateID && out[j].ID != blankTemplateID
+	})
 	writeJSON(w, http.StatusOK, out)
 }
 
-// seedTemplate populates a freshly created workspace from a template: it creates
-// the agents, wires and stores the flow (if any), and adds the disabled starter
-// schedules. The first created agent is treated as the workspace default. All
-// failures are logged but non-fatal so the workspace is still usable.
-func (s *Server) seedTemplate(ctx context.Context, wsNew *workspace.Workspace, tmpl workspaceTemplate) {
-	provider, model := s.defaultProviderModel(wsNew)
+// resolveTemplatePayload returns the WorkspacePayload for a template id, falling
+// back to the embedded blank template when the id is empty/unknown. The second
+// return is false only when even the blank fallback cannot be resolved (no
+// bundled templates — should not happen in a normal build).
+func (s *Server) resolveTemplatePayload(id string) (market.WorkspacePayload, bool) {
+	if id != "" {
+		if p, ok := s.market.Get(id); ok && p.Kind == market.KindWorkspace && p.Payload.Workspace != nil {
+			return *p.Payload.Workspace, true
+		}
+	}
+	if id != blankTemplateID {
+		if p, ok := s.market.Get(blankTemplateID); ok && p.Payload.Workspace != nil {
+			return *p.Payload.Workspace, true
+		}
+	}
+	return market.WorkspacePayload{}, false
+}
 
-	// Create agents, recording key → real ID for flow/schedule wiring.
-	ids := make(map[string]string, len(tmpl.Agents))
-	for _, ta := range tmpl.Agents {
+// seedWorkspaceFromTemplate populates a freshly created workspace from a chosen
+// template id: it resolves the market pack and seeds its starter team. Identity
+// (icon/color) is NOT applied here — the create-workspace flow lets the user pick
+// those in the modal; only template content (instructions/board/agents/flow/
+// schedules) is seeded. Unknown ids fall back to the blank template.
+func (s *Server) seedWorkspaceFromTemplate(ctx context.Context, wsNew *workspace.Workspace, templateID string) {
+	wp, ok := s.resolveTemplatePayload(templateID)
+	if !ok {
+		return // no templates available — leave the workspace empty
+	}
+	// Apply the template's instructions / board layout (icon/color stay the
+	// user's choice from the create modal).
+	patch := workspace.WSSettingsPatch{}
+	if wp.Instructions != "" {
+		patch.Instructions = &wp.Instructions
+	}
+	if len(wp.Columns) > 0 {
+		cols := toBoardColumnDefs(wp.Columns)
+		patch.BoardColumns = &cols
+	}
+	if patch.Instructions != nil || patch.BoardColumns != nil {
+		if _, err := s.workspaces.UpdateSettings(wsNew.ID, patch); err != nil {
+			s.logger.Warn("seed template settings failed", "workspace", wsNew.ID, "error", err)
+		}
+	}
+	s.seedWorkspaceTeam(ctx, wsNew, wp)
+}
+
+// seedWorkspaceTeam seeds a template's full starter ecosystem into a workspace:
+// bundled skills, a richly-configured agent team, one or more flows (linear or
+// non-linear) wiring them, and disabled starter schedules. Seed order matters —
+// skills first (so agent skill assignments resolve), then agents, then flows and
+// schedules (which reference agents by key). Shared by the create-from-template
+// flow and the market workspace-pack install. All failures are logged but
+// non-fatal so the workspace is still usable.
+func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspace, wp market.WorkspacePayload) {
+	// 1) Bundled skills → workspace skills dir, then reload so they are known to
+	// the catalog before agents reference them.
+	s.seedTemplateSkills(wsNew, wp.Skills)
+
+	provider, model := s.defaultProviderModel(wsNew)
+	skillStore := wsNew.Runtime.Skills()
+
+	// 2) Create the (rich) agents, recording key → real ID for flow/schedule
+	// wiring. Empty provider/model fall back to the workspace/app default; skill
+	// references are filtered to ones that actually resolved.
+	ids := make(map[string]string, len(wp.Agents))
+	for _, ta := range wp.Agents {
+		ap, am := ta.Provider, ta.Model
+		if ap == "" {
+			ap = provider
+		}
+		if am == "" {
+			am = model
+		}
+		known := make([]string, 0, len(ta.Skills))
+		for _, slug := range ta.Skills {
+			if _, ok := skillStore.Get(slug); ok {
+				known = append(known, slug)
+			}
+		}
 		agent, err := wsNew.DB.CreateAgent(ctx, db.Agent{
-			Name:     ta.Name,
-			Soul:     ta.Soul,
-			Avatar:   ta.Avatar,
-			Color:    ta.Color,
-			Provider: provider,
-			Model:    model,
+			Name:            ta.Name,
+			Soul:            ta.Soul,
+			Identity:        ta.Identity,
+			Avatar:          ta.Avatar,
+			Color:           ta.Color,
+			Provider:        ap,
+			Model:           am,
+			PlanningMode:    ta.PlanningMode,
+			ThinkingLevel:   ta.ThinkingLevel,
+			PermissionMode:  ta.PermissionMode,
+			MCPEnabled:      ta.MCPEnabled,
+			AllowedTools:    ta.AllowedTools,
+			BlockedTools:    ta.BlockedTools,
+			Skills:          known,
+			DailyCallLimit:  ta.DailyCallLimit,
+			DailyTokenLimit: ta.DailyTokenLimit,
 		})
 		if err != nil {
 			s.logger.Warn("seed template agent failed", "workspace", wsNew.ID, "agent", ta.Name, "error", err)
@@ -255,13 +167,13 @@ func (s *Server) seedTemplate(ctx context.Context, wsNew *workspace.Workspace, t
 		ids[ta.Key] = agent.ID
 	}
 
-	// Wire and store the flow, if all referenced agents were created.
-	if tmpl.Flow != nil && len(tmpl.Flow.Steps) > 0 {
-		s.seedTemplateFlow(ctx, wsNew, *tmpl.Flow, ids)
+	// 3) Flows (linear or non-linear), each wired to the seeded agents.
+	for _, tf := range wp.Flows {
+		s.seedTemplateFlow(ctx, wsNew, tf, ids)
 	}
 
-	// Starter schedules (always disabled).
-	for _, ts := range tmpl.Schedules {
+	// 4) Starter schedules (always disabled).
+	for _, ts := range wp.Schedules {
 		agentID, ok := ids[ts.AgentKey]
 		if !ok {
 			continue
@@ -277,33 +189,37 @@ func (s *Server) seedTemplate(ctx context.Context, wsNew *workspace.Workspace, t
 	}
 }
 
-// seedTemplateFlow builds a linear orchestration graph from the template steps,
-// resolving agent keys to real IDs, and persists it as a flow.
-func (s *Server) seedTemplateFlow(ctx context.Context, wsNew *workspace.Workspace, tf tmplFlow, ids map[string]string) {
-	nodes := make([]orchestration.Node, 0, len(tf.Steps))
-	for i, st := range tf.Steps {
-		agentID, ok := ids[st.AgentKey]
-		if !ok {
-			s.logger.Warn("seed flow skipped: missing agent", "workspace", wsNew.ID, "flow", tf.Name, "agentKey", st.AgentKey)
-			return
-		}
-		next := ""
-		if i+1 < len(tf.Steps) {
-			next = tf.Steps[i+1].ID
-		}
-		nodes = append(nodes, orchestration.Node{
-			ID:      st.ID,
-			Type:    orchestration.NodeAgent,
-			Title:   st.Title,
-			AgentID: agentID,
-			Prompt:  st.Prompt,
-			Next:    next,
-		})
+// seedTemplateSkills writes a template's bundled skills into the workspace skills
+// dir and reloads the catalog so agents can reference them by slug. Reuses the
+// market skill installer (slug-safety, nested files) via a synthetic pack.
+func (s *Server) seedTemplateSkills(wsNew *workspace.Workspace, skills []market.WorkspaceTemplateSkill) {
+	if len(skills) == 0 {
+		return
 	}
+	skillsDir := wsNew.Runtime.WorkspaceSkillsDir()
+	for _, sk := range skills {
+		if sk.Slug == "" || sk.Body == "" {
+			continue
+		}
+		p := market.Pack{
+			Kind:    market.KindSkill,
+			Payload: market.Payload{Skill: &market.SkillPayload{Slug: sk.Slug, Body: sk.Body}},
+			Files:   sk.Files,
+		}
+		if _, err := market.InstallSkill(p, skillsDir, true); err != nil {
+			s.logger.Warn("seed template skill failed", "workspace", wsNew.ID, "skill", sk.Slug, "error", err)
+		}
+	}
+	wsNew.Runtime.Skills().Reload()
+}
 
-	graph := orchestration.Graph{Start: tf.Steps[0].ID, Nodes: nodes}
-	if err := graph.Validate(); err != nil {
-		s.logger.Warn("seed flow invalid graph", "workspace", wsNew.ID, "flow", tf.Name, "error", err)
+// seedTemplateFlow resolves a template flow's graph (linear steps OR a full
+// orchestration graph with branch/parallel/delay/transform), wiring agent keys
+// to real IDs, and persists it. A flow referencing a missing agent is skipped.
+func (s *Server) seedTemplateFlow(ctx context.Context, wsNew *workspace.Workspace, tf market.WorkspaceTemplateFlow, ids map[string]string) {
+	graph, ok := resolveTemplateFlowGraph(tf, ids)
+	if !ok {
+		s.logger.Warn("seed flow skipped: unresolved/invalid", "workspace", wsNew.ID, "flow", tf.Name)
 		return
 	}
 	raw, err := json.Marshal(graph)
@@ -318,6 +234,64 @@ func (s *Server) seedTemplateFlow(ctx context.Context, wsNew *workspace.Workspac
 	}); err != nil {
 		s.logger.Warn("seed flow create failed", "workspace", wsNew.ID, "error", err)
 	}
+}
+
+// resolveTemplateFlowGraph builds the runnable orchestration graph for a template
+// flow, resolving agent keys to the real agent ids created for this workspace. A
+// flow with a Graph uses it directly (agent nodes' agentId "tmpl:<key>" are
+// substituted, so branch/parallel/delay/transform all work); otherwise the linear
+// Steps are assembled. Returns false when a referenced agent key is missing or the
+// resulting graph is empty/invalid. Pure (no side effects) so it is unit-testable.
+func resolveTemplateFlowGraph(tf market.WorkspaceTemplateFlow, ids map[string]string) (orchestration.Graph, bool) {
+	if g := strings.TrimSpace(tf.Graph); g != "" {
+		graph, err := orchestration.ParseGraph(g)
+		if err != nil {
+			return orchestration.Graph{}, false
+		}
+		for i := range graph.Nodes {
+			n := &graph.Nodes[i]
+			if n.Type == orchestration.NodeAgent && strings.HasPrefix(n.AgentID, market.TemplateAgentKeyPrefix) {
+				real, ok := ids[strings.TrimPrefix(n.AgentID, market.TemplateAgentKeyPrefix)]
+				if !ok {
+					return orchestration.Graph{}, false
+				}
+				n.AgentID = real
+			}
+		}
+		if graph.Validate() != nil {
+			return orchestration.Graph{}, false
+		}
+		return graph, true
+	}
+
+	// Linear steps → a sequential agent graph.
+	if len(tf.Steps) == 0 {
+		return orchestration.Graph{}, false
+	}
+	nodes := make([]orchestration.Node, 0, len(tf.Steps))
+	for i, st := range tf.Steps {
+		agentID, ok := ids[st.AgentKey]
+		if !ok {
+			return orchestration.Graph{}, false
+		}
+		next := ""
+		if i+1 < len(tf.Steps) {
+			next = tf.Steps[i+1].ID
+		}
+		nodes = append(nodes, orchestration.Node{
+			ID:      st.ID,
+			Type:    orchestration.NodeAgent,
+			Title:   st.Title,
+			AgentID: agentID,
+			Prompt:  st.Prompt,
+			Next:    next,
+		})
+	}
+	graph := orchestration.Graph{Start: tf.Steps[0].ID, Nodes: nodes}
+	if graph.Validate() != nil {
+		return orchestration.Graph{}, false
+	}
+	return graph, true
 }
 
 // defaultProviderModel resolves the provider/model for seeded agents:

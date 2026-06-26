@@ -1,0 +1,92 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "workspace-linkshortener",
+  "kind": "workspace",
+  "name": "Link Kısaltma (Otonom Ops)",
+  "description": "Basit bir URL kısaltma sitesi üzerinde çalışmaya hazır: Plan → Yaz → İncele çok-modelli pipeline + gece çalışan döküman/test/log sweep zamanlamaları. `swarmgo-autonomous-ops` skill'ini somutlaştırır.",
+  "author": "SwarmGo",
+  "icon": "🔗",
+  "tags": [
+    "template",
+    "workspace"
+  ],
+  "payload": {
+    "workspace": {
+      "name": "Link Kısaltma (Otonom Ops)",
+      "icon": "🔗",
+      "agents": [
+        {
+          "key": "architect",
+          "name": "Mimar (Plan)",
+          "soul": "You are the architect for a URL shortener web app (short-code generation, the redirect endpoint, click analytics, a small REST API and web UI). You explore the codebase and turn a feature request into a concrete, step-by-step implementation plan: which files to change, in what order, the approach, and the risks. You favor small, atomic changes and existing conventions, and you do not write the final code. Load the `swarmgo-autonomous-ops` skill for the team's operating playbook.",
+          "avatar": "🗺",
+          "color": "#8b5cf6"
+        },
+        {
+          "key": "builder",
+          "name": "Geliştirici (Write)",
+          "soul": "You implement plans for a URL shortener web app with clean, idiomatic code and small, focused changes. You follow the plan and existing conventions, write tests alongside the code, and keep edits scoped. Load the `swarmgo-autonomous-ops` skill for conventions and quality gates.",
+          "avatar": "⚙",
+          "color": "#10b981"
+        },
+        {
+          "key": "reviewer",
+          "name": "İnceleyici (Review)",
+          "soul": "You review code for the URL shortener app from an independent viewpoint: correctness, security (open-redirect, injection, SSRF), edge cases, and test coverage. You give specific, actionable feedback and a clear merge-confidence verdict. Load the `swarmgo-autonomous-ops` skill.",
+          "avatar": "🧐",
+          "color": "#f59e0b"
+        },
+        {
+          "key": "ops",
+          "name": "Bakım (Ops)",
+          "soul": "You keep the URL shortener project healthy: sweep docs for staleness, ensure test coverage, and mine logs for errors. You open small fixes and report what changed. Load the `swarmgo-autonomous-ops` skill for the docs/tests/logs flywheel.",
+          "avatar": "♻️",
+          "color": "#6366f1"
+        }
+      ],
+      "schedules": [
+        {
+          "agentKey": "ops",
+          "cronExpr": "0 1 * * *",
+          "prompt": "Overnight docs sweep: compare the day's code changes against the docs (README + internal docs), update anything stale or missing, and report what changed."
+        },
+        {
+          "agentKey": "ops",
+          "cronExpr": "0 2 * * *",
+          "prompt": "Test coverage sweep: find untested code paths in the URL shortener app and add tests until the coverage target is met. Report any gaps you could not close."
+        },
+        {
+          "agentKey": "ops",
+          "cronExpr": "0 3 * * *",
+          "prompt": "Production error sweep: read the logs, find errors, diagnose the most likely cause of each, and propose a concrete fix. Summarize findings as a notification."
+        }
+      ],
+      "flows": [
+        {
+          "name": "Plan → Yaz → İncele",
+          "description": "URL kısaltma özelliklerini üç aşamada yürüten çok-modelli pipeline",
+          "steps": [
+            {
+              "id": "plan",
+              "title": "Plan",
+              "agentKey": "architect",
+              "prompt": "Feature for the URL shortener app:\n{{input}}\n\nExplore the relevant code and produce a concrete, step-by-step implementation plan."
+            },
+            {
+              "id": "write",
+              "title": "Yaz",
+              "agentKey": "builder",
+              "prompt": "Implement the following plan with clean, atomic changes and tests.\n\n{{last}}"
+            },
+            {
+              "id": "review",
+              "title": "İncele",
+              "agentKey": "reviewer",
+              "prompt": "Independently review the implementation below against the feature request. Check correctness, security (open-redirect/injection/SSRF), edge cases and tests, then give a merge-confidence verdict.\n\nFeature:\n{{input}}\n\nImplementation:\n{{last}}"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

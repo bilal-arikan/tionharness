@@ -1,5 +1,8 @@
 // Per-workspace category: identity (icon), stats, instructions,
-// provider/model overrides, autonomy pause and the delete danger zone.
+// provider/model overrides, autonomy pause, publish-as-template and the delete
+// danger zone.
+import { useState } from 'react'
+import { api } from '../../api'
 import type { WorkspaceSettings } from '../../types'
 import { Field, Toggle, inputCls, type WsSet } from './primitives'
 import { ProviderModelSelect } from '../agents/ProviderModelSelect'
@@ -12,6 +15,23 @@ interface Props {
 }
 
 export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
+  // Publish-as-template state: package this workspace's agents/flows/schedules/
+  // skills into a market workspace pack that then appears in the create picker.
+  const [pubBusy, setPubBusy] = useState(false)
+  const [pubMsg, setPubMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const publishTemplate = async () => {
+    setPubBusy(true)
+    setPubMsg(null)
+    try {
+      const pack = await api.publishPack('workspace', ws.id)
+      setPubMsg({ ok: true, text: `“${pack.name}” şablon olarak yayınlandı (id: ${pack.id}). Artık market ve workspace oluşturma ekranında görünür.` })
+    } catch (e) {
+      setPubMsg({ ok: false, text: (e as Error).message })
+    } finally {
+      setPubBusy(false)
+    }
+  }
+
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
@@ -90,6 +110,31 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
           </Field>
         </>
       )}
+
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Şablon
+      </div>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-[var(--color-text-dim)]">
+            Bu workspace'i (ajanlar, akışlar, zamanlamalar, workspace skill'leri, talimatlar) bir
+            <span className="font-medium text-[var(--color-text)]"> şablon paketine</span> dönüştür. Sırlar ve
+            oturum geçmişi dahil edilmez.
+          </span>
+          <button
+            onClick={publishTemplate}
+            disabled={pubBusy}
+            className="shrink-0 rounded border border-[var(--color-accent)] px-3 py-1 text-xs text-[var(--color-accent)] transition hover:bg-[var(--color-accent-soft)] disabled:opacity-50"
+          >
+            {pubBusy ? 'Yayınlanıyor…' : 'Şablon olarak yayınla'}
+          </button>
+        </div>
+        {pubMsg && (
+          <p className={`mt-2 text-xs ${pubMsg.ok ? 'text-[var(--color-success,#10b981)]' : 'text-[var(--color-danger)]'}`}>
+            {pubMsg.text}
+          </p>
+        )}
+      </div>
 
       {onDeleteWorkspace && (
         <div className="mt-2 flex items-center justify-between rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_6%,transparent)] px-3 py-2">

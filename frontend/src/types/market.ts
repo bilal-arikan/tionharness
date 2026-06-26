@@ -59,12 +59,63 @@ export interface BoardColumn {
   color?: string
 }
 
+// A workspace template's starter ecosystem (mirrors the Go market types).
+export interface WorkspaceTemplateAgent {
+  key: string
+  name: string
+  soul?: string
+  identity?: string
+  provider?: string
+  model?: string
+  planningMode?: string
+  thinkingLevel?: string
+  permissionMode?: string
+  avatar?: string
+  color?: string
+  mcpEnabled?: boolean
+  allowedTools?: string
+  blockedTools?: string
+  skills?: string[]
+  dailyCallLimit?: number
+  dailyTokenLimit?: number
+}
+
+export interface WorkspaceTemplateStep {
+  id: string
+  title: string
+  agentKey: string
+  prompt: string
+}
+
+export interface WorkspaceTemplateFlow {
+  name: string
+  description?: string
+  steps?: WorkspaceTemplateStep[]
+  graph?: string
+}
+
+export interface WorkspaceTemplateSchedule {
+  agentKey: string
+  cronExpr: string
+  prompt: string
+}
+
+export interface WorkspaceTemplateSkill {
+  slug: string
+  body: string
+  files?: Record<string, string>
+}
+
 export interface WorkspacePayload {
   name: string
   icon?: string
   color?: string
   instructions?: string
   columns?: BoardColumn[]
+  skills?: WorkspaceTemplateSkill[]
+  agents?: WorkspaceTemplateAgent[]
+  flows?: WorkspaceTemplateFlow[]
+  schedules?: WorkspaceTemplateSchedule[]
 }
 
 export interface MCPPayload {

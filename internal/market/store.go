@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,11 +15,12 @@ import (
 // packFileSuffix is the extension every pack file carries.
 const packFileSuffix = ".swarmpack.json"
 
-// tier pairs a directory with the source label its packs carry. A tier with an
-// fsys is read from an embedded FS (bundled); otherwise from the OS dir.
+// tier pairs a directory with the source label its packs carry. A tier with a
+// non-nil fsys is read from an embedded FS (bundled); otherwise from the OS dir.
 type tier struct {
 	dir    string
 	source Source
+	fsys   fs.FS // non-nil → read from this embedded FS instead of the OS
 }
 
 // Store resolves and caches marketplace packs from the three tiers (bundled →
@@ -51,9 +53,11 @@ type Store struct {
 // ledgerDir is the per-workspace root where the install ledger is kept. Any dir
 // may be empty/missing.
 func New(globalDir, ledgerDir string) *Store {
-	var tiers []tier
+	// Bundled tier first (lowest priority): the embedded workspace-template packs,
+	// always present so a fresh install has templates in the market + create picker.
+	tiers := []tier{{dir: bundledDir, source: SourceBundled, fsys: bundledFS}}
 	if globalDir != "" {
-		tiers = append(tiers, tier{globalDir, SourceGlobal})
+		tiers = append(tiers, tier{dir: globalDir, source: SourceGlobal})
 	}
 	return &Store{
 		tiers:     tiers,
@@ -107,8 +111,15 @@ func (s *Store) Reload() {
 
 // scanDir reads every <dir>/*.swarmpack.json and parses its manifest. Malformed
 // or mis-tagged files are skipped silently (a bad file never breaks the catalog).
+// A tier with a non-nil fsys is read from that embedded FS; otherwise from the OS.
 func scanDir(t tier) []Pack {
-	entries, err := os.ReadDir(t.dir)
+	var entries []fs.DirEntry
+	var err error
+	if t.fsys != nil {
+		entries, err = fs.ReadDir(t.fsys, t.dir)
+	} else {
+		entries, err = os.ReadDir(t.dir)
+	}
 	if err != nil {
 		return nil // missing/inaccessible dir → no packs
 	}
@@ -117,8 +128,16 @@ func scanDir(t tier) []Pack {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), packFileSuffix) {
 			continue
 		}
-		path := filepath.Join(t.dir, e.Name())
-		data, err := os.ReadFile(path)
+		// Embedded FS always uses forward slashes; the OS path uses filepath.
+		var path string
+		var data []byte
+		if t.fsys != nil {
+			path = t.dir + "/" + e.Name()
+			data, err = fs.ReadFile(t.fsys, path)
+		} else {
+			path = filepath.Join(t.dir, e.Name())
+			data, err = os.ReadFile(path)
+		}
 		if err != nil {
 			continue
 		}
@@ -136,6 +155,7 @@ func scanDir(t tier) []Pack {
 		p.Payload = Payload{}
 		p.Source = t.source
 		p.Path = path
+		p.fsys = t.fsys // nil for OS tiers; set so Get reads bundled via fs.ReadFile
 		out = append(out, p)
 	}
 	return out
@@ -206,11 +226,17 @@ func (s *Store) Get(id string) (Pack, bool) {
 		full.RegistryName = rmeta.RegistryName
 		return full, true
 	}
-	data, err := os.ReadFile(meta.Path)
-	if err != nil {
-		if os.IsNotExist(err) {
+	var data []byte
+	var err error
+	if meta.fsys != nil {
+		data, err = fs.ReadFile(meta.fsys, meta.Path) // bundled (embedded) pack
+	} else {
+		data, err = os.ReadFile(meta.Path)
+		if err != nil && os.IsNotExist(err) {
 			s.Reload() // stale catalog entry — drop it
 		}
+	}
+	if err != nil {
 		return Pack{}, false
 	}
 	var full Pack
@@ -219,6 +245,7 @@ func (s *Store) Get(id string) (Pack, bool) {
 	}
 	full.Source = meta.Source
 	full.Path = meta.Path
+	full.fsys = meta.fsys
 	return full, true
 }
 

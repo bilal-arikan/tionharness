@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/market"
 	"github.com/bilal-arikan/swarmgo/internal/backup"
 	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
@@ -40,6 +41,12 @@ type Server struct {
 	grants     *permGrantStore // per-session "Always allow" permission grants
 	logger     *slog.Logger
 
+	// market is a workspace-independent market store (bundled + global tiers),
+	// used by the workspace-template picker and create-from-template seeding so
+	// they work even with zero workspaces (onboarding). Per-workspace runtime
+	// markets (with install ledgers) are used for in-workspace install/publish.
+	market *market.Store
+
 	// selfURL is this server's own loopback base URL (e.g. http://127.0.0.1:8090),
 	// used to point CLI subprocesses at the in-process Interaction MCP endpoint.
 	selfURL string
@@ -66,6 +73,10 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		runs:       newChatRuns(),
 		grants:     newPermGrantStore(),
 		logger:     logger,
+		// Workspace-independent market store (bundled + global tiers) for the
+		// workspace-template picker, which must work with zero workspaces during
+		// onboarding. No ledger dir: install-status tracking is per-workspace.
+		market: market.New(agent.MarketGlobalDir(), ""),
 	}
 	// Interaction MCP: lets CLI agents (claude-cli, ...) reach SwarmGo's
 	// human-in-the-loop tools over in-process HTTP. See _Docs/11-INTERACTION-MCP.md.

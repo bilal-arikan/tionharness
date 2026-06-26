@@ -1,0 +1,103 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "workspace-software",
+  "kind": "workspace",
+  "name": "Yazılım Geliştirme",
+  "description": "Search · Plan · Execute · Verify ajanları ve bu adımları sırayla yürüten geliştirme akışı.",
+  "author": "SwarmGo",
+  "icon": "🛠",
+  "tags": [
+    "template",
+    "workspace"
+  ],
+  "payload": {
+    "workspace": {
+      "name": "Yazılım Geliştirme",
+      "icon": "🛠",
+      "agents": [
+        {
+          "key": "search",
+          "name": "Araştırmacı (Search)",
+          "soul": "You explore the codebase and gather context before any change: relevant files, existing patterns, conventions and constraints. You output a concise, well-organized findings report and never edit code.",
+          "avatar": "🔍",
+          "color": "#6366f1",
+          "permissionMode": "read-only",
+          "skills": [
+            "sw-conventions"
+          ]
+        },
+        {
+          "key": "plan",
+          "name": "Planlayıcı (Plan)",
+          "soul": "You turn findings into a concrete, step-by-step implementation plan: which files to change, in what order, the approach, and the risks. You do not write the final code — you produce an actionable plan.",
+          "avatar": "🗺",
+          "color": "#8b5cf6",
+          "permissionMode": "read-only"
+        },
+        {
+          "key": "execute",
+          "name": "Geliştirici (Execute)",
+          "soul": "You implement the plan with clean, idiomatic code and small, atomic changes. You follow existing conventions and keep edits focused on the plan.",
+          "avatar": "⚙",
+          "color": "#10b981",
+          "permissionMode": "auto",
+          "thinkingLevel": "medium",
+          "skills": [
+            "sw-conventions"
+          ]
+        },
+        {
+          "key": "verify",
+          "name": "Doğrulayıcı (Verify)",
+          "soul": "You verify the implementation: run or inspect tests, check that the original goal is met, and report any remaining issues or regressions clearly.",
+          "avatar": "✅",
+          "color": "#f59e0b",
+          "permissionMode": "read-only"
+        }
+      ],
+      "flows": [
+        {
+          "name": "Search → Plan → Execute → Verify",
+          "description": "Yazılım görevlerini dört aşamada yürüten akış",
+          "steps": [
+            {
+              "id": "search",
+              "title": "Search",
+              "agentKey": "search",
+              "prompt": "Task:\n{{input}}\n\nExplore the relevant code and context. Produce a concise findings report."
+            },
+            {
+              "id": "plan",
+              "title": "Plan",
+              "agentKey": "plan",
+              "prompt": "Task:\n{{input}}\n\nFindings:\n{{last}}\n\nProduce a concrete step-by-step implementation plan."
+            },
+            {
+              "id": "execute",
+              "title": "Execute",
+              "agentKey": "execute",
+              "prompt": "Implement the following plan with clean, atomic changes.\n\n{{last}}"
+            },
+            {
+              "id": "verify",
+              "title": "Verify",
+              "agentKey": "verify",
+              "prompt": "Verify the implementation below against the original task. Run/inspect tests and report remaining issues.\n\nTask:\n{{input}}\n\nImplementation:\n{{last}}"
+            }
+          ]
+        },
+        {
+          "name": "Verify → (FIX→Execute | SHIP)",
+          "description": "Hakem kararina gore dallanan dogrulama dongusu (non-lineer).",
+          "graph": "{\"start\": \"verify\", \"nodes\": [{\"id\": \"verify\", \"type\": \"agent\", \"title\": \"Verify\", \"agentId\": \"tmpl:verify\", \"prompt\": \"Review the change for the task:\\n{{input}}\\n\\nEnd your reply with exactly \\\"VERDICT: SHIP\\\" or \\\"VERDICT: FIX\\\".\", \"next\": \"route\"}, {\"id\": \"route\", \"type\": \"branch\", \"title\": \"Karar\", \"matchMode\": \"contains\", \"branches\": [{\"contains\": \"FIX\", \"next\": \"fix\"}, {\"contains\": \"\", \"next\": \"\"}]}, {\"id\": \"fix\", \"type\": \"agent\", \"title\": \"Fix\", \"agentId\": \"tmpl:execute\", \"prompt\": \"Address the issues raised below with minimal, atomic changes.\\n\\n{{last}}\"}]}"
+        }
+      ],
+      "skills": [
+        {
+          "slug": "sw-conventions",
+          "body": "---\nname: \"Software Conventions\"\ndescription: \"Bu workspace icin kod standartlari ve kalite kapilari.\"\n---\n# Software Conventions\n\n- Small, atomic commits; conventional commit messages.\n- Write tests alongside code; keep edits scoped to the plan.\n- Match existing code style; no unrelated refactors.\n"
+        }
+      ]
+    }
+  }
+}

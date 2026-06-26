@@ -1,0 +1,74 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "workspace-daily",
+  "kind": "workspace",
+  "name": "Günlük Rutin",
+  "description": "Planlayıcı, koç ve hatırlatıcı ajanlarla günlük rutinleri optimize et. Sabah planı + akşam değerlendirmesi zamanlamaları hazır gelir.",
+  "author": "SwarmGo",
+  "icon": "🌙",
+  "tags": [
+    "template",
+    "workspace"
+  ],
+  "payload": {
+    "workspace": {
+      "name": "Günlük Rutin",
+      "icon": "🌙",
+      "agents": [
+        {
+          "key": "planner",
+          "name": "Planlayıcı",
+          "soul": "You are a daily planner. You help organize the day: prioritize tasks, time-block the schedule, and set realistic, achievable goals. You keep plans concise and actionable.",
+          "avatar": "🗓",
+          "color": "#6366f1"
+        },
+        {
+          "key": "coach",
+          "name": "Koç",
+          "soul": "You are a productivity and habit coach. You optimize routines, suggest small habit improvements, remove friction, and keep motivation high with encouraging, practical advice.",
+          "avatar": "🎯",
+          "color": "#10b981"
+        },
+        {
+          "key": "reminder",
+          "name": "Hatırlatıcı",
+          "soul": "You are a reminder assistant. You track commitments and surface timely, friendly reminders and follow-ups so nothing important slips.",
+          "avatar": "⏰",
+          "color": "#f59e0b"
+        }
+      ],
+      "schedules": [
+        {
+          "agentKey": "planner",
+          "cronExpr": "0 8 * * *",
+          "prompt": "Plan today: review priorities and propose a prioritized, time-blocked schedule, then send it as a notification."
+        },
+        {
+          "agentKey": "coach",
+          "cronExpr": "0 20 * * *",
+          "prompt": "Reflect on today: review what was done, note wins and friction points, and suggest one improvement for tomorrow."
+        }
+      ],
+      "flows": [
+        {
+          "name": "Günlük Optimizasyon",
+          "description": "Plan → Koçluk: günü planla, ardından rutini iyileştir",
+          "steps": [
+            {
+              "id": "plan",
+              "title": "Günü Planla",
+              "agentKey": "planner",
+              "prompt": "Today's context, goals and tasks:\n{{input}}\n\nProduce a prioritized, time-blocked plan for the day."
+            },
+            {
+              "id": "coach",
+              "title": "Rutini İyileştir",
+              "agentKey": "coach",
+              "prompt": "Given today's plan below, suggest concrete improvements to the routine and habits to make the day smoother and more productive.\n\n{{last}}"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
