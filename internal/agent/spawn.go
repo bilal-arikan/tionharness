@@ -135,6 +135,8 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 
 	r.trackSession(sessionID)
 	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(ctx, KindSpawn), sessionID))
+	turnCtx, meta := WithTurnMeta(turnCtx)
+	turnStart := time.Now()
 	output, steps, err := r.invokeTraced(turnCtx, agent, prompt, true)
 	r.untrackSession(sessionID)
 
@@ -142,13 +144,15 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 		r.logger.Error("spawn: agent invoke failed",
 			"session", sessionID, "agent", agent.ID,
 			"provider", agent.Provider, "model", agent.Model, "error", err)
-		if _, addErr := r.db.AddMessage(ctx, db.Message{
+		errMsg := db.Message{
 			SessionID: sessionID,
 			AgentID:   agent.ID,
 			Role:      "assistant",
 			Text:      "⚠️ Spawn turu çalıştırılamadı:\n\n" + err.Error(),
 			Steps:     encodeSteps(steps),
-		}); addErr != nil {
+		}
+		meta.apply(&errMsg, time.Since(turnStart).Milliseconds())
+		if _, addErr := r.db.AddMessage(ctx, errMsg); addErr != nil {
 			r.logger.Warn("spawn: failed to record error reply", "session", sessionID, "error", addErr)
 		}
 		r.emitSpawnEvent(agent, sessionID, prompt, false)
@@ -158,13 +162,15 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 	if strings.TrimSpace(output) == "" {
 		output = "ℹ️ Ajan bu spawn için boş yanıt döndürdü."
 	}
-	if _, err := r.db.AddMessage(ctx, db.Message{
+	replyMsg := db.Message{
 		SessionID: sessionID,
 		AgentID:   agent.ID,
 		Role:      "assistant",
 		Text:      output,
 		Steps:     encodeSteps(steps),
-	}); err != nil {
+	}
+	meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
+	if _, err := r.db.AddMessage(ctx, replyMsg); err != nil {
 		r.logger.Warn("spawn: failed to record reply", "session", sessionID, "error", err)
 	}
 	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID)

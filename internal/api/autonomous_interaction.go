@@ -102,8 +102,8 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		bridgeDefs, bridgeCall := rt.BridgeTools(ctx, ag)
 		run.setBridge(bridgeDefs, bridgeCall)
 
-		ctx = tools.WithInteractionEndpoint(ctx, url, run.token,
-			mergeInteractionToolNames(interactionAdvertisedNames(s.tun, true), bridgeDefs))
+		coreNames, extNames := splitInteractionTiers(interactionAdvertisedNames(s.tun, true), bridgeDefs)
+		ctx = tools.WithInteractionEndpoint(ctx, url, run.token, coreNames, extNames)
 		return ctx, func() { s.runs.unregister(runID) }
 	}
 }

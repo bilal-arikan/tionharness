@@ -70,6 +70,70 @@
     (id + yalnız değişen alan; `""`=temizle).
 - Sistem promptuna **"Available Tools (load on demand)"** bloğu eklenir
   (`Runtime.LazyToolsCatalogBlock` → `renderLazyToolCatalog`), yalnızca ad+özet.
+- **NameOnly katmanı (2026-06-26):** workspace Tools ekranındaki "NameOnly" çipi
+  (eski "Gizle"; veri modeli `HiddenTools` aynı kaldı) artık aracı `MarkLazy`
+  yerine **`MarkNameOnly`** ile işaretler. NameOnly araç katalog bloğunda **yalnız
+  adıyla** listelenir (özet bastırılır) — Claude Code'un "deferred tool"
+  mekaniğinin muadili: model adı görür, ne yaptığını `tool_search` ile keşfeder,
+  şemayı `activate_tools` ile çeker. `nameOnly ⊆ lazy`, `hidden`'dan ayrık
+  (`hidden` tamamen düşürülür; `nameOnly` listede kalır). Render: `VisibleLazyCatalog`
+  NameOnly araçların `Description`'ını boşaltır, `renderLazyToolCatalog` boş özetli
+  satırı `- \`ad\`` (özetsiz) basar (`writeLazyToolLine`). `Unlazy` ("Göster")
+  `nameOnly` işaretini de temizler. Native yolda token kazandırır; **claude-cli
+  yolunda NameOnly tek başına etkisiz** (bridge tam şema ilan eder) — ama bu artık
+  aşağıdaki **iki-tier köprü** ile çözüldü: lazy/NameOnly araçlar `swarmgo_extended`
+  sunucusuna gidip CLI'ın kendi ToolSearch deferral'ına tabi olur.
+  Test: `TestMarkNameOnlyKeepsNameDropsSummary`.
+- **claude-cli 2.1.x+ iki-tier köprü (`alwaysLoad` + `ENABLE_TOOL_SEARCH`, 2026-06-26):**
+  CLI'da eager/lazy ayrımı artık gerçekten uygulanıyor. `writeCLIMCPConfig` Interaction
+  MCP'yi **iki sunucu anahtarına** böler (aynı in-process endpoint'e farklı path
+  son-ek'leriyle bağlanır):
+  - **`swarmgo_interaction`** (CORE, `alwaysLoad: true`) → eager tier
+    (`coreInteractionTools`: `Bash`, `ask_user`, `request_confirmation`, `todo_write`,
+    `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`,
+    `core_memory_replace`/`append`, `permission_prompt`). CLI tool-search'ten **muaf**
+    → ilk turda `ToolSearch` gerekmeden hazır. Eski anahtar adı korundu → mevcut
+    namespaced referanslar (`use_skill`, `core_memory`, trace stripping) bozulmaz.
+  - **`swarmgo_extended`** (EXTENDED) → self-management suite + NameOnly oturum
+    araçları (`notify`, `focus_view`, `set_session_goal`/`complete_goal`,
+    `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`,
+    `spawn_session`, `conversation_search`, `read_session_debug`, …). `alwaysLoad`
+    yok → `ENABLE_TOOL_SEARCH=auto` (CLI process env'inde) ile %10 eşiğini aşınca
+    CLI ToolSearch ile **lazy** keşfeder.
+  - Tier sınıflandırması tek kaynak: `interactionTier(name)` / `splitInteractionTiers`
+    (allowlist) + `Backend.Tools(token, tier)` (advertise). Bridged self-management
+    def'leri **daima extended**. Endpoint: `interaction.tierFromPath` path son-ek'ini
+    (`/core`,`/extended`) okur; `api/server.go` subtree mount (`/mcp/interaction/`).
+    Lazy katalog extended built-in'leri `extendedToolPrefix` ile namespace'ler;
+    `trace.go` her iki prefix'i de soyar.
+  - **Kapsam:** yalnız claude-cli 2.1.x ve üzeri (kurulu: 2.1.186). Sürüm guard'ı yok;
+    2.1.x öncesinde `alwaysLoad`/`ENABLE_TOOL_SEARCH` sessiz yok sayılır.
+  - Test: `TestWriteCLIMCPConfigTwoTierInteraction` (config çıktısı + alwaysLoad +
+    tier-namespaced allowlist), `TestInteractionTierSplit` (tier partisyonu),
+    `TestLazyCatalogCLIFormNamespacesNames` (extended prefix). Detay: `_Docs/11`.
+- **Default NameOnly seti (2026-06-26):** `buildRegistry` artık küçük, kendini
+  açıklayan ve turların azınlığında kullanılan bir grup built-in aracı **kod
+  varsayılanı** olarak `MarkNameOnly` ile işaretler (eski `MarkLazy` bloğunun
+  yerine geçti). Bu, her workspace'e (mevcut + yeni) otomatik uygulanır — ayrıca
+  per-workspace `HiddenTools` config'i yazmaya gerek yok. Set:
+  - **Oturum yaşam döngüsü & navigasyon** (önceden eager): `set_session_goal`,
+    `complete_goal`, `set_session_title`, `set_working_dir`, `archive_session`,
+    `notify`, `focus_view`, `schedule_wake`
+  - **Çapraz-oturum & öz-tanılama** (önceden eager): `list_sessions`,
+    `conversation_search`, `read_session_debug`
+  - **Workspace config düzenleme** (önceden lazy+özet): `read_config`,
+    `write_config`, `list_config`
+  - **Secret kasası okuma** (önceden lazy+özet): `secret_list`, `secret_get`
+  - **Web + bellek** (önceden lazy+özet): `WebFetch`, `memory_recall`
+
+  **Eager kalanlar** (davranışsal dürtü veya yüksek frekans): `todo_write`,
+  `ask_user`, `request_confirmation`, `create_artifact`/`update_artifact`,
+  `core_memory_*`, `use_skill`/`skill_search`, `run_subagent`,
+  `Read`/`Write`/`Edit`/`list_dir`/`Glob`/`Grep`, `shell`. Self-management ailesi
+  `MarkHidden` kalır (katalogdan tamamen düşer — name-only'den daha agresif).
+  Etki (ölçüm, WS5/AGT1): eager 30→20 araç, eager şema **~5931→3857 token**
+  (≈ turn/agent başına **~2074 token** tasarruf, cache prefix'inde). 10 araç
+  şeması her turdan tamamen kalktı; 8 araç özet satırını kaybetti.
 - Üç eager meta-araç: **`activate_tools`** (şema yükle), **`deactivate_tools`**,
   **`tool_search`** (katalogda anahtar kelime arama). `internal/tools/builtin_activate.go`.
 - Per-turn **aktif set** (`internal/tools/activetools.go`, context üzerinden
@@ -98,6 +162,52 @@ Skill sisteminde bunu zaten çözdük: katalogta yalnızca **özet** durur, tam 
 > kazandı — **`skill_search`**. `paths:` taşıyan **koşullu skill** katalogda hiç
 > görünmez (özeti bile prompt'a girmez), gerektiğinde `skill_search` ile bulunup
 > `use_skill` ile yüklenir. Böylece yüzlerce skill içe aktarılsa bile prompt şişmez.
+
+> **UI tier chip'leri (2026-06-26):** Workspace Tools ekranı artık üç tier'ı ayrı
+> gösterir: **eager** (chip yok), **NameOnly** (amber — lazy, isimle listelenir),
+> **Self-mgmt** (gri — hidden tier, katalogda ismi bile yok, skill pointer'a katlanır).
+> Backend `WorkspaceToolCatalogWithState` artık `(defs, lazy, hidden)` döndürür;
+> `workspaceTool.selfManaged = hidden[name]` (registry `IsHidden`). UI'da `SelfMgmtBadge`.
+> "Göster" toggle'ı self-mgmt aracı için onu eager'a çıkarır (ShownTools).
+
+> **Tier rafine (2026-06-26):** admin/nadir araçlar NameOnly'den **hidden**
+> self-management grubuna taşındı: `read_config`/`write_config`/`list_config` (ajanın
+> kendi promptunu düzenler) ve `secret_list`/`secret_get` (kasa okuma). Gerekçe: her
+> turda enumerate edilmeye değmeyecek kadar nadir + yazma kardeşleri
+> (`secret_set`/`secret_delete`) zaten hidden — okuma+yazma artık aynı tier'da.
+> Pointer metnine "your own prompts/config" eklendi. **Kural:** NameOnly = "var
+> olduğunu bil, ara sıra kullan"; hidden = "toplu/nadir admin, per-turn ödeme yok".
+> Self-management ailesinin tamamını (46) name-only enumerate ETMEME kararı: patlamalı/
+> nadir admin; CLI'de satır başına ~15 token (namespaced) → ~600 token/tur düşük getiri;
+> kategori-pointer + `swarmgo-self-management` skill + tool_search zaten keşfi sağlıyor.
+
+> **CLI-uyumlu Tools kataloğu (2026-06-26):** "# Available Tools (load on demand)"
+> bloğu artık **claude-cli için doğru namespaced adları** basıyor — skills bloğunun
+> (`CatalogBlockForAgentTool`) zaten yaptığını araç tarafına da taşıdık. claude-cli
+> tüm bu araçları MCP aracı olarak görür: built-in'ler `mcp__swarmgo_interaction__<ad>`,
+> MCP araçları `mcp__<server>__<tool>` olarak listelenir; yönerge native
+> `activate_tools` yerine **`ToolSearch`** (CLI'nin kendi deferred-tool mekanizması);
+> CLI-native built-in'ler (WebFetch) CLI formundan düşürülür. Native (anthropic/minimax)
+> form değişmedi (bare ad + `activate_tools`). `LazyToolsCatalogBlock` ajanın
+> `provider`'ına göre dallanır; `catalogDisplayName` ad eşlemesini yapar. Önceden blok
+> tamamen native biçimdeydi (bare adlar + native yönerge) — bir claude-cli ajanı için
+> yanıltıcıydı; Default-NameOnly değişikliği 10 built-in'i daha bu bloğa ekleyince fark
+> belirginleşti. Test: `TestLazyCatalogCLIFormNamespacesNames`.
+
+> **Skill NameOnly (2026-06-26):** araçlardaki NameOnly katmanının skill muadili.
+> Frontmatter `name_only: true` ile işaretlenen skill "# Available Skills" bloğunda
+> **yalnız slug** olarak listelenir (`- \`slug\``) — açıklama+when bastırılır. Skill
+> **listede kalır** (model varlığını görür, ne yaptığını `skill_search` ile keşfeder,
+> `use_skill` ile yükler); bu, "tam özet" ile "tamamen düşür" (`auto_summary:false` /
+> `paths`) arasındaki orta katman. **Default KAPALI, skill-başına opt-in** —
+> araçlardaki gibi küratörlü bir default-açık set YOK, çünkü skill'lerde açıklama ana
+> tetikleme sinyalidir; toptan kaldırmak keşfi zayıflatır. Render: `renderCatalog`
+> NameOnly skill'de slug-only satır basar; footer notu slug-only girişler için
+> `skill_search`'e yönlendirir. Toggle: `Store.SetNameOnly` + `PUT /api/skills/{slug}/name-only`,
+> UI'da SkillsPanel "NameOnly" çipi/butonu. `isNameOnly`/`setFrontmatterNameOnly`
+> `auto_summary` desenini yansıtır. Etki (ölçüm, WS5): tek bir verbose skill
+> (`swarmgo-autonomous-ops`) NameOnly olunca satırı **839→26 karakter**, blok
+> **3376→2563** (~813 karakter ≈ ~200 token). Test: `TestNameOnlySkillRendersSlugOnly`.
 
 ## Hedef
 

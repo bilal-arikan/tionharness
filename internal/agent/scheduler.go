@@ -235,19 +235,23 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// guide the model to ask in its reply instead of bailing with "proceed without
 	// asking" — the user can answer in the chat afterwards.
 	wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(ctx, KindSchedule), sc.SessionID))
+	wakeCtx, wakeMeta := WithTurnMeta(wakeCtx)
+	wakeStart := time.Now()
 	// Prefer the history-aware runner (installed by the api server) so the woken
 	// agent continues with the FULL conversation — the wake prompt was just
 	// persisted as the last user message, so the history already carries it.
 	// runSessionTurn falls back to the prompt-only invoke when no runner is wired.
 	output, steps, invokeErr := s.rt.runSessionTurn(wakeCtx, agent, sc.SessionID, sc.Prompt, true)
 	if invokeErr != nil {
-		if _, addErr := s.db.AddMessage(ctx, db.Message{
+		wErrMsg := db.Message{
 			SessionID: sc.SessionID,
 			AgentID:   sc.AgentID,
 			Role:      "assistant",
 			Text:      "⚠️ Otomatik uyandırma çalıştırılamadı:\n\n" + invokeErr.Error(),
 			Steps:     encodeSteps(steps),
-		}); addErr != nil {
+		}
+		wakeMeta.apply(&wErrMsg, time.Since(wakeStart).Milliseconds())
+		if _, addErr := s.db.AddMessage(ctx, wErrMsg); addErr != nil {
 			s.logger.Warn("wake: failed to record error reply", "schedule", sc.ID, "error", addErr)
 		}
 		s.emitWakeEvent(sc, "done", "⏰ Otomatik uyandırma başarısız")
@@ -256,13 +260,15 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	if strings.TrimSpace(output) == "" {
 		output = "ℹ️ Ajan bu uyandırma için boş yanıt döndürdü."
 	}
-	_, err = s.db.AddMessage(ctx, db.Message{
+	wReplyMsg := db.Message{
 		SessionID: sc.SessionID,
 		AgentID:   sc.AgentID,
 		Role:      "assistant",
 		Text:      output,
 		Steps:     encodeSteps(steps),
-	})
+	}
+	wakeMeta.apply(&wReplyMsg, time.Since(wakeStart).Milliseconds())
+	_, err = s.db.AddMessage(ctx, wReplyMsg)
 	s.emitWakeEvent(sc, "done", "⏰ Otomatik uyandırma tamamlandı")
 	return err
 }
@@ -412,6 +418,8 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	}
 	s.rt.trackSession(session.ID)
 	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(ctx, KindSchedule), session.ID))
+	turnCtx, meta := WithTurnMeta(turnCtx)
+	turnStart := time.Now()
 	output, steps, err := s.rt.invokeTraced(turnCtx, agent, sc.Prompt, true) // scheduled = autonomous
 	s.rt.untrackSession(session.ID)
 	if err != nil {
@@ -425,13 +433,15 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		// delivery status/logs — otherwise the user opens the session and sees
 		// their prompt with no reply and no clue what went wrong. Persist the
 		// error as an assistant turn so the chat reads the failure inline.
-		if _, addErr := s.db.AddMessage(ctx, db.Message{
+		errMsg := db.Message{
 			SessionID: session.ID,
 			AgentID:   sc.AgentID,
 			Role:      "assistant",
 			Text:      "⚠️ Zamanlanmış prompt çalıştırılamadı:\n\n" + err.Error(),
 			Steps:     encodeSteps(steps),
-		}); addErr != nil {
+		}
+		meta.apply(&errMsg, time.Since(turnStart).Milliseconds())
+		if _, addErr := s.db.AddMessage(ctx, errMsg); addErr != nil {
 			s.logger.Warn("schedule: failed to record error reply", "schedule", sc.ID, "error", addErr)
 		}
 		return session.ID, err
@@ -444,13 +454,15 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	}
 	// Stamp the reply with the agent id (so its avatar/identity renders) and its
 	// activity trace (so tool/thinking steps show like a normal chat turn).
-	_, err = s.db.AddMessage(ctx, db.Message{
+	replyMsg := db.Message{
 		SessionID: session.ID,
 		AgentID:   sc.AgentID,
 		Role:      "assistant",
 		Text:      output,
 		Steps:     encodeSteps(steps),
-	})
+	}
+	meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
+	_, err = s.db.AddMessage(ctx, replyMsg)
 	// Context-reset handoff: if this scheduled turn hit the context limit, optionally
 	// continue the work in a fresh session. No-op unless HandoffAuto is enabled.
 	s.rt.maybeAutoHandoff(ctx, session.ID, agent, overflow.Load())

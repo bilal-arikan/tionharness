@@ -317,6 +317,51 @@ func setFrontmatterAutoSummary(content string, on bool) string {
 	return b.String()
 }
 
+// setFrontmatterNameOnly rewrites a SKILL.md's frontmatter so its name-only mode
+// matches on. NameOnly defaults to OFF, so a disabled skill carries NO marker:
+// any existing `name_only:` (and aliases) line is removed, and only when on is
+// true a single `name_only: true` line is added. All other frontmatter lines and
+// the markdown body are preserved.
+func setFrontmatterNameOnly(content string, on bool) string {
+	norm := strings.ReplaceAll(content, "\r\n", "\n")
+
+	var fmLines []string
+	body := norm
+	hadBlock := false
+	if strings.HasPrefix(norm, "---\n") {
+		rest := norm[len("---\n"):]
+		if end := strings.Index(rest, "\n---"); end >= 0 {
+			hadBlock = true
+			block := rest[:end]
+			body = strings.TrimPrefix(rest[end+len("\n---"):], "\n")
+			for _, ln := range strings.Split(block, "\n") {
+				key := ""
+				if i := strings.Index(ln, ":"); i >= 0 {
+					key = strings.ToLower(strings.TrimSpace(ln[:i]))
+				}
+				switch key {
+				case "name_only", "nameonly":
+					continue // drop any existing name-only marker
+				}
+				fmLines = append(fmLines, ln)
+			}
+		}
+	}
+	if on {
+		fmLines = append(fmLines, "name_only: true")
+	}
+
+	if !hadBlock && len(fmLines) == 0 {
+		return body
+	}
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString(strings.Join(fmLines, "\n"))
+	b.WriteString("\n---\n")
+	b.WriteString(body)
+	return b.String()
+}
+
 // fmField is one ordered frontmatter scalar to write. An empty Val removes the
 // key (used by setFrontmatterFields).
 type fmField struct{ Key, Val string }

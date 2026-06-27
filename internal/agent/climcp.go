@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/mcp"
@@ -23,16 +24,28 @@ type cliMCPServer struct {
 	Type    string            `json:"type,omitempty"`    // sse | http
 	URL     string            `json:"url,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"` // http transport (e.g. Authorization)
+	// AlwaysLoad exempts a server's tools from the CLI's tool-search deferral
+	// (claude-cli 2.1.x+): they are inlined at turn start instead of discovered via
+	// ToolSearch. Used for the eager interaction tier so Bash/ask_user/use_skill are
+	// always available without a discovery round-trip.
+	AlwaysLoad bool `json:"alwaysLoad,omitempty"`
 }
 
-// interactionServerKey is the mcp-config key for the in-process Interaction MCP
-// server; the CLI namespaces its tools as mcp__<key>__<tool>.
-const interactionServerKey = "swarmgo_interaction"
+// interactionCoreKey / interactionExtendedKey are the two mcp-config keys for the
+// in-process Interaction MCP server. Core keeps the historical "swarmgo_interaction"
+// key so existing namespaced references (use_skill, core_memory, trace stripping)
+// stay valid; Extended is a separate key whose tools the CLI defers via ToolSearch
+// (claude-cli 2.1.x+). The CLI namespaces tools as mcp__<key>__<tool>.
+const (
+	interactionCoreKey     = "swarmgo_interaction"
+	interactionExtendedKey = "swarmgo_extended"
+)
 
 // permissionPromptToolID is the namespaced Interaction MCP tool the claude CLI is
 // pointed at via --permission-prompt-tool (only in "ask" mode) so risky tools are
-// gated through SwarmGo's approval UI instead of auto-approved.
-const permissionPromptToolID = "mcp__" + interactionServerKey + "__permission_prompt"
+// gated through SwarmGo's approval UI instead of auto-approved. It lives on the core
+// (always-loaded) server so the permission round-trip never waits on tool search.
+const permissionPromptToolID = "mcp__" + interactionCoreKey + "__permission_prompt"
 
 // promptToolForMode returns the permission-prompt tool id to hand the CLI, but
 // only in "ask" mode with a live Interaction endpoint. Empty otherwise:
@@ -83,16 +96,34 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 	}
 
 	if inter.URL != "" {
-		cfg.MCPServers[interactionServerKey] = cliMCPServer{
+		authHeader := map[string]string{"Authorization": "Bearer " + inter.Token}
+		// Two server entries point at the SAME in-process endpoint via distinct path
+		// suffixes (/core, /extended) so the handler returns each tier's subset:
+		//   - Core: alwaysLoad → never deferred (eager: Bash, ask_user, use_skill, ...).
+		//   - Extended: deferred by the CLI's ToolSearch (self-management + NameOnly).
+		// ENABLE_TOOL_SEARCH=auto (set on the CLI process env) inlines the extended
+		// set when it fits in 10% of context and defers only the overflow.
+		base := strings.TrimRight(inter.URL, "/")
+		cfg.MCPServers[interactionCoreKey] = cliMCPServer{
+			Type:       "http",
+			URL:        base + "/core",
+			Headers:    authHeader,
+			AlwaysLoad: true,
+		}
+		cfg.MCPServers[interactionExtendedKey] = cliMCPServer{
 			Type:    "http",
-			URL:     inter.URL,
-			Headers: map[string]string{"Authorization": "Bearer " + inter.Token},
+			URL:     base + "/extended",
+			Headers: authHeader,
 		}
 		// Allowlist derives from the names the backend advertises for this turn
-		// (InteractionEndpoint.ToolNames) — a single source shared with Tools(), so
-		// a tool added to the backend is allowlisted automatically.
-		for _, t := range inter.ToolNames {
-			allowed = append(allowed, "mcp__"+interactionServerKey+"__"+t)
+		// (InteractionEndpoint.Core/ExtendedToolNames) — a single source shared with
+		// Tools(), so a tool added to the backend is allowlisted automatically. Each
+		// name is namespaced under its tier's server key.
+		for _, t := range inter.CoreToolNames {
+			allowed = append(allowed, "mcp__"+interactionCoreKey+"__"+t)
+		}
+		for _, t := range inter.ExtendedToolNames {
+			allowed = append(allowed, "mcp__"+interactionExtendedKey+"__"+t)
 		}
 		// Suppress the CLI's own equivalents, which can't be answered/honored in
 		// one-shot -p mode: AskUserQuestion has no live client, and ScheduleWakeup

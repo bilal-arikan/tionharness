@@ -38,16 +38,26 @@ func TestStoreInstallPublish(t *testing.T) {
 
 	st := New(global, workspace)
 	list := st.List()
-	if len(list) != 1 {
-		t.Fatalf("expected 1 pack, got %d", len(list))
+	// The catalog now also includes the embedded bundled workspace-template packs,
+	// so locate the seeded global skill pack rather than asserting a total count.
+	var seeded *Pack
+	for i := range list {
+		if list[i].ID == "skill.web-research" {
+			seeded = &list[i]
+		}
+		if list[i].Payload.Skill != nil || list[i].Payload.Workspace != nil {
+			t.Errorf("catalog pack %q should not carry payload", list[i].ID)
+		}
 	}
-	for _, p := range list {
-		if p.Payload.Skill != nil {
-			t.Errorf("catalog pack %q should not carry payload", p.ID)
-		}
-		if p.Source != SourceGlobal {
-			t.Errorf("pack source=%q, want global", p.Source)
-		}
+	if seeded == nil {
+		t.Fatal("seeded global pack not found in catalog")
+	}
+	if seeded.Source != SourceGlobal {
+		t.Errorf("pack source=%q, want global", seeded.Source)
+	}
+	// Bundled workspace templates must be present (the embedded tier).
+	if len(st.ListKind(KindWorkspace)) == 0 {
+		t.Error("expected bundled workspace template packs in the catalog")
 	}
 
 	// Get loads the payload lazily.

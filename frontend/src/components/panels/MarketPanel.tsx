@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Download,
   RefreshCw,
@@ -15,9 +15,13 @@ import {
   Server,
   ArrowUpCircle,
   Globe2,
+  Clock,
+  Bot,
+  Zap,
+  Timer,
   type LucideIcon,
 } from 'lucide-react'
-import type { Agent, Pack, PackKind, Secret } from '../../types'
+import type { Agent, Pack, PackKind, Secret, WorkspacePayload, WorkspaceTemplateFlow } from '../../types'
 import { api } from '../../api'
 import type { PriceTable } from '../../api/providers'
 import type { PreviewItem } from '../../api/ingest'
@@ -249,32 +253,7 @@ function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }) {
     )
   }
   if (pack.kind === 'workspace' && p?.workspace) {
-    const wsp = p.workspace
-    return (
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <Row k="Ad" v={wsp.name} />
-          <Row k="Simge" v={wsp.icon} />
-        </div>
-        {wsp.instructions && (
-          <div>
-            <span className="text-xs text-[var(--color-text-dim)]">Yönergeler</span>
-            <p className="mt-1 whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-[11px]">{wsp.instructions}</p>
-          </div>
-        )}
-        {wsp.columns && wsp.columns.length > 0 && (
-          <div>
-            <span className="text-xs text-[var(--color-text-dim)]">Board kolonları</span>
-            <div className="mt-1">
-              <ColumnsPreview columns={wsp.columns} />
-            </div>
-          </div>
-        )}
-        <p className="pt-1 text-[11px] text-[var(--color-text-dim)]">
-          Kurunca bu şablondan yeni bir workspace oluşturulur.
-        </p>
-      </div>
-    )
+    return <WorkspacePackPreview wsp={p.workspace} />
   }
   if (pack.kind === 'mcp' && p?.mcp) {
     const m = p.mcp
@@ -309,6 +288,217 @@ function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }) {
     )
   }
   return <p className="text-xs text-[var(--color-text-dim)]">Önizleme yok.</p>
+}
+
+// WorkspacePackPreview renders the full starter ecosystem of a workspace-template
+// pack: a stat strip plus the agent team (with config), flows (with node types),
+// schedules, embedded skills, instructions and board layout.
+function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
+  const agents = wsp.agents ?? []
+  const flows = wsp.flows ?? []
+  const schedules = wsp.schedules ?? []
+  const skills = wsp.skills ?? []
+  return (
+    <div className="space-y-4">
+      {/* Stat strip */}
+      <div className="grid grid-cols-4 gap-2">
+        <StatChip icon={Users} label="Ajan" value={agents.length} />
+        <StatChip icon={GitBranch} label="Akış" value={flows.length} />
+        <StatChip icon={Clock} label="Zamanlama" value={schedules.length} />
+        <StatChip icon={Sparkles} label="Skill" value={skills.length} />
+      </div>
+
+      {wsp.instructions && (
+        <PreviewSection title="Yönergeler">
+          <p className="whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-[11px] leading-relaxed">{wsp.instructions}</p>
+        </PreviewSection>
+      )}
+
+      {agents.length > 0 && (
+        <PreviewSection title={`Ajanlar (${agents.length})`}>
+          <div className="space-y-1.5">
+            {agents.map((a) => (
+              <div key={a.key} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-base leading-none">{a.avatar || '🤖'}</span>
+                  <span className="text-xs font-medium">{a.name}</span>
+                  {a.permissionMode && <MiniChip>{a.permissionMode}</MiniChip>}
+                  {a.thinkingLevel && <MiniChip>🧠 {a.thinkingLevel}</MiniChip>}
+                  {a.mcpEnabled && <MiniChip>MCP</MiniChip>}
+                </div>
+                {(a.provider || a.model) && (
+                  <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
+                    {a.provider || '(varsayılan sağlayıcı)'}{a.model ? ` · ${a.model}` : ''}
+                  </div>
+                )}
+                {a.soul && <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[var(--color-text-dim)]">{a.soul}</p>}
+                {a.skills && a.skills.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {a.skills.map((s) => <MiniChip key={s}>📚 {s}</MiniChip>)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </PreviewSection>
+      )}
+
+      {flows.length > 0 && (
+        <PreviewSection title={`Akışlar (${flows.length})`}>
+          <div className="space-y-1.5">
+            {flows.map((f, i) => {
+              const nodes = flowSummary(f)
+              const hasBranch = nodes.some((n) => n.type === 'branch')
+              const hasParallel = nodes.some((n) => n.type === 'parallel')
+              return (
+                <div key={i} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2">
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
+                    {f.name}
+                    {hasBranch && <MiniChip>branch</MiniChip>}
+                    {hasParallel && <MiniChip>parallel</MiniChip>}
+                  </div>
+                  {f.description && <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">{f.description}</div>}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                    {nodes.map((n, j) => {
+                      const NIcon = NODE_ICON[n.type]
+                      return (
+                        <span key={j} className="flex items-center gap-1">
+                          <span className="inline-flex items-center gap-1 rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px]" title={n.type}>
+                            {NIcon ? <NIcon size={11} className="text-[var(--color-text-dim)]" /> : <span className="text-[var(--color-text-dim)]">•</span>}
+                            {n.title || n.id}
+                          </span>
+                          {j < nodes.length - 1 && <span className="text-[10px] text-[var(--color-text-dim)]">→</span>}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </PreviewSection>
+      )}
+
+      {schedules.length > 0 && (
+        <PreviewSection title={`Zamanlamalar (${schedules.length})`}>
+          <div className="space-y-1.5">
+            {schedules.map((s, i) => (
+              <div key={i} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 text-[11px]">
+                <div className="flex items-center gap-2">
+                  <code className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px]">{s.cronExpr}</code>
+                  <span className="text-[var(--color-text-dim)]">→ {s.agentKey}</span>
+                </div>
+                {s.prompt && <p className="mt-1 line-clamp-2 leading-relaxed text-[var(--color-text-dim)]">{s.prompt}</p>}
+              </div>
+            ))}
+          </div>
+          <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">Zamanlamalar pasif (disabled) kurulur — Zamanlamalar ekranından açılır.</p>
+        </PreviewSection>
+      )}
+
+      {skills.length > 0 && (
+        <PreviewSection title={`Gömülü Skill'ler (${skills.length})`}>
+          <div className="space-y-1.5">
+            {skills.map((s) => {
+              const meta = skillMeta(s.body)
+              return (
+                <div key={s.slug} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2">
+                  <div className="flex items-center gap-1.5 text-xs font-medium">
+                    📚 {meta.name || s.slug}
+                    <code className="text-[10px] text-[var(--color-text-dim)]">{s.slug}</code>
+                  </div>
+                  {meta.description && <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-[var(--color-text-dim)]">{meta.description}</p>}
+                </div>
+              )
+            })}
+          </div>
+        </PreviewSection>
+      )}
+
+      {wsp.columns && wsp.columns.length > 0 && (
+        <PreviewSection title="Board kolonları">
+          <ColumnsPreview columns={wsp.columns} />
+        </PreviewSection>
+      )}
+
+      <p className="pt-1 text-[11px] text-[var(--color-text-dim)]">Kurunca bu şablondan yeni bir workspace oluşturulur.</p>
+    </div>
+  )
+}
+
+// NODE_ICON maps an orchestration node type to a monochrome lucide glyph for the
+// flow-chain preview (replaces colored emojis).
+const NODE_ICON: Record<string, LucideIcon> = {
+  agent: Bot, branch: GitBranch, parallel: Zap, delay: Timer, transform: Wrench,
+}
+
+// StatChip is one cell of the workspace stat strip. The icon is a monochrome
+// lucide glyph (inherits the muted text color) rather than a colored emoji.
+function StatChip({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-2 text-center">
+      <div className="flex items-center justify-center gap-1 text-sm font-semibold">
+        <Icon size={13} className="text-[var(--color-text-dim)]" /> {value}
+      </div>
+      <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">{label}</div>
+    </div>
+  )
+}
+
+// PreviewSection is a titled block used inside the workspace preview.
+function PreviewSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">{title}</div>
+      {children}
+    </div>
+  )
+}
+
+// MiniChip is a small inline label (modes, skills, flow tags).
+function MiniChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">{children}</span>
+  )
+}
+
+// SOURCE_LABEL labels which tier/source a pack came from.
+const SOURCE_LABEL: Record<string, string> = {
+  bundled: '📦 Gömülü', global: '💾 Yerel', workspace: '🗂 Workspace', remote: '🌐 Uzak',
+}
+
+// PackMeta renders a row of metadata chips (source, installed version, created
+// date, tags) shown under the description for every pack kind.
+function PackMeta({ pack }: { pack: Pack }) {
+  const created = pack.createdAt ? new Date(pack.createdAt * 1000).toLocaleDateString('tr-TR') : null
+  const src = pack.source ? (SOURCE_LABEL[pack.source] ?? pack.source) : null
+  if (!src && !created && !pack.installedVersion && !(pack.tags && pack.tags.length)) return null
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      {src && <MiniChip>{src}{pack.registryName ? ` · ${pack.registryName}` : ''}</MiniChip>}
+      {pack.installedVersion && <MiniChip>Kurulu: v{pack.installedVersion}</MiniChip>}
+      {created && <MiniChip>📅 {created}</MiniChip>}
+      {pack.tags?.map((t) => <MiniChip key={t}>#{t}</MiniChip>)}
+    </div>
+  )
+}
+
+// flowSummary returns a flow's node list for the preview, from either its full
+// graph JSON or its linear steps.
+function flowSummary(flow: WorkspaceTemplateFlow): { id: string; type: string; title?: string }[] {
+  if (flow.graph) return flowNodeSummary(flow.graph)
+  if (flow.steps) return flow.steps.map((s) => ({ id: s.id, type: 'agent', title: s.title }))
+  return []
+}
+
+// skillMeta parses a skill's SKILL.md frontmatter for its name/description.
+function skillMeta(body: string): { name?: string; description?: string } {
+  const m = /^---\s*\n([\s\S]*?)\n---/.exec(body)
+  if (!m) return {}
+  const fm = m[1]
+  const name = /(?:^|\n)name:\s*"?(.+?)"?\s*(?:\n|$)/.exec(fm)?.[1]
+  const description = /(?:^|\n)description:\s*"?(.+?)"?\s*(?:\n|$)/.exec(fm)?.[1]
+  return { name, description }
 }
 
 // SourceRefPreview renders the GitHub-fetched preview of a directory-site (source-ref)
@@ -835,7 +1025,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
             aria-modal="true"
             aria-label={selected.name}
             data-testid="market-detail-modal"
-            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
+            className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <header className="flex items-start justify-between gap-2 border-b border-[var(--color-border)] px-4 py-3">
@@ -860,6 +1050,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
 
             <div className="border-b border-[var(--color-border)] p-4">
             <p className="text-xs text-[var(--color-text-dim)]">{selected.description}</p>
+            <PackMeta pack={selected} />
             {selected.kind === 'provider' && (
               <div className="mt-3">
                 <label className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">

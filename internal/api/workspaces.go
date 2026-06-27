@@ -68,9 +68,10 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Seed the new workspace from the chosen template (agents + flow + schedules)
-	// so it is usable immediately. Unknown/empty template falls back to "blank".
-	s.seedTemplate(r.Context(), wsNew, templateByID(req.Template))
+	// Seed the new workspace from the chosen market template (agents + flow +
+	// schedules) so it is usable immediately. Unknown/empty template id falls back
+	// to the embedded "blank" template.
+	s.seedWorkspaceFromTemplate(r.Context(), wsNew, req.Template)
 
 	writeJSON(w, http.StatusCreated, wsNew.Meta)
 }

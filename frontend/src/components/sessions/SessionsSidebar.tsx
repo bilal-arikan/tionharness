@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, Archive, ArchiveRestore, type LucideIcon } from 'lucide-react'
+import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, Archive, ArchiveRestore, Pin, PinOff, type LucideIcon } from 'lucide-react'
 import type { Agent, Session, SearchHit } from '../../types'
 import { api } from '../../api'
 import { AgentAvatar } from '../agents/AgentAvatar'
@@ -28,6 +28,8 @@ interface Props {
   onDeleteSession: (id: string) => void
   // Archive (true) or restore (false) a session — drives the Active/Archived filter.
   onSetArchived: (id: string, archived: boolean) => void
+  // Pin (true) or unpin (false) a session — pinned rows float to the top.
+  onSetPinned: (id: string, pinned: boolean) => void
 }
 
 // SessionsSidebar is the chat column: a flat, time-bucketed list of every
@@ -48,6 +50,7 @@ export function SessionsSidebar({
   onRevealFolder,
   onDeleteSession,
   onSetArchived,
+  onSetPinned,
 }: Props) {
   const [menuId, setMenuId] = useState<string | null>(null)
   // Active vs Archived view. Archiving a session moves it out of the default
@@ -291,9 +294,20 @@ export function SessionsSidebar({
                               <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Okunmadı" />
                             )
                           )}
+                          {s.pinned && (
+                            <Pin size={11} className="shrink-0 -rotate-45 text-[var(--color-accent)]" />
+                          )}
                           <span className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}>
                             {s.title || 'Yeni sohbet'}
                           </span>
+                          {s.kind === 'spawned' && (
+                            <span
+                              className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[9px] text-[var(--color-text-dim)]"
+                              title={s.parentSessionId ? 'Bir devralma (handoff) ile oluşturuldu' : 'Spawn ile oluşturuldu'}
+                            >
+                              {s.parentSessionId ? '↩ handoff' : '✦ spawn'}
+                            </span>
+                          )}
                           <span className="shrink-0 font-mono text-[9px] opacity-50" title="Oturum ID">
                             {s.id}
                           </span>
@@ -342,6 +356,14 @@ export function SessionsSidebar({
                         label="Klasörü aç"
                         onClick={() => {
                           onRevealFolder(s.id)
+                          setMenuId(null)
+                        }}
+                      />
+                      <MenuItem
+                        icon={s.pinned ? PinOff : Pin}
+                        label={s.pinned ? 'Sabitlemeyi kaldır' : 'Üste sabitle'}
+                        onClick={() => {
+                          onSetPinned(s.id, !s.pinned)
                           setMenuId(null)
                         }}
                       />

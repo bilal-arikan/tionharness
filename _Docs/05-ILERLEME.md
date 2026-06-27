@@ -1,6 +1,359 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-26**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-27**
+
+## Otonom turlarda per-message metadata + label/status geri çekildi ✅ (2026-06-27)
+
+**Otonom turlarda per-message metadata.** Önceden yalnız chat (sync+stream)
+asistan mesajları `model/stopReason/usage/durationMs` taşıyordu; otonom turlar
+(scheduler/spawn/inbox/wake) bunu atıyordu çünkü sarmalayıcılar (`invokeTraced`/
+`runSessionTurn`/`complete`) provider `Response`'unu düşürüyor. **ctx-tabanlı
+turn-meta yakalama** eklendi (imza değişmeden): `internal/agent/turnmeta.go`
+(`WithTurnMeta(ctx)→*turnMeta`, `capture(resp)`, `apply(&msg,durMs)` + `usageMsg`);
+`completeTraced` her başarılı completion'da ctx'teki sink'e yazar (tüm yollar
+oradan geçer). Bağlanan persist siteleri: spawn (başarı+hata), inbox-delivery
+(başarı+hata), schedule-delivery (başarı+hata), schedule-wake (başarı+hata) —
+hepsi süre + model/stop/usage stamp'ler. Flow (kompozit transkript, per-node model
+değişir) ve handoff (tombstone) bilinçli atlandı.
+
+**Session `labels` + `status` GERİ ÇEKİLDİ (kullanıcı talebi).** Önceki gün eklenen
+oturum etiket/durum alanları + editör + sidebar chip/filtre tamamen kaldırıldı
+(model alanları, db setter'ları `SetSessionLabels/Status`, API `PUT .../labels|status`,
+`SessionDetailPanel` "Etiketler & Durum" editörü, sidebar badge/chip/filtre). **Kalan
+session.jsonl zenginleştirmesi:** per-message (`model/stopReason/usage/durationMs/
+cancelled/feedback`) + session header `pinned` + `v` (SchemaVersion).
+
+Build+vet+505 test + frontend `tsc -b` temiz.
+
+## "Çalışıyor" (zıplayan nokta) indikatörü tüm tur boyunca kalıcı ✅ (2026-06-26)
+
+**Sorun:** Sohbette ajan yanıtı başlamadan önce zıplayan 3-nokta ("yazıyor")
+gösteriliyordu, ama **ilk tool adımı gelir gelmez kayboluyordu** —
+`AssistantTurn.tsx`'te WorkingDots yalnız `steps.length === 0 && !text &&
+!reasoning` iken çiziliyordu. Kullanıcı, indikatörün **tur tamamen bitene
+kadar** (tool kullanımları + kısmi metin dahil) ve **scheduled_task/flow/spawn
+koşularında da** görünmesini istedi.
+
+**Çözüm:**
+- `AssistantTurn.tsx`: WorkingDots koşulu `isLastLive && !interrupted &&
+  !cancelled` oldu → tur canlı olduğu sürece (adımlar/metin olsa bile) balonun
+  altında kalır, içerik varsa `mt-1.5` ile aralıklı; tur bitince (`isLastLive`
+  false) kaybolur. Tamamlanmış boş balon artık sonsuza dek zıplamaz.
+- `ExecutionsPanel.tsx`: `MessageList`'e `streaming={selected.running}`
+  eklendi → koşan scheduled_task/flow/spawn'ın son asistan balonu "canlı"
+  sayılır ve indikatör orada da tur bitene kadar devam eder.
+- `tsc --noEmit` temiz.
+
+## session.jsonl zenginleştirme: per-turn metadata + oturum etiket/durum/pin + feedback ✅ (2026-06-26)
+
+`session.jsonl`'ye kullanıcıya-görünür, kalıcı alanlar eklendi (debug.jsonl ≠ bu;
+gözlemlenebilirlik orada kalır):
+
+**Message (asistan turu):** `model` (cevaplayan gerçek model), `stopReason`
+(kesilme/red), `usage{in,out,cacheRead,cacheWrite}` (per-balon maliyet),
+`durationMs`, `cancelled` (kullanıcı durdurması — `interrupted` crash'ten ayrı),
+`feedback{rating±1,note,at}` (👍/👎). chat (sync+stream) yollarında populate;
+otonom turlar `omitempty` boş. UI: balon-altı `model · ↑in ↓out ⚡cache` rozeti +
+stopReason uyarısı + cancelled banner + hover'da 👍/👎 thumbs (optimistic).
+
+**Session header:** `v` (SchemaVersion=1, ileri-migration), `pinned` (ListSessions
+öne alır). UI: sidebar pin menüsü + 📌 gösterge. _(Not: aynı gün eklenen `labels`+
+`status` ertesi gün kullanıcı talebiyle geri çekildi — yukarıdaki 2026-06-27 girdisi.)_
+
+**Backend:** db setter'ları (SetSessionPinned, SetMessageFeedback) +
+API `PUT /api/sessions/{id}/pin` + `.../messages/{msgId}/feedback`.
+Test `db/session_meta_test.go` (round-trip + clear). Build+vet+test + frontend
+`tsc -b` temiz. Detay: `_Docs\08-DEPOLAMA.md`.
+
+## claude-cli 2.1.x+ iki-tier araç köprüsü: eager-core + lazy-extended ✅ (2026-06-26)
+
+**Sorun:** claude-cli ajanlarında (ör. WS5/AGT4) `Bash` ilk turda `No such tool
+available` veriyordu. Kök neden: SwarmGo tüm bridged araçları (eager + tüm
+self-management suite) **tek** `swarmgo_interaction` MCP sunucusuna full-şema koyuyor;
+toplam şema bağlam penceresinin %10'unu aşınca claude-cli 2.1.x **hepsini erteliyordu**
+(Bash dahil). UI'daki "her tur şema gönderilen · 19" metriği **native** yola aitti;
+CLI yolunda lazy-loading kazanımı gerçekleşmiyordu.
+
+**Çözüm:** Interaction MCP'yi **iki sunucuya** böldük (claude-cli'ın native Tool
+Search mekanizmasını doğru kullanarak):
+- `swarmgo_interaction` (CORE, `alwaysLoad: true`) → eager tier, tool-search'ten muaf
+  → Bash/ask_user/use_skill ilk turdan hazır. Eski anahtar korundu (namespaced
+  referanslar bozulmadı).
+- `swarmgo_extended` (EXTENDED) → self-management + NameOnly oturum araçları;
+  `ENABLE_TOOL_SEARCH=auto` (CLI env) ile lazy keşfedilir.
+
+**Dosyalar:** `internal/tools/interaction.go` (Core/ExtendedToolNames), `internal/
+interaction/server.go` (`Tools(token,tier)` + `tierFromPath`), `internal/api/
+mcp_interaction.go` (`coreInteractionTools`/`interactionTier`/`splitInteractionTiers`,
+çift-prefix `bareToolName`), `internal/agent/climcp.go` (`AlwaysLoad` + iki anahtar),
+`internal/agent/trace.go` + `toolsetup.go` (extended prefix), `internal/providers/
+claudecli.go` (`ENABLE_TOOL_SEARCH=auto` env), `internal/api/server.go` (subtree mount),
+çağıranlar `chat_stream.go`/`autonomous_interaction.go`.
+
+**Kapsam:** yalnız claude-cli **2.1.x ve üzeri** (kurulu: 2.1.186). Sürüm guard'ı yok.
+**Test:** `TestWriteCLIMCPConfigTwoTierInteraction`, `TestInteractionTierSplit`,
+`TestLazyCatalogCLIFormNamespacesNames` + tüm suite (504 test) yeşil. Canlı doğrulandı
+(WS5/AGT4, Playwright): `Bash` tek adımda (ToolSearch'süz), `list_agents` ise
+`mcp__swarmgo_extended__` namespace'inden ToolSearch ile lazy yüklendi. Detay: `_Docs/19`.
+
+## Oturum bilgisi panelinden "Ajanın bugünkü harcaması" kaldırıldı ✅ (2026-06-26)
+
+Kullanıcı isteğiyle, oturum detay (Oturum bilgisi) panelindeki **"Ajanın bugünkü
+harcaması"** bölümü (Motor B — ajanın gün içi tüm-oturum toplamı + model kırılımı
++ "Bütçe ekranı →" linki) kaldırıldı.
+
+- `SessionDetailPanel.tsx`: ilgili `Section` bloğu + `agentUsage` state + onu
+  besleyen `useEffect` + `agentId`/`onOpenBudget` prop'ları + kullanılmayan
+  `AgentUsage` type importu silindi. (Bu oturumun kendi harcaması "Bu oturumun
+  harcaması" bölümü **korundu**.)
+- `App.tsx`: `SessionDetailPanel`'e geçilen `agentId` ve `onOpenBudget`
+  prop'ları kaldırıldı.
+- Ajanın günlük harcaması zaten **Bütçe** ekranında tam haliyle duruyor;
+  `api.agentUsage` ve `AgentUsage` tipi orada kullanıldığı için korundu.
+- `tsc --noEmit` temiz.
+
+## spawned/handoff oturumları sohbet ekranından devam ettirilebilir ✅ (2026-06-26)
+
+Bağlam-reset (handoff) ile açılan oturumlar artık sohbet ekranından konuşulabiliyor.
+
+**Sorun:** handoff komutu yeni session'ı `kind:"spawned"` ile açar (`spawn.go:94`,
+`ParentSessionID` ile eski oturuma bağlı). Ama sol sohbet listesi yalnız
+`chat`/boş kind'ı gösterdiği için (`App.tsx isChatKind`), handoff/spawn
+oturumları yalnız Aktivite (Executions) ekranında salt-okunur görünüyordu —
+kullanıcı devam ettiremiyordu. Backend `chat/stream`'de **kind kontrolü yok**;
+AgentID dolu olan her oturuma tur çalıştırabiliyor (spawned'da AgentID dolu),
+yani tıkanma tamamen frontend kapısındaydı.
+
+**Çözüm (minimal, frontend-only):**
+- `App.tsx`: `isChatKind` artık `spawned`'ı da kabul ediyor → spawn ve handoff
+  (context-reset) çocukları sohbet listesinde görünür ve composer ile devam
+  ettirilebilir. Tek-ajanlı doğrusal transcript oldukları için sohbete uygun.
+- `SessionsSidebar.tsx`: spawned oturumlara ayırt edici rozet — `↩ handoff`
+  (ParentSessionID varsa) veya `✦ spawn`.
+- `schedule`/`flow`/`task` **bilinçli olarak dışarıda** kaldı: bunlar
+  paylaşılan/çok-koşulu/çok-ajanlı birikimli loglar; sohbete yazmak otonom
+  turlarla karışma + ajan belirsizliği yaratır. Onlar için ileride "Sohbete
+  fork" yaklaşımı düşünülebilir (bkz. tasarım tartışması).
+- `tsc --noEmit` temiz.
+
+**Not / sıradaki olası iyileştirmeler:** (a) tur-devam-ediyor kilidi (otonom +
+manuel tur aynı session'a çakışmasın), (b) manuel devralınan turun bütçe/confine
+muafiyetinin netleştirilmesi, (c) spawned oturumların Executions'tan
+kaldırılıp kaldırılmayacağı (şimdilik her iki yerde de görünüyor).
+
+## Oturum detay panelinden özet butonları kaldırıldı ✅ (2026-06-26)
+
+Kullanıcı isteğiyle, sohbet detay (oturum bilgisi) panelindeki "Araçlar"
+bölümünden dört özet butonu (`Hafıza özeti` / `Görev panosu özeti` /
+`Akışlar özeti` / `Araçlar özeti`) kaldırıldı.
+
+- `SessionDetailPanel.tsx`: `SUMMARY_KINDS` sabiti + butonları render eden blok,
+  `onSummarize` prop'u ve artık kullanılmayan importlar (`Database`,
+  `Workflow`, `Wrench`) silindi.
+- `App.tsx`: `SessionDetailPanel`'e geçilen `onSummarize` prop'u kaldırıldı.
+- Aynı özetleri tetikleyen **`/` slash komutları** (`/memory`, `/board`,
+  `/flows`, `/tools`) `useChatStream.ts` içinde **korundu** — yalnız panel
+  butonları kaldırıldı. `tsc --noEmit` temiz.
+
+## Tier ince ayarı: 6 aracın yeniden atanması ✅ (2026-06-26)
+
+Kullanıcı isteğiyle altı aracın tier'ı değişti:
+
+- **eager → NameOnly:** `update_artifact` (create_artifact eager kalır), `deactivate_tools`
+- **NameOnly → eager:** `WebFetch` (artık tam şema her tur)
+- **Self-mgmt (hidden) → NameOnly:** `handoff_session`, `memory_add`, `send_message`
+  (artık katalogda adıyla görünür; pointer 51→48)
+
+- **Registry:** `MarkNameOnly`/`MarkHidden` artık karşılıklı dışlıyor (`delete` ile;
+  disjointness, son işaret kazanır) — self-mgmt→NameOnly flip'i için gerekliydi.
+- **deactivate_tools incelik:** meta-tool buildRegistry sonunda eklendiği için
+  `activate_tools`'un bildiği lazyCat'e elle eklendi (yoksa aktive edilemezdi). CLI'de
+  bridge'lenmediğinden `cliLazyBridgeExcluded`'a kondu (CLI katalogunda görünmez).
+- **Canlı doğrulama (WS5+WS2):** 6 atama hem native hem CLI yolunda doğru; CLI'de
+  handoff/send_message/update_artifact namespaced, deactivate_tools dışlanmış, WebFetch
+  eager. Go build+test ✅, tsc ✅.
+
+## Bağlam önizlemesi: eager araçların tam şeması (açılır-kapanır) ✅ (2026-06-26)
+
+Session bağlam önizlemesinde "Araçlar — her tur şema gönderilen" bölümü artık düz isim
+chip'leri yerine **açılır-kapanır** (`<details>`) öğeler gösteriyor: ad → genişletince
+**tam açıklama + tam JSON input şeması** (her tur gönderilen gerçek payload). Böylece bir
+eager aracın her tur ne kadar yer kapladığı birebir görülebiliyor.
+
+- **Backend:** `toolSummary`'ye `inputSchema` alanı eklendi; `handleAgentContext` ve
+  `handleSessionContextPreview` eager araçlar için `d.InputSchema`'yı (folded examples dahil)
+  doldurur. Lazy araçlarda boş (şema tura girmez).
+- **Frontend:** `SessionContextPreview.tools[].inputSchema`; `SessionContextModal` her aracı
+  `<details>` ile render eder (ad/summary + açıklama + `JSON.stringify(schema, null, 2)`).
+- AgentContextModal eager araçları bilinçli listelemez (değişmedi).
+- Canlı (WS5/AGT1): 20/20 eager araç inputSchema döndürüyor. Go build+test ✅, tsc ✅.
+
+## Market detay popup'ı genişledi: zengin pack önizlemesi ✅ (2026-06-26)
+
+Market item'ına tıklayınca açılan detay popup'ı genişletildi (`max-w-lg`→`max-w-2xl`) ve özellikle
+**workspace pack'leri** için çok daha fazla detay gösteriyor (yeni payload alanları artık görünür).
+
+- **Genel meta satırı** (her kind): kaynak (📦 Gömülü / 💾 Yerel / 🌐 Uzak + registry adı), kurulu sürüm,
+  oluşturma tarihi, `#tag`'ler — açıklamanın altında çip olarak (`PackMeta`).
+- **Zengin workspace önizlemesi** (`WorkspacePackPreview`): stat şeridi (Ajan/Akış/Zamanlama/Skill
+  sayıları) + **Ajanlar** (avatar, isim, izin/thinking/MCP çipleri, sağlayıcı·model, soul, skill çipleri)
+  + **Akışlar** (node-tipi zinciri + branch/parallel rozetleri; lineer `steps` veya tam `graph`'tan)
+  + **Zamanlamalar** (cron + agent-key + prompt) + **Gömülü skill'ler** (frontmatter'dan ad/açıklama) +
+  board kolonları + yönergeler. Frontend tipleri (`types/market.ts`) yeni payload alanlarıyla genişletildi.
+- **Doğrulama:** `tsc` + `vite build` yeşil. Canlı (8090, tarayıcı): Market ▸ Workspaces ▸ "Yazılım
+  Geliştirme" → geniş popup; meta (Gömülü·SwarmGo + #template #workspace), stat (4 ajan/2 akış/0 zam/1 skill),
+  ajan kartları (read-only/auto + thinking + sw-conventions çipleri), akış zincirleri render edildi.
+
+## Workspace'i şablon olarak publish (seeding'in tersi) ✅ (2026-06-26)
+
+Mevcut bir workspace artık tek tıkla bir **market workspace-pack'ine** dönüştürülebiliyor; paket
+hem markette hem workspace oluşturma picker'ında belirir ve ondan yeni workspace üretilebilir
+(tam round-trip).
+
+- **Backend:** `handlePublishMarket`'e `KindWorkspace` case + `buildWorkspaceTemplatePayload`
+  (seeding'in TERSİ): agent'ları stabil local key'lere eşler, flow graph'larındaki gerçek agent id'lerini
+  `tmpl:<key>`'e yeniden yazar (non-lineer yapı korunur), schedule'ları key'e bağlar, **workspace-tier**
+  skill'leri (SKILL.md + nested files) gömer, identity/instructions/board'u taşır. **Sırlar/oturum/runtime
+  verisi DAHİL EDİLMEZ.** `market.BuildWorkspacePack` (id=`workspace-<slug>`), `slugify`/`uniqueAgentKey`
+  yardımcıları. Publish sonrası `s.market.Reload()` (picker server-store'u bayat kalmasın). (`internal/api/market.go`, `internal/market/publish.go`)
+- **Frontend:** `WorkspacePanel`'e "Şablon olarak yayınla" bölümü (`api.publishPack('workspace', ws.id)`),
+  başarı/hata geri bildirimi. Workspace ▸ Genel sekmesinde, silme danger-zone'unun üstünde.
+- **Doğrulama:** `go build/vet/test` + `tsc` yeşil. Canlı round-trip (fresh 8091): `workspace-software`'tan
+  oluştur → **publish** → picker'da `workspace-mydevteam` belirdi (6 template) → ondan yeni workspace üret
+  → agent richness (read-only/auto/thinking/skills), **2 flow** (branch dahil, `tmpl:` key'leri çözülmüş) ve
+  gömülü `sw-conventions/SKILL.md` birebir geri geldi.
+
+## Prompt editörlerine Markdown önizleme + kopyalama ✅ (2026-06-26)
+
+Uygulamadaki prompt/talimat girilen tüm metin alanlarına ortak bir Markdown-farkında
+editör eklendi. Tek yeniden kullanılabilir bileşen `common/PromptEditor.tsx`:
+
+- **Toolbar:** Düzenle/Önizleme geçiş düğmeleri (`Pencil`/`Eye`) + tek tık **Kopyala**
+  (`Copy`→`Check` 1.5s geri-bildirim, `navigator.clipboard`, güvensiz bağlamda sessiz düşer) +
+  **Tam ekran** büyüteç (`Maximize2`/`Minimize2`).
+- **Tam ekran modu:** büyüteç tıklanınca `fixed inset-0` overlay'de aynı editör büyür (toolbar +
+  önizleme/düzenleme paylaşılır; overlay'de içerik `flex-1` ile ekranı doldurur). Esc veya backdrop
+  tıklaması kapatır; açıkken `body` scroll kilitlenir. Hem önizleme hem düzenleme tam ekranda çalışır.
+- **Önizleme:** mevcut `markdown/Markdown` bileşeniyle render (GFM, kod blokları, görseller);
+  boşsa "Önizlenecek içerik yok." Düzenleme modu bare `<textarea>` korur (resize-y, outline).
+- **API:** `value/onChange` + tüm `<textarea>` attribute'leri passthrough (`rows`, `placeholder`,
+  `maxLength`, `autoFocus`, `data-testid`). `mono` (monospace), `textareaClassName` (min-height vb.),
+  `className` (kapsayıcı). Kendi border/bg/focus stilini taşır → call-site sade.
+- **Entegre alanlar (9 alan / 9 call-site):** agent soul + identity (`AgentSettingsForm`), yeni-agent
+  soul (`AgentRoster`/`AgentsView`), skill markdown body (`SkillEditor`), flow agent prompt + transform
+  template (`NodeInspector`), workspace runtime promptları + instructions (`WorkspaceFilesPanel`),
+  background spawn prompt (`SpawnSessionModal`), **core memory blokları** (`CoreMemoryCard` — karakter
+  sayacı/usage-bar korunur, `maxLength` passthrough), **oturum hedefi** (`SessionDetailPanel` — accent
+  kenarlık `className` ile, Ctrl/Cmd+Enter kaydet & Escape `onKeyDown` passthrough, `maxLength=2000`),
+  **kullanıcı tercih notları** (`appPanels` Profil).
+- **Doğrulama:** `tsc -b` temiz; eklediğim alanlarda yeni lint hatası yok (dosyalardaki mevcut
+  ref/useEffect uyarıları ilgisiz/dokunulmadı). (`frontend/src/components/common/PromptEditor.tsx` + 9 call-site)
+
+## Workspace template kapsamı genişledi: zengin agent + gömülü skill + çoklu/non-lineer flow ✅ (2026-06-26)
+
+`market.WorkspacePayload` artık tam bir başlangıç ekosistemi taşıyor (önceden yalnız identity +
+name/soul agent + tek lineer flow):
+
+- **Agent zenginliği:** `WorkspaceTemplateAgent` `AgentPayload` ile hizalandı — provider/model,
+  planning/thinking/permission modu, `MCPEnabled`, `AllowedTools`/`BlockedTools`, `Skills[]` atamaları,
+  günlük bütçe. Boş provider/model seed'de workspace/app default'una düşer. Seeding tek `db.CreateAgent`
+  çağrısında tüm alanları persist eder.
+- **Gömülü skill'ler:** `WorkspacePayload.Skills []WorkspaceTemplateSkill{Slug,Body,Files}` — seed'de
+  **agent'lardan ÖNCE** workspace skills dizinine yazılır (`market.InstallSkill` sentetik pack ile) ve
+  katalog reload edilir, böylece agent `Skills[]` referansları çözülür.
+- **Çoklu + non-lineer flow:** tekil `Flow` → `Flows []WorkspaceTemplateFlow`. Her flow ya lineer
+  (`Steps`) ya da tam **orchestration graph** (`Graph`, branch/parallel/delay/transform). Graph'ta agent
+  düğümleri `agentId="tmpl:<key>"` taşır; seed'de gerçek id'ye çevrilir (`TemplateAgentKeyPrefix`).
+  Saf `resolveTemplateFlowGraph` (lineer + graph) birim-test edilir.
+- **Seed sırası:** skills → agents → flows → schedules. `seedWorkspaceTeam` hem create-picker hem
+  market-install yolunda ortak. (`internal/api/templates.go`, `internal/market/pack.go`)
+- **Bundled paketler:** 5 template `flow`→`flows` migrate edildi; `workspace-software` üç yeteneği de
+  sergiliyor (gömülü `sw-conventions` skill'i + read-only/auto + thinking=medium agent'lar + ikinci
+  **branch'li** flow "Verify → FIX→Execute | SHIP").
+- **Doğrulama:** `go build/vet/test` + integrity testi (branch graph dahil) yeşil. Canlı (fresh 8091):
+  `workspace-software`'tan oluşturma → agent permission/thinking/skill alanları, `sw-conventions/SKILL.md`
+  diske yazıldı, **2 flow** seed edildi (biri `[agent,branch,agent]`, tmpl-key'leri çözülmüş).
+
+## Tool tier UI chip'leri: Self-mgmt vs NameOnly ayrımı ✅ (2026-06-26)
+
+Workspace Tools ekranı artık üç tier'ı ayrı chip ile gösteriyor (önceden hidden ve
+nameOnly ikisi de "NameOnly" görünüyordu):
+
+- **eager** → chip yok (her tur tam şema)
+- **NameOnly** (amber) → lazy + isimle listelenir (örn. set_session_goal, notify)
+- **Self-mgmt** (gri) → hidden tier: katalogda ismi bile yok, `swarmgo-self-management`
+  skill pointer'a katlanır, tool_search ile keşfedilir (örn. create_agent… + Part A'da
+  taşınan read/write/list_config, secret_list/get)
+
+- **Backend:** `Registry.IsHidden`; `WorkspaceToolCatalogWithState` → `(defs, lazy, hidden)`;
+  `workspaceTool.selfManaged` (json) = hidden[name]. **Frontend:** `WorkspaceTool.selfManaged`,
+  `SelfMgmtBadge` (ToolsPanel liste + detay).
+- **Canlı (WS5):** eager 20 · NameOnly 13 · Self-mgmt 51. Go build+test ✅, tsc ✅.
+- Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
+
+## Workspace template'leri markete taşındı (bundled tier) ✅ (2026-06-26)
+
+Workspace oluşturma picker'ı artık **market'in workspace-pack'lerini** gösteriyor; 5 built-in
+template (Boş/Bilimsel Araştırma/Yazılım Geliştirme/Günlük Rutin/Link Kısaltma) hard-coded Go
+listesinden çıkarılıp **gömülü market paketlerine** taşındı.
+
+- **Pack şeması genişledi:** `market.WorkspacePayload` artık opsiyonel `agents[] + flow + schedules[]`
+  taşıyor (`WorkspaceTemplateAgent/Step/Flow/Schedule`). Önceden yalnız identity+instructions+columns
+  vardı → zengin template'leri temsil edemiyordu. (`internal/market/pack.go`)
+- **Bundled tier geri geldi (sadece template'ler için):** `internal/market/embed.go` `//go:embed
+  defaults/*.swarmpack.json` → `SourceBundled` (en düşük öncelik, global/remote override eder).
+  `store.go`: `tier.fsys` + `scanDir`/`Get` embed-FS okuma. 5 paket `internal/market/defaults/`.
+- **Picker kaynağı market:** `/api/workspace-templates`'in JSON şekli **aynı kaldı** (frontend modal
+  değişmedi) ama kaynağı Server-seviyesi workspace-bağımsız market store (`s.market = market.New(
+  agent.MarketGlobalDir(), "")`) — onboarding'de sıfır workspace'te de çalışır. Blank ilk sıraya pinli.
+- **Seeding birleşti:** `seedWorkspaceFromTemplate` (picker) + `installWorkspacePack` (market install)
+  ortak `seedWorkspaceTeam` ile agent+flow+schedule seed eder. Market'ten kurulan workspace artık
+  takımıyla geliyor. Eski `workspaceTemplates`/`templateByID`/`seedTemplate` kaldırıldı.
+- **Frontend:** `WorkspaceCreateModal` yüklemede blank'i (market id `workspace-blank`) auto-select eder.
+- **Doğrulama:** `go build/vet/test ./...` + `tsc` yeşil; bundled-pack integrity testi (eski in-code
+  test yerine). Canlı: fresh 8091 → picker 5 bundled template gösterdi; `workspace-research`'ten
+  oluşturma → 4 agent + 1 flow seed; tarayıcıda create-modal picker market template'lerini render etti.
+
+## Tier rafine: admin-nadir araçlar hidden gruba taşındı ✅ (2026-06-26)
+
+NameOnly seti gözden geçirildi. Admin/nadir araçlar her turdan enumerate edilmek yerine
+**hidden self-management** grubuna (pointer + skill + tool_search) taşındı:
+`read_config`/`write_config`/`list_config` (ajanın kendi promptunu düzenler) +
+`secret_list`/`secret_get` (kasa okuma — yazma kardeşleri zaten hidden'dı, tutarlılık).
+Pointer metnine "your own prompts/config" eklendi.
+
+- **Karar (Part B = HAYIR):** self-management ailesinin tamamını (46) name-only enumerate
+  ETMEDİK. Patlamalı/nadir admin araçları; her tur 46 satır (CLI'de ~600 token) düşük
+  getiri. Kategori-pointer + `swarmgo-self-management` skill + tool_search zaten keşfi
+  sağlıyor. **Kural:** NameOnly = "var olduğunu bil, ara sıra kullan"; hidden = "toplu/
+  nadir admin, per-turn ödeme yok".
+- **Kod:** `toolsetup.go` — config+secret-read'ler `MarkNameOnly`'den `MarkHidden`'a.
+- `internal/agent` + `internal/tools` derleniyor, testleri geçiyor.
+- ⚠️ **Canlı doğrulama bekliyor:** `internal/api` şu an dışarıda süren market/templates
+  refactor'ü yüzünden derlenmiyor (`workspace_bridge.go` → `seedTemplate`/`templateByID`
+  tanımsız), bu yüzden tam backend rebuild + canlı kontrol o refactor bitince yapılacak.
+
+## CLI-uyumlu "Available Tools" kataloğu (claude-cli namespaced adlar) ✅ (2026-06-26)
+
+SES12 (WS2, claude-cli ajan) incelemesinde fark edildi: "# Available Tools (load on
+demand)" bloğu built-in araçları **bare adlarla** (`set_session_goal`, `notify`…) +
+native `activate_tools` yönergesiyle listeliyordu. Ama claude-cli bu araçları MCP aracı
+olarak (`mcp__swarmgo_interaction__*`) görür ve kendi ToolSearch'üyle yükler — yani blok
+yanıltıcıydı (skills bloğu zaten doğru namespaced biçimi kullanıyordu, tools bloğu değil).
+Default-NameOnly değişikliği 10 built-in'i daha bu bloğa eklediği için fark belirginleşti.
+
+- **Düzeltme:** `LazyToolsCatalogBlock` artık ajanın `provider`'ına göre dallanır.
+  claude-cli formunda: built-in → `mcp__swarmgo_interaction__<ad>`, MCP → `mcp__<server>__<tool>`,
+  yönerge `ToolSearch` (native `activate_tools` değil), CLI-native built-in'ler (WebFetch)
+  düşürülür. Native (anthropic/minimax) form **değişmedi** (bare ad + activate_tools).
+- **Kod:** `catalogDisplayName` ad eşlemesi + `renderLazyToolCatalog(..., cli bool)` +
+  `writeLazyToolLine(name, desc)`. `cliLazyBridgeExcluded` = tools.bridgeExcluded ayna.
+- **Not (önemli):** Bu davranış değişikliği değil bir **netleştirme** — eskiden de
+  çalışıyordu (model namespaced adı kendi çıkarıp ToolSearch'lüyordu, SES12'de görüldü),
+  ama artık blok doğru adları + doğru yöntemi söylüyor.
+- **Canlı doğrulama:** WS2/AGT4 (cli) → namespaced + ToolSearch, WebFetch yok; WS1/AGT2
+  (minimax/native) → bare + activate_tools, WebFetch var. Test:
+  `TestLazyCatalogCLIFormNamespacesNames`. Go build+test ✅. Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
 
 ## İlk-yükleme (onboarding) akışı + splash ekranı ✅ (2026-06-26)
 
@@ -47,6 +400,28 @@ boş karşılama ekranında bekler.
   ad girip **Oluştur** → URL `#/w/WS1/chat`, uygulama yüklendi; Workspace ▸ "Workspace'i sil"
   → yeni "son workspace" onay metni çıktı → kabul → **onboarding canlı geri döndü** (popup
   yeniden açıldı), `GET /api/workspaces` → `[]`. Gerçek veri (`~/.swarmgo`, 4 ws) izole tutuldu.
+
+## Skill NameOnly: skill'ler için slug-only katman ✅ (2026-06-26)
+
+Araçlardaki NameOnly mekaniğinin skill muadili. Frontmatter `name_only: true` ile
+işaretlenen skill, "# Available Skills" bloğunda **yalnız slug** olarak listelenir
+(`- \`slug\``); açıklama+when bastırılır. Skill **listede kalır** — model varlığını
+görür, detayı `skill_search` ile keşfeder, `use_skill` ile yükler. "Tam özet" ile
+"tamamen düşür" (`auto_summary:false`/`paths`) arasındaki eksik orta katman.
+
+- **Default KAPALI, skill-başına opt-in.** Araçlardaki gibi küratörlü default-açık
+  set YOK: skill'lerde açıklama ana tetikleme sinyali olduğundan toptan kaldırmak
+  keşfi zayıflatır (bilinçli tasarım kararı).
+- **Backend:** `Skill.NameOnly` alanı; `isNameOnly` parse (`name_only`/`nameonly`);
+  `renderCatalog` slug-only satır + footer `skill_search` yönlendirmesi;
+  `Store.SetNameOnly` + `setFrontmatterNameOnly` (`auto_summary` desenini yansıtır);
+  `PUT /api/skills/{slug}/name-only` (`handleSetSkillNameOnly`).
+- **Frontend:** `Skill.nameOnly` tipi, `api.setSkillNameOnly`, SkillsPanel "NameOnly"
+  badge + toggle butonu (liste + detay).
+- **Etki (canlı ölçüm, WS5):** `swarmgo-autonomous-ops` NameOnly → satır **839→26
+  karakter**, Available Skills bloğu **3376→2563** (~813 karakter ≈ ~200 token, tek skill).
+- Test: `TestNameOnlySkillRendersSlugOnly`. Go build+test ✅, `tsc` ✅. Canlı
+  toggle on/off doğrulandı, config geri alındı. Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
 
 ## Default NameOnly seti: built-in araçlar için varsayılan ✅ (2026-06-26)
 

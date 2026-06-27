@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -33,11 +34,14 @@ type agentContextPreview struct {
 	TotalTokens   int    `json:"totalTokens"`
 }
 
-// toolSummary is one offered tool, name + description (schema omitted for the
-// preview but counted in ToolTokens).
+// toolSummary is one offered tool: name + full description, plus the full JSON
+// input schema for EAGER tools (so the preview can show exactly what is shipped
+// every turn, expandable per tool). InputSchema is empty for lazy tools, whose
+// schemas are not shipped at turn start. ToolTokens still counts the eager schemas.
 type toolSummary struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
 }
 
 // handleAgentContext returns the assembled fresh-start context for an agent so
@@ -56,7 +60,9 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 	defs := wsp.Runtime.ShippedToolCatalog(ctx, agent)
 	tools := make([]toolSummary, 0, len(defs))
 	for _, d := range defs {
-		tools = append(tools, toolSummary{Name: d.Name, Description: d.Description})
+		// Eager tools ship their FULL schema every turn — include it so the preview
+		// can expand the exact payload (description + input schema + folded examples).
+		tools = append(tools, toolSummary{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
 	}
 	// Lazy tools: name+description only (schemas not shipped; tokens already in sysTok).
 	lazyDefs := wsp.Runtime.LazyToolCatalog(ctx, agent)

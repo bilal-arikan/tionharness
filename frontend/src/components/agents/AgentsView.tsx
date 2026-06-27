@@ -6,7 +6,7 @@ import { ProviderModelSelect } from './ProviderModelSelect'
 import { useCatalog, resolveModelLabel } from '../../lib/catalog'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
-import { Button } from '../common'
+import { Button, PromptEditor } from '../common'
 
 interface Props {
   agents: Agent[]
@@ -131,13 +131,12 @@ export function AgentsView({
               data-testid="agent-create-name-input"
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
             />
-            <textarea
+            <PromptEditor
               value={soul}
-              onChange={(e) => setSoul(e.target.value)}
+              onChange={setSoul}
               placeholder="Karakter / sistem promptu (soul)"
               rows={3}
               data-testid="agent-create-soul-textarea"
-              className="w-full resize-none rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
             />
             <div data-testid="agent-create-provider-wrap" className="contents">
               <ProviderModelSelect

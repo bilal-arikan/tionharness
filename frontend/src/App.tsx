@@ -52,11 +52,14 @@ import { isImagePath, mediaUrl } from './lib/paths'
 import { applyAppearance, resolveAppearance, type Appearance } from './lib/theme'
 import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clientPrefs'
 
-// isChatKind reports whether a session is a manual chat (shown in the chat
-// sidebar). Task/flow/schedule transcripts are surfaced in the
-// Activity (executions) view instead, so they don't clutter the chat list.
+// isChatKind reports whether a session is continuable from the chat sidebar.
+// Manual chats (chat/empty) plus "spawned" sessions qualify: spawned covers
+// both the spawn tool and handoff (context-reset) children, which are
+// single-agent linear transcripts explicitly meant for a human to take over and
+// keep talking to. Task/flow/schedule transcripts are aggregate/multi-run logs
+// and stay read-only in the Activity (executions) view instead.
 function isChatKind(kind: string): boolean {
-  return kind === '' || kind === 'chat'
+  return kind === '' || kind === 'chat' || kind === 'spawned'
 }
 
 // Parse the deep-link once at module load. If it names a workspace, apply it to
@@ -474,6 +477,17 @@ export default function App() {
     [activeSessionId],
   )
 
+  // Pin / unpin a session (sidebar). Optimistic; ListSessions floats pinned to top.
+  const setSessionPinned = useCallback(async (id: string, pinned: boolean) => {
+    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, pinned } : s)))
+    try {
+      await api.setSessionPinned(id, pinned)
+      refreshSessions()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }, [refreshSessions])
+
   const copySessionPath = useCallback(async (id: string) => {
     try {
       const { path } = await api.sessionPath(id)
@@ -535,6 +549,25 @@ export default function App() {
     },
     [refreshSessions],
   )
+
+  // Rate an assistant turn (👍/👎). Optimistic: update the local message, then
+  // persist; the new feedback rides into session.jsonl for the reflector/eval.
+  const rateMessage = useCallback(async (id: string, rating: number) => {
+    const sid = activeSessionIdRef.current
+    if (!sid) return
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? { ...m, feedback: rating === 0 ? undefined : { rating, at: Math.floor(Date.now() / 1000) } }
+          : m,
+      ),
+    )
+    try {
+      await api.setMessageFeedback(sid, id, rating)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }, [])
 
   // Autonomous-event handler: raise a desktop notification whose click deep-links
   // to the event's target (chat session, board, or logs). Refreshed each render
@@ -888,6 +921,7 @@ export default function App() {
           onRevealFolder={revealSession}
           onDeleteSession={deleteSession}
           onSetArchived={setSessionArchived}
+          onSetPinned={setSessionPinned}
         />
       )}
 
@@ -984,6 +1018,7 @@ export default function App() {
               onOpenArtifact={openArtifact}
               onDeleteMessage={deleteMessage}
               onRetry={chat.retryMessage}
+              onFeedback={rateMessage}
             />
             {chat.activeAsk &&
               (chat.activeAsk.kind === 'permission' ? (
@@ -1133,15 +1168,12 @@ export default function App() {
       {view === 'chat' && detailOpen && activeSessionId && (
         <SessionDetailPanel
           sessionId={activeSessionId}
-          agentId={activeAgentId}
           refreshKey={meterRefresh}
           onClose={toggleDetail}
           onError={setError}
           onGenerateTitle={regenerateSessionTitle}
           onRename={renameSession}
-          onSummarize={(_, kind) => chat.summarize(kind as 'memory' | 'board' | 'flows' | 'tools')}
           onDeleteSession={deleteSession}
-          onOpenBudget={() => setView('budget')}
           onSelectSession={selectSession}
         />
       )}

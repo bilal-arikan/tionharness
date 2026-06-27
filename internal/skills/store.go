@@ -123,6 +123,7 @@ func scanDir(t tier) []Skill {
 			UserInvocable:   isUserInvocable(fm),
 			Shared:          isShared(fm),
 			AutoSummary:     isAutoSummary(fm),
+			NameOnly:        isNameOnly(fm),
 			Source:          t.source,
 			Path:            path,
 		})
@@ -150,6 +151,18 @@ func isAutoSummary(fm frontmatter) bool {
 		return false
 	}
 	return true
+}
+
+// isNameOnly reports whether a skill should be advertised as SLUG ONLY in the
+// Available Skills block (description + when-to-use suppressed). Defaults to FALSE
+// (absent key → full summary); only an explicit `name_only: true` (or yes/on/1)
+// enables it. See Skill.NameOnly.
+func isNameOnly(fm frontmatter) bool {
+	switch strings.ToLower(strings.TrimSpace(fm.scalar("name_only", "nameonly"))) {
+	case "true", "yes", "on", "1":
+		return true
+	}
+	return false
 }
 
 // isUserInvocable mirrors Claude Code's user-invocable (default TRUE). Only an
@@ -367,6 +380,31 @@ func (s *Store) SetAutoSummary(slug string, on bool) (Skill, error) {
 		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
 	}
 	updated := setFrontmatterAutoSummary(string(data), on)
+	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
+	}
+	s.Reload()
+	out, _ := s.Get(slug)
+	return out, nil
+}
+
+// SetNameOnly toggles whether a skill is advertised as slug-only (description +
+// when-to-use suppressed) in the Available Skills block, by rewriting its SKILL.md
+// frontmatter, then reloads the catalog. Returns the updated skill.
+func (s *Store) SetNameOnly(slug string, on bool) (Skill, error) {
+	sk, ok := s.Get(slug)
+	if !ok {
+		return Skill{}, fmt.Errorf("skill %q not found", slug)
+	}
+	data, err := os.ReadFile(sk.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.Reload()
+			return Skill{}, fmt.Errorf("skill %q is no longer available (its file was moved or deleted); catalog refreshed", slug)
+		}
+		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
+	}
+	updated := setFrontmatterNameOnly(string(data), on)
 	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
 		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
 	}
@@ -724,6 +762,13 @@ func renderCatalog(list []Skill, skillTool string) string {
 		"call the `%s` tool with its slug to load the full instructions BEFORE acting — "+
 		"don't guess from the summary.%s\n", skillTool, deferNote)
 	for _, sk := range list {
+		// NameOnly skills are listed by slug alone (description + when-to-use
+		// suppressed) — the model sees the skill exists and uses skill_search to
+		// learn what it does before use_skill. Mirrors a tool's NameOnly tier.
+		if sk.NameOnly {
+			fmt.Fprintf(&b, "- `%s`\n", sk.Slug)
+			continue
+		}
 		fmt.Fprintf(&b, "- `%s` — %s", sk.Slug, sk.Description)
 		if sk.WhenToUse != "" {
 			fmt.Fprintf(&b, " (when: %s)", sk.WhenToUse)
@@ -731,8 +776,10 @@ func renderCatalog(list []Skill, skillTool string) string {
 		b.WriteString("\n")
 	}
 	// SK-2: not every skill is listed here — on-demand/conditional skills are kept
-	// out to save context. Point the model at skill_search so it can find them.
-	fmt.Fprintf(&b, "Some skills are not listed above (on-demand/conditional). "+
-		"If a task seems to need a skill you don't see, call `%s` with keywords to find it.", searchTool)
+	// out to save context. Some listed skills show their slug ALONE (summary
+	// suppressed). For either case, skill_search reveals what a skill does.
+	fmt.Fprintf(&b, "Entries shown as a slug alone (no summary) and skills not listed at all "+
+		"(on-demand/conditional) are discoverable with `%s`: call it with keywords to see "+
+		"what a skill does before loading it.", searchTool)
 	return strings.TrimSpace(b.String())
 }

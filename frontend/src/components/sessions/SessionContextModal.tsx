@@ -211,21 +211,45 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                 Araçlar — her tur şema gönderilen · {data.tools.length}
                 <CacheTag cached={data.cache.toolsCached} />
               </h3>
+              <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
+                Bu araçların TAM şeması (açıklama + JSON girdi şeması + örnekler) her tur gönderilir.
+                İçeriğini görmek için bir aracı genişlet.
+              </p>
               {data.tools.length === 0 ? (
                 <Dim>Bu ajana şema gönderilen araç yok.</Dim>
               ) : (
-                <ul className="flex flex-wrap gap-1">
+                <ul className="space-y-1">
                   {data.tools.map((t) => (
                     <li
                       key={t.name}
-                      title={t.description}
-                      className={`rounded border px-1.5 py-0.5 text-[11px] ${
-                        data.cache.toolsCached
-                          ? `border-[color-mix(in_srgb,var(--color-success)_30%,transparent)] ${CACHED}`
-                          : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
-                      }`}
+                      className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)]"
                     >
-                      {t.name}
+                      <details>
+                        <summary className="cursor-pointer select-none px-2.5 py-1.5 text-xs">
+                          <code
+                            className={`font-medium ${
+                              data.cache.toolsCached ? CACHED : 'text-[var(--color-text)]'
+                            }`}
+                          >
+                            {t.name}
+                          </code>
+                        </summary>
+                        <div className="border-t border-[var(--color-border)] px-2.5 py-2">
+                          {t.description && (
+                            <p className="mb-2 whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--color-text-dim)]">
+                              {t.description}
+                            </p>
+                          )}
+                          {t.inputSchema != null && (
+                            <pre className="overflow-x-auto rounded bg-[var(--color-surface)] p-2 text-[10px] leading-relaxed text-[var(--color-text-dim)]">
+                              {JSON.stringify(t.inputSchema, null, 2)}
+                            </pre>
+                          )}
+                          {!t.description && t.inputSchema == null && (
+                            <p className="text-[11px] text-[var(--color-text-dim)]">(şema yok)</p>
+                          )}
+                        </div>
+                      </details>
                     </li>
                   ))}
                 </ul>

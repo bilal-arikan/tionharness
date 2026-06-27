@@ -69,7 +69,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// endpoint for this turn, carrying the per-run token so its ask_user/todo_write
 	// calls correlate back here. No-op when the base URL is unknown.
 	if url := s.interactionURL(); url != "" {
-		ctx = tools.WithInteractionEndpoint(ctx, url, run.token, interactionAdvertisedNames(s.tun, false))
+		coreNames, extNames := splitInteractionTiers(interactionAdvertisedNames(s.tun, false), nil)
+		ctx = tools.WithInteractionEndpoint(ctx, url, run.token, coreNames, extNames)
 	}
 
 	wsp := ws(r)
@@ -352,8 +353,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		bridgeDefs, bridgeCall := wsp.Runtime.BridgeTools(turnCtx, agentRow)
 		run.setBridge(bridgeDefs, bridgeCall)
 		if url := s.interactionURL(); url != "" {
-			turnCtx = tools.WithInteractionEndpoint(turnCtx, url, run.token,
-				mergeInteractionToolNames(interactionAdvertisedNames(s.tun, false), bridgeDefs))
+			coreNames, extNames := splitInteractionTiers(interactionAdvertisedNames(s.tun, false), bridgeDefs)
+			turnCtx = tools.WithInteractionEndpoint(turnCtx, url, run.token, coreNames, extNames)
 		}
 
 		agentStart := time.Now()
@@ -414,13 +415,17 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			persistCtx := context.WithoutCancel(ctx)
 			payload := map[string]any{"error": detail, "reason": reason}
 			if msg, aerr := database.AddMessage(persistCtx, db.Message{
-				ID:          replyID,
-				SessionID:   session.ID,
-				Role:        providers.RoleAssistant,
-				AgentID:     agentRow.ID,
-				Text:        partial.String(),
-				Steps:       marshalSteps(trace),
-				Interrupted: true,
+				ID:        replyID,
+				SessionID: session.ID,
+				Role:      providers.RoleAssistant,
+				AgentID:   agentRow.ID,
+				Text:      partial.String(),
+				Steps:     marshalSteps(trace),
+				// A user Stop is Cancelled (clean, intentional); a provider failure
+				// keeps Interrupted (the "cut off" banner) as before.
+				Cancelled:   stopped,
+				Interrupted: !stopped,
+				DurationMs:  time.Since(agentStart).Milliseconds(),
 			}); aerr != nil {
 				s.logger.Error("persist interrupted turn failed", "session", session.ID, "error", aerr)
 			} else {
@@ -434,12 +439,16 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 
 		replyMsg, aerr := database.AddMessage(ctx, db.Message{
-			ID:        replyID,
-			SessionID: session.ID,
-			Role:      providers.RoleAssistant,
-			AgentID:   agentRow.ID,
-			Text:      resp.Text,
-			Steps:     marshalSteps(steps),
+			ID:         replyID,
+			SessionID:  session.ID,
+			Role:       providers.RoleAssistant,
+			AgentID:    agentRow.ID,
+			Text:       resp.Text,
+			Steps:      marshalSteps(steps),
+			Model:      resp.Model,
+			StopReason: resp.StopReason,
+			Usage:      messageUsage(resp.Usage),
+			DurationMs: time.Since(agentStart).Milliseconds(),
 		})
 		if aerr != nil {
 			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "persist_error", aerr.Error())

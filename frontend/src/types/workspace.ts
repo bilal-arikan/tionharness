@@ -103,6 +103,9 @@ export interface WorkspaceTool {
   server: string
   enabled: boolean
   hidden?: boolean
+  // Hidden tier: folded into the self-management skill pointer (not even listed by
+  // name in the per-turn catalog). A subset of hidden — drawn with a distinct chip.
+  selfManaged?: boolean
   inputSchema?: unknown
 }
 

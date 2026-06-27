@@ -1,0 +1,81 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "workspace-research",
+  "kind": "workspace",
+  "name": "Bilimsel Araştırma",
+  "description": "Literatür taraması, metodoloji, analiz ve hakem değerlendirmesi ajanları + uçtan uca araştırma akışı.",
+  "author": "SwarmGo",
+  "icon": "🔬",
+  "tags": [
+    "template",
+    "workspace"
+  ],
+  "payload": {
+    "workspace": {
+      "name": "Bilimsel Araştırma",
+      "icon": "🔬",
+      "agents": [
+        {
+          "key": "scout",
+          "name": "Literatür Tarayıcı",
+          "soul": "You are a research literature scout. Given a research question, you find, gather and summarize the most relevant prior work, papers and sources. You cite sources, extract key findings, and surface gaps in the existing literature.",
+          "avatar": "📚",
+          "color": "#6366f1"
+        },
+        {
+          "key": "method",
+          "name": "Metodolog",
+          "soul": "You are a research methodologist. You design rigorous methodology: clear hypotheses, variables, experiment or analysis design, sampling, and threats to validity. You favor reproducible, well-justified designs.",
+          "avatar": "🧪",
+          "color": "#0ea5e9"
+        },
+        {
+          "key": "analyst",
+          "name": "Analist",
+          "soul": "You are a data and results analyst. You analyze findings, choose appropriate statistical or qualitative methods, interpret results honestly, and draw evidence-based conclusions while stating uncertainty.",
+          "avatar": "📊",
+          "color": "#10b981"
+        },
+        {
+          "key": "critic",
+          "name": "Hakem",
+          "soul": "You are a peer reviewer. You critically evaluate research for rigor, bias, reproducibility and gaps. You give constructive, specific feedback and concrete suggestions for improvement.",
+          "avatar": "🧐",
+          "color": "#f59e0b"
+        }
+      ],
+      "flows": [
+        {
+          "name": "Araştırma Akışı",
+          "description": "Tarama → Metodoloji → Analiz → Hakem değerlendirmesi",
+          "steps": [
+            {
+              "id": "scan",
+              "title": "Literatür Tarama",
+              "agentKey": "scout",
+              "prompt": "Research question:\n{{input}}\n\nFind and summarize the most relevant prior work and sources. List key findings, cite them, and note open gaps."
+            },
+            {
+              "id": "design",
+              "title": "Metodoloji",
+              "agentKey": "method",
+              "prompt": "Research question:\n{{input}}\n\nPrior work summary:\n{{last}}\n\nDesign a rigorous methodology to investigate this question."
+            },
+            {
+              "id": "analyze",
+              "title": "Analiz",
+              "agentKey": "analyst",
+              "prompt": "Given the research context and methodology below, outline the analysis plan and interpret what the expected results would mean.\n\n{{last}}"
+            },
+            {
+              "id": "review",
+              "title": "Hakem Değerlendirmesi",
+              "agentKey": "critic",
+              "prompt": "Critically review the following research plan and analysis. Identify weaknesses, biases and gaps, and propose concrete improvements.\n\n{{last}}"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

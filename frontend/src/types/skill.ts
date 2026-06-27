@@ -27,6 +27,11 @@ export interface Skill {
   // agent's prompt (it stops bloating every session). Defaults to true. A skill
   // assigned explicitly to an agent is always advertised regardless.
   autoSummary?: boolean
+  // When true the skill is advertised as SLUG ONLY in the Available Skills block
+  // (description + when-to-use suppressed) — the skill analogue of a tool's
+  // NameOnly tier. It stays listed (the model can skill_search it); defaults to
+  // false. Unlike autoSummary:false / paths, the skill is NOT dropped entirely.
+  nameOnly?: boolean
   source: SkillSource
 }
 

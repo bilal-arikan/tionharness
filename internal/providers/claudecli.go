@@ -93,7 +93,9 @@ const interactionSystemNote = "To ask the user a clarifying question, call the a
 // the allowlist for this call.
 func (c *ClaudeCLI) usesInteractionTools() bool {
 	for _, t := range c.allowedTools {
-		if strings.Contains(t, "swarmgo_interaction") {
+		// Matches both interaction tiers: mcp__swarmgo_interaction__* (core) and
+		// mcp__swarmgo_extended__* (extended).
+		if strings.Contains(t, "swarmgo_interaction") || strings.Contains(t, "swarmgo_extended") {
 			return true
 		}
 	}
@@ -278,6 +280,13 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 // no duplicate side effects.
 func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
+	// Enable the CLI's threshold-based MCP tool search (claude-cli 2.1.x+): tool
+	// schemas that fit within 10% of the context window are inlined and only the
+	// overflow is deferred. Combined with the core interaction server's alwaysLoad
+	// flag, the eager tier (Bash, ask_user, ...) is always present while the extended
+	// self-management surface is lazily discovered via ToolSearch. Inherit the parent
+	// environment and append the flag (cmd.Env nil would otherwise drop it).
+	cmd.Env = append(os.Environ(), "ENABLE_TOOL_SEARCH=auto")
 	// Run inside the workspace sandbox so relative paths (e.g. an attachment's
 	// "uploads/<sid>/<file>") resolve there rather than the backend's launch
 	// directory. Only set when the dir exists; otherwise inherit the default cwd.

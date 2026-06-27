@@ -337,6 +337,11 @@ func (r *Runtime) NewShellRunner() func(ctx context.Context, args json.RawMessag
 	}
 }
 
+// MarketGlobalDir exposes the data-dir-level global market directory so the api
+// layer can build a workspace-independent market store (used by the workspace
+// template picker, which must work even with zero workspaces during onboarding).
+func MarketGlobalDir() string { return marketGlobalDir() }
+
 // marketGlobalDir is SwarmGo's data-dir-level global market directory
 // (<DataDir>/market, default ~/.swarmgo/market). Mirrors globalSkillsDir.
 func marketGlobalDir() string {

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/market"
 	"github.com/bilal-arikan/swarmgo/internal/backup"
 	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
@@ -40,6 +41,12 @@ type Server struct {
 	grants     *permGrantStore // per-session "Always allow" permission grants
 	logger     *slog.Logger
 
+	// market is a workspace-independent market store (bundled + global tiers),
+	// used by the workspace-template picker and create-from-template seeding so
+	// they work even with zero workspaces (onboarding). Per-workspace runtime
+	// markets (with install ledgers) are used for in-workspace install/publish.
+	market *market.Store
+
 	// selfURL is this server's own loopback base URL (e.g. http://127.0.0.1:8090),
 	// used to point CLI subprocesses at the in-process Interaction MCP endpoint.
 	selfURL string
@@ -66,6 +73,10 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		runs:       newChatRuns(),
 		grants:     newPermGrantStore(),
 		logger:     logger,
+		// Workspace-independent market store (bundled + global tiers) for the
+		// workspace-template picker, which must work with zero workspaces during
+		// onboarding. No ledger dir: install-status tracking is per-workspace.
+		market: market.New(agent.MarketGlobalDir(), ""),
 	}
 	// Interaction MCP: lets CLI agents (claude-cli, ...) reach SwarmGo's
 	// human-in-the-loop tools over in-process HTTP. See _Docs/11-INTERACTION-MCP.md.
@@ -247,6 +258,8 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
 	mux.HandleFunc("PUT /api/sessions/{id}/goal", s.handleSetSessionGoal)
 	mux.HandleFunc("PUT /api/sessions/{id}/state", s.handleSetSessionState)
+	mux.HandleFunc("PUT /api/sessions/{id}/pin", s.handleSetSessionPin)
+	mux.HandleFunc("PUT /api/sessions/{id}/messages/{msgId}/feedback", s.handleSetMessageFeedback)
 	mux.HandleFunc("PUT /api/sessions/{id}/agent", s.handleSetSessionAgent)
 	mux.HandleFunc("GET /api/sessions/{id}/workdir", s.handleGetSessionWorkdir)
 	mux.HandleFunc("PUT /api/sessions/{id}/workdir", s.handleSetSessionWorkdir)
@@ -285,6 +298,10 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	// nil handler; NewServer always installs it.
 	if s.interactionMCP != nil {
 		mux.Handle("/mcp/interaction", s.interactionMCP)
+		// Subtree mount so the CLI's two tier entries (/mcp/interaction/core and
+		// /mcp/interaction/extended) reach the same handler; it derives the tier from
+		// the path's last segment (see interaction.tierFromPath).
+		mux.Handle("/mcp/interaction/", s.interactionMCP)
 	}
 }
 
@@ -388,6 +405,7 @@ func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/skills/{slug}", s.handleDeleteSkill)
 	mux.HandleFunc("PUT /api/skills/{slug}/access", s.handleSetSkillAccess)
 	mux.HandleFunc("PUT /api/skills/{slug}/auto-summary", s.handleSetSkillAutoSummary)
+	mux.HandleFunc("PUT /api/skills/{slug}/name-only", s.handleSetSkillNameOnly)
 	mux.HandleFunc("POST /api/skills/{slug}/reveal", s.handleRevealSkill)
 }
 

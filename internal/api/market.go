@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/market"
 	"github.com/bilal-arikan/swarmgo/internal/orchestration"
 	"github.com/bilal-arikan/swarmgo/internal/settings"
+	"github.com/bilal-arikan/swarmgo/internal/skills"
 	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
@@ -367,6 +369,10 @@ func (s *Server) installWorkspacePack(pack market.Pack) (market.InstallResult, e
 	if _, err := s.workspaces.UpdateSettings(created.ID, patch); err != nil {
 		s.logger.Warn("workspace pack: apply settings failed", "id", created.ID, "error", err)
 	}
+	// Seed the starter team (agents + flow + disabled schedules) when the template
+	// carries one, so a market-installed workspace arrives as ready as one created
+	// from the create-workspace picker.
+	s.seedWorkspaceTeam(context.Background(), created, *wp)
 	return market.InstallResult{
 		Kind: market.KindWorkspace, Ref: created.ID,
 		Message: "Workspace \"" + wp.Name + "\" oluşturuldu",
@@ -638,9 +644,187 @@ func (s *Server) handlePublishMarket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, stored)
+	case market.KindWorkspace:
+		// Capture the ACTIVE workspace's current state into a portable template
+		// pack (the inverse of seeding). SourceID is ignored — the workspace scope
+		// comes from the X-Workspace-Id header.
+		payload, err := s.buildWorkspaceTemplatePayload(r.Context(), wsp)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if len(payload.Agents) == 0 {
+			writeError(w, http.StatusBadRequest, "şablonlanacak ajan yok — workspace en az bir ajan içermeli")
+			return
+		}
+		cfg := wsp.Settings()
+		slug := slugify(wsp.Name)
+		if slug == "" {
+			slug = strings.ToLower(wsp.ID)
+		}
+		pack, err := market.BuildWorkspacePack(slug, wsp.Name, "“"+wsp.Name+"” workspace'inden dışa aktarıldı.", cfg.Icon, cfg.Color, "", 0, payload)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		stored, err := wsp.Runtime.Market().Publish(pack)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		// The template picker reads the server-level market store (separate Store
+		// instance over the same global dir); reload it so the freshly published
+		// template appears in the create picker immediately.
+		s.market.Reload()
+		writeJSON(w, http.StatusOK, stored)
 	default:
 		writeError(w, http.StatusNotImplemented, "publishing "+req.Kind+" is not yet supported")
 	}
+}
+
+// buildWorkspaceTemplatePayload captures a live workspace's current state into a
+// portable WorkspacePayload — the inverse of seedWorkspaceTeam: workspace-tier
+// skills, the agent team (with stable local keys), flows (agent ids rewritten to
+// "tmpl:<key>"), schedules (wired by key), and identity/instructions/board layout.
+// Secrets, sessions, artifacts and other runtime data are never included.
+func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspace.Workspace) (market.WorkspacePayload, error) {
+	cfg := wsp.Settings()
+	wp := market.WorkspacePayload{
+		Name:         wsp.Name,
+		Icon:         cfg.Icon,
+		Color:        cfg.Color,
+		Instructions: cfg.Instructions,
+	}
+	if len(cfg.BoardColumns) > 0 {
+		wp.Columns = fromBoardColumnDefs(cfg.BoardColumns)
+	}
+
+	// Agents → template agents with stable local keys (id → key map for wiring).
+	agents, err := wsp.DB.ListAgents(ctx)
+	if err != nil {
+		return wp, err
+	}
+	idToKey := make(map[string]string, len(agents))
+	usedKeys := map[string]bool{}
+	for _, a := range agents {
+		key := uniqueAgentKey(a.Name, usedKeys)
+		idToKey[a.ID] = key
+		wp.Agents = append(wp.Agents, market.WorkspaceTemplateAgent{
+			Key: key, Name: a.Name, Soul: a.Soul, Identity: a.Identity,
+			Provider: a.Provider, Model: a.Model,
+			PlanningMode: a.PlanningMode, ThinkingLevel: a.ThinkingLevel, PermissionMode: a.PermissionMode,
+			Avatar: a.Avatar, Color: a.Color,
+			MCPEnabled: a.MCPEnabled, AllowedTools: a.AllowedTools, BlockedTools: a.BlockedTools,
+			Skills:         a.Skills,
+			DailyCallLimit: a.DailyCallLimit, DailyTokenLimit: a.DailyTokenLimit,
+		})
+	}
+
+	// Flows → rewrite agent node ids to "tmpl:<key>" so the graph is portable.
+	flows, ferr := wsp.DB.ListFlows(ctx)
+	if ferr != nil {
+		return wp, ferr
+	}
+	for _, f := range flows {
+		graph, perr := orchestration.ParseGraph(f.Graph)
+		if perr != nil {
+			continue // skip an unparseable flow rather than failing the whole export
+		}
+		for i := range graph.Nodes {
+			n := &graph.Nodes[i]
+			if n.Type == orchestration.NodeAgent && n.AgentID != "" {
+				if key, ok := idToKey[n.AgentID]; ok {
+					n.AgentID = market.TemplateAgentKeyPrefix + key
+				}
+			}
+		}
+		raw, merr := json.Marshal(graph)
+		if merr != nil {
+			continue
+		}
+		wp.Flows = append(wp.Flows, market.WorkspaceTemplateFlow{
+			Name: f.Name, Description: f.Description, Graph: string(raw),
+		})
+	}
+
+	// Schedules → reference the agent by key (skip orphans).
+	scheds, serr := wsp.DB.ListSchedules(ctx)
+	if serr != nil {
+		return wp, serr
+	}
+	for _, sc := range scheds {
+		key, ok := idToKey[sc.AgentID]
+		if !ok {
+			continue
+		}
+		wp.Schedules = append(wp.Schedules, market.WorkspaceTemplateSchedule{
+			AgentKey: key, CronExpr: sc.CronExpr, Prompt: sc.Prompt,
+		})
+	}
+
+	// Workspace-tier skills → embed verbatim (SKILL.md + nested files) so the
+	// template is self-contained. Global/bundled skills are shared, not exported.
+	for _, sk := range wsp.Runtime.Skills().List() {
+		if sk.Source != skills.SourceWorkspace || sk.Path == "" {
+			continue
+		}
+		body, rerr := os.ReadFile(sk.Path)
+		if rerr != nil {
+			continue
+		}
+		wp.Skills = append(wp.Skills, market.WorkspaceTemplateSkill{
+			Slug: sk.Slug, Body: string(body), Files: collectSkillFiles(filepath.Dir(sk.Path)),
+		})
+	}
+
+	return wp, nil
+}
+
+// fromBoardColumnDefs is the inverse of toBoardColumnDefs: db board columns → the
+// market envelope's dependency-free BoardColumn list, for publishing a template.
+func fromBoardColumnDefs(in []db.BoardColumnDef) []market.BoardColumn {
+	out := make([]market.BoardColumn, 0, len(in))
+	for _, c := range in {
+		out = append(out, market.BoardColumn{Key: c.Key, Label: c.Label, Color: c.Color})
+	}
+	return out
+}
+
+// uniqueAgentKey derives a stable, unique local key for a template agent from its
+// name, deduping with a numeric suffix. Used to wire flows/schedules by key.
+func uniqueAgentKey(name string, used map[string]bool) string {
+	base := slugify(name)
+	if base == "" {
+		base = "agent"
+	}
+	key := base
+	for i := 2; used[key]; i++ {
+		key = fmt.Sprintf("%s-%d", base, i)
+	}
+	used[key] = true
+	return key
+}
+
+// slugify lowercases a string and keeps only [a-z0-9], collapsing runs of other
+// characters to single dashes. Non-ASCII (e.g. Turkish) letters are dropped, so
+// callers fall back to another id when the result is empty.
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	prevDash := false
+	for _, r := range s {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevDash = false
+		default:
+			if !prevDash && b.Len() > 0 {
+				b.WriteByte('-')
+				prevDash = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 // collectSkillFiles reads a skill folder's bundled resource files (every file

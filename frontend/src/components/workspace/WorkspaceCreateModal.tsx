@@ -25,7 +25,9 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [templates, setTemplates] = useState<WorkspaceTemplate[]>([])
-  const [templateId, setTemplateId] = useState('blank')
+  // Empty until templates load; the load effect auto-selects the blank default so
+  // a valid market template id is always submitted.
+  const [templateId, setTemplateId] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -37,11 +39,17 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Load the available templates for the picker.
+  // Load the available templates (market workspace-kind packs) for the picker.
   useEffect(() => {
     api
       .listWorkspaceTemplates()
-      .then(setTemplates)
+      .then((ts) => {
+        setTemplates(ts)
+        // Default-select the blank template (or the first) so a valid market id
+        // is always submitted and the picker shows an initial selection.
+        const def = ts.find((t) => t.id.endsWith('blank')) ?? ts[0]
+        if (def) setTemplateId((prev) => prev || def.id)
+      })
       .catch(() => {}) // picker just stays empty / blank-only on failure
   }, [])
 

@@ -9,12 +9,17 @@ import "context"
 type InteractionEndpoint struct {
 	URL   string // e.g. http://127.0.0.1:8090/mcp/interaction
 	Token string // per-run opaque secret carried as Authorization: Bearer
-	// ToolNames are the bare tool names the Interaction MCP server advertises for
-	// this turn (e.g. ask_user, use_skill, ...). The CLI MCP-config writer turns
-	// each into an `mcp__<server>__<tool>` allowlist entry, so the advertised set
-	// and the allowlist derive from a SINGLE source: adding a tool to the backend
-	// automatically allowlists it, with no second list to keep in sync.
-	ToolNames []string
+	// CoreToolNames / ExtendedToolNames are the bare tool names the Interaction MCP
+	// server advertises for this turn, split into two tiers so the CLI MCP-config
+	// writer can map each to its own server entry (claude-cli 2.1.x+):
+	//   - Core: eager tools (Bash, ask_user, use_skill, ...) on a server marked
+	//     alwaysLoad → never deferred by the CLI's tool search.
+	//   - Extended: the self-management suite + NameOnly session-lifecycle tools on
+	//     a separate server → subject to the CLI's ToolSearch deferral (lazy).
+	// Each name becomes an `mcp__<server>__<tool>` allowlist entry, so the advertised
+	// set and the allowlist derive from a SINGLE source per tier.
+	CoreToolNames     []string
+	ExtendedToolNames []string
 }
 
 // interactionKey keys the endpoint on a request context.
@@ -24,8 +29,10 @@ type interactionKey struct{}
 // writer can emit a server entry pointing the subprocess back at this turn. Kept
 // in the tools package (not agent) so the bridge mirrors WithAsker and avoids an
 // import cycle.
-func WithInteractionEndpoint(ctx context.Context, url, token string, toolNames []string) context.Context {
-	return context.WithValue(ctx, interactionKey{}, InteractionEndpoint{URL: url, Token: token, ToolNames: toolNames})
+func WithInteractionEndpoint(ctx context.Context, url, token string, coreNames, extendedNames []string) context.Context {
+	return context.WithValue(ctx, interactionKey{}, InteractionEndpoint{
+		URL: url, Token: token, CoreToolNames: coreNames, ExtendedToolNames: extendedNames,
+	})
 }
 
 // InteractionFrom returns the endpoint attached to ctx, or the zero value when

@@ -45,7 +45,7 @@ func (b workspaceBridge) CreateWorkspace(name, parentPath, createdBy string) (to
 	}
 	// Seed the blank template (default agent + config tree) so the new workspace
 	// is usable immediately, exactly like a UI-created one.
-	b.srv.seedTemplate(context.Background(), wsNew, templateByID(""))
+	b.srv.seedWorkspaceFromTemplate(context.Background(), wsNew, blankTemplateID)
 	b.srv.publishWorkspacesChanged(fmt.Sprintf("Bir ajan yeni bir workspace oluşturdu: %s", wsNew.Name))
 	return toWorkspaceInfo(wsNew.Meta), nil
 }

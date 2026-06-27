@@ -46,6 +46,15 @@ type Skill struct {
 	// bloating every prompt) — it can still be assigned to an agent explicitly,
 	// which always advertises it. Set from frontmatter `auto_summary: false`.
 	AutoSummary bool `json:"autoSummary"`
+	// NameOnly marks a skill to advertise as SLUG ONLY in the "# Available Skills"
+	// block: its one-line description + when-to-use are suppressed, leaving just the
+	// backticked slug — the skill analogue of a tool's NameOnly (Claude Code
+	// deferred-tool) tier. The skill stays LISTED (unlike auto_summary:false / paths,
+	// which drop it from the block entirely), so the model still sees it exists and
+	// can call skill_search to learn what it does before use_skill. Defaults to false
+	// (full summary). Opt-in per skill via frontmatter `name_only: true` — NOT a
+	// blanket default, because for skills the description is the main trigger signal.
+	NameOnly bool `json:"nameOnly"`
 	// Version/SourceURL/License are provenance metadata (SK-4) — important for
 	// imported skills so their origin and currency are traceable. From frontmatter
 	// `version` / `source_url` (alias `repo`/`homepage`) / `license`.

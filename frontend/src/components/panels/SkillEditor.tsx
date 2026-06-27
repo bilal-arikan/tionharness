@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { SkillDetail, SkillInput } from '../../types'
 import { api } from '../../api'
 import { EmojiField } from '../common/EmojiField'
-import { Button } from '../common'
+import { Button, PromptEditor } from '../common'
 
 interface Props {
   mode: 'create' | 'edit'
@@ -177,12 +177,12 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
           </label>
 
           <Field label="İçerik (Markdown talimatları)">
-            <textarea
+            <PromptEditor
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={setBody}
               rows={12}
+              mono
               placeholder="# Skill&#10;&#10;Talimatları buraya yaz…"
-              className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
             />
           </Field>
 

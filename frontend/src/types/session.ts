@@ -12,6 +12,10 @@ export interface Session {
   title: string
   messageCount: number
   state: string
+  // Session-header format version (db.SessionSchemaVersion); 0 = pre-versioning.
+  v?: number
+  // Pins the session to the top of the sidebar list regardless of recency.
+  pinned?: boolean
   // True when an agent reply landed while this session wasn't open.
   unread?: boolean
   // Working directory (cwd) override for the agent's file/shell tools. Empty =
@@ -143,7 +147,7 @@ export interface SessionContextPreview {
   dynamicTokens: number
   messages: { role: string; text: string; author?: string; self?: boolean }[]
   messageTokens: number
-  tools: { name: string; description: string }[]
+  tools: { name: string; description: string; inputSchema?: unknown }[]
   toolTokens: number
   totalTokens: number
   cache: CachePreview

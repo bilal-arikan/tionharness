@@ -50,6 +50,11 @@ export const skillApi = {
       method: 'PUT',
       body: JSON.stringify({ autoSummary }),
     }),
+  setSkillNameOnly: (slug: string, nameOnly: boolean) =>
+    req<Skill>(`/api/skills/${encodeURIComponent(slug)}/name-only`, {
+      method: 'PUT',
+      body: JSON.stringify({ nameOnly }),
+    }),
   revealSkill: (slug: string) =>
     req<{ path: string }>(`/api/skills/${encodeURIComponent(slug)}/reveal`, { method: 'POST' }),
 }

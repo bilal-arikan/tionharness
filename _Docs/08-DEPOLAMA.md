@@ -129,9 +129,17 @@ uygulama numaralamaya kaldığı yerden devam eder.
 `session.jsonl` her oturum için tek dosya:
 
 - **Satır 1** = `Session` header'ı (id, agentId, kind, title, messageCount, state,
-  summary, summaryMsgCount, zaman damgaları).
+  summary, summaryMsgCount, zaman damgaları). **Zenginleştirilmiş alanlar (2026-06-26):**
+  `v` (SchemaVersion — header format sürümü, ileri-migration için), `pinned`
+  (sidebar'da üste sabitleme; `ListSessions` pinned'leri öne alır).
 - **Satır 2+** = `Message` kayıtları (role, text, toolCalls, reasoningContent,
-  steps, createdAt) — kronolojik.
+  steps, createdAt) — kronolojik. **Asistan turu zenginleştirmesi (2026-06-26):**
+  `model` (turu cevaplayan gerçek model), `stopReason` (`end_turn|max_tokens|
+  refusal|…` — kesilme/red UI uyarısı), `usage` (`{in,out,cacheRead,cacheWrite}`
+  — per-balon maliyet; transkript kendi kendine yeter), `durationMs` (tur süresi),
+  `cancelled` (kullanıcı durdurması — crash `interrupted`'tan ayrı), `feedback`
+  (`{rating:±1,note,at}` — 👍/👎 kalıcı kalite sinyali, reflektör/eval için).
+  Hepsi `omitempty` (eski mesajlar + user/system turları boş).
 
 `AddMessage` mesajı belleğe ekler, oturum sayacını artırır ve **yalnızca yeni
 satırı dosyaya ekler** (`O_APPEND`, O(1)) — tüm dosyayı yeniden yazmaz. Eski

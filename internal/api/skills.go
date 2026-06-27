@@ -234,6 +234,25 @@ func (s *Server) handleSetSkillAutoSummary(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, sk)
 }
 
+// handleSetSkillNameOnly toggles whether a skill is advertised as slug-only
+// (description + when-to-use suppressed) in the Available Skills block, by
+// rewriting its SKILL.md frontmatter, then returns the updated skill.
+func (s *Server) handleSetSkillNameOnly(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		NameOnly bool `json:"nameOnly"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	sk, err := ws(r).Runtime.Skills().SetNameOnly(r.PathValue("slug"), req.NameOnly)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, sk)
+}
+
 // handleReloadSkills re-scans the skill tiers (after the user edits files on
 // disk) so the catalog and prompt block reflect the change without a restart.
 func (s *Server) handleReloadSkills(w http.ResponseWriter, r *http.Request) {

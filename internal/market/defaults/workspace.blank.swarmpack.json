@@ -1,0 +1,33 @@
+{
+  "schema": "swarmpack/v1",
+  "id": "workspace-blank",
+  "kind": "workspace",
+  "name": "Boş",
+  "description": "Tek bir genel asistan ile başla. Kendi ajanlarını ve akışlarını sıfırdan kur.",
+  "author": "SwarmGo",
+  "icon": "⬡",
+  "tags": [
+    "template",
+    "workspace"
+  ],
+  "payload": {
+    "workspace": {
+      "name": "Boş",
+      "icon": "⬡",
+      "agents": [
+        {
+          "key": "assistant",
+          "name": "Asistan",
+          "soul": "You are a helpful assistant."
+        }
+      ],
+      "schedules": [
+        {
+          "agentKey": "assistant",
+          "cronExpr": "0 * * * *",
+          "prompt": "Review the task board for unfinished or stuck tasks and send a notification summarizing them."
+        }
+      ]
+    }
+  }
+}

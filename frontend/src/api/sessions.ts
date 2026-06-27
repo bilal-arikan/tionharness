@@ -81,6 +81,18 @@ export const sessionApi = {
       method: 'PUT',
       body: JSON.stringify({ state }),
     }),
+  // Pin/unpin the session to the top of the sidebar list.
+  setSessionPinned: (sessionId: string, pinned: boolean) =>
+    req<{ id: string; pinned: boolean }>(`/api/sessions/${sessionId}/pin`, {
+      method: 'PUT',
+      body: JSON.stringify({ pinned }),
+    }),
+  // Rate an assistant message (👍/👎 + optional note). rating: +1 | -1 | 0 (clear).
+  setMessageFeedback: (sessionId: string, messageId: string, rating: number, note = '') =>
+    req<{ id: string; rating: number; note: string }>(
+      `/api/sessions/${sessionId}/messages/${messageId}/feedback`,
+      { method: 'PUT', body: JSON.stringify({ rating, note }) },
+    ),
   // Rebind the session to a different agent (the chat agent dropdown). Every
   // following turn is answered by this agent.
   setSessionAgent: (sessionId: string, agentId: string) =>

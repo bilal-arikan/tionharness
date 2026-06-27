@@ -97,6 +97,51 @@ func TestMarkHiddenKeepsActivatableButOutOfBlock(t *testing.T) {
 	}
 }
 
+// TestMarkNameOnlyKeepsNameDropsSummary verifies a name-only tool stays listed in
+// the rendered block (VisibleLazyCatalog) but with its summary suppressed, while
+// the full LazyCatalog (activate/search source) keeps its description. Unlazy
+// clears the name-only mark too.
+func TestMarkNameOnlyKeepsNameDropsSummary(t *testing.T) {
+	reg := NewRegistry(
+		stubTool{name: "lazy_visible", desc: "shown with summary"},
+		stubTool{name: "deferred_a", desc: "should not be rendered"},
+	)
+	reg.MarkLazy("lazy_visible")
+	reg.MarkNameOnly("deferred_a")
+
+	// MarkNameOnly implies lazy.
+	if !reg.IsLazy("deferred_a") {
+		t.Fatal("MarkNameOnly must imply lazy")
+	}
+	// Full catalog (activate/search) keeps the description.
+	for _, d := range reg.LazyCatalog(nil) {
+		if d.Name == "deferred_a" && d.Description == "" {
+			t.Fatal("LazyCatalog must keep description for name-only tool (search needs it)")
+		}
+	}
+	// Visible (rendered) catalog lists it but with an empty description.
+	vis := reg.VisibleLazyCatalog(nil)
+	if !eq(names(vis), []string{"deferred_a", "lazy_visible"}) {
+		t.Fatalf("VisibleLazyCatalog must still list name-only tool, got %v", names(vis))
+	}
+	for _, d := range vis {
+		if d.Name == "deferred_a" && d.Description != "" {
+			t.Fatalf("name-only tool must have empty summary in block, got %q", d.Description)
+		}
+		if d.Name == "lazy_visible" && d.Description == "" {
+			t.Fatal("ordinary lazy tool must keep its summary")
+		}
+	}
+	// Unlazy clears the name-only mark (the "Göster" override path).
+	reg.Unlazy("deferred_a")
+	if reg.IsLazy("deferred_a") {
+		t.Fatal("Unlazy must clear lazy+nameOnly")
+	}
+	if got := names(reg.ActiveDefs(nil, nil)); !contains(got, "deferred_a") {
+		t.Fatalf("Unlazy'd name-only tool must ship eagerly, got %v", got)
+	}
+}
+
 // TestUnlazyOverridesHidden verifies the "show" override forces a default-hidden
 // tool back to eager: it leaves the lazy catalog, drops out of the hidden count,
 // and ships its schema every turn without activation.

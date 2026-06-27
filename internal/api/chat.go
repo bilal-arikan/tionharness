@@ -11,6 +11,21 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
+// messageUsage converts a provider Usage into the compact per-message form stored
+// on the assistant turn, returning nil when the turn reported no tokens (so an
+// empty/non-LLM turn doesn't carry a zero usage object).
+func messageUsage(u providers.Usage) *db.MessageUsage {
+	if u.InputTokens == 0 && u.OutputTokens == 0 && u.CacheReadTokens == 0 && u.CacheWriteTokens == 0 {
+		return nil
+	}
+	return &db.MessageUsage{
+		InputTokens:      u.InputTokens,
+		OutputTokens:     u.OutputTokens,
+		CacheReadTokens:  u.CacheReadTokens,
+		CacheWriteTokens: u.CacheWriteTokens,
+	}
+}
+
 type chatReq struct {
 	SessionID string `json:"sessionId"`
 	Message   string `json:"message"`
@@ -152,11 +167,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Persist the assistant reply (with its serialised activity trace so the
 	// turn can be re-rendered on reload).
 	replyMsg, err := database.AddMessage(ctx, db.Message{
-		SessionID: session.ID,
-		Role:      providers.RoleAssistant,
-		AgentID:   agent.ID,
-		Text:      resp.Text,
-		Steps:     marshalSteps(steps),
+		SessionID:  session.ID,
+		Role:       providers.RoleAssistant,
+		AgentID:    agent.ID,
+		Text:       resp.Text,
+		Steps:      marshalSteps(steps),
+		Model:      resp.Model,
+		StopReason: resp.StopReason,
+		Usage:      messageUsage(resp.Usage),
+		DurationMs: time.Since(start).Milliseconds(),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

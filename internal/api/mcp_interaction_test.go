@@ -84,7 +84,7 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 // advertised and that self-manage-gated spawn_session is absent without a tun.
 func TestInteractionAdvertisedNames(t *testing.T) {
 	b := &interactionBackend{runs: newChatRuns()} // tun nil → self-manage off
-	specs := b.Tools("") // no token → static set only (no per-run bridge)
+	specs := b.Tools("", "") // no token → static set only (no per-run bridge); tier "" → full set
 	want := make(map[string]bool, len(specs))
 	for _, s := range specs {
 		want[s.Name] = true
@@ -122,6 +122,59 @@ func TestInteractionAdvertisedNames(t *testing.T) {
 	}
 }
 
+// TestInteractionTierSplit locks the two-tier CLI bridge (claude-cli 2.1.x+): the
+// eager core set (alwaysLoad server) and the deferred extended set (ToolSearch
+// server) partition the advertised tools, and the union equals the full set.
+func TestInteractionTierSplit(t *testing.T) {
+	b := &interactionBackend{runs: newChatRuns()} // tun nil → self-manage off
+	full := b.Tools("", "")
+	core := b.Tools("", "core")
+	ext := b.Tools("", "extended")
+
+	if len(core)+len(ext) != len(full) {
+		t.Fatalf("core(%d)+extended(%d) must equal full(%d)", len(core), len(ext), len(full))
+	}
+	// Pure classification: the eager shell/edit tools are core even when gated off
+	// the advertised set (tun nil drops the shell spec, so assert the classifier).
+	for _, n := range []string{"Bash", "core_memory_replace", "run_subagent"} {
+		if interactionTier(n) != "core" {
+			t.Errorf("interactionTier(%q) must be core", n)
+		}
+	}
+	// Eager essentials present without a tun live in core and never in extended.
+	for _, n := range []string{"ask_user", "use_skill", "permission_prompt", "todo_write", "create_artifact"} {
+		if !specHasTool(core, n) {
+			t.Errorf("%q must be in the core (alwaysLoad) tier", n)
+		}
+		if specHasTool(ext, n) {
+			t.Errorf("%q must NOT be in the extended tier", n)
+		}
+	}
+	// NameOnly session-lifecycle tools are deferred (extended), not core.
+	for _, n := range []string{"set_session_goal", "notify", "archive_session"} {
+		if !specHasTool(ext, n) {
+			t.Errorf("%q must be in the extended (deferred) tier", n)
+		}
+		if specHasTool(core, n) {
+			t.Errorf("%q must NOT be in the core tier", n)
+		}
+	}
+
+	// splitInteractionTiers must place every bridged self-management def in the
+	// extended tier and keep eager statics in core.
+	bridge := []providers.ToolDef{{Name: "create_agent"}, {Name: "list_flows"}}
+	gotCore, gotExt := splitInteractionTiers(interactionAdvertisedNames(nil, false), bridge)
+	if !contains(gotCore, "ask_user") || contains(gotCore, "set_session_goal") {
+		t.Errorf("split core tier wrong: %v", gotCore)
+	}
+	if !contains(gotExt, "create_agent") || !contains(gotExt, "list_flows") || !contains(gotExt, "set_session_goal") {
+		t.Errorf("split extended tier must carry bridged + NameOnly tools: %v", gotExt)
+	}
+	if contains(gotExt, "create_artifact") {
+		t.Errorf("eager create_artifact must not leak into the extended tier: %v", gotExt)
+	}
+}
+
 func contains(ss []string, want string) bool {
 	for _, s := range ss {
 		if s == want {
@@ -152,11 +205,11 @@ func TestInteractionBridge(t *testing.T) {
 	b := &interactionBackend{runs: runs}
 
 	// Advertised for this token: the bridged tool appears alongside the static set.
-	if !specHasTool(b.Tools(run.token), "create_agent") {
+	if !specHasTool(b.Tools(run.token, ""), "create_agent") {
 		t.Fatal("bridged tool create_agent must be advertised for the run token")
 	}
 	// Not advertised for an unknown token (no run → static set only).
-	if specHasTool(b.Tools("other"), "create_agent") {
+	if specHasTool(b.Tools("other", ""), "create_agent") {
 		t.Fatal("bridged tool must not leak to a different token")
 	}
 

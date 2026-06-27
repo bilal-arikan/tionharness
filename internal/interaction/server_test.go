@@ -17,7 +17,7 @@ type fakeBackend struct {
 }
 
 func (f *fakeBackend) Valid(token string) bool { return token == f.validToken }
-func (f *fakeBackend) Tools(_ string) []ToolSpec {
+func (f *fakeBackend) Tools(_, _ string) []ToolSpec {
 	return []ToolSpec{{Name: "ask_user", Description: "ask", InputSchema: json.RawMessage(`{"type":"object"}`)}}
 }
 func (f *fakeBackend) Call(_ context.Context, _, name string, args json.RawMessage) (CallResult, error) {

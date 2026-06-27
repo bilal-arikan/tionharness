@@ -1,5 +1,5 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Tag, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
@@ -77,6 +77,20 @@ function SummaryOffBadge() {
   )
 }
 
+// NameOnlyBadge marks a skill advertised as SLUG ONLY in the Available Skills
+// block (description + when-to-use suppressed) — the skill analogue of a tool's
+// NameOnly tier. The skill stays listed and is discoverable via skill_search.
+function NameOnlyBadge() {
+  return (
+    <span
+      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-accent)_18%,transparent)] text-[var(--color-accent)]"
+      title="Available Skills bloğunda yalnız slug görünür (açıklama+when bastırılır); model skill_search ile keşfeder"
+    >
+      NameOnly
+    </span>
+  )
+}
+
 // SkillsPanel is the two-panel Skills screen: a list of resolved skills on the
 // left, the selected skill's full instructions (loaded on demand) on the right.
 export function SkillsPanel({ onError }: Props) {
@@ -86,6 +100,7 @@ export function SkillsPanel({ onError }: Props) {
   const [loadingBody, setLoadingBody] = useState(false)
   const [accessBusy, setAccessBusy] = useState(false)
   const [summaryBusy, setSummaryBusy] = useState(false)
+  const [nameOnlyBusy, setNameOnlyBusy] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
@@ -216,6 +231,21 @@ export function SkillsPanel({ onError }: Props) {
       })
       .catch((e) => onError((e as Error).message))
       .finally(() => setSummaryBusy(false))
+  }, [active, reload, onError])
+
+  // Toggle whether the selected skill is advertised as slug-only (NameOnly) in
+  // the Available Skills block; rewrites the SKILL.md frontmatter + refreshes.
+  const toggleNameOnly = useCallback(() => {
+    if (!active) return
+    setNameOnlyBusy(true)
+    api
+      .setSkillNameOnly(active.slug, !active.nameOnly)
+      .then((sk) => {
+        setActive((a) => (a ? { ...a, nameOnly: sk.nameOnly } : a))
+        reload()
+      })
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setNameOnlyBusy(false))
   }, [active, reload, onError])
 
   // After the editor saves, refresh the list and focus the saved skill.
@@ -349,6 +379,7 @@ export function SkillsPanel({ onError }: Props) {
                               <span className="min-w-0 flex-1 truncate font-medium">{sk.name}</span>
                               {!sk.shared && <RestrictedBadge />}
                               {sk.autoSummary === false && <SummaryOffBadge />}
+                              {sk.nameOnly && <NameOnlyBadge />}
                               <SourceBadge source={sk.source} />
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
@@ -395,6 +426,7 @@ export function SkillsPanel({ onError }: Props) {
                   )}
                   {!active.shared && <RestrictedBadge />}
                   {active.autoSummary === false && <SummaryOffBadge />}
+                  {active.nameOnly && <NameOnlyBadge />}
                   <SourceBadge source={active.source} />
                 </div>
                 <p className="mt-1 text-xs text-[var(--color-text-dim)]">
@@ -481,6 +513,20 @@ export function SkillsPanel({ onError }: Props) {
                 >
                   {active.autoSummary === false ? <EyeOff size={14} /> : <Eye size={14} />}
                   {active.autoSummary === false ? 'Özeti aç' : 'Özeti kapat'}
+                </button>
+                <button
+                  data-testid="skill-detail-toggle-nameonly"
+                  onClick={toggleNameOnly}
+                  disabled={nameOnlyBusy}
+                  title={
+                    active.nameOnly
+                      ? 'NameOnly kapat: özet (açıklama+when) Available Skills bloğunda tekrar görünsün'
+                      : 'NameOnly aç: blokta yalnız slug görünsün (açıklama+when bastırılır); model skill_search ile keşfeder'
+                  }
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+                >
+                  <Tag size={14} />
+                  {active.nameOnly ? 'NameOnly kapat' : 'NameOnly'}
                 </button>
                 <CopyPathButton path={active.dir} />
                 <button

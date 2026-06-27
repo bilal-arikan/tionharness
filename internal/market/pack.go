@@ -10,6 +10,8 @@
 // cheap.
 package market
 
+import "io/fs"
+
 // SchemaV1 is the current pack envelope schema tag.
 const SchemaV1 = "swarmpack/v1"
 
@@ -91,6 +93,11 @@ type Pack struct {
 	// download URL and its optional sha256. Not persisted, not serialised.
 	remoteURL string `json:"-"`
 	remoteSHA string `json:"-"`
+
+	// fsys, when non-nil, is the embedded filesystem a bundled pack was scanned
+	// from; Get reads its payload via fs.ReadFile(fsys, Path) instead of the OS.
+	// Unexported → never serialised.
+	fsys fs.FS
 }
 
 // Payload is the kind-specific body of a pack. Only the field matching Kind is
@@ -170,14 +177,93 @@ type BoardColumn struct {
 	Color string `json:"color,omitempty"`
 }
 
-// WorkspacePayload is a workspace template: visual identity + instructions and an
-// optional kanban layout. Install creates a brand-new workspace from it.
+// TemplateAgentKeyPrefix marks an agent reference inside a template flow graph:
+// an agent node's agentId is set to "tmpl:<key>" and substituted for the real
+// agent id at seed time (the graph itself stays agent-agnostic and portable).
+const TemplateAgentKeyPrefix = "tmpl:"
+
+// WorkspaceTemplateAgent is one seed agent in a workspace template — the full
+// agent config (mirrors AgentPayload) so a template can ship a richly-configured
+// team, not just name+soul. Key is a local reference used to wire flow nodes and
+// schedules to the agent's real ID after creation. Empty Provider/Model fall back
+// to the workspace/app default at seed time.
+type WorkspaceTemplateAgent struct {
+	Key            string   `json:"key"`
+	Name           string   `json:"name"`
+	Soul           string   `json:"soul,omitempty"`
+	Identity       string   `json:"identity,omitempty"`
+	Provider       string   `json:"provider,omitempty"`
+	Model          string   `json:"model,omitempty"`
+	PlanningMode   string   `json:"planningMode,omitempty"`
+	ThinkingLevel  string   `json:"thinkingLevel,omitempty"`
+	PermissionMode string   `json:"permissionMode,omitempty"`
+	Avatar         string   `json:"avatar,omitempty"`
+	Color          string   `json:"color,omitempty"`
+	MCPEnabled     bool     `json:"mcpEnabled,omitempty"`
+	AllowedTools   string   `json:"allowedTools,omitempty"` // legacy allowlist (JSON array)
+	BlockedTools   string   `json:"blockedTools,omitempty"` // per-agent denylist (JSON array)
+	Skills         []string `json:"skills,omitempty"`       // skill slugs to assign (resolved against the seeded skills)
+	DailyCallLimit  int     `json:"dailyCallLimit,omitempty"`
+	DailyTokenLimit int     `json:"dailyTokenLimit,omitempty"`
+}
+
+// WorkspaceTemplateSkill is a skill bundled with a template: its portable
+// SKILL.md text (frontmatter + body) under a slug, plus optional nested resource
+// files. Seeding writes these into the workspace skills dir BEFORE agents are
+// created so an agent's Skills[] references resolve.
+type WorkspaceTemplateSkill struct {
+	Slug  string            `json:"slug"`
+	Body  string            `json:"body"`
+	Files map[string][]byte `json:"files,omitempty"`
+}
+
+// WorkspaceTemplateStep is one node of a LINEAR seed flow. AgentKey points at a
+// WorkspaceTemplateAgent.Key; Prompt is an orchestration template ({{input}}, {{last}}).
+type WorkspaceTemplateStep struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	AgentKey string `json:"agentKey"`
+	Prompt   string `json:"prompt"`
+}
+
+// WorkspaceTemplateFlow is one seed flow. It is either linear (Steps) or a full
+// orchestration graph (Graph) supporting branch/parallel/delay/transform. When
+// Graph is set it takes precedence; agent nodes reference agents by
+// "tmpl:<key>" in their agentId (substituted at seed time).
+type WorkspaceTemplateFlow struct {
+	Name        string                  `json:"name"`
+	Description string                  `json:"description,omitempty"`
+	Steps       []WorkspaceTemplateStep `json:"steps,omitempty"`
+	Graph       string                  `json:"graph,omitempty"` // orchestration.Graph JSON; agentId = "tmpl:<key>"
+}
+
+// WorkspaceTemplateSchedule is a starter cron schedule. It is always seeded
+// DISABLED so it never fires until the user opts in via the Schedules screen.
+type WorkspaceTemplateSchedule struct {
+	AgentKey string `json:"agentKey"`
+	CronExpr string `json:"cronExpr"`
+	Prompt   string `json:"prompt"`
+}
+
+// WorkspacePayload is a workspace template: visual identity + instructions, an
+// optional kanban layout, and an optional starter ecosystem — bundled skills,
+// a richly-configured agent team, one or more flows (linear or non-linear)
+// wiring them, and disabled starter schedules. Install creates a brand-new
+// workspace from it and seeds everything; the workspace-create picker reuses the
+// same payload to seed a user-named workspace.
 type WorkspacePayload struct {
 	Name         string        `json:"name"`
 	Icon         string        `json:"icon,omitempty"`
 	Color        string        `json:"color,omitempty"`
 	Instructions string        `json:"instructions,omitempty"`
 	Columns      []BoardColumn `json:"columns,omitempty"`
+
+	// Starter ecosystem (all optional). Seed order: skills → agents → flows →
+	// schedules, so agent skill assignments and flow agent-key wiring resolve.
+	Skills    []WorkspaceTemplateSkill    `json:"skills,omitempty"`
+	Agents    []WorkspaceTemplateAgent    `json:"agents,omitempty"`
+	Flows     []WorkspaceTemplateFlow     `json:"flows,omitempty"`
+	Schedules []WorkspaceTemplateSchedule `json:"schedules,omitempty"`
 }
 
 // MCPPayload is a Model Context Protocol server config. Secrets in EnvConfig are

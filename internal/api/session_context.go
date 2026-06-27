@@ -207,7 +207,8 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	defs := wsp.Runtime.ShippedToolCatalog(ctx, agent)
 	toolList := make([]toolSummary, 0, len(defs))
 	for _, d := range defs {
-		toolList = append(toolList, toolSummary{Name: d.Name, Description: d.Description})
+		// Full schema for eager tools so the preview can expand the exact payload.
+		toolList = append(toolList, toolSummary{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
 	}
 
 	msgs := make([]previewMessage, 0, len(req.Messages))
