@@ -87,6 +87,9 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	// History-aware self-wake: let schedule_wake continue with the full
 	// conversation (composed like a chat turn) instead of just the wake prompt.
 	manager.SetWakeTurnRunner(s.wakeTurnRunner)
+	// Surface compaction (rolling-summary fold + manual /compact) in the in-app
+	// Logs screen; it was previously visible only in the chat response payload.
+	s.convo.SetLogger(logger)
 	s.applySettings()
 	return s
 }

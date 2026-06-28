@@ -7,6 +7,7 @@ package conversation
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -68,6 +69,26 @@ type Manager struct {
 	keepRecent     int
 	budgetFraction float64 // share of the model window spendable on transcript
 	budgetCeil     int     // hard cap on the auto-derived budget (tokens)
+	logger         *slog.Logger // optional: compaction events to the in-app Logs (nil-safe)
+}
+
+// SetLogger attaches a logger so the routine budgeted fold (and manual /compact)
+// surface in the in-app Logs screen — the single most useful context event was
+// previously visible only in the chat response, never logged. Optional/nil-safe.
+func (m *Manager) SetLogger(l *slog.Logger) {
+	m.mu.Lock()
+	m.logger = l
+	m.mu.Unlock()
+}
+
+// log emits at the given level via the attached logger, if any. Nil-safe.
+func (m *Manager) log(level slog.Level, msg string, args ...any) {
+	m.mu.RLock()
+	l := m.logger
+	m.mu.RUnlock()
+	if l != nil {
+		l.Log(context.Background(), level, msg, args...)
+	}
 }
 
 // NewManager builds a manager, reading SWARMGO_MAX_CONTEXT_TOKENS,
@@ -152,7 +173,7 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		maxTokens = EffectiveBudget(agent.Provider, agent.Model, maxTokens, fraction, ceil)
 	}
 	compacted := false
-	if EstimateTokens(summary, pending) > maxTokens {
+	if before := EstimateTokens(summary, pending); before > maxTokens {
 		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok {
 			newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
 			if err != nil {
@@ -164,6 +185,10 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			}
 			pending = keepTail
 			compacted = true
+			m.log(slog.LevelInfo, "context compacted (rolling summary fold)",
+				"session", session.ID, "agent", agent.ID,
+				"folded_msgs", len(fold), "before_tokens", before,
+				"after_tokens", EstimateTokens(summary, pending), "budget", maxTokens)
 		}
 	}
 
@@ -204,6 +229,8 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	if err := database.SetSessionSummary(ctx, session.ID, newSummary, newCount); err != nil {
 		return 0, "", err
 	}
+	m.log(slog.LevelInfo, "context compacted (manual /compact)",
+		"session", session.ID, "agent", agent.ID, "folded_msgs", len(fold))
 	return len(fold), newSummary, nil
 }
 

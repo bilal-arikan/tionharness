@@ -5,13 +5,15 @@ import { Button } from '../common'
 export interface PendingAsk {
   question: string
   options?: string[]
-  // 'permission' renders the approval card (PermissionPrompt) instead of the
-  // plain question card; tool/risk describe the gated tool.
-  kind?: 'ask' | 'permission'
+  // 'permission' renders the approval card (PermissionPrompt) and 'plan' the
+  // plan-approval card (PlanPrompt) instead of the plain question card; tool/risk
+  // describe the gated tool.
+  kind?: 'ask' | 'permission' | 'plan'
   tool?: string
   risk?: string
   // cmd is the representative argument of the gated call (e.g. the shell command)
-  // shown on the permission card so the user sees what is being approved.
+  // shown on the permission card, or the plan markdown on the plan card, so the
+  // user sees what is being approved.
   cmd?: string
 }
 

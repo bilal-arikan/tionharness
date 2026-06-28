@@ -36,6 +36,10 @@ var toolRisk = map[string]Risk{
 	"WebFetch":     RiskRead,
 	"WebSearch":    RiskRead,
 	"TodoWrite":    RiskRead,
+	// EnterPlanMode just flips the CLI into read-only planning state — no host side
+	// effects, so it auto-allows if it ever reaches the permission gate. ExitPlanMode
+	// is handled specially (plan-approval card), not via this table.
+	"EnterPlanMode": RiskRead,
 	"Edit":         RiskWrite,
 	"Write":        RiskWrite,
 	"MultiEdit":    RiskWrite,

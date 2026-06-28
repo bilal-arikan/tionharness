@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"sync"
@@ -41,6 +42,7 @@ type Pool struct {
 	ttl      time.Duration
 	now      func() time.Time // injectable clock for tests; nil => time.Now
 	onChange func()           // optional: fired (async) when any server's tools change
+	logger   *slog.Logger     // optional: lifecycle logs to the in-app Logs ring buffer
 }
 
 type poolEntry struct {
@@ -69,6 +71,26 @@ func (p *Pool) SetOnToolsChanged(fn func()) {
 	p.mu.Unlock()
 }
 
+// SetLogger attaches a logger for connection-lifecycle events (dial, re-dial on
+// config change / death, tools/list_changed). Optional and nil-safe — the pool
+// stays silent until one is set. The MCP persistent pool is otherwise opaque, so
+// these logs surface session churn / reconnects in the in-app Logs screen.
+func (p *Pool) SetLogger(l *slog.Logger) {
+	p.mu.Lock()
+	p.logger = l
+	p.mu.Unlock()
+}
+
+// log emits at the given level via the attached logger, if any. Nil-safe.
+func (p *Pool) log(level slog.Level, msg string, args ...any) {
+	p.mu.Lock()
+	l := p.logger
+	p.mu.Unlock()
+	if l != nil {
+		l.Log(context.Background(), level, msg, args...)
+	}
+}
+
 func (p *Pool) clock() time.Time {
 	if p.now != nil {
 		return p.now()
@@ -95,21 +117,37 @@ func (p *Pool) ensure(ctx context.Context, e *poolEntry, cfg ServerConfig) (*Std
 	if e.client != nil && e.fp == want && e.client.Alive() {
 		return e.client, nil
 	}
+	// Classify why we (re)dial so the log distinguishes a routine first connect
+	// from a config-driven reconnect or a recovered dead connection.
+	redial := "first_connect"
 	if e.client != nil {
+		if e.fp != want {
+			redial = "config_changed"
+		} else {
+			redial = "connection_dead"
+		}
 		_ = e.client.Close()
 		e.client = nil
 		e.listed = false
 	}
 	client, err := cfg.dial(ctx)
 	if err != nil {
+		p.log(slog.LevelWarn, "mcp pool: dial failed", "server", cfg.Name, "reason", redial, "error", err.Error())
 		return nil, err
 	}
 	name := e.name
 	client.SetOnToolsChanged(func() { p.invalidate(name) })
+	// Hand the client the pool's logger so its read loop can report why a
+	// connection later dies (the pool only sees the symptom, not the cause).
+	p.mu.Lock()
+	l := p.logger
+	p.mu.Unlock()
+	client.SetLogger(l, cfg.Name)
 	e.client = client
 	e.cfg = cfg
 	e.fp = want
 	e.listed = false
+	p.log(slog.LevelInfo, "mcp pool: connected", "server", cfg.Name, "reason", redial)
 	return client, nil
 }
 
@@ -120,6 +158,7 @@ func (p *Pool) invalidate(name string) {
 	e.mu.Lock()
 	e.listed = false
 	e.mu.Unlock()
+	p.log(slog.LevelDebug, "mcp pool: tool list invalidated (list_changed)", "server", name)
 	p.mu.Lock()
 	fn := p.onChange
 	p.mu.Unlock()
@@ -207,6 +246,7 @@ func (p *Pool) Call(ctx context.Context, cfgByServer map[string]ServerConfig, na
 		// A dead connection (read loop gone) is worth one transparent re-dial;
 		// any other error (or ctx cancellation) is returned as-is.
 		if attempt == 0 && !client.Alive() && ctx.Err() == nil {
+			p.log(slog.LevelWarn, "mcp pool: call hit dead connection, re-dialing", "server", server, "tool", tool, "error", err.Error())
 			continue
 		}
 		return res, err

@@ -3,7 +3,8 @@ import type { Attachment } from './attachment'
 
 // A single entry in an assistant turn's activity trace (mirrors agent.TurnStep).
 // Transient (live-only): 'delta' (streaming text), 'ask' (interactive prompt),
-// 'tool_delta' (streaming tool output), 'tombstone' (retract a live step).
+// 'permission' (approval gate), 'plan' (plan approval), 'tool_delta' (streaming
+// tool output), 'tombstone' (retract a live step).
 // Persisted: text, thinking, tool, todo, recovery, error, steer.
 // See lib/stepKinds.ts for human-readable descriptions.
 export type StepKind =
@@ -13,6 +14,7 @@ export type StepKind =
   | 'delta'
   | 'ask'
   | 'permission'
+  | 'plan'
   | 'todo'
   | 'recovery'
   | 'error'

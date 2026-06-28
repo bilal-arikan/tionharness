@@ -194,6 +194,13 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	// silently refused.
 	if c.permissionPromptTool != "" {
 		args = append(args, "--permission-prompt-tool", c.permissionPromptTool)
+		// read-only ALSO runs in plan mode: the CLI blocks every mutation itself, so
+		// the only call that reaches the prompt tool is ExitPlanMode — where SwarmGo
+		// renders the plan for approval. "ask" keeps the CLI's default mode so each
+		// write/exec tool is gated individually through the prompt.
+		if req.PermissionMode == "read-only" {
+			args = append(args, "--permission-mode", "plan")
+		}
 	} else {
 		args = append(args, permissionModeArgs(req.PermissionMode)...)
 	}

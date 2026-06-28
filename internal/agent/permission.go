@@ -3,10 +3,32 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
+
+// permLogKey carries an optional logger into permGate so approvals and standing
+// "always allow" grants leave an audit trail in the in-app Logs screen. It is
+// passed via context (not a parameter) so permGate keeps its pure two-value
+// signature — tests calling it with context.Background() simply log nothing.
+type permLogKey struct{}
+
+// withPermLogger attaches the audit logger for permGate. nil → no-op.
+func withPermLogger(ctx context.Context, l *slog.Logger) context.Context {
+	if l == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, permLogKey{}, l)
+}
+
+// logPerm emits a permission audit line via the ctx logger, if any. Nil-safe.
+func logPerm(ctx context.Context, level slog.Level, msg string, args ...any) {
+	if l, _ := ctx.Value(permLogKey{}).(*slog.Logger); l != nil {
+		l.Log(ctx, level, msg, args...)
+	}
+}
 
 // permGate decides whether a tool call may execute under the agent's permission
 // mode. It returns (allowed, denialMessage); when allowed is false the caller
@@ -40,6 +62,7 @@ func permGate(ctx context.Context, mode string, call providers.ToolCall) (bool, 
 		arg := tools.RepresentativeArg(call.Name, call.Input)
 		grants := tools.GrantsFrom(ctx)
 		if grants.Matches(call.Name, arg) {
+			logPerm(ctx, slog.LevelDebug, "permission auto-allowed by standing rule", "tool", call.Name, "arg", arg)
 			return true, ""
 		}
 		prompt := tools.PermissionPrompterFrom(ctx)
@@ -54,11 +77,15 @@ func permGate(ctx context.Context, mode string, call providers.ToolCall) (bool, 
 		case "always":
 			// Scope "always" to the command family for exec tools (shell(git *)),
 			// or whole-tool otherwise — see DeriveGrantRule.
-			grants.GrantRule(tools.DeriveGrantRule(call.Name, arg))
+			rule := tools.DeriveGrantRule(call.Name, arg)
+			grants.GrantRule(rule)
+			logPerm(ctx, slog.LevelInfo, "permission granted (always) — standing rule recorded", "tool", call.Name, "rule", rule.String())
 			return true, ""
 		case "allow":
+			logPerm(ctx, slog.LevelInfo, "permission granted (once)", "tool", call.Name, "arg", arg)
 			return true, ""
 		default:
+			logPerm(ctx, slog.LevelInfo, "permission denied by user", "tool", call.Name)
 			return false, fmt.Sprintf("permission denied by user: %q was not approved", call.Name)
 		}
 	default:

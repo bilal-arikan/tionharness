@@ -68,6 +68,14 @@ const (
 	// running (allowed) or a permission_denied StepError (denied). Tool names the
 	// gated tool, Reason carries its risk tier, Options the answer choices.
 	StepPermission StepKind = "permission"
+	// StepPlan is a transient interactive plan-approval prompt: a claude-cli agent
+	// called ExitPlanMode to present its plan and is blocked waiting for the user to
+	// approve or reject it. Like StepPermission it is live-only (never persisted);
+	// the outcome surfaces as the turn proceeding (approved) or the model revising
+	// (rejected, with the user's feedback). Text carries the plan markdown, Options
+	// the answer choices. The CLI's stream-json trace persists the ExitPlanMode tool
+	// call itself once the decision is made.
+	StepPlan StepKind = "plan"
 	// StepHook is an audit card for a user-defined PreToolUse/PostToolUse hook
 	// firing around a tool call: Tool names the gated tool, Reason carries the
 	// machine decision tag (hook_block / hook_modify / hook_allow / hook_context),

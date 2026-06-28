@@ -215,7 +215,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	_ = skills.EnsureDefaults(globalSkillsDir())
 	// The marketplace has no bundled/workspace tiers: packs live only in the
 	// global market dir (<DataDir>/market) and remote registries. No seeding.
-	return &Runtime{
+	r := &Runtime{
 		db:        database,
 		providers: registry,
 		mem:       memory.New(database),
@@ -231,6 +231,10 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		market:    market.New(marketGlobalDir(), workspaceLedgerDir(workDir)),
 		mcpPool:   mcp.NewPool(),
 	}
+	// Surface MCP connection lifecycle (dial / re-dial / list_changed) in the
+	// in-app Logs screen; the persistent pool is otherwise opaque.
+	r.mcpPool.SetLogger(logger)
+	return r
 }
 
 // CloseMCP terminates this workspace's persistent MCP connections. Called when

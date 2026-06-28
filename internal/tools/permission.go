@@ -18,6 +18,31 @@ const (
 // shared by the native gate and the CLI permission-prompt tool.
 var PermissionOptions = []string{PermAllowOnce, PermAllowAlways, PermDeny}
 
+// Plan-approval option labels shown when a claude-cli agent calls ExitPlanMode to
+// present its plan (user-facing → Turkish).
+const (
+	PlanApprove = "Planı onayla"
+	PlanReject  = "Reddet"
+)
+
+// PlanOptions is the clickable answer set offered for a plan-approval prompt
+// (ExitPlanMode), surfaced through the same answer channel as the permission gate.
+var PlanOptions = []string{PlanApprove, PlanReject}
+
+// PlanApproved reports whether a clicked or typed answer approves the plan.
+// Anything not clearly an approval is treated as a rejection.
+func PlanApproved(ans string) bool {
+	a := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(ans, "İ", "i")))
+	switch {
+	case strings.Contains(a, "onayla") || strings.Contains(a, "approve") ||
+		strings.Contains(a, "proceed") || strings.HasPrefix(a, "evet") ||
+		strings.HasPrefix(a, "yes") || a == "y":
+		return true
+	default:
+		return false
+	}
+}
+
 // NormalizePermission maps a clicked or typed answer onto a canonical decision:
 // "always" | "allow" | "deny". Anything not clearly an approval is a denial.
 // The Turkish dotted capital "İ" is normalised to "i" first because strings.

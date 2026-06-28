@@ -2,10 +2,62 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
+	"time"
 )
 
 // ---- Artifacts ----
+
+// originPlan tags the per-session rolling artifact that collects approved plans
+// (ExitPlanMode). planArtifactTitle is its fixed display title.
+const (
+	originPlan        = "plan"
+	planArtifactTitle = "📋 Onaylanan Planlar"
+)
+
+// AppendPlanArtifact records an approved plan (ExitPlanMode) in the session's
+// SINGLE rolling plan artifact: it creates the artifact on first use and appends
+// a new "## Plan N" section on every later call. This is the accumulation guard —
+// a session accrues ONE plan artifact regardless of how many plans it approves,
+// holding their chronological history rather than spawning an artifact per plan.
+// agentID tags the approver (may be ""). Best-effort; caller ignores the error.
+func (d *DB) AppendPlanArtifact(ctx context.Context, sessionID, agentID, planMarkdown string) (Artifact, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	plan := strings.TrimSpace(planMarkdown)
+	if plan == "" {
+		plan = "(boş plan)"
+	}
+	stamp := time.Unix(now(), 0).Format("2006-01-02 15:04")
+	// Reuse this session's existing plan artifact if present (append a section).
+	for _, a := range d.artifacts {
+		if a.SessionID == sessionID && a.Origin == originPlan {
+			cur := a // in-memory rows keep the full content
+			n := strings.Count(cur.Content, "\n## Plan ") + 1
+			cur.Content = strings.TrimRight(cur.Content, "\n") +
+				fmt.Sprintf("\n\n## Plan %d — %s\n\n%s\n", n, stamp, plan)
+			cur.UpdatedAt = now()
+			// Clear ContentFile so persistArtifactLocked rewrites the (same, id-derived)
+			// content file with the appended body instead of leaving the stale one.
+			cur.ContentFile = ""
+			return cur, d.persistArtifactLocked(&cur)
+		}
+	}
+	a := Artifact{
+		ID:        d.nextID(idArtifact),
+		SessionID: sessionID,
+		AgentID:   agentID,
+		Title:     planArtifactTitle,
+		Kind:      ArtifactMarkdown,
+		Origin:    originPlan,
+		Content:   fmt.Sprintf("# Onaylanan Planlar\n\n## Plan 1 — %s\n\n%s\n", stamp, plan),
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	return a, d.persistArtifactLocked(&a)
+}
 
 func (d *DB) persistArtifactLocked(a *Artifact) error {
 	// A text artifact's body lives in a real file under workspace/artifacts/, so

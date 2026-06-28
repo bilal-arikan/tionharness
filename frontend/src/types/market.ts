@@ -25,7 +25,6 @@ export interface AgentPayload {
   provider?: string
   model?: string
   capabilities?: string
-  planningMode?: string
   thinkingLevel?: string
   permissionMode?: string
   avatar?: string
@@ -67,7 +66,6 @@ export interface WorkspaceTemplateAgent {
   identity?: string
   provider?: string
   model?: string
-  planningMode?: string
   thinkingLevel?: string
   permissionMode?: string
   avatar?: string

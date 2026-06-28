@@ -23,7 +23,7 @@ export const THINKING_OPTIONS: PickerOption[] = [
 // to the agent's own PermissionMode; the rest override it for the turn (see
 // chatReq.PermissionMode). Order is the Shift+Tab cycle order.
 export const PERMISSION_OPTIONS: PickerOption[] = [
-  { value: '', label: 'Oto (ajan)', hint: 'Ajanın kendi izin ayarı', icon: '🛡' },
+  { value: '', label: 'Oto', hint: 'Ajanın kendi izin ayarı', icon: '🛡' },
   { value: 'read-only', label: 'Salt-okunur', hint: 'Yazma/komut engellenir', icon: '🔒' },
   { value: 'ask', label: 'Sor', hint: 'Yazma/komut için onay iste', icon: '✋' },
   { value: 'auto', label: 'Otomatik', hint: 'Tüm araçlar onaysız', icon: '⚡' },

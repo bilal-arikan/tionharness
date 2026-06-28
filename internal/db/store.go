@@ -58,9 +58,6 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	a.ID = d.nextID(idAgent)
 	a.CreatedAt = now()
 	a.UpdatedAt = a.CreatedAt
-	if a.PlanningMode == "" {
-		a.PlanningMode = "standard"
-	}
 	if a.PermissionMode == "" {
 		a.PermissionMode = "auto"
 	}
@@ -194,7 +191,6 @@ type AgentProfilePatch struct {
 	Identity     *string
 	Provider      *string
 	Model         *string
-	PlanningMode   *string
 	ThinkingLevel  *string
 	PermissionMode *string
 	Avatar         *string
@@ -222,9 +218,6 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		}
 		if p.Model != nil {
 			a.Model = *p.Model
-		}
-		if p.PlanningMode != nil {
-			a.PlanningMode = *p.PlanningMode
 		}
 		if p.ThinkingLevel != nil {
 			a.ThinkingLevel = *p.ThinkingLevel

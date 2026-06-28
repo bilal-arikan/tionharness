@@ -9,7 +9,6 @@ export interface Agent {
   identity: string
   provider: string
   model: string
-  planningMode: string
   thinkingLevel?: string
   // Tool-use permission gate: "read-only" | "ask" | "auto". Empty = auto.
   permissionMode?: string
@@ -39,7 +38,6 @@ export interface AgentPatch {
   identity?: string
   provider?: string
   model?: string
-  planningMode?: string
   thinkingLevel?: string
   permissionMode?: string
   avatar?: string

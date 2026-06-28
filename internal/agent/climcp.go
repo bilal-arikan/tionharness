@@ -47,12 +47,17 @@ const (
 // (always-loaded) server so the permission round-trip never waits on tool search.
 const permissionPromptToolID = "mcp__" + interactionCoreKey + "__permission_prompt"
 
-// promptToolForMode returns the permission-prompt tool id to hand the CLI, but
-// only in "ask" mode with a live Interaction endpoint. Empty otherwise:
-// read-only uses CLI plan mode and auto uses bypass — neither needs a per-tool
-// prompt.
+// promptToolForMode returns the permission-prompt tool id to hand the CLI for a
+// turn, or "" when no per-tool prompt is needed. It is wired in two modes (both
+// need a live Interaction endpoint to answer the prompt):
+//   - "ask":       every write/exec tool is gated through the prompt for approval.
+//   - "read-only": the CLI also runs in --permission-mode plan (mutations blocked
+//     outright); the ONLY call that reaches the prompt is ExitPlanMode, which
+//     SwarmGo renders as a plan-approval card.
+//
+// "auto" uses bypass and needs no prompt.
 func promptToolForMode(mode string, inter tools.InteractionEndpoint) string {
-	if mode == "ask" && inter.URL != "" {
+	if (mode == "ask" || mode == "read-only") && inter.URL != "" {
 		return permissionPromptToolID
 	}
 	return ""
@@ -68,7 +73,7 @@ func promptToolForMode(mode string, inter tools.InteractionEndpoint) string {
 //     the conflicting CLI built-ins (AskUserQuestion/TodoWrite) are disallowed.
 //
 // Returns an empty path when there is nothing to wire.
-func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter tools.InteractionEndpoint) (string, []string, []string, func(), error) {
+func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter tools.InteractionEndpoint, mode string) (string, []string, []string, func(), error) {
 	cfg := cliMCPConfig{MCPServers: map[string]cliMCPServer{}}
 	var allowed, disallowed []string
 
@@ -159,6 +164,15 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		// bridge present, all commands route through SwarmGo's PowerShell shell.
 		if r.tun.ShellEnabled() {
 			disallowed = append(disallowed, "Bash")
+		}
+		// Plan mode: claude-cli's EnterPlanMode/ExitPlanMode only complete when their
+		// exit approval can be answered. SwarmGo answers it via the permission-prompt
+		// tool, which is wired only in "ask" and "read-only" modes (see
+		// promptToolForMode). In "auto" (bypass) there is no approver, so a voluntary
+		// plan-mode entry would hang on the headless "Exit plan mode?" prompt and the
+		// tool result comes back is_error — suppress both so the agent just executes.
+		if mode != "ask" && mode != "read-only" {
+			disallowed = append(disallowed, "EnterPlanMode", "ExitPlanMode")
 		}
 	}
 

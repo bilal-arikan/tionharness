@@ -247,6 +247,16 @@ export function useChatStream(deps: ChatStreamDeps) {
               }))
               return
             }
+            // Plan gate: a claude-cli agent called ExitPlanMode and is waiting for
+            // the user to approve its plan. Surface the plan-approval card
+            // (transient); the decision resumes the turn over the same channel.
+            if (st.kind === 'plan') {
+              setPendingAsks((p) => ({
+                ...p,
+                [sid]: { question: '', options: st.options, kind: 'plan', cmd: st.text },
+              }))
+              return
+            }
             // Streaming providers emit incremental "delta" steps: append the
             // chunk to the live bubble's text instead of the activity trace.
             if (st.kind === 'delta') {

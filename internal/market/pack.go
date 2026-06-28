@@ -129,7 +129,6 @@ type AgentPayload struct {
 	Identity       string   `json:"identity,omitempty"`
 	Provider       string   `json:"provider,omitempty"`
 	Model          string   `json:"model,omitempty"`
-	PlanningMode   string   `json:"planningMode,omitempty"`
 	ThinkingLevel  string   `json:"thinkingLevel,omitempty"`
 	PermissionMode string   `json:"permissionMode,omitempty"`
 	Avatar         string   `json:"avatar,omitempty"`
@@ -194,7 +193,6 @@ type WorkspaceTemplateAgent struct {
 	Identity       string   `json:"identity,omitempty"`
 	Provider       string   `json:"provider,omitempty"`
 	Model          string   `json:"model,omitempty"`
-	PlanningMode   string   `json:"planningMode,omitempty"`
 	ThinkingLevel  string   `json:"thinkingLevel,omitempty"`
 	PermissionMode string   `json:"permissionMode,omitempty"`
 	Avatar         string   `json:"avatar,omitempty"`

@@ -1,15 +1,9 @@
 import type { PillOption } from '../common/OptionPills'
 
-// Option lists for the agent profile's planning / thinking / permission pickers.
-// These describe the agent's OWN stored setting (no "agent default" entry — the
-// agent IS the default), but reuse the same icon language as the composer's
-// per-turn pickers (see composer/pickerOptions.ts) for visual consistency.
-
-// Planning mode: how much the agent plans before acting.
-export const PLANNING_OPTIONS: PillOption[] = [
-  { value: 'standard', label: 'Standart', hint: 'Doğrudan yürütme', icon: '📋' },
-  { value: 'deep', label: 'Derin', hint: 'Önce ayrıntılı planlama', icon: '🧭' },
-]
+// Option lists for the agent profile's thinking / permission pickers. These
+// describe the agent's OWN stored setting (no "agent default" entry — the agent
+// IS the default), but reuse the same icon language as the composer's per-turn
+// pickers (see composer/pickerOptions.ts) for visual consistency.
 
 // Thinking (extended reasoning) level. Empty string = off (matches storage).
 // Icons form an intensity ramp: ○ off · ◔ low · ◑ medium · ● high.

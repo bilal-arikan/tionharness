@@ -27,7 +27,7 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 	}
 
 	// mcpEnabled=false so the test doesn't depend on any stored MCP servers.
-	path, allowed, _, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, inter)
+	path, allowed, _, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, inter, "ask")
 	if err != nil {
 		t.Fatalf("writeCLIMCPConfig: %v", err)
 	}

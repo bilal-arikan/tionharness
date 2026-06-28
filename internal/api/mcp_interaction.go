@@ -360,6 +360,12 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 	if err := json.Unmarshal(args, &in); err != nil {
 		return interaction.CallResult{Text: permDecision(false, in.Input, "invalid permission request: "+err.Error())}, nil
 	}
+	// ExitPlanMode is the CLI's plan-mode exit: the model presents a plan and asks
+	// to leave plan mode. Surface it as a dedicated plan-approval card instead of a
+	// generic permission prompt so the user sees the full plan before deciding.
+	if in.ToolName == "ExitPlanMode" {
+		return b.callExitPlan(ctx, run, in.Input)
+	}
 	risk := tools.Classify(in.ToolName)
 	// Argument-aware grants (B2): honour a standing rule (e.g. Bash(git *)) that
 	// already covers this command without re-prompting.
@@ -385,6 +391,60 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 		return interaction.CallResult{}, ctx.Err()
 	case <-time.After(askTimeout):
 		return interaction.CallResult{Text: permDecision(false, in.Input, "no approval within the time limit")}, nil
+	}
+}
+
+// callExitPlan handles the claude-cli ExitPlanMode tool via the permission-prompt
+// contract: it surfaces the proposed plan as a dedicated approval card (StepPlan)
+// and blocks for the user's decision. Approve → allow (the CLI leaves plan mode
+// and proceeds); reject → deny carrying the user's feedback so the model revises.
+// On an autonomous turn (no live user) the plan is auto-approved so the run can
+// continue unattended. The CLI expects the same allow/deny JSON as any prompt.
+func (b *interactionBackend) callExitPlan(ctx context.Context, run *chatRun, input json.RawMessage) (interaction.CallResult, error) {
+	var in struct {
+		Plan string `json:"plan"`
+	}
+	_ = json.Unmarshal(input, &in)
+	plan := strings.TrimSpace(in.Plan)
+	if plan == "" {
+		plan = "(boş plan)"
+	}
+	// Headless turn (scheduler/spawn): no live user can approve, so let the plan
+	// stand and proceed rather than pinning the call until the timeout.
+	if run.autonomous {
+		b.capturePlanArtifact(run, plan)
+		return interaction.CallResult{Text: permDecision(true, input, "")}, nil
+	}
+	run.emit("step", agent.TurnStep{Kind: agent.StepPlan, Text: plan, Options: tools.PlanOptions})
+	select {
+	case ans := <-run.answer:
+		if tools.PlanApproved(ans) {
+			b.capturePlanArtifact(run, plan)
+			return interaction.CallResult{Text: permDecision(true, input, "")}, nil
+		}
+		return interaction.CallResult{Text: permDecision(false, input, "the user rejected the plan and asked to revise it: "+ans)}, nil
+	case <-run.done:
+		return interaction.CallResult{Text: permDecision(false, input, "the turn ended before the plan was approved")}, nil
+	case <-ctx.Done():
+		return interaction.CallResult{}, ctx.Err()
+	case <-time.After(askTimeout):
+		return interaction.CallResult{Text: permDecision(false, input, "no plan approval within the time limit")}, nil
+	}
+}
+
+// capturePlanArtifact best-effort records an approved plan into the session's
+// single rolling plan artifact (one per session — the accumulation guard). It is
+// a silent no-op when artifacts are unavailable for the turn or the installed sink
+// lacks the capability, so a capture failure never blocks the plan from proceeding.
+func (b *interactionBackend) capturePlanArtifact(run *chatRun, plan string) {
+	sink := run.artifactSink()
+	if sink == nil {
+		return
+	}
+	if appender, ok := sink.(interface {
+		AppendPlanArtifact(context.Context, string) (tools.ArtifactRef, error)
+	}); ok {
+		_, _ = appender.AppendPlanArtifact(context.Background(), plan)
 	}
 }
 

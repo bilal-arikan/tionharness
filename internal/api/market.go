@@ -466,7 +466,6 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 		Identity:       ap.Identity,
 		Provider:       ap.Provider,
 		Model:          ap.Model,
-		PlanningMode:   ap.PlanningMode,
 		ThinkingLevel:  ap.ThinkingLevel,
 		PermissionMode: ap.PermissionMode,
 		Avatar:         ap.Avatar,
@@ -712,7 +711,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 		wp.Agents = append(wp.Agents, market.WorkspaceTemplateAgent{
 			Key: key, Name: a.Name, Soul: a.Soul, Identity: a.Identity,
 			Provider: a.Provider, Model: a.Model,
-			PlanningMode: a.PlanningMode, ThinkingLevel: a.ThinkingLevel, PermissionMode: a.PermissionMode,
+			ThinkingLevel: a.ThinkingLevel, PermissionMode: a.PermissionMode,
 			Avatar: a.Avatar, Color: a.Color,
 			MCPEnabled: a.MCPEnabled, AllowedTools: a.AllowedTools, BlockedTools: a.BlockedTools,
 			Skills:         a.Skills,

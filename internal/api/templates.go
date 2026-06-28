@@ -150,7 +150,6 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			Color:           ta.Color,
 			Provider:        ap,
 			Model:           am,
-			PlanningMode:    ta.PlanningMode,
 			ThinkingLevel:   ta.ThinkingLevel,
 			PermissionMode:  ta.PermissionMode,
 			MCPEnabled:      ta.MCPEnabled,

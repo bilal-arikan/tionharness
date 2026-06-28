@@ -247,7 +247,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// external MCP servers (when enabled) plus the Interaction MCP server (when an
 	// endpoint is present) into a single generated --mcp-config.
 	if cliMCP {
-		path, allowed, disallowed, cleanup, err := r.writeCLIMCPConfig(ctx, agent.MCPEnabled, inter)
+		path, allowed, disallowed, cleanup, err := r.writeCLIMCPConfig(ctx, agent.MCPEnabled, inter, agent.PermissionMode)
 		if err != nil {
 			r.logger.Warn("cli mcp config failed", "error", err)
 		} else if path != "" {
@@ -441,7 +441,9 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// that explicitly approved the call short-circuits the gate.
 			allowed, denyMsg := true, ""
 			if !pre.autoAllow {
-				allowed, denyMsg = permGate(ctx, agent.PermissionMode, call)
+				// Carry the logger so approvals / "always allow" grants leave an
+				// audit trail in the Logs screen (denials are already logged below).
+				allowed, denyMsg = permGate(withPermLogger(ctx, r.logger), agent.PermissionMode, call)
 			}
 			if !allowed {
 				r.logger.Info("tool blocked", "agent", agent.ID, "tool", call.Name, "mode", agent.PermissionMode)

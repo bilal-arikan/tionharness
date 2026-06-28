@@ -35,8 +35,9 @@ type Artifact struct {
 
 	// Origin records how this artifact entered the workspace: "chat" (a chat
 	// attachment), "manual" (dropped into the Artifacts screen), "agent" (a file
-	// the agent wrote, auto-captured) or "tool" (create_artifact). Empty for
-	// legacy rows. Surfaced in the UI as "where it came from".
+	// the agent wrote, auto-captured), "tool" (create_artifact) or "plan" (the
+	// session's rolling artifact of approved ExitPlanMode plans). Empty for legacy
+	// rows. Surfaced in the UI as "where it came from".
 	Origin string `json:"origin,omitempty"`
 
 	// SourcePath is the file path this artifact mirrors when it was captured

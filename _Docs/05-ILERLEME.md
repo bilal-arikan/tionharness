@@ -1,6 +1,89 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-27**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-28**
+
+## Plan modu bağlandı + ölü `planningMode` alanı kaldırıldı ✅ (2026-06-28)
+
+İki iş tek oturumda: (a) eski **ölü `planningMode`** ajan alanı ("Standart"/"Derin")
+uçtan uca silindi — runtime'da hiç okunmuyordu (Go: models/store/agents/market/
+templates/pack; frontend: types + `agentOptions` `PLANNING_OPTIONS` + AgentSettingsForm
+picker'ı). Migration gerekmez (struct'tan kalkınca eski JSON alanı sessizce yok sayılır).
+
+(b) **claude-cli plan modu (`ExitPlanMode`) gerçekten çalışır hale getirildi.** Önceden
+headless `-p` modunda `ExitPlanMode` onayı alınamıyor, araç `"Exit plan mode?"` +
+`is_error` dönüyor, ajan planı "reddedildi" sanıyordu. Artık native `ExitPlanMode`
+çağrısı `--permission-prompt-tool` köprüsünden `permission_prompt`'a düşürülüp özel
+ele alınıyor (`callExitPlan`): plan markdown'ı **plan onay kartı**na (`StepPlan` →
+`PlanPrompt.tsx`, "Planı onayla"/"Reddet") dönüşür, karar `run.answer` kanalından gelir.
+Mod davranışı: **ask** → her tur köprüden; **read-only** → `--permission-mode plan` +
+köprü (CLI tüm yazmaları bloklar, yalnız ExitPlanMode düşer); **auto** → plan araçları
+disallow (onaylayıcı yok); **otonom** → otomatik onay.
+
+**Onaylanan plan → artifact (birikme kontrollü, eklendi):** plan onaylandığında otomatik
+olarak **session başına TEK rolling artifact**'a yazılır (`db.AppendPlanArtifact`,
+`origin="plan"`, başlık "📋 Onaylanan Planlar"); her yeni plan `## Plan N` bölümü olarak
+**eklenir** (yeni artifact açılmaz) → artifact sayısı plan sayısıyla değil session sayısıyla
+sınırlı. Hem manuel onayda hem otonom oto-onayda; best-effort. Doğrulandı: `go build`/`vet`
+temiz, 92 db/api testi + `TestAppendPlanArtifact` geçti, `npm run build` temiz. Detay:
+`_Docs/39-PLAN-MODE.md`.
+
+## Log boşlukları kapatıldı: MCP client + compaction + izin denetim izi ✅ (2026-06-28)
+
+Önceki oturumda listelenen kalan log boşluklarının **üçü de** in-app Logs ring
+buffer'ına bağlandı (hepsi nil-safe logger, sıcak yolda maliyetsiz):
+
+**(1) `internal/mcp/client.go` — stdio JSON-RPC client artık logger taşıyor.**
+Pool yalnız "connection_dead" semptomunu görüyordu; client read-loop'unun **neden**
+öldüğü görünmezdi. Eklenen: `SetLogger(l, server)` + nil-safe `log`. Loglanan:
+read-loop çıkışı (`read loop exited (connection lost)`, kendi `Close()`'umuz hariç —
+`wasClosed` ayrımı; EOF=Info, diğer=Warn, stranded pending sayısı dahil), non-JSON
+inbound satır (Debug), bilinmeyen/geç id (Debug). Pool dial sonrası
+`client.SetLogger(p.logger, cfg.Name)` ile bağlar.
+
+**(2) Bütçeli compaction / rolling-summary fold loglanıyor.** `conversation/
+manager.go`'ya `SetLogger` eklendi; `Prepare` rutin fold'da `context compacted
+(rolling summary fold)` (session/agent/folded_msgs/before_tokens/after_tokens/
+budget), `ForceCompact` manuel `/compact`'te `context compacted (manual /compact)`
+logluyor. `api/server.go` `s.convo.SetLogger(logger)` ile bağladı → chat (sync+
+stream) + wake/otonom yolların **hepsi** tek noktadan kapsanır. Önceden yalnız
+`api/chat.go` yanıtında (`prep.Compacted`) görünüyordu, Logs'a hiç düşmüyordu.
+
+**(3) İzin onayları / "her zaman izin ver" grant'ları — denetim izi.** `permission.go`
+saf iki-değer imzasını korudu; logger **ctx üzerinden** taşınır (`withPermLogger`/
+`logPerm`, testlerde `context.Background()` → no-op). `permGate` artık logluyor:
+standing-rule auto-allow (Debug), onay-bir-kez (`granted (once)`, Info), her-zaman
+grant (`granted (always) — standing rule recorded` + `rule=Bash(git *)` gibi
+`PermRule.String()`, Info), kullanıcı reddi (Info). `toolloop.go` çağrıda
+`withPermLogger(ctx, r.logger)` enjekte eder (reddetme zaten `tool blocked` ile
+loglanıyordu). Böylece neyin yetkilendirildiği Logs'ta izlenebilir.
+
+**Doğrulama:** `go build ./...` + `go test ./...` (**505 test, 32 paket**) yeşil.
+
+## Logs ekranı: kaydırma-aware otomatik takip + MCP pool yaşam-döngüsü logları ✅ (2026-06-27)
+
+**(1) Logs ekranı — yukarı kaydırınca otomatik dibe inmesin.** Önceden `follow`
+(Canlı) açıkken her yeni satırda viewport koşulsuz en alta zıplıyordu; kullanıcı
+eski logları okumak için yukarı kaydırsa bile yeni log gelince aşağı çekiliyordu.
+`LogsPanel.tsx`'e **dibe-sabitlenme takibi** eklendi: `onScroll` viewport'un dibe
+yakın olup olmadığını (`scrollHeight - scrollTop - clientHeight < 24px`) ölçüp
+`atBottomRef`'i günceller; otomatik kaydırma efekti yalnız `follow && atBottom`
+iken çalışır. Kullanıcı yukarıdayken yeni satırlar görünümü bozmaz. Yukarı
+kaydırılmışken sağ-alt köşede **"En alta in"** (ArrowDown) floating butonu görünür
+→ tıklanınca tekrar dibe sabitlenir. Frontend `tsc --noEmit` yeşil.
+
+**(2) MCP kalıcı havuzu (pool) yaşam-döngüsü logları.** `internal/mcp/pool.go`
+tamamen sessizdi — bağlantı dial/yeniden-dial/ölüm ve `tools/list_changed`
+olayları Logs ekranına hiç düşmüyordu (churn'e duyarlı yeni özellik için kör
+nokta). Pool'a **opsiyonel/nil-safe logger** (`SetLogger`) eklendi; loglanan
+olaylar: `connected` (reason=first_connect/config_changed/connection_dead),
+`dial failed`, `tool list invalidated (list_changed)`, `call hit dead connection,
+re-dialing`. Runtime kuruluşunda `r.mcpPool.SetLogger(logger)` ile bağlandı →
+loglar in-app ring buffer'a akar. `NewPool()` imzası korundu (testler kırılmadı).
+`go build ./...` + `go test ./internal/mcp ./internal/agent` (106 test) yeşil.
+
+**Diğer log boşlukları (sonraki adım önerisi):** `internal/agent/debugjournal.go`
+(yalnız hata-debug), `internal/ingest/ingest.go` (tek log), `permission.go` (izin
+ver/reddet izlenmiyor) — istenirse benzer şekilde enstrümante edilebilir.
 
 ## Otonom turlarda per-message metadata + label/status geri çekildi ✅ (2026-06-27)
 

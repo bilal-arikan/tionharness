@@ -180,7 +180,7 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
   "name": "Researcher",
   "soul": "...", "identity": "...",
   "provider": "anthropic", "model": "claude-...",
-  "planningMode": "...", "thinkingLevel": "...",
+  "thinkingLevel": "...",
   "permissionMode": "ask", "avatar": "🤖", "color": "#...",
   "mcpEnabled": true, "allowedTools": "[...]",
   "skills": ["web-research"]   // slug referansı; eksikse kurulumda atlanır

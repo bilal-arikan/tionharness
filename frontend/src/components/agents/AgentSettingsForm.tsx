@@ -11,7 +11,7 @@ import { AgentSkillsSection } from './AgentSkillsSection'
 import { AgentContextModal } from './AgentContextModal'
 import { Button, PromptEditor } from '../common'
 import { OptionPills } from '../common/OptionPills'
-import { PLANNING_OPTIONS, THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
+import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
 
 interface Props {
   agent: Agent
@@ -39,7 +39,6 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [identity, setIdentity] = useState(agent.identity ?? '')
   const [provider, setProvider] = useState(agent.provider)
   const [model, setModel] = useState(agent.model ?? '')
-  const [planningMode, setPlanningMode] = useState(agent.planningMode || 'standard')
   const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel ?? '')
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
@@ -93,7 +92,6 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         identity,
         provider,
         model: model.trim(),
-        planningMode,
         thinkingLevel,
         permissionMode,
         skills,
@@ -235,16 +233,6 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
             setModel(m)
           }}
         />
-
-        <Field label="Planlama modu">
-          <OptionPills
-            value={planningMode}
-            onChange={setPlanningMode}
-            options={PLANNING_OPTIONS}
-            ariaLabel="Planlama modu"
-            testid="agent-planning-mode"
-          />
-        </Field>
 
         <Field label="Düşünme (thinking) seviyesi">
           <OptionPills

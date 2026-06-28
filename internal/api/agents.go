@@ -54,7 +54,6 @@ type createAgentReq struct {
 	Identity       string `json:"identity"`
 	Provider       string `json:"provider"`
 	Model          string `json:"model"`
-	PlanningMode   string `json:"planningMode"`
 	ThinkingLevel  string `json:"thinkingLevel"`
 	PermissionMode string `json:"permissionMode"`
 	Avatar         string `json:"avatar"`
@@ -102,7 +101,6 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		Identity:       req.Identity,
 		Provider:       req.Provider,
 		Model:          req.Model,
-		PlanningMode:   req.PlanningMode,
 		ThinkingLevel:  req.ThinkingLevel,
 		PermissionMode: req.PermissionMode,
 	})
@@ -156,7 +154,6 @@ type updateAgentReq struct {
 	Identity       *string   `json:"identity"`
 	Provider       *string   `json:"provider"`
 	Model          *string   `json:"model"`
-	PlanningMode   *string   `json:"planningMode"`
 	ThinkingLevel  *string   `json:"thinkingLevel"`
 	PermissionMode *string   `json:"permissionMode"`
 	Avatar         *string   `json:"avatar"`
@@ -181,7 +178,6 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		Identity:       req.Identity,
 		Provider:       req.Provider,
 		Model:          req.Model,
-		PlanningMode:   req.PlanningMode,
 		ThinkingLevel:  req.ThinkingLevel,
 		PermissionMode: req.PermissionMode,
 		Avatar:         req.Avatar,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { FolderOpen } from 'lucide-react'
+import { FolderOpen, ArrowDown } from 'lucide-react'
 import { api } from '../../api'
 import type { LogEntry } from '../../types'
 import { groupConsecutive } from '../../lib/logGroup'
@@ -49,6 +49,11 @@ export function LogsPanel({ onError }: Props) {
   // Absolute path of the on-disk log file (for copy / reveal in Explorer).
   const [logPath, setLogPath] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Whether the viewport is pinned to the bottom. While true, new lines
+  // auto-scroll into view; once the user scrolls up this turns false and we
+  // stop yanking the view down (a "jump to bottom" button appears instead).
+  const [atBottom, setAtBottom] = useState(true)
+  const atBottomRef = useRef(true)
 
   // Resolve the on-disk log file path once for the copy/open-folder actions.
   useEffect(() => {
@@ -80,9 +85,29 @@ export function LogsPanel({ onError }: Props) {
     [logs, group],
   )
 
-  // Auto-scroll to the newest line when following.
+  // Track whether the viewport is pinned to the bottom. A small threshold
+  // tolerates sub-pixel rounding and lets near-bottom still count as "bottom".
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+    atBottomRef.current = pinned
+    setAtBottom(pinned)
+  }, [])
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    atBottomRef.current = true
+    setAtBottom(true)
+  }, [])
+
+  // Auto-scroll to the newest line only when following AND the user has not
+  // scrolled up. If they scrolled away from the bottom, leave the view alone
+  // so reading older lines isn't interrupted by incoming logs.
   useEffect(() => {
-    if (follow && scrollRef.current) {
+    if (follow && atBottomRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [rows, follow])
@@ -141,7 +166,8 @@ export function LogsPanel({ onError }: Props) {
       </div>
 
       {/* Log lines */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 font-mono text-xs leading-relaxed">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto p-3 font-mono text-xs leading-relaxed">
         {rows.length === 0 && (
           <p className="text-[var(--color-text-dim)]">Kayıt yok.</p>
         )}
@@ -176,6 +202,19 @@ export function LogsPanel({ onError }: Props) {
             </div>
           )
         })}
+      </div>
+      {/* Jump-to-bottom: shown when following but the user scrolled up, so new
+          lines no longer drag the view down. Click re-pins to the bottom. */}
+      {follow && !atBottom && (
+        <button
+          onClick={scrollToBottom}
+          title="En alta in"
+          className="absolute bottom-3 right-4 flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs text-[var(--color-text)] shadow-md transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+        >
+          <ArrowDown size={12} />
+          En alta in
+        </button>
+      )}
       </div>
     </div>
   )

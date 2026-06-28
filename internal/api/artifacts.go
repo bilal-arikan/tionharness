@@ -131,6 +131,19 @@ func (s artifactSink) UpdateArtifact(ctx context.Context, id, content string) (t
 	return toArtifactRef(a), nil
 }
 
+// AppendPlanArtifact records an approved plan (ExitPlanMode) in this session's
+// single rolling plan artifact. It is a SwarmGo-specific capability used by the
+// plan-approval bridge (callExitPlan), kept off the generic tools.ArtifactSink
+// interface and reached there via a duck-typed assertion. Best-effort.
+func (s artifactSink) AppendPlanArtifact(ctx context.Context, planMarkdown string) (tools.ArtifactRef, error) {
+	a, err := s.db.AppendPlanArtifact(ctx, s.sessionID, s.agentID, planMarkdown)
+	if err != nil {
+		return tools.ArtifactRef{}, err
+	}
+	s.notifyArtifact(a, "güncellendi")
+	return toArtifactRef(a), nil
+}
+
 func toArtifactRef(a db.Artifact) tools.ArtifactRef {
 	return tools.ArtifactRef{ID: a.ID, Title: a.Title, Kind: a.Kind}
 }

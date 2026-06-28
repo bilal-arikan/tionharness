@@ -15,8 +15,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 	"sync"
 	"time"
@@ -82,6 +84,35 @@ type StdioClient struct {
 	pending  map[int]chan reply
 	closed   bool
 	onChange func() // invoked (async) on notifications/tools/list_changed
+
+	logger     *slog.Logger // optional: read-loop death / decode noise (nil-safe)
+	serverName string       // server label attached to logs (set with the logger)
+}
+
+// SetLogger attaches a logger (and the owning server's name for context) so the
+// read loop can surface why a connection died and how much inbound noise it
+// skipped. Optional and nil-safe; the Pool wires this after dialing. The stdio
+// client is otherwise opaque — these logs reach the in-app Logs screen.
+func (c *StdioClient) SetLogger(l *slog.Logger, server string) {
+	c.mu.Lock()
+	c.logger = l
+	c.serverName = server
+	c.mu.Unlock()
+}
+
+// log emits at the given level via the attached logger, if any. Nil-safe and
+// reads the logger under the lock so SetLogger races are harmless.
+func (c *StdioClient) log(level slog.Level, msg string, args ...any) {
+	c.mu.Lock()
+	l, name := c.logger, c.serverName
+	c.mu.Unlock()
+	if l == nil {
+		return
+	}
+	if name != "" {
+		args = append([]any{"server", name}, args...)
+	}
+	l.Log(context.Background(), level, msg, args...)
 }
 
 // DialStdio launches the given command as an MCP server and performs the
@@ -159,6 +190,7 @@ func (c *StdioClient) readLoop() {
 func (c *StdioClient) dispatch(line []byte) {
 	var msg rpcMessage
 	if err := json.Unmarshal(line, &msg); err != nil {
+		c.log(slog.LevelDebug, "mcp client: skipped non-JSON inbound line", "bytes", len(line))
 		return // skip non-JSON / log noise
 	}
 	if msg.ID != nil {
@@ -167,6 +199,7 @@ func (c *StdioClient) dispatch(line []byte) {
 		delete(c.pending, *msg.ID)
 		c.mu.Unlock()
 		if ch == nil {
+			c.log(slog.LevelDebug, "mcp client: response for unknown/late id", "id", *msg.ID)
 			return // late/unknown id
 		}
 		if msg.Error != nil {
@@ -190,10 +223,21 @@ func (c *StdioClient) dispatch(line []byte) {
 // failAll marks the client closed and delivers err to every pending call.
 func (c *StdioClient) failAll(err error) {
 	c.mu.Lock()
+	wasClosed := c.closed // distinguish our own Close() from an unexpected death
 	c.closed = true
 	pend := c.pending
 	c.pending = map[int]chan reply{}
 	c.mu.Unlock()
+	// A read-loop exit we did NOT initiate means the server process died or its
+	// pipe broke mid-session — surface why, and how many calls were stranded.
+	// A clean EOF after our own Close() is routine teardown, so stay quiet.
+	if !wasClosed {
+		level := slog.LevelWarn
+		if errors.Is(err, io.EOF) {
+			level = slog.LevelInfo
+		}
+		c.log(level, "mcp client: read loop exited (connection lost)", "error", err.Error(), "pending", len(pend))
+	}
 	for _, ch := range pend {
 		ch <- reply{err: fmt.Errorf("mcp read: %w", err)}
 	}

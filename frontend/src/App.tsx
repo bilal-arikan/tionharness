@@ -10,6 +10,7 @@ import { MessageList } from './components/chat/MessageList'
 import { Composer } from './components/chat/Composer'
 import { AskPrompt } from './components/chat/AskPrompt'
 import { PermissionPrompt } from './components/chat/PermissionPrompt'
+import { PlanPrompt } from './components/chat/PlanPrompt'
 import { PendingTray } from './components/chat/PendingTray'
 import { WakeWaitBanner } from './components/chat/WakeWaitBanner'
 import { TodoPanel } from './components/chat/TodoPanel'
@@ -1023,6 +1024,8 @@ export default function App() {
             {chat.activeAsk &&
               (chat.activeAsk.kind === 'permission' ? (
                 <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+              ) : chat.activeAsk.kind === 'plan' ? (
+                <PlanPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
               ) : (
                 <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
               ))}

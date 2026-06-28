@@ -69,6 +69,15 @@ export const STEP_KINDS: StepKindInfo[] = [
       'İzin kapısı (ask modu): yazma/komut aracı için kullanıcıdan onay bekler (İzin ver / Her zaman izin ver / Reddet). Geçici; karar verilince araç çalışır ya da permission_denied hatası yazılır. Hem native hem claude-cli (permission-prompt) yolunda.',
   },
   {
+    kind: 'plan',
+    label: 'Plan onayı',
+    icon: '📋',
+    persisted: false,
+    status: 'active',
+    description:
+      'Plan onayı (claude-cli): ajan ExitPlanMode ile planını sunup kullanıcıdan onay bekler (Planı onayla / Reddet). Geçici; onaylanınca tur devam eder, reddedilince model planı revize eder. Yalnız ask ve salt-okunur modda; otonom turda otomatik onaylanır.',
+  },
+  {
     kind: 'todo',
     label: 'Görev listesi',
     icon: '✅',

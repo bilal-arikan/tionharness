@@ -105,6 +105,29 @@ export function Composer({
   // Monotonic id for pending attachments (avoids Date.now collisions on bursts).
   const seq = useRef(0)
 
+  // The "Oto" (default '') option resolves to the selected agent's own setting.
+  // Surface that resolved value on the option label, e.g. "Oto(Yüksek)" /
+  // "Oto(Sor)", so the user can see what auto currently means without opening the
+  // agent. When the agent has no explicit value the plain "Oto" label is kept.
+  const selectedAgent = useMemo(
+    () => agents.find((a) => a.id === agentId),
+    [agents, agentId],
+  )
+  const thinkingOptions = useMemo(() => {
+    const lvl = selectedAgent?.thinkingLevel
+    const resolved = lvl ? THINKING_OPTIONS.find((o) => o.value === lvl)?.label : undefined
+    return THINKING_OPTIONS.map((o) =>
+      o.value === '' ? { ...o, label: resolved ? `Oto(${resolved})` : o.label } : o,
+    )
+  }, [selectedAgent])
+  const permissionOptions = useMemo(() => {
+    const mode = selectedAgent?.permissionMode
+    const resolved = mode ? PERMISSION_OPTIONS.find((o) => o.value === mode)?.label : undefined
+    return PERMISSION_OPTIONS.map((o) =>
+      o.value === '' ? { ...o, label: resolved ? `Oto(${resolved})` : o.label } : o,
+    )
+  }, [selectedAgent])
+
   // Auto-grow the textarea with its content: reset to a single row, then expand to
   // fit the text. A CSS max-height (max-h-[5.5rem] ≈ 3 lines) caps the growth and
   // turns on the internal scrollbar beyond that, so the composer never pushes the
@@ -429,14 +452,14 @@ export function Composer({
           <ComposerPicker
             value={thinkingLevel}
             onChange={onThinkingLevelChange}
-            options={THINKING_OPTIONS}
+            options={thinkingOptions}
             header="Düşünme seviyesi"
             title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
           />
           <ComposerPicker
             value={permissionMode}
             onChange={onPermissionModeChange}
-            options={PERMISSION_OPTIONS}
+            options={permissionOptions}
             header="İzin modu (Shift+Tab)"
             title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
             menuWidthClass="w-60"
