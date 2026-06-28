@@ -548,6 +548,20 @@ type agentSkillWriter struct {
 	db    *db.DB
 }
 
+// ValidateSkill adapts skills.Store.ValidateSkill onto the tools-layer view so the
+// skill_validate tool stays decoupled from the skills package.
+func (w agentSkillWriter) ValidateSkill(slug string) tools.SkillValidation {
+	r := w.store.ValidateSkill(slug)
+	return tools.SkillValidation{
+		Found:    r.Found,
+		Tier:     r.Tier,
+		Path:     r.Path,
+		Valid:    r.Valid,
+		Errors:   r.Errors,
+		Warnings: r.Warnings,
+	}
+}
+
 func (w agentSkillWriter) CreateSkill(slug, name, description, whenToUse, group, body string, shared bool) error {
 	_, err := w.store.Create(slug, skills.SkillInput{
 		Name:        name,

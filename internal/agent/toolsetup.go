@@ -121,6 +121,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewSetSessionTitleTool(),
 		tools.NewSetWorkingDirTool(),
 		tools.NewArchiveSessionTool(),
+		// mermaid_validate: lint a Mermaid diagram (recognised type + balanced
+		// brackets/quotes) before emitting it. Pure, read-only, no deps.
+		tools.NewMermaidValidateTool(),
 	}
 
 	// Core memory (MemGPT-style): the agent edits its own persistent working-memory
@@ -139,6 +142,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// disk until use_skill is called (lazy). The tool is restricted to that set —
 	// a restricted skill is unreachable unless explicitly assigned.
 	if r.skills != nil {
+		// skill_validate: read-only check of a skill's SKILL.md (slug/frontmatter/
+		// body). Always available when a skill store exists — pairs with create_skill/
+		// update_skill so an agent can self-check authored skills, independent of which
+		// skills are assigned.
+		builtins = append(builtins, tools.NewSkillValidateTool(agentSkillWriter{store: r.skills}))
 		if allow := r.skills.AllowedFor(agent.Skills); len(allow) > 0 {
 			lib := agentSkillLib{store: r.skills, allow: allow}
 			builtins = append(builtins, tools.NewUseSkillTool(lib))
@@ -211,6 +219,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewFSListDirTool(sb),
 			tools.NewFSGlobTool(sb),
 			tools.NewFSGrepTool(sb),
+			// config_validate: well-formed-JSON + known-shape check for SwarmGo config
+			// files, rooted at this turn's working dir. Read-only.
+			tools.NewConfigValidateTool(sb),
 		)
 		// The shell tool is high-risk; offer it only when explicitly enabled.
 		if r.tun.ShellEnabled() {
@@ -398,6 +409,8 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// Artifact revise + meta — create_artifact stays eager (behavioral); revise
 		// and the deactivate meta-tool are reached on demand.
 		"update_artifact", "deactivate_tools",
+		// Validation tools — read-only, used only around authoring/diagram emission.
+		"skill_validate", "config_validate", "mermaid_validate",
 		// Promoted out of the hidden self-management group: common enough to advertise
 		// by name (handoff at context limit, add a memory, DM a peer agent) rather than
 		// fold into the self-management skill pointer. MarkNameOnly clears the earlier

@@ -121,7 +121,9 @@ omitted fields keep their current value; prefer it over delete + recreate. `grou
 is an organisation label — skills sharing one are folded together in the Skills UI. Only
 workspace-tier skills can be edited or deleted (global/bundled are protected).
 Deleting a skill also strips its slug from every agent that had it selected, so no
-agent keeps a dangling reference. (`use_skill` itself is always available.)
+agent keeps a dangling reference. (`use_skill` itself is always available.) After
+authoring or editing, run **`skill_validate`** (read-only, load-on-demand) to check
+the SKILL.md's slug/frontmatter/body before relying on it.
 
 A skill's SKILL.md frontmatter supports more than the basics: `paths:` makes it
 **conditional** (kept out of the catalog, found via `skill_search` — good for niche

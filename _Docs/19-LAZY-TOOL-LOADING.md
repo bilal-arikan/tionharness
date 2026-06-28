@@ -125,6 +125,10 @@
     `write_config`, `list_config`
   - **Secret kasası okuma** (önceden lazy+özet): `secret_list`, `secret_get`
   - **Web + bellek** (önceden lazy+özet): `WebFetch`, `memory_recall`
+  - **Doğrulama araçları (2026-06-29)**: `skill_validate`, `config_validate`,
+    `mermaid_validate` — salt-okuma, yalnız authoring/diyagram anlarında kullanılır.
+    Native builtin + NameOnly → lazy olduğundan claude-cli'da `swarmgo_extended`
+    köprüsünden ToolSearch ile gelir (BridgeableDefs otomatik kapsar).
 
   **Eager kalanlar** (davranışsal dürtü veya yüksek frekans): `todo_write`,
   `ask_user`, `request_confirmation`, `create_artifact`/`update_artifact`,

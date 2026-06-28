@@ -1,6 +1,37 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-28**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-29**
+
+## Doğrulama araçları (skill/config/mermaid) + interaction köprü konsolidasyonu ✅ (2026-06-29)
+
+External Agent `session-tools-core` ↔ SwarmGo araç eşleştirmesindeki boşluk analizinden
+(bkz. `_Docs/analiz-craftagent-arac-eslestirme.md`) çıkan üç **salt-okuma doğrulama
+aracı** eklendi:
+
+- **`skill_validate`** — bir skill'in SKILL.md'sini doğrular (slug hijyeni, frontmatter
+  `name`/`description`, boş gövde). Mantık tek kaynak: `skills.Store.ValidateSkill`
+  (`internal/skills/validate.go`); tool `internal/tools/builtin_skillvalidate.go`
+  (`SkillValidator` arayüzü, agent tarafı `agentSkillWriter.ValidateSkill` adaptörü).
+- **`config_validate`** — SwarmGo JSON config dosyalarını doğrular (geçerli JSON +
+  tanınan şekiller için beklenen alanlar: settings.json / tools-config.json / agent /
+  mcp-server). `internal/tools/builtin_configvalidate.go`, çalışma dizini sandbox'ı.
+- **`mermaid_validate`** — saf-Go hafif lint (tanınan diyagram tipi + denge kontrolü;
+  tam parser DEĞİL, sınır belgelendi). `internal/tools/builtin_mermaidvalidate.go`.
+
+Üçü de native builtin + **NameOnly (lazy)** → claude-cli'da `swarmgo_extended`
+köprüsünden `BridgeableDefs` ile otomatik gelir. Kayıt: `toolsetup.go` (mermaid base,
+skill_validate `r.skills!=nil`, config_validate `sb.Ready()`; üçü NameOnly tier'a eklendi).
+
+**Köprü konsolidasyonu (#2):** `mcp_interaction.go`'da delege eden 6 `callXxx`
+(todo/artifact/notify/focus/goal/sessionEdit) tek tablo-güdümlü `sinkToolTable` +
+`callViaSink` yardımcısına indirildi — davranış birebir korundu, ~120 satır boilerplate
+kalktı. (Not: bu, "tek Context, çok-backend" refactor taslağının düşük-riskli/kozmetik
+parçası; büyük `ToolContext` arayüzü gereksiz bulunup uygulanmadı — SwarmGo deseni zaten
+ctx-value injection ile gerçekliyor.)
+
+**Test:** `builtin_validate_test.go` (mermaid/config/skill_validate), `skills/validate_test.go`
+(ValidateSkill) + tüm suite **510 test** yeşil. Doküman/skill: `_Docs/19` (NameOnly seti),
+`swarmgo-self-management` (skill_validate notu), `swarmgo-guide` (mermaid_validate notu).
 
 ## Plan modu bağlandı + ölü `planningMode` alanı kaldırıldı ✅ (2026-06-28)
 
