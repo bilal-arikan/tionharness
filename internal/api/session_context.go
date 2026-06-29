@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
 // sessionContextPreview is the EXACT next-turn context a session's agent would be
@@ -28,6 +30,25 @@ type sessionContextPreview struct {
 	ToolTokens    int              `json:"toolTokens"`
 	TotalTokens   int              `json:"totalTokens"`
 	Cache         cachePreview     `json:"cache"`
+	// CLIOverhead is set only for CLI-wrapper providers (claude-cli / gemini-cli),
+	// where TotalTokens above under-reports the real billed input — see the type doc.
+	CLIOverhead *cliOverheadPreview `json:"cliOverhead,omitempty"`
+}
+
+// cliOverheadPreview surfaces, for CLI-wrapper providers (claude-cli, gemini-cli),
+// the gap between SwarmGo's own segment estimate (TotalTokens) and the real prompt
+// the underlying CLI actually sends to the model. The CLI injects its OWN system
+// prompt + tool schemas + MCP bridge that SwarmGo never composes or sees, so for
+// these providers TotalTokens drastically under-reports billed input (measured
+// ~5x on claude-cli/opus). MeasuredTokens is the average real model input per call
+// derived from the session's recorded lifetime usage (input + cacheRead +
+// cacheWrite) / calls; it is 0 until the first turn has been sent.
+type cliOverheadPreview struct {
+	Note            string `json:"note"`
+	EstimatedTokens int    `json:"estimatedTokens"` // SwarmGo segment sum (== TotalTokens)
+	MeasuredTokens  int    `json:"measuredTokens"`  // avg real model input per call
+	OverheadTokens  int    `json:"overheadTokens"`  // max(0, measured - estimated)
+	Calls           int    `json:"calls"`           // sample size behind measuredTokens
 }
 
 // cachePreview tells the UI which segments of the next request are served from a
@@ -234,6 +255,9 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		len(defs) > 0,
 	)
 
+	totalTok := sysTok + dynTok + msgTok + toolTok
+	cliOver := computeCLIOverhead(ctx, wsp, agent.Provider, session.ID, totalTok)
+
 	writeJSON(w, http.StatusOK, sessionContextPreview{
 		AgentName:     agent.Name,
 		MultiAgent:    multiAgent,
@@ -245,9 +269,51 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		MessageTokens: msgTok,
 		Tools:         toolList,
 		ToolTokens:    toolTok,
-		TotalTokens:   sysTok + dynTok + msgTok + toolTok,
+		TotalTokens:   totalTok,
 		Cache:         cache,
+		CLIOverhead:   cliOver,
 	})
+}
+
+// computeCLIOverhead derives the CLI-wrapper overhead preview for claude-cli /
+// gemini-cli agents (nil for native providers). The real billed input is measured
+// from the session's recorded lifetime usage (input + cacheRead + cacheWrite,
+// averaged per call) and compared against SwarmGo's own segment estimate, so the
+// UI can warn that TotalTokens excludes the CLI's injected prompt + tools + MCP
+// bridge. Returns a populated (overhead-0) preview with a "not measured yet" note
+// when the session has no recorded calls.
+func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider, sessionID string, estimated int) *cliOverheadPreview {
+	if provider != "claude-cli" && provider != "gemini-cli" {
+		return nil
+	}
+	name := "claude-cli (Claude Code)"
+	if provider == "gemini-cli" {
+		name = "gemini-cli"
+	}
+
+	measured, calls := 0, 0
+	if u, err := wsp.DB.GetSessionUsage(ctx, sessionID); err == nil && u.Calls > 0 {
+		calls = u.Calls
+		measured = (u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens) / u.Calls
+	}
+
+	over := measured - estimated
+	if over < 0 {
+		over = 0
+	}
+
+	note := name + " kendi sistem promptu + araç şemaları + MCP köprüsünü modele ekler; bu yük yukarıdaki segment tahminine (TotalTokens) DAHİL DEĞİL. Gerçek faturalanan girdi için usage-detail (input+cacheWrite+cacheRead) esas alın."
+	if measured == 0 {
+		note = name + " kendi sistem promptu + araçlarını ekler (segment tahmini bunu saymaz). Henüz tur gönderilmedi → gerçek girdi ilk turdan sonra ölçülür."
+	}
+
+	return &cliOverheadPreview{
+		Note:            note,
+		EstimatedTokens: estimated,
+		MeasuredTokens:  measured,
+		OverheadTokens:  over,
+		Calls:           calls,
+	}
 }
 
 // historyToPreviewMessages maps stored user/assistant turns to provider messages

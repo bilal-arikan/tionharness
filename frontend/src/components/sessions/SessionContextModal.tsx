@@ -100,12 +100,39 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
             <Stat label="Dinamik" value={data.dynamicTokens} />
             <Stat label={`Mesajlar (${data.messages.length})`} value={data.messageTokens} />
             <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
+            {data.cliOverhead && data.cliOverhead.measuredTokens > 0 && (
+              <Stat label="Gerçek (CLI, ölçülen)" value={data.cliOverhead.measuredTokens} accent />
+            )}
             {data.multiAgent && (
               <span className="rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-[var(--color-accent)]">
                 çok-ajanlı
               </span>
             )}
             <span className="text-[var(--color-text-dim)]">~token tahmini</span>
+          </div>
+        )}
+
+        {/* CLI-wrapper overhead warning: TotalTokens under-reports for claude-cli/gemini-cli */}
+        {data?.cliOverhead && (
+          <div className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-5 py-2 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
+                CLI ek yükü
+              </span>
+              {data.cliOverhead.measuredTokens > 0 ? (
+                <span className="text-[var(--color-text-dim)]">
+                  Tahmin <strong>{data.cliOverhead.estimatedTokens.toLocaleString()}</strong> →
+                  gerçek <strong>{data.cliOverhead.measuredTokens.toLocaleString()}</strong>
+                  {' '}(+<strong>{data.cliOverhead.overheadTokens.toLocaleString()}</strong> ek yük
+                  {data.cliOverhead.estimatedTokens > 0 &&
+                    `, ~${(data.cliOverhead.measuredTokens / data.cliOverhead.estimatedTokens).toFixed(1)}×`}
+                  {`, ${data.cliOverhead.calls} çağrı ort.`})
+                </span>
+              ) : (
+                <span className="text-[var(--color-text-dim)]">henüz ölçülmedi</span>
+              )}
+            </div>
+            <p className="mt-1 text-[var(--color-text-dim)]">{data.cliOverhead.note}</p>
           </div>
         )}
 

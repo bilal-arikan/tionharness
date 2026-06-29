@@ -2,6 +2,162 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-29**
 
+## Context-preview "CLI ek yükü" satırı ✅ (2026-06-29)
+
+**Sorun:** `GET /api/sessions/{id}/context-preview` çıktısı (`systemTokens`/
+`toolTokens`/`totalTokens`) yalnızca SwarmGo'nun **kendi** enjekte ettiği katmanı
+sayar. `claude-cli` (ve `gemini-cli`) sağlayıcılarında alttaki CLI **kendi sistem
+promptu + araç şemaları + MCP köprüsünü** modele ekler — SwarmGo bunu hiç
+görmediği için `totalTokens` gerçek faturalanan girdiyi ciddi şekilde **az
+raporlar**. Canlı ölçüm (AGT1 Coder, opus, SES75, 3 çağrı ort.): tahmin **6.832**
+→ gerçek **49.844** token (~**7,3×**, +43.012 ek yük).
+
+**Çözüm:** `sessionContextPreview`'a opsiyonel `cliOverhead` alanı eklendi
+(`internal/api/session_context.go` → `computeCLIOverhead`). Yalnız CLI-wrapper
+sağlayıcılarda (`claude-cli`/`gemini-cli`) dolar; native (anthropic/minimax/
+openrouter) ajanlarda `nil` → segment tahmini zaten doğru. Gerçek girdi, session'ın
+kayıtlı lifetime usage'ından ölçülür: `measuredTokens = (input + cacheRead +
+cacheWrite) / calls`; `overheadTokens = max(0, measured − estimated)`. Henüz tur
+gönderilmemişse `measured=0` + "ölçülmedi" notu.
+
+**UI:** `SessionContextModal.tsx` token özetine "Gerçek (CLI, ölçülen)" rozeti +
+altına sarı **CLI ek yükü** uyarı bandı (tahmin→gerçek, ×kat, çağrı sayısı, not).
+Tip: `types/session.ts` `CLIOverhead`. Doğrulama: `go build ./internal/api` +
+`tsc --noEmit` temiz; canlı SES75 (cliOverhead dolu) + SES74/Minimax3 (nil) test.
+
+**Yan bulgu (cache stabilitesi):** SES75 ardışık turlarda cache_read = 0 (tur1),
+**0 (tur2)**, 45.920 (tur3) ölçüldü → claude-cli'da tur-arası prompt-cache sıcaklığı
+garanti değil; araç/prompt değişimi prefix'i bozabiliyor.
+
+## Ctrl/Cmd+Click ile çoklu seçim + toplu eylemler ✅ (2026-06-29)
+
+**Hedef:** Listelerde birden fazla öğe seçip tek seferde toplu işlem yapabilmek
+(sohbet, ajanlar, board kartları, hafıza, artifact, skill, flow, araç, aktivite).
+
+**Ortak altyapı (frontend-only):**
+- `hooks/useMultiSelect.ts` — liste-agnostik seçim çekirdeği: `selected` Set'i +
+  shift-aralık `anchor` ref'i. `handleClick(e, id, ordered)` modifier yorumlar
+  (Ctrl/Cmd=toggle, Shift=aralık, plain=temizle+anchor) ve **seçim jesti mi**
+  döndürür → çağıran normal navigasyonu bastırır. `selectAll`/`clear`/`toggle`/
+  `replace`. ≥1 seçili iken **Escape** global temizler. Çapraz-platform
+  (`ctrlKey || metaKey`).
+- `components/common/SelectionBar.tsx` — seçim ≥1 olunca beliren sticky toplu
+  eylem çubuğu (sayaç + filtre-dışı ipucu + "Tümü" + temizle); `SelectionBarButton`
+  kompakt eylem butonu. `common/index.ts`'ten export edilir.
+
+**Bağlanan listeler + toplu eylemler:**
+- **Sohbet** (`SessionsSidebar`): AI başlık · Sabitle · Arşivle/çıkar · Sil
+  (bucket'lar arası shift-aralık; filtre-dışı seçili sayısı gösterilir).
+- **Ajanlar** (`AgentsView`): Sil.
+- **Board kartları** (`TaskBoard`): Sütuna taşı · Ajan ata · Sil (sütunlar arası
+  düz render sırasıyla shift-aralık).
+- **Hafıza** (`MemoryPanel`): Sil — yalnız **modifier-click** seçer (plain-click
+  kart genişletmeyi korur; kart-içi handler'lar modifier'ı yutar).
+- **Artifact** (`ArtifactsPanel`): Sil.
+- **Skills** (`SkillsPanel`): Sil (katlanmış grupları atlayan shift-aralık).
+- **Flows** (`FlowsPanel`, Akışlarım sekmesi): Çalıştır · Sil.
+- **Araçlar** (`AgentToolsSection`): plain-click anında yasaklar; modifier-click
+  çoklu seçer → "Seçilenleri yasakla" tek `setAgentTools` PATCH'i.
+- **Aktivite** (`ExecutionsPanel`): salt-okunur → "Kimlikleri kopyala".
+
+**Desen:** Toplu eylemler mevcut tekil API'leri döngü/`Promise.all` ile kullanır
+(yeni backend yok); optimistic state + hata halinde reload. Yıkıcı eylemler tek
+`confirm("N öğe…")` ile. Detay: `_Docs\40-COKLU-SECIM.md`. Doğrulama: `tsc
+--noEmit` temiz.
+
+## Son kullanıcı mesajı sohbette üstte sticky (ChatGPT/Claude tarzı) ✅ (2026-06-29)
+
+**Hedef:** Transkripti kaydırırken **en son yazdığımız kullanıcı mesajı** ekranın
+üstüne yapışsın (aktif soru, altındaki yanıt kaydırılırken görünür kalsın).
+
+**Yapılanlar (frontend-only):**
+- `MessageList.tsx` — en son **gerçek** (typed; `origin` set olmayan, yani
+  AutoPromptNote olmayan) kullanıcı mesajının index'i (`lastUserIndex`) hesaplanır;
+  o satırın wrapper'ına `sticky -top-2 z-10 bg-[var(--color-bg)] pb-2` eklenir.
+  Solid arka plan + alt padding, altından kayan satırların sızmasını engeller.
+  Flash-highlight ring class'ı ile birleşik className üretilir.
+- Konteyner üst padding'i azaltıldı (`py-6` → `pb-6 pt-2`) ve sticky offset `-top-2`
+  yapıldı → mesaj viewport'un en tepesine (flush) yapışır, üstte boşluk kalmaz.
+- **Yapışıkken kompakt:** sticky satır artık **şeffaf** (balonun kendi accent dolgusu
+  yeterli; `bg-[var(--color-bg)]` kaldırıldı). Yalnızca **yapışık durumdayken** mesaj
+  2 satıra kırpılır (`line-clamp-2`) — normal akışta tam metin görünür. "Stuck" tespiti
+  `onScroll`/messages-effect içinde: `data-pinned-user` satırının rect.top'ı konteyner
+  üstüne değince (`scrollTop>4` korumalı) `stuckPinned=true`. `clamp` prop'u
+  MessageList→UserTurn→UserBubble zinciriyle taşınır.
+- Yalnız tek bir kullanıcı mesajı sticky'dir (diğer turlar normal akışta) → üst üste
+  yığılma olmaz. Scroll-anchoring (bottom-pin) mantığı değişmedi.
+- **Pinlenen = bir önceki tur:** en son kullanıcı mesajı yerine **bir önceki** kullanıcı
+  mesajı (`pinnedUserIndex`, sondan ikinci typed-user) tepede sabit kalır → mevcut tur
+  altta yanıtlanırken önceki soru bağlam olarak durur. İlk turda (önceki yokken) hiçbir
+  şey pinlenmez (`-1`).
+- **Yapışık gradient:** stuck olunca sticky satır artık yukarıdan aşağı **siyah→şeffaf**
+  gradient (`bg-gradient-to-b from-black to-transparent pb-6`) → altından kayan metin
+  okunabilirlik için solar. Normal akışta düz şeffaf satır.
+- Doğrulama: `tsc --noEmit` temiz, `npm run build` başarılı.
+
+## claude-cli dosya düzenlemeleri için diff paneli (Edit/Write tutarlılığı) ✅ (2026-06-29)
+
+**Hedef:** Sohbette dosya-düzenleme araçlarına (Edit/Write/MultiEdit) tıklayınca
+the external agent project'taki gibi silinen/eklenen satırların görüldüğü belirgin bir diff paneli
+açılsın. Sorun: native tool-loop düzenlemeleri zaten `diff` adımı → güzel **DiffCard**
+veriyordu; ama asıl provider olan **claude-cli** düzenlemeyi kendi uyguladığı için
+SwarmGo `recordDiff` çağrılmıyor → düzenleme generic `tool` adımı olarak **ActivityCard**
+ile (yalnızca açınca, sönük) gösteriliyordu → iki yol arasında tutarsızlık.
+
+**Yapılanlar (frontend-only; Go değişmedi):**
+- **`synthDiffData` yardımcısı** (`frontend/src/lib/diff.ts`): bir düzenleme aracının
+  girdisinden (`old_string`/`new_string`, `content` veya MultiEdit `edits[]`) tam
+  unified-patch + `+added/−removed` sayımı + hedef yol üretir. `synthDiff` MultiEdit'i
+  artık her edit için ayrı patch'i istifleyerek işliyor; `isEditToolBase` predicate'i
+  eklendi.
+- **DiffCard iki yolu da besliyor** (`DiffCard.tsx`): `step.patch` varsa (native) onu,
+  yoksa (claude-cli `tool` adımı) `synthDiffData` ile sentezler → her iki yol da aynı
+  paneli render eder. `actionLabel` MultiEdit'i de "Düzenle" sayar.
+- **TurnSteps yönlendirmesi** (`TurnSteps.tsx`): hatasız + düzenleme-aracı + sentezlenebilir
+  bir `tool` adımı artık **DiffCard**'a gider. Hatalı düzenlemeler ActivityCard'da kalır
+  (hata çıktısı + uygulanmamış sönük diff görünür) — native yolun `!res.IsError` koşuluyla
+  aynı davranış.
+- Doğrulama: `tsc --noEmit` temiz, `npm run build` başarılı.
+
+## Plan artifact "📋 Plan" chip'i + artifact hızlı-önizleme modalı ✅ (2026-06-29)
+
+**Hedef:** (1) Agent plan oluşturup artifact olarak kaydedince o artifact'a "plan"
+chip'i de eklensin. (2) Bir artifact'a tıklayınca Artifactlar ekranına gitmeden
+önizlemesi açılsın.
+
+**Yapılanlar (frontend-only; backend zaten `origin="plan"` set ediyordu):**
+- **"📋 Plan" chip'i:** `OriginBadge`'e `plan` girişi eklendi (accent-renkli);
+  `Artifact.origin` tipine `'plan'` eklendi; Artifactlar liste filtre çubuğuna
+  **Plan** facet'i eklendi. Dosyalar: `frontend/src/components/panels/artifactMeta.tsx`,
+  `frontend/src/types/artifact.ts`, `frontend/src/components/panels/ArtifactsPanel.tsx`.
+- **Hızlı önizleme modalı:** yeni `ArtifactPreviewModal` bileşeni — sohbet/aktivite
+  içindeki artifact chip/kartına tıklanınca `getArtifact` ile içeriği çekip
+  `ArtifactView` ile ortada bir overlay'de gösterir (Esc/backdrop kapatır, "Ekranda
+  aç" kısayolu tam Artifactlar ekranına geçirir). `App.openArtifact` artık modalı
+  açar (`previewArtifactId`); tam ekran navigasyonu `openArtifactFull`'a taşındı.
+  Dosyalar: `frontend/src/components/artifacts/ArtifactPreviewModal.tsx`, `frontend/src/App.tsx`.
+- `tsc --noEmit` temiz. Detay: `_Docs\40-PLAN-MODE.md`.
+
+## Dokümante özelliklerin test kapsamı tamamlandı ✅ (2026-06-29)
+
+**Hedef:** Dokümanlarda anlatılan ama test edilmemiş davranışları tespit edip
+testlerini eklemek (eksik/yanlış test denetimi). Tüm suite zaten yeşildi (524
+test); odak, dokümante-edildiği halde unit-test kapsamı olmayan davranışlar.
+
+**Eklenen testler (524 → 539):**
+- **Orchestration (`internal/orchestration/branch_delay_test.go`, _Docs/15):**
+  - `branchArmMatches` üç eşleşme modu (`contains`/`equals`/`regex` + boş→contains
+    fallback) — önceden yalnız `regex` GAN-loop üzerinden dolaylı test ediliyordu.
+  - `evalBranch` default-arm önceliği + default-yok-eşleşme-yok ("no match") yolu.
+  - **Delay node** (hiç testi yoktu): gerçekten bekler + trace yazar + `Next`'e
+    geçer; context-iptali "delay" hatasına döner; `sleepCtx` sıfır/negatif no-op.
+- **Backup (`internal/backup/backup_test.go`, _Docs/34):** `Unzip` **zip-slip**
+  guard'ı — kötücül `../` zip *girdisi* reddedilir ve destDir dışına yazılmaz
+  (önceden yalnız API-katmanı dosya-adı traversal'ı test ediliyordu).
+- **Memory graph (`internal/memory/graph_test.go`, _Docs/23):** kenar `Score`
+  alanı gerçek lexical-cosine benzerliğini taşıyor (eşik..1 aralığı + cosine
+  eşitliği) — önceki test yalnız kenar *sayısını* doğruluyordu.
+
 ## Yeni agent'lar varsayılan olarak araç kullanabilir ✅ (2026-06-29)
 
 **Hedef:** UI/API'den oluşturulan yeni agent'ların `mcpEnabled` alanı varsayılan

@@ -151,6 +151,22 @@ export interface SessionContextPreview {
   toolTokens: number
   totalTokens: number
   cache: CachePreview
+  // Present only for CLI-wrapper providers (claude-cli / gemini-cli): the gap
+  // between SwarmGo's segment estimate (totalTokens) and the real prompt the CLI
+  // sends (its own system + tools + MCP bridge, which SwarmGo never sees).
+  cliOverhead?: CLIOverhead
+}
+
+// CLIOverhead surfaces, for CLI-wrapper agents, that totalTokens under-reports the
+// real billed input. measuredTokens is the avg real model input per call from the
+// session's recorded usage (0 until the first turn); overheadTokens = measured −
+// estimated. On claude-cli/opus this overhead measured ~5x the segment estimate.
+export interface CLIOverhead {
+  note: string
+  estimatedTokens: number
+  measuredTokens: number
+  overheadTokens: number
+  calls: number
 }
 
 // Which segments of the next request are served from a warm prompt cache vs sent
