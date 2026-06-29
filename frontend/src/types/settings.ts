@@ -94,6 +94,7 @@ export interface AppSettings {
   enableSelfManage: boolean
   enableCliHooks: boolean
   claudeResume: boolean
+  claudePersistentSession: boolean
   enableDelegation: boolean
   delegationMaxDepth: number
   delegationMaxCalls: number

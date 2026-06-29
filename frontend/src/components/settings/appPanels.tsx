@@ -510,9 +510,15 @@ export function ToolsPanel({ draft, set }: PanelProps) {
       />
       <Toggle
         label="claude-cli oturum sürekliliği (--resume)"
-        hint="Açıkken claude-cli her turda --resume ile önceki oturumu sürdürür ve yalnız yeni mesajı gönderir — CLI'nin sıcak prompt cache'ini tekrar kullanır (Claude Code gibi, çok daha ucuz). Yalnız tek-ajanlı sohbetlerde geçerli. Deneysel: açtıktan sonra bir sohbette doğrulayın."
+        hint="Varsayılan açık. Her turda --resume ile önceki oturumu sürdürür ve yalnız yeni mesajı gönderir — CLI'nin sıcak prompt cache'ini tekrar kullanır (çok daha ucuz). Etkili olmasının sebebi: sistem promptu artık sabit (değişken bağlam mesaj kuyruğuna taşındı), böylece cache'li önek turdan tura bozulmaz. Yalnız tek-ajanlı sohbetlerde."
         checked={draft.claudeResume}
         onChange={(v) => set('claudeResume', v)}
+      />
+      <Toggle
+        label="claude-cli kalıcı süreç (deneysel)"
+        hint="Açıkken oturum başına TEK uzun-ömürlü claude süreci canlı tutulur ve turlar stdin'den beslenir (her tur yeni süreç açılmaz); sıcak turda yalnız yeni kullanıcı mesajı gider, süreç gerisini hatırlar. Açıkken --resume'un yerine geçer. Cache ısınması TTL'e bağlıdır. Deneysel — varsayılan kapalı; açmadan önce bir sohbette doğrulayın."
+        checked={draft.claudePersistentSession}
+        onChange={(v) => set('claudePersistentSession', v)}
       />
       <Toggle
         label="Ajan→ajan delegasyon (run_subagent)"
