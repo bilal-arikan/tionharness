@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, ListChecks, Square, type LucideIcon } from 'lucide-react'
+import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, ListChecks, Square, ChevronRight, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionInfo, SessionUsageDetail, SessionProgress } from '../../types'
 import { SessionContextModal } from './SessionContextModal'
@@ -18,6 +18,11 @@ interface Props {
   onGenerateTitle: (id: string) => void | Promise<void>
   onRename: (id: string, title: string) => void | Promise<void>
   onDeleteSession: (id: string) => void
+  // Navigate to the Agents view and focus the given agent. Wired so a click on
+  // a participant chip in the "Konuşmadaki ajanlar" section jumps to that
+  // agent's page (matches the behaviour of clicking the agent in the Agents
+  // roster). Optional so legacy/test usages still compile.
+  onSelectAgent?: (id: string) => void
   // Navigate to another session (used by the context-reset lineage link).
   onSelectSession?: (id: string) => void
 }
@@ -45,6 +50,7 @@ export function SessionDetailPanel({
   onRename,
   onDeleteSession,
   onSelectSession,
+  onSelectAgent,
 }: Props) {
   const [info, setInfo] = useState<SessionInfo | null>(null)
   const [sessionUsage, setSessionUsage] = useState<SessionUsageDetail | null>(null)
@@ -458,22 +464,40 @@ export function SessionDetailPanel({
           {/* Agents */}
           <Section title={`Konuşmadaki ajanlar (${info.agents.length})`}>
             <div className="flex flex-col gap-2">
-              {info.agents.map((a) => (
-                <AgentIdentity
-                  key={a.agentId}
-                  agent={{ id: a.agentId, name: a.name, avatar: a.avatar, color: a.color }}
-                  size="sm"
-                  dim={a.disabled}
-                  nameSuffix={
-                    a.isOwner ? (
-                      <span className="ml-1 text-[var(--color-accent)]" title="Varsayılan ajan">
-                        ★
-                      </span>
-                    ) : undefined
-                  }
-                  subtitle={`${a.turns} tur · ~${formatTokens(a.tokens)} token`}
-                />
-              ))}
+              {info.agents.map((a) => {
+                const row = (
+                  <AgentIdentity
+                    agent={{ id: a.agentId, name: a.name, avatar: a.avatar, color: a.color }}
+                    size="sm"
+                    dim={a.disabled}
+                    nameSuffix={
+                      a.isOwner ? (
+                        <span className="ml-1 text-[var(--color-accent)]" title="Varsayılan ajan">
+                          ★
+                        </span>
+                      ) : undefined
+                    }
+                    subtitle={`${a.turns} tur · ~${formatTokens(a.tokens)} token`}
+                  />
+                )
+                // Without a handler, render the bare row (read-only). With one,
+                // wrap in a button that navigates to the Agents view focused on
+                // that agent — matching the behaviour of clicking an agent in the
+                // Agents roster. Disabled agents stay non-interactive.
+                if (!onSelectAgent || a.disabled) return <div key={a.agentId}>{row}</div>
+                return (
+                  <button
+                    key={a.agentId}
+                    type="button"
+                    onClick={() => onSelectAgent(a.agentId)}
+                    title={`${a.name} sayfasına git`}
+                    className="group flex w-full items-center justify-between rounded-md border border-transparent px-2 py-1.5 text-left transition hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+                  >
+                    <span className="min-w-0 flex-1">{row}</span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-dim)] opacity-0 transition group-hover:opacity-100" aria-hidden />
+                  </button>
+                )
+              })}
             </div>
           </Section>
 
