@@ -33,6 +33,7 @@ import { ProvidersPanel } from './settings/ProvidersPanel'
 import { CommandsPanel } from './settings/CommandsPanel'
 import { StepKindsPanel } from './settings/StepKindsPanel'
 import { HooksPanel } from './settings/HooksPanel'
+import { ExternalToolsPanel } from './settings/ExternalToolsPanel'
 import { SecretsPanel } from './panels/SecretsPanel'
 // The workspace tool catalog + MCP server management, surfaced here as a
 // settings category (previously a top-level NavRail view). Renders its own
@@ -251,12 +252,12 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
             {catMeta?.label ?? ''}
           </span>
           <div className="flex items-center gap-3">
-            {cat !== 'mcptools' && cat !== 'secrets' && (
+            {cat !== 'mcptools' && cat !== 'secrets' && cat !== 'exttools' && (
               <span className="text-xs text-[var(--color-text-dim)]">
                 {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
               </span>
             )}
-            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'hooks' && cat !== 'mcptools' && cat !== 'secrets' && (
+            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'hooks' && cat !== 'exttools' && cat !== 'mcptools' && cat !== 'secrets' && (
               <Button onClick={save} disabled={!dirty || saving}>
                 {saving ? 'Kaydediliyor…' : 'Kaydet'}
               </Button>
@@ -298,6 +299,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
               {cat === 'tools' && <ToolsPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'backup' && <BackupPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'hooks' && <HooksPanel onError={onError} />}
+              {cat === 'exttools' && <ExternalToolsPanel onError={onError} />}
               {cat === 'advanced' && (
                 <>
                   <AdvSection title="Bildirimler & Ekran" icon={Bell}>

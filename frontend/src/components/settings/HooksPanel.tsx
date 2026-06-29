@@ -2,14 +2,12 @@
 // and lets the user add/edit/toggle/delete them. Self-contained (own load/save),
 // exempt from the global Save bar — like WorkspaceFilesPanel.
 import { useEffect, useState } from 'react'
-import { Webhook, Trash2, Pencil, Plus, ScanSearch } from 'lucide-react'
+import { Webhook, Trash2, Pencil, Plus } from 'lucide-react'
 import { api } from '../../api'
-import { systemApi } from '../../api/system'
-import type { Hook, HookEvent, ExternalToolStatus } from '../../types'
+import type { Hook, HookEvent } from '../../types'
 import type { HookInput } from '../../api/hooks'
 import { Field, Toggle, inputCls } from './primitives'
 import { Button } from '../common'
-import { displayPath } from '../../lib/paths'
 
 interface Props {
   onError: (msg: string) => void
@@ -23,31 +21,6 @@ const EMPTY: HookInput = {
   enabled: true,
 }
 
-// One-click hook templates that wire a detected external token tool into SwarmGo.
-// Key = external tool name (from /api/external-tools). A `null` value means the
-// tool is NOT hook-based (e.g. context-mode is an MCP server) — the panel shows
-// an info badge instead of a toggle for those.
-const TOOL_HOOK_TEMPLATES: Record<string, HookInput | null> = {
-  // RTK rewrites Bash commands. PreToolUse adapter prepends `rtk ` to the command
-  // (preserving other tool_input fields) so output is filtered before it returns.
-  rtk: {
-    event: 'PreToolUse',
-    matcher: 'Bash',
-    command:
-      "$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; $c=$j.tool_input.command; if($c -and -not ($c -like 'rtk *')){ $j.tool_input.command='rtk '+$c; @{updatedInput=$j.tool_input}|ConvertTo-Json -Compress }",
-    timeoutSec: 30,
-    enabled: true,
-  },
-  // sqz (v1.3.0) `sqz hook claude` is a PreToolUse rewriter: it reads the tool-call
-  // JSON from stdin and rewrites Bash commands to pipe through sqz, then emits the
-  // modified JSON — same model as rtk, so matcher is Bash. NOTE: do not enable rtk
-  // and sqz on Bash at the same time; they both rewrite the command.
-  sqz: { event: 'PreToolUse', matcher: 'Bash', command: 'sqz hook claude', timeoutSec: 30, enabled: true },
-  // context-mode is MCP-based (sandbox + FTS5 KB), not a per-call hook → wired via
-  // Settings ▸ MCP, so the panel shows an info badge instead of a toggle.
-  'context-mode': null,
-}
-
 export function HooksPanel({ onError }: Props) {
   const [hooks, setHooks] = useState<Hook[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,26 +28,6 @@ export function HooksPanel({ onError }: Props) {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState<HookInput>(EMPTY)
   const [busy, setBusy] = useState(false)
-
-  // External token-tool detector: checks whether optional CLI tools used by hook
-  // commands (e.g. `sqz`) are present on PATH. Read-only — nothing is installed.
-  const [tools, setTools] = useState<ExternalToolStatus[] | null>(null)
-  const [checking, setChecking] = useState(false)
-  const [toolsErr, setToolsErr] = useState<string | null>(null)
-  // Per-tool busy flag while creating/toggling that tool's wired hook.
-  const [toolBusy, setToolBusy] = useState<string | null>(null)
-
-  const checkTools = async () => {
-    setChecking(true)
-    setToolsErr(null)
-    try {
-      setTools(await systemApi.externalTools())
-    } catch (e) {
-      setToolsErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setChecking(false)
-    }
-  }
 
   const load = () =>
     api
@@ -85,33 +38,8 @@ export function HooksPanel({ onError }: Props) {
 
   useEffect(() => {
     load()
-    // Auto-detect external token tools as soon as the panel opens (was a manual
-    // button before). Presence-only — nothing is installed or executed.
-    checkTools()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // The hook (if any) currently wiring a given external tool into SwarmGo,
-  // matched by the tool name appearing in the hook command.
-  const wiredHook = (toolName: string): Hook | undefined =>
-    hooks.find((h) => h.command.includes(toolName))
-
-  // Create/enable/disable the hook for a detected tool with one click.
-  const toggleTool = async (toolName: string) => {
-    const tpl = TOOL_HOOK_TEMPLATES[toolName]
-    if (!tpl) return
-    setToolBusy(toolName)
-    try {
-      const existing = wiredHook(toolName)
-      if (existing) await api.toggleHook(existing.id, !existing.enabled)
-      else await api.createHook(tpl)
-      await load()
-    } catch (e) {
-      onError((e as Error).message)
-    } finally {
-      setToolBusy(null)
-    }
-  }
 
   const startCreate = () => {
     setDraft(EMPTY)
@@ -286,85 +214,6 @@ export function HooksPanel({ onError }: Props) {
           )}
         </>
       )}
-
-      <div className="space-y-3 border-t border-[var(--color-border)] pt-4">
-        <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
-          <ScanSearch size={14} className="text-[var(--color-accent)]" /> Harici token araçları
-        </p>
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-          Hook komutlarında kullanılabilecek isteğe bağlı token-optimizasyon araçlarının (ör. <code>sqz</code>) bu cihazda{' '}
-          <span className="font-medium text-[var(--color-text)]">kurulu olup olmadığını</span> kontrol eder.
-          Yalnız PATH'te aranır — araçlar <span className="font-medium text-[var(--color-text)]">kurulmaz, çalıştırılmaz, değiştirilmez</span>.
-        </div>
-        <button
-          type="button"
-          onClick={checkTools}
-          disabled={checking}
-          className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] disabled:opacity-50"
-        >
-          <ScanSearch size={14} className="text-[var(--color-accent)]" />
-          {checking ? 'Kontrol ediliyor…' : 'Kurulu mu kontrol et'}
-        </button>
-        {toolsErr && <p className="text-xs text-[var(--color-warning)]">{toolsErr}</p>}
-        {tools && (
-          <div className="flex flex-col gap-1.5">
-            {tools.map((t) => (
-              <div key={t.name} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm">
-                    <code className="rounded bg-[var(--color-surface-2)] px-1 font-medium">{t.name}</code>
-                    {t.found ? (
-                      <span className="text-[var(--color-success)]">✓ kurulu</span>
-                    ) : (
-                      <span className="text-[var(--color-text-dim)]">— bulunamadı</span>
-                    )}
-                  </div>
-                  <div className="truncate text-xs text-[var(--color-text-dim)]">{t.found ? displayPath(t.path ?? '') : t.desc}</div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {t.found &&
-                    (TOOL_HOOK_TEMPLATES[t.name] === null ? (
-                      <span
-                        className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
-                        title="MCP tabanlı — Ayarlar ▸ MCP'den eklenir, hook değil"
-                      >
-                        MCP
-                      </span>
-                    ) : (
-                      TOOL_HOOK_TEMPLATES[t.name] !== undefined && (
-                        <button
-                          data-testid="tool-toggle"
-                          data-tool={t.name}
-                          disabled={toolBusy === t.name}
-                          onClick={() => toggleTool(t.name)}
-                          className={`rounded px-2 py-0.5 text-xs disabled:opacity-50 ${
-                            wiredHook(t.name)?.enabled
-                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                              : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
-                          }`}
-                          title={
-                            wiredHook(t.name)
-                              ? 'SwarmGo hook bağlantısını aç/kapat'
-                              : 'Bu araç için SwarmGo hook’u oluştur ve etkinleştir'
-                          }
-                        >
-                          {toolBusy === t.name
-                            ? '…'
-                            : wiredHook(t.name)?.enabled
-                              ? 'Aktif'
-                              : wiredHook(t.name)
-                                ? 'Pasif'
-                                : 'Bağla'}
-                        </button>
-                      )
-                    ))}
-                  <a href={t.url} target="_blank" rel="noreferrer" className="text-xs text-[var(--color-accent)] hover:underline">repo ↗</a>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }
