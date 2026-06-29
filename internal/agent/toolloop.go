@@ -239,6 +239,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			return nil, nil, err
 		}
 		// claude-cli surfaces its own tool/thinking trace via stream-json.
+		r.emitCLIToolDebug(ctx, agent, resp.Trace)
 		return resp, traceToSteps(resp.Trace), nil
 	}
 
@@ -268,6 +269,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			return nil, nil, err
 		}
 		// The CLI runs the loop itself; its stream-json trace becomes our steps.
+		r.emitCLIToolDebug(ctx, agent, resp.Trace)
 		return resp, traceToSteps(resp.Trace), nil
 	}
 
@@ -621,6 +623,27 @@ func fillCancelledResults(results []providers.ToolResult, calls []providers.Tool
 // call through here, so logging the failure once at this choke point guarantees
 // a provider error is recorded regardless of which caller (chat, task,
 // schedule) triggered it.
+// emitCLIToolDebug records one DebugTool event per tool the claude-cli ran during
+// its OWN (delegated) loop, so the per-message debug panel lists the CLI agent's
+// tool calls too. The CLI's stream-json aggregate carries no per-tool latency, so
+// DurMs is left 0 (the UI shows it only when known); OutBytes is the tool result
+// size and Err the tool's error flag. Native-loop tools already emit their own
+// (latency-bearing) DebugTool events inside the loop, so this is CLI-only.
+func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []providers.TraceStep) {
+	for _, st := range trace {
+		if st.Kind != "tool" {
+			continue
+		}
+		r.emitDebug(ctx, db.DebugEvent{
+			Type:     db.DebugTool,
+			AgentID:  agent.ID,
+			Name:     st.Tool,
+			OutBytes: len(st.Output),
+			Err:      st.IsError,
+		})
+	}
+}
+
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
 	// Persistent claude-cli session (opt-in): route the turn through the warm
 	// long-lived process keyed by session id (the fingerprint includes the agent's

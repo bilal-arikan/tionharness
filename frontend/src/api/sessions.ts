@@ -14,6 +14,7 @@ import type {
   SessionProgress,
   SessionDebugSummary,
   SessionDebugEvent,
+  TurnDebug,
 } from '../types'
 import { req } from './client'
 
@@ -171,6 +172,14 @@ export const sessionApi = {
       `/api/sessions/${sessionId}/debug?${p.toString()}`,
     ).then((r) => r.events ?? [])
   },
+
+  // Per-MESSAGE debug rollup for one assistant reply (token spend, latency, cost,
+  // per-tool breakdown), correlated by the reply message id. Backs the chat
+  // message debug button.
+  sessionTurnDebug: (sessionId: string, turnId: string) =>
+    req<TurnDebug>(
+      `/api/sessions/${sessionId}/turn-debug?turn=${encodeURIComponent(turnId)}`,
+    ),
 
   // Debug: preview the exact next-turn context (system + dynamic + transcript +
   // tools) the session's agent would be sent. Optional sample "next" user message.

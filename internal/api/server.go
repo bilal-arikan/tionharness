@@ -10,13 +10,13 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/market"
 	"github.com/bilal-arikan/swarmgo/internal/backup"
 	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/events"
 	"github.com/bilal-arikan/swarmgo/internal/interaction"
 	"github.com/bilal-arikan/swarmgo/internal/logbuf"
+	"github.com/bilal-arikan/swarmgo/internal/market"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 	"github.com/bilal-arikan/swarmgo/internal/settings"
 	"github.com/bilal-arikan/swarmgo/internal/web"
@@ -335,6 +335,7 @@ func (s *Server) registerUsageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions/{id}/context", s.handleSessionContext)
 	mux.HandleFunc("GET /api/sessions/{id}/usage-detail", s.handleSessionUsageDetail)
 	mux.HandleFunc("GET /api/sessions/{id}/debug", s.handleSessionDebug)
+	mux.HandleFunc("GET /api/sessions/{id}/turn-debug", s.handleSessionTurnDebug)
 	mux.HandleFunc("GET /api/usage", s.handleWorkspaceUsage)
 }
 

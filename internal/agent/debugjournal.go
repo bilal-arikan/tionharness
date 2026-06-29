@@ -27,6 +27,9 @@ func (r *Runtime) emitDebug(ctx context.Context, ev db.DebugEvent) {
 	if ev.Kind == "" {
 		ev.Kind = string(callKindFrom(ctx))
 	}
+	if ev.TurnID == "" {
+		ev.TurnID = TurnIDFrom(ctx)
+	}
 	if err := r.db.AppendDebugEvent(sid, ev, r.tun.DebugJournalCap()); err != nil {
 		r.logger.Debug("debug journal append failed", "session", sid, "error", err)
 	}

@@ -64,6 +64,24 @@ func SessionIDFrom(ctx context.Context) string {
 	return ""
 }
 
+type turnIDKey struct{}
+
+// WithTurnID stamps the in-flight assistant reply message id onto the context, so
+// every debug event emitted during the turn (llm_call, tool, hook, error,
+// recovery, compaction) can be correlated back to THAT chat message for the
+// per-message debug panel. Stamp it once per turn at the chat entry point.
+func WithTurnID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, turnIDKey{}, id)
+}
+
+// TurnIDFrom returns the reply message id stamped on the context, or "" if none.
+func TurnIDFrom(ctx context.Context) string {
+	if id, ok := ctx.Value(turnIDKey{}).(string); ok {
+		return id
+	}
+	return ""
+}
+
 type overflowKey struct{}
 
 // withOverflowFlag attaches a context-overflow flag to the context and returns

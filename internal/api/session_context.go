@@ -30,12 +30,12 @@ type sessionContextPreview struct {
 	ToolTokens    int              `json:"toolTokens"`
 	TotalTokens   int              `json:"totalTokens"`
 	Cache         cachePreview     `json:"cache"`
-	// CLIOverhead is set only for CLI-wrapper providers (claude-cli / gemini-cli),
+	// CLIOverhead is set only for CLI-wrapper providers (claude-cli / antigravity-cli),
 	// where TotalTokens above under-reports the real billed input — see the type doc.
 	CLIOverhead *cliOverheadPreview `json:"cliOverhead,omitempty"`
 }
 
-// cliOverheadPreview surfaces, for CLI-wrapper providers (claude-cli, gemini-cli),
+// cliOverheadPreview surfaces, for CLI-wrapper providers (claude-cli, antigravity-cli),
 // the gap between SwarmGo's own segment estimate (TotalTokens) and the real prompt
 // the underlying CLI actually sends to the model. The CLI injects its OWN system
 // prompt + tool schemas + MCP bridge that SwarmGo never composes or sees, so for
@@ -276,25 +276,36 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 }
 
 // computeCLIOverhead derives the CLI-wrapper overhead preview for claude-cli /
-// gemini-cli agents (nil for native providers). The real billed input is measured
+// antigravity-cli agents (nil for native providers). The real billed input is measured
 // from the session's recorded lifetime usage (input + cacheRead + cacheWrite,
 // averaged per call) and compared against SwarmGo's own segment estimate, so the
 // UI can warn that TotalTokens excludes the CLI's injected prompt + tools + MCP
 // bridge. Returns a populated (overhead-0) preview with a "not measured yet" note
 // when the session has no recorded calls.
 func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider, sessionID string, estimated int) *cliOverheadPreview {
-	if provider != "claude-cli" && provider != "gemini-cli" {
+	if provider != "claude-cli" && provider != "antigravity-cli" {
 		return nil
 	}
 	name := "claude-cli (Claude Code)"
-	if provider == "gemini-cli" {
-		name = "gemini-cli"
+	if provider == "antigravity-cli" {
+		name = "antigravity-cli (agy)"
 	}
 
 	measured, calls := 0, 0
-	if u, err := wsp.DB.GetSessionUsage(ctx, sessionID); err == nil && u.Calls > 0 {
-		calls = u.Calls
-		measured = (u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens) / u.Calls
+	// Most accurate next-turn projection: the REAL input of the most recent llm_call
+	// from the debug journal (steady-state), rather than a cold+warm lifetime
+	// average that under/over-states what the next turn will actually cost.
+	if evs, derr := wsp.DB.ReadDebugEvents(ctx, sessionID, db.DebugLLMCall, 1); derr == nil && len(evs) > 0 {
+		e := evs[len(evs)-1]
+		measured = e.In + e.CacheRead + e.CacheWrite
+		calls = 1
+	}
+	// Fallback (debug journal off / no llm_call yet): lifetime average per call.
+	if measured == 0 {
+		if u, err := wsp.DB.GetSessionUsage(ctx, sessionID); err == nil && u.Calls > 0 {
+			calls = u.Calls
+			measured = (u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens) / u.Calls
+		}
 	}
 
 	over := measured - estimated
@@ -302,7 +313,7 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 		over = 0
 	}
 
-	note := name + " kendi sistem promptu + araç şemaları + MCP köprüsünü modele ekler; bu yük yukarıdaki segment tahminine (TotalTokens) DAHİL DEĞİL. Gerçek faturalanan girdi için usage-detail (input+cacheWrite+cacheRead) esas alın."
+	note := name + " kendi sistem promptu + araç şemaları + MCP köprüsünü modele ekler; bu yük yukarıdaki segment tahminine (TotalTokens) DAHİL DEĞİL. 'Gerçek' = son ölçülen turun fiili girdisi (input+cacheRead+cacheWrite); çoğu cacheRead ise ucuzdur."
 	if measured == 0 {
 		note = name + " kendi sistem promptu + araçlarını ekler (segment tahmini bunu saymaz). Henüz tur gönderilmedi → gerçek girdi ilk turdan sonra ölçülür."
 	}

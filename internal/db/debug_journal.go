@@ -46,6 +46,7 @@ type DebugEvent struct {
 	Time       int64  `json:"ts"`   // unix milliseconds (stamped on append when 0)
 	Type       string `json:"type"` // one of the Debug* tags above
 	SessionID  string `json:"sessionId,omitempty"`
+	TurnID     string `json:"turnId,omitempty"` // the assistant reply message id this event belongs to (per-message debug)
 	AgentID    string `json:"agentId,omitempty"`
 	Kind       string `json:"kind,omitempty"`  // call origin (chat/task/schedule/flow/…)
 	Name       string `json:"name,omitempty"`  // tool name / hook event name
@@ -282,6 +283,105 @@ func (d *DB) GetDebugSummary(ctx context.Context, sessionID string) (DebugSummar
 		sum.ByModel = nil
 	}
 	return sum, nil
+}
+
+// TurnToolCall is one tool execution within a single turn — the per-call rows the
+// message-level debug panel lists (name + latency + output size + error).
+type TurnToolCall struct {
+	Name     string `json:"name"`
+	DurMs    int64  `json:"durMs"`
+	OutBytes int    `json:"outBytes"`
+	Err      bool   `json:"err,omitempty"`
+}
+
+// TurnDebug is the per-MESSAGE (per-turn) debug rollup behind the chat message
+// debug panel: the token spend, latency, model and the exact tool calls that ran
+// to produce ONE assistant reply. Events are correlated by DebugEvent.TurnID (the
+// reply message id). ByModel feeds the shared cost helper in the API layer and is
+// not serialized directly.
+type TurnDebug struct {
+	SessionID    string              `json:"sessionId"`
+	TurnID       string              `json:"turnId"`
+	Found        bool                `json:"found"`
+	Model        string              `json:"model,omitempty"`
+	DurMs        int64               `json:"durMs"`
+	Stop         string              `json:"stop,omitempty"`
+	LLMCalls     int                 `json:"llmCalls"`
+	InputTokens  int                 `json:"inputTokens"`
+	OutputTokens int                 `json:"outputTokens"`
+	CacheRead    int                 `json:"cacheReadTokens"`
+	CacheWrite   int                 `json:"cacheWriteTokens"`
+	ToolCalls    int                 `json:"toolCalls"`
+	Tools        []TurnToolCall      `json:"tools,omitempty"`
+	Errors       int                 `json:"errors"`
+	Recoveries   int                 `json:"recoveries"`
+	Compactions  int                 `json:"compactions"`
+	LastError    string              `json:"lastError,omitempty"`
+	FirstTs      int64               `json:"firstTs,omitempty"`
+	LastTs       int64               `json:"lastTs,omitempty"`
+	ByModel      map[string]KindStat `json:"-"` // cost calc input (API layer); not serialized
+}
+
+// GetTurnDebug aggregates a session's debug journal down to the events tagged with
+// one turn id (one assistant reply) — the data behind the per-message debug panel.
+// A missing file or unknown turn id yields Found=false (not an error).
+func (d *DB) GetTurnDebug(ctx context.Context, sessionID, turnID string) (TurnDebug, error) {
+	td := TurnDebug{SessionID: sessionID, TurnID: turnID, ByModel: map[string]KindStat{}}
+	if sessionID == "" || turnID == "" {
+		return td, nil
+	}
+	evs, err := readDebugFile(d.debugPath(sessionID))
+	if err != nil {
+		return td, err
+	}
+	for _, e := range evs {
+		if e.TurnID != turnID {
+			continue
+		}
+		td.Found = true
+		if td.FirstTs == 0 || e.Time < td.FirstTs {
+			td.FirstTs = e.Time
+		}
+		if e.Time > td.LastTs {
+			td.LastTs = e.Time
+		}
+		switch e.Type {
+		case DebugTurn:
+			td.DurMs += e.DurMs
+			if e.Stop != "" {
+				td.Stop = e.Stop
+			}
+		case DebugLLMCall:
+			td.LLMCalls++
+			td.InputTokens += e.In
+			td.OutputTokens += e.Out
+			td.CacheRead += e.CacheRead
+			td.CacheWrite += e.CacheWrite
+			if e.Model != "" {
+				td.Model = e.Model
+				st := td.ByModel[e.Model]
+				st.Calls++
+				st.InputTokens += e.In
+				st.OutputTokens += e.Out
+				st.CacheReadTokens += e.CacheRead
+				st.CacheWriteTokens += e.CacheWrite
+				td.ByModel[e.Model] = st
+			}
+		case DebugTool:
+			td.ToolCalls++
+			td.Tools = append(td.Tools, TurnToolCall{Name: e.Name, DurMs: e.DurMs, OutBytes: e.OutBytes, Err: e.Err})
+		case DebugError:
+			td.Errors++
+			if e.Detail != "" {
+				td.LastError = e.Detail
+			}
+		case DebugRecovery:
+			td.Recoveries++
+		case DebugCompaction:
+			td.Compactions++
+		}
+	}
+	return td, nil
 }
 
 // computeDebugAnomalies derives heuristic findings from a populated summary —

@@ -361,6 +361,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		// Pre-allocate the reply id so the streaming crash sidecar and the final
 		// persisted message share one identity (recovery is then idempotent).
 		replyID := uuid.NewString()
+		// Tag every debug event emitted during this turn with the reply id, so the
+		// per-message debug panel can fetch exactly this message's spend/latency.
+		turnCtx = agent.WithTurnID(turnCtx, replyID)
 		// Snapshot the in-flight reply to disk on a throttle: the partial answer
 		// text (accumulated from streaming deltas) plus the persistable trace so
 		// far. A mid-turn process death leaves this sidecar for boot to reclaim.

@@ -16,6 +16,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 func (s *Server) handleSessionDebug(w http.ResponseWriter, r *http.Request) {
@@ -51,4 +52,50 @@ func (s *Server) handleSessionDebug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"summary": sum})
+}
+
+// handleSessionTurnDebug returns the per-MESSAGE debug rollup for one assistant
+// reply — the data behind the chat message debug button. Events are correlated by
+// the reply message id (DebugEvent.TurnID). Cost is computed with the SAME pricing
+// helper as the Budget screen so per-message figures reconcile with the session
+// total.
+//
+//	GET /api/sessions/{id}/turn-debug?turn={replyMessageId}
+func (s *Server) handleSessionTurnDebug(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	turnID := strings.TrimSpace(r.URL.Query().Get("turn"))
+	wsp := ws(r)
+
+	td, err := wsp.DB.GetTurnDebug(r.Context(), sessionID, turnID)
+	if writeDBError(w, err, "") {
+		return
+	}
+	// Reuse the shared Motor-B pricing so this matches /usage-detail exactly.
+	_, cost, savings, priced, estimated, _, _ := modelRowsFor(td.ByModel)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sessionId":        td.SessionID,
+		"turnId":           td.TurnID,
+		"found":            td.Found,
+		"model":            td.Model,
+		"durMs":            td.DurMs,
+		"stop":             td.Stop,
+		"llmCalls":         td.LLMCalls,
+		"inputTokens":      td.InputTokens,
+		"outputTokens":     td.OutputTokens,
+		"cacheReadTokens":  td.CacheRead,
+		"cacheWriteTokens": td.CacheWrite,
+		"toolCalls":        td.ToolCalls,
+		"tools":            td.Tools,
+		"errors":           td.Errors,
+		"recoveries":       td.Recoveries,
+		"compactions":      td.Compactions,
+		"lastError":        td.LastError,
+		"costUSD":          cost,
+		"savingsUSD":       savings,
+		"priced":           priced,
+		"estimated":        estimated,
+		"firstTs":          td.FirstTs,
+		"lastTs":           td.LastTs,
+	})
 }

@@ -174,6 +174,7 @@ export interface SessionDebugEvent {
   ts: number
   type: 'turn' | 'llm_call' | 'tool' | 'hook' | 'error' | 'compaction' | 'recovery'
   sessionId?: string
+  turnId?: string
   agentId?: string
   kind?: string
   name?: string
@@ -188,4 +189,41 @@ export interface SessionDebugEvent {
   stop?: string
   err?: boolean
   detail?: string
+}
+
+// One tool execution within a single turn (per-message debug panel row).
+export interface TurnToolCall {
+  name: string
+  durMs: number
+  outBytes: number
+  err?: boolean
+}
+
+// Per-MESSAGE debug rollup behind the chat message debug button: the token spend,
+// latency, model, cost and the exact tool calls that produced one assistant reply.
+// Backed by GET /api/sessions/{id}/turn-debug?turn={replyMessageId}.
+export interface TurnDebug {
+  sessionId: string
+  turnId: string
+  found: boolean
+  model?: string
+  durMs: number
+  stop?: string
+  llmCalls: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  toolCalls: number
+  tools?: TurnToolCall[]
+  errors: number
+  recoveries: number
+  compactions: number
+  lastError?: string
+  costUSD: number
+  savingsUSD: number
+  priced: boolean
+  estimated: boolean
+  firstTs?: number
+  lastTs?: number
 }
