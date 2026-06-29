@@ -37,7 +37,8 @@ Ajan turunda (native veya CLI)
 | `internal/api/chat_stream.go` | `wakeFn` closure; `WithWakeScheduler` + `setWakeScheduler` |
 | `internal/api/chat_control.go` | `chatRun.wake` alanı + getter/setter |
 | `internal/api/mcp_interaction.go` | `schedule_wake` araç tanımı + `callWake` dispatch |
-| `internal/agent/climcp.go` | `"schedule_wake"` → `interactionToolNames`; `"ScheduleWakeup"` → disallowed |
+| `internal/api/mcp_interaction.go` | `schedule_wake`, `interactionToolSpecs`'e eklenir (extended tier); allowlist `inter.Core/ExtendedToolNames`'ten otomatik türer (tek kaynak). CLI'da `mcp__swarmgo_extended__schedule_wake` |
+| `internal/agent/climcp.go` | `"ScheduleWakeup"` (CLI native) → disallowed (SwarmGo'nun schedule_wake'i yerine geçer) |
 | `internal/api/schedules.go` | One-shot satırları liste filtresi |
 | `internal/tools/builtin_schedulemgmt.go` | One-shot satırları `list_schedules` filtresi |
 | `frontend/src/App.tsx` | `chat` event: `phase=start` → `markPending`, `phase=done` → `clearPending` |
@@ -59,7 +60,7 @@ Ajan turunda (native veya CLI)
 
 **Native provider yolu:** `ScheduleWakeTool.Call` → `wakeFrom(ctx)` → `Runtime.ScheduleWake`.
 
-**claude-cli yolu:** `mcp__swarmgo_interaction__schedule_wake` → `mcp_interaction.go callWake` → `run.wakeScheduler()` → aynı `Runtime.ScheduleWake`. CLI'ın kendi `ScheduleWakeup` aracı `disallowed` listesinde (işe yaramaz, kafa karıştırır).
+**claude-cli yolu:** `mcp__swarmgo_extended__schedule_wake` (NameOnly/extended tier → ToolSearch ile lazy gelir) → `mcp_interaction.go callWake` → `run.wakeScheduler()` → aynı `Runtime.ScheduleWake`. CLI'ın kendi `ScheduleWakeup` aracı `disallowed` listesinde (işe yaramaz, kafa karıştırır).
 
 ## Gecikmeler ve sınırlar
 

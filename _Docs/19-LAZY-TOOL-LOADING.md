@@ -133,7 +133,7 @@
   **Eager kalanlar** (davranışsal dürtü veya yüksek frekans): `todo_write`,
   `ask_user`, `request_confirmation`, `create_artifact`/`update_artifact`,
   `core_memory_*`, `use_skill`/`skill_search`, `run_subagent`,
-  `Read`/`Write`/`Edit`/`list_dir`/`Glob`/`Grep`, `shell`. Self-management ailesi
+  `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`, `Bash`. Self-management ailesi
   `MarkHidden` kalır (katalogdan tamamen düşer — name-only'den daha agresif).
   Etki (ölçüm, WS5/AGT1): eager 30→20 araç, eager şema **~5931→3857 token**
   (≈ turn/agent başına **~2074 token** tasarruf, cache prefix'inde). 10 araç

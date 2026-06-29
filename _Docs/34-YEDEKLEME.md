@@ -145,6 +145,7 @@ yüzden alakasız bir reload ile rahatsız edilmez.
 - `TestResolveArchiveRejectsTraversal` — geçerli arşiv çözülür; `..`/alt-yol/yanlış
   uzantı reddedilir.
 - `TestZipDirSkipsBackupsRoot` — kaynak içine yuvalanmış backups kökü dışlanır.
+- `TestDeleteArchive` — tek bir arşivin silinmesi (traversal-guard'lı).
 
 Canlı doğrulama (2026-06-25): WS1 (5 ajan/26 oturum) ve WS2 (9 ajan/11 oturum) en yeni
 arşivleriyle hem API hem UI'dan geri yüklendi → veri round-trip'te korundu, server sağlıklı.

@@ -49,7 +49,7 @@ Bu tablo başlangıç planıydı. Faz 0–8 sonunda gerçekte kullanılan kararl
 | MCP istemci | mark3labs/mcp-go | **SDK'sız elle JSON-RPC 2.0** (stdio) | Bağımlılıksız felsefe; SSE/HTTP henüz yok (Faz 8 ✅) |
 | OTel (gözlemlenebilirlik) | otel | ⏳ ileride | Henüz eklenmedi |
 
-> İlke: bağımlılığı ancak gerçekten gerektiğinde ekle. Depolama dosya sistemine taşındıktan sonra `go.mod`'da yalnızca `github.com/google/uuid v1.6.0` ve `github.com/robfig/cron/v3 v3.0.1` kaldı (`modernc.org/sqlite` + ~8 dolaylı bağımlılık kaldırıldı). Go backend ikinci bir harici bağımlılık taşımaz; kalan her şey stdlib üzerinde.
+> İlke: bağımlılığı ancak gerçekten gerektiğinde ekle. Depolama dosya sistemine taşındıktan sonra `modernc.org/sqlite` + ~8 dolaylı bağımlılık kaldırıldı. `go.mod`'daki doğrudan bağımlılıklar: `github.com/google/uuid v1.6.0`, `github.com/robfig/cron/v3 v3.0.1` ve `github.com/jchv/go-webview2` (yalnız native masaüstü pencere için, Faz 9). DB ve runtime saf stdlib üzerinde.
 
 ## Masaüstü Kabuk
 

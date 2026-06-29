@@ -90,9 +90,9 @@ type RegistryEntry struct {
     ... // mevcut alanlar
     // Source, set yerine URL'in pack olmadığı; bunun yerine ingest edilecek bir
     // GitHub kaynağı olduğunu belirtir. Boşsa klasik pack davranışı (geriye uyumlu).
-    Source *EntrySource `json:"source,omitempty"`
+    Source *SourceRef `json:"source,omitempty"`
 }
-type EntrySource struct {
+type SourceRef struct {
     Type string `json:"type"` // "github"
     URL  string `json:"url"`  // owner/repo[/tree/<ref>/<path>]
     Keys []string `json:"keys,omitempty"` // ops. belirli artifact'lar (boş = hepsi)
@@ -119,10 +119,10 @@ type Connector interface {
 ```
 
 - **crossaitoolsConnector:** `GET /api/skills` → her kayıt `repo`+`path` →
-  `EntrySource{github, "github.com/<repo>/tree/main/<path>"}`. 21.7k kayıt →
+  `SourceRef{github, "github.com/<repo>/tree/main/<path>"}`. 21.7k kayıt →
   **asla tümünü katalog index'ine yükleme**; `query`/`page` ile sunucu-tarafı arama
   (`/api/skills?q=`) veya client-side ilk-N + arama kutusu.
-- **skillsmpConnector:** `githubUrl` doğrudan `EntrySource.URL`; `/api/v1/skills/search`
+- **skillsmpConnector:** `githubUrl` doğrudan `SourceRef.URL`; `/api/v1/skills/search`
   ile arama.
 - **claudeskillsmarketConnector:** API yok → `sitemap.xml` + sayfa scrape (en kırılgan;
   **son faz / opsiyonel**, site API açarsa öncelik).

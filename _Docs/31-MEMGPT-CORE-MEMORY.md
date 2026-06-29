@@ -1,4 +1,4 @@
-# 26 — MemGPT/Letta Tarzı Self-Editing Bellek (Mod C uygulama planı)
+# 31 — MemGPT/Letta Tarzı Self-Editing Bellek (Mod C uygulama planı)
 
 > **Durum (2026-06-23): Parça 1–5 + 4a + 4b UYGULANDI (TAMAMLANDI).** Çekirdek
 > bellek **adlandırılmış bloklar + karakter limiti** (Parça 5); `human` bloğu

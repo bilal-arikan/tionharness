@@ -56,7 +56,7 @@ olarak **session başına TEK rolling artifact**'a yazılır (`db.AppendPlanArti
 **eklenir** (yeni artifact açılmaz) → artifact sayısı plan sayısıyla değil session sayısıyla
 sınırlı. Hem manuel onayda hem otonom oto-onayda; best-effort. Doğrulandı: `go build`/`vet`
 temiz, 92 db/api testi + `TestAppendPlanArtifact` geçti, `npm run build` temiz. Detay:
-`_Docs/39-PLAN-MODE.md`.
+`_Docs/40-PLAN-MODE.md`.
 
 ## Log boşlukları kapatıldı: MCP client + compaction + izin denetim izi ✅ (2026-06-28)
 

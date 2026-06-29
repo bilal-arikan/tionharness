@@ -11,8 +11,9 @@ insan-okunabilir **JSON / JSONL** dosyalarında. Avantajlar:
 
 - **Taşınabilir & git'lenebilir:** workspace klasörünü kopyala/versiyonla.
 - **Şeffaf:** her kayıt diskte okunabilir; harici araçlarla incelenebilir.
-- **Bağımlılıksız:** `modernc.org/sqlite` + tüm dolaylı bağımlılıklar gitti
-  (`go.mod` artık yalnız `google/uuid` + `robfig/cron`).
+- **Bağımlılıksız:** `modernc.org/sqlite` + tüm dolaylı bağımlılıklar gitti; DB
+  katmanı saf stdlib (`go.mod` doğrudan bağımlılıkları yalnız `google/uuid` +
+  `robfig/cron` + native pencere için `jchv/go-webview2`).
 - **Tek binary, CGO yok** hedefiyle tam uyumlu.
 
 ## Mimari: bellek-içi + diske yazma (write-through)

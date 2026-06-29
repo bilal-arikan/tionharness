@@ -94,7 +94,8 @@ Loglar iki katmanda üretilir:
 ### 1. HTTP access-log (`internal/api/middleware_log.go`)
 
 `withRequestLog` middleware'i **her API isteğini** loglar. `Routes()` zinciri:
-`withCORS → withRequestLog → withWorkspace`.
+`withCORS → withRequestLog → withRecover → withWorkspace` (withRecover, panik 500'ü
+de access-log'a yansısın diye withRequestLog'un içinde).
 
 - Mesaj: `"http request"`, alanlar: `method` / `path` / `status` / `dur`.
 - Seviye eşlemesi: **2xx → INFO**, **4xx → WARN**, **5xx → ERROR**.

@@ -157,11 +157,14 @@ prompt each turn, so explicit recall is only for targeted lookups), `read_logs`
 (read the app log ring buffer). Both memory tools are load-on-demand — activate
 them like the rest of this suite.
 
-**Secrets & sessions & web** — `secret_list` / `secret_get` (read the encrypted
+**Secrets & sessions** — `secret_list` / `secret_get` (read the encrypted
 vault), `secret_set` / `secret_delete` (store or remove a credential — write side,
 gated by self-management), `list_sessions` (enumerate sibling sessions; a context
-block is also pushed automatically), `WebFetch` (fetch a web page as Markdown). These are
-load-on-demand too: `activate_tools` first.
+block is also pushed automatically), `conversation_search` (full-text search across
+the workspace's message history — deeper than list_sessions). These are
+load-on-demand: `activate_tools` first. (`WebFetch` is NOT here — it is an EAGER
+built-in on the native path, always available without activate_tools; on claude-cli
+the CLI's own native WebFetch is used.)
 
 **Application settings** — `get_settings`, `update_settings` (read and live-apply
 the app-wide settings.json). These change config for the WHOLE application — see

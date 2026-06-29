@@ -43,7 +43,7 @@ graph LR
 1. Oturum geçmişini (`ListMessages`) render et (`conversation.RenderTranscript`).
 2. **Handoff üret:** `conversation.BuildHandoff(...)` — compaction çekirdeğiyle aynı
    provider çağrısı (usage `KindCompact`), ama **devam-odaklı** `handoffPrompt` ile
-   (10 bölüm, aşağıda). Env snapshot enjekte edilir.
+   (9 bölüm, aşağıda). Env snapshot enjekte edilir.
 3. **Artifact yaz:** eski oturuma first-class markdown artifact (`Handoff — <başlık>`).
    `db.SetSessionHandoffArtifact` ile eski oturuma id'si işlenir.
 4. **(Ops.) Dosya yaz:** `HandoffWriteFile` açıksa `<workdir>/.swarmgo/handoff.md`
@@ -54,7 +54,7 @@ graph LR
 6. **Zincir + kapanış:** yeni oturum `ParentSessionID = eski`; eski oturuma
    **tombstone** asistan mesajı ("↪ Context reset — devam: SES…").
 
-### Handoff artifact formatı (`handoffPrompt`, 10 bölüm)
+### Handoff artifact formatı (`handoffPrompt`, 9 bölüm)
 
 Rolling-summary'nin 8 bölümünü **reset-kritik** parçalarla genişletir:
 
