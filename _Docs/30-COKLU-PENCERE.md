@@ -39,7 +39,7 @@ Bu, go-webview2'nin tek-pencere modeline tam uyar ve tüm sunucu/durum mantığ�
 graph TD
     P[Birincil süreç<br/>swarmgo-desktop.exe] -->|app.Bootstrap| S[(HTTP sunucu<br/>127.0.0.1:PORT)]
     P --> W1[WebView2 Pencere 1<br/>WS1/chat]
-    P -->|Bind: swarmgoOpenWindow route| SPAWN[proc.Command<br/>kendini connect-only başlat]
+    P -->|Bind: swarmgoOpenWindow route| SPAWN[exec.Command<br/>kendini connect-only başlat]
     SPAWN --> C[İkincil süreç<br/>SWARMGO_WEBVIEW_URL=...]
     C --> W2[WebView2 Pencere 2<br/>WS2/chat]
     W1 --> S
@@ -54,8 +54,9 @@ graph TD
 2. **Frontend** (`openInNewWindow`): WebView2 algılarsa (`window.chrome?.webview` **ve**
    `window.swarmgoOpenWindow` var) → `window.swarmgoOpenWindow(route)` çağırır; aksi halde
    (tarayıcı/dev) eski `window.open` davranışı korunur.
-3. **`openWindow(route)` (Go, birincil)**: `proc.Command(os.Executable())`'ı
-   `SWARMGO_WEBVIEW_URL = baseURL + "/#" + route` env'i ile başlatır (proc.Command → konsol
+3. **`openWindow(route)` (Go, birincil)**: `exec.Command(os.Executable())`'ı
+   `SWARMGO_WEBVIEW_URL = baseURL + "/#" + route` env'i ile başlatır (düz `exec.Command` —
+   `proc.Command` DEĞİL, çünkü onun `HideWindow`'u webview penceresini de gizlerdi → konsol
    yanıp sönmesi yok). Fire-and-forget.
 4. **İkincil süreç** (connect-only): `SWARMGO_WEBVIEW_URL` set ise **sunucu açmaz**
    (`app.Bootstrap` atlanır); yalnız DPI + WebView2 penceresi kurup o URL'ye `Navigate` eder.
@@ -70,7 +71,7 @@ graph TD
     (`GET <base>/api/settings` → preset) `applyTitleBar`, `Navigate(url)`, `Run()`.
   - Birincil yol (mevcut): `app.Bootstrap` + Pencere; ek olarak `w.Bind("swarmgoOpenWindow", ...)`.
 - **`openwindow_windows.go` (yeni)**: `spawnWindow(baseURL, route string)` →
-  `exe, _ := os.Executable(); cmd := proc.Command(exe); cmd.Env = append(os.Environ(),
+  `exe, _ := os.Executable(); cmd := exec.Command(exe); cmd.Env = append(os.Environ(),
   "SWARMGO_WEBVIEW_URL="+baseURL+"/#"+route); cmd.Start()`.
 - **Title bar — connect-only varyantı**: `app.App.Appearance()` yok; küçük bir HTTP yardımcı
   `fetchAppearance(base) (preset, theme string)` (`GET /api/settings`, mevcut DTO `themePreset`/
@@ -125,7 +126,7 @@ soyutla, ileride başka yerlerde de kullanılsın.)
 ## Uygulama adımları (sıra)
 
 1. `cmd/swarmgo-desktop/main.go`: connect-only dalı + `runSecondary` + `w.Bind("swarmgoOpenWindow")`.
-2. `openwindow_windows.go`: `spawnWindow` (proc.Command ile self-exec).
+2. `openwindow_windows.go`: `spawnWindow` (düz `exec.Command` ile self-exec; `proc.Command` değil).
 3. Title bar connect-only: `fetchAppearance(base)` HTTP yardımcı.
 4. Frontend `WorkspaceSwitcher.openInNewWindow`: WebView2 köprüsü + fallback (+ ops. `lib/desktop.ts`).
 5. Build (UI + desktop) + canlı doğrulama (yukarıdaki 5 madde).

@@ -74,7 +74,7 @@ send_message(to, message, summary)
   └─ return "X'e teslim edildi (inbox)"
 ```
 
-- `formatAgentMessage` → `internal/tools/agentmsg_format.go`:
+- `formatAgentMessage` → `internal/agent/agentmsg.go` (uygulandı; ayrı `tools/agentmsg_format.go` yok):
   `<agent_message from="Ada" summary="…">…</agent_message>` (Claude Code'un
   `<teammate_message teammate_id=…>` muadili).
 - Teslim **fire-and-forget**: gönderen beklemez (heartbeat kalktığı için tetik =
@@ -132,9 +132,9 @@ işbirliği).
 
 ## 8. Tahmini dosya dokunuşları
 
-- `internal/tools/builtin_sendmessage.go` (yeni araç) + `agentmsg_format.go` (from-tag)
+- `internal/tools/builtin_sendmessage.go` (yeni araç) + `internal/agent/agentmsg.go` (from-tag biçimleme)
 - `internal/agent/toolsetup.go` (self-manage bloğuna ekle)
-- `internal/agent/*` → `DeliverAgentMessage(target, from, summary, text)` (inbox + spawn)
+- `internal/agent/agentmsg.go` → `DeliverAgentMessage(ctx, fromAgentID, toRef, summary, message)` (inbox + spawn)
 - `internal/tools/builtin_sendmessage_test.go`
 - Docs: bu plan + [[10-KAVRAMSAL-TASARIM-NOTLARI]] + [[05-ILERLEME]] + [[23-ILISKI-GRAFIGI]]
 

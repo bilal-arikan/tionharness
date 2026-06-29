@@ -86,6 +86,9 @@ The chat UI renders your markdown richly — use it directly in your reply:
 
 While a reply streams, an incomplete mermaid block shows its source until the
 syntax is complete, then swaps to the diagram — so partial output never breaks.
+For a non-trivial diagram, lint it first with the **`mermaid_validate`** tool
+(load-on-demand) — it catches a bad diagram type or unbalanced brackets/quotes
+before the broken block reaches the user.
 
 ## Reaching the user (interaction tools)
 

@@ -27,9 +27,9 @@
 | Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters` varsayılan 24, `SWARMGO_MAX_TOOL_ITERS` ile override) + tur kurtarma (`recovery.go`: max-token resume + reaktif compaction, A1) | Yok |
 | Context yönetimi / compaction | Otomatik | `internal/conversation` (token-bütçeli) | Yok |
 | Prompt caching | İnce ayarlı | Yok (native HTTP) | Küçük |
-| Permission / onay modları | Var (mod + hook) | Yok (native); claude-cli'de `--allowedTools` ile kısmi | **Var** |
+| Permission / onay modları | Var (mod + hook) | **Var** — `internal/agent/permission.go` + `tools/permission.go` (auto/ask/read-only modları, arg-bazlı grant desenleri, claude-cli `--permission-prompt-tool`) | ✅ (Faz P3) |
 | Hooks (PreToolUse / PostToolUse) | Var | **Var** (Faz P4, native yol; `internal/agent/hooks.go`) | ✅ |
-| Subagents | Var | `internal/orchestration` graf motoru | Kısmi |
+| Subagents | Var | **Var** — `internal/agent/subagent.go` + `internal/tools/subagent.go` (`run_subagent`: izole alt-ajan, objective/output_format/boundaries) + `internal/orchestration` graf motoru | ✅ |
 | MCP | Var | `internal/mcp` (stdio JSON-RPC) | Yok |
 | Anthropic ile güncel kalma | Bakım Anthropic'te | Bakım bizde | Yapısal |
 

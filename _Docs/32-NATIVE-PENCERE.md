@@ -59,7 +59,7 @@ package app
 
 // Bootstrap tüm alt sistemleri kurar ve dinlemeye hazır bir App döner.
 // addr "127.0.0.1:0" verilirse OS boş port seçer; App.Addr() gerçek adresi verir.
-func Bootstrap(cfg *config.Config, logger *slog.Logger) (*App, error)
+func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*App, error)
 
 func (a *App) Addr() string          // net.Listener.Addr() — gerçek port (0 ise çözülen)
 func (a *App) Serve() error          // bloklar (mevcut go func gövdesi)
@@ -76,7 +76,8 @@ func (a *App) Shutdown(ctx) error    // graceful
 ```
 internal/app/app.go              # paylaşılan boot (Bootstrap/Serve/Shutdown/Addr)
 cmd/swarmgo-desktop/main.go      # //go:build windows  — webview sarmalayıcı
-cmd/swarmgo-desktop/doc.go       # //go:build !windows — boş stub + "yalnız Windows" notu
+cmd/swarmgo-desktop/stub_other.go # //go:build !windows — boş stub + "yalnız Windows" notu
+cmd/swarmgo-desktop/window_windows.go, openwindow_windows.go, titlebar_windows.go, dpi_windows.go  # Windows-özel pencere/DPI/titlebar
 ```
 
 ### `cmd/swarmgo-desktop/main.go` (taslak)
@@ -90,7 +91,7 @@ func main() {
     logger := ...                       // mevcut slog kurulumu
     cfg, _ := config.Load()
     cfg.Addr = "127.0.0.1:0"            // boş port
-    application, err := app.Bootstrap(cfg, logger)
+    application, err := app.Bootstrap(cfg, logs, logger)
     // ... hata → MessageBox + çık
     go application.Serve()
     url := "http://" + application.Addr()

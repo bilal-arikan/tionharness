@@ -38,7 +38,7 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 ### Appearance
 - `theme` — `"dark"` | `"light"` | `"system"` (default `dark`).
 - `accent` — hex color, e.g. `"#8b5cf6"`.
-- `themePreset` — curated palette id (`""` = legacy theme+accent).
+- `themePreset` — curated palette id (default `"midnight-violet"`; `""` = legacy theme+accent).
 - `language` — `"tr"` | `"en"` (default `tr`).
 - `desktopNotifications`, `keepAwake` — booleans (applied client-side).
 
@@ -77,14 +77,24 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 
 ### Tool-output compaction
 - System A (deterministic, free): `compactToolOutput` (default true),
-  `compactMaxLines` (0–5000, default 200), `compactMaxBytes` (0–262144, default 12288).
+  `compactMaxLines` (0–5000, default 200), `compactMaxBytes` (0–262144, default 16384).
 - System B (LLM summary, opt-in): `compactLlmSummary` (default false),
-  `compactLlmThreshold` bytes (default 8192), `compactModel` (`""` = title model).
+  `compactLlmThreshold` bytes (default 12288), `compactModel` (`""` = title model).
 
 ### Budgets & autonomy
 - `defaultDailyCallLimit`, `defaultDailyTokenLimit` — new-agent defaults (0 = unlimited).
 - `pauseAutonomy` (global autonomy brake — pauses scheduled calls).
 - `autoTitleEnabled` (default true), `titleModel` (`""` = agent's model).
+
+### Context reset / handoff (see _Docs/35)
+- `handoffAuto` (default false) — auto-handoff a near-limit session (autonomous turns only).
+- `handoffPressure` (default 0.90) — context-fill ratio that triggers auto-handoff.
+- `handoffMaxChain` (default 20) — max handoff chain length.
+- `handoffWriteFile` (default false) — also write the handoff doc to a file.
+
+### Persistent progress (see _Docs/36)
+- `progressPersist` (default true) — persist the `todo_write` list to `<cwd>/.swarmgo/progress.json`.
+- `progressResume` (default true) — restore that list on a fresh session.
 
 ### MCP & gated tool capabilities (off by default — each expands power/cost)
 - `mcpGatewayUrl` — external MCP gateway URL.

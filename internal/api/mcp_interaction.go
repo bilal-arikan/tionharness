@@ -232,6 +232,93 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 	return specs
 }
 
+// sinkTool describes a sink-bound interaction tool: a shared builtin handler that
+// runs once the per-run sink is injected as a context value. newTool builds the
+// handler; attach pulls the run's sink and returns the augmented ctx (ok=false when
+// a required sink is missing → the model gets `missing` as a graceful error).
+type sinkTool struct {
+	newTool func() tools.Tool
+	attach  func(ctx context.Context, run *chatRun) (context.Context, bool)
+	missing string
+}
+
+// Shared attach closures (one per sink kind). Artifact/notify/focus deliberately
+// run on a fresh background ctx (fire-and-forget, not tied to turn cancellation);
+// goal/session edits use the call ctx.
+var (
+	artifactAttach = func(_ context.Context, run *chatRun) (context.Context, bool) {
+		s := run.artifactSink()
+		if s == nil {
+			return nil, false
+		}
+		return tools.WithArtifacts(context.Background(), s), true
+	}
+	goalAttach = func(ctx context.Context, run *chatRun) (context.Context, bool) {
+		s := run.goalSinkFor()
+		if s == nil {
+			return nil, false
+		}
+		return tools.WithGoal(ctx, s), true
+	}
+	sessionAttach = func(ctx context.Context, run *chatRun) (context.Context, bool) {
+		s := run.sessionSinkFor()
+		if s == nil {
+			return nil, false
+		}
+		return tools.WithSession(ctx, s), true
+	}
+)
+
+// sinkToolTable maps a bare tool name to its sink-bound handler. todo_write is the
+// one optional-sink case (it persists best-effort and always runs).
+var sinkToolTable = map[string]sinkTool{
+	"todo_write": {
+		newTool: func() tools.Tool { return tools.NewTodoWriteTool() },
+		attach: func(_ context.Context, run *chatRun) (context.Context, bool) {
+			if s := run.todoSink(); s != nil {
+				return tools.WithTodoSink(context.Background(), s), true
+			}
+			return context.Background(), true // sink optional: still publish the checklist
+		},
+	},
+	"create_artifact": {newTool: func() tools.Tool { return tools.NewCreateArtifactTool() }, attach: artifactAttach, missing: "artifacts are not available for this turn"},
+	"update_artifact": {newTool: func() tools.Tool { return tools.NewUpdateArtifactTool() }, attach: artifactAttach, missing: "artifacts are not available for this turn"},
+	"notify": {newTool: func() tools.Tool { return tools.NewNotifyTool() }, attach: func(_ context.Context, run *chatRun) (context.Context, bool) {
+		s := run.notifySink()
+		if s == nil {
+			return nil, false
+		}
+		return tools.WithNotify(context.Background(), s), true
+	}, missing: "no notification channel is available for this turn"},
+	"focus_view": {newTool: func() tools.Tool { return tools.NewFocusViewTool() }, attach: func(_ context.Context, run *chatRun) (context.Context, bool) {
+		s := run.navSink()
+		if s == nil {
+			return nil, false
+		}
+		return tools.WithNavigate(context.Background(), s), true
+	}, missing: "no UI is available to navigate for this turn"},
+	"set_session_goal":  {newTool: func() tools.Tool { return tools.NewSetSessionGoalTool() }, attach: goalAttach, missing: "no session goal is available for this turn"},
+	"complete_goal":     {newTool: func() tools.Tool { return tools.NewCompleteGoalTool() }, attach: goalAttach, missing: "no session goal is available for this turn"},
+	"set_session_title": {newTool: func() tools.Tool { return tools.NewSetSessionTitleTool() }, attach: sessionAttach, missing: "no session is available to edit for this turn"},
+	"set_working_dir":   {newTool: func() tools.Tool { return tools.NewSetWorkingDirTool() }, attach: sessionAttach, missing: "no session is available to edit for this turn"},
+	"archive_session":   {newTool: func() tools.Tool { return tools.NewArchiveSessionTool() }, attach: sessionAttach, missing: "no session is available to edit for this turn"},
+}
+
+// callViaSink runs a sink-bound tool: attach the per-run sink, then call the shared
+// builtin. Replaces the former per-tool callTodo/callArtifact/callNotify/callFocus/
+// callGoal/callSessionEdit methods (one shape, one place).
+func (b *interactionBackend) callViaSink(ctx context.Context, run *chatRun, st sinkTool, args json.RawMessage) (interaction.CallResult, error) {
+	cctx, ok := st.attach(ctx, run)
+	if !ok {
+		return interaction.CallResult{Text: st.missing, IsError: true}, nil
+	}
+	text, err := st.newTool().Call(cctx, args)
+	if err != nil {
+		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	return interaction.CallResult{Text: text}, nil
+}
+
 // bareToolName strips the Interaction MCP namespace so dispatch matches whether
 // the CLI sends a namespaced name (core: mcp__swarmgo_interaction__ask_user,
 // extended: mcp__swarmgo_extended__create_agent) or the bare name.
@@ -248,27 +335,23 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 	if run == nil {
 		return interaction.CallResult{}, errors.New("no live turn for token")
 	}
-	switch bareToolName(name) {
+	bare := bareToolName(name)
+	// Sink-bound tools (todo/artifact/notify/focus/goal/session-edit) all share one
+	// shape: pull the per-run sink, inject it as a context value, call the shared
+	// builtin handler. Dispatched through a single table+helper instead of one
+	// near-identical method each (callViaSink / sinkToolTable).
+	if st, ok := sinkToolTable[bare]; ok {
+		return b.callViaSink(ctx, run, st, args)
+	}
+	switch bare {
 	case "ask_user":
 		return b.callAsk(ctx, run, args)
 	case "request_confirmation":
 		return b.callConfirm(ctx, run, args)
 	case "permission_prompt":
 		return b.callPermission(ctx, run, args)
-	case "todo_write":
-		return b.callTodo(run, args)
 	case "schedule_wake":
 		return b.callWake(ctx, run, args)
-	case "create_artifact", "update_artifact":
-		return b.callArtifact(run, bareToolName(name), args)
-	case "notify":
-		return b.callNotify(run, args)
-	case "focus_view":
-		return b.callFocus(run, args)
-	case "set_session_goal", "complete_goal":
-		return b.callGoal(ctx, run, bareToolName(name), args)
-	case "set_session_title", "set_working_dir", "archive_session":
-		return b.callSessionEdit(ctx, run, bareToolName(name), args)
 	case "spawn_session":
 		return b.callSpawn(ctx, run, args)
 	case "use_skill":
@@ -468,18 +551,6 @@ func permDecision(allow bool, input json.RawMessage, message string) string {
 // todo_write call, which traceStepToTurnStep promotes to a checklist card. When
 // the run carries a todo sink, the checklist is also persisted to the project's
 // progress file so it survives across sessions (same as the native path).
-func (b *interactionBackend) callTodo(run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
-	ctx := context.Background()
-	if sink := run.todoSink(); sink != nil {
-		ctx = tools.WithTodoSink(ctx, sink)
-	}
-	text, err := tools.NewTodoWriteTool().Call(ctx, args)
-	if err != nil {
-		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
-	}
-	return interaction.CallResult{Text: text}, nil
-}
-
 // callWake arms a one-shot self-wake for the responding agent (CLI path). It
 // reaches the wake scheduler installed on the run by the stream handler, which
 // knows the session + responding agent. No blocking — returns immediately.
@@ -501,109 +572,6 @@ func (b *interactionBackend) callWake(ctx context.Context, run *chatRun, args js
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}
 	return interaction.CallResult{Text: out}, nil
-}
-
-// callArtifact creates or updates a versioned artifact through the run's sink. The
-// CLI's stream-json trace surfaces the call as an artifact card (no live emit).
-func (b *interactionBackend) callArtifact(run *chatRun, name string, args json.RawMessage) (interaction.CallResult, error) {
-	sink := run.artifactSink()
-	if sink == nil {
-		return interaction.CallResult{Text: "artifacts are not available for this turn", IsError: true}, nil
-	}
-	actx := tools.WithArtifacts(context.Background(), sink)
-	var (
-		text string
-		err  error
-	)
-	if name == "create_artifact" {
-		text, err = tools.NewCreateArtifactTool().Call(actx, args)
-	} else {
-		text, err = tools.NewUpdateArtifactTool().Call(actx, args)
-	}
-	if err != nil {
-		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
-	}
-	return interaction.CallResult{Text: text}, nil
-}
-
-// callNotify raises a non-blocking desktop notification through the run's notify
-// sink (CLI path). Returns immediately; a graceful result when no sink is wired
-// (autonomous turn with no open client) so the CLI agent simply proceeds.
-func (b *interactionBackend) callNotify(run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
-	sink := run.notifySink()
-	if sink == nil {
-		return interaction.CallResult{Text: "no notification channel is available for this turn", IsError: true}, nil
-	}
-	text, err := tools.NewNotifyTool().Call(tools.WithNotify(context.Background(), sink), args)
-	if err != nil {
-		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
-	}
-	return interaction.CallResult{Text: text}, nil
-}
-
-// callFocus drives the user's UI to a view/entity through the run's navigate
-// sink (CLI path). Returns immediately; graceful when no sink is wired.
-func (b *interactionBackend) callFocus(run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
-	sink := run.navSink()
-	if sink == nil {
-		return interaction.CallResult{Text: "no UI is available to navigate for this turn", IsError: true}, nil
-	}
-	text, err := tools.NewFocusViewTool().Call(tools.WithNavigate(context.Background(), sink), args)
-	if err != nil {
-		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
-	}
-	return interaction.CallResult{Text: text}, nil
-}
-
-// callGoal sets or completes this session's persistent goal through the run's
-// goal sink (CLI path), writing the same db.Session.Goal the user edits. Returns
-// immediately; graceful when no sink is wired.
-func (b *interactionBackend) callGoal(ctx context.Context, run *chatRun, name string, args json.RawMessage) (interaction.CallResult, error) {
-	sink := run.goalSinkFor()
-	if sink == nil {
-		return interaction.CallResult{Text: "no session goal is available for this turn", IsError: true}, nil
-	}
-	gctx := tools.WithGoal(ctx, sink)
-	var (
-		text string
-		err  error
-	)
-	if name == "complete_goal" {
-		text, err = tools.NewCompleteGoalTool().Call(gctx, args)
-	} else {
-		text, err = tools.NewSetSessionGoalTool().Call(gctx, args)
-	}
-	if err != nil {
-		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
-	}
-	return interaction.CallResult{Text: text}, nil
-}
-
-// callSessionEdit dispatches a session-metadata mutation (rename / set working
-// dir / archive) through the run's session sink (CLI path). Returns immediately;
-// graceful when no sink is wired.
-func (b *interactionBackend) callSessionEdit(ctx context.Context, run *chatRun, name string, args json.RawMessage) (interaction.CallResult, error) {
-	sink := run.sessionSinkFor()
-	if sink == nil {
-		return interaction.CallResult{Text: "no session is available to edit for this turn", IsError: true}, nil
-	}
-	sctx := tools.WithSession(ctx, sink)
-	var (
-		text string
-		err  error
-	)
-	switch name {
-	case "set_session_title":
-		text, err = tools.NewSetSessionTitleTool().Call(sctx, args)
-	case "set_working_dir":
-		text, err = tools.NewSetWorkingDirTool().Call(sctx, args)
-	default: // archive_session
-		text, err = tools.NewArchiveSessionTool().Call(sctx, args)
-	}
-	if err != nil {
-		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
-	}
-	return interaction.CallResult{Text: text}, nil
 }
 
 // callSpawn launches a new independent session through the per-agent spawn tool
