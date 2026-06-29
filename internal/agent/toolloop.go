@@ -14,10 +14,9 @@ import (
 )
 
 // defaultMaxToolIters bounds the native agentic loop so a misbehaving model can't
-// spin forever calling tools. Tripled from the original 8 to 24 to give multi-step
-// tool workflows (and schedule_wake-driven async flows) room to finish before the
-// loop cap ends the turn.
-const defaultMaxToolIters = 24
+// spin forever calling tools. Set to 500 to give multi-step tool workflows
+// (and schedule_wake-driven async flows) room to finish before the loop cap ends the turn.
+const defaultMaxToolIters = 500
 
 // maxToolIters is the live loop bound, defaulting to defaultMaxToolIters and
 // overridable via SWARMGO_MAX_TOOL_ITERS (positive integer) for power users who

@@ -94,6 +94,12 @@ type Tunables struct {
 	memoryPressureWarn float64 // context-fill ratio (0..1) above which the agent is warned to persist; 0 = off
 	coreMemoryTools    bool    // offer the core_memory_replace/append tools (default on)
 
+
+	// Native tool-loop iteration cap (applied each iteration, so settings changes
+	// take effect on the next turn without restart). <0 → defaultMaxToolIters;
+	// 0 → unlimited (only recovery steps may terminate the loop); >0 → cap.
+	maxToolIters int
+
 	// Context reset / handoff (Anthropic "harness design" pattern). When a long
 	// autonomous turn runs up against the context limit, in-place compaction alone
 	// leaves "context anxiety"; instead the runtime can write a handoff artifact and
@@ -157,6 +163,7 @@ func NewTunables() *Tunables {
 		// transparent to existing behaviour. Production overrides from settings.
 		debugJournal:    true,
 		debugJournalCap: DefaultDebugJournalCap,
+		maxToolIters:    -1,
 	}
 }
 
@@ -749,3 +756,27 @@ func (t *Tunables) DebugJournalCap() int {
 	return t.debugJournalCap
 }
 
+// SetMaxToolIters overrides the native agentic tool-loop iteration cap.
+//   - max < 0   -> reset to the built-in default (see defaultMaxToolIters in toolloop.go)
+//   - max == 0  -> UNLIMITED - the loop never breaks on its own (only recovery steps can)
+//   - max > 0   -> cap to this many iterations per turn
+//
+// The value is read on every iteration of the tool loop, so a settings change
+// takes effect on the next turn without a restart.
+func (t *Tunables) SetMaxToolIters(max int) {
+	t.mu.Lock()
+	t.maxToolIters = max
+	t.mu.Unlock()
+}
+
+// MaxToolIters returns the effective native tool-loop iteration cap, applying
+// the default for negative / unset values. The caller is responsible for
+// interpreting a returned value of 0 as "unlimited".
+func (t *Tunables) MaxToolIters() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.maxToolIters < 0 {
+		return defaultMaxToolIters
+	}
+	return t.maxToolIters
+}
