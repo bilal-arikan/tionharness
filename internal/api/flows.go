@@ -28,9 +28,9 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 }
 
 type flowReq struct {
-	Name        string                `json:"name"`
-	Description string                `json:"description"`
-	Graph       *orchestration.Graph  `json:"graph"`
+	Name        string               `json:"name"`
+	Description string               `json:"description"`
+	Graph       *orchestration.Graph `json:"graph"`
 }
 
 // marshalGraph validates and serialises a graph, defaulting to an empty object.

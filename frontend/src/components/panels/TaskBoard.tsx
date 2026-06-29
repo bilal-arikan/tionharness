@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Task, Flow, BoardColumnDef } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentIdentity } from '../agents/AgentIdentity'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { BoardColumnEditor } from './BoardColumnEditor'
-import { Button } from '../common'
+import { Button, SelectionBar, SelectionBarButton } from '../common'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
 
 // Fallback columns used until workspace settings are loaded.
 const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -171,6 +173,64 @@ export function TaskBoard({ agents, onError }: Props) {
 
   const selected = tasks.find((t) => t.id === selectedId) ?? null
 
+  // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk move/assign/delete.
+  // The ordered id list mirrors the on-screen render order (column by column,
+  // each column in its current sort) so Shift+Click ranges are predictable.
+  const sel = useMultiSelect()
+  const orderedIds = useMemo(() => {
+    const lv = depSort ? topoLevels(tasks) : null
+    return columns.flatMap((col) => {
+      const arr = tasks.filter((t) => t.boardState === col.key)
+      arr.sort((a, b) => {
+        if (lv) {
+          const la = lv.get(a.id) ?? 0
+          const lb = lv.get(b.id) ?? 0
+          if (la !== lb) return la - lb
+        }
+        return b.updatedAt - a.updatedAt
+      })
+      return arr.map((t) => t.id)
+    })
+  }, [tasks, columns, depSort])
+
+  const bulkMove = async (boardState: string) => {
+    if (!boardState) return
+    const ids = [...sel.selected]
+    setTasks((prev) => prev.map((t) => (sel.selected.has(t.id) ? { ...t, boardState, updatedAt: nowSec() } : t)))
+    sel.clear()
+    try {
+      await Promise.all(ids.map((id) => api.updateTask(id, { boardState })))
+    } catch (e) {
+      onError((e as Error).message)
+      reload()
+    }
+  }
+  const bulkAssign = async (ownerAgentId: string) => {
+    const ids = [...sel.selected]
+    setTasks((prev) => prev.map((t) => (sel.selected.has(t.id) ? { ...t, ownerAgentId, updatedAt: nowSec() } : t)))
+    sel.clear()
+    try {
+      await Promise.all(ids.map((id) => api.updateTask(id, { ownerAgentId })))
+    } catch (e) {
+      onError((e as Error).message)
+      reload()
+    }
+  }
+  const bulkDelete = async () => {
+    const ids = [...sel.selected]
+    if (ids.length === 0) return
+    if (!confirm(`${ids.length} görev silinsin mi?`)) return
+    if (selectedId && sel.selected.has(selectedId)) setSelectedId(null)
+    setTasks((prev) => prev.filter((t) => !sel.selected.has(t.id)))
+    sel.clear()
+    try {
+      await Promise.all(ids.map((id) => api.deleteTask(id)))
+    } catch (e) {
+      onError((e as Error).message)
+      reload()
+    }
+  }
+
   // Task count per column key — used by the editor to guard against deleting
   // non-empty columns.
   const taskCountByColumn: Record<string, number> = {}
@@ -334,16 +394,20 @@ export function TaskBoard({ agents, onError }: Props) {
                           e.dataTransfer.setData('application/x-swarmgo-task', t.id)
                           e.dataTransfer.effectAllowed = 'link'
                         }}
-                        onClick={() =>
-                          !pending && setSelectedId((cur) => (cur === t.id ? null : t.id))
-                        }
+                        onClick={(e) => {
+                          if (pending) return
+                          if (sel.handleClick(e, t.id, orderedIds)) return
+                          setSelectedId((cur) => (cur === t.id ? null : t.id))
+                        }}
                         className={`rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
                           pending
                             ? 'animate-pulse cursor-default border-[var(--color-border)] opacity-70'
                             : `cursor-pointer hover:shadow-[var(--shadow-md)] active:cursor-grabbing ${
-                                selectedId === t.id
-                                  ? 'border-[var(--color-accent)]'
-                                  : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
+                                sel.isSelected(t.id)
+                                  ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]'
+                                  : selectedId === t.id
+                                    ? 'border-[var(--color-accent)]'
+                                    : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
                               }`
                         }`}
                       >
@@ -404,6 +468,42 @@ export function TaskBoard({ agents, onError }: Props) {
             )
           })}
         </div>
+
+        <SelectionBar
+          count={sel.count}
+          onClear={sel.clear}
+          onSelectAll={orderedIds.length ? () => sel.selectAll(orderedIds) : undefined}
+        >
+          <select
+            value=""
+            onChange={(e) => bulkMove(e.target.value)}
+            title="Seçili görevleri sütuna taşı"
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
+          >
+            <option value="">↦ Sütuna taşı…</option>
+            {columns.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value=""
+            onChange={(e) => bulkAssign(e.target.value)}
+            title="Seçili görevlere ajan ata"
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
+          >
+            <option value="">⊕ Ajan ata…</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+          <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
+            Sil
+          </SelectionBarButton>
+        </SelectionBar>
       </div>
 
       {selected && (

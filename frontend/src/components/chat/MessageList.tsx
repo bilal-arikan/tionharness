@@ -9,6 +9,8 @@ import { AssistantTurn } from './AssistantTurn'
 
 interface Props {
   messages: Message[]
+  // Session these messages belong to — enables the per-message debug panel.
+  sessionId?: string
   pending: boolean
   // When the standalone "working" bubble shows (no live assistant message yet),
   // attribute it to this agent — renders its avatar+name header like a real
@@ -36,6 +38,9 @@ interface Props {
   onRetry?: (id: string) => void
   // Rate an assistant turn (👍/👎): rating +1 / -1 / 0 (clear).
   onFeedback?: (id: string, rating: number) => void
+  // Open an agent's settings page (Agents view) — fired when the assistant's
+  // avatar/name header is clicked in the transcript.
+  onOpenAgent?: (id: string) => void
 }
 
 // MessageList is the scrolling transcript. It owns scroll-pinning and per-message
@@ -44,6 +49,7 @@ interface Props {
 // streaming placeholder.
 export function MessageList({
   messages,
+  sessionId,
   pending,
   pendingAgentId,
   agents,
@@ -56,6 +62,7 @@ export function MessageList({
   onDeleteMessage,
   onRetry,
   onFeedback,
+  onOpenAgent,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Transiently highlighted message (from a search deep-link); cleared after the
@@ -80,11 +87,33 @@ export function MessageList({
       return next
     })
 
+  // Message index of the user message currently pinned to the top — the most
+  // recent typed user message that has scrolled above the viewport's top edge.
+  // It updates as you scroll (section-header behavior): a newer question takes
+  // over the moment it reaches the top; -1 means nothing has scrolled past yet.
+  const [activePinnedIndex, setActivePinnedIndex] = useState(-1)
+
+  // updateActivePinned scans every typed user row and picks the last (largest
+  // index) one whose top has reached/passed the viewport top — that becomes the
+  // pinned header. Rows are in DOM order, so the last qualifying wins.
+  function updateActivePinned(el: HTMLDivElement) {
+    const cTop = el.getBoundingClientRect().top
+    let active = -1
+    el.querySelectorAll<HTMLElement>('[data-user-row]').forEach((r) => {
+      if (r.getBoundingClientRect().top - cTop <= 1) {
+        const idx = Number(r.dataset.idx)
+        if (!Number.isNaN(idx)) active = idx
+      }
+    })
+    setActivePinnedIndex((prev) => (prev === active ? prev : active))
+  }
+
   function onScroll() {
     const el = scrollRef.current
     if (!el) return
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
     pinnedRef.current = distance < 80
+    updateActivePinned(el)
   }
 
   useEffect(() => {
@@ -95,11 +124,16 @@ export function MessageList({
       prevFirstId.current = firstId
       pinnedRef.current = true
     }
-    if (!pinnedRef.current) return
+    if (!pinnedRef.current) {
+      // Streaming/layout grew the content; the active pinned header may change.
+      updateActivePinned(el)
+      return
+    }
     // Jump instantly (not smooth): rapid streaming deltas update `messages` on
     // every token, and a smooth animation restarted each delta never settles —
     // the symptom where the live reply seems to vanish until the turn finishes.
     el.scrollTop = el.scrollHeight
+    updateActivePinned(el)
   }, [messages, pending, firstId])
 
   // Deep-link: when a search result is opened, scroll to the target message once
@@ -123,6 +157,7 @@ export function MessageList({
   const last = messages[messages.length - 1]
   const showStandalonePending = pending && (!last || last.role === 'user')
 
+
   return (
     <div
       ref={scrollRef}
@@ -131,7 +166,7 @@ export function MessageList({
       role="log"
       aria-live="polite"
       aria-label="Sohbet geçmişi"
-      className="min-h-0 flex-1 overflow-y-auto px-6 py-6"
+      className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-2"
     >
       <div className="flex w-full flex-col gap-4">
         {messages.map((m, i) => {
@@ -140,6 +175,9 @@ export function MessageList({
           // here so the row wrapper can expose it as a DOM signal (data-streaming)
           // for external automation to detect turn completion without polling.
           const rowLive = m.role !== 'user' && !!streaming && i === messages.length - 1
+          // A real (typed) user message — the only rows eligible to pin at top.
+          const isTypedUser = m.role === 'user' && !m.origin
+          const isActivePinned = isTypedUser && i === activePinnedIndex
           if (m.role === 'user') {
             row = m.origin ? (
               <AutoPromptNote message={m} onDelete={onDeleteMessage} />
@@ -150,6 +188,9 @@ export function MessageList({
                 artifacts={artifacts}
                 onDelete={onDeleteMessage}
                 onOpenArtifact={onOpenArtifact}
+                // When pinned at the top, clamp the question to 2 lines so the
+                // reply below stays visible.
+                clamp={isActivePinned}
               />
             )
           } else {
@@ -166,6 +207,7 @@ export function MessageList({
               <AssistantTurn
                 message={m}
                 agent={agentById(m.agentId)}
+                sessionId={sessionId}
                 isLastLive={isLastLive}
                 workedSec={workedSec}
                 toolsHidden={collapsedTools.has(m.id)}
@@ -175,9 +217,22 @@ export function MessageList({
                 onDelete={onDeleteMessage}
                 onRetry={onRetry}
                 onFeedback={onFeedback}
+                onOpenAgent={onOpenAgent}
               />
             )
           }
+          // The most-recently-passed user message pins to the top as a section
+          // header: a top-down black→transparent gradient (so text scrolling
+          // underneath fades out) + its bubble clamped to 2 lines. Only the active
+          // one is sticky, so headers never stack.
+          const stickyCls = isActivePinned
+            ? 'sticky -top-2 z-10 bg-gradient-to-b from-black to-transparent pb-6'
+            : ''
+          const flashCls =
+            flashId === m.id
+              ? 'rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow'
+              : ''
+          const wrapperCls = [stickyCls, flashCls].filter(Boolean).join(' ') || undefined
           return (
             <div
               key={m.id}
@@ -185,11 +240,9 @@ export function MessageList({
               data-testid="chat-message"
               data-role={m.role}
               data-streaming={rowLive ? 'true' : 'false'}
-              className={
-                flashId === m.id
-                  ? 'rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow'
-                  : undefined
-              }
+              data-user-row={isTypedUser ? 'true' : undefined}
+              data-idx={isTypedUser ? i : undefined}
+              className={wrapperCls}
             >
               {row}
             </div>
@@ -200,7 +253,7 @@ export function MessageList({
           <div className="group flex flex-col gap-1">
             <div className="flex w-full justify-start">
               <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3">
-                <AgentHeader agent={agentById(pendingAgentId)} />
+                <AgentHeader agent={agentById(pendingAgentId)} onOpenAgent={onOpenAgent} />
                 <WorkingDots />
               </div>
             </div>

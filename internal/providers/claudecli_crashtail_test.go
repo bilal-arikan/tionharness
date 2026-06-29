@@ -54,12 +54,12 @@ func TestDumpCLIFailure(t *testing.T) {
 	}
 	body := string(b)
 	for _, want := range []string{
-		"exit status 1",          // the run error
-		"--mcp-config",           // the invocation args
-		"C:/ws",                  // the work dir
-		"the real fatal error",   // full stderr
-		"SessionStart:startup",   // full stdout
-		"===== STDOUT",           // section header
+		"exit status 1",        // the run error
+		"--mcp-config",         // the invocation args
+		"C:/ws",                // the work dir
+		"the real fatal error", // full stderr
+		"SessionStart:startup", // full stdout
+		"===== STDOUT",         // section header
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dump missing %q\n--- body ---\n%s", want, body)

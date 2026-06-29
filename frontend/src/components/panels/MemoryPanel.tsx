@@ -1,9 +1,10 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
-import { Sparkles, ChevronDown, ChevronRight, List, Share2 } from 'lucide-react'
+import { Sparkles, ChevronDown, ChevronRight, List, Share2, Trash2 } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Memory, MemoryKind } from '../../types'
 import { Markdown } from '../markdown/Markdown'
-import { Button } from '../common'
+import { Button, SelectionBar, SelectionBarButton } from '../common'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { CoreMemoryCard } from './CoreMemoryCard'
 
 // The knowledge-graph view pulls in React Flow (~300KB); load it only when the
@@ -47,6 +48,8 @@ export function MemoryPanel({ agent, onError }: Props) {
   // Cards render collapsed (a 4-line plain-text preview) by default; this tracks
   // which ids the user has expanded into the full markdown view.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // Multi-select (modifier-click only, so plain clicks still expand/collapse).
+  const sel = useMultiSelect()
 
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
@@ -88,6 +91,20 @@ export function MemoryPanel({ agent, onError }: Props) {
     setMemories((prev) => prev.filter((x) => x.id !== m.id))
     try {
       await api.deleteMemory(m.id)
+    } catch (e) {
+      onError((e as Error).message)
+      reload(agent.id)
+    }
+  }
+
+  const bulkDelete = async () => {
+    const ids = [...sel.selected]
+    if (ids.length === 0) return
+    if (!confirm(`${ids.length} hafıza kaydı silinsin mi?`)) return
+    setMemories((prev) => prev.filter((x) => !sel.selected.has(x.id)))
+    sel.clear()
+    try {
+      await Promise.all(ids.map((id) => api.deleteMemory(id)))
     } catch (e) {
       onError((e as Error).message)
       reload(agent.id)
@@ -190,6 +207,7 @@ export function MemoryPanel({ agent, onError }: Props) {
         </Suspense>
       ) : (
       /* Memory list */
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-2 overflow-y-auto">
         {shown.length === 0 && (
           <p className="text-sm text-[var(--color-text-dim)]">
@@ -202,10 +220,20 @@ export function MemoryPanel({ agent, onError }: Props) {
           // clipped by the 4-line collapsed preview.
           const lineCount = (m.content.match(/\n/g)?.length ?? 0) + 1
           const isLong = lineCount > 4 || m.content.length > 200
+          const orderedIds = shown.map((x) => x.id)
           return (
             <div
               key={m.id}
-              className="group flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
+              // Modifier-click selects; plain clicks fall through to the inner
+              // expand/delete handlers (which ignore modifier clicks).
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey || e.shiftKey) sel.handleClick(e, m.id, orderedIds)
+              }}
+              className={`group flex items-start gap-3 rounded-lg border bg-[var(--color-surface)] px-3 py-2 text-sm transition ${
+                sel.isSelected(m.id)
+                  ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
+                  : 'border-[var(--color-border)]'
+              }`}
             >
               <span
                 className={`mt-0.5 flex-shrink-0 rounded px-1.5 py-0.5 text-xs ${KIND_COLOR[m.kind]}`}
@@ -220,7 +248,10 @@ export function MemoryPanel({ agent, onError }: Props) {
                     className={`line-clamp-4 whitespace-pre-wrap break-words text-[var(--color-text)] ${
                       isLong ? 'cursor-pointer' : ''
                     }`}
-                    onClick={() => isLong && toggleExpanded(m.id)}
+                    onClick={(e) => {
+                      if (e.ctrlKey || e.metaKey || e.shiftKey) return
+                      if (isLong) toggleExpanded(m.id)
+                    }}
                     title={isLong ? 'Genişletmek için tıkla' : undefined}
                   >
                     {m.content}
@@ -230,7 +261,10 @@ export function MemoryPanel({ agent, onError }: Props) {
                   <button
                     data-testid="memory-card-expand"
                     data-memory-id={m.id}
-                    onClick={() => toggleExpanded(m.id)}
+                    onClick={(e) => {
+                      if (e.ctrlKey || e.metaKey || e.shiftKey) return
+                      toggleExpanded(m.id)
+                    }}
                     className="mt-1 flex items-center gap-0.5 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
                   >
                     {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -241,7 +275,10 @@ export function MemoryPanel({ agent, onError }: Props) {
               <button
                 data-testid="memory-delete"
                 data-memory-id={m.id}
-                onClick={() => remove(m)}
+                onClick={(e) => {
+                  if (e.ctrlKey || e.metaKey || e.shiftKey) return
+                  remove(m)
+                }}
                 className="flex-shrink-0 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-danger)] group-hover:opacity-100"
                 title="Sil"
               >
@@ -250,6 +287,17 @@ export function MemoryPanel({ agent, onError }: Props) {
             </div>
           )
         })}
+      </div>
+
+        <SelectionBar
+          count={sel.count}
+          onClear={sel.clear}
+          onSelectAll={shown.length ? () => sel.selectAll(shown.map((m) => m.id)) : undefined}
+        >
+          <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
+            Sil
+          </SelectionBarButton>
+        </SelectionBar>
       </div>
       )}
     </div>

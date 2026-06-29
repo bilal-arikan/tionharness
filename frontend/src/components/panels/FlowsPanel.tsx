@@ -20,7 +20,9 @@ import {
   type FlowRFNode,
 } from '../../lib/flowGraph'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../../types'
-import { Button } from '../common'
+import { Button, SelectionBar, SelectionBarButton } from '../common'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { Play, Trash2 } from 'lucide-react'
 
 interface Props {
   agents: Agent[]
@@ -317,6 +319,33 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
     }
   }
 
+  // Multi-select (Ctrl/Cmd+Click, Shift-range) on the "Akışlarım" tab for bulk
+  // run / delete. Runs fire-and-forget with an empty input.
+  const sel = useMultiSelect()
+  const bulkRun = async () => {
+    const ids = [...sel.selected]
+    if (ids.length === 0) return
+    sel.clear()
+    try {
+      await Promise.all(ids.map((id) => api.runFlow(id, '')))
+    } catch (e) {
+      onError((e as Error).message)
+    }
+  }
+  const bulkDelete = async () => {
+    const ids = [...sel.selected]
+    if (ids.length === 0) return
+    if (!confirm(`${ids.length} akış silinsin mi?`)) return
+    if (selectedId && sel.selected.has(selectedId)) setSelectedId(null)
+    sel.clear()
+    try {
+      await Promise.all(ids.map((id) => api.deleteFlow(id)))
+      loadFlows()
+    } catch (e) {
+      onError((e as Error).message)
+    }
+  }
+
   // setNodeStatus paints a node's live run state (running glow / done ring /
   // error ring).
   const setNodeStatus = (nodeId: string, status: 'running' | 'done' | 'error' | undefined) => {
@@ -510,15 +539,24 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         <Button onClick={createFlow} size="lg" className="mb-3 w-full">
           + Yeni akış
         </Button>
+        {(() => {
+          const visible = flows.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase()))
+          const orderedIds = visible.map((f) => f.id)
+          return (
         <ul className="space-y-1">
-          {flows.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase())).map((f) => (
+          {visible.map((f) => (
             <li key={f.id}>
               <button
-                onClick={() => selectFlow(f)}
+                onClick={(e) => {
+                  if (sel.handleClick(e, f.id, orderedIds)) return
+                  selectFlow(f)
+                }}
                 className={`flex w-full items-start justify-between rounded-lg px-3 py-2 text-left text-sm ${
-                  selectedId === f.id
-                    ? 'bg-[var(--color-surface-2)]'
-                    : 'hover:bg-[var(--color-surface-2)]'
+                  sel.isSelected(f.id)
+                    ? 'bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]'
+                    : selectedId === f.id
+                      ? 'bg-[var(--color-surface-2)]'
+                      : 'hover:bg-[var(--color-surface-2)]'
                 }`}
               >
                 <span className="min-w-0 flex-1">
@@ -531,6 +569,8 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                 </span>
                 <span
                   onClick={(e) => {
+                    // Let modifier-clicks bubble up to the selection handler.
+                    if (e.ctrlKey || e.metaKey || e.shiftKey) return
                     e.stopPropagation()
                     removeFlow(f)
                   }}
@@ -545,6 +585,19 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             <li className="text-sm text-[var(--color-text-dim)]">Henüz akış yok.</li>
           )}
         </ul>
+          )
+        })()}
+        <SelectionBar
+          count={sel.count}
+          onClear={sel.clear}
+        >
+          <SelectionBarButton icon={<Play size={13} />} onClick={bulkRun}>
+            Çalıştır
+          </SelectionBarButton>
+          <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
+            Sil
+          </SelectionBarButton>
+        </SelectionBar>
           </>
         )}
       </div>

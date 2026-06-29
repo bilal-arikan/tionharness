@@ -261,6 +261,21 @@ export function useChatStream(deps: ChatStreamDeps) {
             // chunk to the live bubble's text instead of the activity trace.
             if (st.kind === 'delta') {
               const chunk = st.text || ''
+              // DEBUG-PAGELEAK: temporary — see "SoHbet başka sayfada cevap kayboluyor"
+              // hypothesis. Logs every delta arrival + whether the in-memory
+              // live bubble already carries text (so we can tell if state was
+              // actually being updated while the user was on another view).
+              // Drop after the fix lands.
+              // eslint-disable-next-line no-console
+              console.log('[DBG:delta]', {
+                sid,
+                activeOnScreen: activeSessionIdRef.current,
+                view: typeof window !== 'undefined' ? window.location.hash : '?',
+                msgsLen: (messagesRef.current ?? []).length,
+                liveId: id,
+                liveTxtBefore: (messagesRef.current ?? []).find((m) => m.id === id)?.text?.length ?? -1,
+                chunkLen: chunk.length,
+              })
               onSid((prev) =>
                 prev.map((x) => (x.id === id ? { ...x, text: x.text + chunk } : x)),
               )

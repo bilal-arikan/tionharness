@@ -9,6 +9,8 @@ import { ArtifactView } from '../artifacts/ArtifactView'
 import { CopyPathButton } from '../CopyPathButton'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { SelectionBar, SelectionBarButton } from '../common'
 import {
   KIND_ICON, KIND_LABEL, OriginBadge, KINDS, isMediaKind, artifactKindForUpload,
 } from './artifactMeta'
@@ -52,7 +54,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // List filters: free-text title search + an origin facet (Tümü / chat / manual /
   // agent / tool).
   const [query, setQuery] = useState('')
-  const [originFilter, setOriginFilter] = useState<'all' | 'chat' | 'manual' | 'agent' | 'tool'>('all')
+  const [originFilter, setOriginFilter] = useState<'all' | 'chat' | 'manual' | 'agent' | 'tool' | 'plan'>('all')
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return list.filter((a) => {
@@ -131,6 +133,23 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
     },
     [onError],
   )
+
+  // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk artifact deletion.
+  const sel = useMultiSelect()
+  const bulkDelete = useCallback(async () => {
+    const ids = [...sel.selected]
+    if (ids.length === 0) return
+    if (!confirm(`${ids.length} artifact kalıcı olarak silinsin mi?`)) return
+    setList((prev) => prev.filter((a) => !sel.selected.has(a.id)))
+    setActiveId((cur) => (cur && sel.selected.has(cur) ? null : cur))
+    sel.clear()
+    try {
+      await Promise.all(ids.map((id) => api.deleteArtifact(id)))
+    } catch (e) {
+      onError((e as Error).message)
+      reload()
+    }
+  }, [sel, onError, reload])
 
   // Create a blank artifact and drop straight into edit mode.
   const createNew = useCallback(async () => {
@@ -318,6 +337,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
               ['manual', 'Manuel'],
               ['agent', 'Ajan'],
               ['tool', 'Tool'],
+              ['plan', 'Plan'],
             ] as const).map(([val, label]) => (
               <button
                 key={val}
@@ -353,16 +373,22 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
           {filtered.map((a) => {
             const Icon = KIND_ICON[a.kind] ?? FileText
             const isActive = a.id === activeId
+            const orderedIds = filtered.map((x) => x.id)
             return (
               <button
                 key={a.id}
                 data-testid="artifacts-list-item"
                 data-artifact-id={a.id}
-                onClick={() => setActiveId(a.id)}
+                onClick={(e) => {
+                  if (sel.handleClick(e, a.id, orderedIds)) return
+                  setActiveId(a.id)
+                }}
                 className={`group mb-1 flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
-                  isActive
-                    ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                    : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
+                  sel.isSelected(a.id)
+                    ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
+                    : isActive
+                      ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                      : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
                 }`}
               >
                 <Icon size={16} className="mt-0.5 shrink-0" />
@@ -377,6 +403,16 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             )
           })}
         </div>
+
+        <SelectionBar
+          count={sel.count}
+          onClear={sel.clear}
+          onSelectAll={filtered.length ? () => sel.selectAll(filtered.map((a) => a.id)) : undefined}
+        >
+          <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
+            Sil
+          </SelectionBarButton>
+        </SelectionBar>
       </div>
 
       {/* Viewer / Editor */}

@@ -29,6 +29,7 @@ const NetworkPanel = lazy(() =>
 )
 import { ExecutionsPanel } from './components/panels/ExecutionsPanel'
 import { ArtifactsPanel } from './components/panels/ArtifactsPanel'
+import { ArtifactPreviewModal } from './components/artifacts/ArtifactPreviewModal'
 import { SkillsPanel } from './components/panels/SkillsPanel'
 import { MarketPanel } from './components/panels/MarketPanel'
 import { BudgetPanel } from './components/panels/BudgetPanel'
@@ -337,8 +338,17 @@ export default function App() {
     }
   }, [])
 
-  // Clicking an artifact card in chat: open the artifacts screen on that one.
+  // Clicking an artifact card/chip anywhere (chat, activity): preview it in a
+  // modal overlay — no navigation to the Artifacts screen. The modal offers a
+  // shortcut to open the full screen for editing.
+  const [previewArtifactId, setPreviewArtifactId] = useState<string | null>(null)
   const openArtifact = useCallback((id: string) => {
+    setPreviewArtifactId(id)
+  }, [])
+  // Open the dedicated Artifacts screen on a specific artifact (from the preview
+  // modal's "open in screen" shortcut).
+  const openArtifactFull = useCallback((id: string) => {
+    setPreviewArtifactId(null)
     setArtifactTarget(id)
     setView('artifacts')
   }, [])
@@ -711,6 +721,13 @@ export default function App() {
     setActiveAgentId(id)
   }, [])
 
+  // Open an agent's settings page (Agents view, that agent selected). Used by the
+  // chat transcript so clicking an assistant's avatar/name jumps to its settings.
+  const openAgentSettings = useCallback((id: string) => {
+    setActiveAgentId(id)
+    setView('agents')
+  }, [])
+
   const createAgent = useCallback(
     async (name: string, soul: string, provider: string, model?: string) => {
       try {
@@ -1009,6 +1026,7 @@ export default function App() {
           <>
             <MessageList
               messages={messages}
+              sessionId={activeSessionId ?? undefined}
               pending={chat.activePending}
               agents={agents}
               artifacts={sessionArtifacts}
@@ -1020,6 +1038,7 @@ export default function App() {
               onDeleteMessage={deleteMessage}
               onRetry={chat.retryMessage}
               onFeedback={rateMessage}
+              onOpenAgent={openAgentSettings}
             />
             {chat.activeAsk &&
               (chat.activeAsk.kind === 'permission' ? (
@@ -1178,6 +1197,17 @@ export default function App() {
           onRename={renameSession}
           onDeleteSession={deleteSession}
           onSelectSession={selectSession}
+        />
+      )}
+
+      {/* Artifact quick-preview overlay: opened by clicking an artifact card/chip
+          in chat or the activity feed. Independent of the current view. */}
+      {previewArtifactId && (
+        <ArtifactPreviewModal
+          artifactId={previewArtifactId}
+          onClose={() => setPreviewArtifactId(null)}
+          onOpenFull={openArtifactFull}
+          onError={setError}
         />
       )}
     </div>

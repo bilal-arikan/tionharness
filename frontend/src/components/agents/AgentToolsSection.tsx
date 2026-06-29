@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Ban, Plus, X } from 'lucide-react'
 import { api } from '../../api'
 import type { AgentTools } from '../../types'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { SelectionBar, SelectionBarButton } from '../common'
 
 interface Props {
   agentId: string
@@ -17,6 +19,10 @@ export function AgentToolsSection({ agentId, onError }: Props) {
   const [data, setData] = useState<AgentTools | null>(null)
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
+  // Multi-select on the "available" tool list: modifier-click selects, then one
+  // bulk action blocks every selected tool in a single save. Plain click still
+  // blocks a single tool immediately (the original behaviour).
+  const sel = useMultiSelect()
 
   const load = useCallback(() => {
     api.agentTools(agentId).then(setData).catch((e) => onError?.(e.message))
@@ -48,6 +54,10 @@ export function AgentToolsSection({ agentId, onError }: Props) {
     save(data?.mcpEnabled ?? true, Array.from(blocked).filter((n) => n !== name))
   const blockAll = () => save(data?.mcpEnabled ?? true, names)
   const clearAll = () => save(data?.mcpEnabled ?? true, [])
+  const blockSelected = () => {
+    save(data?.mcpEnabled ?? true, [...new Set([...blocked, ...sel.selected])])
+    sel.clear()
+  }
 
   // Tools still available to ban (not blocked yet), filtered by the search box.
   const available = useMemo(() => {
@@ -159,14 +169,22 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                   {query.trim() ? 'Eşleşen araç yok.' : 'Tüm araçlar zaten yasaklı.'}
                 </p>
               )}
-              {available.map((t) => (
+              {available.map((t) => {
+                const orderedIds = available.map((x) => x.name)
+                return (
                 <button
                   key={t.name}
                   data-testid="agent-tool-block-add"
                   data-tool-name={t.name}
-                  onClick={() => block(t.name)}
+                  onClick={(e) => {
+                    // Modifier-click multi-selects; plain click blocks immediately.
+                    if (sel.handleClick(e, t.name, orderedIds)) return
+                    block(t.name)
+                  }}
                   disabled={busy}
-                  className="flex w-full items-start gap-2.5 rounded px-1 py-1 text-left hover:bg-[var(--color-surface-2)]"
+                  className={`flex w-full items-start gap-2.5 rounded px-1 py-1 text-left hover:bg-[var(--color-surface-2)] ${
+                    sel.isSelected(t.name) ? 'bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]' : ''
+                  }`}
                 >
                   <Plus size={13} className="mt-1 shrink-0 text-[var(--color-text-dim)]" />
                   <span className="min-w-0">
@@ -174,9 +192,20 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                     <span className="ml-2 text-xs text-[var(--color-text-dim)]">{t.description}</span>
                   </span>
                 </button>
-              ))}
+                )
+              })}
             </div>
           </div>
+
+          <SelectionBar
+            count={sel.count}
+            onClear={sel.clear}
+            onSelectAll={available.length ? () => sel.selectAll(available.map((t) => t.name)) : undefined}
+          >
+            <SelectionBarButton icon={<Ban size={13} />} onClick={blockSelected} danger>
+              Seçilenleri yasakla
+            </SelectionBarButton>
+          </SelectionBar>
         </div>
       )}
     </div>

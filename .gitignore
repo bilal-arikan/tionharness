@@ -54,3 +54,6 @@ credential-secret
 # OS
 Thumbs.db
 .DS_Store
+
+# crabbox tooling capture artifacts
+.crabbox/

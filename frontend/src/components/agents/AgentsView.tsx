@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
-import { Plus, RefreshCw } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, RefreshCw, Trash2 } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AgentIdentity } from './AgentIdentity'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { useCatalog, resolveModelLabel } from '../../lib/catalog'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
-import { Button, PromptEditor } from '../common'
+import { Button, PromptEditor, SelectionBar, SelectionBarButton } from '../common'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
 
 interface Props {
   agents: Agent[]
@@ -78,6 +79,17 @@ export function AgentsView({
   }, [agents, defaultAgentId, selectedId])
 
   const selected = agents.find((a) => a.id === selectedId) ?? null
+
+  // Multi-select for bulk roster actions (Ctrl/Cmd+Click, Shift-range).
+  const sel = useMultiSelect()
+  const orderedIds = useMemo(() => agents.map((a) => a.id), [agents])
+  const bulkDelete = async () => {
+    const ids = [...sel.selected]
+    if (ids.length === 0) return
+    if (!confirm(`${ids.length} ajan ve sahip oldukları oturumlar kalıcı olarak silinsin mi?`)) return
+    for (const id of ids) await onDeleteAgent(id)
+    sel.clear()
+  }
 
   const submit = () => {
     if (!name.trim()) return
@@ -161,13 +173,18 @@ export function AgentsView({
               data-testid="agent-roster-item"
               data-agent-id={a.id}
               className={`group mb-1 flex w-full items-center rounded-lg pr-1 text-sm transition ${
-                selectedId === a.id
-                  ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+                sel.isSelected(a.id)
+                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)] ring-1 ring-[var(--color-accent)]'
+                  : selectedId === a.id
+                    ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                    : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
               }`}
             >
               <button
-                onClick={() => select(a.id)}
+                onClick={(e) => {
+                  if (sel.handleClick(e, a.id, orderedIds)) return
+                  select(a.id)
+                }}
                 data-testid="agent-roster-select"
                 data-agent-id={a.id}
                 className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
@@ -208,6 +225,16 @@ export function AgentsView({
             </p>
           )}
         </div>
+
+        <SelectionBar
+          count={sel.count}
+          onClear={sel.clear}
+          onSelectAll={orderedIds.length ? () => sel.selectAll(orderedIds) : undefined}
+        >
+          <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
+            Sil
+          </SelectionBarButton>
+        </SelectionBar>
       </div>
 
       {/* Middle: selected agent's settings */}

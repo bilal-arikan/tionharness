@@ -11,12 +11,15 @@ export function UserTurn({
   artifacts,
   onDelete,
   onOpenArtifact,
+  clamp,
 }: {
   message: Message
   agents: Agent[]
   artifacts?: Artifact[]
   onDelete?: (id: string) => void
   onOpenArtifact?: (id: string) => void
+  // Clamp the bubble text to 2 lines (used when this turn is pinned to the top).
+  clamp?: boolean
 }) {
   const m = message
   return (
@@ -27,6 +30,7 @@ export function UserTurn({
         attachments={m.attachments}
         artifacts={artifacts}
         onOpenArtifact={onOpenArtifact}
+        clamp={clamp}
       />
       <div className="flex items-center justify-end gap-2 pr-1">
         {onDelete && <DeleteButton onClick={() => onDelete(m.id)} />}

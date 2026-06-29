@@ -129,7 +129,7 @@ type cacheControl struct {
 // anthropicMessage carries an array of content blocks (text / tool_use /
 // tool_result), which is the form required once tools are involved.
 type anthropicMessage struct {
-	Role    string        `json:"role"`
+	Role    string         `json:"role"`
 	Content []contentBlock `json:"content"`
 }
 

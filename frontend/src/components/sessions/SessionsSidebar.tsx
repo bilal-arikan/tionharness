@@ -5,6 +5,8 @@ import { api } from '../../api'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '../../lib/time'
 import { useOutsideClick } from '../../hooks/useOutsideClick'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { SelectionBar, SelectionBarButton } from '../common'
 
 interface Props {
   sessions: Session[]
@@ -121,6 +123,42 @@ export function SessionsSidebar({
     }
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
   }, [sessions, query, showArchived])
+
+  // Multi-select (Ctrl/Cmd+Click, Shift-range). The ordered id list is the
+  // flattened visible render order so Shift+Click can span recency buckets.
+  const sel = useMultiSelect()
+  const orderedIds = useMemo(() => groups.flatMap((g) => g.items.map((s) => s.id)), [groups])
+  // Selected sessions that are currently filtered out of view — bulk actions
+  // still apply to them, so we surface the count.
+  const hiddenSelected = useMemo(
+    () => [...sel.selected].filter((id) => !orderedIds.includes(id)).length,
+    [sel.selected, orderedIds],
+  )
+  const selectedIds = () => [...sel.selected]
+  // Bulk actions reuse the existing per-id handlers in a loop (no new API).
+  const bulkArchive = (archived: boolean) => {
+    selectedIds().forEach((id) => onSetArchived(id, archived))
+    sel.clear()
+  }
+  const bulkPin = (pinned: boolean) => {
+    selectedIds().forEach((id) => onSetPinned(id, pinned))
+    sel.clear()
+  }
+  const bulkTitle = () => {
+    selectedIds().forEach((id) => {
+      const s = sessions.find((x) => x.id === id)
+      if (s && s.messageCount > 0) onGenerateTitle(id)
+    })
+    sel.clear()
+  }
+  const bulkDelete = () => {
+    const ids = selectedIds()
+    if (ids.length === 0) return
+    if (confirm(`${ids.length} oturum silinsin mi? Bu işlem geri alınamaz.`)) {
+      ids.forEach((id) => onDeleteSession(id))
+      sel.clear()
+    }
+  }
 
   // Debounced full-text message search. Runs only for queries of 2+ chars so a
   // single keystroke doesn't hit the backend; cleared when the box empties.
@@ -249,13 +287,16 @@ export function SessionsSidebar({
               const owner = agents.find((a) => a.id === s.agentId)
               const isActive = activeSessionId === s.id
               const isStreaming = streamingSessionIds?.has(s.id) ?? false
+              const isSelected = sel.isSelected(s.id)
               return (
                 <div
                   key={s.id}
                   className={`group relative mb-0.5 flex w-full items-center rounded-lg pr-1 text-sm transition ${
-                    isActive
-                      ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-                      : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+                    isSelected
+                      ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)] ring-1 ring-[var(--color-accent)]'
+                      : isActive
+                        ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                        : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
                   }`}
                 >
                   {renamingId === s.id ? (
@@ -272,7 +313,12 @@ export function SessionsSidebar({
                     />
                   ) : (
                     <button
-                      onClick={() => onSelectSession(s.id)}
+                      onClick={(e) => {
+                        // Ctrl/Cmd or Shift turns the click into a selection
+                        // gesture; a plain click opens the session as before.
+                        if (sel.handleClick(e, s.id, orderedIds)) return
+                        onSelectSession(s.id)
+                      }}
                       className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
                     >
                       {owner ? (
@@ -440,6 +486,32 @@ export function SessionsSidebar({
           </div>
         )}
       </div>
+
+      <SelectionBar
+        count={sel.count}
+        hiddenCount={hiddenSelected}
+        onClear={sel.clear}
+        onSelectAll={orderedIds.length ? () => sel.selectAll(orderedIds) : undefined}
+      >
+        <SelectionBarButton icon={<Sparkles size={13} />} onClick={bulkTitle}>
+          AI başlık
+        </SelectionBarButton>
+        <SelectionBarButton icon={<Pin size={13} />} onClick={() => bulkPin(true)}>
+          Sabitle
+        </SelectionBarButton>
+        {showArchived ? (
+          <SelectionBarButton icon={<ArchiveRestore size={13} />} onClick={() => bulkArchive(false)}>
+            Arşivden çıkar
+          </SelectionBarButton>
+        ) : (
+          <SelectionBarButton icon={<Archive size={13} />} onClick={() => bulkArchive(true)}>
+            Arşivle
+          </SelectionBarButton>
+        )}
+        <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
+          Sil
+        </SelectionBarButton>
+      </SelectionBar>
 
       <div
         onMouseDown={startDrag}

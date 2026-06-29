@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -108,6 +109,45 @@ func TestZipUnzipRoundTrip(t *testing.T) {
 		if string(got) != want {
 			t.Errorf("%q = %q, want %q", rel, got, want)
 		}
+	}
+}
+
+// TestUnzipRejectsZipSlip feeds Unzip a malicious archive whose entry escapes
+// the destination via "..". The zip-slip guard (archive.go) must reject it and
+// nothing may be written outside destDir. The existing tests only covered
+// path-name traversal at the API layer (ResolveArchive/DeleteArchive), never the
+// guard inside Unzip itself. See _Docs/34-YEDEKLEME.md (zip-slip korumalı).
+func TestUnzipRejectsZipSlip(t *testing.T) {
+	archive := filepath.Join(t.TempDir(), "evil.zip")
+	zf, err := os.Create(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(zf)
+	w, err := zw.Create("../escaped.txt") // escapes destDir
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("pwned")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	zf.Close()
+
+	dst := filepath.Join(t.TempDir(), "dest")
+	err = Unzip(archive, dst)
+	if err == nil {
+		t.Fatal("expected the zip-slip entry to be rejected")
+	}
+	if !strings.Contains(err.Error(), "unsafe archive entry") {
+		t.Fatalf("expected an unsafe-entry error, got %v", err)
+	}
+	// The escaping file must not exist next to (one level above) destDir.
+	escaped := filepath.Join(filepath.Dir(dst), "escaped.txt")
+	if _, statErr := os.Stat(escaped); !os.IsNotExist(statErr) {
+		t.Fatalf("zip-slip wrote outside destDir (stat err = %v)", statErr)
 	}
 }
 

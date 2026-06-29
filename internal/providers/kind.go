@@ -40,6 +40,9 @@ type ResolvedConfig struct {
 	Model         string // default model applied when a request omits one
 	CLIPath       string // resolved `claude` binary path (claude-cli)
 	ExtendedCache bool   // anthropic extended prompt-cache beta
+
+	AntigravityCLIPath string // resolved `agy` binary path (antigravity-cli)
+	AntigravityKey     string // ANTIGRAVITY_API_KEY injected into the agy subprocess ("" = inherit ambient)
 }
 
 // ProviderKind is one transport "plugin": it describes itself (Manifest),

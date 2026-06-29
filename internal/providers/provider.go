@@ -16,8 +16,8 @@ const (
 
 // Stop reasons reported by Complete.
 const (
-	StopEndTurn = "end_turn"  // model finished a normal textual reply
-	StopToolUse = "tool_use"  // model wants one or more tools executed
+	StopEndTurn = "end_turn" // model finished a normal textual reply
+	StopToolUse = "tool_use" // model wants one or more tools executed
 	StopMaxTok  = "max_tokens"
 )
 

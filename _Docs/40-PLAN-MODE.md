@@ -54,6 +54,16 @@ best-effort (yakalama hatası planın ilerlemesini engellemez).
 - Artifact'lar session-kapsamlıdır: session silinince plan artifact'ı da gider (doğal budama).
 - `origin="plan"` ayrımı sayesinde UI bu artifact'ları gerçek teslimat artifact'larından
   ayırabilir/filtreleyebilir (ileride toplu budama da kolaylaşır).
+- **UI "📋 Plan" chip'i (2026-06-29):** `origin="plan"` artifact'lar Artifactlar
+  ekranında (liste + detay) ve hızlı-önizleme modalında accent-renkli "📋 Plan"
+  rozetiyle gösterilir; liste filtre çubuğuna **Plan** facet'i eklendi
+  (`OriginBadge.ORIGIN_META.plan`, `frontend/src/components/panels/artifactMeta.tsx`).
+- **Hızlı önizleme modalı (2026-06-29):** sohbet/aktivite içindeki bir artifact
+  chip'ine/kartına tıklamak artık Artifactlar ekranına gitmeden ortada bir
+  önizleme modalı (`ArtifactPreviewModal`) açar; modal `getArtifact` ile içeriği
+  çekip `ArtifactView` ile render eder, "Ekranda aç" kısayolu tam ekrana geçirir.
+  `App.openArtifact` artık modalı açar (`previewArtifactId`); tam ekran navigasyonu
+  `openArtifactFull`'a taşındı.
 - Not: artifact'lar sürümlenmez (`UpdateArtifactContent` yerinde üzerine yazar); bu yüzden
   append çekirdeği içeriği elle birleştirip `ContentFile`'ı sıfırlayarak içerik dosyasını
   yeniden yazar.
@@ -84,6 +94,9 @@ best-effort (yakalama hatası planın ilerlemesini engellemez).
 - `internal/api/mcp_interaction.go` — `capturePlanArtifact` (onayda best-effort yakalama).
 - `internal/tools/classify.go` — `EnterPlanMode` = RiskRead (izin kapısına düşerse oto-onay).
 - `internal/agent/trace.go` — `StepPlan` adım türü (transient, live-only).
+- `frontend/src/components/panels/artifactMeta.tsx` — `ORIGIN_META.plan` ("📋 Plan" chip).
+- `frontend/src/components/artifacts/ArtifactPreviewModal.tsx` — hızlı önizleme modalı.
+- `frontend/src/App.tsx` — `openArtifact` (modal) / `openArtifactFull` (tam ekran).
 - Frontend: `types/message.ts` (`plan` kind), `chat/AskPrompt.tsx` (`PendingAsk.kind`),
   `hooks/useChatStream.ts` (plan adımı), `chat/PlanPrompt.tsx` (kart), `App.tsx` (render),
   `lib/stepKinds.ts` (referans girdisi).

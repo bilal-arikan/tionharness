@@ -70,13 +70,63 @@ export function synthDiff(toolBase: string, input: unknown): string | null {
     }
     return null
   }
-  if (toolBase === 'edit' || toolBase === 'edit_file' || toolBase === 'multiedit') {
+  // MultiEdit carries an `edits` array of {old_string,new_string}; synthesize one
+  // patch per edit and stack them so every replacement shows in the card.
+  if (toolBase === 'multiedit') {
+    const edits = Array.isArray(o.edits) ? o.edits : null
+    if (!edits) return null
+    const parts: string[] = []
+    for (const e of edits) {
+      if (!e || typeof e !== 'object') continue
+      const eo = e as Record<string, unknown>
+      const oldS = typeof eo.old_string === 'string' ? eo.old_string : ''
+      const newS = typeof eo.new_string === 'string' ? eo.new_string : ''
+      if (!oldS && !newS) continue
+      parts.push(lineDiff(oldS, newS))
+    }
+    return parts.length ? parts.join('\n') : null
+  }
+  if (toolBase === 'edit' || toolBase === 'edit_file') {
     const oldS = typeof o.old_string === 'string' ? o.old_string : ''
     const newS = typeof o.new_string === 'string' ? o.new_string : ''
     if (!oldS && !newS) return null
     return lineDiff(oldS, newS)
   }
   return null
+}
+
+// EDIT_TOOL_BASES are the file-mutating tool names whose chat step should render
+// as a prominent diff card (rather than a generic activity row).
+const EDIT_TOOL_BASES = ['edit', 'edit_file', 'write', 'write_file', 'multiedit']
+
+export function isEditToolBase(base: string): boolean {
+  return EDIT_TOOL_BASES.includes(base)
+}
+
+export interface SynthDiff {
+  patch: string
+  added: number
+  removed: number
+  path: string
+}
+
+// synthDiffData builds the full diff-card payload for a file-edit tool STEP that
+// arrived without a precomputed patch (the claude-cli path: the CLI applies the
+// edit itself, so SwarmGo never recorded a server-side FileDiff). It synthesizes
+// the unified patch from the tool input (old_string/new_string, content or a
+// multiedit edits[]), counts the +/- lines and extracts the target path. Returns
+// null when the input is not a recognizable edit/write shape.
+export function synthDiffData(toolBase: string, input: unknown): SynthDiff | null {
+  const patch = synthDiff(toolBase, input)
+  if (!patch) return null
+  const { stats } = parseDiff(patch)
+  let path = ''
+  if (input && typeof input === 'object') {
+    const o = input as Record<string, unknown>
+    if (typeof o.file_path === 'string') path = o.file_path
+    else if (typeof o.path === 'string') path = o.path
+  }
+  return { patch, added: stats.added, removed: stats.removed, path }
 }
 
 // lineDiff produces a unified-diff-style string from two blocks of text using an

@@ -84,7 +84,7 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 // advertised and that self-manage-gated spawn_session is absent without a tun.
 func TestInteractionAdvertisedNames(t *testing.T) {
 	b := &interactionBackend{runs: newChatRuns()} // tun nil → self-manage off
-	specs := b.Tools("", "") // no token → static set only (no per-run bridge); tier "" → full set
+	specs := b.Tools("", "")                      // no token → static set only (no per-run bridge); tier "" → full set
 	want := make(map[string]bool, len(specs))
 	for _, s := range specs {
 		want[s.Name] = true

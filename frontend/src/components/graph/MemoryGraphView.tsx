@@ -29,8 +29,8 @@ export function MemoryGraphView({ agentId, onError }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Layout toggles: per-kind draggable anchors (cluster by kind) and
   // connected-component coloring (cluster by topic).
-  const [kindAnchors, setKindAnchors] = useState(false)
-  const [clusterColor, setClusterColor] = useState(false)
+  const [kindAnchors, setKindAnchors] = useState(true)
+  const [clusterColor, setClusterColor] = useState(true)
 
   const load = useCallback(
     (t: number) => {

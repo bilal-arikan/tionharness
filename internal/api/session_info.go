@@ -104,22 +104,22 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := sessionInfoResp{
-		ID:              session.ID,
-		Title:           session.Title,
-		Kind:            session.Kind,
-		State:           session.State,
-		AgentID:         session.AgentID,
-		MessageCount:    session.MessageCount,
-		Unread:          session.Unread,
+		ID:                session.ID,
+		Title:             session.Title,
+		Kind:              session.Kind,
+		State:             session.State,
+		AgentID:           session.AgentID,
+		MessageCount:      session.MessageCount,
+		Unread:            session.Unread,
 		Goal:              session.Goal,
 		GoalDone:          session.GoalDone,
 		ParentSessionID:   session.ParentSessionID,
 		HandoffArtifactID: session.HandoffArtifactID,
-		CreatedAt:       session.CreatedAt,
-		UpdatedAt:       session.UpdatedAt,
-		HasSummary:      session.Summary != "",
-		SummaryMsgCount: session.SummaryMsgCount,
-		SummaryTokens:   conversation.EstimateText(session.Summary),
+		CreatedAt:         session.CreatedAt,
+		UpdatedAt:         session.UpdatedAt,
+		HasSummary:        session.Summary != "",
+		SummaryMsgCount:   session.SummaryMsgCount,
+		SummaryTokens:     conversation.EstimateText(session.Summary),
 	}
 
 	// On-disk footprint: walk the session's folder.

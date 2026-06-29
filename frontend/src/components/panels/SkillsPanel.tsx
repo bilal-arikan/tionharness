@@ -5,6 +5,8 @@ import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
 import { CopyPathButton } from '../CopyPathButton'
 import { SkillEditor } from './SkillEditor'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { SelectionBar, SelectionBarButton } from '../common'
 
 interface Props {
   onError: (msg: string) => void
@@ -277,6 +279,30 @@ export function SkillsPanel({ onError }: Props) {
       .finally(() => setDeleteBusy(false))
   }, [active, reload, onError])
 
+  // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk skill deletion. The
+  // ordered id list is the flattened visible (non-collapsed) skill order so a
+  // Shift+Click range can cross group boundaries but skips folded groups.
+  const sel = useMultiSelect()
+  const orderedSlugs = useMemo(
+    () => grouped.flatMap(([name, items]) => (collapsed.has(name) ? [] : items.map((s) => s.slug))),
+    [grouped, collapsed],
+  )
+  const bulkDelete = useCallback(() => {
+    const slugs = [...sel.selected]
+    if (slugs.length === 0) return
+    if (!window.confirm(`${slugs.length} beceri silinsin mi? Bu, klasörlerini diskten kaldırır.`)) return
+    Promise.all(slugs.map((slug) => api.deleteSkill(slug)))
+      .then(() => {
+        if (activeSlug && sel.selected.has(activeSlug)) {
+          setActive(null)
+          setActiveSlug(null)
+        }
+        sel.clear()
+        reload()
+      })
+      .catch((e) => onError((e as Error).message))
+  }, [sel, activeSlug, reload, onError])
+
   // Re-scan tiers on disk, then refresh the catalog + current selection.
   const rescan = useCallback(() => {
     api
@@ -366,11 +392,16 @@ export function SkillsPanel({ onError }: Props) {
                           key={sk.slug}
                           data-testid="skills-list-item"
                           data-skill-slug={sk.slug}
-                          onClick={() => setActiveSlug(sk.slug)}
+                          onClick={(e) => {
+                            if (sel.handleClick(e, sk.slug, orderedSlugs)) return
+                            setActiveSlug(sk.slug)
+                          }}
                           className={`group flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
-                            isActive
-                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                              : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
+                            sel.isSelected(sk.slug)
+                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
+                              : isActive
+                                ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                                : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
                           }`}
                         >
                           <span className="mt-0.5 shrink-0 text-base leading-none">{sk.icon || '✨'}</span>
@@ -395,6 +426,16 @@ export function SkillsPanel({ onError }: Props) {
             )
           })}
         </div>
+
+        <SelectionBar
+          count={sel.count}
+          onClear={sel.clear}
+          onSelectAll={orderedSlugs.length ? () => sel.selectAll(orderedSlugs) : undefined}
+        >
+          <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
+            Sil
+          </SelectionBarButton>
+        </SelectionBar>
       </div>
 
       {/* Resize handle */}

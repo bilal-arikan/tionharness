@@ -2,6 +2,73 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-29**
 
+## Sohbette ajan başlığına tıklayınca ajan ayar sayfası ✅ (2026-06-29)
+
+**Hedef:** Sohbet detay ekranında asistan balonunun üstündeki ajan adı/avatarına
+tıklayınca o ajanın ayar sayfasına (Ajanlar görünümü, ajan seçili) gidilsin.
+
+**Yapılanlar (frontend-only):**
+- `App.tsx` — `openAgentSettings(id)` callback'i (`setActiveAgentId(id)` + `setView('agents')`);
+  `MessageList`'e `onOpenAgent={openAgentSettings}` olarak geçer.
+- `MessageList.tsx` — `onOpenAgent` prop'u; hem `AssistantTurn`'e hem standalone
+  pending balonundaki `AgentHeader`'a iletilir.
+- `AssistantTurn.tsx` — `onOpenAgent` prop'u eklendi, `AgentHeader`'a geçer.
+- `AgentHeader.tsx` — `onOpenAgent` verildiğinde kimlik satırı bir `<button>`'a sarılır
+  (hover vurgusu + "Ajan ayarlarını aç" tooltip); yoksa eski salt-görüntü davranışı.
+- Doğrulama: `tsc` temiz, `npm run build` başarılı.
+
+## Antigravity CLI (`agy`) provider — Gemini CLI'nin yerine (kısmen ✅, auth bekliyor) (2026-06-29)
+
+**Hedef:** Faz 4 dış-ajan adaptörü olarak Google **Antigravity CLI**'yi (`agy`)
+SwarmGo provider'ı yapmak. (Önce Gemini CLI denendi; Google bireysel hesapta Gemini
+Code Assist OAuth'u kapatıp **Antigravity'ye yönlendirdiği** için yön değiştirildi.)
+
+**Yapılanlar:**
+- **Gemini CLI tamamen kaldırıldı:** `npm uninstall -g @google/gemini-cli`, `~/.gemini`
+  silindi, geçici provider dosyaları (`geminicli.go`, `kind_geminicli.go`, live test,
+  `cmd/gemtest`) kaldırıldı.
+- **Antigravity CLI kuruldu:** resmi installer (`irm https://antigravity.google/cli/install.ps1 | iex`),
+  binary `agy.exe` v1.0.13 → `%LOCALAPPDATA%\agy\bin\agy.exe`; User PATH registry'ye eklendi
+  (aktif PATH için yeni shell gerekir).
+- **`antigravity-cli` provider** (`providers/antigravitycli.go` + `kind_antigravity.go`,
+  Order 5): `agy --print "<prompt>"` ile headless çağrı; çıktı **düz metin** (agy'de
+  `--output-format`/stream-json YOK). System prompt + transkript tek `--print` arg'ına
+  katlanır (`--append-system-prompt` yok). İzin: `auto`→`--dangerously-skip-permissions`,
+  `ask`/`read-only`→bayraksız. Model `--model`; boşsa agy auto-seçer (varsayılan Flash).
+  `--conversation <id>` resume (print modu id basmaz → SwarmGo yakalayamaz).
+  `ANTIGRAVITY_API_KEY` subprocess env'e enjekte. Binary çözümü PATH + installer
+  fallback (`findAgy`). Registry/`ResolvedConfig`/setters gemini→antigravity yeniden
+  adlandırıldı; `api/session_context.go` CLI-overhead önizlemesi `antigravity-cli`'ye
+  güncellendi; `kind_test.go` 6. kind = `antigravity-cli`.
+- **Doğrulama:** `go build ./...` ✅, `go test ./internal/providers ./internal/api` ✅.
+  `agy --help`/`models`/flag'ler canlı incelendi.
+
+**⛔ Engel #1 (çözüldü):** auth — kullanıcı `agy` ile Google Sign-In yaptı.
+
+**⛔ Engel #2 (DOĞRULANMIŞ UPSTREAM BUG — agy Issue #76):** `agy --print` stdout bir
+**TTY değilse** (pipe/redirect/subprocess) yanıtı **sessizce düşürür** — exit 0, ~0 byte
+stdout+stderr, `--print-timeout` yok sayılır, `Start-Process -RedirectStandardOutput`
+süresiz askıda kalır. agy başlangıçta `isatty(stdout)` kontrol edip TTY yoksa render'ı
+**ve model çıktısını** kapatıyor. Birebir bizim semptomlarımız (issue raporu da Windows 11,
+aynı komutlar). Env-var workaround (FORCE_COLOR/CI/TERM/AGY_*/NO_TTY) **yok**;
+`--output-format json` **reddediliyor** (`flags provided but not defined`); maintainer
+fix'i yok. SwarmGo provider'ı agy'yi tam da böyle (Go `exec` + pipe'lı stdout) çağırdığı
+için **olduğu gibi çalışamaz**. Tek bilinen çözüm: **pseudo-terminal** (Unix `script -qec`,
+Windows **ConPTY**; "agy-headless-bridge / PtyGravity" da bunu yapar). Kaynak:
+github.com/google-antigravity/antigravity-cli#76 + antigravitylab.net headless makaleleri.
+
+**Karar: B — DENEYSEL işaretlendi (kullanıcı onayı 2026-06-29).** ConPTY+TUI-parse yolu
+(A) kırılgan ve go.mod'a ilk önemli dış bağımlılığı getireceği için reddedildi; upstream
+zaten düzeltecek. Yapılanlar: kind etiketi `Antigravity CLI (agy · DENEYSEL — upstream #76)`,
+`kind_antigravity.go`/`antigravitycli.go` doc'larına #76 açıklaması, `Complete` boş-çıktı
+yolunda `errAgyNonTTY` ile **aksiyon alınabilir hata** (non-TTY bug + sign-in + PTY/upstream
+unblock yolları). Provider kayıtlı/seçilebilir kalır ama seçilince hızlı + net hata verir.
+Build ✅ + unit testler ✅. **agy `--output-format json` veya non-TTY stdout fix'i yayınlayınca
+kod hazır — tek satırlık değişiklikle (veya hiç değişmeden) açılır.**
+
+**Sırada:** upstream #76 takibi → düzelince canlı doğrulama (`SWARMGO_LIVE_AGY=1`) → MCP
+delegasyonu / Codex. Bu arada claude-cli üretim provider'ı olarak kalır.
+
 ## claude-cli cache sıcaklığı — 4 fazlı çözüm ✅ (2026-06-29)
 
 **Sorun (ölçüldü):** Taze claude-cli session'ı tam soğuk başlıyor ve **tur 2 de soğuk** (cache_read=0). Kök neden: `claudecli.go` statik sistem promptu + **volatil** dinamik bloğu (saniye-hassas saat + bellek recall + özet) TEK `--append-system-prompt`'a birleştiriyordu → cache'lenen ~30K prefix her tur değişiyor.
@@ -100,13 +167,18 @@ garanti değil; araç/prompt değişimi prefix'i bozabiliyor.
   MessageList→UserTurn→UserBubble zinciriyle taşınır.
 - Yalnız tek bir kullanıcı mesajı sticky'dir (diğer turlar normal akışta) → üst üste
   yığılma olmaz. Scroll-anchoring (bottom-pin) mantığı değişmedi.
-- **Pinlenen = bir önceki tur:** en son kullanıcı mesajı yerine **bir önceki** kullanıcı
-  mesajı (`pinnedUserIndex`, sondan ikinci typed-user) tepede sabit kalır → mevcut tur
-  altta yanıtlanırken önceki soru bağlam olarak durur. İlk turda (önceki yokken) hiçbir
-  şey pinlenmez (`-1`).
-- **Yapışık gradient:** stuck olunca sticky satır artık yukarıdan aşağı **siyah→şeffaf**
-  gradient (`bg-gradient-to-b from-black to-transparent pb-6`) → altından kayan metin
-  okunabilirlik için solar. Normal akışta düz şeffaf satır.
+- **Dinamik section-header pinleme (sabit index değil):** sabit pin yerine kaydırma
+  sırasında **viewport üstüne çıkmış en son typed-user mesajı** dinamik olarak pinlenir
+  (`activePinnedIndex`). `onScroll`/messages-effect → `updateActivePinned`: tüm
+  `[data-user-row]` satırlarını tarar, `rect.top ≤ konteyner üstü` olanlardan **en büyük
+  index**'i (DOM sırasında sonuncu) seçer. Yeni bir soru üste değince pin ona devreder;
+  yukarı kaydırınca öncekine geri döner. Hiçbiri üste çıkmamışsa `-1` (ilk mesaj artık
+  boşuna pinlenmez — önceki şikâyet giderildi). **Yalnız aktif satır** sticky olduğu için
+  başlıklar üst üste yığılmaz.
+- **Aktif başlık görünümü:** aktif satır `sticky -top-2 z-10 bg-gradient-to-b
+  from-black to-transparent pb-6` (yukarıdan aşağı siyah→şeffaf gradient, altından kayan
+  metin okunabilirlik için solar) + balon 2 satıra `line-clamp-2`. `clamp` prop'u
+  `isActivePinned` ile MessageList→UserTurn→UserBubble zinciriyle taşınır.
 - Doğrulama: `tsc --noEmit` temiz, `npm run build` başarılı.
 
 ## claude-cli dosya düzenlemeleri için diff paneli (Edit/Write tutarlılığı) ✅ (2026-06-29)

@@ -25,19 +25,19 @@ func (s *Server) handleSessionUsageDetail(w http.ResponseWriter, r *http.Request
 	models, cost, savings, priced, estimated, cacheRead, cacheWrite := modelRowsFor(u.ByModel)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"sessionId":        u.SessionID,
-		"agentId":          u.AgentID,
-		"calls":            u.Calls,
-		"inputTokens":      u.InputTokens,
-		"outputTokens":     u.OutputTokens,
-		"cacheReadTokens":  cacheRead,
-		"cacheWriteTokens": cacheWrite,
-		"byKind":           u.ByKind, // per-origin breakdown (chat/task/schedule/flow/compact/…)
-		"byModel":          models,   // per-model detail with cost
-		"costUSD":          cost,
-		"savingsUSD":       savings, // prompt-cache reads vs full input price
-		"priced":           priced,
-		"estimated":        estimated,
+		"sessionId":            u.SessionID,
+		"agentId":              u.AgentID,
+		"calls":                u.Calls,
+		"inputTokens":          u.InputTokens,
+		"outputTokens":         u.OutputTokens,
+		"cacheReadTokens":      cacheRead,
+		"cacheWriteTokens":     cacheWrite,
+		"byKind":               u.ByKind, // per-origin breakdown (chat/task/schedule/flow/compact/…)
+		"byModel":              models,   // per-model detail with cost
+		"costUSD":              cost,
+		"savingsUSD":           savings, // prompt-cache reads vs full input price
+		"priced":               priced,
+		"estimated":            estimated,
 		"compactSavedBytes":    u.CompactSavedBytes,    // System A: deterministic tool-output trim
 		"compactSavedBytesLLM": u.CompactSavedBytesLLM, // System B: LLM summary trim
 	})

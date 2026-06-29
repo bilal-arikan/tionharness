@@ -7,10 +7,14 @@ import { MessageTime, TurnDuration, LiveTimer } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
 import { WorkingDots } from './WorkingDots'
 import { DeleteButton } from './DeleteButton'
+import { MessageDebugPanel } from './MessageDebugPanel'
 
 interface Props {
   message: Message
   agent?: Agent
+  // Session this turn belongs to — enables the per-message debug panel (fetches
+  // the turn's spend/latency by reply id). Absent in previews with no session.
+  sessionId?: string
   // isLastLive: this is the in-flight assistant bubble (last message while
   // streaming) — drives the live elapsed timer and suppresses retry/delete.
   isLastLive: boolean
@@ -26,6 +30,8 @@ interface Props {
   // Rate this assistant turn: rating +1 (up) / -1 (down) / 0 (clear). Absent →
   // the thumbs are not shown (e.g. the live in-flight bubble).
   onFeedback?: (id: string, rating: number) => void
+  // Open this agent's settings page — fired when its header (avatar/name) is clicked.
+  onOpenAgent?: (id: string) => void
 }
 
 // fmtTok renders a token count compactly (1234 → "1.2k").
@@ -56,6 +62,7 @@ function stopReasonLabel(reason?: string): string {
 export function AssistantTurn({
   message: m,
   agent,
+  sessionId,
   isLastLive,
   workedSec,
   toolsHidden,
@@ -65,6 +72,7 @@ export function AssistantTurn({
   onDelete,
   onRetry,
   onFeedback,
+  onOpenAgent,
 }: Props) {
   const steps = parseSteps(m.steps)
   const stopNote = stopReasonLabel(m.stopReason)
@@ -80,7 +88,11 @@ export function AssistantTurn({
     <div className="group flex flex-col gap-1">
       <div className="flex w-full justify-start">
         <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3 text-[var(--color-text)]">
-          <AgentHeader agent={agent} />
+          {/* Top-left affordance: per-message debug/cost/performance panel. */}
+          <div className="flex items-center gap-1.5">
+            {sessionId && !isLastLive && <MessageDebugPanel sessionId={sessionId} turnId={m.id} />}
+            <AgentHeader agent={agent} onOpenAgent={onOpenAgent} />
+          </div>
           {m.reasoningContent && <ThinkingBlock text={m.reasoningContent} />}
           {/* Per-message toggle to hide/show the tool-activity trace. */}
           {steps.length > 0 && (

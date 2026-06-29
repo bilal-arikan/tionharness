@@ -19,9 +19,9 @@ func TestContextWindowFor(t *testing.T) {
 		{"minimax/minimax-m3", windowMiniMax},
 		{"deepseek/deepseek-v4-flash", windowDeepSeek},
 		{"google/gemini-3.5-flash", windowGemini},
-		{"", 0},                          // claude-cli default → unknown
-		{"openai/gpt-5.5", 0},            // not in a confident family → unknown
-		{"some-unknown-model", 0},        // unknown → 0 (caller falls back)
+		{"", 0},                   // claude-cli default → unknown
+		{"openai/gpt-5.5", 0},     // not in a confident family → unknown
+		{"some-unknown-model", 0}, // unknown → 0 (caller falls back)
 		{"  Claude-Opus  ", windowClaudeOpusSonnet}, // trimmed + case-insensitive
 	}
 	for _, c := range cases {

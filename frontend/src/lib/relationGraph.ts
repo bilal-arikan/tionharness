@@ -140,7 +140,10 @@ const HIST_Y = 440
 
 // nodeFor builds the vis node for one workspace graph entity (shared by both
 // modes).
-function nodeFor(n: WorkspaceGraph['nodes'][number]): Node {
+// colColor (when provided) maps a board-column key → its configured color, so
+// task nodes pick up their column's hue instead of the hard-coded STATUS_COLOR
+// fallback (which only knows the five built-in statuses).
+function nodeFor(n: WorkspaceGraph['nodes'][number], colColor?: Map<string, string>): Node {
     if (n.type === 'agent') {
       const c = n.color || '#7c3aed'
       return {
@@ -209,9 +212,11 @@ function nodeFor(n: WorkspaceGraph['nodes'][number]): Node {
         margin: { top: 5, bottom: 5, left: 9, right: 9 } as Node['margin'],
       }
     }
-    // task: a status-colored square with the title below; the full description
-    // (and status) shows on hover via a rich tooltip.
-    const sc = STATUS_COLOR[n.status ?? ''] ?? '#64748b'
+    // task: a board-colored square with the title below; the full description
+    // (and status) shows on hover via a rich tooltip. The square's color follows
+    // the task's board column (colColor), falling back to the built-in status
+    // tint and finally a neutral slate.
+    const sc = colColor?.get(n.status ?? '') ?? STATUS_COLOR[n.status ?? ''] ?? '#64748b'
     return {
       id: n.id,
       label: truncate(n.label, 22),
@@ -262,6 +267,8 @@ export function workspaceToVis(
           color: c.color || STATUS_COLOR[c.key] || '#64748b',
         }))
       : BOARD_COLUMNS
+  // Per-column color lookup so task nodes inherit their board column's hue.
+  const colColor = new Map(liveColumns.map((c) => [c.state, c.color]))
   const live = mode === 'live'
   // Visibility: agents always; tasks always in live; flow/skill/mcp by toggle.
   const show = (t: WorkspaceNodeType): boolean => {
@@ -273,7 +280,7 @@ export function workspaceToVis(
   const shownIds = new Set(graph.nodes.filter((n) => show(n.type)).map((n) => n.id))
   const statusOf = new Map(graph.nodes.filter((n) => n.type === 'task').map((n) => [n.id, n.status]))
 
-  const nodes: Node[] = graph.nodes.filter((n) => show(n.type)).map(nodeFor)
+  const nodes: Node[] = graph.nodes.filter((n) => show(n.type)).map((n) => nodeFor(n, colColor))
 
   const edges: Edge[] = []
   const addEdge = (kind: string, from: string, to: string, style: Partial<Edge>) => {

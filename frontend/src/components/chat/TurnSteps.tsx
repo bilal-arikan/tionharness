@@ -11,6 +11,8 @@ import { ArtifactCard } from './ArtifactCard'
 import { DiffCard } from './DiffCard'
 import { HookStep } from './HookStep'
 import { SubagentStep } from './SubagentStep'
+import { isEditToolBase, synthDiffData } from '../../lib/diff'
+import { toolBase } from '../../lib/tools'
 
 interface Props {
   steps: TurnStep[]
@@ -56,6 +58,18 @@ export function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
           // Artifact create/update → clickable card linking to the viewer.
           if (step.tool && ARTIFACT_TOOLS.has(step.tool)) {
             return <ArtifactCard key={i} step={step} onOpenArtifact={onOpenArtifact} />
+          }
+          // A successful file mutation (claude-cli applies Edit/Write itself, so it
+          // arrives as a generic `tool` step) → render the same prominent diff
+          // panel the native tool-loop emits as a `diff` step. Errored edits stay
+          // as an ActivityCard so the failure output (and the un-applied, dimmed
+          // diff) is visible.
+          if (
+            !step.isError &&
+            isEditToolBase(toolBase(step.tool || '')) &&
+            synthDiffData(toolBase(step.tool || ''), step.input)
+          ) {
+            return <DiffCard key={i} step={step} onOpenFile={onOpenFile} />
           }
           return <ActivityCard key={i} step={step} onOpenFile={onOpenFile} />
         }

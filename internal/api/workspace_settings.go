@@ -11,11 +11,11 @@ import (
 // workspaceSettingsDTO is the client view of a workspace's editable settings,
 // combining its registry name with its per-workspace overrides and live stats.
 type workspaceSettingsDTO struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	Instructions    string `json:"instructions"`
-	Icon            string `json:"icon"`
-	Color           string `json:"color"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Instructions      string `json:"instructions"`
+	Icon              string `json:"icon"`
+	Color             string `json:"color"`
 	DefaultProvider   string `json:"defaultProvider"`
 	DefaultModel      string `json:"defaultModel"`
 	PauseAutonomy     bool   `json:"pauseAutonomy"`
@@ -47,11 +47,11 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		cols = db.DefaultBoardColumns()
 	}
 	dto := workspaceSettingsDTO{
-		ID:              w.ID,
-		Name:            w.Name,
-		Instructions:    s.Instructions,
-		Icon:            s.Icon,
-		Color:           s.Color,
+		ID:                w.ID,
+		Name:              w.Name,
+		Instructions:      s.Instructions,
+		Icon:              s.Icon,
+		Color:             s.Color,
 		DefaultProvider:   s.DefaultProvider,
 		DefaultModel:      s.DefaultModel,
 		PauseAutonomy:     s.PauseAutonomy,

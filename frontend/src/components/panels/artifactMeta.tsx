@@ -40,6 +40,7 @@ const ORIGIN_META: Record<string, { label: string; cls: string }> = {
   manual: { label: 'Manuel', cls: 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]' },
   agent: { label: 'Ajan', cls: 'bg-[color-mix(in_srgb,var(--color-success)_18%,transparent)] text-[var(--color-success)]' },
   tool: { label: 'Tool', cls: 'bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] text-[var(--color-warning)]' },
+  plan: { label: '📋 Plan', cls: 'bg-[color-mix(in_srgb,var(--color-accent)_22%,transparent)] text-[var(--color-accent)]' },
 }
 
 export function OriginBadge({ origin }: { origin?: string }) {

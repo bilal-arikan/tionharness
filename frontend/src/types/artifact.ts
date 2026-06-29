@@ -27,8 +27,9 @@ export interface Artifact {
   // Set when the artifact was auto-captured from a file the agent wrote.
   sourcePath?: string
   // How the artifact entered the workspace: chat attachment, manual drop, an
-  // agent-written file, or a create_artifact tool call.
-  origin?: 'chat' | 'manual' | 'agent' | 'tool'
+  // agent-written file, a create_artifact tool call, or the session's rolling
+  // artifact of approved ExitPlanMode plans ("plan").
+  origin?: 'chat' | 'manual' | 'agent' | 'tool' | 'plan'
   createdAt: number
   updatedAt: number
 }

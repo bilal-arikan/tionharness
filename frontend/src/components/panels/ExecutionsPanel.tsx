@@ -17,6 +17,8 @@ import { api } from '../../api'
 import { MessageList } from '../chat/MessageList'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { SelectionBar, SelectionBarButton } from '../common'
 
 interface Props {
   agents: Agent[]
@@ -99,6 +101,16 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   const [copied, setCopied] = useState(false)
   const selectedRef = useRef<string | null>(null)
   selectedRef.current = selectedId
+
+  // Multi-select (Ctrl/Cmd+Click, Shift-range). The feed is read-only, so the
+  // one bulk action is copying the selected session ids (handy for cross-tooling).
+  const sel = useMultiSelect()
+  const bulkCopyIds = () => {
+    const ids = [...sel.selected]
+    if (ids.length === 0) return
+    navigator.clipboard?.writeText(ids.join('\n')).catch(() => {})
+    sel.clear()
+  }
 
   // Select an execution and mirror it to the URL (deep-link aware).
   const select = useCallback(
@@ -222,14 +234,20 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
             const Icon = meta.icon
             const owner = agents.find((a) => a.id === it.agentId)
             const isActive = selectedId === it.sessionId
+            const orderedIds = items.map((x) => x.sessionId)
             return (
               <button
                 key={it.sessionId}
-                onClick={() => select(it.sessionId)}
+                onClick={(e) => {
+                  if (sel.handleClick(e, it.sessionId, orderedIds)) return
+                  select(it.sessionId)
+                }}
                 className={`mb-0.5 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-                  isActive
-                    ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-                    : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+                  sel.isSelected(it.sessionId)
+                    ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)] ring-1 ring-[var(--color-accent)]'
+                    : isActive
+                      ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                      : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
                 }`}
               >
                 {owner ? (
@@ -279,6 +297,16 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
             </p>
           )}
         </div>
+
+        <SelectionBar
+          count={sel.count}
+          onClear={sel.clear}
+          onSelectAll={items.length ? () => sel.selectAll(items.map((i) => i.sessionId)) : undefined}
+        >
+          <SelectionBarButton icon={<Copy size={13} />} onClick={bulkCopyIds}>
+            Kimlikleri kopyala
+          </SelectionBarButton>
+        </SelectionBar>
       </aside>
 
       {/* Detail: the selected execution's transcript (read-only) */}
@@ -348,6 +376,7 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
             </header>
             <MessageList
               messages={messages}
+              sessionId={selected.sessionId}
               pending={loading || selected.running}
               // A running execution (scheduled task / flow / spawn) is live: mark
               // it streaming so the last assistant bubble keeps the working

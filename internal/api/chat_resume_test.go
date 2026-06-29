@@ -4,15 +4,15 @@ import "testing"
 
 func TestClaudeResumeDecision(t *testing.T) {
 	cases := []struct {
-		name        string
-		enabled     bool
-		cliID       string
-		sentCount   int
-		rawLen      int
-		wantActive  bool
-		wantResume  string
-		wantDelta   int
-		wantSent    int
+		name       string
+		enabled    bool
+		cliID      string
+		sentCount  int
+		rawLen     int
+		wantActive bool
+		wantResume string
+		wantDelta  int
+		wantSent   int
 	}{
 		// Gate off → inert (full transcript, no id captured/persisted).
 		{"disabled", false, "sess", 2, 5, false, "", 0, 0},

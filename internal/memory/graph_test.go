@@ -66,3 +66,44 @@ func TestGraphLinksSimilarMemories(t *testing.T) {
 		t.Fatalf("expected 1 edge with default cap, got %d", len(g3.Edges))
 	}
 }
+
+// TestGraphEdgeScoreEqualsCosine verifies the edge weight carries the actual
+// lexical-cosine similarity (kept ≥ threshold and ≤ 1), not just a boolean link.
+// The pre-existing test only counted edges; the documented "kenar ağırlığı =
+// benzerlik skoru" contract (_Docs/23-ILISKI-GRAFIGI.md) had no assertion.
+func TestGraphEdgeScoreEqualsCosine(t *testing.T) {
+	ctx := context.Background()
+	s, d, agentID := newTestStore(t)
+	defer d.Close()
+
+	const (
+		a = "golang concurrency goroutine channel scheduler"
+		b = "goroutine channel scheduler runtime golang"
+	)
+	if _, err := s.Remember(ctx, agentID, db.MemoryDocument, a); err != nil {
+		t.Fatalf("remember a: %v", err)
+	}
+	if _, err := s.Remember(ctx, agentID, db.MemoryDocument, b); err != nil {
+		t.Fatalf("remember b: %v", err)
+	}
+
+	const threshold = 0.2
+	g, err := s.Graph(ctx, agentID, threshold, 100)
+	if err != nil {
+		t.Fatalf("graph: %v", err)
+	}
+	if len(g.Edges) != 1 {
+		t.Fatalf("expected 1 edge, got %d", len(g.Edges))
+	}
+
+	va, vb := buildVector(a), buildVector(b)
+	want := cosineNorm(va, vb, norm(va))
+	got := g.Edges[0].Score
+	if got < threshold || got > 1 {
+		t.Errorf("edge score %v outside [%v,1]", got, threshold)
+	}
+	const eps = 1e-9
+	if diff := got - want; diff > eps || diff < -eps {
+		t.Errorf("edge score = %v, want cosine %v", got, want)
+	}
+}

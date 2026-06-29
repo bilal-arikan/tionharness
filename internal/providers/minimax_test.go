@@ -27,7 +27,7 @@ func TestMinimax_CompleteSuccess(t *testing.T) {
 		Messages: []Message{
 			{Role: RoleUser, Text: "hi"},
 			{Role: RoleSystem, Text: "ignored"}, // system-role messages are skipped
-			{Role: RoleAssistant, Text: ""},      // empty text skipped
+			{Role: RoleAssistant, Text: ""},     // empty text skipped
 		},
 	})
 	if err != nil {
