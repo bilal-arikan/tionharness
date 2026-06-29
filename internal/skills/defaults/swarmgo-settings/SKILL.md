@@ -69,6 +69,11 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 ### Turn recovery
 - `reactiveCompact` (default true) — fold history + retry on context overflow.
 - `maxTokenRetries` (0–10, default 3), `reactiveKeepRecent` (2–50, default 6).
+- `maxOutputTokens` (default 0 = auto) — per-turn generation cap (`max_tokens`).
+  0 resolves per model family (opus/sonnet+minimax 32K, haiku/fable 16K,
+  deepseek/gemini 8K, unknown → provider 4096 fallback); a positive value (clamped
+  256–512000) pins a fixed cap across all models. Env fallback when 0:
+  `SWARMGO_MAX_OUTPUT_TOKENS`.
 
 ### Session debug journal (observability)
 - `debugJournalEnabled` (default true) — write the parallel `debug.jsonl` stream per session (turn timings, per-call token spend, per-tool latency/size/errors, hook decisions, compaction/recovery). Off = no debug events written.

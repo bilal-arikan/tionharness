@@ -9,6 +9,11 @@ type ModelInfo struct {
 	Label         string `json:"label"`
 	Description   string `json:"description,omitempty"`
 	ContextWindow int    `json:"contextWindow,omitempty"`
+	// MaxOutput is the model's generation cap in tokens (0 = unknown). Like
+	// ContextWindow it is filled at Catalog() build time from MaxOutputFor, so
+	// manifests stay free of churning numbers; a manifest may still set an
+	// explicit value to override the family default for a specific model.
+	MaxOutput int `json:"maxOutput,omitempty"`
 }
 
 // CatalogEntry describes a provider and its known models for the UI's
@@ -39,6 +44,9 @@ func Catalog() []CatalogEntry {
 		for i := range models {
 			if models[i].ContextWindow == 0 {
 				models[i].ContextWindow = ContextWindowFor(m.Kind, models[i].ID)
+			}
+			if models[i].MaxOutput == 0 {
+				models[i].MaxOutput = MaxOutputFor(m.Kind, models[i].ID)
 			}
 		}
 		out = append(out, CatalogEntry{

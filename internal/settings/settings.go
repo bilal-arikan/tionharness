@@ -155,6 +155,13 @@ type Settings struct {
 	ReactiveCompact    bool `json:"reactiveCompact"`    // fold older history + retry on context overflow
 	MaxTokenRetries    int  `json:"maxTokenRetries"`    // resume attempts after the output cap (0 = disabled)
 	ReactiveKeepRecent int  `json:"reactiveKeepRecent"` // in-flight messages kept verbatim when compacting
+	// MaxOutputTokens is the generation cap (max output tokens) applied when a
+	// turn leaves it unset. 0 = auto: resolve per model family (providers.
+	// MaxOutputFor), which keeps answers from being truncated at the providers'
+	// 4096 fallback. A positive value pins a fixed global cap across all models
+	// (overriding the family table); the SWARMGO_MAX_OUTPUT_TOKENS env is the
+	// fallback when this is 0.
+	MaxOutputTokens int `json:"maxOutputTokens"`
 
 	// Tool-output token optimization — two independent, parallel systems applied
 	// to tool results before they re-enter the model context.
@@ -281,6 +288,7 @@ func Default() Settings {
 		ReactiveCompact:    true,
 		MaxTokenRetries:    3,
 		ReactiveKeepRecent: 6,
+		MaxOutputTokens:    0, // auto: per-model family default
 
 		// Both systems on by default, the external agent project-style: System A (free, deterministic)
 		// always runs; System B (cheap-model summary) kicks in for big outputs. A's
@@ -402,6 +410,7 @@ type DTO struct {
 	ReactiveCompact    bool `json:"reactiveCompact"`
 	MaxTokenRetries    int  `json:"maxTokenRetries"`
 	ReactiveKeepRecent int  `json:"reactiveKeepRecent"`
+	MaxOutputTokens    int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   bool   `json:"compactToolOutput"`
 	CompactMaxLines     int    `json:"compactMaxLines"`
@@ -513,6 +522,7 @@ func (s Settings) ToDTO() DTO {
 		ReactiveCompact:    s.ReactiveCompact,
 		MaxTokenRetries:    s.MaxTokenRetries,
 		ReactiveKeepRecent: s.ReactiveKeepRecent,
+		MaxOutputTokens:    s.MaxOutputTokens,
 
 		CompactToolOutput:   s.CompactToolOutput,
 		CompactMaxLines:     s.CompactMaxLines,
@@ -619,6 +629,7 @@ type Patch struct {
 	ReactiveCompact    *bool `json:"reactiveCompact"`
 	MaxTokenRetries    *int  `json:"maxTokenRetries"`
 	ReactiveKeepRecent *int  `json:"reactiveKeepRecent"`
+	MaxOutputTokens    *int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   *bool   `json:"compactToolOutput"`
 	CompactMaxLines     *int    `json:"compactMaxLines"`

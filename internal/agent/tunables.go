@@ -67,6 +67,7 @@ type Tunables struct {
 	reactiveCompact    bool // fold older in-flight history + retry on context overflow
 	maxTokenRetries    int  // resume attempts after the output cap (0 = disabled)
 	reactiveKeepRecent int  // messages kept verbatim when compacting (<2 → default)
+	maxOutputTokens    int  // generation cap override (0 = auto: per-model family)
 
 	// Tool-output token optimization — two independent, parallel systems.
 	// System A: deterministic compaction (free, rule-based, every result).
@@ -471,6 +472,26 @@ func (t *Tunables) ReactiveKeepRecent() int {
 		return DefaultReactiveKeepRecent
 	}
 	return t.reactiveKeepRecent
+}
+
+// SetMaxOutputTokens configures the generation-cap override applied when a turn
+// leaves MaxTokens unset. 0 = auto (resolve per model family); a positive value
+// pins a fixed global cap across all models.
+func (t *Tunables) SetMaxOutputTokens(n int) {
+	t.mu.Lock()
+	t.maxOutputTokens = n
+	t.mu.Unlock()
+}
+
+// MaxOutputTokens returns the generation-cap override, or 0 when unset (auto:
+// the caller resolves a per-model family default instead).
+func (t *Tunables) MaxOutputTokens() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.maxOutputTokens < 0 {
+		return 0
+	}
+	return t.maxOutputTokens
 }
 
 // SetToolCompaction configures the two independent tool-output optimization

@@ -97,6 +97,9 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
+	// Fill a model-aware output cap when the caller left MaxTokens unset; the
+	// explicit caps that compaction/summary/title set are respected untouched.
+	req = r.withMaxOutput(agent.Provider, req)
 	resp, err := provider.Complete(ctx, req)
 	if err != nil {
 		// Mirror recordedComplete's logging: guardedComplete is the funnel for the

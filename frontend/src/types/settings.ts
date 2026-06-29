@@ -70,6 +70,7 @@ export interface AppSettings {
   reactiveCompact: boolean
   maxTokenRetries: number
   reactiveKeepRecent: number
+  maxOutputTokens: number // generation cap (max_tokens); 0 = auto (per-model family)
 
   // Tool-output token optimization — two independent, parallel systems.
   compactToolOutput: boolean   // System A: deterministic (free)

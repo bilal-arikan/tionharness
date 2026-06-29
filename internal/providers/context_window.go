@@ -20,6 +20,59 @@ const (
 	windowGemini           = 1_000_000 // Gemini long-context family
 )
 
+// Per-family generation caps (max output tokens), used to fill Request.MaxTokens
+// when a caller leaves it unset. Same philosophy as the context-window table:
+// family-based, deliberately conservative. Each value sits comfortably BELOW the
+// family's known maximum so a new family member can never produce a request the
+// API rejects (an over-cap max_tokens is a hard 400, unlike an over-estimated
+// context window which only shifts compaction timing) — yet well ABOVE the
+// providers' 4096 fallback so ordinary answers finish in one call instead of
+// being truncated and resumed by the turn-recovery loop. Raising max_tokens has
+// no cost or rate-limit downside (billing is per actual output token), so the
+// only constraint is staying within the real ceiling.
+const (
+	maxOutClaudeCapable = 32_768 // Opus / Sonnet 4.x (real ceiling 64–128K)
+	maxOutClaudeSmall   = 16_384 // Haiku / Fable / generic Claude
+	maxOutMiniMax       = 32_768 // MiniMax M-series (M3 ceiling ≈ 512K)
+	maxOutDeepSeek      = 8_192  // DeepSeek family (conservative)
+	maxOutGemini        = 8_192  // Gemini family (conservative)
+)
+
+// MaxOutputFor returns the model-aware generation cap (max output tokens) for a
+// provider/model, or 0 when the family is unknown. It is the single source of
+// truth the agent loop uses to fill Request.MaxTokens so the output cap tracks
+// the model's real capacity rather than the providers' conservative 4096
+// fallback — which otherwise truncates answers mid-stream and forces the
+// turn-recovery (A1) loop to resume far more often than necessary. Matching is by
+// model family, mirroring ContextWindowFor; order matters so the more specific
+// tier (haiku) is checked before the broad opus/sonnet/claude rules. provider is
+// accepted for future disambiguation. Unknown families return 0 so the caller
+// falls back to the provider default.
+func MaxOutputFor(provider, model string) int {
+	m := strings.ToLower(strings.TrimSpace(model))
+	if m == "" {
+		// claude-cli "default": the CLI manages its own output cap, so the value
+		// is moot — return unknown and let the caller leave MaxTokens unset.
+		return 0
+	}
+	switch {
+	case strings.Contains(m, "minimax"):
+		return maxOutMiniMax
+	case strings.Contains(m, "deepseek"):
+		return maxOutDeepSeek
+	case strings.Contains(m, "gemini"):
+		return maxOutGemini
+	case strings.Contains(m, "haiku"):
+		return maxOutClaudeSmall
+	case strings.Contains(m, "opus"), strings.Contains(m, "sonnet"):
+		return maxOutClaudeCapable
+	case strings.Contains(m, "fable"), strings.Contains(m, "claude"):
+		return maxOutClaudeSmall
+	default:
+		return 0
+	}
+}
+
 // ContextWindowFor returns the approximate context-window size in tokens for a
 // provider/model, or 0 when unknown. It is the single source of truth used by
 // the catalog (UI display) and tool-output threshold scaling (CG-9). provider is

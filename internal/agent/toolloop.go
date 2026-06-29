@@ -645,6 +645,7 @@ func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []
 }
 
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
+	req = r.withMaxOutput(agent.Provider, req)
 	// Persistent claude-cli session (opt-in): route the turn through the warm
 	// long-lived process keyed by SESSION + AGENT, so each agent in a multi-agent
 	// session keeps its OWN warm process (with its own system prompt) instead of
@@ -684,6 +685,7 @@ const liveThinkingID = "thinking-stream"
 // returned Response also carries the full thinking as a TraceStep, which the
 // caller persists so the reasoning block survives reload.
 func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm providers.Streamer, req providers.Request, onStep func(TurnStep)) (*providers.Response, error) {
+	req = r.withMaxOutput(agent.Provider, req)
 	resp, err := sm.Stream(ctx, req, func(d providers.StreamDelta) {
 		switch d.Kind {
 		case providers.DeltaThinking:

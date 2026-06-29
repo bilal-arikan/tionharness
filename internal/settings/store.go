@@ -312,6 +312,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	}
 	applyInt(&next.MaxTokenRetries, p.MaxTokenRetries)
 	applyInt(&next.ReactiveKeepRecent, p.ReactiveKeepRecent)
+	applyInt(&next.MaxOutputTokens, p.MaxOutputTokens)
 
 	if p.CompactToolOutput != nil {
 		next.CompactToolOutput = *p.CompactToolOutput
@@ -544,6 +545,18 @@ func normalize(v Settings) Settings {
 	}
 	if v.ReactiveKeepRecent > 50 {
 		v.ReactiveKeepRecent = 50
+	}
+	// Output cap: 0 is valid (auto, per-model family). A positive override is
+	// clamped to a sane range — a floor so it can't cripple answers, a ceiling at
+	// the largest known model output (MiniMax-M3 ≈ 512K).
+	if v.MaxOutputTokens < 0 {
+		v.MaxOutputTokens = 0
+	}
+	if v.MaxOutputTokens > 0 && v.MaxOutputTokens < 256 {
+		v.MaxOutputTokens = 256
+	}
+	if v.MaxOutputTokens > 512000 {
+		v.MaxOutputTokens = 512000
 	}
 	// Tool-output compaction (System A): clamp line/byte caps to sane bounds.
 	// 0 is allowed and means "use the built-in default" downstream in Tunables.

@@ -143,6 +143,7 @@ func (s *Server) applySettings() {
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.GitWorktreeIsolation, cur.AutonomousBootSeq)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
+	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
 	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold, cur.CompactModel)
 	if s.backups != nil {
 		s.backups.Configure(backup.Config{
