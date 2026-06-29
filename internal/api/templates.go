@@ -142,6 +142,16 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 				known = append(known, slug)
 			}
 		}
+		// Default-on: workspace templates that omit mcpEnabled (or ship it
+		// false because Go's bool zero value is false) seed agents with tools
+		// enabled, so the starter team is ready to use every workspace-active
+		// tool without the user toggling the master switch in each agent's
+		// detail panel. To turn tools off for a chat-only seeded agent, use
+		// UpdateAgentTools after seeding — see db.Agent.MCPEnabled.
+		mcpEnabled := ta.MCPEnabled
+		if !mcpEnabled {
+			mcpEnabled = true
+		}
 		agent, err := wsNew.DB.CreateAgent(ctx, db.Agent{
 			Name:            ta.Name,
 			Soul:            ta.Soul,
@@ -152,7 +162,7 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			Model:           am,
 			ThinkingLevel:   ta.ThinkingLevel,
 			PermissionMode:  ta.PermissionMode,
-			MCPEnabled:      ta.MCPEnabled,
+			MCPEnabled:      mcpEnabled,
 			AllowedTools:    ta.AllowedTools,
 			BlockedTools:    ta.BlockedTools,
 			Skills:          known,

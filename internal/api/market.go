@@ -460,6 +460,17 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 			known = append(known, slug)
 		}
 	}
+	// Default-on: a pack that omits mcpEnabled (or ships it false because Go's
+	// bool zero value is false) is treated as "tools on" so the fresh agent
+	// can actually do work without the user having to flip the master switch
+	// in agent detail. To turn tools off for a chat-only agent, use
+	// UpdateAgentTools after install — see db.Agent.MCPEnabled for rationale
+	// (the DB layer does not default this because booleans cannot tell "unset"
+	// from "explicit false").
+	mcpEnabled := ap.MCPEnabled
+	if !mcpEnabled {
+		mcpEnabled = true
+	}
 	created, err := wsp.DB.CreateAgent(r.Context(), db.Agent{
 		Name:           ap.Name,
 		Soul:           ap.Soul,
@@ -470,7 +481,7 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 		PermissionMode: ap.PermissionMode,
 		Avatar:         ap.Avatar,
 		Color:          ap.Color,
-		MCPEnabled:     ap.MCPEnabled,
+		MCPEnabled:     mcpEnabled,
 		AllowedTools:   ap.AllowedTools,
 		Skills:         known,
 	})

@@ -2,6 +2,38 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-29**
 
+## Yeni agent'lar varsayılan olarak araç kullanabilir ✅ (2026-06-29)
+
+**Hedef:** UI/API'den oluşturulan yeni agent'ların `mcpEnabled` alanı varsayılan
+olarak **açık** gelsin — minimax/anthropic gibi native sağlayıcılarda araç
+döngüsü `MCPEnabled`'a bağlı olduğundan, kapalı default ile yeni agent'lar
+araçsız başlıyordu (SES8 / AGT7 belirtisi). Aynı kural `false`→`true` flip'i
+olarak **tüm agent-oluşturan call site'larına** yayıldı (market, workspace
+template, ingest).
+
+**Çözüm (per-creation-path default-on flip):**
+- **DB seviyesi (`internal/db/store.go`):** `CreateAgent` `MCPEnabled`'a default
+  koymaz (Go bool "unset" ile "explicit false" ayırt edemez); her caller flip'ten
+  sorumlu — merkezi "default true" override'ı kasıtlı `false`'yu da ezerdi.
+- **HTTP create (`internal/api/agents.go`):** `createAgentReq.MCPEnabled *bool`
+  → `nil` default on, `false` opt-out (tek gerçek opt-out kanalı).
+- **Market install (`internal/api/market.go` `installAgentPack`):** payload
+  `mcpEnabled` yoksa (Go zero value `false`) → `true` flip.
+- **Workspace template seeding (`internal/api/templates.go` `seedWorkspaceTeam`):**
+  template agent `MCPEnabled` yoksa → `true` flip (ek olarak `BlockedTools` zaten
+  template'da tanımlıysa onu olduğu gibi taşır).
+- **Self-management `create_agent` (`internal/tools/builtin_agentmgmt.go`):**
+  zaten önceden `MCPEnabled: true` literal'ı vardı.
+- **E2E harness (`internal/e2e/harness_test.go`):** zaten açıkça `MCPEnabled: true`.
+
+**Chat-only ajan isteyen (escape hatch):** yeni ajan oluşturduktan sonra
+`POST /api/agents/{id}/tools` body `{"mcpEnabled":false}` (UI'da ajan detay
+▸ Araçlar ▸ ana switch) ile kapatabilir. `BlockedTools` daha ince tanelidir.
+
+**Test:** `TestCreateAgentPerCallerFlipDefault` (`internal/api/agents_default_tools_test.go`)
+iki flip'i (HTTP `*bool` + bool pass-through) + DB round-trip ile sabitler.
+Tam suite **524 test** yeşil.
+
 ## `ask_user` şeması claude-cli native AskUserQuestion'a hizalandı ✅ (2026-06-29)
 
 **Sorun (SES73):** claude-cli modeli köprülü `ask_user`'ı native `AskUserQuestion`

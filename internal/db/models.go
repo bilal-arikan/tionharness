@@ -29,8 +29,10 @@ type Agent struct {
 
 	// Tool access. MCPEnabled gates whether the agent is offered tools at all.
 	//
-	// Agents reach EVERY workspace-active tool by default. Access is narrowed two
-	// independent ways:
+	// Agents reach EVERY workspace-active tool by default (after per-creation-path
+	// defaulting — see each db.Agent literal at the call site that flips false to
+	// true; the DB layer does NOT default this because Go bools cannot distinguish
+	// "unset" from "explicit false"). Access is then narrowed two independent ways:
 	//   - BlockedTools: per-agent denylist (the user-facing model in agent
 	//     detail). Empty = nothing blocked = all tools. New tools added later are
 	//     reachable automatically unless explicitly blocked here.

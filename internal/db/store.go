@@ -70,6 +70,15 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	if a.Skills == nil {
 		a.Skills = []string{}
 	}
+	// MCPEnabled is intentionally NOT defaulted here. Booleans cannot tell
+	// "caller didn't set" from "caller set false", so default-on at the DB
+	// layer would silently override explicit opt-outs. Each creation path
+	// (POST /api/agents, market/ingest pack install, workspace-template
+	// seeding, self-management create_agent, e2e harness) is responsible for
+	// flipping false→true before calling CreateAgent — see the per-caller
+	// "default-on" comments next to each db.Agent literal. To turn tools off
+	// for an existing agent, call UpdateAgentTools (POST /api/agents/{id}/tools).
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return a, d.persistAgentLocked(a)
