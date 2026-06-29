@@ -45,7 +45,6 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 ### Providers & model
 - `defaultProvider` — `"claude-cli"` | `"anthropic"` (default `claude-cli`).
 - `defaultModel` — model id; `""` = the provider's own default.
-- `defaultPermissionMode` — seeds new agents: `"read-only"` | `"ask"` | `"auto"`.
 - `claudeCliPath` — path to the `claude` binary; `""` = auto-detect on PATH.
 - `anthropicKey` — **write-only**; `""` clears. Read shows only `anthropicKeySet`.
 - `minimaxKey` (write-only), `minimaxBaseUrl` — MiniMax (OpenAI-compatible).

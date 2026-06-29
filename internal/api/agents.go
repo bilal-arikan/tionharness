@@ -58,6 +58,10 @@ type createAgentReq struct {
 	PermissionMode string `json:"permissionMode"`
 	Avatar         string `json:"avatar"`
 	Color          string `json:"color"`
+	// MCPEnabled gates tool access. Pointer so we can tell "omitted" (nil →
+	// default on) apart from an explicit false (opt-out). New agents get tools
+	// by default.
+	MCPEnabled *bool `json:"mcpEnabled"`
 }
 
 func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +98,12 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	if req.PermissionMode == "" {
 		req.PermissionMode = cfg.DefaultPermissionMode
 	}
+	// Tool access defaults to ON for new agents; an explicit mcpEnabled:false in
+	// the request opts out.
+	mcpEnabled := true
+	if req.MCPEnabled != nil {
+		mcpEnabled = *req.MCPEnabled
+	}
 
 	agent, err := ws(r).DB.CreateAgent(r.Context(), db.Agent{
 		Name:           req.Name,
@@ -103,6 +113,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		Model:          req.Model,
 		ThinkingLevel:  req.ThinkingLevel,
 		PermissionMode: req.PermissionMode,
+		MCPEnabled:     mcpEnabled,
 	})
 	if writeDBError(w, err, "") {
 		return

@@ -2,7 +2,7 @@
 // categories (providers, commands, step kinds, workspace) live in their own
 // files; these are pure draft+setter forms.
 import { useState, useEffect, useRef } from 'react'
-import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, FlaskConical, ShieldCheck, Archive, RotateCcw, ListChecks, Trash2, Bug, type LucideIcon } from 'lucide-react'
+import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, FlaskConical, Archive, RotateCcw, ListChecks, Trash2, Bug, type LucideIcon } from 'lucide-react'
 import type { VersionInfo, BackupStatus, WorkspaceArchives } from '../../types'
 import { api, getActiveWorkspace } from '../../api'
 import type { AppSettings } from '../../types'
@@ -485,16 +485,6 @@ export function McpPanel({ draft, set }: PanelProps) {
 export function ToolsPanel({ draft, set }: PanelProps) {
   return (
     <>
-      <SubHead icon={ShieldCheck}>Yeni ajan varsayılan izin modu</SubHead>
-      <div className="flex flex-col gap-1">
-        <select value={draft.defaultPermissionMode || 'auto'} onChange={(e) => set('defaultPermissionMode', e.target.value)} className={inputCls}>
-          <option value="auto">Otomatik — tüm araçlar onaysız çalışır</option>
-          <option value="ask">Sor — dosya yazma/komut için onay iste</option>
-          <option value="read-only">Salt-okunur — yazma/komut engellenir</option>
-        </select>
-        <span className="text-xs text-[var(--color-text-dim)]">Yeni oluşturulan ajanların araç-kullanım izni. Mevcut ajanları Ajanlar ekranından, tek tur için Composer'dan (Shift+Tab) değiştir.</span>
-      </div>
-
       <SubHead icon={Sparkles}>Geçişli yetenekler</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         Bu yetenekler varsayılan olarak <b>kapalıdır</b>: her biri ajanların gücünü ve
