@@ -158,6 +158,25 @@ budget (para) arasındaki yeri netleştirir.
 - Test: `db/debug_journal_test.go` (`TestDebugSummaryAnomaliesAndSeries`,
   `TestDebugSummaryNoAnomaliesOnHealthy`).
 
+## Mesaj başına debug paneli (2026-06-29)
+
+Debug olayları artık **tur (mesaj) kimliği** ile korele: `DebugEvent.TurnID`,
+chat giriş noktasında `agent.WithTurnID(ctx, replyID)` ile damgalanır (replyID =
+asistan yanıt mesajının id'si). `emitDebug` her olaya bunu basar, böylece bir
+yanıtın tüm olayları (llm_call/tool/error/recovery/compaction) o mesaja bağlanır.
+
+- **Rollup:** `db.GetTurnDebug(session, turnId)` → o yanıtın token/süre/model +
+  per-tool listesi (ad, gecikme, çıktı boyutu, hata). Maliyet API katmanında
+  `modelRowsFor` ile (Bütçe ekranıyla aynı fiyatlandırma).
+- **API:** `GET /api/sessions/{id}/turn-debug?turn={replyMessageId}`.
+- **claude-cli araçları:** CLI kendi tool-loop'unu sürdüğü için per-tool olaylar
+  normalde yayılmaz; `Runtime.emitCLIToolDebug` stream-json trace'inden her araç
+  için bir `DebugTool` olayı yayar (boyut + hata; gecikme yalnız native yolda).
+- **UI:** her asistan mesajının sol üstünde küçük buton (`MessageDebugPanel`) →
+  açılır panelde o mesajın token/maliyet/süre + araç kırılımı (lazy fetch).
+- **cliOverhead iyileştirme:** context-preview projeksiyonu artık lifetime
+  ortalaması yerine debug'daki **son llm_call**'ın gerçek girdisini kullanır.
+
 ## Sırada (Faz 4+ fikirler)
 
 - Anomali eşiklerinin ayarlanabilir olması (settings).
