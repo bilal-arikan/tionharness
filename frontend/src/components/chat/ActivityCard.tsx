@@ -20,10 +20,20 @@ function headerBadge(step: TurnStep, diffText: string | null, output: string): R
   if (diffText) {
     const { stats } = parseDiff(diffText)
     if (stats.added > 0 || stats.removed > 0) {
+      // A failed Edit/Write still carries a synthetic +/- from its (un-applied)
+      // input; painting it green/red reads as "the change went through". When
+      // the step is in error, dim the counts so the user clearly sees these
+      // were the intended — not the applied — line deltas.
+      const addedCls = step.isError
+        ? 'text-[var(--color-text-dim)]'
+        : 'text-[var(--color-success)]'
+      const removedCls = step.isError
+        ? 'text-[var(--color-text-dim)]'
+        : 'text-[var(--color-danger)]'
       return (
         <span className="flex shrink-0 gap-1.5 font-mono">
-          <span className="text-[var(--color-success)]">+{stats.added}</span>
-          <span className="text-[var(--color-danger)]">−{stats.removed}</span>
+          <span className={addedCls}>+{stats.added}</span>
+          <span className={removedCls}>−{stats.removed}</span>
         </span>
       )
     }
