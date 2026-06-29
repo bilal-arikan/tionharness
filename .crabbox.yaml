@@ -1,0 +1,83 @@
+# Crabbox repo config for SwarmGo.
+# Local Docker (local-container) test boxes — no coordinator/login required.
+# Run jobs with:  crabbox job run ci   |   crabbox job run frontend
+profile: swarmgo-check
+
+# Sync: git ls-files manifest over rsync+ssh. Keep build/output dirs out.
+sync:
+  delete: true
+  checksum: false
+  gitSeed: true
+  fingerprint: true
+  timeout: 15m
+  warnFiles: 50000
+  warnBytes: 5368709120
+  failFiles: 150000
+  failBytes: 21474836480
+  exclude:
+    - .git
+    - node_modules
+    - dist
+    - .cache
+    - .turbo
+    - coverage
+    - test-results
+    - playwright-report
+    - frontend/dist
+    - internal/web/dist
+
+run:
+  preflightTools:
+    - go
+
+env:
+  allow:
+    - CI
+    - GOFLAGS
+    - GOTOOLCHAIN
+
+ssh:
+  user: crabbox
+  port: "2222"
+  fallbackPorts:
+    - "22"
+
+# Named jobs. Each pins its own provider + container image.
+# NOTE: internal/web/dist is gitignored (not synced) but //go:embed all:dist needs it,
+#       so a placeholder is created before build. The golang image's login shell resets
+#       PATH, so /usr/local/go/bin is exported.
+jobs:
+  # Go: compile the whole project + run the fast, pure-logic unit tests.
+  ci:
+    provider: local-container
+    image: golang:1.26
+    shell: true
+    stop: auto
+    command: >
+      export PATH=/usr/local/go/bin:$PATH &&
+      go version &&
+      mkdir -p internal/web/dist && touch internal/web/dist/index.html &&
+      echo ===BUILD=== && go build ./... && echo BUILD_OK &&
+      echo ===TEST=== &&
+      go test -count=1 ./internal/conversation/... ./internal/billing/... ./internal/orchestration/... ./internal/skills/...
+
+  # Go: full test suite (some tests may need external tools/network and can fail/skip).
+  ci-full:
+    provider: local-container
+    image: golang:1.26
+    shell: true
+    stop: auto
+    command: >
+      export PATH=/usr/local/go/bin:$PATH &&
+      mkdir -p internal/web/dist && touch internal/web/dist/index.html &&
+      go build ./... && echo BUILD_OK &&
+      go test -count=1 ./...
+
+  # Frontend: install + production build (Vite + React + TS).
+  frontend:
+    provider: local-container
+    image: node:22
+    shell: true
+    stop: auto
+    command: >
+      cd frontend && npm ci && npm run build

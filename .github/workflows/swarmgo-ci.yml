@@ -1,0 +1,57 @@
+name: SwarmGo CI (crabbox)
+
+# Build + test SwarmGo on a Crabbox local-container box.
+# GitHub's ubuntu runners ship Docker + rsync + ssh, so the local-container
+# provider works natively (no coordinator/login, no Windows rsync setup).
+# The actual command lives in .crabbox.yaml (job: ci) — single source of truth.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CRABBOX_VERSION: "0.33.0"
+  GO_IMAGE: "golang:1.26"
+
+jobs:
+  crabbox-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install crabbox
+        run: |
+          set -euo pipefail
+          url="https://github.com/openclaw/crabbox/releases/download/v${CRABBOX_VERSION}/crabbox_${CRABBOX_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$url" -o /tmp/crabbox.tar.gz
+          tar -xzf /tmp/crabbox.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/crabbox "/usr/local/bin/crabbox"
+          crabbox version
+
+      - name: Doctor
+        run: crabbox doctor -provider local-container || true
+
+      - name: Warm a Go box
+        id: warm
+        run: |
+          set -euo pipefail
+          out="$(crabbox warmup -provider local-container -local-container-image "$GO_IMAGE")"
+          echo "$out"
+          slug="$(printf '%s\n' "$out" | grep -oP 'slug=\K[^ ]+' | head -1)"
+          test -n "$slug"
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+
+      - name: Run ci job (build + unit tests)
+        run: crabbox job run --id "${{ steps.warm.outputs.slug }}" ci
+
+      - name: Stop box
+        if: always()
+        run: |
+          slug="${{ steps.warm.outputs.slug }}"
+          if [ -n "$slug" ]; then crabbox stop -provider local-container -id "$slug" || true; fi
