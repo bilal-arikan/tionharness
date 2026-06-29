@@ -10,7 +10,7 @@ import { THEME_PRESETS } from '../../lib/themePresets'
 import { applyAppearance, resolveAppearance, type Appearance } from '../../lib/theme'
 import { NOTIFY_TYPES, mutedTypes, setTypeEnabled } from '../../lib/notifyPrefs'
 import { Field, Toggle, Slider, inputCls, type AppSet } from './primitives'
-import { PromptEditor } from '../common'
+import { PromptEditor, Button } from '../common'
 
 interface PanelProps {
   draft: AppSettings
@@ -239,13 +239,9 @@ export function AppearancePanel({
         </div>
       </Field>
       <div className="flex items-center gap-3 pt-1">
-        <button
-          onClick={save}
-          disabled={!dirty || saving}
-          className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-30"
-        >
+        <Button onClick={save} disabled={!dirty || saving}>
           {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
+        </Button>
         <button
           onClick={resetToGlobal}
           disabled={saving || !hasOverride}

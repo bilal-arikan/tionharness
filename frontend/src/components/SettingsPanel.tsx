@@ -28,6 +28,7 @@ import {
   AboutPanel,
 } from './settings/appPanels'
 import { useRegisterDirty } from '../lib/dirtySignals'
+import { Button } from './common'
 import { ProvidersPanel } from './settings/ProvidersPanel'
 import { CommandsPanel } from './settings/CommandsPanel'
 import { StepKindsPanel } from './settings/StepKindsPanel'
@@ -256,13 +257,9 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
               </span>
             )}
             {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'hooks' && cat !== 'mcptools' && cat !== 'secrets' && (
-              <button
-                onClick={save}
-                disabled={!dirty || saving}
-                className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-30"
-              >
+              <Button onClick={save} disabled={!dirty || saving}>
                 {saving ? 'Kaydediliyor…' : 'Kaydet'}
-              </button>
+              </Button>
             )}
           </div>
         </div>
