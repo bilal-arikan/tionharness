@@ -47,6 +47,7 @@ type Tunables struct {
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
 	selfManage    bool // gates the self-management tool suite (off by default)
 	cliHooks      bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
+	cliPersist    bool // keep a long-lived claude-cli process per session (off by default, experimental)
 	delegation    bool // gates the agent→agent `run_subagent` tool (off by default)
 	delegMaxDepth int  // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls int  // 0 → DefaultMaxDelegationCalls
@@ -246,6 +247,23 @@ func (t *Tunables) CLIHooksEnabled() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.cliHooks
+}
+
+// SetClaudePersistentSession toggles keeping a long-lived claude-cli process per
+// (session, agent) so warm turns ship only the new user message. Off by default
+// (experimental). See providers.CLISessionPool / _Docs/17.
+func (t *Tunables) SetClaudePersistentSession(enabled bool) {
+	t.mu.Lock()
+	t.cliPersist = enabled
+	t.mu.Unlock()
+}
+
+// ClaudePersistentSession reports whether the persistent claude-cli session path
+// is enabled.
+func (t *Tunables) ClaudePersistentSession() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.cliPersist
 }
 
 // SetDelegationEnabled toggles the agent→agent `run_subagent` tool. Off by

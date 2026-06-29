@@ -136,6 +136,12 @@ type Runtime struct {
 	// session state — e.g. the gateway's activate_tools — survives across calls.
 	// Closed via CloseMCP when the workspace is torn down.
 	mcpPool *mcp.Pool
+
+	// cliSessions holds long-lived claude-cli processes (one per session+agent) when
+	// the ClaudePersistentSession setting is on, so warm turns ship only the new user
+	// message. Off by default; nil-safe (recordedComplete falls back to one-shot
+	// Complete). Closed via CloseMCP on workspace teardown.
+	cliSessions *providers.CLISessionPool
 }
 
 // trackSession marks a session as actively running an autonomous invoke.
@@ -216,20 +222,21 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	// The marketplace has no bundled/workspace tiers: packs live only in the
 	// global market dir (<DataDir>/market) and remote registries. No seeding.
 	r := &Runtime{
-		db:        database,
-		providers: registry,
-		mem:       memory.New(database),
-		tun:       tun,
-		workDir:   workDir,
-		vault:     vault,
-		bus:       bus,
-		wsID:      wsID,
-		wsName:    wsName,
-		logs:      logs,
-		logger:    logger,
-		skills:    skills.New(globalSkillsDir(), workspaceSkillsDir(workDir)),
-		market:    market.New(marketGlobalDir(), workspaceLedgerDir(workDir)),
-		mcpPool:   mcp.NewPool(),
+		db:          database,
+		providers:   registry,
+		mem:         memory.New(database),
+		tun:         tun,
+		workDir:     workDir,
+		vault:       vault,
+		bus:         bus,
+		wsID:        wsID,
+		wsName:      wsName,
+		logs:        logs,
+		logger:      logger,
+		skills:      skills.New(globalSkillsDir(), workspaceSkillsDir(workDir)),
+		market:      market.New(marketGlobalDir(), workspaceLedgerDir(workDir)),
+		mcpPool:     mcp.NewPool(),
+		cliSessions: providers.NewCLISessionPool(),
 	}
 	// Surface MCP connection lifecycle (dial / re-dial / list_changed) in the
 	// in-app Logs screen; the persistent pool is otherwise opaque.
@@ -242,6 +249,9 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 func (r *Runtime) CloseMCP() {
 	if r.mcpPool != nil {
 		r.mcpPool.Close()
+	}
+	if r.cliSessions != nil {
+		r.cliSessions.Close()
 	}
 }
 

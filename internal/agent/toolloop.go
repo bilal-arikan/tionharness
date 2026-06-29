@@ -622,6 +622,23 @@ func fillCancelledResults(results []providers.ToolResult, calls []providers.Tool
 // a provider error is recorded regardless of which caller (chat, task,
 // schedule) triggered it.
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
+	// Persistent claude-cli session (opt-in): route the turn through the warm
+	// long-lived process keyed by session id (the fingerprint includes the agent's
+	// system prompt, so a different agent in the same session safely cold-restarts
+	// with the full transcript). Any failure falls back to a one-shot Complete, so
+	// the feature can never wedge a turn. Keyed by session id only → single-agent
+	// sessions stay warm; multi-agent ones cold-restart per agent (still correct).
+	if cli, ok := provider.(*providers.ClaudeCLI); ok && r.cliSessions != nil && r.tun.ClaudePersistentSession() {
+		if sid := SessionIDFrom(ctx); sid != "" {
+			if resp, perr := r.cliSessions.Turn(ctx, sid, cli, req, req.OnEvent); perr == nil {
+				r.RecordUsage(ctx, agent, resp.Model, resp.Usage)
+				return resp, nil
+			} else {
+				r.logger.Warn("persistent cli session failed; falling back to one-shot complete",
+					"agent", agent.ID, "session", sid, "error", perr)
+			}
+		}
+	}
 	resp, err := provider.Complete(ctx, req)
 	if err != nil {
 		r.logger.Warn("provider complete failed",

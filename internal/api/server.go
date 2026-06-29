@@ -137,6 +137,7 @@ func (s *Server) applySettings() {
 	s.tun.SetShellEnabled(cur.EnableShell)
 	s.tun.SetSelfManageEnabled(cur.EnableSelfManage)
 	s.tun.SetCLIHooksEnabled(cur.EnableCLIHooks)
+	s.tun.SetClaudePersistentSession(cur.ClaudePersistentSession)
 	s.tun.SetDelegationEnabled(cur.EnableDelegation)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)

@@ -102,6 +102,77 @@ func (c *ClaudeCLI) usesInteractionTools() bool {
 	return false
 }
 
+// permissionArgs maps the request's permission mode onto the claude CLI flags.
+// In "ask" mode with a permission-prompt tool wired, route tools needing approval
+// through it (CLI default mode + --permission-prompt-tool → real per-tool approval
+// in the SwarmGo UI). Otherwise map the mode to a CLI permission flag (plan /
+// acceptEdits / bypass) so headless edits aren't silently refused. Shared by the
+// one-shot Complete path and the persistent-session launcher.
+func (c *ClaudeCLI) permissionArgs(req Request) []string {
+	if c.permissionPromptTool != "" {
+		args := []string{"--permission-prompt-tool", c.permissionPromptTool}
+		// read-only ALSO runs in plan mode: the CLI blocks every mutation itself, so
+		// the only call that reaches the prompt tool is ExitPlanMode — where SwarmGo
+		// renders the plan for approval. "ask" keeps the CLI's default mode so each
+		// write/exec tool is gated individually through the prompt.
+		if req.PermissionMode == "read-only" {
+			args = append(args, "--permission-mode", "plan")
+		}
+		return args
+	}
+	return permissionModeArgs(req.PermissionMode)
+}
+
+// mcpArgs builds the MCP-delegation flags from the provider's ConfigureMCP state.
+// The single-value --mcp-config is terminated by the boolean --strict-mcp-config;
+// --disallowedTools (suppressing conflicting CLI built-ins) precedes the trailing
+// --allowedTools so neither variadic flag swallows the other. Empty when no MCP
+// config is set. Shared by Complete and the persistent-session launcher.
+func (c *ClaudeCLI) mcpArgs() []string {
+	if c.mcpConfigPath == "" {
+		return nil
+	}
+	args := []string{"--mcp-config", c.mcpConfigPath, "--strict-mcp-config"}
+	if c.settingsPath != "" {
+		args = append(args, "--settings", c.settingsPath)
+	}
+	if len(c.disallowedTools) > 0 {
+		args = append(args, "--disallowedTools")
+		args = append(args, c.disallowedTools...)
+	}
+	if len(c.allowedTools) > 0 {
+		args = append(args, "--allowedTools")
+		args = append(args, c.allowedTools...)
+	}
+	return args
+}
+
+// buildSystemAndPrompt assembles the two halves of a claude-cli invocation, kept
+// pure for testing:
+//
+//   - sys: the appended system prompt. ONLY the STATIC prefix (req.System) plus the
+//     constant interaction note. Byte-stable across turns for a given agent, so
+//     Claude Code's request-prefix prompt cache stays warm turn-to-turn (and across
+//     sessions). The volatile suffix is deliberately excluded.
+//   - prompt: the conversation prompt sent on stdin. The VOLATILE per-turn context
+//     (req.SystemDynamic: turn-start clock, recalled memory, running summary,
+//     sessions block, …) is prepended as a delimited [Context] block so it rides in
+//     the uncached message tail instead of busting the cached system prefix. With
+//     --resume (delta send) this still attaches to the turn actually on the wire.
+//
+// Before this split the static + volatile halves were merged into one appended
+// system prompt; the seconds-precise clock line alone changed the cached prefix
+// every turn, forcing a full cold cache write each turn (measured: turn 2 came
+// back with cache_read=0). See _Docs/17.
+func (c *ClaudeCLI) buildSystemAndPrompt(req Request) (sys, prompt string) {
+	sys = strings.TrimSpace(req.System)
+	if c.usesInteractionTools() {
+		sys = strings.TrimSpace(sys + "\n\n" + interactionSystemNote)
+	}
+	prompt = withDynamic(serializeTranscript(req.Messages), req.SystemDynamic)
+	return sys, prompt
+}
+
 // --- stream-json event shapes (--output-format stream-json --verbose) ---
 //
 // The CLI emits one JSON object per line: system/init, assistant (content
@@ -187,29 +258,12 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	if req.ResumeSessionID != "" {
 		args = append(args, "--resume", req.ResumeSessionID)
 	}
-	// Permission handling. In "ask" mode with a permission-prompt tool wired, route
-	// tools that need approval through it (CLI default mode + --permission-prompt-
-	// tool → real per-tool approval in the SwarmGo UI). Otherwise map the mode to a
-	// CLI permission flag (plan / acceptEdits / bypass) so headless edits aren't
-	// silently refused.
-	if c.permissionPromptTool != "" {
-		args = append(args, "--permission-prompt-tool", c.permissionPromptTool)
-		// read-only ALSO runs in plan mode: the CLI blocks every mutation itself, so
-		// the only call that reaches the prompt tool is ExitPlanMode — where SwarmGo
-		// renders the plan for approval. "ask" keeps the CLI's default mode so each
-		// write/exec tool is gated individually through the prompt.
-		if req.PermissionMode == "read-only" {
-			args = append(args, "--permission-mode", "plan")
-		}
-	} else {
-		args = append(args, permissionModeArgs(req.PermissionMode)...)
-	}
-	// The CLI has no prompt-cache breakpoint, so the static prefix and dynamic
-	// suffix are merged into one appended system prompt.
-	sys := strings.TrimSpace(strings.TrimSpace(req.System) + "\n\n" + strings.TrimSpace(req.SystemDynamic))
-	if c.usesInteractionTools() {
-		sys = strings.TrimSpace(sys + "\n\n" + interactionSystemNote)
-	}
+	args = append(args, c.permissionArgs(req)...)
+	// Assemble the STABLE appended system prompt (static prefix only — keeps Claude
+	// Code's prompt cache warm turn-to-turn and across sessions for the same agent)
+	// plus the conversation prompt with the volatile dynamic context folded into the
+	// message tail. See buildSystemAndPrompt / _Docs/17.
+	sys, prompt := c.buildSystemAndPrompt(req)
 	// The system prompt is handed to the subprocess. Windows caps a process
 	// command line at ~32 KB (ERROR_FILENAME_EXCED_RANGE / errno 206), and a
 	// large system prompt (skills + core memory blocks + dynamic context) blows
@@ -235,29 +289,7 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 		args = append(args, "--append-system-prompt-file", sysPromptPath)
 	}
 
-	// MCP delegation: load the config and restrict to the allowlist. The
-	// single-value --mcp-config is terminated by the boolean --strict-mcp-config;
-	// --disallowedTools (suppressing conflicting CLI built-ins) precedes the
-	// trailing --allowedTools so neither variadic flag swallows the other.
-	if c.mcpConfigPath != "" {
-		args = append(args, "--mcp-config", c.mcpConfigPath, "--strict-mcp-config")
-		// SwarmGo-generated settings (permission deny-list + PreToolUse/PostToolUse
-		// hooks) for this turn. Scoped to the MCP path so a stale path can't leak
-		// onto the plain (non-MCP) completion path.
-		if c.settingsPath != "" {
-			args = append(args, "--settings", c.settingsPath)
-		}
-		if len(c.disallowedTools) > 0 {
-			args = append(args, "--disallowedTools")
-			args = append(args, c.disallowedTools...)
-		}
-		if len(c.allowedTools) > 0 {
-			args = append(args, "--allowedTools")
-			args = append(args, c.allowedTools...)
-		}
-	}
-
-	prompt := serializeTranscript(req.Messages)
+	args = append(args, c.mcpArgs()...)
 
 	// The claude CLI occasionally exits non-zero RIGHT AFTER init — before any
 	// assistant output or tool call — with empty stderr (an intermittent crash on

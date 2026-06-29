@@ -22,7 +22,11 @@ type claudeResumePlan struct {
 // this turn's just-added user message). Returns a plan whose sentCount is stored
 // after the turn together with the rotated Response.SessionID.
 func (s *Server) planClaudeResume(provider providers.Provider, agentCount int, session db.Session, rawHistory []db.Message, llmReq *providers.Request) claudeResumePlan {
-	enabled := s.settings.Get().ClaudeResume && agentCount == 1 && provider.Name() == "claude-cli"
+	set := s.settings.Get()
+	// Persistent-session mode supersedes --resume: the long-lived process holds the
+	// conversation itself and needs the FULL transcript on a cold (re)start, so do
+	// not trim to the delta here when it is on.
+	enabled := set.ClaudeResume && !set.ClaudePersistentSession && agentCount == 1 && provider.Name() == "claude-cli"
 	plan, resumeID, deltaStart := claudeResumeDecision(enabled, session.CLISessionID, session.CLISentMsgCount, len(rawHistory))
 	if resumeID != "" {
 		// Warm resume: send only the unseen delta and ask the CLI to --resume.

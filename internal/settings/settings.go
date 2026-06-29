@@ -189,10 +189,15 @@ type Settings struct {
 	// --resume <id> and sends only the new turn (not the full transcript), so the
 	// CLI reuses its server-side prompt cache (much cheaper, like Claude Code). Off
 	// by default — opt-in (the resume id is tracked per session in db.Session).
-	ClaudeResume       bool `json:"claudeResume"`
-	EnableDelegation   bool `json:"enableDelegation"`   // run_subagent (isolated subagents / agent→agent delegation)
-	DelegationMaxDepth int  `json:"delegationMaxDepth"` // max subagent nesting (0 = default 3)
-	DelegationMaxCalls int  `json:"delegationMaxCalls"` // max subagent runs per turn (0 = default 8)
+	ClaudeResume bool `json:"claudeResume"`
+	// ClaudePersistentSession keeps ONE long-lived claude-cli process alive per
+	// (session, agent) and feeds turns over stdin (stream-json input) instead of
+	// spawning a fresh process each turn — warm turns ship only the new user
+	// message. Supersedes --resume when on. Default off (experimental). _Docs/17.
+	ClaudePersistentSession bool `json:"claudePersistentSession"`
+	EnableDelegation        bool `json:"enableDelegation"`   // run_subagent (isolated subagents / agent→agent delegation)
+	DelegationMaxDepth      int  `json:"delegationMaxDepth"` // max subagent nesting (0 = default 3)
+	DelegationMaxCalls      int  `json:"delegationMaxCalls"` // max subagent runs per turn (0 = default 8)
 
 	// Spawn guards — the detached background surface: run_subagent wait:"async"
 	// (native) and the bridged spawn_session (claude-cli) + the UI spawn button.
@@ -304,6 +309,13 @@ func Default() Settings {
 		// off when a hook authored for SwarmGo's shell misbehaves under the CLI's.
 		EnableCLIHooks: true,
 
+		// claude-cli session resume default ON: each turn passes --resume <id> and
+		// sends only the delta, so the CLI reuses its warm server-side prompt cache
+		// (cache_read instead of a full cold cache write). Combined with the static/
+		// dynamic prompt split (see providers.ClaudeCLI.buildSystemAndPrompt), this
+		// keeps the cached prefix warm turn-to-turn. _Docs/17.
+		ClaudeResume: true,
+
 		DelegationMaxDepth: 3,
 		DelegationMaxCalls: 8,
 
@@ -408,13 +420,20 @@ type DTO struct {
 
 	MCPGatewayURL string `json:"mcpGatewayUrl"`
 
-	EnableShell        bool `json:"enableShell"`
-	EnableSelfManage   bool `json:"enableSelfManage"`
-	EnableCLIHooks     bool `json:"enableCliHooks"`
-	ClaudeResume       bool `json:"claudeResume"`
-	EnableDelegation   bool `json:"enableDelegation"`
-	DelegationMaxDepth int  `json:"delegationMaxDepth"`
-	DelegationMaxCalls int  `json:"delegationMaxCalls"`
+	EnableShell      bool `json:"enableShell"`
+	EnableSelfManage bool `json:"enableSelfManage"`
+	EnableCLIHooks   bool `json:"enableCliHooks"`
+	ClaudeResume     bool `json:"claudeResume"`
+	// ClaudePersistentSession keeps ONE long-lived claude-cli process alive per
+	// (session, agent) and feeds turns over stdin (stream-json input) instead of
+	// spawning a fresh process each turn. The process holds the conversation
+	// in-memory so warm turns ship only the new user message — maximal prompt-cache
+	// reuse + no per-turn startup. Supersedes --resume when on. Default off
+	// (experimental; validate live before enabling). _Docs/17.
+	ClaudePersistentSession bool `json:"claudePersistentSession"`
+	EnableDelegation        bool `json:"enableDelegation"`
+	DelegationMaxDepth      int  `json:"delegationMaxDepth"`
+	DelegationMaxCalls      int  `json:"delegationMaxCalls"`
 
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"`
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`
@@ -512,13 +531,14 @@ func (s Settings) ToDTO() DTO {
 
 		MCPGatewayURL: s.MCPGatewayURL,
 
-		EnableShell:        s.EnableShell,
-		EnableSelfManage:   s.EnableSelfManage,
-		EnableCLIHooks:     s.EnableCLIHooks,
-		ClaudeResume:       s.ClaudeResume,
-		EnableDelegation:   s.EnableDelegation,
-		DelegationMaxDepth: s.DelegationMaxDepth,
-		DelegationMaxCalls: s.DelegationMaxCalls,
+		EnableShell:             s.EnableShell,
+		EnableSelfManage:        s.EnableSelfManage,
+		EnableCLIHooks:          s.EnableCLIHooks,
+		ClaudeResume:            s.ClaudeResume,
+		ClaudePersistentSession: s.ClaudePersistentSession,
+		EnableDelegation:        s.EnableDelegation,
+		DelegationMaxDepth:      s.DelegationMaxDepth,
+		DelegationMaxCalls:      s.DelegationMaxCalls,
 
 		SpawnMaxConcurrent: s.SpawnMaxConcurrent,
 		SpawnMaxPerTurn:    s.SpawnMaxPerTurn,
@@ -617,13 +637,14 @@ type Patch struct {
 
 	MCPGatewayURL *string `json:"mcpGatewayUrl"`
 
-	EnableShell        *bool `json:"enableShell"`
-	EnableSelfManage   *bool `json:"enableSelfManage"`
-	EnableCLIHooks     *bool `json:"enableCliHooks"`
-	ClaudeResume       *bool `json:"claudeResume"`
-	EnableDelegation   *bool `json:"enableDelegation"`
-	DelegationMaxDepth *int  `json:"delegationMaxDepth"`
-	DelegationMaxCalls *int  `json:"delegationMaxCalls"`
+	EnableShell             *bool `json:"enableShell"`
+	EnableSelfManage        *bool `json:"enableSelfManage"`
+	EnableCLIHooks          *bool `json:"enableCliHooks"`
+	ClaudeResume            *bool `json:"claudeResume"`
+	ClaudePersistentSession *bool `json:"claudePersistentSession"`
+	EnableDelegation        *bool `json:"enableDelegation"`
+	DelegationMaxDepth      *int  `json:"delegationMaxDepth"`
+	DelegationMaxCalls      *int  `json:"delegationMaxCalls"`
 
 	SpawnMaxConcurrent *int `json:"spawnMaxConcurrent"`
 	SpawnMaxPerTurn    *int `json:"spawnMaxPerTurn"`

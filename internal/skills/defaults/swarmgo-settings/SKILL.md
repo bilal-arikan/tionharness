@@ -105,12 +105,18 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 - `enableCliHooks` — pass PreToolUse/PostToolUse hooks to claude-cli agents via
   `--settings` (default true). Turn off to keep hooks native-only when a hook
   authored for SwarmGo's shell misbehaves under the CLI's own hook runner.
-- `claudeResume` — keep the claude-cli session warm across turns (default false,
-  experimental). When on, each single-agent turn passes `--resume <id>` and sends
-  only the new delta (not the full transcript), so the CLI reuses its server-side
-  prompt cache (much cheaper). The resume id is tracked per session; warm mode
-  delegates context management to the CLI, so SwarmGo's own compaction is bypassed
-  for that session. Validate on one chat after enabling.
+- `claudeResume` — keep the claude-cli session warm across turns (default **true**).
+  When on, each single-agent turn passes `--resume <id>` and sends only the new
+  delta (not the full transcript), so the CLI reuses its server-side prompt cache
+  (much cheaper). The resume id is tracked per session; warm mode delegates context
+  management to the CLI, so SwarmGo's own compaction is bypassed for that session.
+  Effective only because the appended system prompt is now byte-stable (the volatile
+  dynamic context rides in the message tail, not the cached system prefix).
+- `claudePersistentSession` — keep ONE long-lived claude-cli process alive per
+  session and feed turns over stdin (stream-json input) instead of spawning a fresh
+  process each turn; warm turns ship only the new user message (default **false**,
+  experimental). Supersedes `claudeResume` when on. Retains context in-process and
+  can reuse the prompt cache, but is unvalidated at scale — leave off unless testing.
 - `enableDelegation` — `run_subagent` (isolated subagent workers, agent→agent
   delegation); `delegationMaxDepth` (1–10, default 3), `delegationMaxCalls`
   (1–100, default 8).

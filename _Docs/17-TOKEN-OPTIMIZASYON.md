@@ -295,6 +295,29 @@ her iki durumda da **ceil 256K** rot getirisini sağlar. Büyük ham pencere ist
 bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen gerilim, §11). Testler:
 `budget_test.go` (`TestEffectiveBudgetAdaptive`), `context_window_test.go` (`TestAdaptiveBudgetFraction`).
 
+## claude-cli Prompt-Cache Sıcaklığı (2026-06-29)
+
+claude-cli sağlayıcısında modele giden gerçek girdi, SwarmGo'nun kendi enjekte
+ettiği katmandan çok daha büyüktür (CLI kendi sistem promptu + araç şemaları + MCP
+köprüsünü ekler; context-preview'daki `cliOverhead` bunu gösterir — ölçüm ~7×).
+Bu yükün her tur yeniden **yazılması** (premium `cacheWrite`) yerine **okunması**
+(ucuz `cacheRead`, ~10× ucuz) için prefix'in sıcak kalması şarttır.
+
+- **Stabil prefix (Faz 1):** `providers.ClaudeCLI.buildSystemAndPrompt` — `--append-
+  system-prompt` yalnız statik `req.System` taşır; volatil `req.SystemDynamic`
+  (saniye-hassas saat + bellek recall + özet) konuşma prompt'una `[Context]` bloğu
+  olarak gider. Aksi halde dinamik her tur cache'lenen ~30K prefix'i bozar (turn 2
+  soğuk → ölçülen sorun).
+- **`--resume` (Faz 2, varsayılan açık):** tek-ajan turunda `--resume <id>` + yalnız
+  delta gönderilir; CLI server-side sıcak cache'ini yeniden kullanır. Canlı: turn 2
+  `cache_read≈45K`, dinamikli turda `cache_read≈55K / cacheWrite≈61`.
+- **Deterministik statik prefix (Faz 3):** statik prompt aynı ajan için byte-aynı
+  (kataloglar Name'e göre sort'lu) → cross-session reuse mümkün.
+- **Kalıcı süreç (Faz 4, opsiyonel/deneysel, `claudePersistentSession` default off):**
+  session başına uzun-ömürlü `claude --input-format stream-json`; sıcak turda yalnız
+  yeni kullanıcı mesajı gider. Context korur; cache TTL'e bağlı ısınır. Hata → tek-
+  atış fallback. `providers.CLISessionPool`, `Runtime.cliSessions`.
+
 ## Ayrıca Bakınız
 
 - **[35-CONTEXT-RESET-HANDOFF.md](35-CONTEXT-RESET-HANDOFF.md)** — Context reset + handoff artifact

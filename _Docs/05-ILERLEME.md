@@ -2,6 +2,20 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-29**
 
+## claude-cli cache sıcaklığı — 4 fazlı çözüm ✅ (2026-06-29)
+
+**Sorun (ölçüldü):** Taze claude-cli session'ı tam soğuk başlıyor ve **tur 2 de soğuk** (cache_read=0). Kök neden: `claudecli.go` statik sistem promptu + **volatil** dinamik bloğu (saniye-hassas saat + bellek recall + özet) TEK `--append-system-prompt`'a birleştiriyordu → cache'lenen ~30K prefix her tur değişiyor.
+
+**Faz 1 — Cache prefix stabilizasyonu (keystone).** `ClaudeCLI.buildSystemAndPrompt`: `--append-system-prompt`'a YALNIZ statik `req.System` gider; volatil `req.SystemDynamic` konuşma prompt'una (stdin) `[Context]…[/Context]` bloğu olarak taşınır → append-system byte-stabil → Claude Code auto-cache sıcak kalır. İzin+MCP arg üretimi `permissionArgs`/`mcpArgs` helper'larına çıkarıldı. **Canlı kanıt:** resume turn 3, volatil dinamikle **cache_read=54.932, cacheWrite=61**.
+
+**Faz 2 — `ClaudeResume` varsayılan açık.** `settings.Default()` → `ClaudeResume: true`. Faz 1 sayesinde resume artık gerçekten ısıtıyor: **turn 2 cache_read=45.420** (canlı). Live test `TestLiveClaudeCLIResume` cache_read>0 assert'i ile genişletildi.
+
+**Faz 3 — Statik prefix cross-session deterministik.** Denetlendi: `composeTurnRequest` zaten temiz statik/dinamik ayrımı yapıyor (saniye-hassas saat dinamikte), tool+skill katalogları zaten Name'e göre sort'lu (`registry.go`/`store.go`). Değişmezlik birim testi `TestBuildSystemAndPrompt` ile kilitlendi (sys yalnız statik, deterministik, dinamik kuyrukta).
+
+**Faz 4 — Kalıcı claude-cli süreci (opsiyonel, deneysel, default off).** `providers.CLISession` + `CLISessionPool` (`claudecli_session.go`): session başına uzun-ömürlü `claude --input-format stream-json` süreci; soğuk başta tam transkript, sıcakta yalnız son kullanıcı mesajı (süreç gerisini hatırlar). `Runtime.cliSessions` pool'u (CloseMCP'de kapanır, 30dk idle eviction), tek-huni `recordedComplete`'te session-id ile devreye girer (hata → tek-atış fallback); `ClaudePersistentSession` açıkken `planClaudeResume` trim'i devre dışı. Ayar tüm sitelere bağlandı (Settings/DTO/Patch/Apply/tunable/server apply). **Canlı:** context korunuyor (ZEBRA-9) + cache ısındı (turn 2 cache_read=87.672); warmth TTL'e bağlı, default off. Live test `TestLivePersistentSession`.
+
+Doğrulama: `go build ./...` + `go vet` + paket testleri temiz; `SWARMGO_LIVE_CLI=1` ile iki live test PASS.
+
 ## Context-preview "CLI ek yükü" satırı ✅ (2026-06-29)
 
 **Sorun:** `GET /api/sessions/{id}/context-preview` çıktısı (`systemTokens`/

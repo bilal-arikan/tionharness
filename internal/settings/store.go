@@ -345,6 +345,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyBool(&next.EnableSelfManage, p.EnableSelfManage)
 	applyBool(&next.EnableCLIHooks, p.EnableCLIHooks)
 	applyBool(&next.ClaudeResume, p.ClaudeResume)
+	applyBool(&next.ClaudePersistentSession, p.ClaudePersistentSession)
 	applyBool(&next.EnableDelegation, p.EnableDelegation)
 	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
