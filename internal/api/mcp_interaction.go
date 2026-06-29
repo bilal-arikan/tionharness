@@ -380,17 +380,17 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 // callAsk emits a transient ask step and blocks until the user answers (via
 // POST /api/chat/control {action:"answer"}), the turn ends, or the timeout fires.
 func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
-	var in struct {
-		Question string   `json:"question"`
-		Options  []string `json:"options"`
-	}
-	if err := json.Unmarshal(args, &in); err != nil {
+	// Shared tolerant parser: accepts SwarmGo's {question, options} and claude-cli's
+	// native AskUserQuestion shapes (option objects + questions[] wrapper) so a model
+	// trained on the native tool no longer errors with a schema mismatch (SES73).
+	question, options, err := tools.ParseAskInput(args)
+	if err != nil {
 		return interaction.CallResult{Text: "invalid ask_user input: " + err.Error(), IsError: true}, nil
 	}
-	if strings.TrimSpace(in.Question) == "" {
+	if strings.TrimSpace(question) == "" {
 		return interaction.CallResult{Text: "question is required", IsError: true}, nil
 	}
-	return b.blockForAnswer(ctx, run, in.Question, in.Options, func(a string) string { return a })
+	return b.blockForAnswer(ctx, run, question, options, func(a string) string { return a })
 }
 
 // callConfirm blocks for a yes/no decision on a risky action and normalises it.

@@ -2,6 +2,21 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-29**
 
+## `ask_user` şeması claude-cli native AskUserQuestion'a hizalandı ✅ (2026-06-29)
+
+**Sorun (SES73):** claude-cli modeli köprülü `ask_user`'ı native `AskUserQuestion`
+şemasıyla çağırdı — `options`'ı **obje dizisi** (`[{"content":"..."}]`) olarak yolladı;
+SwarmGo ise `[]string` bekliyordu → `json: cannot unmarshal array into ... askInput.options
+of type string` → 3 ardışık `ask_user` hatası, model 4. turda options'ı bırakıp düz metinle sordu.
+
+**Çözüm:** `ask_user` şeması native ile uyumlu hale getirildi (`internal/tools/builtin_ask.go`):
+- `options` öğesi artık **string VEYA obje** olabilir (`{label|content|value|text|description}`
+  → görünen metne normalize; `askOption` + `flexOptions`).
+- Native **`questions[]` wrapper** da tolere edilir (ilki kullanılır — SwarmGo tek soru sorar).
+- Ortak `tools.ParseAskInput` hem native tool yolunda hem claude-cli Interaction MCP köprüsünde
+  (`callAsk`) kullanılır → iki yol birebir aynı çözümler. Şema `oneOf` (string|object), ekstra
+  native alanlar (header/multiSelect) yok sayılır. Test: `TestParseAskInput` (7 şekil) geçti.
+
 ## Doğrulama araçları (skill/config/mermaid) + interaction köprü konsolidasyonu ✅ (2026-06-29)
 
 External Agent `session-tools-core` ↔ SwarmGo araç eşleştirmesindeki boşluk analizinden
