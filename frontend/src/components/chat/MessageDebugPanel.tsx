@@ -55,14 +55,38 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
               Bu mesaj için debug verisi yok (debug günlüğü kapalı ya da bu mesaj önce üretilmiş).
             </p>
           )}
-          {data && data.found && (
+          {data && data.found && (() => {
+            const totalPrompt = data.inputTokens + data.cacheReadTokens + data.cacheWriteTokens
+            const hitRate = totalPrompt > 0 ? data.cacheReadTokens / totalPrompt : 0
+            const warm = data.cacheReadTokens > 0
+            const tokPerSec = data.durMs > 0 ? Math.round(data.outputTokens / (data.durMs / 1000)) : 0
+            return (
             <div className="space-y-2">
+              {/* Cold vs warm: did this turn reuse the prompt cache, or pay a full
+                  cold write? The single biggest cost signal per message. */}
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    warm
+                      ? 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]'
+                      : 'bg-[color-mix(in_srgb,var(--color-warning,#d97706)_15%,transparent)] text-[var(--color-warning,#d97706)]'
+                  }`}
+                  title={warm ? 'Bu tur sıcak prompt cache\'ini yeniden kullandı (ucuz).' : 'Bu tur soğuk başladı — istem cache\'e tam yazıldı (pahalı).'}
+                >
+                  {warm ? `🔥 sıcak · %${(hitRate * 100).toFixed(0)} cache` : '❄ soğuk'}
+                </span>
+              </div>
               {data.model && <Row label="Model" value={data.model} mono />}
               <Row label="Süre" value={fmtMs(data.durMs)} />
               <Row
                 label="Maliyet"
                 value={`${fmtUSD(data.costUSD)}${data.estimated ? ' ≈' : ''}`}
               />
+              <Row label="Toplam istem" value={`${fmtTok(totalPrompt)} token`} />
+              {tokPerSec > 0 && <Row label="Çıktı hızı" value={`${tokPerSec} tok/s`} />}
+              {data.savingsUSD > 0 && (
+                <Row label="Cache tasarrufu" value={`${fmtUSD(data.savingsUSD)}`} />
+              )}
               <div className="grid grid-cols-2 gap-1">
                 <Stat label="Girdi" value={fmtTok(data.inputTokens)} />
                 <Stat label="Çıktı" value={fmtTok(data.outputTokens)} />
@@ -101,7 +125,8 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
                 <p className="text-[10px] text-[var(--color-danger)]">{data.lastError}</p>
               )}
             </div>
-          )}
+            )
+          })()}
         </div>
       )}
     </div>

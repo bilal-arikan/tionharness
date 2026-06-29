@@ -412,6 +412,24 @@ export function BudgetPanel({ onError }: Props) {
             />
           </div>
 
+          {/* General claude-cli overhead note: when a subscription CLI provider is
+              in use (estimated cost), remind that the real billed input dwarfs the
+              context-preview segment estimate (the CLI injects its own prompt +
+              tools + MCP bridge), and that THESE Budget figures are the real spend. */}
+          {usage.totals.estimated && (
+            <div className="mb-5 flex items-start gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#d97706)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#d97706)_8%,transparent)] px-3 py-2 text-[11px] text-[var(--color-text-dim)]">
+              <span className="text-[var(--color-warning,#d97706)]">ⓘ</span>
+              <span>
+                <strong className="text-[var(--color-text)]">claude-cli ek yükü:</strong> Bu sağlayıcı
+                kendi sistem promptu + araç şemaları + MCP köprüsünü modele ekler; gerçek girdi,
+                bağlam-önizlemesindeki (context-preview) segment tahmininden çok büyüktür. Buradaki
+                rakamlar <strong>gerçek faturalanan</strong> tüketimdir (eşdeğer-API maliyeti) —
+                önizleme tahminine değil bunlara güvenin. Tek bir mesajın kırılımı için sohbette o
+                mesajın debug butonunu kullanın.
+              </span>
+            </div>
+          )}
+
           {/* Window-cumulative ROI — cross-session totals over the selected
               window (today's cards above are just one day). The cache hit rate
               and total savings are the caching ROI signal. */}

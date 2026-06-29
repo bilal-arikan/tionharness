@@ -646,14 +646,14 @@ func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []
 
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
 	// Persistent claude-cli session (opt-in): route the turn through the warm
-	// long-lived process keyed by session id (the fingerprint includes the agent's
-	// system prompt, so a different agent in the same session safely cold-restarts
-	// with the full transcript). Any failure falls back to a one-shot Complete, so
-	// the feature can never wedge a turn. Keyed by session id only → single-agent
-	// sessions stay warm; multi-agent ones cold-restart per agent (still correct).
+	// long-lived process keyed by SESSION + AGENT, so each agent in a multi-agent
+	// session keeps its OWN warm process (with its own system prompt) instead of
+	// thrashing one process cold on every agent switch. Any failure falls back to a
+	// one-shot Complete, so the feature can never wedge a turn.
 	if cli, ok := provider.(*providers.ClaudeCLI); ok && r.cliSessions != nil && r.tun.ClaudePersistentSession() {
 		if sid := SessionIDFrom(ctx); sid != "" {
-			if resp, perr := r.cliSessions.Turn(ctx, sid, cli, req, req.OnEvent); perr == nil {
+			key := sid + "|" + agent.ID
+			if resp, perr := r.cliSessions.Turn(ctx, key, cli, req, req.OnEvent); perr == nil {
 				r.RecordUsage(ctx, agent, resp.Model, resp.Usage)
 				return resp, nil
 			} else {
