@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, Share2, Radio } from 'lucide-react'
 import { api } from '../../api'
-import type { WorkspaceGraph, WorkspaceNodeType } from '../../types'
+import type { WorkspaceGraph, WorkspaceNodeType, BoardColumnDef } from '../../types'
 import { VisNetworkGraph } from '../graph/VisNetworkGraph'
 import { workspaceToVis, EDGE_LEGEND, NODE_LAYERS, type WorkspaceMode } from '../../lib/relationGraph'
 
@@ -17,6 +17,10 @@ interface Props {
 export function NetworkPanel({ onError }: Props) {
   const [graph, setGraph] = useState<WorkspaceGraph | null>(null)
   const [loading, setLoading] = useState(false)
+  // User-defined Kanban columns (mirrors the Board column editor). When set,
+  // the live-mode column anchors in the network are taken from here instead of
+  // the built-in five-status defaults.
+  const [boardColumns, setBoardColumns] = useState<BoardColumnDef[]>([])
   const [density, setDensity] = useState(1)
   // Default to the live board-column flow so the animated, self-refreshing
   // network is the primary view; users can switch to the static relation web.
@@ -36,9 +40,11 @@ export function NetworkPanel({ onError }: Props) {
 
   const load = useCallback(() => {
     setLoading(true)
-    api
-      .workspaceGraph()
-      .then(setGraph)
+    Promise.all([api.workspaceGraph(), api.getWorkspaceSettings()])
+      .then(([g, s]: [WorkspaceGraph, { boardColumns?: BoardColumnDef[] }]) => {
+        setGraph(g)
+        if (s && Array.isArray(s.boardColumns)) setBoardColumns(s.boardColumns)
+      })
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoading(false))
   }, [onError])
@@ -46,6 +52,19 @@ export function NetworkPanel({ onError }: Props) {
   useEffect(() => {
     load()
   }, [load])
+
+  // Board editor save hook: re-pull workspace settings whenever the Board
+  // column editor saves. Works without SSE and across workspaces.
+  useEffect(() => {
+    const handler = () => {
+      api
+        .getWorkspaceSettings()
+        .then((s: { boardColumns?: BoardColumnDef[] }) => { if (s && Array.isArray(s.boardColumns)) setBoardColumns(s.boardColumns) })
+        .catch(() => { /* non-fatal */ })
+    }
+    window.addEventListener('swarmgo:board-columns-changed', handler)
+    return () => window.removeEventListener('swarmgo:board-columns-changed', handler)
+  }, [])
 
   // Live mode: re-fetch the graph when an autonomous event (task run, schedule)
   // lands, so the flow animates as agents pick up / finish work. A
@@ -65,8 +84,8 @@ export function NetworkPanel({ onError }: Props) {
   }, [mode, load])
 
   const { nodes, edges } = useMemo(
-    () => (graph ? workspaceToVis(graph, visible, mode) : { nodes: [], edges: [] }),
-    [graph, visible, mode],
+    () => (graph ? workspaceToVis(graph, visible, mode, boardColumns) : { nodes: [], edges: [] }),
+    [graph, visible, mode, boardColumns],
   )
 
   // In live mode tasks/columns are intrinsic; the flow/skill/MCP layers stay

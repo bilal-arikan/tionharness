@@ -97,6 +97,9 @@ export function TaskBoard({ agents, onError }: Props) {
     const updated = await api.updateWorkspaceSettings({ boardColumns: cols })
     setColumns(updated.boardColumns ?? cols)
     setEditorOpen(false)
+    // Tell the Network screen so its live-mode column anchors can refresh
+    // immediately (without waiting for an autonomous task event).
+    window.dispatchEvent(new CustomEvent('swarmgo:board-columns-changed'))
   }
 
   // A task is a passive board item: created from a description (title is

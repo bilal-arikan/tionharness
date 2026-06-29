@@ -8,6 +8,7 @@ import type {
   WorkspaceGraphEdge,
   WorkspaceNodeType,
   MemoryGraph,
+  BoardColumnDef,
 } from '../types'
 
 // Edge colors per workspace relationship kind, so the network reads at a glance.
@@ -244,7 +245,23 @@ export function workspaceToVis(
   graph: WorkspaceGraph,
   visible?: Set<WorkspaceNodeType>,
   mode: WorkspaceMode = 'relation',
+  // User-defined Kanban columns (saved in WorkspaceSettings.boardColumns). When
+  // supplied in live mode these REPLACE the hard-coded BOARD_COLUMNS set so
+  // newly added / renamed / reordered columns appear on the Network screen.
+  // Falls back to the static defaults when omitted.
+  boardColumns?: BoardColumnDef[],
 ): VisData {
+  // Effective live-mode column anchors: user-defined when non-empty, else the
+  // built-in defaults (a workspace with no saved columns degrades to the 5
+  // standard statuses rather than going column-less).
+  const liveColumns: { state: string; label: string; color: string }[] =
+    boardColumns && boardColumns.length > 0
+      ? boardColumns.map((c) => ({
+          state: c.key,
+          label: c.label,
+          color: c.color || STATUS_COLOR[c.key] || '#64748b',
+        }))
+      : BOARD_COLUMNS
   const live = mode === 'live'
   // Visibility: agents always; tasks always in live; flow/skill/mcp by toggle.
   const show = (t: WorkspaceNodeType): boolean => {
@@ -265,9 +282,10 @@ export function workspaceToVis(
   }
 
   if (live) {
-    // Fixed column anchors across the top.
-    const n = BOARD_COLUMNS.length
-    BOARD_COLUMNS.forEach((col, i) => {
+    // Fixed column anchors across the top -- driven by the user's Kanban
+    // columns (boardColumns), falling back to the static defaults.
+    const n = liveColumns.length
+    liveColumns.forEach((col, i) => {
       const x = (i - (n - 1) / 2) * COL_GAP
       nodes.push({
         id: COL_PREFIX + col.state,
