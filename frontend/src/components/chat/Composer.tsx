@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Paperclip } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '../../types'
 import { AttachmentChip } from './AttachmentChip'
@@ -138,6 +138,14 @@ export function Composer({
     el.style.height = 'auto'
     el.style.height = `${el.scrollHeight}px`
   }, [text])
+
+  // Focus the input whenever the active session changes — opening a new chat or
+  // switching to an existing one lands the cursor in the prompt box so the user
+  // can type immediately. Skipped while disabled (no session / read-only state).
+  useEffect(() => {
+    if (disabled) return
+    taRef.current?.focus()
+  }, [sessionId, disabled])
 
   // uploadFiles uploads each file, tracking per-file progress in `pending`. Image
   // files get a local object-URL preview shown immediately. Requires a session.
