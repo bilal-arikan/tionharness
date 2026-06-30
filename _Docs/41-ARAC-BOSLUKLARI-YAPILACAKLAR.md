@@ -21,7 +21,7 @@
 | 1 | `WebSearch` | Yeni araç | **P0** | ✅ Tamamlandı (2026-06-30) |
 | 2 | `call_llm` (hafif LLM alt-görevi) | Yeni araç | **P1** | Açık |
 | 3 | `transform_data` | Yeni araç | **P1** | ✅ Tamamlandı (2026-06-30) |
-| 4 | `PowerShell` (ayrı shell) | Yeni araç | **P1** | Açık |
+| 4 | `PowerShell` (ayrı shell) | Yeni araç | **P1** | ✅ Tamamlandı (2026-06-30) |
 | 5 | `get_session_info` | Yeni araç | **P2** | Açık |
 | 6 | `set_session_labels` / `set_session_status` | Yeni araç | **P2** | Açık |
 | 7 | `update_user_preferences` | Yeni araç | **P2** | Açık (kısmen core_memory) |
@@ -99,18 +99,27 @@
 - **Eklenen dosyalar:** `internal/tools/builtin_transform_data.go`, `transform_data_env.go`,
   `builtin_transform_data_test.go` (8 test). `classify.go` + `toolsetup.go` kaydı.
 
-### 4. `PowerShell` — ayrı Windows shell — **P1**
+### 4. `PowerShell` — ayrı Windows shell — **P1** — ✅ TAMAMLANDI (2026-06-30)
 
-- **Durum:** Yalnızca `Bash` var (`builtin_shell.go`). Kullanıcı **Windows 11 + PowerShell tercihli**;
-  CLAUDE.md "terminal komutlarını PowerShell'e göre üret" diyor.
-- **Neden önemli:** Bash POSIX semantiği Windows-native işlerde (registry, `Get-ChildItem`, env,
-  cmdlet'ler) eksik/yanlış. the external agent project'ta ayrı `PowerShell` aracı tam da bu yüzden var.
-- **Yaklaşım:** `Bash` ile kardeş bir `PowerShell` builtin'i (`powershell.exe`/`pwsh` seçimi, aynı izin
-  modu + sandbox kuralları, aynı `RiskExec` sınıfı). Ortak yürütme çekirdeği paylaşılır; yalnız komut
-  sarmalama farkı.
-- **Dosyalar:** `internal/tools/builtin_shell.go` içine ikinci `Def()` veya yeni `builtin_powershell.go`
-  (+ test), `registry.go`, `classify.go` risk girdisi.
-- **Risk sınıfı:** `RiskExec`.
+- **Durum:** ~~Yalnızca `Bash` var (Windows'ta gizlice PowerShell çalıştırıyordu).~~ **İki ayrı araç
+  uygulandı** (Seçenek B).
+- **Neden önemli:** Araç adı model'e en güçlü sözdizimi sinyali. "Bash" adı altında PowerShell çalıştırmak,
+  model'in `$VAR`/`&&`/`2>/dev/null` gibi POSIX-izm üretmesine yol açıyordu.
+- **Uygulanan yaklaşım:**
+  - **`Bash`** = POSIX (Unix: `/bin/sh`; Windows: `bash.exe` **varsa**, yoksa kaydedilmez).
+  - **`PowerShell`** = `pwsh` (7+ tercih) → `powershell.exe` (5.1 fallback). Windows'ta hep var.
+  - Her araç **yalnızca backing shell'i mevcutsa** kaydedilir; her OS'te en az biri garantili
+    (Unix→Bash, Windows→PowerShell). Ortak yürütme çekirdeği (`runShell`): timeout, sandbox, çıktı-cap,
+    confined git-guard, streaming — tek fark komut sarmalama.
+  - **CLI yolu:** Tek OS-native shell köprülenir (Windows→PowerShell, Unix→Bash). `NewShellRunner` aynı
+    shell'i seçer, `callShell` her iki adı da dispatch eder, `coreInteractionTools`'a `PowerShell` eklendi.
+    Davranış aynı (Windows'ta zaten PowerShell çalışıyordu) — sadece isim doğrulandı.
+  - **Windows:** WindowsApps alias stub'ları `lookInterpreter` ile atlanır.
+- **Karar:** `pwsh` > `powershell.exe` (modern sözdizimi: ternary, `&&`).
+- **Eklenen/değişen dosyalar:** `builtin_shell.go` (refactor + `PowerShellTool`), `builtin_shell_test.go`
+  (4 test), `classify.go` (`PowerShell: RiskExec`), `toolsetup.go` (koşullu kayıt), `runtime.go`
+  (`NewShellRunner` OS-pick), `mcp_interaction.go` (CLI advertise + core + dispatch).
+- **Risk sınıfı:** `RiskExec` (her iki shell).
 
 ### 5. `get_session_info` — tekil oturum metadata — **P2**
 

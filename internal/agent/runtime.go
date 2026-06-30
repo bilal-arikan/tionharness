@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -345,9 +346,15 @@ func (r *Runtime) NewShellRunner() func(ctx context.Context, args json.RawMessag
 	}
 	// Resolve the working dir per call so the bridged shell honours the session's
 	// WorkingDir override (the ctx carries the session id), matching the native
-	// path. Unconfined, like an interactive turn.
+	// path. Unconfined, like an interactive turn. The CLI path exposes ONE shell:
+	// the OS-native one (PowerShell on Windows, Bash on Unix) — the same identity the
+	// bridge advertises (see interactionToolSpecs) and dispatches (callShell).
 	return func(ctx context.Context, args json.RawMessage) (string, error) {
-		return tools.NewShellTool(tools.NewSandbox(r.effectiveWorkDir(ctx))).Call(ctx, args)
+		sb := tools.NewSandbox(r.effectiveWorkDir(ctx))
+		if runtime.GOOS == "windows" {
+			return tools.NewPowerShellTool(sb).Call(ctx, args)
+		}
+		return tools.NewShellTool(sb).Call(ctx, args)
 	}
 }
 

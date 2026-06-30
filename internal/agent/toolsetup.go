@@ -231,16 +231,22 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			// files, rooted at this turn's working dir. Read-only.
 			tools.NewConfigValidateTool(sb),
 		)
-		// The shell tool is high-risk; offer it only when explicitly enabled.
-		// transform_data also runs arbitrary host code (python/node/bun) — though with
-		// a stripped env and a timeout — so it shares the same execution gate. It lets
-		// the agent reshape large data into a JSON file (referenced as a table src)
-		// without inlining rows into context.
+		// The shell tools are high-risk; offer them only when explicitly enabled. Two
+		// siblings share one execution core: Bash (POSIX — /bin/sh, or bash.exe on
+		// Windows) and PowerShell (pwsh/powershell.exe). Each is registered only when
+		// its backing shell is present, so the model gets a correctly-NAMED tool and
+		// emits the matching syntax. On every OS at least one is available (Unix→Bash,
+		// Windows→PowerShell). transform_data also runs arbitrary host code (python/
+		// node/bun) under the same gate; it reshapes large data into a JSON file
+		// (referenced as a table src) without inlining rows into context.
 		if r.tun.ShellEnabled() {
-			builtins = append(builtins,
-				tools.NewShellTool(sb),
-				tools.NewTransformDataTool(sb),
-			)
+			if sh := tools.NewShellTool(sb); sh.Available() {
+				builtins = append(builtins, sh)
+			}
+			if ps := tools.NewPowerShellTool(sb); ps.Available() {
+				builtins = append(builtins, ps)
+			}
+			builtins = append(builtins, tools.NewTransformDataTool(sb))
 		}
 	}
 

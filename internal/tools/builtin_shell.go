@@ -6,13 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-
-	"github.com/bilal-arikan/swarmgo/internal/proc"
 	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/bilal-arikan/swarmgo/internal/proc"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
@@ -22,65 +21,159 @@ const (
 	shellDefaultTimeout = 30 * time.Second
 )
 
-// ShellTool runs a shell command. It is a high-risk tool: it is only registered
-// when explicitly enabled (see the agent runtime's shell gate) and runs with a
-// bounded timeout. It starts in the sandbox base directory but is NOT confined
-// to it — commands may operate on any path. On Windows it uses PowerShell,
-// elsewhere /bin/sh.
-type ShellTool struct{ sb Sandbox }
+// shellArgs is the shared input schema for both the Bash and PowerShell tools.
+type shellArgs struct {
+	Command    string `json:"command"`
+	TimeoutSec int    `json:"timeout_sec"`
+}
 
-// NewShellTool binds the tool to a base working directory (Sandbox.Root).
-func NewShellTool(sb Sandbox) ShellTool { return ShellTool{sb: sb} }
+// resolvePOSIXShell finds the POSIX shell to back the Bash tool: /bin/sh on Unix,
+// or a bash.exe (git-bash/WSL) on Windows. Returns ok=false on Windows when no
+// bash is on PATH, so the Bash tool is simply not offered there (PowerShell is).
+func resolvePOSIXShell() (string, bool) {
+	if runtime.GOOS == "windows" {
+		return lookInterpreter("bash")
+	}
+	return "/bin/sh", true
+}
+
+// resolvePowerShell finds a PowerShell host for the PowerShell tool, preferring
+// PowerShell 7+ (pwsh, cross-platform, modern syntax) over Windows PowerShell 5.1
+// (powershell.exe). Returns ok=false when neither is present (typical on Unix
+// without pwsh installed), so the tool is not offered there.
+func resolvePowerShell() (string, bool) {
+	return lookInterpreter("pwsh", "powershell")
+}
+
+// ShellTool runs a command through the POSIX shell (the "Bash" tool): /bin/sh on
+// Unix, bash.exe on Windows. High-risk (RiskExec), gated behind the shell switch.
+// It starts in the sandbox base directory but is NOT confined to it. Its
+// PowerShell sibling (PowerShellTool) handles Windows-native shells.
+type ShellTool struct {
+	sb  Sandbox
+	exe string
+}
+
+// NewShellTool binds the tool to a base working directory and resolves the POSIX
+// shell. Use Available to check whether a shell was found before registering it.
+func NewShellTool(sb Sandbox) ShellTool {
+	exe, _ := resolvePOSIXShell()
+	return ShellTool{sb: sb, exe: exe}
+}
+
+// Available reports whether a backing POSIX shell was found (always true on Unix;
+// on Windows only when a bash.exe is on PATH).
+func (t ShellTool) Available() bool { return t.exe != "" }
 
 func (ShellTool) Def() providers.ToolDef {
-	shell := "/bin/sh -c"
-	if runtime.GOOS == "windows" {
-		shell = "PowerShell"
-	}
 	return providers.ToolDef{
 		Name: "Bash",
-		Description: fmt.Sprintf(
-			"Run a shell command (%s) and return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may cd to and operate on any path. Bounded by a timeout (default 30s, max 120s). Use for builds, tests, and file operations. "+
-				"The command runs DIRECTLY in the shell above — on Windows do NOT wrap it in another `powershell -Command \"...\"` / `powershell.exe -Command \"...\"`; pass the PowerShell statements as-is (e.g. `$x = Invoke-RestMethod ...; $x.foo`). Wrapping it re-parses the string and strips `$variable` references.",
-			shell,
-		),
-		InputSchema: json.RawMessage(`{
-			"type":"object",
-			"properties":{
-				"command":{"type":"string","description":"The command line to execute"},
-				"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120)"}
-			},
-			"required":["command"],
-			"additionalProperties":false
-		}`),
+		Description: "Run a command through the POSIX shell (/bin/sh on Unix, bash.exe on Windows) and " +
+			"return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may " +
+			"operate on any path. Bounded by a timeout (default 30s, max 120s). Use POSIX/Bash syntax. On " +
+			"Windows prefer the PowerShell tool for native tasks (cmdlets, registry, $env: variables).",
+		InputSchema: shellInputSchema,
 	}
 }
 
-// Call runs the command and returns its full output (non-streaming).
 func (t ShellTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	return t.CallStream(ctx, input, nil)
 }
 
-// CallStream runs the command, forwarding each output chunk to onChunk (when
-// non-nil) as the process writes it, while still returning the full (capped)
-// output. Implements StreamingTool so the agent loop can surface live tool
-// output as tool_delta steps.
 func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChunk func(string)) (string, error) {
-	var args struct {
-		Command    string `json:"command"`
-		TimeoutSec int    `json:"timeout_sec"`
+	args, err := parseShellArgs(input)
+	if err != nil {
+		return "", err
 	}
+	return runShell(ctx, t.sb, args, onChunk, func(runCtx context.Context, command string) *exec.Cmd {
+		return proc.CommandContext(runCtx, t.exe, "-c", command)
+	})
+}
+
+// PowerShellTool runs a command through PowerShell (pwsh preferred, else
+// powershell.exe) — the Windows-native sibling of the Bash tool. Same execution
+// core, risk tier and gating; only the command wrapping and syntax differ. Giving
+// it an explicit name lets the model emit correct PowerShell syntax (cmdlets,
+// $env:VAR, no &&, 2>$null) instead of guessing from a "Bash"-named tool.
+type PowerShellTool struct {
+	sb  Sandbox
+	exe string
+}
+
+// NewPowerShellTool binds the tool to a base working directory and resolves a
+// PowerShell host. Use Available to check one was found before registering it.
+func NewPowerShellTool(sb Sandbox) PowerShellTool {
+	exe, _ := resolvePowerShell()
+	return PowerShellTool{sb: sb, exe: exe}
+}
+
+// Available reports whether a PowerShell host (pwsh/powershell.exe) was found.
+func (t PowerShellTool) Available() bool { return t.exe != "" }
+
+func (PowerShellTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name: "PowerShell",
+		Description: "Run a command through PowerShell (pwsh 7+ if available, else Windows PowerShell 5.1) " +
+			"and return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but " +
+			"may operate on any path. Bounded by a timeout (default 30s, max 120s). Use PowerShell syntax: " +
+			"cmdlets (Get-ChildItem), $env:VAR for environment variables, 2>$null (not 2>/dev/null), and " +
+			"registry PSDrives (HKLM:\\). The command runs DIRECTLY in PowerShell — do NOT wrap it in another " +
+			"`powershell -Command \"...\"` (that re-parses the string and strips $variable references).",
+		InputSchema: shellInputSchema,
+	}
+}
+
+func (t PowerShellTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	return t.CallStream(ctx, input, nil)
+}
+
+func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, onChunk func(string)) (string, error) {
+	args, err := parseShellArgs(input)
+	if err != nil {
+		return "", err
+	}
+	return runShell(ctx, t.sb, args, onChunk, func(runCtx context.Context, command string) *exec.Cmd {
+		// Defensive unwrap: this tool already runs inside PowerShell. Agents often
+		// redundantly wrap their command in `powershell -Command "..."`, which makes
+		// the OUTER shell expand (and strip) any $variable before the inner shell sees
+		// it — breaking scripts like `$x = ...; $x | ...`. Strip one redundant wrapper.
+		command = unwrapRedundantPowershell(command)
+		return proc.CommandContext(runCtx, t.exe, "-NoProfile", "-NonInteractive", "-Command", command)
+	})
+}
+
+// shellInputSchema is shared by both shell tools.
+var shellInputSchema = json.RawMessage(`{
+	"type":"object",
+	"properties":{
+		"command":{"type":"string","description":"The command line to execute"},
+		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120)"}
+	},
+	"required":["command"],
+	"additionalProperties":false
+}`)
+
+func parseShellArgs(input json.RawMessage) (shellArgs, error) {
+	var args shellArgs
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", argErr(err)
+		return args, argErr(err)
 	}
 	if strings.TrimSpace(args.Command) == "" {
-		return "", fmt.Errorf("command is required")
+		return args, fmt.Errorf("command is required")
 	}
+	return args, nil
+}
+
+// runShell is the shared execution core for the Bash and PowerShell tools: the
+// confined-mode git guard, timeout, working directory, capped streaming capture
+// and uniform output formatting. build constructs the *exec.Cmd for the resolved
+// command — the only part that differs between shells.
+func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(string), build func(ctx context.Context, command string) *exec.Cmd) (string, error) {
 	// Autonomous brake: when the sandbox is confined (autonomous turn + the
 	// AutonomousConfine guard), block network-mutating git operations. A scheduled
 	// or spawned agent must not push to a remote without a human in the loop;
 	// interactive chat (unconfined) is unaffected. Best-effort substring guard.
-	if t.sb.Confined && isNetworkMutatingGit(args.Command) {
+	if sb.Confined && isNetworkMutatingGit(args.Command) {
 		return "", fmt.Errorf("blocked in confined (autonomous) mode: this command pushes to a git remote — run it from an interactive chat session instead")
 	}
 
@@ -94,19 +187,8 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		// Defensive unwrap: this tool already runs inside powershell.exe. Agents
-		// often redundantly wrap their command in `powershell -Command "..."`,
-		// which makes the OUTER shell expand (and strip) any $variable before the
-		// inner shell ever sees it — breaking scripts like `$x = ...; $x | ...`.
-		// Strip a single redundant wrapper so the statements run directly.
-		args.Command = unwrapRedundantPowershell(args.Command)
-		cmd = proc.CommandContext(runCtx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", args.Command)
-	} else {
-		cmd = proc.CommandContext(runCtx, "/bin/sh", "-c", args.Command)
-	}
-	cmd.Dir = t.sb.Root
+	cmd := build(runCtx, args.Command)
+	cmd.Dir = sb.Root
 
 	// Same writer for stdout+stderr: exec serialises writes when they are equal,
 	// so onChunk is never called concurrently.
@@ -149,7 +231,7 @@ func isNetworkMutatingGit(cmd string) bool {
 // powershellWrapperRe matches a command that is ENTIRELY a redundant invocation
 // of `powershell[.exe] [flags] -Command "<inner>"` (or `-c "<inner>"`). Only the
 // quoted single-argument form is unwrapped — anything more complex is left as-is.
-var powershellWrapperRe = regexp.MustCompile(`(?is)^\s*powershell(?:\.exe)?\s+(?:-\S+\s+)*-c(?:ommand)?\s+"(.*)"\s*$`)
+var powershellWrapperRe = regexp.MustCompile(`(?is)^\s*(?:pwsh|powershell)(?:\.exe)?\s+(?:-\S+\s+)*-c(?:ommand)?\s+"(.*)"\s*$`)
 
 // unwrapRedundantPowershell strips one redundant outer `powershell -Command "..."`
 // wrapper (see the call site for why). It only unwraps when the whole command is

@@ -45,6 +45,8 @@ var toolRisk = map[string]Risk{
 	"MultiEdit":    RiskWrite,
 	"NotebookEdit": RiskWrite,
 	"Bash":         RiskExec,
+	"PowerShell":   RiskExec, // Windows-native shell sibling of Bash
+
 	// transform_data runs an arbitrary host script (python/node/bun) in a
 	// subprocess. The env is stripped of secrets and it is time-bounded, but it is
 	// still host code execution — same risk tier as the shell.

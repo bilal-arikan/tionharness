@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ func (b *interactionBackend) Valid(token string) bool {
 // the tier filter below and the per-tier CLI allowlist.
 var coreInteractionTools = map[string]bool{
 	"Bash":                 true,
+	"PowerShell":           true, // Windows-native shell (OS-default bridged shell)
 	"ask_user":             true,
 	"request_confirmation": true,
 	"todo_write":           true,
@@ -192,11 +194,16 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		tools.NewSkillSearchTool(nil).Def(),
 	}
 	// shell is bridged only when enabled, mirroring the native tool loop's shell
-	// gate. It lets a claude-cli agent run commands through SwarmGo's sandboxed
-	// shell (PowerShell on Windows) instead of the CLI's native POSIX Bash — so
-	// the CLI's Bash can be safely disallowed and shell behaviour stays consistent.
+	// gate. The CLI gets ONE shell: the OS-native one — PowerShell on Windows, Bash
+	// on Unix — so a claude-cli agent runs commands through SwarmGo's sandboxed shell
+	// (and the CLI's own native Bash can be safely disallowed). The runner that backs
+	// it (NewShellRunner) picks the SAME shell, and callShell dispatches both names.
 	if tun != nil && tun.ShellEnabled() {
-		defs = append(defs, tools.NewShellTool(tools.Sandbox{}).Def())
+		if runtime.GOOS == "windows" {
+			defs = append(defs, tools.NewPowerShellTool(tools.Sandbox{}).Def())
+		} else {
+			defs = append(defs, tools.NewShellTool(tools.Sandbox{}).Def())
+		}
 	}
 	// spawn_session is a self-management capability: advertise it on the CLI path
 	// only when self-manage is enabled, mirroring the native tool loop's gating.
@@ -358,7 +365,9 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callUseSkill(run, args)
 	case "skill_search":
 		return b.callSkillSearch(run, args)
-	case "Bash":
+	case "Bash", "PowerShell":
+		// One bridged shell per OS (Bash on Unix, PowerShell on Windows); the runner
+		// resolves which one. Accept both names so the dispatch never depends on OS.
 		return b.callShell(ctx, run, args)
 	case "run_subagent":
 		return b.callRunSubagent(ctx, run, args)
