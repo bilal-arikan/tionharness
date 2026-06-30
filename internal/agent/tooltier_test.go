@@ -49,6 +49,26 @@ func TestWorkspaceTierFiltersCatalog(t *testing.T) {
 	}
 }
 
+// TestWebSearchVisibleInWorkspaceCatalog verifies WebSearch is registered
+// unconditionally (like WebFetch) so it appears in the workspace tools catalog —
+// the catalog is built with an empty agent, and WebSearch must not be gated out
+// of it. The claude-cli exclusion happens at the interaction-bridge layer, not by
+// withholding registration, so visibility and CLI-suppression are independent.
+func TestWebSearchVisibleInWorkspaceCatalog(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+
+	full := rt.WorkspaceToolCatalog(ctx)
+	if !hasTool(full, "WebSearch") {
+		t.Fatalf("workspace catalog must list WebSearch (sibling of WebFetch): %v", full)
+	}
+	// And it must NOT be advertised to the claude-cli Interaction MCP bridge — the
+	// CLI uses its own native WebSearch (mirrors WebFetch).
+	if !cliLazyBridgeExcluded["WebSearch"] {
+		t.Fatal("WebSearch must be in cliLazyBridgeExcluded so the CLI uses its native one")
+	}
+}
+
 // TestLazyCatalogSummarisesManyMCPTools verifies the load-on-demand catalog block
 // lists built-in lazy tools in full but, past lazyCatalogMCPListLimit MCP tools,
 // summarises them per server (count + tool_search pointer) instead of enumerating.

@@ -88,6 +88,14 @@ func blockFunc(agent db.Agent) func(string) bool {
 func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Registry {
 	builtins := []tools.Tool{
 		tools.NewWebFetchTool(),
+		// WebSearch: native web search for every NATIVE-API provider (anthropic,
+		// minimax, openrouter, antigravity). Registered unconditionally — exactly like
+		// its sibling WebFetch — so it also appears in the workspace tools catalog. The
+		// claude-cli path never receives it: SwarmGo built-ins reach the CLI ONLY through
+		// the explicit interactionToolSpecs bridge (which does not list it), so a CLI
+		// agent transparently uses its OWN native WebSearch instead. Backed by the
+		// workspace vault (a self-hosted SEARXNG_URL or a TAVILY_API_KEY).
+		tools.NewWebSearchTool(r.vault),
 		tools.NewMemoryRecallTool(r.mem, agent.ID),
 		// Interaction tools: todo_write surfaces a live checklist; ask_user pauses
 		// the turn for a clarifying question; request_confirmation blocks for a
@@ -593,6 +601,7 @@ const lazyCatalogMCPListLimit = 30
 // eager (never in the lazy catalog), so WebFetch is the only one that surfaces here.
 var cliLazyBridgeExcluded = map[string]bool{
 	"WebFetch":     true, // CLI has its own native WebFetch
+	"WebSearch":    true, // CLI has its own native WebSearch (defensive: eager, so not normally lazy)
 	"run_subagent": true, // bridged explicitly via interactionToolSpecs, not the lazy path
 	// deactivate_tools is a SwarmGo-native meta-tool (paired with activate_tools);
 	// the CLI uses its OWN ToolSearch, so this is never bridged — keep it out of the

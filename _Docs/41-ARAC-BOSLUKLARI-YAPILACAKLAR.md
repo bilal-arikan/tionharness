@@ -44,9 +44,10 @@
 - **Uygulanan yaklaşım:**
   - **Provider-bağımsız**, vault'tan otomatik backend seçimi: `SEARXNG_URL` (self-host, anahtarsız) varsa
     o, yoksa `TAVILY_API_KEY` (Tavily, 1k ücretsiz/ay). İkisi de yoksa **sessizce yutmaz** — açık hata.
-  - **claude-cli hariç:** claude-cli kendi native `WebSearch`'ünü kullanır; araç yalnızca diğer
-    provider'lara (anthropic API, minimax, openrouter, antigravity) kaydedilir
-    (`toolsetup.go` → `agent.Provider != "" && != "claude-cli"`).
+  - **claude-cli hariç:** Araç `WebFetch` gibi **koşulsuz** kaydedilir (workspace tools ekranında görünür),
+    ama claude-cli'ye **bridge'lenmez** — SwarmGo built-in'leri CLI'ye yalnızca elle küratörlenen
+    `interactionToolSpecs` listesiyle ulaşır, WebSearch o listede yok → CLI kendi native'ini kullanır.
+    Savunma amaçlı `cliLazyBridgeExcluded`'a da eklendi (WebFetch ile birebir).
   - **SSRF yok:** URL operatör-tanımlı güvenilir backend (yalnızca query model'den gelir), bu yüzden
     WebFetch'in SSRF-guard'lı dialer'ı KULLANILMAZ — self-host SearXNG'in loopback adresi erişilebilir kalır.
   - Çıktı: numaralı başlık + URL + snippet listesi → ajan `WebFetch` ile derinleşir (bkz. I1).
@@ -54,9 +55,8 @@
   `websearch_tavily.go`, `websearch_searxng.go`, `builtin_websearch_test.go` (7 test).
   `toolsetup.go` kaydı eklendi; `classify.go:37` placeholder'ı artık gerçek araca bağlı.
 - **Risk sınıfı:** `RiskRead` (salt-okuma, ağ).
-- **Açık kalan (küçük):** Workspace araç ekranı kataloğu boş-agent (`Provider==""`) ile kurulduğundan
-  WebSearch tools ekranında listelenmez — yalnızca runtime'da non-cli ajanlara çıkar. İleride katalog
-  fonksiyonlarına non-cli sentinel ile çözülebilir.
+- **Görünürlük:** ✅ Çözüldü — koşulsuz kayıt sayesinde workspace tools ekranında listelenir; CLI yine
+  kendi native'ini kullanır (`TestWebSearchVisibleInWorkspaceCatalog` ile doğrulandı).
 - **Operatör kurulumu:** `secret_set` ile `TAVILY_API_KEY` *veya* `SEARXNG_URL` ekle.
 
 ### 2. `call_llm` — hafif ikincil LLM alt-görevi — **P1**
