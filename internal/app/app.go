@@ -79,8 +79,20 @@ func openLogFile() (*os.File, error) {
 // cfg.Addr = "127.0.0.1:0" makes the OS pick a free port; Addr() then reports
 // the resolved address. It does not begin serving — call Serve for that.
 func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*App, error) {
+	// Open the listener FIRST, before the heavy workspace init below. The port
+	// then accepts connections immediately (queued in the kernel backlog); Serve
+	// (called after Bootstrap returns) drains them once init is done. Otherwise a
+	// dev frontend (vite proxy) hitting /api during boot gets ECONNREFUSED until
+	// init finishes — the "works on the 2nd start" race.
+	// cfg.Addr "127.0.0.1:0" → OS picks a free port; Addr() reports the resolved one.
+	ln, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
+		return nil, err
+	}
+
 	secret, err := config.LoadSecret(cfg.DataDir)
 	if err != nil {
+		ln.Close()
 		return nil, err
 	}
 
@@ -89,6 +101,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	// store becomes the single source of truth thereafter.
 	settingsStore, err := settings.Open(cfg.DataDir, secret)
 	if err != nil {
+		ln.Close()
 		return nil, err
 	}
 	if settingsStore.Get().AnthropicKeyEnc == "" && cfg.AnthropicAPIKey != "" {
@@ -139,6 +152,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	// Workspace manager: each workspace owns its own DB + agent runtime.
 	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, secret, bus, logs, logger)
 	if err != nil {
+		ln.Close()
 		return nil, err
 	}
 	logger.Info("workspaces ready", "count", len(manager.List()))
@@ -165,13 +179,6 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		return out
 	}, logger)
 	server.SetBackupManager(backups)
-
-	// Open the listener up front so a ":0" port is resolved before we report Addr.
-	ln, err := net.Listen("tcp", cfg.Addr)
-	if err != nil {
-		manager.Close()
-		return nil, err
-	}
 
 	// Advertise this server's own loopback URL so CLI agents can reach the
 	// in-process Interaction MCP endpoint (ask_user/todo_write) for their turn.
