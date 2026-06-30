@@ -4,6 +4,12 @@
 > `packages/session-tools-core/src/tool-defs.ts` (`SESSION_TOOL_DEFS`). SwarmGo (yerel) —
 > `internal/tools/builtin_*.go` ve interaction köprüsü (`internal/api/mcp_interaction.go`).
 > Analiz salt-okuma yapılmıştır; SwarmGo kodu değiştirilmemiştir.
+>
+> **GÜNCELLEME:** Aksiyon (yapılacaklar) karşılığı artık ayrı dosyada:
+> [`41-ARAC-BOSLUKLARI-YAPILACAKLAR.md`](./41-ARAC-BOSLUKLARI-YAPILACAKLAR.md).
+> Bu analizden sonra `config_validate`, `skill_validate`, `mermaid_validate` araçları **eklendi**
+> (artık SwarmGo'da mevcut) → §4a'daki ilgili maddeler **KAPANDI**; güncel açık boşluk listesi için
+> 41 numaralı dokümana bakın.
 
 ## Özet
 
