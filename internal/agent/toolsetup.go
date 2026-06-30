@@ -232,8 +232,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewConfigValidateTool(sb),
 		)
 		// The shell tool is high-risk; offer it only when explicitly enabled.
+		// transform_data also runs arbitrary host code (python/node/bun) — though with
+		// a stripped env and a timeout — so it shares the same execution gate. It lets
+		// the agent reshape large data into a JSON file (referenced as a table src)
+		// without inlining rows into context.
 		if r.tun.ShellEnabled() {
-			builtins = append(builtins, tools.NewShellTool(sb))
+			builtins = append(builtins,
+				tools.NewShellTool(sb),
+				tools.NewTransformDataTool(sb),
+			)
 		}
 	}
 

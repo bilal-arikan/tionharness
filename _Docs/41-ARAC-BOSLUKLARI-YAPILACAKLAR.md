@@ -20,7 +20,7 @@
 |---|-----------|-----|---------|-------|
 | 1 | `WebSearch` | Yeni araç | **P0** | ✅ Tamamlandı (2026-06-30) |
 | 2 | `call_llm` (hafif LLM alt-görevi) | Yeni araç | **P1** | Açık |
-| 3 | `transform_data` / `script_sandbox` | Yeni araç | **P1** | Açık |
+| 3 | `transform_data` | Yeni araç | **P1** | ✅ Tamamlandı (2026-06-30) |
 | 4 | `PowerShell` (ayrı shell) | Yeni araç | **P1** | Açık |
 | 5 | `get_session_info` | Yeni araç | **P2** | Açık |
 | 6 | `set_session_labels` / `set_session_status` | Yeni araç | **P2** | Açık |
@@ -75,20 +75,29 @@
   otonom turda `guardedComplete`/`ensureBudget` ile sayaca dahil edilmeli.
 - **Risk sınıfı:** `RiskRead`.
 
-### 3. `transform_data` / `script_sandbox` — izole script — **P1**
+### 3. `transform_data` — izole script — **P1** — ✅ TAMAMLANDI (2026-06-30)
 
-- **Durum:** Yok. Aynı sonuç ad-hoc `Bash` ile elde edilebiliyor ama **izole subprocess + yapısal çıktı
-  sözleşmesi + ağ/FS izolasyonu** yok.
+- **Durum:** ~~Yok.~~ **Uygulandı** (`transform_data` adıyla). `script_sandbox` ayrı bir araç olarak
+  uygulanmadı — `transform_data` zaten striplenmiş-env + timeout + yapısal çıktı sözleşmesini karşılıyor.
 - **Neden önemli:** SwarmGo'nun **token optimizasyon** felsefesiyle (`_Docs/17`) birebir uyumlu: büyük
-  araç çıktısını/veri setini izole script ile işleyip **dosyaya yazmak** ve ana bağlama sadece özet/yol
-  döndürmek cached-prefix'i ve token'ı düşürür. `script_sandbox` ayrıca ağ/FS-izole tanılama için güvenli.
-- **Yaklaşım:** İki ayrı (veya tek parametreli) builtin:
-  - `transform_data`: `language(python3|node|bun)`, `script`, `inputFiles[]`, `outputFile` → yapısal JSON.
-  - `script_sandbox`: `language`, `script`, `inputFiles?`, `stdin?`, `timeoutMs(1..15000)` → ağ-izolasyonlu.
-  Windows'ta Python yolu kullanıcı tercihinden (`C:\Python313\python.exe`); node/bun opsiyonel.
-- **Dosyalar:** yeni `internal/tools/builtin_transform.go` / `builtin_sandbox.go` (+ testler),
-  `registry.go`. Mevcut `tools/sandbox.go` çalışma dizini mantığıyla hizalan.
-- **Risk sınıfı:** `RiskWrite` (çıktı dosyası yazar) / sandbox `RiskRead`.
+  veri setini izole script ile işleyip **dosyaya yazmak** ve ana bağlama sadece özet/yol döndürmek
+  cached-prefix'i ve token'ı düşürür.
+- **Uygulanan yaklaşım:**
+  - Parametreler: `language(python3|node|bun)`, `script`, `input_files[]`, `output_file`.
+  - **argv sözleşmesi:** `argv[1..N]` = girdi dosyaları (sırayla), **son argv** = çıktı dosyası.
+  - **Striplenmiş env (allowlist):** yalnızca interpreter'ın ihtiyacı olan değişkenler geçer; **hiçbir
+    secret/API anahtarı** script'e ulaşmaz (`minimalScriptEnv`). 30s timeout, çıktı **dosyaya** yazılır,
+    bağlama yalnızca yol + boyut + satır sayısı + script log'u döner (veri DÖNMEZ).
+  - **Hata sessizce yutulmaz:** eksik girdi, yazılmayan çıktı, script hatası → hepsi açık hata + script
+    stderr'i yüzeye çıkar.
+  - **Windows:** WindowsApps "app execution alias" stub'ları atlanır (gerçek `python.exe` önce denenir),
+    aksi halde striplenmiş env'le 9009 "Python bulunamadı" hatası oluyordu.
+- **Gating + risk:** Host'ta keyfi kod çalıştırdığından `RiskExec` ve **shell gate'i** (`ShellEnabled`)
+  arkasına kaydedildi — shell ile aynı yürütme kapısı. Gerçek güvenlik sandbox'ı değil; secret-izolasyonu +
+  kaynak-sınırlama sarmalayıcısı. (Not: the external agent project bunu Explore'da da sunar; SwarmGo dürüst risk modeli
+  gereği read-only'de bloklar. İleride gerçek sandbox ile `RiskRead`'e indirilebilir / ayrı tunable.)
+- **Eklenen dosyalar:** `internal/tools/builtin_transform_data.go`, `transform_data_env.go`,
+  `builtin_transform_data_test.go` (8 test). `classify.go` + `toolsetup.go` kaydı.
 
 ### 4. `PowerShell` — ayrı Windows shell — **P1**
 

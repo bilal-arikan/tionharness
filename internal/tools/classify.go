@@ -45,6 +45,10 @@ var toolRisk = map[string]Risk{
 	"MultiEdit":    RiskWrite,
 	"NotebookEdit": RiskWrite,
 	"Bash":         RiskExec,
+	// transform_data runs an arbitrary host script (python/node/bun) in a
+	// subprocess. The env is stripped of secrets and it is time-bounded, but it is
+	// still host code execution — same risk tier as the shell.
+	"transform_data": RiskExec,
 }
 
 // Classify returns the risk tier for a tool name. Unknown tools — including
