@@ -85,6 +85,30 @@ try {
         $procs += $backend
     }
 
+    # Wait for the backend to actually serve before starting Vite. `go run` may
+    # spend ~10-20s COMPILING on a cold cache; during that the port does not exist
+    # yet, so starting Vite now would spam "ECONNREFUSED 127.0.0.1:8090" until the
+    # binary finally launches. Polling /health first makes Vite start clean.
+    if (-not $FrontendOnly -and -not $BackendOnly) {
+        Write-Host "==> Backend derleniyor/hazirlaniyor, /health bekleniyor (ilk derleme uzun surebilir)..." -ForegroundColor Cyan
+        $healthUrl = "http://127.0.0.1:$Port/health"
+        $deadline = (Get-Date).AddSeconds(120)
+        $ready = $false
+        while ((Get-Date) -lt $deadline) {
+            if ($backend.HasExited) { throw "backend saglikli olmadan sonlandi" }
+            try {
+                $r = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 2
+                if ($r.StatusCode -eq 200) { $ready = $true; break }
+            } catch { }
+            Start-Sleep -Milliseconds 500
+        }
+        if ($ready) {
+            Write-Host "==> Backend hazir." -ForegroundColor Green
+        } else {
+            Write-Host "==> Backend zaman asimina ugradi; frontend yine de baslatiliyor." -ForegroundColor Yellow
+        }
+    }
+
     if (-not $BackendOnly) {
         # Pre-flight: clear any orphan still holding the Vite dev port (5173).
         Free-Port 5173 "Frontend"
