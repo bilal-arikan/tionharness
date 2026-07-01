@@ -231,7 +231,7 @@ override'larını `store/` yanındaki `ws-settings.json` dosyasında tutar
 |------|----------|
 | `icon`, `color` | Switcher/rail'de görsel kimlik |
 | `defaultProvider`, `defaultModel` | Boş = uygulama varsayılanı |
-| `pauseAutonomy` | Sadece bu workspace'in otonomisini (scheduler) durdurur |
+| `pauseAutonomy` | Sadece bu workspace'in otonomisini (scheduler) durdurur — anahtar **Zamanlamalar** ekranının üstünde (2026-07-01: app-geneli pause kaldırıldı, pause artık yalnız workspace-özel) |
 | `instructions` | **Bu workspace'teki tüm agent'lara eklenen serbest metin yönergeler** |
 
 ### Instructions enjeksiyonu

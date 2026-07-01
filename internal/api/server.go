@@ -126,7 +126,6 @@ func (s *Server) applySettings() {
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
 	s.tun.SetContextBudget(cur.MaxContextTokens)                             // scale tool-output thresholds to the budget (CG-9)
-	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
 	s.tun.SetTitleModel(cur.TitleModel)
 	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen, cur.JournalMinLen)
 	s.tun.SetRecallMinScore(cur.RecallMinScore)
@@ -262,6 +261,7 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleListMessages)
 	mux.HandleFunc("DELETE /api/sessions/{id}/messages/{msgId}", s.handleDeleteMessage)
+	mux.HandleFunc("POST /api/sessions/{id}/rewind", s.handleRewindSession)
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
 	mux.HandleFunc("PUT /api/sessions/{id}/goal", s.handleSetSessionGoal)
 	mux.HandleFunc("PUT /api/sessions/{id}/state", s.handleSetSessionState)

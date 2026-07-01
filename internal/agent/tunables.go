@@ -42,13 +42,13 @@ const (
 )
 
 // Tunables holds process-wide, settings-driven knobs that cut across every
-// workspace runtime: the global autonomy pause switch and an optional model
-// override for auto-title generation. A single instance is created at boot and
+// workspace runtime: an optional model override for auto-title generation and
+// context/journal/memory controls. (Autonomy pausing is per-workspace — see
+// Runtime.SetPaused — so it is not a process-wide knob.) A single instance is created at boot and
 // shared (by pointer) with every Runtime and the API server, so a settings
 // change applies uniformly regardless of which workspace runtime reads it.
 type Tunables struct {
 	mu            sync.RWMutex
-	pauseAutonomy bool
 	titleModel    string
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
 	cliHooks      bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
@@ -181,22 +181,6 @@ func NewTunables() *Tunables {
 		// off) for the same reason — only production turns the write-gate on.
 		recallMinScore: DefaultRecallMinScore,
 	}
-}
-
-// SetAutonomyPaused toggles the global autonomy brake. When paused, autonomous
-// provider calls (scheduler) are rejected before reaching a model;
-// manual chat and run-now are unaffected.
-func (t *Tunables) SetAutonomyPaused(paused bool) {
-	t.mu.Lock()
-	t.pauseAutonomy = paused
-	t.mu.Unlock()
-}
-
-// AutonomyPaused reports the current global pause state.
-func (t *Tunables) AutonomyPaused() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.pauseAutonomy
 }
 
 // SetTitleModel sets the model used for auto-title generation. Empty means use

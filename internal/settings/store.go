@@ -337,10 +337,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.CompactModel = strings.TrimSpace(*p.CompactModel)
 	}
 
-	if p.PauseAutonomy != nil {
-		next.PauseAutonomy = *p.PauseAutonomy
-	}
-
 	if p.AutoTitleEnabled != nil {
 		next.AutoTitleEnabled = *p.AutoTitleEnabled
 	}

@@ -89,8 +89,6 @@ export interface AppSettings {
   compactLlmThreshold: number
   compactModel: string         // System B model id; "" → title model, then agent's model
 
-  pauseAutonomy: boolean
-
   autoTitleEnabled: boolean
   titleModel: string
 

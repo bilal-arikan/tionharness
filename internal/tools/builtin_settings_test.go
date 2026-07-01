@@ -47,16 +47,16 @@ func TestGetSettingsReportsPath(t *testing.T) {
 }
 
 func TestUpdateSettingsAppliesPatch(t *testing.T) {
-	b := &fakeSettingsBridge{path: "/data/settings.json", state: map[string]any{"theme": "dark", "pauseAutonomy": false}}
-	out, err := NewUpdateSettingsTool(b).Call(context.Background(), json.RawMessage(`{"patch":{"theme":"light","pauseAutonomy":true}}`))
+	b := &fakeSettingsBridge{path: "/data/settings.json", state: map[string]any{"theme": "dark", "autoTitleEnabled": false}}
+	out, err := NewUpdateSettingsTool(b).Call(context.Background(), json.RawMessage(`{"patch":{"theme":"light","autoTitleEnabled":true}}`))
 	if err != nil {
 		t.Fatalf("update_settings: %v", err)
 	}
 	if b.state["theme"] != "light" {
 		t.Fatalf("theme not applied: %v", b.state["theme"])
 	}
-	if b.state["pauseAutonomy"] != true {
-		t.Fatalf("pauseAutonomy not applied: %v", b.state["pauseAutonomy"])
+	if b.state["autoTitleEnabled"] != true {
+		t.Fatalf("autoTitleEnabled not applied: %v", b.state["autoTitleEnabled"])
 	}
 	if !strings.Contains(out, "activated") {
 		t.Fatalf("expected confirmation in output, got: %s", out)

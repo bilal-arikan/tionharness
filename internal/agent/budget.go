@@ -8,7 +8,7 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 )
 
-// ErrAutonomyPaused is returned when the global autonomy brake is engaged and an
+// ErrAutonomyPaused is returned when the workspace autonomy brake is engaged and an
 // autonomous call is attempted. Manual calls are unaffected.
 var ErrAutonomyPaused = errors.New("autonomy paused")
 
@@ -57,7 +57,7 @@ func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string,
 // usage afterward so the meter reflects every call.
 func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req providers.Request, autonomous bool) (*providers.Response, error) {
 	if autonomous {
-		if r.tun.AutonomyPaused() || r.Paused() {
+		if r.Paused() {
 			return nil, ErrAutonomyPaused
 		}
 	}

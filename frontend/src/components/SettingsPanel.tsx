@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Bell, Bot, Tag, type LucideIcon } from 'lucide-react'
+import { Bell, Tag, type LucideIcon } from 'lucide-react'
 import { api } from '../api'
 import type {
   AppSettings,
@@ -18,7 +18,6 @@ import {
   ProfilePanel,
   NotificationsPanel,
   ContextPanel,
-  AutonomyPanel,
   AutoTitlePanel,
   ToolsPanel,
   BackupPanel,
@@ -148,7 +147,6 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       compactToolOutput: draft.compactToolOutput, compactMaxLines: draft.compactMaxLines,
       compactMaxBytes: draft.compactMaxBytes, compactLlmSummary: draft.compactLlmSummary,
       compactLlmThreshold: draft.compactLlmThreshold, compactModel: draft.compactModel,
-      pauseAutonomy: draft.pauseAutonomy,
       autoTitleEnabled: draft.autoTitleEnabled, titleModel: draft.titleModel,
       enableShell: draft.enableShell,
       enableCliHooks: draft.enableCliHooks, claudeResume: draft.claudeResume,
@@ -299,9 +297,6 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
                 <>
                   <AdvSection title="Bildirimler & Ekran" icon={Bell}>
                     <NotificationsPanel draft={draft} set={set} setDraft={setDraft} />
-                  </AdvSection>
-                  <AdvSection title="Otonomi" icon={Bot}>
-                    <AutonomyPanel draft={draft} set={set} setDraft={setDraft} />
                   </AdvSection>
                   <AdvSection title="Otomatik Başlık" icon={Tag}>
                     <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />

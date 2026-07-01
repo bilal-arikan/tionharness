@@ -109,13 +109,40 @@ export function Schedules({ agents, focusId, onError }: Props) {
   // Id of the schedule currently being run manually (disables its Run button).
   const [runningId, setRunningId] = useState<string | null>(null)
 
+  // Per-workspace autonomy brake. Moved here from the Workspace settings screen
+  // (the app-global pause was removed): when on, this workspace's scheduled calls
+  // are blocked before reaching a model. Manual chat / run-now are unaffected.
+  // null = not loaded yet (hide the toggle until we know the real value).
+  const [pauseAutonomy, setPauseAutonomy] = useState<boolean | null>(null)
+  const [savingPause, setSavingPause] = useState(false)
+
   const reload = () =>
     api.listSchedules().then(setSchedules).catch((e) => onError(e.message))
 
   useEffect(() => {
     reload()
+    api
+      .getWorkspaceSettings()
+      .then((s) => setPauseAutonomy(s.pauseAutonomy))
+      .catch((e) => onError((e as Error).message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const togglePauseAutonomy = async () => {
+    if (pauseAutonomy === null) return
+    const next = !pauseAutonomy
+    setPauseAutonomy(next) // optimistic
+    setSavingPause(true)
+    try {
+      const updated = await api.updateWorkspaceSettings({ pauseAutonomy: next })
+      setPauseAutonomy(updated.pauseAutonomy)
+    } catch (e) {
+      setPauseAutonomy(!next) // rollback
+      onError((e as Error).message)
+    } finally {
+      setSavingPause(false)
+    }
+  }
 
   // When a deep-link target is present and loaded, scroll it into view and flash
   // a highlight ring that fades after a moment.
@@ -237,6 +264,42 @@ export function Schedules({ agents, focusId, onError }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col p-4">
+      {/* Per-workspace autonomy pause (moved here from Workspace settings). */}
+      {pauseAutonomy !== null && (
+        <div
+          data-testid="workspace-pause-autonomy"
+          className={`mb-3 flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${
+            pauseAutonomy
+              ? 'border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_8%,transparent)]'
+              : 'border-[var(--color-border)] bg-[var(--color-surface)]'
+          }`}
+        >
+          <button
+            data-testid="workspace-pause-autonomy-toggle"
+            onClick={togglePauseAutonomy}
+            disabled={savingPause}
+            className={`h-4 w-8 flex-shrink-0 rounded-full transition disabled:opacity-40 ${
+              pauseAutonomy ? 'bg-[var(--color-danger)]' : 'bg-[var(--color-border)]'
+            }`}
+            title={pauseAutonomy ? 'Otonomi duraklatıldı' : 'Otonomi etkin'}
+          >
+            <span
+              className={`block h-4 w-4 rounded-full bg-white transition ${
+                pauseAutonomy ? 'translate-x-4' : ''
+              }`}
+            />
+          </button>
+          <div className="flex-1">
+            <div className="font-medium">
+              {pauseAutonomy ? 'Bu workspace’te otonomi duraklatıldı' : 'Bu workspace’te otonomiyi duraklat'}
+            </div>
+            <div className="text-xs text-[var(--color-text-dim)]">
+              Yalnızca bu workspace’in zamanlama çağrılarını bloklar. Manuel sohbet ve “şimdi çalıştır” etkilenmez.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* New schedule form */}
       <div className="mb-4 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div className="flex flex-wrap items-start gap-2">

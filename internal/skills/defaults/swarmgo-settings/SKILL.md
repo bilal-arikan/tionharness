@@ -30,7 +30,7 @@ only touches the fields you include; everything else is left unchanged.
 
 ```
 get_settings → {}
-update_settings → {"patch": {"pauseAutonomy": true}}
+update_settings → {"patch": {"autoTitleEnabled": false}}
 ```
 
 ## Settings reference
@@ -101,8 +101,11 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 - The per-agent daily spend caps (`defaultDailyCallLimit`/`defaultDailyTokenLimit` +
   per-agent `dailyCallLimit`/`dailyTokenLimit` + enforcement) were **removed entirely**
   (2026-07-01) — agents are always unlimited. Only spend *tracking* remains (the Budget
-  screen still shows usage). Global pause below is the one remaining autonomy brake.
-- `pauseAutonomy` (global autonomy brake — pauses scheduled calls).
+  screen still shows usage).
+- The autonomy pause is **per-workspace, not app-global** (2026-07-01): the app-wide
+  `pauseAutonomy` setting was removed. Pause is now the workspace-settings field
+  `pauseAutonomy` (`ws-settings.json`), toggled from the **Schedules** screen. It
+  blocks only that workspace's scheduled calls. Not an app-settings key anymore.
 - `autoTitleEnabled` (default true), `titleModel` (`""` = agent's model).
 
 ### Context reset / handoff (see _Docs/35)

@@ -67,7 +67,7 @@ func NewUpdateSettingsTool(b SettingsBridge) UpdateSettingsTool { return UpdateS
 func (UpdateSettingsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_settings",
-		Description: "Change one or more application-wide settings and ACTIVATE them immediately (persisted to settings.json AND pushed into the live runtime — no restart). Pass a `patch` object containing only the fields you want to change, using the exact field names from get_settings (e.g. {\"theme\":\"light\"}, {\"pauseAutonomy\":true}, {\"enableShell\":true}, {\"defaultModel\":\"claude-sonnet-4-6\"}). Numeric fields are clamped to safe ranges. Write-only secret fields are accepted: `anthropicKey` / `minimaxKey` (\"\" clears). Always read get_settings first so you patch the right keys. Returns the new masked settings.",
+		Description: "Change one or more application-wide settings and ACTIVATE them immediately (persisted to settings.json AND pushed into the live runtime — no restart). Pass a `patch` object containing only the fields you want to change, using the exact field names from get_settings (e.g. {\"theme\":\"light\"}, {\"autoTitleEnabled\":false}, {\"enableShell\":true}, {\"defaultModel\":\"claude-sonnet-4-6\"}). Numeric fields are clamped to safe ranges. Write-only secret fields are accepted: `anthropicKey` / `minimaxKey` (\"\" clears). Always read get_settings first so you patch the right keys. Returns the new masked settings.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -78,7 +78,7 @@ func (UpdateSettingsTool) Def() providers.ToolDef {
 		}`),
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"patch":{"theme":"light"}}`),
-			json.RawMessage(`{"patch":{"defaultModel":"claude-sonnet-4-6","pauseAutonomy":true}}`),
+			json.RawMessage(`{"patch":{"defaultModel":"claude-sonnet-4-6","autoTitleEnabled":false}}`),
 			json.RawMessage(`{"patch":{"enableShell":true,"enableCliHooks":true}}`),
 		},
 	}

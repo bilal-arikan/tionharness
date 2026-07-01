@@ -208,9 +208,6 @@ type Settings struct {
 	CompactLLMThreshold int    `json:"compactLlmThreshold"` // only summarize output larger than this (bytes, 0 = default)
 	CompactModel        string `json:"compactModel"`        // model id for System B; "" → TitleModel, then agent's own model
 
-	// Autonomy.
-	PauseAutonomy bool `json:"pauseAutonomy"`
-
 	// Auto-title generation.
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
 	TitleModel       string `json:"titleModel"` // "" = use the agent's model
@@ -339,8 +336,6 @@ func Default() Settings {
 		CompactLLMThreshold: 12288,
 		CompactModel:        "",
 
-		PauseAutonomy: false,
-
 		AutoTitleEnabled: true,
 		TitleModel:       "",
 
@@ -452,8 +447,6 @@ type DTO struct {
 	CompactLLMThreshold int    `json:"compactLlmThreshold"`
 	CompactModel        string `json:"compactModel"`
 
-	PauseAutonomy bool `json:"pauseAutonomy"`
-
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
 	TitleModel       string `json:"titleModel"`
 
@@ -560,8 +553,6 @@ func (s Settings) ToDTO() DTO {
 		CompactLLMThreshold: s.CompactLLMThreshold,
 		CompactModel:        s.CompactModel,
 
-		PauseAutonomy: s.PauseAutonomy,
-
 		AutoTitleEnabled: s.AutoTitleEnabled,
 		TitleModel:       s.TitleModel,
 
@@ -662,8 +653,6 @@ type Patch struct {
 	CompactLLMSummary   *bool   `json:"compactLlmSummary"`
 	CompactLLMThreshold *int    `json:"compactLlmThreshold"`
 	CompactModel        *string `json:"compactModel"`
-
-	PauseAutonomy *bool `json:"pauseAutonomy"`
 
 	AutoTitleEnabled *bool   `json:"autoTitleEnabled"`
 	TitleModel       *string `json:"titleModel"`

@@ -98,7 +98,7 @@ func (r *Runtime) maybeAutoReflect(agentID string) {
 		return
 	}
 	threshold := r.tun.AutoReflectThreshold()
-	if r.tun.AutonomyPaused() || r.Paused() {
+	if r.Paused() {
 		return
 	}
 	// Count journals cheaply before committing to a goroutine.

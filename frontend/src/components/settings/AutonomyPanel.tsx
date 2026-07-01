@@ -1,13 +1,9 @@
 import { Field, Toggle, inputCls } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
-export function AutonomyPanel({ draft, set }: PanelProps) {
-  return (
-    <>
-      <Toggle label="Tüm otonomiyi duraklat (uygulama geneli)" hint="Zamanlanmış çağrılar modele gitmeden bloklanır. Manuel sohbet etkilenmez." checked={draft.pauseAutonomy} onChange={(v) => set('pauseAutonomy', v)} />
-    </>
-  )
-}
+// Note: the app-global autonomy pause was removed (2026-07-01) — autonomy pause is
+// now per-workspace and toggled on the Schedules screen. This file keeps only the
+// auto-title panel.
 
 export function AutoTitlePanel({ draft, set }: PanelProps) {
   return (

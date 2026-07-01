@@ -2,6 +2,93 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-01**
 
+## Otonomi duraklatma → yalnız workspace-özel + Zamanlamalar ekranına taşındı ✅ (2026-07-01)
+
+**İstek:** Workspace ayarları ekranındaki "Otonomiyi duraklat" seçeneğini **Zamanlamalar**
+ekranına taşı; gelişmiş uygulama ayarlarındaki "Tüm otonomiyi duraklat (uygulama geneli)"
+anahtarını tamamen kaldır — pause artık yalnız workspace-özel olsun, Zamanlamalar
+ekranından açıp kapatmak yeterli.
+
+**Yapılan:**
+- **App-geneli pause tamamen kaldırıldı (backend):** `settings.Settings/snapshot/patch`'ten
+  `PauseAutonomy` alanı, `store.go` patch-apply'ı, `api/server.go`'daki
+  `tun.SetAutonomyPaused(...)` çağrısı silindi. `agent.Tunables`'tan `pauseAutonomy`
+  alanı + `SetAutonomyPaused`/`AutonomyPaused` metotları kaldırıldı. Otonomi freni artık
+  yalnız workspace-düzeyi `Runtime.Paused()` (ws-settings `pauseAutonomy` → `SetPaused`):
+  `budget.go guardedComplete` ve `reflector.go maybeAutoReflect` kontrolleri
+  `r.tun.AutonomyPaused() || r.Paused()` → sadece `r.Paused()`.
+- **Frontend:** Ayarlar ▸ Gelişmiş'ten "Otonomi" bölümü + `AutonomyPanel` bileşeni ve
+  `settings.pauseAutonomy` tipi kaldırıldı. Workspace ▸ Genel'deki workspace pause toggle'ı
+  kaldırılıp yerine Zamanlamalar'a yönlendiren not kondu. **Zamanlamalar ekranının üstüne**
+  workspace-özel pause toggle'ı eklendi (`Schedules.tsx`: `getWorkspaceSettings` ile yüklenir,
+  `updateWorkspaceSettings({pauseAutonomy})` ile optimistic toggle; `data-testid=workspace-pause-autonomy`).
+- **Dokümanlar/skill:** `swarmgo-settings` + `swarmgo-autonomous-ops` skill'leri güncellendi
+  (pause artık app-settings key'i değil, workspace-özel + Zamanlamalar ekranı); `06-WORKSPACES.md`
+  tablosu not düştü. `update_settings` araç örnekleri `pauseAutonomy` yerine `autoTitleEnabled` kullanıyor.
+- **Durum:** `go build ./...` ✅, ilgili paket testleri ✅ (agent/tools/settings 256 test), frontend `tsc` temiz.
+
+## `/rewind` — sohbet checkpoint geri sarma (yalnız-sohbet MVP) ✅ (2026-07-01)
+
+**İstek:** Sohbet ekranına Claude Code'daki `/rewind` benzeri bir komut ekle — bir tur
+kodu bozunca ajanla tartışıp bağlamı kirletmek yerine, hatadan önceki temiz checkpoint'e
+dönüp çarkı yeniden çevirmek için. Kapsam kullanıcı kararıyla **yalnız-sohbet** (dosya
+geri-yükleme yok; kod için git zaten var).
+
+**Yapılan:**
+- **Backend truncate:** `db.DeleteMessagesFrom(sessionID, msgID)` — verilen mesaj + sonrasını
+  siler, JSONL'i yeniden yazar; silinen sayıyı döndürür. Truncation noktası özet sınırından
+  önceyse (`SummaryMsgCount > idx`) **artık geçersiz rolling-summary sessizce sıfırlanır**
+  (dangling özet bırakılmaz). Test: `db/rewind_test.go` (removed sayısı + özet reset + reopen kalıcılığı).
+- **API:** `POST /api/sessions/{id}/rewind` body `{messageId}` → `handleRewindSession`
+  (`bindJSON` + `DeleteMessagesFrom`, Logs'a `session rewound` satırı). server.go route kaydı.
+- **Frontend:** `/rewind` slash komutu (`useChatStream.chatCommands`, ⟲) → `RewindDialog`
+  picker açar. Dialog oturumun kullanıcı promptlarını (checkpoint) yeniden-eskiye listeler
+  (her satır: "Prompt #N" + "M mesaj silinir" + önizleme); seçilen checkpoint'e geri sarar.
+  `rewindTo(msgId)` görünüm + sunucu tarafını atomik siler ve **silinen promptu composer
+  draft'ına geri koyar** (düzenleyip yeniden göndermek için) — `writeSessionDraft` +
+  Composer `key` bump ile remount. Yerel-only (persist edilmemiş) anchor'da sunucu çağrısı atlanır.
+- **Sınır (Claude Code ile aynı):** yalnız transcript geri alınır; `Bash` yan etkileri
+  (`git push`/`npm install`/`rm`) ve dosya değişiklikleri geri **gelmez**.
+- **Durum:** db+api derlenir + testler geçer (db 35, api 66), frontend `tsc` temiz.
+  Dosya-restore modu (kod geri-yükleme) ileride eklenebilir — snapshot altyapısı gerektirir.
+
+## Compact (compaction) promptu editlenebilir + tüm workspace'lerde default ✅ (2026-07-01)
+
+**İstek:** Compaction (bağlam sıkıştırma) promptunu da editlenebilir yap ve bütün
+workspace'lerin default (seed) promptu yap — summary/reflect/title gibi.
+
+**Yapılan:**
+- **Editlenebilir 4. runtime prompt:** `agent.PromptKeys`'e `"compact"` eklendi →
+  config API (`GET/PUT /api/workspace-config`) ve WorkspaceFilesPanel bu key üzerinden
+  döndüğü için **otomatik editlenebilir** oldu (`config/prompts/compact.md`). Default
+  `promptDefaults["compact"] = conversation.CompactPromptDefault()` (ham template, iki
+  `%s` slotlu).
+- **Per-workspace enjeksiyon (paylaşılan global Manager'a rağmen):** `conversation`
+  paketine `WithCompactPrompt(ctx, tmpl)` + `compactPromptFromCtx(ctx)` eklendi;
+  `summarizeRendered` template'i ctx'ten alır. **Güvenlik:** ctx template'i yalnız
+  **tam iki `%s` ve başka `%` verb'ü yoksa** kullanılır — bozuk edit'te `fmt.Sprintf`'in
+  `%!`-işaretli çıktısı yerine sessizce gömülü default'a düşer. Enjeksiyon 5 çağrı
+  yerinde: chat / chat_stream / wake_turn (Prepare) + summary (ForceCompact) +
+  toolloop (reaktif mid-loop, `r.CompactPromptTemplate()`).
+- **Tüm workspace'lerde default:** yeni `"compact"` PromptKey olduğu için boot'ta
+  `syncConfigFiles → SeedWorkspaceConfig → writeIfAbsent` her workspace'e
+  `compact.md`'yi **otomatik** yazar (restart sonrası). README template'i iki-`%s`
+  uyarısıyla güncellendi.
+- **Temizlik:** eski read-only `wsConfigDTO.CompactionPrompt` alanı kaldırıldı (compact
+  artık editlenebilir promptKeys'te; duplikasyon önlendi). `CompactionPromptText()`
+  export'u referans için korundu. Frontend'de karşılığı salt-okunur textarea bloğu +
+  `WorkspaceConfig.compactionPrompt` tipi de kaldırıldı; `PROMPT_LABELS`'a `compact` eklendi.
+- **UI overflow fix (workspace prompt ekranı):** uzun promptlar (compact + 40KB instructions)
+  ekran dışına taşıyordu — kök neden `WorkspaceView` sağ-içerik `flex-1` sütununda **`min-w-0`
+  yokluğu** (flex item min-content genişliğinin altına küçülemiyordu). `min-w-0` eklendi
+  (WorkspaceView sütunu + içerik container), `PromptEditor` root `w-full min-w-0` + split
+  yarımları `min-w-0` + preview `break-words`. `<pre>` zaten `overflow-x-auto` taşıyordu.
+  Frontend tam build ✅ (dist yazıldı).
+- **Durum:** çekirdek paketler (`conversation`+`agent`) derlenir + `go vet` temiz + test
+  yazılacak. **api paketi build'i, ilgisiz market_publish/export granular-selection
+  WIP'i (`publishInclude` bool→ID-list refaktörü) nedeniyle bloklu** — o WIP tamamlanınca
+  api tarafı + binary derlenir.
+
 ## Skill 4-tier görünürlük + default workspace prompt ✅ (2026-07-01)
 
 **İstek:** (1) Skilleri de araçlardaki gibi 4 görünürlük kategorisinden birine

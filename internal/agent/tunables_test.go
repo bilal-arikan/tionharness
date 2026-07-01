@@ -7,9 +7,6 @@ import (
 
 func TestTunables_Defaults(t *testing.T) {
 	tun := NewTunables()
-	if tun.AutonomyPaused() {
-		t.Error("new Tunables should not be paused")
-	}
 	if tun.TitleModel() != "" {
 		t.Errorf("TitleModel = %q, want empty", tun.TitleModel())
 	}
@@ -17,15 +14,6 @@ func TestTunables_Defaults(t *testing.T) {
 
 func TestTunables_SetAndGet(t *testing.T) {
 	tun := NewTunables()
-
-	tun.SetAutonomyPaused(true)
-	if !tun.AutonomyPaused() {
-		t.Error("AutonomyPaused should be true after SetAutonomyPaused(true)")
-	}
-	tun.SetAutonomyPaused(false)
-	if tun.AutonomyPaused() {
-		t.Error("AutonomyPaused should be false after SetAutonomyPaused(false)")
-	}
 
 	tun.SetTitleModel("haiku")
 	if tun.TitleModel() != "haiku" {
@@ -121,8 +109,8 @@ func TestTunables_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(2)
-		go func() { defer wg.Done(); tun.SetAutonomyPaused(true); _ = tun.AutonomyPaused() }()
 		go func() { defer wg.Done(); tun.SetTitleModel("m"); _ = tun.TitleModel() }()
+		go func() { defer wg.Done(); tun.SetContextBudget(1000); _ = tun.TitleModel() }()
 	}
 	wg.Wait()
 }
