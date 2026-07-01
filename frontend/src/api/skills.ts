@@ -1,4 +1,4 @@
-import type { Skill, SkillDetail, SkillInput } from '../types'
+import type { Skill, SkillDetail, SkillInput, ToolVisibility } from '../types'
 import { req } from './client'
 
 // SkillImportResult mirrors the backend skills.ImportResult (SK-IMP): the new
@@ -54,6 +54,15 @@ export const skillApi = {
     req<Skill>(`/api/skills/${encodeURIComponent(slug)}/name-only`, {
       method: 'PUT',
       body: JSON.stringify({ nameOnly }),
+    }),
+  // Force a skill into one of the four visibility tiers (full | summary |
+  // name-only | hidden) — the skill analogue of a tool's visibility. The single
+  // entry point the tier selector drives; maps onto the autoSummary/nameOnly/
+  // summaryOnly flags on the backend.
+  setSkillVisibility: (slug: string, visibility: ToolVisibility) =>
+    req<Skill>(`/api/skills/${encodeURIComponent(slug)}/visibility`, {
+      method: 'PUT',
+      body: JSON.stringify({ visibility }),
     }),
   revealSkill: (slug: string) =>
     req<{ path: string }>(`/api/skills/${encodeURIComponent(slug)}/reveal`, { method: 'POST' }),

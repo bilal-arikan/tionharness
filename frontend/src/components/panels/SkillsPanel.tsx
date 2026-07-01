@@ -1,7 +1,8 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Tag, Trash2 } from 'lucide-react'
-import type { Skill, SkillDetail, SkillSource } from '../../types'
+import type { Skill, SkillDetail, SkillSource, ToolVisibility } from '../../types'
 import { api } from '../../api'
+import { VISIBILITY_TIERS } from './toolMeta'
 import { Markdown } from '../markdown/Markdown'
 import { CopyPathButton } from '../CopyPathButton'
 import { SkillEditor } from './SkillEditor'
@@ -98,6 +99,7 @@ export function SkillsPanel({ onError }: Props) {
   const [accessBusy, setAccessBusy] = useState(false)
   const [summaryBusy, setSummaryBusy] = useState(false)
   const [nameOnlyBusy, setNameOnlyBusy] = useState(false)
+  const [visBusy, setVisBusy] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
@@ -228,6 +230,27 @@ export function SkillsPanel({ onError }: Props) {
       .catch((e) => onError((e as Error).message))
       .finally(() => setNameOnlyBusy(false))
   }, [active, reload, onError])
+
+  // Set the selected skill's 4-way visibility tier (full | summary | name-only |
+  // hidden) — the skill analogue of a tool's context tier. One backend call
+  // rewrites the autoSummary/nameOnly/summaryOnly frontmatter flags together.
+  const setVisibility = useCallback(
+    (tier: ToolVisibility) => {
+      if (!active || active.visibility === tier) return
+      setVisBusy(true)
+      api
+        .setSkillVisibility(active.slug, tier)
+        .then((sk) => {
+          setActive((a) =>
+            a ? { ...a, visibility: sk.visibility, autoSummary: sk.autoSummary, nameOnly: sk.nameOnly, summaryOnly: sk.summaryOnly } : a,
+          )
+          reload()
+        })
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setVisBusy(false))
+    },
+    [active, reload, onError],
+  )
 
   // After the editor saves, refresh the list and focus the saved skill.
   const onEditorSaved = useCallback(
@@ -520,34 +543,11 @@ export function SkillsPanel({ onError }: Props) {
                   {active.shared ? <Lock size={14} /> : <Globe size={14} />}
                   {active.shared ? 'Kısıtla' : 'Paylaş'}
                 </button>
-                <button
-                  data-testid="skill-detail-toggle-summary"
-                  onClick={toggleAutoSummary}
-                  disabled={summaryBusy}
-                  title={
-                    active.autoSummary === false
-                      ? 'Özeti her oturuma ekle: ajanların sistem promptunda otomatik görünsün'
-                      : 'Özeti her oturumdan çıkar: otomatik prompta eklenmesin (atanan ajana yine görünür)'
-                  }
-                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
-                >
-                  {active.autoSummary === false ? <EyeOff size={14} /> : <Eye size={14} />}
-                  {active.autoSummary === false ? 'Özeti aç' : 'Özeti kapat'}
-                </button>
-                <button
-                  data-testid="skill-detail-toggle-nameonly"
-                  onClick={toggleNameOnly}
-                  disabled={nameOnlyBusy}
-                  title={
-                    active.nameOnly
-                      ? 'NameOnly kapat: özet (açıklama+when) Available Skills bloğunda tekrar görünsün'
-                      : 'NameOnly aç: blokta yalnız slug görünsün (açıklama+when bastırılır); model skill_search ile keşfeder'
-                  }
-                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
-                >
-                  <Tag size={14} />
-                  {active.nameOnly ? 'NameOnly kapat' : 'NameOnly'}
-                </button>
+                <SkillVisibilitySelector
+                  value={active.visibility ?? (active.autoSummary === false ? 'hidden' : active.nameOnly ? 'name-only' : 'full')}
+                  busy={visBusy}
+                  onSet={setVisibility}
+                />
                 <CopyPathButton path={active.dir} />
                 <button
                   data-testid="skill-detail-reveal"

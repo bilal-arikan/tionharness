@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Eye, Trash2, FolderOpen, ClipboardCopy, Check } from 'lucide-react'
+import { Eye, Trash2 } from 'lucide-react'
 import { api } from '../../api'
+import { CopyPathButton } from '../CopyPathButton'
+import { RevealButton } from '../RevealButton'
 import type { Agent, AgentPatch } from '../../types'
 import { AVATAR_COLORS, normalizeAvatar, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
@@ -46,28 +48,6 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [copiedPath, setCopiedPath] = useState(false)
-
-  // Copy the agent's on-disk JSON file path to the clipboard.
-  const copyPath = async () => {
-    try {
-      const { path } = await api.agentPath(agent.id)
-      await navigator.clipboard?.writeText(path)
-      setCopiedPath(true)
-      setTimeout(() => setCopiedPath(false), 1500)
-    } catch (e) {
-      setErr((e as Error).message)
-    }
-  }
-
-  // Open the folder holding the agent's JSON file in the OS file manager.
-  const revealFolder = async () => {
-    try {
-      await api.revealAgent(agent.id)
-    } catch (e) {
-      setErr((e as Error).message)
-    }
-  }
 
   const preview: Pick<Agent, 'id' | 'name' | 'avatar' | 'color'> = {
     id: agent.id,

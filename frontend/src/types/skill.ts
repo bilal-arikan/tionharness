@@ -34,6 +34,14 @@ export interface Skill {
   // NameOnly tier. It stays listed (the model can skill_search it); defaults to
   // false. Unlike autoSummary:false / paths, the skill is NOT dropped entirely.
   nameOnly?: boolean
+  // When true the skill is advertised as slug + description only (when-to-use
+  // suppressed) — the middle "summary" visibility tier between full and
+  // name-only. Defaults to false. Ignored when nameOnly is set.
+  summaryOnly?: boolean
+  // Derived 4-way visibility tier (full | summary | name-only | hidden) computed
+  // from autoSummary/nameOnly/summaryOnly on the backend. The single value the
+  // Skills screen's tier selector reads and writes; mirrors a tool's visibility.
+  visibility?: ToolVisibility
   source: SkillSource
 }
 
