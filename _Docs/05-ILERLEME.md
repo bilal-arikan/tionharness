@@ -38,6 +38,21 @@ konuşmada ~3× ucuz. Ağır (~40KB) workspace prompt eklemek SwarmGo'da cache-w
 +42K büyüttü (input değişmez — prompt cache'e gider). Sonuç: darboğaz claude-cli'nin
 sıcak prefix'i turlar arası **tutarlı** koruyamaması.
 
+## Dışa aktarıma canlı önizleme ✅ (2026-07-01)
+
+**İstek:** Dışa aktarım paneline **canlı önizleme** ekle.
+
+**Yapılan:**
+- `WorkspaceExportPanel`'e, kategori toggle'larının altında **Önizleme** kartı eklendi:
+  mevcut seçimin tam çıktısını pill'lerle gösterir (N ajan / akış / zamanlama / skill /
+  talimat / pano sütunu). Kapalı veya 0 olan kalemler soluk + üstü çizili.
+- Sayımlar backend kurallarını yansıtır: **zamanlama yalnızca seçili ajana bağlıysa** sayılır
+  (orphan düşer); akış/skill/talimat/pano ilgili toggle'a uyar.
+- Kart üstünde çözümlenen **ad · sürüm · pack id** ve aynı slug'a yeniden yayında
+  **üzerine yazma** notu. Frontend `slugify`, Go `slugify` ile birebir eşleşir →
+  önizleme sunucuyla aynı `workspace-<slug>` id'sini verir.
+- `npx tsc --noEmit` ✅. Dosya: `frontend/src/components/workspace/WorkspaceExportPanel.tsx`.
+
 ## Dışa aktarıma metadata alanları + bağımlılık uyarısı ✅ (2026-07-01)
 
 **İstek:** Dışa aktarıma **isim/açıklama/sürüm** alanı desteği ve **ajan bağımlılık uyarısı** ekle.

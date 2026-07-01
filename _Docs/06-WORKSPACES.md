@@ -61,6 +61,12 @@ detaylandırıldı. Panel: `frontend/src/components/workspace/WorkspaceExportPan
   yazabilir), zamanlamalar **tamamen düşer** (orphan atlanır). Flow bağımlılığı,
   `flow.graph` JSON'u client'ta parse edilip `type==='agent'` düğümlerinin `agentId`'leri
   toplanarak hesaplanır.
+- **Canlı önizleme (2026-07-01):** kategori toggle'larının altında, mevcut seçimin **tam
+  çıktısını** gösteren bir kart. Sayımlar backend kurallarını birebir yansıtır: akış/skill/
+  talimat/pano toggle'ına uyar; **zamanlama yalnızca seçili ajana bağlıysa** sayılır (orphan
+  düşer). Kart ayrıca çözümlenen **ad · sürüm · pack id**'yi (`workspace-<slug>`) ve aynı
+  slug'a yeniden yayında **üzerine yazma** uyarısını gösterir. Slug, Go `slugify`'ın frontend
+  kopyasıyla hesaplanır (Türkçe/ASCII-dışı harfler düşer → önizleme sunucuyla aynı id'yi verir).
 - **API:** `api.publishPack('workspace', ws.id, include, meta)` → `POST /api/market/publish`.
   `include` = `WorkspaceExportInclude` (`agentIds: string[]|null` (null=tümü) + kategori
   boolean'ları); `meta` = `WorkspaceExportMeta` (`name?/description?/version?`, boş alanlar

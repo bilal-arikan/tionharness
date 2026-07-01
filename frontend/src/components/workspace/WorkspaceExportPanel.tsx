@@ -18,6 +18,25 @@ interface Props {
 // Category flags mirror WorkspaceExportInclude minus the per-agent selection.
 type CatKey = 'flows' | 'schedules' | 'skills' | 'instructions' | 'boardColumns'
 
+// slugify mirrors the Go server's slugify (internal/api/market_publish.go): lower,
+// keep [a-z0-9], collapse other runs to a single dash, trim dashes. Non-ASCII
+// (e.g. Turkish) letters are dropped — so the preview shows the same pack id the
+// server will derive.
+function slugify(s: string): string {
+  let out = ''
+  let prevDash = false
+  for (const ch of s.toLowerCase().trim()) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) {
+      out += ch
+      prevDash = false
+    } else if (!prevDash && out.length > 0) {
+      out += '-'
+      prevDash = true
+    }
+  }
+  return out.replace(/^-+|-+$/g, '')
+}
+
 export function WorkspaceExportPanel({ ws, onError }: Props) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
@@ -122,6 +141,31 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     }
     return out
   }, [flowAgentRefs, pickedAgents, cats.flows, cats.schedules, schedules, agents])
+
+  // Live preview: the exact contents the current selection would produce, mirroring
+  // the backend rules — flows/skills/instructions/board follow their toggle, but
+  // schedules only survive when bound to a selected agent (orphans are dropped).
+  const preview = useMemo(() => {
+    const schedEffective = cats.schedules
+      ? schedules.filter((sc) => pickedAgents.has(sc.agentId)).length
+      : 0
+    const resolvedName = name.trim() || ws.name
+    const slug = slugify(resolvedName) || ws.id.toLowerCase()
+    return {
+      resolvedName,
+      version: version.trim() || '1.0.0',
+      packId: `workspace-${slug}`,
+      willOverwrite: slug === (slugify(ws.name) || ws.id.toLowerCase()),
+      items: [
+        { icon: Boxes, label: 'Ajan', count: pickedAgents.size, on: true },
+        { icon: GitBranch, label: 'Akış', count: cats.flows ? flows.length : 0, on: cats.flows },
+        { icon: Clock, label: 'Zamanlama', count: schedEffective, on: cats.schedules },
+        { icon: Sparkles, label: 'Skill', count: cats.skills ? skills.length : 0, on: cats.skills },
+        { icon: FileText, label: 'Talimat', count: cats.instructions && hasInstructions ? 1 : 0, on: cats.instructions && hasInstructions },
+        { icon: Columns3, label: 'Pano sütunu', count: cats.boardColumns ? boardCount : 0, on: cats.boardColumns },
+      ],
+    }
+  }, [cats, schedules, pickedAgents, name, version, ws.name, ws.id, flows.length, skills.length, hasInstructions, boardCount])
 
   const catRows: { key: CatKey; label: string; hint: string; icon: typeof GitBranch; count: number }[] = useMemo(
     () => [
@@ -259,6 +303,40 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
             onChange={(v) => setCat(row.key, v)}
           />
         ))}
+      </div>
+
+      {/* Live preview — the exact contents the current selection produces */}
+      <div className="mt-2 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+            <PackageCheck size={13} className="text-[var(--color-accent)]" /> Önizleme
+          </span>
+          <span className="truncate text-xs text-[var(--color-text-dim)]">
+            <span className="font-medium text-[var(--color-text)]">{preview.resolvedName}</span> · v{preview.version} ·{' '}
+            <code className="rounded bg-[var(--color-surface-2)] px-1">{preview.packId}</code>
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {preview.items.map((it) => (
+            <span
+              key={it.label}
+              className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
+                it.on && it.count > 0
+                  ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                  : 'border-[var(--color-border)] text-[var(--color-text-dim)] line-through opacity-60'
+              }`}
+              title={it.on ? '' : 'Dahil edilmiyor'}
+            >
+              <it.icon size={12} /> {it.count} {it.label}
+            </span>
+          ))}
+        </div>
+        <div className="text-[11px] text-[var(--color-text-dim)]">
+          {preview.willOverwrite
+            ? `“${preview.packId}” zaten varsa üzerine yazılır (aynı slug).`
+            : `Yeni pack id oluşturulur: “${preview.packId}”.`}{' '}
+          Sırlar ve oturum geçmişi asla dahil edilmez.
+        </div>
       </div>
 
       {/* Dependency warnings — excluded agents that flows/schedules rely on */}
