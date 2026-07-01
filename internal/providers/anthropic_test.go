@@ -113,3 +113,57 @@ func TestToAnthropicTools_NoCacheWhenDisabled(t *testing.T) {
 		}
 	}
 }
+
+// With caching on, a single rolling breakpoint lands on the last block of the
+// last message so the whole conversation prefix is cached; no earlier message
+// carries one (one prefix breakpoint covers everything before it).
+func TestToAnthropicMessages_RollingHistoryBreakpoint(t *testing.T) {
+	msgs := []Message{
+		{Role: RoleUser, Text: "hi"},
+		{Role: RoleAssistant, Text: "hello"},
+		{Role: RoleUser, Text: "again"},
+	}
+	got := toAnthropicMessages(msgs, true)
+	if len(got) != 3 {
+		t.Fatalf("got %d messages, want 3", len(got))
+	}
+	for i := 0; i < len(got)-1; i++ {
+		for _, b := range got[i].Content {
+			if b.CacheControl != nil {
+				t.Errorf("message %d must not carry cache_control (only the last does)", i)
+			}
+		}
+	}
+	last := got[len(got)-1].Content
+	bp := last[len(last)-1].CacheControl
+	if bp == nil || bp.TTL != "1h" {
+		t.Errorf("last block must carry a 1h rolling breakpoint, got %+v", bp)
+	}
+}
+
+// The rolling breakpoint lands on the last block even when the final message is
+// a tool_result (assistant tool_use → user tool_result is a common turn tail).
+func TestToAnthropicMessages_BreakpointOnLastBlockAcrossKinds(t *testing.T) {
+	msgs := []Message{
+		{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "t1", Name: "x", Input: json.RawMessage(`{}`)}}},
+		{Role: RoleUser, ToolResults: []ToolResult{{CallID: "t1", Content: "ok"}}},
+	}
+	got := toAnthropicMessages(msgs, true)
+	last := got[len(got)-1].Content
+	if last[len(last)-1].Type != "tool_result" {
+		t.Fatalf("expected last block to be tool_result, got %q", last[len(last)-1].Type)
+	}
+	if last[len(last)-1].CacheControl == nil {
+		t.Error("rolling breakpoint must attach to a trailing tool_result block")
+	}
+}
+
+// With caching off, no message carries a breakpoint.
+func TestToAnthropicMessages_NoCacheWhenDisabled(t *testing.T) {
+	got := toAnthropicMessages([]Message{{Role: RoleUser, Text: "hi"}}, false)
+	for _, b := range got[0].Content {
+		if b.CacheControl != nil {
+			t.Error("no breakpoint expected when extendedCache is off")
+		}
+	}
+}

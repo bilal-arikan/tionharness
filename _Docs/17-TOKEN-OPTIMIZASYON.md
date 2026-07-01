@@ -140,6 +140,25 @@ breakpoint" pratiği). Politika değişmedi: yalnız `extendedCache` açıkken; 
 tool breakpoint'i eklenmez. Kod: `internal/providers/anthropic.go` (`anthropicTool.CacheControl`,
 `toAnthropicTools`). Test: `TestToAnthropicTools_*`.
 
+### Konuşma geçmişi kayan breakpoint'i (2026-07-02)
+
+Önceki iki breakpoint yalnız **statik** prefix'i (tools + system) cache'liyordu; her turda
+**tüm transkript** için tam input ücreti ödeniyordu. Uzun oturumlarda (özellikle Fable 5'in
+1M penceresinde) baskın maliyet kalemi ham geçmiştir. Artık `toAnthropicMessages` caching
+açıkken **son mesajın son bloğuna** kayan bir breakpoint (1h TTL) koyuyor → tüm konuşma
+prefix'i cache'lenir. Anthropic sırası `tools → system → messages`, breakpoint limiti 4;
+`tools(1) + system-static(1) + history(1) = 3` güvenle içeride. Tur N'de prefix cache
+**yazımı** olur, tur N+1'de aynı prefix cache **okuması** (0.10×) olur ve breakpoint en yeni
+mesaja kayar (standart "sliding breakpoint"). Breakpoint son bloğa konur — rol/blok türü
+farketmez (trailing `tool_result` da olur). Politika birleşik: yalnız `extendedCache` açıkken;
+`req.MaxTokens==0` yolu etkilenmez. Kod: `contentBlock.CacheControl` + `toAnthropicMessages`
+(iki çağrı yeri: `Complete`/`Stream`). Test: `TestToAnthropicMessages_*`.
+
+> **Uyarı — thinking cache'i bozar:** adaptif thinking parametresi tur-arası değişirse
+> mesaj prefix'i geçersiz olur (cache miss). `resolveThinkingBudget` deterministik olduğundan
+> normalde sabit kalır; bir ajanın thinking seviyesini oturum ortasında değiştirmek yeni bir
+> cache yazımı tetikler.
+
 ## the external agent project'tan Aktarılan Fikirler
 
 > Kaynak: `external-agent-oss` ([repo](https://github.com/external-agent-project/external-agent-oss)) bağlam-yönetimi

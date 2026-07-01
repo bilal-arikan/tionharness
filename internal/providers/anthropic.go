@@ -146,6 +146,9 @@ type contentBlock struct {
 	ToolUseID string `json:"tool_use_id,omitempty"`
 	Content   string `json:"content,omitempty"`
 	IsError   bool   `json:"is_error,omitempty"`
+	// CacheControl marks a rolling cache breakpoint on the conversation history
+	// (attached to the last block of the last message). See toAnthropicMessages.
+	CacheControl *cacheControl `json:"cache_control,omitempty"`
 }
 
 type anthropicTool struct {
@@ -205,7 +208,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		Model:     model,
 		MaxTokens: maxTokens,
 		System:    a.systemField(req.System, req.SystemDynamic),
-		Messages:  toAnthropicMessages(req.Messages),
+		Messages:  toAnthropicMessages(req.Messages, a.extendedCache),
 		Tools:     toAnthropicTools(req.Tools, a.extendedCache),
 		Thinking:  thinking,
 	}
@@ -288,7 +291,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 		Model:     model,
 		MaxTokens: maxTokens,
 		System:    a.systemField(req.System, req.SystemDynamic),
-		Messages:  toAnthropicMessages(req.Messages),
+		Messages:  toAnthropicMessages(req.Messages, a.extendedCache),
 		Thinking:  thinking,
 		Stream:    true,
 	}
@@ -431,8 +434,19 @@ func (a *Anthropic) systemField(static, dynamic string) any {
 }
 
 // toAnthropicMessages converts provider messages to content-block form,
-// skipping the system role (passed separately in the Anthropic API).
-func toAnthropicMessages(msgs []Message) []anthropicMessage {
+// skipping the system role (passed separately in the Anthropic API). When
+// extendedCache is on, a rolling cache breakpoint (1h TTL) is attached to the
+// last block of the last message so the ENTIRE conversation prefix up to the
+// current turn is cached — the biggest lever on a long session, where the raw
+// transcript (not the static system/tools) dominates input tokens. Anthropic
+// caches by prefix in tools → system → messages order and allows up to 4
+// breakpoints; with tools(1) + system-static(1) this history breakpoint is the
+// 3rd, safely within the limit. On turn N the breakpoint marks the prefix as a
+// cache write; on turn N+1 that same prefix is a cache read (0.10×) and the new
+// breakpoint moves forward to the newest message — the standard "sliding
+// breakpoint" pattern. Gated on the same extendedCache flag as the system/tool
+// breakpoints so the caching on/off policy stays unified.
+func toAnthropicMessages(msgs []Message, extendedCache bool) []anthropicMessage {
 	// Anthropic requires strictly alternating roles; merge any back-to-back
 	// same-role plain-text turns (e.g. two agents' replies in a shared thread)
 	// into one so the request is valid.
@@ -465,6 +479,15 @@ func toAnthropicMessages(msgs []Message) []anthropicMessage {
 			blocks = append(blocks, contentBlock{Type: "text", Text: ""})
 		}
 		out = append(out, anthropicMessage{Role: m.Role, Content: blocks})
+	}
+	// Rolling history breakpoint: mark the last block of the last message so the
+	// whole conversation prefix is cached. Placed after assembly so it lands on
+	// the newest turn regardless of role/block type.
+	if extendedCache && len(out) > 0 {
+		last := &out[len(out)-1]
+		if n := len(last.Content); n > 0 {
+			last.Content[n-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: "1h"}
+		}
 	}
 	return out
 }

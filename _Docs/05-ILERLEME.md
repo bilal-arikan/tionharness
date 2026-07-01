@@ -2,6 +2,25 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-02**
 
+## Native anthropic: konuşma geçmişi kayan cache breakpoint'i ✅ (2026-07-02)
+
+**İstek:** Fable 5 cache analizinde tespit edilen fırsat — native anthropic yolunda
+prompt-cache yalnız statik prefix'i (tools + system) kapsıyordu; uzun oturumlarda baskın
+maliyet olan ham transkript her turda tam ücretleniyordu (OpenRouter yolunda geçmiş
+breakpoint'i zaten vardı).
+
+**Yapılan:**
+- `contentBlock`'a `CacheControl` alanı eklendi; `toAnthropicMessages` artık
+  `extendedCache bool` parametresi alıyor ve caching açıkken **son mesajın son bloğuna**
+  kayan bir breakpoint (1h TTL) koyuyor. `Complete` + `Stream` çağrıları güncellendi.
+- Breakpoint muhasebesi: `tools(1) + system-static(1) + history(1) = 3` (Anthropic limiti 4).
+- Semantik: tur N cache yazımı → tur N+1 cache okuması (0.10×), breakpoint en yeni mesaja kayar.
+  Trailing `tool_result` dahil her blok türünde çalışır.
+- **Testler:** `TestToAnthropicMessages_RollingHistoryBreakpoint` (yalnız son blok işaretli),
+  `_BreakpointOnLastBlockAcrossKinds` (tool_result kuyruğu), `_NoCacheWhenDisabled`.
+  `_Docs/17`'ye bölüm + thinking-cache-invalidation uyarısı eklendi.
+- **Doğrulama:** `go build` ✅, providers testleri ✅ (12/12 anthropic testi PASS).
+
 ## Claude Fable 5 tam desteği ✅ (2026-07-02)
 
 **İstek:** SwarmGo'ya Fable 5 (claude-fable-5) desteği ekle.
