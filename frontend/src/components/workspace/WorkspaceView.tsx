@@ -156,7 +156,14 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
           )}
         </div>
 
-        <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-6">
+        {/* The Files/prompts tab spans the full width so prompt editors render
+            wide (and default to the split edit+preview view); the form tabs stay
+            in a comfortable centered column. */}
+        <div
+          className={`mx-auto w-full flex-1 space-y-4 overflow-y-auto p-6 ${
+            tab === 'files' ? 'max-w-none' : 'max-w-2xl'
+          }`}
+        >
           {!ws ? (
             <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
           ) : tab === 'general' ? (
