@@ -39,9 +39,8 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req summaryReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[summaryReq](w, r)
+	if !ok {
 		return
 	}
 	kind := strings.TrimSpace(req.Kind)

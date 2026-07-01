@@ -6,6 +6,7 @@ import { Markdown } from '../markdown/Markdown'
 import { CopyPathButton } from '../CopyPathButton'
 import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { useGroupedList } from '../../hooks/useGroupedList'
 import { SelectionBar, SelectionBarButton } from '../common'
 
 interface Props {
@@ -22,22 +23,16 @@ const SOURCE_LABEL: Record<SkillSource, string> = {
 // Label for the bucket holding skills with no `group` set; always rendered last.
 const UNGROUPED = 'Grupsuz'
 
-// groupSkills buckets a skill list by its `group` field, preserving the incoming
-// (name-sorted) order within each bucket. Returns ordered [groupName, skills]
-// pairs: named groups alphabetically first, the ungrouped bucket last.
-function groupSkills(list: Skill[]): Array<[string, Skill[]]> {
-  const buckets = new Map<string, Skill[]>()
-  for (const sk of list) {
-    const key = sk.group?.trim() || UNGROUPED
-    const arr = buckets.get(key)
-    if (arr) arr.push(sk)
-    else buckets.set(key, [sk])
-  }
-  return [...buckets.entries()].sort(([a], [b]) => {
-    if (a === UNGROUPED) return 1
-    if (b === UNGROUPED) return -1
-    return a.localeCompare(b, 'tr')
-  })
+// Group key for one skill: its `group` field, or the ungrouped bucket.
+function skillGroupKey(sk: Skill): string {
+  return sk.group?.trim() || UNGROUPED
+}
+
+// Order groups: named groups alphabetically (tr) first, ungrouped bucket last.
+function sortSkillGroups(a: string, b: string): number {
+  if (a === UNGROUPED) return 1
+  if (b === UNGROUPED) return -1
+  return a.localeCompare(b, 'tr')
 }
 
 function SourceBadge({ source }: { source: SkillSource }) {
@@ -115,40 +110,24 @@ export function SkillsPanel({ onError }: Props) {
     localStorage.setItem('swarmgo.skillsListWidth', String(listWidth))
   }, [listWidth])
 
-  // Collapsed (folded-in) group names, persisted so the layout survives reloads.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    try {
-      const raw = localStorage.getItem('swarmgo.skillsCollapsedGroups')
-      return new Set(raw ? (JSON.parse(raw) as string[]) : [])
-    } catch {
-      return new Set()
-    }
+  // Skills bucketed by group (named groups first, ungrouped last), with
+  // persisted per-group collapse state. Recomputed only when the catalog changes.
+  const {
+    groups: grouped,
+    collapsed,
+    toggle: toggleGroup,
+    allCollapsed,
+    toggleAll,
+  } = useGroupedList(list, {
+    keyOf: skillGroupKey,
+    sortGroups: sortSkillGroups,
+    persistKey: 'swarmgo.skillsCollapsedGroups',
   })
-  useEffect(() => {
-    localStorage.setItem('swarmgo.skillsCollapsedGroups', JSON.stringify([...collapsed]))
-  }, [collapsed])
-  const toggleGroup = useCallback((name: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (next.has(name)) next.delete(name)
-      else next.add(name)
-      return next
-    })
-  }, [])
-
-  // Skills bucketed by group (named groups first, ungrouped last). Recomputed
-  // only when the catalog changes.
-  const grouped = useMemo(() => groupSkills(list), [list])
   // Distinct existing group names, offered as editor autocomplete suggestions.
   const groupNames = useMemo(
     () => grouped.map(([name]) => name).filter((n) => n !== UNGROUPED),
     [grouped],
   )
-  // All groups currently folded? Drives the collapse/expand-all toggle.
-  const allCollapsed = grouped.length > 0 && grouped.every(([name]) => collapsed.has(name))
-  const toggleAll = useCallback(() => {
-    setCollapsed(() => (allCollapsed ? new Set() : new Set(grouped.map(([name]) => name))))
-  }, [allCollapsed, grouped])
 
   // Drag the divider to resize the list panel; tracks the pointer on document so
   // the drag continues even when the cursor leaves the thin handle.

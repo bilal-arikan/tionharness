@@ -31,9 +31,8 @@ import (
 // Pre-flight failures use a normal JSON error; once streaming begins, errors
 // are delivered as an `error` event.
 func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
-	var req chatReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[chatReq](w, r)
+	if !ok {
 		return
 	}
 	if req.SessionID == "" || (strings.TrimSpace(req.Message) == "" && len(req.Attachments) == 0) {

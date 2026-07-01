@@ -59,9 +59,9 @@ func (FocusViewTool) Def() providers.ToolDef {
 }
 
 func (FocusViewTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
-	var in focusViewInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", argErrFor("focus_view", err)
+	in, err := parseInput[focusViewInput]("focus_view", input)
+	if err != nil {
+		return "", err
 	}
 	view := strings.TrimSpace(in.View)
 	if view == "" {

@@ -82,9 +82,8 @@ type setAgentToolsReq struct {
 // per-agent denylist).
 func (s *Server) handleSetAgentTools(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req setAgentToolsReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[setAgentToolsReq](w, r)
+	if !ok {
 		return
 	}
 	blockedJSON, _ := json.Marshal(req.BlockedTools)

@@ -216,9 +216,8 @@ type createArtifactReq struct {
 
 // handleCreateArtifact creates an artifact manually (from the UI).
 func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
-	var req createArtifactReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[createArtifactReq](w, r)
+	if !ok {
 		return
 	}
 	if req.Title == "" {
@@ -259,9 +258,8 @@ type updateArtifactReq struct {
 // handleUpdateArtifact overwrites content and/or edits metadata in place.
 func (s *Server) handleUpdateArtifact(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req updateArtifactReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[updateArtifactReq](w, r)
+	if !ok {
 		return
 	}
 	database := ws(r).DB

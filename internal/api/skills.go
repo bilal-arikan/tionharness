@@ -92,9 +92,8 @@ func skillDetailFor(store *skills.Store, sk skills.Skill) skillDetail {
 // handleCreateSkill creates a new skill (folder + SKILL.md) in the workspace
 // tier and returns it with its body.
 func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
-	var req skillInputReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[skillInputReq](w, r)
+	if !ok {
 		return
 	}
 	store := ws(r).Runtime.Skills()
@@ -121,9 +120,8 @@ type importSkillReq struct {
 // bundled files. Returns the ImportResult (mapped fields + warnings) plus the
 // created skill detail. (SK-IMP)
 func (s *Server) handleImportSkill(w http.ResponseWriter, r *http.Request) {
-	var req importSkillReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[importSkillReq](w, r)
+	if !ok {
 		return
 	}
 	source := req.Source
@@ -149,9 +147,8 @@ func (s *Server) handleImportSkill(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateSkill rewrites an existing skill's frontmatter + body in place.
 func (s *Server) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
-	var req skillInputReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[skillInputReq](w, r)
+	if !ok {
 		return
 	}
 	store := ws(r).Runtime.Skills()
@@ -247,6 +244,33 @@ func (s *Server) handleSetSkillNameOnly(w http.ResponseWriter, r *http.Request) 
 	}
 	sk, err := ws(r).Runtime.Skills().SetNameOnly(r.PathValue("slug"), req.NameOnly)
 	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, sk)
+}
+
+// handleSetSkillVisibility forces a skill into one of the four visibility tiers
+// (full | summary | name-only | hidden) — the skill analogue of a tool's
+// visibility — by rewriting its SKILL.md frontmatter flags together, then returns
+// the updated skill. This is the single entry point the Skills screen's 4-way
+// selector drives.
+func (s *Server) handleSetSkillVisibility(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Visibility string `json:"visibility"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	sk, err := ws(r).Runtime.Skills().SetVisibility(r.PathValue("slug"), req.Visibility)
+	if err != nil {
+		// An invalid tier is a client error; a missing skill is a 404. Distinguish
+		// by message prefix so a typo returns 400, not 404.
+		if strings.HasPrefix(err.Error(), "invalid visibility tier") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}

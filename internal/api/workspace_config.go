@@ -72,9 +72,8 @@ func (s *Server) handleGetWorkspaceConfig(w http.ResponseWriter, r *http.Request
 // README are written directly; instructions route through the workspace manager
 // so ws-settings.json, the live runtime and the file all stay in sync.
 func (s *Server) handleUpdateWorkspaceConfig(w http.ResponseWriter, r *http.Request) {
-	var patch wsConfigPatch
-	if err := decodeJSON(r, &patch); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	patch, ok := bindJSON[wsConfigPatch](w, r)
+	if !ok {
 		return
 	}
 	wsDir := ws(r).DataDir

@@ -48,9 +48,9 @@ func (t ConfigValidateTool) Call(_ context.Context, input json.RawMessage) (stri
 	if !t.sb.Ready() {
 		return "", fmt.Errorf("config validation is not available (no working directory)")
 	}
-	var in configValidateInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", argErrFor("config_validate", err)
+	in, err := parseInput[configValidateInput]("config_validate", input)
+	if err != nil {
+		return "", err
 	}
 	if strings.TrimSpace(in.Path) == "" {
 		return "", fmt.Errorf("path is required")

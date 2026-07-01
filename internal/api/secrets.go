@@ -27,9 +27,8 @@ func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 
 // handleSetSecret creates or replaces a secret in the workspace vault.
 func (s *Server) handleSetSecret(w http.ResponseWriter, r *http.Request) {
-	var req setSecretReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[setSecretReq](w, r)
+	if !ok {
 		return
 	}
 	vault := ws(r).Secrets

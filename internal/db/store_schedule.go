@@ -2,12 +2,10 @@ package db
 
 import (
 	"context"
-	"sort"
 )
 
 func (d *DB) persistScheduleLocked(sc Schedule) error {
-	d.schedules[sc.ID] = sc
-	return atomicWriteJSON(d.dir(dirSchedules, sc.ID+".json"), sc)
+	return dbPersistLocked(d, d.schedules, dirSchedules, sc.ID, sc)
 }
 
 // CreateSchedule inserts a new schedule.
@@ -21,40 +19,20 @@ func (d *DB) CreateSchedule(ctx context.Context, sc Schedule) (Schedule, error) 
 
 // GetSchedule loads a schedule by id.
 func (d *DB) GetSchedule(ctx context.Context, id string) (Schedule, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	sc, ok := d.schedules[id]
-	if !ok {
-		return Schedule{}, ErrNotFound
-	}
-	return sc, nil
+	return dbGet(d, d.schedules, id)
 }
 
 // ListSchedules returns all schedules, newest first.
 func (d *DB) ListSchedules(ctx context.Context) ([]Schedule, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make([]Schedule, 0, len(d.schedules))
-	for _, sc := range d.schedules {
-		out = append(out, sc)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
-	return out, nil
+	return dbList(d, d.schedules, func(a, b Schedule) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
-// ListEnabledSchedules returns only enabled schedules (for the scheduler boot).
+// ListEnabledSchedules returns only enabled schedules (for the scheduler boot),
+// newest first.
 func (d *DB) ListEnabledSchedules(ctx context.Context) ([]Schedule, error) {
-	all, err := d.ListSchedules(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]Schedule, 0, len(all))
-	for _, sc := range all {
-		if sc.Enabled {
-			out = append(out, sc)
-		}
-	}
-	return out, nil
+	return dbFilter(d, d.schedules,
+		func(sc Schedule) bool { return sc.Enabled },
+		func(a, b Schedule) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
 // UpdateSchedule edits the mutable fields of a schedule (agent/cron/task/prompt).
@@ -111,9 +89,5 @@ func (d *DB) GetOrCreateKindSession(ctx context.Context, agentID, kind, title st
 func (d *DB) DeleteSchedule(ctx context.Context, id string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if _, ok := d.schedules[id]; !ok {
-		return ErrNotFound
-	}
-	delete(d.schedules, id)
-	return removeFile(d.dir(dirSchedules, id+".json"))
+	return dbDeleteLocked(d, d.schedules, dirSchedules, id)
 }

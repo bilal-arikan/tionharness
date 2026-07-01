@@ -12,12 +12,13 @@ import {
   Sparkles,
   type LucideIcon,
 } from 'lucide-react'
-import type { Agent, Execution, Message } from '../../types'
+import type { Agent, Message } from '../../types'
 import { api } from '../../api'
 import { MessageList } from '../chat/MessageList'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { useAsync } from '../../hooks/useAsync'
 import { SelectionBar, SelectionBarButton } from '../common'
 
 interface Props {
@@ -90,7 +91,6 @@ function StatusPill({ status }: { status: string }) {
 // across chat / task / flow / schedule (each backed by a Session),
 // with live status, plus a read-only transcript viewer for the selected one.
 export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, onOpenFlowRun, focusId, onSelectExecution }: Props) {
-  const [items, setItems] = useState<Execution[]>([])
   const [filter, setFilter] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(focusId ?? null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -127,22 +127,17 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
     if (focusId) setSelectedId(focusId)
   }, [focusId])
 
-  const load = useCallback(
-    (kind: string) => {
-      api
-        .listExecutions(kind || undefined)
-        .then(setItems)
-        .catch((e) => onError((e as Error).message))
-    },
-    [onError],
-  )
-
-  // Initial + filter-change load, then poll so live "running" / status stays fresh.
+  // Initial + filter-change load, then poll so live "running" / status stays
+  // fresh. Errors surface via onError.
+  const {
+    data: itemsData,
+    error: itemsError,
+    refresh: reloadItems,
+  } = useAsync(() => api.listExecutions(filter || undefined), [filter], { pollMs: POLL_MS })
+  const items = itemsData ?? []
   useEffect(() => {
-    load(filter)
-    const t = setInterval(() => load(filter), POLL_MS)
-    return () => clearInterval(t)
-  }, [filter, load])
+    if (itemsError) onError(itemsError)
+  }, [itemsError, onError])
 
   // Resolve the selected session's on-disk folder for the header path buttons.
   useEffect(() => {
@@ -203,7 +198,7 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
             Yürütmeler
           </span>
           <button
-            onClick={() => load(filter)}
+            onClick={() => reloadItems()}
             title="Yenile"
             className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
           >

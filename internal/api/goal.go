@@ -30,9 +30,8 @@ type setGoalReq struct {
 // and its done state.
 func (s *Server) handleSetSessionGoal(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req setGoalReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[setGoalReq](w, r)
+	if !ok {
 		return
 	}
 	goal := strings.TrimSpace(req.Goal)

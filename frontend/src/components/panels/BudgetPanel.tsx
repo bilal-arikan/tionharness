@@ -13,47 +13,14 @@ import {
   Sigma,
 } from 'lucide-react'
 import { api } from '../../api'
-import type { WorkspaceUsage, KindStat, ProviderStat, BudgetTrendPoint } from '../../types'
+import type { KindStat, ProviderStat, BudgetTrendPoint } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { kindColor } from '../../lib/palette'
+import { tokens as fmt, usd, bytes, approxTokens } from '../../lib/format'
+import { useAsync } from '../../hooks/useAsync'
 
 interface Props {
   onError: (msg: string) => void
-}
-
-function fmt(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return `${n}`
-}
-
-// usd renders a USD cost. Sub-cent amounts get more precision so tiny spends
-// don't all collapse to $0.00.
-function usd(n: number): string {
-  if (n === 0) return '$0'
-  if (n < 0.01) return `$${n.toFixed(4)}`
-  return `$${n.toFixed(2)}`
-}
-
-// bytes renders a byte count as B/KB/MB. Used for the tool-output compaction
-// savings meters (System A/B), which are tracked in raw bytes, not tokens.
-function bytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  const units = ['KB', 'MB', 'GB']
-  let v = n / 1024
-  let i = 0
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i++
-  }
-  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`
-}
-
-// approxTokens estimates tokens from bytes at the plain-text ~4 chars/token
-// ratio. Honest approximation for the compaction savings (the exact figure
-// depends on tokenizer + content density); shown as "~N token".
-function approxTokens(n: number): number {
-  return Math.round(n / 4)
 }
 
 // TrendMetric selects which series the daily trend chart plots. Each maps a
@@ -259,9 +226,7 @@ function SavingsCell({ title, primary, sub, hint }: { title: string; primary: st
 // per-origin breakdown (the new ByKind data), a daily trend, and a per-agent
 // spend table with limit fill bars.
 export function BudgetPanel({ onError }: Props) {
-  const [usage, setUsage] = useState<WorkspaceUsage | null>(null)
   const [days, setDays] = useState(7)
-  const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   // Which series the daily trend chart plots. Token volume by default; the other
   // metrics let the same window be read as spend, caching ROI, or compaction.
@@ -275,17 +240,15 @@ export function BudgetPanel({ onError }: Props) {
       return next
     })
 
-  const load = (d = days) => {
-    setLoading(true)
-    api
-      .workspaceUsage(d)
-      .then(setUsage)
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setLoading(false))
-  }
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => load(days), [days])
+  // Fetch workspace usage for the selected window; re-runs when `days` changes
+  // and can be re-triggered by the refresh button. Errors surface via onError.
+  const { data: usage, loading, error, refresh: load } = useAsync(
+    () => api.workspaceUsage(days),
+    [days],
+  )
+  useEffect(() => {
+    if (error) onError(error)
+  }, [error, onError])
 
   const totalTokens = usage ? usage.totals.inputTokens + usage.totals.outputTokens : 0
 

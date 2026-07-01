@@ -2,14 +2,12 @@ package db
 
 import (
 	"context"
-	"sort"
 )
 
 // ---- Flows ----
 
 func (d *DB) persistFlowLocked(f Flow) error {
-	d.flows[f.ID] = f
-	return atomicWriteJSON(d.dir(dirFlows, f.ID+".json"), f)
+	return dbPersistLocked(d, d.flows, dirFlows, f.ID, f)
 }
 
 // CreateFlow inserts a new flow and returns the stored row.
@@ -38,25 +36,12 @@ func (d *DB) FlowPath(flowID string) (string, error) {
 
 // GetFlow loads a flow by id.
 func (d *DB) GetFlow(ctx context.Context, id string) (Flow, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	f, ok := d.flows[id]
-	if !ok {
-		return Flow{}, ErrNotFound
-	}
-	return f, nil
+	return dbGet(d, d.flows, id)
 }
 
 // ListFlows returns all flows, newest first.
 func (d *DB) ListFlows(ctx context.Context) ([]Flow, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make([]Flow, 0, len(d.flows))
-	for _, f := range d.flows {
-		out = append(out, f)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
-	return out, nil
+	return dbList(d, d.flows, func(a, b Flow) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
 // UpdateFlow edits a flow's name/description/graph.
@@ -97,8 +82,7 @@ func (d *DB) DeleteFlow(ctx context.Context, id string) error {
 // ---- Flow runs ----
 
 func (d *DB) persistFlowRunLocked(r FlowRun) error {
-	d.flowRuns[r.ID] = r
-	return atomicWriteJSON(d.dir(dirFlowRuns, r.ID+".json"), r)
+	return dbPersistLocked(d, d.flowRuns, dirFlowRuns, r.ID, r)
 }
 
 // CreateFlowRun opens a new run in the running state.
@@ -119,27 +103,14 @@ func (d *DB) CreateFlowRun(ctx context.Context, r FlowRun) (FlowRun, error) {
 
 // GetFlowRun loads a run by id.
 func (d *DB) GetFlowRun(ctx context.Context, id string) (FlowRun, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	r, ok := d.flowRuns[id]
-	if !ok {
-		return FlowRun{}, ErrNotFound
-	}
-	return r, nil
+	return dbGet(d, d.flowRuns, id)
 }
 
 // ListFlowRuns returns runs for a flow (or all if flowID is empty), newest first.
 func (d *DB) ListFlowRuns(ctx context.Context, flowID string) ([]FlowRun, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make([]FlowRun, 0)
-	for _, r := range d.flowRuns {
-		if flowID == "" || r.FlowID == flowID {
-			out = append(out, r)
-		}
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
-	return out, nil
+	return dbFilter(d, d.flowRuns,
+		func(r FlowRun) bool { return flowID == "" || r.FlowID == flowID },
+		func(a, b FlowRun) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
 // SetFlowRunState persists the restart-safe state snapshot mid-run.
@@ -173,14 +144,7 @@ func (d *DB) FinishFlowRun(ctx context.Context, id, status, output, errText stri
 // ListRunningFlowRuns returns runs still in the running state (for resume on boot),
 // oldest first.
 func (d *DB) ListRunningFlowRuns(ctx context.Context) ([]FlowRun, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make([]FlowRun, 0)
-	for _, r := range d.flowRuns {
-		if r.Status == FlowRunning {
-			out = append(out, r)
-		}
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
-	return out, nil
+	return dbFilter(d, d.flowRuns,
+		func(r FlowRun) bool { return r.Status == FlowRunning },
+		func(a, b FlowRun) bool { return a.CreatedAt < b.CreatedAt }), nil
 }

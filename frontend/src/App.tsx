@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { PanelRight, ClipboardCopy, Check, FolderOpen } from 'lucide-react'
 import { api, getActiveWorkspace, setActiveWorkspace } from './api'
-import type { Agent, AgentPatch, Artifact, Session, Message, AppSettings, AppEvent } from './types'
+import type { Agent, AgentPatch, Artifact, Session, Message, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
 import { SessionsSidebar } from './components/sessions/SessionsSidebar'
 import { AgentRoster } from './components/agents/AgentRoster'

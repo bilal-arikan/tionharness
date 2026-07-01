@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Database, Layers, Clock } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionContext, AgentUsage } from '../../types'
+import { usd } from '../../lib/format'
 
 interface Props {
   agentId: string | null
@@ -12,14 +13,10 @@ interface Props {
   onOpenBudget: () => void
 }
 
+// Local token formatter: caps at "k" (no "M" threshold) — the chat meter shows
+// live context which is expected to stay well under a million tokens.
 function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`
-}
-
-function usd(n: number): string {
-  if (n === 0) return '$0'
-  if (n < 0.01) return `$${n.toFixed(4)}`
-  return `$${n.toFixed(2)}`
 }
 
 // ChatMeters shows two indicators sharing nothing but the top bar: a LIVE

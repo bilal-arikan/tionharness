@@ -59,6 +59,32 @@ type ProviderKind interface {
 	Build(cfg ResolvedConfig) (Provider, error)
 }
 
+// basicKind is the data-driven ProviderKind used by every built-in transport.
+// A kind is fully described by three values — its static Manifest, an Available
+// predicate over the resolved config, and a Build function — so each kind_*.go
+// file is just those three values wired through NewBuiltinKind, with no bespoke
+// struct type or method set to repeat. A transport that needs behaviour beyond
+// these three (none today) can still implement ProviderKind directly.
+type basicKind struct {
+	manifest  Manifest
+	available func(ResolvedConfig) bool
+	build     func(ResolvedConfig) (Provider, error)
+}
+
+func (k basicKind) Manifest() Manifest                { return k.manifest }
+func (k basicKind) Available(cfg ResolvedConfig) bool { return k.available(cfg) }
+func (k basicKind) Build(cfg ResolvedConfig) (Provider, error) {
+	return k.build(cfg)
+}
+
+// NewBuiltinKind assembles a ProviderKind from its manifest, availability
+// predicate and build function. It is the one-liner every kind_*.go registers
+// through, collapsing the former per-kind struct + three method declarations
+// into a single self-registering init() call.
+func NewBuiltinKind(m Manifest, available func(ResolvedConfig) bool, build func(ResolvedConfig) (Provider, error)) ProviderKind {
+	return basicKind{manifest: m, available: available, build: build}
+}
+
 // kindRegistry holds the registered transports. It is package-global and
 // written only from init() (single-threaded at load), then read-only — so no
 // lock is needed.

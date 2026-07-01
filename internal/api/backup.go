@@ -64,9 +64,8 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "backup manager not available")
 		return
 	}
-	var req restoreBackupReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[restoreBackupReq](w, r)
+	if !ok {
 		return
 	}
 	archivePath, err := s.backups.ResolveArchive(req.WorkspaceID, req.Archive)
@@ -90,9 +89,9 @@ func (s *Server) handleDeleteArchive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "backup manager not available")
 		return
 	}
-	var req restoreBackupReq // same shape: {workspaceId, archive}
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	// same shape as restore: {workspaceId, archive}
+	req, ok := bindJSON[restoreBackupReq](w, r)
+	if !ok {
 		return
 	}
 	if err := s.backups.DeleteArchive(req.WorkspaceID, req.Archive); err != nil {

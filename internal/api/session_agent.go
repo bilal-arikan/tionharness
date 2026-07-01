@@ -15,9 +15,8 @@ type setAgentReq struct {
 // answered by this agent. The agent must exist in the workspace.
 func (s *Server) handleSetSessionAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req setAgentReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[setAgentReq](w, r)
+	if !ok {
 		return
 	}
 	agentID := strings.TrimSpace(req.AgentID)

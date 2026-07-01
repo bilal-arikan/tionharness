@@ -61,9 +61,9 @@ func (t SkillValidateTool) Call(_ context.Context, input json.RawMessage) (strin
 	if t.v == nil {
 		return "", fmt.Errorf("skill validation is not available in this workspace")
 	}
-	var in skillValidateInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", argErrFor("skill_validate", err)
+	in, err := parseInput[skillValidateInput]("skill_validate", input)
+	if err != nil {
+		return "", err
 	}
 	slug := strings.TrimSpace(in.SkillSlug)
 	if slug == "" {

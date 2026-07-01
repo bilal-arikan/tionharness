@@ -2,12 +2,10 @@ package db
 
 import (
 	"context"
-	"sort"
 )
 
 func (d *DB) persistTaskLocked(t Task) error {
-	d.tasks[t.ID] = t
-	return atomicWriteJSON(d.dir(dirTasks, t.ID+".json"), t)
+	return dbPersistLocked(d, d.tasks, dirTasks, t.ID, t)
 }
 
 // CreateTask inserts a new task and returns the stored row.
@@ -28,25 +26,12 @@ func (d *DB) CreateTask(ctx context.Context, t Task) (Task, error) {
 
 // GetTask loads a task by id.
 func (d *DB) GetTask(ctx context.Context, id string) (Task, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	t, ok := d.tasks[id]
-	if !ok {
-		return Task{}, ErrNotFound
-	}
-	return t, nil
+	return dbGet(d, d.tasks, id)
 }
 
 // ListTasks returns all tasks, newest first.
 func (d *DB) ListTasks(ctx context.Context) ([]Task, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make([]Task, 0, len(d.tasks))
-	for _, t := range d.tasks {
-		out = append(out, t)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
-	return out, nil
+	return dbList(d, d.tasks, func(a, b Task) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
 // UpdateTask edits the mutable fields of a task (title/description/prompt/owner/state).

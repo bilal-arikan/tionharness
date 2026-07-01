@@ -66,9 +66,8 @@ type gitInitReq struct {
 
 // handleGitInit runs `git init` (default branch "main") in an existing directory.
 func (s *Server) handleGitInit(w http.ResponseWriter, r *http.Request) {
-	var req gitInitReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[gitInitReq](w, r)
+	if !ok {
 		return
 	}
 	path := strings.TrimSpace(req.Path)
@@ -105,9 +104,8 @@ type gitConfigReq struct {
 // handleGitConfig applies repo-local git settings: origin remote URL and the
 // user.name / user.email identity. Only non-empty fields are written.
 func (s *Server) handleGitConfig(w http.ResponseWriter, r *http.Request) {
-	var req gitConfigReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[gitConfigReq](w, r)
+	if !ok {
 		return
 	}
 	path := strings.TrimSpace(req.Path)

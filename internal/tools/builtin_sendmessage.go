@@ -64,9 +64,9 @@ func (*SendMessageTool) Def() providers.ToolDef {
 }
 
 func (t *SendMessageTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
-	var in sendMessageInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", argErrFor("send_message", err)
+	in, err := parseInput[sendMessageInput]("send_message", input)
+	if err != nil {
+		return "", err
 	}
 	in.To = strings.TrimSpace(in.To)
 	in.Message = strings.TrimSpace(in.Message)

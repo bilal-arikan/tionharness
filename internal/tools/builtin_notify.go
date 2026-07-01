@@ -51,9 +51,9 @@ func (NotifyTool) Def() providers.ToolDef {
 var validLevels = map[string]bool{"info": true, "success": true, "error": true}
 
 func (NotifyTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
-	var in notifyInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", argErrFor("notify", err)
+	in, err := parseInput[notifyInput]("notify", input)
+	if err != nil {
+		return "", err
 	}
 	if strings.TrimSpace(in.Title) == "" {
 		return "", fmt.Errorf("title is required")

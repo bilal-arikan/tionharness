@@ -65,9 +65,8 @@ type chatResp struct {
 // handleChat runs one turn: persist user message, call the agent's provider
 // with full history, persist and return the assistant reply.
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
-	var req chatReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[chatReq](w, r)
+	if !ok {
 		return
 	}
 	if req.SessionID == "" || (strings.TrimSpace(req.Message) == "" && len(req.Attachments) == 0) {

@@ -40,9 +40,8 @@ func (s *Server) handleCreateMemory(w http.ResponseWriter, r *http.Request) {
 	agentID := r.PathValue("id")
 	wsp := ws(r)
 
-	var req createMemoryReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[createMemoryReq](w, r)
+	if !ok {
 		return
 	}
 	if strings.TrimSpace(req.Content) == "" {
@@ -94,9 +93,8 @@ func (s *Server) handlePutCore(w http.ResponseWriter, r *http.Request) {
 	agentID := r.PathValue("id")
 	wsp := ws(r)
 
-	var req putCoreReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[putCoreReq](w, r)
+	if !ok {
 		return
 	}
 	if _, err := wsp.DB.GetAgent(r.Context(), agentID); err != nil {
@@ -136,9 +134,8 @@ func (s *Server) handleDefineCoreBlock(w http.ResponseWriter, r *http.Request) {
 	agentID := r.PathValue("id")
 	wsp := ws(r)
 
-	var req defineCoreBlockReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[defineCoreBlockReq](w, r)
+	if !ok {
 		return
 	}
 	if _, err := wsp.DB.GetAgent(r.Context(), agentID); err != nil {
@@ -227,9 +224,8 @@ type recallReq struct {
 func (s *Server) handleRecall(w http.ResponseWriter, r *http.Request) {
 	agentID := r.PathValue("id")
 
-	var req recallReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[recallReq](w, r)
+	if !ok {
 		return
 	}
 	hits, err := ws(r).Runtime.Memory().Recall(r.Context(), agentID, req.Query, req.Limit)

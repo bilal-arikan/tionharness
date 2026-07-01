@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X, Anchor, Palette } from 'lucide-react'
 import { api } from '../../api'
-import type { MemoryGraph, MemoryGraphNode } from '../../types'
+import type { MemoryGraphNode } from '../../types'
 import { VisNetworkGraph } from './VisNetworkGraph'
 import { memoryToVis, MEMORY_KIND_COLOR, MEMORY_KIND_LABEL, fmtDate } from '../../lib/relationGraph'
+import { useAsync } from '../../hooks/useAsync'
 
 interface Props {
   agentId: string
@@ -22,31 +23,23 @@ const KIND_LEGEND: { kind: string; label: string }[] = [
 // links survive; a density slider tunes packing; hovering a node highlights its
 // neighbourhood; clicking a node opens a detail panel with the full content.
 export function MemoryGraphView({ agentId, onError }: Props) {
-  const [graph, setGraph] = useState<MemoryGraph | null>(null)
   const [threshold, setThreshold] = useState(0.18)
   const [density, setDensity] = useState(1)
-  const [loading, setLoading] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Layout toggles: per-kind draggable anchors (cluster by kind) and
   // connected-component coloring (cluster by topic).
   const [kindAnchors, setKindAnchors] = useState(true)
   const [clusterColor, setClusterColor] = useState(true)
 
-  const load = useCallback(
-    (t: number) => {
-      setLoading(true)
-      api
-        .memoryGraph(agentId, t)
-        .then(setGraph)
-        .catch((e) => onError((e as Error).message))
-        .finally(() => setLoading(false))
-    },
-    [agentId, onError],
+  // Re-fetch the memory graph whenever the agent or similarity threshold changes.
+  // Errors surface via onError.
+  const { data: graph, loading, error } = useAsync(
+    () => api.memoryGraph(agentId, threshold),
+    [agentId, threshold],
   )
-
   useEffect(() => {
-    load(threshold)
-  }, [load, threshold])
+    if (error) onError(error)
+  }, [error, onError])
 
   const { nodes, edges } = useMemo(
     () => (graph ? memoryToVis(graph, { kindAnchors, clusterColor }) : { nodes: [], edges: [] }),

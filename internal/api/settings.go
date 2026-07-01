@@ -87,9 +87,8 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 // handleUpdateSettings merges a partial patch, persists it, and re-applies the
 // settings to every live subsystem.
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
-	var patch settings.Patch
-	if err := decodeJSON(r, &patch); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	patch, ok := bindJSON[settings.Patch](w, r)
+	if !ok {
 		return
 	}
 	// Reject invalid enum/format values with a 400 (client error) so the UI shows
@@ -128,9 +127,8 @@ type testProviderResp struct {
 // handleTestProvider performs a minimal live completion to verify a provider is
 // configured and reachable (e.g. claude-cli logged in, Anthropic key valid).
 func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
-	var req testProviderReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[testProviderReq](w, r)
+	if !ok {
 		return
 	}
 

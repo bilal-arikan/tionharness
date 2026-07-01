@@ -55,9 +55,9 @@ func (MermaidValidateTool) Def() providers.ToolDef {
 }
 
 func (MermaidValidateTool) Call(_ context.Context, input json.RawMessage) (string, error) {
-	var in mermaidValidateInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", argErrFor("mermaid_validate", err)
+	in, err := parseInput[mermaidValidateInput]("mermaid_validate", input)
+	if err != nil {
+		return "", err
 	}
 	code := strings.TrimSpace(in.Code)
 	if code == "" {

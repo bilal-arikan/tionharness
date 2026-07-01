@@ -20,9 +20,8 @@ type spawnSessionReq struct {
 // UI "Yeni oturum başlat" surface; the spawn_session agent tool shares the same
 // Runtime.SpawnSession core.
 func (s *Server) handleSpawnSession(w http.ResponseWriter, r *http.Request) {
-	var req spawnSessionReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[spawnSessionReq](w, r)
+	if !ok {
 		return
 	}
 	if strings.TrimSpace(req.Prompt) == "" {

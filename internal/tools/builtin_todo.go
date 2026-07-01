@@ -64,9 +64,9 @@ func (TodoWriteTool) Def() providers.ToolDef {
 }
 
 func (TodoWriteTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
-	var in todoInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", argErrFor("todo_write", err)
+	in, err := parseInput[todoInput]("todo_write", input)
+	if err != nil {
+		return "", err
 	}
 	if len(in.Todos) == 0 {
 		return "", fmt.Errorf("todos must not be empty")

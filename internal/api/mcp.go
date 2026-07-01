@@ -80,9 +80,8 @@ func (req createMCPReq) toMCPRow() (db.MCPServer, error) {
 }
 
 func (s *Server) handleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
-	var req createMCPReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[createMCPReq](w, r)
+	if !ok {
 		return
 	}
 	row, err := req.toMCPRow()
@@ -194,9 +193,8 @@ type toggleMCPReq struct {
 
 func (s *Server) handleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req toggleMCPReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[toggleMCPReq](w, r)
+	if !ok {
 		return
 	}
 	if err := ws(r).DB.SetMCPServerEnabled(r.Context(), id, req.Enabled); err != nil {

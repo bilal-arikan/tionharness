@@ -19,43 +19,41 @@ import "fmt"
 // structured --output-format), or if it is run through a pseudo-terminal
 // (Unix `script -qec`, Windows ConPTY). Until then this kind is labelled DENEYSEL
 // and selecting it will fail fast with an actionable error (see Complete).
-type antigravityKind struct{}
-
-func (antigravityKind) Manifest() Manifest {
-	return Manifest{
-		Kind:             "antigravity-cli",
-		Label:            "Antigravity CLI (agy · DENEYSEL — upstream #76)",
-		NeedsKey:         false,
-		NeedsBaseURL:     false,
-		AllowCustomModel: true,
-		Order:            5,
-		// agy auto-selects when no model is given; these are the tiers agy exposes
-		// (via `agy models` / the in-TUI /model switcher). IDs may evolve —
-		// AllowCustomModel lets the user type any. "" = let agy auto-select.
-		Models: []ModelInfo{
-			{ID: "", Label: "Varsayılan (agy auto)", Description: "agy uygun katmanı seçer (varsayılan Flash)"},
-			{ID: "gemini-3.5-flash", Label: "Gemini 3.5 Flash — hızlı", Description: "Düşük gecikme varsayılan katman"},
-			{ID: "gemini-3.1-pro", Label: "Gemini 3.1 Pro — güçlü", Description: "Daha yetenekli Gemini katmanı"},
-			{ID: "claude-sonnet", Label: "Claude Sonnet — dengeli", Description: "agy üzerinden Anthropic Sonnet"},
-			{ID: "claude-opus", Label: "Claude Opus — en güçlü", Description: "agy üzerinden Anthropic Opus"},
-			{ID: "gpt-oss-120b", Label: "GPT-OSS 120B", Description: "agy üzerinden açık-ağırlık GPT-OSS"},
+func init() {
+	RegisterKind(NewBuiltinKind(
+		Manifest{
+			Kind:             "antigravity-cli",
+			Label:            "Antigravity CLI (agy · DENEYSEL — upstream #76)",
+			NeedsKey:         false,
+			NeedsBaseURL:     false,
+			AllowCustomModel: true,
+			Order:            5,
+			// agy auto-selects when no model is given; these are the tiers agy exposes
+			// (via `agy models` / the in-TUI /model switcher). IDs may evolve —
+			// AllowCustomModel lets the user type any. "" = let agy auto-select.
+			Models: []ModelInfo{
+				{ID: "", Label: "Varsayılan (agy auto)", Description: "agy uygun katmanı seçer (varsayılan Flash)"},
+				{ID: "gemini-3.5-flash", Label: "Gemini 3.5 Flash — hızlı", Description: "Düşük gecikme varsayılan katman"},
+				{ID: "gemini-3.1-pro", Label: "Gemini 3.1 Pro — güçlü", Description: "Daha yetenekli Gemini katmanı"},
+				{ID: "claude-sonnet", Label: "Claude Sonnet — dengeli", Description: "agy üzerinden Anthropic Sonnet"},
+				{ID: "claude-opus", Label: "Claude Opus — en güçlü", Description: "agy üzerinden Anthropic Opus"},
+				{ID: "gpt-oss-120b", Label: "GPT-OSS 120B", Description: "agy üzerinden açık-ağırlık GPT-OSS"},
+			},
 		},
-	}
-}
-
-func (antigravityKind) Available(cfg ResolvedConfig) bool { return cfg.AntigravityCLIPath != "" }
-
-func (antigravityKind) Build(cfg ResolvedConfig) (Provider, error) {
-	if cfg.AntigravityCLIPath == "" {
-		return nil, fmt.Errorf("antigravity CLI (agy) not found on PATH (install from https://antigravity.google/docs/cli-install)")
-	}
-	// agy auto-selects a model when none is given, so an empty/foreign global
-	// default is simply passed through as "" (no --model) rather than forced.
-	model := cfg.Model
-	if !looksLikeAntigravityModel(model) {
-		model = ""
-	}
-	return NewAntigravityCLI(cfg.AntigravityCLIPath, model, cfg.AntigravityKey), nil
+		func(cfg ResolvedConfig) bool { return cfg.AntigravityCLIPath != "" },
+		func(cfg ResolvedConfig) (Provider, error) {
+			if cfg.AntigravityCLIPath == "" {
+				return nil, fmt.Errorf("antigravity CLI (agy) not found on PATH (install from https://antigravity.google/docs/cli-install)")
+			}
+			// agy auto-selects a model when none is given, so an empty/foreign global
+			// default is simply passed through as "" (no --model) rather than forced.
+			model := cfg.Model
+			if !looksLikeAntigravityModel(model) {
+				model = ""
+			}
+			return NewAntigravityCLI(cfg.AntigravityCLIPath, model, cfg.AntigravityKey), nil
+		},
+	))
 }
 
 // looksLikeAntigravityModel reports whether a model id belongs to a tier agy
@@ -68,5 +66,3 @@ func looksLikeAntigravityModel(id string) bool {
 	}
 	return false
 }
-
-func init() { RegisterKind(antigravityKind{}) }

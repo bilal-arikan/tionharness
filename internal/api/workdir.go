@@ -57,9 +57,8 @@ type setWorkdirReq struct {
 // non-empty dir must be an absolute path to an existing directory.
 func (s *Server) handleSetSessionWorkdir(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req setWorkdirReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[setWorkdirReq](w, r)
+	if !ok {
 		return
 	}
 	dir := strings.TrimSpace(req.Dir)

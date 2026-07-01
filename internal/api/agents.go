@@ -65,9 +65,8 @@ type createAgentReq struct {
 }
 
 func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
-	var req createAgentReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[createAgentReq](w, r)
+	if !ok {
 		return
 	}
 	if req.Name == "" {
@@ -164,9 +163,8 @@ type updateAgentReq struct {
 }
 
 func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
-	var req updateAgentReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[updateAgentReq](w, r)
+	if !ok {
 		return
 	}
 	if req.Name != nil && *req.Name == "" {

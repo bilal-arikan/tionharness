@@ -17,6 +17,19 @@ export interface ConnectorSearchResult {
   warnings: string[]
 }
 
+// WorkspaceExportInclude selects what a workspace-template export captures.
+// `agentIds: null` means every agent; the boolean flags gate each optional
+// category. Omitting the whole object (publishPack without `include`) keeps the
+// legacy "export everything" behaviour.
+export interface WorkspaceExportInclude {
+  agentIds: string[] | null
+  flows: boolean
+  schedules: boolean
+  skills: boolean
+  instructions: boolean
+  boardColumns: boolean
+}
+
 export const marketApi = {
   listRegistries: () => req<Registry[]>('/api/market/registries'),
   addRegistry: (name: string, url: string) =>

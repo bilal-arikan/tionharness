@@ -414,6 +414,7 @@ func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/skills/{slug}/access", s.handleSetSkillAccess)
 	mux.HandleFunc("PUT /api/skills/{slug}/auto-summary", s.handleSetSkillAutoSummary)
 	mux.HandleFunc("PUT /api/skills/{slug}/name-only", s.handleSetSkillNameOnly)
+	mux.HandleFunc("PUT /api/skills/{slug}/visibility", s.handleSetSkillVisibility)
 	mux.HandleFunc("POST /api/skills/{slug}/reveal", s.handleRevealSkill)
 }
 

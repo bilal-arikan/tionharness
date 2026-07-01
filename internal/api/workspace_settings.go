@@ -88,9 +88,8 @@ func (s *Server) handleGetWorkspaceSettings(w http.ResponseWriter, r *http.Reque
 // handleUpdateWorkspaceSettings applies a partial update (including rename) to
 // the active workspace and persists it.
 func (s *Server) handleUpdateWorkspaceSettings(w http.ResponseWriter, r *http.Request) {
-	var patch workspace.WSSettingsPatch
-	if err := decodeJSON(r, &patch); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	patch, ok := bindJSON[workspace.WSSettingsPatch](w, r)
+	if !ok {
 		return
 	}
 	updated, err := s.workspaces.UpdateSettings(ws(r).ID, patch)

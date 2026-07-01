@@ -440,9 +440,8 @@ type chatControlReq struct {
 // the tool loop folds in before its next model call; "answer" delivers a reply
 // to a blocked ask_user tool call.
 func (s *Server) handleChatControl(w http.ResponseWriter, r *http.Request) {
-	var req chatControlReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[chatControlReq](w, r)
+	if !ok {
 		return
 	}
 	run := s.runs.get(req.RunID)
@@ -487,9 +486,8 @@ type cancelWakeReq struct {
 // fired. It cancels the timer + deletes the schedule via the workspace runtime,
 // which also emits a phase=cancelled event so the open screen clears the banner.
 func (s *Server) handleCancelWake(w http.ResponseWriter, r *http.Request) {
-	var req cancelWakeReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[cancelWakeReq](w, r)
+	if !ok {
 		return
 	}
 	if req.SessionID == "" {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
 import type { WorkspaceTemplate } from '../../types'
 import { EmojiField } from '../common/EmojiField'
-import { Button } from '../common'
+import { Button, ModalOverlay } from '../common'
 
 export interface NewWorkspaceData {
   name: string
@@ -32,12 +32,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
 
   useEffect(() => {
     nameRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [])
 
   // Load the available templates (market workspace-kind packs) for the picker.
   useEffect(() => {
@@ -82,17 +77,13 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onMouseDown={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Yeni workspace"
         data-testid="workspace-create-modal"
         className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
-        onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 text-base font-semibold">Yeni Workspace</h2>
 
@@ -180,6 +171,6 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
           </Button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

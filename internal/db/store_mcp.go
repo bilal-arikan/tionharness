@@ -2,12 +2,10 @@ package db
 
 import (
 	"context"
-	"sort"
 )
 
 func (d *DB) persistMCPLocked(m MCPServer) error {
-	d.mcp[m.ID] = m
-	return atomicWriteJSON(d.dir(dirMCP, m.ID+".json"), m)
+	return dbPersistLocked(d, d.mcp, dirMCP, m.ID, m)
 }
 
 // CreateMCPServer inserts a new MCP server config and returns the stored row.
@@ -36,40 +34,19 @@ func (d *DB) CreateMCPServer(ctx context.Context, m MCPServer) (MCPServer, error
 
 // GetMCPServer loads an MCP server by id.
 func (d *DB) GetMCPServer(ctx context.Context, id string) (MCPServer, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	m, ok := d.mcp[id]
-	if !ok {
-		return MCPServer{}, ErrNotFound
-	}
-	return m, nil
+	return dbGet(d, d.mcp, id)
 }
 
 // ListMCPServers returns all configured servers, newest first.
 func (d *DB) ListMCPServers(ctx context.Context) ([]MCPServer, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make([]MCPServer, 0, len(d.mcp))
-	for _, m := range d.mcp {
-		out = append(out, m)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
-	return out, nil
+	return dbList(d, d.mcp, func(a, b MCPServer) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
-// ListEnabledMCPServers returns only servers with Enabled = true.
+// ListEnabledMCPServers returns only servers with Enabled = true, newest first.
 func (d *DB) ListEnabledMCPServers(ctx context.Context) ([]MCPServer, error) {
-	all, err := d.ListMCPServers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]MCPServer, 0, len(all))
-	for _, m := range all {
-		if m.Enabled {
-			out = append(out, m)
-		}
-	}
-	return out, nil
+	return dbFilter(d, d.mcp,
+		func(m MCPServer) bool { return m.Enabled },
+		func(a, b MCPServer) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
 // SetMCPServerEnabled toggles a server on/off.
@@ -88,11 +65,7 @@ func (d *DB) SetMCPServerEnabled(ctx context.Context, id string, enabled bool) e
 func (d *DB) DeleteMCPServer(ctx context.Context, id string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if _, ok := d.mcp[id]; !ok {
-		return ErrNotFound
-	}
-	delete(d.mcp, id)
-	return removeFile(d.dir(dirMCP, id+".json"))
+	return dbDeleteLocked(d, d.mcp, dirMCP, id)
 }
 
 // UpdateAgentTools sets an agent's tool access: whether MCP tools are offered

@@ -33,9 +33,8 @@ func validHookEvent(e string) bool {
 
 func (s *Server) handleCreateHook(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
-	var req hookReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[hookReq](w, r)
+	if !ok {
 		return
 	}
 	if !validHookEvent(req.Event) {
@@ -64,9 +63,8 @@ func (s *Server) handleCreateHook(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateHook(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
-	var req hookReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[hookReq](w, r)
+	if !ok {
 		return
 	}
 	if !validHookEvent(req.Event) {
@@ -104,9 +102,8 @@ type toggleHookReq struct {
 func (s *Server) handleToggleHook(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
-	var req toggleHookReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[toggleHookReq](w, r)
+	if !ok {
 		return
 	}
 	if err := wsp.DB.SetHookEnabled(r.Context(), id, req.Enabled); writeDBError(w, err, "hook not found") {

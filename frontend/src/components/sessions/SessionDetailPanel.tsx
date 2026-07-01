@@ -5,8 +5,9 @@ import type { SessionInfo, SessionUsageDetail, SessionProgress } from '../../typ
 import { SessionContextModal } from './SessionContextModal'
 import { SessionDebugCard } from './SessionDebugCard'
 import { AgentIdentity } from '../agents/AgentIdentity'
-import { PromptEditor } from '../common'
+import { PromptEditor, KeyValueRow as Row } from '../common'
 import { roleColor } from '../../lib/palette'
+import { usd, tokens as fmtTok } from '../../lib/format'
 
 interface Props {
   sessionId: string
@@ -25,18 +26,6 @@ interface Props {
   onSelectAgent?: (id: string) => void
   // Navigate to another session (used by the context-reset lineage link).
   onSelectSession?: (id: string) => void
-}
-
-function usd(n: number): string {
-  if (n === 0) return '$0'
-  if (n < 0.01) return `$${n.toFixed(4)}`
-  return `$${n.toFixed(2)}`
-}
-
-function fmtTok(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return `${n}`
 }
 
 // SessionDetailPanel is the right-hand inspector for the active chat session:
@@ -650,15 +639,6 @@ function SaveRow({ label, value, hint }: { label: string; value: string; hint?: 
       <span className="ml-2 shrink-0 font-medium" style={{ color: 'var(--color-success)' }}>
         {value}
       </span>
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-0.5 text-xs">
-      <span className="text-[var(--color-text-dim)]">{label}</span>
-      <span className="text-[var(--color-text)]">{value}</span>
     </div>
   )
 }

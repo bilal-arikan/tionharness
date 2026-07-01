@@ -102,9 +102,8 @@ type setWorkspaceToolsReq struct {
 // visibility values are rejected so a typo can't silently leave a tool at its
 // default.
 func (s *Server) handleSetWorkspaceTools(w http.ResponseWriter, r *http.Request) {
-	var req setWorkspaceToolsReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[setWorkspaceToolsReq](w, r)
+	if !ok {
 		return
 	}
 	cfg, err := ws(r).DB.GetWorkspaceToolConfig(r.Context())

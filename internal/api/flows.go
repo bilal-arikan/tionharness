@@ -53,9 +53,8 @@ func marshalGraph(g *orchestration.Graph) (string, error) {
 }
 
 func (s *Server) handleCreateFlow(w http.ResponseWriter, r *http.Request) {
-	var req flowReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[flowReq](w, r)
+	if !ok {
 		return
 	}
 	if strings.TrimSpace(req.Name) == "" {
@@ -81,9 +80,8 @@ func (s *Server) handleCreateFlow(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpdateFlow(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req flowReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[flowReq](w, r)
+	if !ok {
 		return
 	}
 	graph, err := marshalGraph(req.Graph)
@@ -258,9 +256,8 @@ func (s *Server) handleSessionRunFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req sessionFlowReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[sessionFlowReq](w, r)
+	if !ok {
 		return
 	}
 	if strings.TrimSpace(req.FlowID) == "" {
@@ -384,9 +381,8 @@ func (s *Server) handleSessionRunFlowStream(w http.ResponseWriter, r *http.Reque
 	if writeDBError(w, err, "session not found") {
 		return
 	}
-	var req sessionFlowReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[sessionFlowReq](w, r)
+	if !ok {
 		return
 	}
 	if strings.TrimSpace(req.FlowID) == "" {

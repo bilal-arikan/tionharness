@@ -79,9 +79,9 @@ func (*SpawnSessionTool) Def() providers.ToolDef {
 }
 
 func (t *SpawnSessionTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
-	var in spawnSessionInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", argErrFor("spawn_session", err)
+	in, err := parseInput[spawnSessionInput]("spawn_session", input)
+	if err != nil {
+		return "", err
 	}
 	in.Agent = strings.TrimSpace(in.Agent)
 	in.Prompt = strings.TrimSpace(in.Prompt)

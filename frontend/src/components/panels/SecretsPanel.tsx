@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Eye, EyeOff, Copy, Trash2, KeyRound } from 'lucide-react'
 import { api } from '../../api'
 import type { Secret } from '../../types'
 import { Button } from '../common'
+import { useAsync } from '../../hooks/useAsync'
 
 interface Props {
   onError: (msg: string) => void
@@ -14,8 +15,13 @@ interface Props {
 // through the secret_list / secret_get tools. A value can be revealed/copied on
 // demand via an explicit per-secret action.
 export function SecretsPanel({ onError }: Props) {
-  const [secrets, setSecrets] = useState<Secret[]>([])
-  const [loading, setLoading] = useState(true)
+  // Load the workspace secret list; refetched after add/edit/delete. Errors
+  // surface via onError.
+  const { data, loading, error, refresh: load } = useAsync(() => api.listSecrets(), [])
+  const secrets = data ?? []
+  useEffect(() => {
+    if (error) onError(error)
+  }, [error, onError])
 
   // Add / edit form.
   const [name, setName] = useState('')
@@ -26,17 +32,6 @@ export function SecretsPanel({ onError }: Props) {
 
   // Revealed values, keyed by secret name (cleared on hide).
   const [revealed, setRevealed] = useState<Record<string, string>>({})
-
-  const load = useCallback(() => {
-    setLoading(true)
-    api
-      .listSecrets()
-      .then(setSecrets)
-      .catch((e) => onError(e.message))
-      .finally(() => setLoading(false))
-  }, [onError])
-
-  useEffect(() => load(), [load])
 
   const resetForm = () => {
     setName('')

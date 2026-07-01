@@ -57,9 +57,8 @@ func (s *Server) handlePrices(w http.ResponseWriter, _ *http.Request) {
 // handleUpsertProvider creates or updates a custom provider, then re-applies
 // settings so the registry picks it up immediately.
 func (s *Server) handleUpsertProvider(w http.ResponseWriter, r *http.Request) {
-	var req upsertProviderReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[upsertProviderReq](w, r)
+	if !ok {
 		return
 	}
 	_, err := s.settings.UpsertCustomProvider(settings.CustomProvider{

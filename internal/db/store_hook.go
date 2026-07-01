@@ -2,12 +2,10 @@ package db
 
 import (
 	"context"
-	"sort"
 )
 
 func (d *DB) persistHookLocked(h Hook) error {
-	d.hooks[h.ID] = h
-	return atomicWriteJSON(d.dir(dirHooks, h.ID+".json"), h)
+	return dbPersistLocked(d, d.hooks, dirHooks, h.ID, h)
 }
 
 // CreateHook inserts a new hook config and returns the stored row.
@@ -24,40 +22,20 @@ func (d *DB) CreateHook(ctx context.Context, h Hook) (Hook, error) {
 
 // GetHook loads a hook by id.
 func (d *DB) GetHook(ctx context.Context, id string) (Hook, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	h, ok := d.hooks[id]
-	if !ok {
-		return Hook{}, ErrNotFound
-	}
-	return h, nil
+	return dbGet(d, d.hooks, id)
 }
 
 // ListHooks returns all hooks, newest first.
 func (d *DB) ListHooks(ctx context.Context) ([]Hook, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make([]Hook, 0, len(d.hooks))
-	for _, h := range d.hooks {
-		out = append(out, h)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
-	return out, nil
+	return dbList(d, d.hooks, func(a, b Hook) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
 // ListEnabledHooksByEvent returns only enabled hooks for the given event,
 // oldest first so they fire in a stable, creation-ordered chain.
 func (d *DB) ListEnabledHooksByEvent(ctx context.Context, event string) ([]Hook, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make([]Hook, 0, len(d.hooks))
-	for _, h := range d.hooks {
-		if h.Enabled && h.Event == event {
-			out = append(out, h)
-		}
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
-	return out, nil
+	return dbFilter(d, d.hooks,
+		func(h Hook) bool { return h.Enabled && h.Event == event },
+		func(a, b Hook) bool { return a.CreatedAt < b.CreatedAt }), nil
 }
 
 // UpdateHook edits the mutable fields of a hook.
@@ -93,9 +71,5 @@ func (d *DB) SetHookEnabled(ctx context.Context, id string, enabled bool) error 
 func (d *DB) DeleteHook(ctx context.Context, id string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if _, ok := d.hooks[id]; !ok {
-		return ErrNotFound
-	}
-	delete(d.hooks, id)
-	return removeFile(d.dir(dirHooks, id+".json"))
+	return dbDeleteLocked(d, d.hooks, dirHooks, id)
 }

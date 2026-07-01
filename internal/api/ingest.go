@@ -21,9 +21,8 @@ func (s *Server) registerIngestRoutes(mux *http.ServeMux) {
 // handleIngestPreview fetches a source and returns its first artifacts WITH rendered
 // bodies, so a source-ref (directory-site) catalog entry can be previewed before install.
 func (s *Server) handleIngestPreview(w http.ResponseWriter, r *http.Request) {
-	var req ingestSource
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[ingestSource](w, r)
+	if !ok {
 		return
 	}
 	source, location := req.resolve()
@@ -61,9 +60,8 @@ func (req ingestSource) resolve() (source, location string) {
 // preview metadata (kind, slug, name, description, bundled files, warnings, and
 // whether it already exists here) so the UI can let the user pick what to import.
 func (s *Server) handleIngestScan(w http.ResponseWriter, r *http.Request) {
-	var req ingestSource
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[ingestSource](w, r)
+	if !ok {
 		return
 	}
 	source, location := req.resolve()
@@ -126,9 +124,8 @@ type ingestInstallResult struct {
 // error or conflict) is recorded as a skip, never aborting the batch. Successful
 // installs stamp the market ledger so re-imports show as "Kuruldu"/"Güncelle".
 func (s *Server) handleIngestInstall(w http.ResponseWriter, r *http.Request) {
-	var req ingestInstallReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[ingestInstallReq](w, r)
+	if !ok {
 		return
 	}
 	source, location := req.resolve()

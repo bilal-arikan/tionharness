@@ -45,9 +45,8 @@ func clampProgress(p int) int {
 }
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
-	var req createTaskReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[createTaskReq](w, r)
+	if !ok {
 		return
 	}
 	ctx := r.Context()
@@ -130,9 +129,8 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	oldBoard := task.BoardState
 
-	var req updateTaskReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[updateTaskReq](w, r)
+	if !ok {
 		return
 	}
 	if req.Title != nil {

@@ -18,9 +18,8 @@ type setStateReq struct {
 // mutation an agent makes via archive_session.
 func (s *Server) handleSetSessionState(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req setStateReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[setStateReq](w, r)
+	if !ok {
 		return
 	}
 	state := strings.TrimSpace(req.State)
@@ -61,9 +60,8 @@ type createSessionReq struct {
 }
 
 func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
-	var req createSessionReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[createSessionReq](w, r)
+	if !ok {
 		return
 	}
 	// agentId is the session's default agent. Optional: when omitted we fall

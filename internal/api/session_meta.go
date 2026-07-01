@@ -16,9 +16,8 @@ type setPinReq struct {
 
 func (s *Server) handleSetSessionPin(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req setPinReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[setPinReq](w, r)
+	if !ok {
 		return
 	}
 	ctx := r.Context()
@@ -40,9 +39,8 @@ type setFeedbackReq struct {
 func (s *Server) handleSetMessageFeedback(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 	msgID := r.PathValue("msgId")
-	var req setFeedbackReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[setFeedbackReq](w, r)
+	if !ok {
 		return
 	}
 	if req.Rating < -1 || req.Rating > 1 {

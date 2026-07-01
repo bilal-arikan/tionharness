@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { RefreshCw, X } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Task, Flow, BoardState, BoardColumnDef, TaskPriority } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { DependencyPicker } from './DependencyPicker'
-import { Button } from '../common'
+import { Button, ModalOverlay } from '../common'
 
 function parseDeps(raw: string): string[] {
   try {
@@ -57,15 +57,6 @@ export function TaskFormModal({
   const [depIds, setDepIds] = useState<string[]>(() => parseDeps(task?.dependencies ?? '[]'))
   const [saving, setSaving] = useState(false)
   const [retitling, setRetitling] = useState(false)
-
-  // Close on Escape.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
 
   const addTag = () => {
     const t = tagInput.trim()
@@ -133,12 +124,7 @@ export function TaskFormModal({
   const parentOptions = tasks.filter((t) => t.id !== task?.id)
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         data-testid="task-form-modal"
         className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl"
@@ -300,7 +286,7 @@ export function TaskFormModal({
           )}
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 

@@ -35,9 +35,8 @@ type createScheduleReq struct {
 func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
 
-	var req createScheduleReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[createScheduleReq](w, r)
+	if !ok {
 		return
 	}
 	if req.AgentID == "" {
@@ -87,9 +86,8 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
 
-	var req updateScheduleReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[updateScheduleReq](w, r)
+	if !ok {
 		return
 	}
 	if req.AgentID == "" {
@@ -139,9 +137,8 @@ func (s *Server) handleToggleSchedule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
 
-	var req toggleScheduleReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[toggleScheduleReq](w, r)
+	if !ok {
 		return
 	}
 	err := wsp.DB.SetScheduleEnabled(r.Context(), id, req.Enabled)

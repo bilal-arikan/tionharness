@@ -43,9 +43,8 @@ type createWorkspaceReq struct {
 }
 
 func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
-	var req createWorkspaceReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	req, ok := bindJSON[createWorkspaceReq](w, r)
+	if !ok {
 		return
 	}
 	wsNew, err := s.workspaces.Create(req.Name, strings.TrimSpace(req.Path), "")

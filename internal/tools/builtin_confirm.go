@@ -58,9 +58,9 @@ func (RequestConfirmationTool) Call(ctx context.Context, input json.RawMessage) 
 		return "", fmt.Errorf("request_confirmation is only available in interactive chat sessions; do not take the risky action")
 	}
 	ask := askerFrom(ctx)
-	var in confirmInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", argErrFor("request_confirmation", err)
+	in, err := parseInput[confirmInput]("request_confirmation", input)
+	if err != nil {
+		return "", err
 	}
 	if strings.TrimSpace(in.Question) == "" {
 		return "", fmt.Errorf("question is required")
