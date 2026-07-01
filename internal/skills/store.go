@@ -105,7 +105,7 @@ func scanDir(t tier) []Skill {
 		if name == "" {
 			name = slug
 		}
-		out = append(out, Skill{
+		sk := Skill{
 			Slug:            slug,
 			Name:            name,
 			Description:     fm.scalar("description"),
@@ -124,11 +124,32 @@ func scanDir(t tier) []Skill {
 			Shared:          isShared(fm),
 			AutoSummary:     isAutoSummary(fm),
 			NameOnly:        isNameOnly(fm),
+			SummaryOnly:     isSummaryOnly(fm),
 			Source:          t.source,
 			Path:            path,
-		})
+		}
+		sk.Visibility = skillVisibility(sk)
+		out = append(out, sk)
 	}
 	return out
+}
+
+// skillVisibility derives a skill's 4-way visibility tier from its underlying
+// frontmatter flags (the inverse of Store.SetVisibility). NameOnly beats
+// SummaryOnly when both are somehow set. A skill whose summary is not
+// auto-injected reads as hidden. Paths (conditional skills) are a separate
+// discovery mechanism and do NOT change the displayed tier.
+func skillVisibility(sk Skill) string {
+	if !sk.AutoSummary {
+		return VisibilityHidden
+	}
+	if sk.NameOnly {
+		return VisibilityNameOnly
+	}
+	if sk.SummaryOnly {
+		return VisibilitySummary
+	}
+	return VisibilityFull
 }
 
 // isShared reports whether a skill's frontmatter marks it as on-demand/shared
@@ -159,6 +180,18 @@ func isAutoSummary(fm frontmatter) bool {
 // enables it. See Skill.NameOnly.
 func isNameOnly(fm frontmatter) bool {
 	switch strings.ToLower(strings.TrimSpace(fm.scalar("name_only", "nameonly"))) {
+	case "true", "yes", "on", "1":
+		return true
+	}
+	return false
+}
+
+// isSummaryOnly reports whether a skill should be advertised as slug +
+// description only (when-to-use suppressed) in the Available Skills block.
+// Defaults to FALSE; only an explicit `summary_only: true` (or yes/on/1) enables
+// it. See Skill.SummaryOnly.
+func isSummaryOnly(fm frontmatter) bool {
+	switch strings.ToLower(strings.TrimSpace(fm.scalar("summary_only", "summaryonly"))) {
 	case "true", "yes", "on", "1":
 		return true
 	}
@@ -405,6 +438,49 @@ func (s *Store) SetNameOnly(slug string, on bool) (Skill, error) {
 		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
 	}
 	updated := setFrontmatterNameOnly(string(data), on)
+	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
+	}
+	s.Reload()
+	out, _ := s.Get(slug)
+	return out, nil
+}
+
+// SetVisibility forces a skill into exactly one of the four visibility tiers
+// (full | summary | name-only | hidden) by rewriting its SKILL.md frontmatter
+// flags together in a single write, then reloads the catalog. This is the skill
+// analogue of tools.Registry.SetVisibility and the single entry point the Skills
+// screen's 4-way selector drives. Returns the updated skill; an invalid tier is
+// rejected so a typo can't silently leave a skill at its old tier.
+func (s *Store) SetVisibility(slug, tier string) (Skill, error) {
+	var autoSummary, nameOnly, summaryOnly bool
+	switch tier {
+	case VisibilityFull:
+		autoSummary = true
+	case VisibilitySummary:
+		autoSummary, summaryOnly = true, true
+	case VisibilityNameOnly:
+		autoSummary, nameOnly = true, true
+	case VisibilityHidden:
+		// all false: summary not auto-injected → folded out of the catalog.
+	default:
+		return Skill{}, fmt.Errorf("invalid visibility tier %q (want full|summary|name-only|hidden)", tier)
+	}
+	sk, ok := s.Get(slug)
+	if !ok {
+		return Skill{}, fmt.Errorf("skill %q not found", slug)
+	}
+	data, err := os.ReadFile(sk.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.Reload()
+			return Skill{}, fmt.Errorf("skill %q is no longer available (its file was moved or deleted); catalog refreshed", slug)
+		}
+		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
+	}
+	updated := setFrontmatterAutoSummary(string(data), autoSummary)
+	updated = setFrontmatterNameOnly(updated, nameOnly)
+	updated = setFrontmatterSummaryOnly(updated, summaryOnly)
 	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
 		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
 	}
@@ -771,8 +847,10 @@ func renderCatalog(list []Skill, skillTool string) string {
 			fmt.Fprintf(&b, "- `%s`\n", sk.Slug)
 			continue
 		}
+		// SummaryOnly skills show slug + description but NOT their when-to-use —
+		// the leaner "summary" tier between full and name-only.
 		fmt.Fprintf(&b, "- `%s` — %s", sk.Slug, sk.Description)
-		if sk.WhenToUse != "" {
+		if sk.WhenToUse != "" && !sk.SummaryOnly {
 			fmt.Fprintf(&b, " (when: %s)", sk.WhenToUse)
 		}
 		b.WriteString("\n")

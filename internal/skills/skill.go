@@ -10,6 +10,25 @@
 // sits in the context window until it is actually needed.
 package skills
 
+// Visibility tiers describe how much of a skill rides in the per-turn "# Available
+// Skills" catalog block — the skill analogue of a tool's visibility tiers (see
+// tools.Visibility*). Every skill resolves to exactly one tier, derived from its
+// frontmatter flags (see skillVisibility); the Skills screen sets it via one
+// 4-way selector that maps back onto those flags.
+const (
+	// VisibilityFull: advertised with slug + description + when-to-use (richest).
+	VisibilityFull = "full"
+	// VisibilitySummary: advertised with slug + description only (when-to-use
+	// suppressed) — a leaner middle tier.
+	VisibilitySummary = "summary"
+	// VisibilityNameOnly: advertised by slug ALONE (description + when-to-use
+	// suppressed); still listed so the model can skill_search it before use_skill.
+	VisibilityNameOnly = "name-only"
+	// VisibilityHidden: folded OUT of the catalog entirely (not even named);
+	// reachable only via explicit assignment or skill_search.
+	VisibilityHidden = "hidden"
+)
+
 // Source identifies which tier a skill was resolved from. The workspace tier
 // overrides the global tier when slugs collide (workspace beats global).
 type Source string
@@ -55,6 +74,16 @@ type Skill struct {
 	// (full summary). Opt-in per skill via frontmatter `name_only: true` — NOT a
 	// blanket default, because for skills the description is the main trigger signal.
 	NameOnly bool `json:"nameOnly"`
+	// SummaryOnly marks a skill to advertise as slug + description ONLY (its
+	// when-to-use is suppressed) — the middle "summary" visibility tier between
+	// full and name-only. Defaults to false. Set from frontmatter `summary_only:
+	// true`. Ignored when NameOnly is set (name-only is the stronger suppression).
+	SummaryOnly bool `json:"summaryOnly"`
+	// Visibility is the DERIVED 4-way tier (full | summary | name-only | hidden)
+	// computed from AutoSummary/NameOnly/SummaryOnly (see skillVisibility). It is
+	// not stored directly — it is the single value the Skills screen reads and
+	// writes, mapping back onto the underlying flags. Serialised for the UI.
+	Visibility string `json:"visibility"`
 	// Version/SourceURL/License are provenance metadata (SK-4) — important for
 	// imported skills so their origin and currency are traceable. From frontmatter
 	// `version` / `source_url` (alias `repo`/`homepage`) / `license`.
