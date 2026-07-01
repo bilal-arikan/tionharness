@@ -3,10 +3,11 @@
 import { type ReactNode } from 'react'
 import {
   User, KeyRound, Brain, Shield, Command,
-  Blocks, Info, Boxes, FileText, FolderOpen, Wrench, SlidersHorizontal, Webhook, Plug, Archive, ScanSearch, type LucideIcon,
+  Blocks, Info, Boxes, FileText, Wrench, SlidersHorizontal, Webhook, Plug, Archive, ScanSearch, type LucideIcon,
 } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '../../types'
 import { CopyPathButton } from '../CopyPathButton'
+import { RevealButton } from '../RevealButton'
 import { displayPath } from '../../lib/paths'
 
 // Category keys: the app-global sections plus the per-workspace section.
@@ -195,14 +196,7 @@ export function PromptDetails({ p, dir, onReveal }: { p: PromptInfo; dir: string
         <code className="rounded bg-[var(--color-surface-2)] px-1 text-[10px] text-[var(--color-text-dim)]">{p.file}</code>
         <div className="flex shrink-0 items-center gap-1">
           <CopyPathButton path={dir} />
-          <button
-            onClick={onReveal}
-            disabled={!dir}
-            title={dir ? displayPath(dir) : 'Klasör yolu bilinmiyor'}
-            className="flex shrink-0 items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-40"
-          >
-            <FolderOpen size={12} /> Klasörü aç
-          </button>
+          <RevealButton onReveal={onReveal} disabled={!dir} label="Klasörü aç" title={dir ? displayPath(dir) : 'Klasör yolu bilinmiyor'} />
         </div>
       </div>
       {p.system && (

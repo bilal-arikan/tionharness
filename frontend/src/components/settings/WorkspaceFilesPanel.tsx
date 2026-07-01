@@ -8,6 +8,7 @@ import type { WorkspaceConfig, WorkspaceConfigPatch } from '../../types'
 import { Field } from './primitives'
 import { PromptEditor } from '../common'
 import { CopyPathButton } from '../CopyPathButton'
+import { RevealButton } from '../RevealButton'
 import { displayPath } from '../../lib/paths'
 
 // FilesSaveState lets the parent (WorkspaceView) render the Save button + status
@@ -111,7 +112,9 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
   const setPrompt = (key: string, val: string) =>
     setDraft((d) => (d ? { ...d, prompts: { ...d.prompts, [key]: val } } : d))
 
-  const reveal = () => api.revealWorkspaceConfig().catch((e) => onError((e as Error).message))
+  const reveal = () => {
+    api.revealWorkspaceConfig().catch((e) => onError((e as Error).message))
+  }
 
   return (
     <>
@@ -121,12 +124,7 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <CopyPathButton path={config.dir} />
-          <button
-            onClick={reveal}
-            className="shrink-0 rounded border border-[var(--color-border)] px-2 py-1 text-[11px] hover:border-[var(--color-accent)]"
-          >
-            📂 Klasörü aç
-          </button>
+          <RevealButton onReveal={reveal} label="Klasörü aç" />
         </div>
       </div>
 

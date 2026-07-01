@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { FolderOpen, ArrowDown } from 'lucide-react'
+import { ArrowDown } from 'lucide-react'
 import { api } from '../../api'
 import type { LogEntry } from '../../types'
 import { groupConsecutive } from '../../lib/logGroup'
 import { CopyPathButton } from '../CopyPathButton'
+import { RevealButton } from '../RevealButton'
 
 interface Props {
   onError: (msg: string) => void
@@ -153,13 +154,10 @@ export function LogsPanel({ onError }: Props) {
         </button>
         {/* On-disk log file: copy its path or open its folder in Explorer. */}
         <CopyPathButton path={logPath} title="Log dosyası yolunu kopyala" />
-        <button
-          onClick={() => api.revealLogs().catch((e) => onError((e as Error).message))}
+        <RevealButton
+          onReveal={() => api.revealLogs().catch((e) => onError((e as Error).message))}
           title="Log klasörünü aç"
-          className="flex items-center justify-center rounded border border-[var(--color-border)] px-1.5 py-1 text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-        >
-          <FolderOpen size={12} />
-        </button>
+        />
         <span className="text-xs text-[var(--color-text-dim)]">
           {group && rows.length !== logs.length ? `${rows.length} satır · ${logs.length} kayıt` : `${logs.length} kayıt`}
         </span>

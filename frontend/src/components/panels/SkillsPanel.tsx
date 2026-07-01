@@ -1,10 +1,11 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, FolderOpen, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Tag, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource, ToolVisibility } from '../../types'
 import { api } from '../../api'
 import { VISIBILITY_TIERS } from './toolMeta'
 import { Markdown } from '../markdown/Markdown'
 import { CopyPathButton } from '../CopyPathButton'
+import { RevealButton } from '../RevealButton'
 import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { useGroupedList } from '../../hooks/useGroupedList'
@@ -89,6 +90,52 @@ function NameOnlyBadge() {
   )
 }
 
+// SkillVisibilitySelector is the 4-way segmented control for a skill's catalog
+// visibility tier (Tam / Özet / İsim / Gizli) — the skill counterpart of the
+// tools screen's tier selector, sharing the same VISIBILITY_TIERS metadata. One
+// click rewrites the skill's frontmatter flags via setSkillVisibility.
+function SkillVisibilitySelector({
+  value,
+  busy,
+  onSet,
+}: {
+  value: ToolVisibility
+  busy: boolean
+  onSet: (tier: ToolVisibility) => void
+}) {
+  return (
+    <div
+      className="inline-flex overflow-hidden rounded-md border border-[var(--color-border)]"
+      role="group"
+      aria-label="Skill görünürlüğü"
+      data-testid="skill-detail-visibility"
+    >
+      {VISIBILITY_TIERS.map((tier) => {
+        const on = value === tier.value
+        return (
+          <button
+            key={tier.value}
+            type="button"
+            disabled={busy}
+            onClick={() => onSet(tier.value)}
+            title={tier.hint}
+            data-testid={`skill-vis-${tier.value}`}
+            className={
+              'px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50 ' +
+              (on
+                ? 'font-medium text-[var(--color-bg)]'
+                : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]')
+            }
+            style={on ? { backgroundColor: tier.color } : undefined}
+          >
+            {tier.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // SkillsPanel is the two-panel Skills screen: a list of resolved skills on the
 // left, the selected skill's full instructions (loaded on demand) on the right.
 export function SkillsPanel({ onError }: Props) {
@@ -97,8 +144,6 @@ export function SkillsPanel({ onError }: Props) {
   const [active, setActive] = useState<SkillDetail | null>(null)
   const [loadingBody, setLoadingBody] = useState(false)
   const [accessBusy, setAccessBusy] = useState(false)
-  const [summaryBusy, setSummaryBusy] = useState(false)
-  const [nameOnlyBusy, setNameOnlyBusy] = useState(false)
   const [visBusy, setVisBusy] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
@@ -199,36 +244,6 @@ export function SkillsPanel({ onError }: Props) {
       })
       .catch((e) => onError((e as Error).message))
       .finally(() => setAccessBusy(false))
-  }, [active, reload, onError])
-
-  // Toggle whether the selected skill's summary is auto-injected into every
-  // agent's prompt; rewrites the SKILL.md frontmatter on disk + refreshes.
-  const toggleAutoSummary = useCallback(() => {
-    if (!active) return
-    setSummaryBusy(true)
-    api
-      .setSkillAutoSummary(active.slug, active.autoSummary === false)
-      .then((sk) => {
-        setActive((a) => (a ? { ...a, autoSummary: sk.autoSummary } : a))
-        reload()
-      })
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setSummaryBusy(false))
-  }, [active, reload, onError])
-
-  // Toggle whether the selected skill is advertised as slug-only (NameOnly) in
-  // the Available Skills block; rewrites the SKILL.md frontmatter + refreshes.
-  const toggleNameOnly = useCallback(() => {
-    if (!active) return
-    setNameOnlyBusy(true)
-    api
-      .setSkillNameOnly(active.slug, !active.nameOnly)
-      .then((sk) => {
-        setActive((a) => (a ? { ...a, nameOnly: sk.nameOnly } : a))
-        reload()
-      })
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setNameOnlyBusy(false))
   }, [active, reload, onError])
 
   // Set the selected skill's 4-way visibility tier (full | summary | name-only |
@@ -549,14 +564,12 @@ export function SkillsPanel({ onError }: Props) {
                   onSet={setVisibility}
                 />
                 <CopyPathButton path={active.dir} />
-                <button
-                  data-testid="skill-detail-reveal"
-                  onClick={reveal}
+                <RevealButton
+                  testId="skill-detail-reveal"
+                  onReveal={reveal}
+                  label="Klasörü aç"
                   title="Skill klasörünü dosya yöneticisinde aç"
-                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-                >
-                  <FolderOpen size={14} /> Klasörü aç
-                </button>
+                />
                 <button
                   data-testid="skill-detail-delete"
                   onClick={removeActive}

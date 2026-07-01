@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
-import { PanelRight, ClipboardCopy, Check, FolderOpen } from 'lucide-react'
+import { PanelRight } from 'lucide-react'
+import { CopyPathButton } from './components/CopyPathButton'
+import { RevealButton } from './components/RevealButton'
 import { api, getActiveWorkspace, setActiveWorkspace } from './api'
 import type { Agent, AgentPatch, Artifact, Session, Message, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
@@ -188,7 +190,6 @@ export default function App() {
     })
   }, [])
   // Header "copy path" feedback: briefly show a check after copying.
-  const [pathCopied, setPathCopied] = useState(false)
   // Default agent for NEW sessions (chosen from the roster). Persisted so it
   // survives reloads; unmentioned turns in a session use the session's own agent.
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(
@@ -515,14 +516,6 @@ export default function App() {
       setError((e as Error).message)
     }
   }, [])
-
-  // Header shortcut: copy the active session's folder path (with a brief check).
-  const copyActiveSessionPath = useCallback(async () => {
-    if (!activeSessionId) return
-    await copySessionPath(activeSessionId)
-    setPathCopied(true)
-    setTimeout(() => setPathCopied(false), 1500)
-  }, [activeSessionId, copySessionPath])
 
   const deleteSession = useCallback(
     async (id: string) => {
@@ -984,22 +977,19 @@ export default function App() {
             {view === 'chat' && activeSessionId && (
               <div className="flex items-center gap-1.5">
                 {/* Folder shortcuts (moved here from the detail panel's Klasör card). */}
-                <button
-                  onClick={copyActiveSessionPath}
+                <CopyPathButton
+                  getPath={async () => (await api.sessionPath(activeSessionId)).path}
+                  label="Yolu kopyala"
+                  labelClassName="hidden sm:inline"
                   title="Oturum klasörü yolunu kopyala"
-                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-                >
-                  {pathCopied ? <Check size={15} className="shrink-0" /> : <ClipboardCopy size={15} className="shrink-0" />}
-                  <span className="hidden sm:inline">{pathCopied ? 'Kopyalandı' : 'Yolu kopyala'}</span>
-                </button>
-                <button
-                  onClick={() => revealSession(activeSessionId)}
+                  onError={setError}
+                />
+                <RevealButton
+                  onReveal={() => revealSession(activeSessionId)}
+                  label="Aç"
+                  labelClassName="hidden sm:inline"
                   title="Oturum klasörünü aç"
-                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-                >
-                  <FolderOpen size={15} className="shrink-0" />
-                  <span className="hidden sm:inline">Aç</span>
-                </button>
+                />
                 <button
                   onClick={toggleDetail}
                   title="Oturum bilgisi panelini aç/kapat"

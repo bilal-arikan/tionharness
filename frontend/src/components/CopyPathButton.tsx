@@ -19,13 +19,14 @@ interface Props {
   /** Extra classes on the label span (e.g. "hidden sm:inline" for responsiveness). */
   labelClassName?: string
   title?: string
+  testId?: string
   onError?: (msg: string) => void
 }
 
 // CopyPathButton copies a filesystem path to the clipboard and briefly flips to a
 // check on success. Standardised look shared with <RevealButton> via
 // PATH_ACTION_CLS.
-export function CopyPathButton({ path, getPath, label, labelClassName = '', title = 'Yolu kopyala', onError }: Props) {
+export function CopyPathButton({ path, getPath, label, labelClassName = '', title = 'Yolu kopyala', testId, onError }: Props) {
   const [copied, setCopied] = useState(false)
   if (!path && !getPath) return null
 
@@ -45,6 +46,7 @@ export function CopyPathButton({ path, getPath, label, labelClassName = '', titl
     <button
       type="button"
       onClick={copy}
+      data-testid={testId}
       title={copied ? 'Kopyalandı' : path ? `${title}: ${displayPath(path)}` : title}
       className={PATH_ACTION_CLS}
     >

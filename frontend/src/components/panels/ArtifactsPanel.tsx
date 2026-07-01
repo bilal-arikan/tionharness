@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FileText, FileCode, UploadCloud,
-  Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X, FolderOpen, Search,
+  Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X, Search,
 } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Artifact, ArtifactKind } from '../../types'
 import { ArtifactView } from '../artifacts/ArtifactView'
 import { CopyPathButton } from '../CopyPathButton'
+import { RevealButton } from '../RevealButton'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
@@ -467,15 +468,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                       {copied ? <Check size={15} /> : <Copy size={15} />}
                     </button>
                     <CopyPathButton path={activePath} title="Yolu kopyala" />
-                    <button
-                      data-testid="artifact-detail-reveal"
-                      onClick={reveal}
-                      disabled={!activePath}
-                      title="Klasörü aç"
-                      className={iconBtn}
-                    >
-                      <FolderOpen size={15} />
-                    </button>
+                    <RevealButton testId="artifact-detail-reveal" onReveal={reveal} disabled={!activePath} />
                     {active.sessionId && onOpenSession && (
                       <button
                         onClick={() => onOpenSession(active.sessionId)}

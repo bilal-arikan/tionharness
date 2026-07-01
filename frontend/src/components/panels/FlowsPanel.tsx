@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
-import { Loader2, XCircle, FolderOpen } from 'lucide-react'
+import { Loader2, XCircle } from 'lucide-react'
 import { api } from '../../api'
 import { CopyPathButton } from '../CopyPathButton'
+import { RevealButton } from '../RevealButton'
 import { useRegisterDirty } from '../../lib/dirtySignals'
 import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
@@ -674,14 +675,13 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               {selectedId}
             </span>
             <CopyPathButton path={flowPath} title="Akış yolunu kopyala" />
-            <button
-              type="button"
-              onClick={() => selectedId && api.revealFlow(selectedId).catch((e) => onError((e as Error).message))}
+            <RevealButton
+              onReveal={() => {
+                if (selectedId) api.revealFlow(selectedId).catch((e) => onError((e as Error).message))
+              }}
+              disabled={!selectedId}
               title="Akış klasörünü aç"
-              className="flex flex-shrink-0 items-center justify-center rounded border border-[var(--color-border)] px-1.5 py-1 text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-            >
-              <FolderOpen size={14} />
-            </button>
+            />
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}

@@ -114,23 +114,25 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           >
             <Eye size={14} /> Bağlam
           </button>
-          <button
-            data-testid="agent-copy-path"
-            onClick={copyPath}
+          <CopyPathButton
+            testId="agent-copy-path"
+            getPath={async () => (await api.agentPath(agent.id)).path}
+            label="Yolu kopyala"
             title="Ajanın disk üzerindeki JSON dosya yolunu kopyala"
-            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          >
-            {copiedPath ? <Check size={14} /> : <ClipboardCopy size={14} />}
-            {copiedPath ? 'Kopyalandı' : 'Yolu kopyala'}
-          </button>
-          <button
-            data-testid="agent-reveal-folder"
-            onClick={revealFolder}
+            onError={setErr}
+          />
+          <RevealButton
+            testId="agent-reveal-folder"
+            onReveal={async () => {
+              try {
+                await api.revealAgent(agent.id)
+              } catch (e) {
+                setErr((e as Error).message)
+              }
+            }}
+            label="Klasörü aç"
             title="Ajanın JSON dosyasının bulunduğu klasörü dosya yöneticisinde aç"
-            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          >
-            <FolderOpen size={14} /> Klasörü aç
-          </button>
+          />
           {onCancel && (
             <button
               data-testid="agent-cancel"
