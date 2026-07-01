@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Boxes, FileText, FolderGit2, Palette, type LucideIcon } from 'lucide-react'
+import { Boxes, FileText, FolderGit2, Palette, PackageCheck, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { WorkspaceSettings } from '../../types'
 import type { Appearance } from '../../lib/theme'
@@ -7,12 +7,13 @@ import { WorkspacePanel } from '../settings/WorkspacePanel'
 import { AppearancePanel } from '../settings/appPanels'
 import { WorkspaceFilesPanel, type FilesSaveState } from '../settings/WorkspaceFilesPanel'
 import { ProjectPanel } from './ProjectPanel'
+import { WorkspaceExportPanel } from './WorkspaceExportPanel'
 import { Button } from '../common'
 import { useRegisterDirty } from '../../lib/dirtySignals'
 
-type Tab = 'general' | 'appearance' | 'project' | 'files'
+type Tab = 'general' | 'appearance' | 'project' | 'files' | 'export'
 
-const TAB_KEYS: Tab[] = ['general', 'appearance', 'project', 'files']
+const TAB_KEYS: Tab[] = ['general', 'appearance', 'project', 'files', 'export']
 
 interface Props {
   onError: (msg: string) => void
@@ -32,6 +33,7 @@ const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
   { key: 'appearance', label: 'Görünüm', icon: Palette },
   { key: 'project', label: 'Proje', icon: FolderGit2 },
   { key: 'files', label: 'Promptlar & Dosyalar', icon: FileText },
+  { key: 'export', label: 'Dışa Aktar', icon: PackageCheck },
 ]
 
 // WorkspaceView is the dedicated workspace window opened from the NavRail. A
@@ -99,9 +101,9 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
   const headerDirty = filesTab ? !!filesState?.dirty : dirty
   const headerSaving = filesTab ? !!filesState?.saving : saving
   const onHeaderSave = filesTab ? filesState?.save : save
-  // The Appearance tab manages its own Save/Reset buttons (live preview), so the
-  // shared header Save is hidden there.
-  const showSave = tab === 'appearance' ? false : filesTab ? !!filesState : true
+  // The Appearance tab manages its own Save/Reset buttons (live preview) and the
+  // Export tab has its own publish action, so the shared header Save is hidden there.
+  const showSave = tab === 'appearance' || tab === 'export' ? false : filesTab ? !!filesState : true
   const activeMeta = TABS.find((t) => t.key === tab)
 
   // Surface unsaved workspace edits on the nav "Workspace" item + workspace label.
@@ -126,7 +128,7 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
           >
             <t.icon size={16} className="shrink-0" />
             <span className="flex-1 truncate">{t.label}</span>
-            {(t.key === 'files' ? !!filesState?.dirty : t.key === 'appearance' ? false : dirty) && (
+            {(t.key === 'files' ? !!filesState?.dirty : t.key === 'appearance' || t.key === 'export' ? false : dirty) && (
               <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" title="Kaydedilmemiş" />
             )}
           </button>
@@ -176,6 +178,8 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
               onSelectPath={(p) => setWsField('defaultWorkingDir', p)}
               onError={onError}
             />
+          ) : tab === 'export' ? (
+            <WorkspaceExportPanel ws={ws} onError={onError} />
           ) : (
             <WorkspaceFilesPanel onError={onError} onState={setFilesState} />
           )}

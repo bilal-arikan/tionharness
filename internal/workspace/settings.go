@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"os"
@@ -12,6 +13,16 @@ import (
 
 // wsSettingsFile is the per-workspace settings document inside the workspace dir.
 const wsSettingsFile = "ws-settings.json"
+
+// defaultInstructions is the seed workspace prompt (workspace-specific system
+// prompt addendum) a fresh workspace starts with. SwarmGo has no monolithic
+// system prompt of its own — the workspace prompt IS the standing guidance every
+// agent in the workspace carries — so this default gives new workspaces a full,
+// the external agent project-equivalent baseline instead of an empty prompt. A workspace whose
+// ws-settings.json sets its own `instructions` overrides this seed.
+//
+//go:embed defaults/default-instructions.md
+var defaultInstructions string
 
 // WSSettings holds the per-workspace overrides editable from the Settings
 // screen's "Bu Workspace" category. Empty provider/model fall back to the
@@ -57,6 +68,7 @@ type WSSettings struct {
 // sensible defaults — notably cross-session awareness on, first-turn, 5 recent.
 func defaultWSSettings() WSSettings {
 	return WSSettings{
+		Instructions:              defaultInstructions,
 		SessionContextEnabled:     true,
 		SessionContextEveryTurn:   false,
 		SessionContextRecentCount: 5,
