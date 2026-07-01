@@ -1,4 +1,7 @@
-# 40 — Çoklu Seçim (Ctrl/Cmd+Click) ve Toplu Eylemler
+# 45 — Çoklu Seçim (Ctrl/Cmd+Click) ve Toplu Eylemler
+
+> **Numara notu:** Eski adı `40-COKLU-SECIM.md` idi; `40-PLAN-MODE.md` ile numara
+> çakıştığı için 2026-07-02'de **45**'e taşındı.
 
 > Listelerde birden fazla öğeyi modifier tuşlarıyla seçip tek seferde toplu işlem
 > yapma. Tamamen **frontend-only**; yeni backend yok. (2026-06-29)

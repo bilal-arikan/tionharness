@@ -1,6 +1,31 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-01**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-02**
+
+## Doküman bakımı: 40 numara çakışması + eksik index satırları ✅ (2026-07-02)
+
+**Tespit (proje incelemesi):** `_Docs` içinde iki dosya 40 numarasını paylaşıyordu
+(`40-PLAN-MODE.md` + `40-COKLU-SECIM.md`) ve `00-GENEL-BAKIS.md` index tablosunda
+37–43 arası dokümanlar hiç listelenmiyordu (36'dan 44'e atlıyordu).
+
+**Yapılan:**
+- `40-COKLU-SECIM.md` → **`45-COKLU-SECIM.md`** (git mv; dosya başlığına numara notu,
+  `05-ILERLEME` içindeki referans güncellendi). Plan modu 40'ta kaldı.
+- `00-GENEL-BAKIS.md` index'ine 37/38/39/40/41/42/43/45 + `analiz-craftagent-arac-eslestirme.md`
+  satırları eklendi; "Numara notu" 40→45 taşınmasını belgeliyor.
+- `swarmgo-project` skill'i (the external agent project workspace) düzeltildi: modül yolu
+  `github.com/bilal-arikan/swarmgo` (yanlış `bilal/swarmgo` idi), go.mod'a `jchv/go-webview2`
+  eklendiği bilgisi, klasör yapısına `cmd/swarmgo-desktop` + `internal/app`, doc index'e
+  39=Dizin-Site-Registry / 40=Plan-Modu / 44 / 45, kırık `39-PLAN-MODE.md` referansı →
+  `40-PLAN-MODE.md`, bayat "Sırada: Faz 9 Wails" → native pencere zaten yapıldı (Wails'siz),
+  Bash+PowerShell ayrımı + WebSearch + transform_data araçları eklendi.
+- **Not (bir önceki oturum, commit `7ce98a4`, 2026-07-02 01:39):** persistent-pool
+  gözlemlenebilirliği (`CLISessionPool.SetLogger` yaşam-döngüsü logları) + `resumeGateEnabled`
+  saf fonksiyon + `TestResumeGateEnabled` + AppToolsPanel çifte-toggle uyarısı + `_Docs/17`
+  düzeltmesi (canlı 3-tur ölçüm: resume ≈−43%, persistent ≈−58% cacheWrite) ve birikmiş WIP
+  (rewind, code-execution MCP planı, bridge filter, sidebar chrome, error toast) commit'lendi.
+- **Doğrulama:** `go build ./...` + `go vet ./...` + `go test ./...` (22 paket) + frontend
+  `tsc --noEmit` tamamı yeşil.
 
 ## Otonomi duraklatma → yalnız workspace-özel + Zamanlamalar ekranına taşındı ✅ (2026-07-01)
 
@@ -1012,7 +1037,7 @@ garanti değil; araç/prompt değişimi prefix'i bozabiliyor.
 
 **Desen:** Toplu eylemler mevcut tekil API'leri döngü/`Promise.all` ile kullanır
 (yeni backend yok); optimistic state + hata halinde reload. Yıkıcı eylemler tek
-`confirm("N öğe…")` ile. Detay: `_Docs\40-COKLU-SECIM.md`. Doğrulama: `tsc
+`confirm("N öğe…")` ile. Detay: `_Docs\45-COKLU-SECIM.md`. Doğrulama: `tsc
 --noEmit` temiz.
 
 ## Son kullanıcı mesajı sohbette üstte sticky (ChatGPT/Claude tarzı) ✅ (2026-06-29)
