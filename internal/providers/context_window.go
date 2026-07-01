@@ -9,12 +9,14 @@ import "strings"
 // guess. The 1M Claude tier is opt-in (beta), so the Claude family reports its
 // 200K base.
 const (
-	// Claude 4.x is NOT one size: Opus 4.8 and Sonnet 4.6 ship a 1M window (the
-	// long-context surcharge was dropped in 2026), while Haiku 4.5 stays at 200K.
-	// So the Claude family must be matched per-tier, not with one flat value.
+	// Claude 4.x/5 is NOT one size: Opus 4.8, Sonnet 4.6 and Fable 5 ship a 1M
+	// window (the long-context surcharge was dropped in 2026), while Haiku 4.5
+	// stays at 200K. So the Claude family must be matched per-tier, not with one
+	// flat value.
 	windowClaudeOpusSonnet = 1_000_000 // Opus 4.8 / Sonnet 4.6
+	windowFable            = 1_000_000 // Fable 5 (1M standard, no beta opt-in)
 	windowHaiku            = 200_000   // Haiku 4.5
-	windowClaudeOther      = 200_000   // Fable / generic Claude fallback (conservative)
+	windowClaudeOther      = 200_000   // generic Claude fallback (conservative)
 	windowMiniMax          = 1_000_000 // MiniMax M-series (M3 ≈ 1,048,576, ≥512K guaranteed)
 	windowDeepSeek         = 1_000_000 // DeepSeek V4 family ("1M context")
 	windowGemini           = 1_000_000 // Gemini long-context family
@@ -31,8 +33,8 @@ const (
 // no cost or rate-limit downside (billing is per actual output token), so the
 // only constraint is staying within the real ceiling.
 const (
-	maxOutClaudeCapable = 32_768 // Opus / Sonnet 4.x (real ceiling 64–128K)
-	maxOutClaudeSmall   = 16_384 // Haiku / Fable / generic Claude
+	maxOutClaudeCapable = 32_768 // Opus / Sonnet 4.x / Fable 5 (real ceiling 64–128K)
+	maxOutClaudeSmall   = 16_384 // Haiku / generic Claude
 	maxOutMiniMax       = 32_768 // MiniMax M-series (M3 ceiling ≈ 512K)
 	maxOutDeepSeek      = 8_192  // DeepSeek family (conservative)
 	maxOutGemini        = 8_192  // Gemini family (conservative)
@@ -64,9 +66,9 @@ func MaxOutputFor(provider, model string) int {
 		return maxOutGemini
 	case strings.Contains(m, "haiku"):
 		return maxOutClaudeSmall
-	case strings.Contains(m, "opus"), strings.Contains(m, "sonnet"):
+	case strings.Contains(m, "opus"), strings.Contains(m, "sonnet"), strings.Contains(m, "fable"):
 		return maxOutClaudeCapable
-	case strings.Contains(m, "fable"), strings.Contains(m, "claude"):
+	case strings.Contains(m, "claude"):
 		return maxOutClaudeSmall
 	default:
 		return 0
@@ -96,7 +98,9 @@ func ContextWindowFor(provider, model string) int {
 		return windowHaiku
 	case strings.Contains(m, "opus"), strings.Contains(m, "sonnet"):
 		return windowClaudeOpusSonnet
-	case strings.Contains(m, "fable"), strings.Contains(m, "claude"):
+	case strings.Contains(m, "fable"):
+		return windowFable
+	case strings.Contains(m, "claude"):
 		return windowClaudeOther
 	default:
 		return 0
@@ -128,9 +132,9 @@ func AdaptiveBudgetFraction(provider, model string) float64 {
 		return 0.35
 	case strings.Contains(m, "haiku"):
 		return 0.40
-	case strings.Contains(m, "opus"), strings.Contains(m, "sonnet"):
+	case strings.Contains(m, "opus"), strings.Contains(m, "sonnet"), strings.Contains(m, "fable"):
 		return 0.45
-	case strings.Contains(m, "fable"), strings.Contains(m, "claude"):
+	case strings.Contains(m, "claude"):
 		return 0.40
 	default:
 		return 0

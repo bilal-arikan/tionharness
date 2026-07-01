@@ -299,10 +299,10 @@ daha yüksek pay alır, küçük/bilinmeyen modeller muhafazakâr kalır:
 
 | Aile | Pencere | Fraction | Etkin (ceil 256K) |
 |---|---|---|---|
-| Opus 4.8 / Sonnet 4.6 | 1M | 0.45 | 450K → **256K** (tavan) |
+| Opus 4.8 / Sonnet 4.6 / Fable 5 | 1M | 0.45 | 450K → **256K** (tavan) |
 | Haiku 4.5 | 200K | 0.40 | **80K** |
 | MiniMax / DeepSeek / Gemini | 1M | 0.35 | 350K → **256K** (tavan) |
-| Fable / genel Claude | 200K | 0.40 | **80K** |
+| Genel Claude (bilinmeyen katman) | 200K | 0.40 | **80K** |
 | Bilinmeyen | 0 | — | taban (`MaxContextTokens`) |
 
 **Semantik & geriye-uyumluluk.** `ContextBudgetFraction = 0` artık **"otomatik/adaptif"** anlamına gelir

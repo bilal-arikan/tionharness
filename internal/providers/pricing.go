@@ -95,6 +95,7 @@ var priceTable = map[string]map[string]Price{
 		"anthropic/claude-opus-4.8":   {InputPerMTok: 15, OutputPerMTok: 75, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-sonnet-4.6": {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-haiku-4.5":  {InputPerMTok: 1, OutputPerMTok: 5, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
+		"anthropic/claude-fable-5":    {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 	},
 	// NOTE: market provider-pack prices (xai, mistral, gemini, … ~25 providers, up to
 	// 15 models each) live in the generated pricing_market.go (var marketPrices,

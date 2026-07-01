@@ -164,7 +164,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
       <div className="grid grid-cols-2 gap-3">
         <Field label="Maks. token resume denemesi" hint="Çıktı limiti aşılınca tur kaç kez sürdürülür (0 = kapalı; kısmi cevap olduğu gibi gösterilir)."><input type="number" value={draft.maxTokenRetries} onChange={(e) => set('maxTokenRetries', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Sıkıştırmada korunan mesaj" hint="Reaktif sıkıştırmada aynen tutulan en yeni mesaj sayısı (≥2)."><input type="number" value={draft.reactiveKeepRecent} onChange={(e) => set('reactiveKeepRecent', Number(e.target.value))} className={inputCls} /></Field>
-        <Field label="Çıktı token tavanı" hint="Tur başına maks. çıktı tokeni (max_tokens). 0 = otomatik: modele göre aile-bazlı (opus/sonnet+minimax 32K, haiku/fable 16K, deepseek/gemini 8K). Pozitif değer tüm modeller için sabit tavanı zorlar. Düşük tavan resume döngüsünü daha sık tetikler."><input type="number" value={draft.maxOutputTokens} onChange={(e) => set('maxOutputTokens', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Çıktı token tavanı" hint="Tur başına maks. çıktı tokeni (max_tokens). 0 = otomatik: modele göre aile-bazlı (opus/sonnet/fable+minimax 32K, haiku 16K, deepseek/gemini 8K). Pozitif değer tüm modeller için sabit tavanı zorlar. Düşük tavan resume döngüsünü daha sık tetikler."><input type="number" value={draft.maxOutputTokens} onChange={(e) => set('maxOutputTokens', Number(e.target.value))} className={inputCls} /></Field>
       </div>
 
       <SubHead icon={Scissors}>Araç çıktısı sıkıştırma — Sistem A (deterministik)</SubHead>

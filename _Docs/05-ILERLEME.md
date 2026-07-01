@@ -2,6 +2,32 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-02**
 
+## Claude Fable 5 tam desteği ✅ (2026-07-02)
+
+**İstek:** SwarmGo'ya Fable 5 (claude-fable-5) desteği ekle.
+
+**Mevcut durum (kısmi destek vardı):** thinking resolver (`RequiresAdaptiveThinking` —
+Fable/Mythos `thinking:disabled`'ı 400 ile reddeder, off/low → min adaptif 1024) ve
+anthropic pricing (3/15) zaten vardı; ingest `agent_adapter` fable→claude-fable-5
+eşliyordu. Eksikler tamamlandı:
+
+- **Kataloglar:** `kind_claudecli.go`'ya `fable` alias'ı eklendi (listede yoktu);
+  `kind_anthropic.go`'daki yanlış tanım düzeltildi ("yaratıcı yazım odaklı" →
+  "en yeni nesil; 1M bağlam, adaptif düşünme (daima açık), ajan görevleri", listenin
+  başına alındı); `kind_openrouter.go`'ya `anthropic/claude-fable-5` eklendi.
+- **Aile tabloları (`context_window.go`):** Fable ayrı katman oldu —
+  `windowFable=1M` (eskiden genel-Claude 200K'ya düşüyordu), `MaxOutputFor` →
+  `maxOutClaudeCapable` 32K (eskiden 16K), `AdaptiveBudgetFraction` → 0.45
+  (opus/sonnet sınıfı; eskiden 0.40). Genel-Claude fallback'i 200K/16K/0.40 kaldı.
+- **Pricing:** OpenRouter tablosuna `anthropic/claude-fable-5` (3/15, Anthropic
+  cache tier 0.10×/1.25×) eklendi.
+- **Metinler:** ContextPanel çıktı-tavanı ipucu, `swarmgo-settings` default skill,
+  `_Docs/17` adaptif-fraction tablosu ve `swarmgo-project` skill'i yeni aile
+  sınıflamasına güncellendi (opus/sonnet/fable 32K · haiku 16K).
+- **Testler:** `context_window_test`/`maxoutput_test` yeni beklentilere güncellendi
+  (+`fable` alias satırları). Doğrulama: `go build` ✅, providers/agent/conversation/
+  billing testleri ✅, frontend `tsc --noEmit` ✅.
+
 ## Doküman bakımı: 40 numara çakışması + eksik index satırları ✅ (2026-07-02)
 
 **Tespit (proje incelemesi):** `_Docs` içinde iki dosya 40 numarasını paylaşıyordu
