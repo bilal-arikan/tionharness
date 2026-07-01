@@ -67,11 +67,21 @@ func (s *Server) handlePublishMarket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cfg := wsp.Settings()
-		slug := slugify(wsp.Name)
+		// Pack metadata: honour the user-supplied name/description/version, falling
+		// back to derived defaults when a field is left blank.
+		name := strings.TrimSpace(req.Name)
+		if name == "" {
+			name = wsp.Name
+		}
+		desc := strings.TrimSpace(req.Description)
+		if desc == "" {
+			desc = "“" + wsp.Name + "” workspace'inden dışa aktarıldı."
+		}
+		slug := slugify(name)
 		if slug == "" {
 			slug = strings.ToLower(wsp.ID)
 		}
-		pack, err := market.BuildWorkspacePack(slug, wsp.Name, "“"+wsp.Name+"” workspace'inden dışa aktarıldı.", cfg.Icon, cfg.Color, "", 0, payload)
+		pack, err := market.BuildWorkspacePack(slug, name, desc, strings.TrimSpace(req.Version), cfg.Icon, cfg.Color, "", 0, payload)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return

@@ -30,6 +30,15 @@ export interface WorkspaceExportInclude {
   boardColumns: boolean
 }
 
+// WorkspaceExportMeta carries optional pack-level metadata for a workspace
+// export. Every field is optional; a blank value falls back to a server-derived
+// default (name → workspace name, description → generated line, version → 1.0.0).
+export interface WorkspaceExportMeta {
+  name?: string
+  description?: string
+  version?: string
+}
+
 export const marketApi = {
   listRegistries: () => req<Registry[]>('/api/market/registries'),
   addRegistry: (name: string, url: string) =>
@@ -57,10 +66,17 @@ export const marketApi = {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
     }),
-  publishPack: (kind: PackKind, sourceId: string, include?: WorkspaceExportInclude) =>
+  publishPack: (
+    kind: PackKind,
+    sourceId: string,
+    include?: WorkspaceExportInclude,
+    meta?: WorkspaceExportMeta,
+  ) =>
     req<Pack>('/api/market/publish', {
       method: 'POST',
-      body: JSON.stringify({ kind, sourceId, include }),
+      // meta (name/description/version) lives at the request top level next to
+      // include; blank fields are dropped so the server applies its defaults.
+      body: JSON.stringify({ kind, sourceId, include, ...meta }),
     }),
   importPack: (raw: string) =>
     req<Pack>('/api/market/import', { method: 'POST', body: raw }),

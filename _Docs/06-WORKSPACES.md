@@ -51,14 +51,29 @@ detaylandırıldı. Panel: `frontend/src/components/workspace/WorkspaceExportPan
   zamanlamaları çeker. Kullanıcı **hangi ajanların** dahil edileceğini işaretler (varsayılan
   tümü, ≥1 zorunlu) ve kategori toggle'larıyla (Akışlar / Zamanlamalar / Skill'ler /
   Talimatlar / Pano sütunları — sayı rozetli, varsayılan açık) neyin gireceğini seçer.
-- **API:** `api.publishPack('workspace', ws.id, include)` → `POST /api/market/publish`.
+- **Şablon metadata (2026-07-01):** panelin üstünde **Şablon adı / Açıklama / Sürüm**
+  alanları vardır. Ad workspace adından seed edilir; açıklama/sürüm boş bırakılırsa
+  sunucu varsayılan üretir (açıklama → otomatik satır, sürüm → `1.0.0`). Ad slug'ı
+  belirlediği için farklı ad = farklı pack id (`workspace-<slug>`).
+- **Bağımlılık uyarısı (2026-07-01):** bir ajan hariç bırakıldığında panel, o ajana
+  bağlı **akış** ve **zamanlamaları** listeler. Etki net gösterilir: akışlar dışa
+  aktarımda **kopuk referans** taşır (backend yalnız dışa aktardığı id'leri yeniden
+  yazabilir), zamanlamalar **tamamen düşer** (orphan atlanır). Flow bağımlılığı,
+  `flow.graph` JSON'u client'ta parse edilip `type==='agent'` düğümlerinin `agentId`'leri
+  toplanarak hesaplanır.
+- **API:** `api.publishPack('workspace', ws.id, include, meta)` → `POST /api/market/publish`.
   `include` = `WorkspaceExportInclude` (`agentIds: string[]|null` (null=tümü) + kategori
-  boolean'ları). `include` gönderilmezse davranış eskisi gibi "her şey" (geriye uyumlu).
-- **Backend:** `publishRequest.Include *publishInclude`; `buildWorkspaceTemplatePayload(ctx,
-  wsp, inc)` — `inc==nil` iken her şey, aksi halde seçili ajanlara filtreler ve kategori
-  flag'lerini onurlandırır (`internal/api/market_publish.go`). **Sırlar ve oturum geçmişi
-  asla dahil edilmez** (sunucu-zorunlu). Yayınlanan şablon market + workspace oluşturma
-  ekranında görünür (`s.market.Reload()`).
+  boolean'ları); `meta` = `WorkspaceExportMeta` (`name?/description?/version?`, boş alanlar
+  düşürülür → sunucu varsayılanı). `include`/`meta` gönderilmezse davranış eskisi gibi
+  "her şey + türetilmiş meta" (geriye uyumlu).
+- **Backend:** `publishRequest.{Name,Description,Version,Include}`; workspace kind'ında
+  bunlar `market.BuildWorkspacePack(slug, name, desc, version, …)`'e geçirilir (boş =
+  türetilmiş varsayılan; `BuildWorkspacePack` boş sürümü `1.0.0`'a düşürür).
+  `buildWorkspaceTemplatePayload(ctx, wsp, inc)` — `inc==nil` iken her şey, aksi halde
+  seçili ajanlara filtreler ve kategori flag'lerini onurlandırır
+  (`internal/api/market_publish.go`). **Sırlar ve oturum geçmişi asla dahil edilmez**
+  (sunucu-zorunlu). Yayınlanan şablon market + workspace oluşturma ekranında görünür
+  (`s.market.Reload()`).
 - Panel kendi publish aksiyonunu taşır → ortak header "Kaydet" bu sekmede gizli (Görünüm gibi).
 
 ## Neden Ayrı Store Dizini?

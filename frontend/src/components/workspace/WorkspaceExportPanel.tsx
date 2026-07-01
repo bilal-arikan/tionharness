@@ -4,11 +4,11 @@
 // workspace skills, instructions, board columns) get captured into the template
 // pack. Secrets and session history are never included (server-enforced).
 import { useEffect, useMemo, useState } from 'react'
-import { Boxes, GitBranch, Clock, Sparkles, FileText, Columns3, PackageCheck } from 'lucide-react'
+import { Boxes, GitBranch, Clock, Sparkles, FileText, Columns3, PackageCheck, AlertTriangle } from 'lucide-react'
 import { api } from '../../api'
-import type { WorkspaceExportInclude } from '../../api/market'
-import type { Agent, Flow, Skill, Schedule, WorkspaceSettings } from '../../types'
-import { Toggle } from '../settings/primitives'
+import type { WorkspaceExportInclude, WorkspaceExportMeta } from '../../api/market'
+import type { Agent, Flow, FlowGraph, Skill, Schedule, WorkspaceSettings } from '../../types'
+import { Field, Toggle, inputCls } from '../settings/primitives'
 
 interface Props {
   ws: WorkspaceSettings
@@ -24,6 +24,12 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
   const [skills, setSkills] = useState<Skill[]>([])
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Pack metadata. Name seeds from the workspace name; description/version stay
+  // blank so the server applies its defaults unless the user overrides them.
+  const [name, setName] = useState(ws.name)
+  const [description, setDescription] = useState('')
+  const [version, setVersion] = useState('1.0.0')
 
   // Selection state. Agents default to all-selected; every category defaults on.
   const [pickedAgents, setPickedAgents] = useState<Set<string>>(new Set())
@@ -66,6 +72,57 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
 
   const canExport = pickedAgents.size > 0
 
+  // Agent ids each flow's graph references (agent-type nodes only). Parsed once;
+  // an unparseable graph yields no refs (the backend skips it too).
+  const flowAgentRefs = useMemo(
+    () =>
+      flows.map((f) => {
+        let ids: string[] = []
+        try {
+          const g = JSON.parse(f.graph) as FlowGraph
+          ids = (g.nodes ?? [])
+            .filter((n) => n.type === 'agent' && n.agentId)
+            .map((n) => n.agentId as string)
+        } catch {
+          // Malformed graph JSON — leave refs empty rather than failing the panel.
+        }
+        return { flow: f, agentIds: Array.from(new Set(ids)) }
+      }),
+    [flows],
+  )
+
+  // Dependency warnings: excluding an agent that a flow/schedule depends on has a
+  // concrete effect — flows keep a dangling reference (the backend can only
+  // rewrite ids it actually exports) and schedules are dropped entirely.
+  const depWarnings = useMemo(() => {
+    const nameOf = (id: string) => agents.find((a) => a.id === id)?.name ?? id
+    const out: { key: string; label: string; detail: string }[] = []
+    if (cats.flows) {
+      for (const { flow, agentIds } of flowAgentRefs) {
+        const missing = agentIds.filter((id) => !pickedAgents.has(id))
+        if (missing.length > 0) {
+          out.push({
+            key: `flow:${flow.id}`,
+            label: `Akış “${flow.name || flow.id}”`,
+            detail: `hariç bırakılan ajan(lar)a bağlı — dışa aktarımda kopuk referans kalır: ${missing.map(nameOf).join(', ')}`,
+          })
+        }
+      }
+    }
+    if (cats.schedules) {
+      for (const sc of schedules) {
+        if (!pickedAgents.has(sc.agentId)) {
+          out.push({
+            key: `sched:${sc.id}`,
+            label: `Zamanlama “${sc.prompt?.slice(0, 32) || sc.id}”`,
+            detail: `hariç bırakılan ajana bağlı (${nameOf(sc.agentId)}) — dışa aktarıma dahil edilmez`,
+          })
+        }
+      }
+    }
+    return out
+  }, [flowAgentRefs, pickedAgents, cats.flows, cats.schedules, schedules, agents])
+
   const catRows: { key: CatKey; label: string; hint: string; icon: typeof GitBranch; count: number }[] = useMemo(
     () => [
       { key: 'flows', label: 'Akışlar (Flows)', hint: 'Ajan düğümleri taşınabilir anahtarlara yeniden yazılır.', icon: GitBranch, count: flows.length },
@@ -91,7 +148,12 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         instructions: cats.instructions,
         boardColumns: cats.boardColumns,
       }
-      const pack = await api.publishPack('workspace', ws.id, include)
+      const meta: WorkspaceExportMeta = {
+        name: name.trim() || undefined,
+        description: description.trim() || undefined,
+        version: version.trim() || undefined,
+      }
+      const pack = await api.publishPack('workspace', ws.id, include, meta)
       setMsg({
         ok: true,
         text: `“${pack.name}” şablon olarak dışa aktarıldı (id: ${pack.id}). Artık market ve workspace oluşturma ekranında görünür.`,
@@ -113,6 +175,25 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         <span className="font-medium text-[var(--color-text)]">{ws.name}</span> workspace’ini taşınabilir bir
         <span className="font-medium text-[var(--color-text)]"> şablon paketine</span> dönüştür. Aşağıdan neyin dahil
         edileceğini seç. <span className="font-medium text-[var(--color-text)]">Sırlar ve oturum geçmişi asla dahil edilmez.</span>
+      </div>
+
+      {/* Pack metadata */}
+      <div className="space-y-2">
+        <Field label="Şablon adı">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={ws.name} className={inputCls} />
+        </Field>
+        <Field label="Açıklama" hint="Boş bırakılırsa otomatik bir açıklama üretilir.">
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder={`“${ws.name}” workspace'inden dışa aktarıldı.`}
+            className={`${inputCls} resize-y`}
+          />
+        </Field>
+        <Field label="Sürüm" hint="Örn. 1.0.0 — boş bırakılırsa 1.0.0 kullanılır.">
+          <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.0.0" className={inputCls} />
+        </Field>
       </div>
 
       {/* Agents — at least one required */}
@@ -179,6 +260,22 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
           />
         ))}
       </div>
+
+      {/* Dependency warnings — excluded agents that flows/schedules rely on */}
+      {depWarnings.length > 0 && (
+        <div className="mt-2 space-y-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#f59e0b)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#f59e0b)_8%,transparent)] px-3 py-2.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-warning,#f59e0b)]">
+            <AlertTriangle size={14} /> Bağımlılık uyarısı ({depWarnings.length})
+          </div>
+          <ul className="space-y-1 text-xs text-[var(--color-text-dim)]">
+            {depWarnings.map((w) => (
+              <li key={w.key}>
+                <span className="font-medium text-[var(--color-text)]">{w.label}</span> {w.detail}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Action */}
       <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5">

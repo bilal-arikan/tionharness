@@ -2,6 +2,27 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-01**
 
+## Dışa aktarıma metadata alanları + bağımlılık uyarısı ✅ (2026-07-01)
+
+**İstek:** Dışa aktarıma **isim/açıklama/sürüm** alanı desteği ve **ajan bağımlılık uyarısı** ekle.
+
+**Yapılan:**
+- **Metadata alanları:** `WorkspaceExportPanel`'in üstüne **Şablon adı / Açıklama / Sürüm**
+  girişleri kondu. Ad `ws.name`'den seed edilir; açıklama/sürüm boşsa sunucu varsayılan üretir.
+  Frontend `WorkspaceExportMeta` (`name?/description?/version?`) `api.publishPack(...)`'ın yeni
+  4. argümanı olarak geçer; boş alanlar düşürülür.
+- **Backend:** `publishRequest`'e `Name/Description/Version` (omitempty) eklendi;
+  `handlePublishMarket` workspace kind'ında bunları trim edip `BuildWorkspacePack(slug, name,
+  desc, version, …)`'e verir. `BuildWorkspacePack` imzasına `version` parametresi eklendi
+  (boş → `1.0.0`). Slug artık kullanıcı adından türetilir → farklı ad = farklı pack id.
+- **Bağımlılık uyarısı:** panel, hariç bırakılan ajanlara bağlı akış/zamanlamaları uyarı
+  kutusunda listeler. Flow bağımlılığı `flow.graph` JSON'u client'ta parse edilip
+  `type==='agent'` düğümlerinin `agentId`'leri toplanarak hesaplanır. Etki net: akış → kopuk
+  referans, zamanlama → dışa aktarımdan düşer.
+- `go build ./...` ✅ · `npx tsc --noEmit` ✅. Dosyalar: `internal/market/publish.go`,
+  `internal/api/market.go`, `internal/api/market_publish.go`, `frontend/src/api/market.ts`,
+  `frontend/src/components/workspace/WorkspaceExportPanel.tsx`.
+
 ## Workspace dışa aktarımı ayrı sekmeye taşındı + seçilebilir içerik ✅ (2026-07-01)
 
 **İstek:** Workspace ayarlarındaki "export aldığımız kısım" (Şablon olarak yayınla) ayrı bir

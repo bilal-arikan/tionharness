@@ -183,6 +183,12 @@ type installRequest struct {
 type publishRequest struct {
 	Kind     string `json:"kind"`
 	SourceID string `json:"sourceId"` // skill slug / agent id / flow id / provider id
+	// Pack-level metadata for a workspace-template export. Each is optional; empty
+	// values fall back to a derived default (name → workspace name, description →
+	// a generated line, version → "1.0.0"). Ignored by non-workspace kinds.
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Version     string `json:"version,omitempty"`
 	// Include filters what a workspace-template export captures. A nil pointer
 	// (field omitted) means "everything" for backward compatibility.
 	Include *publishInclude `json:"include,omitempty"`

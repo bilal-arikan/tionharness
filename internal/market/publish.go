@@ -40,12 +40,15 @@ func BuildSkillPack(slug, name, description, icon, color, body, author string, c
 // captured from a live workspace (the inverse of seeding). The id is derived from
 // the slug as "workspace-<slug>" so re-publishing the same workspace overwrites in
 // place and shares the bundled templates' id namespace (global overrides bundled).
-func BuildWorkspacePack(slug, name, description, icon, color, author string, createdAt int64, payload WorkspacePayload) (Pack, error) {
+func BuildWorkspacePack(slug, name, description, version, icon, color, author string, createdAt int64, payload WorkspacePayload) (Pack, error) {
 	if slug == "" {
 		return Pack{}, fmt.Errorf("slug is required")
 	}
 	if name == "" {
 		name = slug
+	}
+	if version == "" {
+		version = "1.0.0"
 	}
 	if payload.Name == "" {
 		payload.Name = name
@@ -56,7 +59,7 @@ func BuildWorkspacePack(slug, name, description, icon, color, author string, cre
 		Kind:        KindWorkspace,
 		Name:        name,
 		Description: description,
-		Version:     "1.0.0",
+		Version:     version,
 		Author:      author,
 		Icon:        icon,
 		Color:       color,
