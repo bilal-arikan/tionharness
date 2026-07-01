@@ -467,8 +467,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     <button data-testid="artifact-detail-copy" onClick={copy} title="İçeriği kopyala" className={iconBtn}>
                       {copied ? <Check size={15} /> : <Copy size={15} />}
                     </button>
-                    <CopyPathButton path={activePath} title="Yolu kopyala" />
-                    <RevealButton testId="artifact-detail-reveal" onReveal={reveal} disabled={!activePath} />
+                    <CopyPathButton path={activePath} label="Yolu kopyala" title="Yolu kopyala" />
+                    <RevealButton testId="artifact-detail-reveal" onReveal={reveal} disabled={!activePath} label="Aç" />
                     {active.sessionId && onOpenSession && (
                       <button
                         onClick={() => onOpenSession(active.sessionId)}

@@ -311,10 +311,12 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
               <div className="flex shrink-0 items-center gap-1">
                 <RevealButton
                   onReveal={() => api.revealSession(selected.sessionId).catch((e) => onError((e as Error).message))}
+                  label="Aç"
                   title={sessPath ? `Klasörü aç: ${sessPath}` : 'Klasörü aç'}
                 />
                 <CopyPathButton
                   getPath={async () => sessPath || (await api.sessionPath(selected.sessionId)).path}
+                  label="Yolu kopyala"
                   title="Yolu kopyala"
                   onError={onError}
                 />

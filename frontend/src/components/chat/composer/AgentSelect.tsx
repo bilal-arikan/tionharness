@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { Agent } from '../../../types'
 import { useOutsideClick } from '../../../hooks/useOutsideClick'
-import { AgentAvatar } from '../../agents/AgentAvatar'
 import { AgentIdentity } from '../../agents/AgentIdentity'
 
 interface Props {
@@ -39,10 +38,7 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
         }`}
       >
         {selected ? (
-          <>
-            <AgentAvatar agent={selected} size={18} />
-            <span className="hidden max-w-[120px] truncate sm:inline">{selected.name}</span>
-          </>
+          <AgentIdentity agent={selected} size="sm" subtitle="model" className="max-w-[180px]" />
         ) : (
           <span>Ajan seç</span>
         )}

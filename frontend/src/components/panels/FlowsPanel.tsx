@@ -674,12 +674,13 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             >
               {selectedId}
             </span>
-            <CopyPathButton path={flowPath} title="Akış yolunu kopyala" />
+            <CopyPathButton path={flowPath} label="Yolu kopyala" title="Akış yolunu kopyala" />
             <RevealButton
               onReveal={() => {
                 if (selectedId) api.revealFlow(selectedId).catch((e) => onError((e as Error).message))
               }}
               disabled={!selectedId}
+              label="Aç"
               title="Akış klasörünü aç"
             />
             <input
