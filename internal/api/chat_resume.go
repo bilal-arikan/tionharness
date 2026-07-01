@@ -23,10 +23,7 @@ type claudeResumePlan struct {
 // after the turn together with the rotated Response.SessionID.
 func (s *Server) planClaudeResume(provider providers.Provider, agentCount int, session db.Session, rawHistory []db.Message, llmReq *providers.Request) claudeResumePlan {
 	set := s.settings.Get()
-	// Persistent-session mode supersedes --resume: the long-lived process holds the
-	// conversation itself and needs the FULL transcript on a cold (re)start, so do
-	// not trim to the delta here when it is on.
-	enabled := set.ClaudeResume && !set.ClaudePersistentSession && agentCount == 1 && provider.Name() == "claude-cli"
+	enabled := resumeGateEnabled(set.ClaudeResume, set.ClaudePersistentSession, agentCount, provider.Name())
 	plan, resumeID, deltaStart := claudeResumeDecision(enabled, session.CLISessionID, session.CLISentMsgCount, len(rawHistory))
 	if resumeID != "" {
 		// Warm resume: send only the unseen delta and ask the CLI to --resume.
@@ -34,6 +31,16 @@ func (s *Server) planClaudeResume(provider providers.Provider, agentCount int, s
 		llmReq.Messages = conversation.ToProviderMessages(rawHistory[deltaStart:])
 	}
 	return plan
+}
+
+// resumeGateEnabled is the pure (testable) gate for the --resume delta path. It is
+// MUTUALLY EXCLUSIVE with ClaudePersistentSession: the persistent long-lived process
+// holds the conversation itself and needs the FULL transcript on a cold (re)start, so
+// when it is on we must NOT trim to the delta here — persistent supersedes --resume.
+// Also single-agent only (the resume id is tracked per session, so a multi-agent
+// thread would collide) and claude-cli only.
+func resumeGateEnabled(claudeResume, persistentSession bool, agentCount int, providerName string) bool {
+	return claudeResume && !persistentSession && agentCount == 1 && providerName == "claude-cli"
 }
 
 // claudeResumeDecision is the pure (testable) core of planClaudeResume. Given the

@@ -18,7 +18,7 @@ const wsSettingsFile = "ws-settings.json"
 // prompt addendum) a fresh workspace starts with. SwarmGo has no monolithic
 // system prompt of its own — the workspace prompt IS the standing guidance every
 // agent in the workspace carries — so this default gives new workspaces a full,
-// the external agent project-equivalent baseline instead of an empty prompt. A workspace whose
+// SwarmGo-specific baseline instead of an empty prompt. A workspace whose
 // ws-settings.json sets its own `instructions` overrides this seed.
 //
 //go:embed defaults/default-instructions.md

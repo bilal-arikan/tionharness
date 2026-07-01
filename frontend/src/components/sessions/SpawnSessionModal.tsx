@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Sparkles, X, Loader2 } from 'lucide-react'
 import type { Agent } from '../../types'
 import { api } from '../../api'
 import { AgentPicker } from '../agents/AgentPicker'
-import { Button, PromptEditor } from '../common'
+import { Button, PromptEditor, ModalOverlay } from '../common'
 
 interface Props {
   agents: Agent[]
@@ -23,15 +23,6 @@ export function SpawnSessionModal({ agents, onClose, onSpawned, onError }: Props
   const [modelOverride, setModelOverride] = useState('')
   const [busy, setBusy] = useState(false)
 
-  // Close on Escape.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   const canSubmit = agentId !== '' && prompt.trim() !== '' && !busy
 
   const submit = async () => {
@@ -48,10 +39,7 @@ export function SpawnSessionModal({ agents, onClose, onSpawned, onError }: Props
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onMouseDown={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -115,6 +103,6 @@ export function SpawnSessionModal({ agents, onClose, onSpawned, onError }: Props
           </Button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

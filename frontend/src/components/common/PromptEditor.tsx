@@ -116,20 +116,27 @@ export function PromptEditor({
     <textarea
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      rows={fullscreen ? undefined : rows}
+      // In split ("half") and fullscreen the textarea fills the pane height
+      // (flex-1) so the edit side matches the preview instead of staying at the
+      // caller's short `rows`, which left it cut off next to a tall preview.
+      rows={fullscreen || half ? undefined : rows}
       className={`w-full bg-transparent px-2.5 py-2 text-sm outline-none ${
-        fullscreen ? 'flex-1 resize-none px-4 py-3' : half ? 'resize-none' : 'resize-y'
+        fullscreen ? 'flex-1 resize-none px-4 py-3' : half ? 'h-full flex-1 resize-none' : 'resize-y'
       } ${mono ? 'font-mono' : ''} ${textareaClassName}`}
       {...rest}
     />
   )
 
-  const previewArea = (fullscreen: boolean) => (
+  // half=true → rendered inside the split row (fills the row's fixed height via
+  // h-full). Single-pane preview (half=false) instead gets the SAME comfortable
+  // min-height as split so clicking "Önizleme" doesn't collapse the box to the
+  // content height. Fullscreen fills the overlay.
+  const previewArea = (fullscreen: boolean, half: boolean) => (
     <div
       className={
-        fullscreen ? 'flex-1 overflow-y-auto px-4 py-3' : 'h-full max-h-[60vh] overflow-y-auto px-2.5 py-2'
+        'min-w-0 break-words overflow-y-auto ' +
+        (fullscreen ? 'flex-1 px-4 py-3' : half ? 'h-full px-2.5 py-2' : 'min-h-[26rem] max-h-[65vh] px-2.5 py-2')
       }
-      style={fullscreen ? undefined : { minHeight: `${rows * 1.5}rem` }}
     >
       {value.trim() ? (
         <Markdown>{value}</Markdown>
@@ -144,20 +151,27 @@ export function PromptEditor({
   const body = (fullscreen: boolean) => {
     if (m === 'split') {
       return (
-        <div className={`flex min-h-0 divide-x divide-[var(--color-border)] ${fullscreen ? 'flex-1' : ''}`}>
-          <div className="flex w-1/2 flex-col">{editArea(fullscreen, true)}</div>
-          <div className="w-1/2 bg-[var(--color-surface)]/30">{previewArea(fullscreen)}</div>
+        // Non-fullscreen split gets an explicit, comfortable height (capped to the
+        // viewport) so BOTH panes fill it and scroll internally — otherwise the
+        // edit side collapsed to the short `rows` while the preview grew tall.
+        <div
+          className={`flex divide-x divide-[var(--color-border)] ${
+            fullscreen ? 'min-h-0 flex-1' : 'h-[26rem] max-h-[65vh]'
+          }`}
+        >
+          <div className="flex w-1/2 min-w-0 flex-col">{editArea(fullscreen, true)}</div>
+          <div className="flex w-1/2 min-w-0 flex-col bg-[var(--color-surface)]/30">{previewArea(fullscreen, true)}</div>
         </div>
       )
     }
-    return m === 'preview' ? previewArea(fullscreen) : editArea(fullscreen, false)
+    return m === 'preview' ? previewArea(fullscreen, false) : editArea(fullscreen, false)
   }
 
   return (
     <>
       <div
         ref={rootRef}
-        className={`overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-bg)] focus-within:border-[var(--color-accent)] ${className}`}
+        className={`w-full min-w-0 overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-bg)] focus-within:border-[var(--color-accent)] ${className}`}
       >
         {toolbar(false)}
         {body(false)}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 	"github.com/bilal-arikan/swarmgo/internal/tools"
@@ -141,6 +142,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Recap recent turns' tool I/O so the agent can answer "what did you just do /
 	// what did that return" (the tool trace is dropped when history → messages).
 	history = appendRecentToolSummaries(history)
+	// Carry this workspace's editable compaction prompt onto the turn context so
+	// any fold (rolling summary here, or reactive mid-loop downstream) uses it.
+	ctx = conversation.WithCompactPrompt(ctx, ws(r).Runtime.CompactPromptTemplate())
 	prep, err := s.convo.Prepare(ctx, database, provider, session, agent, history)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "compaction failed: "+err.Error())

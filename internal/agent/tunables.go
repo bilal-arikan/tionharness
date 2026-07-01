@@ -134,6 +134,13 @@ type Tunables struct {
 	// UI for optimisation + self-improvement. debugJournalCap bounds the file.
 	debugJournal    bool // emit the parallel debug stream (default on)
 	debugJournalCap int  // newest events kept per session (0 = default)
+
+	// cliBridgeSkipHidden (POC) — when true, hidden-tier lazy built-ins (the
+	// self-management suite) are NOT bridged to claude-cli's Interaction MCP at
+	// all, so their full schemas never travel to the CLI process. Default TRUE
+	// (2026-07-01): hidden tools are withheld from the CLI; disable per boot with
+	// SWARMGO_CLI_BRIDGE_SKIP_HIDDEN=0. See clibridge_tunable.go.
+	cliBridgeSkipHidden bool
 }
 
 // DefaultDebugJournalCap mirrors db.DefaultDebugJournalCap as the resolved
@@ -175,7 +182,12 @@ func NewTunables() *Tunables {
 		// transparent to existing behaviour. Production overrides from settings.
 		debugJournal:    true,
 		debugJournalCap: DefaultDebugJournalCap,
-		maxToolIters:    -1,
+		// POC default ON (2026-07-01): hidden-tier self-management tools are NOT
+		// bridged to claude-cli, so their full schemas never reach the CLI process.
+		// CLI agents reach them via a next-turn re-allowlist instead of in-turn.
+		// Disable per boot with SWARMGO_CLI_BRIDGE_SKIP_HIDDEN=0.
+		cliBridgeSkipHidden: true,
+		maxToolIters:        -1,
 		// Recall floor at the historical default so test runtimes (which skip
 		// applySettings) recall exactly as before. journalMinLen is left at 0 (gate
 		// off) for the same reason — only production turns the write-gate on.

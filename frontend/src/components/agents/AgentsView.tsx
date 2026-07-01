@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { RefreshCw, Trash2 } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AgentIdentity } from './AgentIdentity'
 import { ProviderModelSelect } from './ProviderModelSelect'
@@ -7,7 +7,11 @@ import { useCatalog, resolveModelLabel } from '../../lib/catalog'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
 import { Button, PromptEditor, SelectionBar, SelectionBarButton } from '../common'
+import {
+  SidebarHeader, NewItemButton, ResizeHandle, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
+} from '../common/SidebarChrome'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { useResizableSidebar } from '../../hooks/useResizableSidebar'
 
 interface Props {
   agents: Agent[]
@@ -82,6 +86,10 @@ export function AgentsView({
 
   // Multi-select for bulk roster actions (Ctrl/Cmd+Click, Shift-range).
   const sel = useMultiSelect()
+  const { width, startDrag } = useResizableSidebar({
+    storageKey: 'swarmgo.agentsListWidth',
+    defaultWidth: 256,
+  })
   const orderedIds = useMemo(() => agents.map((a) => a.id), [agents])
   const bulkDelete = async () => {
     const ids = [...sel.selected]
@@ -102,37 +110,31 @@ export function AgentsView({
   return (
     <div className="flex min-h-0 flex-1">
       {/* Left: roster */}
-      <div className="flex w-64 shrink-0 flex-col border-r border-[var(--color-border)]">
-        <div className="flex items-center justify-between px-4 pt-4 pb-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            Ajanlar
-          </span>
-          <div className="flex items-center gap-1.5">
-            {onRefresh && (
-              <button
-                onClick={doRefresh}
-                disabled={refreshing}
-                data-testid="agents-refresh"
-                className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-50"
-                title="Listeyi yenile"
-              >
-                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-              </button>
-            )}
-          </div>
-        </div>
+      <div
+        style={{ width }}
+        className="relative flex shrink-0 flex-col border-r border-[var(--color-border)]"
+      >
+        <SidebarHeader title="Ajanlar">
+          {onRefresh && (
+            <button
+              onClick={doRefresh}
+              disabled={refreshing}
+              data-testid="agents-refresh"
+              title="Yenile"
+              className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+          )}
+        </SidebarHeader>
 
-        {/* Prominent new-agent button, mirroring the "Yeni Sohbet" button. */}
-        <div className="px-3 pb-1 pt-1">
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            data-testid="agent-create-toggle"
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-            title="Yeni ajan"
-          >
-            <Plus size={15} /> Yeni Ajan
-          </button>
-        </div>
+        {/* Prominent new-agent button (shared chrome). */}
+        <NewItemButton
+          onClick={() => setShowForm((v) => !v)}
+          label="Yeni Ajan"
+          title="Yeni ajan"
+          testId="agent-create-toggle"
+        />
 
         {showForm && (
           <div className="mx-3 mb-2 space-y-2 rounded-lg bg-[var(--color-surface-2)] p-3">
@@ -174,9 +176,9 @@ export function AgentsView({
               data-agent-id={a.id}
               className={`group mb-1 flex w-full items-center rounded-lg pr-1 text-sm transition ${
                 sel.isSelected(a.id)
-                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)] ring-1 ring-[var(--color-accent)]'
+                  ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
                   : selectedId === a.id
-                    ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                    ? SELECTED_ITEM_CLS
                     : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
               }`}
             >
@@ -235,6 +237,8 @@ export function AgentsView({
             Sil
           </SelectionBarButton>
         </SelectionBar>
+
+        <ResizeHandle onMouseDown={startDrag} />
       </div>
 
       {/* Middle: selected agent's settings */}

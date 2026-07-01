@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
 	"github.com/bilal-arikan/swarmgo/internal/workspace"
@@ -171,6 +172,7 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 	if err != nil {
 		return "", err
 	}
+	ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
 	folded, summary, err := s.convo.ForceCompact(ctx, wsp.DB, provider, session, agentRow, history)
 	if err != nil {
 		return "", err

@@ -4,6 +4,30 @@ import { DataSet } from 'vis-data'
 
 export type VisMode = 'relation' | 'live'
 
+// Cap the framing zoom: vis-network's fit() zooms right up to the content, so a
+// graph with only a handful of nodes ends up uncomfortably close. After every
+// fit we clamp the scale down to this ceiling (kept slightly above 1 so small
+// graphs still read at a natural size, never magnified).
+const MAX_FIT_SCALE = 1
+
+// fitAndCap frames the whole graph, then clamps the zoom so sparse graphs don't
+// end up over-magnified. The initial framing is instant; later refits animate.
+function fitAndCap(net: Network, animated: boolean) {
+  const cap = () => {
+    if (net.getScale() > MAX_FIT_SCALE) {
+      net.moveTo({ scale: MAX_FIT_SCALE, position: net.getViewPosition() })
+    }
+  }
+  if (animated) {
+    net.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } })
+    // Cap after the fit animation settles (getScale is mid-flight during it).
+    setTimeout(cap, 440)
+  } else {
+    net.fit({ animation: false })
+    cap()
+  }
+}
+
 interface Props {
   nodes: Node[]
   edges: Edge[]
@@ -184,7 +208,7 @@ export function VisNetworkGraph({
 
     if (!populatedRef.current && nodes.length > 0) {
       populatedRef.current = true
-      net.once('stabilizationIterationsDone', () => net.fit({ animation: false }))
+      net.once('stabilizationIterationsDone', () => fitAndCap(net, false))
     }
   }, [nodes, edges])
 
@@ -198,7 +222,7 @@ export function VisNetworkGraph({
     const net = networkRef.current
     if (!net) return
     net.setOptions(buildOptions(density, mode))
-    const fit = () => net.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } })
+    const fit = () => fitAndCap(net, true)
     net.once('stabilizationIterationsDone', fit)
     const t = setTimeout(fit, 1600)
     return () => clearTimeout(t)

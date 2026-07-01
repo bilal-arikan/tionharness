@@ -1,8 +1,8 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Globe, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Globe, Lock, Pencil, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource, ToolVisibility } from '../../types'
 import { api } from '../../api'
-import { VISIBILITY_TIERS } from './toolMeta'
+import { VISIBILITY_TIERS, visibilityMeta } from './toolMeta'
 import { Markdown } from '../markdown/Markdown'
 import { CopyPathButton } from '../CopyPathButton'
 import { RevealButton } from '../RevealButton'
@@ -10,6 +10,7 @@ import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { useGroupedList } from '../../hooks/useGroupedList'
 import { SelectionBar, SelectionBarButton } from '../common'
+import { NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING } from '../common/SidebarChrome'
 
 interface Props {
   onError: (msg: string) => void
@@ -63,29 +64,32 @@ function RestrictedBadge() {
   )
 }
 
-// SummaryOffBadge marks a skill whose summary is NOT auto-injected into every
-// agent's prompt (auto-summary disabled). The skill still works when assigned.
-function SummaryOffBadge() {
-  return (
-    <span
-      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-warning,#d97706)_18%,transparent)] text-[var(--color-warning,#d97706)]"
-      title="Özeti her oturuma otomatik eklenmez (yalnızca atanan ajana görünür)"
-    >
-      Gizli
-    </span>
-  )
+// skillVisibility resolves a skill's 4-way tier, preferring the backend-computed
+// `visibility` and falling back to the raw frontmatter flags for older payloads.
+function skillVisibility(sk: Skill): ToolVisibility {
+  if (sk.visibility) return sk.visibility
+  if (sk.autoSummary === false) return 'hidden'
+  if (sk.nameOnly) return 'name-only'
+  if (sk.summaryOnly) return 'summary'
+  return 'full'
 }
 
-// NameOnlyBadge marks a skill advertised as SLUG ONLY in the Available Skills
-// block (description + when-to-use suppressed) — the skill analogue of a tool's
-// NameOnly tier. The skill stays listed and is discoverable via skill_search.
-function NameOnlyBadge() {
+// VisibilityChip shows which of the four catalog-visibility tiers a skill is on
+// (Tam / Özet / İsim / Gizli) as a single colored chip, sharing VISIBILITY_TIERS
+// metadata with the tier selector. Replaces the older per-flag badges so every
+// tier — including full/summary — reads at a glance from the list.
+function VisibilityChip({ v }: { v: ToolVisibility }) {
+  const meta = visibilityMeta(v)
   return (
     <span
-      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-accent)_18%,transparent)] text-[var(--color-accent)]"
-      title="Available Skills bloğunda yalnız slug görünür (açıklama+when bastırılır); model skill_search ile keşfeder"
+      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+      style={{
+        backgroundColor: `color-mix(in srgb, ${meta.color} 18%, transparent)`,
+        color: meta.color,
+      }}
+      title={meta.hint}
     >
-      NameOnly
+      {meta.label}
     </span>
   )
 }
@@ -146,6 +150,8 @@ export function SkillsPanel({ onError }: Props) {
   const [accessBusy, setAccessBusy] = useState(false)
   const [visBusy, setVisBusy] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  // True while a bulk visibility-tier change is applying to the selected skills.
+  const [bulkVisBusy, setBulkVisBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
   // Resizable left list width (persisted, clamped). 288px == the old w-72.
@@ -320,6 +326,28 @@ export function SkillsPanel({ onError }: Props) {
       .catch((e) => onError((e as Error).message))
   }, [sel, activeSlug, reload, onError])
 
+  // Bulk-set the catalog-visibility tier (full | summary | name-only | hidden)
+  // for every selected skill at once, then refresh the catalog and keep the
+  // selection so the user can chain another action. The tier chips update in
+  // place after the reload.
+  const bulkSetVisibility = useCallback(
+    (tier: ToolVisibility) => {
+      const slugs = [...sel.selected]
+      if (slugs.length === 0) return
+      setBulkVisBusy(true)
+      Promise.all(slugs.map((slug) => api.setSkillVisibility(slug, tier)))
+        .then(() => {
+          reload()
+          if (activeSlug && sel.selected.has(activeSlug)) {
+            api.getSkill(activeSlug).then(setActive).catch(() => {})
+          }
+        })
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setBulkVisBusy(false))
+    },
+    [sel.selected, reload, activeSlug, onError],
+  )
+
   // Re-scan tiers on disk, then refresh the catalog + current selection.
   const rescan = useCallback(() => {
     api
@@ -354,14 +382,6 @@ export function SkillsPanel({ onError }: Props) {
               </button>
             )}
             <button
-              data-testid="skills-create"
-              onClick={() => setEditor({ mode: 'create' })}
-              title="Yeni beceri oluştur"
-              className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-            >
-              <Plus size={13} /> Yeni
-            </button>
-            <button
               data-testid="skills-rescan"
               onClick={rescan}
               title="Diskten yeniden tara"
@@ -371,6 +391,12 @@ export function SkillsPanel({ onError }: Props) {
             </button>
           </div>
         </div>
+        <NewItemButton
+          onClick={() => setEditor({ mode: 'create' })}
+          label="Yeni Beceri"
+          title="Yeni beceri oluştur"
+          testId="skills-create"
+        />
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {list.length === 0 && (
             <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
@@ -415,9 +441,9 @@ export function SkillsPanel({ onError }: Props) {
                           }}
                           className={`group flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
                             sel.isSelected(sk.slug)
-                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
+                              ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
                               : isActive
-                                ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                                ? SELECTED_ITEM_CLS
                                 : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
                           }`}
                         >
@@ -426,8 +452,7 @@ export function SkillsPanel({ onError }: Props) {
                             <span className="flex items-center gap-1.5">
                               <span className="min-w-0 flex-1 truncate font-medium">{sk.name}</span>
                               {!sk.shared && <RestrictedBadge />}
-                              {sk.autoSummary === false && <SummaryOffBadge />}
-                              {sk.nameOnly && <NameOnlyBadge />}
+                              <VisibilityChip v={skillVisibility(sk)} />
                               <SourceBadge source={sk.source} />
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
@@ -449,6 +474,27 @@ export function SkillsPanel({ onError }: Props) {
           onClear={sel.clear}
           onSelectAll={orderedSlugs.length ? () => sel.selectAll(orderedSlugs) : undefined}
         >
+          {/* Bulk tier: set the visibility of every selected skill at once. */}
+          <div
+            className="inline-flex overflow-hidden rounded-md border border-[var(--color-border)]"
+            role="group"
+            aria-label="Seçili becerilerin görünürlüğü"
+            data-testid="skills-bulk-visibility"
+          >
+            {VISIBILITY_TIERS.map((tier) => (
+              <button
+                key={tier.value}
+                type="button"
+                disabled={bulkVisBusy}
+                onClick={() => bulkSetVisibility(tier.value)}
+                title={`Seçili becerileri "${tier.label}" yap — ${tier.hint}`}
+                data-testid={`skills-bulk-vis-${tier.value}`}
+                className="px-2 py-1 text-xs text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+              >
+                {tier.label}
+              </button>
+            ))}
+          </div>
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
             Sil
           </SelectionBarButton>
@@ -483,8 +529,7 @@ export function SkillsPanel({ onError }: Props) {
                     </span>
                   )}
                   {!active.shared && <RestrictedBadge />}
-                  {active.autoSummary === false && <SummaryOffBadge />}
-                  {active.nameOnly && <NameOnlyBadge />}
+                  <VisibilityChip v={skillVisibility(active)} />
                   <SourceBadge source={active.source} />
                 </div>
                 <p className="mt-1 text-xs text-[var(--color-text-dim)]">

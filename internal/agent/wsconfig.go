@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
 )
 
 // Per-workspace, editable configuration lives in <workspace>/config/, a sibling
@@ -22,19 +24,31 @@ import (
 // fallback, so a missing or blank file never breaks a turn.
 
 // PromptKeys lists the editable runtime prompt keys in display order.
-var PromptKeys = []string{"summary", "reflect", "title"}
+var PromptKeys = []string{"summary", "reflect", "title", "compact"}
 
 // promptDefaults maps a prompt key to its compiled-in default text, used both to
 // seed a fresh workspace and as the fallback when a file is missing or blank.
+// "compact" is the conversation-compaction template; its default carries two %s
+// slots (existing summary, new messages) that an edit MUST preserve — the
+// compaction core validates and falls back to the default if they are broken.
 var promptDefaults = map[string]string{
 	"summary": summarySystemPrompt,
 	"reflect": reflectPrompt,
 	"title":   titleSystemPrompt,
+	"compact": conversation.CompactPromptDefault(),
 }
 
 // PromptDefault returns the compiled-in default text for a prompt key ("" if the
 // key is unknown).
 func PromptDefault(key string) string { return promptDefaults[key] }
+
+// CompactPromptTemplate returns this workspace's editable compaction prompt (the
+// config/prompts/compact.md override, or the compiled-in default when missing/
+// blank). Callers inject it onto the turn context via conversation.WithCompactPrompt
+// so the shared Manager honors the workspace's edit. Exported (vs readPrompt) so
+// the api package can reach it without the local `agent` variable shadowing the
+// package name at those call sites.
+func (r *Runtime) CompactPromptTemplate() string { return r.readPrompt("compact") }
 
 // WorkspaceConfigDir returns the config directory for a workspace data dir.
 func WorkspaceConfigDir(wsDir string) string { return filepath.Join(wsDir, "config") }
@@ -93,6 +107,7 @@ değiştirebilir.
 - ` + "`prompts/summary.md`" + ` — ` + "`/memory` · `/board` · `/flows`" + ` özet komutlarının sistem promptu
 - ` + "`prompts/reflect.md`" + ` — ` + "`/reflect`" + ` (dream cycle) yansıma promptu
 - ` + "`prompts/title.md`" + ` — otomatik başlık üretimi sistem promptu
+- ` + "`prompts/compact.md`" + ` — bağlam sıkıştırma (compaction) promptu — **iki ` + "`%s`" + ` yer tutucusu** (mevcut özet, yeni mesajlar) korunmalı; bozuksa gömülü varsayılana düşer
 - ` + "`instructions.md`" + ` — bu workspace'teki tüm ajanlara eklenen yönergeler
 
 Bir prompt dosyasını boş bırakırsan uygulama **gömülü varsayılanı** kullanır.

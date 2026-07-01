@@ -420,18 +420,10 @@ var bridgeExcluded = map[string]bool{
 // are skipped (CLI-native or native-loop-context-bound). allow filters by name
 // (nil = allow all), mirroring the per-agent tool filter used on the native path.
 func (r *Registry) BridgeableDefs(allow func(name string) bool) []providers.ToolDef {
-	var out []providers.ToolDef
-	for name, t := range r.builtins {
-		if !r.lazy[name] || bridgeExcluded[name] {
-			continue
-		}
-		if allow != nil && !allow(name) {
-			continue
-		}
-		out = append(out, foldExamples(t.Def()))
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out
+	// Delegates to the filtered form with skipHidden=false, preserving the
+	// historical behaviour (hidden-tier lazy tools ARE bridged to the CLI with
+	// full schemas). See bridge_filter.go for the POC hidden-tier exclusion.
+	return r.BridgeableDefsFiltered(allow, false)
 }
 
 // Has reports whether the registry knows a tool by (namespaced) name.

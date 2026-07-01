@@ -22,7 +22,11 @@ import {
 } from '../../lib/flowGraph'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../../types'
 import { Button, SelectionBar, SelectionBarButton } from '../common'
+import {
+  NewItemButton, ResizeHandle, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
+} from '../common/SidebarChrome'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { useResizableSidebar } from '../../hooks/useResizableSidebar'
 import { Play, Trash2 } from 'lucide-react'
 
 interface Props {
@@ -323,6 +327,11 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   // Multi-select (Ctrl/Cmd+Click, Shift-range) on the "Akışlarım" tab for bulk
   // run / delete. Runs fire-and-forget with an empty input.
   const sel = useMultiSelect()
+  const { width, startDrag } = useResizableSidebar({
+    storageKey: 'swarmgo.flowsListWidth',
+    defaultWidth: 224,
+    min: 180,
+  })
   const bulkRun = async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
@@ -448,7 +457,11 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   return (
     <div className="flex min-h-0 flex-1">
       {/* Flow list / template gallery */}
-      <div className="w-56 flex-shrink-0 overflow-y-auto border-r border-[var(--color-border)] p-3">
+      <div
+        style={{ width }}
+        className="relative flex flex-shrink-0 flex-col border-r border-[var(--color-border)]"
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {/* Tab switch */}
         <div className="mb-3 flex gap-1 rounded-lg bg-[var(--color-surface-2)] p-1 text-xs">
           {(['flows', 'templates', 'runs'] as const).map((t) => (
@@ -480,7 +493,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                   onClick={() => setTemplateId(t.id)}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
                     templateId === t.id
-                      ? 'bg-[var(--color-surface-2)]'
+                      ? SELECTED_ITEM_CLS
                       : 'hover:bg-[var(--color-surface-2)]'
                   }`}
                 >
@@ -516,7 +529,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                     onClick={() => setSelectedRunId(rn.id)}
                     className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm ${
                       selectedRunId === rn.id
-                        ? 'bg-[var(--color-surface-2)]'
+                        ? SELECTED_ITEM_CLS
                         : 'hover:bg-[var(--color-surface-2)]'
                     }`}
                   >
@@ -537,9 +550,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
           </ul>
         ) : (
           <>
-        <Button onClick={createFlow} size="lg" className="mb-3 w-full">
-          + Yeni akış
-        </Button>
+        <NewItemButton bare onClick={createFlow} label="Yeni akış" className="mb-3" />
         {(() => {
           const visible = flows.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase()))
           const orderedIds = visible.map((f) => f.id)
@@ -554,9 +565,9 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                 }}
                 className={`flex w-full items-start justify-between rounded-lg px-3 py-2 text-left text-sm ${
                   sel.isSelected(f.id)
-                    ? 'bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]'
+                    ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
                     : selectedId === f.id
-                      ? 'bg-[var(--color-surface-2)]'
+                      ? SELECTED_ITEM_CLS
                       : 'hover:bg-[var(--color-surface-2)]'
                 }`}
               >
@@ -601,6 +612,8 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         </SelectionBar>
           </>
         )}
+        </div>
+        <ResizeHandle onMouseDown={startDrag} />
       </div>
 
       {/* Main: template preview or flow editor */}

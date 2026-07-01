@@ -346,7 +346,8 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// ends the turn. decideRecovery keeps this policy pure + testable.
 			d := decideRecovery(nil, err, ls, cfg)
 			if d.compact {
-				folded, ok, cerr := conversation.CompactInFlightMessages(ctx, r.db, provider, agent, req.Messages, keepRecent)
+				cctx := conversation.WithCompactPrompt(ctx, r.CompactPromptTemplate())
+				folded, ok, cerr := conversation.CompactInFlightMessages(cctx, r.db, provider, agent, req.Messages, keepRecent)
 				if cerr == nil && ok {
 					req.Messages = folded
 					ls.compacted = true

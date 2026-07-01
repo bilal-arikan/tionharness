@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { KeyRound, Sparkles, Copy, Check } from 'lucide-react'
 import { api } from '../../api'
 import type { AppSettings } from '../../types'
-import { Button } from '../common'
+import { Button, ModalOverlay } from '../common'
 import { inputCls } from './primitives'
 
 type Method = 'oauth' | 'apikey'
@@ -30,14 +30,10 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
   const [copied, setCopied] = useState(false)
   const tokenRef = useRef<HTMLInputElement>(null)
 
+  // Focus the token field on open. Escape-to-close is handled by ModalOverlay.
   useEffect(() => {
     tokenRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [])
 
   // The exact command the user runs once to mint a subscription OAuth token. The
   // CLAUDE_CONFIG_DIR prefix is only needed so the login lands in the same isolated
@@ -98,7 +94,7 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
     }`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onMouseDown={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -196,6 +192,6 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

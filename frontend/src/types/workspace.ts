@@ -81,8 +81,6 @@ export interface WorkspaceConfig {
   promptKeys: string[]
   instructions: string
   readme: string
-  // The actual conversation-summarization prompt, read-only (not user-editable).
-  compactionPrompt: string
 }
 
 // Partial update; omitted fields unchanged. A prompt written as "" clears the

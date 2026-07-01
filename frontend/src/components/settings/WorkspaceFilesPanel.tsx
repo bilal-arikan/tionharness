@@ -28,9 +28,10 @@ interface Props {
 
 // Human labels for each runtime prompt key.
 const PROMPT_LABELS: Record<string, { label: string; hint: string }> = {
-  summary: { label: 'Genel bakış promptu', hint: 'Yalnızca /memory · /board · /flows komutlarının anlık genel-bakış sistem promptu (kısa liste özeti). Konuşma özetlemesi DEĞİL — o aşağıda salt-okunur gösterilir. Boş bırakırsan gömülü varsayılan kullanılır.' },
+  summary: { label: 'Genel bakış promptu', hint: 'Yalnızca /memory · /board · /flows komutlarının anlık genel-bakış sistem promptu (kısa liste özeti). Konuşma özetlemesi (compaction) DEĞİL — o ayrı "Compaction promptu" alanıdır. Boş bırakırsan gömülü varsayılan kullanılır.' },
   reflect: { label: 'Yansıma promptu', hint: '/reflect (dream cycle) yansıma talimatı. Günlük kayıtları otomatik eklenir.' },
   title: { label: 'Başlık promptu', hint: 'Otomatik başlık üretimi sistem promptu.' },
+  compact: { label: 'Compaction promptu', hint: 'Bağlam sınırına yaklaşınca geçmişi tek bir yapılandırılmış özete katlayan ASIL prompt (8 bölüm + anti-decay). İki %s yer tutucusu (mevcut özet, yeni mesajlar) KORUNMALI — bozarsan gömülü varsayılana düşer. Boş bırakırsan varsayılan kullanılır.' },
 }
 
 type Draft = { prompts: Record<string, string>; instructions: string; readme: string }
@@ -154,19 +155,6 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
           </Field>
         )
       })}
-
-      <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Konuşma özetleme promptu</div>
-      <Field
-        label="Compaction promptu (salt-okunur)"
-        hint="Bağlam sınırına yaklaşınca geçmişi tek bir yapılandırılmış özete katlayan ASIL prompt. 8 bölümlü (istek/kavramlar/dosyalar/hatalar/kararlar/bekleyen/mevcut/sonraki) + anti-decay talimatı — her katlamada eski detayı korur. Yapısı bilinçli olarak sabittir (kodda gömülü), bu yüzden düzenlenemez; referans için burada gösterilir."
-      >
-        <textarea
-          value={config.compactionPrompt}
-          readOnly
-          rows={12}
-          className="w-full resize-y rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-2 font-mono text-[11px] leading-relaxed text-[var(--color-text-dim)]"
-        />
-      </Field>
 
       <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Workspace dosyaları</div>
       <Field label="Talimatlar (instructions.md)" hint="Bu workspace'teki tüm ajanlara eklenen yönergeler. 'Genel' sekmesindeki talimatlarla senkronizedir.">

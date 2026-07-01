@@ -41,6 +41,14 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         checked={draft.claudePersistentSession}
         onChange={(v) => set('claudePersistentSession', v)}
       />
+      {draft.claudeResume && draft.claudePersistentSession && (
+        <div className="rounded-lg border border-[var(--color-warning,#f59e0b)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+          ⚠️ <b>Kalıcı süreç, --resume'u geçersiz kılar.</b> İkisi de açık: yalnız kalıcı
+          süreç etkin olur (<code>--resume</code> delta yolu devre dışı). İkisi karşılıklı
+          dışlar — birini seçin. Kalıcı süreç en düşük cache-write'ı verir; --resume ise en
+          düşük input'u (yalnız delta gönderir).
+        </div>
+      )}
       <Toggle
         label="Ajan→ajan delegasyon (run_subagent)"
         hint="Bir ajan, izole bir alt-ajana (yerleşik profil ya da mevcut bir ajan) alt-görev devredip cevabını bekleyebilir; tek turda paralel de çağrılabilir. Her çağrı tam bir alt-ajan turu koşar (token maliyeti). Yalnızca native/anthropic tool yolunda."

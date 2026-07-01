@@ -152,6 +152,13 @@ type anthropicTool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"input_schema"`
+	// CacheControl, when set on the LAST tool, marks a cache breakpoint after the
+	// whole tools block. Anthropic caches by prefix in tools → system → messages
+	// order, so this caches the tool schemas INDEPENDENTLY of the (possibly
+	// changing) system block — a system-prompt edit no longer invalidates the
+	// tool-definition cache. Only the last tool carries it (one breakpoint covers
+	// the entire preceding block).
+	CacheControl *cacheControl `json:"cache_control,omitempty"`
 }
 
 // anthropicResp mirrors the relevant parts of the response body.
@@ -199,7 +206,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		MaxTokens: maxTokens,
 		System:    a.systemField(req.System, req.SystemDynamic),
 		Messages:  toAnthropicMessages(req.Messages),
-		Tools:     toAnthropicTools(req.Tools),
+		Tools:     toAnthropicTools(req.Tools, a.extendedCache),
 		Thinking:  thinking,
 	}
 
@@ -462,7 +469,14 @@ func toAnthropicMessages(msgs []Message) []anthropicMessage {
 	return out
 }
 
-func toAnthropicTools(tools []ToolDef) []anthropicTool {
+// toAnthropicTools converts the tool defs and, when caching is on, attaches a
+// cache breakpoint to the LAST tool so the whole tools block is cached on its own
+// prefix (independent of the system block). The breakpoint uses the same 1h TTL as
+// the system block — valid because tools precede system in Anthropic's ordering,
+// so a 1h tool breakpoint never lands after a shorter-TTL one. Gated on the same
+// extendedCache flag as the system breakpoint, so the caching on/off policy is
+// unchanged; only its granularity improves.
+func toAnthropicTools(tools []ToolDef, extendedCache bool) []anthropicTool {
 	if len(tools) == 0 {
 		return nil
 	}
@@ -473,6 +487,9 @@ func toAnthropicTools(tools []ToolDef) []anthropicTool {
 			schema = json.RawMessage(`{"type":"object"}`)
 		}
 		out = append(out, anthropicTool{Name: t.Name, Description: t.Description, InputSchema: schema})
+	}
+	if extendedCache {
+		out[len(out)-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: "1h"}
 	}
 	return out
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Download, Globe, FolderInput, AlertTriangle, CheckCircle2, Search, ChevronLeft } from 'lucide-react'
 import { api } from '../../api'
 import type { Discovered, IngestInstallResult, IngestKind } from '../../api/ingest'
-import { Button } from '../common'
+import { Button, ModalOverlay } from '../common'
 
 interface Props {
   onClose: () => void
@@ -120,7 +120,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
     'w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -383,6 +383,6 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

@@ -78,3 +78,38 @@ func TestSystemField_DynamicOnlyInheritsCache(t *testing.T) {
 		t.Errorf("dynamic-only block should be cached: %+v", blocks[0])
 	}
 }
+
+// With caching on, exactly ONE cache breakpoint rides the tools block, on the
+// LAST tool (Anthropic caches by prefix, so one breakpoint covers all preceding
+// tools) and at the same 1h TTL as the system block.
+func TestToAnthropicTools_CacheBreakpointOnLastTool(t *testing.T) {
+	defs := []ToolDef{{Name: "a"}, {Name: "b"}, {Name: "c"}}
+	got := toAnthropicTools(defs, true)
+	if len(got) != 3 {
+		t.Fatalf("got %d tools, want 3", len(got))
+	}
+	for i := 0; i < len(got)-1; i++ {
+		if got[i].CacheControl != nil {
+			t.Errorf("tool %q must not carry cache_control (only the last one does)", got[i].Name)
+		}
+	}
+	last := got[len(got)-1]
+	if last.CacheControl == nil || last.CacheControl.TTL != "1h" {
+		t.Errorf("last tool must carry a 1h cache breakpoint, got %+v", last.CacheControl)
+	}
+	// Empty schemas are still filled so the tool is valid.
+	if string(got[0].InputSchema) != `{"type":"object"}` {
+		t.Errorf("empty schema must default to object, got %s", got[0].InputSchema)
+	}
+}
+
+// With caching off, no tool carries a breakpoint — the caching on/off policy is
+// unchanged, only its granularity improves when on.
+func TestToAnthropicTools_NoCacheWhenDisabled(t *testing.T) {
+	got := toAnthropicTools([]ToolDef{{Name: "a"}, {Name: "b"}}, false)
+	for _, tl := range got {
+		if tl.CacheControl != nil {
+			t.Errorf("tool %q must not be cached when extendedCache is off", tl.Name)
+		}
+	}
+}

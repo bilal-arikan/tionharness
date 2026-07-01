@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/events"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
@@ -233,6 +234,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		// agent can see what tools it ran and what they returned (the trace is
 		// otherwise dropped when history → provider messages).
 		history = appendRecentToolSummaries(history)
+		// Carry this workspace's editable compaction prompt onto the turn context.
+		ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
 		prep, cerr := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 		if cerr != nil {
 			s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "compaction_failed", "compaction failed: "+cerr.Error())

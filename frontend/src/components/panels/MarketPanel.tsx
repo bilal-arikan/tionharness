@@ -26,7 +26,7 @@ import { api } from '../../api'
 import type { PriceTable } from '../../api/providers'
 import type { PreviewItem } from '../../api/ingest'
 import { Markdown } from '../markdown/Markdown'
-import { Button } from '../common'
+import { Button, ModalOverlay } from '../common'
 import { SkillImportDialog } from './SkillImportDialog'
 import { RegistryManager } from './RegistryManager'
 
@@ -1016,17 +1016,13 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
 
       {/* Detail popup (centered modal) */}
       {selected && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setSelected(null)}
-        >
+        <ModalOverlay onClose={() => setSelected(null)}>
           <div
             role="dialog"
             aria-modal="true"
             aria-label={selected.name}
             data-testid="market-detail-modal"
             className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
-            onClick={(e) => e.stopPropagation()}
           >
             <header className="flex items-start justify-between gap-2 border-b border-[var(--color-border)] px-4 py-3">
               <div className="flex items-center gap-2">
@@ -1150,7 +1146,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
               )}
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {importing && (

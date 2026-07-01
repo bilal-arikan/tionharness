@@ -1,5 +1,6 @@
 import type { Agent, AgentPatch } from '../../types'
 import { AgentSettingsForm } from './AgentSettingsForm'
+import { ModalOverlay } from '../common'
 
 interface Props {
   agent: Agent
@@ -11,17 +12,13 @@ interface Props {
 // Used by the roster gear button (sidebar in memory/tools views).
 export function AgentSettingsModal({ agent, onClose, onSave }: Props) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Ajan ayarları"
         data-testid="agent-settings-modal"
         className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
       >
         <AgentSettingsForm
           key={agent.id}
@@ -31,6 +28,6 @@ export function AgentSettingsModal({ agent, onClose, onSave }: Props) {
           onCancel={onClose}
         />
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

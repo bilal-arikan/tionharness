@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Plus, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AgentIdentity } from './AgentIdentity'
 import { AgentSettingsModal } from './AgentSettingsModal'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { Button, PromptEditor } from '../common'
+import { NewItemButton, ResizeHandle } from '../common/SidebarChrome'
+import { useResizableSidebar } from '../../hooks/useResizableSidebar'
 import { useCatalog, resolveModelLabel } from '../../lib/catalog'
 
 interface Props {
@@ -37,6 +39,10 @@ export function AgentRoster({
   const [model, setModel] = useState('')
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
   const catalog = useCatalog()
+  const { width, startDrag } = useResizableSidebar({
+    storageKey: 'swarmgo.rosterWidth',
+    defaultWidth: 256,
+  })
 
   const submit = () => {
     if (!name.trim()) return
@@ -57,17 +63,13 @@ export function AgentRoster({
         </span>
       </div>
 
-      {/* Prominent new-agent button, mirroring the "Yeni Sohbet" button. */}
-      <div className="px-3 pb-1 pt-1">
-        <button
-          data-testid="agent-create-toggle"
-          onClick={() => setShowForm((v) => !v)}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-          title="Yeni ajan"
-        >
-          <Plus size={15} /> Yeni Ajan
-        </button>
-      </div>
+      {/* Prominent new-agent button (shared chrome, matches every screen). */}
+      <NewItemButton
+        onClick={() => setShowForm((v) => !v)}
+        label="Yeni Ajan"
+        title="Yeni ajan"
+        testId="agent-create-toggle"
+      />
 
       {showForm && (
         <div className="mx-3 mb-2 space-y-2 rounded-lg bg-[var(--color-surface-2)] p-3">
@@ -159,8 +161,12 @@ export function AgentRoster({
     )
   }
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
+    <aside
+      style={{ width }}
+      className="relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
+    >
       {body}
+      <ResizeHandle onMouseDown={startDrag} />
     </aside>
   )
 }

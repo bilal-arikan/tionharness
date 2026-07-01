@@ -56,6 +56,17 @@ export function ToolsPanel({ onError }: Props) {
   const [visBusy, setVisBusy] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  // List filters: a set of visibility tiers (empty = all) and an enabled/disabled
+  // status filter. Independent of the search query — they narrow the same list.
+  const [visFilter, setVisFilter] = useState<Set<ToolVisibility>>(new Set())
+  const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
+  const toggleVisFilter = (tier: ToolVisibility) =>
+    setVisFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(tier)) next.delete(tier)
+      else next.add(tier)
+      return next
+    })
   // Collapsed group labels (accordion). Persisted so the choice sticks.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
@@ -254,17 +265,27 @@ export function ToolsPanel({ onError }: Props) {
 
   const activeCount = tools.filter((t) => t.enabled).length
 
-  // Filter by the search query (matches label, full name, or description).
+  // Filter by the search query (label/name/description), the visibility-tier set
+  // (empty = all tiers), and the enabled/disabled status filter.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return tools
-    return tools.filter(
-      (t) =>
-        toolLabel(t).toLowerCase().includes(q) ||
-        t.name.toLowerCase().includes(q) ||
-        (t.description ?? '').toLowerCase().includes(q),
-    )
-  }, [tools, query])
+    return tools.filter((t) => {
+      if (
+        q &&
+        !(
+          toolLabel(t).toLowerCase().includes(q) ||
+          t.name.toLowerCase().includes(q) ||
+          (t.description ?? '').toLowerCase().includes(q)
+        )
+      )
+        return false
+      if (visFilter.size && !visFilter.has(t.visibility)) return false
+      if (statusFilter === 'enabled' && !t.enabled) return false
+      if (statusFilter === 'disabled' && t.enabled) return false
+      return true
+    })
+  }, [tools, query, visFilter, statusFilter])
+  const filtersActive = visFilter.size > 0 || statusFilter !== 'all'
 
   // Group filtered tools: built-ins by functional category (fixed order), then one
   // group per MCP server (alphabetical). Empty categories are skipped.
@@ -376,7 +397,67 @@ export function ToolsPanel({ onError }: Props) {
               className="w-full rounded-lg bg-[var(--color-surface-2)] py-2 pl-8 pr-3 text-sm outline-none"
             />
           </div>
+          {/* Filters: visibility tiers (multi-select) + enabled/disabled status. */}
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {VISIBILITY_TIERS.map((tier) => {
+              const on = visFilter.has(tier.value)
+              return (
+                <button
+                  key={tier.value}
+                  data-testid="tools-filter-vis"
+                  data-tier={tier.value}
+                  data-on={on}
+                  onClick={() => toggleVisFilter(tier.value)}
+                  title={`Görünürlük: ${tier.label}`}
+                  className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition"
+                  style={
+                    on
+                      ? { backgroundColor: `color-mix(in srgb, ${tier.color} 22%, transparent)`, color: tier.color }
+                      : { backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-dim)' }
+                  }
+                >
+                  {tier.label}
+                </button>
+              )
+            })}
+            <span className="mx-0.5 h-3 w-px bg-[var(--color-border)]" />
+            {(['enabled', 'disabled'] as const).map((st) => {
+              const on = statusFilter === st
+              return (
+                <button
+                  key={st}
+                  data-testid="tools-filter-status"
+                  data-status={st}
+                  data-on={on}
+                  onClick={() => setStatusFilter((prev) => (prev === st ? 'all' : st))}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition ${
+                    on
+                      ? st === 'enabled'
+                        ? 'bg-[color-mix(in_srgb,var(--color-success)_22%,transparent)] text-[var(--color-success)]'
+                        : 'bg-[var(--color-surface-2)] text-[var(--color-text)] ring-1 ring-inset ring-[var(--color-border)]'
+                      : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+                  }`}
+                >
+                  {st === 'enabled' ? 'Aktif' : 'Devre dışı'}
+                </button>
+              )
+            })}
+            {filtersActive && (
+              <button
+                data-testid="tools-filter-clear"
+                onClick={() => {
+                  setVisFilter(new Set())
+                  setStatusFilter('all')
+                }}
+                title="Filtreleri temizle"
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+              >
+                Temizle
+              </button>
+            )}
+          </div>
           <p className="mt-2 px-0.5 text-xs text-[var(--color-text-dim)]">
+            {filtersActive ? `${filtered.length} eşleşme · ` : ''}
             {activeCount}/{tools.length} aktif
           </p>
         </div>

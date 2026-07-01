@@ -5,7 +5,6 @@ import {
   GitBranch,
   Clock,
   Activity,
-  RefreshCw,
   Copy,
   Sparkles,
   type LucideIcon,
@@ -17,7 +16,9 @@ import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { useAsync } from '../../hooks/useAsync'
+import { useResizableSidebar } from '../../hooks/useResizableSidebar'
 import { SelectionBar, SelectionBarButton } from '../common'
+import { SidebarHeader, RefreshButton, ResizeHandle } from '../common/SidebarChrome'
 import { CopyPathButton } from '../CopyPathButton'
 import { RevealButton } from '../RevealButton'
 
@@ -104,6 +105,10 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The feed is read-only, so the
   // one bulk action is copying the selected session ids (handy for cross-tooling).
   const sel = useMultiSelect()
+  const { width, startDrag } = useResizableSidebar({
+    storageKey: 'swarmgo.executionsListWidth',
+    defaultWidth: 320,
+  })
   const bulkCopyIds = () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
@@ -190,19 +195,13 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   return (
     <div className="flex h-full min-h-0">
       {/* Master: the executions list */}
-      <aside className="flex h-full w-80 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            Yürütmeler
-          </span>
-          <button
-            onClick={() => reloadItems()}
-            title="Yenile"
-            className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-          >
-            <RefreshCw size={14} />
-          </button>
-        </div>
+      <aside
+        style={{ width }}
+        className="relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
+      >
+        <SidebarHeader title="Yürütmeler">
+          <RefreshButton onClick={() => reloadItems()} />
+        </SidebarHeader>
 
         {/* Kind filter tabs */}
         <div className="flex flex-wrap gap-1 px-3 pb-2">
@@ -235,11 +234,11 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
                   if (sel.handleClick(e, it.sessionId, orderedIds)) return
                   select(it.sessionId)
                 }}
-                className={`mb-0.5 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
+                className={`mb-0.5 flex w-full items-start gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition ${
                   sel.isSelected(it.sessionId)
                     ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)] ring-1 ring-[var(--color-accent)]'
                     : isActive
-                      ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                      ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
                       : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
                 }`}
               >
@@ -273,11 +272,9 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
                   <span className="flex items-center gap-1.5 text-[10px] opacity-70">
                     <Icon size={11} className="shrink-0" />
                     <span>{meta.label}</span>
-                    {it.agentName && <span>· {it.agentName}</span>}
-                    <span>· {relativeTime(it.updatedAt)}</span>
-                  </span>
-                  <span className="font-mono text-[10px] text-[var(--color-text-dim)] opacity-60">
-                    #{shortId(it.sessionId)}
+                    <span className="font-mono opacity-70">#{shortId(it.sessionId)}</span>
+                    {it.agentName && <span className="truncate">· {it.agentName}</span>}
+                    <span className="shrink-0">· {relativeTime(it.updatedAt)}</span>
                   </span>
                 </span>
                 {!it.running && <StatusPill status={it.lastStatus ?? ''} />}
@@ -300,6 +297,8 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
             Kimlikleri kopyala
           </SelectionBarButton>
         </SelectionBar>
+
+        <ResizeHandle onMouseDown={startDrag} />
       </aside>
 
       {/* Detail: the selected execution's transcript (read-only) */}

@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/workspace"
 )
 
@@ -21,11 +20,6 @@ type wsConfigDTO struct {
 	PromptKeys   []string          `json:"promptKeys"`
 	Instructions string            `json:"instructions"`
 	Readme       string            `json:"readme"`
-	// CompactionPrompt is the ACTUAL conversation-summarization prompt shown
-	// read-only for reference. It is not user-editable (its structure is fixed)
-	// and is distinct from the editable "summary" utility prompt above, which only
-	// drives the /memory · /board · /flows overview commands.
-	CompactionPrompt string `json:"compactionPrompt"`
 }
 
 // wsConfigPatch is a partial update; omitted fields are left unchanged. A prompt
@@ -51,9 +45,8 @@ func buildWSConfigDTO(wsDir string) wsConfigDTO {
 		Prompts:      map[string]string{},
 		Defaults:     map[string]string{},
 		PromptKeys:   agent.PromptKeys,
-		Instructions:     readFileOr(agent.InstructionsFilePath(wsDir), ""),
-		Readme:           readFileOr(agent.ReadmeFilePath(wsDir), ""),
-		CompactionPrompt: conversation.CompactionPromptText(),
+		Instructions: readFileOr(agent.InstructionsFilePath(wsDir), ""),
+		Readme:       readFileOr(agent.ReadmeFilePath(wsDir), ""),
 	}
 	for _, key := range agent.PromptKeys {
 		def := agent.PromptDefault(key)

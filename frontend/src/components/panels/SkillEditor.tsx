@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { SkillDetail, SkillInput } from '../../types'
 import { api } from '../../api'
 import { EmojiField } from '../common/EmojiField'
-import { Button, PromptEditor } from '../common'
+import { Button, PromptEditor, ModalOverlay } from '../common'
 
 interface Props {
   mode: 'create' | 'edit'
@@ -64,10 +64,7 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -189,7 +186,7 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
           {err && <p className="text-xs text-[var(--color-danger)]">{err}</p>}
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 

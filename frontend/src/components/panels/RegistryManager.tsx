@@ -3,7 +3,7 @@ import { Globe, Plus, RefreshCw, Trash2, AlertTriangle, Server, Sparkles } from 
 import type { Registry } from '../../types'
 import type { ConnectorInfo } from '../../api/market'
 import { api } from '../../api'
-import { Button } from '../common'
+import { Button, ModalOverlay } from '../common'
 
 interface Props {
   onClose: () => void
@@ -94,7 +94,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
     'w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -221,6 +221,6 @@ export function RegistryManager({ onClose, onChanged }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

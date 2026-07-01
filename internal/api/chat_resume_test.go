@@ -2,6 +2,36 @@ package api
 
 import "testing"
 
+// TestResumeGateEnabled locks the ClaudeResume ⟂ ClaudePersistentSession contract:
+// persistent-session ALWAYS supersedes --resume, and the delta path is claude-cli +
+// single-agent only. Regression guard for the "both settings on → neither trims"
+// gotcha (see _Docs/17).
+func TestResumeGateEnabled(t *testing.T) {
+	cases := []struct {
+		name       string
+		resume     bool
+		persistent bool
+		agentCount int
+		provider   string
+		want       bool
+	}{
+		{"resume only, single claude-cli", true, false, 1, "claude-cli", true},
+		{"persistent supersedes resume", true, true, 1, "claude-cli", false},
+		{"persistent only", false, true, 1, "claude-cli", false},
+		{"resume off", false, false, 1, "claude-cli", false},
+		{"multi-agent blocks resume", true, false, 2, "claude-cli", false},
+		{"non-cli provider blocks resume", true, false, 1, "anthropic", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := resumeGateEnabled(c.resume, c.persistent, c.agentCount, c.provider); got != c.want {
+				t.Errorf("resumeGateEnabled(%v,%v,%d,%q) = %v, want %v",
+					c.resume, c.persistent, c.agentCount, c.provider, got, c.want)
+			}
+		})
+	}
+}
+
 func TestClaudeResumeDecision(t *testing.T) {
 	cases := []struct {
 		name       string

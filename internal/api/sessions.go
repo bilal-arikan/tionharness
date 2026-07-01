@@ -215,6 +215,34 @@ func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": msgID})
 }
 
+type rewindReq struct {
+	MessageID string `json:"messageId"`
+}
+
+// handleRewindSession rewinds the conversation to a checkpoint: it removes the
+// given message and every message after it, then rewrites the session's JSONL.
+// This is a conversation-only rewind — file changes from past turns are NOT
+// reverted (git remains the source of truth for code). The client reloads the
+// transcript afterwards.
+func (s *Server) handleRewindSession(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	req, ok := bindJSON[rewindReq](w, r)
+	if !ok {
+		return
+	}
+	msgID := strings.TrimSpace(req.MessageID)
+	if msgID == "" {
+		writeError(w, http.StatusBadRequest, "messageId is required")
+		return
+	}
+	removed, err := ws(r).DB.DeleteMessagesFrom(r.Context(), sessionID, msgID)
+	if writeDBError(w, err, "message not found") {
+		return
+	}
+	s.logger.Info("session rewound", "session", sessionID, "from", msgID, "removed", removed)
+	writeJSON(w, http.StatusOK, map[string]int{"removed": removed})
+}
+
 // handleMarkSessionRead clears a session's unread flag.
 func (s *Server) handleMarkSessionRead(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

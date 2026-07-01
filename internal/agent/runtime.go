@@ -248,6 +248,10 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	// Surface MCP connection lifecycle (dial / re-dial / list_changed) in the
 	// in-app Logs screen; the persistent pool is otherwise opaque.
 	r.mcpPool.SetLogger(logger)
+	// Same rationale for the persistent claude-cli pool: surface cold-start reason
+	// (config-change / dead-process), warm reuse, and process death in Logs so a
+	// surprise cold turn is diagnosable instead of silent.
+	r.cliSessions.SetLogger(logger)
 	return r
 }
 
@@ -468,7 +472,17 @@ func (r *Runtime) SkillAllowedToolsForAgent(agent db.Agent, slug string) []strin
 func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.ToolDef, func(ctx context.Context, name string, args json.RawMessage) (string, error)) {
 	reg := r.buildRegistry(ctx, agent)
 	allow := r.toolFilter(ctx, agent)
-	defs := reg.BridgeableDefs(allow)
+	// POC: optionally withhold the hidden-tier self-management suite from the CLI
+	// bridge so their full schemas never travel to the CLI process. Measure the win
+	// via the skipped-count log below (bytes not shipped ~= sum of those schemas).
+	skipHidden := r.tun.CLIBridgeSkipHidden()
+	defs := reg.BridgeableDefsFiltered(allow, skipHidden)
+	if skipHidden && r.logger != nil {
+		if n := reg.HiddenBridgeableCount(allow); n > 0 {
+			r.logger.Info("cli bridge: hidden tier withheld (POC)",
+				"agent", agent.ID, "skipped_hidden_tools", n, "bridged_tools", len(defs))
+		}
+	}
 	// Bridge a few EAGER built-ins that the CLI would otherwise lack but that have
 	// no native-loop context dependency (they only need r.mem / r.db, which reg
 	// already holds). They stay eager on the native path — we just advertise them

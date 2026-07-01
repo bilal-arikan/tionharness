@@ -119,6 +119,17 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	// Process-wide tunables (autonomy pause, title-model override) shared by
 	// every workspace runtime and updated from the settings screen.
 	tun := agent.NewTunables()
+	// POC gate (SWARMGO_CLI_BRIDGE_SKIP_HIDDEN): hidden-tier self-management tools
+	// are NOT bridged to claude-cli, so their full schemas never travel to the CLI
+	// process. Default ON (NewTunables); this env acts as a per-boot override in
+	// BOTH directions while we measure the win — 0/false/off disables it.
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("SWARMGO_CLI_BRIDGE_SKIP_HIDDEN"))) {
+	case "0", "false", "off", "no":
+		tun.SetCLIBridgeSkipHidden(false)
+		logger.Warn("POC override: hidden-tier tools BRIDGED to claude-cli (SWARMGO_CLI_BRIDGE_SKIP_HIDDEN=0)")
+	case "1", "true", "on", "yes":
+		tun.SetCLIBridgeSkipHidden(true)
+	}
 	// The gated tool capabilities (shell / self-management / agent delegation) are
 	// off by default and now live in the Settings screen (persisted settings.json,
 	// pushed live via applySettings). The legacy SWARMGO_ENABLE_* env vars act as a

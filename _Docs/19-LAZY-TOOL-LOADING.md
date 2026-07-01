@@ -398,3 +398,41 @@ arama. Küçük kataloglarda gerekmez; MCP-ağır workspace'lerde değerli.
 
 Bu plan, skill `subskills` (progressive disclosure) deseninin araç tarafındaki
 karşılığıdır; bkz. `05-ILERLEME.md` (Skill sistemi) ve `17-TOKEN-OPTIMIZASYON.md`.
+
+## POC — Hidden tier'i claude-cli köprüsünden çıkarma (2026-07-01)
+
+**Sorun.** Native yolda 4 görünürlük tier'i (full/summary/name-only/hidden) ayrı
+render edilir ve hidden bir araç tur-içinde `activate_tools` ile yüklenebilir.
+claude-cli köprüsünde bu granülarite erir: MCP üzerinde bir aracın çağrılabilir
+olması için **tam şema** `tools/list`'te bulunmalı, ve CLI'ın `--allowedTools`
+seti süreç başında sabitlenir → tur-içi "henüz ilan edilmemiş aracı aktive et"
+adımı yok. Bu yüzden `BridgeableDefs` tüm lazy built-in'leri (summary+name-only+
+hidden) tam şemayla köprüler ve ertelemeyi CLI'ın kendi `ENABLE_TOOL_SEARCH=auto`'suna
+bırakır.
+
+**POC.** Hidden tier (self-management suite, onlarca araç) CLI'ya **hiç
+köprülenmezse** o şemalar o tur CLI sürecine hiç gitmez. Araçlar tur-içi
+çağrılamaz; "aktive" muadili **bir sonraki tur** yeniden-allowlist olur (model/
+kullanıcı isteyince SwarmGo yeniden ilan eder).
+
+**Kod (izole, geri-alınır):**
+- `internal/tools/bridge_filter.go` — `BridgeableDefsFiltered(allow, skipHidden)`
+  (+ `HiddenBridgeableCount` ölçüm helper'ı). `BridgeableDefs` artık buna
+  `skipHidden=false` ile delege eder → davranış değişmez.
+- `internal/agent/clibridge_tunable.go` + `Tunables.cliBridgeSkipHidden` alanı —
+  `SetCLIBridgeSkipHidden`/`CLIBridgeSkipHidden` accessor'ları (**default true**).
+- `internal/agent/runtime.go` `BridgeTools` — gate'i okur, `skipHidden` iken
+  atlanan hidden araç sayısını Logs'a yazar (ölçüm).
+- `internal/app/app.go` — boot'ta `SWARMGO_CLI_BRIDGE_SKIP_HIDDEN` env'iyle seed.
+
+**Default:** **AÇIK** (2026-07-01, `NewTunables`) — hidden araçlar CLI'ya
+köprülenmez. `SWARMGO_CLI_BRIDGE_SKIP_HIDDEN` env'i iki yönlü override:
+`0/false/off` → kapatır (eski davranış: hidden köprülenir), `1/true/on` → açar.
+Test: `TestBridgeableDefsFilteredSkipsHidden`.
+
+> **Davranış etkisi:** açıkken bir claude-cli ajanı self-management araçlarını
+> **tur-içinde çağıramaz**; erişim bir sonraki tur yeniden-allowlist ile gelir.
+> Native yol etkilenmez (hidden tier orada `activate_tools` ile tur-içi yüklenir).
+
+**Ölçülecek:** kapalı vs açık — CLI'ya giden şema baytı / prompt token farkı ve
+self-management araçlarına erişimin tur-ötesine kaymasının ajan davranışına etkisi.

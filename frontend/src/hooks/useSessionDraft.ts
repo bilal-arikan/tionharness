@@ -26,6 +26,13 @@ function write(sessionId: string | undefined, text: string) {
   }
 }
 
+// writeSessionDraft persists a draft for a session from outside the hook (e.g.
+// restoring a rewound prompt into the composer). The Composer re-reads the draft
+// on mount, so the caller should remount it (key bump) after calling this.
+export function writeSessionDraft(sessionId: string | undefined, text: string) {
+  write(sessionId, text)
+}
+
 // useSessionDraft returns the current session's draft text and a setter that
 // persists every edit immediately. Switching sessionId loads that session's own
 // draft (the previous session's text was already saved on each keystroke).

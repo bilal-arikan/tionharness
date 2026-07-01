@@ -615,6 +615,46 @@ func (d *DB) DeleteMessage(ctx context.Context, sessionID, messageID string) err
 	return d.writeSessionFileLocked(s)
 }
 
+// DeleteMessagesFrom removes the message with the given id and every message
+// after it (a conversation "rewind" back to a checkpoint), then rewrites the
+// session's JSONL file. Returns the number of messages removed, or ErrNotFound
+// if the session or message is absent. File changes made by past turns are NOT
+// reverted — this only truncates the transcript.
+func (d *DB) DeleteMessagesFrom(ctx context.Context, sessionID, messageID string) (int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s, ok := d.sessions[sessionID]
+	if !ok {
+		return 0, ErrNotFound
+	}
+	msgs := d.messages[sessionID]
+	idx := -1
+	for i, m := range msgs {
+		if m.ID == messageID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return 0, ErrNotFound
+	}
+	removed := len(msgs) - idx
+	// Truncate in place; the three-index slice caps cap so the dropped tail is
+	// not aliased and can be GC'd.
+	d.messages[sessionID] = msgs[:idx:idx]
+	s.MessageCount = idx
+	// If the truncation point falls before the summarized boundary, the rolling
+	// summary now describes messages that no longer exist. Reset it so the next
+	// turn re-derives context from the (shorter) live transcript instead of a
+	// stale summary. Loud on purpose — we do not keep a dangling summary.
+	if s.SummaryMsgCount > idx {
+		s.Summary = ""
+		s.SummaryMsgCount = 0
+	}
+	d.sessions[s.ID] = s
+	return removed, d.writeSessionFileLocked(s)
+}
+
 // ListMessages returns messages for a session in chronological order.
 func (d *DB) ListMessages(ctx context.Context, sessionID string) ([]Message, error) {
 	d.mu.RLock()

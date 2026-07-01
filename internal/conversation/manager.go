@@ -70,6 +70,41 @@ func CompactionPromptText() string {
 	return fmt.Sprintf(compactPrompt, "‹the running summary so far›", "‹the new messages to fold in›")
 }
 
+// CompactPromptDefault returns the compiled-in compaction prompt template RAW
+// (with its two %s slots: existing summary, new messages). It seeds the editable
+// per-workspace "compact" runtime prompt and is the fallback when that file is
+// missing, blank, or malformed. Kept distinct from CompactionPromptText (which
+// fills the slots with labels for read-only display).
+func CompactPromptDefault() string { return compactPrompt }
+
+// compactPromptCtxKey carries a per-workspace compaction template on the turn
+// context so the shared (global) Manager and the package-level compaction core
+// can honor a workspace's edited "compact" prompt without a per-workspace Manager.
+type compactPromptCtxKey struct{}
+
+// WithCompactPrompt returns a context carrying a per-workspace compaction prompt
+// template. Empty input is a no-op (the default stays in force). See
+// compactPromptFromCtx for the validation applied when it is read back.
+func WithCompactPrompt(ctx context.Context, tmpl string) context.Context {
+	if strings.TrimSpace(tmpl) == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, compactPromptCtxKey{}, tmpl)
+}
+
+// compactPromptFromCtx returns a VALID compaction template from ctx or the
+// compiled-in default. Validity = exactly the two %s slots and NO other % verb,
+// so a user's edit (e.g. a stray "%" or a dropped slot) can never make
+// fmt.Sprintf emit a "%!"-marked, broken prompt — it silently falls back instead.
+func compactPromptFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(compactPromptCtxKey{}).(string); ok {
+		if strings.Count(v, "%s") == 2 && strings.Count(v, "%") == 2 {
+			return v
+		}
+	}
+	return compactPrompt
+}
+
 // Manager performs token-budgeted compaction. It is safe to share and its
 // limits can be updated live from the Settings screen.
 type Manager struct {
@@ -287,7 +322,7 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 		Model:     agent.Model,
 		MaxTokens: compactMaxOutputTokens,
 		Messages: []providers.Message{
-			{Role: providers.RoleUser, Text: fmt.Sprintf(compactPrompt, existing, rendered)},
+			{Role: providers.RoleUser, Text: fmt.Sprintf(compactPromptFromCtx(ctx), existing, rendered)},
 		},
 	})
 	if err != nil {

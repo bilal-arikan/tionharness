@@ -136,7 +136,10 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
       </aside>
 
       {/* Right content */}
-      <div className="flex flex-1 flex-col">
+      {/* min-w-0: without it this flex-1 column can't shrink below its content's
+          intrinsic width, so a wide prompt preview (code blocks/tables/long lines
+          in the Files tab) pushes the whole column past the viewport. */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
           <span className="flex items-center gap-2 text-sm font-semibold">
             {activeMeta && (
@@ -162,7 +165,7 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
             wide (and default to the split edit+preview view); the form tabs stay
             in a comfortable centered column. */}
         <div
-          className={`mx-auto w-full flex-1 space-y-4 overflow-y-auto p-6 ${
+          className={`mx-auto w-full min-w-0 flex-1 space-y-4 overflow-y-auto p-6 ${
             tab === 'files' ? 'max-w-none' : 'max-w-2xl'
           }`}
         >

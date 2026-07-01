@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } fro
 import { PanelRight } from 'lucide-react'
 import { CopyPathButton } from './components/CopyPathButton'
 import { RevealButton } from './components/RevealButton'
+import { ErrorToast } from './components/common/ErrorToast'
 import { api, getActiveWorkspace, setActiveWorkspace } from './api'
 import type { Agent, AgentPatch, Artifact, Session, Message, AppEvent } from './types'
 import { NavRail, type View } from './components/NavRail'
@@ -10,6 +11,8 @@ import { AgentRoster } from './components/agents/AgentRoster'
 import { AgentsView } from './components/agents/AgentsView'
 import { MessageList } from './components/chat/MessageList'
 import { Composer } from './components/chat/Composer'
+import { RewindDialog } from './components/chat/RewindDialog'
+import { writeSessionDraft } from './hooks/useSessionDraft'
 import { AskPrompt } from './components/chat/AskPrompt'
 import { PermissionPrompt } from './components/chat/PermissionPrompt'
 import { PlanPrompt } from './components/chat/PlanPrompt'
@@ -94,6 +97,14 @@ const VIEW_TITLE: Record<View, string> = {
   settings: 'Ayarlar',
 }
 
+// Views that render their own left list-sidebar INSIDE the main area. For these we
+// skip the app-level top header entirely so the sidebar (and the panel's own
+// in-pane headers) reach the very top — matching the chat/memory layout where the
+// sidebar is a sibling of <main>. Errors for these still surface via ErrorToast.
+const HEADERLESS_VIEWS = new Set<View>([
+  'agents', 'executions', 'artifacts', 'skills', 'flows', 'market',
+])
+
 export default function App() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
@@ -101,6 +112,9 @@ export default function App() {
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Bumped to remount the Composer so it re-reads its persisted draft — used to
+  // restore a rewound prompt back into the input box.
+  const [composerKey, setComposerKey] = useState(0)
   const [view, setView] = useState<View>(INITIAL_ROUTE.view)
   const [meterRefresh, setMeterRefresh] = useState(0)
   // Deep-link target for the schedules screen (highlights the routed schedule).
@@ -955,62 +969,59 @@ export default function App() {
           workspace's data until a manual page refresh. App-level agents/sessions
           are reset+refetched by the activeWorkspaceId effect above. */}
       <main key={activeWorkspaceId ?? 'none'} className="flex h-full min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold">{VIEW_TITLE[view]}</span>
-            {view === 'chat' && (
-              <span className="text-sm text-[var(--color-text-dim)]">
-                · {agents.find((a) => a.id === activeAgentId)?.name ?? 'Ajan seçilmedi'}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            {view === 'chat' && (
-              <ChatMeters
-                agentId={activeAgentId}
-                sessionId={activeSessionId}
-                refreshKey={meterRefresh}
-                onError={setError}
-                onOpenBudget={() => setView('budget')}
-              />
-            )}
-            {view === 'chat' && activeSessionId && (
-              <div className="flex items-center gap-1.5">
-                {/* Folder shortcuts (moved here from the detail panel's Klasör card). */}
-                <CopyPathButton
-                  getPath={async () => (await api.sessionPath(activeSessionId)).path}
-                  label="Yolu kopyala"
-                  labelClassName="hidden sm:inline"
-                  title="Oturum klasörü yolunu kopyala"
+        {!HEADERLESS_VIEWS.has(view) && (
+          <header className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">{VIEW_TITLE[view]}</span>
+              {view === 'chat' && (
+                <span className="text-sm text-[var(--color-text-dim)]">
+                  · {agents.find((a) => a.id === activeAgentId)?.name ?? 'Ajan seçilmedi'}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              {view === 'chat' && (
+                <ChatMeters
+                  agentId={activeAgentId}
+                  sessionId={activeSessionId}
+                  refreshKey={meterRefresh}
                   onError={setError}
+                  onOpenBudget={() => setView('budget')}
                 />
-                <RevealButton
-                  onReveal={() => revealSession(activeSessionId)}
-                  label="Aç"
-                  labelClassName="hidden sm:inline"
-                  title="Oturum klasörünü aç"
-                />
-                <button
-                  onClick={toggleDetail}
-                  title="Oturum bilgisi panelini aç/kapat"
-                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
-                    detailOpen
-                      ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-                      : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
-                  }`}
-                >
-                  <PanelRight size={15} className="shrink-0" />
-                  <span className="hidden sm:inline">Detay</span>
-                </button>
-              </div>
-            )}
-            {error && (
-              <span className="rounded bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] px-2 py-1 text-xs text-[var(--color-danger)]">
-                {error}
-              </span>
-            )}
-          </div>
-        </header>
+              )}
+              {view === 'chat' && activeSessionId && (
+                <div className="flex items-center gap-1.5">
+                  {/* Folder shortcuts (moved here from the detail panel's Klasör card). */}
+                  <CopyPathButton
+                    getPath={async () => (await api.sessionPath(activeSessionId)).path}
+                    label="Yolu kopyala"
+                    labelClassName="hidden sm:inline"
+                    title="Oturum klasörü yolunu kopyala"
+                    onError={setError}
+                  />
+                  <RevealButton
+                    onReveal={() => revealSession(activeSessionId)}
+                    label="Aç"
+                    labelClassName="hidden sm:inline"
+                    title="Oturum klasörünü aç"
+                  />
+                  <button
+                    onClick={toggleDetail}
+                    title="Oturum bilgisi panelini aç/kapat"
+                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
+                      detailOpen
+                        ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                        : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+                    }`}
+                  >
+                    <PanelRight size={15} className="shrink-0" />
+                    <span className="hidden sm:inline">Detay</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </header>
+        )}
 
         {view === 'chat' && (
           <>
@@ -1048,6 +1059,7 @@ export default function App() {
               />
             )}
             <Composer
+              key={composerKey}
               disabled={!activeSessionId}
               sessionId={activeSessionId ?? undefined}
               streaming={chat.activeStreaming}
@@ -1068,6 +1080,20 @@ export default function App() {
               commands={chat.chatCommands}
               artifacts={sessionArtifacts}
             />
+            {chat.rewindOpen && (
+              <RewindDialog
+                messages={messages}
+                onClose={chat.closeRewind}
+                onRewind={async (id) => {
+                  const text = await chat.rewindTo(id)
+                  if (text) {
+                    writeSessionDraft(activeSessionId ?? undefined, text)
+                    setComposerKey((k) => k + 1)
+                  }
+                  return text
+                }}
+              />
+            )}
           </>
         )}
         {view === 'agents' && (
@@ -1200,6 +1226,10 @@ export default function App() {
           onError={setError}
         />
       )}
+
+      {/* App-wide error surface (replaces the per-view header error span so the
+          headerless, sidebar-to-top screens still show errors consistently). */}
+      <ErrorToast message={error ?? ''} onDismiss={() => setError(null)} />
     </div>
   )
 }

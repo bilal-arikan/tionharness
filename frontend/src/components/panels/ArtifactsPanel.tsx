@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FileText, FileCode, UploadCloud,
-  Trash2, ExternalLink, Copy, Check, Pencil, Plus, Save, X, Search,
+  Trash2, ExternalLink, Copy, Check, Pencil, Save, X, Search,
 } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Artifact, ArtifactKind } from '../../types'
@@ -11,7 +11,12 @@ import { RevealButton } from '../RevealButton'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { useResizableSidebar } from '../../hooks/useResizableSidebar'
 import { SelectionBar, SelectionBarButton } from '../common'
+import {
+  SidebarHeader, RefreshButton, NewItemButton, ResizeHandle,
+  SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
+} from '../common/SidebarChrome'
 import {
   KIND_ICON, KIND_LABEL, OriginBadge, KINDS, isMediaKind, artifactKindForUpload,
 } from './artifactMeta'
@@ -137,6 +142,10 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk artifact deletion.
   const sel = useMultiSelect()
+  const { width, startDrag } = useResizableSidebar({
+    storageKey: 'swarmgo.artifactsListWidth',
+    defaultWidth: 288,
+  })
   const bulkDelete = useCallback(async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
@@ -295,20 +304,21 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       )}
 
       {/* List */}
-      <div className="flex w-72 flex-shrink-0 flex-col border-r border-[var(--color-border)]">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            Artifactlar · {filtered.length === list.length ? list.length : `${filtered.length}/${list.length}`}
-          </span>
-          <button
-            data-testid="artifacts-create-new"
-            onClick={createNew}
-            title="Yeni artifact"
-            className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          >
-            <Plus size={13} /> Yeni
-          </button>
-        </div>
+      <div
+        style={{ width }}
+        className="relative flex flex-shrink-0 flex-col border-r border-[var(--color-border)]"
+      >
+        <SidebarHeader
+          title={`Artifactlar · ${filtered.length === list.length ? list.length : `${filtered.length}/${list.length}`}`}
+        >
+          <RefreshButton onClick={reload} />
+        </SidebarHeader>
+        <NewItemButton
+          onClick={createNew}
+          label="Yeni Artifact"
+          title="Yeni artifact"
+          testId="artifacts-create-new"
+        />
 
         {/* Filters: title search + origin facet. */}
         <div className="flex flex-col gap-2 border-b border-[var(--color-border)] px-3 py-2">
@@ -386,9 +396,9 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 }}
                 className={`group mb-1 flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
                   sel.isSelected(a.id)
-                    ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
+                    ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
                     : isActive
-                      ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                      ? SELECTED_ITEM_CLS
                       : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
                 }`}
               >
@@ -414,6 +424,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             Sil
           </SelectionBarButton>
         </SelectionBar>
+
+        <ResizeHandle onMouseDown={startDrag} />
       </div>
 
       {/* Viewer / Editor */}

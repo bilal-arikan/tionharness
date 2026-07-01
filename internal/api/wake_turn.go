@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/swarmgo/internal/conversation"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
@@ -42,6 +43,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// who said what.
 		history, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, ag.ID, history)
 		history = appendRecentToolSummaries(history)
+		ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
 		prep, err := s.convo.Prepare(ctx, wsp.DB, provider, session, ag, history)
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: prepare: %w", err)

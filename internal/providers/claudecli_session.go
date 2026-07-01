@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -240,6 +241,21 @@ func (c *ClaudeCLI) persistentFingerprint(req Request, sys string) string {
 type CLISessionPool struct {
 	mu       sync.Mutex
 	sessions map[string]*CLISession
+	// logger surfaces persistent-process lifecycle (cold start + reason, warm reuse,
+	// process death, idle evict) in the in-app Logs screen. Nil-safe: without it the
+	// pool is silent — which is exactly why a cold turn was once undiagnosable. Set
+	// once by the owning Runtime. See _Docs/17.
+	logger *slog.Logger
+}
+
+// SetLogger wires an optional lifecycle logger. Nil-safe; call once after New.
+func (pl *CLISessionPool) SetLogger(l *slog.Logger) { pl.logger = l }
+
+// log emits at the given level when a logger is wired; a no-op otherwise.
+func (pl *CLISessionPool) log(level slog.Level, msg string, args ...any) {
+	if pl.logger != nil {
+		pl.logger.Log(context.Background(), level, msg, args...)
+	}
 }
 
 // persistentIdleTTL is how long a warm session may sit unused before EvictIdle
@@ -268,16 +284,29 @@ func (pl *CLISessionPool) Turn(ctx context.Context, key string, c *ClaudeCLI, re
 	sess := pl.sessions[key]
 	cold := sess == nil || sess.closed || sess.fingerprint != fp
 	if cold {
+		// Record WHY this turn is cold (writes the full cached prefix again) so a
+		// surprise cold turn — the exact symptom that was once undiagnosable — is
+		// visible in Logs: a config change (persona/permission/MCP) or a dead process.
+		reason := "new-session"
 		if sess != nil {
+			if sess.closed {
+				reason = "dead-process"
+			} else {
+				reason = "config-change" // fingerprint (system prompt / flags / MCP) drifted
+			}
 			sess.Close()
 		}
 		var err error
 		sess, err = c.startPersistent(ctx, req)
 		if err != nil {
 			pl.mu.Unlock()
+			pl.log(slog.LevelWarn, "cli persistent session cold start failed", "key", key, "reason", reason, "error", err)
 			return nil, err
 		}
 		pl.sessions[key] = sess
+		pl.log(slog.LevelInfo, "cli persistent session cold start (full prefix re-sent)", "key", key, "reason", reason)
+	} else {
+		pl.log(slog.LevelDebug, "cli persistent session warm reuse (delta only)", "key", key, "turns", sess.turns)
 	}
 	pl.mu.Unlock()
 
@@ -295,6 +324,9 @@ func (pl *CLISessionPool) Turn(ctx context.Context, key string, c *ClaudeCLI, re
 		}
 		pl.mu.Unlock()
 		sess.Close()
+		// The process died mid-turn (stream ended before a result, or a write failed).
+		// The caller falls back to one-shot Complete; the NEXT turn will cold-restart.
+		pl.log(slog.LevelWarn, "cli persistent session turn failed (process dropped)", "key", key, "error", err)
 		return nil, err
 	}
 	return resp, nil
@@ -318,6 +350,9 @@ func (pl *CLISessionPool) EvictIdle(ttl time.Duration) {
 	pl.mu.Unlock()
 	for _, s := range dead {
 		s.Close()
+	}
+	if len(dead) > 0 {
+		pl.log(slog.LevelDebug, "cli persistent sessions evicted (idle)", "count", len(dead))
 	}
 }
 

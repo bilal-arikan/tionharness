@@ -3,7 +3,7 @@ import { Copy, X } from 'lucide-react'
 import type { SessionContextPreview } from '../../types'
 import { api } from '../../api'
 import { Markdown } from '../markdown/Markdown'
-import { Button } from '../common'
+import { Button, ModalOverlay } from '../common'
 
 interface Props {
   sessionId: string
@@ -53,10 +53,7 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
-      onClick={onClose}
-    >
+    <ModalOverlay onClose={onClose} padding="p-6">
       <div
         role="dialog"
         aria-modal="true"
@@ -285,7 +282,7 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
           )}
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 

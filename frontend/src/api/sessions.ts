@@ -134,6 +134,13 @@ export const sessionApi = {
     req<{ deleted: string }>(`/api/sessions/${sessionId}/messages/${messageId}`, {
       method: 'DELETE',
     }),
+  // Rewind the conversation to a checkpoint: remove the given message and every
+  // message after it (conversation-only — file changes are NOT reverted).
+  rewindSession: (sessionId: string, messageId: string) =>
+    req<{ removed: number }>(`/api/sessions/${sessionId}/rewind`, {
+      method: 'POST',
+      body: JSON.stringify({ messageId }),
+    }),
   // Absolute folder holding the session's JSONL file.
   sessionPath: (sessionId: string) =>
     req<{ path: string }>(`/api/sessions/${sessionId}/path`),

@@ -128,6 +128,18 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
 - Komut-özel akıllı kısaltıcılar (git/test/grep'e özgü) henüz yok; A jeneriktir. → bkz. [Yapılacak](#yapılacak--craftagenttan-aktarılacak-fikirler).
 - claude-cli delegasyon yolu kapsam dışıdır (yukarıdaki sebep).
 
+### Tool dizisi prompt-cache breakpoint'i (2026-07-02)
+
+Anthropic prefix-cache sırası `tools → system → messages`. Eskiden cache breakpoint
+yalnız static **system** bloğundaydı; tool şemaları dolaylı (system prefix'i sayesinde)
+cache'leniyordu → system bloğu değişirse tool cache'i de düşerdi. Artık `toAnthropicTools`
+caching açıkken **son tool'a bağımsız bir breakpoint** koyuyor (1s TTL, system'le aynı;
+sıra `tools(1h)→system(1h)` geçerli). Böylece tool tanımları **kendi prefix'inde** cache'lenir
+ve bir sistem-prompt düzenlemesi tool cache'ini bozmaz (Anthropic önerilen "son araca
+breakpoint" pratiği). Politika değişmedi: yalnız `extendedCache` açıkken; kapalıyken hiçbir
+tool breakpoint'i eklenmez. Kod: `internal/providers/anthropic.go` (`anthropicTool.CacheControl`,
+`toAnthropicTools`). Test: `TestToAnthropicTools_*`.
+
 ## the external agent project'tan Aktarılan Fikirler
 
 > Kaynak: `external-agent-oss` ([repo](https://github.com/external-agent-project/external-agent-oss)) bağlam-yönetimi
@@ -348,6 +360,41 @@ prefix'in sıcak kalması şarttır.
   session başına uzun-ömürlü `claude --input-format stream-json`; sıcak turda yalnız
   yeni kullanıcı mesajı gider. Context korur; cache TTL'e bağlı ısınır. Hata → tek-
   atış fallback. `providers.CLISessionPool`, `Runtime.cliSessions`.
+
+> **⚠️ `--resume` ⟂ Kalıcı süreç KARŞILIKLI DIŞLAYAN (chat_resume.go:29):**
+> `enabled := set.ClaudeResume && !set.ClaudePersistentSession && ...` →
+> **`ClaudePersistentSession`, `ClaudeResume`'i EZER.** İkisi de açıksa `--resume`
+> delta yolu devre dışı kalır (persistent süreç konuşmayı kendi tutar, cold restart'ta
+> tam transcript ister → delta'ya kırpılmaz). İki ayrı sürerlik mekanizması aynı anda
+> çalışamaz; **birini seç.** UI'da ikisini birden açmak sessizce persistent'i seçer.
+
+### Canlı ölçüm (2026-07-02) — resume vs persistent vs "hiçbiri"
+
+AGT1/opus-4-8, aynı 3-turluk sohbet, per-session `usage-detail`:
+
+| Konfig | Input | Cache Write | Cache Read | Maliyet | T3 durumu |
+|--------|-------|-------------|------------|---------|-----------|
+| Nominal ON/ON ama **hiçbiri devrede değil** | 4.164 | 152.113 | 69.148 | \$3.22 | **SOĞUK** (write 78K, read 0) |
+| `resume=on, persist=off` | 1.318 | 75.232 | 143.705 | \$1.84 | sıcak (in=2 delta) |
+| `persist=on` (gerçekten devrede) | 3.944 | **34.292** | 262.856 | **\$1.36** | sıcak (write 4K) |
+
+**Soğuk-T3 kök-neden — DOĞRULANAMADI (önceki "stale-tunable" hipotezi ÇÜRÜTÜLDÜ):**
+İlk elemede `tun`'un canlı runtime'a uygulanmadığından şüphelenildi; **ama `tun`
+paylaşılan tek singleton'dur** (`app.go`: `agent.NewTunables()` hem `workspace.Manager`'a
+hem `api.NewServer`'a AYNI pointer'la verilir; `applySettings` boot'ta + her PUT'ta onu
+günceller → tüm workspace runtime'larına ulaşır). `chat_stream.go:288` session id'yi
+ctx'e damgalar → pool erişilebilir. **Kontrollü tekrar (SES86, persistent=on, taze):
+HER İKİ tur da sıcak** (cR≈69K, cW≈2.5K), fallback logu yok, cold-write yok — yani
+persistent devredeyken **stabil çalışıyor** ve soğuk-T3 **yeniden üretilemedi**. En
+olası açıklama SES83'ün o spesifik T3'ünde **Anthropic prompt-cache'inin geçici
+tahliyesi/TTL'i** (byte-aynı prefix garanti değil; harici cache durumu). **Kod-seviyesi
+bir sync bug'ı KANITLANAMADI.** Önlem olarak `CLISessionPool`'a **gözlemlenebilirlik**
+eklendi (`SetLogger`, `runtime.go`'da bağlı): cold-start **nedeni** (new-session /
+config-change / dead-process), warm-reuse, ve process-death artık in-app Logs'a düşer —
+bir sonraki "sürpriz soğuk tur" sessiz değil, teşhis edilebilir olacak. Mutual-exclusion
+gate saf fonksiyona çıkarıldı (`resumeGateEnabled`) + regresyon testi
+(`TestResumeGateEnabled`). Anlamlı metrik **cacheWrite** (cold-write pahalıdır); output
+turdan tura değiştiği için maliyeti tam normalize etme.
 
 ## Dinamik bağlam (recall) gürültü kapısı
 

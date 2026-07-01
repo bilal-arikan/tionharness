@@ -413,6 +413,40 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionIdRef, messagesRef, setMessages],
   )
 
+  // Rewind ("/rewind"): conversation-only checkpoint restore. The command opens a
+  // picker (rewindOpen) listing the session's user prompts; choosing one truncates
+  // the transcript back to that checkpoint. File changes are NOT reverted.
+  const [rewindOpen, setRewindOpen] = useState(false)
+  const openRewind = useCallback(() => setRewindOpen(true), [])
+  const closeRewind = useCallback(() => setRewindOpen(false), [])
+
+  // rewindTo removes the anchor message and everything after it, from the view
+  // and (atomically) server-side. Returns the removed prompt text so the caller
+  // can drop it back into the composer for a clean re-try. A local-only anchor
+  // (never persisted) is sliced from view without a server call.
+  const rewindTo = useCallback(
+    async (messageId: string): Promise<string> => {
+      const sid = activeSessionIdRef.current
+      if (!sid) return ''
+      const msgs = messagesRef.current ?? []
+      const idx = msgs.findIndex((m) => m.id === messageId)
+      if (idx < 0) return ''
+      const promptText = msgs[idx].role === 'user' ? msgs[idx].text : ''
+      setMessages((prev) => {
+        const i = prev.findIndex((m) => m.id === messageId)
+        return i < 0 ? prev : prev.slice(0, i)
+      })
+      const isLocal = (id: string) =>
+        id.startsWith('tmp-') || id.startsWith('err-') || id.startsWith('live-')
+      if (!isLocal(messageId)) {
+        await api.rewindSession(sid, messageId).catch(() => {})
+      }
+      setRewindOpen(false)
+      return promptText
+    },
+    [activeSessionIdRef, messagesRef, setMessages],
+  )
+
   // When a session's turn ends, drop any of ITS still-pending steers (their
   // target run is gone) and cancel their grace timers.
   useEffect(() => {
@@ -726,6 +760,7 @@ export function useChatStream(deps: ChatStreamDeps) {
       { name: 'reflect', icon: '✦', description: 'Ajana yansıma (dream cycle) ürettir', run: () => summarize('reflect') },
       { name: 'compact', icon: '🗜', description: 'Sohbeti şimdi özete sıkıştır', run: () => summarize('compact') },
       { name: 'handoff', icon: '↪', description: 'Context reset — temiz pencerede devam et', run: () => handoff() },
+      { name: 'rewind', icon: '⟲', description: 'Sohbeti bir checkpoint\'e geri sar — mesajları geri al', run: () => openRewind() },
       { name: 'memory', icon: '⛁', description: 'Hafıza kayıtlarını özetle', run: () => summarize('memory') },
       { name: 'tools', icon: '🔌', description: 'Kullanılabilir araçları listele', run: () => summarize('tools') },
       { name: 'board', icon: '🗂', description: 'Görev panosunu özetle', run: () => summarize('board') },
@@ -741,7 +776,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         }),
       ),
     ],
-    [summarize, handoff, flows, runFlow],
+    [summarize, handoff, openRewind, flows, runFlow],
   )
 
   // Derive the active session's view of the per-session streaming state.
@@ -775,6 +810,10 @@ export function useChatStream(deps: ChatStreamDeps) {
     cancelWake,
     summarize,
     chatCommands,
+    rewindOpen,
+    openRewind,
+    closeRewind,
+    rewindTo,
     activeStreaming,
     activePending,
     activeAsk,

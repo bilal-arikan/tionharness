@@ -71,7 +71,7 @@ onClick={(e) => {
 | Board kartları | `TaskBoard` | Task detayı | Sütuna taşı · Ajan ata · Sil |
 | Hafıza | `MemoryPanel` | Kartı genişlet | Sil (**yalnız modifier-click seçer**) |
 | Artifact | `ArtifactsPanel` | Artifact aç | Sil |
-| Skills | `SkillsPanel` | Skill detayı | Sil (katlanmış grupları atlar) |
+| Skills | `SkillsPanel` | Skill detayı | Görünürlük türü (Tam/Özet/İsim/Gizli) · Sil (katlanmış grupları atlar) |
 | Flows | `FlowsPanel` (Akışlarım) | Flow'u aç | Çalıştır · Sil |
 | Araçlar (ajan) | `AgentToolsSection` | Anında yasakla | "Seçilenleri yasakla" (tek PATCH) |
 | Araçlar (workspace) | `ToolsPanel` (Ayarlar) | Detay aç | Etkinleştir · Devre dışı · NameOnly · Göster |
@@ -92,6 +92,12 @@ onClick={(e) => {
   "anında yasakla" davranışını korur, modifier-click toplu seçim + tek `setAgentTools`.
 - **Metin seçimi çakışması:** Liste satırları `<button>` olduğundan shift+click
   metin seçmez.
+- **Skills toplu görünürlük:** `SelectionBarButton` yerine 4'lü segmented control
+  (`data-testid="skills-bulk-visibility"`, tier butonları `skills-bulk-vis-<tier>`);
+  seçili her skill için `api.setSkillVisibility` çağırıp `reload()` eder. Ayrıca
+  her liste satırı artık tek bir **görünürlük çipi** (`VisibilityChip`,
+  `VISIBILITY_TIERS` rengi/etiketi) taşır — eski dağınık "Gizli"/"NameOnly"
+  rozetleri kaldırıldı, "Tam"/"Özet" dahil dört tier tek bakışta okunur.
 
 ## İleride
 - Klavye gezinme (Space=toggle, Shift+Ok ile aralık).
