@@ -161,6 +161,68 @@ func TestNameOnlySkillRendersSlugOnly(t *testing.T) {
 	}
 }
 
+// TestSetVisibilityTiers verifies the 4-way SetVisibility maps onto the
+// frontmatter flags and derived Visibility, and that each tier renders as
+// expected: full (desc + when), summary (desc only), name-only (slug only),
+// hidden (dropped from the catalog). An invalid tier is rejected.
+func TestSetVisibilityTiers(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "deploy", "---\nname: Deploy\ndescription: ship the build\nwhen_to_use: on release\nshared: true\n---\nbody")
+	s := New("", dir)
+
+	// Default is full.
+	if d, _ := s.Get("deploy"); d.Visibility != VisibilityFull {
+		t.Fatalf("default visibility = %q, want full", d.Visibility)
+	}
+
+	// summary: description present, when-to-use suppressed.
+	if _, err := s.SetVisibility("deploy", VisibilitySummary); err != nil {
+		t.Fatalf("set summary: %v", err)
+	}
+	if d, _ := s.Get("deploy"); d.Visibility != VisibilitySummary || !d.SummaryOnly {
+		t.Fatalf("summary flags: vis=%q summaryOnly=%v", d.Visibility, d.SummaryOnly)
+	}
+	block := s.CatalogBlockForAgent(nil)
+	if !contains(block, "ship the build") || contains(block, "on release") {
+		t.Errorf("summary tier must show desc but not when:\n%s", block)
+	}
+
+	// name-only: slug alone.
+	if _, err := s.SetVisibility("deploy", VisibilityNameOnly); err != nil {
+		t.Fatalf("set name-only: %v", err)
+	}
+	if d, _ := s.Get("deploy"); d.Visibility != VisibilityNameOnly || !d.NameOnly {
+		t.Fatalf("name-only flags: vis=%q nameOnly=%v", d.Visibility, d.NameOnly)
+	}
+	if block := s.CatalogBlockForAgent(nil); contains(block, "ship the build") {
+		t.Errorf("name-only tier must suppress desc:\n%s", block)
+	}
+
+	// hidden: dropped from the catalog entirely.
+	if _, err := s.SetVisibility("deploy", VisibilityHidden); err != nil {
+		t.Fatalf("set hidden: %v", err)
+	}
+	if d, _ := s.Get("deploy"); d.Visibility != VisibilityHidden || d.AutoSummary {
+		t.Fatalf("hidden flags: vis=%q autoSummary=%v", d.Visibility, d.AutoSummary)
+	}
+	if block := s.CatalogBlockForAgent(nil); contains(block, "`deploy`") {
+		t.Errorf("hidden tier must drop the skill from the catalog:\n%s", block)
+	}
+
+	// Back to full restores the rich summary.
+	if _, err := s.SetVisibility("deploy", VisibilityFull); err != nil {
+		t.Fatalf("set full: %v", err)
+	}
+	if block := s.CatalogBlockForAgent(nil); !contains(block, "ship the build") || !contains(block, "on release") {
+		t.Errorf("full tier must restore desc + when:\n%s", block)
+	}
+
+	// Invalid tier is rejected.
+	if _, err := s.SetVisibility("deploy", "bogus"); err == nil {
+		t.Error("invalid tier should error")
+	}
+}
+
 // TestCatalogBlockForAgentTool verifies the block names the skill tool exactly as
 // given (e.g. the namespaced identifier a claude-cli agent must call), instead of
 // the bare default.

@@ -303,6 +303,23 @@ Skill sisteminde bunu zaten çözdük: katalogta yalnızca **özet** durur, tam 
 > (`swarmgo-autonomous-ops`) NameOnly olunca satırı **839→26 karakter**, blok
 > **3376→2563** (~813 karakter ≈ ~200 token). Test: `TestNameOnlySkillRendersSlugOnly`.
 
+> **Skill 4-tier görünürlük (tek seçici, 2026-07-01):** skiller artık araçlarla
+> **birebir aynı** 4-tier modeli taşır: `full` (Tam — slug + açıklama + when) ·
+> `summary` (Özet — slug + açıklama, when bastırılır) · `name-only` (İsim — yalnız
+> slug) · `hidden` (Gizli — katalogdan tamamen düşer, `skill_search` ile bulunur).
+> Önceden yalnız 3 durum vardı (full / name-only / `auto_summary:false`≈hidden);
+> eksik olan **summary** tier'ı eklendi. Türetilmiş `Skill.Visibility` alanı
+> (`skillVisibility()` — flag'lerden hesaplanır, araçlardaki `VisibilityOf`'un
+> muadili) tek okunan/yazılan değerdir; `Store.SetVisibility(slug, tier)` üç
+> frontmatter flag'ini (`auto_summary`/`name_only`/`summary_only`) **tek yazımda**
+> tutarlı kurar. Yeni: `SummaryOnly` alanı + `isSummaryOnly` + `setFrontmatterSummaryOnly`
+> (`name_only` desenini yansıtır); `renderCatalog` summary'de when-to-use'u atlar.
+> API: `PUT /api/skills/{slug}/visibility` (`{visibility}`; geçersiz tier 400).
+> UI: SkillsPanel'de eski Özet/NameOnly toggle çiftinin yerine `SkillVisibilitySelector`
+> — araçların `VISIBILITY_TIERS` metadata'sını (Tam/Özet/İsim/Gizli renk+ipucu)
+> paylaşan 4'lü segmented kontrol. Eski `SetAutoSummary`/`SetNameOnly` + endpoint'leri
+> geriye-uyum için korunur.
+
 ## Hedef
 
 Ajana başlangıçta sadece **hafif bir araç kataloğu** (ad + tek satır açıklama)

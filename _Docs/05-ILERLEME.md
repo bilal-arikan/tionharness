@@ -2,6 +2,42 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-01**
 
+## Skill 4-tier görünürlük + default workspace prompt ✅ (2026-07-01)
+
+**İstek:** (1) Skilleri de araçlardaki gibi 4 görünürlük kategorisinden birine
+ayarlanabilir yap. (2) Yeni workspace'lerin default prompt'unu the external agent project'ın tam
+sistem promptu gibi yap (SwarmGo'da monolitik sistem promptu yok — workspace prompt
+onun yerini tutar). (3) `ClaudeResume`'u default açık yap.
+
+**Yapılan:**
+- **Skill 4-tier görünürlük (araç muadili tek seçici):** skiller artık `full` /
+  `summary` / `name-only` / `hidden` tier'larından **tam birini** taşır. Önceden 3
+  durum vardı (full / name-only / `auto_summary:false`≈hidden); eksik **summary**
+  (slug + açıklama, when bastırılır) eklendi. Türetilmiş `Skill.Visibility`
+  (`skillVisibility()`) + `Store.SetVisibility(slug,tier)` üç frontmatter flag'ini
+  tek yazımda kurar. Yeni `SummaryOnly` alanı + `isSummaryOnly` +
+  `setFrontmatterSummaryOnly`; `renderCatalog` summary'de when'i atlar. API
+  `PUT /api/skills/{slug}/visibility` (geçersiz tier 400). UI: `SkillVisibilitySelector`
+  eski Özet/NameOnly toggle çiftini değiştirir, araçların `VISIBILITY_TIERS`'ini
+  paylaşır. Detay: `_Docs\19` §Skill 4-tier.
+- **Default workspace prompt:** `internal/workspace/defaults/default-instructions.md`
+  (the external agent project tam sistem promptu, ~40KB) `//go:embed` ile `defaultWSSettings().Instructions`
+  seed'ine bağlandı → talimatı olmayan (yeni) workspace'ler bu baseline'la açılır.
+  Persisted `instructions` bunu override eder (mevcut workspace'ler etkilenmez).
+- **ClaudeResume:** zaten default açıktı (kod `settings.go` DefaultSettings + canlı
+  `claudeResume=true`); değişiklik gerekmedi, doğrulandı.
+- **Yan düzeltme:** `RevealButton.onReveal` tipi `() => void | Promise<unknown>`'a
+  genişletildi (reveal endpoint'leri `{path}` döndürüyor; çağrı yerleri tek noktadan
+  tip-uyumlu oldu).
+
+**Cross-runtime cache benchmark (claude-cli resume vs the external agent project SDK):** aynı 3-mesajlık
+konuşma iki runtime'da ölçüldü. SwarmGo (claude-cli, resume açık) ilk turları **soğuk**
+yazıp tur-başı ~70-90K cache **yeniden yazıyor** (warm-read tutarsız, yalnız bazı
+turlarda); the external agent project SDK 1. turdan **istikrarlı sıcak** cache okuyor (cR≫cW) → aynı
+konuşmada ~3× ucuz. Ağır (~40KB) workspace prompt eklemek SwarmGo'da cache-write'ı
++42K büyüttü (input değişmez — prompt cache'e gider). Sonuç: darboğaz claude-cli'nin
+sıcak prefix'i turlar arası **tutarlı** koruyamaması.
+
 ## Dışa aktarıma metadata alanları + bağımlılık uyarısı ✅ (2026-07-01)
 
 **İstek:** Dışa aktarıma **isim/açıklama/sürüm** alanı desteği ve **ajan bağımlılık uyarısı** ekle.
