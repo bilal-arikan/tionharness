@@ -16,7 +16,6 @@ export type Cat =
   | 'providers'
   | 'secrets'
   | 'context'
-  | 'budget'
   | 'tools'
   | 'mcptools'
   | 'hooks'
@@ -40,7 +39,6 @@ export const APP_CATS: CatMeta[] = [
   { key: 'providers', label: 'Sağlayıcılar', icon: KeyRound },
   { key: 'secrets', label: 'Sırlar', icon: Shield },
   { key: 'context', label: 'Bağlam & Bellek', icon: Brain },
-  { key: 'budget', label: 'Bütçe', icon: Shield },
   { key: 'tools', label: 'Yetenekler (Araçlar)', icon: Wrench },
   { key: 'mcptools', label: 'Araçlar & MCP', icon: Plug },
   { key: 'hooks', label: 'Hooks', icon: Webhook },

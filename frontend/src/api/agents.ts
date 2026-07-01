@@ -27,11 +27,6 @@ export const agentApi = {
     req<{ deleted: string }>(`/api/agents/${id}`, { method: 'DELETE' }),
 
   agentUsage: (agentId: string) => req<AgentUsage>(`/api/agents/${agentId}/usage`),
-  setBudget: (agentId: string, dailyCallLimit: number, dailyTokenLimit: number) =>
-    req<{ dailyCallLimit: number; dailyTokenLimit: number }>(
-      `/api/agents/${agentId}/budget`,
-      { method: 'POST', body: JSON.stringify({ dailyCallLimit, dailyTokenLimit }) },
-    ),
 
   agentContext: (agentId: string, message?: string) =>
     req<AgentContextPreview>(

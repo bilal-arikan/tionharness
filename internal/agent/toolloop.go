@@ -139,12 +139,6 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 }
 
 func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool, onStep func(TurnStep)) (*providers.Response, []TurnStep, error) {
-	if autonomous {
-		if err := r.ensureBudget(ctx, agent); err != nil {
-			return nil, nil, err
-		}
-	}
-
 	// Carry the agent's permission mode so provider-driven loops (claude CLI) can
 	// gate their tool use. Empty maps to "auto" downstream.
 	req.PermissionMode = effectivePermissionMode(agent.PermissionMode, autonomous)
@@ -302,6 +296,15 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	}
 
 	var last *providers.Response
+	// turnUsage sums the token usage of EVERY provider call this turn makes (each
+	// tool-loop iteration + every max-output resume) so the returned response — and
+	// thus the persisted assistant bubble — reflects the whole turn, not just the
+	// final call. RecordUsage already sums per-call into the daily/session rollups;
+	// this keeps the per-message figure consistent with those totals (otherwise a
+	// multi-step native turn showed only the last iteration's tokens, so the bubbles
+	// summed to less than the session lifetime total). The claude-cli path doesn't
+	// reach here (one Complete; its usage is already the turn aggregate).
+	var turnUsage providers.Usage
 	var steps []TurnStep
 	// ls carries the single-shot recovery guards (A1) across iterations so a
 	// stuck model can never spin forever inside one turn; cfg/keepRecent are the
@@ -323,12 +326,6 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugError, AgentID: agent.ID, Detail: reason + ": " + err.Error(), Err: true})
 	}
 	for i := 0; i < maxToolIters; i++ {
-		if autonomous {
-			if err := r.ensureBudget(ctx, agent); err != nil {
-				fail(string(termBudget), err)
-				return nil, steps, err
-			}
-		}
 		// Live steering: fold any user guidance that arrived since the last
 		// iteration into the conversation before the next model call.
 		for _, m := range drainSteer(ctx) {
@@ -368,6 +365,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			return nil, steps, err
 		}
 		last = resp
+		turnUsage = sumUsage(turnUsage, resp.Usage)
 		if resp.StopReason != providers.StopToolUse || len(resp.ToolCalls) == 0 {
 			// A1: resume an answer cut off by the output-token cap (bounded by
 			// the guard) so the full reply is produced across capped calls.
@@ -392,6 +390,9 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			if partial.Len() > 0 {
 				resp.Text = partial.String() + resp.Text
 			}
+			// Report the whole turn's token usage on the returned response (the bubble
+			// + autonomous turn-meta read it), not just this final call's.
+			resp.Usage = turnUsage
 			return resp, steps, nil
 		}
 		ls.lastContinue = contToolUse
@@ -655,7 +656,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 		if sid := SessionIDFrom(ctx); sid != "" {
 			key := sid + "|" + agent.ID
 			if resp, perr := r.cliSessions.Turn(ctx, key, cli, req, req.OnEvent); perr == nil {
-				r.RecordUsage(ctx, agent, resp.Model, resp.Usage)
+				r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 				return resp, nil
 			} else {
 				r.logger.Warn("persistent cli session failed; falling back to one-shot complete",
@@ -670,7 +671,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
-	r.RecordUsage(ctx, agent, resp.Model, resp.Usage)
+	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	return resp, nil
 }
 
@@ -697,6 +698,6 @@ func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm provide
 	if err != nil {
 		return nil, err
 	}
-	r.RecordUsage(ctx, agent, resp.Model, resp.Usage)
+	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	return resp, nil
 }

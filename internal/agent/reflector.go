@@ -31,6 +31,16 @@ func (r *Runtime) journalMaxLen() int {
 	return r.tun.JournalMaxLen()
 }
 
+// journalMinLen reads the live write-side low-info gate (min runes a turn must
+// carry to be journaled). When Tunables is absent (tests), the gate is off (0)
+// so existing test journaling is never silently dropped.
+func (r *Runtime) journalMinLen() int {
+	if r.tun == nil {
+		return 0
+	}
+	return r.tun.JournalMinLen()
+}
+
 // reflectionCap reads the live cap on how many newest reflections an agent keeps.
 // Reflections are otherwise durable (never consumed like journals), so without a
 // cap a frequently-reflecting agent would accumulate them without bound.
@@ -54,6 +64,14 @@ const reflectPrompt = `Below are your most recent journal entries. Write a brief
 func (r *Runtime) Journal(ctx context.Context, agentID, content string) {
 	content = strings.TrimSpace(content)
 	if content == "" {
+		return
+	}
+	// Write-side low-info gate: drop trivial turns (e.g. a one-number arithmetic
+	// answer) before they reach the store, so they never pollute similarity recall
+	// — which is re-injected, uncached, into every turn's dynamic context. The gate
+	// is opt-in (minLen 0 = off) and conservative so short-but-real notes survive.
+	if minLen := r.journalMinLen(); minLen > 0 && len([]rune(content)) < minLen {
+		r.logger.Debug("journal skipped (low-info)", "agent", agentID, "runes", len([]rune(content)), "minLen", minLen)
 		return
 	}
 	if maxLen := r.journalMaxLen(); len([]rune(content)) > maxLen {

@@ -19,6 +19,12 @@ type SessionUsage struct {
 	OutputTokens     int                 `json:"outputTokens"`
 	CacheReadTokens  int                 `json:"cacheReadTokens,omitempty"`
 	CacheWriteTokens int                 `json:"cacheWriteTokens,omitempty"`
+	// ProviderCalls is the cumulative number of underlying model API round-trips
+	// behind Calls over this session's life (for claude-cli one SwarmGo turn is
+	// several internal calls — result num_turns). The CLI-overhead preview divides
+	// the cumulative token totals by it to recover the per-call (single-pass) context
+	// when the per-turn debug journal is unavailable.
+	ProviderCalls    int                 `json:"providerCalls,omitempty"`
 	ByKind           map[string]KindStat `json:"byKind,omitempty"`
 	ByModel          map[string]KindStat `json:"byModel,omitempty"`
 	// Compaction savings mirror the per-agent meters but are attributed to this
@@ -72,6 +78,7 @@ func (d *DB) AddSessionUsageKind(ctx context.Context, sessionID, agentID, kind, 
 	u.OutputTokens += delta.OutputTokens
 	u.CacheReadTokens += delta.CacheReadTokens
 	u.CacheWriteTokens += delta.CacheWriteTokens
+	u.ProviderCalls += providerCallsOf(delta)
 	if u.ByKind == nil {
 		u.ByKind = map[string]KindStat{}
 	}

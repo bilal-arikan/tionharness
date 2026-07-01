@@ -45,13 +45,6 @@ func Validate(p Patch) error {
 			return fmt.Errorf("defaultPermissionMode must be one of: read-only, ask, auto (got %q)", *p.DefaultPermissionMode)
 		}
 	}
-	if p.LogLevel != nil {
-		switch *p.LogLevel {
-		case "info", "debug", "warn", "error":
-		default:
-			return fmt.Errorf("logLevel must be one of: info, debug, warn, error (got %q)", *p.LogLevel)
-		}
-	}
 	if p.Accent != nil && *p.Accent != "" && !isHexColor(*p.Accent) {
 		return fmt.Errorf("accent must be a hex color like #8b5cf6 (got %q)", *p.Accent)
 	}

@@ -33,6 +33,9 @@ type Registry struct {
 	mu                 sync.RWMutex
 	anthropicKey       string
 	claudeCLIPath      string // resolved path to `claude` binary, or "" if absent
+	claudeConfigDir    string // CLAUDE_CONFIG_DIR override for claude-cli, or "" to inherit ~/.claude
+	claudeAuthKind     string // claude-cli credential kind: "oauth" | "apikey" | ""
+	claudeAuthToken    string // claude-cli credential value injected into the subprocess env
 	antigravityCLIPath string // resolved path to `agy` binary, or "" if absent
 	antigravityKey     string // ANTIGRAVITY_API_KEY injected into agy subprocesses ("" = inherit ambient)
 	defaultModel       string // applied when a request leaves Model empty
@@ -122,6 +125,24 @@ func (r *Registry) SetClaudeCLIPath(path string) {
 	}
 	r.mu.Lock()
 	r.claudeCLIPath = path
+	r.mu.Unlock()
+}
+
+// SetClaudeConfigDir overrides CLAUDE_CONFIG_DIR for claude-cli subprocesses. An
+// empty value inherits the ambient ~/.claude (default behaviour).
+func (r *Registry) SetClaudeConfigDir(dir string) {
+	r.mu.Lock()
+	r.claudeConfigDir = dir
+	r.mu.Unlock()
+}
+
+// SetClaudeAuth sets the credential injected into claude-cli subprocesses. kind is
+// "oauth" (→ CLAUDE_CODE_OAUTH_TOKEN) or "apikey" (→ ANTHROPIC_API_KEY); an empty
+// token or kind injects nothing (the CLI falls back to its config-dir login).
+func (r *Registry) SetClaudeAuth(token, kind string) {
+	r.mu.Lock()
+	r.claudeAuthToken = token
+	r.claudeAuthKind = kind
 	r.mu.Unlock()
 }
 
@@ -261,6 +282,9 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 	cfg := ResolvedConfig{
 		Model:              r.defaultModel,
 		CLIPath:            r.claudeCLIPath,
+		CLIConfigDir:       r.claudeConfigDir,
+		CLIAuthKind:        r.claudeAuthKind,
+		CLIAuthToken:       r.claudeAuthToken,
 		ExtendedCache:      r.betaExtendedCache,
 		AntigravityCLIPath: r.antigravityCLIPath,
 		AntigravityKey:     r.antigravityKey,

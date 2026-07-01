@@ -23,10 +23,6 @@ type Agent struct {
 	Avatar string `json:"avatar"`
 	Color  string `json:"color"`
 
-	// Daily spend caps for autonomous calls (0 = unlimited).
-	DailyCallLimit  int `json:"dailyCallLimit"`
-	DailyTokenLimit int `json:"dailyTokenLimit"`
-
 	// Tool access. MCPEnabled gates whether the agent is offered tools at all.
 	//
 	// Agents reach EVERY workspace-active tool by default (after per-creation-path

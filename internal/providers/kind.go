@@ -39,6 +39,9 @@ type ResolvedConfig struct {
 	BaseURL       string // custom endpoint ("" = kind default)
 	Model         string // default model applied when a request omits one
 	CLIPath       string // resolved `claude` binary path (claude-cli)
+	CLIConfigDir  string // CLAUDE_CONFIG_DIR override for the claude-cli subprocess ("" = inherit ~/.claude)
+	CLIAuthKind   string // claude-cli credential kind: "oauth" | "apikey" | "" (none)
+	CLIAuthToken  string // claude-cli credential value injected into the subprocess env
 	ExtendedCache bool   // anthropic extended prompt-cache beta
 
 	AntigravityCLIPath string // resolved `agy` binary path (antigravity-cli)

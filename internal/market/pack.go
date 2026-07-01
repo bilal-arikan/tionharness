@@ -201,8 +201,6 @@ type WorkspaceTemplateAgent struct {
 	AllowedTools   string   `json:"allowedTools,omitempty"` // legacy allowlist (JSON array)
 	BlockedTools   string   `json:"blockedTools,omitempty"` // per-agent denylist (JSON array)
 	Skills         []string `json:"skills,omitempty"`       // skill slugs to assign (resolved against the seeded skills)
-	DailyCallLimit  int     `json:"dailyCallLimit,omitempty"`
-	DailyTokenLimit int     `json:"dailyTokenLimit,omitempty"`
 }
 
 // WorkspaceTemplateSkill is a skill bundled with a template: its portable

@@ -223,10 +223,10 @@ export default function App() {
   }, [])
 
   // Appearance is per-workspace: the app-global appearance is the inherited
-  // default, and each workspace may override theme/accent/preset. We keep both
-  // in refs so a global-settings save and a workspace switch can each re-resolve
+  // default, and each workspace may override the theme preset. We keep both in
+  // refs so a global-settings save and a workspace switch can each re-resolve
   // and re-apply the effective theme without racing each other.
-  const globalAppearanceRef = useRef<Appearance>({ theme: 'dark', accent: '#8b5cf6', themePreset: 'midnight-violet' })
+  const globalAppearanceRef = useRef<Appearance>({ themePreset: 'violet-dark' })
   const wsAppearanceRef = useRef<Partial<Appearance> | null>(null)
   const applyResolvedTheme = useCallback(() => {
     applyAppearance(resolveAppearance(wsAppearanceRef.current, globalAppearanceRef.current))
@@ -234,8 +234,8 @@ export default function App() {
 
   // Apply the client-side preferences carried by app settings. Theme resolution
   // honors the active workspace's override on top of these global defaults.
-  const applyClientPrefs = useCallback((s: { theme: AppSettings['theme']; accent: string; themePreset?: string; keepAwake: boolean; desktopNotifications: boolean }) => {
-    globalAppearanceRef.current = { theme: s.theme, accent: s.accent, themePreset: s.themePreset ?? '' }
+  const applyClientPrefs = useCallback((s: { themePreset?: string; keepAwake: boolean; desktopNotifications: boolean }) => {
+    globalAppearanceRef.current = { themePreset: s.themePreset ?? '' }
     applyResolvedTheme()
     applyKeepAwake(s.keepAwake)
     ensureNotificationPermission(s.desktopNotifications)
@@ -263,7 +263,7 @@ export default function App() {
     api.getWorkspaceSettings()
       .then((w) => {
         if (cancelled) return
-        wsAppearanceRef.current = { theme: w.theme as Appearance['theme'], accent: w.accent, themePreset: w.themePreset }
+        wsAppearanceRef.current = { themePreset: w.themePreset }
         applyResolvedTheme()
       })
       .catch(() => {})

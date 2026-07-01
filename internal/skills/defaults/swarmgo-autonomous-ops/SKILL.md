@@ -110,9 +110,9 @@ forever). SwarmGo gives you these options — there is no longer a periodic
 heartbeat ticker; every autonomous run requires an explicit trigger:
 
 - **Schedules** — a cron schedule re-invokes an agent on a timer. Give it a
-  goal-shaped prompt; each tick iterates toward the goal. The **daily budget
-  guardrail** (`ensureBudget`) is the hard stop, so a scheduled loop cannot burn
-  forever.
+  goal-shaped prompt; each tick iterates toward the goal. Always give the prompt a
+  concrete stopping goal — daily spend caps were removed (agents are unlimited), so
+  the **global `pauseAutonomy` brake** is the one hard stop for a runaway loop.
 - **`schedule_wake`** — a single-shot self-wake timer inside an interactive chat
   turn; the agent fires once more after the delay. Good for "check back in N
   minutes" within a conversation, not for standing automation.

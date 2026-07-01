@@ -128,15 +128,6 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		agent.Color = req.Color
 	}
 
-	// Seed the agent's daily spend caps from the configured defaults.
-	if cfg.DefaultDailyCallLimit > 0 || cfg.DefaultDailyTokenLimit > 0 {
-		if err := ws(r).DB.UpdateBudget(r.Context(), agent.ID, cfg.DefaultDailyCallLimit, cfg.DefaultDailyTokenLimit); err != nil {
-			s.logger.Warn("apply default budget failed", "agent", agent.ID, "error", err)
-		} else {
-			agent.DailyCallLimit = cfg.DefaultDailyCallLimit
-			agent.DailyTokenLimit = cfg.DefaultDailyTokenLimit
-		}
-	}
 	s.logger.Info("agent created", "agent", agent.Name, "id", agent.ID,
 		"provider", agent.Provider, "model", agent.Model)
 	writeJSON(w, http.StatusCreated, agent)

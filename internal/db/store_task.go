@@ -66,6 +66,11 @@ func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 	if t.Dependencies != "" {
 		cur.Dependencies = t.Dependencies
 	}
+	cur.Priority = t.Priority
+	cur.Tags = t.Tags
+	cur.Progress = t.Progress
+	cur.StartDate = t.StartDate
+	cur.DueDate = t.DueDate
 	cur.UpdatedAt = now()
 	return d.persistTaskLocked(cur)
 }

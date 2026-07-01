@@ -51,7 +51,7 @@ type poolEntry struct {
 	mu       sync.Mutex
 	cfg      ServerConfig
 	fp       string
-	client   *StdioClient
+	client   Client
 	tools    []Tool
 	listed   bool
 	listedAt time.Time
@@ -112,7 +112,7 @@ func (p *Pool) entry(name string) *poolEntry {
 
 // ensure returns a live client for cfg, dialing (or re-dialing on config change
 // / death) as needed. Caller holds e.mu.
-func (p *Pool) ensure(ctx context.Context, e *poolEntry, cfg ServerConfig) (*StdioClient, error) {
+func (p *Pool) ensure(ctx context.Context, e *poolEntry, cfg ServerConfig) (Client, error) {
 	want := configFingerprint(cfg)
 	if e.client != nil && e.fp == want && e.client.Alive() {
 		return e.client, nil

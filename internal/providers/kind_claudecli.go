@@ -30,7 +30,7 @@ func (claudecliKind) Build(cfg ResolvedConfig) (Provider, error) {
 	if cfg.CLIPath == "" {
 		return nil, fmt.Errorf("claude CLI not found on PATH (install Claude Code)")
 	}
-	return NewClaudeCLI(cfg.CLIPath, cfg.Model), nil
+	return NewClaudeCLI(cfg.CLIPath, cfg.Model, cfg.CLIConfigDir, cfg.CLIAuthKind, cfg.CLIAuthToken), nil
 }
 
 func init() { RegisterKind(claudecliKind{}) }

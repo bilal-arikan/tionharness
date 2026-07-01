@@ -101,14 +101,25 @@ ayrı bölüm (`frontend/.../settings/appPanels.tsx` `ContextPanel`).
 
 ## Harici araç tespiti (presence-only)
 
-Ayarlar → **Tanılama** ekranındaki "Kurulu mu kontrol et" butonu, bu cihazda isteğe bağlı harici
-token araçlarının (`rtk`, `sqz`, `context-mode`) **kurulu olup olmadığını** gösterir.
+Ayarlar → **Hooks** ekranındaki "Kurulu mu kontrol et" butonu (panel açılışında otomatik de çalışır), bu
+cihazda isteğe bağlı harici CLI araçlarının **kurulu olup olmadığını** gösterir. Liste artık yalnız
+token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
+
+| Kategori (`category`) | Araç | Kullanım (`wire`) |
+|---|---|---|
+| `token` (Token / bağlam optimizasyonu) | `rtk`, `sqz` | `hook` — tek tıkla PreToolUse hook'u bağlanır |
+| `dev` (Geliştirme araçları) | `crabbox` | `cli` — ajan Bash ile doğrudan çağırır (bilgi rozeti) |
+| `render` (Render / diyagram) | `mmdc` (mermaid-cli) | `cli` — yerelde mermaid→SVG/PNG dosya çıktısı |
 
 - Backend: `GET /api/external-tools` (`api/external_tools.go`) → `exec.LookPath` ile PATH'te arar.
-  **Araçları kurmaz, çalıştırmaz, değiştirmez** (Windows'ta PATHEXT'e saygılı). Dönüş: `[{name,desc,url,found,path}]`.
-- Frontend: `systemApi.externalTools()` + `DiagnosticsPanel` butonu; her araç için ✓ kurulu / — bulunamadı + repo linki.
-- Bu yalnızca **bilgilendirme**dir; SwarmGo bu araçları otomatik kullanmaz (Sistem A/B native'dir). Kullanıcı
-  isterse manuel entegrasyon için varlığı görür.
+  **Araçları kurmaz, çalıştırmaz, değiştirmez** (Windows'ta PATHEXT'e saygılı). Dönüş:
+  `[{name,desc,url,category,wire,found,path}]`. Yeni araç eklemek = `knownExternalTools`'a tek giriş
+  (yalnız `wire="hook"` ise frontend `TOOL_HOOK_TEMPLATES`'e ek şablon gerekir).
+- Frontend: `systemApi.externalTools()` + `HooksPanel`; araçlar `category`'ye göre gruplanır, `wire`'a
+  göre rozet/buton gösterilir (`hook`→Bağla/Aktif toggle, `mcp`→MCP rozeti, `cli`→CLI rozeti) + repo linki.
+- Bu yalnızca **bilgilendirme + opsiyonel wire-up**'tır; SwarmGo bu araçları kendiliğinden çalıştırmaz
+  (token sıkıştırması Sistem A/B native'dir). `cli` araçları (`crabbox`/`mmdc`) ajan tarafından
+  geliştirme sırasında Bash ile kullanılır.
 
 ## Sınırlar / Notlar
 
@@ -198,7 +209,7 @@ the external agent project her MCP tool çağrısında şemaya bir **`_intent`**
 
 **Notlar / sınırlar:**
 - Hook'lar (`PreToolUse`/`PostToolUse`) hâlâ tasarruf **ölçmez** (Claude Code sözleşmesi; gerçek token-tasarruf
-  mekanizması Sistem A/B'dir). `context-mode`/`rtk`/`sqz` harici araçları yalnız **presence-only** tespit edilir,
+  mekanizması Sistem A/B'dir). `rtk`/`sqz` harici araçları yalnız **presence-only** tespit edilir,
   SwarmGo çıktıları onlardan geçirmez → ölçülen kazanç yok; yerel eşdeğer = Sistem A.
 - Bayt→token→USD: Sistem A/B için yalnız bayt + ~token gösterilir, **USD'ye çevrilmez** (uydurma sayı olmaması
   için). Gerçek USD yalnız prompt-cache'te.
@@ -298,10 +309,30 @@ bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen 
 ## claude-cli Prompt-Cache Sıcaklığı (2026-06-29)
 
 claude-cli sağlayıcısında modele giden gerçek girdi, SwarmGo'nun kendi enjekte
-ettiği katmandan çok daha büyüktür (CLI kendi sistem promptu + araç şemaları + MCP
-köprüsünü ekler; context-preview'daki `cliOverhead` bunu gösterir — ölçüm ~7×).
-Bu yükün her tur yeniden **yazılması** (premium `cacheWrite`) yerine **okunması**
-(ucuz `cacheRead`, ~10× ucuz) için prefix'in sıcak kalması şarttır.
+ettiği katmandan daha büyüktür (CLI kendi sistem promptu + araç şemaları + MCP
+köprüsünü ekler; context-preview'daki `cliOverhead` bunu **num_turns ile bölünmüş
+çağrı-başı** gerçek girdiyle gösterir). Bu yükün her tur yeniden **yazılması**
+(premium `cacheWrite`) yerine **okunması** (ucuz `cacheRead`, ~10× ucuz) için
+prefix'in sıcak kalması şarttır.
+
+> **Kümülatif cacheRead + num_turns bölmesi (2026-06-30):** claude-cli'nin `result`
+> zarfında bildirdiği `cache_read_input_tokens` (ve in/out/cacheWrite) **tek tur
+> içindeki iç tool-loop adımlarının KÜMÜLATİF** toplamıdır — tek-geçiş bağlamını kat
+> kat aşabilir (bir API çağrısı cache'ten yazılandan fazlasını okuyamaz). **Ham stream
+> ile doğrulandı:** `num_turns=2`'lik bir turda result `cacheRead=46658 = 21628+25030`
+> (iki iç çağrının toplamı); gerçek tek-geçiş bağlamlar 28.939 ve 32.446 idi.
+> **Maliyet/billing için kümülatif DOĞRUDUR** (her iç çağrının cache-read'i ayrı
+> faturalanır), ama **bağlam boyutu değildir**.
+>
+> **Çözüm:** claude-cli parser'ı `result.num_turns`'ü `Response.ProviderCalls`'a
+> yakalar → `RecordUsage` debug `llm_call` olayına `Calls` olarak yazar →
+> `computeCLIOverhead` çağrı başı bağlamı **`(in+cacheRead+cacheWrite)/num_turns`**
+> ile bulur (örnekte (8+46658+14719)/2 = **30.692** ≈ gerçek). Eski "~5–7×" rakamı
+> kümülatif-cache yansımasıydı; bir ara denenen `min(cacheRead, estimated)` sınırı ise
+> **ters yönde** hata yapıp per-call'ı olduğundan az gösteriyordu (sıcak turda gerçek
+> ~53K iken ~12K) — ikisi de num_turns bölmesiyle giderildi. Token/bütçe muhasebesinin
+> geri kalanı (OpenAI-uyumlu `prompt_tokens`'tan cached çıkarımı, Anthropic ayrık
+> sayaçlar, fiyat kademeleri, günlük/oturum çağrı-başı toplama) doğrulandı — hatasız.
 
 - **Stabil prefix (Faz 1):** `providers.ClaudeCLI.buildSystemAndPrompt` — `--append-
   system-prompt` yalnız statik `req.System` taşır; volatil `req.SystemDynamic`
@@ -317,6 +348,32 @@ Bu yükün her tur yeniden **yazılması** (premium `cacheWrite`) yerine **okunm
   session başına uzun-ömürlü `claude --input-format stream-json`; sıcak turda yalnız
   yeni kullanıcı mesajı gider. Context korur; cache TTL'e bağlı ısınır. Hata → tek-
   atış fallback. `providers.CLISessionPool`, `Runtime.cliSessions`.
+
+## Dinamik bağlam (recall) gürültü kapısı
+
+Stabil-prefix optimizasyonu (yukarısı) **statik** prefix'i cache'te tutar; ancak her turun
+**dinamik** bloğu (saat + bellek recall + özet) `[Context]` olarak konuşma prompt'una gider ve
+**cache-dışıdır** → her tur taze token. Bu bloğun "Relevant memory" kısmı önemsiz journal
+kayıtlarıyla kirlenirse (ör. `Q: 2+2 kaç eder? A: 4 eder.`) her tur gereksiz token + dikkat dağıtma
+maliyeti doğar. İki ayarlanabilir kapı bunu keser:
+
+| Ayar | Default | Etki |
+|------|---------|------|
+| `journalMinLen` | `40` rune (0 = kapalı) | **Yazma-tarafı:** içeriği bu uzunluktan kısa turlar hiç saklanmaz (`Journal()` boş-check'in yanında eler). Gürültü kaynakta kesilir; recall havuzuna hiç girmez. Muhafazakâr default — kısa ama anlamlı notlar korunur. |
+| `recallMinScore` | `0.04` (= eski sabit) | **Okuma-tarafı:** cosine benzerlik eşiği. Eskiden `memory.go`'da sert-kodlu `const minScore = 0.04` idi; artık `memory.Store` canlı provider'dan okur, runtime `Tunables.RecallMinScore`'a bağlar (restart'sız geçerli). Yükseltmek düşük-alâkalı recall'ı keser. |
+
+**Tasarım notları:**
+- `journalMinLen` için `0` **anlamlı** (kapı kapalı) — cap deseninden farklı olarak getter `0`'ı
+  default'a çevirmez. Clamp: `0 ≤ minLen ≤ journalMaxLen`. Test runtime'larında (`tun==nil`) kapı
+  kapalıdır.
+- `recallMinScore` ayarı settings/frontend'de zaten vardı ama **bağlı değildi** (ölü konfig,
+  default 0.05). Artık bağlandı ve default `0.04`'e çekildi — gerçekte yürürlükteki değer 0.04'tü, yani
+  geriye dönük uyum korunur.
+- Import döngüsü yok: `memory` paketi `agent`'ı import etmez; eşik bir `func() float64` provider ile
+  geçer (`Store.SetMinScoreProvider`, `runtime.go`'da `tun.RecallMinScore`'a bağlanır).
+
+Tunables: `SetJournalLimits(cap, maxLen, minLen)` / `JournalMinLen()` / `SetRecallMinScore` /
+`RecallMinScore()`. Settings alanları: `journalMinLen`, `recallMinScore`.
 
 ## Ayrıca Bakınız
 

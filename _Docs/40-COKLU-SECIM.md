@@ -73,7 +73,8 @@ onClick={(e) => {
 | Artifact | `ArtifactsPanel` | Artifact aç | Sil |
 | Skills | `SkillsPanel` | Skill detayı | Sil (katlanmış grupları atlar) |
 | Flows | `FlowsPanel` (Akışlarım) | Flow'u aç | Çalıştır · Sil |
-| Araçlar | `AgentToolsSection` | Anında yasakla | "Seçilenleri yasakla" (tek PATCH) |
+| Araçlar (ajan) | `AgentToolsSection` | Anında yasakla | "Seçilenleri yasakla" (tek PATCH) |
+| Araçlar (workspace) | `ToolsPanel` (Ayarlar) | Detay aç | Etkinleştir · Devre dışı · NameOnly · Göster |
 | Aktivite | `ExecutionsPanel` | Detay aç | Kimlikleri kopyala (salt-okunur) |
 
 ## Tasarım Notları / Kenar Durumları

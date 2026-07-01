@@ -172,7 +172,7 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 	args = append(args, c.mcpArgs()...)
 
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
-	cmd.Env = append(os.Environ(), "ENABLE_TOOL_SEARCH=auto")
+	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
 	if req.WorkDir != "" {
 		if fi, statErr := os.Stat(req.WorkDir); statErr == nil && fi.IsDir() {
 			cmd.Dir = req.WorkDir

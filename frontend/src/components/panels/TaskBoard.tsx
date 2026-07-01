@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Task, Flow, BoardColumnDef } from '../../types'
-import { AgentPicker } from '../agents/AgentPicker'
 import { AgentIdentity } from '../agents/AgentIdentity'
-import { TaskDetailPanel } from './TaskDetailPanel'
+import { TaskFormModal } from './TaskFormModal'
 import { BoardColumnEditor } from './BoardColumnEditor'
 import { Button, SelectionBar, SelectionBarButton } from '../common'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
@@ -21,6 +20,14 @@ const DEFAULT_COLUMNS: BoardColumnDef[] = [
 // Current unix time in seconds, matching the backend's task timestamps — used
 // for optimistic createdAt/updatedAt so cards sort consistently before reload.
 const nowSec = () => Math.floor(Date.now() / 1000)
+
+// Priority chip colors/labels, keyed by the stored priority slug.
+const PRIORITY_META: Record<string, { label: string; color: string }> = {
+  critical: { label: 'Kritik', color: '#ef4444' },
+  high: { label: 'Yüksek', color: '#f59e0b' },
+  medium: { label: 'Orta', color: '#3b82f6' },
+  low: { label: 'Düşük', color: '#6b7280' },
+}
 
 // Parse a task's dependencies JSON string into an array of task IDs.
 function parseDeps(raw: string): string[] {
@@ -62,12 +69,9 @@ export function TaskBoard({ agents, onError }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
   const [columns, setColumns] = useState<BoardColumnDef[]>(DEFAULT_COLUMNS)
-  const [description, setDescription] = useState('')
-  const [ownerAgentId, setOwnerAgentId] = useState('')
-  const [newFlowId, setNewFlowId] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
-  // Right-hand detail/editor drawer: which task is currently open (null = closed).
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Create/edit popup state: null = closed.
+  const [modal, setModal] = useState<{ mode: 'create' | 'edit'; taskId: string | null } | null>(null)
   // Left-side column editor panel.
   const [editorOpen, setEditorOpen] = useState(false)
   // When true, cards sort by topological dependency order (no-blocker tasks first).
@@ -104,49 +108,6 @@ export function TaskBoard({ agents, onError }: Props) {
     window.dispatchEvent(new CustomEvent('swarmgo:board-columns-changed'))
   }
 
-  // A task is a passive board item: created from a description (title is
-  // auto-generated from it). Agent and flow are optional informational tags;
-  // the board itself never runs anything — flows/schedules/agent sessions read
-  // and update tasks from outside.
-  const createTask = async () => {
-    const desc = description.trim()
-    if (!desc) return
-    const tempId = `temp-${Date.now()}`
-    const owner = ownerAgentId
-    const flow = newFlowId
-    const defaultCol = columns[0]?.key ?? 'todo'
-    const optimistic: Task = {
-      id: tempId,
-      title: desc.length > 60 ? desc.slice(0, 60) + '…' : desc,
-      description: desc,
-      prompt: '',
-      ownerAgentId: owner,
-      flowId: flow,
-      boardState: defaultCol,
-      dependencies: '[]',
-      lastRunId: '',
-      lastRunStatus: '',
-      lastRunAt: 0,
-      createdAt: nowSec(),
-      updatedAt: nowSec(),
-    }
-    setTasks((prev) => [optimistic, ...prev])
-    setDescription('')
-    setNewFlowId('')
-    try {
-      const t = await api.createTask({
-        description: desc,
-        ownerAgentId: owner || undefined,
-        flowId: flow || undefined,
-      })
-      // Swap the placeholder for the persisted task (real id + AI title).
-      setTasks((prev) => prev.map((x) => (x.id === tempId ? t : x)))
-    } catch (e) {
-      setTasks((prev) => prev.filter((x) => x.id !== tempId))
-      onError((e as Error).message)
-    }
-  }
-
   const move = async (task: Task, boardState: string) => {
     if (task.boardState === boardState) return
     setTasks((prev) =>
@@ -162,16 +123,20 @@ export function TaskBoard({ agents, onError }: Props) {
     }
   }
 
-  const onSaved = (updated: Task) => {
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+  // Upsert: a created task is prepended, an edited task replaced in place.
+  const onSaved = (saved: Task) => {
+    setTasks((prev) =>
+      prev.some((t) => t.id === saved.id)
+        ? prev.map((t) => (t.id === saved.id ? saved : t))
+        : [saved, ...prev],
+    )
   }
 
   const onDeleted = (id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id))
-    if (selectedId === id) setSelectedId(null)
   }
 
-  const selected = tasks.find((t) => t.id === selectedId) ?? null
+  const modalTask = modal?.taskId ? tasks.find((t) => t.id === modal.taskId) ?? null : null
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk move/assign/delete.
   // The ordered id list mirrors the on-screen render order (column by column,
@@ -220,7 +185,6 @@ export function TaskBoard({ agents, onError }: Props) {
     const ids = [...sel.selected]
     if (ids.length === 0) return
     if (!confirm(`${ids.length} görev silinsin mi?`)) return
-    if (selectedId && sel.selected.has(selectedId)) setSelectedId(null)
     setTasks((prev) => prev.filter((t) => !sel.selected.has(t.id)))
     sel.clear()
     try {
@@ -268,43 +232,10 @@ export function TaskBoard({ agents, onError }: Props) {
           >
             ⊞ Sütunlar
           </button>
-          <input
-            data-testid="task-create-description-input"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') createTask()
-            }}
-            placeholder="Görev açıklaması — başlık otomatik oluşturulur"
-            className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
-          />
-          <div data-testid="task-create-owner-wrap">
-            <AgentPicker
-              agents={agents}
-              value={ownerAgentId}
-              onChange={setOwnerAgentId}
-              placeholder="Ajan (opsiyonel, bilgi)"
-            />
-          </div>
-          {flows.length > 0 && (
-            <select
-              data-testid="task-create-flow-select"
-              value={newFlowId}
-              onChange={(e) => setNewFlowId(e.target.value)}
-              title="Akış etiketi (opsiyonel, bilgi amaçlı)"
-              className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
-            >
-              <option value="">🔀 Akış yok</option>
-              {flows.map((f) => (
-                <option key={f.id} value={f.id}>
-                  🔀 {f.name}
-                </option>
-              ))}
-            </select>
-          )}
           <div data-testid="task-create-submit">
-            <Button onClick={createTask}>+ Görev</Button>
+            <Button onClick={() => setModal({ mode: 'create', taskId: null })}>+ Görev</Button>
           </div>
+          <div className="flex-1" />
           <button
             data-testid="task-sort-by-deps"
             onClick={() => {
@@ -397,7 +328,7 @@ export function TaskBoard({ agents, onError }: Props) {
                         onClick={(e) => {
                           if (pending) return
                           if (sel.handleClick(e, t.id, orderedIds)) return
-                          setSelectedId((cur) => (cur === t.id ? null : t.id))
+                          setModal({ mode: 'edit', taskId: t.id })
                         }}
                         className={`rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
                           pending
@@ -405,9 +336,7 @@ export function TaskBoard({ agents, onError }: Props) {
                             : `cursor-pointer hover:shadow-[var(--shadow-md)] active:cursor-grabbing ${
                                 sel.isSelected(t.id)
                                   ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]'
-                                  : selectedId === t.id
-                                    ? 'border-[var(--color-accent)]'
-                                    : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
+                                  : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
                               }`
                         }`}
                       >
@@ -422,6 +351,22 @@ export function TaskBoard({ agents, onError }: Props) {
                               {t.description}
                             </div>
                           )
+                        )}
+                        {/* Rich attribute badges: priority, tags. */}
+                        {(t.priority || (t.tags?.length ?? 0) > 0) && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                            {t.priority && PRIORITY_META[t.priority] && (
+                              <span
+                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                                style={{ backgroundColor: PRIORITY_META[t.priority].color + '22', color: PRIORITY_META[t.priority].color }}
+                              >
+                                ● {PRIORITY_META[t.priority].label}
+                              </span>
+                            )}
+                            {t.tags?.map((tag) => (
+                              <span key={tag} className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">#{tag}</span>
+                            ))}
+                          </div>
                         )}
                         {(owner || t.flowId || depIds.length > 0) && (
                           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
@@ -506,18 +451,19 @@ export function TaskBoard({ agents, onError }: Props) {
         </SelectionBar>
       </div>
 
-      {selected && (
-        <TaskDetailPanel
-          task={selected}
+      {modal && (
+        <TaskFormModal
+          mode={modal.mode}
+          task={modalTask ?? undefined}
           agents={agents}
           flows={flows}
           columns={columns}
           tasks={tasks}
-          onClose={() => setSelectedId(null)}
+          defaultBoardState={columns[0]?.key}
+          onClose={() => setModal(null)}
           onSaved={onSaved}
           onDeleted={onDeleted}
           onError={onError}
-          onSelectTask={(id) => setSelectedId(id)}
         />
       )}
     </div>

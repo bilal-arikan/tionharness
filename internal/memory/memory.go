@@ -11,8 +11,10 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
-// minScore is the cosine floor below which a memory is considered irrelevant.
-const minScore = 0.04
+// DefaultMinScore is the cosine floor below which a memory is considered
+// irrelevant, used when no live threshold provider is configured (e.g. tests).
+// It is the historical hard-coded value, so default recall behaviour is unchanged.
+const DefaultMinScore = 0.04
 
 // recallKinds are the memory kinds eligible for similarity recall. The core
 // kinds (core_persona/core_human) are deliberately excluded: they are the
@@ -29,14 +31,35 @@ func DisplayKinds() []string {
 	return append([]string(nil), recallKinds...)
 }
 
-// Store is a thin, stateless wrapper over the DB that adds vector recall on top
-// of knowledge_sources CRUD. Construct one per request; it holds no state.
+// Store is a thin wrapper over the DB that adds vector recall on top of
+// knowledge_sources CRUD. It holds no per-request state; the only mutable field
+// is an optional recall-floor provider wired once at construction.
 type Store struct {
 	db *db.DB
+	// minScoreFn supplies the live recall cosine floor, read on every Recall/Graph
+	// call so a settings change applies without restart. nil (or a value <= 0)
+	// falls back to DefaultMinScore.
+	minScoreFn func() float64
 }
 
 // New constructs a memory store bound to a workspace database.
 func New(database *db.DB) *Store { return &Store{db: database} }
+
+// SetMinScoreProvider installs a live provider for the recall cosine floor. The
+// runtime wires this to its Tunables so the floor tracks settings; passing nil
+// (or a provider returning <= 0) restores the DefaultMinScore behaviour.
+func (s *Store) SetMinScoreProvider(fn func() float64) { s.minScoreFn = fn }
+
+// minScore resolves the effective recall floor: the live provider's value when
+// positive, else DefaultMinScore.
+func (s *Store) minScore() float64 {
+	if s.minScoreFn != nil {
+		if v := s.minScoreFn(); v > 0 {
+			return v
+		}
+	}
+	return DefaultMinScore
+}
 
 // Remember stores a memory of the given kind, caching its term vector.
 func (s *Store) Remember(ctx context.Context, agentID, kind, content string) (db.KnowledgeSource, error) {
@@ -346,6 +369,7 @@ func (s *Store) Recall(ctx context.Context, agentID, query string, limit int, ki
 		return nil, nil
 	}
 	qnorm := norm(qv) // constant across candidates; compute once
+	floor := s.minScore()
 
 	hits := make([]Hit, 0, len(sources))
 	for _, src := range sources {
@@ -354,7 +378,7 @@ func (s *Store) Recall(ctx context.Context, agentID, query string, limit int, ki
 			vec = buildVector(src.Content) // backfill for rows without a cached vector
 		}
 		score := cosineNorm(qv, vec, qnorm)
-		if score >= minScore {
+		if score >= floor {
 			hits = append(hits, Hit{Source: src, Score: score})
 		}
 	}

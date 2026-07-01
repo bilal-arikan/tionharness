@@ -239,6 +239,12 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		mcpPool:     mcp.NewPool(),
 		cliSessions: providers.NewCLISessionPool(),
 	}
+	// Wire the recall cosine floor to this workspace's live Tunables so a settings
+	// change applies on the next recall without restart (memory.Store can't import
+	// agent, so it reads the floor through this provider).
+	if tun != nil {
+		r.mem.SetMinScoreProvider(tun.RecallMinScore)
+	}
 	// Surface MCP connection lifecycle (dial / re-dial / list_changed) in the
 	// in-app Logs screen; the persistent pool is otherwise opaque.
 	r.mcpPool.SetLogger(logger)

@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -29,6 +31,52 @@ type createMCPReq struct {
 	Args      []string          `json:"args"`
 	URL       string            `json:"url"`
 	Env       map[string]string `json:"env"`
+	Headers   map[string]string `json:"headers"`
+}
+
+// toMCPRow validates a create request and renders the stored row (Enabled=true).
+// It does not persist — callers (single create + bulk import) share it.
+func (req createMCPReq) toMCPRow() (db.MCPServer, error) {
+	if req.Name == "" {
+		return db.MCPServer{}, fmt.Errorf("name is required")
+	}
+	if req.Transport == "" {
+		req.Transport = db.MCPTransportStdio
+	}
+	switch req.Transport {
+	case db.MCPTransportStdio:
+		if req.Command == "" {
+			return db.MCPServer{}, fmt.Errorf("command is required for stdio transport")
+		}
+	case db.MCPTransportHTTP:
+		if req.URL == "" {
+			return db.MCPServer{}, fmt.Errorf("url is required for http transport")
+		}
+	case db.MCPTransportSSE:
+		return db.MCPServer{}, fmt.Errorf("the sse transport is deprecated and unsupported — use http (Streamable HTTP)")
+	default:
+		return db.MCPServer{}, fmt.Errorf("unknown transport %q", req.Transport)
+	}
+
+	argsJSON, _ := json.Marshal(req.Args)
+	envJSON := []byte("{}")
+	if req.Env != nil {
+		envJSON, _ = json.Marshal(req.Env)
+	}
+	headersJSON := []byte("{}")
+	if req.Headers != nil {
+		headersJSON, _ = json.Marshal(req.Headers)
+	}
+	return db.MCPServer{
+		Name:          req.Name,
+		Transport:     req.Transport,
+		Command:       req.Command,
+		Args:          string(argsJSON),
+		URL:           req.URL,
+		EnvConfig:     string(envJSON),
+		HeadersConfig: string(headersJSON),
+		Enabled:       true,
+	}, nil
 }
 
 func (s *Server) handleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
@@ -37,38 +85,107 @@ func (s *Server) handleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
+	row, err := req.toMCPRow()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if req.Transport == "" {
-		req.Transport = db.MCPTransportStdio
-	}
-	if req.Transport == db.MCPTransportStdio && req.Command == "" {
-		writeError(w, http.StatusBadRequest, "command is required for stdio transport")
-		return
-	}
-
-	argsJSON, _ := json.Marshal(req.Args)
-	envJSON, _ := json.Marshal(req.Env)
-	if req.Env == nil {
-		envJSON = []byte("{}")
-	}
-
-	server, err := ws(r).DB.CreateMCPServer(r.Context(), db.MCPServer{
-		Name:      req.Name,
-		Transport: req.Transport,
-		Command:   req.Command,
-		Args:      string(argsJSON),
-		URL:       req.URL,
-		EnvConfig: string(envJSON),
-		Enabled:   true,
-	})
+	server, err := ws(r).DB.CreateMCPServer(r.Context(), row)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusCreated, server)
+}
+
+// importMCPServerSpec is one entry in the standard mcpServers JSON object (the
+// shape Claude Code / .mcp.json use). Transport is inferred from "type", else
+// from whether a command or url is present.
+type importMCPServerSpec struct {
+	Type    string            `json:"type"` // stdio | http (sse rejected)
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers"`
+}
+
+// importMCPReq accepts either a top-level {"mcpServers": {...}} document or a bare
+// {...} map of name→spec, so the operator can paste either form.
+type importMCPReq struct {
+	MCPServers map[string]importMCPServerSpec `json:"mcpServers"`
+}
+
+// handleImportMCPServers bulk-creates MCP servers from a pasted mcpServers JSON
+// document. Each entry is validated and created independently; per-entry failures
+// are reported without aborting the rest, so one bad spec does not lose the batch.
+func (s *Server) handleImportMCPServers(w http.ResponseWriter, r *http.Request) {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "read body: "+err.Error())
+		return
+	}
+	// Accept both {"mcpServers": {...}} and a bare {name: spec} map.
+	var doc importMCPReq
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	specs := doc.MCPServers
+	if specs == nil {
+		var bare map[string]importMCPServerSpec
+		if err := json.Unmarshal(raw, &bare); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		specs = bare
+	}
+	if len(specs) == 0 {
+		writeError(w, http.StatusBadRequest, "no mcpServers entries found")
+		return
+	}
+
+	created := []db.MCPServer{}
+	errs := map[string]string{}
+	for name, spec := range specs {
+		req := createMCPReq{
+			Name:      name,
+			Transport: inferTransport(spec),
+			Command:   spec.Command,
+			Args:      spec.Args,
+			URL:       spec.URL,
+			Env:       spec.Env,
+			Headers:   spec.Headers,
+		}
+		row, err := req.toMCPRow()
+		if err != nil {
+			errs[name] = err.Error()
+			continue
+		}
+		server, err := ws(r).DB.CreateMCPServer(r.Context(), row)
+		if err != nil {
+			errs[name] = err.Error()
+			continue
+		}
+		created = append(created, server)
+	}
+	s.logger.Info("mcp servers imported", "created", len(created), "failed", len(errs))
+	writeJSON(w, http.StatusOK, map[string]any{"created": created, "errors": errs})
+}
+
+// inferTransport derives the transport from an import spec: explicit "type" wins,
+// otherwise a command implies stdio and a url implies http.
+func inferTransport(spec importMCPServerSpec) string {
+	if spec.Type != "" {
+		return spec.Type
+	}
+	if spec.Command != "" {
+		return db.MCPTransportStdio
+	}
+	if spec.URL != "" {
+		return db.MCPTransportHTTP
+	}
+	return db.MCPTransportStdio
 }
 
 type toggleMCPReq struct {
@@ -128,6 +245,8 @@ func mcpServerConfig(m db.MCPServer) mcp.ServerConfig {
 	_ = json.Unmarshal([]byte(m.Args), &args)
 	env := map[string]string{}
 	_ = json.Unmarshal([]byte(m.EnvConfig), &env)
+	headers := map[string]string{}
+	_ = json.Unmarshal([]byte(m.HeadersConfig), &headers)
 	return mcp.ServerConfig{
 		Name:      m.Name,
 		Transport: m.Transport,
@@ -135,5 +254,6 @@ func mcpServerConfig(m db.MCPServer) mcp.ServerConfig {
 		Args:      args,
 		URL:       m.URL,
 		Env:       env,
+		Headers:   headers,
 	}
 }

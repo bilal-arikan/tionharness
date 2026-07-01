@@ -13,6 +13,7 @@ import type { AppSettings, ProviderTestResult, Secret } from '../../types'
 import type { CustomProvider, UpsertProviderInput, PriceTable } from '../../api/providers'
 import { ProviderModelSelect } from '../agents/ProviderModelSelect'
 import { inputCls, type AppSet } from './primitives'
+import { ClaudeAuthDialog } from './ClaudeAuthDialog'
 
 // fmtPrice formats a USD/1M-token figure compactly (e.g. "$0.30", "$15", "ücretsiz").
 function fmtPrice(n: number): string {
@@ -126,6 +127,12 @@ function BuiltinProvider({
   endpointValue,
   endpointPlaceholder,
   onEndpoint,
+  endpoint2Label,
+  endpoint2Value,
+  endpoint2Placeholder,
+  onEndpoint2,
+  endpoint2Hint,
+  extra,
   test,
   runTest,
   testProvider,
@@ -145,6 +152,16 @@ function BuiltinProvider({
   endpointValue: string
   endpointPlaceholder: string
   onEndpoint: (v: string) => void
+  // Optional second endpoint-style field (e.g. claude CLI config dir). Rendered
+  // full-width below the key/endpoint grid only when all four props are supplied.
+  endpoint2Label?: string
+  endpoint2Value?: string
+  endpoint2Placeholder?: string
+  onEndpoint2?: (v: string) => void
+  endpoint2Hint?: string
+  // Optional extra controls (e.g. a "kimlik doğrula" button) rendered full-width
+  // between the endpoint fields and the test footer.
+  extra?: React.ReactNode
   test: Props['test']
   runTest: Props['runTest']
   testProvider: string
@@ -185,6 +202,21 @@ function BuiltinProvider({
           />
         </div>
       </div>
+
+      {endpoint2Label && onEndpoint2 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--color-text-dim)]">{endpoint2Label}</span>
+          <input
+            value={endpoint2Value ?? ''}
+            onChange={(e) => onEndpoint2(e.target.value)}
+            placeholder={endpoint2Placeholder}
+            className={inputCls}
+          />
+          {endpoint2Hint && <span className="text-[10px] text-[var(--color-text-dim)]">{endpoint2Hint}</span>}
+        </div>
+      )}
+
+      {extra}
 
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-[11px] text-[var(--color-text-dim)]">
@@ -453,8 +485,18 @@ export function ProvidersPanel({
   onImportSecret,
   onManageSecrets,
 }: Props) {
+  const [authOpen, setAuthOpen] = useState(false)
   return (
     <>
+      {authOpen && (
+        <ClaudeAuthDialog
+          configDir={draft.claudeConfigDir}
+          currentKind={draft.claudeCliAuthKind}
+          isSet={draft.claudeCliAuthSet}
+          onClose={() => setAuthOpen(false)}
+          onSaved={(next) => setDraft(next)}
+        />
+      )}
       <div>
         <div className="mb-1 flex items-center gap-1.5 text-sm font-medium">
           <Server size={14} className="text-[var(--color-accent)]" />
@@ -500,6 +542,47 @@ export function ProvidersPanel({
             endpointValue={draft.claudeCliPath}
             endpointPlaceholder="otomatik (PATH)"
             onEndpoint={(v) => set('claudeCliPath', v)}
+            endpoint2Label="claude config dizini"
+            endpoint2Value={draft.claudeConfigDir}
+            endpoint2Placeholder="otomatik (~/.claude)"
+            onEndpoint2={(v) => set('claudeConfigDir', v)}
+            endpoint2Hint="Boş = ortak ~/.claude. Bir yol verince claude-cli o izole dizinden çalışır (temiz skill/ayar/login)."
+            extra={
+              <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    data-testid="claude-auth-open"
+                    onClick={() => setAuthOpen(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                  >
+                    <KeyRound size={12} /> claude-cli kimlik (Max / API)
+                  </button>
+                  <span className="text-[11px] text-[var(--color-text-dim)]">
+                    {draft.claudeCliAuthSet
+                      ? `✓ ${draft.claudeCliAuthKind === 'oauth' ? 'Max/Pro token' : 'API anahtarı'} kayıtlı`
+                      : 'İzole dizin için token ekle (login gerekmez)'}
+                  </span>
+                </div>
+                {/* Dedicated claude-cli probe: runs the `claude` binary with the
+                    config dir + injected token, separate from the Anthropic HTTP
+                    API-key test (which would fail with "invalid x-api-key" when only
+                    a Max/Pro OAuth token is set). */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    data-testid="provider-test"
+                    data-provider="claude-cli"
+                    onClick={() => runTest('claude-cli')}
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                  >
+                    <Sparkles size={12} /> claude-cli'yi test et
+                  </button>
+                  {testBadge(test, 'claude-cli')}
+                  <span className="text-[11px] text-[var(--color-text-dim)]">
+                    (yandaki “Test et” Anthropic HTTP API anahtarını dener)
+                  </span>
+                </div>
+              </div>
+            }
             test={test}
             runTest={runTest}
             testProvider="anthropic"

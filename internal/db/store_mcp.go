@@ -23,6 +23,9 @@ func (d *DB) CreateMCPServer(ctx context.Context, m MCPServer) (MCPServer, error
 	if m.EnvConfig == "" {
 		m.EnvConfig = "{}"
 	}
+	if m.HeadersConfig == "" {
+		m.HeadersConfig = "{}"
+	}
 	if m.Scope == "" {
 		m.Scope = "shared"
 	}

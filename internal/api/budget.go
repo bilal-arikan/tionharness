@@ -32,8 +32,6 @@ type agentBudgetRow struct {
 	CostUSD         float64             `json:"costUSD"`
 	Priced          bool                `json:"priced"`    // false when any of this agent's spend is unpriced (e.g. claude-cli)
 	Estimated       bool                `json:"estimated"` // true when cost is an equivalent-API estimate (subscription provider)
-	DailyCallLimit  int                 `json:"dailyCallLimit"`
-	DailyTokenLimit int                 `json:"dailyTokenLimit"`
 	// Tool-output compaction savings (bytes) for this agent today — System A
 	// (deterministic) and System B (LLM summary), standalone meters with no cost.
 	CompactSavedBytes    int `json:"compactSavedBytes"`
@@ -164,8 +162,6 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			CostUSD:              roll.CostUSD,
 			Priced:               roll.Priced,
 			Estimated:            roll.Estimated,
-			DailyCallLimit:       a.DailyCallLimit,
-			DailyTokenLimit:      a.DailyTokenLimit,
 			CompactSavedBytes:    u.CompactSavedBytes,
 			CompactSavedBytesLLM: u.CompactSavedBytesLLM,
 		}

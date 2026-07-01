@@ -74,8 +74,6 @@ export interface WorkspaceTemplateAgent {
   allowedTools?: string
   blockedTools?: string
   skills?: string[]
-  dailyCallLimit?: number
-  dailyTokenLimit?: number
 }
 
 export interface WorkspaceTemplateStep {

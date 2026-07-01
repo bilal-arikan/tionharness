@@ -17,15 +17,14 @@ import (
 // artifactDeliverableGuidance is the always-on instruction (kept in the static
 // prompt prefix) that makes "produce a file/document" requests surface as
 // artifacts by default — the user expects deliverables to open in the Artifacts
-// screen, not be buried in chat or written only via an ad-hoc script.
+// screen, not be buried in chat or written only via an ad-hoc script. Only the
+// two-line rule of thumb lives here to keep the cached prefix small; the full
+// rules (binary files, inline media, galleries) live in the `swarmgo-deliverables`
+// skill so they cost attention/tokens only when a deliverable is actually in play.
 const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
 	"When asked to produce a file/document/dataset/report/code, write it with your file tool (write_file / Write) or call create_artifact — don't deliver substantial output only as inline chat text or an ad-hoc shell command (that bypasses artifact capture). " +
-	"For a binary FILE already on disk (e.g. a screenshot), call create_artifact with kind=image|file and sourcePath set to the path — never base64-embed bytes into content. " +
-	"EXCEPTION — content meant to be SEEN in the conversation renders inline in the chat, so put it DIRECTLY IN YOUR REPLY (not only as a create_artifact, which hides it in a separate Artifacts tab):\n" +
-	"• Diagrams: a ```mermaid (and ```diff) fenced block renders as a real diagram.\n" +
-	"• A single image OR video: standard markdown ![alt](path-or-URL) renders inline (local file paths are served automatically) — an image is click-to-zoom, a video file (.mp4/.webm/…) becomes an inline player.\n" +
-	"• Several media: just put each on its OWN line as ![alt](path) — consecutive image/video lines are auto-grouped into one thumbnail gallery. (Or write an explicit ```gallery block: JSON {\"images\":[{\"src\":\"path-or-URL\",\"alt\":\"...\"}, ...]} or a newline-separated list of paths.) The gallery opens a zoom/pan lightbox with prev/next; videos play in it.\n" +
-	"Saving the same thing as an artifact in addition is fine, but the inline block/image is what the user actually sees in chat."
+	"Content meant to be SEEN (a diagram, an image/video, a gallery) goes INLINE in your reply (markdown ![alt](path), a ```mermaid block) — not hidden in a separate Artifacts tab. " +
+	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `swarmgo-deliverables` skill before producing the deliverable."
 
 // artifactsContextBlock builds a system-prompt section listing the artifacts a
 // session already has, so the agent can revise them with update_artifact (by id)

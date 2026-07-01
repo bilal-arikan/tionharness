@@ -46,6 +46,11 @@ type UsageDelta struct {
 	OutputTokens     int
 	CacheReadTokens  int
 	CacheWriteTokens int
+	// ProviderCalls is how many underlying model API round-trips this recorded call
+	// represents. 0 means "unknown" → folded as Calls (one round-trip). For claude-cli
+	// it is the CLI's internal tool-loop turn count (result num_turns), so the rollup
+	// can recover the per-call (single-pass) context from the cumulative token totals.
+	ProviderCalls int
 }
 
 // DeltaFromUsage builds a one-call UsageDelta from a provider's reported usage.
@@ -60,6 +65,17 @@ func DeltaFromUsage(calls int, u providers.Usage) UsageDelta {
 		CacheReadTokens:  u.CacheReadTokens,
 		CacheWriteTokens: u.CacheWriteTokens,
 	}
+}
+
+// providerCallsOf returns how many underlying API round-trips a delta represents,
+// flooring an unknown (0) ProviderCalls to the recorded call count so a recorder
+// that doesn't report it (native single calls, compaction) still counts as one
+// round-trip rather than zero.
+func providerCallsOf(d UsageDelta) int {
+	if d.ProviderCalls > 0 {
+		return d.ProviderCalls
+	}
+	return d.Calls
 }
 
 // add folds a delta into a KindStat.
@@ -85,6 +101,11 @@ type Usage struct {
 	OutputTokens     int                 `json:"outputTokens"`
 	CacheReadTokens  int                 `json:"cacheReadTokens,omitempty"`
 	CacheWriteTokens int                 `json:"cacheWriteTokens,omitempty"`
+	// ProviderCalls is the cumulative number of underlying model API round-trips
+	// behind Calls (for claude-cli a single SwarmGo turn is several internal calls,
+	// reported via result num_turns). Lets a consumer divide the cumulative token
+	// totals by it to recover per-call figures.
+	ProviderCalls    int                 `json:"providerCalls,omitempty"`
 	ByKind           map[string]KindStat `json:"byKind,omitempty"`
 	ByModel          map[string]KindStat `json:"byModel,omitempty"`
 	// CompactSavedBytes is the cumulative byte count removed from tool output by
@@ -160,6 +181,7 @@ func (d *DB) AddUsageKind(ctx context.Context, agentID, kind, provider, model st
 	u.OutputTokens += delta.OutputTokens
 	u.CacheReadTokens += delta.CacheReadTokens
 	u.CacheWriteTokens += delta.CacheWriteTokens
+	u.ProviderCalls += providerCallsOf(delta)
 	if u.ByKind == nil {
 		u.ByKind = map[string]KindStat{}
 	}
@@ -256,13 +278,4 @@ func (d *DB) UsageHistory(ctx context.Context, sinceDay string) ([]Usage, error)
 		}
 	}
 	return out, nil
-}
-
-// UpdateBudget sets an agent's daily spend caps (0 = unlimited).
-func (d *DB) UpdateBudget(ctx context.Context, agentID string, callLimit, tokenLimit int) error {
-	_, err := d.mutateAgentLocked(agentID, func(a *Agent) {
-		a.DailyCallLimit = callLimit
-		a.DailyTokenLimit = tokenLimit
-	})
-	return err
 }

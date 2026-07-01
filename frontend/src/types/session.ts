@@ -158,9 +158,11 @@ export interface SessionContextPreview {
 }
 
 // CLIOverhead surfaces, for CLI-wrapper agents, that totalTokens under-reports the
-// real billed input. measuredTokens is the avg real model input per call from the
-// session's recorded usage (0 until the first turn); overheadTokens = measured −
-// estimated. On claude-cli/opus this overhead measured ~5x the segment estimate.
+// real billed input. measuredTokens is ONE call's real model input: claude-cli
+// reports in/cache CUMULATIVELY across its internal tool-loop round-trips, so the
+// recorded turn total is divided by the round-trip count (calls == result num_turns)
+// to recover the per-call figure (0 until the first turn); overheadTokens =
+// max(0, measured − estimated).
 export interface CLIOverhead {
   note: string
   estimatedTokens: number

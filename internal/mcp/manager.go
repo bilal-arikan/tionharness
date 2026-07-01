@@ -22,7 +22,8 @@ type ServerConfig struct {
 	Command   string
 	Args      []string
 	URL       string
-	Env       map[string]string // extra environment variables
+	Env       map[string]string // extra environment variables (stdio)
+	Headers   map[string]string // extra request headers (http, e.g. Authorization)
 }
 
 // envSlice renders Env as KEY=VALUE entries for exec.
@@ -34,17 +35,24 @@ func (c ServerConfig) envSlice() []string {
 	return out
 }
 
-// dial opens a client for the configured transport. Only stdio is implemented;
-// sse/http return a clear error so the UI can surface "not yet supported".
-func (c ServerConfig) dial(ctx context.Context) (*StdioClient, error) {
+// dial opens a client for the configured transport. stdio launches a subprocess;
+// http opens a Streamable HTTP connection. The legacy sse transport is not
+// implemented (deprecated upstream in favor of Streamable HTTP) and returns a
+// clear error so the UI can steer the operator to http.
+func (c ServerConfig) dial(ctx context.Context) (Client, error) {
 	switch c.Transport {
 	case MCPTransportStdio, "":
 		if c.Command == "" {
 			return nil, fmt.Errorf("mcp %q: stdio transport requires a command", c.Name)
 		}
 		return DialStdio(ctx, c.Command, c.Args, c.envSlice())
-	case MCPTransportSSE, MCPTransportHTTP:
-		return nil, fmt.Errorf("mcp %q: %s transport not yet supported", c.Name, c.Transport)
+	case MCPTransportHTTP:
+		if c.URL == "" {
+			return nil, fmt.Errorf("mcp %q: http transport requires a url", c.Name)
+		}
+		return DialHTTP(ctx, c.URL, c.Headers)
+	case MCPTransportSSE:
+		return nil, fmt.Errorf("mcp %q: the deprecated sse transport is not supported — use the http (Streamable HTTP) transport", c.Name)
 	default:
 		return nil, fmt.Errorf("mcp %q: unknown transport %q", c.Name, c.Transport)
 	}

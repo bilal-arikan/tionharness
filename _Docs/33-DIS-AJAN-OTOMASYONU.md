@@ -32,6 +32,43 @@ gözünden" doğrulama veya tarayıcı-bağımlı senaryolar için.
 - **Format:** İstek/yanıt `application/json`; akışlar `text/event-stream`. Hata gövdesi
   `{ "error": "mesaj" }`.
 
+### A.1.1 UTF-8 Gövde — Türkçe Karakter Tuzağı (önemli)
+
+SwarmGo'nun depolama/bellek/conversation yolu **uçtan uca UTF-8 temizdir** (Go string'leri
+UTF-8; `encoding/json` + atomik bayt yazımı; hiçbir yerde charset decode yok — doğrulandı:
+asistan cevapları `×`/`÷`/`−` gibi çok-baytlı Unicode'u kusursuz saklar). Türkçe metin
+bozulması (mojibake, ör. `Kısaca`→`KÄ±saca`, `kaç`→`kaÃ§`) **yalnızca isteği gönderen
+istemcide** doğar: gövde double-encode edilip gönderilir (doğru UTF-8 baytlar CP1254/ANSI
+olarak çözülüp tekrar UTF-8'e kodlanır). Sunucu aldığı geçerli-UTF-8 baytı sadakatle saklar
+— bunu meşru Latin-1 içerikten ayırt edemeyeceği için **sunucu tarafında otomatik onarım
+YOKTUR** (yanlış pozitif riski; sınır istemcidir).
+
+**En sık sebep (Windows PowerShell 5.1):**
+- `Invoke-RestMethod -Body "<json-string>"` — string gövde, charset'siz `application/json`
+  için Latin-1/ANSI encode edilir → Türkçe bozulur.
+- Kaynak `.ps1`/`.json` dosyası **BOM'suz UTF-8** kaydedilmişse WinPS 5.1 onu **CP1254**
+  okur → string daha bellekte bozulur (`dev.ps1` ASCII-only kuralının nedeni).
+
+**Doğru desenler:**
+```powershell
+# 1) Gövdeyi UTF-8 BAYT dizisi olarak gönder (byte[] ham gider — IRM re-encode etmez)
+$body = [System.Text.Encoding]::UTF8.GetBytes(($obj | ConvertTo-Json -Compress -Depth 10))
+Invoke-RestMethod -Uri $url -Method Post -Headers @{ "Content-Type"="application/json" } -Body $body
+
+# 2) curl ile BOM'suz UTF-8 temp dosya (Go JSON decoder BOM'u reddeder)
+$tmp = [IO.Path]::GetTempFileName()
+[IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding($false)))
+curl.exe -s -X POST $url -H "Content-Type: application/json" --data "@$tmp"
+```
+`scripts\e2e-smoke.ps1` her iki deseni de kullanır (`Api-Post`/`Api-Put` → byte[]; `Curl-Raw`
+→ UTF-8 temp dosya) — kopyalanacak referans.
+
+**Onarım:** Mevcut bozuk veri için `scripts\repair-encoding.ps1` (varsayılan dry-run; `-Apply`
+ile `.bak-encfix` yedeği alıp düzeltir). Yalnız CP1254 double-encoding'i **güvenle** tersine
+çevirir (geçerli-UTF-8 + lead-bayt `C2-C5/E2` kısıtı → temiz Türkçe harfler/sembollerde
+yanlış pozitif yok); knowledge düzeltmelerinde stale `embedding`'i null'lar (Go yüklemede
+düzeltilmiş içerikten yeniden hesaplar).
+
 ### A.2 Uçtan Uca Akış (sıfırdan sohbete)
 
 ```mermaid

@@ -2,6 +2,16 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-01**
 
+## Harici araçlar listesine `codebase-memory-mcp` eklendi ✅ (2026-07-01)
+
+**Yapılan:** Ayarlar ▸ Harici Araçlar ekranının kaynağı olan `knownExternalTools` slice'ına
+(`internal/api/external_tools.go`) yeni entry: **codebase-memory-mcp** (DeusData) — kod tabanını
+kalıcı bilgi grafiğine indeksleyen stdio MCP sunucusu (158 dil, sub-ms sorgu, ~%99 daha az token).
+`category=dev`, `wire=mcp` (Market'te "Codebase Memory MCP" paketiyle kurulur). Tespit PATH'te
+`exec.LookPath` ile; program `C:\Users\user\Desktop\Progs\codebase-memory-mcp\` altında ve PATH'te
+olduğundan ekran **Found** gösteriyor. `go build ./internal/api` ✅. Not: yeni entry PATH'e o dizini
+içeren bir süreçten görünür — backend yeni PATH ile yeniden başlatıldı.
+
 ## Seçili dil sohbet bağlamına enjekte ediliyor (profil zaten ediliyordu) ✅ (2026-07-01)
 
 **Soru:** Profil bilgilerim ve seçtiğim dil bağlama ekleniyor mu?

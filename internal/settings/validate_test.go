@@ -16,7 +16,6 @@ func TestValidateRejectsBadEnums(t *testing.T) {
 		{"bad provider", Patch{DefaultProvider: strptr("openai")}, false},
 		{"bad permission", Patch{DefaultPermissionMode: strptr("yolo")}, false},
 		{"empty permission ok", Patch{DefaultPermissionMode: strptr("")}, true},
-		{"bad loglevel", Patch{LogLevel: strptr("trace")}, false},
 		{"bad accent", Patch{Accent: strptr("purple")}, false},
 		{"good accent", Patch{Accent: strptr("#8b5cf6")}, true},
 		{"empty patch", Patch{}, true},

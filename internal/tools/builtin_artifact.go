@@ -52,14 +52,11 @@ func NewCreateArtifactTool() CreateArtifactTool { return CreateArtifactTool{} }
 func (CreateArtifactTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "create_artifact",
-		Description: "Save a substantial, self-contained piece of content as a versioned " +
-			"artifact the user can open in a dedicated viewer (like a canvas). Use this for " +
-			"documents, code files, HTML pages, SVG or Mermaid diagrams that the user will " +
-			"want to keep, copy or revisit — NOT for short conversational replies. " +
-			"For an image/PDF/binary FILE you already produced on disk (e.g. a screenshot), " +
-			"use kind=image|video|audio|file with sourcePath set to the file path — do NOT " +
-			"base64-embed the bytes into content. Returns the artifact id; reference it with " +
-			"update_artifact to revise the same artifact later.",
+		Description: "Save a substantial, self-contained piece of content as a versioned artifact the " +
+			"user can open in a dedicated viewer — documents, code, HTML, SVG or Mermaid diagrams worth " +
+			"keeping or revisiting, NOT short conversational replies. For an image/PDF/binary file already " +
+			"on disk (e.g. a screenshot), use kind=image|video|audio|file with sourcePath — do NOT " +
+			"base64-embed the bytes. Returns the artifact id; revise it later with update_artifact.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {

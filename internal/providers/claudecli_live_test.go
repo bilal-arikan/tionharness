@@ -23,7 +23,7 @@ func TestLiveClaudeCLIResume(t *testing.T) {
 	if p := os.Getenv("SWARMGO_CLAUDE_BIN"); p != "" {
 		bin = p
 	}
-	c := NewClaudeCLI(bin, "") // "" → CLI default (logged-in) model
+	c := NewClaudeCLI(bin, "", "", "", "") // "" → CLI default (logged-in) model
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -106,7 +106,7 @@ func TestLivePersistentSession(t *testing.T) {
 	if p := os.Getenv("SWARMGO_CLAUDE_BIN"); p != "" {
 		bin = p
 	}
-	c := NewClaudeCLI(bin, "")
+	c := NewClaudeCLI(bin, "", "", "", "")
 	pool := NewCLISessionPool()
 	defer pool.Close()
 
@@ -167,7 +167,7 @@ func TestLivePersistentSession(t *testing.T) {
 // must ride in the conversation prompt's [Context] block. A regression here is what
 // caused turn-to-turn cold cache writes before the split.
 func TestBuildSystemAndPrompt(t *testing.T) {
-	c := NewClaudeCLI("claude", "")
+	c := NewClaudeCLI("claude", "", "", "", "")
 	req := Request{
 		System:        "STATIC-PERSONA",
 		SystemDynamic: "VOLATILE-CLOCK-2026",

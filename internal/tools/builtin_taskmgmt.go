@@ -45,7 +45,7 @@ func NewListTasksTool(database *db.DB, actorID string) ListTasksTool {
 func (ListTasksTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_tasks",
-		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, flowId, last run status, and whether each was created by an agent and is therefore deletable by you). Board columns are: todo, in_progress, review, done, failed.",
+		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, flowId, priority, tags, last run status, and whether each was created by an agent and is therefore deletable by you). Board columns are: todo, in_progress, review, done, failed.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	}
 }
@@ -57,12 +57,14 @@ func (t ListTasksTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 	}
 	type row struct {
 		ID             string `json:"id"`
-		Title          string `json:"title"`
-		BoardState     string `json:"boardState"`
-		OwnerAgentID   string `json:"ownerAgentId,omitempty"`
-		FlowID         string `json:"flowId,omitempty"`
-		LastRunStatus  string `json:"lastRunStatus,omitempty"`
-		CreatedByAgent bool   `json:"createdByAgent"`
+		Title          string   `json:"title"`
+		BoardState     string   `json:"boardState"`
+		OwnerAgentID   string   `json:"ownerAgentId,omitempty"`
+		FlowID         string   `json:"flowId,omitempty"`
+		Priority       string   `json:"priority,omitempty"`
+		Tags           []string `json:"tags,omitempty"`
+		LastRunStatus  string   `json:"lastRunStatus,omitempty"`
+		CreatedByAgent bool     `json:"createdByAgent"`
 	}
 	out := make([]row, 0, len(tasks))
 	for _, tk := range tasks {
@@ -72,6 +74,8 @@ func (t ListTasksTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 			BoardState:     tk.BoardState,
 			OwnerAgentID:   tk.OwnerAgentID,
 			FlowID:         tk.FlowID,
+			Priority:       tk.Priority,
+			Tags:           tk.Tags,
 			LastRunStatus:  tk.LastRunStatus,
 			CreatedByAgent: tk.CreatedBy != "",
 		})
@@ -93,7 +97,7 @@ func NewCreateTaskTool(database *db.DB, actorID string) CreateTaskTool {
 func (CreateTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_task",
-		Description: "Create a task on the kanban board. Provide a prompt (the instruction run by the owner agent) and/or a flowId (the task runs that orchestration flow instead, with the prompt as its input). Optionally set title (auto-generated from prompt when omitted), description, ownerAgentId, boardState (default todo), and dependencies (JSON array of task IDs that must complete before this one). The task is tagged as created by you. Returns the new task id.",
+		Description: "Create a task on the kanban board. Provide a prompt (the instruction run by the owner agent) and/or a flowId (the task runs that orchestration flow instead, with the prompt as its input). Optionally set title (auto-generated from prompt when omitted), description, ownerAgentId, boardState (default todo), dependencies (JSON array of task IDs that must complete before this one), priority (critical/high/medium/low) and tags (string array). The task is tagged as created by you. Returns the new task id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -103,7 +107,9 @@ func (CreateTaskTool) Def() providers.ToolDef {
 				"ownerAgentId":{"type":"string","description":"Agent that runs the task (see list_agents); not required for flow-backed tasks"},
 				"flowId":{"type":"string","description":"When set, running the task executes this flow (see list_flows)"},
 				"boardState":{"type":"string","enum":["todo","in_progress","review","done","failed"],"description":"Initial column (default todo)"},
-				"dependencies":{"type":"string","description":"JSON array of task IDs that must complete before this task, e.g. [\"id1\",\"id2\"]"}
+				"dependencies":{"type":"string","description":"JSON array of task IDs that must complete before this task, e.g. [\"id1\",\"id2\"]"},
+				"priority":{"type":"string","enum":["critical","high","medium","low"],"description":"Task priority (optional)"},
+				"tags":{"type":"array","items":{"type":"string"},"description":"Free-form labels (optional)"}
 			},
 			"required":[],
 			"additionalProperties":false
@@ -113,13 +119,15 @@ func (CreateTaskTool) Def() providers.ToolDef {
 
 func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Title        string `json:"title"`
-		Prompt       string `json:"prompt"`
-		Description  string `json:"description"`
-		OwnerAgentID string `json:"ownerAgentId"`
-		FlowID       string `json:"flowId"`
-		BoardState   string `json:"boardState"`
-		Dependencies string `json:"dependencies"`
+		Title        string   `json:"title"`
+		Prompt       string   `json:"prompt"`
+		Description  string   `json:"description"`
+		OwnerAgentID string   `json:"ownerAgentId"`
+		FlowID       string   `json:"flowId"`
+		BoardState   string   `json:"boardState"`
+		Dependencies string   `json:"dependencies"`
+		Priority     string   `json:"priority"`
+		Tags         []string `json:"tags"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -131,6 +139,9 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	if in.BoardState != "" && !db.ValidBoardState(in.BoardState) {
 		return "", enumErr("boardState", in.BoardState, "todo", "in_progress", "review", "done", "failed")
+	}
+	if !db.ValidPriority(in.Priority) {
+		return "", enumErr("priority", in.Priority, "critical", "high", "medium", "low")
 	}
 	if in.OwnerAgentID != "" {
 		if _, err := t.d.db.GetAgent(ctx, in.OwnerAgentID); err != nil {
@@ -154,6 +165,8 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		FlowID:       in.FlowID,
 		BoardState:   in.BoardState,
 		Dependencies: in.Dependencies,
+		Priority:     in.Priority,
+		Tags:         in.Tags,
 		CreatedBy:    t.d.actorID,
 	})
 	if err != nil {
@@ -176,7 +189,7 @@ func NewUpdateTaskTool(database *db.DB, actorID string) UpdateTaskTool {
 func (UpdateTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_task",
-		Description: "Edit a task on the board. Pass the task id and the fields to change (title, prompt, description, ownerAgentId, flowId, boardState, dependencies). To change only the column, prefer move_task. Allowed on any task.",
+		Description: "Edit a task on the board. Pass the task id and the fields to change (title, prompt, description, ownerAgentId, flowId, boardState, dependencies, priority, tags). To change only the column, prefer move_task. Allowed on any task.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -187,7 +200,9 @@ func (UpdateTaskTool) Def() providers.ToolDef {
 				"ownerAgentId":{"type":"string"},
 				"flowId":{"type":"string","description":"Set to empty string to unlink the flow"},
 				"boardState":{"type":"string","enum":["todo","in_progress","review","done","failed"]},
-				"dependencies":{"type":"string","description":"JSON array of task IDs this task depends on, e.g. [\"id1\",\"id2\"]. Pass [] to clear."}
+				"dependencies":{"type":"string","description":"JSON array of task IDs this task depends on, e.g. [\"id1\",\"id2\"]. Pass [] to clear."},
+				"priority":{"type":"string","enum":["critical","high","medium","low",""],"description":"Priority ('' clears it)"},
+				"tags":{"type":"array","items":{"type":"string"},"description":"Free-form labels (replaces the set; [] clears)"}
 			},
 			"required":["id"],
 			"additionalProperties":false
@@ -205,14 +220,16 @@ func (UpdateTaskTool) Def() providers.ToolDef {
 
 func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		ID           string  `json:"id"`
-		Title        *string `json:"title"`
-		Prompt       *string `json:"prompt"`
-		Description  *string `json:"description"`
-		OwnerAgentID *string `json:"ownerAgentId"`
-		FlowID       *string `json:"flowId"`
-		BoardState   *string `json:"boardState"`
-		Dependencies *string `json:"dependencies"`
+		ID           string    `json:"id"`
+		Title        *string   `json:"title"`
+		Prompt       *string   `json:"prompt"`
+		Description  *string   `json:"description"`
+		OwnerAgentID *string   `json:"ownerAgentId"`
+		FlowID       *string   `json:"flowId"`
+		BoardState   *string   `json:"boardState"`
+		Dependencies *string   `json:"dependencies"`
+		Priority     *string   `json:"priority"`
+		Tags         *[]string `json:"tags"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -258,6 +275,15 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	if in.Dependencies != nil {
 		cur.Dependencies = *in.Dependencies
+	}
+	if in.Priority != nil {
+		if !db.ValidPriority(*in.Priority) {
+			return "", enumErr("priority", *in.Priority, "critical", "high", "medium", "low")
+		}
+		cur.Priority = *in.Priority
+	}
+	if in.Tags != nil {
+		cur.Tags = *in.Tags
 	}
 	if err := t.d.db.UpdateTask(ctx, cur); err != nil {
 		return "", fmt.Errorf("update task: %w", err)

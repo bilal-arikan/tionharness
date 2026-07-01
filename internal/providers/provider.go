@@ -150,6 +150,12 @@ type Response struct {
 	// turn, so the caller must store THIS value to resume on the next turn. Empty for
 	// providers without a resumable server-side session.
 	SessionID string
+	// ProviderCalls is the number of underlying model API round-trips this Response
+	// aggregates. 0 for native single-call providers (one Complete == one call); for
+	// claude-cli it is the CLI's internal tool-loop turn count (result event
+	// num_turns), because the CLI reports Usage CUMULATIVELY across those steps — so
+	// Usage divided by ProviderCalls recovers the per-call (single-pass) token cost.
+	ProviderCalls int
 }
 
 // Provider is implemented by every LLM backend.

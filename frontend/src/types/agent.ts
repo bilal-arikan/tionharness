@@ -60,8 +60,6 @@ export interface AgentUsage {
   savingsUSD?: number
   priced?: boolean
   estimated?: boolean
-  dailyCallLimit: number
-  dailyTokenLimit: number
   compactSavedBytes?: number
   compactSavedBytesLLM?: number
 }

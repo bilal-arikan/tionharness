@@ -19,13 +19,29 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 type createTaskReq struct {
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	Prompt       string `json:"prompt"`
-	OwnerAgentID string `json:"ownerAgentId"`
-	FlowID       string `json:"flowId"`
-	BoardState   string `json:"boardState"`
-	Dependencies string `json:"dependencies"` // JSON array of task IDs
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Prompt       string   `json:"prompt"`
+	OwnerAgentID string   `json:"ownerAgentId"`
+	FlowID       string   `json:"flowId"`
+	BoardState   string   `json:"boardState"`
+	Dependencies string   `json:"dependencies"` // JSON array of task IDs
+	Priority     string   `json:"priority"`
+	Tags         []string `json:"tags"`
+	Progress     int      `json:"progress"`
+	StartDate    string   `json:"startDate"`
+	DueDate      string   `json:"dueDate"`
+}
+
+// clampProgress keeps a progress value within [0,100].
+func clampProgress(p int) int {
+	if p < 0 {
+		return 0
+	}
+	if p > 100 {
+		return 100
+	}
+	return p
 }
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +62,10 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.BoardState != "" && !db.IsValidBoardKey(req.BoardState) {
 		writeError(w, http.StatusBadRequest, "invalid board state")
+		return
+	}
+	if !db.ValidPriority(req.Priority) {
+		writeError(w, http.StatusBadRequest, "invalid priority")
 		return
 	}
 
@@ -71,6 +91,11 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		FlowID:       req.FlowID,
 		BoardState:   req.BoardState,
 		Dependencies: req.Dependencies,
+		Priority:     req.Priority,
+		Tags:         req.Tags,
+		Progress:     clampProgress(req.Progress),
+		StartDate:    req.StartDate,
+		DueDate:      req.DueDate,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -80,13 +105,18 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateTaskReq struct {
-	Title        *string `json:"title"`
-	Description  *string `json:"description"`
-	Prompt       *string `json:"prompt"`
-	OwnerAgentID *string `json:"ownerAgentId"`
-	FlowID       *string `json:"flowId"`
-	BoardState   *string `json:"boardState"`
-	Dependencies *string `json:"dependencies"` // JSON array of task IDs
+	Title        *string   `json:"title"`
+	Description  *string   `json:"description"`
+	Prompt       *string   `json:"prompt"`
+	OwnerAgentID *string   `json:"ownerAgentId"`
+	FlowID       *string   `json:"flowId"`
+	BoardState   *string   `json:"boardState"`
+	Dependencies *string   `json:"dependencies"` // JSON array of task IDs
+	Priority     *string   `json:"priority"`
+	Tags         *[]string `json:"tags"`
+	Progress     *int      `json:"progress"`
+	StartDate    *string   `json:"startDate"`
+	DueDate      *string   `json:"dueDate"`
 }
 
 // handleUpdateTask edits any subset of a task's mutable fields (PATCH-like PUT).
@@ -129,6 +159,25 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Dependencies != nil {
 		task.Dependencies = *req.Dependencies
+	}
+	if req.Priority != nil {
+		if !db.ValidPriority(*req.Priority) {
+			writeError(w, http.StatusBadRequest, "invalid priority")
+			return
+		}
+		task.Priority = *req.Priority
+	}
+	if req.Tags != nil {
+		task.Tags = *req.Tags
+	}
+	if req.Progress != nil {
+		task.Progress = clampProgress(*req.Progress)
+	}
+	if req.StartDate != nil {
+		task.StartDate = *req.StartDate
+	}
+	if req.DueDate != nil {
+		task.DueDate = *req.DueDate
 	}
 
 	if err := wsp.DB.UpdateTask(r.Context(), task); writeDBError(w, err, "task not found") {

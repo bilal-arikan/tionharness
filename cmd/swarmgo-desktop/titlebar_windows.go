@@ -33,39 +33,33 @@ type titleColors struct {
 	border  uint32
 }
 
-// presetTitleColors mirrors frontend/src/lib/themePresets.ts (bg/text/border per
-// curated palette). Kept small and in sync by hand — only the title bar needs
-// these three tokens, not the full palette.
-var presetTitleColors = map[string]struct {
-	dark           bool
-	bg, text, brdr string
-}{
-	"midnight-violet": {true, "#0c0c10", "#e7e7ea", "#2a2a33"},
-	"slate":           {true, "#0d1117", "#e6edf3", "#30363d"},
-	"emerald":         {true, "#0a0f0d", "#e6efe9", "#25332c"},
-	"rose":            {true, "#100c0e", "#f0e7ea", "#33252d"},
-	"amber":           {true, "#100d08", "#efe9df", "#332a1d"},
-	"nord":            {true, "#242933", "#eceff4", "#434c5e"},
-	"daylight":        {false, "#f6f8fb", "#16202c", "#d7dde6"},
-	"solarized-light": {false, "#fdf6e3", "#073642", "#ddd6c1"},
-}
+// Title-bar neutrals mirror frontend/src/lib/themePresets.ts (DARK_NEUTRALS /
+// LIGHT_NEUTRALS). Every theme color shares these per-mode neutrals — only the
+// accent differs, and the title bar doesn't use the accent — so the bar is
+// decided purely by the preset id's "-light"/"-dark" suffix.
+const (
+	darkTitleBG, darkTitleText, darkTitleBorder    = "#0e0e10", "#e7e7ea", "#2b2b30"
+	lightTitleBG, lightTitleText, lightTitleBorder = "#f5f6f8", "#16202c", "#d8dce3"
+)
 
-// resolveTitleColors maps the app appearance (preset id, theme mode) to native
-// title-bar colors. A known preset yields exact palette colors; otherwise we
-// fall back to the legacy dark/light frame without a custom caption color.
-func resolveTitleColors(preset, theme string) titleColors {
-	if p, ok := presetTitleColors[preset]; ok {
+// resolveTitleColors maps the app appearance (preset id) to native title-bar
+// colors. A "-light" preset yields the light neutrals; everything else (incl. an
+// empty preset) yields the dark neutrals, matching the app's dark default.
+func resolveTitleColors(preset, _ string) titleColors {
+	if strings.HasSuffix(preset, "-light") {
 		return titleColors{
-			dark:    p.dark,
-			caption: hexToColorRef(p.bg),
-			text:    hexToColorRef(p.text),
-			border:  hexToColorRef(p.brdr),
+			dark:    false,
+			caption: hexToColorRef(lightTitleBG),
+			text:    hexToColorRef(lightTitleText),
+			border:  hexToColorRef(lightTitleBorder),
 		}
 	}
-	// Legacy theme+accent: only know dark/light. "system" → treat as dark
-	// (the app's default); a wrong guess only tints the frame, never breaks it.
-	dark := theme != "light"
-	return titleColors{dark: dark, caption: ^uint32(0), text: ^uint32(0), border: ^uint32(0)}
+	return titleColors{
+		dark:    true,
+		caption: hexToColorRef(darkTitleBG),
+		text:    hexToColorRef(darkTitleText),
+		border:  hexToColorRef(darkTitleBorder),
+	}
 }
 
 // applyTitleBar tints the native window chrome (caption, buttons, text, border)

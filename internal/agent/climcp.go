@@ -90,6 +90,9 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 			case db.MCPTransportSSE, db.MCPTransportHTTP:
 				entry.Type = sc.Transport
 				entry.URL = sc.URL
+				if len(sc.Headers) > 0 {
+					entry.Headers = sc.Headers
+				}
 			default:
 				entry.Command = sc.Command
 				entry.Args = sc.Args

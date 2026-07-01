@@ -35,8 +35,8 @@ type Graph struct {
 // strongest links so a dense store doesn't explode the payload. Node degree is
 // computed from the kept edges so the frontend can size/rank hubs.
 func (s *Store) Graph(ctx context.Context, agentID string, threshold float64, maxEdges int) (Graph, error) {
-	if threshold < minScore {
-		threshold = minScore
+	if floor := s.minScore(); threshold < floor {
+		threshold = floor
 	}
 	if maxEdges <= 0 {
 		maxEdges = 400

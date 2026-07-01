@@ -39,16 +39,20 @@ type sessionContextPreview struct {
 // the gap between SwarmGo's own segment estimate (TotalTokens) and the real prompt
 // the underlying CLI actually sends to the model. The CLI injects its OWN system
 // prompt + tool schemas + MCP bridge that SwarmGo never composes or sees, so for
-// these providers TotalTokens drastically under-reports billed input (measured
-// ~5x on claude-cli/opus). MeasuredTokens is the average real model input per call
-// derived from the session's recorded lifetime usage (input + cacheRead +
-// cacheWrite) / calls; it is 0 until the first turn has been sent.
+// these providers TotalTokens under-reports the billed input. MeasuredTokens is the
+// real model input of ONE call (input + cacheRead + cacheWrite): claude-cli reports
+// those counters CUMULATIVELY across its internal tool-loop round-trips within a
+// single turn (cache_read especially — a turn's value can be several × the single-
+// pass context because each internal call re-reads the same warm prefix), so the
+// recorded turn total is divided by the round-trip count (result num_turns, carried
+// as DebugEvent.Calls) to recover the per-call figure. It is 0 until the first turn
+// has been sent.
 type cliOverheadPreview struct {
 	Note            string `json:"note"`
 	EstimatedTokens int    `json:"estimatedTokens"` // SwarmGo segment sum (== TotalTokens)
-	MeasuredTokens  int    `json:"measuredTokens"`  // avg real model input per call
+	MeasuredTokens  int    `json:"measuredTokens"`  // real model input per call (turn total ÷ num_turns)
 	OverheadTokens  int    `json:"overheadTokens"`  // max(0, measured - estimated)
-	Calls           int    `json:"calls"`           // sample size behind measuredTokens
+	Calls           int    `json:"calls"`           // CLI internal round-trips behind measuredTokens (num_turns)
 }
 
 // cachePreview tells the UI which segments of the next request are served from a
@@ -297,14 +301,31 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	// average that under/over-states what the next turn will actually cost.
 	if evs, derr := wsp.DB.ReadDebugEvents(ctx, sessionID, db.DebugLLMCall, 1); derr == nil && len(evs) > 0 {
 		e := evs[len(evs)-1]
-		measured = e.In + e.CacheRead + e.CacheWrite
-		calls = 1
+		// claude-cli bills in/out/cache CUMULATIVELY across its internal tool-loop
+		// round-trips (e.Calls == result num_turns; verified: result cacheRead ==
+		// Σ per-assistant cacheRead). Divide by the round-trip count to recover ONE
+		// call's single-pass context. Native providers / single-call turns record
+		// e.Calls 0 or 1 → no division.
+		n := e.Calls
+		if n < 1 {
+			n = 1
+		}
+		measured = (e.In + e.CacheRead + e.CacheWrite) / n
+		calls = n
 	}
-	// Fallback (debug journal off / no llm_call yet): lifetime average per call.
+	// Fallback (debug journal off / no llm_call yet): lifetime average per call. The
+	// session rollup tracks ProviderCalls (Σ num_turns), so dividing the cumulative
+	// token totals by it recovers the per-call (single-pass) context just like the
+	// debug path — not merely a per-SwarmGo-turn average. Sessions recorded before
+	// the counter existed have ProviderCalls 0 → fall back to the turn count.
 	if measured == 0 {
 		if u, err := wsp.DB.GetSessionUsage(ctx, sessionID); err == nil && u.Calls > 0 {
-			calls = u.Calls
-			measured = (u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens) / u.Calls
+			n := u.ProviderCalls
+			if n < 1 {
+				n = u.Calls
+			}
+			calls = n
+			measured = (u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens) / n
 		}
 	}
 
@@ -313,7 +334,7 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 		over = 0
 	}
 
-	note := name + " kendi sistem promptu + araç şemaları + MCP köprüsünü modele ekler; bu yük yukarıdaki segment tahminine (TotalTokens) DAHİL DEĞİL. 'Gerçek' = son ölçülen turun fiili girdisi (input+cacheRead+cacheWrite); çoğu cacheRead ise ucuzdur."
+	note := name + " kendi sistem promptu + araç şemaları + MCP köprüsünü modele ekler; bu yük yukarıdaki segment tahminine (TotalTokens) DAHİL DEĞİL. 'Gerçek' = bir çağrının tek-geçiş girdisi (input+cacheRead+cacheWrite). Not: claude-cli in/out/cache'i tek tur içindeki iç tool-loop adımları (num_turns) boyunca KÜMÜLATİF raporlar → çağrı başına bağlamı bulmak için num_turns'e bölünür."
 	if measured == 0 {
 		note = name + " kendi sistem promptu + araçlarını ekler (segment tahmini bunu saymaz). Henüz tur gönderilmedi → gerçek girdi ilk turdan sonra ölçülür."
 	}

@@ -6,14 +6,13 @@ import (
 	"github.com/bilal-arikan/swarmgo/internal/conversation"
 )
 
-// handleAgentUsage returns today's usage plus the agent's daily caps, so the UI
-// can render a "X / limit" spend meter.
+// handleAgentUsage returns today's usage for an agent, so the UI can render a
+// spend meter (calls + cost).
 func (s *Server) handleAgentUsage(w http.ResponseWriter, r *http.Request) {
 	agentID := r.PathValue("id")
 	wsp := ws(r)
 
-	agent, err := wsp.DB.GetAgent(r.Context(), agentID)
-	if writeDBError(w, err, "agent not found") {
+	if _, err := wsp.DB.GetAgent(r.Context(), agentID); writeDBError(w, err, "agent not found") {
 		return
 	}
 
@@ -41,40 +40,8 @@ func (s *Server) handleAgentUsage(w http.ResponseWriter, r *http.Request) {
 		"savingsUSD":           savings,
 		"priced":               priced,
 		"estimated":            estimated,
-		"dailyCallLimit":       agent.DailyCallLimit,
-		"dailyTokenLimit":      agent.DailyTokenLimit,
 		"compactSavedBytes":    usage.CompactSavedBytes,
 		"compactSavedBytesLLM": usage.CompactSavedBytesLLM,
-	})
-}
-
-type setBudgetReq struct {
-	DailyCallLimit  int `json:"dailyCallLimit"`
-	DailyTokenLimit int `json:"dailyTokenLimit"`
-}
-
-// handleSetBudget updates an agent's daily spend caps (0 = unlimited).
-func (s *Server) handleSetBudget(w http.ResponseWriter, r *http.Request) {
-	agentID := r.PathValue("id")
-	wsp := ws(r)
-
-	var req setBudgetReq
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-	if req.DailyCallLimit < 0 || req.DailyTokenLimit < 0 {
-		writeError(w, http.StatusBadRequest, "limits must be >= 0")
-		return
-	}
-	err := wsp.DB.UpdateBudget(r.Context(), agentID, req.DailyCallLimit, req.DailyTokenLimit)
-	if writeDBError(w, err, "agent not found") {
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"agentId":         agentID,
-		"dailyCallLimit":  req.DailyCallLimit,
-		"dailyTokenLimit": req.DailyTokenLimit,
 	})
 }
 

@@ -25,7 +25,7 @@ function usd(n: number): string {
 // ChatMeters shows two indicators sharing nothing but the top bar: a LIVE
 // context-size meter (Motor A — this session's window fill) and TODAY'S agent
 // spend (Motor B — the whole-day recorded ledger, all sessions). The spend pill
-// deep-links to the Budget screen, where limits are edited.
+// deep-links to the Budget screen.
 export function ChatMeters({ agentId, sessionId, refreshKey, onError, onOpenBudget }: Props) {
   const [ctx, setCtx] = useState<SessionContext | null>(null)
   const [usage, setUsage] = useState<AgentUsage | null>(null)
@@ -43,8 +43,6 @@ export function ChatMeters({ agentId, sessionId, refreshKey, onError, onOpenBudg
 
   if (!agentId) return null
 
-  const overBudget =
-    usage && usage.dailyCallLimit > 0 && usage.calls >= usage.dailyCallLimit
   const cost = usage?.costUSD ?? 0
   const costLabel = cost > 0 ? `${usage?.estimated ? '~' : ''}${usd(cost)}` : ''
 
@@ -66,15 +64,10 @@ export function ChatMeters({ agentId, sessionId, refreshKey, onError, onOpenBudg
       {usage && (
         <button
           onClick={onOpenBudget}
-          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 transition hover:opacity-80 ${
-            overBudget
-              ? 'bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] text-[var(--color-danger)]'
-              : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
-          }`}
+          className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-[var(--color-text-dim)] transition hover:opacity-80"
           title="Bu ajanın BUGÜNKÜ toplam harcaması (tüm oturumlar) · tıkla: Bütçe ekranı"
         >
-          <Clock size={12} /> {usage.calls}
-          {usage.dailyCallLimit > 0 ? `/${usage.dailyCallLimit}` : ''} çağrı
+          <Clock size={12} /> {usage.calls} çağrı
           {costLabel && <span className="opacity-70">· {costLabel}</span>}
         </button>
       )}

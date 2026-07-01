@@ -92,34 +92,28 @@ func NewRunSubagentTool() RunSubagentTool { return RunSubagentTool{} }
 func (RunSubagentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "run_subagent",
-		Description: "Launch an isolated subagent to do a self-contained task and get back ONLY its final " +
-			"result — its intermediate tool output never enters your context, keeping your turn lean. " +
-			"`target` is either a built-in profile (\"explore\" = read-only search/discovery, \"coder\" = " +
-			"write/edit code, \"reviewer\" = read-only independent review) for a throwaway worker, OR the " +
-			"name/id of an existing workspace agent. Defaults: runs now and waits (`wait`:\"sync\") with a " +
-			"clean context (`context`:\"isolated\"). Set `wait`:\"async\" to detach it into a background " +
-			"session (existing agents only). Set `context`:\"inherited\" to let it see the current " +
-			"conversation. Call this several times in one turn to run subagents in parallel. Keep nesting " +
-			"shallow; prefer doing trivial work yourself. For best results give the subagent an " +
-			"`objective`, an `output_format` and `boundaries` — vague tasks cause duplicated work and gaps.",
+		Description: "Launch an isolated subagent for a self-contained task and get back ONLY its final " +
+			"result — its intermediate tool output never enters your context. `target` is a built-in " +
+			"profile (\"explore\" = read-only search, \"coder\" = write/edit code, \"reviewer\" = read-only " +
+			"review) or the name/id of an existing workspace agent. Defaults: runs now and waits (sync) " +
+			"with a clean context (isolated). Call several times in one turn to fan work out in parallel. " +
+			"Give an `objective`, `output_format` and `boundaries` for best results — vague tasks cause gaps.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "target": { "type": "string", "description": "Profile id (\"explore\" | \"coder\" | \"reviewer\") for an ephemeral worker, or the name/id of an existing agent." },
-    "task": { "type": "string", "description": "A clear, self-contained instruction. The subagent does not see your context unless context=inherited." },
-    "wait": { "type": "string", "enum": ["sync", "async"], "description": "\"sync\" (default): run now and return the reply. \"async\": detach into a background session (existing agents only)." },
-    "context": { "type": "string", "enum": ["isolated", "inherited"], "description": "\"isolated\" (default): clean context, only the task. \"inherited\": also pass the current conversation." },
-    "model": { "type": "string", "description": "Optional model id to use instead of the target's default." },
-    "objective": { "type": "string", "description": "Optional. The specific goal this subagent must accomplish (one sentence). Prevents scope drift and duplicated work." },
-    "output_format": { "type": "string", "description": "Optional. How the reply must be structured (e.g. \"bulleted file:line list\", \"a 5-line summary\", \"JSON with keys x,y\"). The caller sees only this reply." },
-    "boundaries": { "type": "string", "description": "Optional. Explicit scope limits — what to exclude, how deep to go, what NOT to touch. Keeps the subagent from over-reaching." }
+    "target": { "type": "string", "description": "Profile id (\"explore\" | \"coder\" | \"reviewer\") or an existing agent's name/id." },
+    "task": { "type": "string", "description": "A clear, self-contained instruction. The subagent sees nothing of your context unless context=inherited." },
+    "wait": { "type": "string", "enum": ["sync", "async"], "description": "\"sync\" (default): run now, return the reply. \"async\": detach into a background session (existing agents only)." },
+    "context": { "type": "string", "enum": ["isolated", "inherited"], "description": "\"isolated\" (default): clean context. \"inherited\": also pass the current conversation." },
+    "model": { "type": "string", "description": "Optional model id override." },
+    "objective": { "type": "string", "description": "Optional. One-sentence goal — prevents scope drift." },
+    "output_format": { "type": "string", "description": "Optional. How the reply must be structured (e.g. \"bulleted file:line list\", \"JSON with keys x,y\")." },
+    "boundaries": { "type": "string", "description": "Optional. Scope limits — what to exclude / NOT touch." }
   },
   "required": ["target", "task"],
   "additionalProperties": false
 }`),
 		Examples: []json.RawMessage{
-			json.RawMessage(`{"target":"explore","task":"Find every place the auth token is validated and list file:line for each."}`),
-			json.RawMessage(`{"target":"reviewer","task":"Review internal/agent/subagent.go for race conditions; report only real issues.","context":"isolated"}`),
 			json.RawMessage(`{"target":"explore","task":"Map how sessions are persisted.","objective":"Locate every read/write of session JSONL files","output_format":"bulleted file:line list, one per call site","boundaries":"only internal/db; do not read frontend; no code edits"}`),
 		},
 	}

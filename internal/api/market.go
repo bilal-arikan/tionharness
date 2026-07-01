@@ -725,8 +725,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 			ThinkingLevel: a.ThinkingLevel, PermissionMode: a.PermissionMode,
 			Avatar: a.Avatar, Color: a.Color,
 			MCPEnabled: a.MCPEnabled, AllowedTools: a.AllowedTools, BlockedTools: a.BlockedTools,
-			Skills:         a.Skills,
-			DailyCallLimit: a.DailyCallLimit, DailyTokenLimit: a.DailyTokenLimit,
+			Skills: a.Skills,
 		})
 	}
 

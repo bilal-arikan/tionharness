@@ -56,6 +56,12 @@ type DebugEvent struct {
 	Out        int    `json:"out,omitempty"`
 	CacheRead  int    `json:"cacheRead,omitempty"`
 	CacheWrite int    `json:"cacheWrite,omitempty"`
+	// Calls is the number of underlying provider API round-trips this llm_call
+	// represents. 0/1 for native single-call providers; for claude-cli it is the
+	// CLI's own internal tool-loop turn count (result event num_turns), since the
+	// CLI bills in/out/cache CUMULATIVELY across those steps — dividing by Calls
+	// recovers the per-call (single-pass) context. Only meaningful for llm_call.
+	Calls      int    `json:"calls,omitempty"`
 	OutBytes   int    `json:"outBytes,omitempty"`   // tool result size
 	SavedBytes int    `json:"savedBytes,omitempty"` // compaction bytes trimmed
 	Stop       string `json:"stop,omitempty"`       // turn stop reason

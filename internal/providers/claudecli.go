@@ -22,6 +22,19 @@ import (
 type ClaudeCLI struct {
 	binPath string
 	model   string // optional alias/name override, e.g. "sonnet"
+	// configDir, when set, is exported as CLAUDE_CONFIG_DIR into the subprocess so
+	// the CLI reads its config home (skills, settings, slash commands, global
+	// CLAUDE.md, login) from an isolated directory instead of the shared ~/.claude.
+	// Empty → inherit the ambient ~/.claude (default behaviour). This lets SwarmGo
+	// drive a "clean" CLI without touching the user's existing installation.
+	configDir string
+	// authKind/authToken inject a credential into the subprocess env so an isolated
+	// configDir authenticates without an interactive in-dir `claude login`:
+	//   "oauth"  → CLAUDE_CODE_OAUTH_TOKEN  (Max/Pro subscription token)
+	//   "apikey" → ANTHROPIC_API_KEY        (API billing)
+	// Empty token/kind injects nothing (rely on the config dir's own login).
+	authKind  string
+	authToken string
 
 	// MCP delegation (Phase 8): when mcpConfigPath is set, the CLI is launched
 	// with that MCP config and restricted to allowedTools. The CLI then runs
@@ -41,9 +54,12 @@ type ClaudeCLI struct {
 	settingsPath string
 }
 
-// NewClaudeCLI creates a provider that invokes the given claude binary.
-func NewClaudeCLI(binPath, model string) *ClaudeCLI {
-	return &ClaudeCLI{binPath: binPath, model: model}
+// NewClaudeCLI creates a provider that invokes the given claude binary. configDir,
+// when non-empty, isolates the CLI's config home via CLAUDE_CONFIG_DIR (pass "" to
+// inherit the user's ~/.claude). authKind/authToken inject a credential env var
+// (pass "","" for none; see the struct fields).
+func NewClaudeCLI(binPath, model, configDir, authKind, authToken string) *ClaudeCLI {
+	return &ClaudeCLI{binPath: binPath, model: model, configDir: configDir, authKind: authKind, authToken: authToken}
 }
 
 // ConfigureMCP enables MCP tool delegation for subsequent Complete calls.
@@ -219,6 +235,7 @@ type cliEvent struct {
 	Result         string                     `json:"result"`
 	Usage          *cliUsage                  `json:"usage"`
 	ModelUsage     map[string]json.RawMessage `json:"modelUsage"`
+	NumTurns       int                        `json:"num_turns"`       // result event: internal tool-loop API round-trips this turn
 	SessionID      string                     `json:"session_id"`      // emitted on system/init and result events
 	RateLimit      *cliRateLimit              `json:"rate_limit_info"` // emitted on rate_limit_event
 }
@@ -317,6 +334,42 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 // retryable is true only for a "clean crash": the process exited non-zero, parsed
 // no final result, salvaged no content, AND executed no tool — so re-running has
 // no duplicate side effects.
+// cliBaseEnv returns the parent environment with the variables that make a
+// nested claude-cli misbehave stripped out. When SwarmGo is itself launched from
+// inside another Claude Code (agent SDK / CLI), the parent exports CLAUDECODE=1,
+// CLAUDE_CODE_* and ANTHROPIC_DEFAULT_*_MODEL. Inheriting these makes the child
+// claude believe it is a nested sub-agent and silently fall back to the small/fast
+// (haiku) model, IGNORING --model opus. Strip them so the child always runs as a
+// clean top-level CLI. SwarmGo re-adds what it actually needs (CLAUDE_CONFIG_DIR,
+// auth) after this. CLAUDE_CODE_GIT_BASH_PATH is preserved — the CLI needs it to
+// locate bash on Windows.
+func cliBaseEnv(extra ...string) []string {
+	src := os.Environ()
+	out := make([]string, 0, len(src)+len(extra))
+	for _, kv := range src {
+		k := kv
+		if i := strings.IndexByte(kv, '='); i >= 0 {
+			k = kv[:i]
+		}
+		if k == "CLAUDE_CODE_GIT_BASH_PATH" {
+			out = append(out, kv) // keep: needed to find bash on Windows
+			continue
+		}
+		switch {
+		case k == "CLAUDECODE",
+			k == "CLAUDE_EFFORT",
+			k == "ANTHROPIC_MODEL",
+			k == "ANTHROPIC_SMALL_FAST_MODEL",
+			strings.HasPrefix(k, "CLAUDE_CODE_"),
+			strings.HasPrefix(k, "CLAUDE_AGENT_SDK"),
+			strings.HasPrefix(k, "ANTHROPIC_DEFAULT_"):
+			continue // strip nesting / model-override leakage
+		}
+		out = append(out, kv)
+	}
+	return append(out, extra...)
+}
+
 func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
 	// Enable the CLI's threshold-based MCP tool search (claude-cli 2.1.x+): tool
@@ -325,7 +378,25 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// flag, the eager tier (Bash, ask_user, ...) is always present while the extended
 	// self-management surface is lazily discovered via ToolSearch. Inherit the parent
 	// environment and append the flag (cmd.Env nil would otherwise drop it).
-	cmd.Env = append(os.Environ(), "ENABLE_TOOL_SEARCH=auto")
+	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
+	// Isolated config home: point the CLI at a clean CLAUDE_CONFIG_DIR so its
+	// skills/settings/commands/global CLAUDE.md/login come from there instead of the
+	// shared ~/.claude. Appended last so it overrides any inherited value.
+	if c.configDir != "" {
+		cmd.Env = append(cmd.Env, "CLAUDE_CONFIG_DIR="+c.configDir)
+	}
+	// Inject the configured credential so an isolated config dir authenticates
+	// without an interactive in-dir login. Per the CLI's auth precedence,
+	// ANTHROPIC_API_KEY outranks the OAuth token, so we set exactly one. Appended
+	// last → overrides any inherited value.
+	if c.authToken != "" {
+		switch c.authKind {
+		case "oauth":
+			cmd.Env = append(cmd.Env, "CLAUDE_CODE_OAUTH_TOKEN="+c.authToken)
+		case "apikey":
+			cmd.Env = append(cmd.Env, "ANTHROPIC_API_KEY="+c.authToken)
+		}
+	}
 	// Run inside the workspace sandbox so relative paths (e.g. an attachment's
 	// "uploads/<sid>/<file>") resolve there rather than the backend's launch
 	// directory. Only set when the dir exists; otherwise inherit the default cwd.
@@ -511,6 +582,32 @@ type cliStreamParser struct {
 	rateLimitMsg string // human-readable detail for the rate-limit failure
 }
 
+// primaryModelUsage returns the model key that consumed the most tokens in a
+// result envelope's modelUsage map, chosen deterministically (alphabetical
+// tie-break). A turn may invoke several models — e.g. an auxiliary tool-search
+// haiku call next to the primary answer — so the map has multiple keys; the one
+// that processed the full context (largest total tokens) is the answer's model.
+// Output tokens alone are misleading (the tiny auxiliary call can emit more), so
+// score by input + output + cache.
+func primaryModelUsage(mu map[string]json.RawMessage) string {
+	best := ""
+	bestScore := -1
+	for k, raw := range mu {
+		var u struct {
+			InputTokens              int `json:"inputTokens"`
+			OutputTokens             int `json:"outputTokens"`
+			CacheReadInputTokens     int `json:"cacheReadInputTokens"`
+			CacheCreationInputTokens int `json:"cacheCreationInputTokens"`
+		}
+		_ = json.Unmarshal(raw, &u)
+		score := u.InputTokens + u.OutputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+		if score > bestScore || (score == bestScore && (best == "" || k < best)) {
+			best, bestScore = k, score
+		}
+	}
+	return best
+}
+
 func newCLIParser(model string, onEvent func(TraceStep)) *cliStreamParser {
 	return &cliStreamParser{
 		resp:    &Response{Model: model},
@@ -651,9 +748,22 @@ func (p *cliStreamParser) feed(line string) {
 				p.resp.Usage.CacheWriteTokens = ev.Usage.CacheCreationInputTokens
 			}
 		}
-		for k := range ev.ModelUsage {
-			p.resp.Model = k
-			break
+		// A single turn can touch more than one model: ENABLE_TOOL_SEARCH runs an
+		// auxiliary haiku call alongside the primary (opus) answer, so the result
+		// envelope's modelUsage holds several keys. Iterating the map and taking
+		// "any" key picked one at RANDOM (Go map order is unspecified), which made
+		// resp.Model flap between the primary and the auxiliary model turn-to-turn —
+		// a phantom "model downgraded to haiku" that never actually happened. Pick
+		// the model that did the real work: the one with the most tokens.
+		if m := primaryModelUsage(ev.ModelUsage); m != "" {
+			p.resp.Model = m
+		}
+		// num_turns = how many internal model API round-trips the CLI made this turn.
+		// The Usage above is the SUM across those round-trips (cache_read especially is
+		// cumulative — verified: result cacheRead == Σ per-assistant cacheRead), so the
+		// caller divides Usage by ProviderCalls to recover the per-call context size.
+		if ev.NumTurns > 0 {
+			p.resp.ProviderCalls = ev.NumTurns
 		}
 	}
 }

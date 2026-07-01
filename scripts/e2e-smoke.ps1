@@ -54,9 +54,16 @@ if ($Workspace) { $headers["X-Workspace-Id"] = $Workspace }
 
 # -Depth 10: iç içe gövdeler (flow graph → nodes → node alanları) varsayılan
 # derinlik 2'de string'e kırpılır → geçersiz JSON. 10 tüm çağrılar için güvenli.
+#
+# UTF-8 gövde: gövde -Body'ye STRING olarak verilirse Windows PowerShell 5.1
+# Invoke-RestMethod onu charset'siz application/json icin Latin-1/ANSI encode eder →
+# Turkce karakterler bozulur (mojibake). Bunu önlemek icin JSON'u her zaman UTF-8
+# BAYT dizisine cevirip öyle gönderiyoruz (byte[] gövde ham gönderilir). Curl-Raw
+# zaten ayni nedenle UTF-8 temp dosya kullanir.
+function ConvertTo-Utf8Body { param($Obj) [System.Text.Encoding]::UTF8.GetBytes(($Obj | ConvertTo-Json -Compress -Depth 10)) }
 function Api-Get  { param($Path) Invoke-RestMethod -Uri "$BaseUrl$Path" -Headers $headers -TimeoutSec 15 }
-function Api-Post { param($Path, $Obj) Invoke-RestMethod -Uri "$BaseUrl$Path" -Method Post -Headers $headers -Body ($Obj | ConvertTo-Json -Compress -Depth 10) -TimeoutSec 30 }
-function Api-Put  { param($Path, $Obj) Invoke-RestMethod -Uri "$BaseUrl$Path" -Method Put -Headers $headers -Body ($Obj | ConvertTo-Json -Compress -Depth 10) -TimeoutSec 15 }
+function Api-Post { param($Path, $Obj) Invoke-RestMethod -Uri "$BaseUrl$Path" -Method Post -Headers $headers -Body (ConvertTo-Utf8Body $Obj) -TimeoutSec 30 }
+function Api-Put  { param($Path, $Obj) Invoke-RestMethod -Uri "$BaseUrl$Path" -Method Put -Headers $headers -Body (ConvertTo-Utf8Body $Obj) -TimeoutSec 15 }
 function Api-Del  { param($Path) Invoke-RestMethod -Uri "$BaseUrl$Path" -Method Delete -Headers $headers -TimeoutSec 15 }
 
 # curl ile ham HTTP — Invoke-WebRequest bazı yanıtlarda (auth/redirect) NonInteractive

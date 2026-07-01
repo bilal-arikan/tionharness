@@ -41,13 +41,43 @@ func TestTunables_JournalDefaults(t *testing.T) {
 	if got := tun.JournalMaxLen(); got != DefaultJournalMaxLen {
 		t.Errorf("JournalMaxLen = %d, want default %d", got, DefaultJournalMaxLen)
 	}
-	// Explicit values override; 0 falls back to the default.
-	tun.SetJournalLimits(7, 0)
+	// MinLen gate defaults off (0) until production wires it from settings.
+	if got := tun.JournalMinLen(); got != 0 {
+		t.Errorf("JournalMinLen = %d, want 0 (gate off) by default", got)
+	}
+	// Explicit values override; 0 falls back to the default for the caps, while a
+	// minLen of 0 stays 0 (gate off — it is not a defaulted cap).
+	tun.SetJournalLimits(7, 0, 0)
 	if got := tun.JournalCap(); got != 7 {
 		t.Errorf("JournalCap = %d, want 7", got)
 	}
 	if got := tun.JournalMaxLen(); got != DefaultJournalMaxLen {
 		t.Errorf("JournalMaxLen = %d, want default after 0", got)
+	}
+	// A positive minLen is returned verbatim (gate on); a negative normalises to 0.
+	tun.SetJournalLimits(7, 0, 64)
+	if got := tun.JournalMinLen(); got != 64 {
+		t.Errorf("JournalMinLen = %d, want 64", got)
+	}
+	tun.SetJournalLimits(7, 0, -5)
+	if got := tun.JournalMinLen(); got != 0 {
+		t.Errorf("JournalMinLen = %d, want 0 after negative", got)
+	}
+}
+
+func TestTunables_RecallMinScore(t *testing.T) {
+	tun := NewTunables()
+	if got := tun.RecallMinScore(); got != DefaultRecallMinScore {
+		t.Errorf("RecallMinScore = %v, want default %v", got, DefaultRecallMinScore)
+	}
+	tun.SetRecallMinScore(0.2)
+	if got := tun.RecallMinScore(); got != 0.2 {
+		t.Errorf("RecallMinScore = %v, want 0.2", got)
+	}
+	// 0 / negative fall back to the default (current behaviour).
+	tun.SetRecallMinScore(0)
+	if got := tun.RecallMinScore(); got != DefaultRecallMinScore {
+		t.Errorf("RecallMinScore = %v, want default after 0", got)
 	}
 }
 

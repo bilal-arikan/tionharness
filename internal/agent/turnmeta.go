@@ -66,6 +66,18 @@ func (m *turnMeta) apply(msg *db.Message, durMs int64) {
 	msg.Usage = usageMsg(m.Usage)
 }
 
+// sumUsage adds two provider Usage values field-by-field. Used by the native tool
+// loop to accumulate every iteration's tokens into one turn total, so the persisted
+// assistant bubble matches what RecordUsage summed into the daily/session rollups.
+func sumUsage(a, b providers.Usage) providers.Usage {
+	return providers.Usage{
+		InputTokens:      a.InputTokens + b.InputTokens,
+		OutputTokens:     a.OutputTokens + b.OutputTokens,
+		CacheReadTokens:  a.CacheReadTokens + b.CacheReadTokens,
+		CacheWriteTokens: a.CacheWriteTokens + b.CacheWriteTokens,
+	}
+}
+
 // usageMsg converts a provider Usage into the compact per-message form, returning
 // nil when the turn reported no tokens (so a non-LLM turn carries no usage object).
 // The agent-package twin of api.messageUsage.

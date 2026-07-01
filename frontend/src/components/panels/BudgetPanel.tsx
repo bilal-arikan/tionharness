@@ -287,24 +287,6 @@ export function BudgetPanel({ onError }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => load(days), [days])
 
-  // Inline daily-limit editor — the Budget screen is the home for limits (moved
-  // here from the chat meters). Prompts for call + token caps, then reloads.
-  const editLimit = async (agentId: string, callLimit: number, tokenLimit: number) => {
-    const c = window.prompt('Günlük çağrı limiti (0 = sınırsız):', String(callLimit))
-    if (c === null) return
-    const t = window.prompt('Günlük token limiti (0 = sınırsız):', String(tokenLimit))
-    if (t === null) return
-    const cn = parseInt(c, 10)
-    const tn = parseInt(t, 10)
-    if (Number.isNaN(cn) || Number.isNaN(tn) || cn < 0 || tn < 0) return
-    try {
-      await api.setBudget(agentId, cn, tn)
-      load()
-    } catch (e) {
-      onError((e as Error).message)
-    }
-  }
-
   const totalTokens = usage ? usage.totals.inputTokens + usage.totals.outputTokens : 0
 
   // Origins sorted by token spend, biggest first. Any spend not attributed to a
@@ -651,18 +633,11 @@ export function BudgetPanel({ onError }: Props) {
                     <th className="px-4 py-2 font-medium">Çağrı</th>
                     <th className="px-4 py-2 font-medium">Token (G/Ç)</th>
                     <th className="px-4 py-2 font-medium">Maliyet</th>
-                    <th className="px-4 py-2 font-medium">Token limiti doluluk</th>
-                    <th className="px-4 py-2 font-medium">Durum</th>
                   </tr>
                 </thead>
                 <tbody>
                   {usage.agents.map((a) => {
                     const tok = a.inputTokens + a.outputTokens
-                    const callOver = a.dailyCallLimit > 0 && a.calls >= a.dailyCallLimit
-                    const tokFill = a.dailyTokenLimit > 0 ? Math.min(100, (tok / a.dailyTokenLimit) * 100) : 0
-                    const tokOver = a.dailyTokenLimit > 0 && tok >= a.dailyTokenLimit
-                    const over = callOver || tokOver
-                    const near = !over && a.dailyTokenLimit > 0 && tokFill >= 80
                     return (
                       <tr key={a.agentId} className="border-t border-[var(--color-border)]">
                         <td className="px-4 py-2.5">
@@ -676,7 +651,6 @@ export function BudgetPanel({ onError }: Props) {
                         </td>
                         <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
                           {a.calls}
-                          {a.dailyCallLimit > 0 && <span className="opacity-60">/{a.dailyCallLimit}</span>}
                         </td>
                         <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
                           {fmt(tok)}{' '}
@@ -686,56 +660,6 @@ export function BudgetPanel({ onError }: Props) {
                         </td>
                         <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
                           {costText(a.costUSD, a.priced, a.estimated)}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {a.dailyTokenLimit > 0 ? (
-                            <div className="flex items-center gap-2">
-                              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--color-surface)]">
-                                <div
-                                  className="h-full rounded-full"
-                                  style={{
-                                    width: `${tokFill}%`,
-                                    background: over
-                                      ? 'var(--color-danger)'
-                                      : near
-                                        ? 'var(--color-warning)'
-                                        : 'var(--color-accent)',
-                                  }}
-                                />
-                              </div>
-                              <span className="text-xs text-[var(--color-text-dim)]">{tokFill.toFixed(0)}%</span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-[var(--color-text-dim)]">sınırsız</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="rounded px-2 py-0.5 text-xs"
-                              style={{
-                                background: over
-                                  ? 'color-mix(in srgb, var(--color-danger) 15%, transparent)'
-                                  : near
-                                    ? 'color-mix(in srgb, var(--color-warning) 15%, transparent)'
-                                    : 'var(--color-surface)',
-                                color: over
-                                  ? 'var(--color-danger)'
-                                  : near
-                                    ? 'var(--color-warning)'
-                                    : 'var(--color-text-dim)',
-                              }}
-                            >
-                              {over ? 'Aşıldı' : near ? 'Limit yakın' : 'Normal'}
-                            </span>
-                            <button
-                              onClick={() => editLimit(a.agentId, a.dailyCallLimit, a.dailyTokenLimit)}
-                              className="text-xs text-[var(--color-text-dim)] underline-offset-2 transition hover:text-[var(--color-accent)] hover:underline"
-                              title="Günlük çağrı/token limitini düzenle"
-                            >
-                              limit
-                            </button>
-                          </div>
                         </td>
                       </tr>
                     )

@@ -27,7 +27,6 @@ const (
 	termMaxIters          termReason = "max_tool_iterations"
 	termProviderErr       termReason = "provider_error"
 	termCancelled         termReason = "cancelled"
-	termBudget            termReason = "budget_exceeded"
 	termMaxTokenExhausted termReason = "max_output_tokens_exhausted"
 )
 

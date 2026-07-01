@@ -1,10 +1,12 @@
-// Curated theme presets. Each preset is a complete palette that maps onto the
-// CSS custom properties consumed across the UI (var(--color-*)). Because every
-// component references those tokens, swapping a preset re-themes the whole app.
+// Curated theme colors. Each color is a family with a DARK and a LIGHT variant;
+// every variant is a complete palette mapped onto the CSS custom properties
+// consumed across the UI (var(--color-*)). Because every component references
+// those tokens, selecting a variant re-themes the whole app.
 //
-// Selecting a preset applies its tokens as inline styles on <html>, which win
-// over the stylesheet defaults in index.css. Clearing the preset ("") restores
-// the legacy theme + accent behaviour driven by index.css.
+// There is no separate light/dark "base mode" anymore: the chosen variant id
+// (e.g. "violet-dark" / "violet-light") encodes both the color and the mode.
+// Selecting one applies its tokens as inline styles on <html>, which win over
+// the stylesheet defaults in index.css.
 
 export interface PresetTokens {
   bg: string
@@ -28,12 +30,10 @@ export interface ThemePreset {
   tokens: PresetTokens
 }
 
-// Neutral background ramps shared by every preset of a given mode. The page
+// Neutral background ramps shared by every variant of a given mode. The page
 // canvas (bg/surface/surface2/border) and the text colours stay a constant
-// near-grey so switching the accent/preset only repaints the accent — not the
-// whole background hue. (Previously each preset tinted its backgrounds with its
-// accent colour, so every colour change shifted the entire canvas and tired the
-// eyes.) Each preset only contributes its accent + accentSoft on top of these.
+// near-grey so switching the color only repaints the accent — not the whole
+// background hue. Each color only contributes its accent + accentSoft on top.
 type Neutrals = Pick<PresetTokens, 'bg' | 'surface' | 'surface2' | 'border' | 'text' | 'textDim'>
 
 const DARK_NEUTRALS: Neutrals = {
@@ -54,58 +54,70 @@ const LIGHT_NEUTRALS: Neutrals = {
   textDim: '#5a6470',
 }
 
-// The order here is the order shown in the Settings appearance picker. Only the
-// accent (+ its soft selected-surface tint) differs between same-mode presets.
-export const THEME_PRESETS: ThemePreset[] = [
-  {
-    id: 'midnight-violet',
-    label: 'Gece Moru',
-    dark: true,
-    tokens: { ...DARK_NEUTRALS, accent: '#8b5cf6', accentSoft: '#2c2545' },
-  },
-  {
-    id: 'slate',
-    label: 'Arduvaz',
-    dark: true,
-    tokens: { ...DARK_NEUTRALS, accent: '#58a6ff', accentSoft: '#16304d' },
-  },
-  {
-    id: 'emerald',
-    label: 'Zümrüt',
-    dark: true,
-    tokens: { ...DARK_NEUTRALS, accent: '#34d399', accentSoft: '#123528' },
-  },
-  {
-    id: 'rose',
-    label: 'Gül',
-    dark: true,
-    tokens: { ...DARK_NEUTRALS, accent: '#fb7185', accentSoft: '#3a1f29' },
-  },
-  {
-    id: 'amber',
-    label: 'Kehribar',
-    dark: true,
-    tokens: { ...DARK_NEUTRALS, accent: '#f59e0b', accentSoft: '#3a2a12' },
-  },
-  {
-    id: 'nord',
-    label: 'Nord',
-    dark: true,
-    tokens: { ...DARK_NEUTRALS, accent: '#88c0d0', accentSoft: '#2b3d44' },
-  },
-  {
-    id: 'daylight',
-    label: 'Gün Işığı',
-    dark: false,
-    tokens: { ...LIGHT_NEUTRALS, accent: '#2f6fed', accentSoft: '#d8e4fb' },
-  },
-  {
-    id: 'solarized-light',
-    label: 'Solarized Açık',
-    dark: false,
-    tokens: { ...LIGHT_NEUTRALS, accent: '#268bd2', accentSoft: '#d8e7f0' },
-  },
+// One entry per color family. Each carries the accent (+ soft selected-surface
+// tint) for both its dark and light variant. Light accents are a touch deeper so
+// they keep enough contrast on the light canvas.
+interface ColorDef {
+  id: string
+  label: string
+  darkAccent: string
+  darkSoft: string
+  lightAccent: string
+  lightSoft: string
+}
+
+const COLORS: ColorDef[] = [
+  { id: 'violet', label: 'Mor', darkAccent: '#8b5cf6', darkSoft: '#2c2545', lightAccent: '#7c3aed', lightSoft: '#ece7fb' },
+  { id: 'blue', label: 'Mavi', darkAccent: '#58a6ff', darkSoft: '#16304d', lightAccent: '#2f6fed', lightSoft: '#d8e4fb' },
+  { id: 'emerald', label: 'Zümrüt', darkAccent: '#34d399', darkSoft: '#123528', lightAccent: '#15915b', lightSoft: '#d6f0e3' },
+  { id: 'rose', label: 'Gül', darkAccent: '#fb7185', darkSoft: '#3a1f29', lightAccent: '#e11d48', lightSoft: '#fbe0e6' },
+  { id: 'amber', label: 'Kehribar', darkAccent: '#f59e0b', darkSoft: '#3a2a12', lightAccent: '#b45309', lightSoft: '#f7e6cf' },
+  { id: 'nord', label: 'Nord', darkAccent: '#88c0d0', darkSoft: '#2b3d44', lightAccent: '#3b7e93', lightSoft: '#d9eaf0' },
 ]
+
+// The default applied when nothing is selected yet.
+export const DEFAULT_PRESET = 'violet-dark'
+
+// Flat preset list (two entries per color: dark + light), keyed by id. This is
+// what applyTheme resolves a stored themePreset id against.
+export const THEME_PRESETS: ThemePreset[] = COLORS.flatMap((c) => [
+  {
+    id: `${c.id}-dark`,
+    label: c.label,
+    dark: true,
+    tokens: { ...DARK_NEUTRALS, accent: c.darkAccent, accentSoft: c.darkSoft },
+  },
+  {
+    id: `${c.id}-light`,
+    label: c.label,
+    dark: false,
+    tokens: { ...LIGHT_NEUTRALS, accent: c.lightAccent, accentSoft: c.lightSoft },
+  },
+])
+
+// One swatch's display info for the appearance picker.
+export interface ThemeColorVariant {
+  id: string // preset id (e.g. "violet-dark")
+  accent: string
+  bg: string
+  border: string
+}
+
+// A color family with both its variants — the unit the appearance picker shows
+// as a row (label + a Light swatch + a Dark swatch).
+export interface ThemeColor {
+  id: string
+  label: string
+  dark: ThemeColorVariant
+  light: ThemeColorVariant
+}
+
+export const THEME_COLORS: ThemeColor[] = COLORS.map((c) => ({
+  id: c.id,
+  label: c.label,
+  dark: { id: `${c.id}-dark`, accent: c.darkAccent, bg: DARK_NEUTRALS.bg, border: DARK_NEUTRALS.border },
+  light: { id: `${c.id}-light`, accent: c.lightAccent, bg: LIGHT_NEUTRALS.bg, border: LIGHT_NEUTRALS.border },
+}))
 
 export const presetById = (id: string): ThemePreset | undefined =>
   THEME_PRESETS.find((p) => p.id === id)

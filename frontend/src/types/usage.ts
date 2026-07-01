@@ -35,8 +35,6 @@ export interface BudgetAgentRow {
   costUSD: number
   priced: boolean
   estimated?: boolean // equivalent-API estimate for subscription providers (e.g. claude-cli)
-  dailyCallLimit: number
-  dailyTokenLimit: number
   // Tool-output compaction savings (bytes) for this agent today.
   compactSavedBytes?: number
   compactSavedBytesLLM?: number

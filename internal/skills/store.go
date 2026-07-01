@@ -743,18 +743,20 @@ func renderCatalog(list []Skill, skillTool string) string {
 	// Sibling skill_search tool name + deferred-activation guidance. A claude-cli
 	// agent reaches these through the Interaction MCP bridge, where the names are
 	// namespaced (mcp__swarmgo_interaction__use_skill) AND may be DEFERRED by the CLI
-	// when many MCP tools are present (e.g. a large gateway): a direct call then
-	// fails with "No such tool available: use_skill" until the schema is activated.
-	// When the tool is namespaced, point the model at ToolSearch up front so it does
-	// not waste its first call on a rejected/unloaded name. Native (bare) agents get
-	// the schema eagerly, so no note is needed there.
+	// when many MCP tools are present (e.g. a large gateway). When the tool is
+	// namespaced, point the model at ToolSearch up front so it does not waste its
+	// first call on a rejected/unloaded name. We deliberately keep this to a single
+	// short clause: the full deferred-loading mechanism (what "DEFERRED" means, that
+	// an unloaded name returns "No such tool available") is explained ONCE in the
+	// "Available Tools (load on demand)" block and not repeated here. Native (bare)
+	// agents get the schema eagerly, so no note is needed there.
 	searchTool := "skill_search"
 	var deferNote string
 	if i := strings.LastIndex(skillTool, "__"); i > 0 && strings.HasPrefix(skillTool, "mcp__") {
 		searchTool = skillTool[:i+2] + searchTool // share the namespace prefix
-		deferNote = fmt.Sprintf("\nThese are MCP tools and may be DEFERRED (schema not preloaded). Before your "+
-			"first call, run `ToolSearch` with `select:%s,%s` to load them; calling the bare/unloaded name "+
-			"returns \"No such tool available\".", skillTool, searchTool)
+		deferNote = fmt.Sprintf("\nThese may be DEFERRED MCP tools: run `ToolSearch` with "+
+			"`select:%s,%s` to load them before your first call (see the Available Tools "+
+			"note for how deferred loading works).", skillTool, searchTool)
 	}
 	var b strings.Builder
 	b.WriteString("# Available Skills\n")

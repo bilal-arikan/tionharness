@@ -13,6 +13,8 @@ export const taskApi = {
     flowId?: string
     boardState?: BoardState
     dependencies?: string
+    priority?: Task['priority']
+    tags?: string[]
   }) =>
     req<Task>('/api/tasks', {
       method: 'POST',
@@ -21,7 +23,16 @@ export const taskApi = {
   // (Re)generate a task title from its description.
   generateTaskTitle: (id: string) =>
     req<Task>(`/api/tasks/${id}/title`, { method: 'POST' }),
-  updateTask: (id: string, patch: Partial<Pick<Task, 'title' | 'description' | 'ownerAgentId' | 'flowId' | 'boardState' | 'dependencies'>>) =>
+  updateTask: (
+    id: string,
+    patch: Partial<
+      Pick<
+        Task,
+        | 'title' | 'description' | 'ownerAgentId' | 'flowId' | 'boardState'
+        | 'dependencies' | 'priority' | 'tags'
+      >
+    >,
+  ) =>
     req<Task>(`/api/tasks/${id}`, {
       method: 'PUT',
       body: JSON.stringify(patch),

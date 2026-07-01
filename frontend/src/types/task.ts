@@ -5,6 +5,9 @@
 // type-hinting; custom column keys are also valid (lowercase + underscores).
 export type BoardState = 'todo' | 'in_progress' | 'review' | 'done' | 'failed' | (string & {})
 
+// Task priority levels (obsidian-pm compatible). '' = unset.
+export type TaskPriority = 'critical' | 'high' | 'medium' | 'low' | ''
+
 export interface Task {
   id: string
   title: string
@@ -14,6 +17,9 @@ export interface Task {
   flowId: string
   boardState: BoardState
   dependencies: string
+  // Rich card attributes (optional; absent on older tasks).
+  priority?: TaskPriority
+  tags?: string[]
   lastRunId: string
   lastRunStatus: string
   lastRunAt: number

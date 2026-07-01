@@ -32,6 +32,34 @@ const (
 	clientVersion   = "0.0.1"
 )
 
+// Client is the transport-agnostic surface the pool and catalog builders use. It
+// is satisfied by StdioClient (subprocess transport) and httpClient (Streamable
+// HTTP transport). Keeping callers on this interface lets a server's transport be
+// chosen at dial time without the pool knowing which one it got.
+type Client interface {
+	// ListTools returns the tools the server currently advertises.
+	ListTools(ctx context.Context) ([]Tool, error)
+	// CallTool invokes a tool with JSON arguments and flattens the text content.
+	CallTool(ctx context.Context, name string, args json.RawMessage) (CallToolResult, error)
+	// Alive reports whether the connection is still usable.
+	Alive() bool
+	// Close terminates the connection (and any subprocess).
+	Close() error
+	// SetOnToolsChanged registers a callback fired when the server announces a
+	// tools/list change. Transports without a server→client channel may never
+	// fire it; that is fine — the pool's TTL still refreshes.
+	SetOnToolsChanged(fn func())
+	// SetLogger attaches an optional logger (and owning server name) for
+	// connection-lifecycle / decode-noise diagnostics. Nil-safe.
+	SetLogger(l *slog.Logger, server string)
+}
+
+// Compile-time assertions that both transports satisfy Client.
+var (
+	_ Client = (*StdioClient)(nil)
+	_ Client = (*httpClient)(nil)
+)
+
 // Tool describes a tool advertised by an MCP server.
 type Tool struct {
 	Name        string          `json:"name"`
@@ -259,12 +287,26 @@ func (c *StdioClient) initialize(ctx context.Context) error {
 	return c.notify("notifications/initialized", map[string]any{})
 }
 
-// ListTools returns the tools advertised by the server.
-func (c *StdioClient) ListTools(ctx context.Context) ([]Tool, error) {
-	raw, err := c.call(ctx, "tools/list", map[string]any{})
-	if err != nil {
-		return nil, err
+// CallToolResult is the textual result of a tools/call.
+type CallToolResult struct {
+	Text    string
+	IsError bool
+}
+
+// callToolParams builds the tools/call request params, defaulting empty args to
+// an empty object (servers reject a missing "arguments"). Shared by transports.
+func callToolParams(name string, args json.RawMessage) map[string]any {
+	params := map[string]any{"name": name}
+	if len(args) > 0 {
+		params["arguments"] = args
+	} else {
+		params["arguments"] = map[string]any{}
 	}
+	return params
+}
+
+// parseToolsList decodes a tools/list result envelope. Shared by transports.
+func parseToolsList(raw json.RawMessage) ([]Tool, error) {
 	var out struct {
 		Tools []Tool `json:"tools"`
 	}
@@ -274,24 +316,9 @@ func (c *StdioClient) ListTools(ctx context.Context) ([]Tool, error) {
 	return out.Tools, nil
 }
 
-// CallToolResult is the textual result of a tools/call.
-type CallToolResult struct {
-	Text    string
-	IsError bool
-}
-
-// CallTool invokes a tool with JSON arguments and flattens the text content.
-func (c *StdioClient) CallTool(ctx context.Context, name string, args json.RawMessage) (CallToolResult, error) {
-	params := map[string]any{"name": name}
-	if len(args) > 0 {
-		params["arguments"] = args
-	} else {
-		params["arguments"] = map[string]any{}
-	}
-	raw, err := c.call(ctx, "tools/call", params)
-	if err != nil {
-		return CallToolResult{}, err
-	}
+// parseCallResult decodes a tools/call result and flattens its text content.
+// Shared by transports.
+func parseCallResult(raw json.RawMessage) (CallToolResult, error) {
 	var out struct {
 		IsError bool `json:"isError"`
 		Content []struct {
@@ -309,6 +336,24 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, args json.RawMe
 		}
 	}
 	return CallToolResult{Text: text, IsError: out.IsError}, nil
+}
+
+// ListTools returns the tools advertised by the server.
+func (c *StdioClient) ListTools(ctx context.Context) ([]Tool, error) {
+	raw, err := c.call(ctx, "tools/list", map[string]any{})
+	if err != nil {
+		return nil, err
+	}
+	return parseToolsList(raw)
+}
+
+// CallTool invokes a tool with JSON arguments and flattens the text content.
+func (c *StdioClient) CallTool(ctx context.Context, name string, args json.RawMessage) (CallToolResult, error) {
+	raw, err := c.call(ctx, "tools/call", callToolParams(name, args))
+	if err != nil {
+		return CallToolResult{}, err
+	}
+	return parseCallResult(raw)
 }
 
 // call sends a request and waits for the matching response (routed by the read

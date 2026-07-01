@@ -39,6 +39,24 @@ func ValidBoardState(s string) bool {
 	}
 }
 
+// Task priority levels (obsidian-pm compatible). Empty string = unset.
+const (
+	PriorityCritical = "critical"
+	PriorityHigh     = "high"
+	PriorityMedium   = "medium"
+	PriorityLow      = "low"
+)
+
+// ValidPriority reports whether p is empty (unset) or a known priority level.
+func ValidPriority(p string) bool {
+	switch p {
+	case "", PriorityCritical, PriorityHigh, PriorityMedium, PriorityLow:
+		return true
+	default:
+		return false
+	}
+}
+
 // Task is a unit of work on the board, optionally owned by an agent. When run,
 // the owner agent is given Prompt and the textual result is stored as a Run.
 // Alternatively, when FlowID is set the task is "flow-backed": running it executes
@@ -54,6 +72,13 @@ type Task struct {
 	FlowID        string `json:"flowId"` // when set, running the task executes this flow
 	BoardState    string `json:"boardState"`
 	Dependencies  string `json:"dependencies"` // JSON array of task ids
+	// Rich card attributes (obsidian-pm compatible). All optional; older task
+	// files without them decode to zero values.
+	Priority  string   `json:"priority,omitempty"`  // critical|high|medium|low ("" = unset)
+	Tags      []string `json:"tags,omitempty"`      // free-form labels
+	Progress  int      `json:"progress,omitempty"`  // 0..100
+	StartDate string   `json:"startDate,omitempty"` // YYYY-MM-DD
+	DueDate   string   `json:"dueDate,omitempty"`   // YYYY-MM-DD
 	LastRunID     string `json:"lastRunId"`
 	LastRunStatus string `json:"lastRunStatus"`
 	LastRunAt     int64  `json:"lastRunAt"`

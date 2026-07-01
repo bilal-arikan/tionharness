@@ -38,11 +38,15 @@ func NewCoreMemoryAppendTool(mem *memory.Store, agentID string) CoreMemoryTool {
 // with the list of valid labels, so the agent learns the available blocks.
 const labelSchema = `"label":{"type":"string","description":"Which core-memory block to edit (default \"persona\"). Standard blocks: \"persona\" = facts about yourself (identity/behaviour), \"human\" = facts about the user (preferences/context). Your agent may define additional named blocks."}`
 
+// coreMemoryDesc is the shared one-line explanation of core memory, factored out
+// so core_memory_append and core_memory_replace don't each repeat it in full.
+const coreMemoryDesc = "Core memory is small, persistent text re-injected into your context every turn (default blocks: \"persona\" = about you, \"human\" = about the user, plus any custom blocks)."
+
 func (t CoreMemoryTool) Def() providers.ToolDef {
 	if t.mode == "append" {
 		return providers.ToolDef{
 			Name:        "core_memory_append",
-			Description: "Append one line to a named block of your core memory — the persistent working-memory kept in context every turn. Use label=\"human\" for a durable fact about the user, label=\"persona\" for a fact about yourself, or a custom block your agent defines. Each block has a character limit; if it is full, condense it with core_memory_replace.",
+			Description: "Append one line to a named block of your core memory. " + coreMemoryDesc + " Use label=\"human\" for a durable fact about the user, \"persona\" for one about yourself. If a block is full, condense it with core_memory_replace.",
 			InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{
@@ -56,7 +60,7 @@ func (t CoreMemoryTool) Def() providers.ToolDef {
 	}
 	return providers.ToolDef{
 		Name:        "core_memory_replace",
-		Description: "Replace one named block of your core memory with new content. Core memory is small, persistent text kept in context every turn (default blocks: \"persona\" about you, \"human\" about the user, plus any custom blocks); rewrite a block to keep it accurate and within its character limit.",
+		Description: "Replace one named block of your core memory with new content. " + coreMemoryDesc + " Rewrite a block to keep it accurate and within its character limit.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{

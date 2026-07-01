@@ -88,13 +88,13 @@ func TestRunAgentGuards(t *testing.T) {
 // while an unknown target falls through to agent resolution.
 func TestResolveSubagentProfile(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
-	caller := db.Agent{ID: "AGT1", Name: "Caller", Provider: "anthropic", Model: "claude", DailyTokenLimit: 1000, PermissionMode: "ask"}
+	caller := db.Agent{ID: "AGT1", Name: "Caller", Provider: "anthropic", Model: "claude", PermissionMode: "ask"}
 
 	eph, ephemeral, err := rt.resolveSubagentTarget(context.Background(), caller, "explore")
 	if err != nil || !ephemeral {
 		t.Fatalf("expected ephemeral explore profile, got ephemeral=%v err=%v", ephemeral, err)
 	}
-	if eph.ID != caller.ID || eph.Provider != caller.Provider || eph.DailyTokenLimit != caller.DailyTokenLimit {
+	if eph.ID != caller.ID || eph.Provider != caller.Provider || eph.Model != caller.Model {
 		t.Fatalf("ephemeral agent must inherit caller infra: %+v", eph)
 	}
 	if eph.Soul == "" || eph.Name != "subagent:explore" {

@@ -36,8 +36,22 @@ func (s *Server) publishWorkspacesChanged(body string) {
 	})
 }
 
-// userContextBlock renders the user-profile settings into a system-prompt block
-// so agents address the user correctly. Empty when no profile fields are set.
+// languageName maps a settings language code to a human name for the reply-language
+// directive. Empty for an unknown code (so no directive is emitted).
+func languageName(code string) string {
+	switch code {
+	case "tr":
+		return "Turkish (Türkçe)"
+	case "en":
+		return "English"
+	}
+	return ""
+}
+
+// userContextBlock renders the user-profile settings AND the configured reply
+// language into a system-prompt block so agents address the user correctly and
+// default to their language. Empty only when there is no profile and no known
+// language (language defaults to "tr", so it is normally always present).
 func userContextBlock(s settings.Settings) string {
 	var b strings.Builder
 	add := func(label, val string) {
@@ -54,6 +68,11 @@ func userContextBlock(s settings.Settings) string {
 	add("Location", loc)
 	add("Timezone", s.UserTimezone)
 	add("Notes", s.UserNotes)
+	// Preferred reply language (the app's configured language). Emitted even when no
+	// other profile field is set, so the agent defaults to the user's language.
+	if lang := languageName(s.Language); lang != "" {
+		b.WriteString("- Preferred language: reply in " + lang + " by default, unless the user writes to you in another language or asks otherwise.\n")
+	}
 	if b.Len() == 0 {
 		return ""
 	}
