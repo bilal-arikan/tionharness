@@ -57,10 +57,10 @@ export const marketApi = {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
     }),
-  publishPack: (kind: PackKind, sourceId: string) =>
+  publishPack: (kind: PackKind, sourceId: string, include?: WorkspaceExportInclude) =>
     req<Pack>('/api/market/publish', {
       method: 'POST',
-      body: JSON.stringify({ kind, sourceId }),
+      body: JSON.stringify({ kind, sourceId, include }),
     }),
   importPack: (raw: string) =>
     req<Pack>('/api/market/import', { method: 'POST', body: raw }),
