@@ -17,16 +17,18 @@ export interface ConnectorSearchResult {
   warnings: string[]
 }
 
-// WorkspaceExportInclude selects what a workspace-template export captures.
-// `agentIds: null` means every agent; the boolean flags gate each optional
-// category. Omitting the whole object (publishPack without `include`) keeps the
-// legacy "export everything" behaviour.
+// WorkspaceExportInclude selects what a workspace-template export captures. The
+// id/slug lists are tri-state: `null` means "every item", a present array
+// (including `[]`) restricts to exactly its members (`[]` = none). The boolean
+// flags gate the file categories. Omitting the whole object (publishPack without
+// `include`) keeps the legacy "export everything" behaviour.
 export interface WorkspaceExportInclude {
   agentIds: string[] | null
-  flows: boolean
-  schedules: boolean
-  skills: boolean
+  flowIds: string[] | null
+  skillSlugs: string[] | null
+  scheduleIds: string[] | null
   instructions: boolean
+  prompts: boolean // non-default runtime prompts + README
   boardColumns: boolean
 }
 

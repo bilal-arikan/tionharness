@@ -254,6 +254,13 @@ type WorkspacePayload struct {
 	Instructions string        `json:"instructions,omitempty"`
 	Columns      []BoardColumn `json:"columns,omitempty"`
 
+	// Editable config files (all optional). Prompts holds only NON-DEFAULT runtime
+	// prompt overrides (key → content, e.g. summary/reflect/title); a key at its
+	// compiled-in default is omitted. Readme is the free-form config/README.md.
+	// Both are seeded as files under <workspace>/config/ on install.
+	Prompts map[string]string `json:"prompts,omitempty"`
+	Readme  string            `json:"readme,omitempty"`
+
 	// Starter ecosystem (all optional). Seed order: skills → agents → flows →
 	// schedules, so agent skill assignments and flow agent-key wiring resolve.
 	Skills    []WorkspaceTemplateSkill    `json:"skills,omitempty"`

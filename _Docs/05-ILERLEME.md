@@ -38,6 +38,30 @@ konuşmada ~3× ucuz. Ağır (~40KB) workspace prompt eklemek SwarmGo'da cache-w
 +42K büyüttü (input değişmez — prompt cache'e gider). Sonuç: darboğaz claude-cli'nin
 sıcak prefix'i turlar arası **tutarlı** koruyamaması.
 
+## Dışa aktarım: promptlar/README + flows/skills/schedules tek tek seçilebilir ✅ (2026-07-01)
+
+**İstek:** Export'a "Promptlar & Dosyalar" ekranındaki diğer promptları da dahil et (varsayılan
+değilse); Flows, Workspace skill'leri ve Schedules'ı ajanlar gibi **tek tek** seçilebilir yap.
+
+**Yapılan:**
+- **Payload:** `market.WorkspacePayload`'a `Prompts map[string]string` (yalnız varsayılandan
+  farklı runtime prompt override'ları) + `Readme string` eklendi (`internal/market/pack.go`).
+- **Export builder** (`buildWorkspaceTemplatePayload`): her `agent.PromptKeys` anahtarını okur,
+  `PromptDefault` ile karşılaştırır, **yalnız farklı olanları** taşır; README boşsa atlanır.
+  `Include` boolean yerine **id/slug set**'leriyle çalışır — `wantSet(all, ids)` (nil=tümü,
+  boş=hiçbiri) + `sliceOrNil` ile agents/flows/skills/schedules bağımsız filtrelenir.
+- **Include şeması:** `publishInclude` = `AgentIDs/FlowIDs/SkillSlugs/ScheduleIDs []string`
+  (tri-state) + `Instructions/Prompts/BoardColumns bool`. Frontend `WorkspaceExportInclude` aynen.
+- **Seed/install:** `seedTemplateConfigFiles` (`seedWorkspaceTeam` 5. adım) install'da non-default
+  promptları `config/prompts/`, README'yi `config/README.md`'ye yazar. Dokunulmamış promptlar
+  hedefteki güncel varsayılanı korur (`internal/api/templates.go`).
+- **UI:** yeni yeniden kullanılabilir `ExportPickList.tsx` (checkbox liste) ile Ajanlar/Akışlar/
+  Skill'ler/Zamanlamalar dört ayrı seçim listesi; Talimatlar/Promptlar&README/Pano toggle kaldı.
+  Promptlar toggle'ı `getWorkspaceConfig`'ten non-default prompt + README sayısını gösterir.
+  Önizleme + bağımlılık uyarısı seçili öğelere göre güncellendi.
+- `go build ./...` ✅ · `npx tsc --noEmit` ✅. (Not: bu refactor, paralel "Compact prompt" WIP'inin
+  beklediği api-build blokerini de çözer.)
+
 ## Dışa aktarıma canlı önizleme ✅ (2026-07-01)
 
 **İstek:** Dışa aktarım paneline **canlı önizleme** ekle.

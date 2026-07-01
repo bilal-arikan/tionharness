@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/bilal-arikan/swarmgo/internal/agent"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/market"
 	"github.com/bilal-arikan/swarmgo/internal/orchestration"
@@ -192,6 +195,43 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			Enabled:  false,
 		}); err != nil {
 			s.logger.Warn("seed template schedule failed", "workspace", wsNew.ID, "error", err)
+		}
+	}
+
+	// 5) Editable config files: non-default runtime prompts + README.
+	s.seedTemplateConfigFiles(wsNew, wp)
+}
+
+// seedTemplateConfigFiles writes a template's non-default runtime prompt overrides
+// and README into the workspace config dir (<workspace>/config/). Only the keys
+// the publisher actually customised are present in wp.Prompts, so untouched keys
+// keep the running build's compiled-in defaults. All failures are logged but
+// non-fatal.
+func (s *Server) seedTemplateConfigFiles(wsNew *workspace.Workspace, wp market.WorkspacePayload) {
+	wsDir := wsNew.DataDir
+	if len(wp.Prompts) > 0 {
+		valid := map[string]bool{}
+		for _, k := range agent.PromptKeys {
+			valid[k] = true
+		}
+		if err := os.MkdirAll(filepath.Join(agent.WorkspaceConfigDir(wsDir), "prompts"), 0o755); err != nil {
+			s.logger.Warn("seed template prompts mkdir failed", "workspace", wsNew.ID, "error", err)
+		} else {
+			for key, content := range wp.Prompts {
+				if !valid[key] || content == "" {
+					continue // unknown key or empty override — nothing to write
+				}
+				if err := os.WriteFile(agent.PromptFilePath(wsDir, key), []byte(content), 0o644); err != nil {
+					s.logger.Warn("seed template prompt failed", "workspace", wsNew.ID, "prompt", key, "error", err)
+				}
+			}
+		}
+	}
+	if strings.TrimSpace(wp.Readme) != "" {
+		if err := os.MkdirAll(agent.WorkspaceConfigDir(wsDir), 0o755); err != nil {
+			s.logger.Warn("seed template readme mkdir failed", "workspace", wsNew.ID, "error", err)
+		} else if err := os.WriteFile(agent.ReadmeFilePath(wsDir), []byte(wp.Readme), 0o644); err != nil {
+			s.logger.Warn("seed template readme failed", "workspace", wsNew.ID, "error", err)
 		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bilal-arikan/swarmgo/internal/agent"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/market"
 	"github.com/bilal-arikan/swarmgo/internal/orchestration"
@@ -107,26 +108,26 @@ func (s *Server) handlePublishMarket(w http.ResponseWriter, r *http.Request) {
 // "tmpl:<key>"), schedules (wired by key), and identity/instructions/board layout.
 // Secrets, sessions, artifacts and other runtime data are never included.
 //
-// inc selects which categories to capture. A nil pointer means "everything"
-// (backward compatible with callers that don't select). When present, its
-// AgentIDs (nil = all) filters the exported team and its boolean flags gate each
-// optional category verbatim.
+// inc selects which parts to capture. A nil pointer means "everything" (backward
+// compatible with callers that don't select). When present, its id/slug slices
+// filter agents/flows/skills/schedules independently (nil slice = all, present
+// slice = exactly its members) and its boolean flags gate the file categories.
 func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspace.Workspace, inc *publishInclude) (market.WorkspacePayload, error) {
 	all := inc == nil
-	incFlows := all || inc.Flows
-	incSchedules := all || inc.Schedules
-	incSkills := all || inc.Skills
 	incInstructions := all || inc.Instructions
+	incPrompts := all || inc.Prompts
 	incBoard := all || inc.BoardColumns
 
-	// wantAgent nil = every agent; otherwise the explicit selection set.
-	var wantAgent map[string]bool
-	if !all && inc.AgentIDs != nil {
-		wantAgent = make(map[string]bool, len(inc.AgentIDs))
-		for _, id := range inc.AgentIDs {
-			wantAgent[id] = true
-		}
-	}
+	// Selection predicates. everything=true means no filtering (nil slice / whole
+	// export); otherwise only ids present in the set pass.
+	var (
+		agentSet, flowSet, skillSet, schedSet    map[string]bool
+		allAgents, allFlows, allSkills, allSched bool
+	)
+	agentSet, allAgents = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.AgentIDs }))
+	flowSet, allFlows = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.FlowIDs }))
+	skillSet, allSkills = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.SkillSlugs }))
+	schedSet, allSched = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.ScheduleIDs }))
 
 	cfg := wsp.Settings()
 	wp := market.WorkspacePayload{
@@ -140,6 +141,24 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	if incBoard && len(cfg.BoardColumns) > 0 {
 		wp.Columns = fromBoardColumnDefs(cfg.BoardColumns)
 	}
+	// Non-default runtime prompts + README (both editable config files). Only
+	// prompts that differ from their compiled-in default are carried, so a fresh
+	// install keeps the newest defaults for untouched keys.
+	if incPrompts {
+		prompts := map[string]string{}
+		for _, key := range agent.PromptKeys {
+			cur := readFileOr(agent.PromptFilePath(wsp.DataDir, key), "")
+			if strings.TrimSpace(cur) != "" && strings.TrimSpace(cur) != strings.TrimSpace(agent.PromptDefault(key)) {
+				prompts[key] = cur
+			}
+		}
+		if len(prompts) > 0 {
+			wp.Prompts = prompts
+		}
+		if rm := readFileOr(agent.ReadmeFilePath(wsp.DataDir), ""); strings.TrimSpace(rm) != "" {
+			wp.Readme = rm
+		}
+	}
 
 	// Agents → template agents with stable local keys (id → key map for wiring).
 	agents, err := wsp.DB.ListAgents(ctx)
@@ -149,7 +168,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	idToKey := make(map[string]string, len(agents))
 	usedKeys := map[string]bool{}
 	for _, a := range agents {
-		if wantAgent != nil && !wantAgent[a.ID] {
+		if !allAgents && !agentSet[a.ID] {
 			continue // not selected for this export
 		}
 		key := uniqueAgentKey(a.Name, usedKeys)
@@ -169,10 +188,10 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	if ferr != nil {
 		return wp, ferr
 	}
-	if !incFlows {
-		flows = nil
-	}
 	for _, f := range flows {
+		if !allFlows && !flowSet[f.ID] {
+			continue // not selected for this export
+		}
 		graph, perr := orchestration.ParseGraph(f.Graph)
 		if perr != nil {
 			continue // skip an unparseable flow rather than failing the whole export
@@ -199,13 +218,13 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	if serr != nil {
 		return wp, serr
 	}
-	if !incSchedules {
-		scheds = nil
-	}
 	for _, sc := range scheds {
+		if !allSched && !schedSet[sc.ID] {
+			continue // not selected for this export
+		}
 		key, ok := idToKey[sc.AgentID]
 		if !ok {
-			continue
+			continue // agent not in the exported team → drop the orphan
 		}
 		wp.Schedules = append(wp.Schedules, market.WorkspaceTemplateSchedule{
 			AgentKey: key, CronExpr: sc.CronExpr, Prompt: sc.Prompt,
@@ -215,12 +234,12 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	// Workspace-tier skills → embed verbatim (SKILL.md + nested files) so the
 	// template is self-contained. Global/bundled skills are shared, not exported.
 	skillList := wsp.Runtime.Skills().List()
-	if !incSkills {
-		skillList = nil
-	}
 	for _, sk := range skillList {
 		if sk.Source != skills.SourceWorkspace || sk.Path == "" {
 			continue
+		}
+		if !allSkills && !skillSet[sk.Slug] {
+			continue // not selected for this export
 		}
 		body, rerr := os.ReadFile(sk.Path)
 		if rerr != nil {
@@ -232,6 +251,30 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	}
 
 	return wp, nil
+}
+
+// sliceOrNil returns pick(inc) when inc is non-nil, else nil. It lets the caller
+// read a selection slice off a possibly-nil *publishInclude without a nil check
+// at every call site (a nil pointer means "whole export").
+func sliceOrNil(inc *publishInclude, pick func(*publishInclude) []string) []string {
+	if inc == nil {
+		return nil
+	}
+	return pick(inc)
+}
+
+// wantSet turns a selection slice into a membership set + an "everything" flag.
+// all=true (whole export) or a nil slice means everything (set is nil, flag true);
+// a non-nil slice — even empty — restricts to exactly its members (empty ⇒ none).
+func wantSet(all bool, ids []string) (map[string]bool, bool) {
+	if all || ids == nil {
+		return nil, true
+	}
+	set := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		set[id] = true
+	}
+	return set, false
 }
 
 // fromBoardColumnDefs is the inverse of toBoardColumnDefs: db board columns → the

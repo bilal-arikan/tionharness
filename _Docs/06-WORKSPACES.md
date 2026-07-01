@@ -47,10 +47,15 @@ artık `WorkspaceView`'in kendi **Dışa Aktar** sekmesindedir (Genel ▸ Görü
 Promptlar & Dosyalar ▸ **Dışa Aktar**). Genel tab'ından çıkarıldı çünkü içerik seçimi
 detaylandırıldı. Panel: `frontend/src/components/workspace/WorkspaceExportPanel.tsx`.
 
-- **Seçilebilir içerik:** panel açılışta ajanları/akışları/workspace-tier skill'leri/
-  zamanlamaları çeker. Kullanıcı **hangi ajanların** dahil edileceğini işaretler (varsayılan
-  tümü, ≥1 zorunlu) ve kategori toggle'larıyla (Akışlar / Zamanlamalar / Skill'ler /
-  Talimatlar / Pano sütunları — sayı rozetli, varsayılan açık) neyin gireceğini seçer.
+- **Öğe-bazlı seçim (2026-07-01):** Ajanlar, Akışlar, Workspace skill'leri ve Zamanlamalar
+  artık **tek tek** seçilir (dört ayrı checkbox listesi — yeniden kullanılabilir
+  `ExportPickList.tsx`). Her liste varsayılan tümü-seçili; ajanlarda ≥1 zorunlu. Dosya
+  kategorileri (Talimatlar / Promptlar & README / Pano sütunları) toggle olarak kalır.
+- **Promptlar & README (2026-07-01):** "Promptlar & Dosyalar" ekranındaki runtime promptları
+  (summary/reflect/title/…) ve README de dışa aktarılabilir — **yalnız varsayılandan farklı
+  olanlar**. Panel `getWorkspaceConfig`'ten non-default prompt + README sayısını gösterir.
+  Backend `WorkspacePayload.Prompts/Readme` taşır; install'da `config/prompts/` + `config/README.md`
+  olarak seed edilir (`seedTemplateConfigFiles`). Dokunulmamış promptlar hedefte güncel varsayılanı korur.
 - **Şablon metadata (2026-07-01):** panelin üstünde **Şablon adı / Açıklama / Sürüm**
   alanları vardır. Ad workspace adından seed edilir; açıklama/sürüm boş bırakılırsa
   sunucu varsayılan üretir (açıklama → otomatik satır, sürüm → `1.0.0`). Ad slug'ı
@@ -68,18 +73,18 @@ detaylandırıldı. Panel: `frontend/src/components/workspace/WorkspaceExportPan
   slug'a yeniden yayında **üzerine yazma** uyarısını gösterir. Slug, Go `slugify`'ın frontend
   kopyasıyla hesaplanır (Türkçe/ASCII-dışı harfler düşer → önizleme sunucuyla aynı id'yi verir).
 - **API:** `api.publishPack('workspace', ws.id, include, meta)` → `POST /api/market/publish`.
-  `include` = `WorkspaceExportInclude` (`agentIds: string[]|null` (null=tümü) + kategori
-  boolean'ları); `meta` = `WorkspaceExportMeta` (`name?/description?/version?`, boş alanlar
-  düşürülür → sunucu varsayılanı). `include`/`meta` gönderilmezse davranış eskisi gibi
-  "her şey + türetilmiş meta" (geriye uyumlu).
+  `include` = `WorkspaceExportInclude`: `agentIds/flowIds/skillSlugs/scheduleIds: string[]|null`
+  (**tri-state**: null=tümü, `[]`=hiçbiri, liste=tam üyeler) + `instructions/prompts/boardColumns`
+  boolean'ları; `meta` = `WorkspaceExportMeta` (`name?/description?/version?`, boş alanlar düşürülür).
+  `include`/`meta` gönderilmezse davranış eskisi gibi "her şey" (geriye uyumlu).
 - **Backend:** `publishRequest.{Name,Description,Version,Include}`; workspace kind'ında
   bunlar `market.BuildWorkspacePack(slug, name, desc, version, …)`'e geçirilir (boş =
   türetilmiş varsayılan; `BuildWorkspacePack` boş sürümü `1.0.0`'a düşürür).
   `buildWorkspaceTemplatePayload(ctx, wsp, inc)` — `inc==nil` iken her şey, aksi halde
-  seçili ajanlara filtreler ve kategori flag'lerini onurlandırır
-  (`internal/api/market_publish.go`). **Sırlar ve oturum geçmişi asla dahil edilmez**
-  (sunucu-zorunlu). Yayınlanan şablon market + workspace oluşturma ekranında görünür
-  (`s.market.Reload()`).
+  `wantSet(all, ids)` (nil=tümü / `[]`=hiçbiri) ile agents/flows/skills/schedules bağımsız
+  filtreler ve dosya flag'lerini onurlandırır (`internal/api/market_publish.go`). **Sırlar ve
+  oturum geçmişi asla dahil edilmez** (sunucu-zorunlu). Yayınlanan şablon market + workspace
+  oluşturma ekranında görünür (`s.market.Reload()`).
 - Panel kendi publish aksiyonunu taşır → ortak header "Kaydet" bu sekmede gizli (Görünüm gibi).
 
 ## Neden Ayrı Store Dizini?

@@ -195,16 +195,20 @@ type publishRequest struct {
 }
 
 // publishInclude selects which parts of a live workspace get captured into a
-// template pack. It only applies to the workspace kind. A nil AgentIDs slice
-// means "all agents"; a present-but-empty slice means "none" (rejected upstream
-// since a template needs at least one agent). The boolean flags gate the
-// optional categories — when Include is provided they are honoured verbatim, so
-// the caller must set every flag it wants included.
+// template pack. It only applies to the workspace kind.
+//
+// The id/slug slices (AgentIDs, FlowIDs, SkillSlugs, ScheduleIDs) use tri-state
+// semantics: a nil slice (JSON field omitted) means "every item"; a present slice
+// — INCLUDING an empty one — restricts to exactly its members (empty = none). So
+// the caller can select a subset of agents, flows, workspace-tier skills and
+// schedules independently. A template still needs at least one agent (rejected
+// upstream otherwise). The boolean flags gate the file categories verbatim.
 type publishInclude struct {
-	AgentIDs     []string `json:"agentIds"` // nil = all agents
-	Flows        bool     `json:"flows"`
-	Schedules    bool     `json:"schedules"`
-	Skills       bool     `json:"skills"`
+	AgentIDs     []string `json:"agentIds"`    // nil = all agents
+	FlowIDs      []string `json:"flowIds"`     // nil = all flows, [] = none
+	SkillSlugs   []string `json:"skillSlugs"`  // nil = all workspace skills, [] = none
+	ScheduleIDs  []string `json:"scheduleIds"` // nil = all schedules, [] = none
 	Instructions bool     `json:"instructions"`
+	Prompts      bool     `json:"prompts"` // non-default runtime prompts + README
 	BoardColumns bool     `json:"boardColumns"`
 }

@@ -1,22 +1,24 @@
-// Dedicated "Dışa Aktar" (export-as-template) sub-panel for a workspace. Split
-// out of the General settings panel so the export can be detailed: the user
-// picks exactly which agents and which optional categories (flows, schedules,
-// workspace skills, instructions, board columns) get captured into the template
-// pack. Secrets and session history are never included (server-enforced).
+// Dedicated "Dışa Aktar" (export-as-template) sub-panel for a workspace. The user
+// picks exactly which agents, flows, workspace-tier skills and schedules get
+// captured (each item-by-item), plus the file categories (workspace instructions,
+// non-default runtime prompts + README, board columns) and pack metadata
+// (name/description/version). Secrets and session history are never included
+// (server-enforced). A live preview + dependency warnings reflect the selection.
 import { useEffect, useMemo, useState } from 'react'
 import { Boxes, GitBranch, Clock, Sparkles, FileText, Columns3, PackageCheck, AlertTriangle } from 'lucide-react'
 import { api } from '../../api'
 import type { WorkspaceExportInclude, WorkspaceExportMeta } from '../../api/market'
-import type { Agent, Flow, FlowGraph, Skill, Schedule, WorkspaceSettings } from '../../types'
+import type { Agent, Flow, FlowGraph, Skill, Schedule, WorkspaceConfig, WorkspaceSettings } from '../../types'
 import { Field, Toggle, inputCls } from '../settings/primitives'
+import { ExportPickList, type PickEntry } from './ExportPickList'
 
 interface Props {
   ws: WorkspaceSettings
   onError: (msg: string) => void
 }
 
-// Category flags mirror WorkspaceExportInclude minus the per-agent selection.
-type CatKey = 'flows' | 'schedules' | 'skills' | 'instructions' | 'boardColumns'
+// File-category flags (non-item categories) captured alongside the item lists.
+type CatKey = 'instructions' | 'prompts' | 'boardColumns'
 
 // slugify mirrors the Go server's slugify (internal/api/market_publish.go): lower,
 // keep [a-z0-9], collapse other runs to a single dash, trim dashes. Non-ASCII
@@ -37,11 +39,18 @@ function slugify(s: string): string {
   return out.replace(/^-+|-+$/g, '')
 }
 
+// selectionToIds returns null when every entry is picked (backend "all" shortcut),
+// otherwise the explicit id array (possibly empty = none).
+function selectionToIds(picked: Set<string>, all: PickEntry[]): string[] | null {
+  return all.length > 0 && picked.size === all.length ? null : Array.from(picked)
+}
+
 export function WorkspaceExportPanel({ ws, onError }: Props) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
   const [skills, setSkills] = useState<Skill[]>([])
   const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [config, setConfig] = useState<WorkspaceConfig | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Pack metadata. Name seeds from the workspace name; description/version stay
@@ -50,24 +59,38 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
   const [description, setDescription] = useState('')
   const [version, setVersion] = useState('1.0.0')
 
-  // Selection state. Agents default to all-selected; every category defaults on.
+  // Per-item selection sets (default all-selected once loaded).
   const [pickedAgents, setPickedAgents] = useState<Set<string>>(new Set())
+  const [pickedFlows, setPickedFlows] = useState<Set<string>>(new Set())
+  const [pickedSkills, setPickedSkills] = useState<Set<string>>(new Set())
+  const [pickedSchedules, setPickedSchedules] = useState<Set<string>>(new Set())
+  // File categories (default on).
   const [cats, setCats] = useState<Record<CatKey, boolean>>({
-    flows: true, schedules: true, skills: true, instructions: true, boardColumns: true,
+    instructions: true, prompts: true, boardColumns: true,
   })
 
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
-    Promise.all([api.listAgents(), api.listFlows(), api.listSkills(), api.listSchedules()])
-      .then(([ag, fl, sk, sc]) => {
+    Promise.all([
+      api.listAgents(),
+      api.listFlows(),
+      api.listSkills(),
+      api.listSchedules(),
+      api.getWorkspaceConfig(),
+    ])
+      .then(([ag, fl, sk, sc, cfg]) => {
+        const wsSkills = sk.filter((s) => s.source === 'workspace') // global/bundled are shared, not exportable
         setAgents(ag)
         setFlows(fl)
-        // Only workspace-tier skills are exportable; global/bundled ones are shared.
-        setSkills(sk.filter((s) => s.source === 'workspace'))
+        setSkills(wsSkills)
         setSchedules(sc)
+        setConfig(cfg)
         setPickedAgents(new Set(ag.map((a) => a.id)))
+        setPickedFlows(new Set(fl.map((f) => f.id)))
+        setPickedSkills(new Set(wsSkills.map((s) => s.slug)))
+        setPickedSchedules(new Set(sc.map((s) => s.id)))
       })
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoading(false))
@@ -77,22 +100,47 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
   const hasInstructions = (ws.instructions ?? '').trim().length > 0
   const boardCount = ws.boardColumns?.length ?? 0
 
-  const toggleAgent = (id: string) =>
-    setPickedAgents((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  const allPicked = agents.length > 0 && pickedAgents.size === agents.length
-  const toggleAll = () =>
-    setPickedAgents(allPicked ? new Set() : new Set(agents.map((a) => a.id)))
-  const setCat = (k: CatKey, v: boolean) => setCats((c) => ({ ...c, [k]: v }))
+  // Non-default runtime prompts (current file content differs from the compiled-in
+  // default) + a non-empty README — the "other prompts" the export can carry.
+  const customPromptKeys = useMemo(() => {
+    if (!config) return []
+    return config.promptKeys.filter(
+      (k) => (config.prompts[k] ?? '').trim() !== (config.defaults[k] ?? '').trim(),
+    )
+  }, [config])
+  const hasReadme = (config?.readme ?? '').trim().length > 0
+  const promptsCount = customPromptKeys.length + (hasReadme ? 1 : 0)
 
+  const setCat = (k: CatKey, v: boolean) => setCats((c) => ({ ...c, [k]: v }))
   const canExport = pickedAgents.size > 0
 
-  // Agent ids each flow's graph references (agent-type nodes only). Parsed once;
-  // an unparseable graph yields no refs (the backend skips it too).
+  const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? id
+
+  // Section entries for the reusable pick lists.
+  const agentEntries: PickEntry[] = useMemo(
+    () => agents.map((a) => ({ id: a.id, label: a.name, emoji: a.avatar || '🤖' })),
+    [agents],
+  )
+  const flowEntries: PickEntry[] = useMemo(
+    () => flows.map((f) => ({ id: f.id, label: f.name || f.id, sub: f.description || undefined })),
+    [flows],
+  )
+  const skillEntries: PickEntry[] = useMemo(
+    () => skills.map((s) => ({ id: s.slug, label: s.name || s.slug, sub: s.slug })),
+    [skills],
+  )
+  const scheduleEntries: PickEntry[] = useMemo(
+    () =>
+      schedules.map((s) => ({
+        id: s.id,
+        label: s.prompt?.trim() || '(prompt yok)',
+        sub: `${agentName(s.agentId)} · ${s.cronExpr}`,
+      })),
+    // agentName depends on agents; recompute when either changes
+    [schedules, agents],
+  )
+
+  // Agent ids each flow's graph references (agent-type nodes only).
   const flowAgentRefs = useMemo(
     () =>
       flows.map((f) => {
@@ -110,45 +158,42 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     [flows],
   )
 
-  // Dependency warnings: excluding an agent that a flow/schedule depends on has a
-  // concrete effect — flows keep a dangling reference (the backend can only
-  // rewrite ids it actually exports) and schedules are dropped entirely.
+  // Dependency warnings: only for SELECTED flows/schedules whose agent is excluded.
+  // A selected flow keeps a dangling agent reference; a selected schedule bound to
+  // an excluded agent is dropped by the backend (orphan).
   const depWarnings = useMemo(() => {
-    const nameOf = (id: string) => agents.find((a) => a.id === id)?.name ?? id
     const out: { key: string; label: string; detail: string }[] = []
-    if (cats.flows) {
-      for (const { flow, agentIds } of flowAgentRefs) {
-        const missing = agentIds.filter((id) => !pickedAgents.has(id))
-        if (missing.length > 0) {
-          out.push({
-            key: `flow:${flow.id}`,
-            label: `Akış “${flow.name || flow.id}”`,
-            detail: `hariç bırakılan ajan(lar)a bağlı — dışa aktarımda kopuk referans kalır: ${missing.map(nameOf).join(', ')}`,
-          })
-        }
+    for (const { flow, agentIds } of flowAgentRefs) {
+      if (!pickedFlows.has(flow.id)) continue
+      const missing = agentIds.filter((id) => !pickedAgents.has(id))
+      if (missing.length > 0) {
+        out.push({
+          key: `flow:${flow.id}`,
+          label: `Akış “${flow.name || flow.id}”`,
+          detail: `hariç bırakılan ajan(lar)a bağlı — dışa aktarımda kopuk referans kalır: ${missing.map(agentName).join(', ')}`,
+        })
       }
     }
-    if (cats.schedules) {
-      for (const sc of schedules) {
-        if (!pickedAgents.has(sc.agentId)) {
-          out.push({
-            key: `sched:${sc.id}`,
-            label: `Zamanlama “${sc.prompt?.slice(0, 32) || sc.id}”`,
-            detail: `hariç bırakılan ajana bağlı (${nameOf(sc.agentId)}) — dışa aktarıma dahil edilmez`,
-          })
-        }
+    for (const sc of schedules) {
+      if (!pickedSchedules.has(sc.id)) continue
+      if (!pickedAgents.has(sc.agentId)) {
+        out.push({
+          key: `sched:${sc.id}`,
+          label: `Zamanlama “${sc.prompt?.slice(0, 32) || sc.id}”`,
+          detail: `hariç bırakılan ajana bağlı (${agentName(sc.agentId)}) — dışa aktarıma dahil edilmez`,
+        })
       }
     }
     return out
-  }, [flowAgentRefs, pickedAgents, cats.flows, cats.schedules, schedules, agents])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowAgentRefs, pickedFlows, pickedSchedules, pickedAgents, schedules, agents])
 
-  // Live preview: the exact contents the current selection would produce, mirroring
-  // the backend rules — flows/skills/instructions/board follow their toggle, but
-  // schedules only survive when bound to a selected agent (orphans are dropped).
+  // Live preview: the exact contents the current selection would produce. Schedules
+  // only survive when bound to a selected agent (orphans dropped), mirroring backend.
   const preview = useMemo(() => {
-    const schedEffective = cats.schedules
-      ? schedules.filter((sc) => pickedAgents.has(sc.agentId)).length
-      : 0
+    const schedEffective = schedules.filter(
+      (sc) => pickedSchedules.has(sc.id) && pickedAgents.has(sc.agentId),
+    ).length
     const resolvedName = name.trim() || ws.name
     const slug = slugify(resolvedName) || ws.id.toLowerCase()
     return {
@@ -157,26 +202,16 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       packId: `workspace-${slug}`,
       willOverwrite: slug === (slugify(ws.name) || ws.id.toLowerCase()),
       items: [
-        { icon: Boxes, label: 'Ajan', count: pickedAgents.size, on: true },
-        { icon: GitBranch, label: 'Akış', count: cats.flows ? flows.length : 0, on: cats.flows },
-        { icon: Clock, label: 'Zamanlama', count: schedEffective, on: cats.schedules },
-        { icon: Sparkles, label: 'Skill', count: cats.skills ? skills.length : 0, on: cats.skills },
+        { icon: Boxes, label: 'Ajan', count: pickedAgents.size, on: pickedAgents.size > 0 },
+        { icon: GitBranch, label: 'Akış', count: pickedFlows.size, on: pickedFlows.size > 0 },
+        { icon: Clock, label: 'Zamanlama', count: schedEffective, on: schedEffective > 0 },
+        { icon: Sparkles, label: 'Skill', count: pickedSkills.size, on: pickedSkills.size > 0 },
         { icon: FileText, label: 'Talimat', count: cats.instructions && hasInstructions ? 1 : 0, on: cats.instructions && hasInstructions },
-        { icon: Columns3, label: 'Pano sütunu', count: cats.boardColumns ? boardCount : 0, on: cats.boardColumns },
+        { icon: FileText, label: 'Prompt/README', count: cats.prompts ? promptsCount : 0, on: cats.prompts && promptsCount > 0 },
+        { icon: Columns3, label: 'Pano sütunu', count: cats.boardColumns ? boardCount : 0, on: cats.boardColumns && boardCount > 0 },
       ],
     }
-  }, [cats, schedules, pickedAgents, name, version, ws.name, ws.id, flows.length, skills.length, hasInstructions, boardCount])
-
-  const catRows: { key: CatKey; label: string; hint: string; icon: typeof GitBranch; count: number }[] = useMemo(
-    () => [
-      { key: 'flows', label: 'Akışlar (Flows)', hint: 'Ajan düğümleri taşınabilir anahtarlara yeniden yazılır.', icon: GitBranch, count: flows.length },
-      { key: 'schedules', label: 'Zamanlamalar', hint: 'Yalnızca seçili ajanlara bağlı zamanlamalar dahil edilir.', icon: Clock, count: schedules.length },
-      { key: 'skills', label: 'Workspace skill’leri', hint: 'SKILL.md + ekli dosyalar birebir gömülür (global skill’ler paylaşımlı, dahil değil).', icon: Sparkles, count: skills.length },
-      { key: 'instructions', label: 'Workspace talimatları', hint: hasInstructions ? 'config/instructions.md içeriği.' : 'Bu workspace’in talimatı boş.', icon: FileText, count: hasInstructions ? 1 : 0 },
-      { key: 'boardColumns', label: 'Pano sütunları', hint: 'Kanban sütun düzeni.', icon: Columns3, count: boardCount },
-    ],
-    [flows.length, schedules.length, skills.length, hasInstructions, boardCount],
-  )
+  }, [schedules, pickedSchedules, pickedAgents, pickedFlows, pickedSkills, cats, name, version, ws.name, ws.id, hasInstructions, promptsCount, boardCount])
 
   const doExport = async () => {
     if (!canExport) return
@@ -184,12 +219,12 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     setMsg(null)
     try {
       const include: WorkspaceExportInclude = {
-        // null = all; only send an explicit list when a subset is picked.
-        agentIds: allPicked ? null : Array.from(pickedAgents),
-        flows: cats.flows,
-        schedules: cats.schedules,
-        skills: cats.skills,
+        agentIds: selectionToIds(pickedAgents, agentEntries),
+        flowIds: selectionToIds(pickedFlows, flowEntries),
+        skillSlugs: selectionToIds(pickedSkills, skillEntries),
+        scheduleIds: selectionToIds(pickedSchedules, scheduleEntries),
         instructions: cats.instructions,
+        prompts: cats.prompts,
         boardColumns: cats.boardColumns,
       }
       const meta: WorkspaceExportMeta = {
@@ -240,69 +275,72 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         </Field>
       </div>
 
-      {/* Agents — at least one required */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-sm font-semibold">
-            <Boxes size={16} className="text-[var(--color-accent)]" /> Ajanlar
-            <span className="text-xs font-normal text-[var(--color-text-dim)]">({pickedAgents.size}/{agents.length})</span>
-          </span>
-          {agents.length > 0 && (
-            <button onClick={toggleAll} className="text-xs text-[var(--color-accent)] hover:underline">
-              {allPicked ? 'Tümünü kaldır' : 'Tümünü seç'}
-            </button>
-          )}
-        </div>
-        {agents.length === 0 ? (
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-            Bu workspace’te ajan yok — dışa aktarım için en az bir ajan gerekir.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {agents.map((a) => {
-              const picked = pickedAgents.has(a.id)
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => toggleAgent(a.id)}
-                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
-                    picked
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
-                      : 'border-[var(--color-border)] bg-[var(--color-bg)] hover:bg-[var(--color-surface-2)]'
-                  }`}
-                >
-                  <span
-                    className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-[10px] ${
-                      picked ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white' : 'border-[var(--color-border)]'
-                    }`}
-                  >
-                    {picked ? '✓' : ''}
-                  </span>
-                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded bg-[var(--color-surface-2)] text-sm">
-                    {a.avatar || '🤖'}
-                  </span>
-                  <span className="flex-1 truncate">{a.name}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
+      {/* Item selections — agents / flows / skills / schedules */}
+      <div className="mt-2 space-y-4 border-t border-[var(--color-border)] pt-3">
+        <ExportPickList
+          title="Ajanlar"
+          icon={Boxes}
+          entries={agentEntries}
+          picked={pickedAgents}
+          setPicked={setPickedAgents}
+          emptyHint="Bu workspace’te ajan yok — dışa aktarım için en az bir ajan gerekir."
+        />
+        <ExportPickList
+          title="Akışlar (Flows)"
+          icon={GitBranch}
+          entries={flowEntries}
+          picked={pickedFlows}
+          setPicked={setPickedFlows}
+          emptyHint="Bu workspace’te akış yok."
+          note="Ajan düğümleri taşınabilir anahtarlara yeniden yazılır."
+        />
+        <ExportPickList
+          title="Workspace skill’leri"
+          icon={Sparkles}
+          entries={skillEntries}
+          picked={pickedSkills}
+          setPicked={setPickedSkills}
+          emptyHint="Bu workspace’e özel skill yok (global/gömülü skill’ler paylaşımlıdır, dahil edilmez)."
+          note="SKILL.md + ekli dosyalar birebir gömülür."
+        />
+        <ExportPickList
+          title="Zamanlamalar"
+          icon={Clock}
+          entries={scheduleEntries}
+          picked={pickedSchedules}
+          setPicked={setPickedSchedules}
+          emptyHint="Bu workspace’te zamanlama yok."
+          note="Yalnızca seçili ajana bağlı zamanlamalar dışa aktarılır (diğerleri düşer)."
+        />
       </div>
 
-      {/* Optional categories */}
+      {/* File categories */}
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Dahil edilecekler
+        Dosyalar
       </div>
       <div className="space-y-2">
-        {catRows.map((row) => (
-          <Toggle
-            key={row.key}
-            label={`${row.label}${row.count ? ` (${row.count})` : ''}`}
-            hint={row.hint}
-            checked={cats[row.key]}
-            onChange={(v) => setCat(row.key, v)}
-          />
-        ))}
+        <Toggle
+          label={`Workspace talimatları${hasInstructions ? '' : ' (boş)'}`}
+          hint="config/instructions.md içeriği."
+          checked={cats.instructions}
+          onChange={(v) => setCat('instructions', v)}
+        />
+        <Toggle
+          label={`Promptlar & README${promptsCount ? ` (${promptsCount})` : ' (varsayılan)'}`}
+          hint={
+            promptsCount
+              ? `Yalnızca varsayılandan farklı runtime promptları${hasReadme ? ' + README' : ''} dahil edilir. Dokunulmamış promptlar hedefte güncel varsayılanı korur.`
+              : 'Tüm runtime promptları varsayılan ve README boş — dahil edilecek bir şey yok.'
+          }
+          checked={cats.prompts}
+          onChange={(v) => setCat('prompts', v)}
+        />
+        <Toggle
+          label={`Pano sütunları${boardCount ? ` (${boardCount})` : ''}`}
+          hint="Kanban sütun düzeni."
+          checked={cats.boardColumns}
+          onChange={(v) => setCat('boardColumns', v)}
+        />
       </div>
 
       {/* Live preview — the exact contents the current selection produces */}
@@ -339,7 +377,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         </div>
       </div>
 
-      {/* Dependency warnings — excluded agents that flows/schedules rely on */}
+      {/* Dependency warnings — excluded agents that selected flows/schedules rely on */}
       {depWarnings.length > 0 && (
         <div className="mt-2 space-y-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#f59e0b)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#f59e0b)_8%,transparent)] px-3 py-2.5">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-warning,#f59e0b)]">
