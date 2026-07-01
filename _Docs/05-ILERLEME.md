@@ -1,6 +1,656 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-06-29**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-01**
+
+## Seçili dil sohbet bağlamına enjekte ediliyor (profil zaten ediliyordu) ✅ (2026-07-01)
+
+**Soru:** Profil bilgilerim ve seçtiğim dil bağlama ekleniyor mu?
+
+**Bulgu:** Profil (Ad/Konum/Saat dilimi/Notlar) zaten **sohbet** turlarında "## About the
+user" bloğu olarak enjekte ediliyordu (`api.userContextBlock` → `composeTurnRequest`).
+Ama **dil (tr/en) hiçbir yere enjekte edilmiyordu** — blok yalnız profil alanlarını
+içeriyordu.
+
+**Yapılan:** `userContextBlock`'a **dil yönergesi** eklendi (`languageName` yardımcısı) —
+"Preferred language: reply in Turkish (Türkçe) by default…". Profil alanı boş olsa bile
+dil satırı çıkar (dil varsayılanı `tr`), yani her sohbet turu artık dili onurlandırıyor.
+
+**Bilinen sınır:** Enjeksiyon **yalnız sohbet yolunda** — otonom/zamanlanmış/flow turları
+(`agent.autonomousSystemPrompt`, farklı paket) bu bloğu hâlâ almıyor. Utility promptları
+(reflect/title/summary) zaten "reply in the same language as the data" diyor. Otonom yola
+taşımak istenirse Tunables köprüsü gerekir (backlog). `go build`/`api test` ✅.
+
+## "Özet promptu" netleştirildi + asıl compaction promptu salt-okunur gösteriliyor ✅ (2026-07-01)
+
+**Soru:** Promptlar & Dosyalar ekranındaki "Özet promptu" kullanılıyor mu? Özetleme
+kapsamlı olmalı; gereksizse sil, veya asıl promptu göster.
+
+**Bulgu:** "summary" runtime promptu **kullanılıyor ama konuşma özetlemesi değil** —
+yalnız `/memory · /board · /flows` slash-komutlarının anlık genel-bakış sistem promptu
+(`agent/summarizer.go`, composer'da hâlâ bağlı: `useChatStream.ts`). Asıl konuşma
+özetlemesi ayrı ve **zaten kapsamlı**: `conversation/manager.go compactPrompt` (8 bölüm +
+anti-decay), düzenlenemez.
+
+**Yapılan:**
+- Etiket "Özet promptu" → **"Genel bakış promptu"**, hint bunun slash-komut özeti olduğunu
+  ve konuşma özetlemesi olmadığını açıkça belirtiyor (`WorkspaceFilesPanel.tsx`).
+- **Asıl compaction promptu salt-okunur gösteriliyor:** `conversation.CompactionPromptText()`
+  (yeni exported erişimci; `%s` slotları etiketle doldurulmuş) → `wsConfigDTO.compactionPrompt`
+  (`api/workspace_config.go`) → panelde read-only textarea (`WorkspaceConfig.compactionPrompt`).
+- Silinmedi (slash komutları hâlâ kullanıyor). `go build`/`tsc` temiz.
+
+**İstek:** Ayarlardan self-management aç/kapa silinsin (araçlar diğerleri gibi olsun);
+her araca skill'lerdeki gibi görünürlük seçilebilsin — **4 tier, biri seçili**:
+`Tam` (context'in tamamı) / `Özet` / `İsim` / `Gizli`. Ayrıca araç bilgisinde olup
+UI'da görünmeyenler (örnekler, when-to-use) gösterilsin.
+
+**Yapılan:**
+- **Backend:** `tools.Visibility{Full,Summary,NameOnly,Hidden}` + `SetVisibility`/
+  `VisibilityOf` (registry). `WorkspaceToolConfig.ToolVisibility map[string]string`
+  (eski `HiddenTools`/`ShownTools` listeleri yüklemede map'e migrate). `toolsetup`
+  override'ları en son `SetVisibility` ile uygular. `workspace-tools` API `visibility`
+  + `examples` döndürür, PUT `toolVisibility` map'i alır (`validVisibility` doğrular).
+- **Self-manage:** master toggle kaldırıldı → paket daima kurulu, varsayılan `hidden`.
+  **Tam sökme (aynı gün):** `settings.EnableSelfManage` alanı + `SWARMGO_ENABLE_SELFMANAGE`
+  env + `Tunables.SelfManageEnabled`/`selfManage` + ayar UI toggle'ı **tamamen silindi**;
+  `spawn_session` CLI köprüsünde koşulsuz ilan edilir. `TestInteractionAdvertisedNames`
+  + `store_test` güncellendi.
+- **UI:** `ToolsPanel` per-tool 4'lü segment (Tam/Özet/İsim/Gizli) + tier-renkli
+  `VisibilityBadge`; toplu + per-server hızlı eylem 4 tier'a genişledi. Detay görünümü
+  **örnek çağrıları** + tam (çok-paragraflı) açıklamayı gösterir.
+- **CLI uyumu:** Native tüm tier'ları tam uygular; CLI'da tier katalog-bloğu metnini
+  etkiler, gerçek yükleme CLI'nin ToolSearch/`alwaysLoad`'ıyla — `full` CLI'da "en
+  fazla ilan", dış MCP'de "kesin eager" garantisi vermez (mimari sınır, dokümante).
+- `go build ./...` + tüm testler yeşil, `tsc --noEmit` temiz. Detay: `_Docs/19`.
+
+## Görünüm sadeleştirme: accent + temel mod kaldırıldı, renk=açık/koyu varyant ✅ (2026-07-01)
+
+**İstek:** Görünüm ekranında "Vurgu rengi (accent)" ve "Temel mod (koyu/açık/sistem)"
+kaldırılsın; onun yerine her tema **renginin** açık ve koyu karşılığı olsun.
+
+**Yeni model:** Tek kontrol = `themePreset`. Bir preset id'i hem rengi hem modu kodlar
+(`violet-dark` / `violet-light`). 6 renk ailesi (Mor/Mavi/Zümrüt/Gül/Kehribar/Nord) ×
+2 varyant = 12 preset. Ayrı base-mode ve accent picker yok.
+
+**Frontend:**
+- `lib/themePresets.ts` yeniden yazıldı: `COLORS` (aile tanımı, dark+light accent/soft) →
+  `THEME_PRESETS` (düz, aile başına 2) + `THEME_COLORS` (picker için aile+varyant) +
+  `DEFAULT_PRESET='violet-dark'`. Neutrals (bg/surface/text) mod başına sabit, yalnız
+  accent değişir.
+- `lib/theme.ts` sadeleşti: `Appearance={themePreset}`, `applyTheme(preset)` (accent
+  override + legacy dark/light/system yolu kaldırıldı; boş/bilinmeyen id → default preset).
+- `AppearancePanel` (`settings/appPanels.tsx`): "Temel mod" + "Vurgu rengi" alanları
+  kaldırıldı; tema paleti grid'i yerine **renk satırları** (her aile: Koyu + Açık swatch).
+  Load/save yalnız `themePreset`.
+- `App.tsx`: appearance ref/`applyClientPrefs`/ws-override yalnız `themePreset`.
+
+**Backend:**
+- `settings.Default().ThemePreset` `"midnight-violet"` → `"violet-dark"`; alan yorumu
+  güncellendi. `Theme`/`Accent` alanları geriye-uyum için kaldı (artık UI'yı etkilemiyor).
+- `cmd/swarmgo-desktop/titlebar_windows.go`: preset→renk haritası kaldırıldı; titlebar
+  artık id son-ekine (`-light`/`-dark`) göre mod-neutrals seçiyor (accent kullanılmıyor).
+
+**Doğrulama:** `go build ./...` + desktop build ✅, frontend `tsc --noEmit` temiz ✅.
+`swarmgo-settings` skill'i güncellendi.
+
+## Journal gürültü filtresi + recall eşiği ayarlanabilir ✅ (2026-07-01)
+
+**İstek:** Context-payload optimizasyonu (4 paralel görevden 4.). Her turun **dinamik**
+(cache-dışı) bağlamına enjekte edilen "Relevant memory" bölümü, önemsiz/düşük-bilgili journal
+kayıtlarıyla kirleniyordu (ör. `Q: 2+2 kaç eder? A: 4 eder.`). Bu trivial turlar her tur taze token
+harcatıyor ve dikkati dağıtıyordu.
+
+**Çözüm — iki ayarlanabilir mekanizma:**
+
+1. **Yazma-tarafı düşük-bilgi kapısı (`journalMinLen`)** — `Journal()` artık içeriği
+   `journalMinLen` rune'dan kısa olan turları **hiç saklamadan** atar (boş-check'in yanında, uzunluk
+   cap'inden önce). Böylece gürültü daha kaynakta, recall havuzuna girmeden kesilir.
+   - Yeni tunable + settings alanı `journalMinLen`. **Default 40 rune** (muhafazakâr: kısa ama
+     anlamlı notlar korunur). **0 = kapalı** (filtre devre dışı; geriye dönük tam uyum).
+   - `0` anlamlı bir değer olduğu için cap deseninden farklı: getter `0`'ı default'a çevirmez,
+     yalnızca negatifi 0'a normalize eder. Clamp: `0 ≤ minLen ≤ journalMaxLen`.
+   - Test runtime'ları (`NewTunables`, `tun==nil`) kapıyı **kapalı** tutar — mevcut testler
+     etkilenmez.
+
+2. **Recall eşiği artık ayarlanabilir (`recallMinScore`)** — eskiden `memory.go` içinde
+   sert-kodlu `const minScore = 0.04` idi. Artık `memory.Store` eşiği bir **canlı provider**
+   üzerinden okur (`SetMinScoreProvider`); runtime bunu workspace'in `Tunables.RecallMinScore`'una
+   bağlar, böylece ayar değişikliği **restart'sız** bir sonraki recall'da geçerli olur (import döngüsü
+   yok — `memory` paketi `agent`'ı import etmez).
+   - `recallMinScore` ayarı zaten settings/frontend'de **vardı ama ölü konfigdi** (hiçbir yere bağlı
+     değildi, default 0.05). Artık gerçekten bağlandı; default `0.05 → **0.04**` düzeltildi (gerçekte
+     yürürlükteki sabit değer 0.04'tü — davranış korunur). Kullanıcı gürültüyü kesmek için
+     yükseltebilir.
+
+**Etki:** Default 40-rune kapısı `Q: kısa? A: tek kelime` türü ultra-trivial turları kaynakta eler;
+daha agresif filtreleme için `journalMinLen` yükseltilir (ör. 60–80) ve/veya `recallMinScore`
+artırılır (ör. 0.08–0.12) — ikisi de dinamik segmentin token + dikkat maliyetini düşürür. Her iki
+default da mevcut davranışı bozmaz (recall 0.04 sabit; kapı yalnızca en kısa turları eler).
+
+**Değişen dosyalar:** `internal/agent/tunables.go` (+`journalMinLen`, +`recallMinScore`,
+`SetJournalLimits` 3 parametre), `internal/agent/reflector.go` (`Journal()` kapı + `journalMinLen()`
+helper), `internal/agent/runtime.go` (provider bağlama), `internal/memory/memory.go`
+(`DefaultMinScore` + provider + `minScore()`), `internal/memory/graph.go` (floor provider),
+`internal/settings/{settings,store}.go` (+alan, applyInt, clamp, default 0.04), `internal/api/server.go`
+(applySettings wiring), `internal/agent/tunables_test.go` (yeni testler), frontend
+(`types/settings.ts`, `SettingsPanel.tsx`, `appPanels.tsx`).
+
+**Doğrulama:** `go build ./...` temiz; `go test ./internal/{memory,agent,settings,api,e2e}/...` →
+201 test geçti; `tsc --noEmit` temiz.
+
+## Statik prefix sadeleştirme — Deliverables skill'e taşındı + deferred-not tek yerde ✅ (2026-07-01)
+
+**İstek:** Context-payload optimizasyonu (4 paralel görevden 3.). Sistem prompt'un statik
+prefix'inde iki şişkinlik: (1) "deferred / ToolSearch ile yükle / unloaded ad → No such tool
+available" açıklaması hem Skills hem Tools bloğunda tekrar ediyordu; (2) "Deliverables →
+Artifacts" bloğu (inline media + gallery JSON + `![alt]` kuralları) her tur statik prefix'te —
+token'dan çok dikkat/context-rot maliyeti.
+
+**Yapılan:**
+- **Adım 1 — Boilerplate birleştirme:** `internal/skills/store.go` `renderCatalog` içindeki
+  skills `deferNote` tek kısa cümleye indirildi (`ToolSearch select:...` + "Available Tools
+  notuna bak"). Mekanizmanın tam açıklaması (DEFERRED'ın anlamı, `"No such tool available"`
+  cümlesi) artık **yalnız** `internal/agent/toolsetup.go` `renderLazyToolCatalog` CLI intro'sunda
+  (tek canonical yer). Native vs CLI varyant farkı korundu (native eager → not yok).
+- **Adım 2 — Deliverables skill'e taşındı:** Yeni shipped skill
+  `internal/skills/defaults/swarmgo-deliverables/SKILL.md` (`access: shared`, on-demand). Tüm
+  detaylı kurallar (binary `sourcePath`, inline media, gallery, `update_artifact` by id) skill
+  body'sine taşındı. `internal/api/artifacts.go` `artifactDeliverableGuidance` 2 satırlık özet +
+  `use_skill swarmgo-deliverables` pointer'ına indirildi. Bilgi **kaybolmadı** — sadece prefix'ten
+  skill'e taşındı; `//go:embed defaults` deseni otomatik gömüyor (ek kayıt gerekmedi).
+
+`go build ./...` temiz; `go test ./internal/skills ./internal/agent ./internal/api` (197) temiz.
+Yeni skill'in seed + parse + shared-yüklenebilir olduğu geçici testle doğrulandı (sonra silindi).
+Tahmini statik-prefix kazancı: deliverables ~250-300 token + her CLI tur deferred-tekrar ~40-60
+token ≈ **~300-360 token/tur**; asıl kazanç deliverables bloğunun her turdan kalkmasıyla
+**dikkat/context-rot azalması**.
+
+## Eager araç şemalarını sadeleştirme (run_subagent / create_artifact / core_memory) ✅ (2026-07-01)
+
+**İstek:** Context-payload optimizasyonu. Araç JSON şemaları en ağır segment (~%56).
+Bilinçli **eager** (her tur tam şemayla giden, "behavioral nudge") üç araç şişkin:
+`run_subagent` (şemada 3 örnek + uzun field açıklamaları), `create_artifact` (uzun açıklama),
+`core_memory_append`/`replace` (neredeyse aynı uzun açıklamayı tekrarlıyor).
+
+**Yapılan (Strateji A — eager kalır, sıfır davranış riski):**
+- `internal/tools/subagent.go`: `run_subagent` açıklaması ~yarıya, field açıklamaları kısaltıldı;
+  `Examples` **3 → 1** (örnekler `foldExamples` ile her tur eager şemaya katlanıyordu → en büyük kalem).
+- `internal/tools/builtin_artifact.go`: `create_artifact` açıklaması kısaltıldı (image/binary + base64-etme uyarısı korundu).
+- `internal/tools/builtin_memory_core.go`: ortak core-memory tanımı tek `coreMemoryDesc` const'una çıkarıldı; her açıklama ortak cümle + role özgü satıra indi. **Lazy yapılmadı** (bağlam-basıncı anında lazım).
+
+`go build ./internal/tools/...` + `go test ./internal/tools/...` (152) temiz; şema/örnek JSON geçerliliği doğrulandı.
+Tahmini tasarruf: ~1.3 KB / eager tur ≈ **~300-350 token**. Strateji B (lazy + prompt nudge) öneri olarak bırakıldı.
+Detay: `_Docs/19-LAZY-TOOL-LOADING.md`.
+
+## Dış MCP araçları katalogda yalnız-ad (NameOnly) ✅ (2026-07-01)
+
+**İstek:** Context-payload optimizasyonu. "Available Tools (load on demand)" bloğunda
+dış MCP araçları (ör. `mcp__mcp-chrome__*`) tam açıklamalarıyla dökülüyordu; SwarmGo'nun
+kendi `swarmgo_extended` araçları ise zaten yalnız-ad. Tutarsızlık + her tur ölü token.
+
+**Yapılan:** `internal/tools/registry.go` `AttachMCP` artık her MCP aracını `lazy` **VE**
+`nameOnly` işaretliyor (tek satırlık ekleme: `r.nameOnly[e.NamespacedName] = true`).
+Mevcut `VisibleLazyCatalog`/`writeLazyToolLine` mekanizması açıklamayı boşaltıp yalnız
+`- \`mcp__server__tool\`` basıyor. İsimler listede kaldığı için `tool_search`/`activate_tools`
+ve CLI `ToolSearch select:<name>` ile araçlar hâlâ keşfedilip yüklenir. `go build ./internal/tools/...`
++ `go test ./internal/tools/...` temiz. Tahmini tasarruf: chrome ~30 araç için ~800–1200 token/tur.
+Detay: `_Docs/19-LAZY-TOOL-LOADING.md`.
+
+**Manuel override (UI):** MCP araçları artık varsayılan NameOnly olduğundan, kullanıcının
+bunu sunucu bazında geri alabilmesi için `ToolsPanel` MCP sunucu kartına her satırda
+**"Tümü NameOnly" / "Tümü Göster"** hızlı eylemi (+ eager/total sayacı) eklendi. Backend
+değişmedi — mevcut `setWorkspaceToolsVisibility` override'ı kullanılıyor. `tsc --noEmit` temiz.
+
+## Built-in araçlar fonksiyonel kategorilere gruplandı ✅ (2026-07-01)
+
+**İstek:** Tools ekranında ~85 built-in araç tek "Yerleşik" grubunda akıyordu (MCP'ler
+sunucu başına gruplanırken). Tutarsız ve taranması zor.
+
+**Yapılan (tek-kaynak, backend → frontend):**
+- **Backend:** `internal/tools/categories.go` — `CategoryOf(name) string`, isim→kategori
+  açık eşlemesi (10 fonksiyonel anahtar: `files`, `search`, `memory`, `agents`,
+  `automation`, `interaction`, `artifacts`, `skills-mcp`, `config`, `diagnostics`;
+  eşlenmemiş araç `other`). `internal/api/workspace_tools.go` her built-in'e `category`
+  alanını basar; MCP araçlarında boş (onlar sunucuya göre gruplanır).
+- **Frontend:** `WorkspaceTool.category` tipi; `toolMeta.ts`'te `toolCategory` +
+  `CATEGORY_LABELS` (TR etiket) + `CATEGORY_ORDER` (sabit sıra). `ToolsPanel` `groups`
+  memo'su built-in'leri kategoriye göre (sabit sırada), MCP'leri sunucuya göre
+  (alfabetik) böler. Bilinmeyen kategori anahtarı ham haliyle sona düşer (graceful).
+- `go build ./internal/tools/... ./internal/api/...` + `tsc --noEmit` temiz. Yeni araç
+  eklenince `categories.go`'ya bir satır eklenmeli (yoksa "Diğer" altında görünür).
+
+## Tam temizlik: bütçe/limit sistemi + ölü ayarlar backend'den söküldü ✅ (2026-07-01)
+
+UI kaldırıldıktan sonra backend kalıntıları da tamamen temizlendi.
+
+**Bütçe/limit sistemi (tamamen kaldırıldı — ajanlar artık koşulsuz sınırsız):**
+- `db.Agent.DailyCallLimit`/`DailyTokenLimit` alanları (`db/models.go`) + `db.UpdateBudget`
+  (`db/store_usage.go`) silindi.
+- `agent/budget.go`: `ErrBudgetExceeded`, `ensureBudget`, `billableTokens` silindi;
+  `guardedComplete` artık yalnız global `pauseAutonomy`/`Paused` frenini uyguluyor.
+  `agent/toolloop.go`'daki iki per-iterasyon bütçe kapısı + `recovery.go termBudget`
+  sabiti + `budget_test.go TestBillableTokens` kaldırıldı.
+- API: `POST /api/agents/{id}/budget` endpoint'i + `handleSetBudget`/`setBudgetReq`
+  (`api/usage.go`, route `server.go`) silindi; `handleAgentUsage` + `agentBudgetRow`
+  (`api/budget.go`) artık limit alanı döndürmüyor; `api/agents.go` varsayılan-bütçe
+  tohumlaması kaldırıldı; `api/templates.go` + `api/market.go` + `market/pack.go` template
+  agent limit alanları söküldü, `subagent_test.go` güncellendi.
+- Settings: `DefaultDailyCallLimit`/`DefaultDailyTokenLimit` (struct/Default/DTO/Patch +
+  store apply/clamp) kaldırıldı.
+- Frontend: `types/agent.ts` (AgentUsage), `types/usage.ts` (BudgetAgentRow),
+  `types/market.ts`, `types/settings.ts` limit alanları + `ChatMeters.tsx` overBudget
+  mantığı temizlendi (spend pill yalnız çağrı+maliyet gösteriyor). **Spend takibi
+  (RecordUsage + Bütçe ekranı) korunur** — yalnız *limit* kavramı gitti.
+
+**Ölü ayarlar (`mcpGatewayUrl`, `logLevel`):** settings.go (struct/Default/DTO/Patch),
+store.go (apply + logLevel clamp), validate.go (+ validate_test.go logLevel case) ve
+frontend `types/settings.ts` + save payload'undan tamamen kaldırıldı.
+
+**Doğrulama:** `go build ./...` ✅, `go vet ./...` temiz ✅, `go test` 208 test ✅,
+frontend `tsc --noEmit` temiz ✅. Skill dökümanları (`swarmgo-settings`,
+`swarmgo-autonomous-ops`) güncellendi.
+
+## Ayarlar ▸ Gelişmiş'ten ölü alt-bölümler kaldırıldı ✅ (2026-06-30)
+
+**İstek:** Gelişmiş ekranındaki "MCP & Araçlar" ve "Tanılama" bölümleri gereksizse
+kalksın; loglar zaten Logs ekranına gidiyor, oradan filtrelenebiliyor.
+
+**Teşhis (ikisi de ölü ayar):**
+- `mcpGatewayUrl` ("MCP & Araçlar"): tüm repoda yalnız kaydedilip yükleniyor, runtime
+  hiç **tüketmiyor**. Gerçek MCP sunucu yönetimi ayrı "Araçlar & MCP" (`mcptools`)
+  kategorisinde → alt-bölüm gereksiz.
+- `logLevel` ("Tanılama"): `cmd/swarmgo`'da hiç okunmuyor → logger'a **uygulanmıyor**.
+  Ayrıca `LogsPanel.tsx` zaten seviye filtresi + metin araması sunuyor → gereksiz.
+
+**Yapılan (frontend):** `SettingsPanel.tsx`'ten iki `AdvSection` (MCP & Araçlar,
+Tanılama) + `McpPanel`/`DiagnosticsPanel` import'ları + kullanılmayan `Plug`/`Activity`
+ikonları kaldırıldı; `settings/appPanels.tsx`'ten `McpPanel` ve `DiagnosticsPanel`
+fonksiyonları silindi. Backend alanları (`mcpGatewayUrl`/`logLevel`) geriye-uyum için
+settings.json'da kalır (zararsız). `swarmgo-settings` skill'inde ikisi deprecated/unused
+not edildi. `tsc --noEmit` temiz.
+
+## Bütçe/limit UI kaldırıldı — ajanlar daima sınırsız ✅ (2026-06-30)
+
+**İstek:** Ayarlardaki "Bütçe" sekmesi kalksın; "Günlük çağrı limiti" ve "Günlük
+token limiti" olmasın, hep sınırsız olsun.
+
+**Yapılan (frontend):**
+- Ayarlar kategorisi `budget` kaldırıldı: `settings/primitives.tsx` (`Cat` union +
+  `APP_CATS`), `SettingsPanel.tsx` (import + `cat === 'budget'` render),
+  `settings/appPanels.tsx` (`BudgetPanel` fonksiyonu silindi).
+- NavRail **Bütçe** ekranı (`panels/BudgetPanel.tsx`) korunur (harcama görünümü) ama
+  limit yüzeyi söküldü: inline `editLimit` prompt'u, "Token limiti doluluk" + "Durum"
+  sütunları, `/limit` çağrı göstergesi, over/near durum rozeti, "limit" düzenle butonu.
+- Kullanılmayan `api.setBudget` (`api/agents.ts`) kaldırıldı.
+
+**Backend:** `defaultDailyCallLimit`/`defaultDailyTokenLimit` zaten 0 (sınırsız);
+alanlar geriye-uyum + self-management için settings.json'da kalır ama artık UI'dan
+düzenlenemez → yeni ajanlar daima sınırsız. Enforcement (budget.go) 0'da no-op.
+`tsc --noEmit` temiz.
+
+## Türkçe karakter (UTF-8) mojibake — teşhis + onarım ✅ (2026-06-30)
+
+**Şikâyet:** Bellek/recall'a giren Türkçe metin bozuluyor (`Kısaca`→`KÄ±saca`,
+`kaç`→`kaÃ§`); uyarı `internal/memory` (journal) + `conversation/db` JSONL byte
+handling'i işaret ediyordu.
+
+**Teşhis (ampirik, kapatıldı):** Kök neden SwarmGo'da **DEĞİL**. Kanıtlar:
+(1) Go I/O uçtan uca UTF-8 — `internal/db/store.go` (JSONL) `encoding/json` + atomik
+bayt yazımı, `internal/memory` + `agent/reflector.go` (journal=`"Q: "+req.Message+...`)
+saf Go string; tüm `internal`'da **tek `DecodeString` base64**, hiçbir charset decoder
+(`x/text/charmap`/CP125x) yok. (2) `claude-cli` provider'ı SwarmGo'nun bire-bir byte
+yoluyla (stdin raw UTF-8 / stdout raw) Türkçe'yi **doğru** round-trip eder (probe ile
+doğrulandı). (3) Diskteki yer-gerçeği: asistan cevapları `×`/`÷`/`−` çok-baytlı Unicode'u
+**kusursuz** saklamış; yalnız **user mesajları** bozuk → bozulma `req.Message`
+SwarmGo'ya gelmeden, **gönderen istemcide** (double-encode: UTF-8 bayt CP1254 çözülüp
+tekrar UTF-8). Klasik **Windows PowerShell 5.1** `Invoke-RestMethod` string-gövde /
+BOM'suz-UTF-8-dosya-ANSI-okuma hatası (`dev.ps1` ASCII-only kuralının aynısı).
+
+**Karar:** Sunucu tarafına otomatik onarım **eklenmedi** (double-encoded girdi geçerli
+UTF-8'dir, meşru Latin-1'den ayırt edilemez → sessiz yanlış-pozitif riski; sınır
+istemcidir).
+
+**Yapılanlar:** (1) `scripts\repair-encoding.ps1` — bir-seferlik güvenli onarım: span
+bazlı (ftfy-benzeri) ters-çevirme, yalnız geçerli-UTF-8 oluşturan + lead-bayt `C2-C5/E2`
+koşuları (temiz Türkçe harf/sembolde yanlış pozitif yok; karışık bozuk-Q+temiz-A
+satırları da düzelir), knowledge'da stale `embedding` null'lanır (Go `unmarshalVector(nil)`
+→ içerikten yeniden hesaplar), session.jsonl ham-satır onarımı (JSON round-trip riski yok),
+`.bak-encfix` yedek + dry-run varsayılan. WS5'te **21 alan / 16 dosya** düzeltildi, 0
+kalıntı, 0 geçersiz JSON. (2) `scripts\e2e-smoke.ps1` `Api-Post`/`Api-Put` sertleştirildi
+(gövde artık UTF-8 byte[]). (3) Doküman: `33-DIS-AJAN-OTOMASYONU.md §A.1.1`.
+
+## claude-cli kimlik popup'ı (Max OAuth / API token) ✅ (2026-06-30)
+
+**Hedef:** İzole config dizini için **SwarmGo UI'ından** login akışı — bir popup'ta
+ya Max/Pro hesabı ya API anahtarı eklenebilsin; dizinde ayrı `claude login` gerekmesin.
+
+**Mekanik:** Claude CLI auth-precedence'ı token'ı env'den kabul ediyor
+(`ANTHROPIC_API_KEY` > `CLAUDE_CODE_OAUTH_TOKEN` > config-dir `.credentials.json`).
+Yani token'ı subprocess env'ine enjekte etmek izole/boş dizini login'siz yetkilendirir
+(token inference için yeterli). İki yöntem: **Max/Pro** → kullanıcı `claude setup-token`
+ile 1 yıllık OAuth token üretir (tarayıcı, tek sefer), popup'a yapıştırır →
+`CLAUDE_CODE_OAUTH_TOKEN` (abonelik, API faturası yok); **API** → `sk-ant-…` →
+`ANTHROPIC_API_KEY`.
+
+**Katmanlar:** `settings.go` (`ClaudeCliAuthKind` + şifreli `ClaudeCliAuthTokenEnc`;
+DTO `claudeCliAuthKind`/`claudeCliAuthSet`; Patch write-only `claudeCliAuthToken`),
+`store.go` (write-only encrypt + `ClaudeCliAuthToken()` decrypt accessor),
+`providers/kind.go` (`CLIAuthKind`/`CLIAuthToken`), `registry.go`
+(`SetClaudeAuth` + resolve), `kind_claudecli.go`+`claudecli.go` (`NewClaudeCLI` 5 param +
+`runAttempt`'ta kind'e göre env enjeksiyonu; ANTHROPIC_API_KEY öncelikli olduğu için
+tek env set edilir), `api/server.go applySettings` (`SetClaudeAuth`). Frontend: yeni
+`ClaudeAuthDialog.tsx` modal (2 sekme + setup-token komutu kopyalama + paste +
+sil), `ProvidersPanel` Anthropic kartında "claude-cli kimlik" butonu + durum rozeti,
+`settings.ts` tipler. Token şifreli saklanır, API'ye asla dönmez (`claudeCliAuthSet`
+bool). `go build`/`go vet`/`tsc` ✅.
+
+**Ek (test butonu):** Anthropic kartındaki mevcut "Test et" **anthropic HTTP API**
+anahtarını dener; yalnız Max/Pro OAuth token varken `invalid x-api-key` döner. Bu yüzden
+karta ayrı **"claude-cli'yi test et"** butonu eklendi → `runTest('claude-cli')` (backend
+test endpoint'i zaten herhangi bir provider'ı `s.providers.Get` ile kurup gerçek `claude`
+turu atıyor; config dir + enjekte token ile). Bağımsız rozet (`test['claude-cli']`).
+Backend değişmedi; yalnız `ProvidersPanel` extra slot.
+
+## claude-cli izole config dizini (CLAUDE_CONFIG_DIR) ✅ (2026-06-30)
+
+**Hedef:** Kullanıcının mevcut `~/.claude`'una (dolu skill/tool/MCP/global CLAUDE.md/login)
+**dokunmadan** claude-cli'yi **temiz** bir config evi ile çalıştırabilmek. İkinci binary
+kurmak çözüm değil — tüm claude binary'leri aynı `~/.claude`'u okur; ayrım **config
+dizininde**.
+
+**Çözüm:** Yeni `claudeConfigDir` ayarı → claude-cli subprocess'ine `CLAUDE_CONFIG_DIR`
+env olarak enjekte edilir. Boş = ortak `~/.claude`; bir yol verilince CLI
+skill/ayar/komut/global CLAUDE.md/login'i o izole dizinden okur.
+
+**Default (2026-06-30):** Artık **izole-by-default** → `~/.swarmgo/claude-home`
+(`settings.defaultClaudeConfigDir()`, home çözülemezse `""`=ortak `~/.claude` fallback).
+Yani claude-cli kutudan çıktığı gibi temiz bir config evinden çalışır; **tek seferlik
+`claude` login** o dizinde gerekir. Anahtarsız-mevcut-login davranışı istenirse alan
+boşaltılır (UI placeholder `otomatik (~/.claude)`). Bilinçli ürün kararı: SwarmGo runtime'ı
+kullanıcının kişisel `~/.claude` skill/tool kirliliğinden ayrışır. (SwarmGo zaten
+`--strict-mcp-config` ile MCP'leri izole ediyordu; bu, eksik olan skill/ayar/CLAUDE.md
+katmanını da kapatır.) CLI bu env'e saygı duyar (doğrulandı: Claude Code env-vars docs +
+issue #25762); SwarmGo CLI'ı doğrudan subprocess çağırdığı için VS Code eklentisindeki
+bug yolu etkilemiyor.
+
+**Dokunulan katmanlar (mevcut `claudeCliPath` aynalandı):** `settings.go`
+(Settings+DTO+Patch+default `claudeConfigDir`), `store.go` (applyString),
+`providers/kind.go` (`ResolvedConfig.CLIConfigDir`), `registry.go`
+(`claudeConfigDir` alanı + `SetClaudeConfigDir` + resolve), `kind_claudecli.go`
+(`NewClaudeCLI` 3. param), `claudecli.go` (`configDir` alanı + `runAttempt`'ta
+`cmd.Env` enjeksiyonu), `api/server.go applySettings` (canlı uygula), frontend
+(`settings.ts` tip, `SettingsPanel` save, `ProvidersPanel` Anthropic kartında opsiyonel
+2. endpoint alanı "claude config dizini"). Default skill `swarmgo-settings` belgelendi.
+`go build`/`go vet`/`tsc` ✅.
+
+## Token/bütçe muhasebesi denetimi + CLI ek-yükü düzeltmesi ✅ (2026-06-30)
+
+**Hedef:** Token ve bütçe hesaplamalarında yanlışlık var mı? (SwarmGo↔the external agent project
+token kıyası oturumunun ardından). **Denetim sonucu:** Çekirdek muhasebe **doğru** —
+OpenAI-uyumlu yol `prompt_tokens`'tan `cached`'i çıkarıyor (çift-sayım yok,
+`minimax.go toUsage`), Anthropic native ayrık sayaçlar, fiyat kademeleri
+(`pricing.go CostDetailed`: input + cacheRead×0.10 + cacheWrite×1.25 + output),
+günlük/oturum toplama her sağlayıcı çağrısı başına doğru topluyor (`RecordUsage`).
+
+**Tek gerçek kusur:** `api/session_context.go computeCLIOverhead`. claude-cli'nin
+`result` zarfındaki `cache_read_input_tokens` **tek tur içindeki iç tool-loop
+adımlarının KÜMÜLATİF** toplamıdır (tek-geçiş bağlamını kat kat aşar — bir API
+çağrısı cache'ten yazılandan fazlasını okuyamaz; kanıt: SES5 tur 2 `cacheRead=269485`
+iken yazılan ≤ ~86K → ~5 iç çağrının toplamı). **Maliyet için doğru** ama **bağlam
+boyutu değil**. Eski kod bunu "çağrı başına gerçek girdi" sayıp `In+CacheRead+
+CacheWrite` ile sahte ~5–7× ek-yük üretiyordu (kıyas oturumunda SwarmGo'yu olduğundan
+ağır gösteren rakam buydu).
+
+**Değişiklik:** `computeCLIOverhead` artık cacheRead katkısını çağrı başına bağlam
+tahminiyle **sınırlıyor** (`capRead = min(cacheRead, estimated)`), hem debug-event
+hem lifetime-fallback yolunda. Soğuk ilk turda (cacheRead≈0) ölçülen≈tahmin → gerçek
+yük ~0; ısınınca ~1.5× düzeyinde gerçekçi kalır. Tip dokümanları (`session.ts`
+`CLIOverhead`, `session_context.go cliOverheadPreview`) + `_Docs/17` güncellendi.
+Build + `billing/providers/conversation/db` testleri ✅. Parser'a (kümülatif kayıt
+billing için doğru) dokunulmadı.
+
+**Takip düzeltmeleri (aynı gün):**
+1. **Bütçe kapısı cache'i sayıyor (`agent/budget.go`):** `ensureBudget` artık
+   `daily_token_limit`'i `input+output` yerine **`billableTokens(u)`** ile
+   kıyaslıyor — cache token'ları fiyat çarpanlarıyla katlıyor (read×0.10,
+   write×1.25). claude-cli/Anthropic'te tüketimin çoğu cache trafiği olduğundan eski
+   `input+output` kapısı neredeyse hiç tetiklenmiyordu; ağırlıklı sayım kapıyı
+   gerçek harcamayla orantılı yapar.
+2. **Native turda mesaj-balonu tur-toplamı (`agent/toolloop.go` + `turnmeta.go`):**
+   Native çok-adımlı tool-loop artık her sağlayıcı çağrısının usage'ını
+   **`sumUsage`** ile biriktirip dönen yanıta yazıyor (`turnUsage`). Eskiden balon
+   yalnız **son** iterasyonun token'ını gösteriyordu → balonların toplamı oturum
+   ömür-boyu toplamından az çıkıyordu (RecordUsage zaten çağrı-başı topluyordu). Artık
+   tutarlı. claude-cli yolu etkilenmez (tek Complete; usage zaten tur-aggregate).
+   Birim testler: `budget_test.go` `TestBillableTokens` + `TestSumUsage` ✅.
+
+**CLI-overhead num_turns düzeltmesi (aynı gün, takip-2):** İlk düzeltmede konan
+`min(cacheRead, estimated)` sınırı **ters yönde** hata yaptı — başka bir oturumda
+fark edildi: sıcak turda gerçek çağrı-başı ~53K iken preview ~12K gösteriyordu (~34K
+eksik). **Ham claude-cli stream'i ile kesin semantik doğrulandı:** `result.num_turns`
+= turdaki iç tool-loop API çağrı sayısı; result `usage` o çağrıların **toplamı**
+(`cacheRead=46658 = 21628+25030`, num_turns=2). Doğru çağrı-başı bağlam =
+`(in+cacheRead+cacheWrite)/num_turns` (= 30.692 ≈ gerçek 28.9K/32.4K). **Zincir:**
+`providers/claudecli.go` parser `num_turns`'ü `Response.ProviderCalls`'a yakalar →
+`Response.ProviderCalls` alanı + `db.DebugEvent.Calls` alanı eklendi → `RecordUsage`
+artık `providerCalls` parametresi alıp debug `llm_call`'a `Calls` yazar (4 çağrı yeri
+güncellendi) → `api/session_context.go computeCLIOverhead` `capRead` hack'i kaldırılıp
+`/num_turns` bölmesi kondu. Lifetime-fallback (rollup num_turns saklamaz) yaklaşık
+kalır — debug-journal yolu (vars. açık) kesin. Tip dokümanları + `_Docs/17`
+güncellendi. Test: `claudecli_usage_test.go TestCLIParserNumTurns` ✅; tüm suite ✅.
+
+**Lifetime-fallback kesinleştirme (aynı gün, takip-3):** Yukarıdaki yaklaşıklık
+giderildi — `db.UsageDelta`'ya `ProviderCalls` taşıyıcı alanı + `db.Usage` ve
+`db.SessionUsage`'a kümülatif **`ProviderCalls`** sayacı (Σ num_turns) eklendi.
+`AddUsageKind`/`AddSessionUsageKind` artık her delta'nın round-trip'ini fold ediyor
+(`providerCallsOf`: bildirilmeyen 0 → `Calls`'a, yani 1'e tabanlanır; native+compaction
+doğru sayılır, claude-cli num_turns). `RecordUsage` `delta.ProviderCalls`'ı set ediyor.
+`computeCLIOverhead` fallback'i artık `(in+cacheRead+cacheWrite)/u.ProviderCalls` ile
+debug-journal yolu kadar kesin (eski sessionlarda sayaç 0 → turn-count'a geriler).
+Test: `store_session_usage_test.go TestSessionUsageProviderCalls` ✅.
+
+## Model-farkında çıktı tavanı (max_tokens) ✅ (2026-06-29)
+
+**Hedef:** Tüm sağlayıcı çağrılarında `req.MaxTokens` boş bırakılıyordu →
+sağlayıcıların sabit `defaultMaxTokens=4096` fallback'ine düşüyordu. Bu, modelin
+gerçek kapasitesinden bağımsız yapay düşük bir çıktı tavanı demekti: yanıtlar
+ortada kesilip turn-recovery (A1) `max_output_tokens_recovery` döngüsünü gereksiz
+sıklıkta tetikliyordu (ör. SES16'da MiniMax-M3 tek turda 4096'ya **iki kez** çarptı;
+M3'ün gerçek sınırı ~512K).
+
+**Değişiklikler:**
+- `providers/context_window.go`: **`MaxOutputFor(provider, model)`** aile-bazlı tablo
+  (`ContextWindowFor` kardeşi, aynı muhafazakâr felsefe — değerler ailenin en zayıf
+  üyesi için bile geçerli, 4096'nın çok üstünde): opus/sonnet + minimax **32K**,
+  haiku/fable/generic-claude **16K**, deepseek/gemini **8K**, bilinmeyen **0** →
+  sağlayıcı fallback. `max_tokens` yükseltmenin maliyet/rate-limit dezavantajı yok
+  (gerçek üretilen token başına ödenir), tek risk gerçek sınırı aşıp 400 → muhafazakâr.
+- `providers/catalog.go`: `ModelInfo.MaxOutput` alanı + `Catalog()` build'inde
+  `MaxOutputFor`'dan doldurulur (manifest'ler churn'süz; tıpkı `ContextWindow`).
+- `agent/maxoutput.go`: **`(r *Runtime) withMaxOutput(provider, req)`** yardımcısı —
+  yalnız `MaxTokens==0` iken doldurur (compaction/summary/title açık değerleri
+  korunur). Üç huniye bağlı: `recordedComplete` + `recordedStream` +
+  `guardedComplete`.
+- **Runtime ayarı (Ayarlar ▸ Bağlam):** `settings.MaxOutputTokens` (default 0=auto,
+  clamp 256–512000) → `Tunables.SetMaxOutputTokens`/`MaxOutputTokens()` →
+  `api/server.go applySettings`. UI: "Çıktı token tavanı" alanı (recovery grid'i,
+  `appPanels.tsx` + `types/settings.ts` + `SettingsPanel.tsx`). **Öncelik (MaxTokens
+  boşken):** Settings override (>0) → env `SWARMGO_MAX_OUTPUT_TOKENS` (>0) → aile
+  tablosu → sağlayıcı fallback (4096).
+- Testler: `providers/maxoutput_test.go` (aile + katalog), `agent/maxoutput_test.go`
+  (fill/explicit-korunur/override). Doğrulama: `go build ./...` ✅, `go test` 166 ✅.
+- Detay/kavram: `_Docs\10` §A1 (eski "max-token escalation merdiveni" boşluğu kapandı).
+
+## Harici araç dedektörü genelleştirildi (kategori + wire) ✅ (2026-06-29)
+
+**Hedef:** PATH'te kurulu harici araçları tarayan presence-only mekanizmanın
+(`rtk`/`sqz`/`context-mode`) kapsamını token araçlarının ötesine genişletmek.
+
+**Değişiklikler:**
+- `api/external_tools.go`: `knownExternalTools` girişlerine **`Category`** (gruplama:
+  `token`/`dev`/`render`) + **`Wire`** (`hook`/`mcp`/`cli`) alanları eklendi; yanıt
+  struct'ı (`externalToolStatus`) bunları JSON'a yansıtıyor. İki yeni araç: **`crabbox`**
+  (`dev`/`cli` — uzak yürütme/test control-plane'i; geliştirmede Bash ile çağrılır) ve
+  **`mmdc`** (`render`/`cli` — mermaid-cli, yerelde mermaid→SVG/PNG dosya çıktısı).
+  Hâlâ `exec.LookPath` ile **presence-only** — kurulum/çalıştırma/değişiklik yok.
+- `frontend/types/settings.ts`: `ExternalToolStatus`'a `category`+`wire` eklendi.
+- `frontend/components/settings/HooksPanel.tsx`: araçlar **kategoriye göre gruplanır**
+  (`TOOL_CATEGORY_LABELS`), rozet/buton **`wire`'a göre** gösterilir — `hook`→Bağla/Aktif
+  toggle (`TOOL_HOOK_TEMPLATES`, artık yalnız hook araçları için), `mcp`→MCP rozeti,
+  `cli`→CLI rozeti. Bölüm başlığı "Harici token araçları" → "Harici araçlar".
+- **Genişletilebilirlik:** yeni araç = `knownExternalTools`'a tek giriş; `wire="hook"`
+  olduğunda ayrıca frontend `TOOL_HOOK_TEMPLATES`'e şablon. Detay: `_Docs\17` §Harici araç tespiti.
+- Doğrulama: `go build ./internal/api` ✅, frontend `tsc --noEmit` ✅.
+- **Kapsam dışı (kullanıcı kararı):** Kroki / Mermaid Live Editor HTTP render yeteneği
+  (built-in `render_mermaid` aracı) bu turda yapılmadı — bunlar PATH CLI'ı değil, ayrı feature.
+
+## Zengin görev alanları + PM-benzeri kart modalı + Obsidian-pm köprüsü ✅ (2026-06-29)
+
+**Hedef:** Board kartlarını obsidian-pm (Obsidian "Project Manager" eklentisi)
+deneyimine yaklaştırmak; SwarmGo board'unu Obsidian'da Kanban/Tablo/Gantt olarak
+görüp **çift yön** senkronlamak.
+
+> **Güncelleme (2026-06-30):** `type` (task/subtask/milestone) ve `parentId`
+> SwarmGo'dan kaldırıldı (ihtiyaç yok) — `Task` modeli, API, araçlar ve modal
+> Tür alanı temizlendi. Subtask hiyerarşisi yalnız Obsidian (PM) tarafında yaşar;
+> köprü onu PM-only tutar. SwarmGo'da kalan zengin alanlar: **priority + tags**.
+
+**Zengin görev modeli (backend):**
+- `db.Task` yeni opsiyonel alanlar: `priority` (critical/high/medium/low),
+  `tags []string`, `type` (task/subtask/milestone), `parentId`, `progress`,
+  `startDate`, `dueDate` — hepsi `omitempty`, eski task JSON'ları zero-value alır
+  (migration yok). `ValidPriority`/`ValidTaskKind` doğrulayıcıları.
+- `store_task.go UpdateTask` yeni alanları kopyalar; `api/tasks.go` create+update
+  request'leri + validasyon (geçersiz priority/type → 400), `clampProgress` (0–100).
+
+**PM-benzeri kart modalı (frontend):**
+- Yeni `TaskFormModal.tsx` — ortalanmış popup, **oluşturma + düzenleme** tek bileşen.
+  Alanlar: Başlık (AI retitle), Açıklama, Durum (kolon), **Öncelik**, **Tür** (+subtask'ta
+  üst-görev seçici), Ajan, Akış, **Etiketler** (chip+input), Bağımlılıklar (`DependencyPicker`).
+- `TaskBoard.tsx`: satır-içi oluşturma formu ve eski sağ panel (`TaskDetailPanel`,
+  **silindi**) kaldırıldı → "+ Görev" modalı açar, karta tıklayınca edit modalı; kartlarda
+  priority/tür/etiket rozetleri. (İlerleme barı + tarih alanları kullanıcı isteğiyle
+  modalden çıkarıldı; backend alanları omitempty olarak duruyor.)
+- `types/task.ts`/`api/tasks.ts` yeni alanlarla genişledi.
+
+**Obsidian-pm köprüsü (harici, `Desktop\Progs\swarmgo-obsidian-sync`, Python):**
+- SwarmGo REST API (`/api/tasks`) ↔ obsidian-pm projesi (düz Markdown: `<proje>.md`
+  + `<proje>_tasks/*.md`, `pm-project`/`pm-task` frontmatter). Sunucu/DB yok.
+- **Tam çift-yön:** başlık/açıklama/durum/owner/deps + **priority/tags/type/parentId**
+  + subtask hiyerarşisi (subtask'lar proje `taskIds`/gövdeden hariç, parent `subtaskIds`
+  yeniden hesaplanır). `parentId` link tablosundan PM-id↔SG-id çevrilir.
+- Çakışma: *boş tarafı doldur; ikisi de doluysa son-yazan-kazanır* (LWW **tur başındaki
+  orijinal** zaman damgalarıyla — çekirdek push'un PM dosyasını yeniden yazıp updatedAt
+  bumplaması kaynaklı yanlış-yön hatası bu şekilde giderildi). İdempotent.
+- Durum eşlemesi: SG `failed`↔PM `blocked`, `review`↔`review`, gerisi birebir.
+  Bağ + son-senkron anlık görüntüsü sidecar `state/<proje>.json`'da; `swarmgoId`
+  PM frontmatter'ına gömülü (sidecar kaybolsa bağ kurtarılır).
+- **`watch` modu:** periyodik otomatik senkron; Progs altında arka plan servisi olarak
+  Windows zamanlanmış görevle (logon'da) çalışır.
+- Canlı backend'de uçtan uca doğrulandı (SG↔PM priority/tags/type/parent, idempotent).
+
+### Köprü → çoklu-provider mimarisi (kanban soyutlaması) ✅ (2026-06-30)
+
+**Hedef:** Kanban kontrolünü tek bir platforma (obsidian-pm) sabitlemek yerine
+**değiştirilebilir provider** arkasına almak; ileride Trello/Asana/WeKan'a yalnız
+yeni bir dosya yazarak geçebilmek (`mermaid-cli` benzeri soyutlama). SwarmGo task
+store'u **canonical kaynak** olarak kalır (ajan orkestrasyonu onun üstünde).
+
+- **Faz 1 — soyutlama (davranış değişmedi):** `sgsync/providers/` paketi eklendi.
+  `base.py` provider sözleşmesi (`Card` canonical model — status'u SwarmGo board
+  sözlüğünde; `ProjectInfo`; `Caps` yetenek bayrakları; `KanbanProvider` ~5 metot).
+  Tüm obsidian-pm mantığı engine'den `providers/obsidian.py`'ye taşındı
+  (status/hiyerarşi map, `swarmgoId` gömme, `subtaskIds` roll-up). `engine.py` artık
+  **provider-bağımsız** — yalnız `Card` + `KanbanProvider` konuşur; çakışma çözümü,
+  kimlik eşleme, çoklu-workspace fan-out, watch kilidi aynen korundu.
+- **Capability modeli:** provider tutamadığı alanı bildirir (`Caps`); engine zorla
+  map etmez, **atlar** (ör. Trello'da priority/deps/hierarchy yok → es geçilir).
+- **Faz 2 — Trello provider:** `providers/trello.py` (REST: list↔status, label↔tag,
+  arşiv↔close, SG id desc marker'ına gömülü; key+token auth). `config.json`'a
+  `_trello_example` mapping bloğu + factory (`make_provider`, mapping `provider`
+  anahtarı, varsayılan `obsidian`, geriye uyumlu).
+- **State göçü:** snapshot `pm_status` artık canonical tutulduğu için tek-seferlik
+  `migrate_state_v2.py` eski native değerleri çevirdi (10 link); böylece refactor
+  sonrası ilk sync'te sahte churn olmadı.
+- **Doğrulama:** obsidian yolu canlı backend'de **dry 0/0 stabil** (davranış birebir);
+  `tests/test_providers.py` → Trello map mantığı + factory hataları + **engine'in
+  board-bağımsızlığı** (sahte provider/SG ile iki-yön kart üretimi) yeşil. Watch
+  servisi yeni kodla yeniden başlatıldı, idle teyit edildi. Detay: köprü README.
+
+### Köprü sadeleştirme: Trello provider kaldırıldı + dosyalar workspace içine (2026-06-30)
+
+**Hedef:** Generic board yönetim sistemini korumak ama Trello provider'ını sökmek;
+obsidian-pm dosyalarını harici tek vault yerine **her SwarmGo workspace'inin kendi
+klasörüne** taşımak (Obsidian kullanıcısı o klasörü manuel vault olarak açar).
+
+- **Trello kaldırıldı:** `providers/trello.py` silindi, registry'den çıkarıldı,
+  `config.json`'daki `_trello_example` ve testteki Trello map kaldırıldı. Generic
+  seam (`base.py`/`obsidian.py`/factory) **aynen duruyor** — registry'de tek slug
+  (`obsidian`); yeni provider eklemek hâlâ tek dosya + tek satır.
+- **Workspace-içi yerleşim:** yol artık mapping'in `workspace_id`'sinden türüyor →
+  `<swarmgo.data_dir>/workspaces/<WS_ID>/<obsidian.subdir>/`. `_resolve_projects_dir`
+  önceliği: `obsidian_dir` override → `data_dir`+workspace → eski `projects_dir`
+  (geriye uyumlu). `data_dir` var ama `workspace_id` yoksa **sessizce yanlış yere
+  yazmaz, hata fırlatır.** Backend değişikliği gerekmedi (yol bridge tarafında türetiliyor).
+- **Veri göçü:** mevcut 3 proje (`SwarmGo`/`DenemeBilimsel`/`SwarmGoRepo` ↔ WS1/WS2/WS5)
+  eski vault'tan `…/.swarmgo/workspaces/<WS>/obsidian/`'e taşındı; state link'leri
+  pm_id bazlı olduğundan korundu (`pull` yeni konumdan aynı kartları/id'leri okudu).
+  `ikariam` örnek projesi (mapping'siz) eski vault'ta bırakıldı.
+- **Doğrulama:** `tests/test_providers.py` (yol çözümü + factory + board-bağımsızlık)
+  yeşil; `pull` yeni konumdan çalışıyor. Watch yeni config'le yeniden başlatıldı.
+  Tam sync 0-churn teyidi **backend açıkken** yapılacak (test sırasında dev backend
+  kapalıydı). Obsidian'da `…/workspaces/<WS_ID>/obsidian` → "Open folder as vault".
+
+## Dış MCP için Streamable HTTP transport + `mcpServers` JSON içe aktarma ✅ (2026-06-29)
+
+**Hedef:** Native MCP istemcisi şimdiye dek yalnız **stdio** konuşuyordu (sse/http
+`dial()`'de "not yet supported" hatasıyla reddediliyordu). Uzak/hosted MCP
+sunucuları için **Streamable HTTP** (MCP spec 2025-03-26/2025-06-18) transport'u
+eklendi; ayrıca standart `mcpServers` JSON belgesiyle **toplu içe aktarma**.
+
+**Transport soyutlaması (refaktör):**
+- `internal/mcp/client.go` — yeni `Client` arayüzü (`ListTools`/`CallTool`/`Alive`/
+  `Close`/`SetOnToolsChanged`/`SetLogger`); `StdioClient` ve `httpClient` ikisi de
+  uygular (compile-time assert). JSON-RPC çözümleme mantığı transport-bağımsız serbest
+  fonksiyonlara çıkarıldı: `parseToolsList`/`parseCallResult`/`callToolParams`.
+- `pool.go` `poolEntry.client` ve `ensure()` artık somut `*StdioClient` yerine
+  `Client` arayüzü tutar → pool transport'tan habersiz, havuzlama/TTL/re-dial aynen
+  her iki transport için çalışır.
+- `manager.go` `dial()` → `Client` döner; `http` → `DialHTTP`, `sse` → açık
+  "deprecated, use http" hatası.
+
+**Streamable HTTP istemcisi (`internal/mcp/http.go`, yeni):**
+- Tek endpoint'e POST; her istek bağımsız (HTTP yanıtı isteğe doğal eşlenir → stdio'daki
+  gibi read-loop/demux gerekmez). `Accept: application/json, text/event-stream`.
+- Yanıt **JSON** (tekil) **veya** **SSE stream** (çoklu event; isteğin yanıtı id ile
+  bulunur, aradaki `notifications/tools/list_changed` callback'e dispatch edilir) — ikisi
+  de ele alınır.
+- `Mcp-Session-Id` handshake'te yakalanır, sonraki her istekte echo edilir;
+  `MCP-Protocol-Version` header'ı; Close'da best-effort session DELETE.
+- Statik `Headers` (örn. `Authorization`) her isteğe uygulanır. Yeni bağımlılık YOK
+  (`net/http` + manuel SSE parse). Testler `http_test.go` (JSON + SSE + session echo +
+  list_changed callback + hata durumu) — 4 vaka ✅.
+
+**Veri modeli + API:**
+- `db.MCPServer` yeni `HeadersConfig` alanı (JSON object, http header'ları);
+  `mcp.ServerConfig.Headers`; `toServerConfig`/`mcpServerConfig`/`climcp` köprülerinde
+  taşınır (CLI köprüsü zaten `type:http`+url+headers iletiyordu).
+- `POST /api/mcp-servers/import` — yapıştırılan `mcpServers` JSON'undan toplu oluşturma;
+  hem `{"mcpServers":{...}}` hem çıplak `{name:spec}` kabul; transport `type`'tan, yoksa
+  command→stdio / url→http çıkarımı; entry-başına hata (biri bozuksa batch düşmez).
+  Tekil create ile ortak `createMCPReq.toMCPRow()` doğrulaması (http→url zorunlu,
+  sse→reddedilir).
+
+**Frontend (`ToolsPanel.tsx` + `types/mcp.ts` + `api/mcp.ts`):**
+- `MCPServer.headersConfig`, `MCPImportResult` tipleri; `mcpApi.importMCPServers(json)`.
+- ServerManagement'a **"JSON ile içe aktar"** kutusu (textarea + placeholder örnek +
+  sonuç/hata mesajı). Transport dropdown'dan `sse` kaldırıldı (`http (Streamable HTTP)`).
+- **Opsiyonel header alanı:** http transport seçiliyken URL altında textarea — her satır
+  `Anahtar: Değer` (ilk `:` böler, sonrakiler değerde kalır → `Bearer x:y` korunur);
+  yalnız http'de gönderilir, boşsa `undefined`.
+
+**Durum:** build ✅, `go test ./...` 544 ✅, `tsc --noEmit` temiz ✅. Canlı uzak-sunucu
+doğrulaması kullanıcı tarafında yapılabilir (httptest ile transport doğrulandı).
 
 ## Sohbette ajan başlığına tıklayınca ajan ayar sayfası ✅ (2026-06-29)
 
@@ -137,8 +787,11 @@ garanti değil; araç/prompt değişimi prefix'i bozabiliyor.
 - **Artifact** (`ArtifactsPanel`): Sil.
 - **Skills** (`SkillsPanel`): Sil (katlanmış grupları atlayan shift-aralık).
 - **Flows** (`FlowsPanel`, Akışlarım sekmesi): Çalıştır · Sil.
-- **Araçlar** (`AgentToolsSection`): plain-click anında yasaklar; modifier-click
+- **Araçlar — ajan** (`AgentToolsSection`): plain-click anında yasaklar; modifier-click
   çoklu seçer → "Seçilenleri yasakla" tek `setAgentTools` PATCH'i.
+- **Araçlar — workspace** (`ToolsPanel`, Ayarlar): plain-click detay açar; modifier-click
+  çoklu seçer → Etkinleştir · Devre dışı (`setWorkspaceTools`) · NameOnly · Göster
+  (`setWorkspaceToolsVisibility`); gruplu (yerleşik + MCP) shift-aralık katlanmışları atlar.
 - **Aktivite** (`ExecutionsPanel`): salt-okunur → "Kimlikleri kopyala".
 
 **Desen:** Toplu eylemler mevcut tekil API'leri döngü/`Promise.all` ile kullanır

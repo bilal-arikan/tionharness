@@ -24,7 +24,7 @@ func TestGatedToolFlagsRoundTrip(t *testing.T) {
 
 	// Fresh store starts from defaults: capabilities off, guards at 3/8.
 	cur := store.Get()
-	if cur.EnableDelegation || cur.EnableShell || cur.EnableSelfManage {
+	if cur.EnableDelegation || cur.EnableShell {
 		t.Fatalf("gated capabilities must default off, got %+v", cur)
 	}
 	if cur.DelegationMaxDepth != 3 || cur.DelegationMaxCalls != 8 {

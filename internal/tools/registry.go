@@ -151,6 +151,60 @@ func (r *Registry) Unlazy(names ...string) {
 	}
 }
 
+// Visibility tiers describe how much of a tool rides in the per-turn context.
+// Exactly ONE applies to a tool at a time; they are the user-selectable states on
+// the workspace tools screen and map directly onto the registry's lazy/nameOnly/
+// hidden marks. See _Docs/19.
+const (
+	// VisibilityFull: eager — the full schema is shipped to the model every turn.
+	VisibilityFull = "full"
+	// VisibilitySummary: lazy — listed in the load-on-demand catalog with name + a
+	// short summary line; the full schema is pulled on demand (activate_tools).
+	VisibilitySummary = "summary"
+	// VisibilityNameOnly: lazy — listed in the catalog by NAME ALONE (summary
+	// suppressed), Claude Code deferred-tool style. Discovered via tool_search.
+	VisibilityNameOnly = "name-only"
+	// VisibilityHidden: lazy — folded OUT of the catalog entirely (not even named),
+	// reachable only via tool_search / the self-management skill pointer.
+	VisibilityHidden = "hidden"
+)
+
+// SetVisibility forces a tool into exactly one visibility tier, clearing the other
+// (mutually exclusive) tier marks first. An unknown tier is a no-op returning
+// false. An unknown tool name is harmless — marks are applied lazily at render.
+func (r *Registry) SetVisibility(name, tier string) bool {
+	switch tier {
+	case VisibilityFull:
+		r.Unlazy(name) // clears lazy + nameOnly + hidden → eager
+	case VisibilitySummary:
+		r.lazy[name] = true
+		delete(r.nameOnly, name)
+		delete(r.hidden, name)
+	case VisibilityNameOnly:
+		r.MarkNameOnly(name) // sets lazy + nameOnly, clears hidden
+	case VisibilityHidden:
+		r.MarkHidden(name) // sets lazy + hidden, clears nameOnly
+	default:
+		return false
+	}
+	return true
+}
+
+// VisibilityOf reports a tool's current effective visibility tier, derived from
+// its lazy/hidden/nameOnly marks (the inverse of SetVisibility).
+func (r *Registry) VisibilityOf(name string) string {
+	if !r.lazy[name] {
+		return VisibilityFull
+	}
+	if r.hidden[name] {
+		return VisibilityHidden
+	}
+	if r.nameOnly[name] {
+		return VisibilityNameOnly
+	}
+	return VisibilitySummary
+}
+
 // IsLazy reports whether a tool is lazy.
 func (r *Registry) IsLazy(name string) bool { return r.lazy[name] }
 
@@ -160,15 +214,20 @@ func (r *Registry) IsLazy(name string) bool { return r.lazy[name] }
 func (r *Registry) IsHidden(name string) bool { return r.hidden[name] }
 
 // AttachMCP records the MCP catalog and per-server configs so the registry can
-// advertise and dispatch namespaced MCP tools. Every MCP tool is marked lazy:
-// external servers can expose hundreds of tools, so their schemas are loaded on
-// demand rather than shipped every turn.
+// advertise and dispatch namespaced MCP tools. Every MCP tool is marked lazy AND
+// name-only: external servers can expose hundreds of tools, so their schemas are
+// loaded on demand rather than shipped every turn, and their (often multi-
+// paragraph) descriptions are suppressed in the load-on-demand catalog — the model
+// sees only the namespaced name and discovers the rest via tool_search/ToolSearch.
+// This mirrors SwarmGo's own deferred (swarmgo_extended) tools: no deferred tool
+// carries a full description in the per-turn prompt.
 func (r *Registry) AttachMCP(entries []mcp.CatalogEntry, cfgByServer map[string]mcp.ServerConfig, caller MCPCaller) {
 	r.mcpEntries = entries
 	r.mcpCfgByServer = cfgByServer
 	r.mcpCaller = caller
 	for _, e := range entries {
 		r.lazy[e.NamespacedName] = true
+		r.nameOnly[e.NamespacedName] = true
 	}
 }
 

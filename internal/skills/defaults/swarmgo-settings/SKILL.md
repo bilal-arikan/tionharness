@@ -36,30 +36,42 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 ## Settings reference
 
 ### Appearance
-- `theme` — `"dark"` | `"light"` | `"system"` (default `dark`).
-- `accent` — hex color, e.g. `"#8b5cf6"`.
-- `themePreset` — curated palette id (default `"midnight-violet"`; `""` = legacy theme+accent).
-- `language` — `"tr"` | `"en"` (default `tr`).
+- `themePreset` — the theme color + variant id, e.g. `"violet-dark"` / `"violet-light"`
+  (default `"violet-dark"`; `""` inherits/falls back to the default). This is the **only**
+  appearance control now: the id encodes both the color and the light/dark mode.
+- `theme`, `accent` — **deprecated/unused** (the base-mode selector and accent color
+  picker were removed 2026-07-01; the variant id drives light/dark). Fields still exist in
+  settings.json for backward compat but no longer affect the UI.
+- `language` — `"tr"` | `"en"` (default `tr`). Injected into chat turns as a
+  reply-language directive inside the "## About the user" block (agents default to
+  this language). Not yet injected into autonomous/flow turns.
 - `desktopNotifications`, `keepAwake` — booleans (applied client-side).
 
 ### Providers & model
 - `defaultProvider` — `"claude-cli"` | `"anthropic"` (default `claude-cli`).
 - `defaultModel` — model id; `""` = the provider's own default.
 - `claudeCliPath` — path to the `claude` binary; `""` = auto-detect on PATH.
+- `claudeConfigDir` — `CLAUDE_CONFIG_DIR` for claude-cli subprocesses. **Default: `~/.swarmgo/claude-home`** (a SwarmGo-managed isolated config home → clean skills/settings/commands/global `CLAUDE.md`/login, separate from the user's `~/.claude`). Authenticate it via `claudeCliAuthToken` below (no in-dir login needed) or run a one-time `claude` login there. Set `""` to inherit the shared `~/.claude` instead (keyless out-of-box, but picks up the user's installed skills/tools).
+- `claudeCliAuthKind` — claude-cli credential kind injected into the subprocess env: `"oauth"` → `CLAUDE_CODE_OAUTH_TOKEN` (Max/Pro subscription token from `claude setup-token`), `"apikey"` → `ANTHROPIC_API_KEY` (API billing), `""` → none. Lets an isolated `claudeConfigDir` authenticate without an interactive in-dir login.
+- `claudeCliAuthToken` — **write-only**; the credential value for `claudeCliAuthKind`. `""` clears. Read shows only `claudeCliAuthSet`. Set via the Settings → Providers → "claude-cli kimlik" popup (Max/Pro or API key).
 - `anthropicKey` — **write-only**; `""` clears. Read shows only `anthropicKeySet`.
 - `minimaxKey` (write-only), `minimaxBaseUrl` — MiniMax (OpenAI-compatible).
 - `openrouterKey` (write-only), `openrouterBaseUrl` — OpenRouter (OpenAI-compatible; one key, hundreds of models via `author/model-slug` ids).
 - `extendedPromptCache` — Anthropic extended (1h) prompt-cache beta (anthropic only). (The 1M-context beta was retired — 1M is GA since 2026-03, so there is no `oneMillionContext` setting anymore.)
 - Custom providers are managed separately (Providers panel / market), not patched here.
 
-### User profile (injected so agents address the user correctly)
-- `userName`, `userTimezone`, `userCity`, `userCountry`, `userNotes`.
+### User profile (injected into CHAT turns so agents address the user correctly)
+- `userName`, `userTimezone`, `userCity`, `userCountry`, `userNotes` — rendered as an
+  "## About the user" block in the chat system prompt (`api.userContextBlock`), together
+  with the reply-language directive. **Chat path only** — autonomous/scheduler/flow turns
+  do not currently inject this block.
 
 ### Context & memory
 - `maxContextTokens` (min 500, default 12000), `keepRecentMsgs` (min 1, default 8).
 - `contextBudgetCeil` (8000–2000000, default 262144 ≈ 256K) — hard cap on the model-aware transcript budget; the operative number for 1M-window models. Lowered from 512K to keep the live window in the context-rot gradient's high-precision zone; raise to keep more history verbatim (trades recall precision for raw history). `contextBudgetFraction` (0–1, default **0 = auto**) — share of the model's context window spendable on transcript. **0 selects a per-family adaptive share** (Opus/Sonnet 0.45, Haiku 0.40, MiniMax/DeepSeek/Gemini 0.35); a positive value pins a fixed manual share. Effective budget = clamp(window × fraction, maxContextTokens, ceil). Rationale: see `_Docs/17` §12.
-- `recallTopN` (default 5), `recallMinScore` (0–1, default 0.05).
+- `recallTopN` (default 5), `recallMinScore` (0–1, default **0.04**) — cosine floor below which a recalled memory is dropped from the dynamic "Relevant memory" block. Raise it to cut low-relevance recall noise (which is uncached, costing fresh tokens every turn). `0` falls back to the default. Applies on the next recall without restart.
 - `journalCap` (1–1000, default 50), `journalMaxLen` runes (64–65536, default 1024).
+- `journalMinLen` runes (0–`journalMaxLen`, default **40**) — write-side low-info gate: a per-turn journal whose content is shorter than this is dropped instead of stored, so trivial exchanges (e.g. a one-word/one-number answer) never pollute recall. **`0` disables the gate** (every non-empty turn is journaled). Conservative default keeps short-but-substantive notes; raise it (e.g. 60–80) to filter more aggressively.
 - `reflectionCap` (1–1000, default 20) — newest reflections kept per agent; older ones are pruned after each dream cycle so reflections (unlike journals) can't accumulate without bound.
 - `memoryPressureWarn` (0–1, default 0.70) — context-fill ratio above which a turn warns the agent to persist important facts before the next silent compaction; `0` disables the warning. (Lowered 0.75→0.70 to pair with the smaller raw budget — see `_Docs/17` §12.)
 - `coreMemoryTools` (default true) — offer the `core_memory_replace`/`core_memory_append` tools that edit the agent's persistent **named core blocks** (persona + human by default, plus any custom blocks; each character-limited, re-injected every turn).
@@ -85,8 +97,11 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 - System B (LLM summary, opt-in): `compactLlmSummary` (default false),
   `compactLlmThreshold` bytes (default 12288), `compactModel` (`""` = title model).
 
-### Budgets & autonomy
-- `defaultDailyCallLimit`, `defaultDailyTokenLimit` — new-agent defaults (0 = unlimited).
+### Autonomy
+- The per-agent daily spend caps (`defaultDailyCallLimit`/`defaultDailyTokenLimit` +
+  per-agent `dailyCallLimit`/`dailyTokenLimit` + enforcement) were **removed entirely**
+  (2026-07-01) — agents are always unlimited. Only spend *tracking* remains (the Budget
+  screen still shows usage). Global pause below is the one remaining autonomy brake.
 - `pauseAutonomy` (global autonomy brake — pauses scheduled calls).
 - `autoTitleEnabled` (default true), `titleModel` (`""` = agent's model).
 
@@ -101,12 +116,15 @@ update_settings → {"patch": {"pauseAutonomy": true}}
 - `progressResume` (default true) — restore that list on a fresh session.
 
 ### MCP & gated tool capabilities (off by default — each expands power/cost)
-- `mcpGatewayUrl` — external MCP gateway URL.
+- (The dead `mcpGatewayUrl` setting was removed entirely 2026-07-01 — it was never
+  consumed by the runtime. MCP servers are managed in the "Araçlar & MCP" category.)
 - `enableShell` — the built-in shell tool. On claude-cli agents it is bridged
   (PowerShell on Windows) and the CLI's native `Bash` is suppressed so commands
   route through SwarmGo's shell.
-- `enableSelfManage` — the self-management suite (create/edit/delete entities,
-  **including these settings tools**).
+- `enableSelfManage` — **REMOVED (2026-07-01).** The self-management suite is now
+  ALWAYS built; visibility is per-tool (full / summary / name-only / hidden) on the
+  "Araçlar" screen, defaulting to `hidden`. The settings field, its `SWARMGO_ENABLE_SELFMANAGE`
+  env seed, and the `SelfManageEnabled` tunable were all deleted. See `_Docs/19`.
 - `enableCliHooks` — pass PreToolUse/PostToolUse hooks to claude-cli agents via
   `--settings` (default true). Turn off to keep hooks native-only when a hook
   authored for SwarmGo's shell misbehaves under the CLI's own hook runner.
@@ -155,7 +173,10 @@ Live: changing these reconfigures the loop immediately. An on-demand run is also
 available over `POST /api/backups/run` (not an agent tool).
 
 ### Diagnostics
-- `logLevel` — `"info"` | `"debug"` | `"warn"` | `"error"` (applied on restart).
+- `logLevel` — `"info"` | `"debug"` | `"warn"` | `"error"`. **Not wired to the logger**
+  (never read by `cmd/swarmgo`) and removed from the Settings UI (2026-06-30); the Logs
+  screen already filters by level + text, so it was redundant. Field kept in
+  settings.json for backward compat only.
 
 ## Safety notes
 

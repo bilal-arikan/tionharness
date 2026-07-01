@@ -94,6 +94,12 @@ func (s *Store) AnthropicKey() string {
 	return s.decrypt(s.Get().AnthropicKeyEnc)
 }
 
+// ClaudeCliAuthToken returns the decrypted claude-cli credential (OAuth token or
+// API key, per ClaudeCliAuthKind), or "" if none/undecryptable.
+func (s *Store) ClaudeCliAuthToken() string {
+	return s.decrypt(s.Get().ClaudeCliAuthTokenEnc)
+}
+
 // MinimaxKey returns the decrypted MiniMax API key, or "" if none.
 func (s *Store) MinimaxKey() string {
 	return s.decrypt(s.Get().MinimaxKeyEnc)
@@ -249,6 +255,8 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.DefaultModel, p.DefaultModel)
 	applyString(&next.DefaultPermissionMode, p.DefaultPermissionMode)
 	applyString(&next.ClaudeCLIPath, p.ClaudeCLIPath)
+	applyString(&next.ClaudeConfigDir, p.ClaudeConfigDir)
+	applyString(&next.ClaudeCliAuthKind, p.ClaudeCliAuthKind)
 
 	applyBool(&next.ExtendedPromptCache, p.ExtendedPromptCache)
 	applyBool(&next.DesktopNotifications, p.DesktopNotifications)
@@ -272,6 +280,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	}
 	applyInt(&next.JournalCap, p.JournalCap)
 	applyInt(&next.JournalMaxLen, p.JournalMaxLen)
+	applyInt(&next.JournalMinLen, p.JournalMinLen)
 	applyInt(&next.ReflectionCap, p.ReflectionCap)
 	if p.MemoryPressureWarn != nil {
 		next.MemoryPressureWarn = *p.MemoryPressureWarn
@@ -328,9 +337,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.CompactModel = strings.TrimSpace(*p.CompactModel)
 	}
 
-	applyInt(&next.DefaultDailyCallLimit, p.DefaultDailyCallLimit)
-	applyInt(&next.DefaultDailyTokenLimit, p.DefaultDailyTokenLimit)
-
 	if p.PauseAutonomy != nil {
 		next.PauseAutonomy = *p.PauseAutonomy
 	}
@@ -340,10 +346,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	}
 	applyString(&next.TitleModel, p.TitleModel)
 
-	applyString(&next.MCPGatewayURL, p.MCPGatewayURL)
-
 	applyBool(&next.EnableShell, p.EnableShell)
-	applyBool(&next.EnableSelfManage, p.EnableSelfManage)
 	applyBool(&next.EnableCLIHooks, p.EnableCLIHooks)
 	applyBool(&next.ClaudeResume, p.ClaudeResume)
 	applyBool(&next.ClaudePersistentSession, p.ClaudePersistentSession)
@@ -364,12 +367,21 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.BackupDir = strings.TrimSpace(*p.BackupDir)
 	}
 
-	applyString(&next.LogLevel, p.LogLevel)
-
 	applyString(&next.MinimaxBaseURL, p.MinimaxBaseURL)
 	applyString(&next.OpenRouterBaseURL, p.OpenRouterBaseURL)
 
 	// Secrets: write-only. Empty string clears; non-empty encrypts and replaces.
+	if p.ClaudeCliAuthToken != nil {
+		if *p.ClaudeCliAuthToken == "" {
+			next.ClaudeCliAuthTokenEnc = ""
+		} else {
+			enc, err := s.cipher.Encrypt(*p.ClaudeCliAuthToken)
+			if err != nil {
+				return Settings{}, err
+			}
+			next.ClaudeCliAuthTokenEnc = enc
+		}
+	}
 	if p.AnthropicKey != nil {
 		if *p.AnthropicKey == "" {
 			next.AnthropicKeyEnc = ""
@@ -493,6 +505,15 @@ func normalize(v Settings) Settings {
 	if v.JournalMaxLen > 65536 {
 		v.JournalMaxLen = 65536
 	}
+	// JournalMinLen is a write-side gate, not a buffer bound: 0 is valid (gate
+	// off). Clamp negatives to 0 and cap at the per-entry max so the gate can
+	// never reject everything.
+	if v.JournalMinLen < 0 {
+		v.JournalMinLen = 0
+	}
+	if v.JournalMinLen > v.JournalMaxLen {
+		v.JournalMinLen = v.JournalMaxLen
+	}
 	if v.ReflectionCap < 1 {
 		v.ReflectionCap = 1
 	}
@@ -579,12 +600,6 @@ func normalize(v Settings) Settings {
 	if v.CompactLLMThreshold > 262144 {
 		v.CompactLLMThreshold = 262144
 	}
-	if v.DefaultDailyCallLimit < 0 {
-		v.DefaultDailyCallLimit = 0
-	}
-	if v.DefaultDailyTokenLimit < 0 {
-		v.DefaultDailyTokenLimit = 0
-	}
 	// Delegation guards: keep at least one level/call; clamp to sane ceilings.
 	if v.DelegationMaxDepth < 1 {
 		v.DelegationMaxDepth = 1
@@ -623,11 +638,6 @@ func normalize(v Settings) Settings {
 	}
 	if v.BackupRetain > 1000 {
 		v.BackupRetain = 1000
-	}
-	switch v.LogLevel {
-	case "debug", "warn", "error", "info":
-	default:
-		v.LogLevel = "info"
 	}
 	return v
 }

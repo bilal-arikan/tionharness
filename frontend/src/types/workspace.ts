@@ -81,6 +81,8 @@ export interface WorkspaceConfig {
   promptKeys: string[]
   instructions: string
   readme: string
+  // The actual conversation-summarization prompt, read-only (not user-editable).
+  compactionPrompt: string
 }
 
 // Partial update; omitted fields unchanged. A prompt written as "" clears the
@@ -95,23 +97,30 @@ export interface WorkspaceConfigPatch {
 // `source`/`server`/`label` describe the tool's origin (built-in vs a specific
 // MCP server) for grouping and clean labelling; `inputSchema` is the JSON Schema
 // of its arguments, used to render the per-tool detail view.
+// One of the four per-tool context visibility tiers (see backend tools.Visibility*).
+export type ToolVisibility = 'full' | 'summary' | 'name-only' | 'hidden'
+
 export interface WorkspaceTool {
   name: string
   label: string
   description: string
   source: 'builtin' | 'mcp'
   server: string
+  // Functional group key for built-ins (e.g. "files", "memory"); empty for MCP
+  // tools, which group by server instead.
+  category?: string
   enabled: boolean
-  hidden?: boolean
-  // Hidden tier: folded into the self-management skill pointer (not even listed by
-  // name in the per-turn catalog). A subset of hidden — drawn with a distinct chip.
-  selfManaged?: boolean
+  // Effective context visibility tier (code default + workspace override).
+  visibility: ToolVisibility
   inputSchema?: unknown
+  // Concrete sample calls (each a JSON object matching inputSchema) that show usage
+  // conventions the schema alone can't express. Surfaced in the detail view.
+  examples?: unknown[]
 }
 
 export interface WorkspaceTools {
   tools: WorkspaceTool[]
   disabledTools: string[]
-  hiddenTools: string[]
-  shownTools: string[]
+  // Per-tool visibility overrides: tool name → tier. Absent → code default.
+  toolVisibility: Record<string, ToolVisibility>
 }

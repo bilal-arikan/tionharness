@@ -1,5 +1,5 @@
 // MCP servers (workspace-scoped) and workspace-wide tool activation.
-import type { MCPServer, MCPTransport, MCPTestResult, WorkspaceTools } from '../types'
+import type { MCPServer, MCPTransport, MCPTestResult, MCPImportResult, WorkspaceTools } from '../types'
 import { req } from './client'
 
 export const mcpApi = {
@@ -11,11 +11,17 @@ export const mcpApi = {
     args?: string[]
     url?: string
     env?: Record<string, string>
+    headers?: Record<string, string>
   }) =>
     req<MCPServer>('/api/mcp-servers', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  // Bulk import from a pasted mcpServers JSON document (Claude Code / .mcp.json
+  // shape). Accepts either {"mcpServers": {...}} or a bare {name: spec} map. The
+  // raw text is forwarded verbatim so the backend owns parsing/validation.
+  importMCPServers: (json: string) =>
+    req<MCPImportResult>('/api/mcp-servers/import', { method: 'POST', body: json }),
   toggleMCPServer: (id: string, enabled: boolean) =>
     req<{ enabled: boolean }>(`/api/mcp-servers/${id}/toggle`, {
       method: 'POST',
@@ -34,12 +40,12 @@ export const mcpApi = {
       method: 'PUT',
       body: JSON.stringify({ disabledTools }),
     }),
-  // Update the visibility override lists (hidden = force load-on-demand, shown =
-  // force a default-hidden tool back into context). The denylist is left
-  // unchanged (the PUT merges per-field).
-  setWorkspaceToolsVisibility: (hiddenTools: string[], shownTools: string[]) =>
-    req<{ hiddenTools: string[]; shownTools: string[] }>('/api/workspace-tools', {
+  // Replace the per-tool visibility override map (tool name → "full" | "summary" |
+  // "name-only" | "hidden"). The denylist is left unchanged (the PUT merges
+  // per-field). A tool absent from the map uses its code default.
+  setWorkspaceToolVisibility: (toolVisibility: Record<string, string>) =>
+    req<{ toolVisibility: Record<string, string> }>('/api/workspace-tools', {
       method: 'PUT',
-      body: JSON.stringify({ hiddenTools, shownTools }),
+      body: JSON.stringify({ toolVisibility }),
     }),
 }

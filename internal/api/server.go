@@ -116,6 +116,8 @@ func (s *Server) applySettings() {
 	cur := s.settings.Get()
 	s.providers.SetAnthropicKey(s.settings.AnthropicKey())
 	s.providers.SetClaudeCLIPath(cur.ClaudeCLIPath)
+	s.providers.SetClaudeConfigDir(cur.ClaudeConfigDir)
+	s.providers.SetClaudeAuth(s.settings.ClaudeCliAuthToken(), cur.ClaudeCliAuthKind)
 	s.providers.SetDefaultModel(cur.DefaultModel)
 	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache)
 	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
@@ -126,7 +128,8 @@ func (s *Server) applySettings() {
 	s.tun.SetContextBudget(cur.MaxContextTokens)                             // scale tool-output thresholds to the budget (CG-9)
 	s.tun.SetAutonomyPaused(cur.PauseAutonomy)
 	s.tun.SetTitleModel(cur.TitleModel)
-	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen)
+	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen, cur.JournalMinLen)
+	s.tun.SetRecallMinScore(cur.RecallMinScore)
 	s.tun.SetReflectionCap(cur.ReflectionCap)
 	s.tun.SetMemoryControls(cur.MemoryPressureWarn, cur.CoreMemoryTools)
 	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffPressure, cur.HandoffMaxChain, cur.HandoffWriteFile)
@@ -135,7 +138,6 @@ func (s *Server) applySettings() {
 	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
 	s.tun.SetUserModel(cur.AutoUserModel)
 	s.tun.SetShellEnabled(cur.EnableShell)
-	s.tun.SetSelfManageEnabled(cur.EnableSelfManage)
 	s.tun.SetCLIHooksEnabled(cur.EnableCLIHooks)
 	s.tun.SetClaudePersistentSession(cur.ClaudePersistentSession)
 	s.tun.SetDelegationEnabled(cur.EnableDelegation)
@@ -329,10 +331,9 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
 }
 
-// registerUsageRoutes registers budget guardrails + the context meter.
+// registerUsageRoutes registers the spend meter + the context meter.
 func (s *Server) registerUsageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents/{id}/usage", s.handleAgentUsage)
-	mux.HandleFunc("POST /api/agents/{id}/budget", s.handleSetBudget)
 	mux.HandleFunc("GET /api/sessions/{id}/context", s.handleSessionContext)
 	mux.HandleFunc("GET /api/sessions/{id}/usage-detail", s.handleSessionUsageDetail)
 	mux.HandleFunc("GET /api/sessions/{id}/debug", s.handleSessionDebug)
@@ -344,6 +345,7 @@ func (s *Server) registerUsageRoutes(mux *http.ServeMux) {
 func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/mcp-servers", s.handleListMCPServers)
 	mux.HandleFunc("POST /api/mcp-servers", s.handleCreateMCPServer)
+	mux.HandleFunc("POST /api/mcp-servers/import", s.handleImportMCPServers)
 	mux.HandleFunc("POST /api/mcp-servers/{id}/toggle", s.handleToggleMCPServer)
 	mux.HandleFunc("POST /api/mcp-servers/{id}/test", s.handleTestMCPServer)
 	mux.HandleFunc("DELETE /api/mcp-servers/{id}", s.handleDeleteMCPServer)

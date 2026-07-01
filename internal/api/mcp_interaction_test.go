@@ -80,10 +80,10 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 // TestInteractionAdvertisedNames locks the single-source invariant (CLI-2): the
 // names handed to the CLI allowlist (InteractionEndpoint.ToolNames) are exactly
 // the names the backend advertises via Tools(). Adding a tool to one therefore
-// adds it to the other automatically. Also asserts the use_skill bridge is
-// advertised and that self-manage-gated spawn_session is absent without a tun.
+// adds it to the other automatically. Also asserts the use_skill bridge and the
+// always-on spawn_session are advertised.
 func TestInteractionAdvertisedNames(t *testing.T) {
-	b := &interactionBackend{runs: newChatRuns()} // tun nil → self-manage off
+	b := &interactionBackend{runs: newChatRuns()}
 	specs := b.Tools("", "")                      // no token → static set only (no per-run bridge); tier "" → full set
 	want := make(map[string]bool, len(specs))
 	for _, s := range specs {
@@ -102,8 +102,10 @@ func TestInteractionAdvertisedNames(t *testing.T) {
 	if !contains(got, "use_skill") {
 		t.Fatalf("use_skill must be advertised (CLI skill bridge); got %s", names)
 	}
-	if contains(got, "spawn_session") {
-		t.Fatalf("spawn_session must NOT be advertised without self-manage; got %s", names)
+	// spawn_session is always advertised now (the self-manage master toggle was
+	// removed 2026-07-01; self-management is always on).
+	if !contains(got, "spawn_session") {
+		t.Fatalf("spawn_session must be advertised (self-management always on); got %s", names)
 	}
 	// Interactive (chat) turn advertises ask_user / request_confirmation.
 	if !contains(got, "ask_user") || !contains(got, "request_confirmation") {

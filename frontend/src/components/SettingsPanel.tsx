@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Bell, Bot, Tag, Plug, Activity, type LucideIcon } from 'lucide-react'
+import { Bell, Bot, Tag, type LucideIcon } from 'lucide-react'
 import { api } from '../api'
 import type {
   AppSettings,
@@ -18,13 +18,10 @@ import {
   ProfilePanel,
   NotificationsPanel,
   ContextPanel,
-  BudgetPanel,
   AutonomyPanel,
   AutoTitlePanel,
-  McpPanel,
   ToolsPanel,
   BackupPanel,
-  DiagnosticsPanel,
   AboutPanel,
 } from './settings/appPanels'
 import { useRegisterDirty } from '../lib/dirtySignals'
@@ -131,6 +128,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       theme: draft.theme, accent: draft.accent, themePreset: draft.themePreset, language: draft.language,
       defaultProvider: draft.defaultProvider, defaultModel: draft.defaultModel,
       defaultPermissionMode: draft.defaultPermissionMode, claudeCliPath: draft.claudeCliPath,
+      claudeConfigDir: draft.claudeConfigDir,
       minimaxBaseUrl: draft.minimaxBaseUrl,
       openrouterBaseUrl: draft.openrouterBaseUrl,
       extendedPromptCache: draft.extendedPromptCache,
@@ -140,7 +138,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       maxContextTokens: draft.maxContextTokens, keepRecentMsgs: draft.keepRecentMsgs,
       recallTopN: draft.recallTopN, recallMinScore: draft.recallMinScore,
       contextBudgetCeil: draft.contextBudgetCeil, contextBudgetFraction: draft.contextBudgetFraction,
-      journalCap: draft.journalCap, journalMaxLen: draft.journalMaxLen,
+      journalCap: draft.journalCap, journalMaxLen: draft.journalMaxLen, journalMinLen: draft.journalMinLen,
       reflectionCap: draft.reflectionCap,
       memoryPressureWarn: draft.memoryPressureWarn, coreMemoryTools: draft.coreMemoryTools,
       autoReflect: draft.autoReflect, autoReflectThreshold: draft.autoReflectThreshold,
@@ -150,11 +148,9 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       compactToolOutput: draft.compactToolOutput, compactMaxLines: draft.compactMaxLines,
       compactMaxBytes: draft.compactMaxBytes, compactLlmSummary: draft.compactLlmSummary,
       compactLlmThreshold: draft.compactLlmThreshold, compactModel: draft.compactModel,
-      defaultDailyCallLimit: draft.defaultDailyCallLimit, defaultDailyTokenLimit: draft.defaultDailyTokenLimit,
       pauseAutonomy: draft.pauseAutonomy,
       autoTitleEnabled: draft.autoTitleEnabled, titleModel: draft.titleModel,
-      mcpGatewayUrl: draft.mcpGatewayUrl, logLevel: draft.logLevel,
-      enableShell: draft.enableShell, enableSelfManage: draft.enableSelfManage,
+      enableShell: draft.enableShell,
       enableCliHooks: draft.enableCliHooks, claudeResume: draft.claudeResume,
       enableDelegation: draft.enableDelegation,
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
@@ -295,7 +291,6 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
                 />
               )}
               {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'budget' && <BudgetPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'tools' && <ToolsPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'backup' && <BackupPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'hooks' && <HooksPanel onError={onError} />}
@@ -310,12 +305,6 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
                   </AdvSection>
                   <AdvSection title="Otomatik Başlık" icon={Tag}>
                     <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />
-                  </AdvSection>
-                  <AdvSection title="MCP & Araçlar" icon={Plug}>
-                    <McpPanel draft={draft} set={set} setDraft={setDraft} />
-                  </AdvSection>
-                  <AdvSection title="Tanılama" icon={Activity}>
-                    <DiagnosticsPanel draft={draft} set={set} setDraft={setDraft} />
                   </AdvSection>
                 </>
               )}

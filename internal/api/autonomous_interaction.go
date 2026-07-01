@@ -76,15 +76,13 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// disallowed; nil when shell is off (then native Bash stays available).
 		run.setShellRunner(rt.NewShellRunner())
 
-		// spawn_session (CLI path): only when self-manage is on, mirroring the native
-		// gate. A fresh instance resets the per-turn spawn budget.
-		if s.tun.SelfManageEnabled() {
-			run.setSpawnTool(tools.NewSpawnSessionTool(ag.ID, s.tun.SpawnMaxPerTurn(),
-				func(sctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
-					res, err := rt.SpawnSession(sctx, target, prompt, agent.SpawnOptions{ModelOverride: modelOverride, CreatedBy: ag.ID})
-					return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
-				}))
-		}
+		// spawn_session (CLI path): self-management is always on now. A fresh instance
+		// resets the per-turn spawn budget.
+		run.setSpawnTool(tools.NewSpawnSessionTool(ag.ID, s.tun.SpawnMaxPerTurn(),
+			func(sctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
+				res, err := rt.SpawnSession(sctx, target, prompt, agent.SpawnOptions{ModelOverride: modelOverride, CreatedBy: ag.ID})
+				return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
+			}))
 
 		// run_subagent (CLI path): synchronous delegation — hand a sub-task to another
 		// agent and get the answer back in this turn. nil when delegation is off.

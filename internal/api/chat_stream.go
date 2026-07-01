@@ -325,17 +325,13 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		// Spawn (CLI path): mirror the native built-in for claude-cli agents, which
 		// reach SwarmGo tools only through the Interaction MCP bridge. Install a
 		// per-agent spawn tool on the run so the bridge's spawn_session dispatch can
-		// launch independent sessions. Gated by the same self-manage master toggle;
-		// a fresh instance per turn resets the per-turn spawn budget.
-		if s.tun.SelfManageEnabled() {
-			run.setSpawnTool(tools.NewSpawnSessionTool(respondingID, s.tun.SpawnMaxPerTurn(),
-				func(sctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
-					res, err := wsp.Runtime.SpawnSession(sctx, target, prompt, agent.SpawnOptions{ModelOverride: modelOverride, CreatedBy: respondingID})
-					return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
-				}))
-		} else {
-			run.setSpawnTool(nil)
-		}
+		// launch independent sessions. Self-management is always on now; a fresh
+		// instance per turn resets the per-turn spawn budget.
+		run.setSpawnTool(tools.NewSpawnSessionTool(respondingID, s.tun.SpawnMaxPerTurn(),
+			func(sctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
+				res, err := wsp.Runtime.SpawnSession(sctx, target, prompt, agent.SpawnOptions{ModelOverride: modelOverride, CreatedBy: respondingID})
+				return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
+			}))
 
 		// run_subagent (CLI path): mirror the native delegation built-in so a
 		// claude-cli agent can hand a self-contained sub-task to another agent and

@@ -132,12 +132,13 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		}
 		return nil
 	}
+	// SWARMGO_ENABLE_SELFMANAGE was removed 2026-07-01 (self-management is always on;
+	// visibility is per-tool), so it is no longer seeded here.
 	seed := settings.Patch{
 		EnableShell:      envOn("SWARMGO_ENABLE_SHELL"),
-		EnableSelfManage: envOn("SWARMGO_ENABLE_SELFMANAGE"),
 		EnableDelegation: envOn("SWARMGO_ENABLE_DELEGATION"),
 	}
-	if seed.EnableShell != nil || seed.EnableSelfManage != nil || seed.EnableDelegation != nil {
+	if seed.EnableShell != nil || seed.EnableDelegation != nil {
 		if _, err := settingsStore.Apply(seed); err != nil {
 			logger.Warn("seed enable-flags from env failed", "error", err)
 		} else {

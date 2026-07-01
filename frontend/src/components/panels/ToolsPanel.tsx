@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, Plug, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { Search, Plug, ChevronRight, Check, Ban } from 'lucide-react'
 import { api } from '../../api'
-import type { MCPServer, MCPTransport, WorkspaceTool } from '../../types'
-import { toolSource, toolServer, toolLabel, extractParams, type ParamRow } from './toolMeta'
+import type { MCPServer, MCPTransport, ToolVisibility, WorkspaceTool } from '../../types'
+import {
+  toolSource,
+  toolServer,
+  toolLabel,
+  toolCategory,
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  extractParams,
+  VISIBILITY_TIERS,
+  visibilityMeta,
+  type ParamRow,
+} from './toolMeta'
 import { toolIcon } from '../../lib/toolIcons'
+import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { SelectionBar, SelectionBarButton } from '../common'
 
 interface Props {
   onError: (msg: string) => void
@@ -25,16 +38,22 @@ export function ToolsPanel({ onError }: Props) {
   const [command, setCommand] = useState('')
   const [argsText, setArgsText] = useState('')
   const [url, setUrl] = useState('')
+  // Optional http request headers, one "Key: Value" per line (e.g. Authorization).
+  const [headersText, setHeadersText] = useState('')
+
+  // Bulk JSON import (mcpServers document).
+  const [importText, setImportText] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState('')
 
   // Workspace tool activation + selection.
   const [tools, setTools] = useState<WorkspaceTool[]>([])
   const [disabled, setDisabled] = useState<string[]>([])
-  // Visibility override lists: hiddenOv forces a tool load-on-demand; shownOv
-  // forces a default-hidden tool (e.g. self-management) back into context.
-  const [hiddenOv, setHiddenOv] = useState<string[]>([])
-  const [shownOv, setShownOv] = useState<string[]>([])
+  // Per-tool visibility override map (tool name → tier). The effective tier shown
+  // per tool comes from t.visibility; this map is what we persist.
+  const [visOv, setVisOv] = useState<Record<string, ToolVisibility>>({})
   const [savingTool, setSavingTool] = useState<string | null>(null)
-  const [hidingTool, setHidingTool] = useState<string | null>(null)
+  const [visBusy, setVisBusy] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   // Collapsed group labels (accordion). Persisted so the choice sticks.
@@ -65,8 +84,7 @@ export function ToolsPanel({ onError }: Props) {
       .then((res) => {
         setTools(res.tools)
         setDisabled(res.disabledTools)
-        setHiddenOv(res.hiddenTools ?? [])
-        setShownOv(res.shownTools ?? [])
+        setVisOv(res.toolVisibility ?? {})
       })
       .catch((e) => onError(e.message))
   }, [onError])
@@ -92,30 +110,47 @@ export function ToolsPanel({ onError }: Props) {
     }
   }
 
-  // Toggle a tool's effective "hidden" (load-on-demand) state for the whole
-  // workspace. A hidden tool stays active but its schema isn't shipped every turn
-  // — the agent pulls it in via tool_search / activate_tools. Works for any tool,
-  // including ones hidden by default in code (the self-management suite): showing
-  // such a tool writes a "shown" override that forces it back into context.
-  // Mirrors a skill's "Gizli" state.
-  const toggleHidden = async (t: WorkspaceTool) => {
-    const add = (list: string[], n: string) => [...new Set([...list, n])]
-    const rm = (list: string[], n: string) => list.filter((x) => x !== n)
-    // Making it shown → add to shown override, drop any hidden override (and v.v.).
-    const nextHidden = t.hidden ? rm(hiddenOv, t.name) : add(hiddenOv, t.name)
-    const nextShown = t.hidden ? add(shownOv, t.name) : rm(shownOv, t.name)
-    setHidingTool(t.name)
+  // Set one tool's context-visibility tier (full / summary / name-only / hidden)
+  // for the whole workspace. Persists an explicit override into the visibility map
+  // — pinning the tool to that tier regardless of its code default. A hidden/
+  // name-only tool stays active; only how much of it rides in the per-turn context
+  // changes. Mirrors a skill's visibility state.
+  const setToolVisibility = async (t: WorkspaceTool, tier: ToolVisibility) => {
+    if (t.visibility === tier) return
+    const nextOv = { ...visOv, [t.name]: tier }
+    setVisBusy(t.name)
     // Optimistic update.
-    setTools((ts) => ts.map((x) => (x.name === t.name ? { ...x, hidden: !t.hidden } : x)))
-    setHiddenOv(nextHidden)
-    setShownOv(nextShown)
+    setTools((ts) => ts.map((x) => (x.name === t.name ? { ...x, visibility: tier } : x)))
+    setVisOv(nextOv)
     try {
-      await api.setWorkspaceToolsVisibility(nextHidden, nextShown)
+      await api.setWorkspaceToolVisibility(nextOv)
     } catch (e) {
       onError((e as Error).message)
       loadTools() // revert on failure
     } finally {
-      setHidingTool(null)
+      setVisBusy(null)
+    }
+  }
+
+  // Set the same visibility tier for EVERY tool of one MCP server in a single
+  // action — the per-server counterpart of the per-tool tier selector. The manual
+  // override for externally-added MCP servers (whose tools default to name-only).
+  const setServerVisibility = async (serverName: string, tier: ToolVisibility) => {
+    const names = tools
+      .filter((t) => toolSource(t) === 'mcp' && (toolServer(t) || 'MCP') === serverName)
+      .map((t) => t.name)
+    if (names.length === 0) return
+    const nameSet = new Set(names)
+    const nextOv = { ...visOv }
+    for (const n of names) nextOv[n] = tier
+    // Optimistic update.
+    setTools((ts) => ts.map((x) => (nameSet.has(x.name) ? { ...x, visibility: tier } : x)))
+    setVisOv(nextOv)
+    try {
+      await api.setWorkspaceToolVisibility(nextOv)
+    } catch (e) {
+      onError((e as Error).message)
+      loadTools() // revert on failure
     }
   }
 
@@ -124,14 +159,59 @@ export function ToolsPanel({ onError }: Props) {
     try {
       // Split args on whitespace; quotes are not parsed (keep it simple).
       const args = argsText.trim() ? argsText.trim().split(/\s+/) : []
-      await api.createMCPServer({ name: name.trim(), transport, command: command.trim(), args, url: url.trim() })
+      // Parse "Key: Value" lines into a headers map (http transport only). The
+      // first colon splits; later colons (e.g. in a URL value) stay in the value.
+      const headers: Record<string, string> = {}
+      if (transport === 'http') {
+        for (const line of headersText.split('\n')) {
+          const t = line.trim()
+          if (!t) continue
+          const i = t.indexOf(':')
+          if (i <= 0) continue
+          headers[t.slice(0, i).trim()] = t.slice(i + 1).trim()
+        }
+      }
+      await api.createMCPServer({
+        name: name.trim(),
+        transport,
+        command: command.trim(),
+        args,
+        url: url.trim(),
+        headers: Object.keys(headers).length ? headers : undefined,
+      })
       setName('')
       setCommand('')
       setArgsText('')
       setUrl('')
+      setHeadersText('')
       loadServers()
     } catch (e) {
       onError((e as Error).message)
+    }
+  }
+
+  const importServers = async () => {
+    const text = importText.trim()
+    if (!text) return
+    setImporting(true)
+    setImportMsg('')
+    try {
+      const res = await api.importMCPServers(text)
+      const errCount = Object.keys(res.errors ?? {}).length
+      const parts = [`${res.created.length} sunucu eklendi`]
+      if (errCount > 0) {
+        const detail = Object.entries(res.errors)
+          .map(([n, e]) => `${n}: ${e}`)
+          .join('; ')
+        parts.push(`${errCount} hata — ${detail}`)
+      }
+      setImportMsg(parts.join(' · '))
+      if (res.created.length > 0) setImportText('')
+      loadServers()
+    } catch (e) {
+      setImportMsg(`✗ ${(e as Error).message}`)
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -186,23 +266,81 @@ export function ToolsPanel({ onError }: Props) {
     )
   }, [tools, query])
 
-  // Group filtered tools by origin: built-ins first, then one group per MCP server.
+  // Group filtered tools: built-ins by functional category (fixed order), then one
+  // group per MCP server (alphabetical). Empty categories are skipped.
   const groups = useMemo(() => {
-    const builtins = filtered.filter((t) => toolSource(t) === 'builtin')
+    const byCategory = new Map<string, WorkspaceTool[]>()
     const byServer = new Map<string, WorkspaceTool[]>()
     for (const t of filtered) {
-      if (toolSource(t) !== 'mcp') continue
-      const key = toolServer(t) || 'MCP'
-      if (!byServer.has(key)) byServer.set(key, [])
-      byServer.get(key)!.push(t)
+      if (toolSource(t) === 'mcp') {
+        const key = toolServer(t) || 'MCP'
+        if (!byServer.has(key)) byServer.set(key, [])
+        byServer.get(key)!.push(t)
+      } else {
+        const key = toolCategory(t)
+        if (!byCategory.has(key)) byCategory.set(key, [])
+        byCategory.get(key)!.push(t)
+      }
     }
     const out: { label: string; tools: WorkspaceTool[] }[] = []
-    if (builtins.length) out.push({ label: 'Yerleşik', tools: builtins })
+    // Built-in categories in fixed order; any unknown key appended after, by label.
+    const seen = new Set<string>()
+    const emit = (cat: string) => {
+      const list = byCategory.get(cat)
+      if (!list || !list.length || seen.has(cat)) return
+      seen.add(cat)
+      out.push({ label: CATEGORY_LABELS[cat] ?? cat, tools: list })
+    }
+    for (const cat of CATEGORY_ORDER) emit(cat)
+    for (const cat of [...byCategory.keys()].sort((a, b) =>
+      (CATEGORY_LABELS[a] ?? a).localeCompare(CATEGORY_LABELS[b] ?? b),
+    )) {
+      emit(cat)
+    }
+    // MCP servers after built-ins, alphabetical.
     for (const [server, list] of [...byServer.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
       out.push({ label: server, tools: list })
     }
     return out
   }, [filtered])
+
+  // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk enable/disable + NameOnly.
+  // Plain click still opens the tool's detail; modifier-click selects instead.
+  const sel = useMultiSelect()
+  const orderedNames = useMemo(
+    () => groups.flatMap((g) => (collapsed.has(g.label) ? [] : g.tools.map((t) => t.name))),
+    [groups, collapsed],
+  )
+  const bulkSetEnabled = async (enabled: boolean) => {
+    if (sel.count === 0) return
+    const ids = [...sel.selected]
+    const next = enabled
+      ? disabled.filter((n) => !sel.selected.has(n))
+      : [...new Set([...disabled, ...ids])]
+    setTools((ts) => ts.map((x) => (sel.selected.has(x.name) ? { ...x, enabled } : x)))
+    setDisabled(next)
+    sel.clear()
+    try {
+      await api.setWorkspaceTools(next)
+    } catch (e) {
+      onError((e as Error).message)
+      loadTools()
+    }
+  }
+  const bulkSetVisibility = async (tier: ToolVisibility) => {
+    if (sel.count === 0) return
+    const nextOv = { ...visOv }
+    for (const n of sel.selected) nextOv[n] = tier
+    setTools((ts) => ts.map((x) => (sel.selected.has(x.name) ? { ...x, visibility: tier } : x)))
+    setVisOv(nextOv)
+    sel.clear()
+    try {
+      await api.setWorkspaceToolVisibility(nextOv)
+    } catch (e) {
+      onError((e as Error).message)
+      loadTools()
+    }
+  }
 
   const selected = tools.find((t) => t.name === selectedName) ?? null
   const params = useMemo(() => extractParams(selected?.inputSchema), [selected])
@@ -270,11 +408,16 @@ export function ToolsPanel({ onError }: Props) {
                         key={t.name}
                         data-testid="tools-list-item"
                         data-tool-name={t.name}
-                        onClick={() => setSelectedName(t.name)}
+                        onClick={(e) => {
+                          if (sel.handleClick(e, t.name, orderedNames)) return
+                          setSelectedName(t.name)
+                        }}
                         className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition ${
-                          active
-                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                            : 'hover:bg-[var(--color-surface-2)]'
+                          sel.isSelected(t.name)
+                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-1 ring-inset ring-[var(--color-accent)]'
+                            : active
+                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                              : 'hover:bg-[var(--color-surface-2)]'
                         }`}
                       >
                         <span
@@ -292,11 +435,7 @@ export function ToolsPanel({ onError }: Props) {
                         >
                           {toolLabel(t)}
                         </span>
-                        {t.selfManaged ? (
-                          <SelfMgmtBadge className="ml-auto" />
-                        ) : (
-                          t.hidden && <HiddenBadge className="ml-auto" />
-                        )}
+                        <VisibilityBadge visibility={t.visibility} className="ml-auto" />
                       </button>
                     )
                   })}
@@ -310,6 +449,23 @@ export function ToolsPanel({ onError }: Props) {
           )}
         </div>
 
+        <SelectionBar
+          count={sel.count}
+          onClear={sel.clear}
+          onSelectAll={orderedNames.length ? () => sel.selectAll(orderedNames) : undefined}
+        >
+          <SelectionBarButton icon={<Check size={13} />} onClick={() => bulkSetEnabled(true)}>
+            Etkinleştir
+          </SelectionBarButton>
+          <SelectionBarButton icon={<Ban size={13} />} onClick={() => bulkSetEnabled(false)}>
+            Devre dışı
+          </SelectionBarButton>
+          {VISIBILITY_TIERS.map((tier) => (
+            <SelectionBarButton key={tier.value} onClick={() => bulkSetVisibility(tier.value)}>
+              {tier.label}
+            </SelectionBarButton>
+          ))}
+        </SelectionBar>
       </aside>
 
       {/* Right: selected tool detail, or MCP server management. */}
@@ -319,13 +475,15 @@ export function ToolsPanel({ onError }: Props) {
             tool={selected}
             params={params}
             saving={savingTool === selected.name}
-            hiding={hidingTool === selected.name}
+            visBusy={visBusy === selected.name}
             onToggle={() => toggleTool(selected)}
-            onToggleHidden={() => toggleHidden(selected)}
+            onSetVisibility={(tier) => setToolVisibility(selected, tier)}
           />
         ) : (
           <ServerManagement
             servers={servers}
+            tools={tools}
+            onServerVisibility={setServerVisibility}
             testing={testing}
             testResult={testResult}
             name={name}
@@ -338,10 +496,17 @@ export function ToolsPanel({ onError }: Props) {
             setArgsText={setArgsText}
             url={url}
             setUrl={setUrl}
+            headersText={headersText}
+            setHeadersText={setHeadersText}
             onAdd={addServer}
             onToggle={toggleServer}
             onTest={testServer}
             onRemove={removeServer}
+            importText={importText}
+            setImportText={setImportText}
+            importing={importing}
+            importMsg={importMsg}
+            onImport={importServers}
           />
         )}
       </div>
@@ -349,34 +514,65 @@ export function ToolsPanel({ onError }: Props) {
   )
 }
 
-// NameOnlyBadge marks a tool rendered as name-only (Claude Code deferred-tool
-// style): its summary + schema are not shipped every turn — only the name is
-// listed, and the schema is pulled in via tool_search / activate_tools. The tool
-// analog of a skill's "Gizli" (auto-summary off) state.
-function HiddenBadge({ className = '' }: { className?: string }) {
+// VisibilityBadge shows a tool's current context-visibility tier (Tam / Özet /
+// İsim / Gizli) with a tier-accent color. Replaces the old NameOnly/Self-mgmt
+// chips — every tool now carries exactly one of the four.
+function VisibilityBadge({
+  visibility,
+  className = '',
+}: {
+  visibility: ToolVisibility
+  className?: string
+}) {
+  const m = visibilityMeta(visibility)
   return (
     <span
-      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-warning,#d97706)_18%,transparent)] text-[var(--color-warning,#d97706)] ${className}`}
-      title="Katalogda yalnızca ismi listelenir (özet gönderilmez); şema gerektiğinde tool_search/activate_tools ile yüklenir (yine de aktif)"
+      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${className}`}
+      style={{
+        backgroundColor: `color-mix(in srgb, ${m.color} 18%, transparent)`,
+        color: m.color,
+      }}
+      title={m.hint}
     >
-      NameOnly
+      {m.label}
     </span>
   )
 }
 
-// SelfMgmtBadge marks a tool in the HIDDEN tier: not even listed by name in the
-// per-turn catalog — folded into the single `swarmgo-self-management` skill pointer
-// and discovered via tool_search. More aggressive than NameOnly (which still shows
-// the name). The bulk admin family (manage agents/flows/schedules/…) plus confined
-// config edits and secret reads live here. Still callable once activated.
-function SelfMgmtBadge({ className = '' }: { className?: string }) {
+// VisibilitySelector is the 4-way segmented control to pick a tool's context tier.
+function VisibilitySelector({
+  value,
+  busy,
+  onSelect,
+}: {
+  value: ToolVisibility
+  busy: boolean
+  onSelect: (tier: ToolVisibility) => void
+}) {
   return (
-    <span
-      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-text-dim)_22%,transparent)] text-[var(--color-text-dim)] ${className}`}
-      title="Gizli (self-management tier): katalogda ismi bile listelenmez — tek bir 'swarmgo-self-management' skill işaretçisine katlanır, tool_search ile keşfedilir (yine de aktif edilince çağrılabilir)"
-    >
-      Self-mgmt
-    </span>
+    <div className="inline-flex overflow-hidden rounded-lg border border-[var(--color-border)]">
+      {VISIBILITY_TIERS.map((tier) => {
+        const active = value === tier.value
+        return (
+          <button
+            key={tier.value}
+            data-testid="tool-visibility-tier"
+            data-tier={tier.value}
+            onClick={() => onSelect(tier.value)}
+            disabled={busy}
+            title={tier.hint}
+            className={`px-3 py-2 text-xs font-medium transition disabled:opacity-50 ${
+              active
+                ? 'text-white'
+                : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+            }`}
+            style={active ? { backgroundColor: tier.color } : undefined}
+          >
+            {tier.label}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -385,18 +581,19 @@ function ToolDetail({
   tool,
   params,
   saving,
-  hiding,
+  visBusy,
   onToggle,
-  onToggleHidden,
+  onSetVisibility,
 }: {
   tool: WorkspaceTool
   params: ParamRow[]
   saving: boolean
-  hiding: boolean
+  visBusy: boolean
   onToggle: () => void
-  onToggleHidden: () => void
+  onSetVisibility: (tier: ToolVisibility) => void
 }) {
   const ToolIcon = toolIcon(tool.name)
+  const examples = (tool.examples ?? []) as unknown[]
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -418,24 +615,10 @@ function ToolDetail({
             >
               {tool.enabled ? 'Aktif' : 'Devre dışı'}
             </span>
-            {tool.selfManaged ? <SelfMgmtBadge /> : tool.hidden && <HiddenBadge />}
+            <VisibilityBadge visibility={tool.visibility} />
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
-          <button
-            data-testid="tool-detail-hide"
-            onClick={onToggleHidden}
-            disabled={hiding}
-            title={
-              tool.hidden
-                ? 'Göster: aracın şeması her tur ajana gönderilsin'
-                : 'NameOnly: katalogda yalnız ismi görünsün, şema gerektiğinde on-demand yüklensin'
-            }
-            className="flex items-center gap-1.5 rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium transition hover:opacity-90 disabled:opacity-50"
-          >
-            {tool.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-            {tool.hidden ? 'Göster' : 'NameOnly'}
-          </button>
           <button
             data-testid="tool-detail-toggle"
             onClick={onToggle}
@@ -459,9 +642,17 @@ function ToolDetail({
 
       <section>
         <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+          Bağlam görünürlüğü
+        </h3>
+        <VisibilitySelector value={tool.visibility} busy={visBusy} onSelect={onSetVisibility} />
+        <p className="mt-2 text-xs text-[var(--color-text-dim)]">{visibilityMeta(tool.visibility).hint}</p>
+      </section>
+
+      <section>
+        <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
           Açıklama
         </h3>
-        <p className="text-sm leading-relaxed">
+        <p className="whitespace-pre-wrap text-sm leading-relaxed">
           {tool.description || <span className="text-[var(--color-text-dim)]">Açıklama yok.</span>}
         </p>
       </section>
@@ -493,6 +684,28 @@ function ToolDetail({
           </div>
         )}
       </section>
+
+      {examples.length > 0 && (
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+            Örnek çağrılar ({examples.length})
+          </h3>
+          <p className="mb-2 text-xs text-[var(--color-text-dim)]">
+            Şemanın ifade edemediği kullanım kalıpları (tarih/ID biçimi, birlikte gelen alanlar).
+            Bunlar yalnızca <b>Tam</b> görünürlükte (tam şemayla) modele gider.
+          </p>
+          <div className="space-y-2">
+            {examples.map((ex, i) => (
+              <pre
+                key={i}
+                className="overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs"
+              >
+                {JSON.stringify(ex, null, 2)}
+              </pre>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -501,6 +714,8 @@ function ToolDetail({
 // selected. (Extracted so the right pane stays readable.)
 function ServerManagement(props: {
   servers: MCPServer[]
+  tools: WorkspaceTool[]
+  onServerVisibility: (server: string, tier: ToolVisibility) => void
   testing: string | null
   testResult: Record<string, string>
   name: string
@@ -513,13 +728,22 @@ function ServerManagement(props: {
   setArgsText: (v: string) => void
   url: string
   setUrl: (v: string) => void
+  headersText: string
+  setHeadersText: (v: string) => void
   onAdd: () => void
   onToggle: (s: MCPServer) => void
   onTest: (s: MCPServer) => void
   onRemove: (s: MCPServer) => void
+  importText: string
+  setImportText: (v: string) => void
+  importing: boolean
+  importMsg: string
+  onImport: () => void
 }) {
   const {
     servers,
+    tools,
+    onServerVisibility,
     testing,
     testResult,
     name,
@@ -532,10 +756,17 @@ function ServerManagement(props: {
     setArgsText,
     url,
     setUrl,
+    headersText,
+    setHeadersText,
     onAdd,
     onToggle,
     onTest,
     onRemove,
+    importText,
+    setImportText,
+    importing,
+    importMsg,
+    onImport,
   } = props
   return (
     <div className="mx-auto max-w-2xl">
@@ -544,7 +775,13 @@ function ServerManagement(props: {
         Soldaki listeden bir araç seçerek detaylarını görüntüleyip aç/kapatabilirsin.
       </p>
       <div className="space-y-2">
-        {servers.map((s) => (
+        {servers.map((s) => {
+          // This server's MCP tools — drives the per-server visibility quick action
+          // (set the whole server's tools to one tier at once).
+          const serverTools = tools.filter(
+            (t) => toolSource(t) === 'mcp' && (toolServer(t) || 'MCP') === s.name,
+          )
+          return (
           <div
             key={s.id}
             className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
@@ -590,11 +827,32 @@ function ServerManagement(props: {
                 </button>
               </div>
             </div>
+            {serverTools.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-2">
+                <span className="text-xs text-[var(--color-text-dim)]">
+                  Tüm araçlar ({serverTools.length}) →
+                </span>
+                {VISIBILITY_TIERS.map((tier) => (
+                  <button
+                    key={tier.value}
+                    data-testid="mcp-server-visibility-all"
+                    data-server-id={s.id}
+                    data-tier={tier.value}
+                    onClick={() => onServerVisibility(s.name, tier.value)}
+                    title={tier.hint}
+                    className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
+                  >
+                    {tier.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {testResult[s.id] && (
               <div className="mt-2 break-words text-xs text-[var(--color-text-dim)]">{testResult[s.id]}</div>
             )}
           </div>
-        ))}
+          )
+        })}
         {servers.length === 0 && (
           <p className="text-sm text-[var(--color-text-dim)]">Henüz MCP sunucusu eklenmedi.</p>
         )}
@@ -618,8 +876,7 @@ function ServerManagement(props: {
             className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
           >
             <option value="stdio">stdio</option>
-            <option value="sse">sse</option>
-            <option value="http">http</option>
+            <option value="http">http (Streamable HTTP)</option>
           </select>
           {transport === 'stdio' ? (
             <>
@@ -639,13 +896,23 @@ function ServerManagement(props: {
               />
             </>
           ) : (
-            <input
-              data-testid="mcp-server-url-input"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="URL"
-              className="col-span-2 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
-            />
+            <>
+              <input
+                data-testid="mcp-server-url-input"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="URL (Streamable HTTP endpoint)"
+                className="col-span-2 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
+              />
+              <textarea
+                data-testid="mcp-server-headers-input"
+                value={headersText}
+                onChange={(e) => setHeadersText(e.target.value)}
+                spellCheck={false}
+                placeholder={'Opsiyonel başlıklar — her satıra "Anahtar: Değer"\nör. Authorization: Bearer TOKEN'}
+                className="col-span-2 h-20 resize-y rounded bg-[var(--color-surface-2)] px-3 py-2 font-mono text-xs outline-none"
+              />
+            </>
           )}
         </div>
         <button
@@ -655,6 +922,36 @@ function ServerManagement(props: {
         >
           Ekle
         </button>
+      </div>
+
+      {/* Bulk import from a pasted mcpServers JSON document. */}
+      <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <h3 className="mb-1 text-xs font-semibold text-[var(--color-text-dim)]">JSON ile içe aktar</h3>
+        <p className="mb-2 text-xs text-[var(--color-text-dim)]">
+          Standart <code className="text-[var(--color-text)]">mcpServers</code> JSON'u yapıştır (Claude Code /
+          .mcp.json biçimi). Birden çok sunucu tek seferde eklenir.
+        </p>
+        <textarea
+          data-testid="mcp-import-textarea"
+          value={importText}
+          onChange={(e) => setImportText(e.target.value)}
+          spellCheck={false}
+          placeholder={
+            '{\n  "mcpServers": {\n    "playwright": {\n      "command": "bunx",\n      "args": ["@playwright/mcp", "--browser", "chrome"]\n    }\n  }\n}'
+          }
+          className="h-40 w-full resize-y rounded bg-[var(--color-surface-2)] px-3 py-2 font-mono text-xs outline-none"
+        />
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            data-testid="mcp-import-button"
+            onClick={onImport}
+            disabled={importing || !importText.trim()}
+            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {importing ? 'İçe aktarılıyor…' : 'İçe aktar'}
+          </button>
+          {importMsg && <span className="break-words text-xs text-[var(--color-text-dim)]">{importMsg}</span>}
+        </div>
       </div>
     </div>
   )

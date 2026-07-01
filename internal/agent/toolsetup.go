@@ -31,6 +31,8 @@ func toServerConfig(m db.MCPServer) mcp.ServerConfig {
 	_ = json.Unmarshal([]byte(m.Args), &args)
 	env := map[string]string{}
 	_ = json.Unmarshal([]byte(m.EnvConfig), &env)
+	headers := map[string]string{}
+	_ = json.Unmarshal([]byte(m.HeadersConfig), &headers)
 	return mcp.ServerConfig{
 		Name:      m.Name,
 		Transport: m.Transport,
@@ -38,6 +40,7 @@ func toServerConfig(m db.MCPServer) mcp.ServerConfig {
 		Args:      args,
 		URL:       m.URL,
 		Env:       env,
+		Headers:   headers,
 	}
 }
 
@@ -262,12 +265,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		)
 	}
 
-	// Self-management suite (gated, off by default): let an agent create/edit/
-	// delete agents, flows and schedules, manage artifacts, add memories and read
-	// logs. Provenance is enforced — agents only touch agent-created entities.
-	// This roughly doubles the tool catalog, so it is opt-in per workspace.
+	// Self-management suite: let an agent create/edit/delete agents, flows and
+	// schedules, manage artifacts, add memories and read logs. Provenance is
+	// enforced — agents only touch agent-created entities. Always built now (the
+	// former `enableSelfManage` master toggle was removed): these tools default to
+	// the HIDDEN visibility tier below (folded into the self-management skill
+	// pointer, ~zero per-turn cost) and are promoted per-tool via the tools screen.
 	selfManageStart := len(builtins)
-	if r.tun.SelfManageEnabled() {
+	{
 		builtins = append(builtins,
 			// Agents. New agents are seeded with the default SwarmGo skill set when
 			// the caller passes none; caller-supplied slugs are validated against the
@@ -458,16 +463,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	if agent.PermissionMode == "read-only" {
 		reg.MarkLazy("Write", "Edit") // write_config already lazy above
 	}
-	// Per-tool visibility overrides from the workspace tools screen. HiddenTools
-	// (the "NameOnly" chip) demotes a tool to load-on-demand AND renders it as
-	// name-only in the catalog (Claude Code deferred-tool style — name shown,
-	// schema pulled via activate_tools/tool_search). ShownTools is applied last
-	// (see below) to force a default-lazy/hidden tool — e.g. the self-management
-	// suite — back into the every-turn context. Loaded once for both passes.
+	// Per-tool visibility overrides from the workspace tools screen are applied
+	// AFTER AttachMCP below (so they win over both code defaults and the MCP
+	// name-only default). Loaded here once.
 	wsToolCfg, _ := r.db.GetWorkspaceToolConfig(ctx)
-	if len(wsToolCfg.HiddenTools) > 0 {
-		reg.MarkNameOnly(wsToolCfg.HiddenTools...)
-	}
 
 	if servers, err := r.db.ListEnabledMCPServers(ctx); err != nil {
 		r.logger.Warn("list mcp servers failed", "error", err)
@@ -490,12 +489,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		reg.AttachMCP(entries, cfgByServer, caller)
 	}
 
-	// ShownTools override (applied LAST so it wins over every default + MCP lazy
-	// mark): force these tools eager so they ride in the per-turn context. This is
-	// how a user surfaces otherwise-hidden tools — notably the self-management
-	// suite — via the tools screen's "Göster" toggle.
-	if len(wsToolCfg.ShownTools) > 0 {
-		reg.Unlazy(wsToolCfg.ShownTools...)
+	// Per-tool visibility overrides (applied LAST so each wins over every code
+	// default + the MCP name-only default): force a tool into one of the four tiers
+	// — full / summary / name-only / hidden — chosen on the tools screen. An unknown
+	// tier value is ignored; an unknown name is a harmless no-op.
+	for name, tier := range wsToolCfg.ToolVisibility {
+		reg.SetVisibility(name, tier)
 	}
 
 	// Wire the lazy-loading meta-tools once the full lazy catalog (self-management
@@ -767,28 +766,18 @@ func (r *Runtime) WorkspaceToolCatalog(ctx context.Context) []providers.ToolDef 
 }
 
 // WorkspaceToolCatalogWithState is WorkspaceToolCatalog plus, for each tool, its
-// effective load-on-demand state after all marks are applied — code defaults
-// (self-management, MCP, etc.) AND the workspace HiddenTools/ShownTools overrides.
-// It returns two sets so the tools screen can distinguish the tiers:
-//   - lazy:   any load-on-demand tool (not shipped every turn). Drives the
-//     "NameOnly" chip for name-only / MCP tools.
-//   - hidden: the subset folded OUT of the per-turn catalog into the
-//     self-management skill pointer (not enumerated by name). Drives the distinct
-//     "Self-mgmt" chip. hidden ⊆ lazy.
-func (r *Runtime) WorkspaceToolCatalogWithState(ctx context.Context) ([]providers.ToolDef, map[string]bool, map[string]bool) {
+// effective visibility tier after all marks are applied — code defaults
+// (self-management, MCP, etc.) AND the workspace per-tool overrides. The returned
+// map is tool name → one of tools.Visibility* ("full" | "summary" | "name-only" |
+// "hidden"); it drives the tools screen's tier selector and chips.
+func (r *Runtime) WorkspaceToolCatalogWithState(ctx context.Context) ([]providers.ToolDef, map[string]string) {
 	reg := r.buildRegistry(ctx, db.Agent{})
 	defs := reg.Defs(nil)
-	lazy := make(map[string]bool, len(defs))
-	hidden := make(map[string]bool, len(defs))
+	vis := make(map[string]string, len(defs))
 	for _, d := range defs {
-		if reg.IsLazy(d.Name) {
-			lazy[d.Name] = true
-		}
-		if reg.IsHidden(d.Name) {
-			hidden[d.Name] = true
-		}
+		vis[d.Name] = reg.VisibilityOf(d.Name)
 	}
-	return defs, lazy, hidden
+	return defs, vis
 }
 
 // ActiveToolCatalog returns the workspace-active tool catalog (full catalog

@@ -6,7 +6,7 @@ import { Layers, Database, NotebookPen, LifeBuoy, Bell, Scissors, Sparkles, Flas
 import type { VersionInfo, BackupStatus, WorkspaceArchives } from '../../types'
 import { api, getActiveWorkspace } from '../../api'
 import type { AppSettings } from '../../types'
-import { THEME_PRESETS } from '../../lib/themePresets'
+import { THEME_COLORS, type ThemeColorVariant } from '../../lib/themePresets'
 import { applyAppearance, resolveAppearance, type Appearance } from '../../lib/theme'
 import { NOTIFY_TYPES, mutedTypes, setTypeEnabled } from '../../lib/notifyPrefs'
 import { Field, Toggle, Slider, inputCls, type AppSet } from './primitives'
@@ -81,12 +81,13 @@ export function NotificationsPanel({ draft, set }: PanelProps) {
   )
 }
 
-// AppearancePanel edits the ACTIVE WORKSPACE's appearance override (theme,
-// accent, palette). It is self-contained — it loads/saves the per-workspace
-// settings directly and applies a live preview as the user edits — so the
-// shared app-global Save button is hidden for this category. Empty fields
-// inherit the app-global appearance, so switching workspaces re-themes the UI.
-const FALLBACK_APPEARANCE: Appearance = { theme: 'dark', accent: '#8b5cf6', themePreset: 'midnight-violet' }
+// AppearancePanel edits the ACTIVE WORKSPACE's appearance override (the theme
+// preset — a color + light/dark variant). It is self-contained — it loads/saves
+// the per-workspace settings directly and applies a live preview as the user
+// edits — so the shared app-global Save button is hidden for this category. An
+// empty preset inherits the app-global appearance, so switching workspaces
+// re-themes the UI.
+const FALLBACK_APPEARANCE: Appearance = { themePreset: 'violet-dark' }
 
 export function AppearancePanel({
   onError,
@@ -113,17 +114,13 @@ export function AppearancePanel({
     Promise.all([api.getSettings(), api.getWorkspaceSettings()])
       .then(([g, w]) => {
         if (cancelled) return
-        const global: Appearance = { theme: g.theme, accent: g.accent, themePreset: g.themePreset }
-        const override: Partial<Appearance> = {
-          theme: w.theme as Appearance['theme'],
-          accent: w.accent,
-          themePreset: w.themePreset,
-        }
+        const global: Appearance = { themePreset: g.themePreset }
+        const override: Partial<Appearance> = { themePreset: w.themePreset }
         const eff = resolveAppearance(override, global)
         setGlobalAppearance(global)
         setDraft(eff)
         setSaved(eff)
-        setHasOverride(!!(w.theme || w.accent || w.themePreset))
+        setHasOverride(!!w.themePreset)
         revertRef.current = eff
       })
       .catch((e) => onError((e as Error).message))
@@ -154,11 +151,7 @@ export function AppearancePanel({
   const save = async () => {
     setSaving(true)
     try {
-      await api.updateWorkspaceSettings({
-        theme: draft.theme,
-        accent: draft.accent,
-        themePreset: draft.themePreset,
-      })
+      await api.updateWorkspaceSettings({ themePreset: draft.themePreset })
       setSaved(draft)
       setHasOverride(true)
       revertRef.current = draft
@@ -174,7 +167,7 @@ export function AppearancePanel({
   const resetToGlobal = async () => {
     setSaving(true)
     try {
-      await api.updateWorkspaceSettings({ theme: '', accent: '', themePreset: '' })
+      await api.updateWorkspaceSettings({ themePreset: '' })
       setDraft(globalAppearance)
       setSaved(globalAppearance)
       setHasOverride(false)
@@ -195,57 +188,55 @@ export function AppearancePanel({
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         Bu görünüm ayarları <span className="font-medium text-[var(--color-text)]">yalnızca bu workspace</span> için geçerlidir. Workspace değiştirdiğinde tema da değişir. Değişiklikler anında önizlenir; kalıcı olması için <span className="font-medium text-[var(--color-text)]">Kaydet</span> de.
       </div>
-      <Field label="Tema paleti" hint="Hazır bir palet seç; tüm arayüz yeniden renklenir. Vurgu rengini aşağıdan ince ayarlayabilirsin.">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {THEME_PRESETS.map((p) => {
-            const sel = draft.themePreset === p.id
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => update({ themePreset: p.id, accent: p.tokens.accent })}
-                className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition ${
-                  sel
-                    ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
-                    : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
-                }`}
-              >
-                <span
-                  className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border"
-                  style={{ background: p.tokens.bg, borderColor: p.tokens.border }}
+      <Field label="Tema rengi" hint="Bir renk ve onun açık/koyu varyantını seç; tüm arayüz anında yeniden renklenir.">
+        <div className="space-y-2.5">
+          {THEME_COLORS.map((c) => {
+            const variant = (v: ThemeColorVariant, label: string) => {
+              const sel = draft.themePreset === v.id
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => update({ themePreset: v.id })}
+                  title={`${c.label} · ${label}`}
+                  className={`flex items-center gap-2.5 rounded-lg border-2 px-3.5 py-2.5 text-left transition ${
+                    sel
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] ring-2 ring-[var(--color-accent)]/40 shadow-sm'
+                      : 'border-[var(--color-border)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]'
+                  }`}
                 >
-                  <span className="h-3.5 w-3.5 rounded-full" style={{ background: p.tokens.accent }} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-xs font-medium text-[var(--color-text)]">{p.label}</span>
-                  <span className="block text-[10px] text-[var(--color-text-dim)]">{p.dark ? 'Koyu' : 'Açık'}</span>
-                </span>
-              </button>
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border"
+                    style={{ background: v.bg, borderColor: v.border }}
+                  >
+                    <span className="h-5 w-5 rounded-full" style={{ background: v.accent }} />
+                  </span>
+                  <span className={`text-sm ${sel ? 'font-semibold text-[var(--color-text)]' : 'font-medium text-[var(--color-text-dim)]'}`}>
+                    {label}
+                  </span>
+                </button>
+              )
+            }
+            return (
+              <div key={c.id} className="flex items-center gap-4">
+                <span className="w-20 shrink-0 text-sm font-semibold text-[var(--color-text)]">{c.label}</span>
+                <div className="flex gap-2.5">
+                  {variant(c.dark, 'Koyu')}
+                  {variant(c.light, 'Açık')}
+                </div>
+              </div>
             )
           })}
         </div>
       </Field>
-      <Field label="Temel mod" hint="Yalnızca özel palet kullanılmadığında (sistem otomatik açık/koyu) etkilidir.">
-        <select value={draft.theme} onChange={(e) => update({ theme: e.target.value as Appearance['theme'] })} className={inputCls}>
-          <option value="dark">Koyu</option>
-          <option value="light">Açık</option>
-          <option value="system">Sistem</option>
-        </select>
-      </Field>
-      <Field label="Vurgu rengi (accent)">
-        <div className="flex items-center gap-2">
-          <input type="color" value={draft.accent} onChange={(e) => update({ accent: e.target.value })} className="h-9 w-12 cursor-pointer rounded border border-[var(--color-border)] bg-[var(--color-bg)]" />
-          <input value={draft.accent} onChange={(e) => update({ accent: e.target.value })} className={`${inputCls} w-32`} />
-        </div>
-      </Field>
-      <div className="flex items-center gap-3 pt-1">
-        <Button onClick={save} disabled={!dirty || saving}>
+      <div className="flex items-center gap-3 pt-2">
+        <Button size="lg" onClick={save} disabled={!dirty || saving}>
           {saving ? 'Kaydediliyor…' : 'Kaydet'}
         </Button>
         <button
           onClick={resetToGlobal}
           disabled={saving || !hasOverride}
-          className="rounded border border-[var(--color-border)] px-3 py-1.5 text-sm hover:border-[var(--color-accent)] disabled:opacity-30"
+          className="rounded-lg border-2 border-[var(--color-border)] px-4 py-2 text-sm font-medium hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)] disabled:opacity-30"
           title="Bu workspace'in görünümünü uygulama-geneli varsayılana döndür"
         >
           Genele sıfırla
@@ -284,6 +275,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
       <div className="grid grid-cols-2 gap-3">
         <Field label="Günlük kayıt limiti" hint="Ajan başına saklanan en yeni journal sayısı; eskiler budanır."><input type="number" value={draft.journalCap} onChange={(e) => set('journalCap', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Günlük kayıt uzunluğu" hint="Tek bir journal kaydı için maks. karakter."><input type="number" value={draft.journalMaxLen} onChange={(e) => set('journalMaxLen', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Günlük min. uzunluk" hint="Bu karakter sayısından kısa turlar (ör. tek kelime/sayı cevaplar) journal'a yazılmaz, recall'ı kirletmez; 0 = kapalı."><input type="number" value={draft.journalMinLen} onChange={(e) => set('journalMinLen', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Yansıma limiti" hint="Ajan başına saklanan en yeni reflection sayısı; her dream cycle'da eskiler budanır (sınırsız birikmeyi önler)."><input type="number" value={draft.reflectionCap} onChange={(e) => set('reflectionCap', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Otomatik yansıma eşiği" hint="Journal sayısı bunu aşınca dream cycle kendiliğinden tetiklenir."><input type="number" value={draft.autoReflectThreshold} onChange={(e) => set('autoReflectThreshold', Number(e.target.value))} className={inputCls} /></Field>
       </div>
@@ -446,16 +438,6 @@ export function ContextPanel({ draft, set }: PanelProps) {
   )
 }
 
-export function BudgetPanel({ draft, set }: PanelProps) {
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      <Field label="Günlük çağrı limiti" hint="0 = sınırsız"><input type="number" value={draft.defaultDailyCallLimit} onChange={(e) => set('defaultDailyCallLimit', Number(e.target.value))} className={inputCls} /></Field>
-      <Field label="Günlük token limiti" hint="0 = sınırsız"><input type="number" value={draft.defaultDailyTokenLimit} onChange={(e) => set('defaultDailyTokenLimit', Number(e.target.value))} className={inputCls} /></Field>
-      <p className="col-span-2 text-xs text-[var(--color-text-dim)]">Bu varsayılanlar yalnızca yeni oluşturulan ajanlara uygulanır.</p>
-    </div>
-  )
-}
-
 export function AutonomyPanel({ draft, set }: PanelProps) {
   return (
     <>
@@ -473,12 +455,6 @@ export function AutoTitlePanel({ draft, set }: PanelProps) {
   )
 }
 
-export function McpPanel({ draft, set }: PanelProps) {
-  return (
-    <Field label="MCP Gateway URL" hint="Araç entegrasyonları için ağ geçidi adresi."><input value={draft.mcpGatewayUrl} onChange={(e) => set('mcpGatewayUrl', e.target.value)} placeholder="http://localhost:9091/mcp" className={inputCls} /></Field>
-  )
-}
-
 export function ToolsPanel({ draft, set }: PanelProps) {
   return (
     <>
@@ -493,12 +469,8 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         checked={draft.enableShell}
         onChange={(v) => set('enableShell', v)}
       />
-      <Toggle
-        label="Öz-yönetim araç paketi"
-        hint="Ajanların ajan/akış/zamanlama/artifact oluşturup düzenlemesine izin verir. Araç kataloğunu kabaca iki katına çıkarır."
-        checked={draft.enableSelfManage}
-        onChange={(v) => set('enableSelfManage', v)}
-      />
+      {/* Öz-yönetim araç paketi toggle'ı kaldırıldı: paket artık daima kurulu;
+          görünürlük araç bazında "Araçlar" ekranından (Tam/Özet/İsim/Gizli) yönetilir. */}
       <Toggle
         label="Hook'ları claude-cli'ye geçir"
         hint="Açıkken workspace PreToolUse/PostToolUse hook'ları claude-cli ajanlarına da `--settings` ile uygulanır (yalnız native değil). Uyarı: CLI hook'ları CLI'nin kendi shell'inde koşar; SwarmGo shell'i (PowerShell) için yazılmış bir hook uyumsuz olabilir — sorun çıkarsa kapatın."
@@ -805,19 +777,6 @@ export function BackupPanel({ draft, set }: PanelProps) {
         </div>
       )}
     </>
-  )
-}
-
-export function DiagnosticsPanel({ draft, set }: PanelProps) {
-  return (
-    <Field label="Log seviyesi" hint="Yeniden başlatınca uygulanır.">
-      <select value={draft.logLevel} onChange={(e) => set('logLevel', e.target.value)} className={inputCls}>
-        <option value="debug">debug</option>
-        <option value="info">info</option>
-        <option value="warn">warn</option>
-        <option value="error">error</option>
-      </select>
-    </Field>
   )
 }
 

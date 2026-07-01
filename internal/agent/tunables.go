@@ -6,10 +6,16 @@ import "sync"
 const (
 	DefaultJournalCap           = 50   // newest journal entries kept per agent
 	DefaultJournalMaxLen        = 1024 // max runes stored per journal entry
+	DefaultJournalMinLen        = 40   // write-side low-info gate (runes); applied via settings, 0 = gate off
 	DefaultAutoReflectThreshold = 20   // journal count that triggers auto-reflect
 	DefaultReflectionCap        = 20   // newest reflections kept per agent (older pruned)
 	DefaultSessionContextRecent = 5    // past sessions listed in the cross-session block
 )
+
+// DefaultRecallMinScore is the cosine floor below which a recalled memory is
+// considered irrelevant, used when the settings-driven value is unset (<= 0). It
+// mirrors memory.DefaultMinScore so default recall behaviour is unchanged.
+const DefaultRecallMinScore = 0.04
 
 // Default turn-recovery (A1) bounds, applied to a freshly constructed Tunables so
 // test runtimes (which never call applySettings) get production-sane behaviour.
@@ -45,7 +51,6 @@ type Tunables struct {
 	pauseAutonomy bool
 	titleModel    string
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
-	selfManage    bool // gates the self-management tool suite (off by default)
 	cliHooks      bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
 	cliPersist    bool // keep a long-lived claude-cli process per session (off by default, experimental)
 	delegation    bool // gates the agent→agent `run_subagent` tool (off by default)
@@ -54,9 +59,15 @@ type Tunables struct {
 
 	spawnMaxConcurrent int // 0 → DefaultSpawnMaxConcurrent
 	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
-	journalCap    int  // 0 → DefaultJournalCap
-	journalMaxLen int  // 0 → DefaultJournalMaxLen
-	reflectionCap int  // 0 → DefaultReflectionCap (newest reflections kept; older pruned each dream cycle)
+	journalCap         int // 0 → DefaultJournalCap
+	journalMaxLen      int // 0 → DefaultJournalMaxLen
+	journalMinLen      int // write-side low-info gate (runes); 0 = gate off (NOT defaulted — 0 is meaningful)
+	reflectionCap      int // 0 → DefaultReflectionCap (newest reflections kept; older pruned each dream cycle)
+
+	// recallMinScore is the cosine floor below which a recalled memory is dropped.
+	// 0 → DefaultRecallMinScore. Raising it cuts low-relevance recall noise from
+	// the (uncached) dynamic context. Read live by memory.Store via a provider.
+	recallMinScore float64
 
 	autoReflect          bool // run the dream cycle automatically as journals grow
 	autoReflectThreshold int  // 0 → DefaultAutoReflectThreshold
@@ -95,7 +106,6 @@ type Tunables struct {
 	// MemGPT-style self-editing memory (C6).
 	memoryPressureWarn float64 // context-fill ratio (0..1) above which the agent is warned to persist; 0 = off
 	coreMemoryTools    bool    // offer the core_memory_replace/append tools (default on)
-
 
 	// Native tool-loop iteration cap (applied each iteration, so settings changes
 	// take effect on the next turn without restart). <0 → defaultMaxToolIters;
@@ -166,6 +176,10 @@ func NewTunables() *Tunables {
 		debugJournal:    true,
 		debugJournalCap: DefaultDebugJournalCap,
 		maxToolIters:    -1,
+		// Recall floor at the historical default so test runtimes (which skip
+		// applySettings) recall exactly as before. journalMinLen is left at 0 (gate
+		// off) for the same reason — only production turns the write-gate on.
+		recallMinScore: DefaultRecallMinScore,
 	}
 }
 
@@ -214,23 +228,6 @@ func (t *Tunables) ShellEnabled() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.shellEnabled
-}
-
-// SetSelfManageEnabled toggles the self-management tool suite (create/edit/
-// delete agents, flows, schedules, artifacts; add memories; read logs). Off by
-// default: the suite roughly doubles the tool catalog (token cost per turn) and
-// lets agents alter the workspace, so it is opt-in per workspace settings.
-func (t *Tunables) SetSelfManageEnabled(enabled bool) {
-	t.mu.Lock()
-	t.selfManage = enabled
-	t.mu.Unlock()
-}
-
-// SelfManageEnabled reports whether the self-management tool suite may be offered.
-func (t *Tunables) SelfManageEnabled() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.selfManage
 }
 
 // SetCLIHooksEnabled toggles whether the workspace's PreToolUse/PostToolUse hooks
@@ -345,12 +342,15 @@ func (t *Tunables) SpawnMaxPerTurn() int {
 	return t.spawnMaxPerTurn
 }
 
-// SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent)
-// and the per-entry length cap. A value of 0 selects the built-in default.
-func (t *Tunables) SetJournalLimits(cap, maxLen int) {
+// SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent),
+// the per-entry length cap, and the write-side low-info gate (min runes a turn
+// must carry to be journaled). A value of 0 selects the built-in default for cap
+// and maxLen; for minLen, 0 disables the gate (it is not defaulted).
+func (t *Tunables) SetJournalLimits(cap, maxLen, minLen int) {
 	t.mu.Lock()
 	t.journalCap = cap
 	t.journalMaxLen = maxLen
+	t.journalMinLen = minLen
 	t.mu.Unlock()
 }
 
@@ -372,6 +372,37 @@ func (t *Tunables) JournalMaxLen() int {
 		return DefaultJournalMaxLen
 	}
 	return t.journalMaxLen
+}
+
+// JournalMinLen returns the write-side low-info gate in runes: a journal entry
+// shorter than this is dropped instead of stored. Unlike the caps above, 0 is a
+// meaningful value (gate disabled), so it is NOT replaced with a default; only a
+// negative (invalid) value is normalised to 0.
+func (t *Tunables) JournalMinLen() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.journalMinLen < 0 {
+		return 0
+	}
+	return t.journalMinLen
+}
+
+// SetRecallMinScore sets the cosine floor below which a recalled memory is
+// dropped. A value of 0 selects DefaultRecallMinScore (current behaviour).
+func (t *Tunables) SetRecallMinScore(score float64) {
+	t.mu.Lock()
+	t.recallMinScore = score
+	t.mu.Unlock()
+}
+
+// RecallMinScore returns the recall cosine floor (default when unset/<=0).
+func (t *Tunables) RecallMinScore() float64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.recallMinScore <= 0 {
+		return DefaultRecallMinScore
+	}
+	return t.recallMinScore
 }
 
 // SetReflectionCap sets how many newest reflections an agent keeps; older ones

@@ -205,12 +205,10 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 			defs = append(defs, tools.NewShellTool(tools.Sandbox{}).Def())
 		}
 	}
-	// spawn_session is a self-management capability: advertise it on the CLI path
-	// only when self-manage is enabled, mirroring the native tool loop's gating.
-	// The per-turn spawn tool is installed on each run by the stream handler.
-	if tun != nil && tun.SelfManageEnabled() {
-		defs = append(defs, tools.NewSpawnSessionTool("", 0, nil).Def())
-	}
+	// spawn_session is a self-management capability, always advertised now (the
+	// self-manage master toggle was removed). The per-turn spawn tool is installed
+	// on each run by the stream handler.
+	defs = append(defs, tools.NewSpawnSessionTool("", 0, nil).Def())
 	// run_subagent is bridged only when delegation is enabled, mirroring the native
 	// tool loop's gate. Unlike spawn_session (fire-and-forget into a separate
 	// session), it runs a subagent synchronously and returns its answer into THIS

@@ -16,6 +16,14 @@ export interface AppSettings {
   defaultModel: string
   defaultPermissionMode: string
   claudeCliPath: string
+  // CLAUDE_CONFIG_DIR for claude-cli subprocesses. "" = inherit the shared
+  // ~/.claude; a path runs the CLI against an isolated, clean config home.
+  claudeConfigDir: string
+  // claude-cli credential injected into the subprocess env so an isolated config
+  // dir authenticates without an interactive in-dir login. kind selects the env
+  // var: "oauth" → CLAUDE_CODE_OAUTH_TOKEN, "apikey" → ANTHROPIC_API_KEY, "" → none.
+  claudeCliAuthKind: string
+  claudeCliAuthSet: boolean // whether a token is stored (the token itself is never returned)
   anthropicKeySet: boolean
   minimaxKeySet: boolean
   minimaxBaseUrl: string
@@ -42,6 +50,7 @@ export interface AppSettings {
 
   journalCap: number
   journalMaxLen: number
+  journalMinLen: number        // write-side low-info gate (runes); 0 = gate off
   reflectionCap: number       // newest reflections kept per agent; older pruned each dream cycle
 
   // MemGPT-style self-editing memory (C6).
@@ -80,19 +89,13 @@ export interface AppSettings {
   compactLlmThreshold: number
   compactModel: string         // System B model id; "" → title model, then agent's model
 
-  defaultDailyCallLimit: number
-  defaultDailyTokenLimit: number
-
   pauseAutonomy: boolean
 
   autoTitleEnabled: boolean
   titleModel: string
 
-  mcpGatewayUrl: string
-
   // Gated tool capabilities (off by default).
   enableShell: boolean
-  enableSelfManage: boolean
   enableCliHooks: boolean
   claudeResume: boolean
   claudePersistentSession: boolean
@@ -115,16 +118,15 @@ export interface AppSettings {
   backupIntervalHours: number
   backupRetain: number
   backupDir: string // "" → <dataDir>/backups
-
-  logLevel: string
 }
 
 // Partial update. anthropicKey/minimaxKey/openrouterKey are write-only: "" clears, non-empty sets.
 export type SettingsPatch = Partial<
-  Omit<AppSettings, 'anthropicKeySet' | 'minimaxKeySet' | 'openrouterKeySet'> & {
+  Omit<AppSettings, 'anthropicKeySet' | 'minimaxKeySet' | 'openrouterKeySet' | 'claudeCliAuthSet'> & {
     anthropicKey: string
     minimaxKey: string
     openrouterKey: string
+    claudeCliAuthToken: string // write-only: "" clears, non-empty stores
   }
 >
 
@@ -206,12 +208,18 @@ export interface VersionInfo {
   module: string
 }
 
-// Detection result for an optional external token-optimization tool (rtk, sqz).
+// Detection result for an optional external CLI tool (rtk, sqz, crabbox, mmdc…).
 // Presence-only: the backend looks the executable up on PATH, never runs it.
+// `category` groups tools in the panel; `wire` tells how it is used once present:
+//   'hook' → one-click PreToolUse/PostToolUse toggle
+//   'mcp'  → wired via Settings ▸ MCP (info badge)
+//   'cli'  → agent calls it directly via Bash (info badge)
 export interface ExternalToolStatus {
   name: string
   desc: string
   url: string
+  category: string
+  wire: 'hook' | 'mcp' | 'cli'
   found: boolean
   path?: string
 }

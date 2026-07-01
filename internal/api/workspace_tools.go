@@ -5,27 +5,30 @@ import (
 	"net/http"
 
 	"github.com/bilal-arikan/swarmgo/internal/mcp"
+	"github.com/bilal-arikan/swarmgo/internal/tools"
 )
 
 // workspaceTool is one entry in the workspace tools screen: a tool plus whether
-// it is currently active (not in the workspace denylist). Source/Server/Label
-// let the UI group tools by origin (built-in vs a specific MCP server) and show
-// a clean, un-namespaced label; InputSchema drives the per-tool detail view.
+// it is currently active (not in the workspace denylist) and its visibility tier.
+// Source/Server/Label let the UI group tools by origin (built-in vs a specific MCP
+// server) and show a clean, un-namespaced label; InputSchema drives the per-tool
+// detail view; Examples surfaces concrete sample calls the schema alone can't show.
 type workspaceTool struct {
-	Name        string          `json:"name"`
-	Label       string          `json:"label"`
-	Description string          `json:"description"`
-	Source      string          `json:"source"` // "builtin" | "mcp"
-	Server      string          `json:"server"` // MCP server display name (empty for built-ins)
-	Enabled     bool            `json:"enabled"`
-	Hidden      bool            `json:"hidden"`      // load-on-demand (lazy): not shipped every turn
-	SelfManaged bool            `json:"selfManaged"` // hidden tier: folded into the self-management skill pointer (not even name-listed)
-	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
+	Name        string            `json:"name"`
+	Label       string            `json:"label"`
+	Description string            `json:"description"`
+	Source      string            `json:"source"`             // "builtin" | "mcp"
+	Server      string            `json:"server"`             // MCP server display name (empty for built-ins)
+	Category    string            `json:"category,omitempty"` // functional group key for built-ins (empty for MCP — those group by server)
+	Enabled     bool              `json:"enabled"`
+	Visibility  string            `json:"visibility"` // "full" | "summary" | "name-only" | "hidden"
+	InputSchema json.RawMessage   `json:"inputSchema,omitempty"`
+	Examples    []json.RawMessage `json:"examples,omitempty"` // concrete sample calls (ToolDef.Examples)
 }
 
 // handleWorkspaceTools returns the full workspace tool catalog (built-ins + all
 // enabled MCP servers' tools), each marked active/inactive per the workspace
-// denylist. This drives the workspace-wide tools screen.
+// denylist and tagged with its effective visibility tier. Drives the tools screen.
 func (s *Server) handleWorkspaceTools(w http.ResponseWriter, r *http.Request) {
 	cfg, err := ws(r).DB.GetWorkspaceToolConfig(r.Context())
 	if err != nil {
@@ -48,12 +51,9 @@ func (s *Server) handleWorkspaceTools(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// hidden reflects the EFFECTIVE load-on-demand state per tool (code defaults
-	// like the self-management suite + the workspace Hidden/Shown overrides), not
-	// just the HiddenTools list — so the "NameOnly" chip matches what the agent sees.
-	// selfManaged is the subset folded into the self-management skill pointer (the
-	// hidden tier), drawn with a distinct chip from the name-only/MCP lazy tools.
-	catalog, lazy, hidden := ws(r).Runtime.WorkspaceToolCatalogWithState(r.Context())
+	// visibility reflects the EFFECTIVE tier per tool (code defaults + the workspace
+	// per-tool overrides), so the screen's tier selector matches what the agent sees.
+	catalog, visibility := ws(r).Runtime.WorkspaceToolCatalogWithState(r.Context())
 	out := make([]workspaceTool, 0, len(catalog))
 	for _, t := range catalog {
 		wt := workspaceTool{
@@ -61,15 +61,17 @@ func (s *Server) handleWorkspaceTools(w http.ResponseWriter, r *http.Request) {
 			Label:       t.Name,
 			Description: t.Description,
 			Source:      "builtin",
+			Category:    tools.CategoryOf(t.Name),
 			Enabled:     !disabled[t.Name],
-			Hidden:      lazy[t.Name],
-			SelfManaged: hidden[t.Name],
+			Visibility:  visibility[t.Name],
 			InputSchema: t.InputSchema,
+			Examples:    t.Examples,
 		}
 		// MCP tools are namespaced "<server>__<tool>"; recover origin and label.
 		if ns, tool, ok := mcp.SplitNamespaced(t.Name); ok {
 			wt.Source = "mcp"
 			wt.Label = tool
+			wt.Category = "" // MCP tools group by server, not functional category
 			if name, found := serverByNS[ns]; found {
 				wt.Server = name
 			} else {
@@ -79,26 +81,26 @@ func (s *Server) handleWorkspaceTools(w http.ResponseWriter, r *http.Request) {
 		out = append(out, wt)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"tools":         out,
-		"disabledTools": cfg.DisabledTools,
-		"hiddenTools":   cfg.HiddenTools,
-		"shownTools":    cfg.ShownTools,
+		"tools":          out,
+		"disabledTools":  cfg.DisabledTools,
+		"toolVisibility": cfg.ToolVisibility,
 	})
 }
 
-// setWorkspaceToolsReq carries the independent tool override lists. Each field is
-// a pointer so the client can update one without resupplying (and clearing) the
-// others — nil means "leave unchanged", a present (possibly empty) array
-// replaces. HiddenTools forces a tool load-on-demand; ShownTools forces a
-// default-hidden tool (e.g. self-management) back into the every-turn context.
+// setWorkspaceToolsReq carries the independent tool override maps. Each field is a
+// pointer so the client can update one without resupplying (and clearing) the
+// other — nil means "leave unchanged", a present (possibly empty) value replaces.
+// ToolVisibility maps a tool name to one of "full" | "summary" | "name-only" |
+// "hidden"; a tool absent from the map uses its code default.
 type setWorkspaceToolsReq struct {
-	DisabledTools *[]string `json:"disabledTools"`
-	HiddenTools   *[]string `json:"hiddenTools"`
-	ShownTools    *[]string `json:"shownTools"`
+	DisabledTools  *[]string          `json:"disabledTools"`
+	ToolVisibility *map[string]string `json:"toolVisibility"`
 }
 
-// handleSetWorkspaceTools updates the workspace tool denylist and/or the
-// hidden/shown override lists. Only the fields present in the request change.
+// handleSetWorkspaceTools updates the workspace tool denylist and/or the per-tool
+// visibility map. Only the fields present in the request change. Invalid
+// visibility values are rejected so a typo can't silently leave a tool at its
+// default.
 func (s *Server) handleSetWorkspaceTools(w http.ResponseWriter, r *http.Request) {
 	var req setWorkspaceToolsReq
 	if err := decodeJSON(r, &req); err != nil {
@@ -113,19 +115,31 @@ func (s *Server) handleSetWorkspaceTools(w http.ResponseWriter, r *http.Request)
 	if req.DisabledTools != nil {
 		cfg.DisabledTools = *req.DisabledTools
 	}
-	if req.HiddenTools != nil {
-		cfg.HiddenTools = *req.HiddenTools
-	}
-	if req.ShownTools != nil {
-		cfg.ShownTools = *req.ShownTools
+	if req.ToolVisibility != nil {
+		for name, tier := range *req.ToolVisibility {
+			if !validVisibility(tier) {
+				writeError(w, http.StatusBadRequest, "invalid visibility for "+name+": "+tier)
+				return
+			}
+		}
+		cfg.ToolVisibility = *req.ToolVisibility
 	}
 	if err := ws(r).DB.SetWorkspaceToolConfig(r.Context(), cfg); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"disabledTools": cfg.DisabledTools,
-		"hiddenTools":   cfg.HiddenTools,
-		"shownTools":    cfg.ShownTools,
+		"disabledTools":  cfg.DisabledTools,
+		"toolVisibility": cfg.ToolVisibility,
 	})
+}
+
+// validVisibility reports whether tier is one of the four allowed values.
+func validVisibility(tier string) bool {
+	switch tier {
+	case tools.VisibilityFull, tools.VisibilitySummary, tools.VisibilityNameOnly, tools.VisibilityHidden:
+		return true
+	default:
+		return false
+	}
 }

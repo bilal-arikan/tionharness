@@ -4,6 +4,25 @@
 // and never returned to clients in plaintext.
 package settings
 
+import (
+	"os"
+	"path/filepath"
+)
+
+// defaultClaudeConfigDir is the baseline CLAUDE_CONFIG_DIR for claude-cli: a
+// SwarmGo-managed, isolated config home (~/.swarmgo/claude-home) so the CLI runs
+// against a clean skills/settings/commands/login set instead of the user's shared
+// ~/.claude out of the box. Requires a one-time `claude` login in that directory.
+// If the home dir can't be resolved we return "" — that is the correct fallback
+// (inherit the ambient ~/.claude), not a swallowed error.
+func defaultClaudeConfigDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".swarmgo", "claude-home")
+}
+
 // Theme options for the UI.
 const (
 	ThemeDark   = "dark"
@@ -48,7 +67,7 @@ type Settings struct {
 	// Appearance.
 	Theme       string `json:"theme"`
 	Accent      string `json:"accent"`      // hex color, e.g. "#4f8cff"
-	ThemePreset string `json:"themePreset"` // curated palette id; "" = legacy theme+accent
+	ThemePreset string `json:"themePreset"` // theme color + variant id, e.g. "violet-dark" ("" = default)
 	Language    string `json:"language"`    // "tr" | "en"
 
 	// Providers.
@@ -58,7 +77,16 @@ type Settings struct {
 	// "read-only" | "ask" | "auto". "" falls back to "auto".
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
 	ClaudeCLIPath         string `json:"claudeCliPath"`   // "" = auto-detect on PATH
-	AnthropicKeyEnc       string `json:"anthropicKeyEnc"` // AES-GCM, never exposed
+	ClaudeConfigDir       string `json:"claudeConfigDir"` // CLAUDE_CONFIG_DIR for claude-cli; "" = inherit ~/.claude
+	// claude-cli credential injected into the subprocess env so an isolated config
+	// dir authenticates without an interactive in-dir `claude login`. The token is
+	// AES-GCM encrypted (never serialized to the API); the kind selects the env var:
+	//   "oauth"  → CLAUDE_CODE_OAUTH_TOKEN (Max/Pro subscription, from `claude setup-token`)
+	//   "apikey" → ANTHROPIC_API_KEY       (API billing)
+	//   ""       → none injected (rely on the config dir's own login)
+	ClaudeCliAuthKind     string `json:"claudeCliAuthKind"`
+	ClaudeCliAuthTokenEnc string `json:"claudeCliAuthTokenEnc"` // AES-GCM, never exposed
+	AnthropicKeyEnc       string `json:"anthropicKeyEnc"`       // AES-GCM, never exposed
 
 	// MiniMax (OpenAI-compatible) provider.
 	MinimaxKeyEnc  string `json:"minimaxKeyEnc"` // AES-GCM, never exposed
@@ -106,6 +134,12 @@ type Settings struct {
 	// Journal (long-term memory) ring-buffer bounds.
 	JournalCap    int `json:"journalCap"`    // newest journal entries kept per agent (0 = default)
 	JournalMaxLen int `json:"journalMaxLen"` // max runes stored per journal entry (0 = default)
+	// JournalMinLen is the write-side low-info gate: a per-turn journal whose
+	// content is shorter than this many runes is dropped instead of stored, so
+	// trivial exchanges (a one-word/one-number answer) never enter the recall
+	// pool and waste fresh tokens in the uncached dynamic context every turn.
+	// 0 disables the gate (every non-empty turn is journaled).
+	JournalMinLen int `json:"journalMinLen"`
 	ReflectionCap int `json:"reflectionCap"` // newest reflections kept per agent; older pruned each dream cycle (0 = default)
 
 	// MemGPT-style self-editing memory (C6). MemoryPressureWarn is the context-fill
@@ -174,10 +208,6 @@ type Settings struct {
 	CompactLLMThreshold int    `json:"compactLlmThreshold"` // only summarize output larger than this (bytes, 0 = default)
 	CompactModel        string `json:"compactModel"`        // model id for System B; "" → TitleModel, then agent's own model
 
-	// Budget defaults applied to newly created agents (0 = unlimited).
-	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
-	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
-
 	// Autonomy.
 	PauseAutonomy bool `json:"pauseAutonomy"`
 
@@ -185,13 +215,11 @@ type Settings struct {
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
 	TitleModel       string `json:"titleModel"` // "" = use the agent's model
 
-	// MCP / tools.
-	MCPGatewayURL string `json:"mcpGatewayUrl"`
-
 	// Gated tool capabilities — off by default; each expands agent power/cost.
-	EnableShell      bool `json:"enableShell"`      // built-in shell (arbitrary commands in sandbox)
-	EnableSelfManage bool `json:"enableSelfManage"` // self-management suite (create/edit/delete entities)
-	EnableCLIHooks   bool `json:"enableCliHooks"`   // pass PreToolUse/PostToolUse hooks to claude-cli agents via --settings
+	// (enableSelfManage was removed 2026-07-01: the self-management suite is always
+	// built now; visibility is per-tool.)
+	EnableShell    bool `json:"enableShell"`    // built-in shell (arbitrary commands in sandbox)
+	EnableCLIHooks bool `json:"enableCliHooks"` // pass PreToolUse/PostToolUse hooks to claude-cli agents via --settings
 	// ClaudeResume keeps the claude-cli session warm across turns: each turn passes
 	// --resume <id> and sends only the new turn (not the full transcript), so the
 	// CLI reuses its server-side prompt cache (much cheaper, like Claude Code). Off
@@ -223,9 +251,6 @@ type Settings struct {
 	BackupIntervalHours int    `json:"backupIntervalHours"` // hours between automatic runs (min 1)
 	BackupRetain        int    `json:"backupRetain"`        // newest archives kept per workspace (min 1)
 	BackupDir           string `json:"backupDir"`           // backups root; "" → <dataDir>/backups
-
-	// Diagnostics (informational; applied on restart).
-	LogLevel string `json:"logLevel"` // info | debug | warn | error
 }
 
 // Default returns the baseline settings used when no file exists yet. Values
@@ -235,18 +260,24 @@ func Default() Settings {
 	return Settings{
 		Theme:       ThemeDark,
 		Accent:      "#8b5cf6",
-		ThemePreset: "midnight-violet",
+		ThemePreset: "violet-dark",
 		Language:    "tr",
 
 		DefaultProvider:       "claude-cli",
 		DefaultModel:          "",
 		DefaultPermissionMode: "auto",
 		ClaudeCLIPath:         "",
+		ClaudeConfigDir:       defaultClaudeConfigDir(),
+		ClaudeCliAuthKind:     "",
 
 		MaxContextTokens: 12000,
 		KeepRecentMsgs:   8,
 		RecallTopN:       5,
-		RecallMinScore:   0.05,
+		// Recall cosine floor. 0.04 matches the historically hard-coded
+		// memory.DefaultMinScore (the value actually in effect before this knob was
+		// wired), so the default preserves existing recall behaviour. Raise it to
+		// cut low-relevance recall noise from the dynamic context.
+		RecallMinScore: 0.04,
 		// Context-rot-aware default (2026-06-25, _Docs/17 §12): ceil 256K keeps the
 		// live window in the gradient's high-precision zone; fraction 0 = "auto"
 		// (per-family adaptive). Durability of folded detail comes from retrieval
@@ -256,6 +287,11 @@ func Default() Settings {
 
 		JournalCap:    50,
 		JournalMaxLen: 1024,
+		// Drop trivial per-turn journals (e.g. "Q: 2+2? A: 4") shorter than 40
+		// runes so they never pollute recall. Conservative on purpose — a short but
+		// substantive note survives; raise it to filter more aggressively, set 0 to
+		// disable the gate entirely.
+		JournalMinLen: 40,
 		ReflectionCap: 20,
 
 		// MemGPT memory: warn at 70% context fill, offer the core editing tools. Lowered
@@ -303,15 +339,10 @@ func Default() Settings {
 		CompactLLMThreshold: 12288,
 		CompactModel:        "",
 
-		DefaultDailyCallLimit:  0,
-		DefaultDailyTokenLimit: 0,
-
 		PauseAutonomy: false,
 
 		AutoTitleEnabled: true,
 		TitleModel:       "",
-
-		MCPGatewayURL: "",
 
 		// CLI-path hooks default ON (preserves the hook-passthrough behaviour); turn
 		// off when a hook authored for SwarmGo's shell misbehaves under the CLI's.
@@ -341,8 +372,6 @@ func Default() Settings {
 		BackupIntervalHours: 24,
 		BackupRetain:        7,
 		BackupDir:           "",
-
-		LogLevel: "info",
 	}
 }
 
@@ -358,6 +387,9 @@ type DTO struct {
 	DefaultModel          string `json:"defaultModel"`
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
 	ClaudeCLIPath         string `json:"claudeCliPath"`
+	ClaudeConfigDir       string `json:"claudeConfigDir"`
+	ClaudeCliAuthKind     string `json:"claudeCliAuthKind"`
+	ClaudeCliAuthSet      bool   `json:"claudeCliAuthSet"`
 	AnthropicKeySet       bool   `json:"anthropicKeySet"`
 	MinimaxKeySet         bool   `json:"minimaxKeySet"`
 	MinimaxBaseURL        string `json:"minimaxBaseUrl"`
@@ -387,6 +419,7 @@ type DTO struct {
 
 	JournalCap    int `json:"journalCap"`
 	JournalMaxLen int `json:"journalMaxLen"`
+	JournalMinLen int `json:"journalMinLen"`
 	ReflectionCap int `json:"reflectionCap"`
 
 	MemoryPressureWarn float64 `json:"memoryPressureWarn"`
@@ -419,20 +452,14 @@ type DTO struct {
 	CompactLLMThreshold int    `json:"compactLlmThreshold"`
 	CompactModel        string `json:"compactModel"`
 
-	DefaultDailyCallLimit  int `json:"defaultDailyCallLimit"`
-	DefaultDailyTokenLimit int `json:"defaultDailyTokenLimit"`
-
 	PauseAutonomy bool `json:"pauseAutonomy"`
 
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
 	TitleModel       string `json:"titleModel"`
 
-	MCPGatewayURL string `json:"mcpGatewayUrl"`
-
-	EnableShell      bool `json:"enableShell"`
-	EnableSelfManage bool `json:"enableSelfManage"`
-	EnableCLIHooks   bool `json:"enableCliHooks"`
-	ClaudeResume     bool `json:"claudeResume"`
+	EnableShell    bool `json:"enableShell"`
+	EnableCLIHooks bool `json:"enableCliHooks"`
+	ClaudeResume   bool `json:"claudeResume"`
 	// ClaudePersistentSession keeps ONE long-lived claude-cli process alive per
 	// (session, agent) and feeds turns over stdin (stream-json input) instead of
 	// spawning a fresh process each turn. The process holds the conversation
@@ -455,8 +482,6 @@ type DTO struct {
 	BackupIntervalHours int    `json:"backupIntervalHours"`
 	BackupRetain        int    `json:"backupRetain"`
 	BackupDir           string `json:"backupDir"`
-
-	LogLevel string `json:"logLevel"`
 }
 
 // ToDTO projects persisted settings into the client view, masking the secret.
@@ -471,6 +496,9 @@ func (s Settings) ToDTO() DTO {
 		DefaultModel:          s.DefaultModel,
 		DefaultPermissionMode: s.DefaultPermissionMode,
 		ClaudeCLIPath:         s.ClaudeCLIPath,
+		ClaudeConfigDir:       s.ClaudeConfigDir,
+		ClaudeCliAuthKind:     s.ClaudeCliAuthKind,
+		ClaudeCliAuthSet:      s.ClaudeCliAuthTokenEnc != "",
 		AnthropicKeySet:       s.AnthropicKeyEnc != "",
 		MinimaxKeySet:         s.MinimaxKeyEnc != "",
 		MinimaxBaseURL:        s.MinimaxBaseURL,
@@ -499,6 +527,7 @@ func (s Settings) ToDTO() DTO {
 
 		JournalCap:    s.JournalCap,
 		JournalMaxLen: s.JournalMaxLen,
+		JournalMinLen: s.JournalMinLen,
 		ReflectionCap: s.ReflectionCap,
 
 		MemoryPressureWarn: s.MemoryPressureWarn,
@@ -531,18 +560,12 @@ func (s Settings) ToDTO() DTO {
 		CompactLLMThreshold: s.CompactLLMThreshold,
 		CompactModel:        s.CompactModel,
 
-		DefaultDailyCallLimit:  s.DefaultDailyCallLimit,
-		DefaultDailyTokenLimit: s.DefaultDailyTokenLimit,
-
 		PauseAutonomy: s.PauseAutonomy,
 
 		AutoTitleEnabled: s.AutoTitleEnabled,
 		TitleModel:       s.TitleModel,
 
-		MCPGatewayURL: s.MCPGatewayURL,
-
 		EnableShell:             s.EnableShell,
-		EnableSelfManage:        s.EnableSelfManage,
 		EnableCLIHooks:          s.EnableCLIHooks,
 		ClaudeResume:            s.ClaudeResume,
 		ClaudePersistentSession: s.ClaudePersistentSession,
@@ -561,8 +584,6 @@ func (s Settings) ToDTO() DTO {
 		BackupIntervalHours: s.BackupIntervalHours,
 		BackupRetain:        s.BackupRetain,
 		BackupDir:           s.BackupDir,
-
-		LogLevel: s.LogLevel,
 	}
 }
 
@@ -579,8 +600,11 @@ type Patch struct {
 	DefaultModel          *string `json:"defaultModel"`
 	DefaultPermissionMode *string `json:"defaultPermissionMode"`
 	ClaudeCLIPath         *string `json:"claudeCliPath"`
-	AnthropicKey          *string `json:"anthropicKey"` // write-only
-	MinimaxKey            *string `json:"minimaxKey"`   // write-only
+	ClaudeConfigDir       *string `json:"claudeConfigDir"`
+	ClaudeCliAuthKind     *string `json:"claudeCliAuthKind"`
+	ClaudeCliAuthToken    *string `json:"claudeCliAuthToken"` // write-only
+	AnthropicKey          *string `json:"anthropicKey"`       // write-only
+	MinimaxKey            *string `json:"minimaxKey"`         // write-only
 	MinimaxBaseURL        *string `json:"minimaxBaseUrl"`
 	OpenRouterKey         *string `json:"openrouterKey"` // write-only
 	OpenRouterBaseURL     *string `json:"openrouterBaseUrl"`
@@ -606,6 +630,7 @@ type Patch struct {
 
 	JournalCap    *int `json:"journalCap"`
 	JournalMaxLen *int `json:"journalMaxLen"`
+	JournalMinLen *int `json:"journalMinLen"`
 	ReflectionCap *int `json:"reflectionCap"`
 
 	MemoryPressureWarn *float64 `json:"memoryPressureWarn"`
@@ -638,18 +663,12 @@ type Patch struct {
 	CompactLLMThreshold *int    `json:"compactLlmThreshold"`
 	CompactModel        *string `json:"compactModel"`
 
-	DefaultDailyCallLimit  *int `json:"defaultDailyCallLimit"`
-	DefaultDailyTokenLimit *int `json:"defaultDailyTokenLimit"`
-
 	PauseAutonomy *bool `json:"pauseAutonomy"`
 
 	AutoTitleEnabled *bool   `json:"autoTitleEnabled"`
 	TitleModel       *string `json:"titleModel"`
 
-	MCPGatewayURL *string `json:"mcpGatewayUrl"`
-
 	EnableShell             *bool `json:"enableShell"`
-	EnableSelfManage        *bool `json:"enableSelfManage"`
 	EnableCLIHooks          *bool `json:"enableCliHooks"`
 	ClaudeResume            *bool `json:"claudeResume"`
 	ClaudePersistentSession *bool `json:"claudePersistentSession"`
@@ -668,8 +687,6 @@ type Patch struct {
 	BackupIntervalHours *int    `json:"backupIntervalHours"`
 	BackupRetain        *int    `json:"backupRetain"`
 	BackupDir           *string `json:"backupDir"`
-
-	LogLevel *string `json:"logLevel"`
 }
 
 // customProvidersToDTO masks the keys of a custom-provider list for the client.

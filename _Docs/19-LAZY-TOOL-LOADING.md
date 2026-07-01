@@ -68,6 +68,26 @@
     `{id}` — belirsizlik yok); `move_task` da değil (`boardState` zaten `enum`).
     Edit aracında örnek ana faydası **kısmi-güncelleme konvansiyonunu** öğretmek
     (id + yalnız değişen alan; `""`=temizle).
+- **Eager şema sadeleştirme (2026-07-01):** araç JSON şemaları, claude-cli/API
+  context'inin en ağır segmenti (~%56). Bilinçli **eager** bırakılan üç araçta
+  davranışsal nudge'ı bozmadan şema maliyeti düşürüldü (Strateji A — sıfır davranış
+  riski, lazy yapılmadı):
+  - `run_subagent` (`subagent.go`): açıklama ~yarıya indi, field açıklamaları
+    kısaltıldı, `Examples` dizisi **3 → 1** (en öğretici objective/output_format/
+    boundaries örneği tutuldu). Örnekler `foldExamples` ile **her tur** eager şemaya
+    katlandığından bu en büyük kalemdi.
+  - `create_artifact` (`builtin_artifact.go`): açıklama kısaltıldı (image/binary
+    yönergesi + base64-etmeyin uyarısı korundu).
+  - `core_memory_append`/`core_memory_replace` (`builtin_memory_core.go`): iki
+    araçta tekrar eden core-memory tanımı tek `coreMemoryDesc` const'una çıkarıldı;
+    her açıklama bu ortak cümleye + role özgü tek satıra indi. Core memory araçları
+    **lazy yapılmadı** (bağlam-basıncı anında gerekir → eager kalmalı).
+  - Tahmini kazanç: ~1.3 KB ham metin / her eager tur ≈ **~300-350 token**.
+    Build temiz, `go test ./internal/tools/...` 152 geçti; şema/örnek JSON
+    geçerliliği doğrulandı. **Öneri (Strateji B, uygulanmadı):** `run_subagent` +
+    `create_artifact`'ı `MarkNameOnly` ile lazy yapıp sistem prompt'a tek satır
+    nudge eklemek daha agresif kazanç verir; ancak nudge'ın prompt'a doğru
+    yerleştirilmesi gerektiğinden ayrı bir görevde değerlendirilmeli.
 - Sistem promptuna **"Available Tools (load on demand)"** bloğu eklenir
   (`Runtime.LazyToolsCatalogBlock` → `renderLazyToolCatalog`), yalnızca ad+özet.
 - **NameOnly katmanı (2026-06-26):** workspace Tools ekranındaki "NameOnly" çipi
@@ -111,6 +131,69 @@
   - Test: `TestWriteCLIMCPConfigTwoTierInteraction` (config çıktısı + alwaysLoad +
     tier-namespaced allowlist), `TestInteractionTierSplit` (tier partisyonu),
     `TestLazyCatalogCLIFormNamespacesNames` (extended prefix). Detay: `_Docs/11`.
+- **Dış MCP araçları da NameOnly (2026-07-01):** `AttachMCP` artık her MCP aracını
+  `lazy` **VE** `nameOnly` işaretliyor (önceden yalnız `lazy`). Sebep: katalog
+  bloğunda dış MCP araçları (ör. `mcp__mcp-chrome__*`, ~30 araç) ≤ `lazyCatalogMCPListLimit`
+  iken **tam açıklamalarıyla** dökülüyordu — `swarmgo_extended` (NameOnly) araçların
+  yalnız-ad davranışıyla çelişiyor ve kullanıcı o aracı kullanmasa bile her tur
+  ~800–1200 ölü token harcıyordu. Artık tutarlı: **hiçbir deferred araç katalogda
+  tam açıklama taşımaz.** Mekanizma tekrar kullanıldı (yeni render yolu yok):
+  `VisibleLazyCatalog` zaten `nameOnly` araçların `Description`'ını boşaltıyor →
+  `writeLazyToolLine` `- \`mcp__server__tool\`` (özetsiz) basar. **İsimler listede
+  kalır** → `tool_search`/`activate_tools` (native) ve `ToolSearch select:<name>`
+  (CLI) ile araçlar hâlâ keşfedilip yüklenir. Server-başına özet satırı (>limit)
+  Description kullanmaz → etkilenmez. `Unlazy` ("Göster") `nameOnly`'yi de temizler,
+  yani kullanıcı bir MCP aracını eager'a yükseltebilir.
+- **Sunucu-seviyesi görünürlük hızlı eylemi (2026-07-01, UI):** Harici MCP araçları artık
+  varsayılan NameOnly olduğundan, kullanıcının bunu **manuel** override edebilmesi için
+  `ToolsPanel` MCP sunucu yönetim kartına her sunucu satırında **"Tümü NameOnly" / "Tümü
+  Göster"** butonları + `(eager/total tam şema)` sayacı eklendi. Per-tool toggle'ın
+  (`ToolDetail`) ve çoklu-seçim toplu eyleminin (`SelectionBar`) sunucu-seviyesi muadili;
+  yeni backend yok — mevcut `setWorkspaceToolsVisibility` (`HiddenTools`=MarkNameOnly /
+  `ShownTools`=Unlazy→eager) tekrar kullanılır. `setServerVisibility` o sunucunun tüm MCP
+  araç adlarını toplayıp tek PUT'ta uygular. Test-id: `mcp-server-nameonly-all` /
+  `mcp-server-show-all`. `tsc --noEmit` temiz.
+  > **Not (2026-07-01):** Bu 2-durumlu (`setWorkspaceToolsVisibility`) API + per-server
+  > NameOnly/Göster butonları aşağıdaki **4-tier** modelle değiştirildi; test-id'ler
+  > `mcp-server-visibility-all` (per-tier) oldu.
+- **4-tier tek-seçim görünürlük modeli + self-manage master toggle kaldırıldı (2026-07-01):**
+  Araç görünürlüğü artık **tek seçilebilir 4 tier**: `full` (Tam — tam şema/tur) ·
+  `summary` (Özet — isim + kısa özet satırı) · `name-only` (İsim — yalnız isim) ·
+  `hidden` (Gizli — katalogda hiç yok, `tool_search`'le bulunur). **Her araç**
+  (built-in + MCP) tam olarak bir tier taşır; skill görünürlük mantığının araç muadili.
+  - **Registry:** `tools.Visibility{Full,Summary,NameOnly,Hidden}` sabitleri +
+    `SetVisibility(name,tier)` (karşılıklı-dışlayan işaretleri temizleyip birini kurar)
+    + `VisibilityOf(name)`. Mekanizma zaten vardı (`lazy`/`nameOnly`/`hidden`) — yeni
+    tier eklenmedi, yalnız tek-seçim API'ye sarıldı.
+  - **Persistans:** `WorkspaceToolConfig.ToolVisibility map[string]string` (araç→tier).
+    Eski iki liste (`HiddenTools`→name-only, `ShownTools`→full) yükleme sırasında map'e
+    **migrate** edilir (`loadToolConfig`), yazımda temizlenir.
+  - **Uygulama sırası:** kod varsayılanları (self-mgmt→hidden, curated→name-only,
+    MCP→name-only) baz; sonra `AttachMCP`; **en son** `ToolVisibility` override'ları
+    `SetVisibility` ile — override kazanır. Geçersiz tier API'de (`validVisibility`)
+    reddedilir (sessiz yutma yok).
+  - **Self-management daima açık:** `enableSelfManage` master toggle'ı (ayar UI +
+    `toolsetup` gate) kaldırıldı; paket **daima kurulur**, varsayılan tier `hidden`
+    (token davranışı aynı). **Tam sökme (2026-07-01):** `settings.EnableSelfManage`
+    alanı (+ Snapshot/Patch/applyBool), `SWARMGO_ENABLE_SELFMANAGE` env seed'i,
+    `Tunables.selfManage` + `Set/SelfManageEnabled` metodları ve tüm çağrı yerleri
+    (`chat_stream`/`autonomous_interaction`/`mcp_interaction` artık spawn_session'ı
+    koşulsuz ilan eder) **silindi**. `SelfManageEnabled` gate'i kalmadı.
+  - **UI:** `ToolsPanel` per-tool **Tam/Özet/İsim/Gizli** segment kontrolü + tek
+    `VisibilityBadge` (tier-renkli); toplu eylem + per-server hızlı eylem 4 tier'a
+    genişledi. Eski `NameOnly/Self-mgmt` rozetleri + `Göster` düğmesi kalktı.
+  - **CLI uyumu:** Native yol 4 tier'ı tam onurlandırır (ActiveDefs). CLI yolunda tier
+    esas olarak render edilen katalog bloğu metnini etkiler; gerçek yükleme CLI'nin
+    kendi ToolSearch/`alwaysLoad` mekanizmasıyladır. Bir built-in'i `full` yapmak
+    native'de eager yapar; CLI'da eager olması için ayrıca core (`alwaysLoad`)
+    tier'ında olması gerekir (`interactionTier` statik) — dış MCP araçlarında CLI'nin
+    `ENABLE_TOOL_SEARCH` deferral'ı geçerli kalır. Yani CLI'da `full` = "en fazla ilan",
+    "kesin eager" değil.
+  - **UI'da araç bilgisi:** detay görünümü artık **örnek çağrıları** (`ToolDef.Examples`
+    → workspace-tools API `examples`) ve çok-paragraflı açıklamaları (`whitespace-pre-wrap`,
+    MCP "when to use" dahil) gösterir.
+  - Test: `store_tools_test.go` (visibility round-trip + `TestWorkspaceToolConfig_LegacyMigration`).
+    `go build ./...` + tüm ilgili testler yeşil, `tsc --noEmit` temiz.
 - **Default NameOnly seti (2026-06-26):** `buildRegistry` artık küçük, kendini
   açıklayan ve turların azınlığında kullanılan bir grup built-in aracı **kod
   varsayılanı** olarak `MarkNameOnly` ile işaretler (eski `MarkLazy` bloğunun
@@ -166,6 +249,13 @@ Skill sisteminde bunu zaten çözdük: katalogta yalnızca **özet** durur, tam 
 > kazandı — **`skill_search`**. `paths:` taşıyan **koşullu skill** katalogda hiç
 > görünmez (özeti bile prompt'a girmez), gerektiğinde `skill_search` ile bulunup
 > `use_skill` ile yüklenir. Böylece yüzlerce skill içe aktarılsa bile prompt şişmez.
+
+> **Deferred-not tekilleştirme (2026-07-01):** "DEFERRED / `ToolSearch select:` ile
+> yükle / unloaded ad → `No such tool available`" açıklaması hem Skills hem Tools
+> bloğunda tekrar ediyordu. Mekanizmanın **tam** açıklaması artık yalnız
+> `renderLazyToolCatalog` CLI intro'sunda (`toolsetup.go`); skills tarafı (`store.go`
+> `renderCatalog` `deferNote`) tek kısa cümle + "Available Tools notuna bak" referansı.
+> Native (eager) varyantta not yok — değişmedi.
 
 > **UI tier chip'leri (2026-06-26):** Workspace Tools ekranı artık üç tier'ı ayrı
 > gösterir: **eager** (chip yok), **NameOnly** (amber — lazy, isimle listelenir),
