@@ -2,6 +2,29 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-01**
 
+## Workspace dışa aktarımı ayrı sekmeye taşındı + seçilebilir içerik ✅ (2026-07-01)
+
+**İstek:** Workspace ayarlarındaki "export aldığımız kısım" (Şablon olarak yayınla) ayrı bir
+alt-panele taşınsın (feature detaylandırılacak); export alırken **neyin dahil edileceği** seçilebilsin.
+
+**Yapılan:**
+- **Yeni alt-sekme:** `WorkspaceView.tsx`'e `export` sekmesi ("Dışa Aktar", `PackageCheck` ikonu)
+  eklendi (TAB_KEYS + TABS + render dalı). Kendi publish aksiyonu olduğu için header "Kaydet"
+  butonu bu sekmede gizli (appearance gibi). Genel (`WorkspacePanel`) tab'ındaki eski
+  "Şablon olarak yayınla" butonu **kaldırıldı**, yerine yeni sekmeye yönlendiren not kondu.
+- **Yeni panel** `frontend/src/components/workspace/WorkspaceExportPanel.tsx`: ajanları
+  (listAgents), akışları, workspace-tier skill'leri, zamanlamaları çeker; **ajan seçim listesi**
+  (checkbox, varsayılan tümü seçili, ≥1 zorunlu) + kategori toggle'ları (Akışlar / Zamanlamalar /
+  Skill'ler / Talimatlar / Pano sütunları, sayı rozetli, varsayılan açık). "Şablon olarak dışa aktar"
+  → `api.publishPack('workspace', ws.id, include)`.
+- **Backend:** `publishRequest`'e opsiyonel `Include *publishInclude` alanı (`AgentIDs []string`
+  (nil=tümü) + `Flows/Schedules/Skills/Instructions/BoardColumns bool`). `buildWorkspaceTemplatePayload`
+  artık `inc *publishInclude` alıyor — **nil = her şey** (geriye uyumlu), aksi halde ajanları filtreler
+  ve kategori flag'lerini birebir onurlandırır (`market_publish.go`). En az bir ajan hâlâ zorunlu.
+- **API tipi:** `market.ts`'e `WorkspaceExportInclude` tipi + `publishPack(kind, sourceId, include?)`.
+
+**Doğrulama:** `go build ./...` ✅ · `npx tsc --noEmit` ✅.
+
 ## Harici araçlar listesine `codebase-memory-mcp` eklendi ✅ (2026-07-01)
 
 **Yapılan:** Ayarlar ▸ Harici Araçlar ekranının kaynağı olan `knownExternalTools` slice'ına

@@ -40,6 +40,27 @@ rengini (accent) saklar; **workspace değiştirince arayüz teması da değişir
 - **Dil seçeneği** Görünüm'den çıkarılıp uygulama-geneli **Profil** kategorisine
   (Ayarlar) taşındı; dil uygulama-geneli kalır (workspace'e özel değildir).
 
+## Workspace Dışa Aktarımı (Şablon) — "Dışa Aktar" Sekmesi (2026-07-01)
+
+Workspace'i taşınabilir bir **şablon paketine** dönüştürme (eski "Şablon olarak yayınla")
+artık `WorkspaceView`'in kendi **Dışa Aktar** sekmesindedir (Genel ▸ Görünüm ▸ Proje ▸
+Promptlar & Dosyalar ▸ **Dışa Aktar**). Genel tab'ından çıkarıldı çünkü içerik seçimi
+detaylandırıldı. Panel: `frontend/src/components/workspace/WorkspaceExportPanel.tsx`.
+
+- **Seçilebilir içerik:** panel açılışta ajanları/akışları/workspace-tier skill'leri/
+  zamanlamaları çeker. Kullanıcı **hangi ajanların** dahil edileceğini işaretler (varsayılan
+  tümü, ≥1 zorunlu) ve kategori toggle'larıyla (Akışlar / Zamanlamalar / Skill'ler /
+  Talimatlar / Pano sütunları — sayı rozetli, varsayılan açık) neyin gireceğini seçer.
+- **API:** `api.publishPack('workspace', ws.id, include)` → `POST /api/market/publish`.
+  `include` = `WorkspaceExportInclude` (`agentIds: string[]|null` (null=tümü) + kategori
+  boolean'ları). `include` gönderilmezse davranış eskisi gibi "her şey" (geriye uyumlu).
+- **Backend:** `publishRequest.Include *publishInclude`; `buildWorkspaceTemplatePayload(ctx,
+  wsp, inc)` — `inc==nil` iken her şey, aksi halde seçili ajanlara filtreler ve kategori
+  flag'lerini onurlandırır (`internal/api/market_publish.go`). **Sırlar ve oturum geçmişi
+  asla dahil edilmez** (sunucu-zorunlu). Yayınlanan şablon market + workspace oluşturma
+  ekranında görünür (`s.market.Reload()`).
+- Panel kendi publish aksiyonunu taşır → ortak header "Kaydet" bu sekmede gizli (Görünüm gibi).
+
 ## Neden Ayrı Store Dizini?
 
 Tek depo + `workspace_id` ayrımı yerine **her workspace için ayrı `store/` dizini** seçildi:
