@@ -2,6 +2,61 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-02**
 
+## Etiketler + Etiket-Tetikleyicili Otomasyonlar ✅ (2026-07-02)
+
+**İstek:** (1) Sohbet/flow/schedule kayıtlarına etiket (tag) ekleyebilmek — hem
+kullanıcı UI'dan hem ajan araçlarla düzenleyebilsin. (2) Schedules ekranına yeni
+"otomasyon" türü: belirli bir etikete sahip oturum bir turu **bitirince**, o
+oturumun sonucunu alıp yeni bir oturum başlatan → kendiliğinden süren döngüler.
+
+**Tasarım kararı (kullanıcıyla netleşti):** Tetikleyici = etiketli oturumda bir tur
+`end_turn` ile bitince (araçlar kullanılıp son cevap verilince). Ham "her tur"
+sohbet selini **tag-gating** (yalnız tetik etiketi taşıyan oturumlar) +
+guardrail'ler (maks. iterasyon, cooldown, aç/kapa) ile önlenir. Otomasyon ayrı bir
+`Automation` entity'sidir ama UI'da Schedules ekranında ayrı bölümde gösterilir.
+
+**Yapılan (backend):**
+- **Etiket alanları:** `Session.Tags` / `Flow.Tags` / `Schedule.Tags` (`[]string`,
+  omitempty; `Task.Tags` zaten vardı). Store setter'ları `SetSessionTags` /
+  `SetFlowTags` / `SetScheduleTags` + paylaşımlı `normalizeTags` (trim/dedup/boş-at).
+- **`Automation` modeli** (`db/models_automation.go` + `store_automation.go`): CRUD +
+  `SetAutomationEnabled` (aç→sayaç sıfır) + `RecordAutomationFire` + `ResetAutomationCount`.
+  Alanlar: TriggerTag, TargetAgentID, PromptTemplate ({{result}}/{{title}}/{{tag}}/
+  {{sessionId}}), SpawnTags (nil→[TriggerTag]=döngü), Enabled, MaxIterations (vars.
+  50, 0=sınırsız), CooldownSec, IterationCount/LastFiredAt/LastSessionID/LastError.
+  Yeni id prefix `AUT`, dir `automations`, `load()`'a eklendi.
+- **Tur-tamamlanma hook'u:** `Runtime.turnHook` + `SetTurnHook` + `FireTurnFinished`
+  (detached goroutine → turu bloklamaz). Çağrı yerleri: chat_stream (her yanıt
+  sonrası), spawn (`runSpawn`), scheduler (`deliverPrompt` + `deliverWake`).
+- **`AutomationEngine`** (`agent/automation.go`): `OnTurnFinished` → biten oturumu
+  yükler, etiketsizse hızlı döner; eşleşen enabled otomasyonlar için cooldown +
+  maks-iterasyon (aşılırsa otomatik pasifle + event) kontrolü → `renderAutomationPrompt`
+  → `SpawnSession(Tags=spawnTags)` → `RecordAutomationFire`. `SpawnOptions.Tags`
+  eklendi (spawn'lanan oturum oluşturulurken etiketlenir → race yok).
+- **API:** `PUT /api/sessions|flows|schedules/{id}/tags` + automations CRUD
+  (`GET/POST /api/automations`, `PUT/POST toggle/POST reset/DELETE /{id}`).
+  `SessionInfo`'ya `tags` eklendi.
+- **Araçlar (self-management):** `set_session_tags` (sink, add/remove/replace),
+  `set_flow_tags`, `set_schedule_tags`, `create/update/delete/list_automation`
+  (provenance: ajan yalnız kendi oluşturduğunu düzenler/siler). `SessionSink`
+  arayüzüne `Tags`/`SetTags` eklendi.
+
+**Yapılan (frontend):**
+- Types: `Session/Flow/Schedule.tags`, yeni `Automation`, `SessionInfo.tags`.
+- API client: `setSessionTags/setFlowTags/setScheduleTags` + automation CRUD.
+- Yeniden kullanılabilir `common/TagEditor.tsx` (chip editörü, Enter/virgül ekler,
+  Backspace son etiketi siler). Bağlandı: SessionDetailPanel (Hedef altına
+  "Etiketler" bölümü), FlowsPanel (meta toolbar), Schedules (satır içi).
+- Yeni `panels/Automations.tsx` — Schedules ekranında "Otomasyonlar" bölümü:
+  oluşturma formu (ad/tetik-etiket/hedef-ajan/prompt/maks-iter/cooldown) + liste
+  (aç-kapa, iterasyon sayacı, spawn-etiket editörü, limit dolunca sıfırla, sil).
+
+**Doğrulama:** `go build ./...` + 143 test (db+agent, yeni automation_test'ler dahil)
++ 73 api test + `npx tsc --noEmit` yeşil.
+
+**Sıradaki:** Canlı loop doğrulaması (gerçek sağlayıcıyla uçtan uca); opsiyonel
+`swarmgo-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi.
+
 ## Code Execution with MCP — Settings toggle + UI trace kartları ✅ (2026-07-02)
 
 **İstek:** Kod-modunu env-only olmaktan çıkarıp Settings'e almak + `run_code` içi
