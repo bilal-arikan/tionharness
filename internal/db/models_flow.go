@@ -14,6 +14,10 @@ type Flow struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Graph       string `json:"graph"` // JSON
+	// Tags are free-form labels on the flow, editable by both the user (UI) and
+	// agents (set_flow_tags). Organizational only (they do not drive automations —
+	// only session tags do).
+	Tags []string `json:"tags,omitempty"`
 	// CreatedBy is the ID of the agent that created this flow via a
 	// self-management tool ("" = created by the user). Agents may only
 	// edit/delete agent-created flows.

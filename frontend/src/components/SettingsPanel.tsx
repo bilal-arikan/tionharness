@@ -31,10 +31,6 @@ import { StepKindsPanel } from './settings/StepKindsPanel'
 import { HooksPanel } from './settings/HooksPanel'
 import { ExternalToolsPanel } from './settings/ExternalToolsPanel'
 import { SecretsPanel } from './panels/SecretsPanel'
-// The workspace tool catalog + MCP server management, surfaced here as a
-// settings category (previously a top-level NavRail view). Renders its own
-// master-detail layout, so it is shown full-bleed below.
-import { ToolsPanel as ToolsCatalogPanel } from './panels/ToolsPanel'
 
 interface Props {
   onError: (msg: string) => void
@@ -149,7 +145,8 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       compactLlmThreshold: draft.compactLlmThreshold, compactModel: draft.compactModel,
       autoTitleEnabled: draft.autoTitleEnabled, titleModel: draft.titleModel,
       enableShell: draft.enableShell,
-      enableCliHooks: draft.enableCliHooks, claudeResume: draft.claudeResume,
+      enableCliHooks: draft.enableCliHooks, enableCodeMode: draft.enableCodeMode,
+      claudeResume: draft.claudeResume,
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
       spawnMaxConcurrent: draft.spawnMaxConcurrent, spawnMaxPerTurn: draft.spawnMaxPerTurn,
       autonomousConfine: draft.autonomousConfine, gitWorktreeIsolation: draft.gitWorktreeIsolation,
@@ -245,12 +242,12 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
             {catMeta?.label ?? ''}
           </span>
           <div className="flex items-center gap-3">
-            {cat !== 'mcptools' && cat !== 'secrets' && cat !== 'exttools' && (
+            {cat !== 'secrets' && cat !== 'exttools' && (
               <span className="text-xs text-[var(--color-text-dim)]">
                 {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
               </span>
             )}
-            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'hooks' && cat !== 'exttools' && cat !== 'mcptools' && cat !== 'secrets' && (
+            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'hooks' && cat !== 'exttools' && cat !== 'secrets' && (
               <Button onClick={save} disabled={!dirty || saving}>
                 {saving ? 'Kaydediliyor…' : 'Kaydet'}
               </Button>
@@ -258,13 +255,9 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
           </div>
         </div>
 
-        {cat === 'mcptools' ? (
-          // Tool catalog hosts its own searchable list + detail/server panes, so
-          // it is rendered full-bleed (outside the centered max-w content column).
-          <ToolsCatalogPanel onError={onError} />
-        ) : cat === 'secrets' ? (
-          // Secrets manages its own list/forms; render full-bleed like the tool
-          // catalog (moved here from a top-level NavRail view).
+        {cat === 'secrets' ? (
+          // Secrets manages its own list/forms; render full-bleed (the tool
+          // catalog "Araçlar & MCP" now lives as a top-level NavRail view).
           <SecretsPanel onError={onError} />
         ) : (
         <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-6">

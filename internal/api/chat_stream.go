@@ -476,6 +476,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			"model", resp.Model, "in", resp.Usage.InputTokens, "out", resp.Usage.OutputTokens,
 			"steps", len(steps), "stream", true,
 			"dur", time.Since(agentStart).Round(time.Millisecond).String())
+
+		// Tag-triggered automations: signal that this session finished a turn. The
+		// runtime dispatches it detached, so a tagged session completing can spawn a
+		// follow-up (the automation loop) without blocking this turn. Fired per
+		// responding agent so a multi-agent turn's last reply carries the result.
+		wsp.Runtime.FireTurnFinished(session.ID, agentRow.ID, resp.Text)
 	}
 
 	// Auto-title once, after the turn, using the first responding agent.

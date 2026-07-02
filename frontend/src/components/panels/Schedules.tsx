@@ -4,7 +4,8 @@ import { api } from '../../api'
 import type { Agent, Schedule } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
-import { Button } from '../common'
+import { Button, TagEditor } from '../common'
+import { Automations } from './Automations'
 
 interface Props {
   agents: Agent[]
@@ -248,6 +249,16 @@ export function Schedules({ agents, focusId, onError }: Props) {
       onError((e as Error).message)
     } finally {
       setRunningId(null)
+    }
+  }
+
+  const setTags = async (s: Schedule, tags: string[]) => {
+    setSchedules((prev) => prev.map((x) => (x.id === s.id ? { ...x, tags } : x)))
+    try {
+      await api.setScheduleTags(s.id, tags)
+    } catch (e) {
+      onError((e as Error).message)
+      reload()
     }
   }
 
@@ -520,6 +531,9 @@ export function Schedules({ agents, focusId, onError }: Props) {
                   </span>
                 </div>
               ) : null}
+              <div className="mt-1">
+                <TagEditor tags={s.tags ?? []} onChange={(tags) => setTags(s, tags)} className="py-1" />
+              </div>
             </div>
             <button
               data-testid="schedule-run-now"
@@ -552,6 +566,9 @@ export function Schedules({ agents, focusId, onError }: Props) {
           </div>
           ),
         )}
+
+        {/* Tag-triggered automations (event-driven loops) live in the same screen. */}
+        <Automations agents={agents} onError={onError} />
       </div>
     </div>
   )

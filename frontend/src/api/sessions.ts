@@ -88,6 +88,12 @@ export const sessionApi = {
       method: 'PUT',
       body: JSON.stringify({ pinned }),
     }),
+  // Replace the session's free-form tags (shared with agents; also drive automations).
+  setSessionTags: (sessionId: string, tags: string[]) =>
+    req<{ id: string; tags: string[] }>(`/api/sessions/${sessionId}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags }),
+    }),
   // Rate an assistant message (👍/👎 + optional note). rating: +1 | -1 | 0 (clear).
   setMessageFeedback: (sessionId: string, messageId: string, rating: number, note = '') =>
     req<{ id: string; rating: number; note: string }>(

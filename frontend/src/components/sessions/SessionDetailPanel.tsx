@@ -5,7 +5,7 @@ import type { SessionInfo, SessionUsageDetail, SessionProgress } from '../../typ
 import { SessionContextModal } from './SessionContextModal'
 import { SessionDebugCard } from './SessionDebugCard'
 import { AgentIdentity } from '../agents/AgentIdentity'
-import { PromptEditor, KeyValueRow as Row } from '../common'
+import { PromptEditor, KeyValueRow as Row, TagEditor } from '../common'
 import { roleColor } from '../../lib/palette'
 import { usd, tokens as fmtTok } from '../../lib/format'
 
@@ -386,6 +386,25 @@ export function SessionDetailPanel({
                 Bu sohbet için bir hedef belirle
               </button>
             )}
+          </section>
+
+          {/* Tags — free-form labels (also drive tag-triggered automations) */}
+          <section>
+            <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+              <span>Etiketler</span>
+            </div>
+            <TagEditor
+              tags={info.tags ?? []}
+              onChange={async (tags) => {
+                setInfo((prev) => (prev ? { ...prev, tags } : prev))
+                try {
+                  await api.setSessionTags(sessionId, tags)
+                } catch {
+                  setLocalRefresh((n) => n + 1) // reload on failure to resync
+                }
+              }}
+              placeholder="Etiket ekle (otomasyon tetikleyicisi olabilir)…"
+            />
           </section>
 
           {/* Meta */}

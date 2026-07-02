@@ -239,6 +239,11 @@ func (m *Manager) open(meta Meta) error {
 		m.logger.Warn("start scheduler failed", "workspace", meta.ID, "error", err)
 	}
 
+	// Tag-triggered automations: wire the event-driven engine as the runtime's turn
+	// hook so a tagged session finishing a turn can spawn a follow-up (the loop).
+	autoEngine := agent.NewAutomationEngine(database, rt, m.logger)
+	rt.SetTurnHook(autoEngine.OnTurnFinished)
+
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())
 

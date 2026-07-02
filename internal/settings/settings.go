@@ -217,6 +217,10 @@ type Settings struct {
 	// built now; visibility is per-tool.)
 	EnableShell    bool `json:"enableShell"`    // built-in shell (arbitrary commands in sandbox)
 	EnableCLIHooks bool `json:"enableCliHooks"` // pass PreToolUse/PostToolUse hooks to claude-cli agents via --settings
+	// EnableCodeMode (code execution with MCP, _Docs/44): expose the MCP catalog
+	// as generated Python bindings behind the run_code tool. Also requires
+	// EnableShell (run_code executes arbitrary host code). Native path only.
+	EnableCodeMode bool `json:"enableCodeMode"`
 	// ClaudeResume keeps the claude-cli session warm across turns: each turn passes
 	// --resume <id> and sends only the new turn (not the full transcript), so the
 	// CLI reuses its server-side prompt cache (much cheaper, like Claude Code). Off
@@ -454,6 +458,7 @@ type DTO struct {
 
 	EnableShell    bool `json:"enableShell"`
 	EnableCLIHooks bool `json:"enableCliHooks"`
+	EnableCodeMode bool `json:"enableCodeMode"`
 	ClaudeResume   bool `json:"claudeResume"`
 	// ClaudePersistentSession keeps ONE long-lived claude-cli process alive per
 	// (session, agent) and feeds turns over stdin (stream-json input) instead of
@@ -559,6 +564,7 @@ func (s Settings) ToDTO() DTO {
 
 		EnableShell:             s.EnableShell,
 		EnableCLIHooks:          s.EnableCLIHooks,
+		EnableCodeMode:          s.EnableCodeMode,
 		ClaudeResume:            s.ClaudeResume,
 		ClaudePersistentSession: s.ClaudePersistentSession,
 		DelegationMaxDepth:      s.DelegationMaxDepth,
@@ -659,6 +665,7 @@ type Patch struct {
 
 	EnableShell             *bool `json:"enableShell"`
 	EnableCLIHooks          *bool `json:"enableCliHooks"`
+	EnableCodeMode          *bool `json:"enableCodeMode"`
 	ClaudeResume            *bool `json:"claudeResume"`
 	ClaudePersistentSession *bool `json:"claudePersistentSession"`
 	DelegationMaxDepth      *int  `json:"delegationMaxDepth"`

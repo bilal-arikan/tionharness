@@ -53,7 +53,33 @@ export interface Schedule {
   lastDeliveryStatus: string
   lastDeliveryError: string
   enabled: boolean
+  tags?: string[] // free-form organizational labels (editable by user + agents)
   createdAt: number
   // Optional end date (unix seconds); 0/undefined = no end date.
   expiresAt?: number
+}
+
+// Automation is a tag-triggered rule: when a session carrying triggerTag finishes
+// a turn, its final reply is rendered into promptTemplate and a new session is
+// spawned for targetAgentId. When the spawned session carries triggerTag too (the
+// default), each completion re-fires the rule — a self-continuing loop bounded by
+// maxIterations / cooldownSec / enabled. Surfaced in the Schedules screen.
+export interface Automation {
+  id: string
+  name: string
+  triggerTag: string
+  targetAgentId: string
+  promptTemplate: string // placeholders: {{result}} {{title}} {{tag}} {{sessionId}}
+  spawnTags?: string[] // tags applied to the spawned session (default: [triggerTag])
+  enabled: boolean
+  maxIterations: number // 0 = unlimited
+  cooldownSec: number
+  // Runtime bookkeeping (read-only).
+  iterationCount: number
+  lastFiredAt?: number
+  lastSessionId?: string
+  lastError?: string
+  createdBy?: string
+  createdAt: number
+  updatedAt: number
 }

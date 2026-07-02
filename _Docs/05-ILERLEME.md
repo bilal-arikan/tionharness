@@ -2,6 +2,31 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-02**
 
+## Code Execution with MCP — Settings toggle + UI trace kartları ✅ (2026-07-02)
+
+**İstek:** Kod-modunu env-only olmaktan çıkarıp Settings'e almak + `run_code` içi
+MCP çağrılarını sohbet trace'inde kart olarak göstermek (`_Docs/44` kalan işler).
+
+**Yapılan:**
+- **Settings toggle `enableCodeMode`:** `settings.go` (Settings/DTO/Patch/mapping) +
+  `store.go` apply + `api/server.go` `applySettings → SetCodeMode` (canlı) +
+  `app.go`'da `SWARMGO_CODE_MODE` artık `EnableShell` gibi **tek seferlik boot seed**
+  (doğrudan tunable set kaldırıldı; source of truth Settings ekranı).
+- **Frontend:** `types/settings.ts` + `SettingsPanel` patch'i + `AppToolsPanel`'e
+  toggle ("Kod-modu (run_code + MCP binding'leri)"); kabuk kapalıyken sarı uyarı
+  kutusu (run_code kabuk yetkisi olmadan kaydedilmez).
+- **Trace kartları:** `codemode.CallObservation`'a `Args` alanı (yalnız UI trace'i —
+  model bağlamına girmez); `toolsetup` observer'ı her script-içi çağrıyı call-ctx
+  sub-step sink'ine `StepTool` olarak ekler (mutex'li — çok-thread'li script
+  eşzamanlı çağırabilir) → tool loop'un mevcut generic promotion'ı `run_code`
+  kartını katlanabilir `StepSubagent` yapar. **Frontend değişikliği gerekmedi**
+  (run_subagent kartıyla aynı render). Girdi 2KB cap (`capStepInput`), çıktı satırı
+  "N KB in M ms"; red `permission_denied` reason'lı hata satırı.
+- **Doğrulama:** `go build ./...` + 349 test (codemode/tools/agent/settings/api) +
+  `npx tsc --noEmit` yeşil.
+
+**Sıradaki:** Faz 3 A/B ölçümü (`_Docs/44` §11 metriğiyle).
+
 ## Code Execution with MCP — Faz 0: baseline ölçümü ✅ (2026-07-02)
 
 **İstek:** `_Docs/44` §5 Faz 0 — kod-modu kazancını ölçebilmek için gerçek MCP
@@ -234,6 +259,9 @@ geri-yükleme yok; kod için git zaten var).
   `rewindTo(msgId)` görünüm + sunucu tarafını atomik siler ve **silinen promptu composer
   draft'ına geri koyar** (düzenleyip yeniden göndermek için) — `writeSessionDraft` +
   Composer `key` bump ile remount. Yerel-only (persist edilmemiş) anchor'da sunucu çağrısı atlanır.
+- **Balon hover aksiyonu (2026-07-02):** her kullanıcı balonunun altında ⟲ "Buraya geri sar"
+  butonu (`RewindButton.tsx`, iki-adımlı onay) → picker açmadan doğrudan o mesaja geri sarar
+  (`UserTurn`→`MessageList` `onRewind`→`App.handleRewind`, dialog ile ortak yol).
 - **Sınır (Claude Code ile aynı):** yalnız transcript geri alınır; `Bash` yan etkileri
   (`git push`/`npm install`/`rm`) ve dosya değişiklikleri geri **gelmez**.
 - **Durum:** db+api derlenir + testler geçer (db 35, api 66), frontend `tsc` temiz.

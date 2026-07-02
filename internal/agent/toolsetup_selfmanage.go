@@ -75,6 +75,14 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewListSchedulesTool(r.db, agent.ID),
 		// Manually fire a schedule now (the "Run now" trigger).
 		tools.NewRunScheduleTool(r.db, r.runScheduleNow),
+		// Tag-triggered automations (event-driven loops). Provenance-enforced.
+		tools.NewCreateAutomationTool(r.db, agent.ID),
+		tools.NewUpdateAutomationTool(r.db, agent.ID),
+		tools.NewDeleteAutomationTool(r.db, agent.ID),
+		tools.NewListAutomationsTool(r.db, agent.ID),
+		// Tag editors for flows + schedules (session tags handled by set_session_tags).
+		tools.NewSetFlowTagsTool(r.db),
+		tools.NewSetScheduleTagsTool(r.db),
 		// Tasks (kanban board). Read/create/edit/move on any task; delete only
 		// agent-created (provenance). The board is passive — no run tool.
 		tools.NewListTasksTool(r.db, agent.ID),

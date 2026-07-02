@@ -73,6 +73,11 @@ type Runtime struct {
 	// scheduler exists; nil before then.
 	runSched func(context.Context, string) error
 
+	// turnHook is called (detached, non-blocking) whenever an agent turn finishes
+	// on any path (chat/spawn/schedule/wake). The workspace manager wires it to the
+	// AutomationEngine so tag-triggered automations can fire. Nil before wiring.
+	turnHook func(context.Context, TurnFinished)
+
 	// settingsBridge backs the get_settings / update_settings self-management
 	// tools: read and live-apply the application-wide settings. Wired by the
 	// workspace manager once the api server exists; nil before then (tools off).
@@ -694,6 +699,27 @@ func (r *Runtime) runScheduleNow(ctx context.Context, id string) error {
 		return fmt.Errorf("scheduler not available")
 	}
 	return r.runSched(ctx, id)
+}
+
+// SetTurnHook wires a callback invoked when an agent turn finishes. Called by the
+// workspace manager to connect the AutomationEngine. Nil leaves turn completion
+// unobserved (automations off).
+func (r *Runtime) SetTurnHook(fn func(context.Context, TurnFinished)) { r.turnHook = fn }
+
+// FireTurnFinished dispatches a turn-completion signal to the wired hook, if any,
+// on a DETACHED goroutine so it never blocks or cancels with the finishing turn.
+// Safe to call from any completion path (chat/spawn/schedule/wake). No-op when no
+// hook is wired or when sessionID is empty.
+func (r *Runtime) FireTurnFinished(sessionID, agentID, output string) {
+	fn := r.turnHook
+	if fn == nil || sessionID == "" {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
+		defer cancel()
+		fn(ctx, TurnFinished{SessionID: sessionID, AgentID: agentID, Output: output})
+	}()
 }
 
 // SetSettingsBridge wires the application-wide settings store + live-apply hook

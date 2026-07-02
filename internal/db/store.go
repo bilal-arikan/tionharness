@@ -380,6 +380,14 @@ func (d *DB) SetSessionState(ctx context.Context, sessionID, state string) error
 	})
 }
 
+// SetSessionTags replaces a session's free-form tags. Does not bump UpdatedAt
+// (tagging is metadata, not activity, and must not reorder the sidebar list).
+func (d *DB) SetSessionTags(ctx context.Context, sessionID string, tags []string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Tags = normalizeTags(tags)
+	})
+}
+
 // SetSessionPinned pins/unpins a session to the top of the sidebar list. Does not
 // bump UpdatedAt (pinning is a view preference, not activity).
 func (d *DB) SetSessionPinned(ctx context.Context, sessionID string, pinned bool) error {

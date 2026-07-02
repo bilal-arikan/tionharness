@@ -122,6 +122,12 @@ type Session struct {
 	// Pinned keeps the session at the top of the sidebar list regardless of recency.
 	Pinned bool `json:"pinned,omitempty"`
 
+	// Tags are free-form labels on the session, editable by both the user (UI) and
+	// agents (set_session_tags). They organize sessions and, crucially, drive
+	// tag-triggered automations: when a tagged session's turn finishes, any
+	// Automation watching that tag fires (see internal/db/models_automation.go).
+	Tags []string `json:"tags,omitempty"`
+
 	// Conversation compaction state (see internal/conversation).
 	Summary         string `json:"summary"`
 	SummaryMsgCount int    `json:"summaryMsgCount"`

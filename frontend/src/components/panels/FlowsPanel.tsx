@@ -21,7 +21,7 @@ import {
   type FlowRFNode,
 } from '../../lib/flowGraph'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../../types'
-import { Button, SelectionBar, SelectionBarButton } from '../common'
+import { Button, SelectionBar, SelectionBarButton, TagEditor } from '../common'
 import {
   NewItemButton, ResizeHandle, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
 } from '../common/SidebarChrome'
@@ -72,6 +72,8 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   // Editor state for the selected flow.
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  // Flow tags persist independently (setFlowTags), not via the Save button.
+  const [tags, setTags] = useState<string[]>([])
   const [start, setStart] = useState('')
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowRFNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -143,6 +145,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
       api.flowPath(f.id).then((r) => setFlowPath(r.path)).catch(() => setFlowPath(''))
       setName(f.name)
       setDescription(f.description)
+      setTags(f.tags ?? [])
       setRun(null)
       setInput('')
       setLiveNodes([])
@@ -702,6 +705,17 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               placeholder="Açıklama — bu akış ne yapar? (isteğe bağlı)"
               className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-dim)] outline-none"
             />
+            <div className="w-56 flex-shrink-0">
+              <TagEditor
+                tags={tags}
+                onChange={(next) => {
+                  setTags(next)
+                  if (selectedId) api.setFlowTags(selectedId, next).catch((e) => onError((e as Error).message))
+                }}
+                placeholder="Etiket…"
+                className="py-1"
+              />
+            </div>
             <label className="flex flex-shrink-0 items-center gap-1 text-xs text-[var(--color-text-dim)]">
               Kablo:
               <select

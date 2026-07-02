@@ -34,6 +34,9 @@ type sessionInfoResp struct {
 	CreatedAt         int64  `json:"createdAt"`
 	UpdatedAt         int64  `json:"updatedAt"`
 
+	// Tags are the session's free-form labels (also drive tag-triggered automations).
+	Tags []string `json:"tags,omitempty"`
+
 	Path      string `json:"path"`
 	SizeBytes int64  `json:"sizeBytes"`
 	FileCount int    `json:"fileCount"`
@@ -113,6 +116,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		Unread:            session.Unread,
 		Goal:              session.Goal,
 		GoalDone:          session.GoalDone,
+		Tags:              session.Tags,
 		ParentSessionID:   session.ParentSessionID,
 		HandoffArtifactID: session.HandoffArtifactID,
 		CreatedAt:         session.CreatedAt,

@@ -141,11 +141,12 @@ type Tunables struct {
 	// SWARMGO_CLI_BRIDGE_SKIP_HIDDEN=0. See clibridge_tunable.go.
 	cliBridgeSkipHidden bool
 
-	// codeMode (POC, _Docs/44) — when true (and the shell gate is on), the MCP
+	// codeMode (_Docs/44) — when true (and the shell gate is on), the MCP
 	// catalog is additionally exposed as generated Python bindings behind the
 	// run_code tool (code execution with MCP: schemas stay out of context,
-	// intermediate data stays in the execution environment). Default FALSE;
-	// enable per boot with SWARMGO_CODE_MODE=1. See codemode_tunable.go.
+	// intermediate data stays in the execution environment). Settings-driven
+	// (enableCodeMode, default off); SWARMGO_CODE_MODE=1 seeds the setting at
+	// boot. See codemode_tunable.go.
 	codeMode bool
 }
 

@@ -130,16 +130,6 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	case "1", "true", "on", "yes":
 		tun.SetCLIBridgeSkipHidden(true)
 	}
-	// POC gate (SWARMGO_CODE_MODE, _Docs/44): expose the MCP catalog as generated
-	// Python bindings behind a single run_code tool (code execution with MCP), so
-	// MCP schemas stay out of the context window and intermediate data stays in
-	// the execution environment. Default OFF while we measure; run_code also
-	// requires the shell capability (it executes arbitrary host code).
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("SWARMGO_CODE_MODE"))) {
-	case "1", "true", "on", "yes":
-		tun.SetCodeMode(true)
-		logger.Info("POC: code-execution mode enabled (run_code + generated MCP python bindings)")
-	}
 	// The gated tool capabilities (shell / self-management / agent delegation) are
 	// off by default and now live in the Settings screen (persisted settings.json,
 	// pushed live via applySettings). The legacy SWARMGO_ENABLE_* env vars act as a
@@ -155,15 +145,18 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	}
 	// SWARMGO_ENABLE_SELFMANAGE was removed 2026-07-01 and SWARMGO_ENABLE_DELEGATION
 	// on 2026-07-02 (both are always installed now; visibility is per-tool from the
-	// Tools screen). Only the shell capability is still env-seedable.
+	// Tools screen). Env-seedable capabilities: the shell, and code-execution mode
+	// (SWARMGO_CODE_MODE — run_code + generated MCP python bindings, _Docs/44;
+	// also requires the shell capability to take effect).
 	seed := settings.Patch{
-		EnableShell: envOn("SWARMGO_ENABLE_SHELL"),
+		EnableShell:    envOn("SWARMGO_ENABLE_SHELL"),
+		EnableCodeMode: envOn("SWARMGO_CODE_MODE"),
 	}
-	if seed.EnableShell != nil {
+	if seed.EnableShell != nil || seed.EnableCodeMode != nil {
 		if _, err := settingsStore.Apply(seed); err != nil {
 			logger.Warn("seed enable-flags from env failed", "error", err)
 		} else {
-			logger.Warn("gated tool capabilities seeded from SWARMGO_ENABLE_* env into settings (Settings screen is now the source of truth)")
+			logger.Warn("gated tool capabilities seeded from env into settings (Settings screen is now the source of truth)")
 		}
 	}
 

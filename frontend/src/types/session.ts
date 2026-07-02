@@ -16,6 +16,9 @@ export interface Session {
   v?: number
   // Pins the session to the top of the sidebar list regardless of recency.
   pinned?: boolean
+  // Free-form labels, editable by the user and agents. Session tags also drive
+  // tag-triggered automations (a tagged session finishing a turn fires them).
+  tags?: string[]
   // True when an agent reply landed while this session wasn't open.
   unread?: boolean
   // Working directory (cwd) override for the agent's file/shell tools. Empty =
@@ -221,6 +224,8 @@ export interface SessionInfo {
   // True when the goal is marked done: it stays visible but is no longer
   // injected into context.
   goalDone: boolean
+  // Free-form labels (also drive tag-triggered automations).
+  tags?: string[]
   // Context-reset lineage: the session this one continues (born from /handoff)
   // and the handoff artifact written into this session at reset.
   parentSessionId?: string

@@ -95,6 +95,9 @@ export interface AppSettings {
   // Gated tool capabilities (off by default).
   enableShell: boolean
   enableCliHooks: boolean
+  // Code execution with MCP (run_code + generated python bindings); also
+  // requires enableShell to take effect. Native path only. _Docs/44.
+  enableCodeMode: boolean
   claudeResume: boolean
   claudePersistentSession: boolean
   // run_subagent is always installed; availability is per-tool from the Tools screen.

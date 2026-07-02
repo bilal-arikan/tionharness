@@ -36,6 +36,7 @@ import { ExecutionsPanel } from './components/panels/ExecutionsPanel'
 import { ArtifactsPanel } from './components/panels/ArtifactsPanel'
 import { ArtifactPreviewModal } from './components/artifacts/ArtifactPreviewModal'
 import { SkillsPanel } from './components/panels/SkillsPanel'
+import { ToolsPanel as ToolCatalogPanel } from './components/panels/ToolsPanel'
 import { MarketPanel } from './components/panels/MarketPanel'
 import { BudgetPanel } from './components/panels/BudgetPanel'
 import { ChatMeters } from './components/panels/ChatMeters'
@@ -90,6 +91,7 @@ const VIEW_TITLE: Record<View, string> = {
   flows: 'Akışlar',
   artifacts: 'Artifactlar',
   skills: 'Skills',
+  tools: 'Araçlar & MCP',
   budget: 'Bütçe',
   logs: 'Loglar',
   market: 'Market',
@@ -102,7 +104,7 @@ const VIEW_TITLE: Record<View, string> = {
 // in-pane headers) reach the very top — matching the chat/memory layout where the
 // sidebar is a sibling of <main>. Errors for these still surface via ErrorToast.
 const HEADERLESS_VIEWS = new Set<View>([
-  'agents', 'executions', 'artifacts', 'skills', 'flows', 'market',
+  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market',
 ])
 
 export default function App() {
@@ -813,6 +815,21 @@ export default function App() {
     bumpMeter,
   })
 
+  // handleRewind rewinds the conversation to a message (via the "/rewind" dialog
+  // or a user bubble's ⟲ hover action): truncate to that checkpoint, then drop the
+  // removed prompt back into the composer (draft write + remount) for a re-try.
+  const handleRewind = useCallback(
+    async (id: string) => {
+      const text = await chat.rewindTo(id)
+      if (text) {
+        writeSessionDraft(activeSessionId ?? undefined, text)
+        setComposerKey((k) => k + 1)
+      }
+      return text
+    },
+    [chat, activeSessionId],
+  )
+
   // After a reload (or workspace switch), restore the "thinking" indicator for
   // any turn still running detached on the server — the user may have refreshed
   // right after sending. Each turn's chat-completion event clears it again.
@@ -1037,6 +1054,7 @@ export default function App() {
               onOpenFile={openFile}
               onOpenArtifact={openArtifact}
               onDeleteMessage={deleteMessage}
+              onRewind={handleRewind}
               onRetry={chat.retryMessage}
               onFeedback={rateMessage}
               onOpenAgent={openAgentSettings}
@@ -1081,18 +1099,7 @@ export default function App() {
               artifacts={sessionArtifacts}
             />
             {chat.rewindOpen && (
-              <RewindDialog
-                messages={messages}
-                onClose={chat.closeRewind}
-                onRewind={async (id) => {
-                  const text = await chat.rewindTo(id)
-                  if (text) {
-                    writeSessionDraft(activeSessionId ?? undefined, text)
-                    setComposerKey((k) => k + 1)
-                  }
-                  return text
-                }}
-              />
+              <RewindDialog messages={messages} onClose={chat.closeRewind} onRewind={handleRewind} />
             )}
           </>
         )}
@@ -1167,6 +1174,7 @@ export default function App() {
           />
         )}
         {view === 'skills' && <SkillsPanel onError={setError} />}
+        {view === 'tools' && <ToolCatalogPanel onError={setError} />}
         {view === 'market' && (
           <MarketPanel
             onError={setError}

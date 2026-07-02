@@ -411,6 +411,10 @@ func (r *Registry) HiddenLazyCount(allow func(name string) bool) int {
 var bridgeExcluded = map[string]bool{
 	"WebFetch":     true,
 	"run_subagent": true,
+	// run_code (code-execution mode, _Docs/44) is native-path-only: the CLI has
+	// its own Bash + ToolSearch story, and the tool is eager anyway — this entry
+	// is a defensive guard in case a workspace override ever marks it lazy.
+	"run_code": true,
 }
 
 // BridgeableDefs returns the FULL schemas of lazy built-in tools — the

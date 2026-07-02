@@ -31,6 +31,11 @@ type SpawnOptions struct {
 	// inherits the workspace's configured default working directory (Path), same
 	// as a UI-created session — so spawns/handoffs start scoped to that folder.
 	WorkingDir string
+	// Tags are applied to the spawned session at creation. Set by tag-triggered
+	// automations so the new session carries the trigger tag (and thus re-fires the
+	// automation on its own completion — the loop). Applying them at creation, not
+	// after, avoids a race with the background turn finishing before the tag lands.
+	Tags []string
 }
 
 // SpawnResult is what a spawn returns to its caller immediately — the new
@@ -96,6 +101,7 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 		Title:           title,
 		ParentSessionID: strings.TrimSpace(opts.ParentSessionID),
 		WorkingDir:      cwd,
+		Tags:            opts.Tags,
 	})
 	if err != nil {
 		r.releaseSpawnSlot()
@@ -175,6 +181,9 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 	}
 	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID)
 	r.emitSpawnEvent(agent, sessionID, prompt, true)
+	// Tag-triggered automations: a spawned session completing is the natural loop
+	// step — if it carries an automation's trigger tag, this fires the next spawn.
+	r.FireTurnFinished(sessionID, agent.ID, output)
 
 	// Context-reset handoff: if this autonomous turn ran up against the context
 	// limit (reactive compaction fired), optionally write a handoff and continue

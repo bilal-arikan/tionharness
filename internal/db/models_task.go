@@ -102,6 +102,10 @@ type Schedule struct {
 	LastDeliveryStatus string `json:"lastDeliveryStatus"`
 	LastDeliveryError  string `json:"lastDeliveryError"`
 	Enabled            bool   `json:"enabled"`
+	// Tags are free-form labels on the schedule, editable by both the user (UI) and
+	// agents (set_schedule_tags). Organizational only (they do not drive
+	// automations — only session tags do).
+	Tags []string `json:"tags,omitempty"`
 	// ExpiresAt is an optional end date (unix seconds). When > 0 the schedule
 	// stops firing once the time passes — the next due cron tick is skipped and
 	// the schedule is auto-disabled. 0 means "no end date" (runs indefinitely).

@@ -14,6 +14,7 @@ import {
   Store,
   Wallet,
   Boxes,
+  Plug,
   Settings,
   ChevronLeft,
   type LucideIcon,
@@ -22,7 +23,7 @@ import type { Workspace } from '../types'
 import { WorkspaceSwitcher } from './workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from './workspace/WorkspaceCreateModal'
 
-export type View = 'chat' | 'executions' | 'agents' | 'network' | 'board' | 'schedules' | 'memory' | 'flows' | 'artifacts' | 'skills' | 'market' | 'budget' | 'logs' | 'workspace' | 'settings'
+export type View = 'chat' | 'executions' | 'agents' | 'network' | 'board' | 'schedules' | 'memory' | 'flows' | 'artifacts' | 'skills' | 'tools' | 'market' | 'budget' | 'logs' | 'workspace' | 'settings'
 
 interface Props {
   view: View
@@ -58,6 +59,7 @@ const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'flows', label: 'Akışlar', icon: GitBranch },
   { key: 'artifacts', label: 'Artifactlar', icon: FileCode },
   { key: 'skills', label: 'Skills', icon: Sparkles },
+  { key: 'tools', label: 'Araçlar & MCP', icon: Plug },
   { key: 'market', label: 'Market', icon: Store },
   { key: 'budget', label: 'Bütçe', icon: Wallet },
   { key: 'logs', label: 'Loglar', icon: ScrollText },

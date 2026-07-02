@@ -51,6 +51,19 @@ func (d *DB) UpdateSchedule(ctx context.Context, sc Schedule) error {
 	return d.persistScheduleLocked(cur)
 }
 
+// SetScheduleTags replaces a schedule's free-form tags without touching its
+// other fields or its delivery bookkeeping.
+func (d *DB) SetScheduleTags(ctx context.Context, id string, tags []string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	sc, ok := d.schedules[id]
+	if !ok {
+		return ErrNotFound
+	}
+	sc.Tags = normalizeTags(tags)
+	return d.persistScheduleLocked(sc)
+}
+
 // SetScheduleEnabled toggles a schedule on or off.
 func (d *DB) SetScheduleEnabled(ctx context.Context, id string, enabled bool) error {
 	d.mu.Lock()

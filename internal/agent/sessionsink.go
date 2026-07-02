@@ -79,6 +79,22 @@ func (s *sessionSink) SetWorkingDir(ctx context.Context, dir string) error {
 	return nil
 }
 
+func (s *sessionSink) Tags(ctx context.Context) ([]string, error) {
+	sess, err := s.db.GetSession(ctx, s.sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return sess.Tags, nil
+}
+
+func (s *sessionSink) SetTags(ctx context.Context, tags []string) error {
+	if err := s.db.SetSessionTags(ctx, s.sessionID, tags); err != nil {
+		return err
+	}
+	s.notify()
+	return nil
+}
+
 func (s *sessionSink) Archive(ctx context.Context) error {
 	if err := s.db.SetSessionState(ctx, s.sessionID, "archived"); err != nil {
 		return err

@@ -34,6 +34,8 @@ interface Props {
   onOpenArtifact?: (id: string) => void
   // Delete a single message (prune a mistaken/test one). Shown on row hover.
   onDeleteMessage?: (id: string) => void
+  // Rewind the conversation to a user message (remove it + everything after).
+  onRewind?: (id: string) => void
   // Retry the failed turn behind an assistant bubble that errored.
   onRetry?: (id: string) => void
   // Rate an assistant turn (👍/👎): rating +1 / -1 / 0 (clear).
@@ -60,6 +62,7 @@ export function MessageList({
   onOpenFile,
   onOpenArtifact,
   onDeleteMessage,
+  onRewind,
   onRetry,
   onFeedback,
   onOpenAgent,
@@ -187,6 +190,7 @@ export function MessageList({
                 agents={agents}
                 artifacts={artifacts}
                 onDelete={onDeleteMessage}
+                onRewind={onRewind}
                 onOpenArtifact={onOpenArtifact}
                 // When pinned at the top, clamp the question to 2 lines so the
                 // reply below stays visible.

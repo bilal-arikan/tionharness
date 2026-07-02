@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/bilal-arikan/swarmgo/internal/codemode"
 	"github.com/bilal-arikan/swarmgo/internal/db"
@@ -132,6 +133,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewSetSessionTitleTool(),
 		tools.NewSetWorkingDirTool(),
 		tools.NewArchiveSessionTool(),
+		// Session tags: edit THIS session's tags (shared with the UI; also enrols the
+		// session into tag-triggered automations). No-op without a session sink.
+		tools.NewSetSessionTagsTool(),
 		// mermaid_validate: lint a Mermaid diagram (recognised type + balanced
 		// brackets/quotes) before emitting it. Pure, read-only, no deps.
 		tools.NewMermaidValidateTool(),
@@ -394,6 +398,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			// Observer: one debug-journal tool event per in-script MCP call, so the
 			// per-message debug panel lists them exactly like native tool calls —
 			// the observability that folding N calls into one run_code card loses.
+			// The sub-step sink on the call ctx feeds the UI: each in-script call
+			// becomes a nested trace row, and the tool loop's generic promotion turns
+			// the run_code card into a collapsible StepSubagent — the same rendering
+			// run_subagent gets. The mutex guards against a multi-threaded script
+			// issuing concurrent bridge calls (each handler runs on its own goroutine).
+			var obMu sync.Mutex
 			observe := func(cctx context.Context, ob codemode.CallObservation) {
 				detail := "via run_code"
 				if ob.Denied {
@@ -408,6 +418,22 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 					Err:      ob.IsError,
 					Detail:   detail,
 				})
+				if sink := subStepSinkFrom(cctx); sink != nil {
+					st := TurnStep{
+						Kind:    StepTool,
+						Tool:    ob.Tool,
+						Input:   capStepInput(ob.Args),
+						IsError: ob.IsError,
+						Output:  fmt.Sprintf("%s in %dms (result stays in the script)", humanStepBytes(ob.OutBytes), ob.DurMs),
+					}
+					if ob.Denied {
+						st.Output = "permission denied"
+						st.Reason = "permission_denied"
+					}
+					obMu.Lock()
+					sink.steps = append(sink.steps, st)
+					obMu.Unlock()
+				}
 			}
 			reg.Add(tools.NewRunCodeTool(sb, entries, caller, r.toolFilter(ctx, agent), gate, observe))
 		}
@@ -713,4 +739,31 @@ func (r *Runtime) ActiveToolCatalog(ctx context.Context) []providers.ToolDef {
 		return r.buildRegistry(ctx, db.Agent{}).Defs(nil)
 	}
 	return r.buildRegistry(ctx, db.Agent{}).Defs(func(name string) bool { return !disabled[name] })
+}
+
+// capStepInput bounds a code-mode call's args for the nested trace card. The
+// UI trace is not model context, but a pathological multi-KB argument blob
+// would still bloat the persisted step JSON — keep a readable prefix.
+func capStepInput(args json.RawMessage) json.RawMessage {
+	const maxLen = 2048
+	if len(args) <= maxLen {
+		return args
+	}
+	// Truncated JSON would fail to render as structured input; fall back to a
+	// quoted string payload carrying the readable prefix.
+	quoted, err := json.Marshal(string(args[:maxLen]) + "…(truncated)")
+	if err != nil {
+		return nil
+	}
+	return quoted
+}
+
+// humanStepBytes renders a byte count for the nested trace row's output line.
+func humanStepBytes(n int) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%d B", n)
+	default:
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	}
 }

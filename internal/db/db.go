@@ -43,9 +43,10 @@ type DB struct {
 	schedules map[string]Schedule
 	knowledge map[string]KnowledgeSource
 	mcp       map[string]MCPServer
-	flows     map[string]Flow
-	flowRuns  map[string]FlowRun
-	artifacts map[string]Artifact
+	flows       map[string]Flow
+	flowRuns    map[string]FlowRun
+	automations map[string]Automation
+	artifacts   map[string]Artifact
 	hooks     map[string]Hook
 	usage     map[string]Usage // keyed by agentID + "|" + day
 	sessionUsage map[string]SessionUsage // keyed by session id (lifetime rollup)
@@ -81,9 +82,10 @@ func Open(path string) (*DB, error) {
 		schedules: map[string]Schedule{},
 		knowledge: map[string]KnowledgeSource{},
 		mcp:       map[string]MCPServer{},
-		flows:     map[string]Flow{},
-		flowRuns:  map[string]FlowRun{},
-		artifacts: map[string]Artifact{},
+		flows:       map[string]Flow{},
+		flowRuns:    map[string]FlowRun{},
+		automations: map[string]Automation{},
+		artifacts:   map[string]Artifact{},
 		hooks:     map[string]Hook{},
 		usage:        map[string]Usage{},
 		sessionUsage: map[string]SessionUsage{},
@@ -121,8 +123,9 @@ const (
 	dirSchedules = "schedules"
 	dirKnowledge = "knowledge"
 	dirMCP       = "mcp-servers"
-	dirFlows     = "flows"
-	dirFlowRuns  = "flow-runs"
+	dirFlows       = "flows"
+	dirFlowRuns    = "flow-runs"
+	dirAutomations = "automations"
 	dirArtifacts = "artifacts"
 	dirHooks     = "hooks"
 	dirUsage     = "usage"
@@ -146,8 +149,9 @@ const (
 	idArtifact  = "ART"
 	idKnowledge = "MEM"
 	idMCP       = "MCP"
-	idHook      = "HOK"
-	idSchedule  = "SCH"
+	idHook       = "HOK"
+	idSchedule   = "SCH"
+	idAutomation = "AUT"
 )
 
 // loadCounters reads the persisted id sequence. A missing file is fine (fresh
@@ -310,6 +314,14 @@ func (d *DB) load() error {
 	}
 	for _, r := range flowRuns {
 		d.flowRuns[r.ID] = r
+	}
+
+	automations, err := loadJSONDir[Automation](d.dir(dirAutomations))
+	if err != nil {
+		return err
+	}
+	for _, a := range automations {
+		d.automations[a.ID] = a
 	}
 
 	artifacts, err := loadJSONDir[Artifact](d.dir(dirArtifacts))

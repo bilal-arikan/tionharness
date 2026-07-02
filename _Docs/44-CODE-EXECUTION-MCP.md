@@ -1,7 +1,8 @@
 # 44 — Code Execution with MCP (Fizibilite + Faz Planı)
 
-> **Durum:** Plan / fizibilite. Bu doküman kod üretmez; SwarmGo reposu üzerinde
-> doğrulanmış mevcut durum + tasarım seçenekleri + fazlandırma içerir.
+> **Durum:** Faz 0 (baseline ölçümü, §11) + Faz 1 PoC + Faz 2 (per-call izin +
+> gözlemlenebilirlik) **tamamlandı** (2026-07-02, `SWARMGO_CODE_MODE=1` ile opt-in —
+> bkz. §10). Faz 3+ açık; ölçüm odağı §11'deki bulguya göre güncellendi.
 > **Tarih:** 2026-07-02 · **İlgili:** [17-TOKEN-OPTIMIZASYON](17-TOKEN-OPTIMIZASYON.md) ·
 > [19-LAZY-TOOL-LOADING](19-LAZY-TOOL-LOADING.md) · [24-SELF-MANAGEMENT](24-SELF-MANAGEMENT.md) ·
 > [25-SUBAGENT-ISOLATION](25-SUBAGENT-ISOLATION.md) · [38-SESSION-DEBUG](38-SESSION-DEBUG.md)
@@ -342,6 +343,134 @@ ağ-mutasyon guard'ının kod-moduna taşınması.
 
 Kazanç ölçülüp regresyon (küçük ölçekte net zarar) elenmeden write/otonom fazlara
 geçilmemeli.
+
+---
+
+## 10. Faz 1 + Faz 2 Uygulama Durumu (2026-07-02) ✅
+
+Seçenek A'nın (native "MCP-as-code") ilk iki fazı uygulandı. Bileşenler:
+
+| Bileşen | Konum | Not |
+|---------|-------|-----|
+| Loopback köprü | `internal/codemode/bridge.go` | Per-execution: 127.0.0.1 rastgele port, rastgele Bearer token (constant-time compare), 200 çağrı/koşu tavanı, 120s per-call timeout, çağrı sayacı + özet |
+| Binding üreticisi | `internal/codemode/bindings.go` | `.swarmgo/mcp/` altına `_bridge.py` + server-başına Python modülü; docstring = açıklama + normalize schema; her çağrıda sıfırdan regen |
+| `run_code` aracı | `internal/tools/builtin_runcode.go` | Boş script → discovery (modül/fonksiyon listesi); script → stripped env + `PYTHONPATH` + köprü env; yalnız stdout/stderr (16KB) + MCP çağrı özeti döner; 60s default / 300s max |
+| Risk sınıfı | `internal/tools/classify.go` | `run_code` = RiskExec → "ask" modda bütünüyle onay, "read-only"de blok |
+| Gate | `internal/agent/tunables.go` + `codemode_tunable.go` + `internal/app/app.go` | `SWARMGO_CODE_MODE=1` (default KAPALI) **VE** `ShellEnabled` **VE** MCP kataloğu dolu |
+| Kayıt | `internal/agent/toolsetup.go` (AttachMCP bloğu) | Köprüye ajanın kendi `toolFilter`'ı verilir; CLI köprüsüne verilmez (`bridgeExcluded`) |
+| **Per-call izin (Faz 2)** | `codemode.Config.Gate` + `toolsetup.go` closure | Script içi her MCP çağrısı, native loop'un aynı çağrıya uygulayacağı **`permGate`'in birebir kendisinden** geçer: "ask" modda per-call onay kartı (standing "always allow" grant'ları geçerli), "read-only"de blok, otonom ask-turlarında prompter yok → red. Red, script'e loud `MCPError` olarak döner; ayrı politika kodu yok — tam parite. |
+| **Per-call gözlemlenebilirlik (Faz 2)** | `codemode.Config.Observe` + `toolsetup.go` closure | Script içi her çağrı (dispatch edilen VEYA reddedilen) `debug.jsonl`'a `tool` tipi olay yazar (`Detail: "via run_code"` / `"permission denied (via run_code)"`, DurMs/OutBytes/Err) — per-message debug paneli köprü çağrılarını native araç çağrıları gibi listeler. Araç sonucundaki özet artık red sayısını da içerir. |
+
+**Akış:** model `run_code` (boş) → listing → `Read .swarmgo/mcp/<module>.py` (tanım
+on-demand) → `run_code(script)` → script `from <server> import <tool>` ile çağırır,
+köprü `mcp.pool.Call`'a yönlendirir → modele yalnız `print()` çıktısı + çağrı özeti döner.
+
+**Plandan sapmalar (gerekçeli):**
+1. **"Yalnız read-only MCP araçları" yerine tool-filter parity.** MCP `Tool` yapısında
+   `readOnlyHint` annotation'ı yok (kod üzerinden doğrulandı: `internal/mcp/client.go`
+   yalnız Name/Description/InputSchema taşır); isim-heuristiği kırılgan olurdu. Bunun
+   yerine köprü ajanın kendi tool filtresini uygular (**kod modu, ajanın doğrudan
+   çağıramayacağı hiçbir aracı açmaz**) ve `run_code` RiskExec olduğundan izin katmanı
+   bütünüyle devrede. Per-call izin Faz 2'de.
+2. **Köprü token'ı subprocess'e env ile geçer** (§4'teki "env'e girmesin" hedefinden
+   sapma): token host secret'ı değil — koşu-başına rastgele, yalnız o tek execution'ın
+   köprüsünü açar, süreçle birlikte ölür. Diske yazmak (worktree'ye/commit'e sızma
+   riski) daha kötü; `minimalScriptEnv` allowlist'i host secret'ları için geçerliliğini
+   koruyor.
+
+**Test kapsamı:** `internal/codemode/bridge_test.go` (auth 401 / filtre 403 /
+namespaced-olmayan 400 / tavan 429 / dispatcher hatası loud IsError / özet),
+`bindings_test.go` (sanitizasyon, keyword/dash, allow filtresi, stale-regen temizliği),
+`internal/tools/builtin_runcode_test.go` (discovery, gerçek python ile uçtan uca MCP
+çağrısı + ham verinin context'e sızmadığı, loud failure, script-içi `_bridge.call`
+bypass denemesinin köprüde reddi).
+
+**Faz 2 notları:**
+- **"Ask" modda bekleme/timeout etkileşimi:** onay beklerken script HTTP yanıtında
+  bloklanır; bekleme script'in wall-clock timeout'una sayılır (Python binding'in
+  urllib timeout'u 125s). Araç açıklaması modeli uyarır: onay beklenen scriptlerde
+  `timeout_sec` yükselt ya da kullanıcı "always allow" grant'ı versin.
+- **Otonom ağ-mutasyon guard'ı (plandaki §5-Faz 2 maddesi):** shell'deki `git push`
+  substring-guard'ının MCP karşılığı yok (annotation yok, çağrı semantiği opak) —
+  bunun yerine parite kuralı geçerli: otonom tur native yolda hangi MCP çağrısını
+  yapabiliyorsa köprüden de aynısını yapabilir, fazlasını değil. Ayrı bir guard
+  eklenmedi (eklenirse native yolla asimetri yaratırdı).
+
+**UI + settings entegrasyonu (2026-07-02, Faz 5'ten öne alındı):**
+- **Settings toggle:** `enableCodeMode` alanı (settings.json, Ayarlar → Geçişli
+  yetenekler ekranı, `AppToolsPanel`) — canlı uygulanır (`applySettings` →
+  `SetCodeMode`). `SWARMGO_CODE_MODE=1` artık doğrudan tunable değil, `EnableShell`
+  gibi **tek seferlik boot seed**'i; source of truth Settings ekranı. Kabuk yetkisi
+  kapalıyken UI uyarı gösterir (run_code kaydedilmez).
+- **Trace kartları:** `CallObservation`'a `Args` eklendi; `toolsetup` observer'ı her
+  script-içi çağrıyı call-ctx'teki sub-step sink'ine `StepTool` olarak yazar → tool
+  loop'un generic promotion'ı `run_code` kartını **katlanabilir `StepSubagent`**
+  yapar (run_subagent ile aynı render, frontend değişikliği gerekmedi). Satır başına
+  girdi (2KB cap) + "N KB in M ms (result stays in the script)" çıktısı; reddedilen
+  çağrı `permission_denied` reason'ı ile düşer. Args yalnız UI trace'ine gider —
+  model bağlamına girmez.
+
+**Kalan (sonraki fazlar):** Faz 3 A/B ölçümü — MCP-yoğun çok-adımlı senaryoda klasik
+vs kod-modu, §11'deki güncellenmiş metrikle (görev-başına toplam token + tur sayısı
++ bağlama giren araç-çıktısı baytı; `cmd/measure-codemode` + `turn-debug`).
+
+---
+
+## 11. Faz 0 Baseline Sonuçları (2026-07-02) ✅
+
+Ölçüm aracı: **`cmd/measure-codemode`** (`go run ./cmd/measure-codemode`) — data
+dizinindeki tüm workspace'lerin etkin MCP sunucularına bağlanır, **gerçek** araç
+kataloglarını çeker ve üç senaryonun tur-başı bağlam maliyetini raporlar. Token
+tahmini: runtime'ın bütçelemede kullandığı `conversation.EstimateText`
+(yoğunluk-duyarlı ~4 karakter/token) — UI metresiyle karşılaştırılabilir,
+provider tokenizer'ı ile birebir değil.
+
+### Ölçülen ortam (bu PC, gerçek sunucular)
+
+| Server | Araç | Full şema |
+|--------|------|-----------|
+| codebase-memory | 14 | 11.815 B ≈ 3.210 tok |
+| mcp-chrome | 29 | 36.433 B ≈ 9.125 tok |
+| playwright | 23 | 13.906 B ≈ 3.492 tok |
+| sqz-mcp | 6 | 4.896 B ≈ 1.222 tok |
+| context-mode | — | ulaşılamadı (bayat konfig — `cmd /c context-mode` artık yok) |
+
+### Üç senaryonun tur-başı occupancy'si (72 araç, 4 sunucu)
+
+| Senaryo | Tur-başı maliyet | Eager-full'a göre |
+|---------|------------------|-------------------|
+| 1. Eager-full (endüstri baseline) | **67.050 B ≈ 17.049 tok** her tur | — |
+| 2. Tier-lazy (SwarmGo bugünü) | 4 per-server özet satırı ≈ **69 tok**/tur (+~236 tok/aktive araç) | **−99,6%** |
+| 3. Code-mode (`run_code`) | 1 şema ≈ **374 tok**/tur; binding'ler diskte 101.698 B (0 bağlam); discovery ≈ 375 tok (tek seferlik) | **−97,8%** |
+
+### Gerçek kullanım profili (28 oturum, 204 `llm_call`, debug.jsonl)
+
+- `in`: ort 1.490 · p50 1.967 · p90 2.219 · max 6.488 tok
+- `cacheRead`: ort 107.569 · p50 68.299 · p90 186.387 · max 1.286.364 tok
+- `out`: ort 673 · p50 515 tok
+- Araç olayları: 336 toplam; MCP-namespaced 130'un **yalnız ~5'i gerçek harici MCP**
+  (kalanı CLI köprüsünün `swarmgo_interaction`/`extended` built-in'leri) — harici MCP
+  kullanımı henüz seyrek; A/B testi kasıtlı MCP-yoğun senaryo gerektirir.
+
+### Dürüst bulgu — ölçüm odağı düzeltmesi
+
+**Şema-occupancy savaşını tier-lazy zaten büyük ölçüde kazanmış** (69 tok/tur,
+%99,6 azaltım): >30 MCP aracında katalog per-server özete düştüğünden, kod-modunun
+tur-başı şema maliyeti (374 tok) bugünkü default'tan **yüksek** bile. Dolayısıyla
+kod-modunun gerçek değeri bu ortamda şema tasarrufu DEĞİL; üç başka eksende:
+
+1. **Aktivasyon churn'ü:** tier-lazy'de kullanılan her araç +~236 tok ile aktif sete
+   girer ve orada kaldıkça her tur taşınır; kod-modunda şema hiç girmez (tanım
+   diskte okunur).
+2. **Ara veri:** klasik yolda her MCP çağrısının ÇIKTISI bağlama döner (gerçek
+   kullanımda cacheRead p50 68K — geçmiş+çıktılar baskın); kod-modunda ara sonuçlar
+   script değişkenlerinde kalır, yalnız `print()` döner.
+3. **Tur sayısı:** N çağrılık zincir tek `run_code` turuna iner.
+
+**Faz 3 ölçümü buna göre güncellendi:** karşılaştırma metriği "şema tokenı" değil,
+**görev-başına toplam token (in+out) + tur sayısı + bağlama giren araç-çıktısı
+baytı** olmalı — MCP-yoğun, çok-adımlı bir senaryoda (ör. mcp-chrome/playwright ile
+50+ satır listeleme→filtreleme→toplama akışı).
 
 ---
 

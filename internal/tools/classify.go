@@ -51,6 +51,12 @@ var toolRisk = map[string]Risk{
 	// subprocess. The env is stripped of secrets and it is time-bounded, but it is
 	// still host code execution — same risk tier as the shell.
 	"transform_data": RiskExec,
+
+	// run_code (code-execution mode, _Docs/44) runs an arbitrary Python script
+	// that may additionally call MCP tools through the loopback bridge. Same
+	// stripped-env/timeout bounds as transform_data, same risk tier as the shell —
+	// "ask" mode approves the WHOLE script once; "read-only" blocks it outright.
+	"run_code": RiskExec,
 }
 
 // Classify returns the risk tier for a tool name. Unknown tools — including

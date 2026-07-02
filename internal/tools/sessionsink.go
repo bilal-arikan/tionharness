@@ -15,6 +15,10 @@ type SessionSink interface {
 	SetTitle(ctx context.Context, title string) error
 	SetWorkingDir(ctx context.Context, dir string) error
 	Archive(ctx context.Context) error
+	// Tags reads the session's current tags; SetTags replaces them. Backing the
+	// set_session_tags tool (which supports add/remove by reading then writing).
+	Tags(ctx context.Context) ([]string, error)
+	SetTags(ctx context.Context, tags []string) error
 }
 
 type sessionKey struct{}

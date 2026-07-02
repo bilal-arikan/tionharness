@@ -2,14 +2,17 @@ import type { Agent, Artifact, Message } from '../../types'
 import { UserBubble } from './UserBubble'
 import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
+import { RewindButton } from './RewindButton'
 
 // UserTurn renders a real user message: the bubble plus a right-aligned meta row
-// (delete-on-hover + timestamp). Auto-generated prompts use AutoPromptNote instead.
+// (rewind + delete on hover + timestamp). Auto-generated prompts use
+// AutoPromptNote instead.
 export function UserTurn({
   message,
   agents,
   artifacts,
   onDelete,
+  onRewind,
   onOpenArtifact,
   clamp,
 }: {
@@ -17,6 +20,8 @@ export function UserTurn({
   agents: Agent[]
   artifacts?: Artifact[]
   onDelete?: (id: string) => void
+  // Rewind the conversation to this message (remove it + everything after).
+  onRewind?: (id: string) => void
   onOpenArtifact?: (id: string) => void
   // Clamp the bubble text to 2 lines (used when this turn is pinned to the top).
   clamp?: boolean
@@ -33,6 +38,7 @@ export function UserTurn({
         clamp={clamp}
       />
       <div className="flex items-center justify-end gap-2 pr-1">
+        {onRewind && <RewindButton onClick={() => onRewind(m.id)} />}
         {onDelete && <DeleteButton onClick={() => onDelete(m.id)} />}
         <MessageTime unixSec={m.createdAt} />
       </div>

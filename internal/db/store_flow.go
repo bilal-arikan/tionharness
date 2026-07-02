@@ -59,6 +59,19 @@ func (d *DB) UpdateFlow(ctx context.Context, f Flow) error {
 	return d.persistFlowLocked(cur)
 }
 
+// SetFlowTags replaces a flow's free-form tags without touching its other fields.
+func (d *DB) SetFlowTags(ctx context.Context, id string, tags []string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cur, ok := d.flows[id]
+	if !ok {
+		return ErrNotFound
+	}
+	cur.Tags = normalizeTags(tags)
+	cur.UpdatedAt = now()
+	return d.persistFlowLocked(cur)
+}
+
 // DeleteFlow removes a flow and all of its runs.
 func (d *DB) DeleteFlow(ctx context.Context, id string) error {
 	d.mu.Lock()

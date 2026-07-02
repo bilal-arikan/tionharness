@@ -24,6 +24,18 @@ export function ToolsPanel({ draft, set }: PanelProps) {
       {/* Öz-yönetim araç paketi toggle'ı kaldırıldı: paket artık daima kurulu;
           görünürlük araç bazında "Araçlar" ekranından (Tam/Özet/İsim/Gizli) yönetilir. */}
       <Toggle
+        label="Kod-modu (run_code + MCP binding'leri)"
+        hint="Code execution with MCP (_Docs/44): MCP araçları şema yerine üretilmiş Python modülleri olarak sunulur; ajan araçları kod yazarak çağırır, ara veriler bağlama girmez. Kabuk yetkisi de açık olmalı (run_code keyfi kod çalıştırır). Yalnız native tool-loop yolunda; script içi MCP çağrıları izin modundan geçer."
+        checked={draft.enableCodeMode}
+        onChange={(v) => set('enableCodeMode', v)}
+      />
+      {draft.enableCodeMode && !draft.enableShell && (
+        <div className="rounded-lg border border-[var(--color-warning,#f59e0b)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+          ⚠️ <b>Kod-modu kabuk yetkisi olmadan etkisizdir.</b> <code>run_code</code> aracı
+          yalnız "Kabuk (Bash) aracı" da açıkken kaydedilir — yukarıdaki toggle'ı da açın.
+        </div>
+      )}
+      <Toggle
         label="Hook'ları claude-cli'ye geçir"
         hint="Açıkken workspace PreToolUse/PostToolUse hook'ları claude-cli ajanlarına da `--settings` ile uygulanır (yalnız native değil). Uyarı: CLI hook'ları CLI'nin kendi shell'inde koşar; SwarmGo shell'i (PowerShell) için yazılmış bir hook uyumsuz olabilir — sorun çıkarsa kapatın."
         checked={draft.enableCliHooks}

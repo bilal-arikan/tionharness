@@ -50,8 +50,12 @@ graph LR
   `/rewind` komutu (`chatCommands`, ikon ⟲). `rewindTo` görünüm + sunucuyu atomik siler,
   silinen prompt metnini döndürür.
 - `RewindDialog.tsx` — `frontend/src/components/chat/RewindDialog.tsx` (checkpoint picker).
-- `App.tsx`: dialog render + `writeSessionDraft` (silinen promptu composer draft'ına yaz) +
-  `composerKey` bump ile Composer remount (draft yeniden okunur).
+- **Balon hover aksiyonu:** her kullanıcı balonunun altında ⟲ **"Buraya geri sar"** butonu
+  (`RewindButton.tsx`, iki-adımlı onay — `DeleteButton` deseni) → picker açmadan doğrudan o
+  mesaja geri sarar. `UserTurn` → `MessageList` (`onRewind`) → `App`.
+- `App.tsx`: ortak `handleRewind` (dialog + balon aksiyonu ikisi de kullanır) → `rewindTo` +
+  `writeSessionDraft` (silinen promptu composer draft'ına yaz) + `composerKey` bump ile
+  Composer remount (draft yeniden okunur).
 - `writeSessionDraft` — `frontend/src/hooks/useSessionDraft.ts` (hook dışından draft yazımı).
 
 ## Sınırlar
@@ -65,4 +69,3 @@ graph LR
 - **Dosya-restore modu:** tur başına pre-image snapshot (`Write`/`Edit` hook'u,
   `sessions/<id>/checkpoints/`), rewind'de diske geri yaz → 3-mod (kod/sohbet/ikisi).
   Claude Code'daki `fileHistory.ts` deseni.
-- Kullanıcı balonu üzerinde hover "⟲ Buraya geri sar" hızlı aksiyonu.

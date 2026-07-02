@@ -270,6 +270,9 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	wakeMeta.apply(&wReplyMsg, time.Since(wakeStart).Milliseconds())
 	_, err = s.db.AddMessage(ctx, wReplyMsg)
 	s.emitWakeEvent(sc, "done", "⏰ Otomatik uyandırma tamamlandı")
+	// Tag-triggered automations: a wake continues a real chat session, which may be
+	// tagged — signal its completion so an automation can pick up the result.
+	s.rt.FireTurnFinished(sc.SessionID, sc.AgentID, output)
 	return err
 }
 
@@ -466,6 +469,8 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Context-reset handoff: if this scheduled turn hit the context limit, optionally
 	// continue the work in a fresh session. No-op unless HandoffAuto is enabled.
 	s.rt.maybeAutoHandoff(ctx, session.ID, agent, overflow.Load())
+	// Tag-triggered automations: a scheduled delivery's session may be tagged too.
+	s.rt.FireTurnFinished(session.ID, agent.ID, output)
 	return session.ID, err
 }
 

@@ -1,7 +1,7 @@
 // Tasks (kanban board) and cron schedules. The board is a passive status
 // surface: tasks are described, columned and optionally tagged with an agent or
 // flow. It never runs anything — flows, schedules and agent sessions do the work.
-import type { Task, Schedule, BoardState } from '../types'
+import type { Task, Schedule, BoardState, Automation } from '../types'
 import { req } from './client'
 
 export const taskApi = {
@@ -69,6 +69,54 @@ export const taskApi = {
   // Fire a schedule immediately ("Run" button), regardless of enabled state.
   runSchedule: (id: string) =>
     req<Schedule>(`/api/schedules/${id}/run`, { method: 'POST' }),
+  setScheduleTags: (id: string, tags: string[]) =>
+    req<{ id: string; tags: string[] }>(`/api/schedules/${id}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags }),
+    }),
   deleteSchedule: (id: string) =>
     req<{ result: string }>(`/api/schedules/${id}`, { method: 'DELETE' }),
+
+  // Tag-triggered automations (event-driven loops; surfaced in the Schedules UI).
+  listAutomations: () => req<Automation[]>('/api/automations'),
+  createAutomation: (data: {
+    name?: string
+    triggerTag: string
+    targetAgentId: string
+    promptTemplate: string
+    spawnTags?: string[]
+    enabled?: boolean
+    maxIterations?: number
+    cooldownSec?: number
+  }) =>
+    req<Automation>('/api/automations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateAutomation: (
+    id: string,
+    data: {
+      name?: string
+      triggerTag?: string
+      targetAgentId?: string
+      promptTemplate?: string
+      spawnTags?: string[]
+      enabled?: boolean
+      maxIterations?: number
+      cooldownSec?: number
+    },
+  ) =>
+    req<{ id: string; action: string }>(`/api/automations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  toggleAutomation: (id: string, enabled: boolean) =>
+    req<{ id: string; enabled: boolean }>(`/api/automations/${id}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
+  resetAutomation: (id: string) =>
+    req<{ id: string; action: string }>(`/api/automations/${id}/reset`, { method: 'POST' }),
+  deleteAutomation: (id: string) =>
+    req<{ deleted: string }>(`/api/automations/${id}`, { method: 'DELETE' }),
 }

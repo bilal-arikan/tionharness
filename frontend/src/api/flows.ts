@@ -152,6 +152,12 @@ export const flowApi = {
     }),
   deleteFlow: (id: string) =>
     req<{ result: string }>(`/api/flows/${id}`, { method: 'DELETE' }),
+  // Replace a flow's free-form tags (organizational).
+  setFlowTags: (id: string, tags: string[]) =>
+    req<{ id: string; tags: string[] }>(`/api/flows/${id}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags }),
+    }),
   // Absolute path of the flow's on-disk JSON file (copy-to-clipboard).
   flowPath: (id: string) => req<{ path: string }>(`/api/flows/${id}/path`),
   // Open the flow's folder in the OS file manager (local desktop).

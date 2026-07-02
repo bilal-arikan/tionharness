@@ -2,6 +2,9 @@
 
 > Durum: **UYGULANDI** (2026-06-18) — 3 fazın tamamı. Skill sisteminin
 > "progressive disclosure" yaklaşımı built-in + MCP araçlarına taşındı.
+> Tamamlayıcı: [44-CODE-EXECUTION-MCP](44-CODE-EXECUTION-MCP.md) — MCP araçlarını
+> şema yerine üretilmiş Python binding'leri olarak sunan `run_code` kod-modu
+> (occupancy ekseni; tier sistemi deferral eksenini çözer, ikisi birlikte çalışır).
 
 ## Uygulanan davranış (özet)
 
