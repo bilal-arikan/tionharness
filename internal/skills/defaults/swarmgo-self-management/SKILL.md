@@ -58,8 +58,8 @@ deliberately, it is not reversible.
   For sharper delegation, also pass `objective`, `output_format` and `boundaries`
   (all optional) — they are injected as a "Task contract" into the subagent's
   system prompt so it has a clear goal, a required reply shape and explicit scope
-  limits (prevents duplicated work and gaps). Gated by the *Delegation* capability
-  (`enableDelegation`). Use when you need a RESULT back.
+  limits (prevents duplicated work and gaps). Always installed (disable per-agent
+  from the Tools screen). Use when you need a RESULT back.
 - `send_message` — send a direct, addressed message (`{to, message, summary?}`) to
   ANOTHER agent. It lands in that agent's persistent inbox tagged with your name,
   and the agent processes it on its own in the background — you do NOT wait, and

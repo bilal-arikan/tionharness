@@ -93,7 +93,7 @@ Akış:
 **b) Ajan aracı — (kaldırıldı)**
 - `spawn_session` built-in tool'u **native ajan yüzeyinden kaldırıldı** (2026-06-19).
 - Yerine geçen: `run_subagent` ile `wait:"async"` — aynı `SpawnSession` altyapısını
-  kullanır, ama `enableDelegation` ile gated ve profil/agent target destekler.
+  kullanır; daima kurulu (görünürlük araç-bazlı), profil/agent target destekler.
 - claude-cli ajanları async arka plan çalışması için Interaction MCP köprüsünden
   `run_subagent` kullanabilir.
 

@@ -49,22 +49,20 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           düşük input'u (yalnız delta gönderir).
         </div>
       )}
-      <Toggle
-        label="Ajan→ajan delegasyon (run_subagent)"
-        hint="Bir ajan, izole bir alt-ajana (yerleşik profil ya da mevcut bir ajan) alt-görev devredip cevabını bekleyebilir; tek turda paralel de çağrılabilir. Her çağrı tam bir alt-ajan turu koşar (token maliyeti). Yalnızca native/anthropic tool yolunda."
-        checked={draft.enableDelegation}
-        onChange={(v) => set('enableDelegation', v)}
-      />
-      {draft.enableDelegation && (
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Maks. delegasyon derinliği" hint="Zincirin kaç kat iç içe gidebileceği (1–10). Döngü koruması.">
-            <input type="number" min={1} max={10} value={draft.delegationMaxDepth} onChange={(e) => set('delegationMaxDepth', Number(e.target.value))} className={inputCls} />
-          </Field>
-          <Field label="Tur başına maks. delegasyon" hint="Tek kullanıcı turunda toplam run_subagent çağrısı (1–100). Bütçe koruması.">
-            <input type="number" min={1} max={100} value={draft.delegationMaxCalls} onChange={(e) => set('delegationMaxCalls', Number(e.target.value))} className={inputCls} />
-          </Field>
-        </div>
-      )}
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+        <b>Ajan→ajan delegasyon (run_subagent).</b> Bu araç artık daima kuruludur; açıp
+        kapatmayı ajan bazında <b>Araçlar</b> ekranından yaparsınız. Aşağıdaki değerler her
+        delegasyon çağrısında geçerli olan güvenlik/bütçe frenleridir. (Yalnızca
+        native/anthropic tool yolunda çalışır.)
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Maks. delegasyon derinliği" hint="Zincirin kaç kat iç içe gidebileceği (1–10). Döngü koruması.">
+          <input type="number" min={1} max={10} value={draft.delegationMaxDepth} onChange={(e) => set('delegationMaxDepth', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Tur başına maks. delegasyon" hint="Tek kullanıcı turunda toplam run_subagent çağrısı (1–100). Bütçe koruması.">
+          <input type="number" min={1} max={100} value={draft.delegationMaxCalls} onChange={(e) => set('delegationMaxCalls', Number(e.target.value))} className={inputCls} />
+        </Field>
+      </div>
 
       <SubHead icon={Sparkles}>Spawn (arka plan) limitleri</SubHead>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">

@@ -145,8 +145,8 @@ graph LR
 - **`run_subagent` (multiple calls in one turn)** — each `run_subagent` call in
   a single turn runs in parallel (goroutine fan-out, shared atomic budget). Use
   built-in profiles (`explore`/`coder`/`reviewer`) for ephemeral isolated workers,
-  or pass an existing agent name/ID for a persistent agent. Gated by the
-  *Delegation* capability (`enableDelegation`). Concurrency is bounded by
+  or pass an existing agent name/ID for a persistent agent. Always installed
+  (disable per-agent from the Tools screen). Concurrency is bounded by
   `SpawnMaxConcurrent` and `DelegationMaxCalls`.
 - **Physical workspace isolation** — each workspace is a separate `store/` +
   runtime + scheduler. This is SwarmGo's "isolated environment" answer to the

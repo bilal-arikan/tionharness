@@ -53,7 +53,6 @@ type Tunables struct {
 	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
 	cliHooks      bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
 	cliPersist    bool // keep a long-lived claude-cli process per session (off by default, experimental)
-	delegation    bool // gates the agent→agent `run_subagent` tool (off by default)
 	delegMaxDepth int  // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls int  // 0 → DefaultMaxDelegationCalls
 
@@ -141,6 +140,13 @@ type Tunables struct {
 	// (2026-07-01): hidden tools are withheld from the CLI; disable per boot with
 	// SWARMGO_CLI_BRIDGE_SKIP_HIDDEN=0. See clibridge_tunable.go.
 	cliBridgeSkipHidden bool
+
+	// codeMode (POC, _Docs/44) — when true (and the shell gate is on), the MCP
+	// catalog is additionally exposed as generated Python bindings behind the
+	// run_code tool (code execution with MCP: schemas stay out of context,
+	// intermediate data stays in the execution environment). Default FALSE;
+	// enable per boot with SWARMGO_CODE_MODE=1. See codemode_tunable.go.
+	codeMode bool
 }
 
 // DefaultDebugJournalCap mirrors db.DefaultDebugJournalCap as the resolved
@@ -258,23 +264,6 @@ func (t *Tunables) ClaudePersistentSession() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.cliPersist
-}
-
-// SetDelegationEnabled toggles the agent→agent `run_subagent` tool. Off by
-// default: delegation multiplies token cost (each call runs another full agent
-// turn) and lets a single turn fan out across agents. The runner still enforces
-// depth, cycle and per-turn call-budget guards when enabled.
-func (t *Tunables) SetDelegationEnabled(enabled bool) {
-	t.mu.Lock()
-	t.delegation = enabled
-	t.mu.Unlock()
-}
-
-// DelegationEnabled reports whether the run_subagent tool may be offered.
-func (t *Tunables) DelegationEnabled() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.delegation
 }
 
 // SetDelegationLimits sets the per-turn delegation guards: max nesting depth and

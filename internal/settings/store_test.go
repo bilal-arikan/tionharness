@@ -22,18 +22,18 @@ func TestGatedToolFlagsRoundTrip(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 
-	// Fresh store starts from defaults: capabilities off, guards at 3/8.
+	// Fresh store starts from defaults: shell off, delegation guards at 3/8.
+	// (run_subagent itself is always installed; only these per-turn guards persist.)
 	cur := store.Get()
-	if cur.EnableDelegation || cur.EnableShell {
+	if cur.EnableShell {
 		t.Fatalf("gated capabilities must default off, got %+v", cur)
 	}
 	if cur.DelegationMaxDepth != 3 || cur.DelegationMaxCalls != 8 {
 		t.Fatalf("default guards want 3/8, got %d/%d", cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	}
 
-	// Enable delegation with out-of-range guards → clamped to [1,10] / [1,100].
+	// Enable shell + set out-of-range delegation guards → clamped to [1,10] / [1,100].
 	next, err := store.Apply(Patch{
-		EnableDelegation:   ptrBool(true),
 		EnableShell:        ptrBool(true),
 		DelegationMaxDepth: ptrInt(99),
 		DelegationMaxCalls: ptrInt(0),
@@ -41,7 +41,7 @@ func TestGatedToolFlagsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	if !next.EnableDelegation || !next.EnableShell {
+	if !next.EnableShell {
 		t.Fatalf("enable flags did not stick: %+v", next)
 	}
 	if next.DelegationMaxDepth != 10 {
@@ -57,13 +57,13 @@ func TestGatedToolFlagsRoundTrip(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	got := reopened.Get()
-	if !got.EnableDelegation || got.DelegationMaxDepth != 10 || got.DelegationMaxCalls != 1 {
+	if !got.EnableShell || got.DelegationMaxDepth != 10 || got.DelegationMaxCalls != 1 {
 		t.Fatalf("reloaded settings lost values: %+v", got)
 	}
 
-	// DTO exposes the flags to the client.
+	// DTO exposes the guards to the client.
 	dto := got.ToDTO()
-	if !dto.EnableDelegation || dto.DelegationMaxDepth != 10 {
+	if dto.DelegationMaxDepth != 10 {
 		t.Fatalf("DTO missing delegation fields: %+v", dto)
 	}
 }

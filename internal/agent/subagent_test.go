@@ -24,21 +24,18 @@ func runAgentFor(t *testing.T, rt *Runtime, caller db.Agent, st delegState) func
 	return func(spec tools.RunAgentSpec) (tools.RunAgentResult, error) { return run(ctx, spec) }
 }
 
-// TestRunSubagentGate verifies run_subagent is absent until delegation is enabled
-// and present once it is.
-func TestRunSubagentGate(t *testing.T) {
-	rt, tun := newTestRuntime(t, t.TempDir())
+// TestRunSubagentAlwaysInstalled verifies run_subagent is shipped by default
+// (2026-07-02: the app-settings delegation master toggle was removed; the tool is
+// always installed and availability is managed per-tool from the Tools screen).
+func TestRunSubagentAlwaysInstalled(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
 	ctx := context.Background()
 	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "anthropic", MCPEnabled: true})
 	if err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
-	if rt.buildRegistry(ctx, agent).Has("run_subagent") {
-		t.Fatal("run_subagent must be absent when delegation is disabled")
-	}
-	tun.SetDelegationEnabled(true)
 	if !rt.buildRegistry(ctx, agent).Has("run_subagent") {
-		t.Fatal("run_subagent must be present when delegation is enabled")
+		t.Fatal("run_subagent must always be present (per-tool visibility handles disabling)")
 	}
 }
 

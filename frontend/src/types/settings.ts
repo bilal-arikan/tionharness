@@ -97,7 +97,8 @@ export interface AppSettings {
   enableCliHooks: boolean
   claudeResume: boolean
   claudePersistentSession: boolean
-  enableDelegation: boolean
+  // run_subagent is always installed; availability is per-tool from the Tools screen.
+  // These remain as per-turn delegation guards.
   delegationMaxDepth: number
   delegationMaxCalls: number
 

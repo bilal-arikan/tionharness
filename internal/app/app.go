@@ -130,6 +130,16 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	case "1", "true", "on", "yes":
 		tun.SetCLIBridgeSkipHidden(true)
 	}
+	// POC gate (SWARMGO_CODE_MODE, _Docs/44): expose the MCP catalog as generated
+	// Python bindings behind a single run_code tool (code execution with MCP), so
+	// MCP schemas stay out of the context window and intermediate data stays in
+	// the execution environment. Default OFF while we measure; run_code also
+	// requires the shell capability (it executes arbitrary host code).
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("SWARMGO_CODE_MODE"))) {
+	case "1", "true", "on", "yes":
+		tun.SetCodeMode(true)
+		logger.Info("POC: code-execution mode enabled (run_code + generated MCP python bindings)")
+	}
 	// The gated tool capabilities (shell / self-management / agent delegation) are
 	// off by default and now live in the Settings screen (persisted settings.json,
 	// pushed live via applySettings). The legacy SWARMGO_ENABLE_* env vars act as a
@@ -143,13 +153,13 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		}
 		return nil
 	}
-	// SWARMGO_ENABLE_SELFMANAGE was removed 2026-07-01 (self-management is always on;
-	// visibility is per-tool), so it is no longer seeded here.
+	// SWARMGO_ENABLE_SELFMANAGE was removed 2026-07-01 and SWARMGO_ENABLE_DELEGATION
+	// on 2026-07-02 (both are always installed now; visibility is per-tool from the
+	// Tools screen). Only the shell capability is still env-seedable.
 	seed := settings.Patch{
-		EnableShell:      envOn("SWARMGO_ENABLE_SHELL"),
-		EnableDelegation: envOn("SWARMGO_ENABLE_DELEGATION"),
+		EnableShell: envOn("SWARMGO_ENABLE_SHELL"),
 	}
-	if seed.EnableShell != nil || seed.EnableDelegation != nil {
+	if seed.EnableShell != nil {
 		if _, err := settingsStore.Apply(seed); err != nil {
 			logger.Warn("seed enable-flags from env failed", "error", err)
 		} else {

@@ -5,17 +5,19 @@ import (
 	"testing"
 )
 
-// TestDelegation_DisabledToolAbsent confirms the gate: with delegation off
-// (the default), run_subagent is not registered, so a model that tries to call it
-// gets an "unknown tool" error result instead of spinning up a subagent.
-func TestDelegation_DisabledToolAbsent(t *testing.T) {
+// TestDelegation_ToolAlwaysAvailable confirms run_subagent is always installed
+// (2026-07-02: the delegation master toggle was removed; per-tool visibility from
+// the Tools screen handles disabling). A call must reach the runner — NOT bounce
+// with an "unknown tool" error. Targeting a non-existent agent lets us assert the
+// tool ran (and reported target-not-found) without spinning a full subagent turn.
+func TestDelegation_ToolAlwaysAvailable(t *testing.T) {
 	prov := newScriptedProvider(
 		callTools("Delegating.", tc("c1", "run_subagent", map[string]any{
-			"target": "explore", "task": "look around",
+			"target": "ghost-agent", "task": "look around",
 		})),
 		sayText("I'll handle it myself."),
 	)
-	h := newHarness(t, prov) // delegation defaults off
+	h := newHarness(t, prov)
 	ag := h.newAgent("Solo")
 	sess := h.newSession(ag)
 
@@ -25,8 +27,8 @@ func TestDelegation_DisabledToolAbsent(t *testing.T) {
 	if step == nil {
 		t.Fatalf("no run_subagent step in trace: %+v", res.steps)
 	}
-	if !step.IsError || !strings.Contains(step.Output, "unknown tool") {
-		t.Errorf("expected unknown-tool error when delegation is off, got %q (err=%v)", step.Output, step.IsError)
+	if strings.Contains(step.Output, "unknown tool") {
+		t.Errorf("run_subagent must always be registered, got unknown-tool error: %q", step.Output)
 	}
 }
 
@@ -42,7 +44,6 @@ func TestDelegation_EnabledUnknownTargetErrors(t *testing.T) {
 		sayText("That target did not exist."),
 	)
 	h := newHarness(t, prov)
-	h.tun.SetDelegationEnabled(true)
 	ag := h.newAgent("Director")
 	sess := h.newSession(ag)
 

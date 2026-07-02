@@ -2,6 +2,123 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-02**
 
+## Code Execution with MCP — Faz 0: baseline ölçümü ✅ (2026-07-02)
+
+**İstek:** `_Docs/44` §5 Faz 0 — kod-modu kazancını ölçebilmek için gerçek MCP
+ortamında occupancy baseline'ı.
+
+**Yapılan:**
+- **Yeni ölçüm aracı `cmd/measure-codemode`** (main/servers/report): data dizinindeki
+  tüm workspace'lerin etkin MCP sunucularına gerçekten bağlanır (`mcp.ListServerTools`),
+  üç senaryoyu raporlar: eager-full / tier-lazy (bugünkü default) / code-mode.
+  Token tahmini `conversation.EstimateText` (runtime'la aynı). Read-only, tekrar
+  koşulabilir (Faz 3'te aynı araçla karşılaştırılacak).
+- **Gerçek sonuçlar (4 sunucu, 72 araç):** eager-full **67.050 B ≈ 17.049 tok/tur** ·
+  tier-lazy **≈69 tok/tur** (−%99,6; +~236 tok/aktive araç) · code-mode **≈374 tok/tur**
+  (−%97,8; binding'ler diskte 101,7 KB = 0 bağlam). context-mode sunucusu bayat
+  konfig (ulaşılamıyor).
+- **Gerçek kullanım profili (28 oturum, 204 llm_call):** in p50 1.967 · cacheRead
+  p50 68.299 · out p50 515 tok; 336 araç olayının yalnız ~5'i gerçek harici MCP.
+- **Dürüst bulgu:** şema-occupancy'yi tier-lazy zaten çözmüş (69 tok < 374 tok!) —
+  kod-modunun gerçek değeri **aktivasyon churn'ü + ara verinin bağlam dışında kalması
+  + tur sayısı düşüşü**. Faz 3 ölçüm metriği buna göre güncellendi: görev-başına
+  toplam token + tur sayısı + bağlama giren araç-çıktısı baytı (şema tokenı değil).
+  Detay + tablolar: `_Docs/44` §11.
+
+**Sıradaki:** Faz 3 — MCP-yoğun çok-adımlı senaryoda klasik vs kod-modu A/B
+(`turn-debug` ile görev-başına toplam maliyet).
+
+## Code Execution with MCP — Faz 2: per-call izin + gözlemlenebilirlik ✅ (2026-07-02)
+
+**İstek:** `_Docs/44` §5 Faz 2 — kod-modu köprüsünde per-call izin kancası ("ask"
+modda script içi mutasyon çağrıları onay UI'ına düşsün) + per-call gözlemlenebilirliğin
+geri kazanılması (debug.jsonl).
+
+**Yapılan:**
+- **`codemode.Bridge` genişletildi** (`bridge.go`): `Start` artık `Config` alıyor
+  (`Call`/`Allow`/`Gate`/`Observe`). `Gate` dispatch'ten önce çalışır; red, script'e
+  loud `MCPError` (isError=true) olarak döner ve özet "(N denied by permission gate)"
+  sayacı içerir. `Observe` dispatch edilen VE reddedilen her çağrı için
+  `CallObservation{Tool, DurMs, OutBytes, IsError, Denied}` üretir.
+- **`RunCodeTool`** (`builtin_runcode.go`): `RunCodeGate` + `RunCodeObserver` hook'ları;
+  Call ctx'i closure'a bağlanıp köprüye verilir (prompter/grants/session-id ctx'te).
+  Araç açıklamasına "ask modda onay beklemesi timeout'a sayılır" uyarısı eklendi.
+- **Agent bağlantısı** (`toolsetup.go`): gate = native loop'un aynı çağrıya uygulayacağı
+  **`permGate`'in birebir kendisi** (aynı mod, ctx prompter/grants, audit logger —
+  ayrı politika kodu yok, tam parite; standing "always allow" grant'ları script içi
+  çağrılarda da geçerli). Observer = her çağrı için `debug.jsonl`'a `DebugTool` olayı
+  (`Detail: "via run_code"` / `"permission denied (via run_code)"`).
+- **Bilinçli karar:** shell'deki otonom `git push` guard'ının MCP karşılığı eklenmedi
+  (annotation yok, semantik opak) — parite kuralı yeterli: otonom tur native yolda
+  neyi çağırabiliyorsa köprüden de onu çağırır. Gerekçe `_Docs/44` §10'da.
+- **Testler (+4):** gate reddi (dispatcher çalışmaz, observer Denied kaydeder, özet
+  sayar) + gate izni & observer dispatch kaydı (bridge_test) · python ile uçtan uca
+  red → `MCPError` ve observer/özet doğrulaması + dispatch gözlemi (runcode_test).
+  270 test yeşil (codemode/tools/agent) + api 73 yeşil.
+
+**Sıradaki:** Faz 0 baseline ölçümü → Faz 3 çok-server ölçümü → Faz 5 UI trace kartları.
+
+## Code Execution with MCP — Faz 1 PoC (`run_code`) ✅ (2026-07-02)
+
+**İstek:** `_Docs/44-CODE-EXECUTION-MCP.md` planının ilk uygulama fazı — MCP araçlarını
+şema olarak değil, üretilmiş Python binding'leri olarak sunmak (occupancy düşürme).
+
+**Yapılan:**
+- **Yeni paket `internal/codemode`:** `bridge.go` (per-execution loopback HTTP köprüsü —
+  127.0.0.1 rastgele port, rastgele Bearer token, agent tool-filter parity, 200 çağrı/koşu
+  tavanı, 120s per-call timeout, çağrı sayacı/özeti) + `bindings.go` (`.swarmgo/mcp/`
+  altına `_bridge.py` + server-başına Python modülü; docstring = açıklama + input schema;
+  Python identifier sanitizasyonu; her çağrıda sıfırdan regen — bayat stub kalmaz).
+- **Yeni araç `run_code`** (`internal/tools/builtin_runcode.go`): boş script → binding
+  regen + modül/fonksiyon listesi (discovery); script → stripped env
+  (`minimalScriptEnv`) + `PYTHONPATH` + köprü URL/token env'i ile python çalıştırır;
+  yalnız stdout/stderr (16KB cap) + MCP çağrı özeti döner — **veri context'e girmez**.
+  RiskExec (`classify.go`), varsayılan 60s / max 300s timeout.
+- **Gate'ler:** `Tunables.codeMode` (default KAPALI, `SWARMGO_CODE_MODE=1` ile boot'ta
+  açılır — `codemode_tunable.go` + `app.go`) VE `ShellEnabled` VE MCP kataloğu dolu.
+  Kayıt `toolsetup.go` AttachMCP bloğunda; CLI köprüsüne verilmez (`bridgeExcluded` +
+  `cliLazyBridgeExcluded`).
+- **Plandan sapmalar (gerekçeli):** (1) "yalnız read-only MCP araçları" yerine **tool-filter
+  parity** — MCP `Tool` yapısında `readOnlyHint` annotation'ı yok (doğrulandı), heuristik
+  isim filtresi kırılgan; bunun yerine köprü ajanın kendi filtresini uygular + `run_code`
+  RiskExec olduğundan ask modunda bütünüyle onaya düşer, read-only modda bloklanır.
+  (2) Köprü token'ı subprocess'e **env ile** geçer — host secret değil, koşu-başına
+  rastgele, köprüyle birlikte ölür; diske yazmaktan (worktree'ye sızma riski) daha güvenli.
+- **Testler (12 yeni):** `codemode/bridge_test.go` (auth/403/400/429, dispatcher hatası
+  loud, özet), `codemode/bindings_test.go` (sanitizasyon, allow filtresi, regen temizliği),
+  `tools/builtin_runcode_test.go` (discovery, gerçek python ile MCP çağrısı + veri
+  sızmaması, loud failure, script-içi bypass'ın köprüde reddi). `go build ./...` +
+  codemode/tools/agent/api testleri yeşil.
+
+**Sıradaki:** Faz 0 baseline ölçümü (turn-debug ile şema token payı, klasik vs kod-modu
+A/B) → Faz 2 (per-call izin + trace olayları). Detay: `_Docs/44` §5.
+
+## run_subagent: app-settings delegasyon master toggle'ı kaldırıldı ✅ (2026-07-02)
+
+**İstek:** Ayarlar ▸ Geçişli yetenekler'deki "Ajan→ajan delegasyon (run_subagent)"
+toggle'ını kaldır — araç zaten Araçlar ekranından (ajan denylist) aktif/deaktif
+edilebiliyor; ikinci bir master toggle gereksiz.
+
+**Yapılan (self-management master toggle'ının 2026-07-01'de kaldırılmasıyla aynı desen):**
+- **Backend gate kaldırıldı:** `run_subagent` artık **daima kurulu** (native
+  `toolsetup.go`, CLI köprüsü `mcp_interaction.go`, `subagent.go RunSubagentRunner`
+  koşulsuz). `Tunables.delegation`/`SetDelegationEnabled`/`DelegationEnabled` silindi;
+  `settings.EnableDelegation` (3 struct + patch pointer + `applyBool` + `server.go`
+  push + `app.go` env seed `SWARMGO_ENABLE_DELEGATION`) tamamen çıkarıldı. **Kalan
+  frenler:** `delegationMaxDepth` (1–10, vars. 3) + `delegationMaxCalls` (1–100, vars. 8)
+  — her delegasyon çağrısında geçerli güvenlik/bütçe guard'ları.
+- **Frontend:** `AppToolsPanel` toggle'ı bilgi kartıyla değiştirildi (araç Araçlar
+  ekranından yönetilir), derinlik/çağrı limitleri koşulsuz gösteriliyor.
+  `types/settings.ts` + `SettingsPanel.tsx` payload'ından `enableDelegation` alanı kaldırıldı.
+- **Testler:** `TestRunSubagentGate` → `TestRunSubagentAlwaysInstalled` (registry'de
+  daima var); `TestDelegation_DisabledToolAbsent` → `TestDelegation_ToolAlwaysAvailable`
+  (unknown-tool hatası ALMAZ); `store_test`/`subagent_test`/`delegation_e2e_test`
+  `EnableDelegation`/`SetDelegationEnabled(true)` referanslarından temizlendi.
+- **Dokümanlar:** `swarmgo-settings`/`swarmgo-self-management`/`swarmgo-autonomous-ops`
+  skill'leri + `_Docs/11/22/24/25` "gated" ifadelerinden "daima kurulu, görünürlük
+  araç-bazlı"ya güncellendi.
+- **Doğrulama:** `go build` ✅, tüm backend testleri ✅, frontend `tsc --noEmit` ✅.
+
 ## Native anthropic: konuşma geçmişi kayan cache breakpoint'i ✅ (2026-07-02)
 
 **İstek:** Fable 5 cache analizinde tespit edilen fırsat — native anthropic yolunda

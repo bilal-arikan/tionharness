@@ -139,7 +139,6 @@ func (s *Server) applySettings() {
 	s.tun.SetShellEnabled(cur.EnableShell)
 	s.tun.SetCLIHooksEnabled(cur.EnableCLIHooks)
 	s.tun.SetClaudePersistentSession(cur.ClaudePersistentSession)
-	s.tun.SetDelegationEnabled(cur.EnableDelegation)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.GitWorktreeIsolation, cur.AutonomousBootSeq)
@@ -266,6 +265,7 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/sessions/{id}/goal", s.handleSetSessionGoal)
 	mux.HandleFunc("PUT /api/sessions/{id}/state", s.handleSetSessionState)
 	mux.HandleFunc("PUT /api/sessions/{id}/pin", s.handleSetSessionPin)
+	mux.HandleFunc("PUT /api/sessions/{id}/tags", s.handleSetSessionTags)
 	mux.HandleFunc("PUT /api/sessions/{id}/messages/{msgId}/feedback", s.handleSetMessageFeedback)
 	mux.HandleFunc("PUT /api/sessions/{id}/agent", s.handleSetSessionAgent)
 	mux.HandleFunc("GET /api/sessions/{id}/workdir", s.handleGetSessionWorkdir)
@@ -328,7 +328,15 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/schedules/{id}", s.handleUpdateSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/toggle", s.handleToggleSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/run", s.handleRunSchedule)
+	mux.HandleFunc("PUT /api/schedules/{id}/tags", s.handleSetScheduleTags)
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
+	// Tag-triggered automations (event-driven loops), surfaced in the Schedules UI.
+	mux.HandleFunc("GET /api/automations", s.handleListAutomations)
+	mux.HandleFunc("POST /api/automations", s.handleCreateAutomation)
+	mux.HandleFunc("PUT /api/automations/{id}", s.handleUpdateAutomation)
+	mux.HandleFunc("POST /api/automations/{id}/toggle", s.handleToggleAutomation)
+	mux.HandleFunc("POST /api/automations/{id}/reset", s.handleResetAutomation)
+	mux.HandleFunc("DELETE /api/automations/{id}", s.handleDeleteAutomation)
 }
 
 // registerUsageRoutes registers the spend meter + the context meter.
@@ -369,6 +377,7 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flows", s.handleListFlows)
 	mux.HandleFunc("POST /api/flows", s.handleCreateFlow)
 	mux.HandleFunc("PUT /api/flows/{id}", s.handleUpdateFlow)
+	mux.HandleFunc("PUT /api/flows/{id}/tags", s.handleSetFlowTags)
 	mux.HandleFunc("DELETE /api/flows/{id}", s.handleDeleteFlow)
 	// Locate the flow on disk: copy its path or open its folder in Explorer.
 	mux.HandleFunc("GET /api/flows/{id}/path", s.handleFlowPath)

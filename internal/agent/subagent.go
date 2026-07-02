@@ -100,13 +100,10 @@ func (r *Runtime) withRunAgent(ctx context.Context, caller db.Agent, reqPtr *pro
 // bound to the caller agent: it seeds the delegation call-graph + runner into ctx
 // and executes the run_subagent tool, returning its formatted result. There is no
 // live providers.Request on the CLI path, so inherited-context mode degrades to the
-// prompt only (the caller passes any needed context in the task). Returns nil when
-// delegation is disabled — the tool is then neither advertised nor callable on the
-// CLI path, mirroring the native gate (toolsetup).
+// prompt only (the caller passes any needed context in the task). run_subagent is
+// always installed (2026-07-02: the delegation master toggle was removed; per-tool
+// visibility handles disabling), so the runner is always returned.
 func (r *Runtime) RunSubagentRunner(caller db.Agent, autonomous bool) func(ctx context.Context, args json.RawMessage) (string, error) {
-	if !r.tun.DelegationEnabled() {
-		return nil
-	}
 	tool := tools.NewRunSubagentTool()
 	return func(ctx context.Context, args json.RawMessage) (string, error) {
 		ctx = r.withRunAgent(ctx, caller, nil, autonomous)

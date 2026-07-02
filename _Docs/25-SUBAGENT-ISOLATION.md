@@ -150,8 +150,8 @@ Bu yüzden `run_subagent` şemasına **üç opsiyonel alan** eklendi:
   başlatır → SwarmGo'ya görünmez, bridged `run_subagent`'ı baypas eder (`subagent`
   trace yok, SwarmGo ajan/profil hedefi yok, bütçe muhasebesi yok). `climcp.go::
   writeCLIMCPConfig` artık `--disallowedTools` ile `Task` + `Agent`'ı bastırır
-  (delegasyon açıkken `run_subagent` gated muadildir; kapalıyken ajan zaten delege
-  etmemeli). `TodoWrite`/`Skill` ile aynı gölgeleme sınıfı (bkz. `_Docs\36` native
+  (`run_subagent` daima kurulu muadildir — 2026-07-02'den beri gate yok, görünürlük
+  araç-bazlı). `TodoWrite`/`Skill` ile aynı gölgeleme sınıfı (bkz. `_Docs\36` native
   araç gölgeleme notu).
 - **Açık karar (async):** sözleşme şu an yalnız **sync** dalda enjekte edilir (kritik
   izole-sync subagent senaryosu). `async` dal `SpawnSession`'a gider; istenirse

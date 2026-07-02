@@ -227,9 +227,11 @@ type Settings struct {
 	// spawning a fresh process each turn — warm turns ship only the new user
 	// message. Supersedes --resume when on. Default off (experimental). _Docs/17.
 	ClaudePersistentSession bool `json:"claudePersistentSession"`
-	EnableDelegation        bool `json:"enableDelegation"`   // run_subagent (isolated subagents / agent→agent delegation)
-	DelegationMaxDepth      int  `json:"delegationMaxDepth"` // max subagent nesting (0 = default 3)
-	DelegationMaxCalls      int  `json:"delegationMaxCalls"` // max subagent runs per turn (0 = default 8)
+	// run_subagent (isolated subagents / agent→agent delegation) is always installed;
+	// availability is managed per-tool from the Tools screen. These remain as
+	// per-turn safety guards on every delegation call.
+	DelegationMaxDepth int `json:"delegationMaxDepth"` // max subagent nesting (0 = default 3)
+	DelegationMaxCalls int `json:"delegationMaxCalls"` // max subagent runs per turn (0 = default 8)
 
 	// Spawn guards — the detached background surface: run_subagent wait:"async"
 	// (native) and the bridged spawn_session (claude-cli) + the UI spawn button.
@@ -460,7 +462,6 @@ type DTO struct {
 	// reuse + no per-turn startup. Supersedes --resume when on. Default off
 	// (experimental; validate live before enabling). _Docs/17.
 	ClaudePersistentSession bool `json:"claudePersistentSession"`
-	EnableDelegation        bool `json:"enableDelegation"`
 	DelegationMaxDepth      int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls      int  `json:"delegationMaxCalls"`
 
@@ -560,7 +561,6 @@ func (s Settings) ToDTO() DTO {
 		EnableCLIHooks:          s.EnableCLIHooks,
 		ClaudeResume:            s.ClaudeResume,
 		ClaudePersistentSession: s.ClaudePersistentSession,
-		EnableDelegation:        s.EnableDelegation,
 		DelegationMaxDepth:      s.DelegationMaxDepth,
 		DelegationMaxCalls:      s.DelegationMaxCalls,
 
@@ -661,7 +661,6 @@ type Patch struct {
 	EnableCLIHooks          *bool `json:"enableCliHooks"`
 	ClaudeResume            *bool `json:"claudeResume"`
 	ClaudePersistentSession *bool `json:"claudePersistentSession"`
-	EnableDelegation        *bool `json:"enableDelegation"`
 	DelegationMaxDepth      *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls      *int  `json:"delegationMaxCalls"`
 

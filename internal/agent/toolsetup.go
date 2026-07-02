@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bilal-arikan/swarmgo/internal/codemode"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 	"github.com/bilal-arikan/swarmgo/internal/mcp"
 	"github.com/bilal-arikan/swarmgo/internal/providers"
@@ -169,13 +170,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// Subagents: the generic run_subagent tool launches an isolated worker — a
 	// built-in profile (explore/coder/reviewer) or an existing agent — sync or
 	// async, gathering only its final result so a sub-task's tool output never
-	// floods this turn's context. Gated (off by default) because it multiplies
-	// token cost and lets one turn fan out across several subagents; the runner
-	// enforces depth/cycle/budget/concurrency guards. Eager (always shipped) so the
-	// model reaches for it readily.
-	if r.tun.DelegationEnabled() {
-		builtins = append(builtins, tools.NewRunSubagentTool())
-	}
+	// floods this turn's context. Always shipped (like self-management, 2026-07-01):
+	// availability is managed per-tool from the Tools screen (denylist), not by an
+	// app-settings master toggle; the runner still enforces depth/cycle/budget/
+	// concurrency guards on every call.
+	builtins = append(builtins, tools.NewRunSubagentTool())
 
 	// Cross-session awareness: the list_sessions pull tool (complements the pushed
 	// context block). Gated per-workspace by the same master toggle.
@@ -372,6 +371,46 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			return r.mcpPool.Call(cctx, cfgByServer, namespaced, args)
 		}
 		reg.AttachMCP(entries, cfgByServer, caller)
+
+		// Code-execution mode (POC, _Docs/44): expose the MCP catalog as generated
+		// Python bindings behind a single run_code tool, so tool schemas stay OUT of
+		// the context window and intermediate data stays in the execution
+		// environment. Gated like the other code-exec tools (ShellEnabled) plus its
+		// own opt-in toggle; the bridge re-applies this agent's tool filter, so code
+		// mode grants no tool the agent could not call directly. Native path only —
+		// the CLI bridge excludes it (bridgeExcluded).
+		if r.tun.CodeModeEnabled() && r.tun.ShellEnabled() && sb.Ready() && len(entries) > 0 {
+			// Faz 2 hooks. Gate: the EXACT decision the native tool loop makes for a
+			// direct call of the same tool in the same turn — permGate with this
+			// agent's mode, the ctx-carried prompter/grants, and the audit logger. So
+			// "ask" prompts per in-script mutation (with standing grants honoured),
+			// "read-only" blocks (defense-in-depth: run_code itself is already
+			// blocked there), autonomous ask-turns without a prompter deny — full
+			// parity, no separate policy to maintain.
+			gate := func(cctx context.Context, tool string, args json.RawMessage) (bool, string) {
+				return permGate(withPermLogger(cctx, r.logger), agent.PermissionMode,
+					providers.ToolCall{Name: tool, Input: args})
+			}
+			// Observer: one debug-journal tool event per in-script MCP call, so the
+			// per-message debug panel lists them exactly like native tool calls —
+			// the observability that folding N calls into one run_code card loses.
+			observe := func(cctx context.Context, ob codemode.CallObservation) {
+				detail := "via run_code"
+				if ob.Denied {
+					detail = "permission denied (via run_code)"
+				}
+				r.emitDebug(cctx, db.DebugEvent{
+					Type:     db.DebugTool,
+					AgentID:  agent.ID,
+					Name:     ob.Tool,
+					DurMs:    ob.DurMs,
+					OutBytes: ob.OutBytes,
+					Err:      ob.IsError,
+					Detail:   detail,
+				})
+			}
+			reg.Add(tools.NewRunCodeTool(sb, entries, caller, r.toolFilter(ctx, agent), gate, observe))
+		}
 	}
 
 	// Per-tool visibility overrides (applied LAST so each wins over every code
@@ -500,6 +539,7 @@ var cliLazyBridgeExcluded = map[string]bool{
 	"WebFetch":     true, // CLI has its own native WebFetch
 	"WebSearch":    true, // CLI has its own native WebSearch (defensive: eager, so not normally lazy)
 	"run_subagent": true, // bridged explicitly via interactionToolSpecs, not the lazy path
+	"run_code":     true, // code-execution mode is native-path-only (mirrors tools.bridgeExcluded)
 	// deactivate_tools is a SwarmGo-native meta-tool (paired with activate_tools);
 	// the CLI uses its OWN ToolSearch, so this is never bridged — keep it out of the
 	// CLI catalog even though it is name-only on the native path.

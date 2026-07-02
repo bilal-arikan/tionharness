@@ -209,13 +209,12 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 	// self-manage master toggle was removed). The per-turn spawn tool is installed
 	// on each run by the stream handler.
 	defs = append(defs, tools.NewSpawnSessionTool("", 0, nil).Def())
-	// run_subagent is bridged only when delegation is enabled, mirroring the native
-	// tool loop's gate. Unlike spawn_session (fire-and-forget into a separate
-	// session), it runs a subagent synchronously and returns its answer into THIS
-	// turn — the CLI agent's "ask another agent and get the result back now" path.
-	if tun != nil && tun.DelegationEnabled() {
-		defs = append(defs, tools.NewRunSubagentTool().Def())
-	}
+	// run_subagent is always bridged now (2026-07-02: the delegation master toggle
+	// was removed; per-tool visibility handles disabling), mirroring the native tool
+	// loop. Unlike spawn_session (fire-and-forget into a separate session), it runs a
+	// subagent synchronously and returns its answer into THIS turn — the CLI agent's
+	// "ask another agent and get the result back now" path.
+	defs = append(defs, tools.NewRunSubagentTool().Def())
 	specs := make([]interaction.ToolSpec, 0, len(defs)+1)
 	for _, d := range defs {
 		// On autonomous turns, omit the interactive tools that need a live user —

@@ -275,9 +275,10 @@ ctx'inde seed'li değildi. Çözüm shell/spawn desenini izler: `Runtime.RunSuba
 deleg call-graph'ını + runner'ı ctx'e seed edip `RunSubagentTool.Call`'u çalıştırır;
 stream handler (`setRunAgent`) ve autonomous kurulum bunu `chatRun`'a takar; `Call()`
 dispatch `run_subagent` adıyla `callRunSubagent`'a yönlendirir. **Senkron** çalışır:
-HTTP isteği subagent bitene dek bloklar ve final cevabı döndürür. Yalnızca
-`DelegationEnabled()` açıkken ilan/dispatch edilir (native gate ile aynı). CLI yolunda
-canlı `providers.Request` olmadığından *inherited-context* modu yalnız prompt'a düşer.
+HTTP isteği subagent bitene dek bloklar ve final cevabı döndürür. **Daima** ilan/dispatch
+edilir (2026-07-02: `enableDelegation` master toggle'ı kaldırıldı; görünürlük araç-bazlı
+Araçlar ekranından). CLI yolunda canlı `providers.Request` olmadığından *inherited-context*
+modu yalnız prompt'a düşer.
 
 **`core_memory_replace`/`core_memory_append` + `conversation_search` — CLI köprüsüne eklendi (2026-06-22):**
 Bu üç araç **eager** built-in (native'de her turda hazır) ve native-loop ctx bağımlılığı
