@@ -19,7 +19,7 @@
 
 ### providers: `NewBuiltinKind`
 - `internal/providers/kind.go`: data-driven `basicKind` + `NewBuiltinKind(manifest, available, build)`.
-- **6 kind_*.go** (anthropic/claude-cli/minimax/minimax-anthropic/openrouter/antigravity) her biri kendi struct tipi + 3 metot yerine tek self-registering `init()`'e indirgendi. Yeni transport = tek `init()` bloğu.
+- **5 kind_*.go** (anthropic/claude-cli/minimax/minimax-anthropic/openrouter) her biri kendi struct tipi + 3 metot yerine tek self-registering `init()`'e indirgendi. Yeni transport = tek `init()` bloğu.
 
 ## Faz 2 — Ortak yapı taşları + God-fonksiyon bölme
 

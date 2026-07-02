@@ -209,7 +209,6 @@ Her CLI'nin kendi mcp-config formatı + built-in-disable bayrağı var. Ortak ç
 |-----|------------------|------------|------------|----------------------|----------------------|
 | **claude-cli** (ilk hedef) | `providers/claudecli.go` + `agent/climcp.go` | `--mcp-config` JSON (temp) | `type:"http"`, `url` | `headers:{Authorization}` | `--disallowedTools AskUserQuestion TodoWrite` *(doğrulandı)* |
 | **Codex CLI** | (yeni) `codexcli.go` | `config.toml` `[mcp_servers]` (veya `--config`) | `url` | `bearer_token_env_var` → env | doğrulanacak (Codex'in built-in ask'i farklı) |
-| **Gemini CLI** | (yeni) `geminicli.go` | `settings.json` `mcpServers` | **`httpUrl`** (standart dışı) | `headers` | doğrulanacak |
 | **Mistral Vibe** | (yeni) `vibecli.go` | Vibe MCP config | doğrulanacak | doğrulanacak | doğrulanacak |
 
 > İlk fazda **yalnız claude-cli** kablolanır. Diğer CLI'lar için provider + adaptör
@@ -376,7 +375,7 @@ allowlist ikisi de aynı koşula uyar.) Değişmez: `mcp_interaction_test.go`
 - `_Docs/09-CLAUDE-AGENT-SDK.md` + `SKILL.md` — yeni mimari notu.
 
 **İleride (CLI başına, ayrı iş):**
-- `internal/providers/codexcli.go` · `geminicli.go` · `vibecli.go` — her biri kendi MCP config yazıcısı + döngü shell-out'u; Interaction MCP server'ı ortak kullanır.
+- `internal/providers/codexcli.go` · `vibecli.go` — her biri kendi MCP config yazıcısı + döngü shell-out'u; Interaction MCP server'ı ortak kullanır.
 
 ---
 
@@ -823,5 +822,4 @@ da erteleniyordu → ilk turda `No such tool available`.
 ## Dış referanslar (2026-06 doğrulandı)
 - MCP Streamable HTTP transport spec — `Mcp-Session-Id`, protokol sürümü
 - OpenAI Codex CLI — MCP `config.toml` `[mcp_servers]`, yalnız Streamable HTTP (`url` + `bearer_token_env_var`), SSE deprecated
-- Google Gemini CLI — `settings.json` `mcpServers`, Streamable HTTP için `httpUrl`, `headers` desteği
 - Mistral Vibe v2.0 (27 Oca 2026) — MCP desteği eklendi (`mistralai/mistral-vibe`)

@@ -43,7 +43,7 @@ type searchBackend interface {
 // WebSearchTool runs a web search and returns ranked results (title, URL,
 // snippet) as Markdown. It is the native counterpart of the claude-cli WebSearch
 // tool, provided to every provider that does NOT ship its own (anthropic API,
-// minimax, openrouter, antigravity). The claude-cli path keeps its built-in
+// minimax, openrouter). The claude-cli path keeps its built-in
 // WebSearch, so this tool is deliberately NOT registered there.
 //
 // The backend is chosen at call time from the workspace vault, so no key is

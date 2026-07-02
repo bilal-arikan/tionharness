@@ -1,6 +1,6 @@
 // Package interaction implements the SwarmGo Interaction MCP server: a minimal
 // MCP-over-HTTP (Streamable HTTP) endpoint that lets agent CLIs which run their
-// own agentic loop (claude-cli first; Codex/Gemini/Vibe later) call SwarmGo's
+// own agentic loop (claude-cli first; Codex/Vibe later) call SwarmGo's
 // human-in-the-loop tools (ask_user, todo_write, ...) and have them surface in
 // the SwarmGo UI — the same behaviour the native (anthropic/minimax) tool path
 // already provides via a context bridge. See _Docs/11-INTERACTION-MCP.md.

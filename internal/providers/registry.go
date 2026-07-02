@@ -2,7 +2,6 @@ package providers
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -36,8 +35,6 @@ type Registry struct {
 	claudeConfigDir    string // CLAUDE_CONFIG_DIR override for claude-cli, or "" to inherit ~/.claude
 	claudeAuthKind     string // claude-cli credential kind: "oauth" | "apikey" | ""
 	claudeAuthToken    string // claude-cli credential value injected into the subprocess env
-	antigravityCLIPath string // resolved path to `agy` binary, or "" if absent
-	antigravityKey     string // ANTIGRAVITY_API_KEY injected into agy subprocesses ("" = inherit ambient)
 	defaultModel       string // applied when a request leaves Model empty
 
 	betaExtendedCache bool // anthropic extended prompt-cache TTL beta
@@ -52,62 +49,15 @@ type Registry struct {
 	customOrder []string              // ids in catalog order
 }
 
-// NewRegistry creates a registry. It auto-detects the claude and agy
-// (Antigravity) CLIs on PATH and seeds the Antigravity API key from the ambient
-// ANTIGRAVITY_API_KEY so the provider works out of the box; Settings can later
-// override the key.
+// NewRegistry creates a registry. It auto-detects the claude CLI on PATH so the
+// keyless claude-cli provider works out of the box; Settings can later override
+// paths and keys.
 func NewRegistry(anthropicKey string) *Registry {
 	claudePath, _ := exec.LookPath("claude")
 	return &Registry{
-		anthropicKey:       anthropicKey,
-		claudeCLIPath:      claudePath,
-		antigravityCLIPath: findAgy(),
-		antigravityKey:     os.Getenv("ANTIGRAVITY_API_KEY"),
+		anthropicKey:  anthropicKey,
+		claudeCLIPath: claudePath,
 	}
-}
-
-// findAgy resolves the agy binary: PATH first, then the installer's default
-// per-user location (the installer adds it to the User PATH registry, which a
-// process started before the next shell launch may not yet see).
-func findAgy() string {
-	if p, err := exec.LookPath("agy"); err == nil {
-		return p
-	}
-	if local := os.Getenv("LOCALAPPDATA"); local != "" {
-		cand := local + `\agy\bin\agy.exe`
-		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
-			return cand
-		}
-	}
-	return ""
-}
-
-// SetAntigravityCLIPath overrides the agy binary path. An empty value re-runs
-// auto-detection so clearing the override restores default behaviour.
-func (r *Registry) SetAntigravityCLIPath(path string) {
-	if path == "" {
-		path = findAgy()
-	}
-	r.mu.Lock()
-	r.antigravityCLIPath = path
-	r.mu.Unlock()
-}
-
-// SetAntigravityKey sets the ANTIGRAVITY_API_KEY injected into agy subprocesses.
-// An empty value falls back to the ambient environment (set at NewRegistry).
-func (r *Registry) SetAntigravityKey(key string) {
-	r.mu.Lock()
-	if key != "" {
-		r.antigravityKey = key
-	}
-	r.mu.Unlock()
-}
-
-// AntigravityCLIAvailable reports whether the agy CLI was found.
-func (r *Registry) AntigravityCLIAvailable() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.antigravityCLIPath != ""
 }
 
 // SetAnthropicKey updates the API key used by the anthropic provider.
@@ -286,8 +236,6 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 		CLIAuthKind:        r.claudeAuthKind,
 		CLIAuthToken:       r.claudeAuthToken,
 		ExtendedCache:      r.betaExtendedCache,
-		AntigravityCLIPath: r.antigravityCLIPath,
-		AntigravityKey:     r.antigravityKey,
 	}
 	switch id {
 	case "anthropic":

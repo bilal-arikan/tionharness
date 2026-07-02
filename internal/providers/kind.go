@@ -43,9 +43,6 @@ type ResolvedConfig struct {
 	CLIAuthKind   string // claude-cli credential kind: "oauth" | "apikey" | "" (none)
 	CLIAuthToken  string // claude-cli credential value injected into the subprocess env
 	ExtendedCache bool   // anthropic extended prompt-cache beta
-
-	AntigravityCLIPath string // resolved `agy` binary path (antigravity-cli)
-	AntigravityKey     string // ANTIGRAVITY_API_KEY injected into the agy subprocess ("" = inherit ambient)
 }
 
 // ProviderKind is one transport "plugin": it describes itself (Manifest),

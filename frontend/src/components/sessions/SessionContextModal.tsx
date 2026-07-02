@@ -109,7 +109,7 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
           </div>
         )}
 
-        {/* CLI-wrapper overhead warning: TotalTokens under-reports for claude-cli/gemini-cli */}
+        {/* CLI-wrapper overhead warning: TotalTokens under-reports for claude-cli */}
         {data?.cliOverhead && (
           <div className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-5 py-2 text-[11px]">
             <div className="flex flex-wrap items-center gap-2">

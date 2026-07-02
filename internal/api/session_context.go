@@ -30,12 +30,12 @@ type sessionContextPreview struct {
 	ToolTokens    int              `json:"toolTokens"`
 	TotalTokens   int              `json:"totalTokens"`
 	Cache         cachePreview     `json:"cache"`
-	// CLIOverhead is set only for CLI-wrapper providers (claude-cli / antigravity-cli),
+	// CLIOverhead is set only for CLI-wrapper providers (claude-cli),
 	// where TotalTokens above under-reports the real billed input — see the type doc.
 	CLIOverhead *cliOverheadPreview `json:"cliOverhead,omitempty"`
 }
 
-// cliOverheadPreview surfaces, for CLI-wrapper providers (claude-cli, antigravity-cli),
+// cliOverheadPreview surfaces, for CLI-wrapper providers (claude-cli),
 // the gap between SwarmGo's own segment estimate (TotalTokens) and the real prompt
 // the underlying CLI actually sends to the model. The CLI injects its OWN system
 // prompt + tool schemas + MCP bridge that SwarmGo never composes or sees, so for
@@ -279,21 +279,18 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// computeCLIOverhead derives the CLI-wrapper overhead preview for claude-cli /
-// antigravity-cli agents (nil for native providers). The real billed input is measured
+// computeCLIOverhead derives the CLI-wrapper overhead preview for claude-cli
+// agents (nil for native providers). The real billed input is measured
 // from the session's recorded lifetime usage (input + cacheRead + cacheWrite,
 // averaged per call) and compared against SwarmGo's own segment estimate, so the
 // UI can warn that TotalTokens excludes the CLI's injected prompt + tools + MCP
 // bridge. Returns a populated (overhead-0) preview with a "not measured yet" note
 // when the session has no recorded calls.
 func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider, sessionID string, estimated int) *cliOverheadPreview {
-	if provider != "claude-cli" && provider != "antigravity-cli" {
+	if provider != "claude-cli" {
 		return nil
 	}
 	name := "claude-cli (Claude Code)"
-	if provider == "antigravity-cli" {
-		name = "antigravity-cli (agy)"
-	}
 
 	measured, calls := 0, 0
 	// Most accurate next-turn projection: the REAL input of the most recent llm_call
