@@ -2,6 +2,31 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-02**
 
+## Code Execution with MCP — Faz 3: canlı A/B ölçümü ✅ (2026-07-02)
+
+**İstek:** `_Docs/44` §5 Faz 3 — klasik tool-loop vs kod-modu, gerçek LLM + gerçek
+MCP sunucusuyla uçtan uca karşılaştırma.
+
+**Düzenek:** Geçici ikinci SwarmGo instance'ı (ayrı port + temp data dir — canlı
+örneğe dokunulmadı), native ajan **minimax-anthropic/MiniMax-M3** (anthropic
+anahtarı geçersiz çıktı), gerçek `sqz-mcp`; görev: 5 dizinin girdi sayımı
+(ground truth 336). Metrikler `debug.jsonl`.
+
+**Sonuç (özet — tam tablo `_Docs/44` §12):**
+- **A klasik:** ✅ 336 · 3 iterasyon · in+out 19.098 tok · bağlama 4.366 B araç çıktısı · 7,3 s
+- **B1 kod (naif):** ❌ **533 — yanlış!** Script sıkıştırılmış dönüşü `len()` ile
+  saydı; model veriyi görmediği için fark edemedi → **§7 doğruluk riski canlı
+  doğrulandı** (ölçümün en değerli çıktısı). Doğru olsaydı: in+out −%13, bağlama
+  giren araç verisi −%91 (373 B).
+- **B2 kod (format-bilinçli):** ✅ 336 · 10 iterasyon · 7 run_code · 25 köprü çağrısı ·
+  in+out 22.239 · 55 s — model sqz formatını script içinden keşfetti (`expand(hash)`),
+  binding docstring'ini Read'le okudu; on-demand tanım okuma tasarımı sahada çalıştı.
+- **Zincir uçtan uca doğrulandı:** Settings toggle canlı → run_code kaydı → binding +
+  köprü + izin + `via run_code` debug olayları + katlanabilir trace kartı (5 alt satır).
+- **Dürüst not:** sqz-mcp kod-moduna en aleyhte senaryo (çıktılar zaten sıkışık);
+  büyük-çıktılı tekrar (mcp-chrome/playwright) sıradaki hedef. `run_code`
+  açıklamasına "opak dönüşte önce küçük örnek print et" nudge'ı önerildi.
+
 ## Etiketler + Etiket-Tetikleyicili Otomasyonlar ✅ (2026-07-02)
 
 **İstek:** (1) Sohbet/flow/schedule kayıtlarına etiket (tag) ekleyebilmek — hem

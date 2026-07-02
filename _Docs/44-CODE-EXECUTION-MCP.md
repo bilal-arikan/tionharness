@@ -1,8 +1,8 @@
 # 44 — Code Execution with MCP (Fizibilite + Faz Planı)
 
-> **Durum:** Faz 0 (baseline ölçümü, §11) + Faz 1 PoC + Faz 2 (per-call izin +
-> gözlemlenebilirlik) **tamamlandı** (2026-07-02, `SWARMGO_CODE_MODE=1` ile opt-in —
-> bkz. §10). Faz 3+ açık; ölçüm odağı §11'deki bulguya göre güncellendi.
+> **Durum:** Faz 0 (baseline, §11) + Faz 1 PoC + Faz 2 (per-call izin +
+> gözlemlenebilirlik) + Settings/UI + **Faz 3 A/B ölçümü (§12)** tamamlandı
+> (2026-07-02). Açık kalan: büyük-çıktılı senaryo tekrarı + doğruluk nudge'ı (§12 sonu).
 > **Tarih:** 2026-07-02 · **İlgili:** [17-TOKEN-OPTIMIZASYON](17-TOKEN-OPTIMIZASYON.md) ·
 > [19-LAZY-TOOL-LOADING](19-LAZY-TOOL-LOADING.md) · [24-SELF-MANAGEMENT](24-SELF-MANAGEMENT.md) ·
 > [25-SUBAGENT-ISOLATION](25-SUBAGENT-ISOLATION.md) · [38-SESSION-DEBUG](38-SESSION-DEBUG.md)
@@ -471,6 +471,71 @@ kod-modunun gerçek değeri bu ortamda şema tasarrufu DEĞİL; üç başka ekse
 **görev-başına toplam token (in+out) + tur sayısı + bağlama giren araç-çıktısı
 baytı** olmalı — MCP-yoğun, çok-adımlı bir senaryoda (ör. mcp-chrome/playwright ile
 50+ satır listeleme→filtreleme→toplama akışı).
+
+---
+
+## 12. Faz 3 A/B Ölçüm Sonuçları (2026-07-02) ✅
+
+**Düzenek:** Kullanıcının canlı örneğine dokunmadan, aynı koddan derlenen **geçici
+ikinci instance** (ayrı port + geçici data dizini, `credential-secret` +
+`settings.json` kopyası). Native tool-loop ajanı: **minimax-anthropic / MiniMax-M3**
+(anthropic anahtarı geçersiz çıktı — mevcut çalışan native kurulum bu). MCP:
+gerçek `sqz-mcp` (stdio). Görev (tüm koşularda aynı): *"5 dizinin (internal/agent,
+tools, api, db, mcp) girdi sayısını sqz_list_dir ile bul; yalnız tablo + toplam
+raporla, listeleri yapıştırma."* Kod-modu koşularında prompt `run_code` kullanmayı
+açıkça söylüyor (belgelenmiş fark). İzin modu `auto`. Metrikler `debug.jsonl`'dan.
+
+### Sonuç tablosu (ground truth: 74+109+94+51+8 = **336**)
+
+| Metrik | A — klasik | B1 — kod (naif) | B2 — kod (format-bilinçli) |
+|--------|-----------|------------------|----------------------------|
+| **Sonuç doğruluğu** | ✅ 336 | ❌ **533 (yanlış!)** | ✅ 336 |
+| LLM iterasyonu | 3 | 2 | 10 |
+| input token (uncached) | 18.761 | 16.370 | 19.551 |
+| output token | 337 | 282 | 2.688 |
+| **görev toplamı (in+out)** | **19.098** | 16.652 | 22.239 |
+| cacheRead | 31.104 | 16.640 | 168.064 |
+| MCP çağrısı | 5 | 5 | 25 (13 list + 11 expand + 1 diğer) |
+| Bağlama giren araç çıktısı | 4.366 B (ham listeler) | 373 B (yalnız stdout) | ~2,6 KB (stdout, 7 run_code) |
+| Süre | 7,3 s | 5,3 s | 55,5 s |
+
+### Bulgular (dürüst okuma)
+
+1. **Doğruluk riski (§7) canlı doğrulandı — bu ölçümün en değerli çıktısı.** B1'de
+   script argümanları doğruydu ama dönüş *sıkıştırılmış metin*di; script `len()`
+   ile **karakter saydı**, model veriyi hiç görmediği için 533'ü kendinden emin
+   raporladı. Klasik yol aynı hatayı yapamaz — model çıktıyı gördüğü için doğal
+   self-correction var. Kod-modunda bunun bedeli ya format-bilinçli prompt (B2) ya
+   da Faz 4+ için bir "sonuç doğrulama" nudge'ı.
+2. **Bu senaryo kasıtlı olarak kod-moduna en aleyhte senaryoydu:** `sqz-mcp` zaten
+   token-sıkıştırma sunucusu — klasik yolda bağlama giren çıktı yalnız 4,4 KB'tı.
+   Buna rağmen B1 (script doğru olsaydı) görev toplamında **−%13** öndeydi ve
+   bağlama giren araç verisi 4.366 B → 373 B'ye (−%91) düştü. Çıktısı büyük
+   sunucularda (mcp-chrome DOM dökümleri, playwright snapshot'ları) fark
+   dramatik büyür — Faz 3 devamı için doğru hedef senaryo budur.
+3. **B2 = kod-modunun gerçek agentic akışı:** model 7 `run_code` denemesiyle sqz
+   formatını script içinden keşfetti (`expand(hash)` semantiğini kendisi çözdü),
+   binding docstring'ini `Read` ile okudu — tanımın on-demand okunması tasarımı
+   sahada çalıştı. Maliyet: 10 iterasyon, cacheRead 168K (ucuz ama iterasyon
+   sayısının aynası) ve 55 s.
+4. **Faz 1-2-UI zinciri uçtan uca sahada doğrulandı:** Settings toggle canlı
+   (`PUT /api/settings` → `run_code` anında kayıtlı), binding üretimi + köprü +
+   izin (auto) + `via run_code` debug olayları + **katlanabilir trace kartı**
+   (`subagent` kind, 5 alt-satır "result stays in the script") hepsi gerçek
+   koşuda görüldü.
+
+### Sınırlılıklar
+
+- Tek görev, tek model (MiniMax-M3 — Claude değil; Python yazım kalitesi modele
+  bağlı), küçük çıktılı MCP sunucusu, B prompt'ları run_code'u açıkça istiyor.
+- `cacheRead` karşılaştırması provider'ın cache muhasebesine bağlı; kesin metrik
+  in+out + bağlama giren araç-çıktısı baytı.
+
+**Sonraki adım (Faz 3 devamı):** Aynı düzeneği büyük-çıktılı senaryoyla tekrarla
+(mcp-chrome/playwright: sayfa gezinme + N eleman çıkarma + toplama) — beklenti:
+klasik yolda çıktılar bağlamı domine eder, kod-modu farkı belirginleşir. Ayrıca
+`run_code` açıklamasına "opak/yapılandırılmamış dönüşlerde önce küçük bir örneği
+print edip formatı doğrula" nudge'ı eklenebilir (B1 hatasını sistemik önler).
 
 ---
 
