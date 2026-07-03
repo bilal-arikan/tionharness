@@ -154,6 +154,39 @@ func TestGrepRGFastPath(t *testing.T) {
 	}
 }
 
+// TestGrepRGGoParity locks byte-for-byte parity between the ripgrep fast path and
+// the Go engine across the main modes (incl. a CRLF file and context), so the
+// --sort/CRLF normalisation never regresses. Skipped when rg is absent.
+func TestGrepRGGoParity(t *testing.T) {
+	if rgExe() == "" {
+		t.Skip("ripgrep (rg) not on PATH")
+	}
+	sb := NewSandbox(t.TempDir())
+	_ = os.MkdirAll(filepath.Join(sb.Root, "a"), 0o755)
+	// Mixed line endings: bcrlf.go uses CRLF, others LF.
+	_ = os.WriteFile(filepath.Join(sb.Root, "a", "lf.go"), []byte("package a\nfunc One() {}\nfunc Two() {}\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(sb.Root, "bcrlf.go"), []byte("package main\r\nfunc One() {}\r\nfunc Three() {}\r\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(sb.Root, "c.md"), []byte("One two\nfunc-ish One\n"), 0o644)
+
+	cases := []map[string]any{
+		{"pattern": "func One"},
+		{"pattern": "func", "output_mode": "count"},
+		{"pattern": "func", "output_mode": "files_with_matches"},
+		{"pattern": "One", "-B": 1, "-A": 1},
+		{"pattern": "func", "type": "go"},
+		{"pattern": "one", "-i": true, "-n": false},
+	}
+	for i, c := range cases {
+		rgOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, c))
+		t.Setenv("SWARMGO_GREP_NO_RG", "1")
+		goOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, c))
+		os.Unsetenv("SWARMGO_GREP_NO_RG")
+		if rgOut != goOut {
+			t.Errorf("case %d (%v) parity mismatch\nrg:\n%q\ngo:\n%q", i, c, rgOut, goOut)
+		}
+	}
+}
+
 func TestGlobPathArg(t *testing.T) {
 	sb := setupTree(t)
 	g := NewFSGlobTool(sb)

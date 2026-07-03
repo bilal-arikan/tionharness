@@ -231,6 +231,9 @@ func walkGrepFiles(root string, args grepArgs, want func(string) bool) ([]string
 		files = append(files, p)
 		return nil
 	})
+	// Lexical path order so content output is deterministic and matches the rg fast
+	// path (rg is run with --sort path).
+	sort.Strings(files)
 	return files, root, err
 }
 
@@ -326,7 +329,10 @@ func grepContent(files []string, root string, re *regexp.Regexp, args grepArgs, 
 			emitted, capped = grepEmitMultiline(&b, rel, content, re, showNums, args.OnlyMatch, emitted, limit)
 			continue
 		}
-		emitted, capped = grepEmitLines(&b, rel, content, re, showNums, args.OnlyMatch, before, after, emitted, limit)
+		// With context on, ripgrep prints a "--" separator between the groups of
+		// different files too; sepBefore triggers that once a prior file has emitted.
+		sepBefore := (before > 0 || after > 0) && emitted > 0
+		emitted, capped = grepEmitLines(&b, rel, content, re, showNums, args.OnlyMatch, before, after, sepBefore, emitted, limit)
 	}
 	if emitted == 0 {
 		return "No matches."
@@ -341,8 +347,13 @@ func grepContent(files []string, root string, re *regexp.Regexp, args grepArgs, 
 // grepEmitLines renders per-line matches for one file with optional context,
 // merging overlapping context windows. Returns the running emitted count and whether
 // the head limit was reached.
-func grepEmitLines(b *strings.Builder, rel, content string, re *regexp.Regexp, showNums, onlyMatch bool, before, after, emitted, limit int) (int, bool) {
+func grepEmitLines(b *strings.Builder, rel, content string, re *regexp.Regexp, showNums, onlyMatch bool, before, after int, sepBefore bool, emitted, limit int) (int, bool) {
 	lines := strings.Split(content, "\n")
+	// Drop the empty element a trailing newline leaves, so after-context near EOF
+	// doesn't emit a phantom blank line (rg doesn't either).
+	if n := len(lines); n > 0 && lines[n-1] == "" {
+		lines = lines[:n-1]
+	}
 	prevEnd := -1 // last line index emitted, for '--' separators and merge
 	for i, line := range lines {
 		if !re.MatchString(line) {
@@ -360,6 +371,8 @@ func grepEmitLines(b *strings.Builder, rel, content string, re *regexp.Regexp, s
 				start = prevEnd + 1 // contiguous: continue without a separator
 			} else if prevEnd >= 0 {
 				b.WriteString("--\n")
+			} else if sepBefore {
+				b.WriteString("--\n") // separator before this file's first group
 			}
 		}
 		for j := start; j <= end; j++ {

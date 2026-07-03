@@ -121,8 +121,10 @@ func (t FSGrepTool) rgTarget(args grepArgs) (dir, target string, ok bool) {
 func buildRGArgs(args grepArgs, mode, target string) ([]string, bool) {
 	// --no-require-git makes rg honour .gitignore even outside a git repo (matching
 	// the Go IgnoreSet); --hidden searches dotfiles (rg still auto-skips .git);
-	// --path-separator / normalises Windows backslashes to the Go convention.
-	out := []string{"--color", "never", "--no-require-git", "--hidden", "--path-separator", "/"}
+	// --path-separator / normalises Windows backslashes to the Go convention;
+	// --sort path forces deterministic, lexical file order matching the Go engine's
+	// WalkDir order (rg is otherwise parallel/unordered) so both paths are byte-identical.
+	out := []string{"--color", "never", "--no-require-git", "--hidden", "--path-separator", "/", "--sort", "path"}
 
 	switch mode {
 	case "content":
@@ -178,8 +180,10 @@ func buildRGArgs(args grepArgs, mode, target string) ([]string, bool) {
 	return out, true
 }
 
-// normalizeRGOutput strips the leading "./" rg prints for a "." target and applies the
-// head limit (default fsGrepMaxHits), appending a marker when results are truncated.
+// normalizeRGOutput strips the leading "./" rg prints for a "." target, drops the
+// trailing CR that rg keeps from CRLF files (the Go engine trims it too, so both
+// paths match on Windows checkouts), and applies the head limit (default
+// fsGrepMaxHits), appending a marker when results are truncated.
 func normalizeRGOutput(raw string, headLimit int) string {
 	raw = strings.TrimRight(raw, "\n")
 	if raw == "" {
@@ -196,7 +200,7 @@ func normalizeRGOutput(raw string, headLimit int) string {
 		truncated = true
 	}
 	for i, ln := range lines {
-		lines[i] = strings.TrimPrefix(ln, "./")
+		lines[i] = strings.TrimRight(strings.TrimPrefix(ln, "./"), "\r")
 	}
 	out := strings.Join(lines, "\n")
 	if truncated {
