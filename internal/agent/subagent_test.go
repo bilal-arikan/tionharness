@@ -104,6 +104,48 @@ func TestResolveSubagentProfile(t *testing.T) {
 	}
 }
 
+// TestResolveSubagentAgentBeatsProfile verifies an existing workspace agent wins
+// over a built-in profile of the same name (case-insensitive). Regression for the
+// shadowing bug where a real "Reviewer" agent was intercepted by the `reviewer`
+// profile — which also broke async delegation (profiles are ephemeral).
+func TestResolveSubagentAgentBeatsProfile(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	caller, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "anthropic"})
+	real, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Reviewer", Provider: "anthropic"})
+
+	got, ephemeral, err := rt.resolveSubagentTarget(ctx, caller, "Reviewer")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if ephemeral || got.ID != real.ID {
+		t.Fatalf("real agent must win over the %q profile: ephemeral=%v id=%q (want %q)", "reviewer", ephemeral, got.ID, real.ID)
+	}
+
+	// With no real agent of that name, the profile still resolves (ephemeral).
+	_, ephemeral2, err := rt.resolveSubagentTarget(ctx, caller, "reviewer2-not-an-agent")
+	if err == nil || ephemeral2 {
+		t.Fatalf("unknown non-profile target must error, got ephemeral=%v err=%v", ephemeral2, err)
+	}
+	if p, ep, perr := rt.resolveSubagentTarget(ctx, caller, "coder"); perr != nil || !ep || p.Name != "subagent:coder" {
+		t.Fatalf("coder profile must resolve ephemeral when no such agent exists: %+v ep=%v err=%v", p, ep, perr)
+	}
+}
+
+// TestAsyncProfileRejected verifies async delegation to a built-in profile (no
+// persistent session) fails with an explanatory error naming the profile.
+func TestAsyncProfileRejected(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	caller, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "anthropic"})
+	var n int32
+	run := runAgentFor(t, rt, caller, delegState{depth: 0, visited: map[string]bool{caller.ID: true}, calls: &n})
+	_, err := run(tools.RunAgentSpec{Target: "explore", Task: "x", Wait: "async"})
+	if err == nil || !strings.Contains(err.Error(), "persistent agent target") {
+		t.Fatalf("expected explanatory async-profile rejection, got %v", err)
+	}
+}
+
 // TestDelegationContract verifies the structured task contract renders only set
 // fields and stays empty (back-compat) when no field is provided.
 func TestDelegationContract(t *testing.T) {

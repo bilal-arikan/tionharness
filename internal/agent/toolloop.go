@@ -276,6 +276,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// activated tool's schema is shipped on the next step.
 	active := tools.NewActiveTools()
 	ctx = withActiveTools(ctx, active)
+	// Coordinator/worker tools (M2): wired only when this turn runs on a coordinator
+	// session. Injected BEFORE buildRegistry so the registry can gate their
+	// registration on the runner's presence (so ordinary/worker sessions never see
+	// them). No-op on every other turn.
+	ctx = r.withCoordination(ctx, agent)
 	reg := r.buildRegistry(ctx, agent)
 	if reg.Empty() {
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
@@ -627,10 +632,11 @@ func fillCancelledResults(results []providers.ToolResult, calls []providers.Tool
 // schedule) triggered it.
 // emitCLIToolDebug records one DebugTool event per tool the claude-cli ran during
 // its OWN (delegated) loop, so the per-message debug panel lists the CLI agent's
-// tool calls too. The CLI's stream-json aggregate carries no per-tool latency, so
-// DurMs is left 0 (the UI shows it only when known); OutBytes is the tool result
-// size and Err the tool's error flag. Native-loop tools already emit their own
-// (latency-bearing) DebugTool events inside the loop, so this is CLI-only.
+// tool calls too. DurMs is the CLI-side wall-clock latency the stream parser
+// measured (time between the tool_use event and its tool_result on the live
+// stream; 0 when the stream was not consumed in real time). OutBytes is the tool
+// result size and Err the tool's error flag. Native-loop tools already emit their
+// own (latency-bearing) DebugTool events inside the loop, so this is CLI-only.
 func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []providers.TraceStep) {
 	for _, st := range trace {
 		if st.Kind != "tool" {
@@ -640,6 +646,7 @@ func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []
 			Type:     db.DebugTool,
 			AgentID:  agent.ID,
 			Name:     st.Tool,
+			DurMs:    st.DurMs,
 			OutBytes: len(st.Output),
 			Err:      st.IsError,
 		})

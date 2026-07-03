@@ -370,6 +370,18 @@ func cliBaseEnv(extra ...string) []string {
 	return append(out, extra...)
 }
 
+// ensureEnvDefault appends KEY=val to env only when KEY is not already present,
+// so an inherited/user-set value always wins over the default.
+func ensureEnvDefault(env []string, key, val string) []string {
+	prefix := key + "="
+	for _, kv := range env {
+		if strings.HasPrefix(kv, prefix) {
+			return env
+		}
+	}
+	return append(env, prefix+val)
+}
+
 func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
 	// Enable the CLI's threshold-based MCP tool search (claude-cli 2.1.x+): tool
@@ -379,6 +391,13 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// self-management surface is lazily discovered via ToolSearch. Inherit the parent
 	// environment and append the flag (cmd.Env nil would otherwise drop it).
 	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
+	// Long sync run_subagent calls (a delegated agent reads files, runs tests, ...)
+	// can exceed the CLI's default 60s MCP tool-call timeout, surfacing to the caller
+	// as "The operation timed out." Give MCP tool calls and server startup generous
+	// headroom so sync delegation completes in-band. Only fill defaults the parent
+	// env didn't already provide, so a user override still wins. Values are ms.
+	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TOOL_TIMEOUT", "600000")
+	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TIMEOUT", "60000")
 	// Isolated config home: point the CLI at a clean CLAUDE_CONFIG_DIR so its
 	// skills/settings/commands/global CLAUDE.md/login come from there instead of the
 	// shared ~/.claude. Appended last so it overrides any inherited value.
@@ -577,9 +596,10 @@ type cliStreamParser struct {
 	sawResult    bool
 	hadError     bool
 	errText      string
-	sawModelTurn bool   // any assistant/tool/result content seen (vs. only system/init noise)
-	rateLimited  bool   // the turn was rejected by a subscription usage / rate limit
-	rateLimitMsg string // human-readable detail for the rate-limit failure
+	sawModelTurn bool                 // any assistant/tool/result content seen (vs. only system/init noise)
+	rateLimited  bool                 // the turn was rejected by a subscription usage / rate limit
+	rateLimitMsg string               // human-readable detail for the rate-limit failure
+	toolStart    map[string]time.Time // tool_use id → time the event was seen (for per-tool latency)
 }
 
 // primaryModelUsage returns the model key that consumed the most tokens in a
@@ -610,10 +630,11 @@ func primaryModelUsage(mu map[string]json.RawMessage) string {
 
 func newCLIParser(model string, onEvent func(TraceStep)) *cliStreamParser {
 	return &cliStreamParser{
-		resp:    &Response{Model: model},
-		onEvent: onEvent,
-		toolIdx: map[string]int{},
-		emitted: map[int]bool{},
+		resp:      &Response{Model: model},
+		onEvent:   onEvent,
+		toolIdx:   map[string]int{},
+		emitted:   map[int]bool{},
+		toolStart: map[string]time.Time{},
 	}
 }
 
@@ -697,6 +718,7 @@ func (p *cliStreamParser) feed(line string) {
 				p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "tool", Tool: b.Name, Input: b.Input})
 				if b.ID != "" {
 					p.toolIdx[b.ID] = len(p.resp.Trace) - 1
+					p.toolStart[b.ID] = time.Now() // start the latency clock for this tool
 				}
 				// Not emitted yet — wait for its tool_result to fill the output.
 			}
@@ -712,6 +734,10 @@ func (p *cliStreamParser) feed(line string) {
 			if i, ok := p.toolIdx[b.ToolUseID]; ok {
 				p.resp.Trace[i].Output = toolResultText(b.Content)
 				p.resp.Trace[i].IsError = b.IsError
+				if start, ok := p.toolStart[b.ToolUseID]; ok {
+					p.resp.Trace[i].DurMs = time.Since(start).Milliseconds()
+					delete(p.toolStart, b.ToolUseID)
+				}
 				p.emit(i)
 			}
 		}

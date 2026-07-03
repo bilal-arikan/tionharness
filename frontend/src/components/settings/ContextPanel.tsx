@@ -1,4 +1,4 @@
-import { Layers, Database, NotebookPen, LifeBuoy, Scissors, Sparkles, FlaskConical, RotateCcw, ListChecks, Bug } from 'lucide-react'
+import { Layers, Database, NotebookPen, LifeBuoy, Scissors, Sparkles, FlaskConical, RotateCcw, ListChecks, Bug, Tags } from 'lucide-react'
 import { Field, Toggle, Slider, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
@@ -128,6 +128,20 @@ export function ContextPanel({ draft, set }: PanelProps) {
         hint="Kendi listesi olmayan yeni bir oturuma, önceki oturumun progress dosyasındaki tamamlanmamış liste bağlam olarak enjekte edilir."
         checked={draft.progressResume}
         onChange={(v) => set('progressResume', v)}
+      />
+
+      <SubHead icon={Tags}>Otomatik etiketleme (olay → etiket)</SubHead>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+        Tur olaylarına ve oturum durumuna göre oturuma well-known etiketler otomatik atanır:
+        <code> tool-error</code> (gerçek araç hatası; claude-cli izin-verilmeyen araç reddi hariç),
+        <code> error</code> (tur hatası), <code> goal</code>/<code>goal-done</code>/<code>archived</code>.
+        Etiketler ekleme-yönlü kalır (bir onarıcı silene kadar) — bir otomasyonla hataları tarayıp otomatik onarmak için idealdir.
+      </div>
+      <Toggle
+        label="Olaylara göre otomatik etiketle"
+        hint="tool-error / error / goal / goal-done / archived etiketlerini turlarda ve arşivlemede otomatik atar. Kapalıyken hiçbir otomatik etiket yazılmaz (elle + ajan etiketleme çalışmaya devam eder)."
+        checked={draft.autoTagSessions}
+        onChange={(v) => set('autoTagSessions', v)}
       />
 
       <SubHead icon={Bug}>Debug günlüğü (gözlemlenebilirlik)</SubHead>

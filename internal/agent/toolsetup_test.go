@@ -64,7 +64,7 @@ func TestBuiltinFSToolsThroughRegistry(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(workDir, "docs", "note.txt")); err != nil {
 		t.Fatalf("file not written to sandbox: %v", err)
 	}
-	if res := callTool(t, rt, agent, "Read", map[string]any{"path": "docs/note.txt"}); res.IsError || res.Content != "hello sandbox" {
+	if res := callTool(t, rt, agent, "Read", map[string]any{"path": "docs/note.txt"}); res.IsError || !strings.Contains(res.Content, "hello sandbox") {
 		t.Fatalf("read_file got %q (err=%v)", res.Content, res.IsError)
 	}
 
@@ -74,7 +74,7 @@ func TestBuiltinFSToolsThroughRegistry(t *testing.T) {
 	}); res.IsError {
 		t.Fatalf("edit_file errored: %s", res.Content)
 	}
-	if res := callTool(t, rt, agent, "Read", map[string]any{"path": "docs/note.txt"}); res.Content != "HELLO sandbox" {
+	if res := callTool(t, rt, agent, "Read", map[string]any{"path": "docs/note.txt"}); !strings.Contains(res.Content, "HELLO sandbox") {
 		t.Fatalf("after edit got %q", res.Content)
 	}
 

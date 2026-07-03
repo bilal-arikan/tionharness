@@ -139,6 +139,12 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	if !ephemeral && cur.visited[agent.ID] {
 		return tools.RunAgentResult{}, fmt.Errorf("agent %q is already part of this chain; pick a different target", agent.Name)
 	}
+	// Guard 4 — async needs a persistent session, which an ephemeral profile lacks.
+	// Reject this impossible combination up front (before provider resolution and
+	// budget spend) so the error is deterministic and no budget unit is wasted.
+	if spec.Wait == "async" && ephemeral {
+		return tools.RunAgentResult{}, fmt.Errorf("async subagents require a persistent agent target; %q resolved to a built-in profile (explore|coder|reviewer) which has no session — create/name a workspace agent for async, or call this target with wait=\"sync\"", spec.Target)
+	}
 	if m := strings.TrimSpace(spec.Model); m != "" {
 		agent.Model = m
 	}
@@ -157,11 +163,8 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	}
 
 	// Async mode: detach into a persistent background session (fire-and-forget).
-	// Only real agents can run async — an ephemeral profile has no persistent id.
+	// Only real agents reach here (the ephemeral case was rejected by Guard 4).
 	if spec.Wait == "async" {
-		if ephemeral {
-			return tools.RunAgentResult{}, fmt.Errorf("async subagents require an existing agent target, not a profile")
-		}
 		res, err := r.SpawnSession(ctx, agent.ID, strings.TrimSpace(spec.Task), SpawnOptions{ModelOverride: spec.Model, CreatedBy: caller.ID})
 		if err != nil {
 			return tools.RunAgentResult{}, err
@@ -223,13 +226,20 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	return tools.RunAgentResult{AgentName: agent.Name, Reply: resp.Text}, nil
 }
 
-// resolveSubagentTarget maps a run_subagent target to a runnable agent. A target
-// matching a built-in profile id yields an EPHEMERAL agent cloned from the caller
-// (so it inherits provider, model, daily limits and permission mode, and its
-// usage attributes to the caller) but reshaped with the profile's system prompt
-// and tool allowlist. Otherwise the target is resolved as an existing workspace
-// agent.
+// resolveSubagentTarget maps a run_subagent target to a runnable agent. An
+// existing workspace agent is preferred FIRST: an explicit user agent must win
+// over a built-in profile of the same name (e.g. a real "Reviewer" agent must
+// not be shadowed by the built-in `reviewer` profile — that shadowing also broke
+// async delegation, since profiles are ephemeral and async needs a persistent
+// target). Only when no real agent matches does a target matching a built-in
+// profile id yield an EPHEMERAL agent cloned from the caller (inheriting
+// provider, model, daily limits and permission mode, usage attributed to the
+// caller) but reshaped with the profile's system prompt and tool allowlist.
 func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, target string) (db.Agent, bool, error) {
+	// Prefer an existing agent so a user-named agent wins over a same-named profile.
+	if a, err := r.resolveAgent(ctx, target); err == nil {
+		return a, false, nil
+	}
 	if p, ok := defaultSubagentProfiles[strings.ToLower(target)]; ok {
 		eph := caller // clone limits/provider/model/permission from the caller
 		eph.Name = "subagent:" + p.ID
@@ -246,11 +256,7 @@ func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, ta
 		}
 		return eph, true, nil
 	}
-	a, err := r.resolveAgent(ctx, target)
-	if err != nil {
-		return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not a profile (explore|coder|reviewer) and %w", target, err)
-	}
-	return a, false, nil
+	return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not an existing agent and not a built-in profile (explore|coder|reviewer)", target)
 }
 
 // subFuture is the pending result of a run_subagent call started concurrently by

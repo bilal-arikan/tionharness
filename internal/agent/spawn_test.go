@@ -4,9 +4,21 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/swarmgo/internal/db"
 )
+
+// drainSpawns waits for all fire-and-forget spawn goroutines to finish so the
+// t.TempDir() cleanup does not race their background writes (Windows locks the
+// session file while it is being written, failing RemoveAll).
+func drainSpawns(t *testing.T, rt *Runtime) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for rt.spawnActive.Load() > 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+}
 
 // TestSpawnSession_OpensIndependentSession verifies the synchronous part of a
 // spawn: a fresh "spawned"-kind session is created with the prompt recorded as
@@ -51,6 +63,7 @@ func TestSpawnSession_OpensIndependentSession(t *testing.T) {
 	if len(msgs) == 0 || msgs[0].Role != "user" || msgs[0].Text != "Do the thing" {
 		t.Fatalf("first message should be the user prompt, got %+v", msgs)
 	}
+	drainSpawns(t, rt)
 }
 
 // TestSpawnSession_ResolvesByName confirms a spawn target may be given by display
@@ -73,6 +86,7 @@ func TestSpawnSession_ResolvesByNameAndIsIndependent(t *testing.T) {
 	if a.SessionID == b.SessionID {
 		t.Fatal("each spawn must open its own independent session")
 	}
+	drainSpawns(t, rt)
 }
 
 // TestSpawnSession_RejectsEmptyPrompt guards the precondition.

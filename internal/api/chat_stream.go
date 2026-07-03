@@ -435,6 +435,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 				s.captureFileArtifacts(persistCtx, database, session.ID, agentRow.ID, trace)
 			}
 			_ = database.ClearInflight(session.ID)
+			// Auto-tag the turn failure (skips a clean user "stopped"), plus any real
+			// tool error captured before the failure.
+			wsp.Runtime.AutoTagTurn(context.WithoutCancel(ctx), session.ID, trace, reason)
 			sse("error", payload)
 			return
 		}
@@ -476,6 +479,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			"model", resp.Model, "in", resp.Usage.InputTokens, "out", resp.Usage.OutputTokens,
 			"steps", len(steps), "stream", true,
 			"dur", time.Since(agentStart).Round(time.Millisecond).String())
+
+		// Auto-tag: derive session tags from this turn (tool-error / error / goal /
+		// archived) so an automation can later scan + repair them.
+		wsp.Runtime.AutoTagTurn(ctx, session.ID, steps, "")
 
 		// Tag-triggered automations: signal that this session finished a turn. The
 		// runtime dispatches it detached, so a tagged session completing can spawn a

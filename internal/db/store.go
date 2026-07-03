@@ -195,11 +195,11 @@ func (d *DB) ListAgents(ctx context.Context) ([]Agent, error) {
 // AgentProfilePatch carries the editable identity fields for UpdateAgent. A nil
 // pointer leaves that field untouched, so callers can do partial updates.
 type AgentProfilePatch struct {
-	Name         *string
-	Soul         *string
-	Identity     *string
-	Provider      *string
-	Model         *string
+	Name           *string
+	Soul           *string
+	Identity       *string
+	Provider       *string
+	Model          *string
 	ThinkingLevel  *string
 	PermissionMode *string
 	Avatar         *string
@@ -451,6 +451,15 @@ func (d *DB) SetSessionHandoffArtifact(ctx context.Context, sessionID, artifactI
 func (d *DB) SetSessionAgent(ctx context.Context, sessionID, agentID string) error {
 	return d.mutateSessionLocked(sessionID, func(s *Session) {
 		s.AgentID = agentID
+	})
+}
+
+// SetSessionRole sets a session's coordinator/worker role (M2). "coordinator"
+// turns it into a coordinator (gets the coordinator prompt + worker tools); ""
+// reverts it to an ordinary session. Worker role is set at spawn time, not here.
+func (d *DB) SetSessionRole(ctx context.Context, sessionID, role string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Role = role
 	})
 }
 

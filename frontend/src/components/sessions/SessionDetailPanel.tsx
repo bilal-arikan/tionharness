@@ -4,6 +4,7 @@ import { api } from '../../api'
 import type { SessionInfo, SessionUsageDetail, SessionProgress } from '../../types'
 import { SessionContextModal } from './SessionContextModal'
 import { SessionDebugCard } from './SessionDebugCard'
+import { CoordinatorSection } from './CoordinatorSection'
 import { AgentIdentity } from '../agents/AgentIdentity'
 import { PromptEditor, KeyValueRow as Row, TagEditor } from '../common'
 import { roleColor } from '../../lib/palette'
@@ -406,6 +407,15 @@ export function SessionDetailPanel({
               placeholder="Etiket ekle (otomasyon tetikleyicisi olabilir)…"
             />
           </section>
+
+          {/* Coordinator/worker (M2): toggle coordinator mode + live worker roster */}
+          <CoordinatorSection
+            sessionId={sessionId}
+            role={info.role}
+            refreshKey={(refreshKey ?? 0) + localRefresh}
+            onError={onError}
+            onRoleChanged={() => setLocalRefresh((n) => n + 1)}
+          />
 
           {/* Meta */}
           <Section title="Genel">

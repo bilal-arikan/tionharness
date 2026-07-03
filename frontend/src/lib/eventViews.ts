@@ -18,6 +18,8 @@ export function viewForEventType(type: string): View | null {
     case 'schedule':
       return 'schedules'
     case 'spawned':
+    case 'worker':
+    case 'coordination':
       return 'executions'
     default:
       return null

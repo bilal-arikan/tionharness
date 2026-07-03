@@ -23,6 +23,22 @@ const KIND_LABEL: Record<IngestKind, string> = {
   mcp: 'MCP araçları',
 }
 
+// deriveGroup suggests a Skills-UI group label from the scanned location so imported
+// skills default to a namespace of their own (e.g. "owner/repo" or a GitHub tree URL
+// → "repo", a local path → its last folder). Keeps a fresh import from mixing into the
+// user's existing skills. Empty when nothing sensible can be derived.
+function deriveGroup(location: string): string {
+  const raw = location.trim().replace(/\/+$/, '')
+  if (!raw) return ''
+  let segs = raw.split(/[\\/]/).filter(Boolean)
+  // For a github.com/owner/repo/tree/branch/... URL, the repo is the 2nd path segment
+  // after the host; otherwise fall back to the last path segment.
+  const host = segs.findIndex((s) => s.includes('github.com'))
+  if (host >= 0 && segs.length > host + 2) return segs[host + 2]
+  const last = segs[segs.length - 1] || ''
+  return last.replace(/\.git$/, '')
+}
+
 // SkillImportDialog is the generic IMPORT dialog (SK-IMP3): it scans a source — a
 // GitHub repo/plugin URL (or owner/repo shorthand) or a local folder TREE — and
 // discovers every importable artifact inside (Claude Code skills, subagents, slash
@@ -34,6 +50,8 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
   const [source, setSource] = useState<Source>('github')
   const [location, setLocation] = useState('')
   const [slugPrefix, setSlugPrefix] = useState('')
+  const [group, setGroup] = useState('')
+  const [groupTouched, setGroupTouched] = useState(false)
   const [shared, setShared] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -70,6 +88,9 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
       setItems(resp.items)
       setScanWarnings(resp.warnings || [])
       setSelected(new Set(resp.items.filter((i) => !i.exists).map((i) => i.key)))
+      // Default the group to the source name so imported skills don't mix with existing
+      // ones — unless the user already typed their own group.
+      if (!groupTouched) setGroup(deriveGroup(location))
       setStep('select')
     } catch (e) {
       setErr((e as Error).message)
@@ -103,6 +124,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
         url: source === 'github' ? location.trim() : undefined,
         keys: Array.from(selected),
         slugPrefix: slugPrefix.trim() || undefined,
+        group: group.trim() || undefined,
         shared,
       })
       setResult(resp)
@@ -271,13 +293,16 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
 
               <div className="flex gap-3">
                 <label className="block flex-1">
-                  <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">Slug öneki (opsiyonel)</span>
+                  <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">Grup (opsiyonel)</span>
                   <input
-                    data-testid="import-slug-prefix"
-                    value={slugPrefix}
-                    onChange={(e) => setSlugPrefix(e.target.value)}
-                    placeholder="ör. caveman → caveman-commit"
-                    className={`${inputCls} font-mono`}
+                    data-testid="import-group"
+                    value={group}
+                    onChange={(e) => {
+                      setGroup(e.target.value)
+                      setGroupTouched(true)
+                    }}
+                    placeholder="Skills ekranında ayrı başlık altında toplanır"
+                    className={inputCls}
                   />
                 </label>
                 <label className="flex items-end gap-2 pb-2">
@@ -292,6 +317,17 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                   </span>
                 </label>
               </div>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">Slug öneki (opsiyonel)</span>
+                <input
+                  data-testid="import-slug-prefix"
+                  value={slugPrefix}
+                  onChange={(e) => setSlugPrefix(e.target.value)}
+                  placeholder="ör. caveman → caveman-commit"
+                  className={`${inputCls} font-mono`}
+                />
+              </label>
             </>
           )}
 

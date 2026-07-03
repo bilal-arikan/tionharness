@@ -133,6 +133,8 @@ func (s *Server) applySettings() {
 	s.tun.SetMemoryControls(cur.MemoryPressureWarn, cur.CoreMemoryTools)
 	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffPressure, cur.HandoffMaxChain, cur.HandoffWriteFile)
 	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
+	s.tun.SetFileFreshnessGuard(cur.FileFreshnessGuard)
+	s.tun.SetAutoTagSessions(cur.AutoTagSessions)
 	s.tun.SetDebugJournal(cur.DebugJournalEnabled, cur.DebugJournalCap)
 	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
 	s.tun.SetUserModel(cur.AutoUserModel)
@@ -142,6 +144,7 @@ func (s *Server) applySettings() {
 	s.tun.SetClaudePersistentSession(cur.ClaudePersistentSession)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
+	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns)
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.GitWorktreeIsolation, cur.AutonomousBootSeq)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
@@ -269,6 +272,8 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/sessions/{id}/tags", s.handleSetSessionTags)
 	mux.HandleFunc("PUT /api/sessions/{id}/messages/{msgId}/feedback", s.handleSetMessageFeedback)
 	mux.HandleFunc("PUT /api/sessions/{id}/agent", s.handleSetSessionAgent)
+	mux.HandleFunc("PUT /api/sessions/{id}/role", s.handleSetSessionRole)
+	mux.HandleFunc("GET /api/sessions/{id}/workers", s.handleListWorkers)
 	mux.HandleFunc("GET /api/sessions/{id}/workdir", s.handleGetSessionWorkdir)
 	mux.HandleFunc("PUT /api/sessions/{id}/workdir", s.handleSetSessionWorkdir)
 	mux.HandleFunc("GET /api/fs/browse", s.handleBrowseDirs)
@@ -367,6 +372,7 @@ func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 // registerHookRoutes registers PreToolUse/PostToolUse hooks (Phase P4).
 func (s *Server) registerHookRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/hooks", s.handleListHooks)
+	mux.HandleFunc("GET /api/hooks/builtins", s.handleListBuiltinHooks)
 	mux.HandleFunc("POST /api/hooks", s.handleCreateHook)
 	mux.HandleFunc("PUT /api/hooks/{id}", s.handleUpdateHook)
 	mux.HandleFunc("POST /api/hooks/{id}/toggle", s.handleToggleHook)
@@ -425,6 +431,7 @@ func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/skills/{slug}/auto-summary", s.handleSetSkillAutoSummary)
 	mux.HandleFunc("PUT /api/skills/{slug}/name-only", s.handleSetSkillNameOnly)
 	mux.HandleFunc("PUT /api/skills/{slug}/visibility", s.handleSetSkillVisibility)
+	mux.HandleFunc("PUT /api/skills/{slug}/group", s.handleSetSkillGroup)
 	mux.HandleFunc("POST /api/skills/{slug}/reveal", s.handleRevealSkill)
 }
 

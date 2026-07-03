@@ -122,17 +122,35 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   dimmed/italik). Varsayılan kapalı.
 - `ActivityCard.tsx` — tek tool çağrısı: ikon + etiket + tek satır niyet
   (başlıkta), açınca girdi/çıktı. Edit/Write çıktısı diff olarak. Hata kırmızı.
+  **`use_skill` (2026-07-02):** başlık özeti artık slug **değerini** gösterir
+  (`lib/tools.ts summarize` `slug`/`skill` alanlarını da toplar; eskiden "slug"
+  anahtar-adı yazıyordu); açınca gövde `<pre>` yerine `Markdown` ile biçimli
+  render olur (`# Skill: <slug>` başlığı + md gövde), gereksiz "Girdi" (`{slug}`)
+  bloğu skill'de gizlenir.
 - `DiffCard.tsx` — `kind:diff` adımı için özel dosya-değişikliği kartı: ✏️ +
   eylem (Oluştur/Düzenle/Yaz) + tıklanabilir yol + `+N −M` satır sayıları
   (başlıkta), açınca `DiffView` ile birleşik patch. `Write`/`Edit`
   çağrıları `todo_write` gibi generic tool satırı yerine bu kart olur.
+  **Yol katlanabilirliği (2026-07-02):** yol artık `shortPath` (…/dir/file) ile
+  kısa gösterilir ve tüm satırı kaplamaz; yalnız yol metni dosyayı açar
+  (stopPropagation), kalan `flex-1` alan + chevron başlık-butonun parçası kalıp
+  diff'i katlar (eskiden `flex-1` tam-genişlik yol satırı katlamayı engelliyordu).
+  Tam yol `title` ile hover'da görünür.
 - `PathText.tsx` — düz metindeki dosya yollarını tıklanabilir çiplere çevirir
   (`lib/paths.ts` tespit eder).
 
 ### Modüler yapı (büyük dosyaların bölünmesi)
 İki büyük dosya tek-sorumluluklu küçük parçalara ayrıldı; davranış birebir korundu.
 - `MessageList.tsx` artık yalnız **orkestratör**: scroll-pinleme + tool-izi katlama
-  durumu. Her satırı şu bileşenlere devreder:
+  durumu. **Pinlenen soru başlığı = ayrı overlay (2026-07-02 fix):** üstten geçen
+  son kullanıcı sorusu artık **flow-içi sticky satır değil**, scroll alanının
+  üstünde `pointer-events-none` mutlak-konumlu overlay (`UserBubble ... clamp` +
+  yukarıdan-aşağı `--color-bg` gradyanı). Eski yaklaşımda aktif satır hem `sticky`
+  hem `line-clamp-2` alıyordu; uzun mesaj pinlenince yüksekliği düşüp `scrollHeight`'i
+  değiştiriyor → scroll kayıyor → eşik tekrar geçiliyor → clamp↔unclamp titreşimi
+  (flicker + aşağı kaydırma zorluğu). Overlay flow yüksekliğini hiç değiştirmediği
+  için döngü kırıldı; satırlar tam-yükseklikte kalır. Her satırı şu bileşenlere
+  devreder:
   - `UserTurn.tsx` — gerçek kullanıcı mesajı (balon + sağ meta satırı).
   - `AutoPromptNote.tsx` — `Message.origin` dolu olduğunda (`wake`/`schedule`)
     ortalanmış "⏰ Otomatik devam / Zamanlanmış görev" notu (kullanıcı balonu değil).

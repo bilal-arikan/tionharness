@@ -23,7 +23,7 @@ Do the work. Use $ARGUMENTS and run !` + "`echo hi`" + ` inline.
 `
 
 func TestMapCCSkillMapping(t *testing.T) {
-	content, res := mapCCSkill(ccSkill, "https://github.com/x/y", true)
+	content, res := mapCCSkill(ccSkill, "https://github.com/x/y", true, "")
 
 	// allowed-tools → always_allow (block list), paths carried, provenance set.
 	for _, want := range []string{"name:", "always_allow:", "Bash(git *)", "paths:", "**/*.go",
@@ -47,12 +47,30 @@ func TestMapCCSkillMapping(t *testing.T) {
 
 func TestMapCCSkillDisableInvocation(t *testing.T) {
 	raw := "---\nname: Guarded\ndescription: d\ndisable-model-invocation: true\n---\nbody"
-	content, res := mapCCSkill(raw, "", true)
+	content, res := mapCCSkill(raw, "", true, "")
 	if strings.Contains(content, "access: shared") {
 		t.Errorf("disable-model-invocation:true must NOT be shared:\n%s", content)
 	}
 	if len(res.Warnings) == 0 {
 		t.Errorf("expected a warning about disable-model-invocation downgrade")
+	}
+}
+
+func TestMapCCSkillGroup(t *testing.T) {
+	// An explicit import group is written as the skill's `group` frontmatter.
+	content, _ := mapCCSkill("---\nname: A\ndescription: d\n---\nbody", "", false, "my-pack")
+	if !strings.Contains(content, "group: my-pack") {
+		t.Errorf("explicit import group not written:\n%s", content)
+	}
+	// With no import group, the source's own group carries over.
+	own, _ := mapCCSkill("---\nname: A\ndescription: d\ngroup: source-grp\n---\nbody", "", false, "")
+	if !strings.Contains(own, "group: source-grp") {
+		t.Errorf("source's own group not preserved:\n%s", own)
+	}
+	// An explicit import group overrides the source's own group.
+	ovr, _ := mapCCSkill("---\nname: A\ndescription: d\ngroup: source-grp\n---\nbody", "", false, "my-pack")
+	if strings.Contains(ovr, "source-grp") || !strings.Contains(ovr, "group: my-pack") {
+		t.Errorf("import group must override source group:\n%s", ovr)
 	}
 }
 

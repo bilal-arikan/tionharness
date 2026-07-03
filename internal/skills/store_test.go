@@ -223,6 +223,55 @@ func TestSetVisibilityTiers(t *testing.T) {
 	}
 }
 
+func TestSetGroup(t *testing.T) {
+	dir := t.TempDir()
+	// One skill with no group, one with a `category` alias to prove it's dropped.
+	writeSkill(t, dir, "a", "---\nname: A\ndescription: d\n---\nbody A")
+	writeSkill(t, dir, "b", "---\nname: B\ndescription: d\ncategory: old\n---\nbody B")
+	s := New("", dir)
+
+	// Assign both into a group.
+	for _, slug := range []string{"a", "b"} {
+		sk, err := s.SetGroup(slug, "my pack")
+		if err != nil {
+			t.Fatalf("set group %s: %v", slug, err)
+		}
+		if sk.Group != "my pack" {
+			t.Errorf("%s group = %q, want 'my pack'", slug, sk.Group)
+		}
+	}
+	// The `category` alias must be gone (only `group` remains) so the two can't disagree.
+	data, _ := os.ReadFile(filepath.Join(dir, "b", "SKILL.md"))
+	if strings.Contains(string(data), "category:") {
+		t.Errorf("category alias not dropped:\n%s", data)
+	}
+	if !strings.Contains(string(data), "group: ") {
+		t.Errorf("group not written:\n%s", data)
+	}
+
+	// Empty group ungroups.
+	sk, err := s.SetGroup("a", "")
+	if err != nil {
+		t.Fatalf("ungroup: %v", err)
+	}
+	if sk.Group != "" {
+		t.Errorf("group after ungroup = %q, want empty", sk.Group)
+	}
+	data, _ = os.ReadFile(filepath.Join(dir, "a", "SKILL.md"))
+	if strings.Contains(string(data), "group:") {
+		t.Errorf("group marker not removed on ungroup:\n%s", data)
+	}
+	// Body and other fields survive.
+	if !strings.Contains(string(data), "body A") || !strings.Contains(string(data), "name: A") {
+		t.Errorf("ungroup damaged the skill:\n%s", data)
+	}
+
+	// Missing skill errors.
+	if _, err := s.SetGroup("nope", "x"); err == nil {
+		t.Error("expected error for missing skill")
+	}
+}
+
 // TestCatalogBlockForAgentTool verifies the block names the skill tool exactly as
 // given (e.g. the namespaced identifier a claude-cli agent must call), instead of
 // the bare default.

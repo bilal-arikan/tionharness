@@ -36,6 +36,14 @@ type SpawnOptions struct {
 	// automation on its own completion — the loop). Applying them at creation, not
 	// after, avoids a race with the background turn finishing before the tag lands.
 	Tags []string
+
+	// Coordinator/worker link (see coordination.go, _Docs/47). When
+	// CoordinatorSessionID is set the spawn is a WORKER: the session is created with
+	// Kind="worker" + Role="worker" + this back-link, and its background turn runs
+	// via runWorker (history-aware, notifies the coordinator on completion) instead
+	// of runSpawn. Empty leaves an ordinary detached spawn unchanged.
+	CoordinatorSessionID string
+	Role                 string
 }
 
 // SpawnResult is what a spawn returns to its caller immediately — the new
@@ -92,16 +100,26 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 		}
 	}
 
+	// Worker spawns (coordinator/worker M2) are tagged as such so the UI and the
+	// coordination loop can tell them apart from ordinary detached spawns.
+	kind := "spawned"
+	coordID := strings.TrimSpace(opts.CoordinatorSessionID)
+	if coordID != "" {
+		kind = "worker"
+	}
+
 	// Each spawn is its own independent session — a fresh sourceID (not GetOrCreate)
 	// so two spawns never collapse into one thread.
 	session, err := r.db.CreateSession(ctx, db.Session{
-		AgentID:         agent.ID,
-		Kind:            "spawned",
-		SourceID:        "spawn:" + uuid.NewString(),
-		Title:           title,
-		ParentSessionID: strings.TrimSpace(opts.ParentSessionID),
-		WorkingDir:      cwd,
-		Tags:            opts.Tags,
+		AgentID:              agent.ID,
+		Kind:                 kind,
+		SourceID:             "spawn:" + uuid.NewString(),
+		Title:                title,
+		ParentSessionID:      strings.TrimSpace(opts.ParentSessionID),
+		WorkingDir:           cwd,
+		Tags:                 opts.Tags,
+		Role:                 strings.TrimSpace(opts.Role),
+		CoordinatorSessionID: coordID,
 	})
 	if err != nil {
 		r.releaseSpawnSlot()
@@ -123,8 +141,14 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 		"session", session.ID, "agent", agent.ID, "model", agent.Model, "by", opts.CreatedBy)
 
 	// Fire-and-forget: run the turn detached from the caller's context so a closed
-	// HTTP request or finished tool call can never cancel the spawn mid-flight.
-	go r.runSpawn(agent, session.ID, prompt)
+	// HTTP request or finished tool call can never cancel the spawn mid-flight. A
+	// worker takes the coordinator-aware path (history-aware turn + notify-back);
+	// an ordinary spawn takes the plain path.
+	if coordID != "" {
+		go r.runWorker(agent, session.ID, prompt, coordID)
+	} else {
+		go r.runSpawn(agent, session.ID, prompt)
+	}
 
 	return SpawnResult{SessionID: session.ID, AgentName: agent.Name}, nil
 }
@@ -162,6 +186,7 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 			r.logger.Warn("spawn: failed to record error reply", "session", sessionID, "error", addErr)
 		}
 		r.emitSpawnEvent(agent, sessionID, prompt, false)
+		r.AutoTagTurn(ctx, sessionID, steps, "spawn_error")
 		return
 	}
 
@@ -181,6 +206,8 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 	}
 	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID)
 	r.emitSpawnEvent(agent, sessionID, prompt, true)
+	// Auto-tag any tool errors / goal state from this spawned turn.
+	r.AutoTagTurn(ctx, sessionID, steps, "")
 	// Tag-triggered automations: a spawned session completing is the natural loop
 	// step — if it carries an automation's trigger tag, this fires the next spawn.
 	r.FireTurnFinished(sessionID, agent.ID, output)

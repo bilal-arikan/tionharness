@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,8 +63,9 @@ func TestSandboxNotReady(t *testing.T) {
 func TestFSWriteReadEdit(t *testing.T) {
 	sb := NewSandbox(t.TempDir())
 	ctx := context.Background()
+	tr := NewReadTracker()
 
-	write := NewFSWriteFileTool(sb)
+	write := NewFSWriteFileTool(sb, tr)
 	if _, err := write.Call(ctx, mustJSON(t, map[string]any{
 		"path":    "notes/hello.txt",
 		"content": "alpha beta gamma",
@@ -71,16 +73,16 @@ func TestFSWriteReadEdit(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	read := NewFSReadFileTool(sb)
+	read := NewFSReadFileTool(sb, tr)
 	out, err := read.Call(ctx, mustJSON(t, map[string]any{"path": "notes/hello.txt"}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if out != "alpha beta gamma" {
+	if !strings.Contains(out, "alpha beta gamma") {
 		t.Fatalf("read got %q", out)
 	}
 
-	edit := NewFSEditFileTool(sb)
+	edit := NewFSEditFileTool(sb, tr)
 	if _, err := edit.Call(ctx, mustJSON(t, map[string]any{
 		"path":       "notes/hello.txt",
 		"old_string": "beta",
@@ -89,16 +91,147 @@ func TestFSWriteReadEdit(t *testing.T) {
 		t.Fatalf("edit: %v", err)
 	}
 	out, _ = read.Call(ctx, mustJSON(t, map[string]any{"path": "notes/hello.txt"}))
-	if out != "alpha BETA gamma" {
+	if !strings.Contains(out, "alpha BETA gamma") {
 		t.Fatalf("after edit got %q", out)
 	}
 
-	// Editing a non-unique string without replace_all must fail.
+	// Editing a non-unique string without replace_all must fail. The file was just
+	// read above, so it clears the freshness guard and fails on the non-unique count.
 	_ = os.WriteFile(filepath.Join(sb.Root, "dup.txt"), []byte("x x x"), 0o644)
+	if _, err := read.Call(ctx, mustJSON(t, map[string]any{"path": "dup.txt"})); err != nil {
+		t.Fatalf("read dup: %v", err)
+	}
 	if _, err := edit.Call(ctx, mustJSON(t, map[string]any{
 		"path": "dup.txt", "old_string": "x", "new_string": "y",
 	})); err == nil {
 		t.Fatal("expected non-unique edit to fail without replace_all")
+	}
+}
+
+// TestFSReadWindow covers line-numbered output and the offset/limit window.
+func TestFSReadWindow(t *testing.T) {
+	sb := NewSandbox(t.TempDir())
+	ctx := context.Background()
+	read := NewFSReadFileTool(sb, nil)
+
+	var lines []string
+	for i := 1; i <= 10; i++ {
+		lines = append(lines, fmt.Sprintf("line-%d", i))
+	}
+	_ = os.WriteFile(filepath.Join(sb.Root, "f.txt"), []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+
+	// Full read is line-numbered.
+	out, err := read.Call(ctx, mustJSON(t, map[string]any{"path": "f.txt"}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(out, "     1\tline-1") || !strings.Contains(out, "    10\tline-10") {
+		t.Fatalf("expected numbered lines, got:\n%s", out)
+	}
+
+	// offset+limit selects a window and reports continuation.
+	out, _ = read.Call(ctx, mustJSON(t, map[string]any{"path": "f.txt", "offset": 3, "limit": 2}))
+	if !strings.Contains(out, "     3\tline-3") || !strings.Contains(out, "     4\tline-4") {
+		t.Fatalf("window should contain lines 3-4, got:\n%s", out)
+	}
+	if strings.Contains(out, "line-5") || strings.Contains(out, "line-2") {
+		t.Fatalf("window leaked out-of-range lines:\n%s", out)
+	}
+
+	// offset past the end is reported, not an error.
+	out, _ = read.Call(ctx, mustJSON(t, map[string]any{"path": "f.txt", "offset": 99}))
+	if !strings.Contains(out, "past the end") {
+		t.Fatalf("expected past-end note, got %q", out)
+	}
+}
+
+// TestFSEditToleratesLineNumbers covers the Edit fallback that strips cat -n line
+// prefixes copied from Read output so a numbered paste still matches.
+func TestFSEditToleratesLineNumbers(t *testing.T) {
+	sb := NewSandbox(t.TempDir())
+	ctx := context.Background()
+	tr := NewReadTracker()
+	read := NewFSReadFileTool(sb, tr)
+	edit := NewFSEditFileTool(sb, tr)
+
+	_ = os.WriteFile(filepath.Join(sb.Root, "f.go"), []byte("func A() {}\nfunc B() {}\n"), 0o644)
+	if _, err := read.Call(ctx, mustJSON(t, map[string]any{"path": "f.go"})); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	// old_string carries the "     2\t" prefix a model may copy from Read output;
+	// new_string is numbered too. The edit must strip both and apply cleanly.
+	if _, err := edit.Call(ctx, mustJSON(t, map[string]any{
+		"path":       "f.go",
+		"old_string": "     2\tfunc B() {}",
+		"new_string": "     2\tfunc B() int { return 0 }",
+	})); err != nil {
+		t.Fatalf("numbered edit should succeed: %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(sb.Root, "f.go"))
+	if string(got) != "func A() {}\nfunc B() int { return 0 }\n" {
+		t.Fatalf("stripped edit wrong result:\n%q", string(got))
+	}
+}
+
+// TestFSFreshnessGuard covers the Claude-parity read-before-write / modified-since
+// checks the ReadTracker enforces on Edit and Write.
+func TestFSFreshnessGuard(t *testing.T) {
+	sb := NewSandbox(t.TempDir())
+	ctx := context.Background()
+	tr := NewReadTracker()
+	read := NewFSReadFileTool(sb, tr)
+	write := NewFSWriteFileTool(sb, tr)
+	edit := NewFSEditFileTool(sb, tr)
+
+	path := filepath.Join(sb.Root, "guarded.txt")
+	_ = os.WriteFile(path, []byte("one two three"), 0o644)
+
+	// Edit before any read → "not read yet".
+	if _, err := edit.Call(ctx, mustJSON(t, map[string]any{
+		"path": "guarded.txt", "old_string": "two", "new_string": "TWO",
+	})); err == nil || !strings.Contains(err.Error(), "not been read") {
+		t.Fatalf("edit-before-read: want not-read error, got %v", err)
+	}
+
+	// Overwrite of an existing file before any read → "not read yet".
+	if _, err := write.Call(ctx, mustJSON(t, map[string]any{
+		"path": "guarded.txt", "content": "blind overwrite",
+	})); err == nil || !strings.Contains(err.Error(), "not been read") {
+		t.Fatalf("write-before-read: want not-read error, got %v", err)
+	}
+
+	// After a read, an edit succeeds.
+	if _, err := read.Call(ctx, mustJSON(t, map[string]any{"path": "guarded.txt"})); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if _, err := edit.Call(ctx, mustJSON(t, map[string]any{
+		"path": "guarded.txt", "old_string": "two", "new_string": "TWO",
+	})); err != nil {
+		t.Fatalf("edit-after-read: %v", err)
+	}
+
+	// Out-of-band change → next edit trips the modified-since-read check.
+	_ = os.WriteFile(path, []byte("changed by someone else"), 0o644)
+	if _, err := edit.Call(ctx, mustJSON(t, map[string]any{
+		"path": "guarded.txt", "old_string": "changed", "new_string": "CHANGED",
+	})); err == nil || !strings.Contains(err.Error(), "modified since") {
+		t.Fatalf("edit-after-external-change: want stale error, got %v", err)
+	}
+
+	// Writing a BRAND-NEW file needs no prior read.
+	if _, err := write.Call(ctx, mustJSON(t, map[string]any{
+		"path": "fresh.txt", "content": "new content",
+	})); err != nil {
+		t.Fatalf("write-new-file: %v", err)
+	}
+
+	// A nil tracker disables the guard entirely (historical behaviour).
+	edOff := NewFSEditFileTool(sb, nil)
+	_ = os.WriteFile(filepath.Join(sb.Root, "off.txt"), []byte("a b c"), 0o644)
+	if _, err := edOff.Call(ctx, mustJSON(t, map[string]any{
+		"path": "off.txt", "old_string": "b", "new_string": "B",
+	})); err != nil {
+		t.Fatalf("guard-off edit without read should succeed: %v", err)
 	}
 }
 

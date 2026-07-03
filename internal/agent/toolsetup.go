@@ -86,6 +86,28 @@ func blockFunc(agent db.Agent) func(string) bool {
 	return patternPredicate(patterns)
 }
 
+// readTrackerFor returns the freshness read-tracker for a session, creating it on
+// first use. An empty session id (catalog/preview builds with no session on ctx)
+// yields nil, which disables the Edit/Write guard for that build.
+func (r *Runtime) readTrackerFor(sessionID string) *tools.ReadTracker {
+	if sessionID == "" {
+		return nil
+	}
+	v, _ := r.readTrackers.LoadOrStore(sessionID, tools.NewReadTracker())
+	return v.(*tools.ReadTracker)
+}
+
+// shellMgrFor returns the background-shell manager for a session, creating it on
+// first use. An empty session id (catalog/preview builds with no session on ctx)
+// yields nil, which disables run_in_background for that build.
+func (r *Runtime) shellMgrFor(sessionID string) *tools.ShellManager {
+	if sessionID == "" {
+		return nil
+	}
+	v, _ := r.shellMgrs.LoadOrStore(sessionID, tools.NewShellManager())
+	return v.(*tools.ShellManager)
+}
+
 // buildRegistry assembles the tool registry for an agent: built-in tools plus
 // the catalog of every enabled MCP server in the workspace. cfgByServer maps
 // sanitized server names back to their configs for dispatch.
@@ -93,7 +115,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	builtins := []tools.Tool{
 		tools.NewWebFetchTool(),
 		// WebSearch: native web search for every NATIVE-API provider (anthropic,
-		// minimax, openrouter, antigravity). Registered unconditionally — exactly like
+		// minimax, openrouter). Registered unconditionally — exactly like
 		// its sibling WebFetch — so it also appears in the workspace tools catalog. The
 		// claude-cli path never receives it: SwarmGo built-ins reach the CLI ONLY through
 		// the explicit interactionToolSpecs bridge (which does not list it), so a CLI
@@ -180,6 +202,19 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// concurrency guards on every call.
 	builtins = append(builtins, tools.NewRunSubagentTool())
 
+	// Coordinator/worker tools (M2, _Docs/47): registered ONLY on a coordinator
+	// session's turn (withCoordination injected the runner into ctx). This keeps
+	// them off ordinary and worker sessions — and a worker therefore cannot spawn
+	// its own workers (recursion guard).
+	if tools.CoordinationFrom(ctx) != nil {
+		builtins = append(builtins,
+			tools.NewSpawnWorkerTool(),
+			tools.NewSendToWorkerTool(),
+			tools.NewStopWorkerTool(),
+			tools.NewListWorkersTool(),
+		)
+	}
+
 	// Cross-session awareness: the list_sessions pull tool (complements the pushed
 	// context block). Gated per-workspace by the same master toggle.
 	if r.SessionContextEnabled() {
@@ -224,11 +259,22 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	if confine {
 		sb = tools.NewConfinedSandbox(wd)
 	}
+	// Freshness guard: a session-scoped read-tracker lets Edit/Write detect a file
+	// changed out-of-band since it was last read. Nil (guard off) for catalog/preview
+	// builds without a session on ctx, or when the tunable is disabled — nil disables
+	// enforcement in the fs tools.
+	var readTracker *tools.ReadTracker
+	if r.tun != nil && r.tun.FileFreshnessGuard() {
+		readTracker = r.readTrackerFor(SessionIDFrom(ctx))
+	}
 	if sb.Ready() {
 		builtins = append(builtins,
-			tools.NewFSReadFileTool(sb),
-			tools.NewFSWriteFileTool(sb),
-			tools.NewFSEditFileTool(sb),
+			tools.NewFSReadFileTool(sb, readTracker),
+			tools.NewFSWriteFileTool(sb, readTracker),
+			tools.NewFSEditFileTool(sb, readTracker),
+			// apply_patch: multi-hunk / multi-file unified-diff editing (the batch
+			// sibling of Edit), sharing the same freshness guard.
+			tools.NewFSApplyPatchTool(sb, readTracker),
 			tools.NewFSListDirTool(sb),
 			tools.NewFSGlobTool(sb),
 			tools.NewFSGrepTool(sb),
@@ -245,11 +291,23 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// node/bun) under the same gate; it reshapes large data into a JSON file
 		// (referenced as a table src) without inlining rows into context.
 		if r.tun.ShellEnabled() {
+			// Session-scoped background-shell manager: wired onto both shell tools so
+			// run_in_background can launch detached processes, plus the three management
+			// tools (shell_output/shell_kill/shell_list) that poll and reap them. Nil for
+			// catalog/preview builds (no session) → background execution simply unavailable.
+			shellMgr := r.shellMgrFor(SessionIDFrom(ctx))
 			if sh := tools.NewShellTool(sb); sh.Available() {
-				builtins = append(builtins, sh)
+				builtins = append(builtins, sh.WithManager(shellMgr))
 			}
 			if ps := tools.NewPowerShellTool(sb); ps.Available() {
-				builtins = append(builtins, ps)
+				builtins = append(builtins, ps.WithManager(shellMgr))
+			}
+			if shellMgr != nil {
+				builtins = append(builtins,
+					tools.NewShellOutputTool(shellMgr),
+					tools.NewShellKillTool(shellMgr),
+					tools.NewShellListTool(shellMgr),
+				)
 			}
 			builtins = append(builtins, tools.NewTransformDataTool(sb))
 		}
@@ -325,6 +383,8 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		"update_artifact", "deactivate_tools",
 		// Validation tools — read-only, used only around authoring/diagram emission.
 		"skill_validate", "config_validate", "mermaid_validate",
+		// Background-shell management — reached only after a run_in_background launch.
+		"shell_output", "shell_kill", "shell_list",
 		// Promoted out of the hidden self-management group: common enough to advertise
 		// by name (handoff at context limit, add a memory, DM a peer agent) rather than
 		// fold into the self-management skill pointer. MarkNameOnly clears the earlier
@@ -349,7 +409,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// load-on-demand for read-only agents (still reachable via activate_tools, and
 	// still execution-gated by the permission layer). "ask"/"auto" keep them eager.
 	if agent.PermissionMode == "read-only" {
-		reg.MarkLazy("Write", "Edit") // write_config already lazy above
+		reg.MarkLazy("Write", "Edit", "apply_patch") // write_config already lazy above
 	}
 	// Per-tool visibility overrides from the workspace tools screen are applied
 	// AFTER AttachMCP below (so they win over both code defaults and the MCP

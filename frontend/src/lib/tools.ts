@@ -57,7 +57,8 @@ function summarize(input: unknown): string {
   }
   const o = input as Record<string, unknown>
   const first =
-    o.command ?? o.query ?? o.url ?? o.path ?? o.file_path ?? o.pattern ?? o.q ?? o.agent ?? o.input
+    o.command ?? o.query ?? o.url ?? o.path ?? o.file_path ?? o.pattern ?? o.q ?? o.agent ??
+    o.slug ?? o.skill ?? o.input
   if (typeof first === 'string') return first
   // Fall back to a compact key list.
   const keys = Object.keys(o)

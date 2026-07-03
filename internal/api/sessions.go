@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/bilal-arikan/swarmgo/internal/agent"
 	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
@@ -34,6 +35,25 @@ func (s *Server) handleSetSessionState(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := database.SetSessionState(ctx, id, state); writeDBError(w, err, "") {
 		return
+	}
+	// Keep the "archived" auto-tag in sync with the lifecycle state so an automation
+	// can scan archived sessions: add it when archiving, drop it when restoring.
+	if sess, err := database.GetSession(ctx, id); err == nil && ws(r).Runtime.AutoTagEnabled() {
+		has := false
+		out := make([]string, 0, len(sess.Tags))
+		for _, t := range sess.Tags {
+			if t == agent.TagArchived {
+				has = true
+				continue // dropped; re-added below only when archiving
+			}
+			out = append(out, t)
+		}
+		if state == "archived" {
+			out = append(out, agent.TagArchived)
+		}
+		if has != (state == "archived") {
+			_ = database.SetSessionTags(ctx, id, out)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": id, "state": state})
 }

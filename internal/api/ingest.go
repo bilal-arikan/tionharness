@@ -108,6 +108,7 @@ type ingestInstallReq struct {
 	Keys       []string `json:"keys"`       // selected Discovered.Key values (empty = all)
 	SlugPrefix string   `json:"slugPrefix"` // optional namespace prefix
 	Shared     bool     `json:"shared"`     // advertise imported skills on-demand
+	Group      string   `json:"group"`      // optional Skills-UI group for imported skills
 }
 
 // ingestInstallResult aggregates a bulk import: installed entities, skipped items
@@ -134,7 +135,7 @@ func (s *Server) handleIngestInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	packs, skipped, warnings, err := ingest.BuildPacks(source, location, req.Keys, ingest.Options{
-		Shared: req.Shared, SlugPrefix: req.SlugPrefix,
+		Shared: req.Shared, SlugPrefix: req.SlugPrefix, Group: req.Group,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

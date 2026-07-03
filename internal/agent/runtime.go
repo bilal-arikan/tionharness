@@ -73,10 +73,51 @@ type Runtime struct {
 	// scheduler exists; nil before then.
 	runSched func(context.Context, string) error
 
-	// turnHook is called (detached, non-blocking) whenever an agent turn finishes
-	// on any path (chat/spawn/schedule/wake). The workspace manager wires it to the
-	// AutomationEngine so tag-triggered automations can fire. Nil before wiring.
-	turnHook func(context.Context, TurnFinished)
+	// turnHooks are called (detached, non-blocking) whenever an agent turn finishes
+	// on any path (chat/spawn/schedule/wake). The workspace manager wires the
+	// AutomationEngine (tag-triggered automations) and the CoordinationEngine
+	// (worker → coordinator <task-notification> feedback) here. Empty before wiring;
+	// guarded by turnHooksMu since AddTurnHook runs during boot while
+	// FireTurnFinished may already be firing.
+	turnHooks   []func(context.Context, TurnFinished)
+	turnHooksMu sync.RWMutex
+
+	// coordSlots serializes turns per session for the coordinator/worker loop: one
+	// slot per coordinator session so concurrent worker notifications never run two
+	// coordinator turns at once, and notifications that arrive mid-turn coalesce
+	// into the next single turn (they are already persisted as history). Keyed by
+	// session id; value is *coordSlot. See NotifyCoordinator + coordination.go.
+	coordSlots sync.Map
+
+	// readTrackers holds one *tools.ReadTracker per session id, the freshness
+	// baseline the Edit/Write guard compares against. Session-scoped and persistent
+	// across turns (a file read in an earlier turn stays a valid baseline for a later
+	// edit). Keyed by session id; value is *tools.ReadTracker. Gated by
+	// Tunables.FileFreshnessGuard; unstamped-session builds (catalog/preview) get nil.
+	readTrackers sync.Map
+
+	// shellMgrs holds one *tools.ShellManager per session id, tracking that session's
+	// background shells (run_in_background) so their output can be polled and they can
+	// be stopped across turns. Session-scoped and persistent across turns; keyed by
+	// session id, value is *tools.ShellManager. Unstamped-session builds (catalog/
+	// preview) get nil, which disables background execution for that build.
+	shellMgrs sync.Map
+
+	// workerCancels tracks in-flight worker turns so stop_worker can cancel one.
+	// Keyed by worker session id; value is *workerCtl (cancel func + stopped flag,
+	// so a cancelled turn reports "killed" rather than "failed"). Populated by
+	// runWorker for its lifetime.
+	workerCancels sync.Map
+
+	// coordRunFn, when non-nil, replaces runCoordinatorTurn in the per-session queue
+	// drain — a test seam so the queue's serialization/coalescing can be exercised
+	// without a live provider. Nil in production (the real turn runs).
+	coordRunFn func(coordSessionID string)
+
+	// profileWorkerMu serializes find-or-create of the persisted profile-worker
+	// agents (worker:explore/coder/reviewer) so two concurrent spawn_worker calls
+	// with the same profile target never create duplicate agents.
+	profileWorkerMu sync.Mutex
 
 	// settingsBridge backs the get_settings / update_settings self-management
 	// tools: read and live-apply the application-wide settings. Wired by the
@@ -523,9 +564,30 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	// lacks the turn's current-session id; inject it (captured from the build ctx)
 	// so session-scoped bridged tools (read_session_debug) default to this session.
 	sid := SessionIDFrom(ctx)
+
+	// Coordinator sessions (M2): bridge the spawn_worker/send_to_worker/stop_worker/
+	// list_workers tools to the CLI path too, so a claude-cli coordinator can drive
+	// workers. They dispatch outside reg (via the coordination runner), so they need
+	// no registry registration. Only advertised when this session is a coordinator.
+	var coordFuncs *tools.CoordinationFuncs
+	if sid != "" && r.sessionRole(ctx) == "coordinator" {
+		coordFuncs = r.coordinationFuncsFor(sid, agent.ID)
+		for _, d := range coordinationBridgeDefs() {
+			if allow == nil || allow(d.Name) {
+				defs = append(defs, d)
+			}
+		}
+	}
+
 	call := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
 		if sid != "" {
 			ctx = tools.WithCurrentSession(ctx, sid)
+			ctx = WithSessionID(ctx, sid)
+		}
+		if coordFuncs != nil {
+			if out, handled, err := dispatchCoordinationBridge(ctx, coordFuncs, name, args); handled {
+				return out, err
+			}
 		}
 		res := reg.Call(ctx, providers.ToolCall{Name: name, Input: args})
 		if res.IsError {
@@ -701,25 +763,52 @@ func (r *Runtime) runScheduleNow(ctx context.Context, id string) error {
 	return r.runSched(ctx, id)
 }
 
-// SetTurnHook wires a callback invoked when an agent turn finishes. Called by the
-// workspace manager to connect the AutomationEngine. Nil leaves turn completion
-// unobserved (automations off).
-func (r *Runtime) SetTurnHook(fn func(context.Context, TurnFinished)) { r.turnHook = fn }
-
-// FireTurnFinished dispatches a turn-completion signal to the wired hook, if any,
-// on a DETACHED goroutine so it never blocks or cancels with the finishing turn.
-// Safe to call from any completion path (chat/spawn/schedule/wake). No-op when no
-// hook is wired or when sessionID is empty.
-func (r *Runtime) FireTurnFinished(sessionID, agentID, output string) {
-	fn := r.turnHook
-	if fn == nil || sessionID == "" {
+// SetTurnHook wires a single callback invoked when an agent turn finishes,
+// replacing any hooks added so far. Kept for callers that want exactly one hook;
+// AddTurnHook is preferred when several observers (automations + coordination)
+// must all see turn completions.
+func (r *Runtime) SetTurnHook(fn func(context.Context, TurnFinished)) {
+	r.turnHooksMu.Lock()
+	defer r.turnHooksMu.Unlock()
+	if fn == nil {
+		r.turnHooks = nil
 		return
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
-		defer cancel()
-		fn(ctx, TurnFinished{SessionID: sessionID, AgentID: agentID, Output: output})
-	}()
+	r.turnHooks = []func(context.Context, TurnFinished){fn}
+}
+
+// AddTurnHook appends a turn-completion observer. All hooks fire (each on its own
+// detached goroutine) for every finished turn, so the AutomationEngine and the
+// CoordinationEngine can both react without one shadowing the other.
+func (r *Runtime) AddTurnHook(fn func(context.Context, TurnFinished)) {
+	if fn == nil {
+		return
+	}
+	r.turnHooksMu.Lock()
+	defer r.turnHooksMu.Unlock()
+	r.turnHooks = append(r.turnHooks, fn)
+}
+
+// FireTurnFinished dispatches a turn-completion signal to every wired hook, each
+// on its own DETACHED goroutine so a hook never blocks or cancels with the
+// finishing turn. Safe to call from any completion path (chat/spawn/schedule/
+// wake). No-op when no hook is wired or when sessionID is empty.
+func (r *Runtime) FireTurnFinished(sessionID, agentID, output string) {
+	if sessionID == "" {
+		return
+	}
+	r.turnHooksMu.RLock()
+	hooks := r.turnHooks
+	r.turnHooksMu.RUnlock()
+	tf := TurnFinished{SessionID: sessionID, AgentID: agentID, Output: output}
+	for _, fn := range hooks {
+		fn := fn
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
+			defer cancel()
+			fn(ctx, tf)
+		}()
+	}
 }
 
 // SetSettingsBridge wires the application-wide settings store + live-apply hook

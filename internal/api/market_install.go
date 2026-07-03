@@ -54,7 +54,7 @@ func (s *Server) installSourceRefPack(w http.ResponseWriter, r *http.Request, ws
 		return
 	}
 	packs, skipped, warnings, err := ingest.BuildPacks("github", src.URL, src.Keys, ingest.Options{
-		Shared: req.Shared, SlugPrefix: req.SlugPrefix,
+		Shared: req.Shared, SlugPrefix: req.SlugPrefix, Group: req.Group,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())

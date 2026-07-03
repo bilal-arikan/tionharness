@@ -277,6 +277,26 @@ func (s *Server) handleSetSkillVisibility(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, sk)
 }
 
+// handleSetSkillGroup rewrites a skill's `group` frontmatter (its Skills-UI
+// organisation bucket) without touching any other field, then returns the updated
+// skill. An empty group ungroups the skill. This is the per-skill endpoint the
+// Skills screen's bulk "set group" action calls for each selected skill.
+func (s *Server) handleSetSkillGroup(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Group string `json:"group"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	sk, err := ws(r).Runtime.Skills().SetGroup(r.PathValue("slug"), req.Group)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, sk)
+}
+
 // handleReloadSkills re-scans the skill tiers (after the user edits files on
 // disk) so the catalog and prompt block reflect the change without a restart.
 func (s *Server) handleReloadSkills(w http.ResponseWriter, r *http.Request) {

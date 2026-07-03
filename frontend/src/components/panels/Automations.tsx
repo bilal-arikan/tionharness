@@ -1,10 +1,26 @@
 import { useEffect, useState } from 'react'
-import { Repeat, RotateCcw, Trash2 } from 'lucide-react'
+import { Repeat, RotateCcw, Trash2, Info } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Automation } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { Button, TagEditor } from '../common'
+
+// PromptTemplate placeholders (kept in sync with agent/automation.go turnVars).
+const PROMPT_VARS: { name: string; desc: string }[] = [
+  { name: '{{result}}', desc: 'Biten oturumun son yanıtı' },
+  { name: '{{title}}', desc: 'Biten oturumun başlığı' },
+  { name: '{{tag}}', desc: 'Tetikleyici etiket' },
+  { name: '{{sessionId}}', desc: 'Biten oturumun ID’si' },
+  { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
+  { name: '{{maxIterations}}', desc: 'Üst sınır (0 → ∞)' },
+  { name: '{{agent}}', desc: 'Sonucu üreten ajanın adı ({{agentName}} eşdeğer)' },
+  { name: '{{prevPrompt}}', desc: 'Bir önceki turu tetikleyen kullanıcı promptu' },
+  { name: '{{automation}}', desc: 'Otomasyonun adı' },
+  { name: '{{date}}', desc: 'Geçerli tarih (2026-07-03)' },
+  { name: '{{time}}', desc: 'Geçerli saat (03:00)' },
+  { name: '{{datetime}}', desc: 'Tarih + saat' },
+]
 
 interface Props {
   agents: Agent[]
@@ -25,6 +41,7 @@ export function Automations({ agents, onError }: Props) {
   const [items, setItems] = useState<Automation[]>([])
 
   // Create form.
+  const [showVars, setShowVars] = useState(false)
   const [name, setName] = useState('')
   const [triggerTag, setTriggerTag] = useState('')
   const [targetAgentId, setTargetAgentId] = useState('')
@@ -158,13 +175,57 @@ export function Automations({ agents, onError }: Props) {
           </label>
         </div>
         <div className="flex items-end gap-2">
-          <textarea
-            value={promptTemplate}
-            onChange={(e) => setPromptTemplate(e.target.value)}
-            rows={2}
-            placeholder="Prompt şablonu — {{result}} {{title}} {{tag}} {{sessionId}} kullanılabilir"
-            className="flex-1 resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
-          />
+          <div className="relative flex-1">
+            <div className="mb-1 flex items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
+              <span>Prompt şablonu</span>
+              <button
+                type="button"
+                onClick={() => setShowVars((v) => !v)}
+                className={`rounded p-0.5 transition hover:text-[var(--color-accent)] ${showVars ? 'text-[var(--color-accent)]' : ''}`}
+                title="Kullanılabilir değişkenler"
+                aria-label="Kullanılabilir değişkenler"
+              >
+                <Info size={13} />
+              </button>
+            </div>
+            {showVars && (
+              <>
+                {/* Click-away backdrop closes the popover. */}
+                <div className="fixed inset-0 z-10" onClick={() => setShowVars(false)} />
+                <div className="absolute bottom-full left-0 z-20 mb-1 w-[360px] max-w-[90vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
+                  <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--color-text-dim)]">
+                    Şablonda kullanılabilir değişkenler (tıkla → ekle)
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {PROMPT_VARS.map((v) => (
+                      <button
+                        key={v.name}
+                        type="button"
+                        onClick={() => {
+                          setPromptTemplate((p) => p + v.name)
+                          setShowVars(false)
+                        }}
+                        className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]"
+                        title="Şablona ekle"
+                      >
+                        <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
+                          {v.name}
+                        </code>
+                        <span className="text-[11px] text-[var(--color-text-dim)]">{v.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            <textarea
+              value={promptTemplate}
+              onChange={(e) => setPromptTemplate(e.target.value)}
+              rows={2}
+              placeholder="Prompt şablonu — ℹ️ ile değişkenleri gör. Örn: Devam et. Önceki sonuç:\n{{result}}"
+              className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+            />
+          </div>
           <Button onClick={create}>+ Otomasyon</Button>
         </div>
       </div>

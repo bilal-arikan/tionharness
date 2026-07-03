@@ -17,6 +17,90 @@ func (s *Server) handleListHooks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, hooks)
 }
 
+// builtinHook describes one automatic, non-user-editable behaviour SwarmGo injects
+// around the tool loop (freshness guard, CLI native-tool bridging, hook
+// passthrough, ...). It is surfaced read-only in the Hooks screen so a user can see
+// what runs implicitly. Enabled reflects the current setting for the toggleable
+// ones; Setting names the settings.json key that controls it (empty = always on).
+type builtinHook struct {
+	Name        string `json:"name"`
+	Scope       string `json:"scope"` // "native" | "cli" | "both"
+	Event       string `json:"event"` // "PreToolUse" | "PostToolUse" | "System"
+	Description string `json:"description"`
+	Enabled     bool   `json:"enabled"`
+	Setting     string `json:"setting,omitempty"`
+}
+
+// handleListBuiltinHooks returns the read-only list of SwarmGo's auto-injected tool
+// behaviours, computed from the current app settings. Purely informational — there
+// is no create/update/delete counterpart.
+func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) {
+	cur := s.settings.Get()
+	list := []builtinHook{
+		{
+			Name:        "File freshness guard",
+			Scope:       "native",
+			Event:       "System",
+			Setting:     "fileFreshnessGuard",
+			Enabled:     cur.FileFreshnessGuard,
+			Description: "Edit / Write / apply_patch refuse to modify a file unless it was Read this session and is unchanged since — prevents silently clobbering an out-of-band edit. Mirrors Claude Code; the claude-cli path enforces its own equivalent natively.",
+		},
+		{
+			Name:        "CLI native-tool bridging",
+			Scope:       "cli",
+			Event:       "System",
+			Enabled:     true,
+			Description: "On the claude-cli path, native tools that can't be honoured headless are suppressed (--disallowedTools) and routed to SwarmGo equivalents: AskUserQuestion→ask_user, TodoWrite/Task*→todo_write, ScheduleWakeup→schedule_wake, Skill→use_skill, Task/Agent→run_subagent.",
+		},
+		{
+			Name:        "Bash → PowerShell bridge",
+			Scope:       "cli",
+			Event:       "System",
+			Setting:     "enableShell",
+			Enabled:     cur.EnableShell,
+			Description: "When the built-in shell is enabled, the CLI's native Bash is suppressed so shell commands route through SwarmGo's own Bash/PowerShell tool (correct Windows syntax + streaming + background shells).",
+		},
+		{
+			Name:        "CLI hook passthrough",
+			Scope:       "cli",
+			Event:       "PreToolUse / PostToolUse",
+			Setting:     "enableCliHooks",
+			Enabled:     cur.EnableCLIHooks,
+			Description: "Your PreToolUse/PostToolUse hooks below are forwarded to claude-cli agents via --settings, so the CLI's own tool loop fires the same hooks the native loop does.",
+		},
+		{
+			Name:        "Permission deny-list (defense-in-depth)",
+			Scope:       "cli",
+			Event:       "System",
+			Enabled:     true,
+			Description: "The suppressed CLI tools are also written to permissions.deny in the per-turn CLI settings — a second barrier in case a --disallowedTools flag is ever ignored.",
+		},
+		{
+			Name:        "Plan-mode approval bridge",
+			Scope:       "cli",
+			Event:       "System",
+			Enabled:     true,
+			Description: "In ask / read-only modes the CLI's ExitPlanMode is routed through SwarmGo's plan-approval card; in auto mode plan tools are disallowed so the agent just executes.",
+		},
+		{
+			Name:        "Autonomous git brake",
+			Scope:       "native",
+			Event:       "PreToolUse",
+			Setting:     "autonomousConfine",
+			Enabled:     cur.AutonomousConfine,
+			Description: "On autonomous (confined) turns, shell commands that push to a git remote (git push / remote add / set-url) are blocked — a human-in-the-loop safeguard. Interactive chat is unaffected.",
+		},
+		{
+			Name:        "Hook fail-open policy",
+			Scope:       "both",
+			Event:       "System",
+			Enabled:     true,
+			Description: "A hook that errors or times out never wedges a turn: the tool call proceeds (fail-open). Hook output is capped at 64KB and the timeout clamps to 30–120s.",
+		},
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
 type hookReq struct {
 	Event      string `json:"event"`
 	Matcher    string `json:"matcher"`

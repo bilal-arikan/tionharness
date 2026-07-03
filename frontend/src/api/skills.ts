@@ -64,6 +64,13 @@ export const skillApi = {
       method: 'PUT',
       body: JSON.stringify({ visibility }),
     }),
+  // Set a skill's `group` (its Skills-UI organisation bucket) without touching any
+  // other field. Empty string ungroups it. Drives the bulk "set group" action.
+  setSkillGroup: (slug: string, group: string) =>
+    req<Skill>(`/api/skills/${encodeURIComponent(slug)}/group`, {
+      method: 'PUT',
+      body: JSON.stringify({ group }),
+    }),
   revealSkill: (slug: string) =>
     req<{ path: string }>(`/api/skills/${encodeURIComponent(slug)}/reveal`, { method: 'POST' }),
 }

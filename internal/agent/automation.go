@@ -63,14 +63,14 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 		if a.TriggerTag == "" || !containsTag(sess.Tags, a.TriggerTag) {
 			continue
 		}
-		e.fire(ctx, a, sess, tf.Output)
+		e.fire(ctx, a, sess, tf)
 	}
 }
 
 // fire evaluates one matching automation's guardrails and, if they pass, spawns
 // the follow-up session. Guardrail decisions are logged so a stalled loop is
 // explainable in the Logs view.
-func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Session, result string) {
+func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Session, tf TurnFinished) {
 	// Cooldown: skip if the previous fire was too recent.
 	if a.CooldownSec > 0 && a.LastFiredAt > 0 {
 		if elapsed := time.Now().Unix() - a.LastFiredAt; elapsed < int64(a.CooldownSec) {
@@ -102,7 +102,8 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 		return
 	}
 
-	prompt := renderAutomationPrompt(a.PromptTemplate, result, sess, a.TriggerTag)
+	vars := e.turnVars(ctx, a, sess, tf)
+	prompt := renderAutomationPrompt(a.PromptTemplate, vars)
 	if strings.TrimSpace(prompt) == "" {
 		e.recordFailure(ctx, a, "rendered prompt is empty")
 		return
@@ -158,21 +159,59 @@ func (e *AutomationEngine) recordFailure(ctx context.Context, a db.Automation, m
 	})
 }
 
-// renderAutomationPrompt substitutes the automation placeholders into the
-// template: {{result}} (finishing session's final reply), {{title}} (its title),
-// {{tag}} (trigger tag), {{sessionId}} (finishing session's id).
-func renderAutomationPrompt(tmpl, result string, sess db.Session, tag string) string {
-	r := strings.NewReplacer(
-		"{{result}}", result,
-		"{{title}}", sess.Title,
-		"{{tag}}", tag,
-		"{{sessionId}}", sess.ID,
-	)
-	out := r.Replace(tmpl)
-	// A template that references no placeholder still needs the result to carry the
-	// loop forward, so append it when the author left {{result}} out entirely.
-	if !strings.Contains(tmpl, "{{result}}") && strings.TrimSpace(result) != "" {
-		out = strings.TrimRight(out, "\n") + "\n\n--- Önceki sonuç ---\n" + result
+// turnVars assembles the placeholder values available to an automation's prompt
+// template for one fire. It resolves a couple of extras from the DB (the finishing
+// agent's name, the prompt that produced the result) best-effort — a lookup miss
+// just leaves that variable empty rather than aborting the fire.
+func (e *AutomationEngine) turnVars(ctx context.Context, a db.Automation, sess db.Session, tf TurnFinished) map[string]string {
+	agentName := tf.AgentID
+	if ag, err := e.db.GetAgent(ctx, tf.AgentID); err == nil {
+		agentName = ag.Name
+	}
+	// prevPrompt: the last user turn of the finishing session — the input that
+	// produced {{result}}. Useful for carrying the original instruction forward.
+	prevPrompt := ""
+	if msgs, err := e.db.ListMessages(ctx, sess.ID); err == nil {
+		for i := len(msgs) - 1; i >= 0; i-- {
+			if msgs[i].Role == "user" {
+				prevPrompt = msgs[i].Text
+				break
+			}
+		}
+	}
+	now := time.Now()
+	maxIter := strconv.Itoa(a.MaxIterations)
+	if a.MaxIterations == 0 {
+		maxIter = "∞"
+	}
+	return map[string]string{
+		"result":        tf.Output,
+		"title":         sess.Title,
+		"tag":           a.TriggerTag,
+		"sessionId":     sess.ID,
+		"iteration":     strconv.Itoa(a.IterationCount + 1), // 1-based: this fire's number
+		"maxIterations": maxIter,
+		"agent":         agentName,
+		"agentName":     agentName, // alias
+		"prevPrompt":    prevPrompt,
+		"automation":    automationLabel(a),
+		"date":          now.Format("2006-01-02"),
+		"time":          now.Format("15:04"),
+		"datetime":      now.Format("2006-01-02 15:04"),
+	}
+}
+
+// renderAutomationPrompt substitutes {{name}} placeholders (see turnVars) into the
+// template. A template that references no {{result}} still gets the result appended
+// so the loop always carries its output forward.
+func renderAutomationPrompt(tmpl string, vars map[string]string) string {
+	pairs := make([]string, 0, len(vars)*2)
+	for k, v := range vars {
+		pairs = append(pairs, "{{"+k+"}}", v)
+	}
+	out := strings.NewReplacer(pairs...).Replace(tmpl)
+	if !strings.Contains(tmpl, "{{result}}") && strings.TrimSpace(vars["result"]) != "" {
+		out = strings.TrimRight(out, "\n") + "\n\n--- Önceki sonuç ---\n" + vars["result"]
 	}
 	return out
 }

@@ -97,13 +97,18 @@ func (RunSubagentTool) Def() providers.ToolDef {
 			"profile (\"explore\" = read-only search, \"coder\" = write/edit code, \"reviewer\" = read-only " +
 			"review) or the name/id of an existing workspace agent. Defaults: runs now and waits (sync) " +
 			"with a clean context (isolated). Call several times in one turn to fan work out in parallel. " +
+			"For LONG tasks (writing many files, running a test suite, multi-minute work) prefer " +
+			"`wait:\"async\"` with an EXISTING agent target, then poll the filesystem (the source of truth) " +
+			"for the expected output — a long sync call can hit the CLI's tool-call timeout (\"The operation " +
+			"timed out.\") even though the work keeps running in the background. Use sync only for quick, " +
+			"bounded work. " +
 			"Give an `objective`, `output_format` and `boundaries` for best results — vague tasks cause gaps.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "target": { "type": "string", "description": "Profile id (\"explore\" | \"coder\" | \"reviewer\") or an existing agent's name/id." },
     "task": { "type": "string", "description": "A clear, self-contained instruction. The subagent sees nothing of your context unless context=inherited." },
-    "wait": { "type": "string", "enum": ["sync", "async"], "description": "\"sync\" (default): run now, return the reply. \"async\": detach into a background session (existing agents only)." },
+    "wait": { "type": "string", "enum": ["sync", "async"], "description": "\"sync\" (default): run now, return the reply — best for quick, bounded work. \"async\": detach into a background session (EXISTING agents only, not profiles); prefer this for long/multi-minute tasks and poll the filesystem for output, since a long sync call can hit the CLI tool-call timeout." },
     "context": { "type": "string", "enum": ["isolated", "inherited"], "description": "\"isolated\" (default): clean context. \"inherited\": also pass the current conversation." },
     "model": { "type": "string", "description": "Optional model id override." },
     "objective": { "type": "string", "description": "Optional. One-sentence goal — prevents scope drift." },

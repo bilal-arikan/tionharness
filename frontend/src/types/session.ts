@@ -154,7 +154,7 @@ export interface SessionContextPreview {
   toolTokens: number
   totalTokens: number
   cache: CachePreview
-  // Present only for CLI-wrapper providers (claude-cli / gemini-cli): the gap
+  // Present only for CLI-wrapper providers (claude-cli): the gap
   // between SwarmGo's segment estimate (totalTokens) and the real prompt the CLI
   // sends (its own system + tools + MCP bridge, which SwarmGo never sees).
   cliOverhead?: CLIOverhead
@@ -230,6 +230,11 @@ export interface SessionInfo {
   // and the handoff artifact written into this session at reset.
   parentSessionId?: string
   handoffArtifactId?: string
+  // Coordinator/worker role (M2): 'coordinator' | 'worker' | ''. A coordinator
+  // session gets the coordinator prompt + worker tools; coordinatorSessionId is a
+  // worker's back-link to its coordinator.
+  role?: string
+  coordinatorSessionId?: string
   createdAt: number
   updatedAt: number
 
@@ -245,4 +250,13 @@ export interface SessionInfo {
 
   fillers: ContextFiller[]
   agents: SessionAgentStat[]
+}
+
+// WorkerInfo is one worker's status under a coordinator session (M2).
+export interface WorkerInfo {
+  sessionId: string
+  agentName: string
+  title: string
+  running: boolean
+  summary: string
 }

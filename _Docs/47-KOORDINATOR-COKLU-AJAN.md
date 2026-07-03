@@ -1,0 +1,378 @@
+# 47 — Koordinatör & Çoklu-Ajan Koordinasyonu
+
+> **Durum:** M2 TAM UYGULANDI ✅ (2026-07-03, F0–F5 + CLI köprüsü + ayar UI'si +
+> M3 scratchpad + efemeral worker hedefi — bkz. §9 Uygulama Durumu). §1–§8 orijinal
+> tasarım metnidir. Kalan yalnız opsiyonel LLM-in-the-loop görsel deneme.
+> **Amaç:** SwarmGo'ya Claude Code'un "koordinatör modu"na denk bir çok-ajan
+> koordinasyon katmanı eklemek — bir üst ajan (koordinatör) birden çok işçiyi
+> (worker) paralel yönetir; ayrıca **birden fazla koordinasyon yöntemi**
+> (parallel fan-out / koordinatör-işçi / takım-karatahta / flow) tek bir çatı
+> altında seçilebilir olsun.
+
+İlgili dokümanlar: `22-SPAWN-SESSION`, `28-PEER-MESAJLASMA`, `15-FLOW-CANVAS`,
+`35-CONTEXT-RESET-HANDOFF`, `46-ETIKET-OTOMASYON`, `24-SELF-MANAGEMENT`.
+
+---
+
+## 1. Motivasyon
+
+Claude Code'un koordinatör modu (`src/coordinator/coordinatorMode.ts`) şu deseni
+uygular:
+
+1. Koordinatör ajan, `Agent` aracıyla **async** işçiler başlatır (bloklamaz).
+2. Bir işçinin turu bitince sonucu, koordinatörün oturumuna **user-rolünde bir
+   `<task-notification>` mesajı** olarak enjekte edilir ve **yeni bir koordinatör
+   turu tetiklenir**.
+3. Koordinatör bulguları **kendisi sentezler**, işçileri `SendMessage` ile
+   (yüklü bağlamlarıyla) devam ettirir veya yenisini spawn eder, `TaskStop` ile
+   durdurur.
+4. Fazlar: Araştırma (paralel işçiler) → Sentez (koordinatör) → Uygulama →
+   Doğrulama.
+
+SwarmGo bugün bu döngünün **çoğu parçasına sahip** ama "async işçi → koordinatöre
+geri bildirim → koordinatör devam eder" halkası eksik.
+
+### 1.1 SwarmGo'da bugün ne var (yeniden kullanılacak)
+
+| Yetenek | Kod | Not |
+|--------|-----|-----|
+| Paralel sync fan-out | `agent/subagent.go: launchParallelSubagents` | goroutine + WaitGroup + atomik ortak bütçe. Tek turda N `run_subagent`. |
+| Async detached spawn | `agent/spawn.go: SpawnSession`/`runSpawn` | fire-and-forget; `ParentSessionID`/`CreatedBy` kaydı; biten turda `FireTurnFinished`. |
+| **Mevcut oturuma mesaj enjekte + history-aware tur** | `agent/agentmsg.go: runSessionTurn` → `api/wake_turn.go: wakeTurnRunner` | **Kilit mekanizma.** Scheduler wake + inbox teslimi bunu kullanır. |
+| Tur-bitti kancası | `agent/runtime.go: FireTurnFinished` → `agent/automation.go: OnTurnFinished` | detached goroutine; chat/spawn/schedule/wake yollarından çağrılır. |
+| Peer mesaj + inbox | `agent/agentmsg.go: DeliverAgentMessage`/`deliverOne`/`runInboxDelivery` | zaten `<agent_message from=…>` Claude-Code tarzı etiket + broadcast. |
+| Delegasyon guard'ları | `agent/subagent.go: delegState` (depth/visited/calls) | döngü/derinlik/bütçe koruması. |
+| Flow paralel node | `orchestration/engine.go` | deterministik fan-out (LLM koordinatörsüz). |
+
+### 1.2 Eksik olan / riskli olan
+
+1. **Async worker → koordinatör geri bildirimi yok.** Bugün `wait:async`
+   ayrı bağımsız bir oturum açar; sonuç orada kalır, koordinatörün oturumuna
+   dönmez. `FireTurnFinished` yalnızca **yeni** bir oturum spawn edebiliyor
+   (automation), var olan koordinatör oturumuna besleme yapamıyor.
+2. **Aynı oturumda eşzamanlı tur koruması YOK.** `activeSessions` (sync.Map,
+   `trackSession`/`untrackSession`) yalnız UI "çalışıyor" göstergesi — **kilit
+   değil**. 4 işçi aynı anda bitip koordinatöre `<task-notification>` yazıp tur
+   tetiklerse: iç içe geçmiş mesajlar + çift tur = yarış. **Per-session tur
+   kuyruğu şart.**
+3. Koordinatör-farkında sistem promptu / işçi araç kısıtı yok.
+4. Koordinatör/işçi ilişkisini modelleyen alanlar yok (`ParentSessionID` handoff
+   için kullanılıyor, anlamı "devamı" — worker "tarafından-spawn-edildi" farklı).
+
+---
+
+## 2. Koordinasyon Yöntemleri (seçilebilir "methods")
+
+Kullanıcı isteği: *"farklı agent koordinasyon methodlarını da kullanabilecek
+şekilde"*. Dört yöntemi tek çatı altında topluyoruz. Üçü zaten var; asıl yeni
+inşa **M2**.
+
+```mermaid
+graph TD
+    U[Kullanıcı / Görev] --> SEL{Koordinasyon<br/>yöntemi}
+    SEL -->|M1| M1[Parallel Fan-out<br/>sync run_subagent x N]
+    SEL -->|M2| M2[Koordinatör-İşçi<br/>async + notify-back ⭐YENİ]
+    SEL -->|M3| M3[Takım / Karatahta<br/>peer mesaj + inbox + scratchpad]
+    SEL -->|M4| M4[Flow<br/>deterministik graf]
+```
+
+| Yöntem | Ne zaman | Durum |
+|--------|----------|-------|
+| **M1 — Parallel fan-out (sync)** | Kısa, bağımsız alt-görevler; koordinatör hepsini aynı turda toplamak istiyor (araştırma taraması). | ✅ VAR (`run_subagent` ×N). Belgelenip "method 1" olarak sunulacak. |
+| **M2 — Koordinatör-İşçi (async notify-back)** | Uzun/çok-fazlı iş; koordinatör turlar boyunca canlı kalıp fan-out + sentez + doğrulama yapmalı. | ⭐ **YENİ inşa.** Claude Code modeli. |
+| **M3 — Takım / Karatahta (peer)** | Eşdüzey ajanlar birbirine mesaj atarak işbirliği; merkezi koordinatör yok. | ✅ VAR (`DeliverAgentMessage`/inbox/broadcast) + ortak **scratchpad** eklenecek. |
+| **M4 — Flow (deterministik)** | LLM koordinatörü değil, sabit graf: paralel node + branch. | ✅ VAR (`orchestration`). Belgelenecek. |
+
+Bu doküman ağırlıklı olarak **M2**'yi tasarlar; M1/M3/M4 mevcut ve "yöntem"
+kavramı altında birleştirilir.
+
+---
+
+## 3. M2 — Koordinatör/İşçi Mimarisi
+
+### 3.1 Akış
+
+```mermaid
+sequenceDiagram
+    participant U as Kullanıcı
+    participant C as Koordinatör oturumu
+    participant K as CoordinationEngine
+    participant Q as Per-session tur kuyruğu (C)
+    participant W1 as Worker 1
+    participant W2 as Worker 2
+
+    U->>C: Görev
+    C->>C: spawn_worker (async) x2
+    Note over C: Tur biter, koordinatör "beklemede"
+    C-->>W1: SpawnSession (CoordinatorSessionID=C)
+    C-->>W2: SpawnSession (CoordinatorSessionID=C)
+    W1->>K: turn finished (FireTurnFinished)
+    W2->>K: turn finished
+    K->>Q: NotifyCoordinator(<task-notification W1>)
+    K->>Q: NotifyCoordinator(<task-notification W2>)
+    Note over Q: C meşgulse kuyruğa al; boşalınca<br/>bekleyen TÜM bildirimleri TEK turda birleştir
+    Q->>C: user msg = task-notification(W1)+(W2) → runSessionTurn
+    C->>C: Sentez; gerekirse send_to_worker / yeni spawn_worker
+    C->>U: Ara özet
+```
+
+### 3.2 Yeni araçlar (self-management "coordination" ailesi)
+
+Koordinatör oturumundaki ajana açılır (worker oturumlarında gizli — recursion
+guard):
+
+| Araç | Karşılığı (Claude Code) | Davranış |
+|------|-------------------------|----------|
+| `spawn_worker` | `Agent` (async) | Yeni worker oturumu aç: `Kind="worker"`, `CoordinatorSessionID=<caller session>`, `CreatedBy=<caller agent>`. Hemen worker id döner; tur arka planda koşar (`SpawnSession` yeniden kullanılır + yeni opts). Tek turda çoklu çağrı = paralel. |
+| `send_to_worker` | `SendMessage` (continue) | Var olan worker oturumuna mesaj ekle + turunu çalıştır (`runSessionTurn`/wake mekanizması). Yüklü bağlamı korur. |
+| `stop_worker` | `TaskStop` | Çalışan worker turunu iptal et (context cancel). Kuyruktaki bekleyeni de düşürür. |
+| `list_workers` | `TaskList` | Bu koordinatörün worker'ları + durumları (running/done/failed). |
+
+> **Not:** M2 araçları, mevcut `run_subagent` (M1) ve `send_message` (M3) ile
+> **birlikte** yaşar; koordinatör ajan görev tipine göre birini seçer.
+
+### 3.3 Geri bildirim: `<task-notification>` formatı
+
+Claude Code ile birebir uyumlu (worker sonucu koordinatöre user-rolünde gelir):
+
+```xml
+<task-notification>
+<task-id>{workerSessionID}</task-id>
+<status>completed|failed|killed</status>
+<summary>{kısa özet}</summary>
+<result>{worker'ın son yanıt metni}</result>
+<usage><total_tokens>N</total_tokens><tool_uses>N</tool_uses><duration_ms>N</duration_ms></usage>
+</task-notification>
+```
+
+Koordinatör sistem promptu bunun bir "kullanıcı mesajı gibi görünen ama
+konuşma partneri olmayan iç sinyal" olduğunu öğretir (Claude Code'daki gibi:
+"never thank or acknowledge them").
+
+### 3.4 Kilit yeni bileşen: `CoordinationEngine` + per-session tur kuyruğu
+
+Yeni dosya `internal/agent/coordination.go`:
+
+```go
+// CoordinationEngine, bir worker turu bittiğinde (FireTurnFinished) devreye
+// girer: worker'ın CoordinatorSessionID'si varsa <task-notification> üretir ve
+// koordinatör oturumuna enjekte edip tur tetikler — per-session kuyruk üzerinden.
+type CoordinationEngine struct { db *db.DB; rt *Runtime; logger *slog.Logger }
+
+func (e *CoordinationEngine) OnWorkerFinished(ctx, tf TurnFinished) {
+    sess := e.db.GetSession(tf.SessionID)
+    if sess.CoordinatorSessionID == "" { return }   // worker değil → çık
+    note := formatTaskNotification(sess, tf.Output, "completed", usage)
+    e.rt.NotifyCoordinator(sess.CoordinatorSessionID, note)
+}
+```
+
+`Runtime.NotifyCoordinator(coordID, note)`:
+1. `<task-notification>` mesajını koordinatör oturumuna **user** rolüyle
+   `AddMessage` eder (Origin="worker-note" → UI "🤖 İşçi bildirimi" olarak
+   render eder, kullanıcı balonu değil).
+2. **Per-session tur kuyruğuna** bir "tur talebi" bırakır.
+
+**Per-session tur kuyruğu** (`Runtime.sessionTurnQueue`): oturum başına tek bir
+sıralayıcı. Amaç: (a) aynı oturumda iki tur ASLA eşzamanlı koşmaz; (b) koordinatör
+meşgulken biriken **birden çok bildirim TEK sonraki turda birleşir** (4 worker
+biterse 4 ayrı tur değil, hepsini gören 1 tur). Inbox'ın "history-aware tur"
+mantığıyla aynı: tur çalışınca son user mesajları (tüm bekleyen bildirimler)
+zaten geçmişte olur.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Running: bildirim geldi → tur başlat
+    Running --> Running: tur sürerken yeni bildirim → geçmişe eklenir (kuyruk işareti)
+    Running --> Draining: tur bitti, bekleyen işaret var mı?
+    Draining --> Running: evet → yeni tur (biriken tüm bildirimleri görür)
+    Draining --> Idle: hayır
+```
+
+Uygulama seçeneği: oturum başına `struct{ mu sync.Mutex; pending atomic.Bool }`
+veya oturum başına bir goroutine + buffered channel. **Tercih:** keyed-lock +
+pending-flag (basit, kilitsiz drenaj). `sync.Map[sessionID]*coordSlot`.
+
+### 3.5 Session modeli değişiklikleri
+
+`internal/db/models.go` (`Session`):
+
+```go
+CoordinatorSessionID string   // worker → onu spawn eden koordinatör oturumu ("" = normal)
+Role                 string   // "coordinator" | "worker" | "" (normal)
+```
+
+- `ParentSessionID`'yi **kirletmiyoruz** (o handoff "devamı" anlamında).
+- `Kind="worker"` de eklenir (mevcut `spawned`/`inbox`/`scheduled` yanına).
+- Worker → koordinatör bağı `CoordinatorSessionID` üzerinden; `list_workers` bunu
+  sorgular.
+
+### 3.6 Guard'lar (recursion/storm/loop)
+
+| Risk | Önlem |
+|------|-------|
+| Worker kendi worker'ını spawn eder (sonsuz ağaç) | Worker oturumlarında `spawn_worker`/`send_to_worker` **gizli** (Role=worker → coordination araçları kapalı). + mevcut `delegState.depth`. |
+| Spawn fırtınası | Mevcut `SpawnMaxConcurrent` slot + yeni `CoordinatorMaxWorkers` (koordinatör başına aktif worker). |
+| Sonsuz notify döngüsü | Koordinatör turu sayacı `CoordinatorMaxTurns` (vars. ~50, automation MaxIterations gibi); aşılınca notify enjeksiyonu durur, kullanıcıya uyarı. |
+| Koordinatör oturumu kapanınca kaçak worker | Oturum silme/arşivde `stop_worker` hepsine (cascade cancel). |
+| Aynı oturumda çift tur | §3.4 per-session kuyruk. |
+
+---
+
+## 4. Koordinatör Sistem Promptu / Skill
+
+Yeni gömülü skill `swarmgo-coordinator` (`internal/skills/defaults/`), Claude
+Code'un `getCoordinatorSystemPrompt()`'undan uyarlanır (Türkçe doküman / İngilizce
+prompt kuralına göre prompt İngilizce):
+
+- Rolün = koordinatör; her mesajın kullanıcıya; worker bildirimleri iç sinyal,
+  onlara teşekkür etme.
+- Paralellik senin süper gücün: bağımsız worker'ları tek mesajda fan-out et.
+- **Sentezi SEN yap** — "based on your findings" YASAK; dosya:satır içeren
+  spesifik spec yaz.
+- Continue-vs-spawn karar tablosu (bağlam örtüşmesi yüksek→continue,
+  düşük→fresh).
+- Fazlar: Araştırma(paralel)→Sentez(sen)→Uygulama(dosya-seti başına tek)→Doğrulama.
+- Gerçek doğrulama: özelliği açıp test et, rubber-stamp etme.
+
+Prompt yalnız `Session.Role=="coordinator"` iken enjekte edilir (workspace prompt
+kompozisyonuna koşullu blok — `composeTurnRequest`).
+
+İşçi profilleri: mevcut `explore`/`coder`/`reviewer` (subagent.go) yeniden
+kullanılır; koordinatör bunları `spawn_worker(target=...)` ile hedefler ya da
+gerçek workspace ajanı adı verir.
+
+---
+
+## 5. UI
+
+- **Koordinasyon paneli** (yeni): koordinatör oturumu açıkken sağda worker
+  kartları — ad, durum (⏳running / ✅done / ❌failed), süre, token, son özet;
+  karta tık → worker transkripti (executions feed'e deep-link, zaten var).
+- Composer'da **koordinasyon yöntemi rozeti** (M1–M4 seçimi; M2 için "Koordinatör"
+  toggle → oturum `Role=coordinator` olur, prompt+araçlar açılır).
+- SSE: mevcut `spawned`/`chat` event'lerine `worker`-tipli event (status geçişi)
+  eklenir → panel canlı güncellenir. Backend `emitSpawnEvent` deseni kopyalanır.
+
+---
+
+## 6. Fazlama
+
+| Faz | Kapsam | Dosyalar |
+|-----|--------|----------|
+| **F0** | Bu tasarım dokümanı + koordinatör skill taslağı | `_Docs/47`, `skills/defaults/swarmgo-coordinator` |
+| **F1** | Çekirdek backend: session alanları + `NotifyCoordinator` + per-session tur kuyruğu + `CoordinationEngine.OnWorkerFinished` (workspace manager'a `SetTurnHook` zincirine ekle) | `db/models.go`, `agent/coordination.go`, `agent/runtime.go`, `workspace/manager.go` |
+| **F2** | Araçlar: `spawn_worker`/`send_to_worker`/`stop_worker`/`list_workers` + worker araç kısıtı + guard'lar (`CoordinatorMaxWorkers`/`MaxTurns`) | `tools/builtin_coordination.go`, `agent/subagent.go`, `agent/tunables.go` |
+| **F3** | Koordinatör sistem promptu (koşullu enjeksiyon) + `swarmgo-coordinator` skill | `agent/prompts*`, `api/*compose*`, `skills/defaults/` |
+| **F4** | UI: koordinasyon paneli + yöntem seçici + `worker` SSE event | `frontend/src/components/`, `agent/coordination.go` (emit) |
+| **F5** | M3 ortak scratchpad + M1/M4 birleşik "yöntem" belgeleme + testler + doküman güncelleme | `_Docs/28`,`15`,`47`, `*_test.go`, `SKILL.md` |
+
+### 6.1 F1 için en kritik teknik detay
+
+`FireTurnFinished` bugün **tek** hook'a gidiyor (`AutomationEngine.OnTurnFinished`,
+`manager.go:245`). İki tüketici gerekiyor (automation + coordination). Çözüm:
+`SetTurnHook`'u **çoklu-hook** yap (hook listesi) ya da manager'da tek bir
+"dispatcher" hook kur; o hem `AutomationEngine.OnTurnFinished` hem
+`CoordinationEngine.OnWorkerFinished` çağırsın. Basit ve geriye uyumlu:
+`manager.go`'da bir kompozit fonksiyon.
+
+---
+
+## 7. Kabul Kriterleri (M2)
+
+1. Koordinatör oturumunda `spawn_worker` ×3 (tek tur) → 3 worker paralel koşar,
+   koordinatör turu **bloklanmadan** biter.
+2. Worker'lar bitince koordinatör oturumuna `<task-notification>` düşer ve **tek**
+   yeni koordinatör turu (hepsini gören) otomatik başlar.
+3. İki worker aynı anda bitse bile koordinatörde **çift tur olmaz** (kuyruk).
+4. `send_to_worker` biten worker'ı yüklü bağlamıyla devam ettirir; `stop_worker`
+   çalışanı iptal eder.
+5. Worker oturumu `spawn_worker` göremez (recursion engellendi).
+6. `CoordinatorMaxTurns` aşılınca notify döngüsü durur + kullanıcı bilgilendirilir.
+7. M1 (`run_subagent` sync) ve M3 (`send_message`/inbox) davranışları **değişmez**.
+
+---
+
+## 8. Açık Kararlar (ÇÖZÜLDÜ — kararlar §9'da)
+
+1. **Kapsam:** F0–F5'in tamamı mı, yoksa önce yalnız F1+F2 (çalışan çekirdek M2,
+   UI'sız) mı? (Öneri: F1+F2+F3'ü ilk PR, F4 UI ikinci PR.)
+2. **`Role` alanı mı, yalnız `CoordinatorSessionID` mi?** (Öneri: ikisi de — Role
+   prompt/araç koşulu, CoordinatorSessionID bağ.)
+3. **Kuyruk uygulaması:** keyed-lock+flag (basit) vs per-session goroutine
+   (temiz ama daha çok makine). (Öneri: keyed-lock+flag.)
+4. **M3 scratchpad** bu turda mı yoksa sonraya mı? (Öneri: F5, opsiyonel.)
+
+---
+
+## 9. Uygulama Durumu (2026-07-03)
+
+**Karar:** F0–F5 tamamı; hem `Role` hem `CoordinatorSessionID`; kuyruk =
+keyed-lock+flag; M3 scratchpad ertelendi.
+
+### Ne yapıldı (F1–F4 + test)
+
+- **Session modeli** (`db/models.go`): `Role` + `CoordinatorSessionID`; worker
+  spawn'ları `Kind="worker"`.
+- **Çoklu turn-hook** (`agent/runtime.go`): `turnHook` → `turnHooks []` +
+  `AddTurnHook`/`SetTurnHook` (mutex); `FireTurnFinished` her hook'u ayrı
+  goroutine'de çağırır. (Automation hâlâ `SetTurnHook` kullanır.)
+- **Koordinasyon çekirdeği** (`agent/coordination.go`, YENİ): `coordSlot`
+  (per-session kuyruk `running`/`pending`/`turns`/`workers`) +
+  `enqueueCoordinatorTurn`/`drainCoordinator` (serileştirme + coalescing) +
+  `NotifyCoordinator` (`<task-notification>` `Origin="worker-note"`) +
+  `SpawnWorker`/`SendToWorker`/`StopWorker`/`ListWorkers` + `runWorker`
+  (history-aware; completed/failed/killed HER durumda notify) + `workerCancels` +
+  `formatTaskNotification`/`countToolSteps`.
+- **Araçlar** (`tools/builtin_coordination.go`, YENİ): `spawn_worker`/
+  `send_to_worker`/`stop_worker`/`list_workers`; context-injection
+  (`WithCoordination`) ile YALNIZ koordinatör oturumunda kayıtlı (recursion
+  engeli). Wiring: `toolloop.go withCoordination` + `toolsetup.go` koşullu kayıt.
+- **Prompt/skill** (F3): `api/coordinator_prompt.go` (`composeTurnRequest`'te
+  `Role=="coordinator"` iken enjekte → wake yolunu da kapsar) + gömülü default
+  skill `swarmgo-coordinator`.
+- **Guard'lar** (`agent/tunables.go`): `CoordinatorMaxWorkers` (8) +
+  `CoordinatorMaxTurns` (50) + `SetCoordinatorLimits`.
+- **API** (F4): `session_info`'ya `role`+`coordinatorSessionId`; yeni
+  `PUT /api/sessions/{id}/role` + `GET /api/sessions/{id}/workers`.
+- **UI** (F4): `CoordinatorSection.tsx` (aç/kapa + canlı worker roster, running
+  varken 3sn poll) SessionDetailPanel'de; `worker`+`coordination` SSE tipleri
+  `eventViews`'te executions'a bağlı.
+- **Test** (`agent/coordination_test.go`): kuyruk serileştirme+coalescing (kritik
+  yarış), worker cap, coordinator-link, notification format, countToolSteps.
+  **Tüm paket testleri (221) geçiyor.**
+
+### Tasarımdan sapma (bilinçli)
+
+§3.4'teki ayrı `CoordinationEngine` **turn-hook** yerine geri bildirim `runWorker`
+içinden **doğrudan** (`NotifyCoordinator`) yapılır. Sebep: `runSpawn` başarısız
+turda `FireTurnFinished` çağırmıyor → hook yolu worker hatalarını iletemezdi.
+Explicit-notify başarı/başarısız/killed'ı kesin statüyle iletir, çift-tetiği eler.
+`AddTurnHook` altyapısı ileride başka gözlemciler için yine de eklendi.
+
+### İkinci tur — kalan adımların tamamı yapıldı ✅ (2026-07-03)
+
+- **CLI köprüsü ✅:** koordinasyon araçları `BridgeTools`'a eklendi
+  (`runtime.go`) — koordinatör oturumunda `coordinationBridgeDefs()` advertise
+  edilir, dispatch `dispatchCoordinationBridge` ile koordinasyon runner'ı üzerinden
+  (reg dışı). `autonomous_interaction.go` ctx'i `WithSessionID` ile stampliyor →
+  claude-cli koordinatör de worker sürebilir. Bridge defs zaten allowlist'e
+  (`splitInteractionTiers`) giriyor.
+- **Ayar UI'si ✅:** `settings.CoordinatorMaxWorkers`/`CoordinatorMaxTurns` (ana +
+  maskeli + patch struct'ları), `store.go` applyInt + clamp (worker 1–64, tur
+  1–500), `server.go applySettings` → `SetCoordinatorLimits`. Frontend:
+  `AppToolsPanel` "Koordinatör (çoklu-ajan) limitleri" + `types/settings.ts` +
+  `SettingsPanel` patch. Canlı doğrulandı (8/50 default → 5/42 patch).
+- **M3 ortak scratchpad ✅:** koordinatör + tüm worker'ları için ORTAK dizin
+  (`<SessionDir(coordID)>/scratchpad`), `coordinationScratchpadBlock`
+  (`coordinator_prompt.go`) ile context'e enjekte (`composeTurnRequest`);
+  normal dosya araçlarıyla okunur/yazılır (koordinatör + worker aynı mutlak yolda).
+- **spawn_worker efemeral hedef ✅:** profil (explore/coder/reviewer) hedefi
+  `resolveWorkerTarget` ile kalıcı, yeniden-kullanılabilir `worker:<profile>`
+  ajanına materyalize edilir (base ajandan provider/model/permission klonlanır,
+  `profileWorkerMu` ile dup önlenir). Test: `TestSpawnWorkerMaterializesProfile`.
+- **Canlı doğrulama ✅:** backend booted; API smoke (rol set/get, `/workers`,
+  ayar round-trip) uçtan uca geçti. `go build ./...` + **624 test** + `tsc` yeşil.
+- **Kalan (opsiyonel):** LLM-in-the-loop görsel deneme (dev'de koordinatör
+  oturumu + gerçek model → worker roster'ın canlı dolması) — kullanıcı UI'da izler.

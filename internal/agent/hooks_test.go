@@ -22,6 +22,12 @@ func TestHookMatches(t *testing.T) {
 		{"http_*", "http_get", true}, // glob
 		{"http_*", "shell", false},
 		{"*", "anything", true},
+		// comma-separated alternatives (Bash,PowerShell after the shell split)
+		{"Bash,PowerShell", "Bash", true},
+		{"Bash,PowerShell", "PowerShell", true},
+		{"Bash,PowerShell", "Write", false},
+		{"Bash, PowerShell", "PowerShell", true}, // whitespace-tolerant
+		{"http_*,Bash", "http_get", true},        // glob alt + exact alt
 	}
 	for _, c := range cases {
 		if got := hookMatches(c.matcher, c.tool); got != c.want {

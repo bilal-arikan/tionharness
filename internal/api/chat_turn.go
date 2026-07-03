@@ -33,6 +33,14 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // Shared by both the blocking (chat.go) and streaming (chat_stream.go) handlers.
 func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool) providers.Request {
 	system := buildSystemPrompt(agentRow)
+	// Coordinator sessions (M2, _Docs/47) lead with the coordinator operating manual
+	// so the agent drives workers, synthesizes their notifications itself, and runs
+	// the research→synthesis→implementation→verification loop. Role is stable, so
+	// this sits in the cached static prefix. Only a coordinator session gets it (and
+	// only a coordinator session gets the spawn_worker/send_to_worker/... tools).
+	if session.Role == "coordinator" {
+		system = strings.TrimSpace(coordinatorSystemPrompt() + "\n\n" + system)
+	}
 	// Tell the agent its own name and how "@name" references work. The message is
 	// addressed to THIS agent (chosen from the UI dropdown). An "@name" inside the
 	// message is just a NAME REFERENCE — the user pointing at who they mean — NOT a
@@ -89,6 +97,13 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	}
 	if wb := workdirContextBlock(cwd); wb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + wb)
+	}
+	// Coordination scratchpad (M2/M3): a shared folder the coordinator and ALL its
+	// workers can read/write, for durable cross-worker knowledge that shouldn't ride
+	// in every prompt. Injected for a coordinator session and for its workers so
+	// they converge on the SAME absolute path.
+	if sb := coordinationScratchpadBlock(wsp, session); sb != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
 	}
 	// Core memory (MemGPT-style): the agent's self-maintained named working-memory
 	// blocks, re-injected verbatim every turn (edited via core_memory_replace/

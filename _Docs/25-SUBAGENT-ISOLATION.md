@@ -70,6 +70,21 @@ graph TD
 | `context` | `isolated` (varsayılan) / `inherited` | Temiz bağlam / parent konuşmasını miras al |
 | `session` | `ephemeral` (varsayılan) / `persistent` | İz parent'a gömülü / kendi oturumu feed'de |
 
+> **Hedef çözümleme sırası (2026-07-03, fix):** `resolveSubagentTarget` **önce
+> mevcut workspace ajanına** bakar, bulamazsa built-in profile (`explore`/`coder`/
+> `reviewer`) düşer. Böylece kullanıcının **kendi adlandırdığı ajanı** aynı isimli
+> bir profille **çakışmaz/gölgelenmez** — ör. gerçek bir "Reviewer" (AGTx) ajanı,
+> built-in `reviewer` profiliyle örtüşse bile isimle çözülür. (Eskiden ters sıraydı;
+> "Reviewer" gibi bir ajan `run_subagent` ile **async** çağrılamıyordu çünkü profil
+> ephemeral'dı → `async subagents require an existing agent target, not a profile`.
+> Regresyon: `TestResolveSubagentAgentBeatsProfile`.)
+>
+> **async + profile (ephemeral) geçersiz kombinasyon:** profilin kalıcı oturumu
+> olmadığından `wait:async` bir profile verilemez; provider çözümlemesi/bütçe
+> harcamasından **önce** açıklayıcı hatayla reddedilir (Guard 4). Profili async
+> istiyorsan onu kalıcı bir ajana dönüştür ya da `wait:sync` kullan. Regresyon:
+> `TestAsyncProfileRejected`.
+
 Eski primitifler artık bu eksenlerin birer kombinasyonu:
 
 | Eski | runAgent kombinasyonu |

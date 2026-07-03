@@ -1,6 +1,303 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-02**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-03**
+
+## Araç boşluk kapatma: arka-plan shell + apply_patch + CLI tool latency + built-in hook görünürlüğü ✅ (2026-07-03)
+
+claude-cli built-in araç yüzeyi ile SwarmGo native araçları arasındaki boşlukların
+kapatılması (the external agent project↔SwarmGo backlog `_Docs/41`).
+
+- **Arka-plan / uzun-süren shell (`BashOutput`/`KillShell` paritesi):** `Bash`/`PowerShell`
+  araçlarına `run_in_background` argümanı → detached süreç başlatıp shell id döner
+  (`internal/tools/builtin_shell_bg.go`: `ShellManager` süreç kayıt defteri + `bgWriter`
+  rolling ring 256KB + offset-takipli **destructive drain**; `bgShellMaxLive=16`,
+  `bgShellKeepDone=16` budama). Üç yönetim aracı: `shell_output` (son okumadan beri YENİ
+  çıktı + durum satırı; ring taşarsa "rolled off" uyarısı), `shell_kill`, `shell_list`
+  (name-only tier). Yönetici **session-scoped** (`Runtime.shellMgrs sync.Map`,
+  `shellMgrFor`), turlar arası yaşar; catalog/preview build'de nil → arka-plan devre dışı.
+  Shell tool'lar `WithManager` ile bağlanır (value-type copy; eski call-site'lar
+  değişmedi). Confined-git brake arka-planda da geçerli. Dev server/watcher senaryosu.
+- **`apply_patch` (unified-diff, çok-hunk/çok-dosya):** `Edit`'in batch kardeşi
+  (`internal/tools/builtin_patch.go`). `diff -u`/`git diff` çıktısını **context
+  eşleştirmeyle** uygular (@@ satır no'ları ipucu, güvenilmez) → alakasız edit'ler satırı
+  kaydırsa bile tutar; hunk eşleşmezse **o dosyanın tamamı reddedilir** (yarım uygulama
+  yok). **İki-fazlı** (tüm dosyalar önce validate+freshness, sonra commit) → dosyalar
+  arası all-or-nothing. `--- /dev/null` create, `+++ /dev/null` delete; `a/`,`b/` prefix
+  ve `diff -u` tab-timestamp temizlenir. Freshness guard entegre (read-only ajanda lazy).
+- **CLI tool latency → debug.jsonl (#3):** `emitCLIToolDebug` zaten tool olaylarını
+  besliyordu ama `DurMs=0` idi. `cliStreamParser`'a `toolStart map[id]time.Time` eklendi:
+  `tool_use` görülünce saat başlar, `tool_result` gelince `TraceStep.DurMs` = gerçek
+  wall-clock (stream satır-satır `ReadString` ile real-time beslendiği için CLI-içi araç
+  gecikmesi doğru). `provider.TraceStep.DurMs` yeni alan; native/CLI arası tek-tip tool
+  metriği tamamlandı.
+- **Built-in/auto-injected hook görünürlüğü (salt-okunur):** yeni `GET /api/hooks/builtins`
+  (`api/hooks.go handleListBuiltinHooks`) app-settings snapshot'ından hesaplanan 8 yerleşik
+  davranışı döner (freshness guard, CLI native-tool bridging, Bash→PowerShell, CLI hook
+  passthrough, permission deny-list, plan-mode approval, autonomous git brake, hook
+  fail-open) — `enabled` toggle'lanabilirler için `FileFreshnessGuard`/`EnableShell`/
+  `EnableCLIHooks`/`AutonomousConfine`'dan. Frontend: `HooksPanel.tsx` altına dashed-border
+  read-only bölüm (scope/event badge + ayar anahtarı + Aktif/Pasif); `types/hook.ts
+  BuiltinHook` + `api/hooks.ts listBuiltinHooks`.
+- **#2 (freshness-guard'ı CLI yoluna taşı) YAPILMADI — bilinçli:** CLI'nin **native**
+  Read/Edit/Write'ı zaten kendi read-before-write guard'ını uyguluyor (SwarmGo'nun
+  `readtracker.go`'su bunu "mirrors Claude Code's readFileState guard" diye kopyaladı).
+  Hook tabanlı ikinci guard redundant + kırılgan olurdu (hook executor'ı değiştiremez,
+  yalnız deny/observe/updatedInput; `updatedInput` Edit'te bug'lı #47853).
+- **Test/derleme:** `internal/tools/builtin_patch_test.go` (update/create/delete/mismatch/
+  freshness/multi-hunk), `builtin_shell_bg_test.go` (ring drain/overflow, unknown-id, nil
+  manager, gerçek arka-plan echo). `go build ./...` + 430 test (4 paket) + `tsc --noEmit` yeşil.
+
+## Etiket-Otomasyon: genişletilmiş değişkenler + info popover + olay-bazlı otomatik etiketleme ✅ (2026-07-03)
+
+`_Docs/46`'nın devamı (etiket + otomasyon çekirdeği 2026-07-02).
+
+- **PromptTemplate değişkenleri 4→13:** `renderAutomationPrompt` + yeni `turnVars`
+  (`agent/automation.go`) → {{result}}/{{title}}/{{tag}}/{{sessionId}}/{{iteration}}/
+  {{maxIterations}}/{{agent}}(+{{agentName}})/{{prevPrompt}}/{{automation}}/{{date}}/
+  {{time}}/{{datetime}}. Bilinmeyen `{{...}}` aynen kalır; {{result}} yoksa sona eklenir.
+- **UI info popover:** `panels/Automations.tsx` prompt alanına ℹ️ butonu → 13 değişkeni
+  açıklamalı listeler; satıra tıkla → şablona ekler (`PROMPT_VARS`).
+- **Olay-bazlı otomatik etiketleme** (yeni `agent/autotag.go`): tur olaylarına göre
+  well-known etiketler (ADD-only): `tool-error` (gerçek tool hatası; claude-cli
+  **disallowed-tool** reddi `isPermissionDenyError` ile HARİÇ), `error` (tur-seviyesi
+  hata, "stopped" hariç), `goal`/`goal-done`/`archived` (durum). `Runtime.AutoTagTurn`
+  chat(başarı+cerr)/spawn/schedule/wake yollarında; `archived` ayrıca arşiv mutasyonunda
+  (`sessionSink.Archive` + API state handler, geri yüklemede silinir). Amaç: bir
+  otomasyonla hataları tarayıp otomatik onarmak.
+- **Canlı doğrulama (WS2, sonnet/claude-cli):** loop (sayaç 10→11→12, story zinciri,
+  2 senaryo paralel, maks-iter'de auto-disable); genişletilmiş değişkenler render;
+  autotag: archived ekle/sil, goal, var-olmayan dosya Read → tool-error. Testler:
+  `db/automation_test.go`, `agent/automation_test.go`, `agent/autotag_test.go`;
+  spawn testlerine `drainSpawns` (fire-and-forget goroutine'i TempDir cleanup'tan önce
+  beklet → Windows dosya-kilidi flakiness giderildi). `go build ./...` + 635 test + tsc yeşil.
+
+## Fix: `run_subagent` hedef gölgeleme + sync timeout (WS8/SES1 teşhisinden) ✅ (2026-07-03)
+
+**Belirti:** Superpowers pipeline'ında (Orchestrator=claude-cli) `run_subagent`
+"Reviewer"/"Verifier" fazlarında tutarlı başarısız: async → `async subagents require
+an existing agent target, not a profile`; sync → `The operation timed out.`
+
+**Kök neden 1 (gölgeleme):** `resolveSubagentTarget` önce built-in profillere
+(`explore`/`coder`/`reviewer`) bakıyordu → kullanıcının gerçek "Reviewer" (AGT6) ajanı
+`reviewer` profiliyle gölgelenip ephemeral çözülüyordu; ephemeral async'i reddettiği için
+hata. **Fix:** önce mevcut ajana bak, bulamazsa profile düş (gerçek ajan kazanır).
+Async+ephemeral reddi provider/bütçe işinden **önce** açıklayıcı mesajla (Guard 4).
+
+**Kök neden 2 (timeout):** sync `run_subagent`'ta alt-ajanın tüm işi tool çağrısında
+koşuyor ve claude-cli'nin ~60 sn MCP araç-çağrısı timeout'unu aşıyor → CLI `The operation
+timed out.` verir (SwarmGo işi arka planda bitirir). **Fix:** `claudecli.go runAttempt`
+CLI process'ine `MCP_TOOL_TIMEOUT=600000` + `MCP_TIMEOUT=60000` ms enjekte eder (kullanıcı
+override kazanır → `ensureEnvDefault`).
+
+**Dokunulan:** `internal/agent/subagent.go` (çözümleme sırası + Guard 4), `internal/
+providers/claudecli.go` (`ensureEnvDefault` + MCP timeout env), testler
+`TestResolveSubagentAgentBeatsProfile`/`TestAsyncProfileRejected`. Doküman `_Docs\25` +
+skill `swarmgo-session-debug` (desen G/H). `go build`/`go test ./internal/agent
+./internal/providers` (186) yeşil.
+
+## Feature: Read/Grep/Glob araç-paritesi — offset/limit + satır no, ripgrep-stili Grep, mtime Glob, .gitignore ✅ (2026-07-03)
+
+**İstek:** Claude Code'un fs araçlarında olup bizde olmayan per-tool özellikler
+(`_Docs/41` Bölüm E): Read satır-aralığı + numaralama, Grep output-mode/context/-i/
+type/multiline/head_limit, Glob mtime sıralama + path, ve .gitignore farkındalığı.
+
+**Çözüm:**
+- **`Read`** (`builtin_fs.go` `renderNumbered`): çıktı artık **satır-numaralı** (`%6d\t…`,
+  cat -n stili; Edit için "önek+tab'ı sıyır" notu açıklamaya eklendi). **`offset`**
+  (1-tabanlı başlangıç) + **`limit`** (satır sayısı, vars. 2000) ile büyük dosyanın
+  penceresi okunur; satır-başı karakter cap'i (2000) + 256KB çıktı cap'i + "devam:
+  offset=N" ipuçları. Tazelik hash'i tam içerik üzerinden (pencere kısmi görünüm).
+- **`Grep`** (yeni `builtin_grep.go`): `output_mode` (content/files_with_matches/count),
+  context `-A`/`-B`/`-C` (bitişik pencereler birleşir, `--` ayraç), `-i`, `-n` (vars.
+  açık), `-o` (yalnız eşleşen), `type` (dil→uzantı haritası), `multiline` (`(?s)`),
+  `head_limit`, `path` (dosya/dizin), `no_ignore`. Eşleşen satır `path:line:text`,
+  bağlam `path-line-text` (ripgrep konvansiyonu).
+- **`Glob`** (yeni `builtin_glob.go`): sonuçlar **mtime'a göre** (en yeni önce) sıralı;
+  `path` (arama kökü) + `no_ignore` argümanları.
+- **`.gitignore` farkındalığı** (yeni `ignore.go` `IgnoreSet`): Grep+Glob kök+iç-içe
+  `.gitignore`'ları (lazy) + daima `.git`'i atlar; dizin eşleşince `SkipDir` ile tüm
+  alt-ağaç elenir. `*`/`**`/`?`, `!` negasyon, dir-only `/`, anchored `/` desteklenir
+  (byte-perfect Git değil; node_modules/.git/dist gürültüsünü keser). `no_ignore` ile
+  kapatılır. Yeni bağımlılık yok (ripgrep binary'sine bağlanmadan saf-Go).
+- Eski `FSGlobTool`/`FSGrepTool` `builtin_fs.go`'dan yeni dosyalara taşındı;
+  `globToRegexp`/`isBinary` paylaşımlı kaldı.
+- **Grep `rg` hızlı yolu (opsiyonel, 2026-07-03):** PATH'te `rg` (ripgrep) varsa Grep
+  otomatik ona delege eder (`grep_rg.go` `tryRG`) — daha hızlı + native tip/ignore. Bayrak
+  eşlemesi: `--no-require-git --hidden` (Go `IgnoreSet` semantiğiyle eşleşir: repo olmadan
+  `.gitignore`'a uy + dotfile'ları ara, `.git` daima atlanır), `--path-separator /` (Windows
+  `\`→`/` normalizasyon), output_mode→`--no-heading`/`--files-with-matches`/`--count-matches`,
+  `-A/-B/-C`, `--ignore-case`, `--only-matching`, `--multiline --multiline-dotall`,
+  `--glob`, tip→uzantı-glob'ları, `--no-ignore`, `--regexp` (dash-güvenli). Çıktı Go
+  motoruyla **aynı şekle** normalize edilir (lider `./` sıyrılır, head-limit uygulanır).
+  **Herhangi bir belirsizlikte** (rg yok / bilinmeyen mode/tip / rg exit≠0/1 / timeout)
+  sessizce **Go motoruna düşer** → davranış her iki yolda birebir. `SWARMGO_GREP_NO_RG=1`
+  ile kapatılır. rgExe env kontrolü `sync.Once` DIŞINDA (test-toggle edilebilir; LookPath cache'li).
+- **Edit satır-no toleransı (Read numaralama davranış değişikliği için):** Read çıktısı artık
+  `<no>\t<içerik>` numaralı; model bazen bu öneki `old_string`'e kopyalar. Doğrudan eşleşme
+  0 olduğunda Edit, `old_string` VE `new_string`'den `cat -n` öneklerini (`^ *\d+\t`,
+  `stripCatNPrefixes`) sıyırıp yeniden dener — eşleşirse temiz uygular (numaralı paste
+  artefaktı dosyaya yazılmaz). Yalnız verbatim eşleşme başarısızsa devreye girer; başarılı
+  eşleşmeyi asla değiştirmez.
+- **Test:** `TestFSReadWindow`, `TestFSEditToleratesLineNumbers`, `TestGrepOutputModes/
+  Context/OnlyMatching` (Go motoruna sabitli), `TestGrepRGFastPath` (rg yoksa skip),
+  `TestGlobMtimeSortAndIgnore/PathArg`; mevcut Read-eşitlik testleri `Contains`'e
+  güncellendi. `go build`/`vet`/`test` (366) yeşil. (`run_in_background` paralel bir çalışmada
+  `builtin_shell_bg.go` `ShellManager` + `shell_output`/`shell_kill`/`shell_list` ile
+  ayrıca eklendi — tazelik guard'ı eşzamanlı düzenlemede duplikat yazımı engelledi.)
+
+## Feature: Dosya tazelik guard'ı — Edit/Write "read-before-write" (Claude Code paritesi) ✅ (2026-07-03)
+
+**İstek:** Claude Code'un Edit toolundaki *"File has been modified since read… Read
+it again before attempting to write it"* tespiti bizde yoktu; ekleyelim.
+
+**Sorun:** SwarmGo'nun `Edit`/`Write` araçları önceki bir `Read`'i takip etmiyordu →
+bir oturum dosyayı okuduktan sonra dosya dışarıdan (kullanıcı/linter/başka tool)
+değişse bile edit **sessizce üzerine yazıyordu** (stale-write footgun).
+
+**Çözüm:** Session-scoped **`ReadTracker`** (içerik-hash tabanlı tazelik temeli):
+- **`internal/tools/readtracker.go`** (yeni): `ReadRecord{ModTime,Size,Sum(sha256),
+  Partial}` + concurrency-safe `ReadTracker` (nil = no-op, guard kapalı). `Read`
+  aracı okuma anında (truncation ÖNCESİ, tam içerik hash'i → >256KB dosyalar da
+  kapsanır) temeli kaydeder. `checkFreshness` = kayıt yok → *"file has not been read
+  yet"*, içerik hash'i uyuşmuyor → *"file has been modified since it was last read"*.
+  Karşılaştırma mtime değil **içerik-hash** (cloud-sync/AV kaynaklı sahte mtime
+  bump'larında yanlış-pozitif yok, mtime değişmeyen gerçek edit'i de yakalar).
+- **`builtin_fs.go`:** `Read` kaydeder; `Edit` mutasyondan önce `checkFreshness`;
+  `Write` yalnız **var-olan** dosyada guard (yeni dosya prior-read istemez); ikisi de
+  yazımdan sonra temeli yeni içeriğe tazeler (`recordWritten`) → aynı dosyada edit
+  zinciri araya Read istemez. Tool açıklamalarına "önce Read" notu eklendi.
+- **Ayar/gating:** `Tunables.fileFreshnessGuard` (default **açık**) + `settings.
+  FileFreshnessGuard` (Default/public/patch/store + `server.go applySettings`); default
+  skill `swarmgo-settings`'e belgelendi. `buildRegistry` session-id'yi (`SessionIDFrom`)
+  çözüp `Runtime.readTrackers` (sync.Map, session-başına kalıcı) üzerinden tracker'ı
+  3 fs tool'a bağlar; katalog/preview build'lerinde (session yok) veya ayar kapalıysa
+  **nil** → guard devre dışı. Yalnız **native** yol; claude-cli'nin kendi karşılığı var.
+- **Test:** `TestFSFreshnessGuard` (edit-before-read / write-before-read / after-read
+  ok / external-change → stale / new-file-ok / nil-guard-off) + mevcut `TestFSWriteReadEdit`
+  tracker'lı güncellendi. `go build`/`vet`/`test` (273) yeşil.
+
+## Feature: Skiller için toplu "Grup ata" (bulk set-group) ✅ (2026-07-03)
+
+**İstek:** Skilleri toplu seçince topluca gruplarını setleyebilelim.
+
+**Çözüm:** Skills ekranı zaten çoklu-seçim (`useMultiSelect`) + `SelectionBar`
+(toplu görünürlük + sil) taşıyordu; buna **toplu grup atama** eklendi.
+- **Backend:** `Store.SetGroup(slug, group)` — SKILL.md'nin yalnız `group`
+  frontmatter'ını `setFrontmatterFields` ile yeniden yazar (gövdeye/diğer alanlara
+  dokunmaz), `category` alias'ını düşürür (ikisi çelişmesin), boş grup → grupsuz.
+  API `PUT /api/skills/{slug}/group` (`handleSetSkillGroup`). Diğer `Set*` toggle
+  endpoint'leriyle aynı desen.
+- **Frontend:** `api.setSkillGroup(slug, group)`; `SkillsPanel` `bulkSetGroup` seçili
+  her slug için paralel çağırır (`Promise.all`), sonra listeyi tazeler ve seçimi
+  korur (zincirleme aksiyon). `SelectionBar`'a datalist'li (mevcut grup adları öneri)
+  grup input'u + "Ata"/"Grupsuz" butonu; Enter da uygular.
+- **Test:** `store_test.go TestSetGroup` (ata / category-alias düşür / boş=grupsuz /
+  gövde-korunur / eksik-skill hata). `go build`/`test` + `tsc` yeşil.
+
+## Antigravity CLI (`agy`) provider'ı KALDIRILDI ✅ (2026-07-03)
+
+Deneysel `antigravity-cli` provider'ı (2026-06-29'da eklenmişti; tarihsel kayıt
+aşağıda) **tamamen kaldırıldı**: upstream non-TTY bug'ı (#76) düzelmedi ve ConPTY
+workaround'u istenmedi → ölü deneysel kod taşımak yerine temizlendi. Silinen:
+`providers/antigravitycli.go` + `kind_antigravity.go` + live test;
+`kind.go`/`registry.go`/`kind_test.go` arındırıldı. Artık **5 provider kind'ı**
+(claude-cli/anthropic/minimax/minimax-anthropic/openrouter). Dış-ajan adaptörü
+olarak sırada **Codex** (MCP delegasyonlu) duruyor.
+
+## Feature: Çok-Ajan Koordinasyonu — M2 Koordinatör/Worker ✅ (2026-07-03)
+
+**İstek:** Bir ajanın paralelde 4-5 ajanı koordine etmesi (Claude Code'un
+koordinatör modu gibi) + farklı koordinasyon yöntemleri.
+
+**Çözüm (M2 koordinatör/worker + M1/M3/M4 birleşik çatı):** Bir oturum
+`Role="coordinator"` yapılınca koordinatör sistem promptu + dört araç açılır:
+`spawn_worker` (async worker = mevcut ajan hedefli arka-plan oturumu), `send_to_worker`
+(yüklü bağlamla devam), `stop_worker` (iptal→killed), `list_workers`.
+
+- **Geri bildirim halkası:** worker turu bitince (`runWorker`, başarı/başarısız/killed)
+  sonuç `<task-notification>` olarak koordinatör oturumuna enjekte edilir
+  (`NotifyCoordinator`, `Origin="worker-note"`) ve **per-session tur kuyruğu**
+  (`coordSlot` + `enqueueCoordinatorTurn`/`drainCoordinator`) bir koordinatör turu
+  tetikler. Eşzamanlı bitişler **serileşir**; koordinatör meşgulken biriken
+  bildirimler tek turda **coalesce** olur (çift-tur yarışı yok — kritik test yeşil).
+- **Recursion engeli:** araçlar context-injection (`tools.WithCoordination`) ile YALNIZ
+  koordinatör oturumunda kayıtlı → worker worker spawn edemez.
+- **Guard'lar:** `CoordinatorMaxWorkers` (8) + `CoordinatorMaxTurns` (50) +
+  `SetCoordinatorLimits`.
+- **Session modeli:** `Role` + `CoordinatorSessionID`; worker `Kind="worker"`.
+  `turnHook` → çoklu `turnHooks` (`AddTurnHook`), otomasyonu ezmeden.
+- **Prompt/skill:** `api/coordinator_prompt.go` (`composeTurnRequest`'te koşullu enjekte,
+  wake yolunu da kapsar) + gömülü default skill `swarmgo-coordinator`.
+- **API:** `session_info`'ya `role`+`coordinatorSessionId`; `PUT /api/sessions/{id}/role`
+  + `GET /api/sessions/{id}/workers`.
+- **UI:** `CoordinatorSection.tsx` (aç/kapa + canlı worker roster, running varken 3sn
+  poll) SessionDetailPanel'de; `worker`/`coordination` SSE tipleri executions'a bağlı.
+- **Sapma:** tasarımdaki ayrı `CoordinationEngine` turn-hook yerine geri bildirim
+  `runWorker` içinden doğrudan (runSpawn başarısız turda FireTurnFinished çağırmıyor →
+  hook yolu worker hatalarını iletemezdi).
+- **Test:** `agent/coordination_test.go` (kuyruk serileştirme+coalescing, worker cap,
+  coordinator-link, notification format). `go build ./...` + `tsc` yeşil.
+
+### İkinci tur: kalan adımların tamamı ✅ (2026-07-03)
+
+- **CLI köprüsü:** koordinasyon araçları `BridgeTools`'a eklendi → claude-cli
+  koordinatör de `spawn_worker/...` sürebilir (advertise + `dispatchCoordinationBridge`;
+  `autonomous_interaction` ctx `WithSessionID` stamp).
+- **Ayar UI'si:** `settings.CoordinatorMaxWorkers`/`CoordinatorMaxTurns` (ana+maskeli+
+  patch + clamp 1–64 / 1–500) → `applySettings`→`SetCoordinatorLimits`; frontend
+  `AppToolsPanel` "Koordinatör limitleri". Canlı doğrulandı (8/50→5/42).
+- **M3 scratchpad:** koordinatör + worker'lar için ortak dizin
+  (`<SessionDir(coordID)>/scratchpad`), `coordinationScratchpadBlock` context'e enjekte.
+- **Efemeral worker hedefi:** `spawn_worker` profil hedefi (explore/coder/reviewer)
+  `resolveWorkerTarget` ile kalıcı `worker:<profile>` ajanına materyalize (base'den
+  klon, `profileWorkerMu` dup guard). Test: `TestSpawnWorkerMaterializesProfile`.
+- **Canlı doğrulama:** backend boot + API smoke (rol set/get, `/workers`, ayar
+  round-trip) uçtan uca geçti. `go build ./...` + **624 test** + `tsc` yeşil.
+- **Kalan (opsiyonel):** LLM-in-the-loop görsel deneme (dev'de). Detay: `_Docs\47`.
+
+## Feature: İçe aktarılan skiller için "Grup" (import namespace) ✅ (2026-07-02)
+
+**İstek:** Markette başka kaynaklardan/linklerden skiller indirilebiliyor; içe
+aktarırken **bir grup içinde** aktaralım ki mevcut skiller'e karışmasın.
+
+**Çözüm (ingest pipeline'a `Group` opsiyonu):**
+- `ingest.Options.Group` eklendi — doluysa her içe aktarılan skill'in `group`
+  frontmatter'ı olarak yazılır (Skills UI'da tek katlanabilir başlık altında toplanır;
+  `Skill.Group` zaten vardı). Boşsa kaynağın kendi `group`'u **korunur** (eskiden
+  tamamen düşüyordu), doluysa onu **ezer**.
+- `skills.RenderImportedSkill`/`mapCCSkill` imzasına `group` parametresi; skill +
+  command adapter'ları `opts.Group` geçiriyor. Tek-skill import (`ImportCCSkill`) yolu
+  `""` geçerek kaynağın kendi grubunu korur.
+- API: `POST /api/ingest/install` `group`, `installRequest.group` (source-ref/directory-
+  site kurulumu) — her iki install yolu `Options.Group`'a bağlı.
+- UI (`SkillImportDialog`): "Grup (opsiyonel)" alanı; tarama sonrası grup **kaynak
+  adından otomatik ön-doldurulur** (`deriveGroup`: `owner/repo`/GitHub tree URL → repo,
+  yerel yol → son klasör), kullanıcı düzenleyene kadar. Elle düzenlenince ön-doldurma
+  durur.
+- Test: `import_test.go TestMapCCSkillGroup` (açık grup yaz / kaynak grubu koru / açık
+  grup ezer). `go build`/`test` + `tsc` yeşil.
+
+## Fix: sqz/rtk hook'u PowerShell aracını kaçırıyordu ✅ (2026-07-02)
+
+**Bulgu:** Ayarlar ▸ Dış Araçlar'daki tek-tık "Bağla", sqz/rtk hook'unu
+`matcher: 'Bash'` ile kuruyordu. `shell` aracı 2026-07-01'de `Bash` + `PowerShell`
+olarak bölününce, Windows'ta ajanlar shell komutlarını **`PowerShell`** aracıyla
+çağırdığından hook **hiç eşleşmiyordu** → sqz/rtk sessizce devreye girmiyordu.
+Örnek oturum (`WS6/SES1`) `debug.jsonl`'inde onlarca `PowerShell` çağrısı var ama
+sıfır `hook` olayı; sqz/rtk'nin kendisi CLI testinde PowerShell komutlarını sorunsuz
+sıkıştırıyor (sqz `tool_name`'i umursamıyor, rtk sadece `rtk ` ekliyor) — yani tek
+kusur matcher'daydı.
+
+**Çözüm:**
+- `agent/hooks.go` `hookMatches` artık **virgülle ayrılmış alternatif** glob'ları
+  destekliyor (`Bash,PowerShell` → herhangi biri eşleşirse tetiklenir; `filepath.Match`
+  süslü parantez desteklemediği için). Boşluk-toleranslı.
+- `ExternalToolsPanel.tsx` rtk+sqz template matcher'ları `Bash` → `Bash,PowerShell`.
+- `_Docs/18-HOOKS.md` matcher bölümü + Windows uyarısı güncellendi.
+- Regresyon: `hooks_test.go` `TestHookMatches`'e 5 virgül-alt vakası.
+
+**Not:** Eski workspace'lerde matcher `Bash` kalmış hook'lar elle `Bash,PowerShell`
+yapılmalı (veya kaldırıp yeniden "Bağla"). `go build`/`test` + `tsc` yeşil.
 
 ## Code Execution with MCP — Faz 3: canlı A/B ölçümü ✅ (2026-07-02)
 
@@ -25,7 +322,8 @@ anahtarı geçersiz çıktı), gerçek `sqz-mcp`; görev: 5 dizinin girdi sayım
   köprü + izin + `via run_code` debug olayları + katlanabilir trace kartı (5 alt satır).
 - **Dürüst not:** sqz-mcp kod-moduna en aleyhte senaryo (çıktılar zaten sıkışık);
   büyük-çıktılı tekrar (mcp-chrome/playwright) sıradaki hedef. `run_code`
-  açıklamasına "opak dönüşte önce küçük örnek print et" nudge'ı önerildi.
+  açıklamasına "opak dönüşte önce küçük örnek print et" nudge'ı **eklendi**
+  (2026-07-03, `builtin_runcode.go` "ACCURACY:" paragrafı).
 
 ## Etiketler + Etiket-Tetikleyicili Otomasyonlar ✅ (2026-07-02)
 
@@ -46,8 +344,10 @@ guardrail'ler (maks. iterasyon, cooldown, aç/kapa) ile önlenir. Otomasyon ayr�
   `SetFlowTags` / `SetScheduleTags` + paylaşımlı `normalizeTags` (trim/dedup/boş-at).
 - **`Automation` modeli** (`db/models_automation.go` + `store_automation.go`): CRUD +
   `SetAutomationEnabled` (aç→sayaç sıfır) + `RecordAutomationFire` + `ResetAutomationCount`.
-  Alanlar: TriggerTag, TargetAgentID, PromptTemplate ({{result}}/{{title}}/{{tag}}/
-  {{sessionId}}), SpawnTags (nil→[TriggerTag]=döngü), Enabled, MaxIterations (vars.
+  Alanlar: TriggerTag, TargetAgentID, PromptTemplate (13 değişken: {{result}}/
+  {{title}}/{{tag}}/{{sessionId}}/{{iteration}}/{{maxIterations}}/{{agent}}/
+  {{prevPrompt}}/{{automation}}/{{date}}/{{time}}/{{datetime}} — `turnVars`, 2026-07-03
+  genişletildi + canlı doğrulandı), SpawnTags (nil→[TriggerTag]=döngü), Enabled, MaxIterations (vars.
   50, 0=sınırsız), CooldownSec, IterationCount/LastFiredAt/LastSessionID/LastError.
   Yeni id prefix `AUT`, dir `automations`, `load()`'a eklendi.
 - **Tur-tamamlanma hook'u:** `Runtime.turnHook` + `SetTurnHook` + `FireTurnFinished`
@@ -1178,57 +1478,29 @@ tıklayınca o ajanın ayar sayfasına (Ajanlar görünümü, ajan seçili) gidi
   (hover vurgusu + "Ajan ayarlarını aç" tooltip); yoksa eski salt-görüntü davranışı.
 - Doğrulama: `tsc` temiz, `npm run build` başarılı.
 
-## Antigravity CLI (`agy`) provider — Gemini CLI'nin yerine (kısmen ✅, auth bekliyor) (2026-06-29)
+## Antigravity CLI + Gemini CLI provider'ları tamamen kaldırıldı (2026-07-03)
 
-**Hedef:** Faz 4 dış-ajan adaptörü olarak Google **Antigravity CLI**'yi (`agy`)
-SwarmGo provider'ı yapmak. (Önce Gemini CLI denendi; Google bireysel hesapta Gemini
-Code Assist OAuth'u kapatıp **Antigravity'ye yönlendirdiği** için yön değiştirildi.)
+Deneysel Google dış-ajan adaptörleri (Antigravity CLI `agy` ve daha önce denenen
+Gemini CLI) **projeden ve dokümanlardan tamamen kaldırıldı.** Antigravity CLI, agy'nin
+doğrulanmış non-TTY stdout bug'ı (google-antigravity/antigravity-cli#76 — pipe/subprocess
+altında yanıtı sessizce düşürüyordu) nedeniyle hiçbir zaman üretim-hazır olamadı; Gemini
+CLI ise daha önce OAuth yönlendirmesi yüzünden bırakılmıştı.
 
-**Yapılanlar:**
-- **Gemini CLI tamamen kaldırıldı:** `npm uninstall -g @google/gemini-cli`, `~/.gemini`
-  silindi, geçici provider dosyaları (`geminicli.go`, `kind_geminicli.go`, live test,
-  `cmd/gemtest`) kaldırıldı.
-- **Antigravity CLI kuruldu:** resmi installer (`irm https://antigravity.google/cli/install.ps1 | iex`),
-  binary `agy.exe` v1.0.13 → `%LOCALAPPDATA%\agy\bin\agy.exe`; User PATH registry'ye eklendi
-  (aktif PATH için yeni shell gerekir).
-- **`antigravity-cli` provider** (`providers/antigravitycli.go` + `kind_antigravity.go`,
-  Order 5): `agy --print "<prompt>"` ile headless çağrı; çıktı **düz metin** (agy'de
-  `--output-format`/stream-json YOK). System prompt + transkript tek `--print` arg'ına
-  katlanır (`--append-system-prompt` yok). İzin: `auto`→`--dangerously-skip-permissions`,
-  `ask`/`read-only`→bayraksız. Model `--model`; boşsa agy auto-seçer (varsayılan Flash).
-  `--conversation <id>` resume (print modu id basmaz → SwarmGo yakalayamaz).
-  `ANTIGRAVITY_API_KEY` subprocess env'e enjekte. Binary çözümü PATH + installer
-  fallback (`findAgy`). Registry/`ResolvedConfig`/setters gemini→antigravity yeniden
-  adlandırıldı; `api/session_context.go` CLI-overhead önizlemesi `antigravity-cli`'ye
-  güncellendi; `kind_test.go` 6. kind = `antigravity-cli`.
-- **Doğrulama:** `go build ./...` ✅, `go test ./internal/providers ./internal/api` ✅.
-  `agy --help`/`models`/flag'ler canlı incelendi.
+**Kaldırılanlar:**
+- Dosyalar: `providers/antigravitycli.go`, `antigravitycli_live_test.go`, `kind_antigravity.go`.
+- `registry.go`: `antigravityCLIPath`/`antigravityKey` alanları, `findAgy`,
+  `SetAntigravityCLIPath`/`SetAntigravityKey`/`AntigravityCLIAvailable`, `NewRegistry`
+  seeding'i ve `resolve()` doldurma; kullanılmayan `os` importu düştü.
+- `kind.go`: `ResolvedConfig`'ten `AntigravityCLIPath`/`AntigravityKey`.
+- `api/session_context.go`: CLI-overhead önizlemesi yalnız `claude-cli`'ye daraltıldı.
+- `kind_test.go`: katalog artık **5 kind** (`claude-cli`/`anthropic`/`minimax`/
+  `minimax-anthropic`/`openrouter`); yorumlar (`builtin_websearch.go`, `toolsetup.go`,
+  `interaction/server.go`) ve frontend yorumları (`session.ts`, `SessionContextModal.tsx`)
+  temizlendi.
 
-**⛔ Engel #1 (çözüldü):** auth — kullanıcı `agy` ile Google Sign-In yaptı.
-
-**⛔ Engel #2 (DOĞRULANMIŞ UPSTREAM BUG — agy Issue #76):** `agy --print` stdout bir
-**TTY değilse** (pipe/redirect/subprocess) yanıtı **sessizce düşürür** — exit 0, ~0 byte
-stdout+stderr, `--print-timeout` yok sayılır, `Start-Process -RedirectStandardOutput`
-süresiz askıda kalır. agy başlangıçta `isatty(stdout)` kontrol edip TTY yoksa render'ı
-**ve model çıktısını** kapatıyor. Birebir bizim semptomlarımız (issue raporu da Windows 11,
-aynı komutlar). Env-var workaround (FORCE_COLOR/CI/TERM/AGY_*/NO_TTY) **yok**;
-`--output-format json` **reddediliyor** (`flags provided but not defined`); maintainer
-fix'i yok. SwarmGo provider'ı agy'yi tam da böyle (Go `exec` + pipe'lı stdout) çağırdığı
-için **olduğu gibi çalışamaz**. Tek bilinen çözüm: **pseudo-terminal** (Unix `script -qec`,
-Windows **ConPTY**; "agy-headless-bridge / PtyGravity" da bunu yapar). Kaynak:
-github.com/google-antigravity/antigravity-cli#76 + antigravitylab.net headless makaleleri.
-
-**Karar: B — DENEYSEL işaretlendi (kullanıcı onayı 2026-06-29).** ConPTY+TUI-parse yolu
-(A) kırılgan ve go.mod'a ilk önemli dış bağımlılığı getireceği için reddedildi; upstream
-zaten düzeltecek. Yapılanlar: kind etiketi `Antigravity CLI (agy · DENEYSEL — upstream #76)`,
-`kind_antigravity.go`/`antigravitycli.go` doc'larına #76 açıklaması, `Complete` boş-çıktı
-yolunda `errAgyNonTTY` ile **aksiyon alınabilir hata** (non-TTY bug + sign-in + PTY/upstream
-unblock yolları). Provider kayıtlı/seçilebilir kalır ama seçilince hızlı + net hata verir.
-Build ✅ + unit testler ✅. **agy `--output-format json` veya non-TTY stdout fix'i yayınlayınca
-kod hazır — tek satırlık değişiklikle (veya hiç değişmeden) açılır.**
-
-**Sırada:** upstream #76 takibi → düzelince canlı doğrulama (`SWARMGO_LIVE_AGY=1`) → MCP
-delegasyonu / Codex. Bu arada claude-cli üretim provider'ı olarak kalır.
+**Doğrulama:** `go build ./...` ✅, `go test ./internal/providers` ✅ (72 test).
+Not: OpenRouter üzerinden erişilen Gemini **modelleri** (pricing/context-window/katalog)
+bir CLI provider'ı değil — meşru model referansları olarak korundu.
 
 ## claude-cli cache sıcaklığı — 4 fazlı çözüm ✅ (2026-06-29)
 
@@ -1248,7 +1520,7 @@ Doğrulama: `go build ./...` + `go vet` + paket testleri temiz; `SWARMGO_LIVE_CL
 
 **Sorun:** `GET /api/sessions/{id}/context-preview` çıktısı (`systemTokens`/
 `toolTokens`/`totalTokens`) yalnızca SwarmGo'nun **kendi** enjekte ettiği katmanı
-sayar. `claude-cli` (ve `gemini-cli`) sağlayıcılarında alttaki CLI **kendi sistem
+sayar. `claude-cli` sağlayıcısında alttaki CLI **kendi sistem
 promptu + araç şemaları + MCP köprüsünü** modele ekler — SwarmGo bunu hiç
 görmediği için `totalTokens` gerçek faturalanan girdiyi ciddi şekilde **az
 raporlar**. Canlı ölçüm (AGT1 Coder, opus, SES75, 3 çağrı ort.): tahmin **6.832**
@@ -1256,7 +1528,7 @@ raporlar**. Canlı ölçüm (AGT1 Coder, opus, SES75, 3 çağrı ort.): tahmin *
 
 **Çözüm:** `sessionContextPreview`'a opsiyonel `cliOverhead` alanı eklendi
 (`internal/api/session_context.go` → `computeCLIOverhead`). Yalnız CLI-wrapper
-sağlayıcılarda (`claude-cli`/`gemini-cli`) dolar; native (anthropic/minimax/
+sağlayıcılarda (`claude-cli`) dolar; native (anthropic/minimax/
 openrouter) ajanlarda `nil` → segment tahmini zaten doğru. Gerçek girdi, session'ın
 kayıtlı lifetime usage'ından ölçülür: `measuredTokens = (input + cacheRead +
 cacheWrite) / calls`; `overheadTokens = max(0, measured − estimated)`. Henüz tur

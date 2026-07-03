@@ -247,6 +247,40 @@
 
 ---
 
+## E. Mevcut araçların EKSİK ÖZELLİKLERİ (yeni araç değil, per-tool feature farkı)
+
+> Bölüm A "eksik araçları" listeler; bu bölüm **SwarmGo'da VAR OLAN** araçların
+> Claude Code muadilinde bulunup bizde olmayan **özelliklerini** toplar. (İlk kayıt:
+> 2026-07-03, `observed-behavior` `src/tools/*` incelemesinden.)
+
+### `Edit` / `Write` — tazelik guard'ı — ✅ TAMAMLANDI (2026-07-03)
+- **Eklendi:** read-before-write + modified-since-read kontrolü (`ReadTracker`, içerik-hash).
+  Bkz. `_Docs/05-ILERLEME.md` bu tarih. Ayar `fileFreshnessGuard` (vars. açık).
+
+### `Read` — ✅ TAMAMLANDI (2026-07-03)
+- **`offset`/`limit` satır aralığı + `cat -n` satır numaralama** eklendi (`renderNumbered`).
+  Satır-başı 2000 char cap + 256KB çıktı cap + "devam: offset=N" ipucu. Bkz. `05-ILERLEME.md`.
+- (Görsel/PDF/Notebook okuma bilinçli **kapsam dışı** — kullanıcı gerek görmedi.)
+
+### `Grep` — ✅ TAMAMLANDI (2026-07-03)
+- `output_mode` (content/files_with_matches/count), `-A`/`-B`/`-C`, `-i`, `-n`, `-o`, `type`,
+  `multiline`, `head_limit`, `path`, `no_ignore` eklendi (yeni `builtin_grep.go`). ripgrep binary'ye
+  bağlanmadan saf-Go; `.gitignore` farkındalığı için bkz. aşağı.
+
+### `Glob` — ✅ TAMAMLANDI (2026-07-03)
+- **mtime sıralaması** (en yeni önce) + `path` (arama kökü) + `no_ignore` argümanları eklendi
+  (yeni `builtin_glob.go`).
+
+### `Bash` / `PowerShell` — ✅ TAMAMLANDI (2026-07-03, paralel çalışma)
+- **`run_in_background`** eklendi (`builtin_shell_bg.go` `ShellManager` + `shell_output`/
+  `shell_kill`/`shell_list`, session-scoped `Runtime.shellMgrs`). Uzun süren komut detached
+  başlar, id döner; çıktı pollanır, durdurulur.
+
+### `Glob`/`Grep` ortak — ✅ `.gitignore` farkındalığı eklendi (yeni `ignore.go` `IgnoreSet`):
+kök+iç-içe `.gitignore` (lazy) + daima `.git`; dizin eşleşince `SkipDir`. `no_ignore` ile kapatılır.
+
+---
+
 ## C. Bilinçli kapsam-dışı (eklenmeyecek)
 
 the external agent project'ta olup SwarmGo'nun **kapsam/felsefe farkı** nedeniyle eklenmeyenler:

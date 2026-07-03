@@ -304,6 +304,12 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.ProgressResume != nil {
 		next.ProgressResume = *p.ProgressResume
 	}
+	if p.FileFreshnessGuard != nil {
+		next.FileFreshnessGuard = *p.FileFreshnessGuard
+	}
+	if p.AutoTagSessions != nil {
+		next.AutoTagSessions = *p.AutoTagSessions
+	}
 	if p.DebugJournalEnabled != nil {
 		next.DebugJournalEnabled = *p.DebugJournalEnabled
 	}
@@ -351,6 +357,8 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
 	applyInt(&next.SpawnMaxConcurrent, p.SpawnMaxConcurrent)
 	applyInt(&next.SpawnMaxPerTurn, p.SpawnMaxPerTurn)
+	applyInt(&next.CoordinatorMaxWorkers, p.CoordinatorMaxWorkers)
+	applyInt(&next.CoordinatorMaxTurns, p.CoordinatorMaxTurns)
 
 	applyBool(&next.AutonomousConfine, p.AutonomousConfine)
 	applyBool(&next.GitWorktreeIsolation, p.GitWorktreeIsolation)
@@ -621,6 +629,19 @@ func normalize(v Settings) Settings {
 	}
 	if v.SpawnMaxPerTurn > 64 {
 		v.SpawnMaxPerTurn = 64
+	}
+	// Coordinator guards: workers ≥ 1 (≤ 64), auto-turns ≥ 1 (≤ 500).
+	if v.CoordinatorMaxWorkers < 1 {
+		v.CoordinatorMaxWorkers = 1
+	}
+	if v.CoordinatorMaxWorkers > 64 {
+		v.CoordinatorMaxWorkers = 64
+	}
+	if v.CoordinatorMaxTurns < 1 {
+		v.CoordinatorMaxTurns = 1
+	}
+	if v.CoordinatorMaxTurns > 500 {
+		v.CoordinatorMaxTurns = 500
 	}
 	// Workspace backups: interval ≥ 1h, retention ≥ 1 archive; clamp ceilings.
 	if v.BackupIntervalHours < 1 {

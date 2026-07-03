@@ -86,7 +86,12 @@ type Discovered struct {
   filtreler, her birinin `build(opts)` closure'ını çağırıp `[]market.Pack` üretir.
   Build hatası fatal değil — `SkipNote`.
 - **Options:** `Shared` (skill'leri on-demand sun), `SlugPrefix` (isim-uzayı; yalnız
-  slug-anahtarlı skill kind'inde uygulanır).
+  slug-anahtarlı skill kind'inde uygulanır), `Group` (içe aktarılan skill'leri
+  **Skills UI'da tek bir katlanabilir başlık** altında toplayan `group` frontmatter'ı;
+  boşsa kaynağın kendi `group`'u korunur, doluysa onu **ezer** — böylece markette/
+  linkten indirilen bir paket mevcut skiller'e karışmaz). skill+command adapter'larında
+  uygulanır. UI (`SkillImportDialog`) taramada grubu kaynak adından (repo/owner-repo/
+  klasör) **otomatik ön-doldurur**; kullanıcı düzenleyebilir/temizleyebilir.
 
 ### Adapter'lar (4)
 

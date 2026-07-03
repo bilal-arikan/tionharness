@@ -97,6 +97,11 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 
 		// Self-management bridge (CLI-3): advertise the agent's lazy self-management
 		// tools and dispatch them through the same registry the native loop uses.
+		// Stamp the session id so BridgeTools can detect a coordinator session and
+		// bridge the coordinator tools (M2) for a claude-cli coordinator.
+		if sessionID != "" {
+			ctx = agent.WithSessionID(ctx, sessionID)
+		}
 		bridgeDefs, bridgeCall := rt.BridgeTools(ctx, ag)
 		run.setBridge(bridgeDefs, bridgeCall)
 

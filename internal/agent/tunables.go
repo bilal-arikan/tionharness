@@ -32,6 +32,14 @@ const (
 	DefaultSpawnMaxPerTurn    = 4  // max spawns one agent turn may launch
 )
 
+// Default coordinator/worker guards (see internal/agent/coordination.go). They
+// bound the M2 coordination loop so a coordinator can neither fan out unbounded
+// workers nor spin forever on worker → notify → new-turn feedback.
+const (
+	DefaultCoordinatorMaxWorkers = 8  // max active workers a single coordinator may run at once
+	DefaultCoordinatorMaxTurns   = 50 // max auto-triggered coordinator turns per session (notify-loop cap)
+)
+
 // Default tool-output compaction bounds. System A (deterministic) trims every
 // tool result; System B (LLM intent-aware summary) only fires past its byte
 // threshold. Both default to sane values used by test runtimes.
@@ -58,6 +66,8 @@ type Tunables struct {
 
 	spawnMaxConcurrent int // 0 → DefaultSpawnMaxConcurrent
 	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
+	coordMaxWorkers    int // 0 → DefaultCoordinatorMaxWorkers
+	coordMaxTurns      int // 0 → DefaultCoordinatorMaxTurns
 	journalCap         int // 0 → DefaultJournalCap
 	journalMaxLen      int // 0 → DefaultJournalMaxLen
 	journalMinLen      int // write-side low-info gate (runes); 0 = gate off (NOT defaulted — 0 is meaningful)
@@ -141,6 +151,18 @@ type Tunables struct {
 	// SWARMGO_CLI_BRIDGE_SKIP_HIDDEN=0. See clibridge_tunable.go.
 	cliBridgeSkipHidden bool
 
+	// fileFreshnessGuard (Claude Code parity) — when true, the built-in Edit and
+	// Write tools enforce a read-before-write / not-modified-since-read check: an
+	// Edit (or an overwrite of an existing file) errors unless the file was read
+	// this session and is unchanged since, so an out-of-band edit is never silently
+	// clobbered. Default on. See internal/tools/readtracker.go.
+	fileFreshnessGuard bool
+
+	// autoTagSessions — when true, the runtime derives well-known session tags from
+	// turn outcomes + session state (tool-error/error/goal/goal-done/archived) so an
+	// automation can scan + repair them. Default on. See internal/agent/autotag.go.
+	autoTagSessions bool
+
 	// codeMode (_Docs/44) — when true (and the shell gate is on), the MCP
 	// catalog is additionally exposed as generated Python bindings behind the
 	// run_code tool (code execution with MCP: schemas stay out of context,
@@ -194,7 +216,14 @@ func NewTunables() *Tunables {
 		// CLI agents reach them via a next-turn re-allowlist instead of in-turn.
 		// Disable per boot with SWARMGO_CLI_BRIDGE_SKIP_HIDDEN=0.
 		cliBridgeSkipHidden: true,
-		maxToolIters:        -1,
+		// File freshness guard on by default (Claude Code parity): Edit/Write refuse to
+		// clobber a file changed out-of-band since it was last read. Production overrides
+		// from settings via SetFileFreshnessGuard.
+		fileFreshnessGuard: true,
+		// Auto-tagging on by default (production overrides from settings via
+		// SetAutoTagSessions); test runtimes that skip applySettings still auto-tag.
+		autoTagSessions: true,
+		maxToolIters:    -1,
 		// Recall floor at the historical default so test runtimes (which skip
 		// applySettings) recall exactly as before. journalMinLen is left at 0 (gate
 		// off) for the same reason — only production turns the write-gate on.
@@ -326,6 +355,40 @@ func (t *Tunables) SpawnMaxPerTurn() int {
 		return DefaultSpawnMaxPerTurn
 	}
 	return t.spawnMaxPerTurn
+}
+
+// SetCoordinatorLimits sets the coordinator/worker guards: the max number of
+// active workers a single coordinator may run at once and the max auto-triggered
+// coordinator turns per session (the notify-loop cap). A value of 0 selects the
+// built-in default.
+func (t *Tunables) SetCoordinatorLimits(maxWorkers, maxTurns int) {
+	t.mu.Lock()
+	t.coordMaxWorkers = maxWorkers
+	t.coordMaxTurns = maxTurns
+	t.mu.Unlock()
+}
+
+// CoordinatorMaxWorkers returns the cap on active workers per coordinator session
+// (default when unset).
+func (t *Tunables) CoordinatorMaxWorkers() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.coordMaxWorkers <= 0 {
+		return DefaultCoordinatorMaxWorkers
+	}
+	return t.coordMaxWorkers
+}
+
+// CoordinatorMaxTurns returns the cap on auto-triggered coordinator turns per
+// session (default when unset). 0 in settings means "use default"; the loop
+// treats the returned value as a hard ceiling.
+func (t *Tunables) CoordinatorMaxTurns() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.coordMaxTurns <= 0 {
+		return DefaultCoordinatorMaxTurns
+	}
+	return t.coordMaxTurns
 }
 
 // SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent),
@@ -810,6 +873,37 @@ func (t *Tunables) DebugJournalCap() int {
 		return DefaultDebugJournalCap
 	}
 	return t.debugJournalCap
+}
+
+// SetFileFreshnessGuard toggles the Edit/Write read-before-write freshness guard
+// (Claude Code parity). On by default; disable to restore the historical behaviour
+// where Edit/Write never check whether the file changed since it was last read.
+func (t *Tunables) SetFileFreshnessGuard(enabled bool) {
+	t.mu.Lock()
+	t.fileFreshnessGuard = enabled
+	t.mu.Unlock()
+}
+
+// FileFreshnessGuard reports whether the Edit/Write freshness guard is enabled.
+func (t *Tunables) FileFreshnessGuard() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.fileFreshnessGuard
+}
+
+// SetAutoTagSessions toggles event-driven session auto-tagging (tool-error/error/
+// goal/archived). On by default; disable to stop the runtime writing derived tags.
+func (t *Tunables) SetAutoTagSessions(enabled bool) {
+	t.mu.Lock()
+	t.autoTagSessions = enabled
+	t.mu.Unlock()
+}
+
+// AutoTagSessions reports whether event-driven auto-tagging is enabled.
+func (t *Tunables) AutoTagSessions() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.autoTagSessions
 }
 
 // SetMaxToolIters overrides the native agentic tool-loop iteration cap.

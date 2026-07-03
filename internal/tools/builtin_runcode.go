@@ -89,7 +89,10 @@ func (RunCodeTool) Def() providers.ToolDef {
 			"Runs in an isolated subprocess with a stripped environment (no API keys/secrets) and a bounded " +
 			"timeout; MCP calls are limited to the tools this agent may use anyway. Under the 'ask' permission " +
 			"mode each in-script MCP call may pause for user approval — the wait counts against the script's " +
-			"timeout, so raise timeout_sec for scripts expected to prompt.",
+			"timeout, so raise timeout_sec for scripts expected to prompt. ACCURACY: tool results are strings " +
+			"in a format you have NOT seen — never aggregate them blindly (len()/count on an opaque string is " +
+			"wrong). On first use of a tool, print a small sample (e.g. repr(result)[:200]) to verify the " +
+			"format, then compute.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{

@@ -16,3 +16,15 @@ export interface Hook {
   createdBy?: string
   createdAt: number
 }
+
+// BuiltinHook is one of SwarmGo's automatic, non-editable tool behaviours
+// (freshness guard, CLI native-tool bridging, hook passthrough, ...) surfaced
+// read-only in the Hooks screen. Mirrors api.builtinHook.
+export interface BuiltinHook {
+  name: string
+  scope: 'native' | 'cli' | 'both'
+  event: string // "PreToolUse" | "PostToolUse" | "System" | combinations
+  description: string
+  enabled: boolean
+  setting?: string // settings.json key that toggles it (absent = always on)
+}

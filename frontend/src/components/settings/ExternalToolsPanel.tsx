@@ -21,21 +21,27 @@ interface Props {
 // /api/external-tools) need an entry here; 'mcp'/'cli' tools render an info badge
 // instead of a toggle (driven by ExternalToolStatus.wire, not this map).
 const TOOL_HOOK_TEMPLATES: Record<string, HookInput> = {
-  // RTK rewrites Bash commands. PreToolUse adapter prepends `rtk ` to the command
+  // RTK rewrites shell commands. PreToolUse adapter prepends `rtk ` to the command
   // (preserving other tool_input fields) so output is filtered before it returns.
+  // Matcher covers BOTH shell tools: the `shell` tool was split into `Bash` +
+  // `PowerShell` (2026-07-01), and on Windows the agent uses `PowerShell` — a
+  // `Bash`-only matcher would silently never fire. The comma-alt matcher is
+  // honoured by `hookMatches` (filepath.Match has no brace expansion). The
+  // adapter self-guards on `.tool_input.command`, so non-shell tools pass through.
   rtk: {
     event: 'PreToolUse',
-    matcher: 'Bash',
+    matcher: 'Bash,PowerShell',
     command:
       "$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; $c=$j.tool_input.command; if($c -and -not ($c -like 'rtk *')){ $j.tool_input.command='rtk '+$c; @{updatedInput=$j.tool_input}|ConvertTo-Json -Compress }",
     timeoutSec: 30,
     enabled: true,
   },
   // sqz (v1.3.0) `sqz hook claude` is a PreToolUse rewriter: it reads the tool-call
-  // JSON from stdin and rewrites Bash commands to pipe through sqz, then emits the
-  // modified JSON — same model as rtk, so matcher is Bash. NOTE: do not enable rtk
-  // and sqz on Bash at the same time; they both rewrite the command.
-  sqz: { event: 'PreToolUse', matcher: 'Bash', command: 'sqz hook claude', timeoutSec: 30, enabled: true },
+  // JSON from stdin and rewrites shell commands to pipe through sqz, then emits the
+  // modified JSON — same model as rtk. sqz ignores tool_name and rewrites any
+  // payload carrying `.command` (Bash + PowerShell alike), so the matcher covers
+  // both. NOTE: do not enable rtk and sqz at the same time; they both rewrite.
+  sqz: { event: 'PreToolUse', matcher: 'Bash,PowerShell', command: 'sqz hook claude', timeoutSec: 30, enabled: true },
 }
 
 // Human-readable group headings for the tool categories returned by the backend.

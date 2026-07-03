@@ -26,7 +26,7 @@ func (skillAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
 
 		// Render once (shared=false) to surface structural mapping warnings in the
 		// preview (context:fork, unsupported keys, slash-command args…).
-		_, prev := skills.RenderImportedSkill(raw, "", false)
+		_, prev := skills.RenderImportedSkill(raw, "", false, "")
 
 		relPath := g.RelPath
 		files := g.Files
@@ -41,7 +41,7 @@ func (skillAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
 			Warnings:    prev.Warnings,
 			build: func(opts Options) (market.Pack, error) {
 				finalSlug := applyPrefix(skills.Slugify(opts.SlugPrefix), slug)
-				body, res := skills.RenderImportedSkill(raw, itemURL(baseURL, relPath), opts.Shared)
+				body, res := skills.RenderImportedSkill(raw, itemURL(baseURL, relPath), opts.Shared, opts.Group)
 				dispName := res.Name
 				if dispName == "" {
 					dispName = name

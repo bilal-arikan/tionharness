@@ -3,28 +3,29 @@ package agent
 import (
 	"strings"
 	"testing"
-
-	"github.com/bilal-arikan/swarmgo/internal/db"
 )
 
 func TestRenderAutomationPrompt(t *testing.T) {
-	sess := db.Session{ID: "SES3", Title: "My loop"}
+	vars := map[string]string{
+		"result": "DONE", "title": "My loop", "sessionId": "SES3", "tag": "loop",
+		"iteration": "2", "agent": "Bob",
+	}
 
-	// All placeholders substituted.
-	got := renderAutomationPrompt("[{{tag}}] {{title}} ({{sessionId}}): {{result}}", "DONE", sess, "loop")
-	want := "[loop] My loop (SES3): DONE"
+	// All placeholders substituted (including the extended set).
+	got := renderAutomationPrompt("[{{tag}}] {{title}} ({{sessionId}}) #{{iteration}} by {{agent}}: {{result}}", vars)
+	want := "[loop] My loop (SES3) #2 by Bob: DONE"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 
 	// A template without {{result}} still carries the result forward (appended).
-	got = renderAutomationPrompt("Keep going.", "the result", sess, "loop")
+	got = renderAutomationPrompt("Keep going.", map[string]string{"result": "the result"})
 	if !strings.Contains(got, "the result") || !strings.HasPrefix(got, "Keep going.") {
 		t.Fatalf("result not appended: %q", got)
 	}
 
 	// Empty result + no placeholder → template unchanged (nothing appended).
-	got = renderAutomationPrompt("Just do X.", "", sess, "loop")
+	got = renderAutomationPrompt("Just do X.", map[string]string{"result": ""})
 	if got != "Just do X." {
 		t.Fatalf("unexpected mutation: %q", got)
 	}

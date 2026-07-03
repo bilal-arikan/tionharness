@@ -23,8 +23,9 @@ const (
 
 // shellArgs is the shared input schema for both the Bash and PowerShell tools.
 type shellArgs struct {
-	Command    string `json:"command"`
-	TimeoutSec int    `json:"timeout_sec"`
+	Command         string `json:"command"`
+	TimeoutSec      int    `json:"timeout_sec"`
+	RunInBackground bool   `json:"run_in_background"`
 }
 
 // resolvePOSIXShell finds the POSIX shell to back the Bash tool: /bin/sh on Unix,
@@ -52,6 +53,7 @@ func resolvePowerShell() (string, bool) {
 type ShellTool struct {
 	sb  Sandbox
 	exe string
+	mgr *ShellManager // background-shell registry (nil = run_in_background unavailable)
 }
 
 // NewShellTool binds the tool to a base working directory and resolves the POSIX
@@ -60,6 +62,11 @@ func NewShellTool(sb Sandbox) ShellTool {
 	exe, _ := resolvePOSIXShell()
 	return ShellTool{sb: sb, exe: exe}
 }
+
+// WithManager returns a copy of the tool wired to a session's background-shell
+// manager, enabling run_in_background. Without it, background execution reports it
+// is unavailable (the historical foreground-only behaviour).
+func (t ShellTool) WithManager(m *ShellManager) ShellTool { t.mgr = m; return t }
 
 // Available reports whether a backing POSIX shell was found (always true on Unix;
 // on Windows only when a bash.exe is on PATH).
@@ -71,7 +78,9 @@ func (ShellTool) Def() providers.ToolDef {
 		Description: "Run a command through the POSIX shell (/bin/sh on Unix, bash.exe on Windows) and " +
 			"return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may " +
 			"operate on any path. Bounded by a timeout (default 30s, max 120s). Use POSIX/Bash syntax. On " +
-			"Windows prefer the PowerShell tool for native tasks (cmdlets, registry, $env: variables).",
+			"Windows prefer the PowerShell tool for native tasks (cmdlets, registry, $env: variables). " +
+			"Set run_in_background=true for a long-running command (dev server, watcher): it returns a shell " +
+			"id immediately — poll shell_output and stop it with shell_kill.",
 		InputSchema: shellInputSchema,
 	}
 }
@@ -85,9 +94,13 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 	if err != nil {
 		return "", err
 	}
-	return runShell(ctx, t.sb, args, onChunk, func(runCtx context.Context, command string) *exec.Cmd {
+	build := func(runCtx context.Context, command string) *exec.Cmd {
 		return proc.CommandContext(runCtx, t.exe, "-c", command)
-	})
+	}
+	if args.RunInBackground {
+		return startBackgroundShell(t.mgr, t.sb, args, "Bash", build)
+	}
+	return runShell(ctx, t.sb, args, onChunk, build)
 }
 
 // PowerShellTool runs a command through PowerShell (pwsh preferred, else
@@ -98,6 +111,7 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 type PowerShellTool struct {
 	sb  Sandbox
 	exe string
+	mgr *ShellManager // background-shell registry (nil = run_in_background unavailable)
 }
 
 // NewPowerShellTool binds the tool to a base working directory and resolves a
@@ -106,6 +120,10 @@ func NewPowerShellTool(sb Sandbox) PowerShellTool {
 	exe, _ := resolvePowerShell()
 	return PowerShellTool{sb: sb, exe: exe}
 }
+
+// WithManager returns a copy wired to a session's background-shell manager,
+// enabling run_in_background (see ShellTool.WithManager).
+func (t PowerShellTool) WithManager(m *ShellManager) PowerShellTool { t.mgr = m; return t }
 
 // Available reports whether a PowerShell host (pwsh/powershell.exe) was found.
 func (t PowerShellTool) Available() bool { return t.exe != "" }
@@ -132,14 +150,18 @@ func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, o
 	if err != nil {
 		return "", err
 	}
-	return runShell(ctx, t.sb, args, onChunk, func(runCtx context.Context, command string) *exec.Cmd {
+	build := func(runCtx context.Context, command string) *exec.Cmd {
 		// Defensive unwrap: this tool already runs inside PowerShell. Agents often
 		// redundantly wrap their command in `powershell -Command "..."`, which makes
 		// the OUTER shell expand (and strip) any $variable before the inner shell sees
 		// it — breaking scripts like `$x = ...; $x | ...`. Strip one redundant wrapper.
 		command = unwrapRedundantPowershell(command)
 		return proc.CommandContext(runCtx, t.exe, "-NoProfile", "-NonInteractive", "-Command", command)
-	})
+	}
+	if args.RunInBackground {
+		return startBackgroundShell(t.mgr, t.sb, args, "PowerShell", build)
+	}
+	return runShell(ctx, t.sb, args, onChunk, build)
 }
 
 // shellInputSchema is shared by both shell tools.
@@ -147,7 +169,8 @@ var shellInputSchema = json.RawMessage(`{
 	"type":"object",
 	"properties":{
 		"command":{"type":"string","description":"The command line to execute"},
-		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120)"}
+		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120). Ignored when run_in_background is true."},
+		"run_in_background":{"type":"boolean","description":"Run detached and return a shell id immediately instead of waiting. Use for long-running processes (dev servers, watchers); read output with shell_output and stop with shell_kill."}
 	},
 	"required":["command"],
 	"additionalProperties":false
@@ -162,6 +185,24 @@ func parseShellArgs(input json.RawMessage) (shellArgs, error) {
 		return args, fmt.Errorf("command is required")
 	}
 	return args, nil
+}
+
+// startBackgroundShell launches args.Command detached via the session's shell
+// manager and returns the assigned shell id with a usage hint. It applies the same
+// confined-mode git brake as runShell, then hands off to the manager (which owns
+// the process lifecycle). A nil manager reports background execution is unavailable.
+func startBackgroundShell(mgr *ShellManager, sb Sandbox, args shellArgs, label string, build func(ctx context.Context, command string) *exec.Cmd) (string, error) {
+	if mgr == nil {
+		return "", fmt.Errorf("run_in_background is not available here — run the command in the foreground instead")
+	}
+	if sb.Confined && isNetworkMutatingGit(args.Command) {
+		return "", fmt.Errorf("blocked in confined (autonomous) mode: this command pushes to a git remote — run it from an interactive chat session instead")
+	}
+	id, err := mgr.Start(sb, args.Command, label, build)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Started background %s shell %q. Read its output with shell_output (shell_id=%q) and stop it with shell_kill.", label, id, id), nil
 }
 
 // runShell is the shared execution core for the Bash and PowerShell tools: the

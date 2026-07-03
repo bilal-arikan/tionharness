@@ -177,6 +177,7 @@ type installRequest struct {
 	// Used only by source-ref (directory-site) installs that run the ingest pipeline.
 	Shared     bool   `json:"shared"`
 	SlugPrefix string `json:"slugPrefix"`
+	Group      string `json:"group"` // optional Skills-UI group for imported skills
 }
 
 // publishRequest packages an existing workspace entity into the local registry.

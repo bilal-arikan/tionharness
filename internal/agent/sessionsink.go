@@ -22,12 +22,15 @@ type sessionSink struct {
 	// publish emits a workspace-scoped change event for live UI refresh. Optional
 	// (nil-safe) — a turn with no runtime emitter just doesn't push the refresh.
 	publish func(events.Event)
+	// autoTag reports whether event-driven auto-tagging is on (settings gate), so
+	// Archive only writes the "archived" tag when the feature is enabled.
+	autoTag func() bool
 }
 
 // NewSessionSink builds a session sink bound to a session for this workspace. It
 // satisfies both tools.SessionSink and (as a superset) tools.GoalSink.
 func (r *Runtime) NewSessionSink(sessionID string) tools.SessionSink {
-	return &sessionSink{db: r.db, sessionID: sessionID, publish: r.publish}
+	return &sessionSink{db: r.db, sessionID: sessionID, publish: r.publish, autoTag: r.tun.AutoTagSessions}
 }
 
 // notify publishes a "session" change event so the open session list + detail
@@ -98,6 +101,13 @@ func (s *sessionSink) SetTags(ctx context.Context, tags []string) error {
 func (s *sessionSink) Archive(ctx context.Context) error {
 	if err := s.db.SetSessionState(ctx, s.sessionID, "archived"); err != nil {
 		return err
+	}
+	// Auto-tag "archived" so an automation can scan archived sessions (best-effort;
+	// gated by the auto-tag setting).
+	if s.autoTag != nil && s.autoTag() {
+		if sess, err := s.db.GetSession(ctx, s.sessionID); err == nil && !containsTag(sess.Tags, TagArchived) {
+			_ = s.db.SetSessionTags(ctx, s.sessionID, append(sess.Tags, TagArchived))
+		}
 	}
 	s.notify()
 	return nil

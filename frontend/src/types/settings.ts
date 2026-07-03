@@ -67,6 +67,9 @@ export interface AppSettings {
   progressPersist: boolean    // persist the todo_write checklist to <cwd>/.swarmgo/progress.json
   progressResume: boolean     // inject a resumed-progress block into a fresh session at start
 
+  // Event-driven session auto-tagging (tool-error/error/goal/goal-done/archived).
+  autoTagSessions: boolean
+
   // Per-session debug journal (parallel observability stream).
   debugJournalEnabled: boolean // emit structured debug events to debug.jsonl
   debugJournalCap: number      // newest events kept per session (0 = default 5000)
@@ -108,6 +111,10 @@ export interface AppSettings {
   // Spawn guards — the detached background surface (run_subagent async + spawn).
   spawnMaxConcurrent: number
   spawnMaxPerTurn: number
+
+  // Coordinator/worker guards (M2): active workers per coordinator + auto-turn cap.
+  coordinatorMaxWorkers: number
+  coordinatorMaxTurns: number
 
   // Working-directory guards for the (unconfined) fs/shell tools.
   autonomousConfine: boolean

@@ -74,7 +74,7 @@ onClick={(e) => {
 | Board kartları | `TaskBoard` | Task detayı | Sütuna taşı · Ajan ata · Sil |
 | Hafıza | `MemoryPanel` | Kartı genişlet | Sil (**yalnız modifier-click seçer**) |
 | Artifact | `ArtifactsPanel` | Artifact aç | Sil |
-| Skills | `SkillsPanel` | Skill detayı | Görünürlük türü (Tam/Özet/İsim/Gizli) · Sil (katlanmış grupları atlar) |
+| Skills | `SkillsPanel` | Skill detayı | Görünürlük türü (Tam/Özet/İsim/Gizli) · **Grup ata** (input+datalist, "Ata"/"Grupsuz") · Sil (katlanmış grupları atlar) |
 | Flows | `FlowsPanel` (Akışlarım) | Flow'u aç | Çalıştır · Sil |
 | Araçlar (ajan) | `AgentToolsSection` | Anında yasakla | "Seçilenleri yasakla" (tek PATCH) |
 | Araçlar (workspace) | `ToolsPanel` (Ayarlar) | Detay aç | Etkinleştir · Devre dışı · NameOnly · Göster |
@@ -101,6 +101,13 @@ onClick={(e) => {
   her liste satırı artık tek bir **görünürlük çipi** (`VisibilityChip`,
   `VISIBILITY_TIERS` rengi/etiketi) taşır — eski dağınık "Gizli"/"NameOnly"
   rozetleri kaldırıldı, "Tam"/"Özet" dahil dört tier tek bakışta okunur.
+- **Skills toplu grup atama:** SelectionBar'da bir grup input'u (`data-testid=
+  "skills-bulk-group-input"`, mevcut grup adları `datalist` ile önerilir) + "Ata"/
+  "Grupsuz" butonu (`skills-bulk-group`); Enter da uygular. Seçili her skill için
+  `api.setSkillGroup(slug, group)` → `PUT /api/skills/{slug}/group` (backend
+  `Store.SetGroup`, yalnız `group` frontmatter'ını yazar, `category` alias'ını
+  düşürür). Boş grup = grupsuz. İçe aktarılan bir paketi (import namespace, `_Docs\37`)
+  sonradan tek başlıkta toplamak/dağıtmak için — her skill'i tek tek açmadan.
 
 ## İleride
 - Klavye gezinme (Space=toggle, Shift+Ok ile aralık).

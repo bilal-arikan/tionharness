@@ -58,7 +58,7 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 				"name":{"type":"string","description":"Optional display name"},
 				"triggerTag":{"type":"string","description":"The session tag that fires this automation when a tagged session's turn ends"},
 				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents)"},
-				"promptTemplate":{"type":"string","description":"Prompt for the spawned session; placeholders {{result}} {{title}} {{tag}} {{sessionId}}"},
+				"promptTemplate":{"type":"string","description":"Prompt for the spawned session. Placeholders: {{result}} (finishing reply), {{title}}, {{tag}}, {{sessionId}}, {{iteration}} (1-based fire number), {{maxIterations}}, {{agent}}/{{agentName}}, {{prevPrompt}} (the prior user prompt), {{automation}}, {{date}}, {{time}}, {{datetime}}"},
 				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (default: [triggerTag] → loop; pass [] to break the loop)"},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling (0 = unlimited; default 50)"},
 				"cooldownSec":{"type":"integer","description":"Minimum seconds between fires (default 0)"},

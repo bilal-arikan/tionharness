@@ -167,6 +167,19 @@ type Settings struct {
 	ProgressPersist bool `json:"progressPersist"`
 	ProgressResume  bool `json:"progressResume"`
 
+	// FileFreshnessGuard (Claude Code parity). When on, the built-in Edit and Write
+	// tools enforce a read-before-write / not-modified-since-read check: an edit (or
+	// overwrite of an existing file) errors unless the file was read this session and
+	// is unchanged since, so an out-of-band edit is never silently clobbered.
+	FileFreshnessGuard bool `json:"fileFreshnessGuard"`
+
+	// AutoTagSessions (event-driven auto-tagging). When on, the runtime derives
+	// well-known session tags from turn outcomes + session state — "tool-error" (a
+	// real tool failed; a claude-cli disallowed-tool denial is excluded), "error" (the
+	// turn itself failed), "goal"/"goal-done"/"archived" — so an automation can scan
+	// and repair them. Add-only (a fixer removes the tag). Detay: _Docs/46 §3.
+	AutoTagSessions bool `json:"autoTagSessions"`
+
 	// Per-session debug journal (parallel observability stream). When
 	// DebugJournalEnabled is on, the runtime appends structured events (turn
 	// timings, token spend, tool latency/size, hook decisions, errors, compaction,
@@ -242,6 +255,10 @@ type Settings struct {
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"` // max concurrent spawned sessions (0 = default 16)
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`    // max spawns per agent turn (0 = default 4)
 
+	// Coordinator/worker guards (M2, _Docs/47).
+	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"` // max active workers per coordinator (0 = default 8)
+	CoordinatorMaxTurns   int `json:"coordinatorMaxTurns"`   // max auto-triggered coordinator turns per session (0 = default 50)
+
 	// Working-directory guards. The built-in fs/shell tools are unconfined (may
 	// touch any path); these brake that power on autonomous (no-human) turns.
 	AutonomousConfine    bool `json:"autonomousConfine"`    // confine fs/shell to the working dir on autonomous turns (default true)
@@ -315,6 +332,14 @@ func Default() Settings {
 		ProgressPersist: true,
 		ProgressResume:  true,
 
+		// File freshness guard on by default (Claude Code parity): Edit/Write refuse to
+		// clobber a file changed out-of-band since it was last read.
+		FileFreshnessGuard: true,
+
+		// Auto-tagging on by default: derives error/goal/archived tags for automation
+		// scanning; add-only and cheap (a small write only when a tag actually changes).
+		AutoTagSessions: true,
+
 		// Debug journal on by default: only adds a per-session file, transparent to
 		// existing behaviour. 5000 newest events kept per session.
 		DebugJournalEnabled: true,
@@ -361,6 +386,9 @@ func Default() Settings {
 
 		SpawnMaxConcurrent: 16,
 		SpawnMaxPerTurn:    4,
+
+		CoordinatorMaxWorkers: 8,
+		CoordinatorMaxTurns:   50,
 
 		// Autonomous turns confine fs/shell by default (safety brake); worktree
 		// isolation is opt-in (needs git + has setup cost).
@@ -434,6 +462,9 @@ type DTO struct {
 	ProgressPersist bool `json:"progressPersist"`
 	ProgressResume  bool `json:"progressResume"`
 
+	FileFreshnessGuard bool `json:"fileFreshnessGuard"`
+	AutoTagSessions    bool `json:"autoTagSessions"`
+
 	DebugJournalEnabled bool `json:"debugJournalEnabled"`
 	DebugJournalCap     int  `json:"debugJournalCap"`
 
@@ -472,6 +503,9 @@ type DTO struct {
 
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"`
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`
+
+	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"`
+	CoordinatorMaxTurns   int `json:"coordinatorMaxTurns"`
 
 	AutonomousConfine    bool `json:"autonomousConfine"`
 	GitWorktreeIsolation bool `json:"gitWorktreeIsolation"`
@@ -540,6 +574,9 @@ func (s Settings) ToDTO() DTO {
 		ProgressPersist: s.ProgressPersist,
 		ProgressResume:  s.ProgressResume,
 
+		FileFreshnessGuard: s.FileFreshnessGuard,
+		AutoTagSessions:    s.AutoTagSessions,
+
 		DebugJournalEnabled: s.DebugJournalEnabled,
 		DebugJournalCap:     s.DebugJournalCap,
 
@@ -572,6 +609,9 @@ func (s Settings) ToDTO() DTO {
 
 		SpawnMaxConcurrent: s.SpawnMaxConcurrent,
 		SpawnMaxPerTurn:    s.SpawnMaxPerTurn,
+
+		CoordinatorMaxWorkers: s.CoordinatorMaxWorkers,
+		CoordinatorMaxTurns:   s.CoordinatorMaxTurns,
 
 		AutonomousConfine:    s.AutonomousConfine,
 		GitWorktreeIsolation: s.GitWorktreeIsolation,
@@ -641,6 +681,9 @@ type Patch struct {
 	ProgressPersist *bool `json:"progressPersist"`
 	ProgressResume  *bool `json:"progressResume"`
 
+	FileFreshnessGuard *bool `json:"fileFreshnessGuard"`
+	AutoTagSessions    *bool `json:"autoTagSessions"`
+
 	DebugJournalEnabled *bool `json:"debugJournalEnabled"`
 	DebugJournalCap     *int  `json:"debugJournalCap"`
 
@@ -673,6 +716,9 @@ type Patch struct {
 
 	SpawnMaxConcurrent *int `json:"spawnMaxConcurrent"`
 	SpawnMaxPerTurn    *int `json:"spawnMaxPerTurn"`
+
+	CoordinatorMaxWorkers *int `json:"coordinatorMaxWorkers"`
+	CoordinatorMaxTurns   *int `json:"coordinatorMaxTurns"`
 
 	AutonomousConfine    *bool `json:"autonomousConfine"`
 	GitWorktreeIsolation *bool `json:"gitWorktreeIsolation"`

@@ -31,7 +31,12 @@ type ImportResult struct {
 // → access (shared only when invocation is NOT disabled AND shared is requested);
 // user-invocable → user_invocable. Unsupported (context:fork, hooks, agent, model,
 // effort, slash-command arguments) are dropped with a warning.
-func mapCCSkill(raw, sourceURL string, shared bool) (content string, res ImportResult) {
+//
+// group namespaces the import: when non-empty it is written as the skill's `group`
+// frontmatter (overriding any group the source declared), so every skill from one
+// import lands under a single collapsible header in the Skills UI and never mixes
+// with the user's existing skills. Empty → the source's own `group` is preserved.
+func mapCCSkill(raw, sourceURL string, shared bool, group string) (content string, res ImportResult) {
 	fm, body := parseFrontmatter(raw)
 
 	name := strings.TrimSpace(fm.scalar("name"))
@@ -66,6 +71,15 @@ func mapCCSkill(raw, sourceURL string, shared bool) (content string, res ImportR
 	writeImportScalar(&b, "license", license, add)
 	if sourceURL != "" {
 		writeImportScalar(&b, "source_url", sourceURL, add)
+	}
+	// An explicit import group overrides whatever the source declared; otherwise the
+	// source's own group carries over (previously dropped entirely).
+	grp := strings.TrimSpace(group)
+	if grp == "" {
+		grp = strings.TrimSpace(fm.scalar("group", "category"))
+	}
+	if grp != "" {
+		writeImportScalar(&b, "group", grp, add)
 	}
 	if !userInvocable {
 		b.WriteString("user_invocable: false\n")
@@ -102,9 +116,10 @@ func mapCCSkill(raw, sourceURL string, shared bool) (content string, res ImportR
 // RenderImportedSkill maps a Claude Code SKILL.md to the equivalent SwarmGo
 // SKILL.md (frontmatter remapped, unsupported features stripped with warnings) and
 // returns the rendered content plus the mapping result. Exposed for the ingest
-// pipeline, which packages the rendered body into a market pack. (SK-IMP2)
-func RenderImportedSkill(raw, sourceURL string, shared bool) (string, ImportResult) {
-	return mapCCSkill(raw, sourceURL, shared)
+// pipeline, which packages the rendered body into a market pack. group namespaces
+// the import into a single Skills-UI group ("" = keep the source's own group). (SK-IMP2)
+func RenderImportedSkill(raw, sourceURL string, shared bool, group string) (string, ImportResult) {
+	return mapCCSkill(raw, sourceURL, shared, group)
 }
 
 // SuggestSlug derives a slug from a folder path (its base name), falling back to a
@@ -193,7 +208,8 @@ func readLocalSkillDir(dir string) (raw string, files map[string][]byte, err err
 // slug defaults to the skill name when empty. Fails if the slug already exists.
 // (SK-IMP)
 func (s *Store) ImportCCSkill(slug, raw, sourceURL string, files map[string][]byte, shared bool) (Skill, ImportResult, error) {
-	content, res := mapCCSkill(raw, sourceURL, shared)
+	// Single-skill import keeps the source's own group ("" = no override).
+	content, res := mapCCSkill(raw, sourceURL, shared, "")
 	if strings.TrimSpace(res.Name) == "" && slug == "" {
 		return Skill{}, res, fmt.Errorf("skill has no name and no slug was provided")
 	}

@@ -23,6 +23,12 @@ import (
 type Options struct {
 	Shared     bool   // advertise installed skills on-demand
 	SlugPrefix string // namespace prefix for derived slugs/ids
+	// Group namespaces the import for ORGANISATION: when non-empty it is written as
+	// each imported skill's `group` frontmatter, so every skill from one import lands
+	// under a single collapsible header in the Skills UI and never mixes with the
+	// user's existing skills. Empty → each skill keeps whatever group its source
+	// declared (usually none).
+	Group string
 }
 
 // Discovered is one artifact found in a source tree: preview metadata plus a

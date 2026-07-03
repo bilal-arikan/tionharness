@@ -5,6 +5,7 @@ import type { TurnStep } from '../../types'
 import { toolMeta, isReadTool, toolBase } from '../../lib/tools'
 import { parseDiff, looksLikeDiff, synthDiff } from '../../lib/diff'
 import { DiffView } from '../markdown/DiffView'
+import { Markdown } from '../markdown/Markdown'
 import { PathText } from './PathText'
 
 interface Props {
@@ -62,6 +63,9 @@ export function ActivityCard({ step, onOpenFile }: Props) {
       : synthDiff(toolBase(step.tool || ''), step.input)
     : null
   const badge = headerBadge(step, diffText, output)
+  // A loaded skill's body is markdown (use_skill returns "# Skill: <slug>\n\n…").
+  // Render it formatted rather than as a raw <pre> block when the card is expanded.
+  const isSkill = toolBase(step.tool || '') === 'use_skill' && !step.isError
 
   return (
     <div className="overflow-hidden rounded-md">
@@ -85,7 +89,7 @@ export function ActivityCard({ step, onOpenFile }: Props) {
 
       {open && (
         <div className="space-y-2 px-3 pb-2 text-xs">
-          {step.input != null && (
+          {step.input != null && !isSkill && (
             <div>
               <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
                 Girdi
@@ -103,6 +107,15 @@ export function ActivityCard({ step, onOpenFile }: Props) {
                 Değişiklik
               </div>
               <DiffView text={diffText} />
+            </div>
+          ) : isSkill && output.trim() ? (
+            <div>
+              <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                Skill
+              </div>
+              <div className="rounded bg-[var(--color-bg)] p-2">
+                <Markdown onOpenFile={onOpenFile}>{output}</Markdown>
+              </div>
             </div>
           ) : (
             output && (

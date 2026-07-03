@@ -4,6 +4,7 @@ import type { TurnStep } from '../../types'
 import { DiffView } from '../markdown/DiffView'
 import { synthDiffData } from '../../lib/diff'
 import { toolBase } from '../../lib/tools'
+import { shortPath } from '../../lib/paths'
 
 interface Props {
   step: TurnStep
@@ -51,23 +52,28 @@ export function DiffCard({ step, onOpenFile }: Props) {
       >
         <Pencil size={14} className="shrink-0 text-[var(--color-text-dim)]" />
         <span className="shrink-0 font-medium text-[var(--color-text)]">{actionLabel(step, created)}</span>
-        {/* Span (not <button>) to avoid an invalid button-in-button: the row
-            header itself is a <button>. stopPropagation keeps the path click
-            from also toggling the diff. */}
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => { e.stopPropagation(); onOpenFile?.(path) }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              e.stopPropagation()
-              onOpenFile?.(path)
-            }
-          }}
-          className="min-w-0 flex-1 cursor-pointer truncate text-left font-mono text-[0.92em] text-[var(--color-accent)] underline decoration-dotted underline-offset-2 hover:opacity-80"
-        >
-          {path}
+        {/* The path is shown short (…/dir/file) so it no longer spans the whole
+            row; only the text itself opens the file (span, not <button>, to keep
+            valid HTML inside the header <button>; stopPropagation so it doesn't
+            also toggle). The flex-1 remainder stays part of the header button, so
+            clicking the empty area (or the chevron) folds the diff. */}
+        <span className="flex min-w-0 flex-1 items-center">
+          <span
+            role="button"
+            tabIndex={0}
+            title={path}
+            onClick={(e) => { e.stopPropagation(); onOpenFile?.(path) }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                onOpenFile?.(path)
+              }
+            }}
+            className="max-w-full cursor-pointer truncate text-left font-mono text-[0.92em] text-[var(--color-accent)] underline decoration-dotted underline-offset-2 hover:opacity-80"
+          >
+            {shortPath(path)}
+          </span>
         </span>
         {created && (
           <span className="shrink-0 rounded bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">

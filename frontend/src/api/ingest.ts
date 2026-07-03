@@ -37,6 +37,7 @@ export interface IngestInstallInput extends IngestSource {
   keys?: string[] // selected Discovered.key values (empty = all)
   slugPrefix?: string
   shared?: boolean
+  group?: string // Skills-UI group for imported skills (keeps them from mixing with existing ones)
 }
 
 export interface InstallResult {

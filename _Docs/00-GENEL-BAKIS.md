@@ -20,7 +20,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | Bileşen | SwarmGo |
 |---------|---------|
 | Dil | Go 1.26+ |
-| Masaüstü kabuk | Wails v2 (Faz 9, opsiyonel) |
+| Masaüstü kabuk | Native WebView2 penceresi (`cmd/swarmgo-desktop`, CGO'suz — Wails gereksizleşti; bkz. `32-NATIVE-PENCERE.md`) |
 | Web framework | Bağımsız frontend + Go API; `dist/` binary'e `go:embed` ile gömülü |
 | Depolama | Dosya sistemi — JSON/JSONL, DB yok (bkz. `08-DEPOLAMA.md`) |
 | Orkestrasyon | Kendi state-machine + goroutine/channel |
@@ -84,6 +84,8 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [43-REWIND.md](43-REWIND.md) | `/rewind` — sohbet checkpoint geri sarma (yalnız-sohbet MVP) |
 | [44-CODE-EXECUTION-MCP.md](44-CODE-EXECUTION-MCP.md) | Code Execution with MCP — occupancy'yi kökten düşürme fizibilite + faz planı |
 | [45-COKLU-SECIM.md](45-COKLU-SECIM.md) | Çoklu seçim (Ctrl/Cmd+Click) + toplu eylemler (frontend-only; eski 40 numarasından taşındı) |
+| [46-ETIKET-OTOMASYON.md](46-ETIKET-OTOMASYON.md) | Etiketler (session/flow/schedule tags) + etiket-tetikleyicili döngü otomasyonları |
+| [47-KOORDINATOR-COKLU-AJAN.md](47-KOORDINATOR-COKLU-AJAN.md) | Koordinatör & çoklu-ajan koordinasyonu (M2 koordinatör/worker: async spawn_worker + task-notification) |
 | [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md) | the external agent project↔SwarmGo araç eşleştirme analizi |
 | **arsiv/** | Tarihsel inceleme dokümanları (referans/appendix) |
 | [arsiv/13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md) | external-agent-oss release incelemesi → SwarmGo çıkarımları |
@@ -98,10 +100,10 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 - ✅ Go 1.26.4
 - ✅ Node.js v24 + npm 11
-- ⏳ Wails v2 (Faz 9'da kurulacak)
+- ✅ WebView2 runtime (native masaüstü penceresi; Wails planı iptal — `32-NATIVE-PENCERE.md`)
 
 ## Proje Durumu (2026-06-23)
 
 ✅ **Faz 0–8 + kapsamlı backlog tamamlandı** ve Chrome'da canlı test edildi: İskelet · DB/Config · Provider+Chat (5 kind: anthropic/claude-cli/minimax/minimax-anthropic/openrouter) · React Web UI · Agent Runtime · Workspace İzolasyonu · Tasks+Schedules · Memory · Sağlamlaştırma (compaction + bütçe guardrail) · Tool-use+MCP · Orchestration (akışlar) · Lazy tool yükleme · Prefix'li insan-okunabilir ID'ler (WS/AGT/SES, `cmd/migrate-ids`) · İlişki grafiği · Self-management suite · Hooks · İzin modeli.
 ✅ **Sonradan eklenenler (06-22 → 06-23):** native masaüstü penceresi (WebView2, CGO'suz) + çoklu pencere · oturum-başına çalışma dizini (cwd) · MemGPT/Letta tarzı self-editing çekirdek bellek · MCP kalıcı bağlantı havuzu · oturumlar-arası tam-metin arama · ajanlar-arası peer mesajlaşma · generic bildirim sinyalleri.
-➡️ **Sıradaki: Faz 9 — Wails paketleme** (native masaüstü pencere zaten WebView2 ile yapıldı; kalan tam Wails sarmalama). (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Detay: [05-ILERLEME.md](05-ILERLEME.md) · arşiv: [05-ARSIV.md](05-ARSIV.md).
+➡️ **Sıradaki (2026-07-03):** Code Execution with MCP — büyük-çıktılı senaryoyla A/B tekrarı ([44](44-CODE-EXECUTION-MCP.md)) · koordinasyon kalanları — CLI köprüsü + ayar UI'si + M3 scratchpad ([47](47-KOORDINATOR-COKLU-AJAN.md)). Native masaüstü pencere WebView2 ile yapıldı — Wails gereksizleşti ([32](32-NATIVE-PENCERE.md)). (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Detay: [05-ILERLEME.md](05-ILERLEME.md) · arşiv: [05-ARSIV.md](05-ARSIV.md).

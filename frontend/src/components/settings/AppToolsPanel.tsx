@@ -89,6 +89,19 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         </Field>
       </div>
 
+      <SubHead icon={Sparkles}>Koordinatör (çoklu-ajan) limitleri</SubHead>
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
+        M2 koordinatör/worker döngüsü için sınırlar: bir koordinatör kaç worker'ı aynı anda çalıştırabilir ve worker bildirimleri kaç otomatik koordinatör turu tetikleyebilir.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Koordinatör başına maks. worker" hint="Bir koordinatörün aynı anda çalıştırabileceği aktif worker sayısı (1–64).">
+          <input type="number" min={1} max={64} value={draft.coordinatorMaxWorkers} onChange={(e) => set('coordinatorMaxWorkers', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Maks. otomatik koordinatör turu" hint="Oturum başına worker bildirimlerinin tetikleyebileceği otomatik tur sayısı; aşılınca bildirimler kaydedilir ama tur durur (1–500).">
+          <input type="number" min={1} max={500} value={draft.coordinatorMaxTurns} onChange={(e) => set('coordinatorMaxTurns', Number(e.target.value))} className={inputCls} />
+        </Field>
+      </div>
+
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         <b>Çalışma dizini güvenliği.</b> Dosya/kabuk araçları artık workspace'e kilitli
         değil (her yola erişebilir). Aşağıdaki frenler bu gücü <b>otonom</b>

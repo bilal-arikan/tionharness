@@ -533,9 +533,10 @@ açıkça söylüyor (belgelenmiş fark). İzin modu `auto`. Metrikler `debug.js
 
 **Sonraki adım (Faz 3 devamı):** Aynı düzeneği büyük-çıktılı senaryoyla tekrarla
 (mcp-chrome/playwright: sayfa gezinme + N eleman çıkarma + toplama) — beklenti:
-klasik yolda çıktılar bağlamı domine eder, kod-modu farkı belirginleşir. Ayrıca
+klasik yolda çıktılar bağlamı domine eder, kod-modu farkı belirginleşir.
 `run_code` açıklamasına "opak/yapılandırılmamış dönüşlerde önce küçük bir örneği
-print edip formatı doğrula" nudge'ı eklenebilir (B1 hatasını sistemik önler).
+print edip formatı doğrula" nudge'ı **eklendi** (2026-07-03, `builtin_runcode.go`
+Def açıklaması "ACCURACY:" paragrafı — B1 hatasını sistemik önler).
 
 ---
 

@@ -489,6 +489,36 @@ func (s *Store) SetVisibility(slug, tier string) (Skill, error) {
 	return out, nil
 }
 
+// SetGroup rewrites a skill's `group` frontmatter (dropping the `category` alias)
+// without touching any other field or its body, then reloads the catalog. An empty
+// group removes the marker (skill becomes ungrouped). This is the single-skill entry
+// point the Skills screen's bulk "set group" action drives per selected skill.
+func (s *Store) SetGroup(slug, group string) (Skill, error) {
+	sk, ok := s.Get(slug)
+	if !ok {
+		return Skill{}, fmt.Errorf("skill %q not found", slug)
+	}
+	data, err := os.ReadFile(sk.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.Reload()
+			return Skill{}, fmt.Errorf("skill %q is no longer available (its file was moved or deleted); catalog refreshed", slug)
+		}
+		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
+	}
+	// Drop the `category` alias so the two can't disagree, then upsert/remove `group`.
+	updated := setFrontmatterFields(string(data), []fmField{
+		{Key: "category", Val: ""},
+		{Key: "group", Val: strings.TrimSpace(group)},
+	}, nil)
+	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
+	}
+	s.Reload()
+	out, _ := s.Get(slug)
+	return out, nil
+}
+
 // SkillInput carries the editable fields used to create or update a skill. It
 // maps onto the SKILL.md frontmatter (plus the markdown body).
 type SkillInput struct {

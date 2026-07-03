@@ -1,5 +1,5 @@
 // PreToolUse / PostToolUse hooks (workspace-scoped, Phase P4).
-import type { Hook, HookEvent } from '../types'
+import type { Hook, HookEvent, BuiltinHook } from '../types'
 import { req } from './client'
 
 export interface HookInput {
@@ -12,6 +12,7 @@ export interface HookInput {
 
 export const hookApi = {
   listHooks: () => req<Hook[]>('/api/hooks'),
+  listBuiltinHooks: () => req<BuiltinHook[]>('/api/hooks/builtins'),
   createHook: (data: HookInput) =>
     req<Hook>('/api/hooks', { method: 'POST', body: JSON.stringify(data) }),
   updateHook: (id: string, data: HookInput) =>

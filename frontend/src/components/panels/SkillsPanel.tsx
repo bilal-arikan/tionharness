@@ -1,5 +1,5 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Globe, Lock, Pencil, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FolderInput, Globe, Lock, Pencil, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource, ToolVisibility } from '../../types'
 import { api } from '../../api'
 import { VISIBILITY_TIERS, visibilityMeta } from './toolMeta'
@@ -152,6 +152,9 @@ export function SkillsPanel({ onError }: Props) {
   const [deleteBusy, setDeleteBusy] = useState(false)
   // True while a bulk visibility-tier change is applying to the selected skills.
   const [bulkVisBusy, setBulkVisBusy] = useState(false)
+  // Draft group name + busy flag for the bulk "set group" action on the selection.
+  const [bulkGroup, setBulkGroup] = useState('')
+  const [bulkGroupBusy, setBulkGroupBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
   // Resizable left list width (persisted, clamped). 288px == the old w-72.
@@ -348,6 +351,29 @@ export function SkillsPanel({ onError }: Props) {
     [sel.selected, reload, activeSlug, onError],
   )
 
+  // Bulk-set the `group` (organisation bucket) of every selected skill at once, so
+  // a batch — e.g. a freshly imported pack — lands under one collapsible header
+  // without opening each skill. An empty group ungroups them. Keeps the selection
+  // so the user can chain another action; the list re-buckets after the reload.
+  const bulkSetGroup = useCallback(
+    (group: string) => {
+      const slugs = [...sel.selected]
+      if (slugs.length === 0) return
+      setBulkGroupBusy(true)
+      Promise.all(slugs.map((slug) => api.setSkillGroup(slug, group)))
+        .then(() => {
+          setBulkGroup('')
+          reload()
+          if (activeSlug && sel.selected.has(activeSlug)) {
+            api.getSkill(activeSlug).then(setActive).catch(() => {})
+          }
+        })
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setBulkGroupBusy(false))
+    },
+    [sel.selected, reload, activeSlug, onError],
+  )
+
   // Re-scan tiers on disk, then refresh the catalog + current selection.
   const rescan = useCallback(() => {
     api
@@ -494,6 +520,37 @@ export function SkillsPanel({ onError }: Props) {
                 {tier.label}
               </button>
             ))}
+          </div>
+          {/* Bulk group: move every selected skill into one organisation bucket. */}
+          <div data-testid="skills-bulk-group" className="inline-flex items-center gap-1">
+            <input
+              list="skills-bulk-group-names"
+              value={bulkGroup}
+              onChange={(e) => setBulkGroup(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  bulkSetGroup(bulkGroup.trim())
+                }
+              }}
+              disabled={bulkGroupBusy}
+              placeholder="Grup ata…"
+              data-testid="skills-bulk-group-input"
+              className="w-28 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+            />
+            <datalist id="skills-bulk-group-names">
+              {groupNames.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+            <SelectionBarButton
+              icon={<FolderInput size={13} />}
+              onClick={() => bulkSetGroup(bulkGroup.trim())}
+              disabled={bulkGroupBusy}
+              title={bulkGroup.trim() ? `Seçili becerileri "${bulkGroup.trim()}" grubuna taşı` : 'Seçili becerileri grupsuz yap'}
+            >
+              {bulkGroup.trim() ? 'Ata' : 'Grupsuz'}
+            </SelectionBarButton>
           </div>
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
             Sil

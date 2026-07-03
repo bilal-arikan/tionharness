@@ -53,7 +53,7 @@ func (commandAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered
 			Warnings:    warnings,
 			build: func(opts Options) (market.Pack, error) {
 				finalSlug := applyPrefix(skills.Slugify(opts.SlugPrefix), slug)
-				content := synthSkillMD(nm, ds, itemURL(baseURL, relPath), opts.Shared, bd)
+				content := synthSkillMD(nm, ds, itemURL(baseURL, relPath), opts.Shared, opts.Group, bd)
 				return market.BuildSkillPack(finalSlug, nm, ds, "", "", content, "", 0, nil)
 			},
 		})
@@ -104,8 +104,9 @@ func firstNonEmpty(vals ...string) string {
 }
 
 // synthSkillMD assembles a SwarmGo SKILL.md from a command's parts (commands carry no
-// SKILL.md of their own).
-func synthSkillMD(name, desc, sourceURL string, shared bool, body string) string {
+// SKILL.md of their own). group, when non-empty, namespaces the command into a single
+// Skills-UI group alongside the rest of the same import.
+func synthSkillMD(name, desc, sourceURL string, shared bool, group, body string) string {
 	var b strings.Builder
 	b.WriteString("---\n")
 	b.WriteString("name: " + yamlInline(name) + "\n")
@@ -117,6 +118,9 @@ func synthSkillMD(name, desc, sourceURL string, shared bool, body string) string
 	}
 	if sourceURL != "" {
 		b.WriteString("source_url: " + yamlInline(sourceURL) + "\n")
+	}
+	if g := strings.TrimSpace(group); g != "" {
+		b.WriteString("group: " + yamlInline(g) + "\n")
 	}
 	b.WriteString("---\n\n")
 	b.WriteString(strings.TrimSpace(body))

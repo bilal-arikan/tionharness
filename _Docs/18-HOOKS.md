@@ -63,7 +63,18 @@ Command, TimeoutSec, Enabled, CreatedBy, CreatedAt`. Per-workspace
 CRUD: `internal/db/store_hook.go` (+ `ListEnabledHooksByEvent` filtresi).
 
 **Matcher:** araç adı glob'u (`filepath.Match`: `*`, `?`). Boş = tüm araçlar.
-Birden çok eşleşen hook **oluşturma sırasına göre** zincirlenir; ilk `block` kazanır.
+**Virgülle ayrılmış alternatifler** desteklenir (`Bash,PowerShell`) — herhangi biri
+eşleşirse hook tetiklenir (Go'nun `filepath.Match`'i süslü parantez `{}` desteklemez;
+`hookMatches` virgülde bölüp her alternatifi dener). Bu, `shell` aracının `Bash` +
+`PowerShell` olarak bölünmesinden (2026-07-01) sonra tek hook'un iki shell aracını da
+kapsaması için gerekir — Windows'ta ajan `PowerShell` aracını kullanır, yalnız `Bash`
+matcher'ı **hiç eşleşmezdi**. Birden çok eşleşen hook **oluşturma sırasına göre**
+zincirlenir; ilk `block` kazanır.
+
+> **sqz/rtk uyarısı (Windows):** Ayarlar ▸ Dış Araçlar'daki tek-tık "Bağla" artık
+> `Bash,PowerShell` matcher'ıyla hook kurar. Eski kurulumlarda matcher `Bash` kalmışsa
+> PowerShell komutları sıkıştırılmadan geçer — hook'u düzenleyip matcher'ı
+> `Bash,PowerShell` yapın (veya kaldırıp yeniden bağlayın).
 
 ## Akış (toolloop.go)
 

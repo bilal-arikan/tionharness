@@ -76,13 +76,25 @@ type postHookOutcome struct {
 }
 
 // hookMatches reports whether a hook's matcher applies to a tool name. An empty
-// matcher matches every tool; otherwise it is a shell-style glob (*, ?).
+// matcher matches every tool; otherwise it is one or more comma-separated
+// shell-style globs (*, ?) — the hook matches if ANY alternative matches. The
+// comma form exists because Go's filepath.Match has no brace expansion, yet a
+// single hook often needs to cover sibling tools (e.g. "Bash,PowerShell" after
+// the shell tool was split into two on Windows/POSIX).
 func hookMatches(matcher, tool string) bool {
 	if matcher == "" {
 		return true
 	}
-	ok, err := filepath.Match(matcher, tool)
-	return err == nil && ok
+	for _, alt := range strings.Split(matcher, ",") {
+		alt = strings.TrimSpace(alt)
+		if alt == "" {
+			continue
+		}
+		if ok, err := filepath.Match(alt, tool); err == nil && ok {
+			return true
+		}
+	}
+	return false
 }
 
 // runPreToolHooks runs every enabled PreToolUse hook matching call.Name, in

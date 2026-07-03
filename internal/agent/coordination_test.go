@@ -1,0 +1,187 @@
+package agent
+
+import (
+	"context"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/bilal-arikan/swarmgo/internal/db"
+)
+
+// TestFormatTaskNotification checks the coordinator-facing XML carries the
+// worker id, status, and result.
+func TestFormatTaskNotification(t *testing.T) {
+	note := formatTaskNotification("SES9", "Scout", "completed", "found it in foo.go:42", 3, 1200)
+	for _, want := range []string{
+		"<task-notification>", "<task-id>SES9</task-id>", "<status>completed</status>",
+		"found it in foo.go:42", "<tool_uses>3</tool_uses>", "<duration_ms>1200</duration_ms>",
+	} {
+		if !strings.Contains(note, want) {
+			t.Errorf("notification missing %q:\n%s", want, note)
+		}
+	}
+}
+
+// TestCountToolSteps counts only tool steps.
+func TestCountToolSteps(t *testing.T) {
+	steps := []TurnStep{
+		{Kind: StepText}, {Kind: StepTool}, {Kind: StepThinking}, {Kind: StepTool},
+	}
+	if n := countToolSteps(steps); n != 2 {
+		t.Fatalf("countToolSteps = %d, want 2", n)
+	}
+}
+
+// TestCoordinatorQueueSerializesAndCoalesces is the critical race guard: two
+// notifications that arrive while a coordinator turn is running must (a) never run
+// two turns concurrently, and (b) coalesce into exactly ONE follow-up turn (they
+// are already persisted, so the next turn sees them all).
+func TestCoordinatorQueueSerializesAndCoalesces(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+
+	var mu sync.Mutex
+	concurrent, maxConcurrent, turns := 0, 0, 0
+	started := make(chan struct{})
+	release := make(chan struct{})
+	rt.coordRunFn = func(string) {
+		mu.Lock()
+		concurrent++
+		if concurrent > maxConcurrent {
+			maxConcurrent = concurrent
+		}
+		turns++
+		mu.Unlock()
+		started <- struct{}{}
+		<-release
+		mu.Lock()
+		concurrent--
+		mu.Unlock()
+	}
+
+	// First enqueue starts turn 1.
+	rt.enqueueCoordinatorTurn("COORD")
+	<-started
+
+	// Two more notifications arrive WHILE turn 1 runs → they must coalesce (pending),
+	// not spawn new turns.
+	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn("COORD")
+
+	// Let turn 1 finish; the pending flag triggers exactly one follow-up (turn 2).
+	release <- struct{}{}
+	<-started
+	release <- struct{}{}
+
+	// Give the drain goroutine a moment to settle (no third turn should appear).
+	deadline := time.After(500 * time.Millisecond)
+	for {
+		mu.Lock()
+		done := turns == 2
+		mu.Unlock()
+		if done {
+			break
+		}
+		select {
+		case <-deadline:
+			mu.Lock()
+			got := turns
+			mu.Unlock()
+			t.Fatalf("expected exactly 2 coordinator turns (coalesced), got %d", got)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if maxConcurrent != 1 {
+		t.Fatalf("coordinator turns overlapped: maxConcurrent = %d, want 1", maxConcurrent)
+	}
+}
+
+// TestSpawnWorkerRespectsWorkerCap verifies the per-coordinator worker cap refuses
+// a spawn once the active-worker count is at the limit.
+func TestSpawnWorkerRespectsWorkerCap(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	rt.tun.SetCoordinatorLimits(2, 0)
+	ctx := context.Background()
+	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "W", Provider: "anthropic", Model: "m"}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	// Simulate two workers already active under this coordinator.
+	slot := rt.coordSlotFor("COORD")
+	slot.workers.Add(2)
+
+	if _, err := rt.SpawnWorker(ctx, "COORD", "W", "task", "", ""); err == nil {
+		t.Fatal("expected worker-limit error when the cap is already reached")
+	}
+}
+
+// TestSpawnWorkerMaterializesProfile verifies a profile target (explore) is
+// materialized once into a reusable "worker:explore" agent cloned from the base
+// coordinator agent, and reused on the second spawn.
+func TestSpawnWorkerMaterializesProfile(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	base, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Coord", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create base agent: %v", err)
+	}
+
+	r1, err := rt.SpawnWorker(ctx, "COORD", "explore", "map the code", "", base.ID)
+	if err != nil {
+		t.Fatalf("spawn worker (explore): %v", err)
+	}
+	s1, _ := rt.db.GetSession(ctx, r1.SessionID)
+	wa, err := rt.resolveAgent(ctx, "worker:explore")
+	if err != nil {
+		t.Fatalf("profile worker agent not materialized: %v", err)
+	}
+	if s1.AgentID != wa.ID {
+		t.Errorf("worker session agent = %q, want materialized %q", s1.AgentID, wa.ID)
+	}
+	if wa.Provider != "anthropic" {
+		t.Errorf("materialized worker should clone provider, got %q", wa.Provider)
+	}
+
+	// Second spawn reuses the same agent (no duplicate).
+	if _, err := rt.SpawnWorker(ctx, "COORD", "explore", "again", "", base.ID); err != nil {
+		t.Fatalf("second spawn: %v", err)
+	}
+	agents, _ := rt.db.ListAgents(ctx)
+	n := 0
+	for _, a := range agents {
+		if a.Name == "worker:explore" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("expected exactly one worker:explore agent, got %d", n)
+	}
+}
+
+// TestSpawnWorkerSetsCoordinatorLink confirms a worker spawn creates a worker-kind
+// session linked back to its coordinator.
+func TestSpawnWorkerSetsCoordinatorLink(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "W", Provider: "anthropic", Model: "m"}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	res, err := rt.SpawnWorker(ctx, "COORD", "W", "do it", "", "")
+	if err != nil {
+		t.Fatalf("spawn worker: %v", err)
+	}
+	sess, err := rt.db.GetSession(ctx, res.SessionID)
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	if sess.Kind != "worker" {
+		t.Errorf("kind = %q, want worker", sess.Kind)
+	}
+	if sess.Role != "worker" {
+		t.Errorf("role = %q, want worker", sess.Role)
+	}
+	if sess.CoordinatorSessionID != "COORD" {
+		t.Errorf("coordinatorSessionID = %q, want COORD", sess.CoordinatorSessionID)
+	}
+}

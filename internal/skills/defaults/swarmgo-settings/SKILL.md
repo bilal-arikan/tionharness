@@ -118,6 +118,15 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
 - `progressPersist` (default true) — persist the `todo_write` list to `<cwd>/.swarmgo/progress.json`.
 - `progressResume` (default true) — restore that list on a fresh session.
 
+### File freshness guard (Claude Code parity)
+- `fileFreshnessGuard` (default true) — the built-in `Edit`/`Write` tools require a
+  file to have been `Read` this session and to be unchanged since, before it may be
+  edited or overwritten. An edit of an unread file errors "file has not been read
+  yet"; an edit after an out-of-band change errors "file has been modified since it
+  was last read". A brand-new `Write` needs no prior read. Session-scoped, native
+  path only (claude-cli agents have their own equivalent). Disable to restore the
+  old unchecked behaviour.
+
 ### MCP & gated tool capabilities (off by default — each expands power/cost)
 - (The dead `mcpGatewayUrl` setting was removed entirely 2026-07-01 — it was never
   consumed by the runtime. MCP servers are managed in the "Araçlar & MCP" category.)

@@ -131,6 +131,11 @@ type TraceStep struct {
 	Input   json.RawMessage // tool input
 	Output  string          // tool result
 	IsError bool            // tool failed
+	// DurMs is the wall-clock latency of a "tool" step, measured by a provider that
+	// runs the loop internally (claude-cli: time between seeing the tool_use event
+	// and its tool_result on the live stream). 0 when unknown (native-loop steps,
+	// which the agent layer times itself, or a non-streamed parse).
+	DurMs int64
 }
 
 // Response is a completion result. When StopReason is StopToolUse, ToolCalls

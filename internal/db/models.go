@@ -2,12 +2,12 @@ package db
 
 // Agent is an autonomous AI entity bound to a provider/model.
 type Agent struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Soul         string `json:"soul"`
-	Identity     string `json:"identity"`
-	Provider     string `json:"provider"`
-	Model        string `json:"model"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Soul     string `json:"soul"`
+	Identity string `json:"identity"`
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
 	// ThinkingLevel requests extended reasoning: "" / "off" | "low" | "medium" |
 	// "high". Applied on plain (non-tool) completions; anthropic provider only.
 	ThinkingLevel string `json:"thinkingLevel"`
@@ -141,6 +141,19 @@ type Session struct {
 	// Both empty for an ordinary (non-handoff) session.
 	ParentSessionID   string `json:"parentSessionId,omitempty"`
 	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
+
+	// Multi-agent coordination (see internal/agent/coordination.go, _Docs/47).
+	// Role marks a session's part in a coordinator/worker relationship:
+	// "coordinator" (drives workers, gets the coordinator system prompt + the
+	// spawn_worker/send_to_worker/stop_worker tools), "worker" (spawned by a
+	// coordinator; coordination tools hidden to prevent recursion), or "" (an
+	// ordinary session, unchanged behavior). CoordinatorSessionID is the worker's
+	// back-link to the coordinator session that spawned it, so a finished worker
+	// turn can inject its <task-notification> into the right coordinator. Empty on
+	// a coordinator or ordinary session. Distinct from ParentSessionID, which is
+	// the handoff "continues-from" lineage — a worker is spawned-by, not a reset of.
+	Role                 string `json:"role,omitempty"`
+	CoordinatorSessionID string `json:"coordinatorSessionId,omitempty"`
 
 	// claude-cli session resume (opt-in, ClaudeResume setting). CLISessionID is the
 	// CLI's server-side session to --resume on the next turn (rotates each turn);

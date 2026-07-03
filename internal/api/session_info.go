@@ -31,8 +31,13 @@ type sessionInfoResp struct {
 	// /handoff) and the handoff artifact written into this session at reset.
 	ParentSessionID   string `json:"parentSessionId,omitempty"`
 	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
-	CreatedAt         int64  `json:"createdAt"`
-	UpdatedAt         int64  `json:"updatedAt"`
+	// Coordinator/worker role (M2): "coordinator" | "worker" | "". A coordinator
+	// session gets the coordinator prompt + spawn_worker/... tools;
+	// CoordinatorSessionID is a worker's back-link to its coordinator.
+	Role                 string `json:"role,omitempty"`
+	CoordinatorSessionID string `json:"coordinatorSessionId,omitempty"`
+	CreatedAt            int64  `json:"createdAt"`
+	UpdatedAt            int64  `json:"updatedAt"`
 
 	// Tags are the session's free-form labels (also drive tag-triggered automations).
 	Tags []string `json:"tags,omitempty"`
@@ -107,23 +112,25 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := sessionInfoResp{
-		ID:                session.ID,
-		Title:             session.Title,
-		Kind:              session.Kind,
-		State:             session.State,
-		AgentID:           session.AgentID,
-		MessageCount:      session.MessageCount,
-		Unread:            session.Unread,
-		Goal:              session.Goal,
-		GoalDone:          session.GoalDone,
-		Tags:              session.Tags,
-		ParentSessionID:   session.ParentSessionID,
-		HandoffArtifactID: session.HandoffArtifactID,
-		CreatedAt:         session.CreatedAt,
-		UpdatedAt:         session.UpdatedAt,
-		HasSummary:        session.Summary != "",
-		SummaryMsgCount:   session.SummaryMsgCount,
-		SummaryTokens:     conversation.EstimateText(session.Summary),
+		ID:                   session.ID,
+		Title:                session.Title,
+		Kind:                 session.Kind,
+		State:                session.State,
+		AgentID:              session.AgentID,
+		MessageCount:         session.MessageCount,
+		Unread:               session.Unread,
+		Goal:                 session.Goal,
+		GoalDone:             session.GoalDone,
+		Tags:                 session.Tags,
+		ParentSessionID:      session.ParentSessionID,
+		HandoffArtifactID:    session.HandoffArtifactID,
+		Role:                 session.Role,
+		CoordinatorSessionID: session.CoordinatorSessionID,
+		CreatedAt:            session.CreatedAt,
+		UpdatedAt:            session.UpdatedAt,
+		HasSummary:           session.Summary != "",
+		SummaryMsgCount:      session.SummaryMsgCount,
+		SummaryTokens:        conversation.EstimateText(session.Summary),
 	}
 
 	// On-disk footprint: walk the session's folder.

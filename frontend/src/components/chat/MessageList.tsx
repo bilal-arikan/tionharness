@@ -5,6 +5,7 @@ import { AgentHeader } from './AgentHeader'
 import { WorkingDots } from './WorkingDots'
 import { AutoPromptNote } from './AutoPromptNote'
 import { UserTurn } from './UserTurn'
+import { UserBubble } from './UserBubble'
 import { AssistantTurn } from './AssistantTurn'
 
 interface Props {
@@ -160,17 +161,36 @@ export function MessageList({
   const last = messages[messages.length - 1]
   const showStandalonePending = pending && (!last || last.role === 'user')
 
+  // The typed user question that has scrolled above the top edge — rendered as a
+  // compact overlay header (below), NOT as an in-flow sticky row. Keeping it out
+  // of the scroll flow means engaging/disengaging the pin never changes the
+  // container's scrollHeight, which is what previously caused a clamp↔unclamp
+  // reflow oscillation (visible flicker + fighting the scroll).
+  const pinned = activePinnedIndex >= 0 ? messages[activePinnedIndex] : undefined
+  const pinnedTyped = pinned && pinned.role === 'user' && !pinned.origin ? pinned : undefined
 
   return (
-    <div
-      ref={scrollRef}
-      onScroll={onScroll}
-      data-testid="chat-transcript"
-      role="log"
-      aria-live="polite"
-      aria-label="Sohbet geçmişi"
-      className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-2"
-    >
+    <div className="relative min-h-0 flex-1">
+      {/* Overlay pinned-question header. pointer-events-none so wheel/touch scroll
+          passes straight through to the transcript underneath; the top-down
+          gradient fades the real question that scrolls beneath it. */}
+      {pinnedTyped && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[var(--color-bg)] via-[var(--color-bg)] to-transparent px-6 pt-2 pb-6"
+        >
+          <UserBubble text={pinnedTyped.text} agents={agents} clamp />
+        </div>
+      )}
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        data-testid="chat-transcript"
+        role="log"
+        aria-live="polite"
+        aria-label="Sohbet geçmişi"
+        className="h-full overflow-y-auto px-6 pb-6 pt-2"
+      >
       <div className="flex w-full flex-col gap-4">
         {messages.map((m, i) => {
           let row: ReactNode
@@ -180,7 +200,6 @@ export function MessageList({
           const rowLive = m.role !== 'user' && !!streaming && i === messages.length - 1
           // A real (typed) user message — the only rows eligible to pin at top.
           const isTypedUser = m.role === 'user' && !m.origin
-          const isActivePinned = isTypedUser && i === activePinnedIndex
           if (m.role === 'user') {
             row = m.origin ? (
               <AutoPromptNote message={m} onDelete={onDeleteMessage} />
@@ -192,9 +211,6 @@ export function MessageList({
                 onDelete={onDeleteMessage}
                 onRewind={onRewind}
                 onOpenArtifact={onOpenArtifact}
-                // When pinned at the top, clamp the question to 2 lines so the
-                // reply below stays visible.
-                clamp={isActivePinned}
               />
             )
           } else {
@@ -225,18 +241,14 @@ export function MessageList({
               />
             )
           }
-          // The most-recently-passed user message pins to the top as a section
-          // header: a top-down black→transparent gradient (so text scrolling
-          // underneath fades out) + its bubble clamped to 2 lines. Only the active
-          // one is sticky, so headers never stack.
-          const stickyCls = isActivePinned
-            ? 'sticky -top-2 z-10 bg-gradient-to-b from-black to-transparent pb-6'
-            : ''
+          // Rows stay full-height and in normal flow — the pinned question is a
+          // separate overlay header (rendered above), so nothing here changes the
+          // scroll layout. flashCls is the transient search deep-link highlight.
           const flashCls =
             flashId === m.id
               ? 'rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow'
               : ''
-          const wrapperCls = [stickyCls, flashCls].filter(Boolean).join(' ') || undefined
+          const wrapperCls = flashCls || undefined
           return (
             <div
               key={m.id}
@@ -279,6 +291,7 @@ export function MessageList({
         )}
 
         <div />
+      </div>
       </div>
     </div>
   )

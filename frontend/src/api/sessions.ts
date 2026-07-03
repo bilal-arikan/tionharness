@@ -4,6 +4,7 @@ import type {
   Session,
   Message,
   SessionInfo,
+  WorkerInfo,
   SessionContext,
   SessionContextPreview,
   SearchHit,
@@ -107,6 +108,16 @@ export const sessionApi = {
       method: 'PUT',
       body: JSON.stringify({ agentId }),
     }),
+  // Set the session's coordinator role (M2). role: 'coordinator' to enable
+  // coordinator mode (coordinator prompt + spawn_worker/... tools), '' to revert.
+  setSessionRole: (sessionId: string, role: string) =>
+    req<{ id: string; role: string }>(`/api/sessions/${sessionId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
+  // List the workers spawned under a coordinator session (for the coordination panel).
+  listWorkers: (sessionId: string) =>
+    req<{ workers: WorkerInfo[] }>(`/api/sessions/${sessionId}/workers`),
   // On-demand summary/listing posted as an assistant message in the session.
   // kind: 'memory' | 'board' | 'flows' | 'tools'. Returns the new message.
   summarizeSession: (sessionId: string, kind: string) =>
