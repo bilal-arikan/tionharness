@@ -2,6 +2,46 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-04**
 
+## Logs: sayaç + Kopyala + Aç üst-title'a taşındı ✅ (2026-07-04)
+
+- `logs` `HEADERLESS_VIEWS`'e eklendi; `LogsPanel` kendi `PaneHeader`'ını render ediyor
+  (title="Loglar", `right` = "N satır · N kayıt" sayacı + `CopyPathButton` (ikon) +
+  `RevealButton` **label="Aç"**). Bu üç öğe filtre toolbar'ından çıkarıldı; toolbar'da
+  seviyeler/arama/grupla/canlı/Yenile kaldı.
+- Reveal butonu artık "Aç" metnini gösteriyor (`labelClassName="hidden sm:inline"`).
+- Dosyalar: `App.tsx`, `panels/LogsPanel.tsx`. `tsc -b` temiz; canlı doğrulandı
+  (header: "Loglar · 35 satır · 36 kayıt · [kopya] · Aç").
+
+## Schedules toggle title'a + Flows minimap toggle + Market butonları panele ✅ (2026-07-04)
+
+Üç ayrı UI isteği. Hepsi canlı doğrulandı (mcp-chrome), `tsc -b` temiz.
+
+- **Schedules — otonomi toggle başlığa taşındı:** `schedules` artık `HEADERLESS_VIEWS`
+  içinde; `Schedules` kendi `PaneHeader`'ını render ediyor (title="Otomasyon",
+  `right` = "Otonomiyi duraklat" switch). İçerikteki eski büyük duraklat kartı
+  kaldırıldı. Dosyalar: `App.tsx`, `panels/Schedules.tsx`.
+- **Flows — mini harita aç/kapa butonu:** `FlowCanvas` `CanvasInner`'a `showMinimap`
+  state'i + `CanvasTools` içine "🗺 Mini harita" toggle butonu eklendi (`CanvasTools`
+  artık salt-okunur modda da render oluyor; auto-layout yalnız editable). `<MiniMap>`
+  koşullu. Dosya: `flow/FlowCanvas.tsx`.
+- **Market — İçe Aktar + Kaynaklar sol panele:** iki buton üst header'dan çıkarılıp
+  sol "Kategoriler" `ListPane`'inin altına (border-top'lu footer) taşındı. Header'da
+  yalnız arama + Yenile kaldı. Dosya: `panels/MarketPanel.tsx`.
+
+## Agents: aktivite paneli üst-title'daki butondan toggle ✅ (2026-07-04)
+
+Kullanıcı isteği: ajan ekranında aktivite paneli, başlıktaki bir butonla açılıp
+kapansın. Canlı doğrulandı (mcp-chrome).
+
+- `AgentsView` `PaneHeader` `right`'ına **"Aktivite"** toggle butonu eklendi
+  (`data-testid="agent-activity-toggle"`, `Activity` ikonu, chat'teki "Detay"
+  butonu deseni; açıkken accent kenarlık, `aria-pressed`). Copy/Aç butonları yalnız
+  ajan seçiliyken; Aktivite butonu her zaman görünür.
+- Eski **slim dikey reopen-rail** (kapalı durumda sağ kenardaki şerit) kaldırıldı;
+  panel artık yalnız başlıktaki butondan açılıp kapanıyor (`{activityOpen && <AgentActivityPanel/>}`).
+  Panelin kendi X (onClose) butonu korundu.
+- Dosya: `agents/AgentsView.tsx`. `tsc -b` temiz.
+
 ## Artifacts + Skills başlıkları da üst-title'a birleştirildi ✅ (2026-07-04)
 
 Flows/Agents desenini diğer detay ekranlarına uygulama. Canlı doğrulandı (mcp-chrome).
@@ -173,6 +213,21 @@ Agent SDK) devrediyor; SwarmGo kendi yazdığı için boşluk oluşmuş.
 - **Kalan:** canlı `cache_read>0` ölçümü (anthropic/openrouter anahtarı + gerçek tur). Sıradaki:
   **P2** (özeti compact-boundary mesajına çevir → özet de cache'lensin), sonra P4 (cache-break
   telemetri), P3/P5 (opsiyonel). Detay: `_Docs\50`.
+
+## claude-cli ek yükü: ajan bağlam önizlemesinde de + buton sohbet başlığına ✅ (2026-07-04)
+
+CLI ek-yük bilgisi artık **iki bağlam penceresinde de** görünür ve "Bağlam önizle"
+butonu sohbet başlığına taşındı. `go build/test` + `tsc -b --force` temiz.
+
+- **Ajan bağlam önizlemesi (`AgentContextModal`):** `handleAgentContext` artık
+  `computeCLIOverhead`'i **boş sessionID** ile çağırır → predicted-only (ölçüm yok,
+  ajanın oturumu yok). `computeCLIOverhead` boş sessionID'de debug/usage okumasını
+  atlar. UI'da "Beklenen (CLI, tahmini)" chip'i + "CLI ek yükü" uyarı kutusu. Canlı:
+  AGT4 → predicted 27.275 (eager=5). `agentContextPreview.cliOverhead` alanı eklendi.
+- **Buton taşındı:** `SessionDetailPanel` "Araçlar" kartındaki "Bağlam önizle (debug)"
+  → sohbet başlığına (`App.tsx` header, `ScanEye` ikon). `SessionContextModal` artık
+  App.tsx'ten render edilir; detay panelini açmadan erişilir. İlgili import/state/modal
+  detay panelinden temizlendi.
 
 ## claude-cli ek yükü: ölçülmüş generic referans + önceden tahmin ✅ (2026-07-04)
 
