@@ -103,9 +103,25 @@ func mustJSONbg(t *testing.T, v any) json.RawMessage {
 	return b
 }
 
-func TestShellOutputToolValidation(t *testing.T) {
-	tool := NewShellOutputTool(NewShellManager())
-	if _, err := tool.Call(context.Background(), mustJSONbg(t, map[string]any{"shell_id": ""})); err == nil {
-		t.Fatal("empty shell_id should error")
+func TestShellManageToolValidation(t *testing.T) {
+	tool := NewShellManageTool(NewShellManager())
+	// output/kill require a shell_id.
+	if _, err := tool.Call(context.Background(), mustJSONbg(t, map[string]any{"action": "output", "shell_id": ""})); err == nil {
+		t.Fatal("empty shell_id for output should error")
+	}
+	if _, err := tool.Call(context.Background(), mustJSONbg(t, map[string]any{"action": "kill", "shell_id": ""})); err == nil {
+		t.Fatal("empty shell_id for kill should error")
+	}
+	// unknown action errors.
+	if _, err := tool.Call(context.Background(), mustJSONbg(t, map[string]any{"action": "bogus"})); err == nil {
+		t.Fatal("unknown action should error")
+	}
+	// list needs no shell_id and returns the empty-list message.
+	out, err := tool.Call(context.Background(), mustJSONbg(t, map[string]any{"action": "list"}))
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if !strings.Contains(out, "no background shells") {
+		t.Fatalf("list output = %q", out)
 	}
 }

@@ -276,88 +276,67 @@ func (m *ShellManager) List() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// --- Tools: shell_output / shell_kill / shell_list ---
+// --- Tool: shell_manage (output / kill / list) ---
 
-// ShellOutputTool reads the accumulated output of a background shell.
-type ShellOutputTool struct{ mgr *ShellManager }
+// ShellManageTool is the single control surface for background shells started via
+// Bash/PowerShell with run_in_background=true. It replaces the former one-per-verb
+// tools (shell_output / shell_kill / shell_list) with an `action` discriminator:
+// `output` reads new stdout+stderr since the last read, `kill` terminates a shell,
+// `list` enumerates every tracked shell in the session.
+type ShellManageTool struct{ mgr *ShellManager }
 
-// NewShellOutputTool binds the tool to a session's shell manager.
-func NewShellOutputTool(m *ShellManager) ShellOutputTool { return ShellOutputTool{mgr: m} }
+// NewShellManageTool binds the tool to a session's shell manager.
+func NewShellManageTool(m *ShellManager) ShellManageTool { return ShellManageTool{mgr: m} }
 
-func (ShellOutputTool) Def() providers.ToolDef {
+func (ShellManageTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "shell_output",
-		Description: "Read the NEW output (stdout+stderr) a background shell has produced since the last read, " +
-			"plus its running/exited status. Start a background shell by calling Bash or PowerShell with " +
-			"run_in_background=true. Poll this until the status line shows the shell exited.",
+		Name: "shell_manage",
+		Description: "Manage background shells started by calling Bash or PowerShell with " +
+			"run_in_background=true. Set `action`: `output` (read the NEW stdout+stderr since the last " +
+			"read plus the running/exited status — poll until it shows exited; needs shell_id), `kill` " +
+			"(terminate a running shell; needs shell_id), or `list` (every tracked shell with status, " +
+			"age and command).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
-			"properties":{"shell_id":{"type":"string","description":"The id returned when the background shell was started (e.g. bg1)"}},
-			"required":["shell_id"],
+			"properties":{
+				"action":{"type":"string","enum":["output","kill","list"],"description":"What to do"},
+				"shell_id":{"type":"string","description":"The background shell id (required for output/kill; e.g. bg1)"}
+			},
+			"required":["action"],
 			"additionalProperties":false
 		}`),
+		Examples: []json.RawMessage{
+			json.RawMessage(`{"action":"list"}`),
+			json.RawMessage(`{"action":"output","shell_id":"bg1"}`),
+			json.RawMessage(`{"action":"kill","shell_id":"bg1"}`),
+		},
 	}
 }
 
-func (t ShellOutputTool) Call(_ context.Context, input json.RawMessage) (string, error) {
+func (t ShellManageTool) Call(_ context.Context, input json.RawMessage) (string, error) {
 	var args struct {
+		Action  string `json:"action"`
 		ShellID string `json:"shell_id"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
-		return "", argErr(err)
+		return "", argErrFor("shell_manage", err)
 	}
-	if strings.TrimSpace(args.ShellID) == "" {
-		return "", fmt.Errorf("shell_id is required")
+	action := strings.ToLower(strings.TrimSpace(args.Action))
+	id := strings.TrimSpace(args.ShellID)
+	switch action {
+	case "list":
+		return t.mgr.List(), nil
+	case "output":
+		if id == "" {
+			return "", fmt.Errorf("shell_id is required for action \"output\"")
+		}
+		return t.mgr.Output(id)
+	case "kill":
+		if id == "" {
+			return "", fmt.Errorf("shell_id is required for action \"kill\"")
+		}
+		return t.mgr.Kill(id)
+	default:
+		return "", fmt.Errorf("unknown action %q (use output/kill/list)", args.Action)
 	}
-	return t.mgr.Output(args.ShellID)
-}
-
-// ShellKillTool terminates a running background shell.
-type ShellKillTool struct{ mgr *ShellManager }
-
-// NewShellKillTool binds the tool to a session's shell manager.
-func NewShellKillTool(m *ShellManager) ShellKillTool { return ShellKillTool{mgr: m} }
-
-func (ShellKillTool) Def() providers.ToolDef {
-	return providers.ToolDef{
-		Name:        "shell_kill",
-		Description: "Terminate a running background shell (started via Bash/PowerShell with run_in_background=true) by its id.",
-		InputSchema: json.RawMessage(`{
-			"type":"object",
-			"properties":{"shell_id":{"type":"string","description":"The id of the background shell to stop (e.g. bg1)"}},
-			"required":["shell_id"],
-			"additionalProperties":false
-		}`),
-	}
-}
-
-func (t ShellKillTool) Call(_ context.Context, input json.RawMessage) (string, error) {
-	var args struct {
-		ShellID string `json:"shell_id"`
-	}
-	if err := json.Unmarshal(input, &args); err != nil {
-		return "", argErr(err)
-	}
-	if strings.TrimSpace(args.ShellID) == "" {
-		return "", fmt.Errorf("shell_id is required")
-	}
-	return t.mgr.Kill(args.ShellID)
-}
-
-// ShellListTool lists all tracked background shells.
-type ShellListTool struct{ mgr *ShellManager }
-
-// NewShellListTool binds the tool to a session's shell manager.
-func NewShellListTool(m *ShellManager) ShellListTool { return ShellListTool{mgr: m} }
-
-func (ShellListTool) Def() providers.ToolDef {
-	return providers.ToolDef{
-		Name:        "shell_list",
-		Description: "List every background shell in this session with its status (running/exited), age and command.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-}
-
-func (t ShellListTool) Call(_ context.Context, _ json.RawMessage) (string, error) {
-	return t.mgr.List(), nil
 }
