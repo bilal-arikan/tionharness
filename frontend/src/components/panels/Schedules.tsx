@@ -1,11 +1,68 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Hourglass, Pencil, X, Clock } from 'lucide-react'
+import { Play, Hourglass, Pencil, X, Clock, Workflow } from 'lucide-react'
 import { api } from '../../api'
-import type { Agent, Schedule } from '../../types'
+import type { Agent, Flow, Schedule } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
-import { Button, TagEditor } from '../common'
+import { Button, TagEditor, PaneHeader } from '../common'
+import { normalizeAvatar } from '../../lib/avatar'
 import { Automations } from './Automations'
+
+// TargetModeToggle is a small segmented control letting a schedule/automation
+// target either a single agent or an orchestration flow.
+export function TargetModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: 'agent' | 'flow'
+  onChange: (m: 'agent' | 'flow') => void
+}) {
+  return (
+    <div className="inline-flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
+      {(['agent', 'flow'] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          onClick={() => onChange(m)}
+          className={`px-2 py-1 transition ${
+            mode === m
+              ? 'bg-[var(--color-accent)] text-white'
+              : 'bg-[var(--color-bg)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+          }`}
+        >
+          {m === 'agent' ? 'Ajan' : 'Akış'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// FlowPicker is a simple dropdown of the workspace flows (mirrors AgentPicker).
+export function FlowPicker({
+  flows,
+  value,
+  onChange,
+}: {
+  flows: Flow[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  return (
+    <select
+      data-testid="flow-picker"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+    >
+      <option value="">Akış seç…</option>
+      {flows.map((f) => (
+        <option key={f.id} value={f.id}>
+          {normalizeAvatar(f.emoji) ? `${normalizeAvatar(f.emoji)} ${f.name}` : f.name}
+        </option>
+      ))}
+    </select>
+  )
+}
 
 interface Props {
   agents: Agent[]
@@ -91,10 +148,15 @@ function localInputToUnix(s: string): number {
 
 export function Schedules({ agents, focusId, onError }: Props) {
   const [schedules, setSchedules] = useState<Schedule[]>([])
+  // Workspace flows, for flow-backed schedules/automations (target = a flow).
+  const [flows, setFlows] = useState<Flow[]>([])
   // Briefly highlight a deep-linked schedule once it is present in the list.
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const focusRef = useRef<HTMLDivElement | null>(null)
   const [agentId, setAgentId] = useState('')
+  // Create-form target: an agent (prompt delivery) or a flow (orchestration run).
+  const [targetMode, setTargetMode] = useState<'agent' | 'flow'>('agent')
+  const [flowId, setFlowId] = useState('')
   const [cronExpr, setCronExpr] = useState('*/5 * * * *')
   const [prompt, setPrompt] = useState('')
   // Optional end date for the new schedule (datetime-local string; '' = none).
@@ -103,6 +165,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
   // Inline edit state (one schedule edited at a time).
   const [editId, setEditId] = useState<string | null>(null)
   const [editAgentId, setEditAgentId] = useState('')
+  const [editTargetMode, setEditTargetMode] = useState<'agent' | 'flow'>('agent')
+  const [editFlowId, setEditFlowId] = useState('')
   const [editCronExpr, setEditCronExpr] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
   const [editExpiresAt, setEditExpiresAt] = useState('')
@@ -122,12 +186,17 @@ export function Schedules({ agents, focusId, onError }: Props) {
 
   useEffect(() => {
     reload()
+    api.listFlows().then(setFlows).catch((e) => onError((e as Error).message))
     api
       .getWorkspaceSettings()
       .then((s) => setPauseAutonomy(s.pauseAutonomy))
       .catch((e) => onError((e as Error).message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const flowName = (id?: string) => flows.find((f) => f.id === id)?.name ?? id ?? '—'
+  // Resolved (mojibake-safe) flow emoji, or null when the flow has none.
+  const flowEmoji = (id?: string) => normalizeAvatar(flows.find((f) => f.id === id)?.emoji)
 
   const togglePauseAutonomy = async () => {
     if (pauseAutonomy === null) return
@@ -158,13 +227,24 @@ export function Schedules({ agents, focusId, onError }: Props) {
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? '—'
 
   const create = async () => {
-    if (!agentId || !cronExpr.trim()) {
-      onError('Ajan ve cron ifadesi zorunlu')
+    if (!cronExpr.trim()) {
+      onError('Cron ifadesi zorunlu')
       return
     }
-    if (!prompt.trim()) {
-      onError('Prompt zorunlu')
-      return
+    if (targetMode === 'flow') {
+      if (!flowId) {
+        onError('Akış seçilmeli')
+        return
+      }
+    } else {
+      if (!agentId) {
+        onError('Ajan zorunlu')
+        return
+      }
+      if (!prompt.trim()) {
+        onError('Prompt zorunlu')
+        return
+      }
     }
     const expUnix = localInputToUnix(expiresAt)
     if (expUnix && expUnix <= Math.floor(Date.now() / 1000)) {
@@ -173,7 +253,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
     }
     try {
       const s = await api.createSchedule({
-        agentId,
+        ...(targetMode === 'flow' ? { flowId } : { agentId }),
         cronExpr: cronExpr.trim(),
         prompt: prompt.trim(),
         enabled: true,
@@ -182,6 +262,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
       setSchedules((prev) => [s, ...prev])
       setPrompt('')
       setExpiresAt('')
+      setFlowId('')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -202,6 +283,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
   const startEdit = (s: Schedule) => {
     setEditId(s.id)
     setEditAgentId(s.agentId)
+    setEditTargetMode(s.flowId ? 'flow' : 'agent')
+    setEditFlowId(s.flowId ?? '')
     setEditCronExpr(s.cronExpr)
     setEditPrompt(s.prompt)
     setEditExpiresAt(unixToLocalInput(s.expiresAt))
@@ -210,13 +293,24 @@ export function Schedules({ agents, focusId, onError }: Props) {
   const cancelEdit = () => setEditId(null)
 
   const saveEdit = async (s: Schedule) => {
-    if (!editAgentId || !editCronExpr.trim()) {
-      onError('Ajan ve cron ifadesi zorunlu')
+    if (!editCronExpr.trim()) {
+      onError('Cron ifadesi zorunlu')
       return
     }
-    if (!editPrompt.trim()) {
-      onError('Prompt zorunlu')
-      return
+    if (editTargetMode === 'flow') {
+      if (!editFlowId) {
+        onError('Akış seçilmeli')
+        return
+      }
+    } else {
+      if (!editAgentId) {
+        onError('Ajan zorunlu')
+        return
+      }
+      if (!editPrompt.trim()) {
+        onError('Prompt zorunlu')
+        return
+      }
     }
     const expUnix = localInputToUnix(editExpiresAt)
     if (expUnix && expUnix <= Math.floor(Date.now() / 1000)) {
@@ -225,7 +319,10 @@ export function Schedules({ agents, focusId, onError }: Props) {
     }
     try {
       const updated = await api.updateSchedule(s.id, {
-        agentId: editAgentId,
+        // Send the active target explicitly; the other is cleared server-side.
+        ...(editTargetMode === 'flow'
+          ? { flowId: editFlowId, agentId: '' }
+          : { agentId: editAgentId, flowId: '' }),
         cronExpr: editCronExpr.trim(),
         prompt: editPrompt.trim(),
         expiresAt: expUnix,
@@ -274,42 +371,49 @@ export function Schedules({ agents, focusId, onError }: Props) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col p-4">
-      {/* Per-workspace autonomy pause (moved here from Workspace settings). */}
-      {pauseAutonomy !== null && (
-        <div
-          data-testid="workspace-pause-autonomy"
-          className={`mb-3 flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${
-            pauseAutonomy
-              ? 'border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_8%,transparent)]'
-              : 'border-[var(--color-border)] bg-[var(--color-surface)]'
-          }`}
-        >
-          <button
-            data-testid="workspace-pause-autonomy-toggle"
-            onClick={togglePauseAutonomy}
-            disabled={savingPause}
-            className={`h-4 w-8 flex-shrink-0 rounded-full transition disabled:opacity-40 ${
-              pauseAutonomy ? 'bg-[var(--color-danger)]' : 'bg-[var(--color-border)]'
-            }`}
-            title={pauseAutonomy ? 'Otonomi duraklatıldı' : 'Otonomi etkin'}
-          >
-            <span
-              className={`block h-4 w-4 rounded-full bg-white transition ${
-                pauseAutonomy ? 'translate-x-4' : ''
+    <div className="flex min-h-0 flex-1 flex-col">
+      <PaneHeader
+        title="Otomasyon"
+        right={
+          pauseAutonomy !== null ? (
+            <button
+              data-testid="workspace-pause-autonomy-toggle"
+              onClick={togglePauseAutonomy}
+              disabled={savingPause}
+              aria-pressed={pauseAutonomy}
+              title={
+                pauseAutonomy
+                  ? 'Bu workspace’te otonomi duraklatıldı — yalnız zamanlama çağrılarını bloklar (manuel sohbet + “şimdi çalıştır” etkilenmez). Tıkla: sürdür.'
+                  : 'Bu workspace’te otonomiyi duraklat — yalnız zamanlama çağrılarını bloklar (manuel sohbet + “şimdi çalıştır” etkilenmez).'
+              }
+              className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs transition disabled:opacity-40 ${
+                pauseAutonomy
+                  ? 'border-[var(--color-danger)] text-[var(--color-danger)]'
+                  : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
               }`}
-            />
-          </button>
-          <div className="flex-1">
-            <div className="font-medium">
-              {pauseAutonomy ? 'Bu workspace’te otonomi duraklatıldı' : 'Bu workspace’te otonomiyi duraklat'}
-            </div>
-            <div className="text-xs text-[var(--color-text-dim)]">
-              Yalnızca bu workspace’in zamanlama çağrılarını bloklar. Manuel sohbet ve “şimdi çalıştır” etkilenmez.
-            </div>
-          </div>
-        </div>
-      )}
+            >
+              <span
+                className={`h-4 w-8 flex-shrink-0 rounded-full transition ${
+                  pauseAutonomy ? 'bg-[var(--color-danger)]' : 'bg-[var(--color-border)]'
+                }`}
+              >
+                <span
+                  className={`block h-4 w-4 rounded-full bg-white transition ${
+                    pauseAutonomy ? 'translate-x-4' : ''
+                  }`}
+                />
+              </span>
+              <span className="hidden sm:inline">
+                {pauseAutonomy ? 'Otonomi duraklatıldı' : 'Otonomiyi duraklat'}
+              </span>
+            </button>
+          ) : undefined
+        }
+      />
+      {/* Single scroll region: the section header + create form + list + the
+          Automations section all scroll together (previously the header/form were
+          pinned outside the scroll and ate vertical space). */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
 
       {/* Section header — schedules are cron/time based (sky accent), distinct
           from the tag-triggered Automations below (violet accent). */}
@@ -321,9 +425,16 @@ export function Schedules({ agents, focusId, onError }: Props) {
       {/* New schedule form */}
       <div className="mb-4 space-y-2 rounded-lg border border-l-4 border-[var(--color-border)] border-l-sky-500 bg-[var(--color-surface)] p-3">
         <div className="flex flex-wrap items-start gap-2">
-          <div data-testid="schedule-create-agent-wrap">
-            <AgentPicker agents={agents} value={agentId} onChange={setAgentId} />
-          </div>
+          <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
+          {targetMode === 'flow' ? (
+            <div data-testid="schedule-create-flow-wrap">
+              <FlowPicker flows={flows} value={flowId} onChange={setFlowId} />
+            </div>
+          ) : (
+            <div data-testid="schedule-create-agent-wrap">
+              <AgentPicker agents={agents} value={agentId} onChange={setAgentId} />
+            </div>
+          )}
           <select
             data-testid="schedule-create-cron-preset-select"
             value={cronExpr}
@@ -374,7 +485,11 @@ export function Schedules({ agents, focusId, onError }: Props) {
             data-testid="schedule-create-prompt-input"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Prompt (zorunlu) — ajana gönderilecek talimat"
+            placeholder={
+              targetMode === 'flow'
+                ? 'Akış girdisi (opsiyonel)'
+                : 'Prompt (zorunlu) — ajana gönderilecek talimat'
+            }
             className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
           />
           <div data-testid="schedule-create-submit">
@@ -384,7 +499,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
       </div>
 
       {/* Schedule list */}
-      <div className="flex-1 space-y-2 overflow-y-auto">
+      <div className="space-y-2">
         {schedules.length === 0 && (
           <p className="text-sm text-[var(--color-text-dim)]">Henüz zamanlama yok.</p>
         )}
@@ -395,7 +510,12 @@ export function Schedules({ agents, focusId, onError }: Props) {
               className="space-y-2 rounded-lg border border-l-4 border-[var(--color-accent)] border-l-sky-500 bg-[var(--color-surface)] p-3 text-sm"
             >
               <div className="flex flex-wrap items-start gap-2">
-                <AgentPicker agents={agents} value={editAgentId} onChange={setEditAgentId} />
+                <TargetModeToggle mode={editTargetMode} onChange={setEditTargetMode} />
+                {editTargetMode === 'flow' ? (
+                  <FlowPicker flows={flows} value={editFlowId} onChange={setEditFlowId} />
+                ) : (
+                  <AgentPicker agents={agents} value={editAgentId} onChange={setEditAgentId} />
+                )}
                 <select
                   value={editCronExpr}
                   onChange={(e) => setEditCronExpr(e.target.value)}
@@ -488,6 +608,17 @@ export function Schedules({ agents, focusId, onError }: Props) {
               />
             </button>
             {(() => {
+              if (s.flowId) {
+                const fe = flowEmoji(s.flowId)
+                return (
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                    title="Akış tabanlı zamanlama"
+                  >
+                    {fe ? <span className="text-base leading-none">{fe}</span> : <Workflow size={15} />}
+                  </span>
+                )
+              }
               const owner = agents.find((a) => a.id === s.agentId)
               return owner ? (
                 <AgentAvatar agent={owner} size={28} />
@@ -498,12 +629,18 @@ export function Schedules({ agents, focusId, onError }: Props) {
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[var(--color-accent)]">{s.cronExpr}</span>
-                <span className="text-xs text-[var(--color-text-dim)]">{agentName(s.agentId)}</span>
+                <span className="text-xs text-[var(--color-text-dim)]">
+                  {s.flowId ? `${flowEmoji(s.flowId) ?? '🔀'} ${flowName(s.flowId)}` : agentName(s.agentId)}
+                </span>
                 <span className="ml-auto font-mono text-[10px] text-[var(--color-text-dim)] opacity-60" title="Zamanlama ID">
                   {s.id}
                 </span>
               </div>
-              <div className="text-xs text-[var(--color-text-dim)]">Prompt: {s.prompt}</div>
+              {s.prompt || !s.flowId ? (
+                <div className="text-xs text-[var(--color-text-dim)]">
+                  {s.flowId ? 'Girdi' : 'Prompt'}: {s.prompt}
+                </div>
+              ) : null}
               <div className="text-xs text-[var(--color-text-dim)]">
                 Sonraki: {fmtTime(s.nextRunAt)} · Son:{' '}
                 {s.lastDeliveryStatus ? (
@@ -575,7 +712,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
         )}
 
         {/* Tag-triggered automations (event-driven loops) live in the same screen. */}
-        <Automations agents={agents} onError={onError} />
+        <Automations agents={agents} flows={flows} onError={onError} />
+      </div>
       </div>
     </div>
   )

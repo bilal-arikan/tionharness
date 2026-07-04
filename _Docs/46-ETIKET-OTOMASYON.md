@@ -37,8 +37,9 @@ UI'da aynı Schedules ekranında ayrı bölümde gösterilir.
 | Alan | Anlam |
 |------|-------|
 | `TriggerTag` | İzlenen session etiketi. Bu etiketi taşıyan oturum bir turu bitirince tetiklenir. |
-| `TargetAgentID` | Spawn'lanan oturumu çalıştıracak ajan. |
-| `PromptTemplate` | Yeni oturumun promptu. Placeholder'lar aşağıda. |
+| `TargetAgentID` | Spawn'lanan oturumu çalıştıracak ajan. `FlowID` set ise opsiyonel. |
+| `FlowID` | Set ise **akış tabanlı** otomasyon: tetikte ajan oturumu spawn etmek yerine render edilen prompt, o orkestrasyon akışının **girdisi** olarak çalıştırılır (`RunFlowRecorded`). Ajan-hedef ile karşılıklı dışlar. Akış oturumları tetik etiketi taşımaz → **kendini döngülemez** (per-tetik dispatch); yine de guardrail'ler (MaxIterations/Cooldown/ExpiresAt) tetik sıklığını sınırlar, `SpawnTags` yok sayılır. |
+| `PromptTemplate` | Yeni oturumun promptu (veya akış girdisi). Placeholder'lar aşağıda. |
 | `SpawnTags` | Spawn'lanan oturuma uygulanan etiketler. `nil` → `[TriggerTag]` (döngü). `[]` → döngüyü kırar. |
 | `Enabled` | Kill-switch. Aç→iterasyon sayacı sıfırlanır. |
 | `MaxIterations` | Toplam tetik üst sınırı (0=sınırsız — dikkat). Vars. 50. Aşılınca otomatik pasifle. |
@@ -88,11 +89,14 @@ output)` ile sinyallenir — **detached goroutine**, turu asla bloklamaz/iptal e
      + `automation` event, dur.
    - `renderAutomationPrompt` (placeholder ikamesi; `{{result}}` yoksa sonucu
      "--- Önceki sonuç ---" ile ekler).
-   - `SpawnSession(TargetAgentID, prompt, {Tags: spawnTags, ParentSessionID: biten,
-     CreatedBy: "automation:"+id})`. **`SpawnOptions.Tags`** eklendi → spawn'lanan
-     oturum **oluşturulurken** etiketlenir (arka plan turu tag konmadan bitse bile
-     race yok).
-   - `RecordAutomationFire` (sayaç++, spawned session id, hata).
+   - **Akış tabanlı (`FlowID` set):** `fireFlow` → `RunFlowRecorded(FlowID, prompt,
+     autonomous)`; akış transcript oturumuna tur olarak yazılır + kendi bildirimini
+     yükseltir. Ajan lookup + spawn atlanır. `RecordAutomationFire(sessionID)`.
+   - **Ajan tabanlı (varsayılan):** `SpawnSession(TargetAgentID, prompt, {Tags:
+     spawnTags, ParentSessionID: biten, CreatedBy: "automation:"+id})`.
+     **`SpawnOptions.Tags`** → spawn'lanan oturum **oluşturulurken** etiketlenir
+     (arka plan turu tag konmadan bitse bile race yok).
+   - `RecordAutomationFire` (sayaç++, spawned/flow session id, hata).
 
 Döngü: A(#loop) biter → B(#loop) spawn → B biter → C spawn … MaxIterations'a kadar.
 Sayaç tek otomasyon üzerinde birikir (tüm spawn'lar aynı etiketi → aynı kural).

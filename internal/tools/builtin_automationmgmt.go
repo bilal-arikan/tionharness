@@ -48,24 +48,26 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "create_automation",
 		Description: "Create a tag-triggered automation: when a session carrying triggerTag finishes a turn, " +
-			"its final reply is rendered into promptTemplate ({{result}}, {{title}}, {{tag}}, {{sessionId}}) and a NEW " +
-			"session is spawned for targetAgentId. By default the spawned session carries triggerTag too, so it " +
-			"re-fires the automation on its own completion — a self-continuing loop bounded by maxIterations. " +
+			"its final reply is rendered into promptTemplate ({{result}}, {{title}}, {{tag}}, {{sessionId}}) and the " +
+			"target runs. The target is EITHER an agent (targetAgentId → a NEW session is spawned; by default it carries " +
+			"triggerTag too, re-firing the automation — a self-continuing loop bounded by maxIterations) OR an " +
+			"orchestration flow (flowId → the rendered prompt is run as the flow input; per-trigger, no self-loop). " +
 			"To tag an existing session so it participates, use set_session_tags.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Optional display name"},
 				"triggerTag":{"type":"string","description":"The session tag that fires this automation when a tagged session's turn ends"},
-				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents)"},
-				"promptTemplate":{"type":"string","description":"Prompt for the spawned session. Placeholders: {{result}} (finishing reply), {{title}}, {{tag}}, {{sessionId}}, {{iteration}} (1-based fire number), {{maxIterations}}, {{agent}}/{{agentName}}, {{prevPrompt}} (the prior user prompt), {{automation}}, {{date}}, {{time}}, {{datetime}}"},
-				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (default: [triggerTag] → loop; pass [] to break the loop)"},
+				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents). Omit when flowId is set."},
+				"flowId":{"type":"string","description":"Run this orchestration flow with the rendered prompt as its input instead of spawning an agent session (see list_flows)."},
+				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Placeholders: {{result}} (finishing reply), {{title}}, {{tag}}, {{sessionId}}, {{iteration}} (1-based fire number), {{maxIterations}}, {{agent}}/{{agentName}}, {{prevPrompt}} (the prior user prompt), {{automation}}, {{date}}, {{time}}, {{datetime}}"},
+				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (default: [triggerTag] → loop; pass [] to break the loop). Ignored for flow-backed automations."},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling (0 = unlimited; default 50)"},
 				"cooldownSec":{"type":"integer","description":"Minimum seconds between fires (default 0)"},
 				"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); after it the automation auto-disables. 0 = no end date"},
 				"enabled":{"type":"boolean","description":"Active immediately (default true)"}
 			},
-			"required":["triggerTag","targetAgentId","promptTemplate"],
+			"required":["triggerTag","promptTemplate"],
 			"additionalProperties":false
 		}`),
 		Examples: []json.RawMessage{
@@ -79,6 +81,7 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		Name           string   `json:"name"`
 		TriggerTag     string   `json:"triggerTag"`
 		TargetAgentID  string   `json:"targetAgentId"`
+		FlowID         string   `json:"flowId"`
 		PromptTemplate string   `json:"promptTemplate"`
 		SpawnTags      []string `json:"spawnTags"`
 		MaxIterations  *int     `json:"maxIterations"`
@@ -91,11 +94,22 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	in.TriggerTag = strings.TrimSpace(in.TriggerTag)
 	in.TargetAgentID = strings.TrimSpace(in.TargetAgentID)
-	if in.TriggerTag == "" || in.TargetAgentID == "" || strings.TrimSpace(in.PromptTemplate) == "" {
-		return "", fmt.Errorf("triggerTag, targetAgentId and promptTemplate are all required")
+	in.FlowID = strings.TrimSpace(in.FlowID)
+	if in.TriggerTag == "" || strings.TrimSpace(in.PromptTemplate) == "" {
+		return "", fmt.Errorf("triggerTag and promptTemplate are required")
 	}
-	if _, err := t.d.db.GetAgent(ctx, in.TargetAgentID); err != nil {
-		return "", fmt.Errorf("no agent with id %q (use list_agents)", in.TargetAgentID)
+	// Either a flow (flowId) or an agent (targetAgentId) is the target.
+	if in.FlowID != "" {
+		if _, err := t.d.db.GetFlow(ctx, in.FlowID); err != nil {
+			return "", fmt.Errorf("no flow with id %q (use list_flows)", in.FlowID)
+		}
+	} else {
+		if in.TargetAgentID == "" {
+			return "", fmt.Errorf("targetAgentId or flowId is required")
+		}
+		if _, err := t.d.db.GetAgent(ctx, in.TargetAgentID); err != nil {
+			return "", fmt.Errorf("no agent with id %q (use list_agents)", in.TargetAgentID)
+		}
 	}
 	maxIter := defaultAutomationMax
 	if in.MaxIterations != nil {
@@ -117,6 +131,7 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		Name:           strings.TrimSpace(in.Name),
 		TriggerTag:     in.TriggerTag,
 		TargetAgentID:  in.TargetAgentID,
+		FlowID:         in.FlowID,
 		PromptTemplate: in.PromptTemplate,
 		SpawnTags:      in.SpawnTags,
 		MaxIterations:  maxIter,
@@ -143,7 +158,7 @@ func NewUpdateAutomationTool(database *db.DB, actorID string) UpdateAutomationTo
 func (UpdateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_automation",
-		Description: "Edit an agent-created automation (not one made by the user). Pass the id and the fields to change (name, triggerTag, targetAgentId, promptTemplate, spawnTags, maxIterations, cooldownSec, enabled).",
+		Description: "Edit an agent-created automation (not one made by the user). Pass the id and the fields to change (name, triggerTag, targetAgentId, flowId, promptTemplate, spawnTags, maxIterations, cooldownSec, enabled). Setting flowId makes it flow-backed (and clears the agent); setting targetAgentId switches it back to agent-backed.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -151,6 +166,7 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 				"name":{"type":"string"},
 				"triggerTag":{"type":"string"},
 				"targetAgentId":{"type":"string"},
+				"flowId":{"type":"string","description":"Run this flow with the rendered prompt as input instead of spawning an agent session (see list_flows). Setting it clears the agent."},
 				"promptTemplate":{"type":"string"},
 				"spawnTags":{"type":"array","items":{"type":"string"}},
 				"maxIterations":{"type":"integer"},
@@ -169,6 +185,7 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		Name           *string   `json:"name"`
 		TriggerTag     *string   `json:"triggerTag"`
 		TargetAgentID  *string   `json:"targetAgentId"`
+		FlowID         *string   `json:"flowId"`
 		PromptTemplate *string   `json:"promptTemplate"`
 		SpawnTags      *[]string `json:"spawnTags"`
 		MaxIterations  *int      `json:"maxIterations"`
@@ -193,11 +210,21 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	if in.TriggerTag != nil {
 		cur.TriggerTag = strings.TrimSpace(*in.TriggerTag)
 	}
-	if in.TargetAgentID != nil {
+	// A non-empty flowId switches to flow-backed (and clears the agent); an
+	// explicit targetAgentId switches back to agent-backed (and clears the flow).
+	if in.FlowID != nil && strings.TrimSpace(*in.FlowID) != "" {
+		fid := strings.TrimSpace(*in.FlowID)
+		if _, err := t.d.db.GetFlow(ctx, fid); err != nil {
+			return "", fmt.Errorf("no flow with id %q (use list_flows)", fid)
+		}
+		cur.FlowID = fid
+		cur.TargetAgentID = ""
+	} else if in.TargetAgentID != nil && strings.TrimSpace(*in.TargetAgentID) != "" {
 		if _, err := t.d.db.GetAgent(ctx, *in.TargetAgentID); err != nil {
 			return "", fmt.Errorf("no agent with id %q", *in.TargetAgentID)
 		}
 		cur.TargetAgentID = *in.TargetAgentID
+		cur.FlowID = ""
 	}
 	if in.PromptTemplate != nil {
 		cur.PromptTemplate = *in.PromptTemplate
@@ -294,6 +321,7 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 		Name           string `json:"name"`
 		TriggerTag     string `json:"triggerTag"`
 		TargetAgentID  string `json:"targetAgentId"`
+		FlowID         string `json:"flowId,omitempty"`
 		Enabled        bool   `json:"enabled"`
 		IterationCount int    `json:"iterationCount"`
 		MaxIterations  int    `json:"maxIterations"`
@@ -306,6 +334,7 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 			Name:           a.Name,
 			TriggerTag:     a.TriggerTag,
 			TargetAgentID:  a.TargetAgentID,
+			FlowID:         a.FlowID,
 			Enabled:        a.Enabled,
 			IterationCount: a.IterationCount,
 			MaxIterations:  a.MaxIterations,

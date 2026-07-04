@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Repeat, RotateCcw, Trash2, Info, Pencil, X } from 'lucide-react'
+import { Repeat, RotateCcw, Trash2, Info, Pencil, X, Workflow } from 'lucide-react'
 import { api } from '../../api'
-import type { Agent, Automation } from '../../types'
+import type { Agent, Automation, Flow } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { Button, TagEditor } from '../common'
+import { normalizeAvatar } from '../../lib/avatar'
+import { TargetModeToggle, FlowPicker } from './Schedules'
 
 // datetime-local <-> unix-seconds helpers (mirrors Schedules.tsx).
 function unixToLocalInput(unix?: number): string {
@@ -37,6 +39,7 @@ const PROMPT_VARS: { name: string; desc: string }[] = [
 
 interface Props {
   agents: Agent[]
+  flows: Flow[]
   onError: (msg: string) => void
 }
 
@@ -50,7 +53,7 @@ function fmtTime(unix?: number): string {
 // session is spawned for the target agent (which, tagged with triggerTag by
 // default, re-triggers the rule → a bounded loop). Rendered as a distinct
 // section inside the Schedules screen.
-export function Automations({ agents, onError }: Props) {
+export function Automations({ agents, flows, onError }: Props) {
   const [items, setItems] = useState<Automation[]>([])
 
   // Create form.
@@ -58,6 +61,8 @@ export function Automations({ agents, onError }: Props) {
   const [name, setName] = useState('')
   const [triggerTag, setTriggerTag] = useState('')
   const [targetAgentId, setTargetAgentId] = useState('')
+  const [targetMode, setTargetMode] = useState<'agent' | 'flow'>('agent')
+  const [flowId, setFlowId] = useState('')
   const [promptTemplate, setPromptTemplate] = useState('Devam et. Önceki sonuç:\n{{result}}')
   const [maxIterations, setMaxIterations] = useState('50')
   const [cooldownSec, setCooldownSec] = useState('0')
@@ -66,10 +71,14 @@ export function Automations({ agents, onError }: Props) {
   // Inline edit state (one automation edited at a time).
   const [editId, setEditId] = useState<string | null>(null)
   const [edit, setEdit] = useState({
-    name: '', triggerTag: '', targetAgentId: '', promptTemplate: '',
-    maxIterations: '50', cooldownSec: '0', expiresAt: '',
+    name: '', triggerTag: '', targetAgentId: '', targetMode: 'agent' as 'agent' | 'flow',
+    flowId: '', promptTemplate: '', maxIterations: '50', cooldownSec: '0', expiresAt: '',
   })
   const [showEditVars, setShowEditVars] = useState(false)
+
+  const flowName = (id?: string) => flows.find((f) => f.id === id)?.name ?? id ?? '—'
+  // Resolved (mojibake-safe) flow emoji, or null when the flow has none.
+  const flowEmoji = (id?: string) => normalizeAvatar(flows.find((f) => f.id === id)?.emoji)
 
   const reload = () =>
     api.listAutomations().then(setItems).catch((e) => onError((e as Error).message))
@@ -82,8 +91,12 @@ export function Automations({ agents, onError }: Props) {
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? '—'
 
   const create = async () => {
-    if (!triggerTag.trim() || !targetAgentId || !promptTemplate.trim()) {
-      onError('Tetikleyici etiket, hedef ajan ve prompt şablonu zorunlu')
+    if (!triggerTag.trim() || !promptTemplate.trim()) {
+      onError('Tetikleyici etiket ve prompt şablonu zorunlu')
+      return
+    }
+    if (targetMode === 'flow' ? !flowId : !targetAgentId) {
+      onError(targetMode === 'flow' ? 'Hedef akış zorunlu' : 'Hedef ajan zorunlu')
       return
     }
     const expUnix = localInputToUnix(expiresAt)
@@ -95,7 +108,7 @@ export function Automations({ agents, onError }: Props) {
       const a = await api.createAutomation({
         name: name.trim(),
         triggerTag: triggerTag.trim(),
-        targetAgentId,
+        ...(targetMode === 'flow' ? { flowId } : { targetAgentId }),
         promptTemplate: promptTemplate.trim(),
         maxIterations: Number(maxIterations) || 0,
         cooldownSec: Number(cooldownSec) || 0,
@@ -106,6 +119,7 @@ export function Automations({ agents, onError }: Props) {
       setName('')
       setTriggerTag('')
       setExpiresAt('')
+      setFlowId('')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -118,6 +132,8 @@ export function Automations({ agents, onError }: Props) {
       name: a.name ?? '',
       triggerTag: a.triggerTag,
       targetAgentId: a.targetAgentId,
+      targetMode: a.flowId ? 'flow' : 'agent',
+      flowId: a.flowId ?? '',
       promptTemplate: a.promptTemplate,
       maxIterations: String(a.maxIterations),
       cooldownSec: String(a.cooldownSec),
@@ -128,8 +144,12 @@ export function Automations({ agents, onError }: Props) {
   const cancelEdit = () => setEditId(null)
 
   const saveEdit = async (a: Automation) => {
-    if (!edit.triggerTag.trim() || !edit.targetAgentId || !edit.promptTemplate.trim()) {
-      onError('Tetikleyici etiket, hedef ajan ve prompt şablonu zorunlu')
+    if (!edit.triggerTag.trim() || !edit.promptTemplate.trim()) {
+      onError('Tetikleyici etiket ve prompt şablonu zorunlu')
+      return
+    }
+    if (edit.targetMode === 'flow' ? !edit.flowId : !edit.targetAgentId) {
+      onError(edit.targetMode === 'flow' ? 'Hedef akış zorunlu' : 'Hedef ajan zorunlu')
       return
     }
     const expUnix = localInputToUnix(edit.expiresAt)
@@ -141,7 +161,10 @@ export function Automations({ agents, onError }: Props) {
       await api.updateAutomation(a.id, {
         name: edit.name.trim(),
         triggerTag: edit.triggerTag.trim(),
-        targetAgentId: edit.targetAgentId,
+        // Send the active target explicitly; the other is cleared server-side.
+        ...(edit.targetMode === 'flow'
+          ? { flowId: edit.flowId, targetAgentId: '' }
+          : { targetAgentId: edit.targetAgentId, flowId: '' }),
         promptTemplate: edit.promptTemplate.trim(),
         maxIterations: Number(edit.maxIterations) || 0,
         cooldownSec: Number(edit.cooldownSec) || 0,
@@ -222,7 +245,12 @@ export function Automations({ agents, onError }: Props) {
             placeholder="tetikleyici etiket (ör. loop)"
             className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
           />
-          <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
+          <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
+          {targetMode === 'flow' ? (
+            <FlowPicker flows={flows} value={flowId} onChange={setFlowId} />
+          ) : (
+            <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
+          )}
           <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
             Maks. iter.
             <input
@@ -350,7 +378,12 @@ export function Automations({ agents, onError }: Props) {
                     placeholder="tetikleyici etiket"
                     className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
                   />
-                  <AgentPicker agents={agents} value={edit.targetAgentId} onChange={(v) => setEdit((s) => ({ ...s, targetAgentId: v }))} />
+                  <TargetModeToggle mode={edit.targetMode} onChange={(m) => setEdit((s) => ({ ...s, targetMode: m }))} />
+                  {edit.targetMode === 'flow' ? (
+                    <FlowPicker flows={flows} value={edit.flowId} onChange={(v) => setEdit((s) => ({ ...s, flowId: v }))} />
+                  ) : (
+                    <AgentPicker agents={agents} value={edit.targetAgentId} onChange={(v) => setEdit((s) => ({ ...s, targetAgentId: v }))} />
+                  )}
                   <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
                     Maks. iter.
                     <input type="number" min={0} value={edit.maxIterations}
@@ -431,6 +464,17 @@ export function Automations({ agents, onError }: Props) {
                 <span className={`block h-4 w-4 rounded-full bg-white transition ${a.enabled ? 'translate-x-4' : ''}`} />
               </button>
               {(() => {
+                if (a.flowId) {
+                  const fe = flowEmoji(a.flowId)
+                  return (
+                    <span
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                      title="Akış tabanlı otomasyon"
+                    >
+                      {fe ? <span className="text-base leading-none">{fe}</span> : <Workflow size={15} />}
+                    </span>
+                  )
+                }
                 const owner = agents.find((x) => x.id === a.targetAgentId)
                 return owner ? (
                   <AgentAvatar agent={owner} size={28} />
@@ -444,7 +488,9 @@ export function Automations({ agents, onError }: Props) {
                   <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
                     #{a.triggerTag}
                   </span>
-                  <span className="text-xs text-[var(--color-text-dim)]">→ {agentName(a.targetAgentId)}</span>
+                  <span className="text-xs text-[var(--color-text-dim)]">
+                    → {a.flowId ? `${flowEmoji(a.flowId) ?? '🔀'} ${flowName(a.flowId)}` : agentName(a.targetAgentId)}
+                  </span>
                   <span className="ml-auto font-mono text-[10px] text-[var(--color-text-dim)] opacity-60">{a.id}</span>
                 </div>
                 <div className="mt-1 truncate text-xs text-[var(--color-text-dim)]" title={a.promptTemplate}>
@@ -465,17 +511,23 @@ export function Automations({ agents, onError }: Props) {
                   ) : null}
                   {a.lastError && <span className="text-[var(--color-danger)]">Hata: {a.lastError}</span>}
                 </div>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-                    Spawn etiketleri
-                  </span>
-                  <TagEditor
-                    tags={a.spawnTags ?? [a.triggerTag]}
-                    onChange={(tags) => setSpawnTags(a, tags)}
-                    placeholder="loop kırmak için boş bırak"
-                    className="flex-1 py-1"
-                  />
-                </div>
+                {a.flowId ? (
+                  <div className="mt-1.5 text-[11px] text-[var(--color-text-dim)] opacity-80">
+                    Akış tabanlı — her tetikte akış çalışır (kendini döngülemez; spawn etiketleri yok sayılır).
+                  </div>
+                ) : (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+                      Spawn etiketleri
+                    </span>
+                    <TagEditor
+                      tags={a.spawnTags ?? [a.triggerTag]}
+                      onChange={(tags) => setSpawnTags(a, tags)}
+                      placeholder="loop kırmak için boş bırak"
+                      className="flex-1 py-1"
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex flex-col items-center gap-2">
                 <button

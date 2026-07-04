@@ -92,11 +92,20 @@ type Task struct {
 
 // Schedule fires on a cron expression and delivers a standalone prompt to its
 // agent. (Schedules are decoupled from the board: they do not run tasks.)
+//
+// Alternatively, when FlowID is set the schedule is "flow-backed": each fire runs
+// that orchestration flow (with Prompt as the flow input) instead of delivering
+// the prompt to a single agent. AgentID is then optional — the flow owns its own
+// agents. Either path funnels through Scheduler.run, so cron ticks and manual
+// "run now" support both uniformly.
 type Schedule struct {
 	ID                 string `json:"id"`
 	AgentID            string `json:"agentId"`
 	CronExpr           string `json:"cronExpr"`
 	Prompt             string `json:"prompt"`
+	// FlowID, when set, makes this a flow-backed schedule: firing runs that flow
+	// with Prompt as its input instead of delivering the prompt to AgentID.
+	FlowID             string `json:"flowId,omitempty"`
 	NextRunAt          int64  `json:"nextRunAt"`
 	LastRunAt          int64  `json:"lastRunAt"`
 	LastDeliveryStatus string `json:"lastDeliveryStatus"`

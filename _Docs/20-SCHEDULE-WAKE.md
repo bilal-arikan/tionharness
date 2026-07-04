@@ -291,3 +291,54 @@ kaydediyordu → UI onu UserBubble olarak çiziyordu.
 
 **Not:** Backend değişikliği (Origin yazımı) için Go sunucusunun yeniden
 başlatılması gerekir; frontend vite HMR ile anında güncellenir.
+
+---
+
+# Akış Tabanlı Zamanlamalar + Otomasyonlar (`flowId`) (2026-07-04)
+
+## Neden
+
+Bir zamanlama/otomasyon tetiklendiğinde tek bir ajana prompt teslim etmek yerine,
+seçilen bir **orkestrasyon akışını** (Flow) başlatabilmek istendi — böylece
+çok-adımlı (agent/branch/parallel/transform) iş akışları cron ile veya etiket
+tetikleyicisiyle otomatik koşabilir. Model olarak, Task'taki mevcut `FlowID`
+("flow-backed task") deseni Schedule ve Automation'a taşındı.
+
+## Model
+
+- `db.Schedule.FlowID` + `db.Automation.FlowID` (`json:"flowId,omitempty"`).
+  Set ise **akış tabanlı**: Prompt/PromptTemplate akışın **girdisi** olur;
+  `AgentID`/`TargetAgentID` opsiyonel hale gelir. Ajan-hedef ile karşılıklı dışlar.
+- Store `Update*` fonksiyonları `FlowID`'yi round-trip eder.
+
+## Dispatch
+
+- **Schedule** (`agent/scheduler.go` `run`): `sc.FlowID != ""` → `deliverFlow` →
+  `RunFlowRecorded(FlowID, Prompt, autonomous)`. Akış kendi transcript oturumunu +
+  bildirimini yönetir; bu yüzden akış yolunda `emitPromptDelivery` çağrılmaz.
+  `FlowFailure` → schedule `lastDeliveryStatus=failure`. Cron tick + "şimdi çalıştır"
+  ikisi de aynı yoldan geçer.
+- **Automation** (`agent/automation.go` `fire`): render sonrası `a.FlowID != ""` →
+  `fireFlow` → `RunFlowRecorded(FlowID, prompt)`. Spawn/agent-lookup atlanır.
+  Akış oturumları tetik etiketi taşımadığından **kendini döngülemez** (per-tetik
+  dispatch); guardrail'ler (MaxIterations/Cooldown/ExpiresAt) yine tetik sıklığını
+  sınırlar, `SpawnTags` yok sayılır.
+
+## API + Araçlar + UI
+
+- **API:** `POST/PUT /api/schedules` + `POST/PUT /api/automations` `flowId` alır.
+  Doğrulama gevşetildi: cron/triggerTag + promptTemplate zorunlu; hedef = **ya**
+  `flowId` (akış varlığı doğrulanır) **ya** ajan (+ prompt). Automation update'te
+  `flowId` set → agent temizlenir, `targetAgentId` set → flow temizlenir (kısmi
+  spawnTags güncellemesi hedefi ellemez).
+- **Araçlar:** `create/update_schedule` + `create/update_automation` `flowId`
+  parametresi (+ `list_*` çıktısında `flowId`). Flow varlığı `GetFlow` ile doğrulanır.
+- **UI:** `Schedules.tsx` + `Automations.tsx` — ortak `TargetModeToggle` (Ajan/Akış)
+  + `FlowPicker` (workspace akışları `api.listFlows`). Akış modunda prompt "Akış
+  girdisi (opsiyonel)"; listede akış satırı `Workflow` ikonu + `🔀 <akış adı>` ile
+  gösterilir; akış otomasyonunda spawn-etiket editörü yerine bilgi notu.
+
+## Test
+
+- `internal/db/automation_test.go` — `TestAutomationFlowIDRoundTrip`,
+  `TestScheduleFlowIDRoundTrip` (create/update round-trip + hedef değiştirme).

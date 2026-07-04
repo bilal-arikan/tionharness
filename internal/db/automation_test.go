@@ -101,3 +101,124 @@ func TestSetSessionTagsNormalizes(t *testing.T) {
 		t.Fatalf("tags not normalized: %v", got.Tags)
 	}
 }
+
+// TestAutomationFlowIDRoundTrip verifies a flow-backed automation persists its
+// FlowID on create, keeps it through an update, and can be switched back to an
+// agent target by clearing FlowID.
+func TestAutomationFlowIDRoundTrip(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	a, err := d.CreateAutomation(ctx, Automation{
+		TriggerTag:     "loop",
+		FlowID:         "FLOW1",
+		PromptTemplate: "go: {{result}}",
+		Enabled:        true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.FlowID != "FLOW1" {
+		t.Fatalf("create did not keep FlowID: %q", a.FlowID)
+	}
+
+	// Update to a different flow.
+	a.FlowID = "FLOW2"
+	if err := d.UpdateAutomation(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := d.GetAutomation(ctx, a.ID); got.FlowID != "FLOW2" {
+		t.Fatalf("update did not change FlowID: %q", got.FlowID)
+	}
+
+	// Switch to an agent target: clear FlowID, set TargetAgentID.
+	a.FlowID = ""
+	a.TargetAgentID = "AGT1"
+	if err := d.UpdateAutomation(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := d.GetAutomation(ctx, a.ID)
+	if got.FlowID != "" || got.TargetAgentID != "AGT1" {
+		t.Fatalf("switch to agent failed: flow=%q agent=%q", got.FlowID, got.TargetAgentID)
+	}
+}
+
+// TestScheduleFlowIDRoundTrip verifies a flow-backed schedule persists FlowID on
+// create and keeps it through an update.
+func TestScheduleFlowIDRoundTrip(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	sc, err := d.CreateSchedule(ctx, Schedule{
+		FlowID:   "FLOW1",
+		CronExpr: "0 9 * * *",
+		Prompt:   "input",
+		Enabled:  true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.FlowID != "FLOW1" {
+		t.Fatalf("create did not keep FlowID: %q", sc.FlowID)
+	}
+
+	// Switch to an agent target: clear FlowID, set AgentID.
+	sc.FlowID = ""
+	sc.AgentID = "AGT1"
+	if err := d.UpdateSchedule(ctx, sc); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := d.GetSchedule(ctx, sc.ID)
+	if got.FlowID != "" || got.AgentID != "AGT1" {
+		t.Fatalf("switch to agent failed: flow=%q agent=%q", got.FlowID, got.AgentID)
+	}
+}
+
+func TestFlowEmojiRoundTrip(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	// Create with an emoji; it must persist.
+	f, err := d.CreateFlow(ctx, Flow{Name: "Draft & review", Emoji: "📝"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Emoji != "📝" {
+		t.Fatalf("create did not keep Emoji: %q", f.Emoji)
+	}
+
+	// A name/graph save must NOT wipe the emoji (persisted independently).
+	if err := d.UpdateFlow(ctx, Flow{ID: f.ID, Name: "Renamed", Graph: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := d.GetFlow(ctx, f.ID)
+	if got.Emoji != "📝" {
+		t.Fatalf("UpdateFlow wiped emoji: %q", got.Emoji)
+	}
+	if got.Name != "Renamed" {
+		t.Fatalf("UpdateFlow did not apply name: %q", got.Name)
+	}
+
+	// SetFlowEmoji replaces the glyph; empty string clears it.
+	if err := d.SetFlowEmoji(ctx, f.ID, "🚀"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = d.GetFlow(ctx, f.ID); got.Emoji != "🚀" {
+		t.Fatalf("SetFlowEmoji did not apply: %q", got.Emoji)
+	}
+	if err := d.SetFlowEmoji(ctx, f.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = d.GetFlow(ctx, f.ID); got.Emoji != "" {
+		t.Fatalf("SetFlowEmoji did not clear: %q", got.Emoji)
+	}
+}

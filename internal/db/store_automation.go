@@ -74,6 +74,7 @@ func (d *DB) UpdateAutomation(ctx context.Context, a Automation) error {
 	cur.Name = a.Name
 	cur.TriggerTag = strings.TrimSpace(a.TriggerTag)
 	cur.TargetAgentID = a.TargetAgentID
+	cur.FlowID = a.FlowID
 	cur.PromptTemplate = a.PromptTemplate
 	cur.SpawnTags = normalizeTags(a.SpawnTags)
 	cur.MaxIterations = a.MaxIterations

@@ -318,10 +318,19 @@ func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 	// or the process dies mid-flight — the previous code only logged on success.
 	s.logger.Info("schedule fire: begin",
 		"schedule", scheduleID, "trigger", trigger,
-		"agent", sc.AgentID, "cron", sc.CronExpr)
+		"agent", sc.AgentID, "flow", sc.FlowID, "cron", sc.CronExpr)
 
-	sessionID, fireErr := s.deliverPrompt(ctx, sc)
-	s.emitPromptDelivery(sc, sessionID, fireErr)
+	// Flow-backed schedules run their orchestration flow; prompt-backed ones
+	// deliver a standalone prompt to the agent. RunFlowRecorded emits its own
+	// desktop notification, so only the prompt path calls emitPromptDelivery.
+	var sessionID string
+	var fireErr error
+	if sc.FlowID != "" {
+		sessionID, fireErr = s.deliverFlow(ctx, sc)
+	} else {
+		sessionID, fireErr = s.deliverPrompt(ctx, sc)
+		s.emitPromptDelivery(sc, sessionID, fireErr)
+	}
 
 	status := "success"
 	errText := ""
@@ -395,6 +404,28 @@ func notifyLine(s string, max int) string {
 		return strings.TrimSpace(string(r[:max])) + "…"
 	}
 	return s
+}
+
+// deliverFlow runs a flow-backed schedule: it executes sc.FlowID (with sc.Prompt
+// as the flow input) through RunFlowRecorded, which records the run as a turn in
+// the flow's transcript session and raises its own desktop notification. It
+// returns the flow session id (for delivery bookkeeping) and any run error. A
+// flow that finishes with FlowFailure is surfaced as an error so the schedule's
+// lastDeliveryStatus reflects it.
+func (s *Scheduler) deliverFlow(ctx context.Context, sc db.Schedule) (string, error) {
+	if _, err := s.db.GetFlow(ctx, sc.FlowID); err != nil {
+		return "", fmt.Errorf("schedule %s flow %s gone: %w", sc.ID, sc.FlowID, err)
+	}
+	run, sessionID, err := s.rt.RunFlowRecorded(ctx, sc.FlowID, sc.Prompt, true, nil)
+	if err != nil {
+		s.logger.Error("schedule deliver: flow run failed",
+			"schedule", sc.ID, "flow", sc.FlowID, "session", sessionID, "error", err)
+		return sessionID, err
+	}
+	if run.Status == db.FlowFailure {
+		return sessionID, fmt.Errorf("flow run failed: %s", run.Error)
+	}
+	return sessionID, nil
 }
 
 // deliverPrompt sends a standalone scheduled prompt to the agent and logs the

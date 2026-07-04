@@ -26,6 +26,7 @@ type automationReq struct {
 	Name           string   `json:"name"`
 	TriggerTag     string   `json:"triggerTag"`
 	TargetAgentID  string   `json:"targetAgentId"`
+	FlowID         string   `json:"flowId"`
 	PromptTemplate string   `json:"promptTemplate"`
 	SpawnTags      []string `json:"spawnTags"`
 	Enabled        *bool    `json:"enabled"`
@@ -41,14 +42,27 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	}
 	req.TriggerTag = strings.TrimSpace(req.TriggerTag)
 	req.TargetAgentID = strings.TrimSpace(req.TargetAgentID)
-	if req.TriggerTag == "" || req.TargetAgentID == "" || strings.TrimSpace(req.PromptTemplate) == "" {
-		writeError(w, http.StatusBadRequest, "triggerTag, targetAgentId and promptTemplate are required")
+	req.FlowID = strings.TrimSpace(req.FlowID)
+	if req.TriggerTag == "" || strings.TrimSpace(req.PromptTemplate) == "" {
+		writeError(w, http.StatusBadRequest, "triggerTag and promptTemplate are required")
 		return
 	}
 	ctx := r.Context()
-	if _, err := ws(r).DB.GetAgent(ctx, req.TargetAgentID); err != nil {
-		writeError(w, http.StatusBadRequest, "target agent not found")
-		return
+	// The automation targets EITHER a flow or a single agent.
+	if req.FlowID != "" {
+		if _, err := ws(r).DB.GetFlow(ctx, req.FlowID); err != nil {
+			writeError(w, http.StatusBadRequest, "target flow not found")
+			return
+		}
+	} else {
+		if req.TargetAgentID == "" {
+			writeError(w, http.StatusBadRequest, "targetAgentId or flowId is required")
+			return
+		}
+		if _, err := ws(r).DB.GetAgent(ctx, req.TargetAgentID); err != nil {
+			writeError(w, http.StatusBadRequest, "target agent not found")
+			return
+		}
 	}
 	enabled := true
 	if req.Enabled != nil {
@@ -70,6 +84,7 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		Name:           strings.TrimSpace(req.Name),
 		TriggerTag:     req.TriggerTag,
 		TargetAgentID:  req.TargetAgentID,
+		FlowID:         req.FlowID,
 		PromptTemplate: req.PromptTemplate,
 		SpawnTags:      req.SpawnTags,
 		Enabled:        enabled,
@@ -98,12 +113,23 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	if t := strings.TrimSpace(req.TriggerTag); t != "" {
 		cur.TriggerTag = t
 	}
-	if a := strings.TrimSpace(req.TargetAgentID); a != "" {
+	// Targeting: apply only when the request specifies a target, so partial
+	// updates (e.g. spawnTags-only) don't wipe it. Setting a flow switches the
+	// automation to flow-backed and clears the agent, and vice versa.
+	if f := strings.TrimSpace(req.FlowID); f != "" {
+		if _, err := ws(r).DB.GetFlow(ctx, f); err != nil {
+			writeError(w, http.StatusBadRequest, "target flow not found")
+			return
+		}
+		cur.FlowID = f
+		cur.TargetAgentID = ""
+	} else if a := strings.TrimSpace(req.TargetAgentID); a != "" {
 		if _, err := ws(r).DB.GetAgent(ctx, a); err != nil {
 			writeError(w, http.StatusBadRequest, "target agent not found")
 			return
 		}
 		cur.TargetAgentID = a
+		cur.FlowID = ""
 	}
 	if req.PromptTemplate != "" {
 		cur.PromptTemplate = req.PromptTemplate

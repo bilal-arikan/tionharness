@@ -22,8 +22,16 @@ type Automation struct {
 	// TriggerTag is the session tag this rule watches. A finishing session whose
 	// Tags contain TriggerTag fires the rule.
 	TriggerTag string `json:"triggerTag"`
-	// TargetAgentID is the agent that runs the spawned session.
+	// TargetAgentID is the agent that runs the spawned session. Optional when
+	// FlowID is set (a flow-backed automation runs a flow instead of one agent).
 	TargetAgentID string `json:"targetAgentId"`
+	// FlowID, when set, makes this a flow-backed automation: on fire the rendered
+	// prompt is run as that orchestration flow's input (RunFlowRecorded) instead
+	// of spawning a session for TargetAgentID. A flow-backed automation is a
+	// per-trigger dispatch — it does not self-loop via SpawnTags (flow sessions
+	// carry no trigger tag and do not re-fire the rule), so the loop guardrails
+	// (MaxIterations/Cooldown/ExpiresAt) still bound how often the trigger fires.
+	FlowID string `json:"flowId,omitempty"`
 	// PromptTemplate is the prompt delivered to the spawned session. Placeholders:
 	// {{result}} (the finishing session's final reply), {{title}} (its title),
 	// {{tag}} (TriggerTag), {{sessionId}} (the finishing session's id).

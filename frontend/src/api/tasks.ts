@@ -43,7 +43,8 @@ export const taskApi = {
   // Schedules (cron).
   listSchedules: () => req<Schedule[]>('/api/schedules'),
   createSchedule: (data: {
-    agentId: string
+    agentId?: string
+    flowId?: string
     cronExpr: string
     prompt?: string
     enabled?: boolean
@@ -55,7 +56,7 @@ export const taskApi = {
     }),
   updateSchedule: (
     id: string,
-    data: { agentId: string; cronExpr: string; prompt?: string; expiresAt?: number },
+    data: { agentId?: string; flowId?: string; cronExpr: string; prompt?: string; expiresAt?: number },
   ) =>
     req<Schedule>(`/api/schedules/${id}`, {
       method: 'PUT',
@@ -82,7 +83,8 @@ export const taskApi = {
   createAutomation: (data: {
     name?: string
     triggerTag: string
-    targetAgentId: string
+    targetAgentId?: string
+    flowId?: string
     promptTemplate: string
     spawnTags?: string[]
     enabled?: boolean
@@ -100,6 +102,7 @@ export const taskApi = {
       name?: string
       triggerTag?: string
       targetAgentId?: string
+      flowId?: string
       promptTemplate?: string
       spawnTags?: string[]
       enabled?: boolean

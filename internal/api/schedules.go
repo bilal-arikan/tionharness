@@ -27,7 +27,10 @@ type createScheduleReq struct {
 	AgentID  string `json:"agentId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
-	Enabled  bool   `json:"enabled"`
+	// FlowID, when set, makes this a flow-backed schedule (runs the flow with
+	// Prompt as input instead of delivering the prompt to AgentID).
+	FlowID  string `json:"flowId"`
+	Enabled bool   `json:"enabled"`
 	// ExpiresAt is an optional end date (unix seconds); 0 = no end date.
 	ExpiresAt int64 `json:"expiresAt"`
 }
@@ -39,27 +42,37 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if req.AgentID == "" {
-		writeError(w, http.StatusBadRequest, "agentId is required")
-		return
-	}
 	if req.CronExpr == "" {
 		writeError(w, http.StatusBadRequest, "cronExpr is required")
 		return
 	}
-	if req.Prompt == "" {
-		writeError(w, http.StatusBadRequest, "prompt is required")
-		return
-	}
-	if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
-		writeError(w, http.StatusBadRequest, "unknown agent")
-		return
+	// A schedule targets EITHER a flow or a single agent. Flow-backed schedules
+	// take Prompt as the (optional) flow input; agent-backed ones require a prompt.
+	if req.FlowID != "" {
+		if _, err := wsp.DB.GetFlow(r.Context(), req.FlowID); err != nil {
+			writeError(w, http.StatusBadRequest, "unknown flow")
+			return
+		}
+	} else {
+		if req.AgentID == "" {
+			writeError(w, http.StatusBadRequest, "agentId or flowId is required")
+			return
+		}
+		if req.Prompt == "" {
+			writeError(w, http.StatusBadRequest, "prompt is required")
+			return
+		}
+		if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
+			writeError(w, http.StatusBadRequest, "unknown agent")
+			return
+		}
 	}
 
 	schedule, err := wsp.DB.CreateSchedule(r.Context(), db.Schedule{
 		AgentID:   req.AgentID,
 		CronExpr:  req.CronExpr,
 		Prompt:    req.Prompt,
+		FlowID:    req.FlowID,
 		Enabled:   req.Enabled,
 		ExpiresAt: req.ExpiresAt,
 	})
@@ -69,7 +82,7 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	if err := wsp.Scheduler.Reload(r.Context()); err != nil {
 		s.logger.Warn("scheduler reload failed", "error", err)
 	}
-	s.logger.Info("schedule created", "id", schedule.ID, "agent", req.AgentID, "cron", req.CronExpr)
+	s.logger.Info("schedule created", "id", schedule.ID, "agent", req.AgentID, "flow", req.FlowID, "cron", req.CronExpr)
 	writeJSON(w, http.StatusCreated, schedule)
 }
 
@@ -77,11 +90,14 @@ type updateScheduleReq struct {
 	AgentID  string `json:"agentId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
+	// FlowID, when set, makes this a flow-backed schedule (empty string clears it
+	// back to agent-backed).
+	FlowID string `json:"flowId"`
 	// ExpiresAt is an optional end date (unix seconds); 0 = no end date.
 	ExpiresAt int64 `json:"expiresAt"`
 }
 
-// handleUpdateSchedule edits a schedule's agent/cron/task/prompt and reloads cron.
+// handleUpdateSchedule edits a schedule's agent/flow/cron/prompt and reloads cron.
 func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
@@ -90,21 +106,28 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if req.AgentID == "" {
-		writeError(w, http.StatusBadRequest, "agentId is required")
-		return
-	}
 	if req.CronExpr == "" {
 		writeError(w, http.StatusBadRequest, "cronExpr is required")
 		return
 	}
-	if req.Prompt == "" {
-		writeError(w, http.StatusBadRequest, "prompt is required")
-		return
-	}
-	if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
-		writeError(w, http.StatusBadRequest, "unknown agent")
-		return
+	if req.FlowID != "" {
+		if _, err := wsp.DB.GetFlow(r.Context(), req.FlowID); err != nil {
+			writeError(w, http.StatusBadRequest, "unknown flow")
+			return
+		}
+	} else {
+		if req.AgentID == "" {
+			writeError(w, http.StatusBadRequest, "agentId or flowId is required")
+			return
+		}
+		if req.Prompt == "" {
+			writeError(w, http.StatusBadRequest, "prompt is required")
+			return
+		}
+		if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
+			writeError(w, http.StatusBadRequest, "unknown agent")
+			return
+		}
 	}
 
 	err := wsp.DB.UpdateSchedule(r.Context(), db.Schedule{
@@ -112,6 +135,7 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		AgentID:   req.AgentID,
 		CronExpr:  req.CronExpr,
 		Prompt:    req.Prompt,
+		FlowID:    req.FlowID,
 		ExpiresAt: req.ExpiresAt,
 	})
 	if writeDBError(w, err, "schedule not found") {

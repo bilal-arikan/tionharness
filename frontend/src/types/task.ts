@@ -46,6 +46,9 @@ export interface Run {
 export interface Schedule {
   id: string
   agentId: string
+  // When set, the schedule runs this flow (with prompt as input) instead of
+  // delivering the prompt to agentId.
+  flowId?: string
   cronExpr: string
   prompt: string
   nextRunAt: number
@@ -69,6 +72,9 @@ export interface Automation {
   name: string
   triggerTag: string
   targetAgentId: string
+  // When set, the automation runs this flow (with the rendered prompt as input)
+  // instead of spawning a session for targetAgentId. Per-trigger (no self-loop).
+  flowId?: string
   promptTemplate: string // placeholders: {{result}} {{title}} {{tag}} {{sessionId}}
   spawnTags?: string[] // tags applied to the spawned session (default: [triggerTag])
   enabled: boolean
