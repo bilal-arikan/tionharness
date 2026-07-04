@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, ChevronsDownUp, ChevronsUpDown, Copy, FoldVertical, X } from 'lucide-react'
+import { Check, ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, FoldVertical, X } from 'lucide-react'
 import type { SessionContextPreview } from '../../types'
 import { api } from '../../api'
 import { copyToClipboard } from '../../lib/clipboard'
@@ -34,6 +34,8 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
   // When on, the preview simulates this turn's budgeted compaction (fewer
   // messages) so the array matches what the model actually receives.
   const [simulate, setSimulate] = useState(false)
+  // Token summary + CLI-overhead strip: collapsible, default collapsed.
+  const [statsOpen, setStatsOpen] = useState(false)
   const { bulk, expandAll, collapseAll } = useBulkToggle(true)
 
   const load = useCallback(
@@ -80,74 +82,97 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
         className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-5 py-3">
+        {/* Header — title with the copy + close actions inline beside it. */}
+        <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-3">
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-semibold">
               Sıradaki tur bağlam önizleme{title ? ` — ${title}` : ''}
             </h2>
-            <p className="text-xs text-[var(--color-text-dim)]">
+            <p className="truncate text-xs text-[var(--color-text-dim)]">
               {data ? `${data.agentName} bu oturumda bir sonraki turda alacağı tam istek` : 'Yükleniyor…'}
               {' · '}salt-okunur (tur çalıştırılmaz)
             </p>
           </div>
-          {data && <BulkButtons onExpand={expandAll} onCollapse={collapseAll} />}
-          {data && (
+          <div className="flex shrink-0 items-center gap-1">
+            {data && (
+              <button
+                onClick={copy}
+                title={copied ? 'Kopyalandı' : 'Bağlamı kopyala'}
+                aria-label={copied ? 'Kopyalandı' : 'Bağlamı kopyala'}
+                className="flex shrink-0 items-center rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+              >
+                {copied ? <Check size={13} className="text-[var(--color-success)]" /> : <Copy size={13} />}
+              </button>
+            )}
             <button
-              onClick={copy}
-              title={copied ? 'Kopyalandı' : 'Bağlamı kopyala'}
-              aria-label={copied ? 'Kopyalandı' : 'Bağlamı kopyala'}
-              className="flex shrink-0 items-center rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+              onClick={onClose}
+              className="shrink-0 rounded-md p-1.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
-              {copied ? <Check size={13} className="text-[var(--color-success)]" /> : <Copy size={13} />}
+              <X size={16} />
             </button>
-          )}
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-md p-1.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          >
-            <X size={16} />
-          </button>
+          </div>
         </div>
 
-        {/* Token summary */}
+        {/* Token summary + CLI overhead — collapsible strip, default collapsed. */}
         {data && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-5 py-2 text-xs">
-            <Stat label="Toplam" value={data.totalTokens} accent />
-            <Stat label="Sistem" value={data.systemTokens} />
-            {data.skills && <Stat label="Skills" value={data.skillsTokens} />}
-            {data.summary && <Stat label="Özet" value={data.summaryTokens} />}
-            <Stat label="Dinamik" value={data.dynamicTokens} />
-            <Stat label={`Mesajlar (${data.messages.length})`} value={data.messageTokens} />
-            {data.droppedMessages.length > 0 && (
-              <Stat label={`Katlanmış (${data.droppedMessages.length})`} value={data.droppedTokens} dropped />
-            )}
-            <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
-            {data.cliOverhead && data.cliOverhead.measuredTokens > 0 && (
-              <Stat label="Gerçek (CLI, ölçülen)" value={data.cliOverhead.measuredTokens} accent />
-            )}
-            {/* Predicted CLI projection — shown alongside the measured figure (dim)
-                and as the primary accent chip before the first turn is measured. */}
-            {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
-              <Stat
-                label="Beklenen taban (CLI)"
-                value={data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead}
-                accent={data.cliOverhead.measuredTokens === 0}
+          <div className="border-b border-[var(--color-border)] text-xs">
+            <button
+              onClick={() => setStatsOpen((v) => !v)}
+              aria-expanded={statsOpen}
+              className="flex w-full items-center gap-2 px-5 py-2 text-left hover:bg-[var(--color-surface-2)]"
+            >
+              <ChevronRight
+                size={14}
+                className={`shrink-0 text-[var(--color-text-dim)] transition-transform ${statsOpen ? 'rotate-90' : ''}`}
               />
-            )}
-            {data.multiAgent && (
-              <span className="rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-[var(--color-accent)]">
-                çok-ajanlı
+              <span className="font-medium">Token özeti</span>
+              <span className="text-[var(--color-text-dim)]">
+                · Toplam {data.totalTokens.toLocaleString()} <span className="opacity-70">(~tahmini)</span>
               </span>
-            )}
-            <span className="text-[var(--color-text-dim)]">~token tahmini</span>
-          </div>
-        )}
+              {data.cliOverhead && (
+                <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
+                  CLI ek yükü
+                </span>
+              )}
+            </button>
 
-        {/* CLI-wrapper overhead warning: TotalTokens under-reports for claude-cli */}
-        {data?.cliOverhead && (
-          <div className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-5 py-2 text-[11px]">
-            <div className="flex flex-wrap items-center gap-2">
+            {statsOpen && (
+              <>
+                <div className="flex flex-wrap items-center gap-2 px-5 pb-2">
+                  <Stat label="Toplam" value={data.totalTokens} accent />
+                  <Stat label="Sistem" value={data.systemTokens} />
+                  {data.skills && <Stat label="Skills" value={data.skillsTokens} />}
+                  {data.summary && <Stat label="Özet" value={data.summaryTokens} />}
+                  <Stat label="Dinamik" value={data.dynamicTokens} />
+                  <Stat label={`Mesajlar (${data.messages.length})`} value={data.messageTokens} />
+                  {data.droppedMessages.length > 0 && (
+                    <Stat label={`Katlanmış (${data.droppedMessages.length})`} value={data.droppedTokens} dropped />
+                  )}
+                  <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
+                  {data.cliOverhead && data.cliOverhead.measuredTokens > 0 && (
+                    <Stat label="Gerçek (CLI, ölçülen)" value={data.cliOverhead.measuredTokens} accent />
+                  )}
+                  {/* Predicted CLI projection — shown alongside the measured figure (dim)
+                      and as the primary accent chip before the first turn is measured. */}
+                  {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
+                    <Stat
+                      label="Beklenen taban (CLI)"
+                      value={data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead}
+                      accent={data.cliOverhead.measuredTokens === 0}
+                    />
+                  )}
+                  {data.multiAgent && (
+                    <span className="rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-[var(--color-accent)]">
+                      çok-ajanlı
+                    </span>
+                  )}
+                  <span className="text-[var(--color-text-dim)]">~token tahmini</span>
+                </div>
+
+                {/* CLI-wrapper overhead warning: TotalTokens under-reports for claude-cli */}
+                {data.cliOverhead && (
+                  <div className="bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-5 py-2 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
                 CLI ek yükü
                 <InfoPopover text={`${data.cliOverhead.note}\n\n${FLOOR_NOTE}`} label="CLI ek yükü nasıl hesaplanır?" />
@@ -185,7 +210,11 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
               ) : (
                 <span className="text-[var(--color-text-dim)]">henüz ölçülmedi</span>
               )}
-            </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -195,13 +224,15 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
             <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-success)]">
               <span className="h-2 w-2 rounded-sm bg-[color-mix(in_srgb,var(--color-success)_70%,transparent)]" />
               cache'li (sıcak, yeniden kullanılır)
+              {data.cache.note && (
+                <InfoPopover text={data.cache.note} label="Cache nasıl çalışır?" />
+              )}
             </span>
-            <span className="text-[var(--color-text-dim)]">{data.cache.note}</span>
           </div>
         )}
 
         {/* Sample "next" message + compaction-simulation toggle */}
-        <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-5 py-2">
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -209,6 +240,8 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
             placeholder="Örnek 'sıradaki' kullanıcı mesajı → bu mesaj gönderilseydi bağlam nasıl olurdu"
             className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
           />
+          {/* Expand/collapse-all (icon-only), sitting next to the Compaction toggle. */}
+          {data && <BulkButtons onExpand={expandAll} onCollapse={collapseAll} />}
           <button
             onClick={() => setSimulate((s) => !s)}
             disabled={loading}
@@ -426,14 +459,14 @@ const CACHED = 'text-[color-mix(in_srgb,var(--color-success)_60%,var(--color-tex
 // every CollapsibleSection in the modal.
 function BulkButtons({ onExpand, onCollapse }: { onExpand: () => void; onCollapse: () => void }) {
   const cls =
-    'flex shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+    'flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
   return (
     <div className="flex shrink-0 items-center gap-1">
-      <button onClick={onExpand} title="Tümünü aç" className={cls}>
-        <ChevronsUpDown size={13} /> Tümünü aç
+      <button onClick={onExpand} title="Tümünü aç" aria-label="Tümünü aç" className={cls}>
+        <ChevronsUpDown size={14} />
       </button>
-      <button onClick={onCollapse} title="Tümünü kapat" className={cls}>
-        <ChevronsDownUp size={13} /> Tümünü kapat
+      <button onClick={onCollapse} title="Tümünü kapat" aria-label="Tümünü kapat" className={cls}>
+        <ChevronsDownUp size={14} />
       </button>
     </div>
   )

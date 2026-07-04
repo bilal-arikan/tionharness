@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSessionState } from '../../hooks/useSessionState'
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FolderInput, Globe, Lock, Pencil, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource, ToolVisibility } from '../../types'
 import { api } from '../../api'
@@ -145,7 +146,8 @@ function SkillVisibilitySelector({
 // left, the selected skill's full instructions (loaded on demand) on the right.
 export function SkillsPanel({ onError }: Props) {
   const [list, setList] = useState<Skill[]>([])
-  const [activeSlug, setActiveSlug] = useState<string | null>(null)
+  // Selection persists across screen switches within the session (resets on reload).
+  const [activeSlug, setActiveSlug] = useSessionState<string | null>('skills.activeSlug', null)
   const [active, setActive] = useState<SkillDetail | null>(null)
   const [loadingBody, setLoadingBody] = useState(false)
   const [accessBusy, setAccessBusy] = useState(false)
@@ -438,7 +440,7 @@ export function SkillsPanel({ onError }: Props) {
                           data-testid="skills-list-item"
                           data-skill-slug={sk.slug}
                           onClick={(e) => {
-                            if (sel.handleClick(e, sk.slug, orderedSlugs)) return
+                            if (sel.handleClick(e, sk.slug, orderedSlugs, activeSlug)) return
                             setActiveSlug(sk.slug)
                           }}
                           className={`group flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
@@ -535,19 +537,28 @@ export function SkillsPanel({ onError }: Props) {
       </ListPane>
 
       {/* Detail */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <PaneHeader
           listOpen={listOpen}
           onToggleList={toggleList}
           // Detail view: the top bar hosts the skill name + badges + actions (no
           // redundant "Skills" title / subtitle). The descriptive block (slug,
           // description, when-to-use, tools, sub-skills) stays below in the body.
+          // Chips + the Tam/Özet/İsim/Gizli selector always live on their own second
+          // row (every width), so the first row stays compact.
+          secondaryAlwaysWrap
           title={active ? undefined : 'Skills'}
           titleSlot={
             active ? (
               <span className="flex min-w-0 items-center gap-2">
                 <span className="text-lg leading-none">{active.icon || '✨'}</span>
                 <h2 className="truncate text-base font-semibold">{active.name}</h2>
+              </span>
+            ) : undefined
+          }
+          secondary={
+            active ? (
+              <>
                 {active.group && (
                   <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
                     {active.group}
@@ -556,7 +567,15 @@ export function SkillsPanel({ onError }: Props) {
                 {!active.shared && <RestrictedBadge />}
                 <VisibilityChip v={skillVisibility(active)} />
                 <SourceBadge source={active.source} />
-              </span>
+                {/* Push the Tam/Özet/İsim/Gizli selector to the right of the row. */}
+                <span className="ml-auto flex">
+                  <SkillVisibilitySelector
+                    value={active.visibility ?? (active.autoSummary === false ? 'hidden' : active.nameOnly ? 'name-only' : 'full')}
+                    busy={visBusy}
+                    onSet={setVisibility}
+                  />
+                </span>
+              </>
             ) : undefined
           }
           right={
@@ -568,7 +587,7 @@ export function SkillsPanel({ onError }: Props) {
                   title="Bu beceriyi düzenle (ad, simge, açıklama, içerik)"
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
                 >
-                  <Pencil size={14} /> Düzenle
+                  <Pencil size={14} /> 
                 </button>
                 <button
                   data-testid="skill-detail-toggle-access"
@@ -584,11 +603,6 @@ export function SkillsPanel({ onError }: Props) {
                   {active.shared ? <Lock size={14} /> : <Globe size={14} />}
                   {active.shared ? 'Kısıtla' : 'Paylaş'}
                 </button>
-                <SkillVisibilitySelector
-                  value={active.visibility ?? (active.autoSummary === false ? 'hidden' : active.nameOnly ? 'name-only' : 'full')}
-                  busy={visBusy}
-                  onSet={setVisibility}
-                />
                 <CopyPathButton path={active.dir} label="Yolu kopyala" labelClassName="hidden" />
                 <RevealButton
                   testId="skill-detail-reveal"

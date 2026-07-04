@@ -237,8 +237,10 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       </aside>
       </CollapsibleListShell>
 
-      {/* Right: content for the active category */}
-      <div className="flex flex-1 flex-col">
+      {/* Right: content for the active category. min-w-0 lets this flex column
+          shrink below its content's intrinsic width on narrow screens (otherwise
+          a wide child — e.g. a Hooks/ExternalTools code sample — forces overflow). */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
           <span className="flex items-center gap-2 text-sm font-semibold">
             {CatIcon && (

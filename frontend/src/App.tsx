@@ -108,7 +108,7 @@ const VIEW_TITLE: Record<View, string> = {
 // in-pane headers) reach the very top — matching the chat/memory layout where the
 // sidebar is a sibling of <main>. Errors for these still surface via ErrorToast.
 const HEADERLESS_VIEWS = new Set<View>([
-  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs', 'budget', 'board',
+  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs', 'budget', 'board', 'memory',
 ])
 
 export default function App() {
@@ -1136,7 +1136,7 @@ export default function App() {
           are reset+refetched by the activeWorkspaceId effect above. */}
       <main
         key={activeWorkspaceId ?? 'none'}
-        className="flex h-full min-w-0 flex-1 flex-col max-md:pb-16"
+        className="flex h-full min-w-0 flex-1 flex-col max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))]"
       >
         {!HEADERLESS_VIEWS.has(view) && (
           <header className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] py-3 max-md:px-3 md:px-6">
@@ -1328,6 +1328,7 @@ export default function App() {
           <MemoryPanel
             agent={agents.find((a) => a.id === activeAgentId) ?? null}
             onError={setError}
+            onToggleList={() => setMobileListOpen(true)}
           />
         )}
         {view === 'flows' && (
@@ -1425,6 +1426,11 @@ export default function App() {
         busyViews={busyViews}
         unreadViews={unreadViews}
         dirtyViews={dirtyViews as Set<View>}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        unreadWorkspaceIds={unreadWs}
+        onSwitchWorkspace={switchWorkspace}
+        onCreateWorkspace={createWorkspace}
       />
 
       {/* Next-turn context preview: opened from the chat header (works whether or

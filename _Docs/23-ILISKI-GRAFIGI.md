@@ -130,7 +130,7 @@ benzerliği **eşik** üstündeki çiftler bağlanır.
 - **Tıkla → detay paneli:** bir hafızaya tıklayınca sağ üstte bir kart açılır —
   tür rozeti, **tam içerik** (kaydırılabilir), bağ sayısı ve tarih; ✕ ile kapanır.
   Düğüm seçimi `onSelect` → `selectedId` ile sürülür.
-- **Tür çapaları (toggle):** Belge/Günlük/Yansıma için sürüklenebilir, fizik-bağışık
+- **Tür çapa (toggle):** Belge/Günlük/Yansıma için sürüklenebilir, fizik-bağışık
   çapa kutuları; her hafıza kendi tür çapasına yaylanır → bulut türe göre kümelenir
   (canlı moddaki sütun mekaniğiyle aynı). `memoryToVis({ kindAnchors })`.
 - **Küme rengi (toggle):** benzerlik kenarları üzerinden union-find ile bağlı

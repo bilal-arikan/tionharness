@@ -1,11 +1,12 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
-import { Sparkles, ChevronDown, ChevronRight, List, Share2, Trash2 } from 'lucide-react'
+import { Sparkles, ChevronDown, ChevronRight, List, Share2, Trash2, Paperclip } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Memory, MemoryKind } from '../../types'
 import { Markdown } from '../markdown/Markdown'
-import { Button, SelectionBar, SelectionBarButton } from '../common'
+import { SelectionBar, SelectionBarButton, PaneHeader } from '../common'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { CoreMemoryCard } from './CoreMemoryCard'
+import { AgentAvatar } from '../agents/AgentAvatar'
 
 // The knowledge-graph view pulls in React Flow (~300KB); load it only when the
 // user switches to the graph tab.
@@ -16,6 +17,9 @@ const MemoryGraphView = lazy(() =>
 interface Props {
   agent: Agent | null
   onError: (msg: string) => void
+  // Open the left agent roster (mobile drawer) — wired to the PaneHeader hamburger
+  // since the memory screen is now headerless (its own top bar).
+  onToggleList?: () => void
 }
 
 const KIND_LABEL: Record<MemoryKind, string> = {
@@ -32,12 +36,12 @@ const KIND_COLOR: Record<MemoryKind, string> = {
 
 const FILTERS: { key: MemoryKind | 'all'; label: string }[] = [
   { key: 'all', label: 'Tümü' },
-  { key: 'document', label: 'Belgeler' },
+  { key: 'document', label: 'Belge' },
   { key: 'journal', label: 'Günlük' },
-  { key: 'reflection', label: 'Yansımalar' },
+  { key: 'reflection', label: 'Yansıma' },
 ]
 
-export function MemoryPanel({ agent, onError }: Props) {
+export function MemoryPanel({ agent, onError, onToggleList }: Props) {
   const [memories, setMemories] = useState<Memory[]>([])
   const [content, setContent] = useState('')
   const [filter, setFilter] = useState<MemoryKind | 'all'>('all')
@@ -70,8 +74,11 @@ export function MemoryPanel({ agent, onError }: Props) {
 
   if (!agent) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
-        Hafızayı görmek için soldan bir ajan seç.
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PaneHeader title="Hafıza" onToggleList={onToggleList} />
+        <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
+          Hafızayı görmek için soldan bir ajan seç.
+        </div>
       </div>
     )
   }
@@ -130,32 +137,51 @@ export function MemoryPanel({ agent, onError }: Props) {
     filter === 'all' ? memories : memories.filter((m) => m.kind === filter)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col p-4">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Top bar: knowledge input + add-document (attach icon) + reflect. */}
+      <PaneHeader
+        onToggleList={onToggleList}
+        titleSlot={
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            {/* Selected agent's avatar, left of the knowledge input. */}
+            <AgentAvatar agent={agent} size={22} />
+            <input
+              data-testid="memory-content-input"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && add()}
+              placeholder={`${agent.name} için hatırlanacak bir bilgi ekle…`}
+              className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+            />
+          </span>
+        }
+        right={
+          <>
+            <button
+              data-testid="memory-add-document"
+              onClick={add}
+              title="Belge ekle"
+              aria-label="Belge ekle"
+              className="flex items-center justify-center rounded border border-[var(--color-border)] p-1.5 text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            >
+              <Paperclip size={15} />
+            </button>
+            <button
+              data-testid="memory-reflect"
+              onClick={reflect}
+              disabled={reflecting}
+              className="flex items-center gap-1.5 rounded border border-[var(--color-border)] px-3 py-1 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40"
+              title="Günlük üzerine yansıma üret (dream cycle)"
+            >
+              <Sparkles size={14} />
+              {reflecting ? '…' : 'Yansıt'}
+            </button>
+          </>
+        }
+      />
+      <div className="flex min-h-0 flex-1 flex-col p-4">
       {/* Core memory (MemGPT): the agent's persistent, always-in-context block. */}
       <CoreMemoryCard agentId={agent.id} onError={onError} />
-
-      {/* Add memory + reflect */}
-      <div className="mb-3 flex flex-wrap gap-2">
-        <input
-          data-testid="memory-content-input"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
-          placeholder={`${agent.name} için hatırlanacak bir bilgi ekle…`}
-          className="min-w-[10rem] flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
-        />
-        <Button data-testid="memory-add-document" onClick={add}>+ Belge</Button>
-        <button
-          data-testid="memory-reflect"
-          onClick={reflect}
-          disabled={reflecting}
-          className="flex items-center gap-1.5 rounded border border-[var(--color-border)] px-3 py-1 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40"
-          title="Günlük üzerine yansıma üret (dream cycle)"
-        >
-          <Sparkles size={14} />
-          {reflecting ? '…' : 'Yansıt'}
-        </button>
-      </div>
 
       {/* Filters (list mode) + list/graph mode toggle */}
       <div className="mb-3 flex items-center gap-1">
@@ -300,6 +326,7 @@ export function MemoryPanel({ agent, onError }: Props) {
         </SelectionBar>
       </div>
       )}
+      </div>
     </div>
   )
 }

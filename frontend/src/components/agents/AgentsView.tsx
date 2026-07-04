@@ -204,7 +204,7 @@ export function AgentsView({
             >
               <button
                 onClick={(e) => {
-                  if (sel.handleClick(e, a.id, orderedIds)) return
+                  if (sel.handleClick(e, a.id, orderedIds, selectedId)) return
                   select(a.id)
                 }}
                 data-testid="agent-roster-select"
@@ -309,7 +309,7 @@ export function AgentsView({
             </>
           }
         />
-        <div className="flex min-h-0 flex-1 max-md:flex-col">
+        <div className="flex min-h-0 flex-1">
         {/* Middle: selected agent's settings */}
         <div className="min-w-0 flex-1">
         {selected ? (
@@ -332,15 +332,21 @@ export function AgentsView({
         )}
       </div>
 
-      {/* Right: selected agent's live activity feed — toggled from the top bar's
-          "Aktivite" button (no slim reopen rail; the title button reopens it). */}
+      {/* Right: selected agent's live activity feed — opened from the top bar's
+          "Aktivite" button. Desktop: a right-hand column. Mobile: a right slide-in
+          drawer with a dim backdrop — same as the chat session-detail panel. */}
       {activityOpen && (
-        <AgentActivityPanel
-          agentId={selected?.id ?? null}
-          onError={onError ?? (() => {})}
-          onOpenExecution={onOpenExecution}
-          onClose={toggleActivity}
-        />
+        <>
+          <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={toggleActivity} />
+          <div className="flex shrink-0 md:static max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[85vw] max-md:max-w-sm max-md:shadow-xl">
+            <AgentActivityPanel
+              agentId={selected?.id ?? null}
+              onError={onError ?? (() => {})}
+              onOpenExecution={onOpenExecution}
+              onClose={toggleActivity}
+            />
+          </div>
+        </>
       )}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSessionState } from '../../hooks/useSessionState'
 import {
   FileText, FileCode, UploadCloud,
   Trash2, ExternalLink, Copy, Check, Pencil, Save, X, Search,
@@ -45,7 +46,9 @@ interface Draft {
 // in place) and delete. Artifacts are not versioned.
 export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: Props) {
   const [list, setList] = useState<Artifact[]>([])
-  const [activeId, setActiveId] = useState<string | null>(selectedId ?? null)
+  // Selection persists across screen switches within the session (resets on app
+  // reload). A deep-link `selectedId` still overrides via the effect below.
+  const [activeId, setActiveId] = useSessionState<string | null>('artifacts.activeId', selectedId ?? null)
   const [active, setActive] = useState<Artifact | null>(null)
   const [copied, setCopied] = useState(false)
   // On-disk path of the active artifact (its source file, or its store JSON),
@@ -410,7 +413,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 data-testid="artifacts-list-item"
                 data-artifact-id={a.id}
                 onClick={(e) => {
-                  if (sel.handleClick(e, a.id, orderedIds)) return
+                  if (sel.handleClick(e, a.id, orderedIds, activeId)) return
                   setActiveId(a.id)
                 }}
                 className={`group mb-1 flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
@@ -447,34 +450,50 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
 
       {/* Viewer / Editor column: the standard title bar sits ONLY here, to the
           right of the list — like the chat header (never spans over the list). */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <PaneHeader
           listOpen={listOpen}
           onToggleList={toggleList}
           // Detail view: the top bar hosts the artifact identity + actions (no
           // redundant "Artifactlar" title / subtitle). Empty state keeps the title.
+          // Chips + the İçerik (content-copy) button always live on their own second
+          // row (every width), so the first row stays compact.
+          secondaryAlwaysWrap
           title={active ? undefined : 'Artifactlar'}
           titleSlot={
             active ? (
               <div className="flex min-w-0 items-center gap-2">
                 <FileCode size={16} className="shrink-0 text-[var(--color-accent)]" />
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{active.title}</div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
-                    <OriginBadge origin={active.origin} />
-                    <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
-                      {KIND_LABEL[active.kind] ?? active.kind}
-                      {active.language ? ` · ${active.language}` : ''}
-                    </span>
-                    {creator(active) && (
-                      <span className="flex items-center gap-1">
-                        <AgentAvatar agent={creator(active)!} size={14} />
-                        {creator(active)!.name}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <div className="truncate text-sm font-semibold">{active.title}</div>
               </div>
+            ) : undefined
+          }
+          secondary={
+            active ? (
+              <>
+                <OriginBadge origin={active.origin} />
+                <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-dim)]">
+                  {KIND_LABEL[active.kind] ?? active.kind}
+                  {active.language ? ` · ${active.language}` : ''}
+                </span>
+                {creator(active) && (
+                  <span className="flex items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
+                    <AgentAvatar agent={creator(active)!} size={14} />
+                    {creator(active)!.name}
+                  </span>
+                )}
+                {!draft && (
+                  <button
+                    data-testid="artifact-detail-copy"
+                    onClick={copy}
+                    title="İçeriği kopyala"
+                    className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  >
+                    {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
+                    <span>{copied ? 'Kopyalandı' : 'İçerik'}</span>
+                  </button>
+                )}
+              </>
             ) : undefined
           }
           right={
@@ -498,15 +517,6 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                   <>
                     <button data-testid="artifact-detail-edit" onClick={startEdit} title="Düzenle" className={iconBtn}>
                       <Pencil size={15} />
-                    </button>
-                    <button
-                      data-testid="artifact-detail-copy"
-                      onClick={copy}
-                      title="İçeriği kopyala"
-                      className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                    >
-                      {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
-                      <span>{copied ? 'Kopyalandı' : 'İçeriği kopyala'}</span>
                     </button>
                     <CopyPathButton path={activePath} label="Yolu kopyala" labelClassName="hidden" title="Yolu kopyala" />
                     <RevealButton testId="artifact-detail-reveal" onReveal={reveal} disabled={!activePath} label="Aç" labelClassName="hidden sm:inline" />

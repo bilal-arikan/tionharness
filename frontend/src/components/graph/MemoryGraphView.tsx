@@ -81,7 +81,7 @@ export function MemoryGraphView({ agentId, onError }: Props) {
               : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
           }`}
         >
-          <Anchor size={12} /> Tür çapaları
+          <Anchor size={12} /> Tür çapa
         </button>
         <button
           onClick={() => setClusterColor((v) => !v)}
@@ -95,7 +95,7 @@ export function MemoryGraphView({ agentId, onError }: Props) {
           <Palette size={12} /> Küme rengi
         </button>
         <label className="ml-auto flex items-center gap-2 text-[var(--color-text-dim)]">
-          Benzerlik eşiği: {threshold.toFixed(2)}
+          Benzerlik: {threshold.toFixed(2)}
           <input
             type="range"
             min={0.05}

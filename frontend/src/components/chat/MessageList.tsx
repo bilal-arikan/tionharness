@@ -178,7 +178,7 @@ export function MessageList({
       {pinnedTyped && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[var(--color-bg)] via-[var(--color-bg)] to-transparent px-6 pt-2 pb-6"
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[var(--color-bg)] via-[var(--color-bg)] to-transparent px-[1px] pt-2 pb-6 md:px-6"
         >
           <UserBubble text={pinnedTyped.text} agents={agents} clamp />
         </div>
@@ -190,7 +190,7 @@ export function MessageList({
         role="log"
         aria-live="polite"
         aria-label="Sohbet geçmişi"
-        className="h-full overflow-y-auto px-6 pb-6 pt-2"
+        className="h-full overflow-y-auto px-[1px] pb-6 pt-2 md:px-6"
       >
       <div className="flex w-full flex-col gap-4">
         {messages.map((m, i) => {

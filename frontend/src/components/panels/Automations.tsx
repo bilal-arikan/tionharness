@@ -233,24 +233,18 @@ export function Automations({ agents, flows, onError }: Props) {
       {/* Create form */}
       <div className="mb-4 space-y-2 rounded-lg border border-l-4 border-[var(--color-border)] border-l-violet-500 bg-[var(--color-surface)] p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ad (ops.)"
-            className="w-40 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
-          />
-          <input
-            value={triggerTag}
-            onChange={(e) => setTriggerTag(e.target.value)}
-            placeholder="tetikleyici etiket (ör. loop)"
-            className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
-          />
           <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
           {targetMode === 'flow' ? (
             <FlowPicker flows={flows} value={flowId} onChange={setFlowId} />
           ) : (
             <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
           )}
+          <input
+            value={triggerTag}
+            onChange={(e) => setTriggerTag(e.target.value)}
+            placeholder="tetikleyici etiket (ör. loop)"
+            className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
+          />
           <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
             Maks. iter.
             <input
@@ -366,24 +360,18 @@ export function Automations({ agents, flows, onError }: Props) {
                 className="space-y-2 rounded-lg border border-l-4 border-[var(--color-accent)] border-l-violet-500 bg-[var(--color-surface)] p-3 text-sm"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    value={edit.name}
-                    onChange={(e) => setEdit((s) => ({ ...s, name: e.target.value }))}
-                    placeholder="Ad (ops.)"
-                    className="w-40 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
-                  />
-                  <input
-                    value={edit.triggerTag}
-                    onChange={(e) => setEdit((s) => ({ ...s, triggerTag: e.target.value }))}
-                    placeholder="tetikleyici etiket"
-                    className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
-                  />
                   <TargetModeToggle mode={edit.targetMode} onChange={(m) => setEdit((s) => ({ ...s, targetMode: m }))} />
                   {edit.targetMode === 'flow' ? (
                     <FlowPicker flows={flows} value={edit.flowId} onChange={(v) => setEdit((s) => ({ ...s, flowId: v }))} />
                   ) : (
                     <AgentPicker agents={agents} value={edit.targetAgentId} onChange={(v) => setEdit((s) => ({ ...s, targetAgentId: v }))} />
                   )}
+                  <input
+                    value={edit.triggerTag}
+                    onChange={(e) => setEdit((s) => ({ ...s, triggerTag: e.target.value }))}
+                    placeholder="tetikleyici etiket"
+                    className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
+                  />
                   <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
                     Maks. iter.
                     <input type="number" min={0} value={edit.maxIterations}
@@ -454,37 +442,39 @@ export function Automations({ agents, flows, onError }: Props) {
               key={a.id}
               className="flex items-start gap-3 rounded-lg border border-l-4 border-[var(--color-border)] border-l-violet-500 bg-[var(--color-surface)] px-3 py-2 text-sm"
             >
-              <button
-                onClick={() => toggle(a)}
-                className={`mt-1 h-4 w-8 flex-shrink-0 rounded-full transition ${
-                  a.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
-                }`}
-                title={a.enabled ? 'Etkin' : 'Pasif'}
-              >
-                <span className={`block h-4 w-4 rounded-full bg-white transition ${a.enabled ? 'translate-x-4' : ''}`} />
-              </button>
-              {(() => {
-                if (a.flowId) {
-                  const fe = flowEmoji(a.flowId)
-                  return (
-                    <span
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
-                      title="Akış tabanlı otomasyon"
-                    >
-                      {fe ? <span className="text-base leading-none">{fe}</span> : <Workflow size={15} />}
-                    </span>
+              {/* Enable toggle on top, agent/flow icon below (stacked vertically). */}
+              <div className="flex shrink-0 flex-col items-center gap-2">
+                <button
+                  onClick={() => toggle(a)}
+                  className={`h-4 w-8 flex-shrink-0 rounded-full transition ${
+                    a.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
+                  }`}
+                  title={a.enabled ? 'Etkin' : 'Pasif'}
+                >
+                  <span className={`block h-4 w-4 rounded-full bg-white transition ${a.enabled ? 'translate-x-4' : ''}`} />
+                </button>
+                {(() => {
+                  if (a.flowId) {
+                    const fe = flowEmoji(a.flowId)
+                    return (
+                      <span
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                        title="Akış tabanlı otomasyon"
+                      >
+                        {fe ? <span className="text-base leading-none">{fe}</span> : <Workflow size={15} />}
+                      </span>
+                    )
+                  }
+                  const owner = agents.find((x) => x.id === a.targetAgentId)
+                  return owner ? (
+                    <AgentAvatar agent={owner} size={28} />
+                  ) : (
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-dim)]">?</span>
                   )
-                }
-                const owner = agents.find((x) => x.id === a.targetAgentId)
-                return owner ? (
-                  <AgentAvatar agent={owner} size={28} />
-                ) : (
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-dim)]">?</span>
-                )
-              })()}
+                })()}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-[var(--color-text)]">{a.name || '(adsız)'}</span>
                   <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
                     #{a.triggerTag}
                   </span>

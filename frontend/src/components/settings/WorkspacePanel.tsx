@@ -35,22 +35,12 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       </div>
 
       <div className="flex items-end gap-3">
+        <Field label="Workspace adı"><input value={ws.name} onChange={(e) => setWsField('name', e.target.value)} className={inputCls} /></Field>
         <Field label="İkon (emoji)">
           <EmojiField value={ws.icon} onChange={(e) => setWsField('icon', e)} clearLabel="⬡" />
         </Field>
-        <div className="flex items-center gap-2 pb-1 text-sm">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-surface-2)] text-lg">{ws.icon || '⬡'}</span>
-          <span className="text-xs text-[var(--color-text-dim)]">önizleme</span>
-        </div>
       </div>
 
-      <Field label="Workspace adı"><input value={ws.name} onChange={(e) => setWsField('name', e.target.value)} className={inputCls} /></Field>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        📝 Bu workspace'in <span className="font-medium text-[var(--color-text)]">talimatları</span> ve runtime
-        <span className="font-medium text-[var(--color-text)]"> promptları</span> artık yan menüdeki
-        <span className="font-medium text-[var(--color-text)]"> “Promptlar &amp; Dosyalar”</span> sekmesinden,
-        düzenlenebilir dosyalar (<code className="rounded bg-[var(--color-bg)] px-1">config/</code>) olarak yönetilir.
-      </div>
       <div className="space-y-1">
         <span className="text-sm font-medium">Varsayılan sağlayıcı + model (bu workspace)</span>
         <ProviderModelSelect
@@ -63,13 +53,6 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
           }}
         />
         <span className="text-xs text-[var(--color-text-dim)]">Boş = uygulama varsayılanı.</span>
-      </div>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        📁 Proje dizini (path) ve git ayarları için yan menüdeki <b>Proje</b> sekmesine bak.
-      </div>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        ⏸️ Bu workspace'in otonomisini duraklatma anahtarı artık yan menüdeki
-        <span className="font-medium text-[var(--color-text)]"> Zamanlamalar</span> ekranının üstünde.
       </div>
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
@@ -96,12 +79,7 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       )}
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Şablon
-      </div>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5 text-xs text-[var(--color-text-dim)]">
-        📦 Bu workspace'i (ajanlar, akışlar, zamanlamalar, skill'ler, talimatlar) bir şablon paketine
-        dönüştürmek ve <span className="font-medium text-[var(--color-text)]">neyin dahil edileceğini seçmek</span> için
-        yan menüdeki <span className="font-medium text-[var(--color-text)]">Dışa Aktar</span> sekmesine bak.
+        Sil
       </div>
 
       {onDeleteWorkspace && (

@@ -1,6 +1,9 @@
 import { Boxes, Settings, type LucideIcon } from 'lucide-react'
 import { NAV, type View } from './NavRail'
 import { useDragScroll } from '../hooks/useDragScroll'
+import { MobileWorkspaceButton } from './MobileWorkspaceButton'
+import type { Workspace } from '../types'
+import type { NewWorkspaceData } from './workspace/WorkspaceCreateModal'
 
 interface Props {
   view: View
@@ -8,6 +11,13 @@ interface Props {
   busyViews?: Set<View>
   unreadViews?: Set<View>
   dirtyViews?: Set<View>
+  // Workspace picker (pinned at the strip's start) — the mobile counterpart of
+  // the desktop rail's WorkspaceSwitcher.
+  workspaces: Workspace[]
+  activeWorkspaceId: string | null
+  unreadWorkspaceIds?: Set<string>
+  onSwitchWorkspace: (id: string) => void
+  onCreateWorkspace: (data: NewWorkspaceData) => void
 }
 
 // The two pinned items that sit below the primary NAV list in the desktop rail.
@@ -21,19 +31,45 @@ const PINNED: { key: View; label: string; icon: LucideIcon }[] = [
 // vertical NavRail is hidden at this breakpoint; here every view lives in a single
 // horizontally-scrollable strip so all destinations stay reachable with a swipe —
 // no "more" drawer, no hidden items. Hidden on `md+` where the rail takes over.
-export function MobileNavBar({ view, onSelectView, busyViews, unreadViews, dirtyViews }: Props) {
+export function MobileNavBar({
+  view,
+  onSelectView,
+  busyViews,
+  unreadViews,
+  dirtyViews,
+  workspaces,
+  activeWorkspaceId,
+  unreadWorkspaceIds,
+  onSwitchWorkspace,
+  onCreateWorkspace,
+}: Props) {
   const items = [...NAV, ...PINNED]
   // Mouse click-and-drag panning (touch already scrolls natively).
-  const drag = useDragScroll<HTMLElement>()
+  const drag = useDragScroll<HTMLDivElement>()
   return (
+    // The nav itself does NOT scroll (overflow visible) so the workspace picker's
+    // upward popup is not clipped; only the inner view strip scrolls horizontally.
     <nav
-      ref={drag.ref}
-      onMouseDown={drag.onMouseDown}
-      onClickCapture={drag.onClickCapture}
       aria-label="Ana gezinme"
-      className="fixed inset-x-0 bottom-0 z-50 flex cursor-grab gap-1 overflow-x-auto border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 pt-1 shadow-[var(--shadow-sm)] select-none active:cursor-grabbing md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 flex items-stretch border-t border-[var(--color-border)] bg-[var(--color-surface)] pt-1 shadow-[var(--shadow-sm)] md:hidden"
       style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
     >
+      {/* Pinned workspace picker at the very start (always reachable). */}
+      <MobileWorkspaceButton
+        workspaces={workspaces}
+        activeId={activeWorkspaceId}
+        unreadIds={unreadWorkspaceIds}
+        onSwitch={onSwitchWorkspace}
+        onCreate={onCreateWorkspace}
+      />
+
+      {/* Horizontally-scrollable view strip (mouse drag + native touch). */}
+      <div
+        ref={drag.ref}
+        onMouseDown={drag.onMouseDown}
+        onClickCapture={drag.onClickCapture}
+        className="flex flex-1 cursor-grab gap-1 overflow-x-auto px-2 select-none active:cursor-grabbing [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
       {items.map((item) => {
         const Icon = item.icon
         const active = view === item.key
@@ -72,6 +108,7 @@ export function MobileNavBar({ view, onSelectView, busyViews, unreadViews, dirty
           </button>
         )
       })}
+      </div>
     </nav>
   )
 }

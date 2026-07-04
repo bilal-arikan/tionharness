@@ -47,20 +47,29 @@ export function FlowPicker({
   value: string
   onChange: (id: string) => void
 }) {
+  // Selected flow's icon (mojibake-safe emoji, or a Workflow glyph fallback),
+  // shown next to the dropdown — mirrors the AgentPicker's leading avatar.
+  const selected = flows.find((f) => f.id === value)
+  const selectedEmoji = normalizeAvatar(selected?.emoji)
   return (
-    <select
-      data-testid="flow-picker"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
-    >
-      <option value="">Akış seç…</option>
-      {flows.map((f) => (
-        <option key={f.id} value={f.id}>
-          {normalizeAvatar(f.emoji) ? `${normalizeAvatar(f.emoji)} ${f.name}` : f.name}
-        </option>
-      ))}
-    </select>
+    <div className="flex items-center gap-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg)] pl-1.5 focus-within:border-[var(--color-accent)]">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+        {selectedEmoji ? <span className="text-sm leading-none">{selectedEmoji}</span> : <Workflow size={13} />}
+      </span>
+      <select
+        data-testid="flow-picker"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded bg-transparent py-1 pr-2 text-sm outline-none"
+      >
+        <option value="">Akış seç…</option>
+        {flows.map((f) => (
+          <option key={f.id} value={f.id}>
+            {normalizeAvatar(f.emoji) ? `${normalizeAvatar(f.emoji)} ${f.name}` : f.name}
+          </option>
+        ))}
+      </select>
+    </div>
   )
 }
 
@@ -592,40 +601,43 @@ export function Schedules({ agents, focusId, onError }: Props) {
                 : 'border-[var(--color-border)]'
             }`}
           >
-            <button
-              data-testid="schedule-enable-toggle"
-              data-schedule-id={s.id}
-              onClick={() => toggle(s)}
-              className={`h-4 w-8 flex-shrink-0 rounded-full transition ${
-                s.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
-              }`}
-              title={s.enabled ? 'Etkin' : 'Pasif'}
-            >
-              <span
-                className={`block h-4 w-4 rounded-full bg-white transition ${
-                  s.enabled ? 'translate-x-4' : ''
+            {/* Enable toggle on top, agent/flow icon below (stacked vertically). */}
+            <div className="flex shrink-0 flex-col items-center gap-2">
+              <button
+                data-testid="schedule-enable-toggle"
+                data-schedule-id={s.id}
+                onClick={() => toggle(s)}
+                className={`h-4 w-8 flex-shrink-0 rounded-full transition ${
+                  s.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
                 }`}
-              />
-            </button>
-            {(() => {
-              if (s.flowId) {
-                const fe = flowEmoji(s.flowId)
-                return (
-                  <span
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
-                    title="Akış tabanlı zamanlama"
-                  >
-                    {fe ? <span className="text-base leading-none">{fe}</span> : <Workflow size={15} />}
-                  </span>
+                title={s.enabled ? 'Etkin' : 'Pasif'}
+              >
+                <span
+                  className={`block h-4 w-4 rounded-full bg-white transition ${
+                    s.enabled ? 'translate-x-4' : ''
+                  }`}
+                />
+              </button>
+              {(() => {
+                if (s.flowId) {
+                  const fe = flowEmoji(s.flowId)
+                  return (
+                    <span
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                      title="Akış tabanlı zamanlama"
+                    >
+                      {fe ? <span className="text-base leading-none">{fe}</span> : <Workflow size={15} />}
+                    </span>
+                  )
+                }
+                const owner = agents.find((a) => a.id === s.agentId)
+                return owner ? (
+                  <AgentAvatar agent={owner} size={28} />
+                ) : (
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-dim)]">?</span>
                 )
-              }
-              const owner = agents.find((a) => a.id === s.agentId)
-              return owner ? (
-                <AgentAvatar agent={owner} size={28} />
-              ) : (
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-dim)]">?</span>
-              )
-            })()}
+              })()}
+            </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[var(--color-accent)]">{s.cronExpr}</span>
