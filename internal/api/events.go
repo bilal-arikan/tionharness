@@ -59,7 +59,14 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			b, _ := json.Marshal(e)
-			fmt.Fprintf(w, "event: notify\ndata: %s\n\n", b)
+			// Live turn-activity steps ride the same feed but under a distinct SSE
+			// event name so the frontend routes them to the transcript renderer
+			// instead of the notification/badge path (which reacts to `notify`).
+			name := "notify"
+			if e.Type == "session_step" {
+				name = "step"
+			}
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, b)
 			flusher.Flush()
 		}
 	}

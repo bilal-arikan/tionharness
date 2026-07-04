@@ -16,6 +16,7 @@ import type {
   SessionDebugSummary,
   SessionDebugEvent,
   TurnDebug,
+  InflightSnapshot,
 } from '../types'
 import { req } from './client'
 
@@ -29,6 +30,12 @@ export const sessionApi = {
   // to restore the "thinking" indicator for detached turns still in flight.
   activeSessions: () =>
     req<{ sessionIds: string[] }>('/api/sessions/active').then((r) => r.sessionIds),
+  // The session's in-progress streaming snapshot (partial reply — agent, text and
+  // trace so far), or null when no turn is streaming. Fetched after a mid-turn
+  // reload to restore the in-progress assistant bubble instead of losing its
+  // steps/agent until the turn finishes.
+  getInflight: (sessionId: string) =>
+    req<InflightSnapshot | null>(`/api/sessions/${encodeURIComponent(sessionId)}/inflight`),
   createSession: (agentId = '', title = '') =>
     req<Session>('/api/sessions', {
       method: 'POST',
@@ -207,12 +214,17 @@ export const sessionApi = {
 
   // Debug: preview the exact next-turn context (system + dynamic + transcript +
   // tools) the session's agent would be sent. Optional sample "next" user message.
-  sessionContextPreview: (sessionId: string, message?: string) =>
-    req<SessionContextPreview>(
-      `/api/sessions/${sessionId}/context-preview${
-        message ? `?message=${encodeURIComponent(message)}` : ''
-      }`,
-    ),
+  // compact=true simulates this turn's budgeted compaction (read-only, no summary
+  // generated/persisted) so the message array matches what the model receives.
+  sessionContextPreview: (sessionId: string, message?: string, compact = false) => {
+    const p = new URLSearchParams()
+    if (message) p.set('message', message)
+    if (compact) p.set('compact', '1')
+    const q = p.toString()
+    return req<SessionContextPreview>(
+      `/api/sessions/${sessionId}/context-preview${q ? `?${q}` : ''}`,
+    )
+  },
 
   // Working directory (cwd) for the agent's file/shell tools.
   getWorkdir: (sessionId: string) =>

@@ -192,13 +192,15 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// is wired for this turn (so ask_user/todo_write work even with MCP off).
 	cli, isCLI := provider.(*providers.ClaudeCLI)
 	inter := tools.InteractionFrom(ctx)
-	// Autonomous CLI turns (scheduler/spawn/flow) don't carry an
-	// Interaction endpoint the way chat turns do, so a CLI agent there can't reach
-	// the bridged use_skill/shell/self-manage tools and falls back to its native
-	// (now-disallowed/foreign) ones — the cause of scheduled "Unknown skill" + the
-	// POSIX-Bash mismatch. Wire one on demand for this turn so headless runs get
-	// the same bridge chat agents do. Only when none is already present.
-	if autonomous && isCLI && inter.URL == "" && r.autoInteract != nil {
+	// CLI turns that arrive without an Interaction endpoint — autonomous ones
+	// (scheduler/spawn/flow) AND the non-stream /api/chat path (only /api/chat/stream
+	// registers a run) — can't reach the bridged use_skill/shell/self-manage/
+	// coordination tools and fall back to native (now-disallowed/foreign) ones: the
+	// cause of scheduled "Unknown skill", the POSIX-Bash mismatch, and a coordinator
+	// fanning out via the CLI's own Agent tool instead of spawn_worker. Wire the
+	// headless endpoint on demand for ANY such CLI turn; skipped whenever one is
+	// already present (the stream path installs its own).
+	if isCLI && inter.URL == "" && r.autoInteract != nil {
 		var done func()
 		ctx, done = r.autoInteract(ctx, agent, SessionIDFrom(ctx))
 		defer done()

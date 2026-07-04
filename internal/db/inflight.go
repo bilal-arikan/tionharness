@@ -62,6 +62,16 @@ func (d *DB) ClearInflight(sessionID string) error {
 	return err
 }
 
+// ReadInflight exposes a session's current streaming snapshot (the partial reply
+// text + trace being written on a throttle while a turn runs). Returns ok=false
+// when there is no live turn. Used by the API so a page reloaded MID-TURN can
+// restore the in-progress assistant bubble (agent, steps-so-far) instead of
+// showing a bare "thinking" dot until the turn finishes. Distinct from
+// recoverInflight, which only materialises CRASH-orphaned sidecars at boot.
+func (d *DB) ReadInflight(sessionID string) (InflightTurn, bool, error) {
+	return d.readInflight(sessionID)
+}
+
 // readInflight loads a session's sidecar, returning ok=false when absent.
 func (d *DB) readInflight(sessionID string) (InflightTurn, bool, error) {
 	b, err := os.ReadFile(d.inflightPath(sessionID))

@@ -5,6 +5,7 @@
 package events
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -21,6 +22,13 @@ type Event struct {
 	Body          string            `json:"body"`
 	Target        map[string]string `json:"target,omitempty"`
 	Time          int64             `json:"time"`
+	// Step carries an already-marshalled agent.TurnStep for a "session_step"
+	// event: the live activity trace of an in-progress turn, broadcast so any
+	// window viewing that session (Target["sessionId"]) — or an autonomous turn
+	// with no per-request SSE of its own — can render thinking/tool steps as they
+	// happen. Opaque JSON here (the events package never imports agent), exactly
+	// like db.Message.Steps. Empty for ordinary notifications.
+	Step json.RawMessage `json:"step,omitempty"`
 }
 
 // Bus fans out events to every live subscriber. Sends are non-blocking: a slow

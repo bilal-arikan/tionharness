@@ -2,7 +2,8 @@
 
 > **Durum:** M2 TAM UYGULANDI ✅ (2026-07-03, F0–F5 + CLI köprüsü + ayar UI'si +
 > M3 scratchpad + efemeral worker hedefi — bkz. §9 Uygulama Durumu). §1–§8 orijinal
-> tasarım metnidir. Kalan yalnız opsiyonel LLM-in-the-loop görsel deneme.
+> tasarım metnidir. **LLM-in-the-loop görsel deneme ✅ canlı doğrulandı (2026-07-03,
+> bkz. §10)** — deneme sırasında bulunan non-stream CLI köprü boşluğu da düzeltildi.
 > **Amaç:** SwarmGo'ya Claude Code'un "koordinatör modu"na denk bir çok-ajan
 > koordinasyon katmanı eklemek — bir üst ajan (koordinatör) birden çok işçiyi
 > (worker) paralel yönetir; ayrıca **birden fazla koordinasyon yöntemi**
@@ -374,5 +375,127 @@ Explicit-notify başarı/başarısız/killed'ı kesin statüyle iletir, çift-te
   `profileWorkerMu` ile dup önlenir). Test: `TestSpawnWorkerMaterializesProfile`.
 - **Canlı doğrulama ✅:** backend booted; API smoke (rol set/get, `/workers`,
   ayar round-trip) uçtan uca geçti. `go build ./...` + **624 test** + `tsc` yeşil.
-- **Kalan (opsiyonel):** LLM-in-the-loop görsel deneme (dev'de koordinatör
-  oturumu + gerçek model → worker roster'ın canlı dolması) — kullanıcı UI'da izler.
+- ~~**Kalan (opsiyonel):** LLM-in-the-loop görsel deneme~~ → ✅ yapıldı, bkz. §10.
+
+---
+
+## 10. LLM-in-the-loop Canlı Görsel Deneme ✅ (2026-07-03)
+
+Gerçek modelle (claude-cli / opus, ajan "Manager", WS5) koordinatör oturumu
+açılıp uçtan uca izlendi. **Sonuç: M2 döngüsü canlıda çalışıyor** — ayrıca deneme
+sırasında bir köprü boşluğu bulunup düzeltildi.
+
+### Doğrulanan akış (SES104)
+
+1. UI composer'dan görev: "Spawn 2 workers in parallel … synthesize yourself".
+2. İlk denemede model M1'i (`run_subagent` ×2, sync) seçti — meşru bir seçim
+   (prompt her iki yolu da sunuyor). Async'i zorlayan takip mesajıyla M2 tetiklendi.
+3. `spawn_worker` ×2 **tek turda** → `worker:explore` profili efemeral ajana
+   materyalize edildi (AGT25), SES105+SES106 paralel koştu; koordinatör turu
+   **19 sn'de bloklanmadan** bitti (kabul kriteri #1 ✅).
+4. UI ▸ SessionDetailPanel ▸ Koordinasyon roster'ı **canlı doldu**: 2 kart
+   "ÇALIŞIYOR" → bitişte 3 sn poll içinde "BITTI" + özet metni (kriter roster ✅).
+5. Worker'lar ayrık bitti (22:08:47 / 22:09:23): her `<task-notification>`
+   (Origin=worker-note, UI'da işçi bildirimi olarak) koordinatöre düştü ve
+   **otomatik tur** tetiklendi; ilk turda koordinatör doğru şekilde "SES105'i
+   bekliyorum" deyip turu kapattı, ikinci bildirimde sentezi yazdı (kriter #2 ✅,
+   çift tur yok #3 ✅). (Yakın bitişte tek-tur coalescing bu denemede
+   gözlenmedi — birim testi `coordination_test.go` kapsıyor.)
+
+Görseller + API çıktısı: `_Docs/gorseller/coord-02-before-ses104.png` (öncesi),
+`coord-03-workers-running.png` (roster canlı), `coord-04-workers-done.png`
+(BITTI kartları), `coord-05-synthesis-chat.png` (bildirimler + sentez),
+`coord-workers-api-output.json` (`GET /api/sessions/SES104/workers`).
+
+### Bulunan ve düzeltilen boşluk: non-stream CLI turunda köprü yok
+
+İlk deneme `POST /api/chat` (non-stream) ile yapılmıştı ve koordinatör SwarmGo'nun
+`spawn_worker`'ı yerine **claude-cli'nin kendi `Agent` aracını** kullandı: worker
+roster hiç dolmadı, log `cli mcp config written … interaction=false` gösterdi.
+
+- **Kök neden:** Interaction MCP endpoint'ini yalnız `/api/chat/stream` kendisi
+  kuruyordu; `toolloop.go`'daki on-demand kurulum ise `autonomous &&` koşuluyla
+  sınırlıydı. Non-stream `/api/chat` + claude-cli ikisine de girmiyordu →
+  köprü araçları (spawn_worker dahil) advertise edilmedi **ve** CLI'nin native
+  `Agent`/`Task` araçları disallow edilmedi (shadowing).
+- **Düzeltme:** `internal/agent/toolloop.go` — on-demand headless Interaction
+  kurulumundaki `autonomous` şartı kaldırıldı: endpoint'siz **her** CLI turu
+  (scheduler/spawn/flow + non-stream chat) `autoInteract` ile sarılır; stream
+  yolu kendi endpoint'ini kurduğundan (inter.URL != "") etkilenmez.
+  `go build ./...` + agent/tools 296 test yeşil.
+
+### UI: task-notification'a özel kart render'ı (2026-07-04)
+
+`<task-notification>` enjeksiyonları eskiden genel "Otomatik devam" notu olarak
+ham XML'iyle basılıyordu (okunmaz bir blok). Artık `Origin=worker-note` mesajlar
+kendi bileşeniyle çiziliyor: **`frontend/src/components/chat/TaskNotificationNote.tsx`**
+(MessageList'te worker-note dalı). Kart; worker ajan adı + oturum id + durum
+rozeti (tamamlandı/başarısız/durduruldu), araç sayısı + süre satırı ve
+**varsayılan katlı** result gövdesi (tıklayınca açılır) gösterir. Parse
+edilemeyen eski/yabancı formatlar ham metniyle katlı gösterilir — hiçbir şey
+sessizce gizlenmez. DB'deki mesaj metni değişmez; salt görüntüleme. Görsel:
+`_Docs/gorseller/coord-06-notification-card.png`. `npx tsc --noEmit` temiz.
+
+### Canlı coalescing testi ✅ (2026-07-04)
+
+SES104'e tek turda 3 hızlı worker açtırıldı (`worker:explore`, görev: tek kelime
+yanıt — ALPHA/BETA/GAMMA, araçsız). Zaman çizelgesi (session.jsonl, epoch sn):
+
+| t | Olay |
+|---|---|
+| 524 | user: test prompt'u (stream turu başlar) |
+| 535 | worker-note **SES111** (ALPHA) → otomatik tur 1 başlar |
+| 536 | worker-note **SES113** (GAMMA) → tur 1 çalışıyor → `pending=true` |
+| 537 | stream turunun assistant yanıtı persist edilir ("üç worker başlatıldı") |
+| 537 | worker-note **SES112** (BETA) → hâlâ `pending=true` (coalesce) |
+| 564 | otomatik tur 1 yanıtı: yalnız ALPHA'yı gördü, "diğerlerini bekliyorum" |
+| 588 | otomatik tur 2 yanıtı: **3/3 sentez tablosu** |
+
+**Sonuç: 3 bildirim → 2 otomatik tur.** SES113+SES112 tek ek turda birleşti —
+`coordSlot` coalescing'i canlıda doğrulandı (birim testin yanına saha kanıtı).
+Tur 1'in yalnız ALPHA görmesi tasarım gereği: history anlık görüntüsü tur
+başında alınır; sonradan gelenler pending'i işaretler.
+
+### Bulgu: stream turu ile koordinatör oto-turu AYRI kilitte → DÜZELTİLDİ ✅
+
+Aynı testte yarış canlı gözlendi: worker-note'lar (t=535/536) stream turunun
+kendi yanıtından (t=537) ÖNCE history'ye düştü ve **oto-tur 1, stream turu hâlâ
+çalışırken başladı**. Kod teyidi:
+
+- `handleChatStream` (`api/chat_stream.go`) turu doğrudan koşar — `coordSlot`'a
+  bakmaz, `trackSession` çağırmaz; `wake_turn.go`'da da oturum kilidi yok.
+- `drainCoordinator` yalnız OTO turları serileştirir; `isSessionActive`
+  kontrolü yapmaz.
+- Yani kullanıcı stream'den yazarken oto-tur (veya tersi) aynı oturumda
+  **paralel** koşabilirdi: history append'leri DB'de serileşir ama iki LLM turu
+  birbirinin ara mesajlarını görmeden yanıt üretebilirdi (karışık sıra, mükerrer
+  tepki riski).
+
+**Düzeltme (2026-07-04, seçenek a+b birlikte):** koordinatör oturumunda "tek
+oturumda tek tur" garantisi.
+
+- `agent/coordination.go` — **`BeginCoordinatorUserTurn(sessionID) func()`**:
+  interaktif tur coordSlot'u `running` olarak sahiplenir; çalışan oto-tur varsa
+  `sync.Cond` ile bitmesini bekler (oto-tur `spawnTimeout` ile sınırlı → bekleme
+  sınırlı). Tur sırasında gelen worker bildirimleri `enqueueCoordinatorTurn`'da
+  `running=true` gördüğü için `pending`'e düşer; release'te pending varsa **tek**
+  coalesced oto-tur tetiklenir. Kullanıcı turu ayrıca `turns`/`capWarn`'ı
+  sıfırlar (insan döngüye girdi → cap sonrası oto-turlar yeniden açılır; uyarı
+  mesajındaki "manuel mesajla devam" vaadi artık gerçekten cap'i resetler).
+  `drainCoordinator`'ın iki çıkışı da `signalFree()` (Broadcast) yapar.
+- `api/chat_stream.go` + `api/chat.go` — session yüklendikten hemen sonra
+  `Role=="coordinator"` ise `BeginCoordinatorUserTurn` + `defer release()`.
+- Testler: `TestUserTurnBlocksAutoTurnsAndDrainsPending` +
+  `TestUserTurnWaitsForAutoTurnAndResetsCap` (`coordination_test.go`).
+  `go build ./...` + **653 test / 34 paket** yeşil.
+- **Otonom yollar da kapsandı (2026-07-04):**
+  `claimTurnSlotIfCoordinator(ctx, sessionID)` (coordination.go) — oturum
+  koordinatörse slotu claim eder (değilse no-op release döner). İç mekanizma
+  `claimCoordinatorSlot(id, resetCap)` olarak ortaklandı: kullanıcı turu
+  `resetCap=true` (insan döngüde → cap reset), otonom yollar `resetCap=false`
+  (cap korunur — periyodik wake, notify-loop korumasını deldirmesin).
+  Takılan yerler: **wake** (`scheduler.go` deliverWake — sc.SessionID
+  koordinatör olabilir), **scheduled prompt** (`scheduler.go` deliverPrompt —
+  schedule kind oturumuna rol verilmiş olabilir), **inbox** (`agentmsg.go`
+  runInboxDelivery). Test: `TestClaimTurnSlotIfCoordinator`. Kapsam dışı kalan
+  tek yol: `flow.go` (flow-run oturumları koordinatör olarak kullanılmıyor).

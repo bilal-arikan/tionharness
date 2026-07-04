@@ -4,6 +4,7 @@ import { MessageTime, LiveTimer } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
 import { WorkingDots } from './WorkingDots'
 import { AutoPromptNote } from './AutoPromptNote'
+import { TaskNotificationNote } from './TaskNotificationNote'
 import { UserTurn } from './UserTurn'
 import { UserBubble } from './UserBubble'
 import { AssistantTurn } from './AssistantTurn'
@@ -201,7 +202,12 @@ export function MessageList({
           // A real (typed) user message — the only rows eligible to pin at top.
           const isTypedUser = m.role === 'user' && !m.origin
           if (m.role === 'user') {
-            row = m.origin ? (
+            // Worker <task-notification> injections get their own collapsible
+            // card (raw XML is unreadable as a plain note); other origins keep
+            // the generic auto-continuation note.
+            row = m.origin === 'worker-note' ? (
+              <TaskNotificationNote message={m} onDelete={onDeleteMessage} />
+            ) : m.origin ? (
               <AutoPromptNote message={m} onDelete={onDeleteMessage} />
             ) : (
               <UserTurn

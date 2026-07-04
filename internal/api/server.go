@@ -133,6 +133,7 @@ func (s *Server) applySettings() {
 	s.tun.SetMemoryControls(cur.MemoryPressureWarn, cur.CoreMemoryTools)
 	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffPressure, cur.HandoffMaxChain, cur.HandoffWriteFile)
 	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
+	s.tun.SetAutoContinue(cur.AutonomousAutoContinue, cur.AutonomousAutoContinueMax)
 	s.tun.SetFileFreshnessGuard(cur.FileFreshnessGuard)
 	s.tun.SetAutoTagSessions(cur.AutoTagSessions)
 	s.tun.SetDebugJournal(cur.DebugJournalEnabled, cur.DebugJournalCap)
@@ -258,6 +259,7 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("GET /api/sessions/active", s.handleActiveSessions)
+	mux.HandleFunc("GET /api/sessions/{id}/inflight", s.handleSessionInflight)
 	mux.HandleFunc("GET /api/sessions/search", s.handleSearchMessages)
 	mux.HandleFunc("POST /api/sessions", s.handleCreateSession)
 	mux.HandleFunc("POST /api/sessions/spawn", s.handleSpawnSession)

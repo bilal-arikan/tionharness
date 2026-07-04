@@ -18,8 +18,14 @@ import type {
 import { req } from './client'
 
 // subscribeEvents opens the global autonomous-event SSE feed via EventSource
-// (which reconnects automatically on drop). Returns an unsubscribe function.
-function subscribeEvents(onEvent: (e: AppEvent) => void): () => void {
+// (which reconnects automatically on drop). `onEvent` receives notification
+// frames (`notify`); the optional `onStep` receives live turn-activity frames
+// (`step`, type === 'session_step') so autonomous/other-window turns render their
+// thinking/tool steps live. Both ride ONE EventSource. Returns an unsubscribe fn.
+function subscribeEvents(
+  onEvent: (e: AppEvent) => void,
+  onStep?: (e: AppEvent) => void,
+): () => void {
   const es = new EventSource('/api/events')
   es.addEventListener('notify', (ev) => {
     try {
@@ -28,6 +34,15 @@ function subscribeEvents(onEvent: (e: AppEvent) => void): () => void {
       // ignore malformed frames
     }
   })
+  if (onStep) {
+    es.addEventListener('step', (ev) => {
+      try {
+        onStep(JSON.parse((ev as MessageEvent).data) as AppEvent)
+      } catch {
+        // ignore malformed frames
+      }
+    })
+  }
   return () => es.close()
 }
 

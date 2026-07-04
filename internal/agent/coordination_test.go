@@ -98,6 +98,159 @@ func TestCoordinatorQueueSerializesAndCoalesces(t *testing.T) {
 	}
 }
 
+// TestUserTurnBlocksAutoTurnsAndDrainsPending: while an interactive (user) turn
+// holds the coordinator slot, worker notifications must NOT start an auto turn —
+// they fall into pending — and releasing the user turn must run exactly ONE
+// coalesced follow-up turn.
+func TestUserTurnBlocksAutoTurnsAndDrainsPending(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+
+	var mu sync.Mutex
+	turns := 0
+	rt.coordRunFn = func(string) {
+		mu.Lock()
+		turns++
+		mu.Unlock()
+	}
+
+	release := rt.BeginCoordinatorUserTurn("COORD")
+
+	// Two notifications land mid-user-turn: no auto turn may start.
+	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn("COORD")
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	if turns != 0 {
+		mu.Unlock()
+		t.Fatalf("auto turn ran while user turn held the slot: turns = %d", turns)
+	}
+	mu.Unlock()
+
+	// Releasing the user turn drains the pile-up into exactly one turn.
+	release()
+	deadline := time.After(time.Second)
+	for {
+		mu.Lock()
+		n := turns
+		mu.Unlock()
+		if n == 1 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("expected exactly 1 coalesced turn after release, got %d", n)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if turns != 1 {
+		t.Fatalf("expected exactly 1 coalesced turn, got %d", turns)
+	}
+}
+
+// TestUserTurnWaitsForAutoTurnAndResetsCap: a user turn arriving while an auto
+// turn runs must block until it finishes, and claiming the slot resets the
+// auto-turn cap (human back in the loop).
+func TestUserTurnWaitsForAutoTurnAndResetsCap(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+
+	started := make(chan struct{})
+	releaseAuto := make(chan struct{})
+	rt.coordRunFn = func(string) {
+		started <- struct{}{}
+		<-releaseAuto
+	}
+
+	// Pre-load cap state to verify the reset.
+	slot := rt.coordSlotFor("COORD")
+	slot.mu.Lock()
+	slot.turns = 40
+	slot.capWarn = true
+	slot.mu.Unlock()
+
+	rt.enqueueCoordinatorTurn("COORD")
+	<-started
+
+	acquired := make(chan func(), 1)
+	go func() { acquired <- rt.BeginCoordinatorUserTurn("COORD") }()
+
+	select {
+	case <-acquired:
+		t.Fatal("user turn acquired the slot while an auto turn was running")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	releaseAuto <- struct{}{}
+	var release func()
+	select {
+	case release = <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("user turn never acquired the slot after the auto turn finished")
+	}
+
+	slot.mu.Lock()
+	turnsAfter, warnAfter := slot.turns, slot.capWarn
+	slot.mu.Unlock()
+	if turnsAfter != 0 || warnAfter {
+		t.Fatalf("user turn should reset cap state, got turns=%d capWarn=%v", turnsAfter, warnAfter)
+	}
+	release()
+}
+
+// TestClaimTurnSlotIfCoordinator: a coordinator session's autonomous turn claims
+// the slot (blocking auto turns into pending, without resetting the cap); a
+// non-coordinator session gets a no-op release even when a slot with the same id
+// happens to be busy.
+func TestClaimTurnSlotIfCoordinator(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "C", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	coord, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID, Role: "coordinator"})
+	if err != nil {
+		t.Fatalf("create coordinator session: %v", err)
+	}
+	plain, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID})
+	if err != nil {
+		t.Fatalf("create plain session: %v", err)
+	}
+
+	var mu sync.Mutex
+	turns := 0
+	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
+
+	// Coordinator session: slot is claimed — a notification must fall into pending,
+	// and the cap state must survive (autonomous claim does not reset it).
+	slot := rt.coordSlotFor(coord.ID)
+	slot.mu.Lock()
+	slot.turns = 7
+	slot.mu.Unlock()
+	release := rt.claimTurnSlotIfCoordinator(ctx, coord.ID)
+	rt.enqueueCoordinatorTurn(coord.ID)
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	if turns != 0 {
+		mu.Unlock()
+		t.Fatalf("auto turn ran while autonomous turn held the slot: turns = %d", turns)
+	}
+	mu.Unlock()
+	slot.mu.Lock()
+	if slot.turns != 7 {
+		slot.mu.Unlock()
+		t.Fatalf("autonomous claim must not reset the auto-turn cap, turns = %d", slot.turns)
+	}
+	slot.mu.Unlock()
+	release()
+
+	// Non-coordinator session: release is a no-op and nothing blocks.
+	releasePlain := rt.claimTurnSlotIfCoordinator(ctx, plain.ID)
+	releasePlain()
+}
+
 // TestSpawnWorkerRespectsWorkerCap verifies the per-coordinator worker cap refuses
 // a spawn once the active-worker count is at the limit.
 func TestSpawnWorkerRespectsWorkerCap(t *testing.T) {

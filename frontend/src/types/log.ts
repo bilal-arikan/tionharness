@@ -21,4 +21,8 @@ export interface AppEvent {
   body: string
   target?: Record<string, string>
   time: number // unix seconds
+  // Present only on type === 'session_step' frames (delivered under the SSE
+  // `step` event name): the marshalled TurnStep of an in-progress turn. Raw here
+  // to avoid a type cycle; the consumer parses it.
+  step?: unknown
 }

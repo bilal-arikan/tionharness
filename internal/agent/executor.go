@@ -45,7 +45,12 @@ func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt strin
 	if err != nil {
 		return "", nil, err
 	}
-	resp, steps, err := r.CompleteWithToolsTraced(ctx, agent, provider, providers.Request{
+	// A session-scoped step emitter (nil when the turn has no session id) streams
+	// this autonomous turn's activity to the bus, so a window viewing the session
+	// sees thinking/tool steps live — the same feed a chat turn gets. The returned
+	// slice is unchanged (still the full persistable trace); only live emission is
+	// added.
+	resp, steps, err := r.CompleteWithToolsStream(ctx, agent, provider, providers.Request{
 		Model:  agent.Model,
 		System: r.autonomousSystemPrompt(agent),
 		// The session's persistent goal steers headless runs too (scheduler/spawn/
@@ -55,7 +60,7 @@ func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt strin
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: prompt},
 		},
-	}, autonomous)
+	}, autonomous, r.SessionStepEmitter(ctx))
 	if err != nil {
 		return "", nil, err
 	}

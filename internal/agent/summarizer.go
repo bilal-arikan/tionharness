@@ -107,7 +107,7 @@ func (r *Runtime) gatherSummaryData(ctx context.Context, agent db.Agent, kind st
 			flows = flows[:maxSummaryItems]
 		}
 		for _, f := range flows {
-			fmt.Fprintf(&sb, "- %s — %s\n", f.Name, oneLine(f.Description))
+			fmt.Fprintf(&sb, "- %s (%s)\n", f.Name, f.ID)
 		}
 		return sb.String(), "akış", nil
 	default:

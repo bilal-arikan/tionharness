@@ -215,6 +215,11 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	if _, err := s.db.GetSession(ctx, sc.SessionID); err != nil {
 		return fmt.Errorf("wake session %s gone: %w", sc.SessionID, err)
 	}
+	// A wake may re-enter a coordinator session: claim its turn slot so the wake
+	// turn never overlaps an auto-triggered coordinator turn (worker notifications
+	// arriving meanwhile coalesce and run after release). No-op otherwise.
+	release := s.rt.claimTurnSlotIfCoordinator(ctx, sc.SessionID)
+	defer release()
 
 	// Record the wake prompt as a user turn and tell the open screen to refresh +
 	// show a thinking indicator (phase=start). Origin "wake" makes the UI render it
@@ -411,6 +416,10 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 			"schedule", sc.ID, "agent", sc.AgentID, "error", err)
 		return "", err
 	}
+	// The schedule session could have been given the coordinator role: serialize
+	// with its auto turns the same way chat/wake turns do. No-op otherwise.
+	release := s.rt.claimTurnSlotIfCoordinator(ctx, session.ID)
+	defer release()
 	// Record the scheduled prompt as a user turn first, so the schedule thread
 	// reads as a real conversation (the UI shows what was asked). Origin "schedule"
 	// renders it as a "⏰ Zamanlanmış görev" note rather than a user bubble.
@@ -470,6 +479,10 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	}
 	meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
 	_, err = s.db.AddMessage(ctx, replyMsg)
+	// Self-completion: a scheduled run has no human to send the follow-up, so if the
+	// turn stalled with unfinished work (activated tools it never used, or open
+	// todos) keep it going until done. No-op on a clean finish. Bounded + budget-gated.
+	s.rt.maybeAutoContinue(ctx, agent, session.ID, KindSchedule, steps)
 	// Context-reset handoff: if this scheduled turn hit the context limit, optionally
 	// continue the work in a fresh session. No-op unless HandoffAuto is enabled.
 	s.rt.maybeAutoHandoff(ctx, session.ID, agent, overflow.Load())

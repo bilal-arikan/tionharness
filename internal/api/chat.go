@@ -84,6 +84,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
+	// A coordinator session runs at most ONE turn at a time: claim the turn slot
+	// (blocking until any in-flight auto turn finishes) so this interactive turn
+	// never overlaps an auto-triggered coordinator turn. Worker notifications
+	// arriving mid-turn coalesce and trigger one auto turn on release.
+	if session.Role == "coordinator" {
+		release := ws(r).Runtime.BeginCoordinatorUserTurn(session.ID)
+		defer release()
+	}
 	// Capture before the user message is appended: an empty title on a fresh
 	// chat session means we should auto-generate one from this first message
 	// (only when auto-titling is enabled in settings).

@@ -31,11 +31,19 @@ import (
 // spawn path without the turn lock).
 type coordSlot struct {
 	mu      sync.Mutex
-	running bool         // a coordinator turn is currently executing
+	free    *sync.Cond   // lazily created; broadcast whenever running flips false
+	running bool         // a turn (auto OR interactive) is currently executing
 	pending bool         // >=1 notification arrived while running; run once more after
 	turns   int          // auto-triggered coordinator turns so far (notify-loop cap)
 	capWarn bool         // whether the "cap reached" warning has been posted
 	workers atomic.Int64 // active workers under this coordinator
+}
+
+// signalFree wakes turns blocked in BeginCoordinatorUserTurn. Callers must hold mu.
+func (s *coordSlot) signalFree() {
+	if s.free != nil {
+		s.free.Broadcast()
+	}
 }
 
 // workerCtl lets stop_worker cancel an in-flight worker turn and mark it stopped
@@ -449,6 +457,65 @@ func (r *Runtime) NotifyCoordinator(coordSessionID, note string) {
 	r.enqueueCoordinatorTurn(coordSessionID)
 }
 
+// BeginCoordinatorUserTurn claims the coordinator's turn slot for an interactive
+// (user-initiated) turn so it never overlaps an auto-triggered coordinator turn:
+// auto turns arriving meanwhile fall into pending (enqueueCoordinatorTurn sees
+// running=true), and this call blocks until any in-flight auto turn — bounded by
+// spawnTimeout — finishes. The returned release func MUST be called when the
+// interactive turn ends (defer it); it frees the slot and, when worker
+// notifications piled up mid-turn, schedules exactly one coordinator turn to
+// process them. A user turn also resets the auto-turn cap: a human is back in
+// the loop, so notifications may resume triggering turns after a cap stop.
+func (r *Runtime) BeginCoordinatorUserTurn(coordSessionID string) (release func()) {
+	return r.claimCoordinatorSlot(coordSessionID, true)
+}
+
+// claimTurnSlotIfCoordinator claims the coordinator turn slot when sessionID
+// belongs to a coordinator session, so autonomous turns (scheduler wake, scheduled
+// prompt, inbox delivery) serialize with coordinator auto turns exactly like
+// interactive chat turns. Returns a release func — a no-op for non-coordinator
+// sessions (or when the session can't be loaded, since there is then no
+// coordinator slot to protect). Unlike a user turn it does NOT reset the
+// auto-turn cap: no human re-entered the loop.
+func (r *Runtime) claimTurnSlotIfCoordinator(ctx context.Context, sessionID string) (release func()) {
+	s, err := r.db.GetSession(ctx, sessionID)
+	if err != nil || s.Role != "coordinator" {
+		return func() {}
+	}
+	return r.claimCoordinatorSlot(sessionID, false)
+}
+
+// claimCoordinatorSlot blocks until the coordinator's turn slot is free, claims
+// it, and returns the release func (see BeginCoordinatorUserTurn for semantics).
+// resetCap additionally zeroes the auto-turn budget (human back in the loop).
+func (r *Runtime) claimCoordinatorSlot(coordSessionID string, resetCap bool) func() {
+	slot := r.coordSlotFor(coordSessionID)
+	slot.mu.Lock()
+	if slot.free == nil {
+		slot.free = sync.NewCond(&slot.mu)
+	}
+	for slot.running {
+		slot.free.Wait()
+	}
+	slot.running = true
+	if resetCap {
+		slot.turns = 0
+		slot.capWarn = false
+	}
+	slot.mu.Unlock()
+	return func() {
+		slot.mu.Lock()
+		slot.running = false
+		pending := slot.pending
+		slot.pending = false
+		slot.signalFree()
+		slot.mu.Unlock()
+		if pending {
+			r.enqueueCoordinatorTurn(coordSessionID)
+		}
+	}
+}
+
 // enqueueCoordinatorTurn schedules one coordinator turn. If a turn is already
 // running it just flags pending (the running turn will loop once more and see the
 // freshly-persisted notification in history). Otherwise it starts the drain loop.
@@ -476,6 +543,7 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 			slot.capWarn = true
 			slot.running = false
 			slot.pending = false
+			slot.signalFree()
 			slot.mu.Unlock()
 			if warn {
 				r.warnCoordinatorCap(coordSessionID, slot.turns)
@@ -498,6 +566,7 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 			continue
 		}
 		slot.running = false
+		slot.signalFree()
 		slot.mu.Unlock()
 		return
 	}

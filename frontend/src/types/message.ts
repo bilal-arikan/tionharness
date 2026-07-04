@@ -112,6 +112,19 @@ export interface Message {
   createdAt: number
 }
 
+// InflightSnapshot is a session's in-progress streaming reply as written to the
+// crash sidecar on a throttle (backend db.InflightTurn). Fetched after a mid-turn
+// reload to restore the partial assistant bubble (agent + steps-so-far) while the
+// detached turn keeps running. `steps` is JSON-encoded TurnStep[] (may be "[]").
+export interface InflightSnapshot {
+  messageId: string
+  sessionId: string
+  agentId: string
+  startedAt: number
+  text: string
+  steps: string
+}
+
 // MessageUsage is an assistant turn's token consumption (compact keys mirror the
 // backend db.MessageUsage).
 export interface MessageUsage {

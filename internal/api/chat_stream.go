@@ -103,6 +103,14 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
+	// A coordinator session runs at most ONE turn at a time: claim the turn slot
+	// (blocking until any in-flight auto turn finishes) so this interactive turn
+	// never overlaps an auto-triggered coordinator turn. Worker notifications
+	// arriving mid-turn coalesce and trigger one auto turn on release.
+	if session.Role == "coordinator" {
+		release := wsp.Runtime.BeginCoordinatorUserTurn(session.ID)
+		defer release()
+	}
 	firstTurn := s.isFirstUntitledTurn(session)
 	// Captured before the user message is appended: primes cross-session context
 	// on a fresh session's first turn.
@@ -271,9 +279,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		// tools and the session-edit tools alike; each mutation emits a "session"
 		// event so open windows refresh live.
 		ssink := wsp.Runtime.NewSessionSink(session.ID)
-		run.setGoal(ssink)
 		run.setSession(ssink)
-		turnCtx = tools.WithGoal(turnCtx, ssink)
 		turnCtx = tools.WithSession(turnCtx, ssink)
 		// Persistent progress: bind a todo sink so todo_write persists the checklist
 		// to the project's progress file on both tool paths (native via context, CLI
@@ -385,6 +391,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		resp, steps, cerr := wsp.Runtime.CompleteWithToolsStream(turnCtx, agentRow, provider, llmReq, false,
 			func(st agent.TurnStep) {
 				sse("step", st)
+				// Mirror the step onto the process-wide bus so OTHER windows viewing
+				// this session render it live too. The originating window ignores the
+				// bus copy (it owns the run and streams over its own per-request SSE);
+				// the emitter drops high-frequency/interactive kinds itself.
+				wsp.Runtime.EmitSessionStep(session.ID, st)
 				switch st.Kind {
 				case agent.StepDelta:
 					partial.WriteString(st.Text)

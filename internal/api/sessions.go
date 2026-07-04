@@ -224,6 +224,27 @@ func (s *Server) handleActiveSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string][]string{"sessionIds": s.runs.activeSessionIDs()})
 }
 
+// handleSessionInflight returns the session's in-progress streaming snapshot (the
+// partial assistant reply — agent, text and trace so far — written on a throttle
+// while the turn runs), or null when no turn is streaming. A page reloaded
+// mid-turn fetches this to restore the in-progress bubble (agent name + steps)
+// rather than showing a bare "thinking" dot until the turn completes. The turn is
+// detached server-side, so the snapshot keeps growing after the reload and the
+// authoritative message replaces it on completion.
+func (s *Server) handleSessionInflight(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	t, ok, err := ws(r).DB.ReadInflight(sessionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "inflight read failed")
+		return
+	}
+	if !ok {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
 // handleDeleteMessage removes a single message from a session (e.g. to prune a
 // mistaken or test message). Rewrites the session's JSONL file.
 func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {

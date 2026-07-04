@@ -14,7 +14,16 @@ import {
   type SetStateAction,
 } from 'react'
 import { api } from '../api'
-import type { Agent, Attachment, Flow, Message, Session, SlashCommand, TurnStep } from '../types'
+import type {
+  Agent,
+  Attachment,
+  Flow,
+  InflightSnapshot,
+  Message,
+  Session,
+  SlashCommand,
+  TurnStep,
+} from '../types'
 import type { View } from '../components/NavRail'
 import type { PendingAsk } from '../components/chat/AskPrompt'
 import type { PendingItem } from '../components/chat/PendingTray'
@@ -539,6 +548,123 @@ export function useChatStream(deps: ChatStreamDeps) {
     setPendingSessions((p) => withRemoved(p, sid))
   }, [])
 
+  // ---- autonomous / other-window live turns (session-step bus) ----
+
+  // A synthetic "ghost" assistant bubble per session, grown from `session_step`
+  // bus frames. It lets a window that does NOT own the running turn — a scheduled/
+  // spawned/worker/wake turn, or the same chat turn viewed in another window —
+  // render thinking/tool steps live, exactly like the locally-streamed bubble.
+  // Replaced by the authoritative persisted message when the turn ends (the
+  // completion event reloads the transcript). Keyed by session because turns are
+  // detached and several can overlap.
+  const autoLiveRef = useRef<Map<string, { id: string; steps: TurnStep[] }>>(new Map())
+
+  // applyAutoStep folds one bus step into the active session's ghost bubble. It is
+  // a no-op when THIS window owns the turn (runsRef has it → the local per-request
+  // SSE already renders it, so the bus copy would duplicate), and only mutates the
+  // transcript for the session currently on screen (off-screen turns just raise the
+  // thinking indicator and reload their transcript on completion).
+  const applyAutoStep = useCallback(
+    (sid: string, step: TurnStep) => {
+      if (runsRef.current.has(sid)) return // this window owns the turn — avoid a duplicate ghost
+      if (activeSessionIdRef.current !== sid) {
+        setPendingSessions((p) => withAdded(p, sid))
+        return
+      }
+      let entry = autoLiveRef.current.get(sid)
+      if (!entry) {
+        entry = { id: `live-auto-${sid}-${Date.now()}`, steps: [] }
+        autoLiveRef.current.set(sid, entry)
+        const bubble: Message = {
+          id: entry.id,
+          sessionId: sid,
+          role: 'assistant',
+          text: '',
+          steps: '[]',
+          createdAt: Math.floor(Date.now() / 1000),
+        }
+        setMessages((prev) => (prev.some((m) => m.id === entry!.id) ? prev : [...prev, bubble]))
+      }
+      // Merge streamed reasoning chunks (same id) into one growing thinking block;
+      // a tombstone retracts a prior step; everything else appends.
+      if (step.kind === 'tombstone') {
+        entry.steps = entry.steps.filter((s) => s.id !== step.ref)
+      } else if (step.kind === 'thinking' && step.id) {
+        const idx = entry.steps.findIndex((s) => s.kind === 'thinking' && s.id === step.id)
+        if (idx >= 0) {
+          const merged = { ...entry.steps[idx], text: (entry.steps[idx].text || '') + (step.text || '') }
+          entry.steps = entry.steps.map((s, k) => (k === idx ? merged : s))
+        } else {
+          entry.steps = [...entry.steps, step]
+        }
+      } else {
+        entry.steps = [...entry.steps, step]
+      }
+      const json = JSON.stringify(entry.steps)
+      const id = entry.id
+      setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, steps: json } : m)))
+      setPendingSessions((p) => withRemoved(p, sid))
+    },
+    [activeSessionIdRef, setMessages],
+  )
+
+  // clearAutoLive drops a session's ghost bubble + its accumulator once the turn
+  // has ended. The caller reloads the transcript right after, so the authoritative
+  // persisted message takes the ghost's place.
+  const clearAutoLive = useCallback(
+    (sid: string) => {
+      if (!autoLiveRef.current.has(sid)) return
+      const entry = autoLiveRef.current.get(sid)!
+      autoLiveRef.current.delete(sid)
+      // Drop the ghost bubble whether it was synthesized (live-auto-<sid>) or seeded
+      // from an inflight snapshot (id = the pre-allocated reply id).
+      setMessages((prev) => prev.filter((m) => m.id !== entry.id && !m.id.startsWith(`live-auto-${sid}`)))
+    },
+    [setMessages],
+  )
+
+  // recoverInflight restores the in-progress assistant bubble after a MID-TURN
+  // reload. The turn keeps running detached server-side, but a fresh page only
+  // loads persisted messages — so the steps/agent produced before the reload
+  // vanish until the turn ends. This fetches the streaming snapshot (agent + text
+  // + steps-so-far, written to the crash sidecar on a throttle) and seeds it as the
+  // session's ghost bubble, which the session-step bus then keeps growing live. The
+  // authoritative message (same id) replaces it on completion. No-op when this
+  // window owns the run (its own SSE renders it) or the reply already persisted.
+  const recoverInflight = useCallback(
+    async (sid: string, loadedMsgs: Message[]) => {
+      if (runsRef.current.has(sid)) return
+      let snap: InflightSnapshot | null = null
+      try {
+        snap = await api.getInflight(sid)
+      } catch {
+        return
+      }
+      if (!snap || !snap.messageId) return
+      if (loadedMsgs.some((m) => m.id === snap!.messageId)) return // already persisted
+      if (activeSessionIdRef.current !== sid) return // user switched away mid-fetch
+      let steps: TurnStep[] = []
+      try {
+        steps = JSON.parse(snap.steps || '[]') as TurnStep[]
+      } catch {
+        steps = []
+      }
+      autoLiveRef.current.set(sid, { id: snap.messageId, steps })
+      const bubble: Message = {
+        id: snap.messageId,
+        sessionId: sid,
+        role: 'assistant',
+        agentId: snap.agentId || undefined,
+        text: snap.text || '',
+        steps: snap.steps || '[]',
+        createdAt: Math.floor(Date.now() / 1000),
+      }
+      setMessages((prev) => (prev.some((m) => m.id === snap!.messageId) ? prev : [...prev, bubble]))
+      setPendingSessions((p) => withAdded(p, sid))
+    },
+    [activeSessionIdRef, setMessages],
+  )
+
   // ---- self-wake (schedule_wake) waiting state ----
 
   // Arm the waiting banner: a schedule_wake event (phase=armed) said this session
@@ -769,7 +895,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         (f): SlashCommand => ({
           name: flowSlug(f.name) || f.id.slice(0, 6),
           icon: '🔀',
-          description: f.description ? `${f.name} — ${f.description}` : `${f.name} akışını çalıştır`,
+          description: `${f.name} akışını çalıştır`,
           takesInput: true,
           run: (input?: string, attachments?: Attachment[]) =>
             runFlow(f.id, f.name, input ?? '', attachments ?? []),
@@ -805,6 +931,9 @@ export function useChatStream(deps: ChatStreamDeps) {
     removePending,
     markPending,
     clearPending,
+    applyAutoStep,
+    clearAutoLive,
+    recoverInflight,
     setWakeWait,
     clearWakeWait,
     cancelWake,
