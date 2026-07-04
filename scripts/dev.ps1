@@ -14,6 +14,24 @@
 # The backend has NO auth and CORS is wildcard -- only expose it on a trusted LAN.
 # Pass -Loopback to bind 127.0.0.1 only (old behaviour, no firewall prompt).
 #
+# TROUBLESHOOTING -- "firewall allowed but phone still can't reach it":
+#   The usual cause is the Wi-Fi network being classified as PUBLIC. Windows
+#   Firewall blocks inbound on Public, and the go run temp exe gets a NEW path on
+#   every compile so a program-based allow rule goes stale. Fix (elevated shell):
+#     Set-NetConnectionProfile -InterfaceAlias 'Wi-Fi' -NetworkCategory Private
+#     New-NetFirewallRule -DisplayName 'SwarmGo Dev 5173' -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow -Profile Private
+#     New-NetFirewallRule -DisplayName 'SwarmGo Dev 8090' -Direction Inbound -LocalPort 8090 -Protocol TCP -Action Allow -Profile Private
+#   Port-based rules survive recompiles; the phone hits Vite (:5173, node), which
+#   proxies /api to the backend (:8090).
+#
+#   If the PC self-test (Invoke-WebRequest to the LAN IP) returns 200 but the phone
+#   STILL fails, the PC side is fine -- the router is the problem. Diagnose from the
+#   phone with adb: `adb shell ping -c3 <PC-LAN-IP>`. "Destination Host Unreachable"
+#   while the gateway pings fine == router AP/client isolation (peers can't ARP each
+#   other). Fix: disable "AP Isolation"/"Client Isolation" on the router, OR bypass
+#   it entirely with Tailscale (browse http://<PC-tailscale-100.x.y.z>:5173 -- Vite
+#   binds 0.0.0.0 so it also listens on the Tailscale interface).
+#
 # Usage:  .\scripts\dev.ps1                 # backend + frontend on LAN, open browser at LAN IP
 #         .\scripts\dev.ps1 -Loopback       # bind 127.0.0.1 only (local-only, no network access)
 #         .\scripts\dev.ps1 -NoBrowser      # don't auto-open the browser
