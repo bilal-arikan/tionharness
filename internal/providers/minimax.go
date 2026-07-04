@@ -479,7 +479,22 @@ func toOAIMessages(req Request, cacheSystem bool) []oaiMessage {
 		// Second breakpoint on the tail of the transcript so the whole conversation
 		// prefix (system + history) is cached and reused next turn — not just the
 		// system prefix. OpenRouter/Anthropic allow up to 4 breakpoints; we use 2.
-		attachHistoryBreakpoint(msgs)
+		idx := attachHistoryBreakpoint(msgs)
+		// Volatile dynamic rides as a trailing text part on the breakpoint message —
+		// AFTER the breakpoint — so it stays OUTSIDE the cached prefix (request-time
+		// only, never persisted). This lets tools + system + history all be cache
+		// reads; previously the dynamic sat in the system message upstream and busted
+		// the history breakpoint every turn. Mirrors the native Anthropic + claude-cli
+		// paths. Fallback: a trailing user message when no eligible message exists.
+		if d := strings.TrimSpace(req.SystemDynamic); d != "" {
+			if idx >= 0 {
+				if parts, ok := msgs[idx].Content.([]oaiContentPart); ok {
+					msgs[idx].Content = append(parts, oaiContentPart{Type: "text", Text: d})
+				}
+			} else {
+				msgs = append(msgs, oaiMessage{Role: RoleUser, Content: []oaiContentPart{{Type: "text", Text: d}}})
+			}
+		}
 	}
 	return msgs
 }
@@ -487,9 +502,9 @@ func toOAIMessages(req Request, cacheSystem bool) []oaiMessage {
 // attachHistoryBreakpoint places a cache_control breakpoint on the last plain-text
 // message (user/assistant text or a tool result) by converting its string content
 // to a single text part. Messages carrying tool_calls and the system message
-// (index 0, which already has its own breakpoint) are skipped. No-op when there is
-// no eligible message.
-func attachHistoryBreakpoint(msgs []oaiMessage) {
+// (index 0, which already has its own breakpoint) are skipped. Returns the index it
+// marked, or -1 when there is no eligible message.
+func attachHistoryBreakpoint(msgs []oaiMessage) int {
 	for i := len(msgs) - 1; i >= 1; i-- {
 		if len(msgs[i].ToolCalls) > 0 {
 			continue
@@ -499,16 +514,18 @@ func attachHistoryBreakpoint(msgs []oaiMessage) {
 			continue
 		}
 		msgs[i].Content = []oaiContentPart{{Type: "text", Text: s, CacheControl: &oaiCacheCtrl{Type: "ephemeral"}}}
-		return
+		return i
 	}
+	return -1
 }
 
-// buildSystemMessage assembles the leading system message from a static prefix
-// and a volatile dynamic suffix. Without caching the two are concatenated into a
-// plain string. With caching (OpenRouter) they become two text parts and a
-// cache_control breakpoint is placed on the static prefix (or, if there is no
-// static prefix, on the dynamic block) so the cached prefix is reused next turn.
-// ok is false when both parts are empty (no system message at all).
+// buildSystemMessage assembles the leading system message. Without caching the
+// static + dynamic parts are concatenated into a plain string. With caching
+// (OpenRouter) the system message is STATIC-ONLY and carries a cache_control
+// breakpoint, so it is fully cacheable; the volatile dynamic is NOT placed here —
+// it moves to the message tail (see toOAIMessages) so it never invalidates the
+// cached prefix. ok is false when there is nothing to send as a system message
+// (both empty, or caching-on with no static prefix — the dynamic rides the messages).
 func buildSystemMessage(static, dynamic string, cache bool) (oaiMessage, bool) {
 	static = strings.TrimSpace(static)
 	dynamic = strings.TrimSpace(dynamic)
@@ -518,15 +535,11 @@ func buildSystemMessage(static, dynamic string, cache bool) (oaiMessage, bool) {
 	if !cache {
 		return oaiMessage{Role: "system", Content: strings.TrimSpace(static + "\n\n" + dynamic)}, true
 	}
-
-	bp := &oaiCacheCtrl{Type: "ephemeral"}
-	var parts []oaiContentPart
-	if static != "" {
-		parts = append(parts, oaiContentPart{Type: "text", Text: static, CacheControl: bp})
-		bp = nil // breakpoint already placed on the static prefix
+	if static == "" {
+		return oaiMessage{}, false
 	}
-	if dynamic != "" {
-		parts = append(parts, oaiContentPart{Type: "text", Text: dynamic, CacheControl: bp})
-	}
-	return oaiMessage{Role: "system", Content: parts}, true
+	return oaiMessage{
+		Role:    "system",
+		Content: []oaiContentPart{{Type: "text", Text: static, CacheControl: &oaiCacheCtrl{Type: "ephemeral"}}},
+	}, true
 }

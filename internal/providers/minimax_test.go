@@ -114,8 +114,9 @@ func TestOAICompat_CacheUsageParsing(t *testing.T) {
 }
 
 func TestOpenRouter_SystemCacheControl(t *testing.T) {
-	// OpenRouter gets a cache_control breakpoint on the static System prefix as an
-	// array of content parts; the dynamic suffix is a second part without one.
+	// OpenRouter: the system message is STATIC-ONLY with a cache_control breakpoint;
+	// the volatile dynamic moves to the message tail (a trailing part on the last
+	// message, AFTER the history breakpoint) so it never busts the cached prefix.
 	var gotReq oaiReq
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&gotReq)
@@ -135,19 +136,26 @@ func TestOpenRouter_SystemCacheControl(t *testing.T) {
 	if len(gotReq.Messages) == 0 || gotReq.Messages[0].Role != "system" {
 		t.Fatalf("expected leading system message, got %+v", gotReq.Messages)
 	}
-	// content must be an array of parts (decoded as []any), with cache_control on
-	// the first (static) part only.
-	parts, ok := gotReq.Messages[0].Content.([]any)
-	if !ok || len(parts) != 2 {
-		t.Fatalf("system content = %#v, want 2 parts", gotReq.Messages[0].Content)
+	// System is static-only: a single content part carrying cache_control.
+	sysParts, ok := gotReq.Messages[0].Content.([]any)
+	if !ok || len(sysParts) != 1 {
+		t.Fatalf("system content = %#v, want 1 static part", gotReq.Messages[0].Content)
 	}
-	first, _ := parts[0].(map[string]any)
-	if first["cache_control"] == nil {
-		t.Errorf("static part missing cache_control: %#v", first)
+	if first, _ := sysParts[0].(map[string]any); first["cache_control"] == nil {
+		t.Errorf("static part missing cache_control: %#v", sysParts[0])
 	}
-	second, _ := parts[1].(map[string]any)
-	if second["cache_control"] != nil {
-		t.Errorf("dynamic part should not carry cache_control: %#v", second)
+	// The dynamic rides the LAST message: [ "hi" (breakpoint), "DYNAMIC SUFFIX" (no bp) ].
+	last := gotReq.Messages[len(gotReq.Messages)-1]
+	msgParts, ok := last.Content.([]any)
+	if !ok || len(msgParts) != 2 {
+		t.Fatalf("last message content = %#v, want persisted+dynamic parts", last.Content)
+	}
+	if bp, _ := msgParts[0].(map[string]any); bp["cache_control"] == nil {
+		t.Errorf("breakpoint must sit on the persisted message part: %#v", msgParts[0])
+	}
+	dyn, _ := msgParts[1].(map[string]any)
+	if dyn["text"] != "DYNAMIC SUFFIX" || dyn["cache_control"] != nil {
+		t.Errorf("dynamic must trail after the breakpoint, uncached: %#v", dyn)
 	}
 }
 

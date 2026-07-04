@@ -365,6 +365,43 @@ prefix'in sıcak kalması şarttır.
 > geri kalanı (OpenAI-uyumlu `prompt_tokens`'tan cached çıkarımı, Anthropic ayrık
 > sayaçlar, fiyat kademeleri, günlük/oturum çağrı-başı toplama) doğrulandı — hatasız.
 
+### claude-cli ek yükü — ölçülmüş referans + önceden tahmin (2026-07-04)
+
+`computeCLIOverhead` yükü ancak **ilk tur gönderildikten sonra** (debug journal'dan)
+ölçebiliyordu; ondan önce `overhead=0` gösteriyordu. Artık yükün bileşenleri
+**empirik ölçüldü** ve `internal/conversation/clioverhead.go` içinde generic bir
+referans olarak sabitlendi → herhangi bir token-hesap kodu (context-preview, bütçe,
+gelecekteki tahminciler) yükü **ilk turdan önce** projekte edebilir.
+
+**Ölçüm (claude-cli 2.1.201, izole `claude-home`, gerçek API `usage`):**
+
+```
+claude -p "ok" --output-format stream-json --verbose \
+  --strict-mcp-config --mcp-config '{"mcpServers":{}}' [--disallowedTools <tüm built-in>]
+toplam girdi = usage.input_tokens + cache_creation_input_tokens + cache_read_input_tokens
+```
+
+| Bileşen | Ölçülen | Sabit |
+|---|---|---|
+| Saf sistem promptu (0 araç, tüm built-in disallow) | 17.067 | `CLIBaseSystemTokens` (17000) |
+| + Claude Code dahili araç şemaları (~15 tool) | 26.265 → +9.198 | `CLIBuiltinToolsTokens` (9200) |
+| **Taban zemin** (sistem + dahili araçlar) | ~26.200 | `CLIBaseTokens` |
+| Köprülü SwarmGo aracı başına ort. şema (name+desc+inputSchema+`mcp__…__` ns) | ~215 (42–710) | `CLIAvgBridgedToolTokens` |
+
+**Formül** (`conversation.PredictCLIOverhead(loadedTools)`):
+
+$$\text{beklenen\_ek\_yük} \approx \underbrace{26.200}_{\text{sys}+\text{dahili}} + \text{yüklü\_araç} \times 215$$
+
+Yalnız **eager** (always-load) araçlar tam şema taşır; deferred/lazy araçlar
+`ToolSearch` ile açılana dek name-only stub'dır → yüklü sayı üst sınırdır (uyarı için
+kabul edilebilir). Doğrulama: SES104'te Tahmin 29.573 → Gerçek 88.425 (Δ 58.852), bu
+referansla (17K sys + 9K dahili + ~19–33K köprü araçları) ~%15 içinde örtüşür.
+
+Rakamlar ±~15% (CLI, MCP şemalarını SwarmGo'nun ~4 karakter/token sezgisinden daha
+ayrıntılı serileştirir + tokenizer farkı). **claude-cli major sürümü değişince
+ölçümü yenile** (taban sistem promptu sürümler arası büyür). `cliOverheadPreview`
+artık `predictedOverhead` alanı taşır → UI ilk turdan önce de uyarabilir.
+
 - **Stabil prefix (Faz 1):** `providers.ClaudeCLI.buildSystemAndPrompt` — `--append-
   system-prompt` yalnız statik `req.System` taşır; volatil `req.SystemDynamic`
   (saniye-hassas saat + bellek recall + özet) konuşma prompt'una `[Context]` bloğu

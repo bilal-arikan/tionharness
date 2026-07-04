@@ -208,7 +208,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		Model:     model,
 		MaxTokens: maxTokens,
 		System:    a.systemField(req.System, req.SystemDynamic),
-		Messages:  toAnthropicMessages(req.Messages, a.extendedCache),
+		Messages:  toAnthropicMessages(req.Messages, a.extendedCache, req.SystemDynamic),
 		Tools:     toAnthropicTools(req.Tools, a.extendedCache),
 		Thinking:  thinking,
 	}
@@ -291,7 +291,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 		Model:     model,
 		MaxTokens: maxTokens,
 		System:    a.systemField(req.System, req.SystemDynamic),
-		Messages:  toAnthropicMessages(req.Messages, a.extendedCache),
+		Messages:  toAnthropicMessages(req.Messages, a.extendedCache, req.SystemDynamic),
 		Thinking:  thinking,
 		Stream:    true,
 	}
@@ -415,22 +415,24 @@ func (a *Anthropic) systemField(static, dynamic string) any {
 		return nil
 	}
 	if !a.extendedCache {
+		// Caching off: placement is irrelevant, keep the historical single-block
+		// concatenation (static + dynamic) so the non-cached path is unchanged.
 		return strings.TrimSpace(static + "\n\n" + dynamic)
 	}
 
-	// The cache breakpoint goes on the static prefix when present; otherwise it
-	// falls to the dynamic block so a static-less prompt is still cached (matching
-	// the prior single-block behavior).
-	cache := &cacheControl{Type: "ephemeral", TTL: "1h"}
-	var blocks []systemBlock
-	if static != "" {
-		blocks = append(blocks, systemBlock{Type: "text", Text: static, CacheControl: cache})
-		cache = nil
+	// Caching ON: the system field is STATIC-ONLY so it is fully cacheable. The
+	// volatile dynamic suffix is NOT placed here — it moves to a trailing block on
+	// the last message (see toAnthropicMessages), i.e. AFTER the rolling history
+	// breakpoint, so it never invalidates the cached prefix. This lets tools +
+	// system + the whole message history all become cache READS turn-to-turn
+	// (previously the dynamic sat upstream of tools/messages and busted both every
+	// turn — only the static system prefix ever hit). Mirrors the claude-cli path,
+	// which already weaves the dynamic into the last user message. When there is no
+	// static prefix, system is nil (dynamic still rides the messages).
+	if static == "" {
+		return nil
 	}
-	if dynamic != "" {
-		blocks = append(blocks, systemBlock{Type: "text", Text: dynamic, CacheControl: cache})
-	}
-	return blocks
+	return []systemBlock{{Type: "text", Text: static, CacheControl: &cacheControl{Type: "ephemeral", TTL: "1h"}}}
 }
 
 // toAnthropicMessages converts provider messages to content-block form,
@@ -446,7 +448,7 @@ func (a *Anthropic) systemField(static, dynamic string) any {
 // breakpoint moves forward to the newest message — the standard "sliding
 // breakpoint" pattern. Gated on the same extendedCache flag as the system/tool
 // breakpoints so the caching on/off policy stays unified.
-func toAnthropicMessages(msgs []Message, extendedCache bool) []anthropicMessage {
+func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic string) []anthropicMessage {
 	// Anthropic requires strictly alternating roles; merge any back-to-back
 	// same-role plain-text turns (e.g. two agents' replies in a shared thread)
 	// into one so the request is valid.
@@ -480,13 +482,31 @@ func toAnthropicMessages(msgs []Message, extendedCache bool) []anthropicMessage 
 		}
 		out = append(out, anthropicMessage{Role: m.Role, Content: blocks})
 	}
-	// Rolling history breakpoint: mark the last block of the last message so the
-	// whole conversation prefix is cached. Placed after assembly so it lands on
-	// the newest turn regardless of role/block type.
-	if extendedCache && len(out) > 0 {
-		last := &out[len(out)-1]
-		if n := len(last.Content); n > 0 {
-			last.Content[n-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: "1h"}
+	if extendedCache {
+		// Rolling history breakpoint: mark the last block of the last (persisted)
+		// message so tools + system + the whole conversation prefix is cached. On
+		// turn N this prefix is a cache write; on N+1 the same prefix is a cache
+		// read and the breakpoint slides forward to the newest turn.
+		if len(out) > 0 {
+			last := &out[len(out)-1]
+			if n := len(last.Content); n > 0 {
+				last.Content[n-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: "1h"}
+			}
+		}
+		// Volatile dynamic (date/time, recalled memory, running summary, …) rides as
+		// a trailing text block on the last message — AFTER the breakpoint above, so
+		// it stays OUTSIDE the cached prefix. It is request-time only (never
+		// persisted), so the cached prefix is byte-identical turn-to-turn and hits;
+		// the dynamic block's absence in the next turn's rebuilt history is
+		// irrelevant because it was never part of the cached prefix. When there are
+		// no messages yet, seed one so the dynamic is not dropped.
+		if d := strings.TrimSpace(dynamic); d != "" {
+			if len(out) == 0 {
+				out = append(out, anthropicMessage{Role: RoleUser, Content: []contentBlock{{Type: "text", Text: d}}})
+			} else {
+				last := &out[len(out)-1]
+				last.Content = append(last.Content, contentBlock{Type: "text", Text: d})
+			}
 		}
 	}
 	return out
