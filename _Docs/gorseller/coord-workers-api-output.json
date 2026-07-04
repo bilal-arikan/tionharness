@@ -1,0 +1,18 @@
+﻿{
+    "workers":  [
+                    {
+                        "agentName":  "worker:explore",
+                        "running":  false,
+                        "sessionId":  "SES105",
+                        "summary":  "AÅaÄÄ±da `internal/tools` altÄ±ndaki `.go` dosyalarÄ±nÄ±n listesi ve dosya adlarÄ±na + `categories.go`\u0027daki resmi sÄ±nÄ±flandÄ±râ¦",
+                        "title":  "â¨ List all files under the directory internal/tools (relativeâ¦"
+                    },
+                    {
+                        "agentName":  "worker:explore",
+                        "running":  false,
+                        "sessionId":  "SES106",
+                        "summary":  "SwarmGo, Go diliyle sÄ±fÄ±rdan yazÄ±lmÄ±Å, kendi UI/UX tasarÄ±mÄ±na sahip, aÃ§Ä±k kaynaklÄ± ve kendi sunucunda barÄ±ndÄ±rÄ±lan Ã§ok-aâ¦",
+                        "title":  "â¨ Read the file _Docs/00-GENEL-BAKIS.md (relative to the repoâ¦"
+                    }
+                ]
+}

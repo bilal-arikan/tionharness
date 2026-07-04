@@ -1,6 +1,790 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-03**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-04**
+
+## Kopyala butonları sadece-ikon yapıldı ✅ (2026-07-04)
+
+Kullanıcı isteği: kopyala butonlarındaki "Bağlamı kopyala" / "Copy" gibi metinler
+kaldırılsın, yalnız kopyalama ikonu kalsın.
+
+- **Metin→ikon (4 buton):** `markdown/CodeBlock` ("Copy/Copied" → `Copy`/`Check`),
+  `markdown/MermaidDiagram` (aynı), `sessions/SessionContextModal` ("Bağlamı kopyala"
+  → ikon), `agents/AgentContextModal` ("Promptu kopyala" → ikon). Erişilebilirlik
+  için `title` + `aria-label` eklendi; CodeBlock/Mermaid'e `lucide-react` ikonları,
+  Session/Agent modal'a `Check` importu geldi.
+- **Zaten ikon-only:** tüm `CopyPathButton` örnekleri (`labelClassName="hidden"`),
+  `SecretsPanel`, `PromptEditor`, `ClaudeAuthDialog`, `ArtifactsPanel` kopya butonları.
+- **Bilinçli istisna (etiketli bırakıldı):** `SessionsSidebar` sağ-tık menüsündeki
+  "Yolu kopyala" (menü öğesi — liste satırı, etiket gerekli) ve `ExecutionsPanel`
+  seçim-çubuğundaki "Kimlikleri kopyala" (bulk-action; `SelectionBarButton` children
+  zorunlu, ikon-only UX'i bozardı). İstenirse bunlar da dönüştürülebilir.
+- `tsc -b` temiz; canlı doğrulama (mcp-chrome) sorunsuz.
+
+## Liste ekranı başlıkları tam sohbet paritesi: başlık artık listenin üstüne gelmiyor ✅ (2026-07-04)
+
+Sorun: liste ekranlarında (Aktivite, Ajanlar, Artifactlar, Skills, Araçlar, Akışlar)
+`PaneHeader` tüm genişliğe yayılıyordu — başlık, soldaki listenin **üzerine** de
+geliyordu. Sohbet ekranında ise başlık yalnız içerik alanının üstünde; oturum
+listesinin üzerine gelmez.
+
+**Kök neden:** panel yapısı `flex-col > [PaneHeader(tam genişlik)] > [row: liste | detay]`
+şeklindeydi. Sohbet ise `flex-row > [liste (tam yükseklik)] | [main: header + içerik]`.
+
+**Düzeltme:** her liste ekranı sohbet düzenine geçirildi →
+`flex-row > [ListPane (tam yükseklik kardeş sütun)] | [içerik-kolonu: PaneHeader + detay]`.
+Böylece başlık çubuğu yalnız listenin **sağındaki** içerik kolonunun üstünde durur.
+Playwright ile doğrulandı: 6 ekranın hepsinde `header.left === list.right` (üst üste
+binme yok), 1280px'de hamburger gizli, 390px'de hamburger görünür + drawer varsayılan
+kapalı, yatay taşma yok.
+
+- **Değişen dosyalar:** `ExecutionsPanel`, `AgentsView` (3 kolon korundu:
+  roster | ayarlar | aktivite), `ArtifactsPanel` (drop-zone kök satır oldu),
+  `SkillsPanel`, `ToolsPanel`, `FlowsPanel`.
+- **Path butonları sohbet stiline getirildi:** başlıklardaki `Yolu kopyala`
+  (`labelClassName="hidden"` → sadece ikon) ve `Aç` (`labelClassName="hidden sm:inline"`)
+  artık sohbet başlığındakiyle birebir aynı. Executions'ta path butonları detay
+  alt-başlığından `PaneHeader.right`'a taşındı (sohbetteki gibi sağ üstte).
+
+## Tüm kopyalama butonları merkezi `copyToClipboard`'a taşındı ✅ (2026-07-04)
+
+Önceki düzeltmenin devamı: uygulamadaki tüm doğrudan `navigator.clipboard.writeText`
+kullanımları tek merkezi metoda migrate edildi (güvensiz LAN/HTTP bağlamında hepsi
+sessizce bozuktu).
+
+- **Merkezi metod:** `lib/clipboard.ts` → `copyToClipboard(text, promptLabel?)`.
+  İç akış: `copyText` (Clipboard API → `execCommand` fallback) başarısızsa
+  `window.prompt` ile elle-kopya. Programatik kopya başarılıysa `true` döner →
+  çağıran "Kopyalandı" onayını yalnız bunda gösterir. `navigator.clipboard`'a
+  doğrudan dokunan tek yer artık bu dosya.
+- **Migrate edilen 9 dosya (10+ buton):** `markdown/CodeBlock`, `markdown/MermaidDiagram`,
+  `agents/AgentContextModal`, `sessions/SessionContextModal`, `panels/ArtifactsPanel`,
+  `settings/ClaudeAuthDialog`, `common/PromptEditor`, `panels/SecretsPanel`,
+  `panels/ExecutionsPanel` (toplu-id + oturum-id kopyala). Ayrıca daha önce düzeltilen
+  `CopyPathButton` + `App.tsx` (`openFile`, `copySessionPath`) de artık merkezi metodu
+  kullanıyor (inline prompt kaldırıldı).
+- `tsc -b` temiz; canlı smoke testi (mcp-chrome) sorunsuz.
+
+## Claude Code cache paritesi P1+P6: native yolda dinamiği mesaj kuyruğuna taşı ✅ (2026-07-04)
+
+`_Docs\50-CLAUDE-CODE-CACHE-PARITE.md` planının **P1** (en büyük kazanç) + **P6**'sı uygulandı.
+**Teşhis:** native (anthropic + OpenAI-compat) yolda Tools + statik System zaten cache HIT
+alıyordu, ama volatile **Dinamik `system` alanında** (tools+mesajların önünde) durduğu için
+asıl büyüyen kısmın (mesaj geçmişi) rolling breakpoint'i **her tur ıskalıyordu** → pratikte
+ölü. External Agents bunu yaşamıyor çünkü cache/compaction'ı native `claude` binary'ye (Claude
+Agent SDK) devrediyor; SwarmGo kendi yazdığı için boşluk oluşmuş.
+
+**Yapılan (yalnız `extendedCache`/`cacheSystem` açıkken; cache-kapalı yol birebir korundu):**
+- `anthropic.go`: `systemField` artık **statik-only** (tam cache'lenebilir); `toAnthropicMessages`
+  yeni imza `(msgs, extendedCache, dynamic)` — rolling breakpoint son **persist** mesaj bloğunda,
+  volatile dinamik onun **gerisinde** trailing text-blok olarak (request-time, persist edilmez).
+- `minimax.go`: `buildSystemMessage` statik-only; `attachHistoryBreakpoint` işaretlediği
+  **indeksi döndürür**; dinamik o mesaja breakpoint'ten sonra eklenir. Fallback: uygun mesaj
+  yoksa trailing user mesajı.
+- **Invariant:** cache öneki yalnız immutable içerik barındırır → dinamik hiç persist edilmez,
+  sonraki tur önek byte-aynı kalır → HIT. (claude-cli'nin `withDynamic(lastUserText…)` deseninin
+  native'e genellenmesi.)
+- `session_context.go` `computeCachePreview` anthropic dalı: `CachedMsgCount=msgCount-1` (rolling),
+  Araçlar+Sistem+geçmiş cache'li, dinamik "tail/taze" notu.
+- Testler: `anthropic_test.go` + `minimax_test.go` yeni yerleşimi kilitler (dinamik breakpoint'in
+  gerisinde, cache-kapalıyken system'de kalır). **`go test` 289 yeşil**, `tsc` temiz.
+- **Kalan:** canlı `cache_read>0` ölçümü (anthropic/openrouter anahtarı + gerçek tur). Sıradaki:
+  **P2** (özeti compact-boundary mesajına çevir → özet de cache'lensin), sonra P4 (cache-break
+  telemetri), P3/P5 (opsiyonel). Detay: `_Docs\50`.
+
+## claude-cli ek yükü: ölçülmüş generic referans + önceden tahmin ✅ (2026-07-04)
+
+Kullanıcı "Tahmin ↔ Gerçek" farkının (claude-cli vergisi) nereden geldiğini sordu →
+bileşenler **empirik ölçüldü** ve uygulama geneli generic bir referansa dönüştürüldü.
+`go build ./...` + `go test ./internal/conversation ./internal/api` temiz (95 test).
+
+- **Ölçüm (claude-cli 2.1.201, gerçek API `usage`):** saf sistem promptu 0 araç =
+  **17.067**; +dahili araçlar (~15) = **26.265** (dahili ≈ 9.198); köprülü araç başına
+  ort. şema **~215** (42–710). Doğrulama: SES104 Tahmin 29.573 → Gerçek 88.425.
+- **Generic kaynak `internal/conversation/clioverhead.go`:** `CLIBaseSystemTokens`,
+  `CLIBuiltinToolsTokens`, `CLIBaseTokens`, `CLIAvgBridgedToolTokens` sabitleri +
+  `PredictCLIOverhead(loadedTools)` = `26.200 + yüklü×215`. Token-hesap yapan her yer
+  bu tek kaynaktan okur (native paket, import döngüsü yok).
+- **`api/session_context.go`:** `computeCLIOverhead` artık `eagerTools` alır (call-site
+  `interactionTier(d.Name)=="core"` sayımı — gerçek eager/deferred ayrımı, fs built-in'ler
+  tabanda); ölçüm yokken (`measured==0`) 0 yerine `PredictCLIOverhead` ile **önceden
+  tahmin (cold-start floor)** verir. `cliOverheadPreview.predictedOverhead` alanı (JSON)
+  eklendi. Ölçüm-yok notu artık taban rakamları içerir.
+- **Frontend (`SessionContextModal.tsx` + `types/session.ts`):** ölçüm yokken başlıkta
+  "Beklenen (CLI, tahmini) = Tahmin + predictedOverhead" Stat'ı + "CLI ek yükü" kutusunda
+  "Tahmin → beklenen ~X (+Y tahmini ek yük, henüz ölçülmedi)" satırı. Ölçüm gelince eski
+  "Gerçek" görünümü. Benim dosyalarım `tsc` temiz.
+- **Docs/skill:** `_Docs\17` "claude-cli ek yükü — ölçülmüş referans" bölümü;
+  `swarmgo-session-debug` skill'ine "Tahmin↔Gerçek farkı" ölçüm-referansı + tekrar-
+  ölçüm komutu eklendi. `clioverhead_test.go` regresyon kilidi.
+
+## Liste panelleri tam sohbet paritesi: masaüstü hep açık + hamburger sadece mobil ✅ (2026-07-04)
+
+Kullanıcı: liste ekranları (Aktivite vb.) sohbet ekranı gibi olmalı — geniş ekranda
+**sol panel hep açık**, **hamburger geniş ekranda gizli**, daralt-butonu yok. Önceki
+davranış (masaüstünde de daraltılabilir + toggle her boyutta) sohbetten farklıydı.
+Sohbet sessions-drawer modeline geçirildi. `tsc -b && vite build` temiz; Playwright
+ile masaüstü (1280) + mobil (390) doğrulandı.
+
+- **`common/CollapsibleListShell.tsx` yeniden yazıldı:** liste artık DAİMA DOM'da —
+  `md+` statik sütun (hep görünür, daralma yok), `< md` sola kayan drawer (`open`
+  yalnız mobil translate'i sürer) + backdrop. Eski "kapalıyken null / ince ray"
+  mantığı kaldırıldı.
+- **`useCollapsibleList` sadeleşti:** artık ephemeral `useState(false)` (persist yok)
+  — sohbetin `mobileListOpen`'ı gibi; mobilde her açılışta drawer kapalı gelir
+  (eski persist, drawer'ı açık açıyordu).
+- **Tüm toggle'lar `md:hidden`:** PaneHeader hamburger, Market inline, App
+  workspace/settings toggle + liste-içi daralt butonları (SidebarHeader onCollapse,
+  Skills/Tools/Market/Flows) → geniş ekranda görünmez, sadece mobil drawer'ı sürer.
+- **Executions başlığı bağlamlı:** `Aktivite · {seçili çalıştırma}` (sohbetteki
+  "Sohbet · Manager" gibi). Doğrulama: masaüstü hamburger gizli + aside statik
+  görünür; mobil hamburger görünür + drawer default kapalı, tıklayınca dolu-surface
+  drawer + backdrop, taşma yok.
+
+## Flow açıklaması (description) uygulamadan tamamen kaldırıldı ✅ (2026-07-04)
+
+Akışların `description` alanı uçtan uca kaldırıldı. `go build/test` (413) + `tsc -b &&
+vite build` temiz.
+
+- **Backend model/store/API:** `db.Flow.Description` alanı silindi; `store_flow.UpdateFlow`,
+  `api.flows` (`flowReq` + create/update), `summarizer` (SummaryFlows artık `Ad (id)`),
+  `api/graph.go` (node `Sub` = flow id) güncellendi.
+- **Agent araçları (`builtin_flowmgmt.go`):** `create_flow`/`update_flow` şemalarından
+  `description` prop'u; `list_flows`/`get_flow` çıktılarından `description` alanı; ilgili
+  tool açıklama metinleri temizlendi.
+- **Market/şablon (tam temizlik — 2026-07-04):** SwarmPack format tiplerinden
+  `FlowPayload.Description` ve `WorkspaceTemplateFlow.Description` alanları **da silindi**
+  (Go `market/pack.go` + frontend `types/market.ts`); install/publish/seed zaten db.Flow
+  ile bağ kurmuyordu. `MarketPanel` flow açıklaması render'ı kaldırıldı. `gen_examples.py`
+  `flow_pack` artık flow'a description koymaz (pack-seviye `description` korunur).
+  **Gömülü paketler temizlendi:** `internal/market/defaults/workspace.*.swarmpack.json`
+  içindeki 5 flow-description anahtarı silindi (4 dosya; `blank`'te yoktu). Ev dizininde
+  başka `.swarmpack` yok. Not: çalışan workspace store'larındaki `FLW*.json` dosyalarında
+  kalan eski `description` anahtarları zararsız (yükte yok sayılır, ilk kayıtta düşer);
+  uygulama çalışırken canlı store'a dokunulmadı.
+- **Frontend:** `types/flow.ts` + `api/flows.ts` (createFlow/updateFlow imzaları)
+  `description`'sız; `FlowsPanel` state/dirty/kaydet/şablon çağrıları temizlendi;
+  `useChatStream` slash-komut açıklaması sadeleşti; `WorkspaceExportPanel` sub → flow id.
+- **Sol flow listesi:** açıklama satırı yerine **flow id (mono) · N node** meta satırı
+  (`flowNodeCount` helper). Detay `_Docs\15`.
+
+## Yol kopyala butonu güvensiz bağlamda (LAN IP/HTTP) düzeltildi ✅ (2026-07-04)
+
+Kullanıcı "Copy path / Open path çalışmıyor" bildirdi. Canlı tarayıcıda (mcp-chrome,
+`http://192.168.1.4:5173`) teşhis edildi:
+
+- **Kök neden (Copy):** `window.isSecureContext === false` → `navigator.clipboard`
+  **undefined**. Eski kod `navigator.clipboard?.writeText` (optional chaining) ile
+  sessizce hiçbir şey yapmıyordu. Async Clipboard API yalnız güvenli origin'de
+  (HTTPS veya `localhost`) açık; düz-HTTP LAN IP'de yok. Test: bu Chrome güvensiz
+  bağlamda `document.execCommand('copy')`'yi de (gerçek tıklama gesture'ında bile)
+  **false** döndürüyor.
+- **Çözüm:** yeni `lib/clipboard.ts` → `copyText()` (Clipboard API → execCommand
+  fallback, boolean döner). `CopyPathButton` ve `App.tsx` (`openFile`,
+  `copySessionPath`) bunu kullanır. Her ikisi de başarısızsa **son çare**:
+  `window.prompt(...)` yolu seçili gösterip kullanıcının Ctrl+C ile elle
+  kopyalamasını sağlar → hiçbir bağlamda sessiz başarısızlık kalmaz.
+- **Open (Aç) aslında çalışıyor:** backend `/api/sessions/{id}/reveal` →
+  `explorer.exe <path>` host'ta klasörü açıyor (Shell.Application ile doğrulandı).
+  Uzak cihazdan erişimde host'ta açılır (tasarım gereği), istemcide değil. Önceki
+  manuel test 404'leri geçiciydi (hash chat route'unda değilken `sessionId=undefined`
+  gidiyordu) — endpoint sağlam.
+- Not: uygulamada ~13 yerde daha doğrudan `navigator.clipboard` kullanımı var;
+  bunlar da güvensiz bağlamda çalışmaz — ileride `copyText`'e migrate edilebilir.
+- Dosyalar: `frontend/src/lib/clipboard.ts` (yeni), `frontend/src/components/CopyPathButton.tsx`,
+  `frontend/src/App.tsx`.
+
+## Chat başlığından bütçe-yönlendiren harcama pill'i kaldırıldı ✅ (2026-07-04)
+
+- **`ChatMeters` kaldırıldı:** chat üst-bar'ındaki "BUGÜNKÜ harcama" pill'i
+  (`N çağrı · ~$X`, tıklayınca Bütçe ekranına gidiyordu) `App.tsx` başlığından
+  silindi; import ve artık öksüz kalan `components/panels/ChatMeters.tsx` dosyası
+  tamamen kaldırıldı. `meterRefresh` state'i korundu (artifact yenileme +
+  `SessionDetailPanel` hâlâ kullanıyor). Bütçe verisi Bütçe ekranı + oturum detay
+  panelinde zaten mevcut.
+- Dosyalar: `frontend/src/App.tsx`, `frontend/src/components/panels/ChatMeters.tsx` (silindi).
+
+## Ajan-yanı model etiketi + isim hizalaması ✅ (2026-07-04)
+
+Kullanıcı isteğiyle 2 küçük UI düzeltmesi (canlı tarayıcıda mcp-chrome ile doğrulandı).
+
+- **Model etiketinden açıklama eki kırpıldı:** `resolveModelLabel` (`lib/catalog.ts`)
+  artık `stripTagline` ile katalog label'ındaki boşlukla ayrılmış tire sonrası eki
+  atar → "Sonnet — dengeli" yerine "Sonnet", "MiniMax M3 - guncel amiral" yerine
+  "MiniMax M3". Regex `/\s+[—–-]\s+.*$/` boşluksuz tireleri ("GPT-5.5") ve parantezli
+  varyantları ("Opus 4.8 (Fast)") korur. Tam açıklamalı label'lar model seçicilerde
+  (`ProviderModelSelect`/`ProvidersPanel`) aynen kalır; yalnız ajan-yanı gösterim
+  sadeleşir.
+- **Ajan ismi hizalaması standartlaştı:** `AgentIdentity` kök span'ine `text-left`
+  eklendi. `<button>` varsayılan `text-align:center` taşıdığından composer'ın
+  `AgentSelect` tetikleyicisinde (ve `AgentPicker` trigger'ında — `text-left`
+  class'ı yoktu) ajan ismi ortalanıyordu; artık her yerde sola hizalı.
+- **Dar telefonda sadece avatar:** `AgentIdentity`'ye `mobileIconOnly` prop'u eklendi
+  → metin sütunu `md` altında `hidden` (yalnız avatar). Composer `AgentSelect`
+  tetikleyicisi bu prop'u kullanır (`md:max-w-[180px]`), böylece dar ekranda ajan
+  seçici kompakt kalır.
+- Dosyalar: `frontend/src/lib/catalog.ts`, `frontend/src/components/agents/AgentIdentity.tsx`,
+  `frontend/src/components/chat/composer/AgentSelect.tsx`.
+
+## Liste-toggle butonu tüm ekranlarda sohbet hamburger'ıyla eşitlendi ✅ (2026-07-04)
+
+Kullanıcı geri bildirimi: Executions/Agents/… başlığındaki liste aç/kapa butonu
+(turuncu çerçeveli `PanelLeft` kutu) sohbet başlığındaki hamburger'dan farklı
+görünüyordu. Hepsi sohbetteki **çerçevesiz `Menu` (hamburger), dim renk** stiline
+alındı. `tsc -b && vite build` temiz; Playwright ile doğrulandı (border 0px, dim renk).
+
+- `common/PaneHeader.tsx` (Agents/Artifacts/Tools/Skills/Executions/Flows),
+  `MarketPanel` inline toggle, `App.tsx` header workspace/settings toggle → hepsi
+  `Menu` + `flex h-8 w-8 rounded-lg text-dim hover:bg-surface-2` (sohbet hamburger'ının
+  birebir sınıfları). Eski `border-accent` (kapalıyken) / bordered kutu kaldırıldı.
+
+## Flow editörü: popup boyutu + palet sürükle-bırak ✅ (2026-07-04)
+
+- **Popup boyutu board popup'ına eşitlendi** (`TaskFormModal`): `max-h-[90vh] w-full
+  max-w-2xl rounded-xl` (önceki `w-80 max-h-[85vh]` yerine).
+- **Palet sürükle-bırak ile node ekleme:** node listesindeki tipler `draggable`;
+  `FlowCanvas` `CanvasInner`'a ayrıldı (ReactFlowProvider altında `screenToFlowPosition`
+  erişimi için), `onDrop` bırakma noktasını graf uzayına çevirip `onDropNode` →
+  `FlowsPanel.addNodeAt` ile node'u **o konumda** oluşturur. Tık ile ekleme korundu.
+  MIME: `FLOW_NODE_DND_MIME`. `tsc -b && vite build` temiz.
+
+## Flow editörü UX düzeni: popup node editörü + sadeleşmiş toolbar ✅ (2026-07-04)
+
+Kullanıcı isteğiyle 4 UI değişikliği. `tsc -b && vite build` temiz.
+
+- **Meta toolbar sadeleşti:** açıklama (`description`) alanı kaldırıldı; "yolu kopyala"
+  **icon-only** (`CopyPathButton` `label` prop'u kaldırıldı); ad girişi genişledi.
+- **Görünüm ayarları sol palete taşındı:** etiket (`TagEditor`), "Kablo" edge-style
+  seçici ve "Animasyon" toggle artık "Node ekle" paletinin altında **Görünüm** bölümünde
+  (palet `w-40`, mobil `w-32`).
+- **Node editörü popup oldu:** sabit sağ panel → `ModalOverlay`. Node'a **tıklayınca**
+  açılır; `FlowCanvas`'a `onNodeClick` prop'u + `nodeDragThreshold={4}` eklendi →
+  sürükleme/tıklama karışmaz. Boş canvas/Escape/backdrop kapatır.
+- **Node üstü toolbar kaldırıldı:** `NodeToolbar` yerine Başlangıç/Çoğalt/Sil eylemleri
+  popup içindeki `NodeInspector` başlığında (`onDuplicate` prop'u eklendi). FlowsPanel
+  artık `nodeActions` geçmiyor → `NodeActionsContext` null.
+- Dosyalar: `FlowsPanel.tsx`, `flow/FlowCanvas.tsx`, `flow/NodeInspector.tsx`,
+  `CopyPathButton.tsx` (değişmedi — zaten opsiyonel label). Detay `_Docs\15`.
+
+## Portrait UI testi (Playwright) + taşma düzeltmeleri ✅ (2026-07-04)
+
+Gerçek tarayıcıda (Playwright, 360px & 390px) 16 view tarandı; yatay-taşma
+(docW > viewport) tespiti için clip-farkında JS detektörü kullanıldı. 4 gerçek
+taşma bulundu ve düzeltildi; tümü "dar ekranda sarmalanmayan/`shrink-0` buton
+satırı" desenindeydi. Yeniden tarama: 16/16 view temiz (docW=360), drawer açıkken
+dolu surface + taşma yok.
+
+- **Chat composer:** `px-6→max-md:px-3`, toolbar satırı `flex-wrap`, `AgentSelect`
+  ad genişliği mobilde `max-w-[120px]` → "Gönder" artık taşmıyor.
+- **Skills detay eylem çubuğu:** başlık + toolbar `flex-wrap` (eski `shrink-0`
+  kaldırıldı) → ~238px taşma giderildi.
+- **Artifacts viewer başlığı:** `flex-wrap` (başlık + aksiyon toolbar).
+- **Memory ekle satırı:** `flex-wrap` + input `min-w-[10rem]`.
+- Not: layout-dışı, pre-existing bir React uyarısı gözlendi — Sağlayıcılar
+  listesinde çift `key="openrouter"` (veri kaynaklı; ayrı ele alınmalı).
+
+## Standart ekran başlığı: PaneHeader + başlıktan liste aç/kapa (9 ekran) ✅ (2026-07-04)
+
+Tüm liste ekranları sohbet ekranı gibi bir **başlık çubuğu + tıklanabilir liste
+aç/kapa butonu** kazandı; kapalıyken liste tamamen gizlenir (sohbet gibi, ince ray
+yok), başlıktan yeniden açılır. `tsc -b && vite build` temiz.
+
+- **Yeni `common/PaneHeader.tsx`:** standart ekran başlığı (sol toggle + başlık +
+  ops. subtitle + sağ aksiyonlar). **`CollapsibleListShell`/`ListPane` `hideRail`:**
+  kapalıyken null döner (ray yerine başlık toggle'ı açar).
+- **PaneHeader'lı 7 ekran:** Agents (roster→ListPane, subtitle = seçili ajan / "Ajan
+  seçilmedi", boş-durum korunur), Artifacts, Tools, Market (toggle mevcut katalog
+  başlığına), Skills, Executions, Flows.
+- **App-header toggle'lı 2 ekran:** Workspace + Settings — kategori/sekme `<aside>`'ı
+  `CollapsibleListShell hideRail` ile sarıldı; collapse state App'te
+  (`workspaceNav`/`settingsNav` = useCollapsibleList), App header'ında PanelLeft
+  toggle. Detay: `_Docs\49` §7.6.
+
+## Refactor: iki-panelli liste ekranları tek `ListPane` standardında ✅ (2026-07-04)
+
+Her iki-panelli ekran kendi liste-kolonu çözümünü uyguluyordu (kimi
+`useResizableSidebar`, Skills özel resize, Tools/Market sabit genişlik; farklı
+bg/border/handle; kimi CollapsibleListShell'li kimi değil). Tek standart bileşene
+indirgendi. `tsc -b && vite build` temiz.
+
+- **Yeni `common/ListPane.tsx`:** tek standart sol liste kolonu — `CollapsibleListShell`
+  (daralt/rail + mobil drawer) + dolu surface `<aside>` + sağ border + `useResizableSidebar`
+  (kalıcı sürükle-genişlet) + `ResizeHandle`. Ekran yalnız header + gövdeyi `children`
+  olarak verir; genişlik/collapse/tema/handle ListPane'de.
+- **Taşınan 6 panel:** Artifacts, Skills, Tools, Market, Flows, Executions. Kazanımlar:
+  Skills'in **özel resize kodu silindi**; Tools/Market **artık resizable**; Executions
+  **artık daraltılabilir**; hepsi aynı bg/border/genişlik/drawer davranışı.
+- **Kapsam dışı:** `AgentsView` (roster | ayarlar | aktivite = 3-panel özel; mobil
+  flex-col stack + aktivite paneliyle rail/drawer çakışması) mevcut paylaşılan
+  primitiflerde bırakıldı. Detay: `_Docs\49` §7.5.
+
+## Fix: Akış editörü yanlış "kaydedilmemiş değişiklik" ✅ (2026-07-04)
+
+- **Belirti:** Flows ekranında bir akışa tıklayınca hiçbir düzenleme yapılmasa
+  bile "değişiklik var" algılanıyor; ayrılırken/kapatırken uyarı çıkıyor
+  (nav amber nokta + `beforeunload`).
+- **Kök neden:** `FlowsPanel.flowDirty` canvas'tan yeniden kurulan graph'ı
+  (`reactFlowToGraph` her zaman `next:""`, `x`, `y` üretir) backend'in stored
+  JSON'u ile karşılaştırıyordu. Go `orchestration` modeli neredeyse tüm alanlarda
+  `omitempty` kullandığından (`next`, `x`, `y`, `prompt`…) kayıtlı JSON boş alanları
+  düşürüyor → iki taraf **her açılışta** farklı → sürekli dirty.
+- **Çözüm:** normalize mantığı `flowGraph.ts` içinde tek `canonicalGraphKey()`
+  helper'ına çıkarıldı — bir graph'ı editörün yüklemede kullandığı aynı round-trip'ten
+  (`graphToReactFlow → reactFlowToGraph`) geçirip kararlı bir karşılaştırma anahtarı
+  döndürür (cosmetic `edgeStyle`/`animated` hariç). `flowDirty` hem canlı canvas'ı
+  hem stored graph'ı bu helper'dan geçirir → simetrik, yalnız gerçek düzenlemeler
+  fark yaratır (`FlowsPanel.tsx` + `flowGraph.ts`). `tsc --noEmit` temiz.
+
+## Sohbet UX küçük rötuşlar ✅ (2026-07-04)
+
+- **Sohbet header "yolu kopyala" icon-only** (`App.tsx`, `labelClassName="hidden"`).
+- **Sohbet listesinde oturum ID'si alt satıra taşındı** (`SessionsSidebar` — başlık
+  satırından çıkıp meta satırında sağa hizalı; başlık artık daha geniş).
+- **Koordinatör worker listesi daraltılabilir** (`CoordinatorSection` — "Worker'lar · N"
+  başlığı + chevron, kalıcı `swarmgo.coordWorkersOpen`).
+
+`tsc -b && vite build` temiz.
+
+## Panel UX: daraltılabilir listeler + otomasyon renk ayrımı ✅ (2026-07-04)
+
+Kullanıcı isteğiyle 5 UI iyileştirmesi. `tsc -b && vite build` temiz.
+
+- **Yeniden kullanılabilir daraltılabilir liste:** `hooks/useCollapsibleList.ts`
+  (kalıcı, masaüstü açık / telefon kapalı) + `common/CollapsibleListShell.tsx`
+  (açık: sütun / mobil drawer+backdrop; kapalı: ince yeniden-açma rayı) +
+  `SidebarHeader` `onCollapse` (◀). Sessions sidebar deseninin genelleştirmesi.
+- **Uygulandığı paneller:** Artifacts, Skills, Tools, Market (kategori rayı), Flows
+  (sol akış listesi). Bu panellerde F3 mobil top-bottom stack **geri alındı** → drawer.
+- **Flows node inspector:** editördeki sağ node paneli daraltılabilir
+  (`PanelRightClose/Open`).
+- **Agents aktivite paneli:** sohbet DetayPaneli gibi aç/kapa (X + "Aktivite" rayı).
+- **Agents "yolu kopyala":** icon-only (`labelClassName="hidden"`).
+- **Otomasyon ekranı renk ayrımı:** Zamanlamalar → sky sol şerit + "Zamanlamalar
+  (cron)" başlığı; Otomasyonlar → violet sol şerit + violet başlık ikonu (form +
+  satır + edit kartı). Hangisi ne, bir bakışta belli. Detay: `_Docs\49` §7.4.
+
+## Üç optimizasyon: default-skill re-seed + skill sadeleştirme + run_code built-in binding'leri ✅ (2026-07-04)
+
+1. **`EnsureDefaults` sürüm-farkında re-seed** (`internal/skills/defaults.go`): eskiden
+   mevcut dosyanın üzerine hiç yazmıyordu → gömülü skill güncellemeleri mevcut
+   kurulumlara yansımıyordu. Artık root'ta `.shipped-versions.json` sidecar'ı her
+   default dosyanın son-shipped sha256'sını tutar; boot'ta: **eksik**→yaz, **gömülüyle
+   aynı**→bırak+kaydet, **son-shipped ile aynı (kullanıcı dokunmamış)**→**tazele**,
+   **ikisinden de farklı (kullanıcı edit'i)**→koru. İlk boot'ta manifest kendini
+   seed'ler (senkronladığımız kopyalar gömülüyle eşit → hepsi kaydolur). Testler:
+   `TestEnsureDefaultsSeeds` (edit korunur) + yeni `TestEnsureDefaultsRefreshesPristine`.
+2. **`swarmgo-project` workspace skill'i sadeleştirildi** (~194→~150 satır): "Mevcut
+   Yetenekler" bölümü changelog seviyesi tarih/commit/test-ismi/env-minutiae'den
+   arındırılıp "ne var + hangi `_Docs\NN`" özet haritasına indirildi (her-tur cache'li
+   prefix küçüldü). Yetenek bilgisi korundu.
+3. **`run_code`'a built-in araç binding'leri** (`_Docs\44`): code-execution artık yalnız
+   MCP'yi değil, **SwarmGo built-in araçlarını** da `swarmgo` Python modülü olarak sunar
+   (`from swarmgo import <tool>`). `codemode.WriteBindings(dir, entries, builtins, allow)`
+   + `Config.Builtin` dispatcher (reserved `swarmgo__<tool>` namespace, bare-name
+   allow/gate/dispatch); built-in'ler **tur ctx**'iyle `reg.Call`'a gider → sink/oturum
+   davranışı direkt-çağrıyla birebir. Eligibility hard-exclude (`CodeModeEligible`:
+   interaktif/exec-in-exec/delegasyon/meta/worker araçları hariç) + ajan tool-filter.
+   run_code artık **MCP'siz** de kullanılabilir (built-in'ler yeter; `toolsetup.go`'da
+   `len(entries)>0` koşulu kaldırıldı). Testler: bindings (built-in modül + collision
+   guard), builtin_runcode (dispatch + discovery), bridge (routing). Tam suite 660 yeşil.
+
+## Mobil/dikey ekran uyumu — F3 (liste panelleri tek-sütun) ✅ (2026-07-04)
+
+İki-sütunlu paneller portrait telefonda **dikey stack** (üstte liste 45vh tavanlı,
+altta içerik); memory roster sohbet gibi drawer. Masaüstü birebir korunur. `tsc -b
+&& vite build` temiz.
+
+- **Memory roster → drawer:** `mobileSessionsOpen` → `mobileListOpen` genellendi
+  (sohbet+memory ortak); header hamburger `chat||memory`'de; `AgentRoster` sohbet
+  sidebar'ıyla aynı drawer deseni.
+- **6 headerless panel dikey stack:** kök `max-md:flex-col` + sol liste
+  `max-md:!w-full max-md:max-h-[45vh] max-md:border-b` (`!important` inline
+  resizable width'i ezer) — Executions/Agents/Tools/Skills/Artifacts/Market
+  (Market kategori rayı `flex-row flex-wrap` chip). Detay: `_Docs\49` §7.3.
+
+## Otonom self-completion: oto-devam (lazy-tool aktivasyon tuzağı) ✅ (2026-07-04)
+
+**Sorun (canlı SES6/schedule):** Otonom (scheduler/spawn/wake) tek-atımlık tur,
+ajan `ToolSearch`/`activate_tools` ile araç aktive edip todo yazdıktan sonra
+`end_turn` ile bitiyordu. claude-cli'nin araç seti süreç başında sabit olduğundan
+aktive edilen araçlar **ancak bir sonraki turda** kullanılabilir — ama otonom turda
+sonraki tur yok → görev yarıda kalıyor, kullanıcı müdahale edemediği için asla
+tamamlanmıyor. Error de yok (temiz `end_turn`, `result.subtype=success`).
+
+**Çözüm — `internal/agent/autocontinue.go`:** Otonom tur bittikten sonra
+`maybeAutoContinue` trace'i inceler; **tamamlanmamış iş sinyali** varsa
+(`needsAutoContinue`: son anlamlı eylem lazy-tool aktivasyonu **veya** en güncel
+`todo_write`'ta açık `pending`/`in_progress` madde) aynı oturumda history-aware bir
+**devam turu** (`runSessionTurn` + Türkçe nudge, `Origin="auto-continue"`) tetikler,
+yanıtı persist eder ve tekrarlar — **maks 10** (`DefaultAutoContinueMax`, ayar
+`autonomousAutoContinueMax`). Devam turunun kalıcı MCP pool'u sayesinde aktive edilen
+araçlar artık hazırdır. Duruş koşulları: iş bitti (`!needsAutoContinue`), tur araç
+ilerlemesi yapmadı (`hasToolStep`=false → no-progress guard), sağlayıcı hatası veya
+**günlük bütçe** stop'u (guardedComplete zaten enforce eder). Çağrı noktaları:
+`runSpawn` (spawn.go) + scheduler deliver (scheduler.go), `FireTurnFinished`'ten önce.
+Ayar `autonomousAutoContinue` (vars. açık) + `autonomousAutoContinueMax` (vars. 10) —
+settings→tunables köprüsü `SetAutoContinue` (server.go applySettings), Tunables
+`AutoContinue()`/`AutoContinueMax()`. settings paketi build+test yeşil; agent/api
+derlemesi paralel codemode WIP'i (`builtin_runcode.go` ↔ yeni `WriteBindings` imzası)
+yüzünden geçici bloke — kendi dosyalar gofmt-temiz, imzalar doğrulandı.
+
+## Koordinatör: interaktif tur ↔ oto-tur kilit birleştirme ✅ (2026-07-04)
+
+Stream/non-stream kullanıcı turu artık koordinatör oto-turlarıyla aynı kilidi
+paylaşıyor: `BeginCoordinatorUserTurn` (`coordination.go`, sync.Cond'lu coordSlot)
+interaktif tur boyunca slotu tutar; bu sırada gelen worker bildirimleri pending'e
+düşüp release'te TEK coalesced oto-tur olarak koşar; kullanıcı turu cap'i
+(`turns`/`capWarn`) resetler. Wiring: `chat_stream.go` + `chat.go`
+(`Role=="coordinator"` → claim + defer release). Otonom yollar da kapsandı:
+`claimTurnSlotIfCoordinator` (no-op release non-coordinator'da, cap RESETLEMEZ)
+→ wake + scheduled prompt (`scheduler.go`) + inbox (`agentmsg.go`). 3 yeni test;
+agent+api 191 test yeşil (tools/codemode test derlemesi paralel oturumun devam
+eden run_code imza değişikliğinden kırık — bu işten bağımsız). Detay: `_Docs/47` §10.
+
+## Koordinatör: canlı coalescing testi ✅ + stream/oto-tur kilit bulgusu (2026-07-04)
+
+SES104'te 3 hızlı worker (ALPHA/BETA/GAMMA) aynı turda spawn edildi: 3 bildirim
+→ **2 otomatik tur** (SES113+SES112 tek turda birleşti) — `coordSlot` coalescing
+canlıda doğrulandı. Aynı testte bulgu: `handleChatStream`/`wake_turn` oturum
+kilidi kullanmıyor, `drainCoordinator` da `isSessionActive`'e bakmıyor → kullanıcı
+stream turu ile koordinatör oto-turu aynı oturumda **paralel** koşabiliyor
+(canlıda gözlendi, zararsızdı; tasarım kararı bekliyor). Detay + zaman çizelgesi
++ çözüm seçenekleri: `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §10.
+
+## Araç konsolidasyonu — birleşik built-in araçlar ✅ (2026-07-04)
+
+Fazla/parçalı built-in araçlar tek çok-amaçlı araçlara indirildi (per-tur bağlam
++ şema tekrarı azaldı, yetenek aynı). CRUD aileleri zaten standarttı, dokunulmadı.
+
+- **`update_session`** (yeni, `tools/builtin_sessionupdate.go`): altı ayrı aracı
+  birleştirir — `set_session_title` / `set_working_dir` / `archive_session` /
+  `set_session_goal` / `complete_goal` / `set_session_tags` **kaldırıldı**. Tek
+  çağrıda title/working_dir/goal/goal_done/tags(add,remove veya replace)/archive
+  alanlarından verilenleri uygular; mutasyondan önce hepsini doğrular (yarım
+  güncelleme yok). `sessionFrom` (SessionSink ⊇ GoalSink) tek sink'ten okur →
+  CLI köprüsünde tek `sessionAttach`. Görünürlük: name-only.
+- **`secret`** (birleşik, `tools/builtin_secret.go`): `secret_list`/`_get`/`_set`/
+  `_delete` **kaldırıldı** → tek araç `action: list|get|set|delete`. `builtin_secretmgmt.go`
+  silindi; artık yalnız `buildRegistry`'de vault varken kayıtlı (hidden). RiskWrite
+  (eskiden de reads RiskWrite idi → regresyon yok).
+- **`shell_manage`** (birleşik, `tools/builtin_shell_bg.go`): `shell_output`/`_kill`/
+  `_list` **kaldırıldı** → tek araç `action: output|kill|list`. Görünürlük: name-only.
+- **Tag editörleri folded**: `set_flow_tags`/`set_schedule_tags` **kaldırıldı** →
+  `update_flow`/`update_schedule` artık `tags` alanı alıyor (ayrı `SetFlowTags`/
+  `SetScheduleTags` ile persist, `SetScheduleEnabled` deseni gibi). Session tag'leri
+  `update_session`'da.
+- Wiring: `toolsetup.go`+`toolsetup_selfmanage.go` (kayıt+MarkNameOnly/MarkHidden),
+  `mcp_interaction.go` (spec+sinkToolTable), `categories.go`, frontend `toolIcons.ts`,
+  `default-instructions.md`. Tüm testler yeşil (650 passed / 34 paket). Detay:
+  `_Docs\24-SELF-MANAGEMENT.md`.
+- **Gömülü default skiller güncellendi (2026-07-04, ayrı tur):** 3 skill (`swarmgo-guide`,
+  `swarmgo-progress`, `swarmgo-self-management`) yeni araç isimlerine (`update_session`,
+  `secret`) göre düzeltildi. **Bulgu:** `skills.EnsureDefaults` diske seed ederken
+  **mevcut dosyanın üzerine yazmıyor** → önceden çalışmış kurulumlarda global skills
+  dizini (`~/.swarmgo/skills`, tüm workspace'ler paylaşır) **genel olarak bayat**
+  kalmış (11 default skill'in hepsi farklı: self-management 361, settings 306, guide
+  303 satır). On-disk kopyalar güncel gömülü içerikle **elle senkronlandı** (yedek:
+  `~/.swarmgo/skills-backup-20260704-preconsolidation`; `otonom-dispatch` gibi kullanıcı
+  skill'lerine dokunulmadı). **Açık gap:** `EnsureDefaults` sürüm-farkında değil →
+  ileride gömülü skill güncellemeleri mevcut kurulumlara otomatik yansımıyor; içerik-hash
+  ile "kullanıcı düzenlememişse tazele" mantığı eklenebilir (ileride).
+
+## Mobil/dikey ekran uyumu — F2 (modallar + header) ✅ (2026-07-04)
+
+Modallar portrait telefonda **bottom-sheet**; header taşması giderildi. Masaüstü
+birebir korunur (mobil sınıflar `max-md:`/`md:hidden` altında). `tsc -b && vite
+build` temiz.
+
+- **`common/ModalOverlay.tsx` (tek kaldıraç → 13 modal):** `< md`'de `items-end` +
+  `p-0` + `max-md:[&>*]:!w-full !max-w-none !max-h-[92dvh] !rounded-b-none` → her
+  modal tam-genişlik, düz-alt-köşe, 92dvh iç-scrolllu sheet. `!important` çocuğun
+  sabit genişlik/yuvarlamasını ezer.
+- **Elle yazılmış overlay'ler:** `ArtifactPreviewModal` (48-F2 önizleme ile
+  örtüşür) + `RewindDialog` aynı desene; `PromptEditor` tam-ekran editör mobilde
+  kenardan-kenara (`p-0` + çocuk `!rounded-none !max-w-none`).
+- **Header (`App.tsx`):** `max-md:px-3`; sol grup `min-w-0` + ajan adı `truncate`;
+  **ChatMeters `hidden md:flex`** (mobilde gizli). Detay: `_Docs\49` §7.2.
+
+## Mobil/dikey ekran uyumu — F1 (shell + sohbet) ✅ (2026-07-04)
+
+UI artık portrait telefonda (`< md` = 768px altı) kullanılabilir. Masaüstü
+düzeni birebir korunur (tüm mobil sınıflar `max-md:`/`md:hidden` altında).
+
+- **Yeni:** `hooks/useMediaQuery.ts` (`useIsMobile`, `max-width:767px`) +
+  `components/MobileNavBar.tsx` — altta `fixed bottom-0` **yatay-kaydırılabilir**
+  nav bar; tüm view'lar + Workspace/Ayarlar tek şeritte (taşanlar scroll ile),
+  busy/unread/dirty noktaları, safe-area padding, `md:hidden`.
+- **NavRail:** `NAV` export edildi (tek kaynak → mobil bar da tüketir); kök
+  `hidden md:flex` (mobilde gizli).
+- **App.tsx:** chat header'ında mobil hamburger → **SessionsSidebar** soldan
+  slide-in drawer (backdrop + `translate-x`, seçimde kapanır); **SessionDetailPanel**
+  sağdan slide-in drawer (`detailOpen` sürer); `<main>` `max-md:pb-16`; `<MobileNavBar>`
+  render.
+- Navigasyon deseni **kararlaştı**: 4-tab+drawer hibriti yerine tam yatay-scroll bar.
+- `tsc -b && vite build` temiz. Kalan: F2 modallar (full-screen sheet) · F3 liste
+  panelleri · F4 grafik/canvas · mobil workspace switcher. Detay: `_Docs\49` §7.1.
+
+## Chat: worker task-notification'a özel katlanabilir kart ✅ (2026-07-04)
+
+`Origin=worker-note` mesajlar (koordinatöre enjekte edilen `<task-notification>`
+blokları) artık ham XML yerine özel bir kartla çiziliyor: yeni
+`frontend/src/components/chat/TaskNotificationNote.tsx` + `MessageList`'te
+worker-note dalı. Kart başlığı worker ajan adı, oturum id ve durum rozeti
+(tamamlandı yeşil / başarısız kırmızı / durduruldu sarı), altında araç sayısı +
+süre; result gövdesi varsayılan **katlı**, tıklayınca açılır. Parse edilemeyen
+format ham metniyle katlı gösterilir (sessizce gizleme yok); DB metni değişmez.
+SES104'te canlı doğrulandı (`_Docs/gorseller/coord-06-notification-card.png`),
+`npx tsc --noEmit` temiz. Detay: 47 §10.
+
+## Bağlam önizleme modalları: katlanabilir bölümler + ayrık Skills segmenti + tümünü aç/kapat ✅ (2026-07-04)
+
+Bağlam önizleme pencerelerindeki (Oturum + Ajan) tüm bağlam segmentleri artık
+tek tek **fold in/out** (katla/aç) edilebilir; ayrıca **Skills** kendi segmenti
+olarak sistem promptundan ayrıldı ve header'a **Tümünü aç / Tümünü kapat**
+eklendi. Canlı doğrulandı (Playwright, WS2/AGT9 + WS1/SES89).
+
+- **Yeni primitif `common/CollapsibleSection.tsx`:** chevron + başlık gövdeyi
+  açar/kapar, opsiyonel `right` node (cache etiketi, sayaç, Markdown/Ham geçişi)
+  toggle düğmesinin DIŞINDA kalır (buton-içinde-buton geçersiz HTML'den kaçınır —
+  kendi kontrolleri tıklanabilir), vars. açık. Yanında `useBulkToggle` hook'u +
+  `BulkToggle` tipi: `{all,nonce}` sinyalini bump'layıp tüm abone bölümleri aynı
+  anda açar/kapar (sonra tek tek toggle serbest); `useEffect([nonce])` ile senkron.
+- **Backend — Skills segment ayrımı (`session_context.go` + `agent_context.go`):**
+  önizleme yanıtına `skills`/`skillsTokens` alanları eklendi.
+  `SkillsCatalogBlockForAgent(agent)` bloğu composeTurnRequest/
+  buildAgentStaticPrompt'un ürettiği sistem promptundan `stripBlock` yardımcısıyla
+  (tek verbatim occurrence + ayraç temizliği) çıkarılıp ayrı alana taşınır; toplam
+  token korunur (sys+skills+dyn+msg+tools). Blok bulunamazsa duplikasyon yerine
+  skills boş bırakılır. `List()/SharedList()` `s.order` slice tabanlı → deterministik,
+  recompute-strip güvenli. Canlı: AGT9 systemTokens 11762→10689 + skillsTokens 973,
+  `systemHasSkillsHeader=false`.
+- **`SessionContextModal`:** bölümler katlanabilir + **bölüm sırası** (kullanıcı
+  isteği, 2026-07-04): **Mesaj dizisi (modele gidecek)** en üstte → **Dinamik
+  bağlam** → Sistem promptu → **Skills** (varsa) → Cache'li mesaj dizisi → Araçlar
+  (değişken/model-bağlı içerik üstte, stabil cache'li prefix altta). Mesaj dizisi
+  ikiye bölündü — cache öneki varsa **"Cache'li mesaj dizisi (sıcak önek)"** ayrı
+  grup (vars. KAPALI, artık alt tarafta) + **"Mesaj dizisi (taze)"**; mesaj kartı
+  `MessageCard`'a çıkarıldı, eski inline cache-sınırı çizgisi kaldırıldı. `Section`
+  helper'ı `CollapsibleSection` sarar + `bulk` iletir. Token chip'e Skills +
+  copy()'ye `# Skills` bölümü eklendi.
+- **`AgentContextModal`:** bölüm sırası (kullanıcı isteği, 2026-07-04): **Dinamik
+  bağlam** en üstte → Sistem promptu (Markdown/Ham `right`'ta) → **Skills** (varsa,
+  Markdown/Ham'a saygılı) → lazy araçlar; hepsi katlanabilir + Skills token chip.
+- Doğrulama: `go build ./...` + `go test ./internal/api/...` (73) + `npx tsc
+  --noEmit` temiz. Canlı: tek-toggle (aria-expanded true→false, 5→4), Tümünü
+  kapat→0, Tümünü aç→geri; Skills bölümü AGT9 modalında chip 973 + başlık render.
+- Not: kullanıcının 8090'daki backend'i (dün başlatılmış eski binary) bu
+  değişiklikleri içermez → yeni davranış için backend yeniden başlatılmalı
+  (`.\scripts\dev.ps1`).
+- **Doğruluk uyarıları (`SessionContextModal`, 2026-07-04):** önizlemenin gerçek
+  wire-payload'dan bilinçli saptığı yerler için yeni `HintNote` (soft-amber callout):
+  (1) Mesaj dizisi başlığında — önizleme **bu-turun compaction'ını uygulamaz**
+  (yan-etkisiz; bütçeye yakın oturumda modele gerçekte gidenden fazla mesaj
+  görünebilir); (2) claude-cli'da (`data.cliOverhead != null`) Dinamik bölümünde —
+  dinamik ayrı system bloğu değil **son kullanıcı mesajına dokunularak** gider;
+  (3) claude-cli'da Araçlar bölümünde — araçlar SwarmGo isteğinde şema olarak değil
+  **CLI built-in + MCP köprüsüyle** iletilir, token yaklaşık. `npx tsc --noEmit` temiz.
+- **Provider alanı + "Compaction'ı simüle et" toggle + AgentContextModal cli notu
+  (2026-07-04):** her iki önizleme yanıtına `provider` alanı eklendi
+  (`session_context.go`/`agent_context.go` → `agent.Provider`); `AgentContextModal`
+  Dinamik bölümüne de #3 notu (`data.provider === 'claude-cli'`) taşındı.
+  **Compaction simülasyonu:** yeni yan-etkisiz `conversation.Manager.SimulateCompaction`
+  (Prepare'ın ön yarısı — aynı bütçe matematiği + `foldBoundary`, ama **LLM summarize
+  YOK, persist YOK**) → API `?compact=1` (`compactionSimulated`/`foldedCount` alanları,
+  `strconv.ParseBool`). UI'da input satırında **"Compaction simüle/açık"** toggle
+  (`FoldVertical`), açıkken mesaj dizisi bu-turun katlamasını yansıtır ve #1 notu
+  duruma göre değişir (kaç mesaj katlanırdı / katlanacak yok). `load(msg, compact)` +
+  `simulate` state; `useEffect([simulate])` toggle'da anında refetch.
+- **Canlı doğrulandı (Playwright, WS1, kendi backend 8095 + Vite 5174 → 8095):**
+  SES89 (claude-cli) modalında üç not da render (`compactionOff`/`cliDinamik`/`cliAraclar`
+  = true), toggle → "Compaction açık" + "simülasyon açık" + "katlanacak mesaj yok"
+  (foldedCount 0, oturum küçük). AgentContextModal Holly (AGT8, claude-cli): Dinamik
+  en üstte + cli notu true. Negatif: Minimax3 (minimax-anthropic) → cli notu gizli.
+  Backend `go test ./internal/api/... ./internal/conversation/...` (94) + `tsc` temiz.
+  Görseller: `session-ctx-cli-notes-compaction.png`, `agent-ctx-cli-dynamic-note.png`.
+  Doğrulama sonrası verify-backend/Vite kapatıldı, `vite.config.ts` 8090'a geri alındı.
+- **Katlanmış mesajlar ayrı grup + Özet kategorisi + varsayılan tutarlılık fix'i
+  (2026-07-04):** `SessionContextModal` artık `/compact` sonrası gerçekle tutarlı.
+  **Backend (`session_context.go`):** önizleme mesaj dizisi **her zaman** kalıcı özet
+  sınırını (`session.SummaryMsgCount`) uygular → `liveHistory = history[start:]`
+  (gerçekten gönderilen) ve `droppedHistory = history[:start]` (özete katlanmış, artık
+  gönderilmeyen) ayrılır; `?compact=1` ile bu-turun ek bütçe katlaması da düşülür.
+  Rolling summary `conversationSummaryBlock` `stripBlock` ile Dinamik'ten çıkarılıp
+  ayrı `summary`/`summaryTokens` alanına taşınır (Dinamik'te çift sayım yok). Yeni
+  alanlar: `summary`/`summaryTokens` (toplama DAHİL — katlananların yerine geçer),
+  `droppedMessages`/`droppedTokens` (toplama DAHİL DEĞİL — wire'da yok). `authorsFor`
+  helper'ı iki dilime de yazar rozeti verir.
+  **UI:** yeni **"Özet (katlanmış mesajların yerine geçer)"** katlanabilir bölümü +
+  **"Artık gönderilmeyen (özete katlanmış)"** açık-turuncu grup (vars. KAPALI);
+  `MessageCard`'a `dropped` varyantı (turuncu border/bg + `DroppedTag "katlandı ·
+  gönderilmiyor"`), `Stat`'a `dropped` (turuncu chip), token chip'lerine Özet +
+  Katlanmış, `copy()`'ye `# Summary (folded)`. **Bulk fix:** `CollapsibleSection`
+  mount'ta (nonce değişmeden) artık `bulk`'u uygulamıyor (`seenNonce` ref) →
+  `defaultOpen` korunuyor (dropped/cache grupları kapalı açılır), Tümünü aç/kapat
+  hâlâ çalışıyor.
+  **Canlı doğrulandı (Playwright, WS2/SES2, özetli oturum SummaryMsgCount=20):**
+  20 canlı + 20 katlanmış mesaj, Özet 1130 tok (Dinamik'te yok), Katlanmış 3691 tok
+  (toplama dahil değil), turuncu grup vars. kapalı → açınca 20 turuncu kart +
+  conversation_search ipucu; Tümünü kapat→0/aç→7. `go test` (94) + `tsc` temiz.
+  Görsel: `session-ctx-dropped-summary.png`.
+
+## M2 koordinatör/worker: LLM-in-the-loop canlı görsel deneme ✅ + non-stream CLI köprü fix'i (2026-07-03)
+
+`_Docs/47` §10: gerçek modelle (claude-cli/opus) koordinatör oturumu (WS5/SES104)
+uçtan uca doğrulandı — `spawn_worker` ×2 tek turda, koordinatör turu bloklanmadan
+bitti; Koordinasyon roster'ı UI'da canlı doldu (ÇALIŞIYOR→BITTI, 3 sn poll);
+`<task-notification>`'lar otomatik koordinatör turlarını tetikledi ve sentez
+yazıldı (çift tur yok). Görseller: `_Docs/gorseller/coord-0*.png`.
+
+- **Bulgu+fix:** non-stream `/api/chat` + claude-cli turunda Interaction MCP hiç
+  kurulmuyordu (`interaction=false`) → köprü araçları (spawn_worker dahil) yok ve
+  CLI'nin native `Agent`/`Task`'ı disallow edilmiyordu; model kendi Agent'ıyla
+  fan-out yapıp M2'yi bypass etti. `toolloop.go` on-demand `autoInteract`
+  kurulumundaki `autonomous` şartı kaldırıldı (endpoint'siz her CLI turu sarılır;
+  stream yolu etkilenmez). `go build ./...` + agent/tools 296 test yeşil.
+- Not: model, prompt'taki meşru seçenek gereği ilk istekte M1'i (`run_subagent`
+  sync) seçebiliyor; denemede async M2, "use spawn_worker (NOT run_subagent)"
+  yönlendirmesiyle tetiklendi.
+
+## Otonom turların canlı adım akışı — session-step bus ✅ (2026-07-03)
+
+**Sorun:** Chat turunda ajanın adımları (thinking/tool) canlı görünüyordu; otonom
+turlarda (scheduler/spawn/worker/wake/peer) **kalıcı olarak kaydediliyordu** ama
+canlı görünmüyordu — çünkü chat'in canlı akışı `chat_stream`'in **isteğe-özel** SSE'si
+(`sse("step")`) üzerindendi, otonom yollar ise `onStep=nil` ile
+`CompleteWithToolsTraced` çağırıyordu (trace toplanır+persist edilir, ama hiçbir yere
+yayınlanmaz). Süreç-geneli `/api/events` bus'ı yalnız kaba bildirim taşıyordu.
+
+**Yapılan — süreç-geneli canlı adım köprüsü:**
+- `events.Event`'e `Step json.RawMessage` alanı (opaque TurnStep JSON; events paketi
+  agent'ı import etmez — `db.Message.Steps` deseni). `handleEvents` `Type=="session_step"`
+  frame'lerini ayrı SSE event adı **`step`** ile yazar (bildirim/badge yolu `notify`
+  dinler → step'ler oraya karışmaz).
+- `internal/agent/sessionstep.go`: `emitSessionStep`/`EmitSessionStep` +
+  `SessionStepEmitter(ctx)` (ctx'te session id yoksa nil → eski yol). `busForwardable`
+  yüksek-frekanslı (delta/tool_delta) ve etkileşimli (ask/permission/plan/tombstone —
+  yalnız turu **sahiplenen** pencere yanıtlayabilir) adımları eler; kalan anlamlı
+  aktiviteyi (thinking/tool/todo/diff/recovery/error/subagent) yayınlar.
+- Choke point'ler `CompleteWithToolsTraced`→`CompleteWithToolsStream(..., emitter)`
+  ile değişti: `invokeTraced` (scheduler/spawn/peer-fallback) + `wakeTurnRunner`
+  (worker/coordinator/wake/peer history-aware). Dönen `steps` slice'ı **değişmedi** →
+  persistence birebir aynı; yalnız canlı yayın eklendi.
+- `chat_stream` onStep'i de `EmitSessionStep` ile bus'a aynalanır → **çok-pencere**
+  senkronu: aynı chat turunu başka pencerede izleyen de canlı görür.
+
+**Frontend:** `subscribeEvents(onEvent, onStep?)` tek EventSource'ta `step` frame'lerini
+de dinler. `useChatStream.applyAutoStep` aktif oturum için bir **ghost asistan balonu**
+(`live-auto-<sid>`) büyütür (thinking merge + tombstone); turu bu pencere sahipleniyorsa
+(`runsRef`) atlar (yerel SSE zaten render eder → çift balon yok), ekran-dışı oturumda
+yalnız "düşünüyor" göstergesi. Tur bitince tamamlanma event'i (`chat`/`spawned`/`worker`/
+`schedule`) ghost'u temizler + transcript'i reload eder → yetkili kalıcı mesaj yerine
+geçer. `go build`+vet+agent testleri yeşil, frontend `tsc --noEmit` temiz.
+
+**Ek — tur ortasında UI yenilenince adım/agent kaybı düzeltildi:** Yenileme
+sırasında tur sunucuda detached sürüyor ama taze sayfa yalnız **kalıcı** mesajları
+yüklüyordu → o ana kadarki adımlar + agent adı kayboluyor, yalnız son cevapla geri
+geliyordu (asistan mesajı yalnız tur bitince persist edilir). `inflight.json` sidecar'ı
+(partial text+steps+agentId, throttle'lı yazılır) zaten vardı ama yalnız **boot**'ta
+crash kurtarma için okunuyordu (`recoverInflight`); canlı yenilemeye açık değildi.
+Eklendi: `db.ReadInflight` (exported) + `GET /api/sessions/{id}/inflight` (snapshot
+veya null). Frontend: mesaj-yükleme effect'i `chat.recoverInflight(sid, msgs)` çağırır →
+snapshot varsa (ve henüz persist edilmemişse) `id=messageId` ghost balonu seed eder
+(agent adı + o ana kadarki adımlar geri gelir); session-step bus'ı bu balonu **canlı
+büyütmeye devam eder**, tur bitince aynı id'li kalıcı mesaj yerine geçer. Turu bu
+pencere sahipleniyorsa (yerel SSE) no-op. `chatRef` (App'te chat hook'una canlı handle)
+mesaj-yükleme effect'i chat tanımından ÖNCE geldiği için deps-dizisi TDZ'sini atlar.
+`go build`+db+api testleri yeşil, `tsc --noEmit` temiz.
+
+## Workspace default promptu SwarmGo-native yeniden yazıldı ✅ (2026-07-03)
+
+`internal/workspace/defaults/default-instructions.md` hâlâ the external agent project sistem
+promptunun mekanik "the external agent project→SwarmGo" kopyasıydı — SwarmGo'da **olmayan**
+onlarca yeteneği öğretiyor (`datatable`/`spreadsheet`, `html/pdf/markdown-preview`,
+`render_template`, `call_llm`, `~/.external-agent/docs/*`, `_displayName` MCP meta,
+External Sources+`guide.md` modeli), **gerçek** yüzeyi (run_subagent, use_skill,
+set_session_goal, flows/self-management/handoff/plan modu, gerçek render seti) hiç
+anlatmıyordu. Ayrıca ajana talimat olmayan the external agent project iç dokümantasyonu (Dynamic
+context / Complete user message / SDK config bölümleri + mini-agent promptu) ve
+makineye özel sızıntı (gömülü Bilal tercihleri + sabit `C:/Users/user/...` yolları)
+içeriyordu.
+
+**Yapılan:** dosya sıfırdan SwarmGo-native olarak yeniden yazıldı (~750 → ~150
+satır). Tasarım ilkesi the external agent project'ın "her şeyi inline et" (~37K token) yaklaşımı
+yerine SwarmGo'nun **küçük cache'li prefix + skill'e devret** felsefesi (`_Docs/17`,
+`_Docs/19`): skill kataloğu + `GoalUsageHint` zaten prefix'te enjekte edildiği için
+prompt artık ansiklopedi değil, doğru araç yüzeyi + skill pointer'ları. İçerik
+İngilizce (kod/prompt kuralı). Render fence'leri gerçek koda göre doğrulandı
+(`frontend/.../CodeBlock.tsx`: yalnız `diff`/`mermaid`/`gallery`+`image-preview`).
+Document Tools bölümü **kullanıcı kararıyla korundu** ("ileride eklenecek" notuyla).
+
+**Regresyon kilidi:** `internal/workspace/defaults_test.go` —
+`TestDefaultInstructionsAreSwarmGoNative` embed'in yasak the external agent project-ism string'leri
+(`datatable`/`call_llm`/`render_template`/`~/.external-agent/docs`/`_displayName`/
+`html-preview`…) içermemesini ve gerçek SwarmGo terimlerini (`run_subagent`/
+`use_skill`/`set_session_goal`/`mermaid`) içermesini garanti eder. Enjeksiyon yolu
+`TestSystemPromptInjectsWorkspaceInstructions` ile zaten kilitli. `go build ./...` +
+118 test (agent+workspace) yeşil. Not: yalnız **yeni** workspace'leri etkiler;
+persisted `instructions` taşıyan mevcut workspace'ler seed'i override eder.
+
+## Otomasyon UX: nav rename + inline edit + opsiyonel son tarih ✅ (2026-07-03)
+
+`_Docs/46` devamı. (1) **NavRail "Zamanlamalar" → "Otomasyon"** (`NavRail.tsx` +
+`App.tsx` başlık; ekran cron Zamanlamalar + Otomasyonlar'ı birlikte tutar). (2)
+**Otomasyonlara inline düzenleme** (`Automations.tsx` kalem butonu → ad/tetik/hedef/
+maks-iter/bekleme/son-tarih/prompt + ℹ️ değişken popover; `updateAutomation` API zaten
+vardı). (3) **Opsiyonel son tarih** `Automation.ExpiresAt` (unix sn): `fire` başında
+`time.Now >= ExpiresAt` → otomatik pasifle (Schedule `expiresAt` deseninin eşi);
+create+update API + `create/update_automation` tool + UI datetime-local. Canlı
+doğrulandı (create round-trip expiresAt saklandı; PUT edit name/expiresAt/cooldown
+güncelledi). `go build ./...` + 406 test + tsc yeşil. **Ayrıca** WS5'te gerçek
+**otomatik-onarım otomasyonu** kuruldu+test edildi (AGT24 Repairer sonnet, triggerTag
+`tool-error`, spawnTags `["repair"]` loop-kırıcı): induced tool-error → Repairer spawn →
+"false positive, no changes" doğru teşhis.
+
+## Araç backlog P2 dalgası: `get_session_info` + `update_user_preferences` ✅ / labels-status ❌ kapsam dışı (2026-07-03)
+
+`_Docs/41` madde 5-6-7 kapatıldı (kullanıcı kararı: 6'yı yapma, 5+7'yi yap):
+
+- **`get_session_info` (YENİ, `tools/builtin_sessioninfo.go`):** ajan kendi oturumunun
+  metadata'sını okur — id/title/state/kind/agent(ad+id)/mesaj sayısı/tags/goal/
+  working_dir/role/coordinator_session/parent_session; `session_id?` ile başka oturum.
+  Ctx'teki mevcut oturum (`CurrentSessionID`) default; oturumsuz turda zarif mesaj.
+  Session-edit araçlarının (title/tags/goal) okuma eşi. Koşulsuz kayıt, `MarkNameOnly`
+  tier, `RiskRead`, kategori `agents`; claude-cli köprüsü `BridgeTools` `extra`.
+- **`update_user_preferences` (YENİ, `tools/builtin_userprefs.go`):** kullanıcıdan
+  öğrenilen kalıcı bilgileri (ad/saat dilimi/şehir/ülke/tercih notları) mevcut
+  **Settings ▸ Profil** alanlarına yazar (`SettingsBridge.Apply`, yalnız 5 profil
+  alanı — dar sarmalayıcı). `notes` REPLACE / `notes_append` satır ekler (ikisi
+  birlikte → hata; append Snapshot'tan mevcut notu okur). Profil zaten her turda
+  "About the user" bloğu olarak enjekte → yeni prompt katmanı gerekmedi. Bridge
+  varken kayıt, `MarkNameOnly`, `RiskWrite` (default), kategori `config`; CLI köprülü.
+- **`set_session_labels`/`set_session_status` KAPSAM DIŞI:** etiketleri
+  `set_session_tags` + etiket-otomasyonları (`_Docs/46`) zaten karşılıyor; durum için
+  `State`+`archive_session`+Kanban yeterli. `_Docs/41` §6 gerekçesiyle işaretlendi.
+- **Test:** `builtin_sessioninfo_test.go` (explicit id / ctx default / no-session /
+  unknown id) + `builtin_userprefs_test.go` (alan patch, append/replace, guard'lar,
+  nil bridge). `go build ./...` + tools+agent 289 test yeşil.
+
+## Kaydedilmemiş-değişiklik belirteci: agents/artifacts kapsam + sayfa-değiştirme uyarısı ✅ (2026-07-03)
+
+Ayarlar/Workspace/Flows ekranlarında zaten var olan "kaydedilmemiş değişiklik"
+(dirty) nav belirteci **Ajanlar** ve **Artifactlar** ekranlarına da genişletildi;
+ayrıca kirli bir ekrandan ayrılmaya çalışınca uyarı gösterilir.
+
+- **Ortak altyapı (`lib/dirtySignals.ts`):** `useRegisterDirty(view, isDirty)` artık
+  `view: View | undefined` kabul eder (undefined → no-op). Böylece aynı editör bir
+  modalda tekrar kullanıldığında nav'ı yanlış ekrandan kirletmez.
+- **Ajanlar (`agents/AgentSettingsForm.tsx`):** form alanları (name/avatar/color/soul/
+  identity/provider/model/thinkingLevel/permissionMode/skills) ajanın kalıcı değerleriyle
+  karşılaştırılıp `dirty` hesaplanır; yeni opt-in `dirtyView?: View` prop'u ile
+  `AgentsView` `dirtyView="agents"` geçer (modal reuse geçmez). Tools bölümü anında
+  kaydettiği için dirty'e dahil değil.
+- **Artifactlar (`panels/ArtifactsPanel.tsx`):** açık `draft` kalıcı artifact'tan
+  (title/kind/language/content) farklıysa `useRegisterDirty('artifacts', dirty)`.
+- **Sayfa-değiştirme uyarısı (`App.tsx`):** `selectView` guard'ı — mevcut ekran dirty
+  iken başka nav view'ine geçişte `window.confirm` onayı ister (NavRail `onSelectView`
+  artık `selectView`). Ayrıca herhangi bir ekran dirty iken sekme kapatma/yenilemede
+  `beforeunload` tarayıcı uyarısı. Not: workspace switch bu guard'ın dışında (kapsam
+  yalnız nav view değişimi).
 
 ## Araç boşluk kapatma: arka-plan shell + apply_patch + CLI tool latency + built-in hook görünürlüğü ✅ (2026-07-03)
 
@@ -63,7 +847,9 @@ kapatılması (the external agent project↔SwarmGo backlog `_Docs/41`).
   hata, "stopped" hariç), `goal`/`goal-done`/`archived` (durum). `Runtime.AutoTagTurn`
   chat(başarı+cerr)/spawn/schedule/wake yollarında; `archived` ayrıca arşiv mutasyonunda
   (`sessionSink.Archive` + API state handler, geri yüklemede silinir). Amaç: bir
-  otomasyonla hataları tarayıp otomatik onarmak.
+  otomasyonla hataları tarayıp otomatik onarmak. **Ayar toggle'ı** `AutoTagSessions`
+  (vars. açık; Ayarlar ▸ Bağlam) → `AutoTagTurn`/`AutoTagEnabled`/`sessionSink.autoTag`
+  guard'ları; kapalıyken hiç otomatik etiket yazılmaz. Canlı: OFF→yazmıyor, ON→yazıyor.
 - **Canlı doğrulama (WS2, sonnet/claude-cli):** loop (sayaç 10→11→12, story zinciri,
   2 senaryo paralel, maks-iter'de auto-disable); genişletilmiş değişkenler render;
   autotag: archived ekle/sil, goal, var-olmayan dosya Read → tool-error. Testler:

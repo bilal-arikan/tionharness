@@ -34,6 +34,11 @@ cd frontend; npm install; npm run dev   # http://localhost:5173 (vite proxy → 
 
 Sağlık kontrolü: `curl http://localhost:8090/health`
 
+**Tek komutla:** `.\scripts\dev.ps1` backend + frontend'i birlikte başlatır ve tarayıcıyı açar.
+Varsayılan olarak **yerel ağa açar** (`0.0.0.0`) → aynı ağdaki telefon/laptop `http://<makine-LAN-IP>:5173`
+adresinden erişir. Yalnız bu makineyle sınırlamak için `.\scripts\dev.ps1 -Loopback` (Windows Güvenlik
+Duvarı sormaz). ⚠ Backend'de auth yok + CORS wildcard — yalnız güvenilir ağda aç.
+
 > Tüm `/api/*` uçları `X-Workspace-Id` header'ına göre çalışır; yoksa Varsayılan workspace kullanılır.
 
 ## Tek Binary (üretim)
