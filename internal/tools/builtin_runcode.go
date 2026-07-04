@@ -51,12 +51,14 @@ const (
 // observed (RunCodeObserver — one debug-journal tool event per call, restoring
 // the per-call observability that folding N calls into one run_code loses).
 type RunCodeTool struct {
-	sb      Sandbox
-	entries []mcp.CatalogEntry
-	caller  MCPCaller
-	allow   func(string) bool // agent tool filter (nil = allow all)
-	gate    RunCodeGate       // per-call permission (nil = allow all)
-	observe RunCodeObserver   // per-call observability (nil = none)
+	sb       Sandbox
+	entries  []mcp.CatalogEntry
+	caller   MCPCaller
+	builtins []codemode.BuiltinDef // SwarmGo built-in tools exposed as the `swarmgo` module
+	callBI   MCPCaller             // dispatches a built-in by bare name (nil = built-ins off)
+	allow    func(string) bool     // agent tool filter (nil = allow all)
+	gate     RunCodeGate           // per-call permission (nil = allow all)
+	observe  RunCodeObserver       // per-call observability (nil = none)
 }
 
 // RunCodeGate decides one in-script MCP call under the agent's permission mode.
@@ -69,18 +71,53 @@ type RunCodeGate func(ctx context.Context, tool string, args json.RawMessage) (a
 type RunCodeObserver func(ctx context.Context, ob codemode.CallObservation)
 
 // NewRunCodeTool binds the tool to the turn's working-dir sandbox, the MCP
-// catalog to expose, the pool-backed dispatcher, the agent's tool filter and
-// the per-call permission/observability hooks (either may be nil).
-func NewRunCodeTool(sb Sandbox, entries []mcp.CatalogEntry, caller MCPCaller, allow func(string) bool, gate RunCodeGate, observe RunCodeObserver) RunCodeTool {
-	return RunCodeTool{sb: sb, entries: entries, caller: caller, allow: allow, gate: gate, observe: observe}
+// catalog to expose, the pool-backed MCP dispatcher, the built-in tools to expose
+// (as the `swarmgo` module) with their dispatcher, the agent's tool filter and the
+// per-call permission/observability hooks. entries/caller may be empty (built-ins
+// only); builtins/callBI may be nil (MCP only); gate/observe may be nil.
+func NewRunCodeTool(sb Sandbox, entries []mcp.CatalogEntry, caller MCPCaller, builtins []codemode.BuiltinDef, callBI MCPCaller, allow func(string) bool, gate RunCodeGate, observe RunCodeObserver) RunCodeTool {
+	return RunCodeTool{sb: sb, entries: entries, caller: caller, builtins: builtins, callBI: callBI, allow: allow, gate: gate, observe: observe}
 }
+
+// codeModeExcludedBuiltins are the built-in tools NEVER exposed as run_code
+// bindings, regardless of the agent's tool filter. They fall into four groups,
+// each nonsensical or unsafe to drive from a script:
+//   - interactive (block for a live human → would hang the bridge for the whole run)
+//   - other execution engines / code-in-code (no added value, extra risk)
+//   - delegation, recursion and meta tool-loading (run_code inside run_code, etc.)
+//   - coordinator worker controls (only valid on a coordinator turn; recursion-ish)
+//
+// Everything else that is a registered built-in AND passes the agent's tool filter
+// gets a binding — so code mode grants no capability the agent lacks directly.
+var codeModeExcludedBuiltins = map[string]bool{
+	// Interactive — block for a human.
+	"ask_user": true, "request_confirmation": true,
+	// UI-sink fire-and-forget; meaningless when scripted.
+	"notify": true, "focus_view": true,
+	// Other execution engines / code-in-code.
+	"Bash": true, "PowerShell": true, "transform_data": true, "run_code": true,
+	"shell_manage": true,
+	// Delegation / recursion / meta tool-loading.
+	"run_subagent": true, "use_skill": true, "skill_search": true,
+	"activate_tools": true, "deactivate_tools": true, "tool_search": true,
+	"spawn_session": true,
+	// Coordinator worker controls.
+	"spawn_worker": true, "send_to_worker": true, "stop_worker": true, "list_workers": true,
+}
+
+// CodeModeEligible reports whether a built-in tool NAME may be exposed as a
+// run_code binding (i.e. it is not on the hard-exclude list above). The agent's
+// own tool filter is applied on top of this, at binding-generation time.
+func CodeModeEligible(name string) bool { return !codeModeExcludedBuiltins[name] }
 
 func (RunCodeTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "run_code",
-		Description: "Run a Python script that calls MCP tools as ordinary functions (code-execution mode). " +
-			"Every enabled MCP tool is exposed as a generated Python module under " + runCodeBindingsDir + "/ " +
-			"(one module per server, on PYTHONPATH — `from <server> import <tool>`). Call with NO script first: " +
+		Description: "Run a Python script that calls tools as ordinary functions (code-execution mode). " +
+			"Every enabled MCP tool AND SwarmGo's own built-in tools are exposed as generated Python modules under " + runCodeBindingsDir + "/ " +
+			"(one module per MCP server + a `swarmgo` module for built-ins, on PYTHONPATH — `from <server> import <tool>` / " +
+			"`from swarmgo import <tool>`). This lets you orchestrate a multi-tool workflow (list → filter → act) in ONE " +
+			"call instead of many tool round-trips. Call with NO script first: " +
 			"the bindings are (re)generated and the module/function listing is returned; then Read a module file " +
 			"to see each function's docstring + input schema. Pass arguments as keywords; functions return the " +
 			"tool's result (JSON-decoded when possible) and raise _bridge.MCPError on failure. Keep large " +
@@ -118,8 +155,8 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	if !t.sb.Ready() {
 		return "", fmt.Errorf("no working directory is configured for run_code")
 	}
-	if len(t.entries) == 0 {
-		return "", fmt.Errorf("no MCP tools are available to expose as bindings")
+	if len(t.entries) == 0 && len(t.builtins) == 0 {
+		return "", fmt.Errorf("no tools are available to expose as bindings")
 	}
 
 	bindDir, err := t.sb.Resolve(runCodeBindingsDir)
@@ -127,8 +164,9 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 		return "", fmt.Errorf("bindings dir: %w", err)
 	}
 	// Stateless regeneration on every call: the bindings always mirror the
-	// current catalog, so a changed/removed server can never serve stale stubs.
-	modules, err := codemode.WriteBindings(bindDir, t.entries, t.allow)
+	// current catalog (MCP servers + the `swarmgo` built-ins module), so a
+	// changed/removed tool can never serve stale stubs.
+	modules, err := codemode.WriteBindings(bindDir, t.entries, t.builtins, t.allow)
 	if err != nil {
 		return "", err
 	}
@@ -136,7 +174,7 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	if strings.TrimSpace(args.Script) == "" {
 		return renderBindingListing(modules), nil
 	}
-	if t.caller == nil {
+	if len(t.entries) > 0 && t.caller == nil {
 		return "", fmt.Errorf("run_code has no MCP dispatcher wired (workspace MCP pool unavailable)")
 	}
 
@@ -153,7 +191,25 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	// Bind this call's ctx into the bridge hooks: the gate needs the turn's
 	// permission prompter/grants, the observer needs the session/turn ids — both
 	// ride on ctx, which the HTTP handler does not have.
-	cfg := codemode.Config{Call: codemode.CallFunc(t.caller), Allow: t.allow}
+	cfg := codemode.Config{Allow: t.allow}
+	if t.caller != nil {
+		cfg.Call = codemode.CallFunc(t.caller)
+	} else {
+		// Built-ins only (no MCP servers): the bridge still needs a non-nil MCP
+		// dispatcher to Start; a stray MCP call (none should occur — no MCP module
+		// was generated) fails loudly rather than panicking.
+		cfg.Call = func(context.Context, string, json.RawMessage) (mcp.CallToolResult, error) {
+			return mcp.CallToolResult{}, fmt.Errorf("no MCP servers are available in this run_code execution")
+		}
+	}
+	if t.callBI != nil {
+		// Built-ins dispatch on the TURN's ctx (session id + sinks), NOT the bridge's
+		// per-call ctx, so a sink-based built-in behaves exactly like a direct call.
+		// Mirrors the gate/observe closures below, which also capture the turn ctx.
+		cfg.Builtin = func(_ context.Context, name string, in json.RawMessage) (mcp.CallToolResult, error) {
+			return t.callBI(ctx, name, in)
+		}
+	}
 	if t.gate != nil {
 		cfg.Gate = func(tool string, in json.RawMessage) (bool, string) { return t.gate(ctx, tool, in) }
 	}
@@ -232,7 +288,8 @@ func renderBindingListing(modules map[string][]string) string {
 	sort.Strings(names)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "MCP bindings regenerated under %s/ (on PYTHONPATH for run_code scripts).\nModules:\n", runCodeBindingsDir)
+	fmt.Fprintf(&b, "Tool bindings regenerated under %s/ (on PYTHONPATH for run_code scripts).\n"+
+		"Modules: one per MCP server, plus `swarmgo` for SwarmGo's built-in tools.\nModules:\n", runCodeBindingsDir)
 	for _, m := range names {
 		fmt.Fprintf(&b, "- %s: %s\n", m, strings.Join(modules[m], ", "))
 	}

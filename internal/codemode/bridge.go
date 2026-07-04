@@ -62,11 +62,15 @@ type CallObservation struct {
 // denied). Called synchronously from the handler; keep it cheap.
 type ObserveFunc func(CallObservation)
 
-// Config wires a Bridge: the dispatcher is required, everything else optional.
+// Config wires a Bridge: the MCP dispatcher is required, everything else optional.
 type Config struct {
-	Call    CallFunc          // dispatches allowed calls (required)
-	Allow   func(string) bool // agent tool filter (nil = allow all)
-	Gate    GateFunc          // per-call permission (nil = allow all)
+	Call CallFunc // dispatches allowed MCP calls (required)
+	// Builtin dispatches an allowed SwarmGo built-in call by its BARE name (the
+	// tool arrives namespaced as "swarmgo__<tool>" and is stripped first). Nil ⇒
+	// built-in bindings are disabled (a swarmgo__ call comes back as a loud error).
+	Builtin CallFunc
+	Allow   func(string) bool // agent tool filter (nil = allow all); checked on the BARE name
+	Gate    GateFunc          // per-call permission (nil = allow all); checked on the BARE name
 	Observe ObserveFunc       // per-call observability (nil = none)
 }
 
@@ -161,12 +165,30 @@ func (b *Bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 		writeBridgeErr(w, http.StatusBadRequest, "malformed call body: "+err.Error())
 		return
 	}
-	if _, _, ok := mcp.SplitNamespaced(req.Tool); !ok {
-		writeBridgeErr(w, http.StatusBadRequest, fmt.Sprintf("%q is not a namespaced MCP tool (server__tool)", req.Tool))
+	server, bare, ok := mcp.SplitNamespaced(req.Tool)
+	if !ok {
+		writeBridgeErr(w, http.StatusBadRequest, fmt.Sprintf("%q is not a namespaced tool (server__tool)", req.Tool))
 		return
 	}
-	if b.cfg.Allow != nil && !b.cfg.Allow(req.Tool) {
-		writeBridgeErr(w, http.StatusForbidden, fmt.Sprintf("tool %q is not permitted for this agent", req.Tool))
+	// Choose the dispatch target. Built-ins live under the reserved BuiltinServer
+	// namespace; every other namespace is an MCP server. gateName is the name used
+	// for the allow filter, the permission gate and the debug event — the BARE
+	// name for built-ins (so it matches the agent's own tool names) and the full
+	// namespaced name for MCP.
+	dispatch := b.cfg.Call
+	dispatchName := req.Tool
+	gateName := req.Tool
+	if server == BuiltinServer {
+		if b.cfg.Builtin == nil {
+			writeBridgeErr(w, http.StatusBadRequest, "built-in tools are not available in this run_code execution")
+			return
+		}
+		dispatch = b.cfg.Builtin
+		dispatchName = bare
+		gateName = bare
+	}
+	if b.cfg.Allow != nil && !b.cfg.Allow(gateName) {
+		writeBridgeErr(w, http.StatusForbidden, fmt.Sprintf("tool %q is not permitted for this agent", gateName))
 		return
 	}
 	if !b.registerCall(req.Tool) {
@@ -179,9 +201,9 @@ func (b *Bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	// script blocks on the HTTP response meanwhile), standing grants short-
 	// circuit, denials come back as loud tool errors the script can react to.
 	if b.cfg.Gate != nil {
-		if allowed, denial := b.cfg.Gate(req.Tool, req.Args); !allowed {
+		if allowed, denial := b.cfg.Gate(gateName, req.Args); !allowed {
 			b.registerDenied()
-			b.observe(CallObservation{Tool: req.Tool, Args: req.Args, IsError: true, Denied: true})
+			b.observe(CallObservation{Tool: gateName, Args: req.Args, IsError: true, Denied: true})
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(callResponse{Text: denial, IsError: true})
 			return
@@ -191,7 +213,7 @@ func (b *Bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), bridgeCallTimeout)
 	defer cancel()
 	start := time.Now()
-	out, err := b.cfg.Call(ctx, req.Tool, req.Args)
+	out, err := dispatch(ctx, dispatchName, req.Args)
 	resp := callResponse{Text: out.Text, IsError: out.IsError}
 	if err != nil {
 		// Dispatcher failures surface as tool errors so the Python side raises a
@@ -203,7 +225,7 @@ func (b *Bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 		b.registerErr()
 	}
 	b.observe(CallObservation{
-		Tool:     req.Tool,
+		Tool:     gateName,
 		Args:     req.Args,
 		DurMs:    time.Since(start).Milliseconds(),
 		OutBytes: len(resp.Text),
@@ -267,7 +289,7 @@ func (b *Bridge) Summary() string {
 			parts = append(parts, n)
 		}
 	}
-	s := fmt.Sprintf("%d MCP call(s): %s", b.total, strings.Join(parts, ", "))
+	s := fmt.Sprintf("%d tool call(s): %s", b.total, strings.Join(parts, ", "))
 	if b.errs > 0 {
 		s += fmt.Sprintf(" (%d errored)", b.errs)
 	}

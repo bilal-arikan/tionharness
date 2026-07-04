@@ -1,8 +1,8 @@
 # 44 — Code Execution with MCP (Fizibilite + Faz Planı)
 
 > **Durum:** Faz 0 (baseline, §11) + Faz 1 PoC + Faz 2 (per-call izin +
-> gözlemlenebilirlik) + Settings/UI + **Faz 3 A/B ölçümü (§12)** tamamlandı
-> (2026-07-02). Açık kalan: büyük-çıktılı senaryo tekrarı + doğruluk nudge'ı (§12 sonu).
+> gözlemlenebilirlik) + Settings/UI + **Faz 3 A/B ölçümü (§12)** + **built-in araç
+> binding'leri (§13)** tamamlandı. Açık kalan: büyük-çıktılı senaryo tekrarı.
 > **Tarih:** 2026-07-02 · **İlgili:** [17-TOKEN-OPTIMIZASYON](17-TOKEN-OPTIMIZASYON.md) ·
 > [19-LAZY-TOOL-LOADING](19-LAZY-TOOL-LOADING.md) · [24-SELF-MANAGEMENT](24-SELF-MANAGEMENT.md) ·
 > [25-SUBAGENT-ISOLATION](25-SUBAGENT-ISOLATION.md) · [38-SESSION-DEBUG](38-SESSION-DEBUG.md)
@@ -537,6 +537,41 @@ klasik yolda çıktılar bağlamı domine eder, kod-modu farkı belirginleşir.
 `run_code` açıklamasına "opak/yapılandırılmamış dönüşlerde önce küçük bir örneği
 print edip formatı doğrula" nudge'ı **eklendi** (2026-07-03, `builtin_runcode.go`
 Def açıklaması "ACCURACY:" paragrafı — B1 hatasını sistemik önler).
+
+---
+
+## 13. Built-in araç binding'leri (2026-07-04)
+
+İlk PoC yalnız **MCP** kataloğunu binding'e döküyordu; `run_code` MCP sunucusu
+yoksa hiç açılmıyordu (`len(entries)==0`→hata). Bu faz built-in araçları da açar:
+kod-modunun asıl kaldıracı — çok-araçlı iş akışını (list→filter→act) **tek** çağrıda
+kod yazarak yapmak — artık SwarmGo'nun kendi araçlarını da kapsar.
+
+- **Binding üretimi** (`codemode.WriteBindings(dir, entries, builtins, allow)`): MCP
+  sunucu modüllerinin yanına tek **`swarmgo`** modülü yazılır (`from swarmgo import <tool>`),
+  her fonksiyon `_bridge.call("swarmgo__<tool>", args)` çağırır. MCP entry'leri
+  namespaced isimle, built-in'ler bare isimle `allow`'dan geçer. Rezerve `swarmgo`
+  isimli gerçek bir MCP sunucusu çakışırsa `swarmgo_server`'a yeniden adlandırılır.
+- **Köprü yönlendirme** (`codemode.Config.Builtin`): `handleCall` `SplitNamespaced`
+  ile server'ı çözer; `server == BuiltinServer` ise dispatcher `cfg.Builtin`, ve
+  allow/gate/observe **bare** isimle çalışır (native araç isimleriyle birebir; MCP
+  yolu değişmez). Yeni `Config.Builtin` nil ise built-in çağrısı yüksek sesle hata.
+- **Dispatch = direkt çağrı** (`toolsetup.go`): `callBI` built-in'i **tur ctx**'iyle
+  `reg.Call`'a verir (bridge'in per-call ctx'i değil) → sink/oturum-scoped built-in'ler
+  (`update_session`, `get_session_info`, artifacts…) script içinden de direkt-çağrıyla
+  aynı davranır. Gate hâlâ `permGate` (RiskWrite/Exec "ask"'te sorar), observe hâlâ
+  debug-journal + nested trace.
+- **Eligibility** (`tools.CodeModeEligible`, hard-exclude): interaktif (ask_user/
+  request_confirmation), exec-in-exec (Bash/PowerShell/transform_data/run_code/
+  shell_manage), delegasyon/meta (run_subagent/use_skill/skill_search/activate/
+  deactivate/tool_search/spawn_session) ve worker araçları binding'e girmez. Kalan
+  her built-in ajan tool-filter'ından geçtiği sürece açılır → kod-modu ajanın direkt
+  çağıramayacağı hiçbir aracı vermez.
+- **MCP'siz kullanım:** `run_code` artık yalnız `CodeMode+Shell+cwd` ile açılır
+  (eski `len(entries)>0` koşulu kaldı); built-in'ler tek başına yeterli.
+
+**Testler:** `bindings_test` (built-in modül + collision guard), `builtin_runcode_test`
+(built-in dispatch + MCP'siz discovery), `bridge_test` (routing). Tam suite yeşil.
 
 ---
 

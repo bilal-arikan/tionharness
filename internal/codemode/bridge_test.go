@@ -67,7 +67,7 @@ func TestBridgeDispatchesAndFlattens(t *testing.T) {
 	if gotTool != "demo__ping" || !strings.Contains(gotArgs, `"hi"`) {
 		t.Fatalf("dispatcher saw tool=%q args=%q", gotTool, gotArgs)
 	}
-	if s := b.Summary(); !strings.Contains(s, "1 MCP call(s)") || !strings.Contains(s, "demo__ping") {
+	if s := b.Summary(); !strings.Contains(s, "1 tool call(s)") || !strings.Contains(s, "demo__ping") {
 		t.Fatalf("summary = %q", s)
 	}
 }

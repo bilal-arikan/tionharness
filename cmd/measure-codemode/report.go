@@ -69,7 +69,7 @@ func report(cfgs []mcp.ServerConfig, timeout time.Duration) {
 	tierTokens, tierDesc := tierLazyCost(all)
 	avgSchema := eagerTokens / len(all)
 
-	runCodeDef := tools.NewRunCodeTool(tools.Sandbox{}, all, nil, nil, nil, nil).Def()
+	runCodeDef := tools.NewRunCodeTool(tools.Sandbox{}, all, nil, nil, nil, nil, nil, nil).Def()
 	runCodeTokens := defTokens(providers.ToolDef{
 		Name: runCodeDef.Name, Description: runCodeDef.Description, InputSchema: runCodeDef.InputSchema,
 	})
@@ -80,7 +80,7 @@ func report(cfgs []mcp.ServerConfig, timeout time.Duration) {
 		os.Exit(1)
 	}
 	defer os.RemoveAll(bindDir)
-	modules, err := codemode.WriteBindings(filepath.Join(bindDir, "mcp"), all, nil)
+	modules, err := codemode.WriteBindings(filepath.Join(bindDir, "mcp"), all, nil, nil)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "bindings:", err)
 		os.Exit(1)

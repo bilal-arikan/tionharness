@@ -29,7 +29,7 @@ func TestWriteBindingsGeneratesModules(t *testing.T) {
 		entry("linear", "create_issue", "Create an issue."),
 		entry("my-server", "import", "Keyword + dash stress test."),
 	}
-	modules, err := WriteBindings(dir, entries, nil)
+	modules, err := WriteBindings(dir, entries, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestWriteBindingsAppliesAllowFilter(t *testing.T) {
 		entry("demo", "allowed", "ok"),
 		entry("demo", "blocked", "no"),
 	}
-	modules, err := WriteBindings(dir, entries, func(name string) bool { return name == "demo__allowed" })
+	modules, err := WriteBindings(dir, entries, nil, func(name string) bool { return name == "demo__allowed" })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,10 +79,10 @@ func TestWriteBindingsAppliesAllowFilter(t *testing.T) {
 
 func TestWriteBindingsRegeneratesFromScratch(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "mcp")
-	if _, err := WriteBindings(dir, []mcp.CatalogEntry{entry("old", "gone", "x")}, nil); err != nil {
+	if _, err := WriteBindings(dir, []mcp.CatalogEntry{entry("old", "gone", "x")}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := WriteBindings(dir, []mcp.CatalogEntry{entry("new", "here", "y")}, nil); err != nil {
+	if _, err := WriteBindings(dir, []mcp.CatalogEntry{entry("new", "here", "y")}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "old.py")); !os.IsNotExist(err) {
@@ -90,6 +90,56 @@ func TestWriteBindingsRegeneratesFromScratch(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "new.py")); err != nil {
 		t.Fatalf("new module missing: %v", err)
+	}
+}
+
+func TestWriteBindingsBuiltinModule(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "mcp")
+	builtins := []BuiltinDef{
+		{Name: "update_flow", Description: "Edit a flow.", InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"}}}`)},
+		{Name: "secret", Description: "Manage the vault.", InputSchema: json.RawMessage(`{"type":"object","properties":{"action":{"type":"string"}}}`)},
+		{Name: "blocked_builtin", Description: "no", InputSchema: json.RawMessage(`{"type":"object"}`)},
+	}
+	allow := func(name string) bool { return name != "blocked_builtin" }
+	modules, err := WriteBindings(dir, nil, builtins, allow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	funcs, ok := modules[BuiltinServer]
+	if !ok {
+		t.Fatalf("built-in module %q missing; modules=%v", BuiltinServer, modules)
+	}
+	if len(funcs) != 2 {
+		t.Fatalf("built-in funcs = %v, want 2 (blocked one filtered)", funcs)
+	}
+	src, err := os.ReadFile(filepath.Join(dir, BuiltinServer+".py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), `_bridge.call("swarmgo__update_flow", args)`) {
+		t.Fatalf("built-in wrapper must dispatch under swarmgo__ namespace, got:\n%s", src)
+	}
+	if strings.Contains(string(src), "blocked_builtin") {
+		t.Fatal("disallowed built-in leaked into bindings")
+	}
+}
+
+// TestWriteBindingsBuiltinServerCollision covers the guard: an MCP server that
+// sanitises to the reserved built-ins module name is renamed so it never clobbers
+// the swarmgo built-ins module.
+func TestWriteBindingsBuiltinServerCollision(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "mcp")
+	entries := []mcp.CatalogEntry{entry(BuiltinServer, "alpha", "x")}
+	builtins := []BuiltinDef{{Name: "beta", Description: "y", InputSchema: json.RawMessage(`{"type":"object"}`)}}
+	modules, err := WriteBindings(dir, entries, builtins, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := modules[BuiltinServer]; !ok {
+		t.Fatal("built-in module must keep the reserved name")
+	}
+	if _, ok := modules[BuiltinServer+"_server"]; !ok {
+		t.Fatalf("colliding MCP server must be renamed to %q; modules=%v", BuiltinServer+"_server", modules)
 	}
 }
 

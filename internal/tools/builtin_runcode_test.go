@@ -25,7 +25,7 @@ func runCodeEntries() []mcp.CatalogEntry {
 }
 
 func TestRunCodeRequiresCatalog(t *testing.T) {
-	tool := NewRunCodeTool(NewSandbox(t.TempDir()), nil, nil, nil, nil, nil)
+	tool := NewRunCodeTool(NewSandbox(t.TempDir()), nil, nil, nil, nil, nil, nil, nil)
 	if _, err := tool.Call(t.Context(), []byte(`{}`)); err == nil {
 		t.Fatal("expected error when no MCP tools are available")
 	}
@@ -33,7 +33,7 @@ func TestRunCodeRequiresCatalog(t *testing.T) {
 
 func TestRunCodeDiscoveryListsModules(t *testing.T) {
 	dir := t.TempDir()
-	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), nil, nil, nil, nil)
+	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), nil, nil, nil, nil, nil, nil)
 	out, err := tool.Call(t.Context(), []byte(`{}`))
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestRunCodeScriptCallsMCPAndReturnsOnlyStdout(t *testing.T) {
 		}
 		return mcp.CallToolResult{Text: `{"rows":[1,2,3,4,5]}`}, nil
 	}
-	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, nil, nil, nil)
+	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, nil, nil, nil, nil, nil)
 
 	script := "from demo import ping\n" +
 		"r = ping(msg='hi')\n" + // large-ish structured result stays in the variable
@@ -76,7 +76,7 @@ func TestRunCodeScriptCallsMCPAndReturnsOnlyStdout(t *testing.T) {
 	if strings.Contains(out, `"rows"`) {
 		t.Fatalf("raw data leaked into the tool result:\n%s", out)
 	}
-	if !strings.Contains(out, "1 MCP call(s): demo__ping") {
+	if !strings.Contains(out, "1 tool call(s): demo__ping") {
 		t.Fatalf("mcp call summary missing, got:\n%s", out)
 	}
 }
@@ -89,7 +89,7 @@ func TestRunCodeScriptFailureIsLoud(t *testing.T) {
 	caller := func(context.Context, string, json.RawMessage) (mcp.CallToolResult, error) {
 		return mcp.CallToolResult{Text: "unused"}, nil
 	}
-	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, nil, nil, nil)
+	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, nil, nil, nil, nil, nil)
 	args, _ := json.Marshal(map[string]any{"script": "raise SystemExit('boom')"})
 	if _, err := tool.Call(t.Context(), args); err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("script failure must surface loudly with its output, got: %v", err)
@@ -110,7 +110,7 @@ func TestRunCodeGateDeniesInScriptCallAndObserverRecords(t *testing.T) {
 	}
 	var observed []codemode.CallObservation
 	observe := func(_ context.Context, ob codemode.CallObservation) { observed = append(observed, ob) }
-	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, nil, gate, observe)
+	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, nil, nil, nil, gate, observe)
 
 	script := "from demo import ping\n" +
 		"import _bridge\n" +
@@ -146,7 +146,7 @@ func TestRunCodeObserverRecordsDispatchedCalls(t *testing.T) {
 	gate := func(context.Context, string, json.RawMessage) (bool, string) { return true, "" }
 	var observed []codemode.CallObservation
 	observe := func(_ context.Context, ob codemode.CallObservation) { observed = append(observed, ob) }
-	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, nil, gate, observe)
+	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, nil, nil, nil, gate, observe)
 
 	args, _ := json.Marshal(map[string]any{"script": "from demo import ping\nprint(ping(msg='x')['ok'])"})
 	out, err := tool.Call(t.Context(), args)
@@ -177,7 +177,7 @@ func TestRunCodeBridgeEnforcesAgentFilterInScript(t *testing.T) {
 	// The allow filter drops demo__ping from the BINDINGS; calling _bridge.call
 	// directly (simulating a bypass attempt) must be rejected by the bridge too.
 	allow := func(name string) bool { return name != "demo__ping" }
-	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, allow, nil, nil)
+	tool := NewRunCodeTool(NewSandbox(dir), runCodeEntries(), caller, nil, nil, allow, nil, nil)
 	script := "import _bridge\n" +
 		"try:\n" +
 		"    _bridge.call('demo__ping', {})\n" +
@@ -191,5 +191,60 @@ func TestRunCodeBridgeEnforcesAgentFilterInScript(t *testing.T) {
 	}
 	if strings.Contains(out, "CALL SUCCEEDED") || !strings.Contains(out, "rejected:") {
 		t.Fatalf("filtered tool must be rejected by the bridge, got:\n%s", out)
+	}
+}
+
+func TestRunCodeDispatchesBuiltinModule(t *testing.T) {
+	if !pythonAvailable() {
+		t.Skip("python not available")
+	}
+	dir := t.TempDir()
+	builtins := []codemode.BuiltinDef{{
+		Name:        "echo_tool",
+		Description: "Echo the args back.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"x":{"type":"number"}}}`),
+	}}
+	var gotName string
+	callBI := func(_ context.Context, name string, _ json.RawMessage) (mcp.CallToolResult, error) {
+		gotName = name // must be the BARE built-in name, not the swarmgo__ namespace
+		return mcp.CallToolResult{Text: `{"echoed":true}`}, nil
+	}
+	// No MCP entries at all — built-ins alone drive run_code.
+	tool := NewRunCodeTool(NewSandbox(dir), nil, nil, builtins, callBI, nil, nil, nil)
+
+	script := "from swarmgo import echo_tool\nprint('ok:', echo_tool(x=1)['echoed'])"
+	args, _ := json.Marshal(map[string]any{"script": script})
+	out, err := tool.Call(t.Context(), args)
+	if err != nil {
+		t.Fatalf("run_code failed: %v", err)
+	}
+	if !strings.Contains(out, "ok: True") {
+		t.Fatalf("built-in dispatch output missing, got:\n%s", out)
+	}
+	if gotName != "echo_tool" {
+		t.Fatalf("dispatcher must receive the bare built-in name, got %q", gotName)
+	}
+	if !strings.Contains(out, "swarmgo__echo_tool") {
+		t.Fatalf("summary should count the namespaced built-in call, got:\n%s", out)
+	}
+}
+
+// TestRunCodeBuiltinsOnlyDiscovery verifies run_code is usable with ZERO MCP
+// servers: the discovery listing shows the swarmgo built-ins module.
+func TestRunCodeBuiltinsOnlyDiscovery(t *testing.T) {
+	dir := t.TempDir()
+	builtins := []codemode.BuiltinDef{{
+		Name: "list_flows", Description: "List flows.", InputSchema: json.RawMessage(`{"type":"object"}`),
+	}}
+	tool := NewRunCodeTool(NewSandbox(dir), nil, nil, builtins, nil, nil, nil, nil)
+	out, err := tool.Call(t.Context(), []byte(`{}`))
+	if err != nil {
+		t.Fatalf("discovery failed: %v", err)
+	}
+	if !strings.Contains(out, "swarmgo: list_flows") {
+		t.Fatalf("listing must name the swarmgo module + function, got:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".swarmgo", "mcp", "swarmgo.py")); err != nil {
+		t.Fatalf("swarmgo bindings not written: %v", err)
 	}
 }
