@@ -36,6 +36,12 @@ interface Props {
   nameSuffix?: ReactNode
   /** Content pinned to the right edge of the row (badges, actions). */
   trailing?: ReactNode
+  /**
+   * Collapse to avatar-only on narrow (phone) widths — the name + secondary line
+   * are hidden below the `md` breakpoint, leaving just the avatar. Used by the
+   * composer's agent trigger so it stays compact on phones.
+   */
+  mobileIconOnly?: boolean
   className?: string
 }
 
@@ -51,6 +57,7 @@ export function AgentIdentity({
   dim,
   nameSuffix,
   trailing,
+  mobileIconOnly,
   className,
 }: Props) {
   const catalog = useCatalog()
@@ -64,9 +71,9 @@ export function AgentIdentity({
   }
 
   return (
-    <span className={`flex min-w-0 items-center ${s.gap} ${className ?? ''}`}>
+    <span className={`flex min-w-0 items-center text-left ${s.gap} ${className ?? ''}`}>
       <AgentAvatar agent={agent} size={s.avatar} active={active} />
-      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+      <span className={`min-w-0 flex-1 flex-col leading-tight ${mobileIconOnly ? 'hidden md:flex' : 'flex'}`}>
         <span
           className={`truncate ${s.name} ${
             dim ? 'italic text-[var(--color-text-dim)]' : 'text-[var(--color-text)]'

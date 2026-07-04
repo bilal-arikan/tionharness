@@ -24,7 +24,7 @@ import {
   AboutPanel,
 } from './settings/appPanels'
 import { useRegisterDirty } from '../lib/dirtySignals'
-import { Button } from './common'
+import { Button, CollapsibleListShell } from './common'
 import { ProvidersPanel } from './settings/ProvidersPanel'
 import { CommandsPanel } from './settings/CommandsPanel'
 import { StepKindsPanel } from './settings/StepKindsPanel'
@@ -48,6 +48,10 @@ interface Props {
   // event). On change the app-settings form reloads — but only when it has no
   // unsaved edits, so a concurrent agent change never clobbers in-progress typing.
   reloadNonce?: number
+  // Left category rail collapse — controlled from the app header's list toggle,
+  // matching every other list screen. Defaults to open when not provided.
+  navOpen?: boolean
+  onToggleNav?: () => void
 }
 
 const ALL_CATS: Cat[] = APP_CATS.map((c) => c.key)
@@ -59,7 +63,7 @@ function isCat(v: string | null | undefined): v is Cat {
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
 // The per-category forms live in ./settings/*.
-export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, onCatChange, reloadNonce = 0 }: Props) {
+export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, onCatChange, reloadNonce = 0, navOpen, onToggleNav }: Props) {
   // Category is controlled by the parent (URL deep-link) when onCatChange is
   // given; an unknown/empty routed category falls back to 'profile'.
   const [catState, setCatState] = useState<Cat>('profile')
@@ -221,8 +225,9 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
 
   return (
     <div className="flex min-h-0 flex-1">
-      {/* Left: category rail */}
-      <aside className="flex w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+      {/* Left: category rail (collapsible via the app header toggle; mobile drawer) */}
+      <CollapsibleListShell open={navOpen ?? true} onToggle={onToggleNav ?? (() => {})} label="Ayarlar" hideRail>
+      <aside className="flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm">
         <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
           Uygulama
         </div>
@@ -230,6 +235,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
           <CatButton key={c.key} c={c} active={cat === c.key} onClick={() => setCat(c.key)} dirty={c.key !== 'about' && c.key !== 'secrets' && !!dirtyApp} />
         ))}
       </aside>
+      </CollapsibleListShell>
 
       {/* Right: content for the active category */}
       <div className="flex flex-1 flex-col">

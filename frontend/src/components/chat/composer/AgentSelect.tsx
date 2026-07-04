@@ -38,7 +38,7 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
         }`}
       >
         {selected ? (
-          <AgentIdentity agent={selected} size="sm" subtitle="model" className="max-w-[180px]" />
+          <AgentIdentity agent={selected} size="sm" subtitle="model" mobileIconOnly className="md:max-w-[180px]" />
         ) : (
           <span>Ajan seç</span>
         )}

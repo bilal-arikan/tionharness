@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Eye, EyeOff, Copy, Trash2, KeyRound } from 'lucide-react'
 import { api } from '../../api'
 import type { Secret } from '../../types'
+import { copyToClipboard } from '../../lib/clipboard'
 import { Button } from '../common'
 import { useAsync } from '../../hooks/useAsync'
 
@@ -85,7 +86,7 @@ export function SecretsPanel({ onError }: Props) {
   const copyValue = async (s: Secret) => {
     try {
       const val = revealed[s.name] ?? (await api.revealSecret(s.name)).value
-      await navigator.clipboard.writeText(val)
+      await copyToClipboard(val)
     } catch (e) {
       onError((e as Error).message)
     }

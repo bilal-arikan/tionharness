@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { KeyRound, Sparkles, Copy, Check } from 'lucide-react'
 import { api } from '../../api'
+import { copyToClipboard } from '../../lib/clipboard'
 import type { AppSettings } from '../../types'
 import { Button, ModalOverlay } from '../common'
 import { inputCls } from './primitives'
@@ -43,12 +44,9 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
     : 'claude setup-token'
 
   const copyCmd = async () => {
-    try {
-      await navigator.clipboard.writeText(setupCmd)
+    if (await copyToClipboard(setupCmd)) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
-      setError('Panoya kopyalanamadı — komutu elle seç.')
     }
   }
 

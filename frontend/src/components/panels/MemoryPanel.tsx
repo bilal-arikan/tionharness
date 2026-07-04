@@ -135,14 +135,14 @@ export function MemoryPanel({ agent, onError }: Props) {
       <CoreMemoryCard agentId={agent.id} onError={onError} />
 
       {/* Add memory + reflect */}
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3 flex flex-wrap gap-2">
         <input
           data-testid="memory-content-input"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder={`${agent.name} için hatırlanacak bir bilgi ekle…`}
-          className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+          className="min-w-[10rem] flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
         />
         <Button data-testid="memory-add-document" onClick={add}>+ Belge</Button>
         <button

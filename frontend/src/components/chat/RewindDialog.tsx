@@ -60,7 +60,7 @@ export function RewindDialog({ messages, onRewind, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 max-md:items-end max-md:p-0 max-md:[&>*]:!w-full max-md:[&>*]:!max-w-none max-md:[&>*]:!max-h-[92dvh] max-md:[&>*]:!rounded-b-none"
       onMouseDown={onClose}
     >
       <div

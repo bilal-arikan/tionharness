@@ -374,7 +374,7 @@ export function Composer({
 
   return (
     <div
-      className={`relative border-t bg-[var(--color-surface)] px-6 py-4 transition-shadow ${
+      className={`relative border-t bg-[var(--color-surface)] px-3 py-3 transition-shadow md:px-6 md:py-4 ${
         dragOver
           ? 'border-[var(--color-border)] ring-2 ring-inset ring-[var(--color-accent)]'
           : active
@@ -449,8 +449,9 @@ export function Composer({
         />
 
         {/* Toolbar row: left = target agent + per-turn pickers + workdir + attach;
-            right = send/streaming actions. Fixed height regardless of input size. */}
-        <div className="flex items-center gap-1.5">
+            right = send/streaming actions. Wraps on narrow (mobile) widths so the
+            send cluster drops to its own line instead of overflowing the viewport. */}
+        <div className="flex flex-wrap items-center gap-1.5">
           <AgentSelect
             agents={agents}
             value={agentId}

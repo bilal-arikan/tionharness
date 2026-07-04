@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Trash2 } from 'lucide-react'
+import { RefreshCw, Trash2, Activity } from 'lucide-react'
 import type { Agent, AgentPatch } from '../../types'
 import { AgentIdentity } from './AgentIdentity'
 import { ProviderModelSelect } from './ProviderModelSelect'
 import { useCatalog, resolveModelLabel } from '../../lib/catalog'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
-import { Button, PromptEditor, SelectionBar, SelectionBarButton } from '../common'
+import { Button, PromptEditor, SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '../common'
 import {
-  SidebarHeader, NewItemButton, ResizeHandle, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
+  SidebarHeader, NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
 } from '../common/SidebarChrome'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
-import { useResizableSidebar } from '../../hooks/useResizableSidebar'
+import { useCollapsibleList } from '../../hooks/useCollapsibleList'
 
 interface Props {
   agents: Agent[]
@@ -52,6 +52,22 @@ export function AgentsView({
   const [refreshing, setRefreshing] = useState(false)
   const catalog = useCatalog()
 
+  // Left roster collapse (standard list pane) — toggled from the PaneHeader.
+  const { open: rosterOpen, toggle: toggleRoster } = useCollapsibleList('swarmgo.agentsListOpen')
+
+  // Right-hand activity panel visibility (persisted) — mirrors the chat
+  // SessionDetailPanel open/close affordance so the middle settings area can use
+  // the full width when the feed isn't needed.
+  const [activityOpen, setActivityOpen] = useState(
+    () => localStorage.getItem('swarmgo.agentActivityOpen') !== '0',
+  )
+  const toggleActivity = () =>
+    setActivityOpen((v) => {
+      const next = !v
+      localStorage.setItem('swarmgo.agentActivityOpen', next ? '1' : '0')
+      return next
+    })
+
   const doRefresh = async () => {
     if (!onRefresh || refreshing) return
     setRefreshing(true)
@@ -86,10 +102,6 @@ export function AgentsView({
 
   // Multi-select for bulk roster actions (Ctrl/Cmd+Click, Shift-range).
   const sel = useMultiSelect()
-  const { width, startDrag } = useResizableSidebar({
-    storageKey: 'swarmgo.agentsListWidth',
-    defaultWidth: 256,
-  })
   const orderedIds = useMemo(() => agents.map((a) => a.id), [agents])
   const bulkDelete = async () => {
     const ids = [...sel.selected]
@@ -108,11 +120,16 @@ export function AgentsView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1">
-      {/* Left: roster */}
-      <div
-        style={{ width }}
-        className="relative flex shrink-0 flex-col border-r border-[var(--color-border)]"
+    <div className="flex h-full min-h-0 flex-1">
+      {/* Left: roster — full-height sibling column (like chat). */}
+      <ListPane
+        open={rosterOpen}
+        onToggle={toggleRoster}
+        widthKey="swarmgo.agentsListWidth"
+        defaultWidth={256}
+        label="Ajanlar"
+        testId="agents-list-toggle"
+        hideRail
       >
         <SidebarHeader title="Ajanlar">
           {onRefresh && (
@@ -237,16 +254,24 @@ export function AgentsView({
             Sil
           </SelectionBarButton>
         </SelectionBar>
+      </ListPane>
 
-        <ResizeHandle onMouseDown={startDrag} />
-      </div>
-
-      {/* Middle: selected agent's settings */}
-      <div className="min-w-0 flex-1">
+      {/* Content column: the title bar sits ONLY here (right of the roster), like chat. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PaneHeader
+          title="Ajanlar"
+          listOpen={rosterOpen}
+          onToggleList={toggleRoster}
+          subtitle={selected ? `· ${selected.name}` : '· Ajan seçilmedi'}
+        />
+        <div className="flex min-h-0 flex-1 max-md:flex-col">
+        {/* Middle: selected agent's settings */}
+        <div className="min-w-0 flex-1">
         {selected ? (
           <AgentSettingsForm
             key={selected.id}
             agent={selected}
+            dirtyView="agents"
             onSave={(p) => onUpdateAgent(selected.id, p)}
             onDelete={async () => {
               if (confirm(`"${selected.name}" ajanı ve sahip olduğu oturumlar kalıcı olarak silinsin mi?`)) {
@@ -262,12 +287,30 @@ export function AgentsView({
         )}
       </div>
 
-      {/* Right: selected agent's live activity feed */}
-      <AgentActivityPanel
-        agentId={selected?.id ?? null}
-        onError={onError ?? (() => {})}
-        onOpenExecution={onOpenExecution}
-      />
+      {/* Right: selected agent's live activity feed — collapsible. When closed a
+          slim rail on the right edge reopens it (mobile: a full-width bar). */}
+      {activityOpen ? (
+        <AgentActivityPanel
+          agentId={selected?.id ?? null}
+          onError={onError ?? (() => {})}
+          onOpenExecution={onOpenExecution}
+          onClose={toggleActivity}
+        />
+      ) : (
+        <button
+          onClick={toggleActivity}
+          title="Aktivite panelini aç"
+          aria-label="Aktivite panelini aç"
+          className="flex w-9 shrink-0 flex-col items-center gap-2 border-l border-[var(--color-border)] bg-[var(--color-surface)] py-3 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] max-md:w-full max-md:flex-row max-md:justify-center max-md:border-l-0 max-md:border-t max-md:py-2"
+        >
+          <Activity size={16} className="shrink-0" />
+          <span className="text-[10px] [writing-mode:vertical-rl] max-md:[writing-mode:horizontal-tb]">
+            Aktivite
+          </span>
+        </button>
+      )}
+        </div>
+      </div>
     </div>
   )
 }

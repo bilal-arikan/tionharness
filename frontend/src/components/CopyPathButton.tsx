@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 import { displayPath } from '../lib/paths'
+import { copyToClipboard } from '../lib/clipboard'
 
 // Shared visual language for the path actions (copy path / open folder) used
 // across the app so they always look identical: a compact bordered icon button
@@ -34,7 +35,11 @@ export function CopyPathButton({ path, getPath, label, labelClassName = '', titl
     try {
       const text = getPath ? await getPath() : path ?? ''
       if (!text) return
-      await navigator.clipboard?.writeText(text)
+      // copyToClipboard falls back to a manual-copy prompt when the browser
+      // blocks programmatic copy (insecure LAN/HTTP context); it returns true
+      // only on a real programmatic copy, so gate the "Kopyalandı" flash on it.
+      const ok = await copyToClipboard(text, 'Yolu kopyalayın (Ctrl+C, Enter):')
+      if (!ok) return
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
     } catch (e) {

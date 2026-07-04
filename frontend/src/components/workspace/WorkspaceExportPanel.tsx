@@ -122,7 +122,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     [agents],
   )
   const flowEntries: PickEntry[] = useMemo(
-    () => flows.map((f) => ({ id: f.id, label: f.name || f.id, sub: f.description || undefined })),
+    () => flows.map((f) => ({ id: f.id, label: f.name || f.id, sub: f.id })),
     [flows],
   )
   const skillEntries: PickEntry[] = useMemo(

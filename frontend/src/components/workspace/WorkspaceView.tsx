@@ -8,7 +8,7 @@ import { AppearancePanel } from '../settings/appPanels'
 import { WorkspaceFilesPanel, type FilesSaveState } from '../settings/WorkspaceFilesPanel'
 import { ProjectPanel } from './ProjectPanel'
 import { WorkspaceExportPanel } from './WorkspaceExportPanel'
-import { Button } from '../common'
+import { Button, CollapsibleListShell } from '../common'
 import { useRegisterDirty } from '../../lib/dirtySignals'
 
 type Tab = 'general' | 'appearance' | 'project' | 'files' | 'export'
@@ -26,6 +26,9 @@ interface Props {
   // Active sub-tab, URL-synced by the parent (#/w/{ws}/workspace/{tab}).
   tab?: string | null
   onTabChange?: (t: string) => void
+  // Left sub-navbar collapse — controlled from the app header's list toggle.
+  navOpen?: boolean
+  onToggleNav?: () => void
 }
 
 const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
@@ -41,7 +44,7 @@ const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
 // workspace's General settings, its Project (path + git), and its prompt/
 // instruction Files. Moved out of the Settings screen so workspace + path
 // details have their own navbar-opened window.
-export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, onAppearanceSaved, tab: tabProp, onTabChange }: Props) {
+export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, onAppearanceSaved, tab: tabProp, onTabChange, navOpen, onToggleNav }: Props) {
   const tab: Tab = TAB_KEYS.includes(tabProp as Tab) ? (tabProp as Tab) : 'general'
   const setTab = (t: Tab) => onTabChange?.(t)
   const [ws, setWs] = useState<WorkspaceSettings | null>(null)
@@ -111,8 +114,9 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
 
   return (
     <div className="flex min-h-0 flex-1">
-      {/* Left sub-navbar */}
-      <aside className="flex w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+      {/* Left sub-navbar (collapsible via the app header toggle; mobile drawer) */}
+      <CollapsibleListShell open={navOpen ?? true} onToggle={onToggleNav ?? (() => {})} label="Workspace" hideRail>
+      <aside className="flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm">
         <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
           Workspace{ws ? ` · ${ws.name}` : ''}
         </div>
@@ -134,6 +138,7 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
           </button>
         ))}
       </aside>
+      </CollapsibleListShell>
 
       {/* Right content */}
       {/* min-w-0: without it this flex-1 column can't shrink below its content's

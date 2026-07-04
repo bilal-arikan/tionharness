@@ -14,7 +14,7 @@ import {
   MessagesSquare, ScanSearch, Search, Focus,
   // agents / sessions
   UserPlus, UserCog, UserMinus, Users, Bot, MessageSquarePlus, Send, ArrowLeftRight,
-  Inbox, Archive, FolderCog, Pencil,
+  Inbox, FolderCog, Pencil,
   // artifacts
   PackageOpen, PackagePlus, PackageCheck, PackageMinus, Package,
   // config
@@ -25,8 +25,6 @@ import {
   Bug, ScrollText,
   // flows
   Workflow, PencilRuler, ListTree, GitBranch, Play,
-  // goal
-  Target, CircleCheckBig,
   // hooks
   Webhook,
   // mcp
@@ -34,7 +32,7 @@ import {
   // schedule
   AlarmClock, CalendarPlus, CalendarCog, CalendarX, CalendarClock,
   // secrets
-  KeySquare, KeyRound, Lock,
+  KeyRound,
   // settings
   Settings, SlidersHorizontal,
   // skills
@@ -120,10 +118,6 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   get_flow: GitBranch,
   run_flow: Play,
 
-  // goal
-  set_session_goal: Target,
-  complete_goal: CircleCheckBig,
-
   // hooks
   list_hooks: Webhook,
   create_hook: Webhook,
@@ -143,15 +137,11 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   list_schedules: CalendarClock,
 
   // secrets
-  secret_list: KeySquare,
-  secret_get: KeyRound,
-  secret_set: Lock,
-  secret_delete: Trash2,
+  secret: KeyRound,
 
   // session edit
-  set_session_title: Pencil,
-  set_working_dir: FolderCog,
-  archive_session: Archive,
+  update_session: Pencil,
+  shell_manage: FolderCog,
   list_sessions: Inbox,
 
   // settings

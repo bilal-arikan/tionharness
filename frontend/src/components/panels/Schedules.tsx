@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Hourglass, Pencil, X } from 'lucide-react'
+import { Play, Hourglass, Pencil, X, Clock } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Schedule } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
@@ -311,8 +311,15 @@ export function Schedules({ agents, focusId, onError }: Props) {
         </div>
       )}
 
+      {/* Section header — schedules are cron/time based (sky accent), distinct
+          from the tag-triggered Automations below (violet accent). */}
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
+        <Clock size={15} className="text-sky-500" />
+        Zamanlamalar (cron / zaman tabanlı)
+      </div>
+
       {/* New schedule form */}
-      <div className="mb-4 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+      <div className="mb-4 space-y-2 rounded-lg border border-l-4 border-[var(--color-border)] border-l-sky-500 bg-[var(--color-surface)] p-3">
         <div className="flex flex-wrap items-start gap-2">
           <div data-testid="schedule-create-agent-wrap">
             <AgentPicker agents={agents} value={agentId} onChange={setAgentId} />
@@ -385,7 +392,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
           editId === s.id ? (
             <div
               key={s.id}
-              className="space-y-2 rounded-lg border border-[var(--color-accent)] bg-[var(--color-surface)] p-3 text-sm"
+              className="space-y-2 rounded-lg border border-l-4 border-[var(--color-accent)] border-l-sky-500 bg-[var(--color-surface)] p-3 text-sm"
             >
               <div className="flex flex-wrap items-start gap-2">
                 <AgentPicker agents={agents} value={editAgentId} onChange={setEditAgentId} />
@@ -459,7 +466,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
             data-testid="schedule-row"
             data-schedule-id={s.id}
             ref={s.id === focusId ? focusRef : undefined}
-            className={`flex items-center gap-3 rounded-lg border bg-[var(--color-surface)] px-3 py-2 text-sm transition ${
+            className={`flex items-center gap-3 rounded-lg border border-l-4 border-l-sky-500 bg-[var(--color-surface)] px-3 py-2 text-sm transition ${
               highlightId === s.id
                 ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]'
                 : 'border-[var(--color-border)]'

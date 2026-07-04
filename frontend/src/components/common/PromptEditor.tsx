@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { Check, Columns2, Copy, Eye, Maximize2, Minimize2, Pencil } from 'lucide-react'
 import { Markdown } from '../markdown/Markdown'
+import { copyToClipboard } from '../../lib/clipboard'
 
 // Textarea attributes we forward verbatim (placeholder, rows, maxLength,
 // onKeyDown, autoFocus, data-testid, …). value/onChange are typed explicitly.
@@ -61,12 +62,9 @@ export function PromptEditor({
   const m: ViewMode = mode ?? 'edit'
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
+    if (await copyToClipboard(value)) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Clipboard may be unavailable (insecure context) — fail silently.
     }
   }
 
@@ -179,7 +177,7 @@ export function PromptEditor({
 
       {full && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-8"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-8 max-md:p-0 max-md:[&>*]:!max-w-none max-md:[&>*]:!rounded-none"
           onClick={() => setFull(false)}
         >
           <div

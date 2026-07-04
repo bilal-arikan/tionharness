@@ -28,7 +28,7 @@ import {
 } from '../common/SidebarChrome'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { useCollapsibleList } from '../../hooks/useCollapsibleList'
-import { Play, Trash2, PanelLeftClose, X } from 'lucide-react'
+import { Play, Trash2, X } from 'lucide-react'
 
 interface Props {
   agents: Agent[]
@@ -486,16 +486,6 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         hideRail
       >
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        <div className="mb-2 flex justify-end md:hidden">
-          <button
-            onClick={toggleFlowsList}
-            title="Listeyi kapat"
-            aria-label="Listeyi kapat"
-            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-          >
-            <PanelLeftClose size={14} />
-          </button>
-        </div>
         {/* Tab switch */}
         <div className="mb-3 flex gap-1 rounded-lg bg-[var(--color-surface-2)] p-1 text-xs">
           {(['flows', 'templates', 'runs'] as const).map((t) => (

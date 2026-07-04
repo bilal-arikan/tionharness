@@ -16,7 +16,8 @@ import {
 } from './toolMeta'
 import { toolIcon } from '../../lib/toolIcons'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
-import { SelectionBar, SelectionBarButton } from '../common'
+import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '../common'
+import { useCollapsibleList } from '../../hooks/useCollapsibleList'
 
 interface Props {
   onError: (msg: string) => void
@@ -55,6 +56,7 @@ export function ToolsPanel({ onError }: Props) {
   const [savingTool, setSavingTool] = useState<string | null>(null)
   const [visBusy, setVisBusy] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.toolsListOpen')
   const [query, setQuery] = useState('')
   // List filters: a set of visibility tiers (empty = all) and an enabled/disabled
   // status filter. Independent of the search query — they narrow the same list.
@@ -367,9 +369,17 @@ export function ToolsPanel({ onError }: Props) {
   const params = useMemo(() => extractParams(selected?.inputSchema), [selected])
 
   return (
-    <div className="flex min-h-0 flex-1">
-      {/* Left: searchable, grouped tool list. */}
-      <aside className="flex w-72 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className="flex h-full min-h-0 flex-1">
+      {/* Left: searchable, grouped tool list — full-height sibling column (like chat). */}
+      <ListPane
+        open={listOpen}
+        onToggle={toggleList}
+        widthKey="swarmgo.toolsListWidth"
+        defaultWidth={288}
+        label="Araçlar"
+        testId="tools-list-toggle"
+        hideRail
+      >
         <div className="border-b border-[var(--color-border)] p-3">
           {/* Prominent, clearly-clickable jump to MCP server management. */}
           <button
@@ -547,10 +557,18 @@ export function ToolsPanel({ onError }: Props) {
             </SelectionBarButton>
           ))}
         </SelectionBar>
-      </aside>
+      </ListPane>
 
-      {/* Right: selected tool detail, or MCP server management. */}
-      <div className="flex-1 overflow-y-auto p-6">
+      {/* Right column: title bar + selected tool detail / MCP server management.
+          The title bar sits ONLY here, to the right of the list — like the chat header. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PaneHeader
+          title="Araçlar & MCP"
+          subtitle={selected ? `· ${selected.name}` : undefined}
+          listOpen={listOpen}
+          onToggleList={toggleList}
+        />
+        <div className="flex-1 overflow-y-auto p-6">
         {selected ? (
           <ToolDetail
             tool={selected}
@@ -590,6 +608,7 @@ export function ToolsPanel({ onError }: Props) {
             onImport={importServers}
           />
         )}
+      </div>
       </div>
     </div>
   )

@@ -11,6 +11,8 @@ import {
   GitBranch,
   Boxes,
   Database,
+  Menu,
+  PanelLeftClose,
   Wrench,
   Server,
   ArrowUpCircle,
@@ -26,7 +28,8 @@ import { api } from '../../api'
 import type { PriceTable } from '../../api/providers'
 import type { PreviewItem } from '../../api/ingest'
 import { Markdown } from '../markdown/Markdown'
-import { Button, ModalOverlay } from '../common'
+import { Button, ModalOverlay, ListPane } from '../common'
+import { useCollapsibleList } from '../../hooks/useCollapsibleList'
 import { SkillImportDialog } from './SkillImportDialog'
 import { RegistryManager } from './RegistryManager'
 
@@ -357,7 +360,6 @@ function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
                     {hasBranch && <MiniChip>branch</MiniChip>}
                     {hasParallel && <MiniChip>parallel</MiniChip>}
                   </div>
-                  {f.description && <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">{f.description}</div>}
                   <div className="mt-1.5 flex flex-wrap items-center gap-1">
                     {nodes.map((n, j) => {
                       const NIcon = NODE_ICON[n.type]
@@ -605,6 +607,7 @@ function packTargetKey(pack: Pack): { set: keyof ExistingKeys; key: string } | n
 
 export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   const [packs, setPacks] = useState<Pack[]>([])
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.marketListOpen')
   const [tab, setTab] = useState<PackKind>(KIND_NAV[0].key)
   const [selected, setSelected] = useState<Pack | null>(null)
   const [busy, setBusy] = useState(false)
@@ -832,11 +835,31 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
 
   return (
     <div className="flex h-full">
-      {/* Kind filter rail */}
-      <div className="flex w-44 shrink-0 flex-col gap-1 border-r border-[var(--color-border)] p-2">
-        <span className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-          Kategoriler
-        </span>
+      {/* Kind filter rail — standard ListPane column. */}
+      <ListPane
+        open={listOpen}
+        onToggle={toggleList}
+        widthKey="swarmgo.marketListWidth"
+        defaultWidth={200}
+        minWidth={160}
+        label="Kategoriler"
+        testId="market-list-toggle"
+        hideRail
+      >
+      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+        <div className="flex items-center justify-between px-2 py-1">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+            Kategoriler
+          </span>
+          <button
+            onClick={toggleList}
+            title="Listeyi kapat"
+            aria-label="Listeyi kapat"
+            className="rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] md:hidden"
+          >
+            <PanelLeftClose size={13} />
+          </button>
+        </div>
         {KIND_NAV.map((k) => {
           const Icon = k.icon
           const count = packs.filter((p) => p.kind === k.key).length
@@ -860,11 +883,21 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
           )
         })}
       </div>
+      </ListPane>
 
       {/* Catalog */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              onClick={toggleList}
+              title={listOpen ? 'Listeyi gizle' : 'Listeyi göster'}
+              aria-label="Kategori panelini aç/kapat"
+              data-testid="pane-list-toggle"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] md:hidden"
+            >
+              <Menu size={18} />
+            </button>
             <Store size={18} className="text-[var(--color-accent)]" />
             <h2 className="text-sm font-semibold">Market</h2>
             <span className="text-xs text-[var(--color-text-dim)]">{visible.length} paket</span>

@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Lightbox } from '../common'
+import { copyToClipboard } from '../../lib/clipboard'
+import { Copy, Check } from 'lucide-react'
 
 interface Props {
   code: string
@@ -105,7 +107,8 @@ export function MermaidDiagram({ code }: Props) {
   }, [code, baseId, themeTick])
 
   const copy = () => {
-    navigator.clipboard.writeText(code).then(() => {
+    copyToClipboard(code).then((ok) => {
+      if (!ok) return
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
     })
@@ -151,9 +154,10 @@ export function MermaidDiagram({ code }: Props) {
             <button
               onClick={copy}
               title={copied ? 'Kopyalandı' : 'Kodu kopyala'}
+              aria-label={copied ? 'Kopyalandı' : 'Kodu kopyala'}
               className="rounded px-1.5 py-0.5 hover:bg-[var(--color-surface-2)]"
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
             </button>
           </div>
         </div>

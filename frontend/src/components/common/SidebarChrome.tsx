@@ -13,8 +13,16 @@ export const SELECTED_ITEM_CLS = 'bg-[var(--color-accent-soft)] text-[var(--colo
 export const SELECTED_ITEM_RING = 'ring-1 ring-[var(--color-accent)]'
 
 // SidebarHeader is the top row of a list column: an uppercase title on the left
-// and optional actions (typically a RefreshButton) on the right.
-export function SidebarHeader({ title, children }: { title: string; children?: ReactNode }) {
+// and optional actions (typically a RefreshButton) on the right. Like the chat
+// sessions sidebar, it has NO collapse button — on mobile the drawer is dismissed
+// by tapping the backdrop; on desktop the column is always visible.
+export function SidebarHeader({
+  title,
+  children,
+}: {
+  title: string
+  children?: ReactNode
+}) {
   return (
     <div className="flex items-center justify-between px-4 pt-4 pb-1">
       <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">

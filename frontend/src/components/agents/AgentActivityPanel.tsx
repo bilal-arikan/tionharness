@@ -7,6 +7,7 @@ import {
   Activity,
   RefreshCw,
   ChevronRight,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 import type { Execution } from '../../types'
@@ -19,6 +20,8 @@ interface Props {
   onError: (msg: string) => void
   // Jump to the Activity (executions) view with this run pre-selected.
   onOpenExecution?: (sessionId: string) => void
+  // Collapse the panel (matches the chat SessionDetailPanel close affordance).
+  onClose?: () => void
 }
 
 // Per-kind display metadata mirrors the unified executions feed so an agent's
@@ -42,7 +45,7 @@ function kindMeta(kind: string) {
 // so no backend work is needed — every run path already funnels into a Session
 // tagged with its owner agent. Clicking a row opens the full transcript on the
 // Activity screen.
-export function AgentActivityPanel({ agentId, onError, onOpenExecution }: Props) {
+export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose }: Props) {
   const [items, setItems] = useState<Execution[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -117,7 +120,7 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution }: Props)
   return (
     <aside
       style={{ width }}
-      className="relative flex shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]"
+      className="relative flex shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] max-md:!w-full max-md:border-l-0 max-md:border-t"
     >
       {/* Drag handle on the left edge — widen the panel by dragging left. */}
       <div
@@ -134,13 +137,25 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution }: Props)
             </span>
           )}
         </span>
-        <button
-          onClick={refresh}
-          title="Yenile"
-          className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-        >
-          <RefreshCw size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={refresh}
+            title="Yenile"
+            className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+          >
+            <RefreshCw size={14} />
+          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              title="Aktivite panelini kapat"
+              aria-label="Aktivite panelini kapat"
+              className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">

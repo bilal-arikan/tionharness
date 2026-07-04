@@ -354,17 +354,21 @@ export function SessionsSidebar({
                               {s.parentSessionId ? '↩ handoff' : '✦ spawn'}
                             </span>
                           )}
-                          <span className="shrink-0 font-mono text-[9px] opacity-50" title="Oturum ID">
+                        </span>
+                        {/* Meta row: status/time on the left, the session ID on a
+                            row of its own below the title (moved off the title line). */}
+                        <span className="flex items-center gap-1.5 text-[10px]">
+                          {isStreaming ? (
+                            <span className="truncate font-medium text-[var(--color-success)]">yazıyor…</span>
+                          ) : (
+                            <span className="truncate opacity-60">
+                              {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
+                            </span>
+                          )}
+                          <span className="ml-auto shrink-0 font-mono opacity-50" title="Oturum ID">
                             {s.id}
                           </span>
                         </span>
-                        {isStreaming ? (
-                          <span className="truncate text-[10px] font-medium text-[var(--color-success)]">yazıyor…</span>
-                        ) : (
-                          <span className="truncate text-[10px] opacity-60">
-                            {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
-                          </span>
-                        )}
                       </span>
                     </button>
                   )}

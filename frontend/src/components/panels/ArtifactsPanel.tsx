@@ -10,11 +10,13 @@ import { CopyPathButton } from '../CopyPathButton'
 import { RevealButton } from '../RevealButton'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
+import { copyToClipboard } from '../../lib/clipboard'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
-import { useResizableSidebar } from '../../hooks/useResizableSidebar'
-import { SelectionBar, SelectionBarButton } from '../common'
+import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '../common'
+import { useCollapsibleList } from '../../hooks/useCollapsibleList'
+import { useRegisterDirty } from '../../lib/dirtySignals'
 import {
-  SidebarHeader, RefreshButton, NewItemButton, ResizeHandle,
+  SidebarHeader, RefreshButton, NewItemButton,
   SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
 } from '../common/SidebarChrome'
 import {
@@ -142,10 +144,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk artifact deletion.
   const sel = useMultiSelect()
-  const { width, startDrag } = useResizableSidebar({
-    storageKey: 'swarmgo.artifactsListWidth',
-    defaultWidth: 288,
-  })
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.artifactsListOpen')
   const bulkDelete = useCallback(async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
@@ -210,9 +209,24 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
     }
   }, [active, draft, onError])
 
+  // Unsaved-edits flag: an open draft whose fields differ from the persisted
+  // artifact. Surfaces on the nav "Artifactlar" item + workspace label.
+  const dirty = useMemo(
+    () =>
+      !!draft &&
+      !!active &&
+      (draft.title !== active.title ||
+        draft.kind !== active.kind ||
+        draft.language !== active.language ||
+        draft.content !== active.content),
+    [draft, active],
+  )
+  useRegisterDirty('artifacts', dirty)
+
   const copy = useCallback(() => {
     if (!active) return
-    navigator.clipboard.writeText(active.content).then(() => {
+    copyToClipboard(active.content).then((ok) => {
+      if (!ok) return
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
     })
@@ -287,12 +301,12 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
 
   return (
     <div
-      className="relative flex min-h-0 flex-1"
+      className="relative flex h-full min-h-0 flex-1"
       onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
       {/* Drop overlay */}
       {(dragging || importing) && (
         <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 border-2 border-dashed border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_12%,var(--color-bg))]/90 backdrop-blur-sm">
@@ -303,10 +317,15 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         </div>
       )}
 
-      {/* List */}
-      <div
-        style={{ width }}
-        className="relative flex flex-shrink-0 flex-col border-r border-[var(--color-border)]"
+      {/* Standard list column (ListPane: collapse + mobile drawer + resize + theme) */}
+      <ListPane
+        open={listOpen}
+        onToggle={toggleList}
+        widthKey="swarmgo.artifactsListWidth"
+        defaultWidth={288}
+        label="Artifactlar"
+        testId="artifacts-list-toggle"
+        hideRail
       >
         <SidebarHeader
           title={`Artifactlar · ${filtered.length === list.length ? list.length : `${filtered.length}/${list.length}`}`}
@@ -424,19 +443,24 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             Sil
           </SelectionBarButton>
         </SelectionBar>
+      </ListPane>
 
-        <ResizeHandle onMouseDown={startDrag} />
-      </div>
-
-      {/* Viewer / Editor */}
+      {/* Viewer / Editor column: the standard title bar sits ONLY here, to the
+          right of the list — like the chat header (never spans over the list). */}
       <div className="flex min-w-0 flex-1 flex-col">
+        <PaneHeader
+          title="Artifactlar"
+          subtitle={active ? `· ${active.title}` : undefined}
+          listOpen={listOpen}
+          onToggleList={toggleList}
+        />
         {!active ? (
           <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
             Görüntülemek için bir artifact seç.
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3">
               <div className="flex min-w-0 items-center gap-2">
                 <FileCode size={16} className="shrink-0 text-[var(--color-accent)]" />
                 <div className="min-w-0">
@@ -456,7 +480,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {draft ? (
                   <>
                     <button
@@ -479,8 +503,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     <button data-testid="artifact-detail-copy" onClick={copy} title="İçeriği kopyala" className={iconBtn}>
                       {copied ? <Check size={15} /> : <Copy size={15} />}
                     </button>
-                    <CopyPathButton path={activePath} label="Yolu kopyala" title="Yolu kopyala" />
-                    <RevealButton testId="artifact-detail-reveal" onReveal={reveal} disabled={!activePath} label="Aç" />
+                    <CopyPathButton path={activePath} label="Yolu kopyala" labelClassName="hidden" title="Yolu kopyala" />
+                    <RevealButton testId="artifact-detail-reveal" onReveal={reveal} disabled={!activePath} label="Aç" labelClassName="hidden sm:inline" />
                     {active.sessionId && onOpenSession && (
                       <button
                         onClick={() => onOpenSession(active.sessionId)}

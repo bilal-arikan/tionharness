@@ -54,7 +54,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm max-md:items-end max-md:p-0 max-md:[&>*]:!w-full max-md:[&>*]:!max-w-none max-md:[&>*]:!max-h-[92dvh] max-md:[&>*]:!rounded-b-none"
       onClick={onClose}
     >
       <div

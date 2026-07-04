@@ -48,13 +48,15 @@ interface Props {
   onDeleteWorkspace: (id: string) => void
 }
 
-const NAV: { key: View; label: string; icon: LucideIcon }[] = [
+// NAV is the primary view list. Exported so the mobile bottom bar renders the
+// same set from a single source of truth.
+export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
   { key: 'executions', label: 'Aktivite', icon: Activity },
   { key: 'agents', label: 'Ajanlar', icon: Users },
   { key: 'network', label: 'Ağ', icon: Share2 },
   { key: 'board', label: 'Görevler', icon: LayoutGrid },
-  { key: 'schedules', label: 'Zamanlamalar', icon: Clock },
+  { key: 'schedules', label: 'Otomasyon', icon: Clock },
   { key: 'memory', label: 'Hafıza', icon: Database },
   { key: 'flows', label: 'Akışlar', icon: GitBranch },
   { key: 'artifacts', label: 'Artifactlar', icon: FileCode },
@@ -171,7 +173,7 @@ export function NavRail({
 
   return (
     <nav
-      className={`flex h-full flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-sm)] transition-all duration-200 ${
+      className={`hidden h-full flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-sm)] transition-all duration-200 md:flex ${
         collapsed ? 'w-14' : 'w-52'
       }`}
     >

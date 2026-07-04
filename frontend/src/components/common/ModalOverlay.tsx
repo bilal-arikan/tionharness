@@ -22,9 +22,14 @@ export function ModalOverlay({
   closeOnEscape = true,
 }: Props) {
   useEscapeKey(onClose, closeOnEscape)
+  // On portrait phones (`< md`) every modal becomes a bottom sheet: pinned to the
+  // bottom edge, full-width, flat bottom corners, capped at 92dvh with the dialog's
+  // own inner scroll. The `[&>*]` important overrides win over each child's fixed
+  // width / max-width / rounding, so all 13 ModalOverlay consumers adapt from one
+  // place. On `md+` the classes are inert and the centered desktop dialog is intact.
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${padding} ${className}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${padding} ${className} max-md:items-end max-md:p-0 max-md:[&>*]:!w-full max-md:[&>*]:!max-w-none max-md:[&>*]:!max-h-[92dvh] max-md:[&>*]:!rounded-b-none`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}

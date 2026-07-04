@@ -11,14 +11,15 @@ import {
 } from 'lucide-react'
 import type { Agent, Message } from '../../types'
 import { api } from '../../api'
+import { copyToClipboard } from '../../lib/clipboard'
 import { MessageList } from '../chat/MessageList'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { useAsync } from '../../hooks/useAsync'
-import { useResizableSidebar } from '../../hooks/useResizableSidebar'
-import { SelectionBar, SelectionBarButton } from '../common'
-import { SidebarHeader, RefreshButton, ResizeHandle } from '../common/SidebarChrome'
+import { useCollapsibleList } from '../../hooks/useCollapsibleList'
+import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '../common'
+import { SidebarHeader, RefreshButton } from '../common/SidebarChrome'
 import { CopyPathButton } from '../CopyPathButton'
 import { RevealButton } from '../RevealButton'
 
@@ -105,14 +106,11 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The feed is read-only, so the
   // one bulk action is copying the selected session ids (handy for cross-tooling).
   const sel = useMultiSelect()
-  const { width, startDrag } = useResizableSidebar({
-    storageKey: 'swarmgo.executionsListWidth',
-    defaultWidth: 320,
-  })
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.executionsListOpen')
   const bulkCopyIds = () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
-    navigator.clipboard?.writeText(ids.join('\n')).catch(() => {})
+    void copyToClipboard(ids.join('\n'))
     sel.clear()
   }
 
@@ -194,10 +192,16 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
 
   return (
     <div className="flex h-full min-h-0">
-      {/* Master: the executions list */}
-      <aside
-        style={{ width }}
-        className="relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
+      {/* Master: the executions list — a full-height sibling column (like the chat
+          sessions sidebar), so the title bar never spans over it. */}
+      <ListPane
+        open={listOpen}
+        onToggle={toggleList}
+        widthKey="swarmgo.executionsListWidth"
+        defaultWidth={320}
+        label="Yürütmeler"
+        testId="executions-list-toggle"
+        hideRail
       >
         <SidebarHeader title="Yürütmeler">
           <RefreshButton onClick={() => reloadItems()} />
@@ -297,29 +301,50 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
             Kimlikleri kopyala
           </SelectionBarButton>
         </SelectionBar>
+      </ListPane>
 
-        <ResizeHandle onMouseDown={startDrag} />
-      </aside>
-
-      {/* Detail: the selected execution's transcript (read-only) */}
+      {/* Detail column: the standard title bar (PaneHeader) + the selected
+          execution's transcript. The title bar sits ONLY above the content, to the
+          right of the list — exactly like the chat header. */}
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        {selected ? (
-          <>
-            <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
-              {/* Path actions (top-left): open the session folder + copy its path. */}
-              <div className="flex shrink-0 items-center gap-1">
-                <RevealButton
-                  onReveal={() => api.revealSession(selected.sessionId).catch((e) => onError((e as Error).message))}
-                  label="Aç"
-                  title={sessPath ? `Klasörü aç: ${sessPath}` : 'Klasörü aç'}
-                />
+        <PaneHeader
+          title="Aktivite"
+          subtitle={selected ? `· ${selected.title || kindMeta(selected.kind).label}` : undefined}
+          listOpen={listOpen}
+          onToggleList={toggleList}
+          right={
+            selected ? (
+              <div className="flex items-center gap-1.5">
+                {/* Path actions — same components + look as the chat header. */}
                 <CopyPathButton
                   getPath={async () => sessPath || (await api.sessionPath(selected.sessionId)).path}
                   label="Yolu kopyala"
+                  labelClassName="hidden"
                   title="Yolu kopyala"
                   onError={onError}
                 />
+                <RevealButton
+                  onReveal={() => api.revealSession(selected.sessionId).catch((e) => onError((e as Error).message))}
+                  label="Aç"
+                  labelClassName="hidden sm:inline"
+                  title={sessPath ? `Klasörü aç: ${sessPath}` : 'Klasörü aç'}
+                />
+                {selected.kind === 'flow' && selected.sourceId && onOpenFlowRun && (
+                  <button
+                    onClick={() => onOpenFlowRun(selected.sourceId!)}
+                    title="Bu akışın koşularını Akışlar ekranında aç"
+                    className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  >
+                    <GitBranch size={13} /> <span className="hidden sm:inline">Akış görünümü</span>
+                  </button>
+                )}
               </div>
+            ) : undefined
+          }
+        />
+        {selected ? (
+          <>
+            <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-2">
               {(() => {
                 const Icon = kindMeta(selected.kind).icon
                 return <Icon size={16} className="text-[var(--color-text-dim)]" />
@@ -333,7 +358,7 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
               </span>
               <button
                 type="button"
-                onClick={() => navigator.clipboard?.writeText(selected.sessionId).catch(() => {})}
+                onClick={() => void copyToClipboard(selected.sessionId)}
                 title={`Kimliği kopyala: ${selected.sessionId}`}
                 className="flex items-center gap-1 rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
               >
@@ -341,15 +366,6 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
               </button>
               {selected.running && (
                 <span className="ml-1 text-[11px] font-medium text-[var(--color-success)]">çalışıyor…</span>
-              )}
-              {selected.kind === 'flow' && selected.sourceId && onOpenFlowRun && (
-                <button
-                  onClick={() => onOpenFlowRun(selected.sourceId!)}
-                  title="Bu akışın koşularını Akışlar ekranında aç"
-                  className="ml-auto flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                >
-                  <GitBranch size={13} /> Akış görünümü
-                </button>
               )}
             </header>
             <MessageList

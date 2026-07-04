@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Eye, Trash2 } from 'lucide-react'
 import { api } from '../../api'
+import { useRegisterDirty } from '../../lib/dirtySignals'
+import type { View } from '../NavRail'
 import { CopyPathButton } from '../CopyPathButton'
 import { RevealButton } from '../RevealButton'
 import type { Agent, AgentPatch } from '../../types'
@@ -25,13 +27,17 @@ interface Props {
   cancelLabel?: string
   /** Danger action: when set, a "Sil" button is shown at the footer-left. */
   onDelete?: () => void
+  /** When set, unsaved edits are surfaced on this nav view's dirty indicator.
+   * The AgentsView page passes "agents"; the modal reuse leaves it unset so it
+   * does not flag the nav from an unrelated screen. */
+  dirtyView?: View
 }
 
 // AgentSettingsForm is the editable agent profile (visual identity + core
 // fields). It is reused both inside the modal (roster gear) and as the right
 // pane of the two-panel Agents view. Mount with a key={agent.id} so switching
 // the selected agent resets the field state.
-export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabel = 'İptal', onDelete }: Props) {
+export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabel = 'İptal', onDelete, dirtyView }: Props) {
   const [name, setName] = useState(agent.name)
   // Seed with a normalized avatar so an existing mojibake value is repaired on
   // open and persisted clean when the form is saved.
@@ -48,6 +54,25 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
   const [previewOpen, setPreviewOpen] = useState(false)
+
+  // Unsaved-edits flag: current form fields vs the agent's persisted values.
+  // (The tools section saves instantly on its own, so it is not part of this.)
+  const dirty = useMemo(
+    () =>
+      name !== agent.name ||
+      avatar !== (normalizeAvatar(agent.avatar) ?? '') ||
+      color !== (agent.color ?? '') ||
+      soul !== (agent.soul ?? '') ||
+      identity !== (agent.identity ?? '') ||
+      provider !== agent.provider ||
+      model !== (agent.model ?? '') ||
+      thinkingLevel !== (agent.thinkingLevel ?? '') ||
+      permissionMode !== (agent.permissionMode || 'auto') ||
+      JSON.stringify(skills) !== JSON.stringify(agent.skills ?? []),
+    [name, avatar, color, soul, identity, provider, model, thinkingLevel, permissionMode, skills, agent],
+  )
+  // Surface unsaved agent edits on the nav "Ajanlar" item (page reuse only).
+  useRegisterDirty(dirtyView, dirty)
 
   const preview: Pick<Agent, 'id' | 'name' | 'avatar' | 'color'> = {
     id: agent.id,
@@ -118,6 +143,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
             testId="agent-copy-path"
             getPath={async () => (await api.agentPath(agent.id)).path}
             label="Yolu kopyala"
+            labelClassName="hidden"
             title="Ajanın disk üzerindeki JSON dosya yolunu kopyala"
             onError={setErr}
           />

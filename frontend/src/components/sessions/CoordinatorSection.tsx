@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Network, Users, CheckCircle2, Play } from 'lucide-react'
+import { Loader2, Network, Users, CheckCircle2, Play, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../../api'
 import type { WorkerInfo } from '../../types'
 
@@ -23,6 +23,16 @@ export function CoordinatorSection({ sessionId, role, refreshKey, onError, onRol
   const isWorker = role === 'worker'
   const [toggling, setToggling] = useState(false)
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
+  // Worker roster collapse (persisted) — the list can get long, so let it fold.
+  const [workersOpen, setWorkersOpen] = useState(
+    () => localStorage.getItem('swarmgo.coordWorkersOpen') !== '0',
+  )
+  const toggleWorkers = () =>
+    setWorkersOpen((v) => {
+      const next = !v
+      localStorage.setItem('swarmgo.coordWorkersOpen', next ? '1' : '0')
+      return next
+    })
 
   const loadWorkers = useCallback(() => {
     if (!isCoordinator) return
@@ -109,6 +119,16 @@ export function CoordinatorSection({ sessionId, role, refreshKey, onError, onRol
               Henüz worker yok. Sohbette <code>spawn_worker</code> ile paralel worker başlatın.
             </p>
           ) : (
+            <>
+            <button
+              onClick={toggleWorkers}
+              aria-expanded={workersOpen}
+              className="flex w-full items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+            >
+              {workersOpen ? <ChevronDown size={12} className="shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
+              Worker'lar · {workers.length}
+            </button>
+            {workersOpen && (
             <ul className="space-y-1.5">
               {workers.map((w) => (
                 <li
@@ -132,6 +152,8 @@ export function CoordinatorSection({ sessionId, role, refreshKey, onError, onRol
                 </li>
               ))}
             </ul>
+            )}
+            </>
           )}
         </div>
       )}

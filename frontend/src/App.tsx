@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
-import { PanelRight } from 'lucide-react'
+import { PanelRight, Menu } from 'lucide-react'
 import { CopyPathButton } from './components/CopyPathButton'
 import { RevealButton } from './components/RevealButton'
 import { ErrorToast } from './components/common/ErrorToast'
 import { api, getActiveWorkspace, setActiveWorkspace } from './api'
-import type { Agent, AgentPatch, Artifact, Session, Message, AppEvent } from './types'
+import type { Agent, AgentPatch, Artifact, Session, Message, AppEvent, TurnStep } from './types'
 import { NavRail, type View } from './components/NavRail'
+import { MobileNavBar } from './components/MobileNavBar'
 import { SessionsSidebar } from './components/sessions/SessionsSidebar'
 import { AgentRoster } from './components/agents/AgentRoster'
 import { AgentsView } from './components/agents/AgentsView'
@@ -39,7 +40,6 @@ import { SkillsPanel } from './components/panels/SkillsPanel'
 import { ToolsPanel as ToolCatalogPanel } from './components/panels/ToolsPanel'
 import { MarketPanel } from './components/panels/MarketPanel'
 import { BudgetPanel } from './components/panels/BudgetPanel'
-import { ChatMeters } from './components/panels/ChatMeters'
 import { SessionDetailPanel } from './components/sessions/SessionDetailPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { WorkspaceView } from './components/workspace/WorkspaceView'
@@ -55,8 +55,11 @@ import { useDirtyViews } from './lib/dirtySignals'
 import { viewForEventType } from './lib/eventViews'
 import { useChatStream } from './hooks/useChatStream'
 import { useUrlSync } from './hooks/useUrlSync'
+import { useIsMobile } from './hooks/useMediaQuery'
+import { useCollapsibleList } from './hooks/useCollapsibleList'
 import { parseRoute, routeIdForView, routeFromEvent, buildRoute, type Route } from './lib/url'
 import { isImagePath, mediaUrl } from './lib/paths'
+import { copyToClipboard } from './lib/clipboard'
 import { applyAppearance, resolveAppearance, type Appearance } from './lib/theme'
 import { applyKeepAwake, ensureNotificationPermission, notify } from './lib/clientPrefs'
 
@@ -86,7 +89,7 @@ const VIEW_TITLE: Record<View, string> = {
   agents: 'Ajanlar',
   network: 'Ağ',
   board: 'Görevler',
-  schedules: 'Zamanlamalar',
+  schedules: 'Otomasyon',
   memory: 'Hafıza',
   flows: 'Akışlar',
   artifacts: 'Artifactlar',
@@ -194,6 +197,19 @@ export default function App() {
     return () => clearTimeout(t)
   }, [hadSetupAtBoot])
 
+  // Portrait-phone layout flag: below Tailwind's `md` breakpoint the desktop rail
+  // and persistent sidebars collapse into a bottom nav + slide-in drawers.
+  const isMobile = useIsMobile()
+  // Mobile-only: the left list column (chat sessions OR the memory agent roster)
+  // is a slide-in drawer instead of an always-visible column. Opened via the
+  // header hamburger; closed on select. One flag shared across list-bearing views.
+  const [mobileListOpen, setMobileListOpen] = useState(false)
+
+  // App-headed list screens (workspace / settings) own their category-rail
+  // collapse here so the app header's toggle button and the panel share one flag.
+  const workspaceNav = useCollapsibleList('swarmgo.workspaceNavOpen')
+  const settingsNav = useCollapsibleList('swarmgo.settingsNavOpen')
+
   // Right-hand session detail panel visibility (persisted).
   const [detailOpen, setDetailOpen] = useState(
     () => localStorage.getItem('swarmgo.detailOpen') === '1',
@@ -216,6 +232,13 @@ export default function App() {
   // Latest autonomous-event handler, refreshed each render so the once-mounted
   // SSE subscription always navigates with current state/closures.
   const onEventRef = useRef<(e: AppEvent) => void>(() => {})
+  // Latest live turn-step handler (session_step bus frames), refreshed each render
+  // so the once-mounted SSE subscription always sees current closures.
+  const onStepRef = useRef<(e: AppEvent) => void>(() => {})
+  // Live handle to the chat hook for effects declared ABOVE its definition (the
+  // messages-load effect): the ref is read post-render when the binding is set,
+  // sidestepping the temporal-dead-zone the const would hit in a deps array.
+  const chatRef = useRef<ReturnType<typeof useChatStream> | null>(null)
   // Artifact deep-link target: set when a chat artifact card is clicked, opening
   // the artifacts screen with that artifact pre-selected.
   const [artifactTarget, setArtifactTarget] = useState<string | null>(
@@ -351,7 +374,7 @@ export default function App() {
     if (isImagePath(path)) {
       window.open(mediaUrl(path), '_blank')
     } else {
-      navigator.clipboard?.writeText(path).catch(() => {})
+      void copyToClipboard(path)
     }
   }, [])
 
@@ -370,13 +393,27 @@ export default function App() {
     setView('artifacts')
   }, [])
 
-  // When the active session changes, load its messages.
+  // When the active session changes, load its messages. If a turn is still
+  // streaming (a mid-turn reload, or switching to a running session), restore the
+  // in-progress assistant bubble (agent + steps-so-far) from the inflight snapshot
+  // so it isn't blank until the turn ends; the session-step bus then grows it live.
   useEffect(() => {
     if (!activeSessionId) {
       setMessages([])
       return
     }
-    api.listMessages(activeSessionId).then(setMessages)
+    const sid = activeSessionId
+    api
+      .listMessages(sid)
+      .then((msgs) => {
+        setMessages(msgs)
+        // chat is defined below in render order; the callback runs post-render so
+        // the binding is initialised by the time this fires (same pattern as the
+        // SSE onEvent handler). Keep it out of the deps array to avoid a TDZ read.
+        void chatRef.current?.recoverInflight(sid, msgs)
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId])
 
   // Artifacts offered by the composer's "#" picker so the user can include an
@@ -519,7 +556,7 @@ export default function App() {
   const copySessionPath = useCallback(async (id: string) => {
     try {
       const { path } = await api.sessionPath(id)
-      await navigator.clipboard?.writeText(path)
+      await copyToClipboard(path, 'Yolu kopyalayın (Ctrl+C, Enter):')
     } catch (e) {
       setError((e as Error).message)
     }
@@ -680,6 +717,18 @@ export default function App() {
           chat.clearPending(sid)
         }
         if (sid === activeSessionIdRef.current) {
+          chat.clearAutoLive(sid)
+          api.listMessages(sid).then(setMessages).catch(() => {})
+        }
+      }
+      // Autonomous turn completion (spawn / coordinator worker / scheduled run):
+      // like the chat branch, drop the live ghost bubble and reload the transcript
+      // so the authoritative persisted turn (with its full trace) replaces it. These
+      // types carry no wake-phase logic — a plain reload is enough.
+      if ((e.type === 'spawned' || e.type === 'worker' || e.type === 'schedule') && sid) {
+        chat.clearPending(sid)
+        if (sid === activeSessionIdRef.current) {
+          chat.clearAutoLive(sid)
           api.listMessages(sid).then(setMessages).catch(() => {})
         }
       }
@@ -705,8 +754,23 @@ export default function App() {
     }, tag)
   }
 
-  // Subscribe once to the global autonomous-event feed (task/schedule).
-  useEffect(() => api.subscribeEvents((e) => onEventRef.current(e)), [])
+  // Live turn-activity frames (session_step): fold each step into the active
+  // session's ghost bubble so an autonomous turn (scheduler/spawn/worker/wake) or
+  // the same chat turn viewed in another window renders its thinking/tool steps
+  // live. Ignore frames from other workspaces (their session isn't on screen here).
+  onStepRef.current = (e: AppEvent) => {
+    if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) return
+    const sid = e.target?.sessionId
+    if (!sid || !e.step) return
+    chat.applyAutoStep(sid, e.step as TurnStep)
+  }
+
+  // Subscribe once to the global feed: notifications (onEvent) + live turn steps
+  // (onStep). Both ride one EventSource; the refs keep closures current.
+  useEffect(
+    () => api.subscribeEvents((e) => onEventRef.current(e), (e) => onStepRef.current(e)),
+    [],
+  )
 
   // Pick the default agent for NEW sessions (from the roster).
   const pickDefaultAgent = useCallback((id: string) => {
@@ -814,6 +878,8 @@ export default function App() {
     refreshSessions,
     bumpMeter,
   })
+  // Publish the live chat handle for effects declared above (messages-load).
+  chatRef.current = chat
 
   // handleRewind rewinds the conversation to a message (via the "/rewind" dialog
   // or a user bubble's ⟲ hover action): truncate to that checkpoint, then drop the
@@ -851,6 +917,43 @@ export default function App() {
   // signals — the other two channels of the generic nav notification system.
   const { unreadViews, markViewUnread, markViewRead } = useUnreadViews(activeWorkspaceId)
   const dirtyViews = useDirtyViews()
+
+  // Navigation guard: if the current screen has unsaved edits, confirm before
+  // switching to another view so those edits are not silently lost. Returns true
+  // when it is safe to proceed. Same-view selects always pass.
+  const confirmLeaveIfDirty = useCallback(
+    (next: View): boolean => {
+      if (next === view) return true
+      if (!dirtyViews.has(view)) return true
+      return window.confirm(
+        'Bu sayfada kaydedilmemiş değişiklikler var. Kaydetmeden ayrılmak istiyor musunuz?',
+      )
+    },
+    [view, dirtyViews],
+  )
+  const selectView = useCallback(
+    (next: View) => {
+      if (confirmLeaveIfDirty(next)) {
+        setView(next)
+        // Leaving a list-bearing view closes the mobile list drawer so it never
+        // lingers over another screen.
+        setMobileListOpen(false)
+      }
+    },
+    [confirmLeaveIfDirty],
+  )
+
+  // Warn on tab close / reload (browser-native prompt) whenever any screen has
+  // unsaved edits. The message text is controlled by the browser.
+  useEffect(() => {
+    if (dirtyViews.size === 0) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirtyViews])
 
   // Clear a view's unread badge as soon as it is shown (in this window).
   useEffect(() => {
@@ -930,7 +1033,7 @@ export default function App() {
     <div className="flex h-full">
       <NavRail
         view={view}
-        onSelectView={setView}
+        onSelectView={selectView}
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         unreadWorkspaceIds={unreadWs}
@@ -948,34 +1051,76 @@ export default function App() {
           schedules are workspace-scoped, so the list is hidden there. */}
       {/* Chat: a sessions-only list (agents now live in their own view). */}
       {view === 'chat' && (
-        <SessionsSidebar
-          sessions={chatSessions}
-          agents={agents}
-          activeSessionId={activeSessionId}
-          streamingSessionIds={chat.streamingSessions}
-          newDisabled={agents.length === 0}
-          onSelectSession={selectSession}
-          onNewSession={newSession}
-          onRefresh={refreshSessions}
-          onRenameSession={renameSession}
-          onGenerateTitle={regenerateSessionTitle}
-          onCopyPath={copySessionPath}
-          onRevealFolder={revealSession}
-          onDeleteSession={deleteSession}
-          onSetArchived={setSessionArchived}
-          onSetPinned={setSessionPinned}
-        />
+        <>
+          {/* Mobile: dim backdrop behind the sessions drawer. */}
+          {isMobile && mobileListOpen && (
+            <div
+              className="fixed inset-0 z-30 bg-black/50 md:hidden"
+              onClick={() => setMobileListOpen(false)}
+            />
+          )}
+          {/* Desktop: an always-visible column (md:static). Mobile: a left
+              slide-in drawer toggled by the header hamburger. */}
+          <div
+            className={`shrink-0 md:static ${
+              mobileListOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
+            } max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-xl max-md:transition-transform`}
+          >
+            <SessionsSidebar
+              sessions={chatSessions}
+              agents={agents}
+              activeSessionId={activeSessionId}
+              streamingSessionIds={chat.streamingSessions}
+              newDisabled={agents.length === 0}
+              onSelectSession={(id, messageId) => {
+                selectSession(id, messageId)
+                setMobileListOpen(false)
+              }}
+              onNewSession={() => {
+                newSession()
+                setMobileListOpen(false)
+              }}
+              onRefresh={refreshSessions}
+              onRenameSession={renameSession}
+              onGenerateTitle={regenerateSessionTitle}
+              onCopyPath={copySessionPath}
+              onRevealFolder={revealSession}
+              onDeleteSession={deleteSession}
+              onSetArchived={setSessionArchived}
+              onSetPinned={setSessionPinned}
+            />
+          </div>
+        </>
       )}
 
-      {/* Agent-scoped views need an agent picker; reuse the roster as a sidebar. */}
+      {/* Agent-scoped views need an agent picker; reuse the roster as a sidebar.
+          Desktop: an always-visible column. Mobile: a left slide-in drawer (same
+          hamburger + backdrop pattern as the chat sessions list). */}
       {view === 'memory' && (
-        <AgentRoster
-          agents={agents}
-          defaultAgentId={defaultAgentId}
-          onSelectAgent={pickAgent}
-          onCreateAgent={createAgent}
-          onUpdateAgent={updateAgent}
-        />
+        <>
+          {isMobile && mobileListOpen && (
+            <div
+              className="fixed inset-0 z-30 bg-black/50 md:hidden"
+              onClick={() => setMobileListOpen(false)}
+            />
+          )}
+          <div
+            className={`shrink-0 md:static ${
+              mobileListOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
+            } max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-xl max-md:transition-transform`}
+          >
+            <AgentRoster
+              agents={agents}
+              defaultAgentId={defaultAgentId}
+              onSelectAgent={(id) => {
+                pickAgent(id)
+                setMobileListOpen(false)
+              }}
+              onCreateAgent={createAgent}
+              onUpdateAgent={updateAgent}
+            />
+          </div>
+        </>
       )}
 
       {/* Key the view subtree by the active workspace so switching (or creating
@@ -985,34 +1130,53 @@ export default function App() {
           memory), so without a remount they would keep showing the previous
           workspace's data until a manual page refresh. App-level agents/sessions
           are reset+refetched by the activeWorkspaceId effect above. */}
-      <main key={activeWorkspaceId ?? 'none'} className="flex h-full min-w-0 flex-1 flex-col">
+      <main
+        key={activeWorkspaceId ?? 'none'}
+        className="flex h-full min-w-0 flex-1 flex-col max-md:pb-16"
+      >
         {!HEADERLESS_VIEWS.has(view) && (
-          <header className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">{VIEW_TITLE[view]}</span>
+          <header className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] py-3 max-md:px-3 md:px-6">
+            <div className="flex min-w-0 items-center gap-2">
+              {(view === 'chat' || view === 'memory') && (
+                <button
+                  onClick={() => setMobileListOpen(true)}
+                  aria-label={view === 'memory' ? 'Ajanlar' : 'Oturumlar'}
+                  title={view === 'memory' ? 'Ajanlar' : 'Oturumlar'}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] md:hidden"
+                >
+                  <Menu size={18} />
+                </button>
+              )}
+              {(view === 'workspace' || view === 'settings') && (() => {
+                const nav = view === 'workspace' ? workspaceNav : settingsNav
+                return (
+                  <button
+                    onClick={nav.toggle}
+                    aria-label="Panel listesini aç/kapat"
+                    aria-pressed={nav.open}
+                    title={nav.open ? 'Listeyi gizle' : 'Listeyi göster'}
+                    data-testid="pane-list-toggle"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] md:hidden"
+                  >
+                    <Menu size={18} />
+                  </button>
+                )
+              })()}
+              <span className="shrink-0 text-sm font-semibold">{VIEW_TITLE[view]}</span>
               {view === 'chat' && (
-                <span className="text-sm text-[var(--color-text-dim)]">
+                <span className="truncate text-sm text-[var(--color-text-dim)]">
                   · {agents.find((a) => a.id === activeAgentId)?.name ?? 'Ajan seçilmedi'}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {view === 'chat' && (
-                <ChatMeters
-                  agentId={activeAgentId}
-                  sessionId={activeSessionId}
-                  refreshKey={meterRefresh}
-                  onError={setError}
-                  onOpenBudget={() => setView('budget')}
-                />
-              )}
+            <div className="flex shrink-0 items-center gap-3">
               {view === 'chat' && activeSessionId && (
                 <div className="flex items-center gap-1.5">
                   {/* Folder shortcuts (moved here from the detail panel's Klasör card). */}
                   <CopyPathButton
                     getPath={async () => (await api.sessionPath(activeSessionId)).path}
                     label="Yolu kopyala"
-                    labelClassName="hidden sm:inline"
+                    labelClassName="hidden"
                     title="Oturum klasörü yolunu kopyala"
                     onError={setError}
                   />
@@ -1197,6 +1361,8 @@ export default function App() {
             onAppearanceSaved={onAppearanceSaved}
             tab={workspaceTab}
             onTabChange={setWorkspaceTab}
+            navOpen={workspaceNav.open}
+            onToggleNav={workspaceNav.toggle}
           />
         )}
         {view === 'settings' && (
@@ -1207,22 +1373,46 @@ export default function App() {
             cat={settingsCat}
             onCatChange={setSettingsCat}
             reloadNonce={settingsNonce}
+            navOpen={settingsNav.open}
+            onToggleNav={settingsNav.toggle}
           />
         )}
       </main>
 
       {view === 'chat' && detailOpen && activeSessionId && (
-        <SessionDetailPanel
-          sessionId={activeSessionId}
-          refreshKey={meterRefresh}
-          onClose={toggleDetail}
-          onError={setError}
-          onGenerateTitle={regenerateSessionTitle}
-          onRename={renameSession}
-          onDeleteSession={deleteSession}
-          onSelectSession={selectSession}
-        />
+        <>
+          {/* Mobile: dim backdrop behind the right detail drawer. */}
+          {isMobile && (
+            <div
+              className="fixed inset-0 z-30 bg-black/50 md:hidden"
+              onClick={toggleDetail}
+            />
+          )}
+          {/* Desktop: a right-hand column. Mobile: a right slide-in drawer. */}
+          <div className="shrink-0 md:static max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:shadow-xl">
+            <SessionDetailPanel
+              sessionId={activeSessionId}
+              refreshKey={meterRefresh}
+              onClose={toggleDetail}
+              onError={setError}
+              onGenerateTitle={regenerateSessionTitle}
+              onRename={renameSession}
+              onDeleteSession={deleteSession}
+              onSelectSession={selectSession}
+            />
+          </div>
+        </>
       )}
+
+      {/* Bottom navigation for portrait phones (hidden on md+ where the rail
+          shows). All views in one horizontally-scrollable strip. */}
+      <MobileNavBar
+        view={view}
+        onSelectView={selectView}
+        busyViews={busyViews}
+        unreadViews={unreadViews}
+        dirtyViews={dirtyViews as Set<View>}
+      />
 
       {/* Artifact quick-preview overlay: opened by clicking an artifact card/chip
           in chat or the activity feed. Independent of the current view. */}

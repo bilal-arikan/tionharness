@@ -47,8 +47,11 @@ export function useDirtyViews(): ReadonlySet<View> {
 
 // useRegisterDirty marks `view` dirty while `isDirty` holds, clearing it on
 // change and on unmount (so leaving an editor never leaves a stale amber dot).
-export function useRegisterDirty(view: View, isDirty: boolean) {
+// `view` may be undefined so a shared editor (e.g. the agent form reused inside
+// a modal) can opt out of registering — it then just no-ops.
+export function useRegisterDirty(view: View | undefined, isDirty: boolean) {
   useEffect(() => {
+    if (!view) return
     setViewDirty(view, isDirty)
     return () => setViewDirty(view, false)
   }, [view, isDirty])

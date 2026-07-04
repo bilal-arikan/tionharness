@@ -1,4 +1,4 @@
-import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FolderInput, Globe, Lock, Pencil, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource, ToolVisibility } from '../../types'
 import { api } from '../../api'
@@ -9,8 +9,9 @@ import { RevealButton } from '../RevealButton'
 import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { useGroupedList } from '../../hooks/useGroupedList'
-import { SelectionBar, SelectionBarButton } from '../common'
+import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '../common'
 import { NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING } from '../common/SidebarChrome'
+import { useCollapsibleList } from '../../hooks/useCollapsibleList'
 
 interface Props {
   onError: (msg: string) => void
@@ -157,14 +158,7 @@ export function SkillsPanel({ onError }: Props) {
   const [bulkGroupBusy, setBulkGroupBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
-  // Resizable left list width (persisted, clamped). 288px == the old w-72.
-  const [listWidth, setListWidth] = useState(() => {
-    const v = Number(localStorage.getItem('swarmgo.skillsListWidth'))
-    return v >= 200 && v <= 640 ? v : 288
-  })
-  useEffect(() => {
-    localStorage.setItem('swarmgo.skillsListWidth', String(listWidth))
-  }, [listWidth])
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.skillsListOpen')
 
   // Skills bucketed by group (named groups first, ungrouped last), with
   // persisted per-group collapse state. Recomputed only when the catalog changes.
@@ -183,29 +177,6 @@ export function SkillsPanel({ onError }: Props) {
   const groupNames = useMemo(
     () => grouped.map(([name]) => name).filter((n) => n !== UNGROUPED),
     [grouped],
-  )
-
-  // Drag the divider to resize the list panel; tracks the pointer on document so
-  // the drag continues even when the cursor leaves the thin handle.
-  const startResize = useCallback(
-    (e: ReactMouseEvent) => {
-      e.preventDefault()
-      const startX = e.clientX
-      const startW = listWidth
-      const onMove = (ev: MouseEvent) =>
-        setListWidth(Math.min(640, Math.max(200, startW + ev.clientX - startX)))
-      const onUp = () => {
-        document.removeEventListener('mousemove', onMove)
-        document.removeEventListener('mouseup', onUp)
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-      document.addEventListener('mousemove', onMove)
-      document.addEventListener('mouseup', onUp)
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    },
-    [listWidth],
   )
 
   const reload = useCallback(() => {
@@ -386,11 +357,16 @@ export function SkillsPanel({ onError }: Props) {
   }, [reload, activeSlug, onError])
 
   return (
-    <div className="flex min-h-0 flex-1">
-      {/* List (resizable) */}
-      <div
-        className="flex flex-shrink-0 flex-col"
-        style={{ width: listWidth }}
+    <div className="flex h-full min-h-0 flex-1">
+      {/* List — standard ListPane column (full-height sibling, like chat). */}
+      <ListPane
+        open={listOpen}
+        onToggle={toggleList}
+        widthKey="swarmgo.skillsListWidth"
+        defaultWidth={288}
+        label="Skills"
+        testId="skills-list-toggle"
+        hideRail
       >
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
@@ -556,26 +532,23 @@ export function SkillsPanel({ onError }: Props) {
             Sil
           </SelectionBarButton>
         </SelectionBar>
-      </div>
-
-      {/* Resize handle */}
-      <div
-        onMouseDown={startResize}
-        title="Sürükleyerek genişlet"
-        className="group relative w-1 shrink-0 cursor-col-resize bg-[var(--color-border)] hover:bg-[var(--color-accent)]"
-      >
-        <span className="absolute inset-y-0 -left-1 -right-1" />
-      </div>
+      </ListPane>
 
       {/* Detail */}
       <div className="flex min-w-0 flex-1 flex-col">
+        <PaneHeader
+          title="Skills"
+          subtitle={active ? `· ${active.name}` : undefined}
+          listOpen={listOpen}
+          onToggleList={toggleList}
+        />
         {!active ? (
           <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
             {loadingBody ? 'Yükleniyor…' : 'Görüntülemek için bir beceri seç.'}
           </div>
         ) : (
           <>
-            <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-lg leading-none">{active.icon || '✨'}</span>
@@ -637,7 +610,7 @@ export function SkillsPanel({ onError }: Props) {
                   </p>
                 )}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   data-testid="skill-detail-edit"
                   onClick={() => setEditor({ mode: 'edit', initial: active })}
@@ -665,11 +638,12 @@ export function SkillsPanel({ onError }: Props) {
                   busy={visBusy}
                   onSet={setVisibility}
                 />
-                <CopyPathButton path={active.dir} />
+                <CopyPathButton path={active.dir} label="Yolu kopyala" labelClassName="hidden" />
                 <RevealButton
                   testId="skill-detail-reveal"
                   onReveal={reveal}
-                  label="Klasörü aç"
+                  label="Aç"
+                  labelClassName="hidden sm:inline"
                   title="Skill klasörünü dosya yöneticisinde aç"
                 />
                 <button
