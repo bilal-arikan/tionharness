@@ -47,7 +47,6 @@
       "flows": [
         {
           "name": "Araştırma Akışı",
-          "description": "Tarama → Metodoloji → Analiz → Hakem değerlendirmesi",
           "steps": [
             {
               "id": "scan",

@@ -38,7 +38,6 @@ export interface FlowGraph {
 export interface Flow {
   id: string
   name: string
-  description: string
   graph: string // JSON FlowGraph
   tags?: string[] // free-form organizational labels (editable by user + agents)
   createdAt: number

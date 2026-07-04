@@ -180,7 +180,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 			ID:    flowPfx + f.ID,
 			Type:  "flow",
 			Label: f.Name,
-			Sub:   f.Description,
+			Sub:   f.ID,
 		})
 		// A flow "uses" every distinct agent referenced by its agent nodes — this
 		// is the multi-agent collaboration signal (two agents wired into one flow).

@@ -64,7 +64,6 @@
       "flows": [
         {
           "name": "Plan → Yaz → İncele",
-          "description": "URL kısaltma özelliklerini üç aşamada yürüten çok-modelli pipeline",
           "steps": [
             {
               "id": "plan",

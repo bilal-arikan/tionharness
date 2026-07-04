@@ -58,7 +58,6 @@
       "flows": [
         {
           "name": "Search → Plan → Execute → Verify",
-          "description": "Yazılım görevlerini dört aşamada yürüten akış",
           "steps": [
             {
               "id": "search",
@@ -88,7 +87,6 @@
         },
         {
           "name": "Verify → (FIX→Execute | SHIP)",
-          "description": "Hakem kararina gore dallanan dogrulama dongusu (non-lineer).",
           "graph": "{\"start\": \"verify\", \"nodes\": [{\"id\": \"verify\", \"type\": \"agent\", \"title\": \"Verify\", \"agentId\": \"tmpl:verify\", \"prompt\": \"Review the change for the task:\\n{{input}}\\n\\nEnd your reply with exactly \\\"VERDICT: SHIP\\\" or \\\"VERDICT: FIX\\\".\", \"next\": \"route\"}, {\"id\": \"route\", \"type\": \"branch\", \"title\": \"Karar\", \"matchMode\": \"contains\", \"branches\": [{\"contains\": \"FIX\", \"next\": \"fix\"}, {\"contains\": \"\", \"next\": \"\"}]}, {\"id\": \"fix\", \"type\": \"agent\", \"title\": \"Fix\", \"agentId\": \"tmpl:execute\", \"prompt\": \"Address the issues raised below with minimal, atomic changes.\\n\\n{{last}}\"}]}"
         }
       ],

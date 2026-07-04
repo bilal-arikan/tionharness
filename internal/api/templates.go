@@ -275,9 +275,8 @@ func (s *Server) seedTemplateFlow(ctx context.Context, wsNew *workspace.Workspac
 		return
 	}
 	if _, err := wsNew.DB.CreateFlow(ctx, db.Flow{
-		Name:        tf.Name,
-		Description: tf.Description,
-		Graph:       string(raw),
+		Name:  tf.Name,
+		Graph: string(raw),
 	}); err != nil {
 		s.logger.Warn("seed flow create failed", "workspace", wsNew.ID, "error", err)
 	}

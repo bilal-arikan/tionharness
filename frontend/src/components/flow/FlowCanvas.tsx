@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './flowCanvas.css'
-import type { Agent } from '../../types'
+import type { Agent, FlowNodeType } from '../../types'
 import type { FlowRFNode } from '../../lib/flowGraph'
 import { AgentsContext, NodeActionsContext, chromeFor, type NodeActions } from './nodeStyles'
 import { AgentNode } from './AgentNode'
@@ -88,6 +88,10 @@ interface Props {
   onEdgesChange: (c: EdgeChange[]) => void
   setEdges: (updater: (e: Edge[]) => Edge[]) => void
   onSelect: (id: string | null) => void
+  // Fired on a genuine node click (not a drag) — used to open the node editor
+  // popup. React Flow suppresses onNodeClick when the pointer moved past the
+  // drag threshold, so dragging to reposition/connect never triggers it.
+  onNodeClick?: (id: string) => void
   // Read-only preview (template gallery): disable dragging, connecting and
   // selection so the graph can only be viewed, not edited.
   readOnly?: boolean
@@ -95,13 +99,17 @@ interface Props {
   onAutoLayout?: () => void
   // Per-node toolbar actions (make-start / duplicate / delete). Null = none.
   nodeActions?: NodeActions | null
+  // Palette drag-and-drop: called with the dropped node type + the flow-space
+  // position (already screen→flow converted). Absent = DnD disabled.
+  onDropNode?: (type: FlowNodeType, pos: { x: number; y: number }) => void
 }
 
-// FlowCanvas renders the interactive node graph. Connecting from a source
-// handle replaces any existing edge from the same handle, so an agent's `next`
-// and a branch arm stay single-target (parallel "fan" may have many).
-export function FlowCanvas({
-  agents,
+// dataTransfer key for palette drag-and-drop of a new node.
+export const FLOW_NODE_DND_MIME = 'application/swarmgo-flow-node'
+
+// CanvasInner holds the actual <ReactFlow>. It lives inside ReactFlowProvider so
+// it can use screenToFlowPosition to convert a drop point into graph space.
+function CanvasInner({
   nodes,
   edges,
   edgeStyle,
@@ -110,10 +118,13 @@ export function FlowCanvas({
   onEdgesChange,
   setEdges,
   onSelect,
+  onNodeClick,
   readOnly = false,
   onAutoLayout,
-  nodeActions = null,
-}: Props) {
+  onDropNode,
+}: Omit<Props, 'agents' | 'nodeActions'>) {
+  const { screenToFlowPosition } = useReactFlow()
+
   // Apply the chosen path style + animation + arrowhead to every edge for
   // display. These are cosmetic flow-level presentation hints; labels are kept.
   const styledEdges = useMemo(
@@ -159,42 +170,73 @@ export function FlowCanvas({
     [onSelect],
   )
 
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      const type = e.dataTransfer.getData(FLOW_NODE_DND_MIME) as FlowNodeType
+      if (!type || !onDropNode) return
+      const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+      onDropNode(type, pos)
+    },
+    [screenToFlowPosition, onDropNode],
+  )
+
+  return (
+    <ReactFlow
+      data-testid="flow-canvas-root"
+      nodes={nodes}
+      edges={styledEdges}
+      nodeTypes={nodeTypes}
+      defaultEdgeOptions={{
+        type: edgeStyle,
+        animated,
+        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+      }}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      onConnect={readOnly ? undefined : onConnect}
+      onSelectionChange={onSelectionChange}
+      onNodeClick={readOnly || !onNodeClick ? undefined : (_, n) => onNodeClick(n.id)}
+      onDrop={readOnly ? undefined : onDrop}
+      onDragOver={readOnly ? undefined : onDragOver}
+      // A few px of movement counts as a drag (not a click), so repositioning
+      // a node never opens the editor popup and a plain click always does.
+      nodeDragThreshold={4}
+      nodesDraggable={!readOnly}
+      nodesConnectable={!readOnly}
+      elementsSelectable={!readOnly}
+      fitView
+      proOptions={{ hideAttribution: true }}
+    >
+      <Background />
+      <Controls />
+      <CanvasTools onAutoLayout={readOnly ? undefined : onAutoLayout} />
+      <MiniMap
+        pannable
+        zoomable
+        bgColor="#0b0e14"
+        maskColor="rgba(0, 0, 0, 0.6)"
+        nodeColor={(n) => chromeFor(n.type ?? 'agent').accent}
+      />
+    </ReactFlow>
+  )
+}
+
+// FlowCanvas renders the interactive node graph. Connecting from a source
+// handle replaces any existing edge from the same handle, so an agent's `next`
+// and a branch arm stay single-target (parallel "fan" may have many).
+export function FlowCanvas({ agents, nodeActions = null, ...rest }: Props) {
   return (
     <AgentsContext.Provider value={agents}>
       <NodeActionsContext.Provider value={nodeActions}>
-      <ReactFlowProvider>
-        <ReactFlow
-          data-testid="flow-canvas-root"
-          nodes={nodes}
-          edges={styledEdges}
-          nodeTypes={nodeTypes}
-          defaultEdgeOptions={{
-            type: edgeStyle,
-            animated,
-            markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
-          }}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={readOnly ? undefined : onConnect}
-          onSelectionChange={onSelectionChange}
-          nodesDraggable={!readOnly}
-          nodesConnectable={!readOnly}
-          elementsSelectable={!readOnly}
-          fitView
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background />
-          <Controls />
-          <CanvasTools onAutoLayout={readOnly ? undefined : onAutoLayout} />
-          <MiniMap
-            pannable
-            zoomable
-            bgColor="#0b0e14"
-            maskColor="rgba(0, 0, 0, 0.6)"
-            nodeColor={(n) => chromeFor(n.type ?? 'agent').accent}
-          />
-        </ReactFlow>
-      </ReactFlowProvider>
+        <ReactFlowProvider>
+          <CanvasInner {...rest} />
+        </ReactFlowProvider>
       </NodeActionsContext.Provider>
     </AgentsContext.Provider>
   )

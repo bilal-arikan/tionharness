@@ -68,8 +68,10 @@ def provider_pack(slug, label, desc, icon, color, base, default_model, models):
 
 
 def flow_pack(slug, name, desc, icon, color, graph):
+    # desc is the PACK-level description (kept); flows themselves have no
+    # description field anymore (removed app-wide 2026-07-04).
     return pack("flow", slug, name, desc, icon, color, ["flow", "orchestration"],
-                {"flow": {"name": name, "description": desc, "graph": json.dumps(graph)}})
+                {"flow": {"name": name, "graph": json.dumps(graph)}})
 
 
 PACKS = []

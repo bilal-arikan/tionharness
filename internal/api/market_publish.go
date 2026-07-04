@@ -209,7 +209,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 			continue
 		}
 		wp.Flows = append(wp.Flows, market.WorkspaceTemplateFlow{
-			Name: f.Name, Description: f.Description, Graph: string(raw),
+			Name: f.Name, Graph: string(raw),
 		})
 	}
 

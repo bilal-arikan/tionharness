@@ -10,10 +10,9 @@ const (
 // Flow is a reusable multi-agent orchestration protocol. Graph holds the JSON
 // node graph (see internal/orchestration.Graph).
 type Flow struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Graph       string `json:"graph"` // JSON
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Graph string `json:"graph"` // JSON
 	// Tags are free-form labels on the flow, editable by both the user (UI) and
 	// agents (set_flow_tags). Organizational only (they do not drive automations —
 	// only session tags do).

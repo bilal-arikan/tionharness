@@ -48,7 +48,6 @@ export interface ProviderPayload {
 
 export interface FlowPayload {
   name: string
-  description?: string
   graph: string
 }
 
@@ -85,7 +84,6 @@ export interface WorkspaceTemplateStep {
 
 export interface WorkspaceTemplateFlow {
   name: string
-  description?: string
   steps?: WorkspaceTemplateStep[]
   graph?: string
 }

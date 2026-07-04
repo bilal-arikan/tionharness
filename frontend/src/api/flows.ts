@@ -140,15 +140,15 @@ async function streamRunFlowStandalone(
 
 export const flowApi = {
   listFlows: () => req<Flow[]>('/api/flows'),
-  createFlow: (name: string, description = '', graph?: FlowGraph) =>
+  createFlow: (name: string, graph?: FlowGraph) =>
     req<Flow>('/api/flows', {
       method: 'POST',
-      body: JSON.stringify({ name, description, graph }),
+      body: JSON.stringify({ name, graph }),
     }),
-  updateFlow: (id: string, name: string, description: string, graph: FlowGraph) =>
+  updateFlow: (id: string, name: string, graph: FlowGraph) =>
     req<Flow>(`/api/flows/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name, description, graph }),
+      body: JSON.stringify({ name, graph }),
     }),
   deleteFlow: (id: string) =>
     req<{ result: string }>(`/api/flows/${id}`, { method: 'DELETE' }),

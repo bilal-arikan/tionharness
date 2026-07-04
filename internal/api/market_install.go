@@ -354,7 +354,7 @@ func (s *Server) installFlowPack(r *http.Request, wsp *workspace.Workspace, pack
 		name = pack.Name
 	}
 	created, err := wsp.DB.CreateFlow(r.Context(), db.Flow{
-		Name: name, Description: fp.Description, Graph: graph,
+		Name: name, Graph: graph,
 	})
 	if err != nil {
 		return market.InstallResult{}, httpErr{http.StatusInternalServerError, err.Error()}

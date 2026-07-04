@@ -99,6 +99,22 @@ export function reactFlowToGraph(
   return { start, nodes: out }
 }
 
+// canonicalGraphKey returns a stable string identity for a FlowGraph, invariant
+// to representational differences: the backend's `omitempty` marshaling drops
+// next:""/x/y:0/empty-prompt, and JSON key order isn't guaranteed. It re-runs the
+// editor's own graphToReactFlow → reactFlowToGraph round-trip so a stored graph
+// and the live canvas reconstruction collapse to the same key when structurally
+// equal. Cosmetic fields (edgeStyle/animated) are intentionally excluded, so they
+// never raise a false "unsaved edits" signal. Use for dirty-checking.
+export function canonicalGraphKey(graph: FlowGraph): string {
+  const { nodes, edges } = graphToReactFlow({
+    start: graph.start ?? '',
+    nodes: Array.isArray(graph.nodes) ? graph.nodes : [],
+  })
+  const g = reactFlowToGraph(nodes, edges, graph.start ?? '')
+  return JSON.stringify({ start: g.start ?? '', nodes: g.nodes ?? [] })
+}
+
 // needsLayout reports whether any node lacks a persisted position.
 function needsLayout(graph: FlowGraph): boolean {
   return graph.nodes.some((n) => n.x === undefined || n.y === undefined)

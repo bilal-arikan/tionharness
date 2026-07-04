@@ -7,7 +7,7 @@ import { RevealButton } from '../RevealButton'
 import { useRegisterDirty } from '../../lib/dirtySignals'
 import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
-import { FlowCanvas, type EdgeStyle } from '../flow/FlowCanvas'
+import { FlowCanvas, FLOW_NODE_DND_MIME, type EdgeStyle } from '../flow/FlowCanvas'
 import { TemplatePreview } from '../flow/TemplatePreview'
 import { RunView } from '../flow/RunView'
 import { NodeInspector } from '../flow/NodeInspector'
@@ -15,19 +15,20 @@ import { FLOW_TEMPLATES, type FlowTemplate } from '../../lib/flowTemplates'
 import {
   graphToReactFlow,
   reactFlowToGraph,
+  canonicalGraphKey,
   autoLayout,
   blankNode,
   nextNodeId,
   type FlowRFNode,
 } from '../../lib/flowGraph'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '../../types'
-import { Button, SelectionBar, SelectionBarButton, TagEditor } from '../common'
+import { Button, SelectionBar, SelectionBarButton, TagEditor, ListPane, PaneHeader, ModalOverlay } from '../common'
 import {
-  NewItemButton, ResizeHandle, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
+  NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
 } from '../common/SidebarChrome'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
-import { useResizableSidebar } from '../../hooks/useResizableSidebar'
-import { Play, Trash2 } from 'lucide-react'
+import { useCollapsibleList } from '../../hooks/useCollapsibleList'
+import { Play, Trash2, PanelLeftClose, X } from 'lucide-react'
 
 interface Props {
   agents: Agent[]
@@ -71,7 +72,6 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
 
   // Editor state for the selected flow.
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
   // Flow tags persist independently (setFlowTags), not via the Save button.
   const [tags, setTags] = useState<string[]>([])
   const [start, setStart] = useState('')
@@ -144,7 +144,6 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
       setFlowPath('')
       api.flowPath(f.id).then((r) => setFlowPath(r.path)).catch(() => setFlowPath(''))
       setName(f.name)
-      setDescription(f.description)
       setTags(f.tags ?? [])
       setRun(null)
       setInput('')
@@ -203,7 +202,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
       ),
     }
     try {
-      const f = await api.createFlow(t.name, t.description, graph)
+      const f = await api.createFlow(t.name, graph)
       setFlows((prev) => [f, ...prev])
       setTab('flows')
       selectFlow(f)
@@ -212,21 +211,27 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
     }
   }
 
-  // addNode appends a blank node of the given type near the canvas origin and
-  // makes it the start node if none is set yet.
-  const addNode = (type: FlowNodeType) => {
+  // addNodeAt appends a blank node of the given type at a specific canvas
+  // position and makes it the start node if none is set yet.
+  const addNodeAt = (type: FlowNodeType, pos: { x: number; y: number }) => {
     const existing = nodes.map((n) => n.data.node)
     const id = nextNodeId(existing)
     const node = blankNode(id, type, agents[0]?.id ?? '')
-    const offset = nodes.length * 30
     const rf: FlowRFNode = {
       id,
       type,
-      position: { x: 80 + offset, y: 80 + offset },
+      position: pos,
       data: { node, isStart: !start },
     }
     setNodes((prev) => [...prev, rf])
     if (!start) setStart(id)
+  }
+
+  // addNode (click on the palette) drops the new node near the canvas origin,
+  // cascaded so successive adds don't stack exactly on top of each other.
+  const addNode = (type: FlowNodeType) => {
+    const offset = nodes.length * 30
+    addNodeAt(type, { x: 80 + offset, y: 80 + offset })
   }
 
   // patchSelected updates the selected node's intrinsic fields. A type change or
@@ -308,7 +313,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
       const graph = reactFlowToGraph(nodes, edges, start)
       graph.edgeStyle = edgeStyle
       graph.animated = animated
-      const f = await api.updateFlow(selectedId, name, description, graph)
+      const f = await api.updateFlow(selectedId, name, graph)
       setFlows((prev) => prev.map((x) => (x.id === f.id ? f : x)))
       onError('') // clear
     } catch (e) {
@@ -330,11 +335,18 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   // Multi-select (Ctrl/Cmd+Click, Shift-range) on the "Akışlarım" tab for bulk
   // run / delete. Runs fire-and-forget with an empty input.
   const sel = useMultiSelect()
-  const { width, startDrag } = useResizableSidebar({
-    storageKey: 'swarmgo.flowsListWidth',
-    defaultWidth: 224,
-    min: 180,
-  })
+  // Left flow list collapse (slim rail / mobile drawer).
+  const { open: flowsListOpen, toggle: toggleFlowsList } = useCollapsibleList('swarmgo.flowsListOpen')
+  // Node editor popup: clicking a node (not dragging) opens a modal to edit it,
+  // instead of a docked side panel. Closing keeps the node selected on canvas.
+  const [nodeEditorOpen, setNodeEditorOpen] = useState(false)
+  const openNodeEditor = (id: string) => {
+    setSelectedNodeId(id)
+    setNodeEditorOpen(true)
+  }
+  const duplicateSelected = () => {
+    if (selectedNodeId) duplicateNode(selectedNodeId)
+  }
   const bulkRun = async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
@@ -432,23 +444,26 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   )
 
   // Unsaved-edits (dirty) signal for the nav "Akışlar" item + workspace label:
-  // compare the live editor (name/description + structural graph) to the stored
-  // flow. Cosmetic-only fields (edgeStyle/animated) are ignored so they don't
-  // raise a false amber dot. Best-effort — a parse failure reads as "not dirty".
+  // compare the live editor (name + structural graph) to the stored flow.
+  // Cosmetic-only fields (edgeStyle/animated) are ignored so they don't raise a
+  // false amber dot. Best-effort — a parse failure reads as "not dirty".
   const flowDirty = useMemo(() => {
     const stored = flows.find((f) => f.id === selectedId)
     if (!selectedId || !stored) return false
-    if (name !== stored.name || description !== (stored.description ?? '')) return true
+    if (name !== stored.name) return true
     try {
-      const norm = (g: { start?: string; nodes?: unknown }) =>
-        JSON.stringify({ start: g.start ?? '', nodes: g.nodes ?? [] })
-      const cur = reactFlowToGraph(nodes, edges, start)
-      const prev = stored.graph ? JSON.parse(stored.graph) : {}
-      return norm(cur) !== norm(prev)
+      // Compare live canvas vs stored via canonicalGraphKey, which round-trips
+      // both sides through the same graphToReactFlow → reactFlowToGraph pipeline.
+      // This absorbs the backend's `omitempty` marshaling (dropping next:"",
+      // x/y:0, empty prompt…) so a freshly opened, unedited flow isn't flagged
+      // dirty — only real structural edits differ.
+      const cur = canonicalGraphKey(reactFlowToGraph(nodes, edges, start))
+      const raw = stored.graph ? JSON.parse(stored.graph) : { start: '', nodes: [] }
+      return cur !== canonicalGraphKey(raw)
     } catch {
       return false
     }
-  }, [flows, selectedId, name, description, nodes, edges, start])
+  }, [flows, selectedId, name, nodes, edges, start])
   useRegisterDirty('flows', flowDirty)
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)?.data.node ?? null
@@ -458,13 +473,29 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   const selectedRun = runs.find((r) => r.id === selectedRunId) ?? null
 
   return (
-    <div className="flex min-h-0 flex-1">
-      {/* Flow list / template gallery */}
-      <div
-        style={{ width }}
-        className="relative flex flex-shrink-0 flex-col border-r border-[var(--color-border)]"
+    <div className="flex h-full min-h-0 flex-1">
+      {/* Flow list / template gallery — full-height sibling column (like chat). */}
+      <ListPane
+        open={flowsListOpen}
+        onToggle={toggleFlowsList}
+        widthKey="swarmgo.flowsListWidth"
+        defaultWidth={224}
+        minWidth={180}
+        label="Akışlar"
+        testId="flows-list-toggle"
+        hideRail
       >
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="mb-2 flex justify-end md:hidden">
+          <button
+            onClick={toggleFlowsList}
+            title="Listeyi kapat"
+            aria-label="Listeyi kapat"
+            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+          >
+            <PanelLeftClose size={14} />
+          </button>
+        </div>
         {/* Tab switch */}
         <div className="mb-3 flex gap-1 rounded-lg bg-[var(--color-surface-2)] p-1 text-xs">
           {(['flows', 'templates', 'runs'] as const).map((t) => (
@@ -576,11 +607,10 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{f.name}</span>
-                  {f.description && (
-                    <span className="mt-0.5 block truncate text-xs text-[var(--color-text-dim)]">
-                      {f.description}
-                    </span>
-                  )}
+                  <span className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+                    <span className="truncate font-mono text-[11px]">{f.id}</span>
+                    <span className="flex-shrink-0">· {flowNodeCount(f.graph)} node</span>
+                  </span>
                 </span>
                 <span
                   onClick={(e) => {
@@ -616,11 +646,30 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
           </>
         )}
         </div>
-        <ResizeHandle onMouseDown={startDrag} />
-      </div>
+      </ListPane>
 
-      {/* Main: template preview or flow editor */}
-      {tab === 'templates' ? (
+      {/* Main column: the title bar sits ONLY here (right of the list), like chat. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PaneHeader
+          title="Akışlar"
+          subtitle={
+            tab === 'templates'
+              ? selectedTemplate
+                ? `· ${selectedTemplate.name}`
+                : undefined
+              : tab === 'runs'
+                ? selectedRun
+                  ? '· Koşu'
+                  : undefined
+                : selectedId
+                  ? `· ${name || selectedId}`
+                  : undefined
+          }
+          listOpen={flowsListOpen}
+          onToggleList={toggleFlowsList}
+        />
+        {/* Main: template preview or flow editor */}
+        {tab === 'templates' ? (
         <div className="flex min-w-0 flex-1 flex-col">
           {!selectedTemplate ? (
             <div className="flex-1 p-6">
@@ -675,13 +724,13 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         </div>
       ) : (
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Meta toolbar: name + description side by side */}
+          {/* Meta toolbar: name + file actions + save (title only — no description) */}
           <div className="flex items-center gap-2 border-b border-[var(--color-border)] p-3">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Akış adı"
-              className="w-56 flex-shrink-0 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium outline-none"
+              className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium outline-none"
             />
             {/* Flow id + on-disk location (copy path / open folder). */}
             <span
@@ -690,75 +739,86 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             >
               {selectedId}
             </span>
-            <CopyPathButton path={flowPath} label="Yolu kopyala" title="Akış yolunu kopyala" />
+            <CopyPathButton path={flowPath} label="Yolu kopyala" labelClassName="hidden" title="Akış yolunu kopyala" />
             <RevealButton
               onReveal={() => {
                 if (selectedId) api.revealFlow(selectedId).catch((e) => onError((e as Error).message))
               }}
               disabled={!selectedId}
               label="Aç"
+              labelClassName="hidden sm:inline"
               title="Akış klasörünü aç"
             />
-            <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Açıklama — bu akış ne yapar? (isteğe bağlı)"
-              className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-dim)] outline-none"
-            />
-            <div className="w-56 flex-shrink-0">
-              <TagEditor
-                tags={tags}
-                onChange={(next) => {
-                  setTags(next)
-                  if (selectedId) api.setFlowTags(selectedId, next).catch((e) => onError((e as Error).message))
-                }}
-                placeholder="Etiket…"
-                className="py-1"
-              />
-            </div>
-            <label className="flex flex-shrink-0 items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              Kablo:
-              <select
-                value={edgeStyle}
-                onChange={(e) => changeEdgeStyle(e.target.value as EdgeStyle)}
-                className="rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-xs outline-none"
-              >
-                {EDGE_STYLES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-shrink-0 cursor-pointer items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              <input
-                type="checkbox"
-                checked={animated}
-                onChange={(e) => setAnimated(e.target.checked)}
-              />
-              Animasyon
-            </label>
             <Button onClick={saveFlow} size="lg" className="flex-shrink-0">
               Kaydet
             </Button>
           </div>
 
-          {/* Node palette + canvas + inspector */}
+          {/* Node palette (add nodes + flow-level presentation) + canvas */}
           <div className="flex min-h-0 flex-1">
-            <div className="w-32 flex-shrink-0 space-y-2 overflow-y-auto border-r border-[var(--color-border)] p-2">
+            <div className="w-40 flex-shrink-0 space-y-2 overflow-y-auto border-r border-[var(--color-border)] p-2 max-md:w-32">
               <div className="px-1 text-xs font-semibold text-[var(--color-text-dim)]">
                 Node ekle
+              </div>
+              <div className="px-1 text-[10px] leading-tight text-[var(--color-text-dim)]">
+                Tıkla veya canvas'a sürükle
               </div>
               {NODE_TYPES.map((t) => (
                 <button
                   key={t.value}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(FLOW_NODE_DND_MIME, t.value)
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
                   onClick={() => addNode(t.value)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-left text-xs hover:border-[var(--color-accent)]"
+                  className="flex w-full cursor-grab items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-left text-xs hover:border-[var(--color-accent)] active:cursor-grabbing"
                 >
                   <span className="text-base">{t.icon}</span>
                   <span>{t.label}</span>
                 </button>
               ))}
+
+              {/* Flow-level presentation moved here from the meta toolbar. */}
+              <div className="space-y-2 border-t border-[var(--color-border)] pt-2">
+                <div className="px-1 text-xs font-semibold text-[var(--color-text-dim)]">
+                  Görünüm
+                </div>
+                <div className="px-0.5">
+                  <span className="mb-1 block px-0.5 text-[11px] text-[var(--color-text-dim)]">Etiket</span>
+                  <TagEditor
+                    tags={tags}
+                    onChange={(next) => {
+                      setTags(next)
+                      if (selectedId) api.setFlowTags(selectedId, next).catch((e) => onError((e as Error).message))
+                    }}
+                    placeholder="Etiket…"
+                    className="py-1"
+                  />
+                </div>
+                <label className="block px-0.5">
+                  <span className="mb-1 block px-0.5 text-[11px] text-[var(--color-text-dim)]">Kablo</span>
+                  <select
+                    value={edgeStyle}
+                    onChange={(e) => changeEdgeStyle(e.target.value as EdgeStyle)}
+                    className="w-full rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-xs outline-none"
+                  >
+                    {EDGE_STYLES.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex cursor-pointer items-center gap-1.5 px-0.5 text-xs text-[var(--color-text-dim)]">
+                  <input
+                    type="checkbox"
+                    checked={animated}
+                    onChange={(e) => setAnimated(e.target.checked)}
+                  />
+                  Animasyon
+                </label>
+              </div>
             </div>
             <div className="min-w-0 flex-1">
               <FlowCanvas
@@ -771,32 +831,45 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                 onEdgesChange={onEdgesChange}
                 setEdges={setEdges}
                 onSelect={setSelectedNodeId}
+                onNodeClick={openNodeEditor}
+                onDropNode={addNodeAt}
                 onAutoLayout={autoArrange}
-                nodeActions={{
-                  onMakeStart: makeStartNode,
-                  onDuplicate: duplicateNode,
-                  onDelete: deleteNode,
-                }}
               />
             </div>
-            <div className="w-72 flex-shrink-0 overflow-y-auto border-l border-[var(--color-border)] p-3">
-              {selectedNode ? (
-                <NodeInspector
-                  node={selectedNode}
-                  agents={agents}
-                  isStart={start === selectedNode.id}
-                  onPatch={patchSelected}
-                  onMakeStart={makeStart}
-                  onDelete={deleteSelected}
-                />
-              ) : (
-                <p className="text-xs text-[var(--color-text-dim)]">
-                  Düzenlemek için bir node seçin. Bağlantı için bir node'un tutamağından
-                  diğerine sürükleyin.
-                </p>
-              )}
-            </div>
           </div>
+
+          {/* Node editor popup — opens on node click (not drag). Holds the node
+              fields plus its make-start / duplicate / delete actions. */}
+          {nodeEditorOpen && selectedNode && (
+            <ModalOverlay onClose={() => setNodeEditorOpen(false)}>
+              <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
+                <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+                    Node
+                  </span>
+                  <button
+                    onClick={() => setNodeEditorOpen(false)}
+                    title="Kapat"
+                    aria-label="Kapat"
+                    className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                  <NodeInspector
+                    node={selectedNode}
+                    agents={agents}
+                    isStart={start === selectedNode.id}
+                    onPatch={patchSelected}
+                    onMakeStart={makeStart}
+                    onDuplicate={duplicateSelected}
+                    onDelete={deleteSelected}
+                  />
+                </div>
+              </div>
+            </ModalOverlay>
+          )}
 
           {/* Run */}
           <div className="max-h-[40%] overflow-y-auto border-t border-[var(--color-border)] p-4">
@@ -872,6 +945,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
@@ -881,5 +955,16 @@ function safeParse(s: string): FlowState | null {
     return JSON.parse(s) as FlowState
   } catch {
     return null
+  }
+}
+
+// flowNodeCount reads how many nodes a flow's stored graph holds, for the list
+// meta line. Best-effort — an unparseable graph reads as 0.
+function flowNodeCount(graph: string): number {
+  try {
+    const g = JSON.parse(graph || '{}')
+    return Array.isArray(g.nodes) ? g.nodes.length : 0
+  } catch {
+    return 0
   }
 }

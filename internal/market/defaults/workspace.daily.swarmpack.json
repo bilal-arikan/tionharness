@@ -52,7 +52,6 @@
       "flows": [
         {
           "name": "Günlük Optimizasyon",
-          "description": "Plan → Koçluk: günü planla, ardından rutini iyileştir",
           "steps": [
             {
               "id": "plan",

@@ -10,6 +10,32 @@ Eski `FlowsPanel` node'ları üst üste kartlar olarak gösteriyor, bağlantıla
 dropdown'larıyla kuruyordu — graf topolojisi görünmüyordu. Yaygın node-graph builder'lar
 React Flow canvas kullanıyor. Aynı kütüphaneyle, kodu kopyalamadan aynı deneyim kuruldu.
 
+## UX düzeni güncellemesi (2026-07-04)
+
+Editör yerleşimi sadeleştirildi:
+
+- **Meta toolbar** yalnız: akış adı (geniş) + ID rozeti + **icon-only** "yolu kopyala" +
+  "Aç" + **Kaydet**. **Açıklama (`description`) desteği uygulamadan tamamen kaldırıldı**
+  (backend model/API/agent-araçları/tipler dahil — bkz. `_Docs\05` ilgili kayıt). Sol
+  flow listesi açıklama yerine **flow id · N node** meta satırı gösterir.
+- **Sol palet** iki bölüm: **Node ekle** (5 tip) + **Görünüm** (akış-bazlı etiket
+  `TagEditor`, "Kablo" edge-style seçici, "Animasyon" toggle) — hepsi toolbar'dan
+  buraya taşındı. Palet genişliği `w-40` (mobilde `w-32`).
+- **Node editörü artık popup** (`ModalOverlay`), sabit sağ panel değil. Bir node'a
+  **tıklayınca** (sürükleme değil) açılır: `FlowCanvas.onNodeClick` → `openNodeEditor`.
+  Sürükleme/tıklama karışmaması için `nodeDragThreshold={4}` (birkaç px hareket = sürükleme,
+  düz tık = popup). Boş canvas'a tık veya Escape/backdrop → kapanır. **Boyut board
+  popup'ıyla (`TaskFormModal`) aynı:** `max-h-[90vh] w-full max-w-2xl rounded-xl`.
+- **Palet sürükle-bırak:** node ekleme listesindeki her tip hem tıklanabilir hem
+  **canvas'a sürüklenebilir**. `dataTransfer` MIME `FLOW_NODE_DND_MIME`
+  (`application/swarmgo-flow-node`); `FlowCanvas` içindeki `CanvasInner` (artık
+  `ReactFlowProvider` altında ayrı bileşen) `onDrop`'ta `screenToFlowPosition` ile
+  ekran noktasını graf uzayına çevirir → `onDropNode(type, pos)` → `FlowsPanel.addNodeAt`
+  node'u **bırakılan konumda** oluşturur. Tık ile ekleme origin yakınına kaskad bırakır.
+- **Node üstü `NodeToolbar` kaldırıldı** (FlowsPanel artık `nodeActions` geçmiyor →
+  `NodeActionsContext` null → toolbar render edilmez). **Başlangıç / Çoğalt / Sil**
+  eylemleri popup içindeki `NodeInspector` başlığına taşındı (`onDuplicate` prop'u eklendi).
+
 ## Mimari — backend'e neredeyse dokunmadan
 
 Veri modeli (`orchestration.Graph{Start, Nodes[]}`) zaten yönlü graf olduğundan React Flow'un
@@ -66,8 +92,9 @@ Canvas ile bir kez kaydedilince `x/y` kalıcılaşır; sonraki açılışlarda k
 - **Başlangıç/bitiş tonlaması:** başlangıç node'u hafif yeşil + "başlangıç" rozeti, terminal
   node'lar (giden kenarı yok) hafif mavi + "bitiş" rozeti. Bitiş tespiti `useIsEndNode` ile
   React Flow store'undan canlı okunur (`START_TINT`/`END_TINT`, `nodeStyles.ts`).
-- **Düzen:** açıklama üst toolbar'da ad'ın yanında; node'lar **sol palet**ten tıklanarak eklenir
-  (ikonlu liste); inspector'da ajan seçimi avatarlı `AgentPicker`, prompt alanı yüksek + monospace.
+- **Düzen:** _(güncel: açıklama alanı kaldırıldı — 2026-07-04)_ node'lar **sol palet**ten
+  tıklanarak/sürüklenerek eklenir (ikonlu liste); inspector'da ajan seçimi avatarlı
+  `AgentPicker`, prompt alanı yüksek + monospace.
 - **Node üzerinde ajan avatarı** (`AgentAvatar`).
 - **Bağlantı noktaları (handle):** 12px, accent dolgu (`flowCanvas.css`); hover'da
   **tooltip** (`title`): "Giriş" / "Çıkış → sonraki node" / "Dal → <koşul>" / "Paralel dallar" / "Join".

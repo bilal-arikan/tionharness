@@ -8,6 +8,7 @@ interface Props {
   isStart: boolean
   onPatch: (patch: Partial<FlowNode>) => void
   onMakeStart: () => void
+  onDuplicate: () => void
   onDelete: () => void
 }
 
@@ -26,22 +27,25 @@ const input =
 // by drawing edges on the canvas; here we edit a node's intrinsic fields
 // (type, title, agent, prompt, branch conditions). Edge re-targeting on the
 // canvas stays the single source of truth for `next`/`parallel`/`joinNext`.
-export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onDelete }: Props) {
+export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onDuplicate, onDelete }: Props) {
   return (
     <div className="space-y-3 text-sm">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">
           {node.id}
           {isStart && ' ▶'}
         </span>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {!isStart && (
-            <button onClick={onMakeStart} className="text-xs text-[var(--color-accent)]">
-              Başlangıç yap
+            <button onClick={onMakeStart} className="text-xs text-[var(--color-accent)]" title="Başlangıç yap">
+              ▶ Başlangıç
             </button>
           )}
-          <button onClick={onDelete} className="text-xs text-[var(--color-danger)]">
-            Sil
+          <button onClick={onDuplicate} className="text-xs text-[var(--color-accent)]" title="Çoğalt">
+            ⧉ Çoğalt
+          </button>
+          <button onClick={onDelete} className="text-xs text-[var(--color-danger)]" title="Sil">
+            ✕ Sil
           </button>
         </div>
       </div>

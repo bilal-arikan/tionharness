@@ -44,7 +44,7 @@ func (d *DB) ListFlows(ctx context.Context) ([]Flow, error) {
 	return dbList(d, d.flows, func(a, b Flow) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
-// UpdateFlow edits a flow's name/description/graph.
+// UpdateFlow edits a flow's name/graph.
 func (d *DB) UpdateFlow(ctx context.Context, f Flow) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -53,7 +53,6 @@ func (d *DB) UpdateFlow(ctx context.Context, f Flow) error {
 		return ErrNotFound
 	}
 	cur.Name = f.Name
-	cur.Description = f.Description
 	cur.Graph = f.Graph
 	cur.UpdatedAt = now()
 	return d.persistFlowLocked(cur)

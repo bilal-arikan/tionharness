@@ -102,7 +102,6 @@ func (CreateFlowTool) Def() providers.ToolDef {
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Flow name"},
-				"description":{"type":"string","description":"What the flow does"},
 				"graph":{"type":"string","description":"The orchestration graph as a JSON string"}
 			},
 			"required":["name"],
@@ -110,21 +109,20 @@ func (CreateFlowTool) Def() providers.ToolDef {
 		}`),
 		Examples: []json.RawMessage{
 			// graph is a JSON STRING (escaped) describing Graph{start,nodes}.
-			json.RawMessage(`{"name":"Draft then review","description":"Writer drafts, reviewer critiques","graph":"{\"start\":\"draft\",\"nodes\":[{\"id\":\"draft\",\"type\":\"agent\",\"agentId\":\"agt_writer\",\"prompt\":\"Write a short post about: {{input}}\",\"next\":\"review\"},{\"id\":\"review\",\"type\":\"agent\",\"agentId\":\"agt_reviewer\",\"prompt\":\"Critique this draft: {{node.draft}}\",\"next\":\"\"}]}"}`),
-			// Minimal single-node flow; description omitted.
+			json.RawMessage(`{"name":"Draft then review","graph":"{\"start\":\"draft\",\"nodes\":[{\"id\":\"draft\",\"type\":\"agent\",\"agentId\":\"agt_writer\",\"prompt\":\"Write a short post about: {{input}}\",\"next\":\"review\"},{\"id\":\"review\",\"type\":\"agent\",\"agentId\":\"agt_reviewer\",\"prompt\":\"Critique this draft: {{node.draft}}\",\"next\":\"\"}]}"}`),
+			// Minimal single-node flow.
 			json.RawMessage(`{"name":"Quick classify","graph":"{\"start\":\"c\",\"nodes\":[{\"id\":\"c\",\"type\":\"agent\",\"agentId\":\"agt_triage\",\"prompt\":\"Classify: {{input}}\",\"next\":\"\"}]}"}`),
 			// Parallel fan-out + join: a parallel node lists child agent node ids in
 			// "parallel" (NOT "branches") and continues via "joinNext" (NOT "next").
-			json.RawMessage(`{"name":"Research then synthesize","description":"Run 2 researchers in parallel, then merge","graph":"{\"start\":\"fan\",\"nodes\":[{\"id\":\"fan\",\"type\":\"parallel\",\"parallel\":[\"a\",\"b\"],\"joinNext\":\"merge\"},{\"id\":\"a\",\"type\":\"agent\",\"agentId\":\"agt_x\",\"prompt\":\"Angle A: {{input}}\"},{\"id\":\"b\",\"type\":\"agent\",\"agentId\":\"agt_y\",\"prompt\":\"Angle B: {{input}}\"},{\"id\":\"merge\",\"type\":\"agent\",\"agentId\":\"agt_z\",\"prompt\":\"Merge {{node.a}} and {{node.b}}\",\"next\":\"\"}]}"}`),
+			json.RawMessage(`{"name":"Research then synthesize","graph":"{\"start\":\"fan\",\"nodes\":[{\"id\":\"fan\",\"type\":\"parallel\",\"parallel\":[\"a\",\"b\"],\"joinNext\":\"merge\"},{\"id\":\"a\",\"type\":\"agent\",\"agentId\":\"agt_x\",\"prompt\":\"Angle A: {{input}}\"},{\"id\":\"b\",\"type\":\"agent\",\"agentId\":\"agt_y\",\"prompt\":\"Angle B: {{input}}\"},{\"id\":\"merge\",\"type\":\"agent\",\"agentId\":\"agt_z\",\"prompt\":\"Merge {{node.a}} and {{node.b}}\",\"next\":\"\"}]}"}`),
 		},
 	}
 }
 
 func (t CreateFlowTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Graph       string `json:"graph"`
+		Name  string `json:"name"`
+		Graph string `json:"graph"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -137,10 +135,9 @@ func (t CreateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 		return "", err
 	}
 	created, err := t.d.db.CreateFlow(ctx, db.Flow{
-		Name:        in.Name,
-		Description: in.Description,
-		Graph:       strings.TrimSpace(in.Graph),
-		CreatedBy:   t.d.actorID,
+		Name:      in.Name,
+		Graph:     strings.TrimSpace(in.Graph),
+		CreatedBy: t.d.actorID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create flow: %w", err)
@@ -160,14 +157,14 @@ func NewUpdateFlowTool(database *db.DB, actorID string) UpdateFlowTool {
 func (UpdateFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_flow",
-		Description: "Edit an agent-created flow (not one made by the user). Pass the flow id and the fields to change (name, description, graph).",
+		Description: "Edit an agent-created flow (not one made by the user). Pass the flow id and the fields to change (name, graph, tags).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"id":{"type":"string","description":"The flow id (see list_flows)"},
 				"name":{"type":"string"},
-				"description":{"type":"string"},
-				"graph":{"type":"string","description":"The orchestration graph as a JSON string"}
+				"graph":{"type":"string","description":"The orchestration graph as a JSON string"},
+				"tags":{"type":"array","items":{"type":"string"},"description":"Replace the flow's organizational tags with this exact set"}
 			},
 			"required":["id"],
 			"additionalProperties":false
@@ -183,10 +180,10 @@ func (UpdateFlowTool) Def() providers.ToolDef {
 
 func (t UpdateFlowTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		ID          string  `json:"id"`
-		Name        *string `json:"name"`
-		Description *string `json:"description"`
-		Graph       *string `json:"graph"`
+		ID    string    `json:"id"`
+		Name  *string   `json:"name"`
+		Graph *string   `json:"graph"`
+		Tags  *[]string `json:"tags"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -202,9 +199,6 @@ func (t UpdateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.Name != nil {
 		cur.Name = strings.TrimSpace(*in.Name)
 	}
-	if in.Description != nil {
-		cur.Description = *in.Description
-	}
 	if in.Graph != nil {
 		if err := validGraphJSON(*in.Graph); err != nil {
 			return "", err
@@ -213,6 +207,13 @@ func (t UpdateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	if err := t.d.db.UpdateFlow(ctx, cur); err != nil {
 		return "", fmt.Errorf("update flow: %w", err)
+	}
+	// Tags are persisted separately (UpdateFlow does not touch them), mirroring how
+	// update_schedule applies enabled via its own store call.
+	if in.Tags != nil {
+		if err := t.d.db.SetFlowTags(ctx, in.ID, *in.Tags); err != nil {
+			return "", fmt.Errorf("set flow tags: %w", err)
+		}
 	}
 	b, _ := json.Marshal(map[string]string{"id": in.ID, "action": "updated"})
 	return string(b), nil
@@ -271,7 +272,7 @@ func NewListFlowsTool(database *db.DB, actorID string) ListFlowsTool {
 func (ListFlowsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_flows",
-		Description: "List the orchestration flows in this workspace (id, name, description, and whether each was created by an agent and is therefore editable/deletable by you).",
+		Description: "List the orchestration flows in this workspace (id, name, and whether each was created by an agent and is therefore editable/deletable by you).",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	}
 }
@@ -284,7 +285,6 @@ func (t ListFlowsTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 	type row struct {
 		ID             string `json:"id"`
 		Name           string `json:"name"`
-		Description    string `json:"description"`
 		CreatedByAgent bool   `json:"createdByAgent"`
 	}
 	out := make([]row, 0, len(flows))
@@ -292,7 +292,6 @@ func (t ListFlowsTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 		out = append(out, row{
 			ID:             f.ID,
 			Name:           f.Name,
-			Description:    f.Description,
 			CreatedByAgent: f.CreatedBy != "",
 		})
 	}
@@ -316,7 +315,7 @@ func NewGetFlowTool(database *db.DB, actorID string) GetFlowTool {
 func (GetFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "get_flow",
-		Description: "Get one orchestration flow in full, including its graph JSON (the node graph). Use this to read a flow's current graph before editing it with update_flow. Returns id, name, description, graph and whether it was created by an agent. Allowed on any flow.",
+		Description: "Get one orchestration flow in full, including its graph JSON (the node graph). Use this to read a flow's current graph before editing it with update_flow. Returns id, name, graph and whether it was created by an agent. Allowed on any flow.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"id":{"type":"string","description":"The flow id (see list_flows)"}},
@@ -344,7 +343,6 @@ func (t GetFlowTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	b, _ := json.Marshal(map[string]any{
 		"id":             f.ID,
 		"name":           f.Name,
-		"description":    f.Description,
 		"graph":          f.Graph,
 		"createdByAgent": f.CreatedBy != "",
 	})

@@ -28,9 +28,8 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 }
 
 type flowReq struct {
-	Name        string               `json:"name"`
-	Description string               `json:"description"`
-	Graph       *orchestration.Graph `json:"graph"`
+	Name  string               `json:"name"`
+	Graph *orchestration.Graph `json:"graph"`
 }
 
 // marshalGraph validates and serialises a graph, defaulting to an empty object.
@@ -67,9 +66,8 @@ func (s *Server) handleCreateFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	flow, err := ws(r).DB.CreateFlow(r.Context(), db.Flow{
-		Name:        req.Name,
-		Description: req.Description,
-		Graph:       graph,
+		Name:  req.Name,
+		Graph: graph,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -90,10 +88,9 @@ func (s *Server) handleUpdateFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := ws(r).DB.UpdateFlow(r.Context(), db.Flow{
-		ID:          id,
-		Name:        req.Name,
-		Description: req.Description,
-		Graph:       graph,
+		ID:    id,
+		Name:  req.Name,
+		Graph: graph,
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

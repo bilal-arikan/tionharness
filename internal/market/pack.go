@@ -162,9 +162,8 @@ type ProviderPayload struct {
 // FlowPayload is an agent-agnostic flow draft. Graph node agentId slots are
 // blanked at publish time and re-assigned by the user after install.
 type FlowPayload struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Graph       string `json:"graph"` // orchestration.Graph JSON
+	Name  string `json:"name"`
+	Graph string `json:"graph"` // orchestration.Graph JSON
 }
 
 // BoardColumn mirrors db.BoardColumnDef without importing the db package, so the
@@ -227,10 +226,9 @@ type WorkspaceTemplateStep struct {
 // Graph is set it takes precedence; agent nodes reference agents by
 // "tmpl:<key>" in their agentId (substituted at seed time).
 type WorkspaceTemplateFlow struct {
-	Name        string                  `json:"name"`
-	Description string                  `json:"description,omitempty"`
-	Steps       []WorkspaceTemplateStep `json:"steps,omitempty"`
-	Graph       string                  `json:"graph,omitempty"` // orchestration.Graph JSON; agentId = "tmpl:<key>"
+	Name  string                  `json:"name"`
+	Steps []WorkspaceTemplateStep `json:"steps,omitempty"`
+	Graph string                  `json:"graph,omitempty"` // orchestration.Graph JSON; agentId = "tmpl:<key>"
 }
 
 // WorkspaceTemplateSchedule is a starter cron schedule. It is always seeded
