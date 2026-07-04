@@ -9,7 +9,13 @@
 # (no BOM) script as ANSI, which corrupts non-ASCII chars (em-dash, Turkish
 # letters) and breaks string parsing inside Start-Job.
 #
-# Usage:  .\scripts\dev.ps1                 # backend + frontend, open browser at :5173
+# By default the servers bind to 0.0.0.0 so the UI + API are reachable from other
+# devices on the local network (phone, laptop) at http://<this-machine-LAN-IP>:5173.
+# The backend has NO auth and CORS is wildcard -- only expose it on a trusted LAN.
+# Pass -Loopback to bind 127.0.0.1 only (old behaviour, no firewall prompt).
+#
+# Usage:  .\scripts\dev.ps1                 # backend + frontend on LAN, open browser at LAN IP
+#         .\scripts\dev.ps1 -Loopback       # bind 127.0.0.1 only (local-only, no network access)
 #         .\scripts\dev.ps1 -NoBrowser      # don't auto-open the browser
 #         .\scripts\dev.ps1 -BackendOnly    # only the Go backend
 #         .\scripts\dev.ps1 -FrontendOnly   # only the Vite dev server
@@ -23,6 +29,7 @@
 
 param(
     [int]$Port = 8090,
+    [switch]$Loopback,
     [switch]$NoBrowser,
     [switch]$BackendOnly,
     [switch]$FrontendOnly,
@@ -32,6 +39,25 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+
+# Get-LanIP returns the primary IPv4 address of the adapter that owns the default
+# route (the one other LAN devices can reach). Falls back to 127.0.0.1 if none is
+# found (e.g. offline). Used for the bind address hint and the browser URL.
+function Get-LanIP {
+    try {
+        $ip = Get-NetIPConfiguration |
+            Where-Object { $_.IPv4DefaultGateway -ne $null -and $_.NetAdapter.Status -eq "Up" } |
+            ForEach-Object { $_.IPv4Address.IPAddress } |
+            Select-Object -First 1
+        if ($ip) { return $ip }
+    } catch { }
+    return "127.0.0.1"
+}
+
+# Bind host: 0.0.0.0 exposes the servers on every interface (LAN-reachable); with
+# -Loopback we keep the old 127.0.0.1-only behaviour (no Windows Firewall prompt).
+$bindHost = if ($Loopback) { "127.0.0.1" } else { "0.0.0.0" }
+$lanIP = if ($Loopback) { "127.0.0.1" } else { Get-LanIP }
 
 # Track launched processes so the finally block can tear them (and their
 # children: go->compiled exe, npm->node) down on exit.
@@ -75,8 +101,8 @@ try {
     if (-not $FrontendOnly) {
         # Pre-flight: clear any orphan still holding the backend port.
         Free-Port $Port "Backend"
-        Write-Host "==> Backend baslatiliyor: go run ./cmd/swarmgo  (127.0.0.1:$Port)" -ForegroundColor Cyan
-        $env:SWARMGO_ADDR = "127.0.0.1:$Port"
+        Write-Host "==> Backend baslatiliyor: go run ./cmd/swarmgo  (${bindHost}:$Port)" -ForegroundColor Cyan
+        $env:SWARMGO_ADDR = "${bindHost}:$Port"
         # Gated features (see SKILL.md / Ortam Notlari): shell + self-management.
         $env:SWARMGO_ENABLE_SHELL = "1"
         $env:SWARMGO_ENABLE_SELFMANAGE = "1"
@@ -119,21 +145,34 @@ try {
             npm install
             Pop-Location
         }
-        Write-Host "==> Frontend baslatiliyor: npm run dev  (http://127.0.0.1:5173)" -ForegroundColor Cyan
+        # In network mode pass --host 0.0.0.0 so Vite listens on every interface
+        # (default is localhost-only). "--" forwards the flag through npm to vite.
+        $viteArgs = @("run", "dev")
+        if (-not $Loopback) { $viteArgs += @("--", "--host", "0.0.0.0") }
+        Write-Host "==> Frontend baslatiliyor: npm run dev  (http://${lanIP}:5173)" -ForegroundColor Cyan
         # npm.cmd: on Windows npm is a batch shim; call the .cmd directly.
-        $frontend = Start-Process -FilePath "npm.cmd" -ArgumentList "run", "dev" `
+        $frontend = Start-Process -FilePath "npm.cmd" -ArgumentList $viteArgs `
             -WorkingDirectory $fe -NoNewWindow -PassThru
         $procs += $frontend
     }
 
     if (-not $NoBrowser -and -not $BackendOnly) {
-        # Give Vite a moment to come up, then open the browser.
+        # Give Vite a moment to come up, then open the browser at the LAN IP so the
+        # same URL works from other devices too.
         Start-Sleep -Seconds 3
-        Start-Process "http://127.0.0.1:5173"
+        Start-Process "http://${lanIP}:5173"
     }
 
     Write-Host ""
     Write-Host "==> Calisiyor. Durdurmak icin Ctrl+C (ya da pencereyi kapat) -> ikisi de kapanir." -ForegroundColor Green
+    if (-not $Loopback) {
+        Write-Host "==> UI (bu makine):   http://127.0.0.1:5173" -ForegroundColor Green
+        Write-Host "==> UI (yerel agdan): http://${lanIP}:5173  <- telefon/diger cihazlar" -ForegroundColor Green
+        Write-Host "==> API auth YOK, CORS wildcard -> yalnizca guvenilir agda ac." -ForegroundColor Yellow
+        Write-Host "==> Ilk calistirmada Windows Guvenlik Duvari izin sorabilir (Ozel ag icin izin ver)." -ForegroundColor Yellow
+    } else {
+        Write-Host "==> UI: http://127.0.0.1:5173  (yalnizca bu makine / -Loopback)" -ForegroundColor Green
+    }
     Write-Host ""
 
     # Wait until one of them exits; if one dies, take the others down too.
