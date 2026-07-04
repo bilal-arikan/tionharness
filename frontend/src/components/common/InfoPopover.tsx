@@ -32,7 +32,7 @@ export function InfoPopover({
       {open && (
         <span
           role="tooltip"
-          className={`absolute top-5 z-50 w-80 max-w-[80vw] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text-dim)] shadow-[var(--shadow-lg)] ${
+          className={`absolute top-5 z-50 w-80 max-w-[80vw] whitespace-pre-line rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text-dim)] shadow-[var(--shadow-lg)] ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >

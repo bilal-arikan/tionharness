@@ -6,6 +6,14 @@ import { copyToClipboard } from '../../lib/clipboard'
 import { Markdown } from '../markdown/Markdown'
 import { Button, CollapsibleSection, InfoPopover, ModalOverlay, useBulkToggle, type BulkToggle } from '../common'
 
+// FLOOR_NOTE clarifies that the predicted CLI overhead is a per-turn FLOOR (base
+// system + built-ins + eager tools only), so a measured turn can exceed it: the
+// gap is accumulated warm context + runtime-activated (deferred) tools. Appended
+// to the CLI-overhead info popover.
+const FLOOR_NOTE =
+  '"Beklenen taban" = bir sonraki minimal tur için ALT SINIR (yalnız CLI tabanı + eager araç şemaları). ' +
+  'Ölçülen "Gerçek" bunu aşabilir: fark, oturum boyunca biriken sıcak bağlam (--resume ile server-side tutulan geçmiş, her iç çağrıda cacheRead) + çalışma-anında aktive edilen deferred araçlardır.'
+
 interface Props {
   sessionId: string
   title?: string
@@ -122,7 +130,7 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                 and as the primary accent chip before the first turn is measured. */}
             {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
               <Stat
-                label="Beklenen (CLI, tahmini)"
+                label="Beklenen taban (CLI)"
                 value={data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead}
                 accent={data.cliOverhead.measuredTokens === 0}
               />
@@ -142,7 +150,7 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
                 CLI ek yükü
-                <InfoPopover text={data.cliOverhead.note} label="CLI ek yükü nasıl hesaplanır?" />
+                <InfoPopover text={`${data.cliOverhead.note}\n\n${FLOOR_NOTE}`} label="CLI ek yükü nasıl hesaplanır?" />
               </span>
               {data.cliOverhead.measuredTokens > 0 ? (
                 <span className="text-[var(--color-text-dim)]">
@@ -152,25 +160,26 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                   {data.cliOverhead.estimatedTokens > 0 &&
                     `, ~${(data.cliOverhead.measuredTokens / data.cliOverhead.estimatedTokens).toFixed(1)}×`}
                   {`, ${data.cliOverhead.calls} çağrı ort.`})
-                  {/* Also surface the reference-based projection next to the measured value. */}
+                  {/* Also surface the reference-based FLOOR next to the measured value;
+                      the gap (measured − floor) is accumulated warm context. */}
                   {data.cliOverhead.predictedOverhead > 0 && (
                     <>
-                      {' · '}tahmini ~
+                      {' · '}beklenen taban ~
                       <strong>
                         {(data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead).toLocaleString()}
                       </strong>
-                      {' '}(+{data.cliOverhead.predictedOverhead.toLocaleString()})
+                      {' '}(fark = birikmiş sıcak bağlam)
                     </>
                   )}
                 </span>
               ) : data.cliOverhead.predictedOverhead > 0 ? (
                 <span className="text-[var(--color-text-dim)]">
                   Tahmin <strong>{data.cliOverhead.estimatedTokens.toLocaleString()}</strong> →
-                  beklenen ~
+                  beklenen taban ~
                   <strong>
                     {(data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead).toLocaleString()}
                   </strong>
-                  {' '}(+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong> tahmini ek yük,
+                  {' '}(+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong> taban ek yük,
                   henüz ölçülmedi)
                 </span>
               ) : (

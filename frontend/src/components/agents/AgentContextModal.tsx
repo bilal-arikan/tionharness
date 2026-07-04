@@ -107,7 +107,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
             <Stat label="Dinamik" value={data.dynamicTokens} />
             {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
               <Stat
-                label="Beklenen (CLI, tahmini)"
+                label="Beklenen taban (CLI)"
                 value={data.totalTokens + data.cliOverhead.predictedOverhead}
                 accent
               />
@@ -123,12 +123,15 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
                 CLI ek yükü
-                <InfoPopover text={data.cliOverhead.note} label="CLI ek yükü nasıl hesaplanır?" />
+                <InfoPopover
+                  text={`${data.cliOverhead.note}\n\n"Beklenen taban" = bir turun ALT SINIRI (yalnız CLI tabanı + eager araç şemaları). Gerçek girdi, biriken bağlam + aktive edilen deferred araçlarla bunu aşabilir; kesin değer ilk turdan sonra ölçülür.`}
+                  label="CLI ek yükü nasıl hesaplanır?"
+                />
               </span>
               <span className="text-[var(--color-text-dim)]">
-                Tahmin <strong>{data.totalTokens.toLocaleString()}</strong> → beklenen ~
+                Tahmin <strong>{data.totalTokens.toLocaleString()}</strong> → beklenen taban ~
                 <strong>{(data.totalTokens + data.cliOverhead.predictedOverhead).toLocaleString()}</strong>
-                {' '}(+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong> tahmini ek yük)
+                {' '}(+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong> taban ek yük)
               </span>
             </div>
           </div>
