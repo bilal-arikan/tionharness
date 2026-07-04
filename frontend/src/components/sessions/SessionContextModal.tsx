@@ -115,15 +115,18 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
               <Stat label={`Katlanmış (${data.droppedMessages.length})`} value={data.droppedTokens} dropped />
             )}
             <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
-            {data.cliOverhead && data.cliOverhead.measuredTokens > 0 ? (
+            {data.cliOverhead && data.cliOverhead.measuredTokens > 0 && (
               <Stat label="Gerçek (CLI, ölçülen)" value={data.cliOverhead.measuredTokens} accent />
-            ) : data.cliOverhead && data.cliOverhead.predictedOverhead > 0 ? (
+            )}
+            {/* Predicted CLI projection — shown alongside the measured figure (dim)
+                and as the primary accent chip before the first turn is measured. */}
+            {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
               <Stat
                 label="Beklenen (CLI, tahmini)"
                 value={data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead}
-                accent
+                accent={data.cliOverhead.measuredTokens === 0}
               />
-            ) : null}
+            )}
             {data.multiAgent && (
               <span className="rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-[var(--color-accent)]">
                 çok-ajanlı
@@ -148,6 +151,16 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                   {data.cliOverhead.estimatedTokens > 0 &&
                     `, ~${(data.cliOverhead.measuredTokens / data.cliOverhead.estimatedTokens).toFixed(1)}×`}
                   {`, ${data.cliOverhead.calls} çağrı ort.`})
+                  {/* Also surface the reference-based projection next to the measured value. */}
+                  {data.cliOverhead.predictedOverhead > 0 && (
+                    <>
+                      {' · '}tahmini ~
+                      <strong>
+                        {(data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead).toLocaleString()}
+                      </strong>
+                      {' '}(+{data.cliOverhead.predictedOverhead.toLocaleString()})
+                    </>
+                  )}
                 </span>
               ) : data.cliOverhead.predictedOverhead > 0 ? (
                 <span className="text-[var(--color-text-dim)]">
