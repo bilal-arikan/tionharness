@@ -74,8 +74,15 @@ export interface AgentTools {
 // Fresh-start context preview: the static system prompt + tool catalog an agent
 // begins each turn with (dynamic memory/summary/artifacts are added per-turn).
 export interface AgentContextPreview {
+  // Agent provider — drives provider-aware UI notes (e.g. claude-cli weaves the
+  // dynamic suffix into the last user message rather than a separate system block).
+  provider: string
   system: string
   systemTokens: number
+  // Selected-skills catalog block, split out of the system prompt (still part of
+  // the cached static prefix). Empty when the agent has no skills selected.
+  skills: string
+  skillsTokens: number
   tools: { name: string; description: string }[]
   toolTokens: number
   // Lazy (on-demand) tools: schemas NOT shipped at turn start; name+desc only.

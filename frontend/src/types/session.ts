@@ -143,13 +143,28 @@ export interface SessionContext {
 // each with a token estimate. Backed by GET /api/sessions/{id}/context-preview.
 export interface SessionContextPreview {
   agentName: string
+  // Agent provider ('claude-cli' | 'anthropic' | 'minimax' | …) — drives
+  // provider-aware UI notes (tool delivery, dynamic placement).
+  provider: string
   multiAgent: boolean
   system: string
   systemTokens: number
+  // Selected-skills catalog block, split out of the system prompt (still part of
+  // the cached static prefix). Empty when the agent has no skills selected.
+  skills: string
+  skillsTokens: number
+  // Rolling summary (the compacted stand-in for the dropped messages), split out
+  // of the dynamic suffix. Empty when the session has no summary. Counts in total.
+  summary: string
+  summaryTokens: number
   dynamic: string
   dynamicTokens: number
   messages: { role: string; text: string; author?: string; self?: boolean }[]
   messageTokens: number
+  // Turns folded into the rolling summary and NO LONGER sent (shown separately).
+  // droppedTokens is their size and is NOT part of totalTokens (not on the wire).
+  droppedMessages: { role: string; text: string; author?: string; self?: boolean }[]
+  droppedTokens: number
   tools: { name: string; description: string; inputSchema?: unknown }[]
   toolTokens: number
   totalTokens: number
@@ -158,6 +173,11 @@ export interface SessionContextPreview {
   // between SwarmGo's segment estimate (totalTokens) and the real prompt the CLI
   // sends (its own system + tools + MCP bridge, which SwarmGo never sees).
   cliOverhead?: CLIOverhead
+  // True when this preview was requested with compaction simulated (?compact=1):
+  // the message array reflects this turn's budgeted fold (read-only, no summary
+  // generated/persisted). foldedCount is how many pending messages would fold.
+  compactionSimulated: boolean
+  foldedCount: number
 }
 
 // CLIOverhead surfaces, for CLI-wrapper agents, that totalTokens under-reports the
@@ -165,13 +185,16 @@ export interface SessionContextPreview {
 // reports in/cache CUMULATIVELY across its internal tool-loop round-trips, so the
 // recorded turn total is divided by the round-trip count (calls == result num_turns)
 // to recover the per-call figure (0 until the first turn); overheadTokens =
-// max(0, measured − estimated).
+// max(0, measured − estimated). predictedOverhead is the projection from the
+// empirically measured reference (base system + built-ins + eager bridged tools),
+// available BEFORE the first turn is billed.
 export interface CLIOverhead {
   note: string
   estimatedTokens: number
   measuredTokens: number
   overheadTokens: number
   calls: number
+  predictedOverhead: number
 }
 
 // Which segments of the next request are served from a warm prompt cache vs sent

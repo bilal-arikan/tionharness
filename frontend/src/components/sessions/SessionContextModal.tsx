@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, X } from 'lucide-react'
+import { Check, ChevronsDownUp, ChevronsUpDown, Copy, FoldVertical, X } from 'lucide-react'
 import type { SessionContextPreview } from '../../types'
 import { api } from '../../api'
+import { copyToClipboard } from '../../lib/clipboard'
 import { Markdown } from '../markdown/Markdown'
-import { Button, ModalOverlay } from '../common'
+import { Button, CollapsibleSection, ModalOverlay, useBulkToggle, type BulkToggle } from '../common'
 
 interface Props {
   sessionId: string
@@ -22,12 +23,16 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
   const [copied, setCopied] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  // When on, the preview simulates this turn's budgeted compaction (fewer
+  // messages) so the array matches what the model actually receives.
+  const [simulate, setSimulate] = useState(false)
+  const { bulk, expandAll, collapseAll } = useBulkToggle(true)
 
   const load = useCallback(
-    (msg: string) => {
+    (msg: string, compact: boolean) => {
       setLoading(true)
       api
-        .sessionContextPreview(sessionId, msg.trim() || undefined)
+        .sessionContextPreview(sessionId, msg.trim() || undefined, compact)
         .then(setData)
         .catch((e) => setErr((e as Error).message))
         .finally(() => setLoading(false))
@@ -35,7 +40,9 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
     [sessionId],
   )
 
-  useEffect(() => load(''), [load])
+  // Reload whenever the sample message is (re)submitted or the compaction toggle
+  // flips. simulate is a dependency so toggling it refetches immediately.
+  useEffect(() => load(message, simulate), [load, simulate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const copy = () => {
     if (!data) return
@@ -45,8 +52,11 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
         return `### ${m.role}${who}\n${m.text}`
       })
       .join('\n\n')
-    const full = `# System\n${data.system}\n\n# Dynamic\n${data.dynamic}\n\n# Messages\n${transcript}`
-    navigator.clipboard.writeText(full).then(() => {
+    const skills = data.skills ? `\n\n# Skills\n${data.skills}` : ''
+    const summary = data.summary ? `\n\n# Summary (folded)\n${data.summary}` : ''
+    const full = `# System\n${data.system}${skills}${summary}\n\n# Dynamic\n${data.dynamic}\n\n# Messages\n${transcript}`
+    copyToClipboard(full).then((ok) => {
+      if (!ok) return
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     })
@@ -73,12 +83,15 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
               {' · '}salt-okunur (tur çalıştırılmaz)
             </p>
           </div>
+          {data && <BulkButtons onExpand={expandAll} onCollapse={collapseAll} />}
           {data && (
             <button
               onClick={copy}
-              className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+              title={copied ? 'Kopyalandı' : 'Bağlamı kopyala'}
+              aria-label={copied ? 'Kopyalandı' : 'Bağlamı kopyala'}
+              className="flex shrink-0 items-center rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
-              <Copy size={13} /> {copied ? 'Kopyalandı' : 'Bağlamı kopyala'}
+              {copied ? <Check size={13} className="text-[var(--color-success)]" /> : <Copy size={13} />}
             </button>
           )}
           <button
@@ -94,12 +107,23 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-5 py-2 text-xs">
             <Stat label="Toplam" value={data.totalTokens} accent />
             <Stat label="Sistem" value={data.systemTokens} />
+            {data.skills && <Stat label="Skills" value={data.skillsTokens} />}
+            {data.summary && <Stat label="Özet" value={data.summaryTokens} />}
             <Stat label="Dinamik" value={data.dynamicTokens} />
             <Stat label={`Mesajlar (${data.messages.length})`} value={data.messageTokens} />
-            <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
-            {data.cliOverhead && data.cliOverhead.measuredTokens > 0 && (
-              <Stat label="Gerçek (CLI, ölçülen)" value={data.cliOverhead.measuredTokens} accent />
+            {data.droppedMessages.length > 0 && (
+              <Stat label={`Katlanmış (${data.droppedMessages.length})`} value={data.droppedTokens} dropped />
             )}
+            <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
+            {data.cliOverhead && data.cliOverhead.measuredTokens > 0 ? (
+              <Stat label="Gerçek (CLI, ölçülen)" value={data.cliOverhead.measuredTokens} accent />
+            ) : data.cliOverhead && data.cliOverhead.predictedOverhead > 0 ? (
+              <Stat
+                label="Beklenen (CLI, tahmini)"
+                value={data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead}
+                accent
+              />
+            ) : null}
             {data.multiAgent && (
               <span className="rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-[var(--color-accent)]">
                 çok-ajanlı
@@ -125,6 +149,16 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                     `, ~${(data.cliOverhead.measuredTokens / data.cliOverhead.estimatedTokens).toFixed(1)}×`}
                   {`, ${data.cliOverhead.calls} çağrı ort.`})
                 </span>
+              ) : data.cliOverhead.predictedOverhead > 0 ? (
+                <span className="text-[var(--color-text-dim)]">
+                  Tahmin <strong>{data.cliOverhead.estimatedTokens.toLocaleString()}</strong> →
+                  beklenen ~
+                  <strong>
+                    {(data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead).toLocaleString()}
+                  </strong>
+                  {' '}(+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong> tahmini ek yük,
+                  henüz ölçülmedi)
+                </span>
               ) : (
                 <span className="text-[var(--color-text-dim)]">henüz ölçülmedi</span>
               )}
@@ -144,16 +178,28 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
           </div>
         )}
 
-        {/* Sample "next" message */}
+        {/* Sample "next" message + compaction-simulation toggle */}
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-2">
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && load(message)}
+            onKeyDown={(e) => e.key === 'Enter' && load(message, simulate)}
             placeholder="Örnek 'sıradaki' kullanıcı mesajı → bu mesaj gönderilseydi bağlam nasıl olurdu"
             className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
           />
-          <Button onClick={() => load(message)} disabled={loading} className="shrink-0">
+          <button
+            onClick={() => setSimulate((s) => !s)}
+            disabled={loading}
+            title="Bu turun sıkıştırmasını (compaction) simüle et — mesaj dizisini modele gerçekte gidecek hale indir (salt-okunur, özet üretmez/kaydetmez)"
+            className={`flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs ${
+              simulate
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            <FoldVertical size={13} /> Compaction {simulate ? 'açık' : 'simüle'}
+          </button>
+          <Button onClick={() => load(message, simulate)} disabled={loading} className="shrink-0">
             {loading ? '…' : 'Önizle'}
           </Button>
         </div>
@@ -164,120 +210,182 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
           {!err && !data && <p className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>}
           {data && (
             <>
-              <Section title="Sistem promptu" cached={data.cache.systemCached}>
-                <Markdown>{data.system || '(boş)'}</Markdown>
-              </Section>
-              <Section title="Dinamik bağlam" cached={data.cache.dynamicCached}>
-                {data.dynamic ? <Markdown>{data.dynamic}</Markdown> : <Dim>(boş)</Dim>}
-              </Section>
-
-              <h3 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                Mesaj dizisi (modele gidecek) · {data.messages.length}
-              </h3>
-              {data.messages.length === 0 ? (
-                <Dim>Henüz mesaj yok.</Dim>
-              ) : (
-                <div className="space-y-2">
-                  {data.messages.map((m, i) => {
-                    const cached = i < data.cache.cachedMsgCount
-                    // Draw the cache boundary right after the last cached message,
-                    // but only when there is actually a warm prefix to divide.
-                    const boundary =
-                      data.cache.cachedMsgCount > 0 && i === data.cache.cachedMsgCount
-                    return (
-                      <div key={i}>
-                        {boundary && (
-                          <div className="my-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-[var(--color-success)]">
-                            <span className="h-px flex-1 bg-[color-mix(in_srgb,var(--color-success)_30%,transparent)]" />
-                            cache sınırı — buraya kadar cache'li (sıcak)
-                            <span className="h-px flex-1 bg-[color-mix(in_srgb,var(--color-success)_30%,transparent)]" />
-                          </div>
-                        )}
-                        <div
-                          className={`rounded-lg border bg-[var(--color-bg)] px-3 py-2 ${
-                            cached ? 'border-[color-mix(in_srgb,var(--color-success)_30%,transparent)]' : 'border-[var(--color-border)]'
-                          }`}
-                        >
-                          <div className="mb-1 flex items-center gap-1.5">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
-                              {m.role}
-                            </span>
-                            {m.author && (
-                              <span
-                                title={
-                                  m.role === 'user'
-                                    ? `Hedef ajan: ${m.author}`
-                                    : `Yazan ajan: ${m.author}`
-                                }
-                                className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-dim)]"
-                              >
-                                {m.role === 'user' ? `→ ${m.author}` : m.author}
-                                {m.self && m.role !== 'user' && ' (siz)'}
-                              </span>
-                            )}
-                            <CacheTag cached={cached} />
-                          </div>
-                          <pre
-                            className={`overflow-x-auto whitespace-pre-wrap break-words text-xs ${
-                              cached ? CACHED : 'text-[var(--color-text)]'
-                            }`}
-                          >
-                            {m.text || '(boş)'}
-                          </pre>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              <h3 className="mb-1.5 mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                Araçlar — her tur şema gönderilen · {data.tools.length}
-                <CacheTag cached={data.cache.toolsCached} />
-              </h3>
-              <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
-                Bu araçların TAM şeması (açıklama + JSON girdi şeması + örnekler) her tur gönderilir.
-                İçeriğini görmek için bir aracı genişlet.
-              </p>
-              {data.tools.length === 0 ? (
-                <Dim>Bu ajana şema gönderilen araç yok.</Dim>
-              ) : (
-                <ul className="space-y-1">
-                  {data.tools.map((t) => (
-                    <li
-                      key={t.name}
-                      className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)]"
+              {/* Section order (top→bottom), per user request: the fresh
+                  model-bound message array first, then the dynamic suffix, then
+                  the stable cached prefix (system / skills / warm message prefix).
+                  The IIFE splits the message array so the fresh half can lead and
+                  the cached half sits down with the other cached segments. */}
+              {(() => {
+                const cachedCount = data.cache.cachedMsgCount
+                const cachedMsgs = data.messages.slice(0, cachedCount)
+                const freshMsgs = data.messages.slice(cachedCount)
+                return (
+                  <>
+                    <CollapsibleSection
+                      title={<>Mesaj dizisi (modele gidecek) · {freshMsgs.length}</>}
+                      bulk={bulk}
                     >
-                      <details>
-                        <summary className="cursor-pointer select-none px-2.5 py-1.5 text-xs">
-                          <code
-                            className={`font-medium ${
-                              data.cache.toolsCached ? CACHED : 'text-[var(--color-text)]'
-                            }`}
-                          >
-                            {t.name}
-                          </code>
-                        </summary>
-                        <div className="border-t border-[var(--color-border)] px-2.5 py-2">
-                          {t.description && (
-                            <p className="mb-2 whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--color-text-dim)]">
-                              {t.description}
-                            </p>
-                          )}
-                          {t.inputSchema != null && (
-                            <pre className="overflow-x-auto rounded bg-[var(--color-surface)] p-2 text-[10px] leading-relaxed text-[var(--color-text-dim)]">
-                              {JSON.stringify(t.inputSchema, null, 2)}
-                            </pre>
-                          )}
-                          {!t.description && t.inputSchema == null && (
-                            <p className="text-[11px] text-[var(--color-text-dim)]">(şema yok)</p>
-                          )}
+                      {data.compactionSimulated ? (
+                        <HintNote>
+                          <strong>Compaction simülasyonu açık.</strong> Bu dizi bu turun bütçeli
+                          katlamasını da yansıtır (salt-okunur — yeni özet üretilmedi/kaydedilmedi).{' '}
+                          {data.foldedCount > 0
+                            ? `${data.foldedCount} bekleyen mesaj daha özete katlanırdı; aşağıdaki "Artık gönderilmeyen" grubunda turuncu olarak görünür.`
+                            : 'Bu turda ek katlanacak mesaj yok — dizi zaten bütçeye sığıyor.'}
+                        </HintNote>
+                      ) : (
+                        data.droppedMessages.length === 0 && (
+                          <HintNote>
+                            Bu önizleme kalıcı özet sınırını uygular ama{' '}
+                            <strong>bu turun ek bütçe katlamasını uygulamaz</strong>. Bütçeye yakın
+                            oturumda gerçek tur daha fazla mesaj katlayabilir — üstteki{' '}
+                            <strong>“Compaction simüle”</strong> düğmesiyle onu da görebilirsin.
+                          </HintNote>
+                        )
+                      )}
+                      {freshMsgs.length === 0 ? (
+                        <Dim>{cachedCount > 0 ? 'Taze mesaj yok (hepsi cache önekinde).' : 'Henüz mesaj yok.'}</Dim>
+                      ) : (
+                        <div className="space-y-2">
+                          {freshMsgs.map((m, i) => (
+                            <MessageCard key={i} m={m} cached={false} />
+                          ))}
                         </div>
-                      </details>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                      )}
+                    </CollapsibleSection>
+
+                    {/* Rolling summary — the compacted stand-in for the dropped
+                        turns below. Shown as its own category (was buried in Dynamic). */}
+                    {data.summary && (
+                      <Section title="Özet (katlanmış mesajların yerine geçer)" bulk={bulk}>
+                        <Markdown>{data.summary}</Markdown>
+                      </Section>
+                    )}
+
+                    {/* Dropped messages — folded into the summary, no longer sent.
+                        Light-orange group so it is clearly "off the wire". */}
+                    {data.droppedMessages.length > 0 && (
+                      <CollapsibleSection
+                        title={
+                          <span className="text-[var(--color-warning)]">
+                            Artık gönderilmeyen (özete katlanmış) · {data.droppedMessages.length}
+                          </span>
+                        }
+                        right={<DroppedTag />}
+                        defaultOpen={false}
+                        bulk={bulk}
+                      >
+                        <HintNote>
+                          Bu mesajlar <strong>özete katlandı</strong> ve modele artık ham olarak
+                          gönderilmiyor — içerikleri yukarıdaki <strong>Özet</strong> bölümünde
+                          temsil ediliyor. Token'ları toplamda sayılmaz. Tam metni gerekirse{' '}
+                          <code className="rounded bg-[var(--color-surface-2)] px-1">conversation_search</code>{' '}
+                          ile geri alınır.
+                        </HintNote>
+                        <div className="space-y-2">
+                          {data.droppedMessages.map((m, i) => (
+                            <MessageCard key={i} m={m} cached={false} dropped />
+                          ))}
+                        </div>
+                      </CollapsibleSection>
+                    )}
+
+                    <Section title="Dinamik bağlam" cached={data.cache.dynamicCached} bulk={bulk}>
+                      {data.cliOverhead && (
+                        <HintNote>
+                          claude-cli: dinamik bağlam ayrı bir system bloğu olarak değil,{' '}
+                          <strong>son kullanıcı mesajının içine dokunularak</strong> gönderilir
+                          (sıcak cache prefix'ini bozmaz).
+                        </HintNote>
+                      )}
+                      {data.dynamic ? <Markdown>{data.dynamic}</Markdown> : <Dim>(boş)</Dim>}
+                    </Section>
+
+                    <Section title="Sistem promptu" cached={data.cache.systemCached} bulk={bulk}>
+                      <Markdown>{data.system || '(boş)'}</Markdown>
+                    </Section>
+                    {data.skills && (
+                      <Section title="Skills" cached={data.cache.systemCached} bulk={bulk}>
+                        <Markdown>{data.skills}</Markdown>
+                      </Section>
+                    )}
+
+                    {cachedCount > 0 && (
+                      <CollapsibleSection
+                        title={<>Cache'li mesaj dizisi (sıcak önek) · {cachedMsgs.length}</>}
+                        right={<CacheTag cached />}
+                        defaultOpen={false}
+                        bulk={bulk}
+                      >
+                        <div className="space-y-2">
+                          {cachedMsgs.map((m, i) => (
+                            <MessageCard key={i} m={m} cached />
+                          ))}
+                        </div>
+                      </CollapsibleSection>
+                    )}
+                  </>
+                )
+              })()}
+
+              <CollapsibleSection
+                title={<>Araçlar — her tur şema gönderilen · {data.tools.length}</>}
+                right={<CacheTag cached={data.cache.toolsCached} />}
+                bulk={bulk}
+              >
+                {data.cliOverhead ? (
+                  <HintNote>
+                    claude-cli: bu araçlar SwarmGo'nun kendi isteğinde şema olarak DEĞİL,{' '}
+                    <strong>CLI'nin built-in araçları + MCP köprüsüyle</strong> iletilir; aşağıdaki
+                    token sayısı yaklaşıktır (gerçek yük CLI'nin kendi temsiline göre değişir — bkz.
+                    yukarıdaki “CLI ek yükü”).
+                  </HintNote>
+                ) : (
+                  <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
+                    Bu araçların TAM şeması (açıklama + JSON girdi şeması + örnekler) her tur gönderilir.
+                    İçeriğini görmek için bir aracı genişlet.
+                  </p>
+                )}
+                {data.tools.length === 0 ? (
+                  <Dim>Bu ajana şema gönderilen araç yok.</Dim>
+                ) : (
+                  <ul className="space-y-1">
+                    {data.tools.map((t) => (
+                      <li
+                        key={t.name}
+                        className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)]"
+                      >
+                        <details>
+                          <summary className="cursor-pointer select-none px-2.5 py-1.5 text-xs">
+                            <code
+                              className={`font-medium ${
+                                data.cache.toolsCached ? CACHED : 'text-[var(--color-text)]'
+                              }`}
+                            >
+                              {t.name}
+                            </code>
+                          </summary>
+                          <div className="border-t border-[var(--color-border)] px-2.5 py-2">
+                            {t.description && (
+                              <p className="mb-2 whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--color-text-dim)]">
+                                {t.description}
+                              </p>
+                            )}
+                            {t.inputSchema != null && (
+                              <pre className="overflow-x-auto rounded bg-[var(--color-surface)] p-2 text-[10px] leading-relaxed text-[var(--color-text-dim)]">
+                                {JSON.stringify(t.inputSchema, null, 2)}
+                              </pre>
+                            )}
+                            {!t.description && t.inputSchema == null && (
+                              <p className="text-[11px] text-[var(--color-text-dim)]">(şema yok)</p>
+                            )}
+                          </div>
+                        </details>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CollapsibleSection>
             </>
           )}
         </div>
@@ -292,21 +400,36 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
 // default text colour.
 const CACHED = 'text-[color-mix(in_srgb,var(--color-success)_60%,var(--color-text))]'
 
+// BulkButtons is the header pair that broadcasts expand-all / collapse-all to
+// every CollapsibleSection in the modal.
+function BulkButtons({ onExpand, onCollapse }: { onExpand: () => void; onCollapse: () => void }) {
+  const cls =
+    'flex shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <button onClick={onExpand} title="Tümünü aç" className={cls}>
+        <ChevronsUpDown size={13} /> Tümünü aç
+      </button>
+      <button onClick={onCollapse} title="Tümünü kapat" className={cls}>
+        <ChevronsDownUp size={13} /> Tümünü kapat
+      </button>
+    </div>
+  )
+}
+
 function Section({
   title,
   cached,
+  bulk,
   children,
 }: {
   title: string
   cached?: boolean
+  bulk?: BulkToggle
   children: React.ReactNode
 }) {
   return (
-    <div className="mb-4">
-      <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        {title}
-        <CacheTag cached={!!cached} />
-      </h3>
+    <CollapsibleSection title={title} right={<CacheTag cached={!!cached} />} bulk={bulk}>
       <div
         className={`rounded-lg border bg-[var(--color-bg)] px-3 py-1 ${
           cached
@@ -316,7 +439,61 @@ function Section({
       >
         {children}
       </div>
+    </CollapsibleSection>
+  )
+}
+
+// MessageCard renders one transcript message with its role/author labels. `cached`
+// tints it green (served from the warm prefix); `dropped` tints it light orange
+// (folded into the summary and no longer sent). At most one should be set.
+function MessageCard({
+  m,
+  cached,
+  dropped,
+}: {
+  m: { role: string; text: string; author?: string; self?: boolean }
+  cached: boolean
+  dropped?: boolean
+}) {
+  const border = dropped
+    ? 'border-[color-mix(in_srgb,var(--color-warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)]'
+    : cached
+      ? 'border-[color-mix(in_srgb,var(--color-success)_30%,transparent)] bg-[var(--color-bg)]'
+      : 'border-[var(--color-border)] bg-[var(--color-bg)]'
+  return (
+    <div className={`rounded-lg border px-3 py-2 ${border}`}>
+      <div className="mb-1 flex items-center gap-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
+          {m.role}
+        </span>
+        {m.author && (
+          <span
+            title={m.role === 'user' ? `Hedef ajan: ${m.author}` : `Yazan ajan: ${m.author}`}
+            className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-dim)]"
+          >
+            {m.role === 'user' ? `→ ${m.author}` : m.author}
+            {m.self && m.role !== 'user' && ' (siz)'}
+          </span>
+        )}
+        {dropped ? <DroppedTag /> : <CacheTag cached={cached} />}
+      </div>
+      <pre
+        className={`overflow-x-auto whitespace-pre-wrap break-words text-xs ${
+          dropped ? 'text-[var(--color-text-dim)]' : cached ? CACHED : 'text-[var(--color-text)]'
+        }`}
+      >
+        {m.text || '(boş)'}
+      </pre>
     </div>
+  )
+}
+
+// DroppedTag marks a message folded into the rolling summary (no longer sent).
+function DroppedTag() {
+  return (
+    <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 text-[9px] font-medium normal-case text-[var(--color-warning)]">
+      katlandı · gönderilmiyor
+    </span>
   )
 }
 
@@ -338,12 +515,35 @@ function Dim({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-[var(--color-text-dim)]">{children}</p>
 }
 
-function Stat({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
-  const cls = accent
-    ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-    : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+// HintNote is the soft amber "this preview is an approximation" callout used to
+// flag where the debug view intentionally diverges from the exact wire payload
+// (no this-turn compaction; provider-specific tool/dynamic delivery).
+function HintNote({ children }: { children: React.ReactNode }) {
   return (
-    <span className={`rounded-md px-2 py-1 ${cls}`}>
+    <div className="mb-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--color-text-dim)]">
+      {children}
+    </div>
+  )
+}
+
+function Stat({
+  label,
+  value,
+  accent,
+  dropped,
+}: {
+  label: string
+  value: number
+  accent?: boolean
+  dropped?: boolean
+}) {
+  const cls = dropped
+    ? 'bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] text-[var(--color-warning)]'
+    : accent
+      ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+      : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+  return (
+    <span className={`rounded-md px-2 py-1 ${cls}`} title={dropped ? 'Özete katlandı — toplama dahil değil' : undefined}>
       {label}: <strong>{value.toLocaleString()}</strong>
     </span>
   )

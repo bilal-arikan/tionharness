@@ -17,8 +17,16 @@ import (
 // list, cross-session context) is added per-turn and depends on the message, so
 // it is intentionally not part of this "from scratch" preview.
 type agentContextPreview struct {
+	// Provider drives provider-aware UI notes (e.g. claude-cli weaves the dynamic
+	// suffix into the last user message rather than a separate system block).
+	Provider     string        `json:"provider"`
 	System       string        `json:"system"`
 	SystemTokens int           `json:"systemTokens"`
+	// Skills is the agent's selected-skills catalog block, split out of the system
+	// prompt so the preview UI can fold it as its own segment (it still lives inside
+	// the cached static prefix). Empty when the agent has no skills selected.
+	Skills       string        `json:"skills"`
+	SkillsTokens int           `json:"skillsTokens"`
 	Tools        []toolSummary `json:"tools"`
 	ToolTokens   int           `json:"toolTokens"`
 	// LazyTools are the on-demand tools whose schemas are NOT shipped at turn start.
@@ -73,18 +81,33 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 	// Optional sample message → simulate the message-dependent dynamic suffix.
 	dynamic := buildAgentDynamicPrompt(ctx, wsp, agent, r.URL.Query().Get("message"))
 
+	// Split the skills catalog block out of the composed system prompt (same block
+	// composeTurnRequest appends) so the preview can fold it as its own segment.
+	skillsText := strings.TrimSpace(wsp.Runtime.SkillsCatalogBlockForAgent(agent))
+	if skillsText != "" {
+		if stripped, ok := stripBlock(system, skillsText); ok {
+			system = stripped
+		} else {
+			skillsText = ""
+		}
+	}
+
 	sysTok := conversation.EstimateText(system)
+	skillsTok := conversation.EstimateText(skillsText)
 	toolTok := estimateToolCatalog(defs)
 	dynTok := conversation.EstimateText(dynamic)
 	writeJSON(w, http.StatusOK, agentContextPreview{
+		Provider:      agent.Provider,
 		System:        system,
 		SystemTokens:  sysTok,
+		Skills:        skillsText,
+		SkillsTokens:  skillsTok,
 		Tools:         tools,
 		ToolTokens:    toolTok,
 		LazyTools:     lazyTools,
 		Dynamic:       dynamic,
 		DynamicTokens: dynTok,
-		TotalTokens:   sysTok + toolTok + dynTok,
+		TotalTokens:   sysTok + skillsTok + toolTok + dynTok,
 	})
 }
 

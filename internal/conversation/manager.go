@@ -278,6 +278,32 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	return len(fold), newSummary, nil
 }
 
+// SimulateCompaction reports how THIS turn's budgeted compaction would reshape the
+// message array, WITHOUT any side effect (no LLM summarize, no summary persist). It
+// mirrors Prepare's front half — same budget math (limits + budgetShape +
+// EffectiveBudget) and fold boundary — but instead of summarizing, it just returns
+// how many pending messages WOULD be folded into the rolling summary and the tail
+// that would remain on the wire. keptTail always excludes the already-summarized
+// head (history[:SummaryMsgCount]); when wouldCompact is false (budget disabled or
+// summary+pending already fit) it is the full pending slice. Read-only, for the
+// context preview's "simulate compaction" toggle.
+func (m *Manager) SimulateCompaction(session db.Session, agent db.Agent, history []db.Message) (foldCount int, keptTail []db.Message, wouldCompact bool) {
+	summary := session.Summary
+	start := clampStart(session.SummaryMsgCount, len(history))
+	pending := history[start:]
+	maxTokens, keepRecent := m.limits()
+	if maxTokens > 0 {
+		fraction, ceil := m.budgetShape()
+		maxTokens = EffectiveBudget(agent.Provider, agent.Model, maxTokens, fraction, ceil)
+	}
+	if maxTokens > 0 && EstimateTokens(summary, pending) > maxTokens {
+		if fold, tail, _, ok := foldBoundary(history, start, keepRecent); ok {
+			return len(fold), tail, true
+		}
+	}
+	return 0, pending, false
+}
+
 // clampStart caps a recorded SummaryMsgCount at the current history length —
 // defensive against a history shorter than recorded (e.g. after message edits).
 func clampStart(start, n int) int {

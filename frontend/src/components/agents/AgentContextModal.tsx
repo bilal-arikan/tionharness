@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, X } from 'lucide-react'
+import { Check, ChevronsDownUp, ChevronsUpDown, Copy, X } from 'lucide-react'
 import type { AgentContextPreview } from '../../types'
 import { api } from '../../api'
+import { copyToClipboard } from '../../lib/clipboard'
 import { Markdown } from '../markdown/Markdown'
-import { Button, ModalOverlay } from '../common'
+import { Button, CollapsibleSection, ModalOverlay, useBulkToggle } from '../common'
 
 interface Props {
   agentId: string
@@ -22,6 +23,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
   const [raw, setRaw] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const { bulk, expandAll, collapseAll } = useBulkToggle(true)
 
   const load = useCallback(
     (msg: string) => {
@@ -39,7 +41,8 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
 
   const copy = () => {
     if (!data) return
-    navigator.clipboard.writeText(data.system).then(() => {
+    copyToClipboard(data.system).then((ok) => {
+      if (!ok) return
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     })
@@ -72,12 +75,15 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
               Ajanın sıfırdan (oturum yokken) bir tura başlarken aldığı sistem promptu + araçlar
             </p>
           </div>
+          {data && <BulkButtons onExpand={expandAll} onCollapse={collapseAll} />}
           {data && (
             <button
               onClick={copy}
-              className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+              title={copied ? 'Kopyalandı' : 'Promptu kopyala'}
+              aria-label={copied ? 'Kopyalandı' : 'Promptu kopyala'}
+              className="flex shrink-0 items-center rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
-              <Copy size={13} /> {copied ? 'Kopyalandı' : 'Promptu kopyala'}
+              {copied ? <Check size={13} className="text-[var(--color-success)]" /> : <Copy size={13} />}
             </button>
           )}
           <button
@@ -93,6 +99,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-5 py-2 text-xs">
             <Stat label="Toplam" value={data.totalTokens} accent />
             <Stat label="Sistem promptu" value={data.systemTokens} />
+            {data.skills && <Stat label="Skills" value={data.skillsTokens} />}
             <Stat label={`Şema araçlar (${data.tools.length})`} value={data.toolTokens} />
             {data.lazyTools.length > 0 && (
               <Stat label={`Talep-üzerine (${data.lazyTools.length})`} value={0} dim />
@@ -122,59 +129,86 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
           {!err && !data && <p className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>}
           {data && (
             <>
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Sistem promptu
-                </h3>
-                <div className="flex items-center overflow-hidden rounded-md border border-[var(--color-border)] text-[11px]">
-                  {(['Markdown', 'Ham'] as const).map((mode) => {
-                    const isRaw = mode === 'Ham'
-                    const activeMode = raw === isRaw
-                    return (
-                      <button
-                        key={mode}
-                        onClick={() => setRaw(isRaw)}
-                        className={`px-2 py-0.5 ${
-                          activeMode
-                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                            : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-                        }`}
-                      >
-                        {mode}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-              {raw ? (
-                <pre className="mb-5 whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
-                  {data.system || '(boş)'}
-                </pre>
-              ) : (
-                <div className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
-                  <Markdown>{data.system || '(boş)'}</Markdown>
-                </div>
-              )}
+              {/* Dynamic suffix (simulated) — moved to the top per user request,
+                  ahead of the stable system prompt / skills / tools prefix. */}
+              <CollapsibleSection
+                title={<>Dinamik bağlam {message.trim() ? '(örnek mesaja göre)' : ''}</>}
+                bulk={bulk}
+              >
+                {data.provider === 'claude-cli' && (
+                  <div className="mb-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--color-text-dim)]">
+                    claude-cli: dinamik bağlam ayrı bir system bloğu olarak değil,{' '}
+                    <strong>son kullanıcı mesajının içine dokunularak</strong> gönderilir
+                    (sıcak cache prefix'ini bozmaz).
+                  </div>
+                )}
+                {data.dynamic ? (
+                  raw ? (
+                    <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
+                      {data.dynamic}
+                    </pre>
+                  ) : (
+                    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
+                      <Markdown>{data.dynamic}</Markdown>
+                    </div>
+                  )
+                ) : (
+                  <p className="text-xs text-[var(--color-text-dim)]">
+                    Bu mesaj için recall yok. Özet · oturum artifact'ları · todo listesi gerçek bir
+                    oturumda, tur anında eklenir (burada simüle edilmez).
+                  </p>
+                )}
+              </CollapsibleSection>
 
-              {/* Dynamic suffix (simulated). */}
-              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                Dinamik bağlam {message.trim() ? '(örnek mesaja göre)' : ''}
-              </h3>
-              {data.dynamic ? (
-                raw ? (
-                  <pre className="mb-5 whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
-                    {data.dynamic}
+              <CollapsibleSection
+                title="Sistem promptu"
+                bulk={bulk}
+                right={
+                  <div className="flex items-center overflow-hidden rounded-md border border-[var(--color-border)] text-[11px]">
+                    {(['Markdown', 'Ham'] as const).map((mode) => {
+                      const isRaw = mode === 'Ham'
+                      const activeMode = raw === isRaw
+                      return (
+                        <button
+                          key={mode}
+                          onClick={() => setRaw(isRaw)}
+                          className={`px-2 py-0.5 ${
+                            activeMode
+                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                          }`}
+                        >
+                          {mode}
+                        </button>
+                      )
+                    })}
+                  </div>
+                }
+              >
+                {raw ? (
+                  <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
+                    {data.system || '(boş)'}
                   </pre>
                 ) : (
-                  <div className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
-                    <Markdown>{data.dynamic}</Markdown>
+                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
+                    <Markdown>{data.system || '(boş)'}</Markdown>
                   </div>
-                )
-              ) : (
-                <p className="mb-5 text-xs text-[var(--color-text-dim)]">
-                  Bu mesaj için recall yok. Özet · oturum artifact'ları · todo listesi gerçek bir
-                  oturumda, tur anında eklenir (burada simüle edilmez).
-                </p>
+                )}
+              </CollapsibleSection>
+
+              {/* Skills catalog block, split out of the system prompt. */}
+              {data.skills && (
+                <CollapsibleSection title="Skills" bulk={bulk}>
+                  {raw ? (
+                    <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
+                      {data.skills}
+                    </pre>
+                  ) : (
+                    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
+                      <Markdown>{data.skills}</Markdown>
+                    </div>
+                  )}
+                </CollapsibleSection>
               )}
 
               {/* The "schema sent every turn" tools are already part of the
@@ -185,10 +219,10 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                   duplicated what the Context already carries. */}
 
               {shownLazyTools.length > 0 && (
-                <>
-                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                    Araçlar — talep üzerine (lazy) · {shownLazyTools.length}
-                  </h3>
+                <CollapsibleSection
+                  title={<>Araçlar — talep üzerine (lazy) · {shownLazyTools.length}</>}
+                  bulk={bulk}
+                >
                   <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
                     Şema tura girmez — yalnızca ad+özet sistem promptundaki{' '}
                     <code className="rounded bg-[var(--color-surface-2)] px-1">Available Tools (load on demand)</code>{' '}
@@ -207,13 +241,30 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                       </li>
                     ))}
                   </ul>
-                </>
+                </CollapsibleSection>
               )}
             </>
           )}
         </div>
       </div>
     </ModalOverlay>
+  )
+}
+
+// BulkButtons is the header pair that broadcasts expand-all / collapse-all to
+// every CollapsibleSection in the modal.
+function BulkButtons({ onExpand, onCollapse }: { onExpand: () => void; onCollapse: () => void }) {
+  const cls =
+    'flex shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <button onClick={onExpand} title="Tümünü aç" className={cls}>
+        <ChevronsUpDown size={13} /> Tümünü aç
+      </button>
+      <button onClick={onCollapse} title="Tümünü kapat" className={cls}>
+        <ChevronsDownUp size={13} /> Tümünü kapat
+      </button>
+    </div>
   )
 }
 
