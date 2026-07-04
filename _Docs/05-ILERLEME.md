@@ -2,6 +2,89 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-04**
 
+## Artifacts + Skills başlıkları da üst-title'a birleştirildi ✅ (2026-07-04)
+
+Flows/Agents desenini diğer detay ekranlarına uygulama. Canlı doğrulandı (mcp-chrome).
+
+- **Artifacts:** detay toolbar'ı (başlık + origin/kind/creator rozetleri + eylemler:
+  Düzenle/İçerik-kopyala/Yol-kopyala/Aç/Kaynak-sohbet/Sil) tamamen üst `PaneHeader`'a
+  taşındı → `titleSlot` = kimlik, `right` = eylemler. Düzenleme modunda `right` =
+  Kaydet/İptal. "Artifactlar" başlığı + subtitle detay görünümünde kalktı.
+- **Skills:** isim + rozetler (grup/kısıt/görünürlük/kaynak) `titleSlot`'a, eylem
+  grubu (Düzenle/Kısıtla-Paylaş/Görünürlük-seçici/Yol-kopyala/Aç/Sil) `right`'a taşındı.
+  Açıklama bloğu (slug, açıklama, ne-zaman, izinli araçlar, alt-beceriler) gövdede
+  slim strip olarak kaldı. "Skills" başlığı detay görünümünde kalktı.
+- **Uygulanmayan:** `Araçlar & MCP` (detay salt-içerik, ayrı toolbar/path yok) ve
+  liste-ağırlıklı ekranlar (Market/Hafıza/Loglar/Bütçe) desene uymuyor — dokunulmadı.
+- Dosyalar: `panels/ArtifactsPanel.tsx`, `panels/SkillsPanel.tsx`. `tsc -b` temiz.
+
+## Fix: Schedules ekranında "Zamanlamalar" başlığı scroll dışında kalıyordu ✅ (2026-07-04)
+
+- **Belirti:** Schedules ekranında "Zamanlamalar (cron / zaman tabanlı)" başlığı +
+  yeni-zamanlama formu üstte sabit (pinli) kalıyor, yalnız alttaki liste (içine
+  Automations da giriyor) kayıyordu → başlık/form dikey alan yiyor, scroll dışında.
+- **Çözüm:** `Schedules.tsx` tek scroll kapsayıcısına alındı — kök `flex-col`
+  (p-4'süz), içine `min-h-0 flex-1 overflow-y-auto p-4` sarmalayıcı; başlık + form +
+  liste + `Automations` birlikte kayar. Liste div'i `flex-1 … overflow-y-auto` →
+  `space-y-2`. Deep-link `scrollIntoView` çalışmaya devam eder. `tsc -b && vite build` temiz.
+
+## Flows: Şablonlar + Koşular başlıkları da üst-title'a birleştirildi ✅ (2026-07-04)
+
+Önceki birleştirmenin (flow editörü + agents) devamı — aynı desen Şablonlar ve
+Koşular sekmelerine uygulandı. Canlı doğrulandı (mcp-chrome).
+
+- **Şablonlar:** şablon önizleme üstündeki ayrı toolbar kaldırıldı; içeriği üst
+  `PaneHeader`'a taşındı → `titleSlot` = şablon adı + açıklaması; `right` =
+  "salt-okunur önizleme" + "+ Bu şablondan akış oluştur". "Akışlar" başlığı kalktı.
+- **Koşular:** `RunView`'e `hideSummary` prop'u eklendi (üst özet satırını gizler,
+  Girdi/Hata satırları kalır). `STATUS_LABEL` + `statusColor` export edildi;
+  `FlowsPanel` üst `PaneHeader`'da `titleSlot` = akış adı + durum + tarih, `right` =
+  "Tekrar çalıştır" butonu. "Akışlar" başlığı kalktı, özet çift render olmuyor.
+- `title` artık üç detay görünümünde de (editor/template/run) gizli; yalnız
+  boş/liste durumunda "Akışlar".
+- Dosyalar: `flow/RunView.tsx`, `panels/FlowsPanel.tsx`. `tsc -b` temiz.
+
+## Flows + Agents başlıkları tek üst-title'a birleştirildi ✅ (2026-07-04)
+
+Kullanıcı isteği: detay başlıklarını tek üst-bar'a topla (sohbet başlığı deseni).
+Canlı doğrulandı (mcp-chrome).
+
+- **`PaneHeader` esnetildi:** `title` opsiyonel oldu + yeni `titleSlot?: ReactNode`
+  (title/subtitle bloğunun yerine büyüyen özel içerik — ör. isim inputu). Sol
+  konteyner `flex-1` aldı ki input genişleyebilsin. Hamburger zaten `md:hidden`
+  (yalnız dar ekran).
+- **Flows:** flow editöründe ayrı "meta toolbar" (alt title) kaldırıldı; içeriği üst
+  `PaneHeader`'a taşındı → `titleSlot` = akış-adı inputu + ID chip; `right` =
+  Yol-kopyala (ikon) + "Aç" + "Kaydet". "Akışlar" başlığı ve `· <akış adı>` subtitle
+  editör görünümünde kaldırıldı (şablon/koşu/boş sekmelerde "Akışlar" korunur).
+  Doğrulama: header'da input="akış adı", id="FLW…", butonlar [Listeyi göster, Yolu
+  kopyala, Aç, Kaydet], "Akışlar" yok.
+- **Agents:** `CopyPathButton` + `RevealButton` `AgentSettingsForm` header'ından
+  `AgentsView` üst `PaneHeader`'ının `right`'ına taşındı; reveal etiketi "Klasörü aç"
+  → **"Aç"**. Kullanılmayan importlar (`api`, `CopyPathButton`, `RevealButton`)
+  AgentSettingsForm'dan temizlendi.
+- Dosyalar: `common/PaneHeader.tsx`, `panels/FlowsPanel.tsx`, `agents/AgentsView.tsx`,
+  `agents/AgentSettingsForm.tsx`. `tsc -b` temiz.
+
+## Sol panellerdeki "listeyi gizle" butonları kaldırıldı (sohbet listesi gibi) ✅ (2026-07-04)
+
+Sohbet oturum listesinde panel-kapat butonu yok; mobilde drawer'ı **boşluğa
+(backdrop) tıklayarak** kapatıyorsun, masaüstünde ise sütun hep açık. Diğer liste
+ekranlarındaki `PanelLeftClose` "Listeyi kapat" butonları bu davranışı gereksiz
+kılıyordu — hepsi kaldırıldı.
+
+- **`SidebarHeader` (`common/SidebarChrome.tsx`):** `onCollapse` prop'u ve kapat
+  butonu tamamen kaldırıldı → Executions, Ajanlar, Artifactlar başlıklarındaki
+  buton gitti (3 çağrı yeri güncellendi).
+- **Liste-içi satır butonları kaldırıldı:** ToolsPanel, FlowsPanel, SkillsPanel,
+  MarketPanel (`md:hidden` "Listeyi kapat" düğmeleri) + artık kullanılmayan
+  `PanelLeftClose` importları temizlendi.
+- **Korunan:** başlıktaki hamburger (Menu) açma butonu — mobilde drawer'ı açmak
+  için gerekli (MarketPanel dahil), sohbetteki gibi.
+- **Playwright doğrulaması (390px):** 7 ekranın hepsinde liste sütununda 0 gizle
+  butonu; hamburger ile açılıyor, backdrop'a tıklayınca kapanıyor
+  (drawer `left: 0 → -width`).
+
 ## Kopyala butonları sadece-ikon yapıldı ✅ (2026-07-04)
 
 Kullanıcı isteği: kopyala butonlarındaki "Bağlamı kopyala" / "Copy" gibi metinler
