@@ -2,6 +2,121 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-04**
 
+## Node türü sabit + değişken info butonu + flow tag chip'leri ✅ (2026-07-04)
+
+Flow editörü UX (yalnız frontend). Ayrıntı: `_Docs/15-FLOW-CANVAS.md`.
+
+- **Node türü sabit** — `NodeInspector`'dan "Tür" select kaldırıldı; yerine salt-okunur tür
+  başlığı (monokrom ikon + ad + "(tür sabit)"). Tür artık yalnız palet'ten oluşturulurken belirlenir.
+- **Değişken info butonu** — Prompt/Şablon alanları yanına ℹ️ popover (`FlowVarsButton`).
+  Flow motorunun gerçekten desteklediği değişkenler: `{{input}}`, `{{last}}`, `{{node.<id>}}`
+  (engine.go `render`). Popover, akıştaki her diğer node için dinamik `{{node.<id>}}` satırı üretir;
+  tıklayınca alana ekler. (Otomasyonların `{{date}}` vb. flow motorunda yok.)
+- **Flow tag chip'leri** — etiketler zaten Görünüm > Etiket'ten atanabiliyordu; artık sol flow
+  listesinde chip olarak da görünür (canlı senkron).
+
+## Akış emojisi + monokrom node ikonları ✅ (2026-07-04)
+
+Akışlar (Flow) için iki görsel iyileştirme. Ayrıntı: `_Docs/15-FLOW-CANVAS.md`.
+
+- **`Flow.emoji`** — her akışa opsiyonel emoji. Bağımsız kalıcı: yeni store metodu
+  `SetFlowEmoji` + `PUT /api/flows/{id}/emoji`; `UpdateFlow` emojiye dokunmaz (ad/graph
+  kaydı emojiyi silmez). `create_flow`/`update_flow`/`get_flow`/`list_flows` araçlarına
+  `emoji` eklendi. UI: `FlowsPanel` başlığında ortak `EmojiField` (seçince anında kalıcı).
+  Emoji her akış-seçim/gösterim yerinde: flow listesi, Koşular listesi + başlık, `RunView`,
+  `FlowPicker` (Zamanlama/Otomasyon), zamanlama/otomasyon satır rozetleri, TaskBoard +
+  `TaskFormModal`. Hepsi `normalizeAvatar` ile mojibake-güvenli.
+- **Monokrom node ikonları** — çok renkli emoji (🤖🔀⚡⏱️🧩) yerine temaya uygun tek renkli
+  lucide ikonlar (`Bot/Split/Zap/Timer/Puzzle`, `nodeStyles.NODE_ICONS`). `NodeChrome.icon`
+  → `Icon: LucideIcon`; `NodeShell` başlıkta + "Node ekle" paletinde (node ağacı) aynı
+  ikon seti render eder.
+- **Test:** `TestFlowEmojiRoundTrip` (create/UpdateFlow-koruma/SetFlowEmoji-değiştir-temizle).
+  Go build+vet temiz, `tsc`+`npm run build` temiz.
+
+## Görevler (board): toolbar üst-title'a taşındı ✅ (2026-07-04)
+
+- `board` `HEADERLESS_VIEWS`'e eklendi; `TaskBoard` board kolonunun tepesine
+  `PaneHeader` (title="Görevler", `right` = ⊞ Sütunlar + "+ Görev" + 🔗 Sırala)
+  yerleştirildi. Eski `border-b` toolbar bar'ı kaldırıldı. PaneHeader, sol sütun
+  editörü panelinin sağındaki içerik kolonunun tepesinde (diğer ekranlardaki
+  ListPane+PaneHeader deseniyle tutarlı). Sütunlar butonu zaten editörü toggle
+  ettiğinden ayrı liste-toggle'a gerek yok.
+- Dosyalar: `App.tsx`, `panels/TaskBoard.tsx`. `tsc -b` temiz; canlı doğrulandı
+  (header: "Görevler · ⊞ Sütunlar · + Görev · 🔗 Sırala").
+
+## Alt navbar fare-sürükleme ile kaydırılabilir oldu ✅ (2026-07-04)
+
+Dar ekranlarda (`< md`) alttaki yatay `MobileNavBar` dokunmatikle native kayıyordu
+ama fareyle sürüklenemiyordu. Yeni `useDragScroll` hook'u (→ `hooks/useDragScroll.ts`)
+sadece **fare** için tıkla-sürükle panning ekliyor (touch'a dokunulmuyor — zaten
+momentumlu native kaydırma var). 4px'lik ölü bölge + capture-fazında click bastırma
+ile bir buton üzerinde sürükleme yanlışlıkla o görünüme geçmiyor. `cursor-grab` /
+`active:cursor-grabbing` + `select-none` görsel/etkileşim ipuçları eklendi.
+
+- **Playwright doğrulaması (360px):** 200px sola sürükleme → `scrollLeft` 0→200
+  (birebir), görünüm değişmedi; düz tıklama → görünüm değişiyor. Build temiz.
+
+## OpenRouter duplicate-key React uyarısı giderildi (katalog id çakışması) ✅ (2026-07-04)
+
+**Belirti:** Sağlayıcı/model seçicilerinde React "encountered two children with the
+same key, `openrouter`" uyarısı.
+
+**Kök neden (backend, frontend değil):** `GET /api/catalog` yerleşik katalogu
+(`providers.Catalog()`) custom sağlayıcılarla (`CustomCatalog()`) **id kontrolü
+olmadan** birleştiriyordu. Kullanıcı, yerleşik `openrouter` ile aynı id'de bir
+custom sağlayıcı eklemişti → katalog aynı id'yi iki kez döndürüyordu (canlı API'de
+doğrulandı: 26 modelli yerleşik + 3 modelli custom). Bu sadece bir uyarı değil,
+gerçek belirsizlik: `provider: "openrouter"` hangisini kastediyor?
+
+**Düzeltme:** Yeni `providers.MergeCatalog(builtin, custom)` (→ `internal/providers/merge.go`).
+Custom sağlayıcı aynı id'li yerleşiği **yerinde override eder** ("kullanıcı config'i
+kazanır"), eşi olmayan custom id'ler sona eklenir; girdi dilimleri değişmez.
+`handleCatalog` artık bunu kullanıyor. Birim test: `merge_test.go` (çakışma → tek
+kayıt, sıra korunur, custom kazanır, girdi mutasyonu yok) — geçti. `go build ./internal/...` temiz.
+
+> ⚠️ Etki için backend restart gerekir — çalışan `go run ./cmd/swarmgo` (kullanıcı
+> oturumu) yeniden başlayınca devreye girer.
+
+## Bütçe: iç header üst-title'a (PaneHeader) taşındı ✅ (2026-07-04)
+
+- `budget` `HEADERLESS_VIEWS`'e eklendi; `BudgetPanel` kendi `PaneHeader`'ını render
+  ediyor (title="Bütçe", subtitle = gün, `right` = 7g/30g/90g aralık seçici + Yenile).
+  Eski iç header (`Wallet` + "Bütçe" h1 + gün + kontroller) kaldırıldı → App header ile
+  çift "Bütçe" başlığı sorunu giderildi. Kullanılmayan `Wallet` importu temizlendi.
+  İçerik (özet kartlar + tablolar) `flex-1 overflow-y-auto p-5` gövdeye alındı.
+- Dosyalar: `App.tsx`, `panels/BudgetPanel.tsx`. `tsc -b` temiz; canlı doğrulandı
+  (header: "Bütçe · 2026-07-04 · 7g/30g/90g · Yenile").
+
+## Schedule + Automation: boş oturum yerine bir Flow başlatma (`flowId`) ✅ (2026-07-04)
+
+Kullanıcı isteği: zamanlamalar ve otomasyonlar tek ajana prompt teslim etmek yerine
+seçilen bir **orkestrasyon akışını** (Flow) da başlatabilsin. Task'taki mevcut
+`FlowID` deseni Schedule + Automation'a taşındı.
+
+- **Model:** `db.Schedule.FlowID` + `db.Automation.FlowID` (`flowId,omitempty`); set
+  ise prompt = akış girdisi, agent/targetAgent opsiyonel (karşılıklı dışlar). Store
+  `UpdateSchedule`/`UpdateAutomation` round-trip eder.
+- **Dispatch:** `scheduler.go` `run` → `deliverFlow` (`RunFlowRecorded`, akış kendi
+  bildirim + transcript oturumunu yönetir, `FlowFailure`→delivery failure).
+  `automation.go` `fire` → render sonrası `fireFlow` (spawn atlanır; akış per-tetik,
+  kendini döngülemez — guardrail'ler tetik sıklığını sınırlar, SpawnTags yok sayılır).
+- **API:** create/update (schedules+automations) `flowId` alır; doğrulama gevşetildi
+  (cron/triggerTag + promptTemplate zorunlu; hedef = flowId **ya da** ajan). Automation
+  update hedef-değiştirme mantığı flowId↔agent (kısmi güncelleme hedefi ellemez).
+- **Araçlar:** `create/update_schedule` + `create/update_automation` + `list_*`
+  `flowId` (flow varlığı `GetFlow` ile doğrulanır).
+- **UI:** ortak `TargetModeToggle` (Ajan/Akış) + `FlowPicker` (Schedules.tsx export;
+  Automations import); create/edit formları + liste satırları (`Workflow` ikonu +
+  `🔀 <akış>`); akış otomasyonunda spawn-etiket editörü yerine bilgi notu.
+- **Test:** `db/automation_test.go` `TestAutomationFlowIDRoundTrip` +
+  `TestScheduleFlowIDRoundTrip`. `go build ./...` + `go test` (409) yeşil, `tsc` temiz.
+- Dosyalar: `db/models_task.go`, `db/models_automation.go`, `db/store_schedule.go`,
+  `db/store_automation.go`, `agent/scheduler.go`, `agent/automation.go`,
+  `api/schedules.go`, `api/automations.go`, `tools/builtin_schedulemgmt.go`,
+  `tools/builtin_automationmgmt.go`, `frontend/{types/task.ts, api/tasks.ts,
+  panels/Schedules.tsx, panels/Automations.tsx}`. Detay `20-SCHEDULE-WAKE.md`,
+  `46-ETIKET-OTOMASYON.md`.
+
 ## Logs: sayaç + Kopyala + Aç üst-title'a taşındı ✅ (2026-07-04)
 
 - `logs` `HEADERLESS_VIEWS`'e eklendi; `LogsPanel` kendi `PaneHeader`'ını render ediyor
