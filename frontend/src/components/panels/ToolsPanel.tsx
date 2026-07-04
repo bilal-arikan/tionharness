@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSessionState } from '../../hooks/useSessionState'
 import { Search, Plug, ChevronRight, Check, Ban } from 'lucide-react'
 import { api } from '../../api'
 import type { MCPServer, MCPTransport, ToolVisibility, WorkspaceTool } from '../../types'
@@ -55,7 +56,8 @@ export function ToolsPanel({ onError }: Props) {
   const [visOv, setVisOv] = useState<Record<string, ToolVisibility>>({})
   const [savingTool, setSavingTool] = useState<string | null>(null)
   const [visBusy, setVisBusy] = useState<string | null>(null)
-  const [selectedName, setSelectedName] = useState<string | null>(null)
+  // Selection persists across screen switches within the session (resets on reload).
+  const [selectedName, setSelectedName] = useSessionState<string | null>('tools.selectedName', null)
   const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.toolsListOpen')
   const [query, setQuery] = useState('')
   // List filters: a set of visibility tiers (empty = all) and an enabled/disabled
@@ -500,7 +502,7 @@ export function ToolsPanel({ onError }: Props) {
                         data-testid="tools-list-item"
                         data-tool-name={t.name}
                         onClick={(e) => {
-                          if (sel.handleClick(e, t.name, orderedNames)) return
+                          if (sel.handleClick(e, t.name, orderedNames, selectedName)) return
                           setSelectedName(t.name)
                         }}
                         className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition ${

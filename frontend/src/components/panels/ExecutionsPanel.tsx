@@ -235,7 +235,7 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
               <button
                 key={it.sessionId}
                 onClick={(e) => {
-                  if (sel.handleClick(e, it.sessionId, orderedIds)) return
+                  if (sel.handleClick(e, it.sessionId, orderedIds, selectedId)) return
                   select(it.sessionId)
                 }}
                 className={`mb-0.5 flex w-full items-start gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition ${

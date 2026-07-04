@@ -316,7 +316,7 @@ export function SessionsSidebar({
                       onClick={(e) => {
                         // Ctrl/Cmd or Shift turns the click into a selection
                         // gesture; a plain click opens the session as before.
-                        if (sel.handleClick(e, s.id, orderedIds)) return
+                        if (sel.handleClick(e, s.id, orderedIds, activeSessionId)) return
                         onSelectSession(s.id)
                       }}
                       className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
