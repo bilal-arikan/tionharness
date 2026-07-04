@@ -71,6 +71,15 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 // the follow-up session. Guardrail decisions are logged so a stalled loop is
 // explainable in the Logs view.
 func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Session, tf TurnFinished) {
+	// Expiry: past its optional end date → auto-disable and stop.
+	if a.ExpiresAt > 0 && time.Now().Unix() >= a.ExpiresAt {
+		e.logger.Info("automation: past end date; auto-disabling",
+			"automation", a.ID, "tag", a.TriggerTag, "expiresAt", a.ExpiresAt)
+		if err := e.db.SetAutomationEnabled(ctx, a.ID, false); err != nil {
+			e.logger.Warn("automation: expiry auto-disable failed", "automation", a.ID, "error", err)
+		}
+		return
+	}
 	// Cooldown: skip if the previous fire was too recent.
 	if a.CooldownSec > 0 && a.LastFiredAt > 0 {
 		if elapsed := time.Now().Unix() - a.LastFiredAt; elapsed < int64(a.CooldownSec) {

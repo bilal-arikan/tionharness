@@ -1,10 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Repeat, RotateCcw, Trash2, Info } from 'lucide-react'
+import { Repeat, RotateCcw, Trash2, Info, Pencil, X } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Automation } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { Button, TagEditor } from '../common'
+
+// datetime-local <-> unix-seconds helpers (mirrors Schedules.tsx).
+function unixToLocalInput(unix?: number): string {
+  if (!unix) return ''
+  const d = new Date(unix * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+function localInputToUnix(s: string): number {
+  if (!s) return 0
+  const ms = new Date(s).getTime()
+  return isNaN(ms) ? 0 : Math.floor(ms / 1000)
+}
 
 // PromptTemplate placeholders (kept in sync with agent/automation.go turnVars).
 const PROMPT_VARS: { name: string; desc: string }[] = [
@@ -48,6 +61,15 @@ export function Automations({ agents, onError }: Props) {
   const [promptTemplate, setPromptTemplate] = useState('Devam et. Önceki sonuç:\n{{result}}')
   const [maxIterations, setMaxIterations] = useState('50')
   const [cooldownSec, setCooldownSec] = useState('0')
+  const [expiresAt, setExpiresAt] = useState('')
+
+  // Inline edit state (one automation edited at a time).
+  const [editId, setEditId] = useState<string | null>(null)
+  const [edit, setEdit] = useState({
+    name: '', triggerTag: '', targetAgentId: '', promptTemplate: '',
+    maxIterations: '50', cooldownSec: '0', expiresAt: '',
+  })
+  const [showEditVars, setShowEditVars] = useState(false)
 
   const reload = () =>
     api.listAutomations().then(setItems).catch((e) => onError((e as Error).message))
@@ -64,6 +86,11 @@ export function Automations({ agents, onError }: Props) {
       onError('Tetikleyici etiket, hedef ajan ve prompt şablonu zorunlu')
       return
     }
+    const expUnix = localInputToUnix(expiresAt)
+    if (expUnix && expUnix <= Math.floor(Date.now() / 1000)) {
+      onError('Son tarih gelecekte olmalı')
+      return
+    }
     try {
       const a = await api.createAutomation({
         name: name.trim(),
@@ -72,11 +99,56 @@ export function Automations({ agents, onError }: Props) {
         promptTemplate: promptTemplate.trim(),
         maxIterations: Number(maxIterations) || 0,
         cooldownSec: Number(cooldownSec) || 0,
+        expiresAt: expUnix,
         enabled: true,
       })
       setItems((prev) => [a, ...prev])
       setName('')
       setTriggerTag('')
+      setExpiresAt('')
+    } catch (e) {
+      onError((e as Error).message)
+    }
+  }
+
+  const startEdit = (a: Automation) => {
+    setEditId(a.id)
+    setShowEditVars(false)
+    setEdit({
+      name: a.name ?? '',
+      triggerTag: a.triggerTag,
+      targetAgentId: a.targetAgentId,
+      promptTemplate: a.promptTemplate,
+      maxIterations: String(a.maxIterations),
+      cooldownSec: String(a.cooldownSec),
+      expiresAt: unixToLocalInput(a.expiresAt),
+    })
+  }
+
+  const cancelEdit = () => setEditId(null)
+
+  const saveEdit = async (a: Automation) => {
+    if (!edit.triggerTag.trim() || !edit.targetAgentId || !edit.promptTemplate.trim()) {
+      onError('Tetikleyici etiket, hedef ajan ve prompt şablonu zorunlu')
+      return
+    }
+    const expUnix = localInputToUnix(edit.expiresAt)
+    if (expUnix && expUnix <= Math.floor(Date.now() / 1000)) {
+      onError('Son tarih gelecekte olmalı')
+      return
+    }
+    try {
+      await api.updateAutomation(a.id, {
+        name: edit.name.trim(),
+        triggerTag: edit.triggerTag.trim(),
+        targetAgentId: edit.targetAgentId,
+        promptTemplate: edit.promptTemplate.trim(),
+        maxIterations: Number(edit.maxIterations) || 0,
+        cooldownSec: Number(edit.cooldownSec) || 0,
+        expiresAt: expUnix,
+      })
+      setEditId(null)
+      reload()
     } catch (e) {
       onError((e as Error).message)
     }
@@ -126,7 +198,7 @@ export function Automations({ agents, onError }: Props) {
   return (
     <div className="mt-6">
       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
-        <Repeat size={15} className="text-[var(--color-accent)]" />
+        <Repeat size={15} className="text-violet-500" />
         Otomasyonlar (etiket tetikleyicili döngüler)
       </div>
       <p className="mb-3 text-xs text-[var(--color-text-dim)]">
@@ -136,7 +208,7 @@ export function Automations({ agents, onError }: Props) {
       </p>
 
       {/* Create form */}
-      <div className="mb-4 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+      <div className="mb-4 space-y-2 rounded-lg border border-l-4 border-[var(--color-border)] border-l-violet-500 bg-[var(--color-surface)] p-3">
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={name}
@@ -172,6 +244,26 @@ export function Automations({ agents, onError }: Props) {
               className="w-16 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
               title="İki tetik arası minimum saniye"
             />
+          </label>
+          <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+            Son tarih (ops.)
+            <input
+              type="datetime-local"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+              title="Bu tarihten sonra otomasyon tetiklenmez (opsiyonel)"
+            />
+            {expiresAt && (
+              <button
+                type="button"
+                onClick={() => setExpiresAt('')}
+                className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
+                title="Son tarihi temizle"
+              >
+                <X size={13} />
+              </button>
+            )}
           </label>
         </div>
         <div className="flex items-end gap-2">
@@ -237,10 +329,97 @@ export function Automations({ agents, onError }: Props) {
         )}
         {items.map((a) => {
           const maxed = a.maxIterations > 0 && a.iterationCount >= a.maxIterations
+          const expired = a.expiresAt && a.expiresAt <= Math.floor(Date.now() / 1000)
+
+          if (editId === a.id) {
+            return (
+              <div
+                key={a.id}
+                className="space-y-2 rounded-lg border border-l-4 border-[var(--color-accent)] border-l-violet-500 bg-[var(--color-surface)] p-3 text-sm"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={edit.name}
+                    onChange={(e) => setEdit((s) => ({ ...s, name: e.target.value }))}
+                    placeholder="Ad (ops.)"
+                    className="w-40 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+                  />
+                  <input
+                    value={edit.triggerTag}
+                    onChange={(e) => setEdit((s) => ({ ...s, triggerTag: e.target.value }))}
+                    placeholder="tetikleyici etiket"
+                    className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
+                  />
+                  <AgentPicker agents={agents} value={edit.targetAgentId} onChange={(v) => setEdit((s) => ({ ...s, targetAgentId: v }))} />
+                  <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+                    Maks. iter.
+                    <input type="number" min={0} value={edit.maxIterations}
+                      onChange={(e) => setEdit((s) => ({ ...s, maxIterations: e.target.value }))}
+                      className="w-16 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none" />
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+                    Bekleme (sn)
+                    <input type="number" min={0} value={edit.cooldownSec}
+                      onChange={(e) => setEdit((s) => ({ ...s, cooldownSec: e.target.value }))}
+                      className="w-16 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none" />
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+                    Son tarih (ops.)
+                    <input type="datetime-local" value={edit.expiresAt}
+                      onChange={(e) => setEdit((s) => ({ ...s, expiresAt: e.target.value }))}
+                      className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]" />
+                    {edit.expiresAt && (
+                      <button type="button" onClick={() => setEdit((s) => ({ ...s, expiresAt: '' }))}
+                        className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]" title="Son tarihi temizle">
+                        <X size={13} />
+                      </button>
+                    )}
+                  </label>
+                </div>
+                <div className="relative">
+                  <div className="mb-1 flex items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
+                    <span>Prompt şablonu</span>
+                    <button type="button" onClick={() => setShowEditVars((v) => !v)}
+                      className={`rounded p-0.5 transition hover:text-[var(--color-accent)] ${showEditVars ? 'text-[var(--color-accent)]' : ''}`}
+                      title="Kullanılabilir değişkenler" aria-label="Kullanılabilir değişkenler">
+                      <Info size={13} />
+                    </button>
+                  </div>
+                  {showEditVars && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowEditVars(false)} />
+                      <div className="absolute bottom-full left-0 z-20 mb-1 w-[360px] max-w-[90vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
+                        <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--color-text-dim)]">Şablonda kullanılabilir değişkenler (tıkla → ekle)</div>
+                        <div className="max-h-64 overflow-y-auto">
+                          {PROMPT_VARS.map((v) => (
+                            <button key={v.name} type="button"
+                              onClick={() => { setEdit((s) => ({ ...s, promptTemplate: s.promptTemplate + v.name })); setShowEditVars(false) }}
+                              className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]" title="Şablona ekle">
+                              <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">{v.name}</code>
+                              <span className="text-[11px] text-[var(--color-text-dim)]">{v.desc}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  <textarea value={edit.promptTemplate}
+                    onChange={(e) => setEdit((s) => ({ ...s, promptTemplate: e.target.value }))}
+                    rows={2}
+                    className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button onClick={() => saveEdit(a)}>Kaydet</Button>
+                  <Button variant="secondary" onClick={cancelEdit}>İptal</Button>
+                </div>
+              </div>
+            )
+          }
+
           return (
             <div
               key={a.id}
-              className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
+              className="flex items-start gap-3 rounded-lg border border-l-4 border-[var(--color-border)] border-l-violet-500 bg-[var(--color-surface)] px-3 py-2 text-sm"
             >
               <button
                 onClick={() => toggle(a)}
@@ -278,7 +457,12 @@ export function Automations({ agents, onError }: Props) {
                     {maxed && ' (limit doldu)'}
                   </span>
                   <span>Bekleme: {a.cooldownSec}s</span>
-                  <span>Son: {fmtTime(a.lastFiredAt)}</span>
+                  <span>Son çalışma: {fmtTime(a.lastFiredAt)}</span>
+                  {a.expiresAt ? (
+                    <span className={expired ? 'text-[var(--color-danger)]' : ''}>
+                      Son tarih: {fmtTime(a.expiresAt)}{expired && ' (süresi doldu)'}
+                    </span>
+                  ) : null}
                   {a.lastError && <span className="text-[var(--color-danger)]">Hata: {a.lastError}</span>}
                 </div>
                 <div className="mt-1.5 flex items-center gap-2">
@@ -294,6 +478,13 @@ export function Automations({ agents, onError }: Props) {
                 </div>
               </div>
               <div className="flex flex-col items-center gap-2">
+                <button
+                  onClick={() => startEdit(a)}
+                  className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+                  title="Düzenle"
+                >
+                  <Pencil size={15} />
+                </button>
                 {maxed && (
                   <button
                     onClick={() => reset(a)}

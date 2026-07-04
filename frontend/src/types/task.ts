@@ -74,6 +74,7 @@ export interface Automation {
   enabled: boolean
   maxIterations: number // 0 = unlimited
   cooldownSec: number
+  expiresAt?: number // optional end date (unix seconds); 0/undefined = no end date
   // Runtime bookkeeping (read-only).
   iterationCount: number
   lastFiredAt?: number

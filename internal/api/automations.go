@@ -31,6 +31,7 @@ type automationReq struct {
 	Enabled        *bool    `json:"enabled"`
 	MaxIterations  *int     `json:"maxIterations"`
 	CooldownSec    *int     `json:"cooldownSec"`
+	ExpiresAt      *int64   `json:"expiresAt"`
 }
 
 func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +62,10 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	if req.CooldownSec != nil {
 		cooldown = *req.CooldownSec
 	}
+	var expiresAt int64
+	if req.ExpiresAt != nil {
+		expiresAt = *req.ExpiresAt
+	}
 	created, err := ws(r).DB.CreateAutomation(ctx, db.Automation{
 		Name:           strings.TrimSpace(req.Name),
 		TriggerTag:     req.TriggerTag,
@@ -70,6 +75,7 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		Enabled:        enabled,
 		MaxIterations:  maxIter,
 		CooldownSec:    cooldown,
+		ExpiresAt:      expiresAt,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -110,6 +116,9 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	}
 	if req.CooldownSec != nil {
 		cur.CooldownSec = *req.CooldownSec
+	}
+	if req.ExpiresAt != nil {
+		cur.ExpiresAt = *req.ExpiresAt
 	}
 	if err := ws(r).DB.UpdateAutomation(ctx, cur); writeDBError(w, err, "") {
 		return

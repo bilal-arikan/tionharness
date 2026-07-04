@@ -78,6 +78,7 @@ func (d *DB) UpdateAutomation(ctx context.Context, a Automation) error {
 	cur.SpawnTags = normalizeTags(a.SpawnTags)
 	cur.MaxIterations = a.MaxIterations
 	cur.CooldownSec = a.CooldownSec
+	cur.ExpiresAt = a.ExpiresAt
 	cur.UpdatedAt = now()
 	return d.persistAutomationLocked(cur)
 }

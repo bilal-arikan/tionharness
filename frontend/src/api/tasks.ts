@@ -88,6 +88,7 @@ export const taskApi = {
     enabled?: boolean
     maxIterations?: number
     cooldownSec?: number
+    expiresAt?: number
   }) =>
     req<Automation>('/api/automations', {
       method: 'POST',
@@ -104,6 +105,7 @@ export const taskApi = {
       enabled?: boolean
       maxIterations?: number
       cooldownSec?: number
+      expiresAt?: number
     },
   ) =>
     req<{ id: string; action: string }>(`/api/automations/${id}`, {

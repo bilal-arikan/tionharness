@@ -103,9 +103,16 @@ Sayaç tek otomasyon üzerinde birikir (tüm spawn'lar aynı etiketi → aynı k
   `DELETE /api/automations/{id}`. Create'te hedef ajan doğrulanır; vars. maks=50.
 - **Araçlar:** `create/update/delete/list_automation` (self-management suite,
   provenance: ajan yalnız kendi oluşturduğunu düzenler/siler).
-- **UI:** `panels/Automations.tsx` — Schedules ekranında "Otomasyonlar" bölümü:
-  oluşturma formu + liste (aç-kapa, iterasyon sayacı `n/max`, spawn-etiket editörü,
-  limit dolunca "sıfırla", sil). Prompt şablonu alanında **ℹ️ info butonu** →
+- **UI:** `panels/Automations.tsx` — **Otomasyon** ekranında (NavRail'de eski
+  "Zamanlamalar" → **"Otomasyon"**, `NavRail.tsx` + `App.tsx`; ekran hâlâ cron
+  Zamanlamalar + Otomasyonlar bölümlerini birlikte tutar) "Otomasyonlar" bölümü:
+  oluşturma formu (ad/tetik/hedef/maks-iter/bekleme/**son tarih (ops.)**/prompt) +
+  liste (aç-kapa, iterasyon sayacı `n/max`, spawn-etiket editörü, **inline düzenle**
+  (kalem → tüm alanlar + prompt), limit dolunca "sıfırla", sil). **Son tarih
+  (`ExpiresAt`, opsiyonel unix sn):** geçtikten sonra otomasyon bir sonraki tetik
+  denemesinde otomatik pasifleşir (`fire` başında `time.Now >= ExpiresAt` kontrolü,
+  Schedule `expiresAt` deseninin eşi); create+update API/tool + UI datetime-local.
+  Prompt şablonu alanında **ℹ️ info butonu** →
   13 değişkeni açıklamalı listeleyen popover (satıra tıkla → şablona ekle;
   click-away ile kapanır; `PROMPT_VARS` sabiti `turnVars` ile senkron).
   Etiket-tetikleyici event'leri `automation` tipiyle
@@ -139,12 +146,19 @@ işaretleriyle (`permission_denied`, "requested permissions", "haven't granted",
 (başarı + cerr hata yolu), spawn (başarı + hata), scheduler `deliverPrompt` +
 `deliverWake` (başarı + hata). `archived` ayrıca mutasyon anında: `sessionSink.Archive`
 + API `handleSetSessionState` (arşivde ekle, geri yüklemede sil). Yazım add-only +
-değişiklik varsa persist + `session` event (canlı UI refresh). Şu an daima açık
-(ayar yok; istenirse Tunables flag'i eklenebilir).
+değişiklik varsa persist + `session` event (canlı UI refresh).
+
+**Ayar toggle'ı:** `settings.AutoTagSessions` (vars. **açık**) → `Tunables.autoTagSessions`
+(`Set/AutoTagSessions`), `applySettings` ile canlı uygulanır. `AutoTagTurn` başında
+`r.tun.AutoTagSessions()` guard'ı; tur-dışı arşiv etiketlemesi de `Runtime.AutoTagEnabled()`
+(API) + `sessionSink.autoTag()` (agent tool) ile aynı toggle'a bağlı. UI: Ayarlar ▸
+Bağlam ▸ "Otomatik etiketleme" (`ContextPanel.tsx`). Kapalıyken hiçbir otomatik etiket
+yazılmaz (elle + ajan `set_session_tags` çalışmaya devam eder).
 
 **Canlı doğrulama (2026-07-03, WS2):** archived ekle/sil ✅, goal→`['goal']` ✅,
-var-olmayan dosya Read → `is_error` → `tool-error` ✅. Birim testi:
-`autotag_test.go` (`isPermissionDenyError` gerçek-hata vs politika-reddi ayrımı).
+var-olmayan dosya Read → `is_error` → `tool-error` ✅; toggle OFF→etiket yazılmadı,
+ON→yazıldı ✅. Birim testi: `autotag_test.go` (`isPermissionDenyError` gerçek-hata
+vs politika-reddi ayrımı).
 
 ## Güvenlik / Runaway Freni
 - Etiketsiz sohbet asla tetiklenmez (tag-gating).

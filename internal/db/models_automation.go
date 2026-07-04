@@ -40,6 +40,10 @@ type Automation struct {
 	// CooldownSec is the minimum number of seconds between two fires of this rule
 	// (0 = no cooldown). Bounds burst re-triggering.
 	CooldownSec int `json:"cooldownSec"`
+	// ExpiresAt is an optional end date (unix seconds). When > 0 the automation
+	// stops firing once the time passes and is auto-disabled on the next attempt.
+	// 0 means "no end date" (runs until maxIterations / manual disable).
+	ExpiresAt int64 `json:"expiresAt,omitempty"`
 
 	// --- runtime bookkeeping (updated by RecordAutomationFire) ---
 	IterationCount int    `json:"iterationCount"`

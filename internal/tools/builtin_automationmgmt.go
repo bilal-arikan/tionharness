@@ -62,6 +62,7 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (default: [triggerTag] → loop; pass [] to break the loop)"},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling (0 = unlimited; default 50)"},
 				"cooldownSec":{"type":"integer","description":"Minimum seconds between fires (default 0)"},
+				"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); after it the automation auto-disables. 0 = no end date"},
 				"enabled":{"type":"boolean","description":"Active immediately (default true)"}
 			},
 			"required":["triggerTag","targetAgentId","promptTemplate"],
@@ -82,6 +83,7 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		SpawnTags      []string `json:"spawnTags"`
 		MaxIterations  *int     `json:"maxIterations"`
 		CooldownSec    *int     `json:"cooldownSec"`
+		ExpiresAt      *int64   `json:"expiresAt"`
 		Enabled        *bool    `json:"enabled"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
@@ -107,6 +109,10 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	if in.Enabled != nil {
 		enabled = *in.Enabled
 	}
+	var expiresAt int64
+	if in.ExpiresAt != nil {
+		expiresAt = *in.ExpiresAt
+	}
 	created, err := t.d.db.CreateAutomation(ctx, db.Automation{
 		Name:           strings.TrimSpace(in.Name),
 		TriggerTag:     in.TriggerTag,
@@ -115,6 +121,7 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		SpawnTags:      in.SpawnTags,
 		MaxIterations:  maxIter,
 		CooldownSec:    cooldown,
+		ExpiresAt:      expiresAt,
 		Enabled:        enabled,
 		CreatedBy:      t.d.actorID,
 	})
@@ -166,6 +173,7 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		SpawnTags      *[]string `json:"spawnTags"`
 		MaxIterations  *int      `json:"maxIterations"`
 		CooldownSec    *int      `json:"cooldownSec"`
+		ExpiresAt      *int64    `json:"expiresAt"`
 		Enabled        *bool     `json:"enabled"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
@@ -202,6 +210,9 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	if in.CooldownSec != nil {
 		cur.CooldownSec = *in.CooldownSec
+	}
+	if in.ExpiresAt != nil {
+		cur.ExpiresAt = *in.ExpiresAt
 	}
 	if err := t.d.db.UpdateAutomation(ctx, cur); err != nil {
 		return "", fmt.Errorf("update automation: %w", err)
