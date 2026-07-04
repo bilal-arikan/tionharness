@@ -152,7 +152,7 @@ func (s *Server) computeCachePreview(provider string, session db.Session, msgCou
 	case "claude-cli":
 		warm := set.ClaudeResume && session.CLISessionID != "" && session.CLISentMsgCount > 0
 		if !warm {
-			return cachePreview{Mode: "none", Note: "claude-cli ilk/soğuk tur: bu tur cache yazılır. Sistem promptu artık statik (dinamik bağlam mesaj kuyruğuna taşındı) → Claude Code auto-cache'i sonraki turda sıcak prefix'i yeniden kullanır."}
+			return cachePreview{Mode: "none", Note: ""}
 		}
 		cached := session.CLISentMsgCount
 		if cached > msgCount {
@@ -164,7 +164,7 @@ func (s *Server) computeCachePreview(provider string, session db.Session, msgCou
 			ToolsCached:    hasTools,
 			DynamicCached:  false, // volatile (bellek+özet) — mesaj kuyruğunda, her tur taze
 			CachedMsgCount: cached,
-			Note:           "claude-cli --resume (sıcak): statik Sistem + ilk " + strconv.Itoa(cached) + " mesaj CLI'da server-side sıcak; dinamik bağlam mesaj kuyruğunda taze gider, cached prefix'i bozmaz.",
+			Note:           "claude-cli --resume (sıcak): statik Sistem + ilk " + strconv.Itoa(cached) + " mesaj CLI'da server-side sıcak.",
 		}
 	default:
 		return cachePreview{Mode: "none", Note: "Bu sağlayıcı için SwarmGo cache breakpoint göndermez → istek her tur taze."}
