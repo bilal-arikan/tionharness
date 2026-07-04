@@ -55,7 +55,7 @@ function CanvasTools({
             className="rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
             title="Düğümleri otomatik diz"
           >
-            ▦ Otomatik diz
+            ▦ Oto diz
           </button>
         )}
         <button
@@ -67,7 +67,7 @@ function CanvasTools({
           }`}
           title={showMinimap ? 'Mini haritayı gizle' : 'Mini haritayı göster'}
         >
-          🗺 Mini harita
+          🗺 harita
         </button>
       </div>
     </Panel>
@@ -145,8 +145,11 @@ function CanvasInner({
   onDropNode,
 }: Omit<Props, 'agents' | 'nodeActions'>) {
   const { screenToFlowPosition } = useReactFlow()
-  // Mini-map show/hide (toggled from the in-canvas toolbar). On by default.
-  const [showMinimap, setShowMinimap] = useState(true)
+  // Mini-map show/hide (toggled from the in-canvas toolbar). Defaults on for wide
+  // screens but OFF on narrow (< md) ones where it would crowd the canvas.
+  const [showMinimap, setShowMinimap] = useState(
+    () => typeof window === 'undefined' || window.innerWidth >= 768,
+  )
 
   // Apply the chosen path style + animation + arrowhead to every edge for
   // display. These are cosmetic flow-level presentation hints; labels are kept.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
-import { Loader2, XCircle, type LucideIcon } from 'lucide-react'
+import { Loader2, XCircle, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import { EmojiField } from '../common/EmojiField'
 import { NODE_ICONS } from '../flow/nodeStyles'
@@ -14,6 +14,7 @@ import { FlowCanvas, FLOW_NODE_DND_MIME, type EdgeStyle } from '../flow/FlowCanv
 import { TemplatePreview } from '../flow/TemplatePreview'
 import { RunView, STATUS_LABEL, statusColor } from '../flow/RunView'
 import { NodeInspector } from '../flow/NodeInspector'
+import { FlowVarsButton } from '../flow/FlowVarsButton'
 import { FLOW_TEMPLATES, type FlowTemplate } from '../../lib/flowTemplates'
 import {
   graphToReactFlow,
@@ -31,6 +32,7 @@ import {
 } from '../common/SidebarChrome'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { useCollapsibleList } from '../../hooks/useCollapsibleList'
+import { useSessionState } from '../../hooks/useSessionState'
 import { Play, Trash2, X, RotateCcw } from 'lucide-react'
 
 interface Props {
@@ -62,18 +64,49 @@ const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [
 // progress stream live on the canvas and in the trace below.
 export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   const [flows, setFlows] = useState<Flow[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Selection + active tab persist across screen switches within the session
+  // (reset on app reload). The selected flow's editor state is re-loaded on mount
+  // by the restore effect below.
+  const [selectedId, setSelectedId] = useSessionState<string | null>('flows.selectedId', null)
   // Absolute path of the selected flow's on-disk JSON file (for copy / reveal).
   const [flowPath, setFlowPath] = useState('')
   // Left-column tab: own flows, read-only template gallery, or run history.
-  const [tab, setTab] = useState<'flows' | 'templates' | 'runs'>('flows')
-  const [templateId, setTemplateId] = useState<string | null>(null)
+  const [tab, setTab] = useSessionState<'flows' | 'templates' | 'runs'>('flows.tab', 'flows')
+  const [templateId, setTemplateId] = useSessionState<string | null>('flows.templateId', null)
   // Run history (all flows, newest first) + the selected run for the read-only viewer.
   const [runs, setRuns] = useState<FlowRun[]>([])
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [selectedRunId, setSelectedRunId] = useSessionState<string | null>('flows.selectedRunId', null)
   // Left-list search (adapts to the active tab: flow/template name, or a run's
   // flow name).
   const [q, setQ] = useState('')
+  // Flow tag filter (Akışlarım tab): selected tags a flow must carry (ANY match).
+  // Empty = no tag filter.
+  const [tagFilter, setTagFilter] = useState<string[]>([])
+  // "Node ekle" palette section: vertically collapsible (persisted).
+  const [paletteOpen, setPaletteOpen] = useState(
+    () => localStorage.getItem('swarmgo.flowPaletteOpen') !== '0',
+  )
+  const togglePalette = () =>
+    setPaletteOpen((o) => {
+      const next = !o
+      localStorage.setItem('swarmgo.flowPaletteOpen', next ? '1' : '0')
+      return next
+    })
+  // Whole left palette column (Node ekle + Görünüm) show/hide, toggled from the
+  // top bar. Persisted; hidden gives the canvas full width.
+  const [paletteVisible, setPaletteVisible] = useState(
+    () => localStorage.getItem('swarmgo.flowPaletteVisible') !== '0',
+  )
+  const togglePaletteVisible = () =>
+    setPaletteVisible((v) => {
+      const next = !v
+      localStorage.setItem('swarmgo.flowPaletteVisible', next ? '1' : '0')
+      return next
+    })
+  // Auto-grow the run input upward: the run panel is bottom-anchored (below the
+  // flex-1 canvas), so growing the textarea moves its top edge up while its bottom
+  // stays put. Height tracks content up to a cap; then the textarea scrolls.
+  const runInputRef = useRef<HTMLTextAreaElement>(null)
 
   // Editor state for the selected flow.
   const [name, setName] = useState('')
@@ -110,6 +143,14 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   }, [onError])
 
   useEffect(() => loadFlows(), [loadFlows])
+
+  // Resize the run input to fit its content (grows upward, capped at 160px).
+  useEffect(() => {
+    const el = runInputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+  }, [input, selectedId])
 
   // While the Koşular tab is open, load all flow runs and poll every 3s so
   // in-progress runs advance live. Polling stops when leaving the tab.
@@ -179,8 +220,19 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         setAnimated(false)
       }
     },
-    [setNodes, setEdges],
+    [setNodes, setEdges, setSelectedId],
   )
+
+  // Restore the session-persisted flow selection on mount: once flows load, if a
+  // flow was selected earlier this session, re-load its editor state (runs once —
+  // later user clicks are unaffected).
+  const didRestoreRef = useRef(false)
+  useEffect(() => {
+    if (didRestoreRef.current || flows.length === 0 || !selectedId) return
+    didRestoreRef.current = true
+    const f = flows.find((x) => x.id === selectedId)
+    if (f) selectFlow(f)
+  }, [flows, selectedId, selectFlow])
 
   const createFlow = async () => {
     const n = prompt('Akış adı:')
@@ -488,6 +540,15 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   }, [flows, selectedId, name, nodes, edges, start])
   useRegisterDirty('flows', flowDirty)
 
+  // Unique, sorted tags across all flows — the pool of chips for the tag filter.
+  const allTags = useMemo(() => {
+    const set = new Set<string>()
+    flows.forEach((f) => f.tags?.forEach((t) => set.add(t)))
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [flows])
+  const toggleTagFilter = (t: string) =>
+    setTagFilter((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)?.data.node ?? null
   const trace: FlowState | null = run?.state ? safeParse(run.state) : null
   const selectedTemplate = FLOW_TEMPLATES.find((t) => t.id === templateId) ?? null
@@ -602,8 +663,44 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         ) : (
           <>
         <NewItemButton bare onClick={createFlow} label="Yeni akış" className="mb-3" />
+        {/* Tag filter chips: click to narrow the list to flows carrying any of the
+            selected tags. Only shown when at least one flow has a tag. */}
+        {allTags.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-1">
+            {allTags.map((t) => {
+              const on = tagFilter.includes(t)
+              return (
+                <button
+                  key={t}
+                  onClick={() => toggleTagFilter(t)}
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] transition ${
+                    on
+                      ? 'bg-[var(--color-accent)] text-white'
+                      : 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:opacity-80'
+                  }`}
+                  title={on ? 'Filtreyi kaldır' : 'Bu etikete göre filtrele'}
+                >
+                  #{t}
+                </button>
+              )
+            })}
+            {tagFilter.length > 0 && (
+              <button
+                onClick={() => setTagFilter([])}
+                className="text-[10px] text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
+                title="Etiket filtresini temizle"
+              >
+                temizle
+              </button>
+            )}
+          </div>
+        )}
         {(() => {
-          const visible = flows.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase()))
+          const visible = flows.filter(
+            (f) =>
+              f.name.toLowerCase().includes(q.trim().toLowerCase()) &&
+              (tagFilter.length === 0 || tagFilter.some((t) => f.tags?.includes(t))),
+          )
           const orderedIds = visible.map((f) => f.id)
           return (
         <ul className="space-y-1">
@@ -611,7 +708,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             <li key={f.id}>
               <button
                 onClick={(e) => {
-                  if (sel.handleClick(e, f.id, orderedIds)) return
+                  if (sel.handleClick(e, f.id, orderedIds, selectedId)) return
                   selectFlow(f)
                 }}
                 className={`flex w-full items-start justify-between rounded-lg px-3 py-2 text-left text-sm ${
@@ -663,8 +760,10 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               </button>
             </li>
           ))}
-          {flows.length === 0 && (
-            <li className="text-sm text-[var(--color-text-dim)]">Henüz akış yok.</li>
+          {visible.length === 0 && (
+            <li className="text-sm text-[var(--color-text-dim)]">
+              {flows.length === 0 ? 'Henüz akış yok.' : 'Eşleşen akış yok.'}
+            </li>
           )}
         </ul>
           )
@@ -833,14 +932,19 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
           {/* Node palette (add nodes + flow-level presentation) + canvas. The flow
               name/id + file actions + save now live in the top PaneHeader above. */}
           <div className="flex min-h-0 flex-1">
+            {paletteVisible && (
             <div className="w-40 flex-shrink-0 space-y-2 overflow-y-auto border-r border-[var(--color-border)] p-2 max-md:w-32">
-              <div className="px-1 text-xs font-semibold text-[var(--color-text-dim)]">
+              <button
+                type="button"
+                onClick={togglePalette}
+                className="flex w-full items-center gap-1 px-1 text-xs font-semibold text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                title={paletteOpen ? 'Node ekle bölümünü daralt' : 'Node ekle bölümünü genişlet'}
+                aria-expanded={paletteOpen}
+              >
+                {paletteOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 Node ekle
-              </div>
-              <div className="px-1 text-[10px] leading-tight text-[var(--color-text-dim)]">
-                Tıkla veya canvas'a sürükle
-              </div>
-              {NODE_TYPES.map((t) => (
+              </button>
+              {paletteOpen && NODE_TYPES.map((t) => (
                 <button
                   key={t.value}
                   draggable
@@ -900,7 +1004,20 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                 </label>
               </div>
             </div>
-            <div className="min-w-0 flex-1">
+            )}
+            <div className="relative min-w-0 flex-1">
+              {/* Floating top-left toggle to hide/show the whole left palette,
+                  overlaid on the canvas (React Flow's own toolbar is top-right,
+                  Controls bottom-left, so top-left is free). */}
+              <button
+                type="button"
+                onClick={togglePaletteVisible}
+                aria-pressed={paletteVisible}
+                title={paletteVisible ? 'Sol paneli gizle' : 'Sol paneli göster'}
+                className="absolute left-2 top-2 z-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 text-[var(--color-text-dim)] shadow-lg transition hover:text-[var(--color-accent)]"
+              >
+                {paletteVisible ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+              </button>
               <FlowCanvas
                 agents={agents}
                 nodes={nodes}
@@ -952,16 +1069,28 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             </ModalOverlay>
           )}
 
-          {/* Run */}
-          <div className="max-h-[40%] overflow-y-auto border-t border-[var(--color-border)] p-4">
-            <h3 className="mb-2 text-sm font-semibold">Çalıştır</h3>
-            <div className="flex gap-2">
+          {/* Run panel. MobileNavBar clearance is handled globally by <main>'s
+              max-md bottom padding, so no extra padding is needed here (an earlier
+              pb-24 created dead space + scroll). Tight top padding so the input row
+              hugs the canvas above it. */}
+          <div className="max-h-[40%] overflow-y-auto border-t border-[var(--color-border)] px-4 pb-4 pt-2">
+            {/* Variable helper (ℹ️) sits to the LEFT of the run input; its content
+                shows in a floating balloon (portal), so the row stays a simple
+                centered [ℹ️][input][Çalıştır] line. The run panel is bottom-anchored,
+                so the input (and the area around it) grows upward as it gets taller. */}
+            <div className="flex items-center gap-2">
+              <FlowVarsButton
+                context="seed"
+                nodeRefs={[]}
+                onInsert={(t) => setInput((v) => v + t)}
+              />
               <textarea
+                ref={runInputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Girdi (akışa {{input}} olarak geçer)"
                 rows={1}
-                className="flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
+                className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               />
               <Button onClick={doRun} disabled={running} size="lg">
                 {running ? 'Çalışıyor…' : '▶ Çalıştır'}

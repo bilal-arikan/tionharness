@@ -1,9 +1,8 @@
-import { useState } from 'react'
-import { Info } from 'lucide-react'
 import type { Agent, BranchMatchMode, FlowNode } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { PromptEditor } from '../common'
 import { chromeFor } from './nodeStyles'
+import { FlowVarsButton } from './FlowVarsButton'
 
 interface Props {
   node: FlowNode
@@ -20,94 +19,6 @@ interface Props {
 
 const input =
   'w-full rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none'
-
-// FlowVarsButton is an ℹ️ popover listing the template placeholders usable in a
-// node's prompt/template, mirroring the Automations prompt-vars helper. Static
-// entries ({{input}}, {{last}}) plus one {{node.<id>}} per OTHER node in the flow.
-// Clicking a row appends the placeholder to the target field.
-function FlowVarsButton({
-  nodeRefs,
-  onInsert,
-}: {
-  nodeRefs: { id: string; title: string }[]
-  onInsert: (text: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const statics: { name: string; desc: string }[] = [
-    { name: '{{input}}', desc: 'Akışın girdisi (RunFlow input)' },
-    { name: '{{last}}', desc: 'En son çalışan node’un çıktısı' },
-  ]
-  return (
-    <span className="relative inline-flex">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`rounded p-0.5 transition hover:text-[var(--color-accent)] ${open ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'}`}
-        title="Kullanılabilir değişkenler"
-        aria-label="Kullanılabilir değişkenler"
-      >
-        <Info size={13} />
-      </button>
-      {open && (
-        <>
-          {/* Click-away backdrop closes the popover. */}
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-full left-0 z-20 mb-1 w-[340px] max-w-[90vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
-            <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--color-text-dim)]">
-              Node’lar arası değişkenler (tıkla → ekle)
-            </div>
-            <div className="max-h-64 overflow-y-auto">
-              {statics.map((v) => (
-                <button
-                  key={v.name}
-                  type="button"
-                  onClick={() => {
-                    onInsert(v.name)
-                    setOpen(false)
-                  }}
-                  className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]"
-                  title="Alana ekle"
-                >
-                  <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
-                    {v.name}
-                  </code>
-                  <span className="text-[11px] text-[var(--color-text-dim)]">{v.desc}</span>
-                </button>
-              ))}
-              {nodeRefs.length > 0 && (
-                <div className="mt-1 border-t border-[var(--color-border)] pt-1">
-                  <div className="mb-0.5 px-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-                    Belirli node çıktısı
-                  </div>
-                  {nodeRefs.map((n) => {
-                    const name = `{{node.${n.id}}}`
-                    return (
-                      <button
-                        key={n.id}
-                        type="button"
-                        onClick={() => {
-                          onInsert(name)
-                          setOpen(false)
-                        }}
-                        className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]"
-                        title="Alana ekle"
-                      >
-                        <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
-                          {name}
-                        </code>
-                        <span className="truncate text-[11px] text-[var(--color-text-dim)]">{n.title || n.id}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </span>
-  )
-}
 
 // NodeInspector edits the currently selected node. A node's TYPE is fixed once
 // created (it is chosen from the palette and never changes here) — the inspector
@@ -176,7 +87,7 @@ export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onMake
             />
           </div>
           <div className="block">
-            <div className="mb-1 flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+            <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
               <span>Prompt</span>
               <FlowVarsButton
                 nodeRefs={nodeRefs}
@@ -280,7 +191,7 @@ export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onMake
 
       {node.type === 'transform' && (
         <div className="block">
-          <div className="mb-1 flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+          <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
             <span>Şablon (çıktı)</span>
             <FlowVarsButton
               nodeRefs={nodeRefs}

@@ -347,3 +347,78 @@ ikonlarına** geçti: `Bot / Split / Zap / Timer / Puzzle` (`nodeStyles.NODE_ICO
   `TagEditor` → `setFlowTags`); artık **sol flow listesi satırlarında chip** olarak da görünür
   (ilk 4 + "+N"). Görünüm editörünün `onChange`'i `flows` dizisini de senkronlar → chip'ler canlı yenilenir.
 
+
+## Flow tarih/saat değişkenleri + tag filtreleme (2026-07-04)
+
+- **Yeni flow değişkenleri.** `orchestration.render` (engine.go) artık `{{date}}` (`2006-01-02`),
+  `{{time}}` (`15:04`), `{{datetime}}` (`2006-01-02 15:04`) placeholder'larını da çözer —
+  otomasyon `turnVars` formatıyla birebir. Render anındaki duvar-saati kullanılır (resume'da
+  resume anı; bu "şimdi" değerleri için kabul edilebilir). Node inspector'ın ℹ️ popover'ına
+  eklendi. Test: `TestRenderVars`. (Otomasyona özgü `{{result}}/{{tag}}/{{iteration}}` gibi
+  oturum-bağlamlı değişkenler flow motorunda **yok** — flow'un oturum/tetik bağlamı yoktur.)
+- **Flow tag filtreleme.** `FlowsPanel` "Akışlarım" sekmesinde arama kutusunun altında
+  **etiket chip'leri** (yalnız en az bir flow etiketliyse). Chip'e tıkla → o etikete göre süz
+  (**ANY** eşleşme: seçili etiketlerden birini taşıyan flow'lar), "temizle" ile sıfırla. Ad
+  araması (`q`) ile **AND**'lenir. Boş sonuç → "Eşleşen akış yok."
+
+## Değişken popover'ı satır-içi (kırpılma fix) + run input info butonu (2026-07-04)
+
+- **Kırpılma fix.** `FlowVarsButton` ayrı bir bileşene taşındı (`flow/FlowVarsButton.tsx`) ve
+  **absolute popover yerine satır-içi genişleyen panel** olur: `w-full basis-full`, ebeveyn
+  `flex flex-wrap` satırında kendi satırına sarar. Böylece node-editör modal'ının
+  `overflow-y-auto` gövdesi artık paneli **kesmiyor** (eski `absolute bottom-full` üstten/yandan
+  kırpılıyordu). Panel içeriği büyüdükçe modal gövdesi kaydırılır.
+- **Run input info butonu.** Flow'u başlatan girdi alanına ("Girdi") da ℹ️ butonu eklendi
+  (`context="seed"`). Seed, node'larda `{{input}}` olur; bu yüzden yalnız `{{date}}/{{time}}/
+  {{datetime}}` önerilir (bunlar motorun `render` sıralı ikamesiyle — önce `{{input}}` sonra
+  `{{date}}` — bir node `{{input}}` kullandığında gerçekten çözülür). `{{last}}/{{node.<id>}}`
+  seed anında önceki çıktı olmadığından listelenmez; panelde "Bu metin akışta {{input}} olur" notu var.
+
+## Daraltılabilir "Node ekle" paleti + yukarı büyüyen run input (2026-07-04)
+
+- **Daraltılabilir palet.** Sol paletteki "Node ekle" başlığı artık chevron'lu bir **toggle**
+  (`paletteOpen`, `localStorage: swarmgo.flowPaletteOpen`). Daraltınca ipucu + node tip butonları
+  gizlenir; "Görünüm" bölümü hep görünür kalır.
+- **Run input yukarı büyür.** Çalıştır girdisi `rows={1}` sabit yükseklikten **auto-grow**'a geçti
+  (`runInputRef` + effect: `height=auto` → `min(scrollHeight,160)`; `resize-none max-h-40`). Run
+  paneli `flex-1` canvas'ın altında bottom-anchored olduğundan textarea büyüdükçe panelin üst kenarı
+  yukarı kayar → girdinin **alt kenarı sabit kalır, üst yukarı genişler**. Satır `items-end` ile
+  ℹ️ + Çalıştır son satıra hizalı.
+
+## Değişken info butonu → baloncuk (portal) + run input satırı ortalı (2026-07-04)
+
+- **Baloncuk.** `FlowVarsButton` artık içeriği **floating baloncukta** gösterir: `createPortal`
+  ile `<body>`'ye fixed-positioned popover. Buton viewport'un alt yarısındaysa **üstte**, değilse
+  altta açılır (`getBoundingClientRect`; scroll/resize'da yeniden konumlanır, Escape/backdrop kapatır).
+  Portal olduğu için hiçbir `overflow` ata (node-editör modalı dahil) baloncuğu **kesmez** — önceki
+  satır-içi `basis-full` panel yaklaşımının yerini aldı.
+- **Run input satırı** tekrar `flex items-center gap-2` (ortalı `[ℹ️][input][Çalıştır]`). Baloncuk
+  artık satırı büyütmüyor. Textarea auto-grow + run panelinin bottom-anchored olması sayesinde
+  input **ve çevresindeki alan** yukarı doğru genişler.
+
+## Run paneli fazla alt boşluk fix (2026-07-04)
+
+Çalıştır panelindeki `pb-24 md:pb-4` **kaldırıldı** → `p-4`. MobileNavBar boşluğu zaten global
+olarak `<main>`'in `max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))]`'i (App.tsx) ile
+sağlanıyor; panele ayrıca eklenen `pb-24` girdi altında ölü boşluk + gereksiz scroll yaratıyordu.
+
+## Dar ekranda MiniMap default kapalı + sol panel gizle/göster (2026-07-05)
+
+- **MiniMap dar ekranda kapalı.** `FlowCanvas` `showMinimap` başlangıcı artık ekran genişliğine
+  bağlı: `window.innerWidth >= 768` (yani `< md`'de **kapalı**, md+'da açık). Canvas toolbar'daki
+  "🗺 harita" toggle'ı hâlâ elle aç/kapa yapıyor.
+- **Sol palet gizle/göster.** Node ekle + Görünüm kolonu **canvas'ın üzerinde sol üstte** yüzen
+  (`absolute left-2 top-2 z-10`) `PanelLeftClose`/`PanelLeftOpen` butonuyla tümüyle gizlenip
+  açılabilir (`paletteVisible`, `localStorage: swarmgo.flowPaletteVisible`). Canvas sarmalayıcı
+  `relative`; React Flow toolbar'ı top-right, Controls bottom-left olduğundan sol üst boş.
+  Gizliyken canvas tam genişlik. (Palet içi "Node ekle" bölüm-daraltma `paletteOpen`'dan ayrıdır.)
+
+## Koşular: "Adım izi" alttan açılıp kapanabilir + dikey yükseklik fix (2026-07-05)
+
+- **Adım izi toggle.** `RunView`'deki "Adım izi" (step trace) bölümü artık **alttan açılıp
+  kapanabilen** bir panel: başlık satırı chevron'lu toggle (`ChevronUp` kapalı → yukarı aç,
+  `ChevronDown` açık) + "N adım" sayacı. `traceOpen` `localStorage: swarmgo.flowTraceOpen`'da
+  kalıcı; **default dar ekranda (`< md`) kapalı**, md+'da açık.
+- **Dikey yükseklik fix.** `RunView` kökü `min-h-0` aldı (flex çocukları düzgün küçülsün diye);
+  trace listesi `max-h-[40%]` → `max-h-[40vh]` (kesin-yükseklik gerektirmeyen, daha kararlı).
+  Kapalıyken canvas tüm yüksekliği alır — dar ekranda "yükseklik bozulması" giderildi.

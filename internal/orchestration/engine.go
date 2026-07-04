@@ -328,11 +328,22 @@ func sleepCtx(ctx context.Context, ms int) error {
 //	{{input}}        the flow's input
 //	{{last}}         the most recent node output
 //	{{node.<id>}}    a specific node's stored output
+//	{{date}}         current date (2006-01-02)
+//	{{time}}         current time (15:04)
+//	{{datetime}}     current date + time (2006-01-02 15:04)
+//
+// The date/time placeholders resolve to the wall-clock at render time (mirrors the
+// automation engine's turnVars format). On a resumed run they reflect the resume
+// moment, not the original start — acceptable for these cosmetic "now" values.
 func render(tmpl, input string, st State) string {
 	out := strings.ReplaceAll(tmpl, "{{input}}", input)
 	out = strings.ReplaceAll(out, "{{last}}", st.Last)
 	for id, v := range st.Outputs {
 		out = strings.ReplaceAll(out, "{{node."+id+"}}", v)
 	}
+	now := time.Now()
+	out = strings.ReplaceAll(out, "{{date}}", now.Format("2006-01-02"))
+	out = strings.ReplaceAll(out, "{{time}}", now.Format("15:04"))
+	out = strings.ReplaceAll(out, "{{datetime}}", now.Format("2006-01-02 15:04"))
 	return out
 }

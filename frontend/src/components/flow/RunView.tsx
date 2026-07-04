@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
-import { RotateCcw } from 'lucide-react'
+import { RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
 import { graphToReactFlow, type FlowRFNode, type NodeStatus } from '../../lib/flowGraph'
 import type { Agent, Flow, FlowGraph, FlowRun, FlowState } from '../../types'
 import { Markdown } from '../markdown/Markdown'
@@ -70,6 +70,22 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
   const graph = useMemo(() => (flow ? safeParseGraph(flow.graph) : null), [flow])
   const statuses = useMemo(() => nodeStatuses(run, st), [run, st])
 
+  // Collapsible "Adım izi" (step trace) bottom panel. Persisted; defaults open on
+  // wide screens but CLOSED on narrow (< md) ones, where it otherwise squeezes the
+  // canvas and breaks the vertical layout.
+  const [traceOpen, setTraceOpen] = useState(() => {
+    const v = localStorage.getItem('swarmgo.flowTraceOpen')
+    if (v !== null) return v !== '0'
+    return typeof window === 'undefined' || window.innerWidth >= 768
+  })
+  const toggleTrace = () =>
+    setTraceOpen((o) => {
+      const next = !o
+      localStorage.setItem('swarmgo.flowTraceOpen', next ? '1' : '0')
+      return next
+    })
+  const traceCount = (st?.trace ?? []).length
+
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowRFNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
@@ -85,7 +101,7 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
   }, [graph, statuses, setNodes, setEdges])
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Header: run summary (flow name + status + date + rerun) plus input/error
           detail rows. The summary row is hidden when the parent lifts it into the
           screen's top bar (PaneHeader); the input/error rows always show here. */}
@@ -154,28 +170,44 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
         </div>
       )}
 
-      {/* Trace: node outputs + error */}
-      <div className={`overflow-y-auto border-t border-[var(--color-border)] p-4 ${graph ? 'max-h-[40%]' : 'flex-1'}`}>
-        <div className="mb-2 text-xs text-[var(--color-text-dim)]">Adım izi</div>
-        <ol className="space-y-2">
-          {(st?.trace ?? []).map((t, i) => (
-            <li key={`${t.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
-              <div className="mb-1 text-xs text-[var(--color-text-dim)]">
-                {i + 1}. [{t.type}] {t.title}
-              </div>
-              {t.type === 'branch' ? (
-                <div className="whitespace-pre-wrap">{t.output}</div>
-              ) : (
-                <Markdown>{t.output}</Markdown>
+      {/* Trace: node outputs + error. A collapsible bottom panel — the header is a
+          toggle button; when open it expands upward (capped) with its own scroll,
+          when closed only the header bar remains so the canvas keeps the height. */}
+      <div className={`flex flex-col border-t border-[var(--color-border)] ${!graph && traceOpen ? 'min-h-0 flex-1' : ''}`}>
+        <button
+          type="button"
+          onClick={toggleTrace}
+          aria-expanded={traceOpen}
+          className="flex flex-shrink-0 items-center gap-1 px-4 py-2 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+          title={traceOpen ? 'Adım izini gizle' : 'Adım izini göster'}
+        >
+          {traceOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+          <span>Adım izi</span>
+          <span className="ml-auto opacity-70">{traceCount} adım</span>
+        </button>
+        {traceOpen && (
+          <div className={`overflow-y-auto px-4 pb-4 ${graph ? 'max-h-[40vh]' : 'min-h-0 flex-1'}`}>
+            <ol className="space-y-2">
+              {(st?.trace ?? []).map((t, i) => (
+                <li key={`${t.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
+                  <div className="mb-1 text-xs text-[var(--color-text-dim)]">
+                    {i + 1}. [{t.type}] {t.title}
+                  </div>
+                  {t.type === 'branch' ? (
+                    <div className="whitespace-pre-wrap">{t.output}</div>
+                  ) : (
+                    <Markdown>{t.output}</Markdown>
+                  )}
+                </li>
+              ))}
+              {traceCount === 0 && (
+                <li className="text-xs italic text-[var(--color-text-dim)]">
+                  {run.status === 'running' ? 'Henüz adım tamamlanmadı…' : 'Adım izi yok.'}
+                </li>
               )}
-            </li>
-          ))}
-          {(st?.trace ?? []).length === 0 && (
-            <li className="text-xs italic text-[var(--color-text-dim)]">
-              {run.status === 'running' ? 'Henüz adım tamamlanmadı…' : 'Adım izi yok.'}
-            </li>
-          )}
-        </ol>
+            </ol>
+          </div>
+        )}
       </div>
     </div>
   )

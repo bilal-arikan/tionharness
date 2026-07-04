@@ -207,3 +207,27 @@ func TestRunParallel_HappyPath(t *testing.T) {
 		t.Errorf("joined output missing a child result: %q", final.Last)
 	}
 }
+
+// TestRenderVars covers the template placeholders resolvable in prompts/templates:
+// {{input}}, {{last}}, {{node.<id>}} plus the wall-clock date/time vars.
+func TestRenderVars(t *testing.T) {
+	st := NewState(Graph{Start: "a"})
+	st.Last = "LAST"
+	st.Outputs["a"] = "AOUT"
+
+	got := render("in={{input}} last={{last}} a={{node.a}}", "IN", st)
+	want := "in=IN last=LAST a=AOUT"
+	if got != want {
+		t.Fatalf("core vars: got %q want %q", got, want)
+	}
+
+	// date/time vars resolve to a non-empty, correctly shaped value.
+	dt := render("{{date}} {{time}} {{datetime}}", "", st)
+	if strings.Contains(dt, "{{") {
+		t.Fatalf("date/time vars not substituted: %q", dt)
+	}
+	parts := strings.SplitN(dt, " ", 2)
+	if len(parts[0]) != len("2006-01-02") {
+		t.Fatalf("{{date}} wrong shape: %q", dt)
+	}
+}
