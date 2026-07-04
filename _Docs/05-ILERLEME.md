@@ -1,6 +1,230 @@
 # SwarmGo — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-04**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-05**
+
+## Agents: aktivite paneli chat Detay gibi yan-drawer oldu ✅ (2026-07-05)
+
+- `AgentsView` aktivite paneli artık `SessionDetailPanel` (chat "Detay") ile aynı
+  desende açılıyor: **masaüstünde** sağ kolon (tam yükseklik), **mobilde** sağdan
+  kayan drawer (`max-md:fixed inset-y-0 right-0 z-40 w-[85vw] max-w-sm shadow-xl`) +
+  `md:hidden` karartma backdrop (tıklayınca kapatır).
+- İçerik satırından `max-md:flex-col` kaldırıldı (panel artık mobilde altta yığılmıyor,
+  drawer). Sarmalayıcı `flex` yapıldı ki `<aside>` (h-full'süz) tam yüksekliği doldursun.
+- Doğrulama: masaüstünde panel sağ kenarda (x:1600/w:320/h:860), toggle `aria-pressed`
+  çalışıyor. Mobil drawer CSS'i SessionDetailPanel ile birebir.
+- Dosya: `agents/AgentsView.tsx`. `tsc -b` temiz.
+
+## Modal (bottom-sheet) mobilde navbar arkasında kalması fix ✅ (2026-07-05)
+
+`ModalOverlay` `z-50` → `z-[60]`. MobileNavBar de `z-50` ve DOM'da modaldan sonra geldiğinden,
+mobilde bottom-sheet modalın (ör. Flows node-editör popup'ı) altı navbar'ın arkasında kalıyordu.
+Modal artık navbar'ın **üstünde**; 13 `ModalOverlay` tüketicisinin hepsi tek yerden düzeldi.
+
+## Skills/Artifacts başlığı: yan-bilgiler dar ekranda 2. satıra + min-h-0 fix ✅ (2026-07-05)
+
+- **`PaneHeader`'a `secondary` prop'u:** üç-slot flex-wrap düzeni. Geniş ekranda tek
+  satır (title · secondary · right); dar ekranda `secondary` grubu tam genişlikle
+  (`order-last basis-full`) 2. satıra sarar, title + sağ eylemler 1. satırda kalır.
+  Geniş: `md:order-2 md:flex-1 md:basis-auto`.
+- **Skills:** chip'ler (grup/Kısıtlı/görünürlük/kaynak) + **Tam/Özet/İsim/Gizli**
+  seçici `secondary`'ye taşındı (dar ekranda 2. satır). Title + Düzenle/Kısıtla/
+  kopya/Aç/Sil 1. satırda.
+- **Artifacts:** rozetler (origin/kind/creator) + **İçerik** (içerik-kopyala) butonu
+  `secondary`'ye taşındı. Title + Düzenle/yol-kopyala/Aç/kaynak/Sil 1. satırda.
+- **Navbar/yükseklik fix:** Skills + Artifacts içerik kolonuna (`flex flex-1 flex-col`)
+  **`min-h-0`** eklendi — eksik olması `min-height:auto` yüzünden uzun içeriğin kolonu
+  parent yüksekliğinin ötesine taşırıp body-scroll + navbar kaymasına yol açıyordu.
+- Dosyalar: `common/PaneHeader.tsx`, `panels/SkillsPanel.tsx`, `panels/ArtifactsPanel.tsx`.
+  `tsc -b` temiz; canlı DOM doğrulaması (secondary `basis-full order-last`, geniş inline).
+- **Güncelleme:** `PaneHeader`'a `secondaryAlwaysWrap` prop'u eklendi — `secondary`
+  grubu **her genişlikte** kendi 2. satırında kalır (`md:` inline override'ları
+  kaldırılır). **Skills** bu modu kullanıyor (chip'ler + Tam/Özet/İsim/Gizli hep 2.
+  satırda). Doğrulama: geniş ekranda header 2 satır, secondary title'ın altında.
+- **Güncelleme 2:** **Artifacts** de artık `secondaryAlwaysWrap` (chip'ler + İçerik
+  hep 2. satırda). Ayrıca 2. satırda hareketli kontrol **sağa dayandı** (`ml-auto`):
+  Skills'te Tam/Özet/İsim/Gizli seçici, Artifacts'te İçerik butonu satırın sağ
+  kenarında (chip'ler solda). Doğrulama: her ikisinde `rightGap: 0`.
+
+## Çoklu seçim: Ctrl+Click ile aktif öğe de sete dahil ediliyor ✅ (2026-07-05)
+
+Sorun: bir öğe açık/aktifken Ctrl+Click ile ikinci bir öğeye tıklanınca yalnız yeni
+tıklanan seçime giriyor, ilk (aktif) öğe dahil edilmiyordu — çünkü multi-select seti
+panelin "aktif detay" state'inden ayrı.
+
+**Çözüm (`hooks/useMultiSelect.ts` — tek noktada, tüm ekranları kapsar):**
+`handleClick` artık yeni bir çoklu seçim başlarken (set boş) aktif öğeyi **tohumluyor**:
+Ctrl/Cmd+Click ikinci satırda → ikisi de seçilir. Aktif öğe kaynağı: yeni opsiyonel
+`activeId` parametresi (varsa) → yoksa anchor (son düz-tıklanan satır). Böylece
+tıklanmamış default-seçili satır bile dahil edilir.
+
+**Çağrı yerleri:** paneller aktif id'lerini geçiriyor — Artifacts (`activeId`),
+Executions (`selectedId`), Flows (`selectedId`), Skills (`activeSlug`), Tools
+(`selectedName`), Sessions (`activeSessionId`), Agents (`selectedId`). Memory /
+AgentTools / TaskBoard anchor fallback kullanır.
+
+Playwright: Tools (tık→Ctrl+tık = 2 seçili), Artifacts (default-seçili + Ctrl+tık başka
+satır = 2 seçili). Build temiz.
+## Ekran seçimleri oturum boyunca korunuyor (reload'da sıfırlanır) ✅ (2026-07-05)
+
+İstek: farklı ekranlar arasında gezerken seçili öğe (sohbet, aktivite, ajan, hafıza
+ajanı, akış, artifact, skill, tool) korunsun; uygulama kapatılıp açılınca sıfırlansın.
+
+**Mevcut zaten çalışanlar (App-seviyesi state):** Sohbet (`activeSessionId`),
+Aktivite (`executionTarget` + `onSelectExecution`), Ajanlar/Hafıza (`activeAgentId`).
+App unmount olmadığı için nav geçişinde korunuyorlardı.
+
+**Kırık olanlar (panel-local `useState`, remount'ta sıfırlanıyordu):** Artifactlar,
+Skills, Araçlar, Akışlar — paneller kendi seçimini tutup App'e geri yazmıyordu.
+
+**Çözüm:** Yeni `useSessionState(key, initial)` hook'u (→ `hooks/useSessionState.ts`).
+`useState` benzeri ama değeri **modül-içi bir Map**'te tutar → component unmount/remount
+arası korunur, ama localStorage'a yazılmaz → tam sayfa reload / uygulama yeniden açılış
+sıfırlar. Panellerde seçim state'i buna geçirildi:
+- `ArtifactsPanel` → `artifacts.activeId`
+- `SkillsPanel` → `skills.activeSlug`
+- `ToolsPanel` → `tools.selectedName`
+- `FlowsPanel` → `flows.selectedId` + `tab` + `templateId` + `selectedRunId`, ayrıca
+  mount'ta seçili akışın editör state'ini yeniden yükleyen tek-seferlik restore effect.
+
+Playwright: 8 ekranın hepsinde seç → başka ekrana git → geri dön → seçim korunuyor.
+Build temiz.
+## Hafıza (memory): bilgi inputu + Belge(ikon) + Yansıt üst-title'a ✅ (2026-07-04)
+
+- `memory` `HEADERLESS_VIEWS`'e eklendi; `MemoryPanel` kendi `PaneHeader`'ını render
+  ediyor: `titleSlot` = bilgi-girme inputu (büyüyen), `right` = **Belge** (yalnız
+  `Paperclip` ikonu, metin kaldırıldı) + **Yansıt**. Eski "bilgi ekle + reflect" bar'ı
+  ve `+ Belge` (`Button`) kaldırıldı. Kullanılmayan `Button` importu temizlendi.
+- Memory chat-benzeri layout (sol AgentRoster sibling + App header) kullandığından,
+  App header'ın mobil roster hamburger'ı kayboldu → `PaneHeader`'a `onToggleList`
+  prop'u (`setMobileListOpen(true)`) App'ten geçirildi; null-ajan durumunda da
+  PaneHeader ("Hafıza" + hamburger) render ediliyor.
+- Dosyalar: `App.tsx`, `panels/MemoryPanel.tsx`. `tsc -b` temiz; canlı doğrulandı
+  (input header'da, Belge ikon-only, Yansıt header'da).
+- **Ek:** `titleSlot`'ta inputun soluna seçili ajanın `AgentAvatar`'ı (22px) eklendi.
+
+## Dar ekranda sohbet mesaj listesi yatay padding azaltıldı (1px) ✅ (2026-07-04)
+
+Sohbet mesaj kaydırma konteyneri (`MessageList` `role="log"`) **ve** üstte sabitlenen
+(pinned) soru overlay'i yatay padding'i dar telefonlarda **1px**'e düşürüldü:
+`px-6` → **`px-[1px] md:px-6`** (ikisinde de). Dar (`<md`) = 1px, geniş (`md+`) = 24px
+(değişmedi). Playwright: 390px→1px, 1280px→24px. Build temiz.
+## Flow: daraltılabilir "Node ekle" paleti + yukarı büyüyen run input ✅ (2026-07-04)
+
+- "Node ekle" başlığı chevron'lu toggle (`paletteOpen`, localStorage kalıcı); daraltınca node
+  tip butonları gizlenir, "Görünüm" kalır.
+- Çalıştır girdisi auto-grow (`runInputRef` effect, `min(scrollHeight,160)`, `resize-none`); run
+  paneli bottom-anchored olduğundan **yukarı doğru** genişler (alt kenar sabit). Detay `15-FLOW-CANVAS.md`.
+
+## Dar ekranda composer ↔ alt navbar boşluğu near-flush yapıldı ✅ (2026-07-04)
+
+Sohbet ekranında composer ile alttaki `MobileNavBar` arasındaki boşluk fazlaydı;
+kullanıcı composer'ın navbar'a bitişik olmasını istedi. `main` alt padding'i
+sabit `pb-16/pb-20` yerine **`max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))]`**
+yapıldı → navbar yüksekliğiyle (safe-area dahil) eşleşiyor, boşluk **~1px** (bitişik),
+taşma yok. Safe-area büyüyen cihazlarda da padding aynı `env()` değerini içerdiği için
+bitişiklik korunur, composer navbar arkasına kaçmaz. Playwright (390px): composer alt
+728, navbar üst 729, gap 1, overlap yok. Build temiz.
+
+## Bağlam modal header + cache info + otomasyon formu sadeleştirme ✅ (2026-07-04)
+
+1. **Cache notu → InfoPopover:** SessionContextModal cache legend'ında "cache'li…"
+   chip'inin yanındaki uzun `data.cache.note` metni, chip içine (i) `InfoPopover`
+   olarak alındı.
+2. **Header aksiyonları title yanına döndü:** iki modalda header tekrar tek satır
+   (`nowrap`); kopyala + X butonları başlığın yanında (BulkButtons zaten örnek-mesaj
+   satırına taşınmıştı). Alt yazı `truncate`.
+3. **Otomasyon formu:** "Ad (ops.)" isim inputu **create + edit**'ten kaldırıldı;
+   kart görünümündeki isim (`{a.name || '(adsız)'}`) kaldırıldı (artık `#etiket`
+   birincil). Ajan-Akış geçişi (`TargetModeToggle`) forma **en sola** alındı
+   (zamanlamada zaten soldaydı).
+4. **FlowPicker görünür ikon:** native `<select>` artık solunda seçili akışın
+   ikonunu (mojibake-safe emoji, yoksa `Workflow` glyph) gösteriyor — AgentPicker
+   avatar'ına paralel; hem schedule hem otomasyon formunda.
+
+Playwright: isim inputu 0, toggle en solda, iki FlowPicker'da da ikon, header nowrap
++ copy/X title yanında, cache chip'inde (i). Build temiz.
+
+## Bağlam modalı: token özeti + CLI ek yükü açılır-kapanır (default kapalı) ✅ (2026-07-04)
+
+`SessionContextModal` ve `AgentContextModal`'da token istatistik satırı (Toplam,
+Sistem, Skills, … ~token tahmini) ve "CLI ek yükü" bloğu tek bir açılır-kapanır
+şeride alındı. **Default kapalı**; başlık çubuğu "Token özeti · Toplam N (~tahmini)"
++ varsa "CLI ek yükü" rozetini gösterir, `ChevronRight` 90° dönerek durumu belli
+eder. Playwright: default `aria-expanded=false`, kapalıyken detay (`Mesajlar (…)`)
+gizli, tıklayınca açılıyor. Build temiz.
+
+## Flow değişken popover'ı kırpılma fix + run input info butonu ✅ (2026-07-04)
+
+- **Kırpılma fix** — `FlowVarsButton` paylaşılan bileşene taşındı (`flow/FlowVarsButton.tsx`),
+  absolute popover yerine satır-içi (`w-full basis-full`, ebeveyn `flex flex-wrap`) panel; modal
+  gövdesinin `overflow-y-auto`'su artık kesmiyor.
+- **Run input info butonu** — flow başlatma girdisine ℹ️ (`context="seed"`): yalnız
+  `{{date}}/{{time}}/{{datetime}}` (motorun sıralı `render` ikamesiyle çözülür) + "{{input}} olur" notu.
+- Yalnız frontend; `tsc`+build temiz. Detay `15-FLOW-CANVAS.md`.
+
+## Bağlam modal aksiyonları + claude-cli cache notu + schedule kartı ✅ (2026-07-04)
+
+1. **"Tümünü aç/kapat" ikon-only + Compact Simüle yanına taşındı:** `SessionContextModal`
+   ve `AgentContextModal`'da header'daki metinli `BulkButtons` kaldırıldı; örnek-mesaj
+   satırına (Compaction simüle / Simüle et düğmesinin yanına), yalnız ikon (30×30)
+   olarak taşındı. Satır `flex-wrap` yapıldı. Playwright: ikon-only, input satırında,
+   header'da yok.
+2. **claude-cli soğuk-tur cache notu kaldırıldı:** backend `session_context.go` içindeki
+   uzun "claude-cli ilk/soğuk tur…" metni `Note: ""` yapıldı; frontend cache-legend
+   boş note'u artık render etmiyor (`{data.cache.note && …}`). ⚠️ görünür etki için
+   backend restart gerekir.
+3. **Schedule/Automation kartı dikey:** açma-kapama toggle'ı **üstte**, agent/flow
+   ikonu **altta** olacak şekilde dikey sütuna alındı (`Schedules.tsx` + `Automations.tsx`).
+   Playwright: stacked column, toggle üstte, icon altta.
+
+Frontend + Go build temiz.
+
+## Dar ekran düzeltmeleri: bağlam modal başlığı + ayarlar min-w + artifact buton metni ✅ (2026-07-04)
+
+Üç dar-ekran sorunu giderildi:
+
+1. **Bağlam pencereleri başlığı sığmıyordu** (`SessionContextModal`, `AgentContextModal`):
+   sağdaki geniş aksiyon butonları (Tümünü aç/kapat/kopyala/X) başlık kolonunu ~0'a
+   sıkıştırıyor, alt yazı dikey kelime-kelime sarıyordu. Header artık `flex-wrap`;
+   dar ekranda başlık tam ilk satırı alıyor (`basis-full sm:basis-0`), aksiyonlar
+   tek grup halinde alt satıra sarıyor. Playwright (360px): başlık kolonu 319px,
+   alt yazı 2 satır (dikey sıkışma yok), modal 360'a sığıyor.
+
+2. **Ayarlar Hooks & Harici Araçlar bir noktadan sonra daralmıyordu:** içerik kolonu
+   (`SettingsPanel` sağ pane) `min-w-0` içermiyordu → içindeki geniş bir öğe (kod
+   örneği vb.) min-content genişliğinin altına inmeyi engelliyor, yatay taşma
+   oluşuyordu. `flex flex-1 flex-col` → `flex min-w-0 flex-1 flex-col`. Bu tek
+   düzeltme tüm ayar kategorilerini kapsıyor. Playwright (360px): `docScrollW 360`,
+   taşma yok (hem hooks hem exttools).
+
+3. **Artifacts "içeriği kopyala" butonu metni** "İçerik" olarak kısaltıldı.
+
+Build temiz.
+
+## Flow tarih/saat değişkenleri + tag filtreleme ✅ (2026-07-04)
+
+- **Yeni flow değişkenleri** — `orchestration.render` (engine.go) artık `{{date}}`/`{{time}}`/
+  `{{datetime}}`'i de çözer (otomasyon formatıyla aynı). Node inspector ℹ️ popover'ına eklendi.
+  Test `TestRenderVars`. Oturum-bağlamlı otomasyon değişkenleri (`{{result}}` vb.) flow'da yok.
+- **Flow tag filtreleme** — `FlowsPanel` Akışlarım sekmesinde etiket chip'leri; ANY-eşleşme
+  süzme, ad aramasıyla AND. Boş → "Eşleşen akış yok." Detay `15-FLOW-CANVAS.md`.
+
+## Alt navbar'a workspace seçme butonu eklendi ✅ (2026-07-04)
+
+Dar ekranlarda (`< md`) masaüstü NavRail'in tepesindeki workspace seçici yoktu.
+Alt `MobileNavBar`'ın **en başına sabit** bir workspace-seçme butonu eklendi (mobil
+karşılığı `MobileWorkspaceButton` → `components/MobileWorkspaceButton.tsx`).
+
+- **Yukarı açılan menü:** bar ekranın altında olduğu için popup `bottom-full` ile
+  **yukarı** açılıyor; workspace'ler arasında geçiş + "Yeni workspace" (mevcut
+  `WorkspaceCreateModal` yeniden kullanıldı).
+- **Kırpılma çözümü:** `<nav>` artık kaydırmıyor (overflow visible), yalnız içteki
+  görünüm şeridi yatay kayıyor. Böylece yukarı açılan menü şeridin `overflow` 'una
+  takılmıyor. `useDragScroll` ref'i içteki şeride taşındı (fare-sürükleme korundu).
+- **Playwright doğrulaması (360px):** workspace butonu en solda (left 0); menü
+  yukarı açılıyor (bottom 706 ≤ nav-top 709), kırpılmıyor (top ≥ 0), 5 workspace +
+  create listeleniyor; şerit hâlâ fare-sürükleme ile kayıyor (200px, navigasyon yok).
+  Build temiz.
 
 ## Node türü sabit + değişken info butonu + flow tag chip'leri ✅ (2026-07-04)
 
