@@ -40,6 +40,11 @@ type agentContextPreview struct {
 	Dynamic       string `json:"dynamic"`
 	DynamicTokens int    `json:"dynamicTokens"`
 	TotalTokens   int    `json:"totalTokens"`
+	// CLIOverhead is set only for CLI-wrapper providers (claude-cli): the projected
+	// harness cost (base system + built-ins + eager bridged tools) that TotalTokens
+	// does NOT include. Predicted-only here — an agent preview has no session, so
+	// there is no measured figure (MeasuredTokens/Calls are 0).
+	CLIOverhead *cliOverheadPreview `json:"cliOverhead,omitempty"`
 }
 
 // toolSummary is one offered tool: name + full description, plus the full JSON
@@ -96,6 +101,15 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 	skillsTok := conversation.EstimateText(skillsText)
 	toolTok := estimateToolCatalog(defs)
 	dynTok := conversation.EstimateText(dynamic)
+	total := sysTok + skillsTok + toolTok + dynTok
+	// Predicted-only CLI overhead (empty sessionID → no measured turn): count the
+	// eager (core-tier) bridged tools that carry a full schema up front.
+	eagerTools := 0
+	for _, d := range defs {
+		if interactionTier(d.Name) == "core" {
+			eagerTools++
+		}
+	}
 	writeJSON(w, http.StatusOK, agentContextPreview{
 		Provider:      agent.Provider,
 		System:        system,
@@ -107,7 +121,8 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 		LazyTools:     lazyTools,
 		Dynamic:       dynamic,
 		DynamicTokens: dynTok,
-		TotalTokens:   sysTok + skillsTok + toolTok + dynTok,
+		TotalTokens:   total,
+		CLIOverhead:   computeCLIOverhead(ctx, wsp, agent.Provider, "", total, eagerTools),
 	})
 }
 

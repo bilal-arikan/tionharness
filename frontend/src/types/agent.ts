@@ -1,6 +1,7 @@
 // Agent profile, partial patch, usage counters and per-agent tool selection.
 
 import type { ToolDef } from './mcp'
+import type { CLIOverhead } from './session'
 
 export interface Agent {
   id: string
@@ -93,4 +94,7 @@ export interface AgentContextPreview {
   dynamic: string
   dynamicTokens: number
   totalTokens: number
+  // CLI-wrapper (claude-cli) harness overhead projection that totalTokens does NOT
+  // include. Predicted-only for an agent preview (no session → measuredTokens/calls 0).
+  cliOverhead?: CLIOverhead
 }

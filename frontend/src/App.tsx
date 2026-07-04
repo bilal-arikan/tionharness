@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
-import { PanelRight, Menu } from 'lucide-react'
+import { PanelRight, Menu, ScanEye } from 'lucide-react'
 import { CopyPathButton } from './components/CopyPathButton'
 import { RevealButton } from './components/RevealButton'
 import { ErrorToast } from './components/common/ErrorToast'
@@ -41,6 +41,7 @@ import { ToolsPanel as ToolCatalogPanel } from './components/panels/ToolsPanel'
 import { MarketPanel } from './components/panels/MarketPanel'
 import { BudgetPanel } from './components/panels/BudgetPanel'
 import { SessionDetailPanel } from './components/sessions/SessionDetailPanel'
+import { SessionContextModal } from './components/sessions/SessionContextModal'
 import { SettingsPanel } from './components/SettingsPanel'
 import { WorkspaceView } from './components/workspace/WorkspaceView'
 import { OnboardingScreen } from './components/workspace/OnboardingScreen'
@@ -107,7 +108,7 @@ const VIEW_TITLE: Record<View, string> = {
 // in-pane headers) reach the very top — matching the chat/memory layout where the
 // sidebar is a sibling of <main>. Errors for these still surface via ErrorToast.
 const HEADERLESS_VIEWS = new Set<View>([
-  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market',
+  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs',
 ])
 
 export default function App() {
@@ -211,6 +212,9 @@ export default function App() {
   const settingsNav = useCollapsibleList('swarmgo.settingsNavOpen')
 
   // Right-hand session detail panel visibility (persisted).
+  // Next-turn context preview modal (moved here from the detail panel so it opens
+  // straight from the chat header without first opening the detail inspector).
+  const [ctxPreviewOpen, setCtxPreviewOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(
     () => localStorage.getItem('swarmgo.detailOpen') === '1',
   )
@@ -1186,6 +1190,15 @@ export default function App() {
                     labelClassName="hidden sm:inline"
                     title="Oturum klasörünü aç"
                   />
+                  {/* Next-turn context preview (moved here from the detail panel). */}
+                  <button
+                    onClick={() => setCtxPreviewOpen(true)}
+                    title="Sonraki turun bağlamını önizle (debug)"
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                  >
+                    <ScanEye size={15} className="shrink-0" />
+                    <span className="hidden sm:inline">Bağlam önizle</span>
+                  </button>
                   <button
                     onClick={toggleDetail}
                     title="Oturum bilgisi panelini aç/kapat"
@@ -1413,6 +1426,16 @@ export default function App() {
         unreadViews={unreadViews}
         dirtyViews={dirtyViews as Set<View>}
       />
+
+      {/* Next-turn context preview: opened from the chat header (works whether or
+          not the detail inspector is open). */}
+      {ctxPreviewOpen && activeSessionId && (
+        <SessionContextModal
+          sessionId={activeSessionId}
+          title={sessions.find((s) => s.id === activeSessionId)?.title}
+          onClose={() => setCtxPreviewOpen(false)}
+        />
+      )}
 
       {/* Artifact quick-preview overlay: opened by clicking an artifact card/chip
           in chat or the activity feed. Independent of the current view. */}

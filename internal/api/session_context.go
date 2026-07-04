@@ -442,10 +442,13 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	predicted := conversation.PredictCLIOverhead(eagerTools)
 
 	measured, calls := 0, 0
+	// Agent-level preview (no session) passes an empty sessionID: there is no
+	// recorded turn to measure, so skip the debug/usage reads and return the
+	// predicted-only projection below.
 	// Most accurate next-turn projection: the REAL input of the most recent llm_call
 	// from the debug journal (steady-state), rather than a cold+warm lifetime
 	// average that under/over-states what the next turn will actually cost.
-	if evs, derr := wsp.DB.ReadDebugEvents(ctx, sessionID, db.DebugLLMCall, 1); derr == nil && len(evs) > 0 {
+	if evs, derr := wsp.DB.ReadDebugEvents(ctx, sessionID, db.DebugLLMCall, 1); sessionID != "" && derr == nil && len(evs) > 0 {
 		e := evs[len(evs)-1]
 		// claude-cli bills in/out/cache CUMULATIVELY across its internal tool-loop
 		// round-trips (e.Calls == result num_turns; verified: result cacheRead ==
@@ -464,7 +467,7 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	// token totals by it recovers the per-call (single-pass) context just like the
 	// debug path — not merely a per-SwarmGo-turn average. Sessions recorded before
 	// the counter existed have ProviderCalls 0 → fall back to the turn count.
-	if measured == 0 {
+	if measured == 0 && sessionID != "" {
 		if u, err := wsp.DB.GetSessionUsage(ctx, sessionID); err == nil && u.Calls > 0 {
 			n := u.ProviderCalls
 			if n < 1 {

@@ -105,7 +105,32 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
               <Stat label={`Talep-üzerine (${data.lazyTools.length})`} value={0} dim />
             )}
             <Stat label="Dinamik" value={data.dynamicTokens} />
+            {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
+              <Stat
+                label="Beklenen (CLI, tahmini)"
+                value={data.totalTokens + data.cliOverhead.predictedOverhead}
+                accent
+              />
+            )}
             <span className="text-[var(--color-text-dim)]">~token tahmini</span>
+          </div>
+        )}
+
+        {/* CLI-wrapper overhead: totalTokens under-reports for claude-cli. Agent
+            preview has no session → predicted-only (measured comes after a turn). */}
+        {data?.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
+          <div className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-5 py-2 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
+                CLI ek yükü
+              </span>
+              <span className="text-[var(--color-text-dim)]">
+                Tahmin <strong>{data.totalTokens.toLocaleString()}</strong> → beklenen ~
+                <strong>{(data.totalTokens + data.cliOverhead.predictedOverhead).toLocaleString()}</strong>
+                {' '}(+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong> tahmini ek yük)
+              </span>
+            </div>
+            <p className="mt-1 text-[var(--color-text-dim)]">{data.cliOverhead.note}</p>
           </div>
         )}
 

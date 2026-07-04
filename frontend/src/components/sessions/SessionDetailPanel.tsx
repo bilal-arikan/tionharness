@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, ScanEye, PiggyBank, ListChecks, Square, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, PiggyBank, ListChecks, Square, ChevronRight, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionInfo, SessionUsageDetail, SessionProgress } from '../../types'
-import { SessionContextModal } from './SessionContextModal'
 import { SessionDebugCard } from './SessionDebugCard'
 import { CoordinatorSection } from './CoordinatorSection'
 import { AgentIdentity } from '../agents/AgentIdentity'
@@ -59,8 +58,6 @@ export function SessionDetailPanel({
   // Manual-refresh nonce: bumped by the refresh button (and after a title
   // regeneration) to re-fetch without touching the parent's refreshKey.
   const [localRefresh, setLocalRefresh] = useState(0)
-  // Debug: next-turn context preview modal visibility.
-  const [ctxPreview, setCtxPreview] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -569,12 +566,8 @@ export function SessionDetailPanel({
                 disabled={info.messageCount === 0 || titling}
                 busy={titling}
               />
-              {/* Debug: preview the exact next-turn context the agent would get. */}
-              <ActionBtn
-                icon={ScanEye}
-                label="Bağlam önizle (debug)"
-                onClick={() => setCtxPreview(true)}
-              />
+              {/* "Bağlam önizle" moved to the chat header (App.tsx) so it opens
+                  without first opening this inspector. */}
               <ActionBtn
                 icon={Trash2}
                 label="Oturumu sil"
@@ -586,13 +579,6 @@ export function SessionDetailPanel({
             </div>
           </Section>
         </div>
-      )}
-      {ctxPreview && (
-        <SessionContextModal
-          sessionId={sessionId}
-          title={info?.title}
-          onClose={() => setCtxPreview(false)}
-        />
       )}
     </aside>
   )
