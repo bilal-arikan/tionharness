@@ -449,18 +449,13 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
           right of the list — like the chat header (never spans over the list). */}
       <div className="flex min-w-0 flex-1 flex-col">
         <PaneHeader
-          title="Artifactlar"
-          subtitle={active ? `· ${active.title}` : undefined}
           listOpen={listOpen}
           onToggleList={toggleList}
-        />
-        {!active ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
-            Görüntülemek için bir artifact seç.
-          </div>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3">
+          // Detail view: the top bar hosts the artifact identity + actions (no
+          // redundant "Artifactlar" title / subtitle). Empty state keeps the title.
+          title={active ? undefined : 'Artifactlar'}
+          titleSlot={
+            active ? (
               <div className="flex min-w-0 items-center gap-2">
                 <FileCode size={16} className="shrink-0 text-[var(--color-accent)]" />
                 <div className="min-w-0">
@@ -480,6 +475,10 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                   </div>
                 </div>
               </div>
+            ) : undefined
+          }
+          right={
+            active ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 {draft ? (
                   <>
@@ -500,8 +499,14 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     <button data-testid="artifact-detail-edit" onClick={startEdit} title="Düzenle" className={iconBtn}>
                       <Pencil size={15} />
                     </button>
-                    <button data-testid="artifact-detail-copy" onClick={copy} title="İçeriği kopyala" className={iconBtn}>
-                      {copied ? <Check size={15} /> : <Copy size={15} />}
+                    <button
+                      data-testid="artifact-detail-copy"
+                      onClick={copy}
+                      title="İçeriği kopyala"
+                      className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                    >
+                      {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
+                      <span>{copied ? 'Kopyalandı' : 'İçeriği kopyala'}</span>
                     </button>
                     <CopyPathButton path={activePath} label="Yolu kopyala" labelClassName="hidden" title="Yolu kopyala" />
                     <RevealButton testId="artifact-detail-reveal" onReveal={reveal} disabled={!activePath} label="Aç" labelClassName="hidden sm:inline" />
@@ -518,15 +523,22 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                       data-testid="artifact-detail-delete"
                       onClick={() => remove(active.id)}
                       title="Sil"
-                      className="rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-dim)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] hover:text-[var(--color-danger)]"
+                      className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={14} /> Sil
                     </button>
                   </>
                 )}
               </div>
-            </div>
-
+            ) : undefined
+          }
+        />
+        {!active ? (
+          <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
+            Görüntülemek için bir artifact seç.
+          </div>
+        ) : (
+          <>
             {draft ? (
               // Editor
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-5">

@@ -5,6 +5,7 @@ import type { Agent, Task, Flow, BoardState, BoardColumnDef, TaskPriority } from
 import { AgentPicker } from '../agents/AgentPicker'
 import { DependencyPicker } from './DependencyPicker'
 import { Button, ModalOverlay } from '../common'
+import { normalizeAvatar } from '../../lib/avatar'
 
 function parseDeps(raw: string): string[] {
   try {
@@ -229,7 +230,7 @@ export function TaskFormModal({
               >
                 <option value="">🔀 Akış yok</option>
                 {flows.map((f) => (
-                  <option key={f.id} value={f.id}>🔀 {f.name}</option>
+                  <option key={f.id} value={f.id}>{normalizeAvatar(f.emoji) ?? '🔀'} {f.name}</option>
                 ))}
               </select>
             </Field>

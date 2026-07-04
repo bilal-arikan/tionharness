@@ -3,9 +3,10 @@ import { Trash2 } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Task, Flow, BoardColumnDef } from '../../types'
 import { AgentIdentity } from '../agents/AgentIdentity'
+import { normalizeAvatar } from '../../lib/avatar'
 import { TaskFormModal } from './TaskFormModal'
 import { BoardColumnEditor } from './BoardColumnEditor'
-import { Button, SelectionBar, SelectionBarButton } from '../common'
+import { Button, SelectionBar, SelectionBarButton, PaneHeader } from '../common'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 
 // Fallback columns used until workspace settings are loaded.
@@ -218,40 +219,44 @@ export function TaskBoard({ agents, onError }: Props) {
       )}
 
       <div className="flex h-full flex-1 flex-col overflow-hidden">
-        {/* New task form */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
-          <button
-            data-testid="task-board-columns-editor"
-            onClick={() => setEditorOpen((v) => !v)}
-            title="Sütunları düzenle"
-            className={`flex-shrink-0 rounded border px-2 py-1 text-xs transition ${
-              editorOpen
-                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
-            }`}
-          >
-            ⊞ Sütunlar
-          </button>
-          <div data-testid="task-create-submit">
-            <Button onClick={() => setModal({ mode: 'create', taskId: null })}>+ Görev</Button>
-          </div>
-          <div className="flex-1" />
-          <button
-            data-testid="task-sort-by-deps"
-            onClick={() => {
-              if (!depSort && !confirm('Görevler bağımlılık sırasına göre yeniden dizilecek. Devam edilsin mi?')) return
-              setDepSort((v) => !v)
-            }}
-            title={depSort ? 'Bağımlılık sıralamasını kapat' : 'Bağımlılığa göre sırala — önce bağımlısı olmayanlar'}
-            className={`rounded border px-2 py-1 text-xs transition ${
-              depSort
-                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
-            }`}
-          >
-            🔗 Sırala
-          </button>
-        </div>
+        {/* Top bar: title + board actions (Sütunlar / + Görev / Sırala). */}
+        <PaneHeader
+          title="Görevler"
+          right={
+            <>
+              <button
+                data-testid="task-board-columns-editor"
+                onClick={() => setEditorOpen((v) => !v)}
+                title="Sütunları düzenle"
+                className={`flex-shrink-0 rounded border px-2 py-1 text-xs transition ${
+                  editorOpen
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
+                }`}
+              >
+                ⊞ Sütunlar
+              </button>
+              <div data-testid="task-create-submit">
+                <Button onClick={() => setModal({ mode: 'create', taskId: null })}>+ Görev</Button>
+              </div>
+              <button
+                data-testid="task-sort-by-deps"
+                onClick={() => {
+                  if (!depSort && !confirm('Görevler bağımlılık sırasına göre yeniden dizilecek. Devam edilsin mi?')) return
+                  setDepSort((v) => !v)
+                }}
+                title={depSort ? 'Bağımlılık sıralamasını kapat' : 'Bağımlılığa göre sırala — önce bağımlısı olmayanlar'}
+                className={`rounded border px-2 py-1 text-xs transition ${
+                  depSort
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
+                }`}
+              >
+                🔗 Sırala
+              </button>
+            </>
+          }
+        />
 
         {/* Board */}
         <div className="flex flex-1 gap-3 overflow-x-auto p-4">
@@ -373,7 +378,7 @@ export function TaskBoard({ agents, onError }: Props) {
                             {owner && <AgentIdentity agent={owner} size="sm" className="max-w-[160px]" />}
                             {t.flowId && (
                               <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
-                                🔀 {flow?.name ?? 'Akış'}
+                                {normalizeAvatar(flow?.emoji) ?? '🔀'} {flow?.name ?? 'Akış'}
                               </span>
                             )}
                             {depIds.length > 0 && (() => {

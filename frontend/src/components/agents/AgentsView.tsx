@@ -6,6 +6,9 @@ import { ProviderModelSelect } from './ProviderModelSelect'
 import { useCatalog, resolveModelLabel } from '../../lib/catalog'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
+import { api } from '../../api'
+import { CopyPathButton } from '../CopyPathButton'
+import { RevealButton } from '../RevealButton'
 import { Button, PromptEditor, SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '../common'
 import {
   SidebarHeader, NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
@@ -263,6 +266,48 @@ export function AgentsView({
           listOpen={rosterOpen}
           onToggleList={toggleRoster}
           subtitle={selected ? `· ${selected.name}` : '· Ajan seçilmedi'}
+          right={
+            <>
+              {selected && (
+                <>
+                  <CopyPathButton
+                    testId="agent-copy-path"
+                    getPath={async () => (await api.agentPath(selected.id)).path}
+                    title="Ajanın disk üzerindeki JSON dosya yolunu kopyala"
+                    onError={onError}
+                  />
+                  <RevealButton
+                    testId="agent-reveal-folder"
+                    onReveal={async () => {
+                      try {
+                        await api.revealAgent(selected.id)
+                      } catch (e) {
+                        onError?.((e as Error).message)
+                      }
+                    }}
+                    label="Aç"
+                    labelClassName="hidden sm:inline"
+                    title="Ajanın JSON dosyasının bulunduğu klasörü dosya yöneticisinde aç"
+                  />
+                </>
+              )}
+              {/* Toggle the right-hand activity feed from the top bar (like chat's Detay). */}
+              <button
+                onClick={toggleActivity}
+                data-testid="agent-activity-toggle"
+                aria-pressed={activityOpen}
+                title={activityOpen ? 'Aktivite panelini gizle' : 'Aktivite panelini göster'}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
+                  activityOpen
+                    ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+                }`}
+              >
+                <Activity size={15} className="shrink-0" />
+                <span className="hidden sm:inline">Aktivite</span>
+              </button>
+            </>
+          }
         />
         <div className="flex min-h-0 flex-1 max-md:flex-col">
         {/* Middle: selected agent's settings */}
@@ -287,27 +332,15 @@ export function AgentsView({
         )}
       </div>
 
-      {/* Right: selected agent's live activity feed — collapsible. When closed a
-          slim rail on the right edge reopens it (mobile: a full-width bar). */}
-      {activityOpen ? (
+      {/* Right: selected agent's live activity feed — toggled from the top bar's
+          "Aktivite" button (no slim reopen rail; the title button reopens it). */}
+      {activityOpen && (
         <AgentActivityPanel
           agentId={selected?.id ?? null}
           onError={onError ?? (() => {})}
           onOpenExecution={onOpenExecution}
           onClose={toggleActivity}
         />
-      ) : (
-        <button
-          onClick={toggleActivity}
-          title="Aktivite panelini aç"
-          aria-label="Aktivite panelini aç"
-          className="flex w-9 shrink-0 flex-col items-center gap-2 border-l border-[var(--color-border)] bg-[var(--color-surface)] py-3 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] max-md:w-full max-md:flex-row max-md:justify-center max-md:border-l-0 max-md:border-t max-md:py-2"
-        >
-          <Activity size={16} className="shrink-0" />
-          <span className="text-[10px] [writing-mode:vertical-rl] max-md:[writing-mode:horizontal-tb]">
-            Aktivite
-          </span>
-        </button>
       )}
         </div>
       </div>

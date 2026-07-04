@@ -1,10 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Eye, Trash2 } from 'lucide-react'
-import { api } from '../../api'
 import { useRegisterDirty } from '../../lib/dirtySignals'
 import type { View } from '../NavRail'
-import { CopyPathButton } from '../CopyPathButton'
-import { RevealButton } from '../RevealButton'
 import type { Agent, AgentPatch } from '../../types'
 import { AVATAR_COLORS, normalizeAvatar, resolveColor } from '../../lib/avatar'
 import { AgentAvatar } from './AgentAvatar'
@@ -139,26 +136,6 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           >
             <Eye size={14} /> Bağlam
           </button>
-          <CopyPathButton
-            testId="agent-copy-path"
-            getPath={async () => (await api.agentPath(agent.id)).path}
-            label="Yolu kopyala"
-            labelClassName="hidden"
-            title="Ajanın disk üzerindeki JSON dosya yolunu kopyala"
-            onError={setErr}
-          />
-          <RevealButton
-            testId="agent-reveal-folder"
-            onReveal={async () => {
-              try {
-                await api.revealAgent(agent.id)
-              } catch (e) {
-                setErr((e as Error).message)
-              }
-            }}
-            label="Klasörü aç"
-            title="Ajanın JSON dosyasının bulunduğu klasörü dosya yöneticisinde aç"
-          />
           {onCancel && (
             <button
               data-testid="agent-cancel"

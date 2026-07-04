@@ -12,7 +12,6 @@ import {
   Boxes,
   Database,
   Menu,
-  PanelLeftClose,
   Wrench,
   Server,
   ArrowUpCircle,
@@ -847,18 +846,10 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         hideRail
       >
       <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-        <div className="flex items-center justify-between px-2 py-1">
+        <div className="flex items-center px-2 py-1">
           <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
             Kategoriler
           </span>
-          <button
-            onClick={toggleList}
-            title="Listeyi kapat"
-            aria-label="Listeyi kapat"
-            className="rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] md:hidden"
-          >
-            <PanelLeftClose size={13} />
-          </button>
         </div>
         {KIND_NAV.map((k) => {
           const Icon = k.icon
@@ -882,6 +873,25 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
             </button>
           )
         })}
+      </div>
+      {/* Global market actions (moved here from the top header). */}
+      <div className="flex flex-col gap-1 border-t border-[var(--color-border)] p-2">
+        <button
+          data-testid="market-import"
+          onClick={() => setImporting(true)}
+          title="GitHub repo / plugin veya yerel klasörden içe aktar (skill / agent / komut / MCP)"
+          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+        >
+          <Download size={16} className="shrink-0" /> İçe Aktar
+        </button>
+        <button
+          data-testid="market-registries"
+          onClick={() => setManagingRegistries(true)}
+          title="Uzak kaynakları yönet (registry ekle/çıkar)"
+          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+        >
+          <Server size={16} className="shrink-0" /> Kaynaklar
+        </button>
       </div>
       </ListPane>
 
@@ -910,22 +920,6 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
               placeholder="Ara…"
               className="w-40 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
             />
-            <button
-              data-testid="market-import"
-              onClick={() => setImporting(true)}
-              title="GitHub repo / plugin veya yerel klasörden içe aktar (skill / agent / komut / MCP)"
-              className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
-            >
-              <Download size={13} /> İçe Aktar
-            </button>
-            <button
-              data-testid="market-registries"
-              onClick={() => setManagingRegistries(true)}
-              title="Uzak kaynakları yönet (registry ekle/çıkar)"
-              className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
-            >
-              <Server size={13} /> Kaynaklar
-            </button>
             <button
               onClick={reload}
               disabled={busy}

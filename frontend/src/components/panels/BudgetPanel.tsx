@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Wallet,
   RefreshCw,
   Coins,
   Hash,
@@ -13,6 +12,7 @@ import {
   Sigma,
 } from 'lucide-react'
 import { api } from '../../api'
+import { PaneHeader } from '../common'
 import type { KindStat, ProviderStat, BudgetTrendPoint } from '../../types'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { kindColor } from '../../lib/palette'
@@ -291,40 +291,38 @@ export function BudgetPanel({ onError }: Props) {
   }, [usage, metricDef])
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-[var(--color-surface)] p-5">
-      {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Wallet size={18} className="text-[var(--color-accent)]" />
-          <h1 className="text-lg font-semibold text-[var(--color-text)]">Bütçe</h1>
-          {usage && <span className="text-xs text-[var(--color-text-dim)]">· {usage.day}</span>}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
-            {[7, 30, 90].map((d) => (
-              <button
-                key={d}
-                onClick={() => setDays(d)}
-                className={`px-2 py-1 transition ${
-                  days === d
-                    ? 'bg-[var(--color-accent)] text-white'
-                    : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:opacity-80'
-                }`}
-              >
-                {d}g
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => load()}
-            className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1.5 text-[var(--color-text-dim)] transition hover:opacity-80"
-            title="Yenile"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
-      </div>
-
+    <div className="flex h-full flex-col bg-[var(--color-surface)]">
+      <PaneHeader
+        title="Bütçe"
+        subtitle={usage ? `· ${usage.day}` : undefined}
+        right={
+          <>
+            <div className="flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
+              {[7, 30, 90].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDays(d)}
+                  className={`px-2 py-1 transition ${
+                    days === d
+                      ? 'bg-[var(--color-accent)] text-white'
+                      : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:opacity-80'
+                  }`}
+                >
+                  {d}g
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => load()}
+              className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1.5 text-[var(--color-text-dim)] transition hover:opacity-80"
+              title="Yenile"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </>
+        }
+      />
+      <div className="flex-1 overflow-y-auto p-5">
       {!usage ? (
         <div className="text-sm text-[var(--color-text-dim)]">{loading ? 'Yükleniyor…' : 'Veri yok.'}</div>
       ) : (
@@ -633,6 +631,7 @@ export function BudgetPanel({ onError }: Props) {
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }

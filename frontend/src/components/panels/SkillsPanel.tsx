@@ -537,10 +537,78 @@ export function SkillsPanel({ onError }: Props) {
       {/* Detail */}
       <div className="flex min-w-0 flex-1 flex-col">
         <PaneHeader
-          title="Skills"
-          subtitle={active ? `· ${active.name}` : undefined}
           listOpen={listOpen}
           onToggleList={toggleList}
+          // Detail view: the top bar hosts the skill name + badges + actions (no
+          // redundant "Skills" title / subtitle). The descriptive block (slug,
+          // description, when-to-use, tools, sub-skills) stays below in the body.
+          title={active ? undefined : 'Skills'}
+          titleSlot={
+            active ? (
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="text-lg leading-none">{active.icon || '✨'}</span>
+                <h2 className="truncate text-base font-semibold">{active.name}</h2>
+                {active.group && (
+                  <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
+                    {active.group}
+                  </span>
+                )}
+                {!active.shared && <RestrictedBadge />}
+                <VisibilityChip v={skillVisibility(active)} />
+                <SourceBadge source={active.source} />
+              </span>
+            ) : undefined
+          }
+          right={
+            active ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  data-testid="skill-detail-edit"
+                  onClick={() => setEditor({ mode: 'edit', initial: active })}
+                  title="Bu beceriyi düzenle (ad, simge, açıklama, içerik)"
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                >
+                  <Pencil size={14} /> Düzenle
+                </button>
+                <button
+                  data-testid="skill-detail-toggle-access"
+                  onClick={toggleAccess}
+                  disabled={accessBusy}
+                  title={
+                    active.shared
+                      ? 'Kısıtlıya çevir: yalnız atanan ajanlar kullanabilsin'
+                      : 'Paylaşımlı yap: tüm ajanlar gerektiğinde kullanabilsin'
+                  }
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+                >
+                  {active.shared ? <Lock size={14} /> : <Globe size={14} />}
+                  {active.shared ? 'Kısıtla' : 'Paylaş'}
+                </button>
+                <SkillVisibilitySelector
+                  value={active.visibility ?? (active.autoSummary === false ? 'hidden' : active.nameOnly ? 'name-only' : 'full')}
+                  busy={visBusy}
+                  onSet={setVisibility}
+                />
+                <CopyPathButton path={active.dir} label="Yolu kopyala" labelClassName="hidden" />
+                <RevealButton
+                  testId="skill-detail-reveal"
+                  onReveal={reveal}
+                  label="Aç"
+                  labelClassName="hidden sm:inline"
+                  title="Skill klasörünü dosya yöneticisinde aç"
+                />
+                <button
+                  data-testid="skill-detail-delete"
+                  onClick={removeActive}
+                  disabled={deleteBusy}
+                  title="Bu beceriyi sil (klasörünü diskten kaldırır)"
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
+                >
+                  <Trash2 size={14} /> Sil
+                </button>
+              </div>
+            ) : undefined
+          }
         />
         {!active ? (
           <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
@@ -550,19 +618,7 @@ export function SkillsPanel({ onError }: Props) {
           <>
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg leading-none">{active.icon || '✨'}</span>
-                  <h2 className="truncate text-base font-semibold">{active.name}</h2>
-                  {active.group && (
-                    <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
-                      {active.group}
-                    </span>
-                  )}
-                  {!active.shared && <RestrictedBadge />}
-                  <VisibilityChip v={skillVisibility(active)} />
-                  <SourceBadge source={active.source} />
-                </div>
-                <p className="mt-1 text-xs text-[var(--color-text-dim)]">
+                <p className="text-xs text-[var(--color-text-dim)]">
                   <code>{active.slug}</code>
                   {active.description ? ` · ${active.description}` : ''}
                 </p>
@@ -609,52 +665,6 @@ export function SkillsPanel({ onError }: Props) {
                     })}
                   </p>
                 )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  data-testid="skill-detail-edit"
-                  onClick={() => setEditor({ mode: 'edit', initial: active })}
-                  title="Bu beceriyi düzenle (ad, simge, açıklama, içerik)"
-                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-                >
-                  <Pencil size={14} /> Düzenle
-                </button>
-                <button
-                  data-testid="skill-detail-toggle-access"
-                  onClick={toggleAccess}
-                  disabled={accessBusy}
-                  title={
-                    active.shared
-                      ? 'Kısıtlıya çevir: yalnız atanan ajanlar kullanabilsin'
-                      : 'Paylaşımlı yap: tüm ajanlar gerektiğinde kullanabilsin'
-                  }
-                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
-                >
-                  {active.shared ? <Lock size={14} /> : <Globe size={14} />}
-                  {active.shared ? 'Kısıtla' : 'Paylaş'}
-                </button>
-                <SkillVisibilitySelector
-                  value={active.visibility ?? (active.autoSummary === false ? 'hidden' : active.nameOnly ? 'name-only' : 'full')}
-                  busy={visBusy}
-                  onSet={setVisibility}
-                />
-                <CopyPathButton path={active.dir} label="Yolu kopyala" labelClassName="hidden" />
-                <RevealButton
-                  testId="skill-detail-reveal"
-                  onReveal={reveal}
-                  label="Aç"
-                  labelClassName="hidden sm:inline"
-                  title="Skill klasörünü dosya yöneticisinde aç"
-                />
-                <button
-                  data-testid="skill-detail-delete"
-                  onClick={removeActive}
-                  disabled={deleteBusy}
-                  title="Bu beceriyi sil (klasörünü diskten kaldırır)"
-                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
-                >
-                  <Trash2 size={14} /> Sil
-                </button>
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">

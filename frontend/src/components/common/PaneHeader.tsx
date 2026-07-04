@@ -2,8 +2,14 @@ import type { ReactNode } from 'react'
 import { Menu } from 'lucide-react'
 
 interface Props {
-  // Screen title shown in the header (e.g. "Ajanlar").
-  title: string
+  // Screen title shown in the header (e.g. "Ajanlar"). Optional: omit it when
+  // passing `titleSlot` to render custom main content (e.g. a name input) in its
+  // place.
+  title?: string
+  // When provided, replaces the title + subtitle block entirely with custom
+  // content that fills the main (growing) area — used by detail editors that put
+  // a name input + id chip directly in the top bar (e.g. the flow editor).
+  titleSlot?: ReactNode
   // When provided, a left toggle button appears (like the chat sessions
   // hamburger) that shows/hides the screen's left list panel.
   listOpen?: boolean
@@ -20,10 +26,10 @@ interface Props {
 // a left toggle for the list panel + a title, optional subtitle, and right-side
 // actions. Screens render it above their two-column body so the whole app shares
 // one header look and one "open the left panel" affordance.
-export function PaneHeader({ title, listOpen, onToggleList, subtitle, right }: Props) {
+export function PaneHeader({ title, titleSlot, listOpen, onToggleList, subtitle, right }: Props) {
   return (
     <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] py-3 max-md:px-3 md:px-6">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         {onToggleList && (
           <button
             onClick={onToggleList}
@@ -36,9 +42,13 @@ export function PaneHeader({ title, listOpen, onToggleList, subtitle, right }: P
             <Menu size={18} />
           </button>
         )}
-        <span className="shrink-0 truncate text-sm font-semibold">{title}</span>
-        {subtitle && (
-          <span className="truncate text-sm text-[var(--color-text-dim)]">{subtitle}</span>
+        {titleSlot ?? (
+          <>
+            {title && <span className="shrink-0 truncate text-sm font-semibold">{title}</span>}
+            {subtitle && (
+              <span className="truncate text-sm text-[var(--color-text-dim)]">{subtitle}</span>
+            )}
+          </>
         )}
       </div>
       {right && <div className="flex shrink-0 items-center gap-2">{right}</div>}

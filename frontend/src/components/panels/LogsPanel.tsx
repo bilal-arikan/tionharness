@@ -5,6 +5,7 @@ import type { LogEntry } from '../../types'
 import { groupConsecutive } from '../../lib/logGroup'
 import { CopyPathButton } from '../CopyPathButton'
 import { RevealButton } from '../RevealButton'
+import { PaneHeader } from '../common'
 
 interface Props {
   onError: (msg: string) => void
@@ -115,7 +116,26 @@ export function LogsPanel({ onError }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Controls */}
+      <PaneHeader
+        title="Loglar"
+        right={
+          <>
+            <span className="text-xs text-[var(--color-text-dim)]">
+              {group && rows.length !== logs.length
+                ? `${rows.length} satır · ${logs.length} kayıt`
+                : `${logs.length} kayıt`}
+            </span>
+            <CopyPathButton path={logPath} title="Log dosyası yolunu kopyala" />
+            <RevealButton
+              onReveal={() => api.revealLogs().catch((e) => onError((e as Error).message))}
+              label="Aç"
+              labelClassName="hidden sm:inline"
+              title="Log klasörünü aç"
+            />
+          </>
+        }
+      />
+      {/* Filters (count / copy-path / open-folder moved to the title bar above). */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-2">
         <div className="flex items-center gap-1">
           {LEVELS.map((l) => (
@@ -152,15 +172,6 @@ export function LogsPanel({ onError }: Props) {
         >
           Yenile
         </button>
-        {/* On-disk log file: copy its path or open its folder in Explorer. */}
-        <CopyPathButton path={logPath} title="Log dosyası yolunu kopyala" />
-        <RevealButton
-          onReveal={() => api.revealLogs().catch((e) => onError((e as Error).message))}
-          title="Log klasörünü aç"
-        />
-        <span className="text-xs text-[var(--color-text-dim)]">
-          {group && rows.length !== logs.length ? `${rows.length} satır · ${logs.length} kayıt` : `${logs.length} kayıt`}
-        </span>
       </div>
 
       {/* Log lines */}

@@ -108,7 +108,7 @@ const VIEW_TITLE: Record<View, string> = {
 // in-pane headers) reach the very top — matching the chat/memory layout where the
 // sidebar is a sibling of <main>. Errors for these still surface via ErrorToast.
 const HEADERLESS_VIEWS = new Set<View>([
-  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs',
+  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs', 'budget', 'board',
 ])
 
 export default function App() {
