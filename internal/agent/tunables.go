@@ -136,6 +136,14 @@ type Tunables struct {
 	progressPersist bool // persist the checklist to disk (default on)
 	progressResume  bool // inject a resumed-progress block on a fresh session (default on)
 
+	// Autonomous self-completion: when an autonomous turn (scheduler/spawn/wake)
+	// ends with unfinished work (open todos, or a trailing lazy-tool activation
+	// whose tools only take effect next turn), the runtime auto-issues a
+	// continuation turn — up to autoContinueMax times — so unattended work
+	// finishes instead of stalling. Budget-gated; stops on no tool progress.
+	autoContinue    bool // enable autonomous auto-continue (default on)
+	autoContinueMax int  // 0 → DefaultAutoContinueMax
+
 	// Per-session debug journal (parallel observability stream). When on, the
 	// runtime appends structured events (turn timings, llm-call token spend, tool
 	// latency/size, hook decisions, errors, compaction, recovery) to each
@@ -176,6 +184,10 @@ type Tunables struct {
 // default when no explicit cap is configured.
 const DefaultDebugJournalCap = 5000
 
+// DefaultAutoContinueMax bounds how many extra turns an autonomous run will
+// auto-issue to finish work the agent left pending, when no explicit max is set.
+const DefaultAutoContinueMax = 10
+
 // Default context-reset / handoff bounds.
 const (
 	DefaultHandoffPressure = 0.90 // auto-reset only well above the memory-pressure warning (0.70)
@@ -207,6 +219,11 @@ func NewTunables() *Tunables {
 		// transparent to existing behaviour. Production overrides from settings.
 		progressPersist: true,
 		progressResume:  true,
+		// Autonomous self-completion on by default (production overrides from
+		// settings via SetAutoContinue): an unattended turn that stalls after tool
+		// activation or with open todos continues itself, bounded at 10 turns.
+		autoContinue:    true,
+		autoContinueMax: DefaultAutoContinueMax,
 		// Debug journal on by default: it only adds a per-session file and is
 		// transparent to existing behaviour. Production overrides from settings.
 		debugJournal:    true,
@@ -873,6 +890,35 @@ func (t *Tunables) DebugJournalCap() int {
 		return DefaultDebugJournalCap
 	}
 	return t.debugJournalCap
+}
+
+// SetAutoContinue configures autonomous self-completion: whether an autonomous
+// turn that ends with unfinished work auto-issues continuation turns, and the max
+// number of such extra turns per run. A value of 0 for max selects the built-in
+// default (DefaultAutoContinueMax).
+func (t *Tunables) SetAutoContinue(enabled bool, max int) {
+	t.mu.Lock()
+	t.autoContinue = enabled
+	t.autoContinueMax = max
+	t.mu.Unlock()
+}
+
+// AutoContinue reports whether autonomous auto-continue is enabled.
+func (t *Tunables) AutoContinue() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.autoContinue
+}
+
+// AutoContinueMax returns the max number of auto-issued continuation turns per
+// autonomous run (default when unset). A returned value is a hard ceiling.
+func (t *Tunables) AutoContinueMax() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.autoContinueMax <= 0 {
+		return DefaultAutoContinueMax
+	}
+	return t.autoContinueMax
 }
 
 // SetFileFreshnessGuard toggles the Edit/Write read-before-write freshness guard

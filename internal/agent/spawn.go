@@ -205,6 +205,10 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 		r.logger.Warn("spawn: failed to record reply", "session", sessionID, "error", err)
 	}
 	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID)
+	// Self-completion: if the spawned turn stalled with unfinished work (activated
+	// tools it never used, or open todos), keep it going — there is no human to send
+	// the follow-up. No-op when the turn finished cleanly. Bounded + budget-gated.
+	r.maybeAutoContinue(ctx, agent, sessionID, KindSpawn, steps)
 	r.emitSpawnEvent(agent, sessionID, prompt, true)
 	// Auto-tag any tool errors / goal state from this spawned turn.
 	r.AutoTagTurn(ctx, sessionID, steps, "")
