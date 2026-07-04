@@ -1,5 +1,6 @@
 import { Boxes, Settings, type LucideIcon } from 'lucide-react'
 import { NAV, type View } from './NavRail'
+import { useDragScroll } from '../hooks/useDragScroll'
 
 interface Props {
   view: View
@@ -22,10 +23,15 @@ const PINNED: { key: View; label: string; icon: LucideIcon }[] = [
 // no "more" drawer, no hidden items. Hidden on `md+` where the rail takes over.
 export function MobileNavBar({ view, onSelectView, busyViews, unreadViews, dirtyViews }: Props) {
   const items = [...NAV, ...PINNED]
+  // Mouse click-and-drag panning (touch already scrolls natively).
+  const drag = useDragScroll<HTMLElement>()
   return (
     <nav
+      ref={drag.ref}
+      onMouseDown={drag.onMouseDown}
+      onClickCapture={drag.onClickCapture}
       aria-label="Ana gezinme"
-      className="fixed inset-x-0 bottom-0 z-50 flex gap-1 overflow-x-auto border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 pt-1 shadow-[var(--shadow-sm)] md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 flex cursor-grab gap-1 overflow-x-auto border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 pt-1 shadow-[var(--shadow-sm)] select-none active:cursor-grabbing md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
     >
       {items.map((item) => {
