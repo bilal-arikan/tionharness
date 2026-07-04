@@ -387,6 +387,7 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/flows", s.handleCreateFlow)
 	mux.HandleFunc("PUT /api/flows/{id}", s.handleUpdateFlow)
 	mux.HandleFunc("PUT /api/flows/{id}/tags", s.handleSetFlowTags)
+	mux.HandleFunc("PUT /api/flows/{id}/emoji", s.handleSetFlowEmoji)
 	mux.HandleFunc("DELETE /api/flows/{id}", s.handleDeleteFlow)
 	// Locate the flow on disk: copy its path or open its folder in Explorer.
 	mux.HandleFunc("GET /api/flows/{id}/path", s.handleFlowPath)

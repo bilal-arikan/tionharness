@@ -1,7 +1,8 @@
 // Shared visual styling for flow canvas nodes: per-type accent + run status.
 import { createContext, useContext } from 'react'
 import { useStore } from '@xyflow/react'
-import type { Agent } from '../../types'
+import { Bot, Split, Zap, Timer, Puzzle, Circle, type LucideIcon } from 'lucide-react'
+import type { Agent, FlowNodeType } from '../../types'
 import type { NodeStatus } from '../../lib/flowGraph'
 
 // useIsEndNode reports whether a node is terminal (has no outgoing edge), so the
@@ -37,19 +38,30 @@ export function useAgent(agentId?: string): Agent | undefined {
 export interface NodeChrome {
   accent: string // border/handle color
   label: string
-  icon: string
+  Icon: LucideIcon // monochrome (theme-colored) type glyph — inherits currentColor
+}
+
+// Monochrome lucide glyph per node type. Rendered in the accent-colored node
+// header (white via currentColor) AND in the "Node ekle" palette tree (theme
+// text color) — replacing the previous multicolor emojis.
+export const NODE_ICONS: Record<FlowNodeType, LucideIcon> = {
+  agent: Bot,
+  branch: Split,
+  parallel: Zap,
+  delay: Timer,
+  transform: Puzzle,
 }
 
 const CHROME: Record<string, NodeChrome> = {
-  agent: { accent: 'var(--color-accent)', label: 'Ajan', icon: '🤖' },
-  branch: { accent: '#d97706', label: 'Dallanma', icon: '🔀' },
-  parallel: { accent: '#7c3aed', label: 'Paralel', icon: '⚡' },
-  delay: { accent: '#0891b2', label: 'Bekle', icon: '⏱️' },
-  transform: { accent: '#059669', label: 'Birleştir', icon: '🧩' },
+  agent: { accent: 'var(--color-accent)', label: 'Ajan', Icon: NODE_ICONS.agent },
+  branch: { accent: '#d97706', label: 'Dallanma', Icon: NODE_ICONS.branch },
+  parallel: { accent: '#7c3aed', label: 'Paralel', Icon: NODE_ICONS.parallel },
+  delay: { accent: '#0891b2', label: 'Bekle', Icon: NODE_ICONS.delay },
+  transform: { accent: '#059669', label: 'Birleştir', Icon: NODE_ICONS.transform },
 }
 
 export function chromeFor(type: string): NodeChrome {
-  return CHROME[type] ?? { accent: 'var(--color-border)', label: type, icon: '•' }
+  return CHROME[type] ?? { accent: 'var(--color-border)', label: type, Icon: Circle }
 }
 
 // statusRing returns an extra box-shadow style for a node's run status.

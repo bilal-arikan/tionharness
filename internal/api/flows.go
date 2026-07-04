@@ -30,6 +30,7 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 type flowReq struct {
 	Name  string               `json:"name"`
 	Graph *orchestration.Graph `json:"graph"`
+	Emoji string               `json:"emoji"` // optional cosmetic glyph (create only; edited via /emoji)
 }
 
 // marshalGraph validates and serialises a graph, defaulting to an empty object.
@@ -68,6 +69,7 @@ func (s *Server) handleCreateFlow(w http.ResponseWriter, r *http.Request) {
 	flow, err := ws(r).DB.CreateFlow(r.Context(), db.Flow{
 		Name:  req.Name,
 		Graph: graph,
+		Emoji: strings.TrimSpace(req.Emoji),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -97,6 +99,28 @@ func (s *Server) handleUpdateFlow(w http.ResponseWriter, r *http.Request) {
 	}
 	flow, _ := ws(r).DB.GetFlow(r.Context(), id)
 	writeJSON(w, http.StatusOK, flow)
+}
+
+type flowEmojiReq struct {
+	Emoji string `json:"emoji"`
+}
+
+// handleSetFlowEmoji replaces a flow's cosmetic emoji only (independent of the
+// name/graph save), so changing the glyph never round-trips the whole graph.
+func (s *Server) handleSetFlowEmoji(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	req, ok := bindJSON[flowEmojiReq](w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	if _, err := ws(r).DB.GetFlow(ctx, id); writeDBError(w, err, "flow not found") {
+		return
+	}
+	if err := ws(r).DB.SetFlowEmoji(ctx, id, strings.TrimSpace(req.Emoji)); writeDBError(w, err, "") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "emoji": strings.TrimSpace(req.Emoji)})
 }
 
 // handleFlowPath returns the absolute path of a flow's on-disk JSON file.

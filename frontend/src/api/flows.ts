@@ -140,10 +140,10 @@ async function streamRunFlowStandalone(
 
 export const flowApi = {
   listFlows: () => req<Flow[]>('/api/flows'),
-  createFlow: (name: string, graph?: FlowGraph) =>
+  createFlow: (name: string, graph?: FlowGraph, emoji?: string) =>
     req<Flow>('/api/flows', {
       method: 'POST',
-      body: JSON.stringify({ name, graph }),
+      body: JSON.stringify({ name, graph, emoji }),
     }),
   updateFlow: (id: string, name: string, graph: FlowGraph) =>
     req<Flow>(`/api/flows/${id}`, {
@@ -157,6 +157,12 @@ export const flowApi = {
     req<{ id: string; tags: string[] }>(`/api/flows/${id}/tags`, {
       method: 'PUT',
       body: JSON.stringify({ tags }),
+    }),
+  // Replace a flow's cosmetic emoji (persisted independently of name/graph).
+  setFlowEmoji: (id: string, emoji: string) =>
+    req<{ id: string; emoji: string }>(`/api/flows/${id}/emoji`, {
+      method: 'PUT',
+      body: JSON.stringify({ emoji }),
     }),
   // Absolute path of the flow's on-disk JSON file (copy-to-clipboard).
   flowPath: (id: string) => req<{ path: string }>(`/api/flows/${id}/path`),

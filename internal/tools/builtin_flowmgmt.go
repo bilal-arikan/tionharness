@@ -102,7 +102,8 @@ func (CreateFlowTool) Def() providers.ToolDef {
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Flow name"},
-				"graph":{"type":"string","description":"The orchestration graph as a JSON string"}
+				"graph":{"type":"string","description":"The orchestration graph as a JSON string"},
+				"emoji":{"type":"string","description":"Optional cosmetic emoji shown wherever the flow is listed/picked"}
 			},
 			"required":["name"],
 			"additionalProperties":false
@@ -123,6 +124,7 @@ func (t CreateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 	var in struct {
 		Name  string `json:"name"`
 		Graph string `json:"graph"`
+		Emoji string `json:"emoji"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -137,6 +139,7 @@ func (t CreateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 	created, err := t.d.db.CreateFlow(ctx, db.Flow{
 		Name:      in.Name,
 		Graph:     strings.TrimSpace(in.Graph),
+		Emoji:     strings.TrimSpace(in.Emoji),
 		CreatedBy: t.d.actorID,
 	})
 	if err != nil {
@@ -164,7 +167,8 @@ func (UpdateFlowTool) Def() providers.ToolDef {
 				"id":{"type":"string","description":"The flow id (see list_flows)"},
 				"name":{"type":"string"},
 				"graph":{"type":"string","description":"The orchestration graph as a JSON string"},
-				"tags":{"type":"array","items":{"type":"string"},"description":"Replace the flow's organizational tags with this exact set"}
+				"tags":{"type":"array","items":{"type":"string"},"description":"Replace the flow's organizational tags with this exact set"},
+				"emoji":{"type":"string","description":"Replace the flow's cosmetic emoji (empty string clears it)"}
 			},
 			"required":["id"],
 			"additionalProperties":false
@@ -184,6 +188,7 @@ func (t UpdateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 		Name  *string   `json:"name"`
 		Graph *string   `json:"graph"`
 		Tags  *[]string `json:"tags"`
+		Emoji *string   `json:"emoji"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -213,6 +218,13 @@ func (t UpdateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.Tags != nil {
 		if err := t.d.db.SetFlowTags(ctx, in.ID, *in.Tags); err != nil {
 			return "", fmt.Errorf("set flow tags: %w", err)
+		}
+	}
+	// Emoji is persisted separately too (UpdateFlow does not touch it), so it
+	// survives independent name/graph saves.
+	if in.Emoji != nil {
+		if err := t.d.db.SetFlowEmoji(ctx, in.ID, strings.TrimSpace(*in.Emoji)); err != nil {
+			return "", fmt.Errorf("set flow emoji: %w", err)
 		}
 	}
 	b, _ := json.Marshal(map[string]string{"id": in.ID, "action": "updated"})
@@ -285,6 +297,7 @@ func (t ListFlowsTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 	type row struct {
 		ID             string `json:"id"`
 		Name           string `json:"name"`
+		Emoji          string `json:"emoji,omitempty"`
 		CreatedByAgent bool   `json:"createdByAgent"`
 	}
 	out := make([]row, 0, len(flows))
@@ -292,6 +305,7 @@ func (t ListFlowsTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 		out = append(out, row{
 			ID:             f.ID,
 			Name:           f.Name,
+			Emoji:          f.Emoji,
 			CreatedByAgent: f.CreatedBy != "",
 		})
 	}
@@ -343,6 +357,7 @@ func (t GetFlowTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	b, _ := json.Marshal(map[string]any{
 		"id":             f.ID,
 		"name":           f.Name,
+		"emoji":          f.Emoji,
 		"graph":          f.Graph,
 		"createdByAgent": f.CreatedBy != "",
 	})

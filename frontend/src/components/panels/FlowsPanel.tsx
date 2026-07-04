@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
-import { Loader2, XCircle } from 'lucide-react'
+import { Loader2, XCircle, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
+import { EmojiField } from '../common/EmojiField'
+import { NODE_ICONS } from '../flow/nodeStyles'
+import { normalizeAvatar } from '../../lib/avatar'
 import { CopyPathButton } from '../CopyPathButton'
 import { RevealButton } from '../RevealButton'
 import { useRegisterDirty } from '../../lib/dirtySignals'
@@ -9,7 +12,7 @@ import type { FlowNodeEvent } from '../../api/flows'
 import { Markdown } from '../markdown/Markdown'
 import { FlowCanvas, FLOW_NODE_DND_MIME, type EdgeStyle } from '../flow/FlowCanvas'
 import { TemplatePreview } from '../flow/TemplatePreview'
-import { RunView } from '../flow/RunView'
+import { RunView, STATUS_LABEL, statusColor } from '../flow/RunView'
 import { NodeInspector } from '../flow/NodeInspector'
 import { FLOW_TEMPLATES, type FlowTemplate } from '../../lib/flowTemplates'
 import {
@@ -28,7 +31,7 @@ import {
 } from '../common/SidebarChrome'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
 import { useCollapsibleList } from '../../hooks/useCollapsibleList'
-import { Play, Trash2, X } from 'lucide-react'
+import { Play, Trash2, X, RotateCcw } from 'lucide-react'
 
 interface Props {
   agents: Agent[]
@@ -37,12 +40,14 @@ interface Props {
   openFlowId?: string | null
 }
 
-const NODE_TYPES: { value: FlowNodeType; label: string; icon: string }[] = [
-  { value: 'agent', label: 'Ajan', icon: '🤖' },
-  { value: 'branch', label: 'Dallanma', icon: '🔀' },
-  { value: 'parallel', label: 'Paralel', icon: '⚡' },
-  { value: 'delay', label: 'Bekle', icon: '⏱️' },
-  { value: 'transform', label: 'Birleştir', icon: '🧩' },
+// Node palette entries. Icons are the shared monochrome (theme-colored) lucide
+// glyphs from nodeStyles, so the palette tree matches the canvas node headers.
+const NODE_TYPES: { value: FlowNodeType; label: string; Icon: LucideIcon }[] = [
+  { value: 'agent', label: 'Ajan', Icon: NODE_ICONS.agent },
+  { value: 'branch', label: 'Dallanma', Icon: NODE_ICONS.branch },
+  { value: 'parallel', label: 'Paralel', Icon: NODE_ICONS.parallel },
+  { value: 'delay', label: 'Bekle', Icon: NODE_ICONS.delay },
+  { value: 'transform', label: 'Birleştir', Icon: NODE_ICONS.transform },
 ]
 
 const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [
@@ -72,6 +77,9 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
 
   // Editor state for the selected flow.
   const [name, setName] = useState('')
+  // Cosmetic emoji for the selected flow. Persisted independently (setFlowEmoji),
+  // like tags — not via the Save button — so it survives graph/name saves.
+  const [emoji, setEmoji] = useState('')
   // Flow tags persist independently (setFlowTags), not via the Save button.
   const [tags, setTags] = useState<string[]>([])
   const [start, setStart] = useState('')
@@ -144,6 +152,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
       setFlowPath('')
       api.flowPath(f.id).then((r) => setFlowPath(r.path)).catch(() => setFlowPath(''))
       setName(f.name)
+      setEmoji(f.emoji ?? '')
       setTags(f.tags ?? [])
       setRun(null)
       setInput('')
@@ -316,6 +325,19 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
       const f = await api.updateFlow(selectedId, name, graph)
       setFlows((prev) => prev.map((x) => (x.id === f.id ? f : x)))
       onError('') // clear
+    } catch (e) {
+      onError((e as Error).message)
+    }
+  }
+
+  // changeEmoji persists the selected flow's emoji immediately (independent of
+  // the Save button) and syncs the local list so the glyph updates everywhere.
+  const changeEmoji = async (next: string) => {
+    setEmoji(next) // optimistic
+    if (!selectedId) return
+    try {
+      await api.setFlowEmoji(selectedId, next)
+      setFlows((prev) => prev.map((x) => (x.id === selectedId ? { ...x, emoji: next } : x)))
     } catch (e) {
       onError((e as Error).message)
     }
@@ -538,7 +560,9 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                 return (flows.find((f) => f.id === rn.flowId)?.name ?? '').toLowerCase().includes(qq)
               })
               .map((rn) => {
-              const fname = flows.find((f) => f.id === rn.flowId)?.name ?? '（silinmiş akış）'
+              const rflow = flows.find((f) => f.id === rn.flowId)
+              const fname = rflow?.name ?? '（silinmiş akış）'
+              const femoji = normalizeAvatar(rflow?.emoji)
               const badge =
                 rn.status === 'success' ? '✓' : rn.status === 'failure' ? '✕' : '▶'
               const badgeColor =
@@ -559,7 +583,10 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                   >
                     <span className={`mt-0.5 text-xs ${badgeColor}`}>{badge}</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate">{fname}</span>
+                      <span className="block truncate">
+                        {femoji && <span className="mr-1 leading-none">{femoji}</span>}
+                        {fname}
+                      </span>
                       <span className="mt-0.5 block truncate text-xs text-[var(--color-text-dim)]">
                         {new Date(rn.createdAt * 1000).toLocaleString()}
                       </span>
@@ -596,11 +623,31 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                 }`}
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate">{f.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    {normalizeAvatar(f.emoji) && (
+                      <span className="shrink-0 leading-none">{normalizeAvatar(f.emoji)}</span>
+                    )}
+                    <span className="truncate">{f.name}</span>
+                  </span>
                   <span className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
                     <span className="truncate font-mono text-[11px]">{f.id}</span>
                     <span className="flex-shrink-0">· {flowNodeCount(f.graph)} node</span>
                   </span>
+                  {(f.tags?.length ?? 0) > 0 && (
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {f.tags!.slice(0, 4).map((t) => (
+                        <span
+                          key={t}
+                          className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]"
+                        >
+                          #{t}
+                        </span>
+                      ))}
+                      {f.tags!.length > 4 && (
+                        <span className="text-[10px] text-[var(--color-text-dim)]">+{f.tags!.length - 4}</span>
+                      )}
+                    </span>
+                  )}
                 </span>
                 <span
                   onClick={(e) => {
@@ -641,22 +688,105 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
       {/* Main column: the title bar sits ONLY here (right of the list), like chat. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <PaneHeader
-          title="Akışlar"
-          subtitle={
-            tab === 'templates'
-              ? selectedTemplate
-                ? `· ${selectedTemplate.name}`
-                : undefined
-              : tab === 'runs'
-                ? selectedRun
-                  ? '· Koşu'
-                  : undefined
-                : selectedId
-                  ? `· ${name || selectedId}`
-                  : undefined
-          }
           listOpen={flowsListOpen}
           onToggleList={toggleFlowsList}
+          // Detail views (flow editor / template preview / run inspector) put their
+          // own toolbar directly in the top bar via titleSlot + right — no redundant
+          // "Akışlar" title / subtitle. Empty/list states keep the "Akışlar" title.
+          title={
+            (tab === 'flows' && selectedId) ||
+            (tab === 'templates' && selectedTemplate) ||
+            (tab === 'runs' && selectedRun)
+              ? undefined
+              : 'Akışlar'
+          }
+          titleSlot={
+            tab === 'flows' && selectedId ? (
+              <>
+                <EmojiField value={emoji} onChange={changeEmoji} clearLabel="🔀" />
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Akış adı"
+                  className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-3 py-1.5 text-sm font-medium outline-none"
+                />
+                <span
+                  className="flex-shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-text-dim)]"
+                  title="Akış ID (dosya adı)"
+                >
+                  {selectedId}
+                </span>
+              </>
+            ) : tab === 'templates' && selectedTemplate ? (
+              <span className="flex min-w-0 flex-col leading-tight">
+                <span className="truncate text-sm font-medium">{selectedTemplate.name}</span>
+                {selectedTemplate.description && (
+                  <span className="truncate text-xs text-[var(--color-text-dim)]">
+                    {selectedTemplate.description}
+                  </span>
+                )}
+              </span>
+            ) : tab === 'runs' && selectedRun ? (
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-sm font-medium">
+                  {(() => {
+                    const rf = flows.find((f) => f.id === selectedRun.flowId)
+                    const e = normalizeAvatar(rf?.emoji)
+                    return `${e ? e + ' ' : ''}${rf?.name ?? '（silinmiş akış）'}`
+                  })()}
+                </span>
+                <span className={`flex-shrink-0 text-xs ${statusColor(selectedRun.status)}`}>
+                  {STATUS_LABEL[selectedRun.status] ?? selectedRun.status}
+                </span>
+                <span className="flex-shrink-0 text-xs text-[var(--color-text-dim)]">
+                  {new Date(selectedRun.createdAt * 1000).toLocaleString()}
+                </span>
+              </span>
+            ) : undefined
+          }
+          right={
+            tab === 'flows' && selectedId ? (
+              <>
+                <CopyPathButton path={flowPath} label="Yolu kopyala" labelClassName="hidden" title="Akış yolunu kopyala" />
+                <RevealButton
+                  onReveal={() => {
+                    if (selectedId) api.revealFlow(selectedId).catch((e) => onError((e as Error).message))
+                  }}
+                  disabled={!selectedId}
+                  label="Aç"
+                  labelClassName="hidden sm:inline"
+                  title="Akış klasörünü aç"
+                />
+                <Button onClick={saveFlow} size="lg" className="flex-shrink-0">
+                  Kaydet
+                </Button>
+              </>
+            ) : tab === 'templates' && selectedTemplate ? (
+              <>
+                <span className="hidden text-xs text-[var(--color-text-dim)] sm:inline">
+                  salt-okunur önizleme
+                </span>
+                <Button onClick={() => instantiateTemplate(selectedTemplate)} size="lg" className="flex-shrink-0">
+                  + Bu şablondan akış oluştur
+                </Button>
+              </>
+            ) : tab === 'runs' && selectedRun ? (
+              <button
+                type="button"
+                onClick={() => rerunRun(selectedRun)}
+                disabled={rerunning || selectedRun.status === 'running' || !flows.some((f) => f.id === selectedRun.flowId)}
+                title={
+                  !flows.some((f) => f.id === selectedRun.flowId)
+                    ? 'Akış silinmiş — tekrar çalıştırılamaz'
+                    : 'Bu koşuyu aynı girdiyle tekrar çalıştır'
+                }
+                className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RotateCcw size={13} className={rerunning ? 'animate-spin' : ''} />
+                {rerunning ? 'Çalışıyor…' : 'Tekrar çalıştır'}
+              </button>
+            ) : undefined
+          }
         />
         {/* Main: template preview or flow editor */}
         {tab === 'templates' ? (
@@ -668,25 +798,10 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               </p>
             </div>
           ) : (
-            <>
-              <div className="flex items-center gap-2 border-b border-[var(--color-border)] p-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{selectedTemplate.name}</div>
-                  <div className="truncate text-xs text-[var(--color-text-dim)]">
-                    {selectedTemplate.description}
-                  </div>
-                </div>
-                <span className="flex-shrink-0 text-xs text-[var(--color-text-dim)]">
-                  salt-okunur önizleme
-                </span>
-                <Button onClick={() => instantiateTemplate(selectedTemplate)} size="lg" className="flex-shrink-0">
-                  + Bu şablondan akış oluştur
-                </Button>
-              </div>
-              <div className="min-h-0 flex-1">
-                <TemplatePreview graph={selectedTemplate.graph} agents={agents} />
-              </div>
-            </>
+            // Template name/description + actions now live in the top PaneHeader.
+            <div className="min-h-0 flex-1">
+              <TemplatePreview graph={selectedTemplate.graph} agents={agents} />
+            </div>
           )}
         </div>
       ) : tab === 'runs' ? (
@@ -704,6 +819,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             agents={agents}
             onRerun={rerunRun}
             rerunning={rerunning}
+            hideSummary
           />
         )
       ) : !selectedId ? (
@@ -714,37 +830,8 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         </div>
       ) : (
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Meta toolbar: name + file actions + save (title only — no description) */}
-          <div className="flex items-center gap-2 border-b border-[var(--color-border)] p-3">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Akış adı"
-              className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium outline-none"
-            />
-            {/* Flow id + on-disk location (copy path / open folder). */}
-            <span
-              className="flex-shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-text-dim)]"
-              title="Akış ID (dosya adı)"
-            >
-              {selectedId}
-            </span>
-            <CopyPathButton path={flowPath} label="Yolu kopyala" labelClassName="hidden" title="Akış yolunu kopyala" />
-            <RevealButton
-              onReveal={() => {
-                if (selectedId) api.revealFlow(selectedId).catch((e) => onError((e as Error).message))
-              }}
-              disabled={!selectedId}
-              label="Aç"
-              labelClassName="hidden sm:inline"
-              title="Akış klasörünü aç"
-            />
-            <Button onClick={saveFlow} size="lg" className="flex-shrink-0">
-              Kaydet
-            </Button>
-          </div>
-
-          {/* Node palette (add nodes + flow-level presentation) + canvas */}
+          {/* Node palette (add nodes + flow-level presentation) + canvas. The flow
+              name/id + file actions + save now live in the top PaneHeader above. */}
           <div className="flex min-h-0 flex-1">
             <div className="w-40 flex-shrink-0 space-y-2 overflow-y-auto border-r border-[var(--color-border)] p-2 max-md:w-32">
               <div className="px-1 text-xs font-semibold text-[var(--color-text-dim)]">
@@ -764,7 +851,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                   onClick={() => addNode(t.value)}
                   className="flex w-full cursor-grab items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-left text-xs hover:border-[var(--color-accent)] active:cursor-grabbing"
                 >
-                  <span className="text-base">{t.icon}</span>
+                  <t.Icon size={15} className="shrink-0 text-[var(--color-text-dim)]" />
                   <span>{t.label}</span>
                 </button>
               ))}
@@ -780,7 +867,10 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                     tags={tags}
                     onChange={(next) => {
                       setTags(next)
-                      if (selectedId) api.setFlowTags(selectedId, next).catch((e) => onError((e as Error).message))
+                      if (!selectedId) return
+                      // Sync the list array too so the flow row's tag chips refresh live.
+                      setFlows((prev) => prev.map((x) => (x.id === selectedId ? { ...x, tags: next } : x)))
+                      api.setFlowTags(selectedId, next).catch((e) => onError((e as Error).message))
                     }}
                     placeholder="Etiket…"
                     className="py-1"
@@ -851,6 +941,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
                     node={selectedNode}
                     agents={agents}
                     isStart={start === selectedNode.id}
+                    allNodes={nodes.map((n) => n.data.node)}
                     onPatch={patchSelected}
                     onMakeStart={makeStart}
                     onDuplicate={duplicateSelected}

@@ -38,6 +38,7 @@ export interface FlowGraph {
 export interface Flow {
   id: string
   name: string
+  emoji?: string // optional cosmetic glyph shown wherever the flow is listed/picked
   graph: string // JSON FlowGraph
   tags?: string[] // free-form organizational labels (editable by user + agents)
   createdAt: number

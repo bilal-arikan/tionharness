@@ -1,33 +1,124 @@
-import type { Agent, BranchMatchMode, FlowNode, FlowNodeType } from '../../types'
+import { useState } from 'react'
+import { Info } from 'lucide-react'
+import type { Agent, BranchMatchMode, FlowNode } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { PromptEditor } from '../common'
+import { chromeFor } from './nodeStyles'
 
 interface Props {
   node: FlowNode
   agents: Agent[]
   isStart: boolean
+  // All nodes in the flow (for the {{node.<id>}} variable helper). Excludes nothing;
+  // the helper filters out the current node itself.
+  allNodes: FlowNode[]
   onPatch: (patch: Partial<FlowNode>) => void
   onMakeStart: () => void
   onDuplicate: () => void
   onDelete: () => void
 }
 
-const TYPES: { value: FlowNodeType; label: string }[] = [
-  { value: 'agent', label: 'Ajan' },
-  { value: 'branch', label: 'Dallanma' },
-  { value: 'parallel', label: 'Paralel' },
-  { value: 'delay', label: 'Bekle' },
-  { value: 'transform', label: 'Birleştir' },
-]
-
 const input =
   'w-full rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none'
 
-// NodeInspector edits the currently selected node. Routing targets are managed
-// by drawing edges on the canvas; here we edit a node's intrinsic fields
-// (type, title, agent, prompt, branch conditions). Edge re-targeting on the
-// canvas stays the single source of truth for `next`/`parallel`/`joinNext`.
-export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onDuplicate, onDelete }: Props) {
+// FlowVarsButton is an ℹ️ popover listing the template placeholders usable in a
+// node's prompt/template, mirroring the Automations prompt-vars helper. Static
+// entries ({{input}}, {{last}}) plus one {{node.<id>}} per OTHER node in the flow.
+// Clicking a row appends the placeholder to the target field.
+function FlowVarsButton({
+  nodeRefs,
+  onInsert,
+}: {
+  nodeRefs: { id: string; title: string }[]
+  onInsert: (text: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const statics: { name: string; desc: string }[] = [
+    { name: '{{input}}', desc: 'Akışın girdisi (RunFlow input)' },
+    { name: '{{last}}', desc: 'En son çalışan node’un çıktısı' },
+  ]
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`rounded p-0.5 transition hover:text-[var(--color-accent)] ${open ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'}`}
+        title="Kullanılabilir değişkenler"
+        aria-label="Kullanılabilir değişkenler"
+      >
+        <Info size={13} />
+      </button>
+      {open && (
+        <>
+          {/* Click-away backdrop closes the popover. */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute bottom-full left-0 z-20 mb-1 w-[340px] max-w-[90vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
+            <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--color-text-dim)]">
+              Node’lar arası değişkenler (tıkla → ekle)
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {statics.map((v) => (
+                <button
+                  key={v.name}
+                  type="button"
+                  onClick={() => {
+                    onInsert(v.name)
+                    setOpen(false)
+                  }}
+                  className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]"
+                  title="Alana ekle"
+                >
+                  <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
+                    {v.name}
+                  </code>
+                  <span className="text-[11px] text-[var(--color-text-dim)]">{v.desc}</span>
+                </button>
+              ))}
+              {nodeRefs.length > 0 && (
+                <div className="mt-1 border-t border-[var(--color-border)] pt-1">
+                  <div className="mb-0.5 px-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+                    Belirli node çıktısı
+                  </div>
+                  {nodeRefs.map((n) => {
+                    const name = `{{node.${n.id}}}`
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => {
+                          onInsert(name)
+                          setOpen(false)
+                        }}
+                        className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]"
+                        title="Alana ekle"
+                      >
+                        <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
+                          {name}
+                        </code>
+                        <span className="truncate text-[11px] text-[var(--color-text-dim)]">{n.title || n.id}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </span>
+  )
+}
+
+// NodeInspector edits the currently selected node. A node's TYPE is fixed once
+// created (it is chosen from the palette and never changes here) — the inspector
+// only edits its intrinsic fields (title, agent, prompt, branch conditions).
+// Routing (next/parallel/joinNext) is managed by drawing edges on the canvas.
+export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onMakeStart, onDuplicate, onDelete }: Props) {
+  const chrome = chromeFor(node.type)
+  // Other nodes, for the {{node.<id>}} variable helper (a node can't reference itself).
+  const nodeRefs = allNodes
+    .filter((n) => n.id !== node.id)
+    .map((n) => ({ id: n.id, title: n.title ?? '' }))
   return (
     <div className="space-y-3 text-sm">
       <div className="flex items-center justify-between gap-2">
@@ -50,20 +141,18 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
         </div>
       </div>
 
-      <label className="block">
-        <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Tür</span>
-        <select
-          value={node.type}
-          onChange={(e) => onPatch({ type: e.target.value as FlowNodeType })}
-          className={input}
+      {/* Node type is fixed after creation — shown read-only with its monochrome
+          type glyph (no type <select>; the type is chosen once from the palette). */}
+      <div className="flex items-center gap-2">
+        <span
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded"
+          style={{ background: chrome.accent, color: '#fff' }}
         >
-          {TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          <chrome.Icon size={14} />
+        </span>
+        <span className="text-sm font-medium">{chrome.label}</span>
+        <span className="text-[11px] text-[var(--color-text-dim)]">(tür sabit)</span>
+      </div>
 
       <label className="block">
         <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Başlık</span>
@@ -86,8 +175,14 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
               placeholder="— ajan seç —"
             />
           </div>
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Prompt</span>
+          <div className="block">
+            <div className="mb-1 flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+              <span>Prompt</span>
+              <FlowVarsButton
+                nodeRefs={nodeRefs}
+                onInsert={(t) => onPatch({ prompt: (node.prompt ?? '') + t })}
+              />
+            </div>
             <PromptEditor
               value={node.prompt ?? ''}
               onChange={(v) => onPatch({ prompt: v })}
@@ -96,7 +191,7 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
               mono
               textareaClassName="min-h-48 text-xs"
             />
-          </label>
+          </div>
         </>
       )}
 
@@ -184,8 +279,14 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
       )}
 
       {node.type === 'transform' && (
-        <label className="block">
-          <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Şablon (çıktı)</span>
+        <div className="block">
+          <div className="mb-1 flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+            <span>Şablon (çıktı)</span>
+            <FlowVarsButton
+              nodeRefs={nodeRefs}
+              onInsert={(t) => onPatch({ template: (node.template ?? '') + t })}
+            />
+          </div>
           <PromptEditor
             value={node.template ?? ''}
             onChange={(v) => onPatch({ template: v })}
@@ -194,7 +295,7 @@ export function NodeInspector({ node, agents, isStart, onPatch, onMakeStart, onD
             mono
             textareaClassName="min-h-32 text-xs"
           />
-        </label>
+        </div>
       )}
     </div>
   )

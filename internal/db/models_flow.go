@@ -13,6 +13,10 @@ type Flow struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Graph string `json:"graph"` // JSON
+	// Emoji is an optional cosmetic glyph shown wherever the flow is presented or
+	// picked (flow list, title bar, schedule/automation flow badges, run views).
+	// Persisted independently via SetFlowEmoji so it survives graph/name saves.
+	Emoji string `json:"emoji,omitempty"`
 	// Tags are free-form labels on the flow, editable by both the user (UI) and
 	// agents (set_flow_tags). Organizational only (they do not drive automations —
 	// only session tags do).

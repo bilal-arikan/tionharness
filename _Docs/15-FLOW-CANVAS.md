@@ -296,3 +296,54 @@ durur. `go build`/`vet` + `tsc -b`/`vite build` yeşil.
 - MiniMap arka planı sabit `#0b0e14` (temaya duyarlı değil) — istenirse tema değişkenine bağlanır.
 - Şablon `instantiateTemplate` varsayılan olarak ilk ajanı atıyor; ileride "ajan eşleme" adımı
   (her şablon node'u için ajan seçtirme) eklenebilir.
+
+## Akış emojisi + tek renkli (monokrom) node ikonları (2026-07-04)
+
+İki görsel iyileştirme:
+
+### 1. Akış emojisi (`Flow.emoji`)
+
+Her akışa opsiyonel bir emoji seçilebilir; akışın listelendiği/seçildiği her yerde gösterilir.
+
+- **Model:** `db.Flow.Emoji` (`json:"emoji,omitempty"`). **Bağımsız** kalıcı — `SetFlowEmoji`
+  (mirror `SetFlowTags`); `UpdateFlow` emojiye dokunmaz, böylece ad/graph kaydı emojiyi silmez.
+- **API:** `PUT /api/flows/{id}/emoji` (`handleSetFlowEmoji`). Create isteği de `emoji` alanını kabul eder.
+- **Araçlar:** `create_flow`/`update_flow` `emoji` alanı (update'te boş string temizler),
+  `get_flow`/`list_flows` çıktısına `emoji` eklendi. Provenance yine geçerli.
+- **UI:** `FlowsPanel` başlık çubuğunda ortak `common/EmojiField` (picker), seçim anında
+  `api.setFlowEmoji` ile kalıcı olur (Kaydet butonundan bağımsız — etiketler gibi). Emoji
+  görünen yerler: flow listesi, Koşular listesi + başlığı, `RunView` başlığı, `FlowPicker`
+  (Zamanlama/Otomasyon dropdown'ları), zamanlama/otomasyon satır rozetleri (emoji varsa
+  `Workflow` ikonu yerine gösterilir; metinde `🔀` yerine emoji), TaskBoard kartı + `TaskFormModal`.
+  Tüm gösterimler mojibake'e karşı `normalizeAvatar` ile geçirilir.
+
+### 2. Monokrom node ikonları
+
+Node tür ikonları çok renkli emojilerden (🤖🔀⚡⏱️🧩) **temaya uygun tek renkli lucide
+ikonlarına** geçti: `Bot / Split / Zap / Timer / Puzzle` (`nodeStyles.NODE_ICONS`).
+
+- `NodeChrome.icon: string` → `Icon: LucideIcon`. `NodeShell` başlıkta `<chrome.Icon size={13}/>`
+  render eder (accent zeminde `currentColor` = beyaz). Bilinmeyen tip → `Circle`.
+- **Node ağacı (palet):** `FlowsPanel` "Node ekle" listesi aynı `NODE_ICONS`'u
+  `text-[var(--color-text-dim)]` ile render eder — canvas başlıkları ile tutarlı.
+- Yeni/değişen: `flow/nodeStyles.ts`, `flow/NodeShell.tsx`, `panels/FlowsPanel.tsx`.
+
+## Node türü sabit + değişken info butonu + flow tag görünürlüğü (2026-07-04)
+
+Üç küçük düzenleme (hepsi frontend):
+
+- **Node türü artık sabit.** `NodeInspector`'daki **"Tür" `<select>` kaldırıldı** — bir node'un
+  türü yalnız palet'ten oluşturulurken belirlenir, sonradan değiştirilemez. Yerine **salt-okunur
+  tür başlığı**: monokrom tür ikonu (accent zeminde) + tür adı + "(tür sabit)". (`patchSelected`'in
+  tür-değişim/kenar-budama dalı artık tetiklenmez ama savunma amaçlı duruyor.)
+- **Node'lar arası değişken info butonu.** `NodeInspector`'da agent **Prompt** ve transform
+  **Şablon** alanlarının yanına ℹ️ popover (`FlowVarsButton`) eklendi — Otomasyonlardaki
+  prompt-değişken yardımcısını taklit eder. Flow motoru (`orchestration.render`, engine.go)
+  yalnız şunları destekler: `{{input}}` (akış girdisi), `{{last}}` (en son node çıktısı),
+  `{{node.<id>}}` (belirli node çıktısı). Popover statik iki girdi + akıştaki **diğer** her node
+  için bir `{{node.<id>}}` satırı (node başlığıyla) listeler; tıklayınca alana ekler. Not:
+  otomasyonların `{{date}}/{{time}}/{{agent}}` gibi değişkenleri flow motorunda **yok**.
+- **Flow tag görünürlüğü.** Flow etiketleri zaten atanabiliyordu (sol **Görünüm > Etiket**
+  `TagEditor` → `setFlowTags`); artık **sol flow listesi satırlarında chip** olarak da görünür
+  (ilk 4 + "+N"). Görünüm editörünün `onChange`'i `flows` dizisini de senkronlar → chip'ler canlı yenilenir.
+

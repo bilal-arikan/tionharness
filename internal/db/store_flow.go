@@ -58,6 +58,20 @@ func (d *DB) UpdateFlow(ctx context.Context, f Flow) error {
 	return d.persistFlowLocked(cur)
 }
 
+// SetFlowEmoji replaces a flow's cosmetic emoji without touching its other
+// fields (mirrors SetFlowTags), so it survives independent name/graph saves.
+func (d *DB) SetFlowEmoji(ctx context.Context, id, emoji string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cur, ok := d.flows[id]
+	if !ok {
+		return ErrNotFound
+	}
+	cur.Emoji = emoji
+	cur.UpdatedAt = now()
+	return d.persistFlowLocked(cur)
+}
+
 // SetFlowTags replaces a flow's free-form tags without touching its other fields.
 func (d *DB) SetFlowTags(ctx context.Context, id string, tags []string) error {
 	d.mu.Lock()

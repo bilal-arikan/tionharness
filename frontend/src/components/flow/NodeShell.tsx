@@ -71,7 +71,7 @@ export function NodeShell({ id, type, title, isStart, isEnd, selected, status, c
         className="flex items-center gap-1.5 rounded-t-lg px-2 py-1 text-[11px] font-semibold"
         style={{ background: chrome.accent, color: '#fff' }}
       >
-        <span>{chrome.icon}</span>
+        <chrome.Icon size={13} className="shrink-0" />
         <span className="truncate">{title || chrome.label}</span>
         <span className="ml-auto flex gap-1">
           {isStart && <span className="rounded bg-black/25 px-1">başlangıç</span>}
