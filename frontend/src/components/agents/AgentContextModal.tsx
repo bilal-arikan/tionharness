@@ -4,7 +4,7 @@ import type { AgentContextPreview } from '../../types'
 import { api } from '../../api'
 import { copyToClipboard } from '../../lib/clipboard'
 import { Markdown } from '../markdown/Markdown'
-import { Button, CollapsibleSection, ModalOverlay, useBulkToggle } from '../common'
+import { Button, CollapsibleSection, InfoPopover, ModalOverlay, useBulkToggle } from '../common'
 
 interface Props {
   agentId: string
@@ -121,8 +121,9 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
         {data?.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
           <div className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-5 py-2 text-[11px]">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
+              <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
                 CLI ek yükü
+                <InfoPopover text={data.cliOverhead.note} label="CLI ek yükü nasıl hesaplanır?" />
               </span>
               <span className="text-[var(--color-text-dim)]">
                 Tahmin <strong>{data.totalTokens.toLocaleString()}</strong> → beklenen ~
@@ -130,7 +131,6 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                 {' '}(+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong> tahmini ek yük)
               </span>
             </div>
-            <p className="mt-1 text-[var(--color-text-dim)]">{data.cliOverhead.note}</p>
           </div>
         )}
 
