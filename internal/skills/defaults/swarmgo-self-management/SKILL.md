@@ -157,9 +157,8 @@ prompt each turn, so explicit recall is only for targeted lookups), `read_logs`
 (read the app log ring buffer). Both memory tools are load-on-demand — activate
 them like the rest of this suite.
 
-**Secrets & sessions** — `secret_list` / `secret_get` (read the encrypted
-vault), `secret_set` / `secret_delete` (store or remove a credential — write side,
-gated by self-management), `list_sessions` (enumerate sibling sessions; a context
+**Secrets & sessions** — `secret` (one tool, `action: list|get|set|delete`) reads
+the encrypted vault and stores/removes a credential, `list_sessions` (enumerate sibling sessions; a context
 block is also pushed automatically), `conversation_search` (full-text search across
 the workspace's message history — deeper than list_sessions). These are
 load-on-demand: `activate_tools` first. (`WebFetch` is NOT here — it is an EAGER

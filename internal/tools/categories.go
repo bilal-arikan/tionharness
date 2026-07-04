@@ -30,6 +30,7 @@ var builtinCategory = map[string]string{
 	"Read": CategoryFiles, "Write": CategoryFiles, "Edit": CategoryFiles,
 	"LS": CategoryFiles, "Glob": CategoryFiles, "Grep": CategoryFiles,
 	"Bash": CategoryFiles, "PowerShell": CategoryFiles,
+	"shell_manage": CategoryFiles,
 
 	// Search & web
 	"WebFetch": CategorySearch, "WebSearch": CategorySearch,
@@ -44,10 +45,11 @@ var builtinCategory = map[string]string{
 	"delete_agent": CategoryAgents, "list_agents": CategoryAgents,
 	"run_subagent": CategoryAgents, "spawn_session": CategoryAgents,
 	"handoff_session": CategoryAgents, "send_message": CategoryAgents,
-	"list_sessions": CategoryAgents, "set_session_title": CategoryAgents,
-	"set_working_dir": CategoryAgents, "archive_session": CategoryAgents,
-	"set_session_goal": CategoryAgents, "complete_goal": CategoryAgents,
-	"focus_view": CategoryAgents,
+	"list_sessions": CategoryAgents, "update_session": CategoryAgents,
+	"focus_view": CategoryAgents, "get_session_info": CategoryAgents,
+
+	// User profile (Settings ▸ Profile) — grouped with settings/config.
+	"update_user_preferences": CategoryConfig,
 
 	// Automation: flows, schedules, tasks, hooks
 	"create_flow": CategoryAutomation, "update_flow": CategoryAutomation,
@@ -85,8 +87,7 @@ var builtinCategory = map[string]string{
 	"list_config": CategoryConfig, "config_validate": CategoryConfig,
 	"list_workspaces": CategoryConfig, "create_workspace": CategoryConfig,
 	"rename_workspace": CategoryConfig, "delete_workspace": CategoryConfig,
-	"secret_list": CategoryConfig, "secret_get": CategoryConfig,
-	"secret_set": CategoryConfig, "secret_delete": CategoryConfig,
+	"secret": CategoryConfig,
 
 	// Diagnostics, validators, tool loading
 	"read_logs": CategoryDiagnostics, "read_session_debug": CategoryDiagnostics,

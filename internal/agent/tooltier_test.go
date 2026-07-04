@@ -140,13 +140,13 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 // native activate_tools.
 func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	lazy := []providers.ToolDef{
-		{Name: "set_session_goal"},               // lazy built-in → extended namespace
+		{Name: "update_session"},               // lazy built-in → extended namespace
 		{Name: "WebFetch", Description: "fetch"},  // CLI-native → dropped
 		{Name: "srvA__alpha", Description: "mcp"}, // MCP → mcp__ prefix
 	}
 	out := renderLazyToolCatalog(lazy, 3, true)
 
-	if !strings.Contains(out, "mcp__swarmgo_extended__set_session_goal") {
+	if !strings.Contains(out, "mcp__swarmgo_extended__update_session") {
 		t.Errorf("CLI form must namespace lazy built-ins under the extended tier:\n%s", out)
 	}
 	if !strings.Contains(out, "mcp__srvA__alpha") {
@@ -168,7 +168,7 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 
 	// Native form keeps bare names + activate_tools (regression guard).
 	nat := renderLazyToolCatalog(lazy, 0, false)
-	if !strings.Contains(nat, "- `set_session_goal`") || !strings.Contains(nat, "- `WebFetch`") {
+	if !strings.Contains(nat, "- `update_session`") || !strings.Contains(nat, "- `WebFetch`") {
 		t.Errorf("native form keeps bare names incl. WebFetch:\n%s", nat)
 	}
 	if !strings.Contains(nat, "activate_tools") {

@@ -171,7 +171,7 @@ func NewUpdateScheduleTool(database *db.DB, actorID string, reload func(context.
 func (UpdateScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_schedule",
-		Description: "Edit an agent-created schedule (not one made by the user). Pass the schedule id and the fields to change (agentId, cronExpr, prompt, enabled).",
+		Description: "Edit an agent-created schedule (not one made by the user). Pass the schedule id and the fields to change (agentId, cronExpr, prompt, enabled, tags).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -179,7 +179,8 @@ func (UpdateScheduleTool) Def() providers.ToolDef {
 				"agentId":{"type":"string"},
 				"cronExpr":{"type":"string"},
 				"prompt":{"type":"string"},
-				"enabled":{"type":"boolean"}
+				"enabled":{"type":"boolean"},
+				"tags":{"type":"array","items":{"type":"string"},"description":"Replace the schedule's organizational tags with this exact set"}
 			},
 			"required":["id"],
 			"additionalProperties":false
@@ -195,11 +196,12 @@ func (UpdateScheduleTool) Def() providers.ToolDef {
 
 func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		ID       string  `json:"id"`
-		AgentID  *string `json:"agentId"`
-		CronExpr *string `json:"cronExpr"`
-		Prompt   *string `json:"prompt"`
-		Enabled  *bool   `json:"enabled"`
+		ID       string    `json:"id"`
+		AgentID  *string   `json:"agentId"`
+		CronExpr *string   `json:"cronExpr"`
+		Prompt   *string   `json:"prompt"`
+		Enabled  *bool     `json:"enabled"`
+		Tags     *[]string `json:"tags"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -230,6 +232,11 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 	if in.Enabled != nil {
 		if err := t.d.db.SetScheduleEnabled(ctx, in.ID, *in.Enabled); err != nil {
 			return "", fmt.Errorf("set enabled: %w", err)
+		}
+	}
+	if in.Tags != nil {
+		if err := t.d.db.SetScheduleTags(ctx, in.ID, *in.Tags); err != nil {
+			return "", fmt.Errorf("set schedule tags: %w", err)
 		}
 	}
 	if err := t.d.reload(ctx); err != nil {

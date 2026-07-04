@@ -153,7 +153,7 @@ func TestInteractionTierSplit(t *testing.T) {
 		}
 	}
 	// NameOnly session-lifecycle tools are deferred (extended), not core.
-	for _, n := range []string{"set_session_goal", "notify", "archive_session"} {
+	for _, n := range []string{"update_session", "notify"} {
 		if !specHasTool(ext, n) {
 			t.Errorf("%q must be in the extended (deferred) tier", n)
 		}
@@ -166,10 +166,10 @@ func TestInteractionTierSplit(t *testing.T) {
 	// extended tier and keep eager statics in core.
 	bridge := []providers.ToolDef{{Name: "create_agent"}, {Name: "list_flows"}}
 	gotCore, gotExt := splitInteractionTiers(interactionAdvertisedNames(nil, false), bridge)
-	if !contains(gotCore, "ask_user") || contains(gotCore, "set_session_goal") {
+	if !contains(gotCore, "ask_user") || contains(gotCore, "update_session") {
 		t.Errorf("split core tier wrong: %v", gotCore)
 	}
-	if !contains(gotExt, "create_agent") || !contains(gotExt, "list_flows") || !contains(gotExt, "set_session_goal") {
+	if !contains(gotExt, "create_agent") || !contains(gotExt, "list_flows") || !contains(gotExt, "update_session") {
 		t.Errorf("split extended tier must carry bridged + NameOnly tools: %v", gotExt)
 	}
 	if contains(gotExt, "create_artifact") {

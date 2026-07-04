@@ -90,9 +90,10 @@ Suggested shape:
 - **Progress (this skill)** = what is done / in progress / next — structured task
   state, tied to the project.
 - **Goal** = the session's single north-star objective. Set it with
-  `set_session_goal` and mark it achieved with `complete_goal` — it is the SAME
-  goal the user edits in the UI (shared, not parallel), injected into every turn
-  until done. One durable objective, not a task checklist (that's progress/todos).
+  `update_session` (`goal` field) and mark it achieved with `update_session`
+  (`goal_done: true`) — it is the SAME goal the user edits in the UI (shared, not
+  parallel), injected into every turn until done. One durable objective, not a task
+  checklist (that's progress/todos).
 
 Keep them distinct: don't dump task checklists into core memory, and don't put
 durable user facts in PROGRESS.md.

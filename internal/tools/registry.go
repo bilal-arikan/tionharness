@@ -430,6 +430,20 @@ func (r *Registry) BridgeableDefs(allow func(name string) bool) []providers.Tool
 	return r.BridgeableDefsFiltered(allow, false)
 }
 
+// BuiltinDefs returns the ToolDefs of the registry's in-process built-in tools
+// (NOT MCP tools). Used by code-execution mode to expose eligible built-ins as
+// Python bindings. allow filters by name (nil = allow all).
+func (r *Registry) BuiltinDefs(allow func(name string) bool) []providers.ToolDef {
+	var out []providers.ToolDef
+	for name, t := range r.builtins {
+		if allow == nil || allow(name) {
+			out = append(out, t.Def())
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
 // Has reports whether the registry knows a tool by (namespaced) name.
 func (r *Registry) Has(name string) bool {
 	if _, ok := r.builtins[name]; ok {

@@ -24,6 +24,7 @@ var toolRisk = map[string]Risk{
 	"update_artifact":      RiskRead,
 	"list_artifacts":       RiskRead,
 	"read_artifact":        RiskRead,
+	"get_session_info":     RiskRead,
 
 	// Core file/shell built-ins share claude-cli's tool names (Read/Write/Edit/
 	// LS/Glob/Grep/Bash), so native and CLI agents — and the CLI permission-prompt

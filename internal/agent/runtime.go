@@ -555,6 +555,14 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	if r.tun.DebugJournalEnabled() {
 		extra = append(extra, tools.NewReadSessionDebugTool(r.db).Def())
 	}
+	//   - get_session_info : read own-session metadata (title/tags/goal/role) — the
+	//     session id is injected into the call ctx below, same as read_session_debug.
+	extra = append(extra, tools.NewGetSessionInfoTool(r.db).Def())
+	//   - update_user_preferences : persist durable user facts into the app-wide
+	//     profile; only needs the settings bridge reg already dispatches through.
+	if r.settingsBridge != nil {
+		extra = append(extra, tools.NewUpdateUserPreferencesTool(r.settingsBridge).Def())
+	}
 	for _, d := range extra {
 		if allow == nil || allow(d.Name) {
 			defs = append(defs, d)

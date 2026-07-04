@@ -80,9 +80,8 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewUpdateAutomationTool(r.db, agent.ID),
 		tools.NewDeleteAutomationTool(r.db, agent.ID),
 		tools.NewListAutomationsTool(r.db, agent.ID),
-		// Tag editors for flows + schedules (session tags handled by set_session_tags).
-		tools.NewSetFlowTagsTool(r.db),
-		tools.NewSetScheduleTagsTool(r.db),
+		// Flow/schedule tags are edited via the `tags` field on update_flow /
+		// update_schedule; session tags via update_session. No separate tag tools.
 		// Tasks (kanban board). Read/create/edit/move on any task; delete only
 		// agent-created (provenance). The board is passive — no run tool.
 		tools.NewListTasksTool(r.db, agent.ID),
@@ -109,13 +108,9 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewMemoryAddTool(r.mem, agent.ID),
 		tools.NewReadLogsTool(r.logs),
 	}
-	// Secret vault writes: store/remove credentials (read is always-on above).
-	if r.vault != nil {
-		builtins = append(builtins,
-			tools.NewSecretSetTool(r.vault),
-			tools.NewSecretDeleteTool(r.vault),
-		)
-	}
+	// Secret vault: list/get/set/delete are unified in the single `secret` tool
+	// registered in buildRegistry (always-on when a vault exists) — no separate
+	// write tools here.
 	// Skill authoring: create/update/delete/import reusable workspace skills.
 	if r.skills != nil {
 		builtins = append(builtins,

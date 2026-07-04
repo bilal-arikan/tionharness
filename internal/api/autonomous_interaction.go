@@ -46,10 +46,10 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 			run.setNotify(nsink)
 			// focus_view (CLI path): same sink drives the UI (no-op when no window open).
 			run.setNav(nsink)
-			// Session sink (CLI path): goal + title + working dir + archive, all bound
-			// to this session (SessionSink is a superset of GoalSink).
+			// Session sink (CLI path): goal + title + working dir + tags + archive,
+			// all bound to this session via the single update_session tool
+			// (SessionSink is a superset of GoalSink).
 			ssink := rt.NewSessionSink(sessionID)
-			run.setGoal(ssink)
 			run.setSession(ssink)
 			// Persistent progress (CLI path): persist the todo_write checklist to the
 			// project's progress file on autonomous turns too. Keyed to the session's

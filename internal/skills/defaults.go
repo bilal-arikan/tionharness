@@ -1,7 +1,10 @@
 package skills
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -13,6 +16,14 @@ import (
 //
 //go:embed defaults
 var defaultsFS embed.FS
+
+// shippedManifestName is the sidecar, at the root of the seed dir, that records
+// the sha256 of the SHIPPED content last written for each default file. It lets
+// EnsureDefaults tell an unmodified prior-shipped copy (safe to refresh) from a
+// user-edited one (must be preserved) — the version-aware re-seed. It is a
+// dotfile, so the skill store (which scans subdirs for SKILL.md) never treats it
+// as a skill.
+const shippedManifestName = ".shipped-versions.json"
 
 // DefaultSkillSlugs returns the slugs of the shipped default skills (the
 // subdirectories under defaults/), so callers can seed new agents with the
@@ -33,15 +44,62 @@ func DefaultSkillSlugs() []string {
 	return out
 }
 
-// EnsureDefaults writes the built-in default skills into dir, creating only the
-// ones that are missing. Existing files are never overwritten, so user edits and
-// the access toggle survive; a deleted default reappears on next start (these
-// are shipped, baseline skills). A blank dir is a no-op.
+// sha256Hex returns the lowercase hex sha256 of b.
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// loadShippedManifest reads the shipped-version sidecar from dir. A missing or
+// unreadable manifest yields an empty map (first run of the version-aware code),
+// so every existing on-disk file is treated as unknown-provenance and preserved.
+func loadShippedManifest(dir string) map[string]string {
+	m := map[string]string{}
+	data, err := os.ReadFile(filepath.Join(dir, shippedManifestName))
+	if err != nil {
+		return m
+	}
+	_ = json.Unmarshal(data, &m)
+	if m == nil {
+		m = map[string]string{}
+	}
+	return m
+}
+
+// saveShippedManifest writes the shipped-version sidecar back to dir (best effort).
+func saveShippedManifest(dir string, m map[string]string) error {
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, shippedManifestName), data, 0o644)
+}
+
+// EnsureDefaults writes the built-in default skills into dir, VERSION-AWARE:
+//
+//   - A missing file is written and its shipped hash recorded.
+//   - An on-disk file identical to the embedded one is left as-is (its hash is
+//     recorded, so future ships know it is pristine).
+//   - An on-disk file that DIFFERS from the embedded one but matches the hash of
+//     the PREVIOUSLY shipped version (recorded in the manifest) is unmodified by
+//     the user, so it is REFRESHED to the new embedded content. This is what makes
+//     shipped skill updates reach existing installs (the old EnsureDefaults never
+//     overwrote, so evolved defaults went stale on any machine that had run before).
+//   - An on-disk file that differs from BOTH the embedded and the last-shipped hash
+//     (or has no manifest entry) is treated as a USER EDIT and preserved untouched.
+//
+// A blank dir is a no-op. Bootstrapping note: on the first run of this version-
+// aware code the manifest is absent, so pre-existing files are all treated as
+// user edits (preserved); the manifest then seeds itself for every file that
+// currently matches the embedded content, so subsequent ships can refresh them.
 func EnsureDefaults(dir string) error {
 	if dir == "" {
 		return nil
 	}
-	return fs.WalkDir(defaultsFS, "defaults", func(p string, d fs.DirEntry, err error) error {
+	manifest := loadShippedManifest(dir)
+	changed := false
+
+	walkErr := fs.WalkDir(defaultsFS, "defaults", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -49,17 +107,55 @@ func EnsureDefaults(dir string) error {
 		if relErr != nil {
 			return relErr
 		}
+		key := filepath.ToSlash(rel) // stable manifest key across OSes
 		dest := filepath.Join(dir, filepath.FromSlash(rel))
-		if _, statErr := os.Stat(dest); statErr == nil {
-			return nil // already present — leave as-is
-		}
-		if mkErr := os.MkdirAll(filepath.Dir(dest), 0o755); mkErr != nil {
-			return mkErr
-		}
-		data, readErr := defaultsFS.ReadFile(p)
+
+		embedded, readErr := defaultsFS.ReadFile(p)
 		if readErr != nil {
 			return readErr
 		}
-		return os.WriteFile(dest, data, 0o644)
+		hEmbed := sha256Hex(embedded)
+
+		onDisk, statErr := os.ReadFile(dest)
+		if statErr != nil {
+			// Missing (or unreadable) — write it fresh and record the shipped hash.
+			if mkErr := os.MkdirAll(filepath.Dir(dest), 0o755); mkErr != nil {
+				return mkErr
+			}
+			if wErr := os.WriteFile(dest, embedded, 0o644); wErr != nil {
+				return wErr
+			}
+			manifest[key] = hEmbed
+			changed = true
+			return nil
+		}
+
+		hDisk := sha256Hex(onDisk)
+		if hDisk == hEmbed {
+			// Already current — just make sure the manifest records it as pristine.
+			if manifest[key] != hEmbed {
+				manifest[key] = hEmbed
+				changed = true
+			}
+			return nil
+		}
+
+		// Differs from the embedded content: refresh only if it is the untouched
+		// previously-shipped version; otherwise it is a user edit and we leave it.
+		if prev, ok := manifest[key]; ok && prev == hDisk {
+			if wErr := os.WriteFile(dest, embedded, 0o644); wErr != nil {
+				return wErr
+			}
+			manifest[key] = hEmbed
+			changed = true
+		}
+		return nil
 	})
+	if walkErr != nil {
+		return walkErr
+	}
+	if changed {
+		return saveShippedManifest(dir, manifest)
+	}
+	return nil
 }

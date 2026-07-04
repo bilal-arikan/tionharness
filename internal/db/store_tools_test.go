@@ -19,7 +19,7 @@ func TestWorkspaceToolConfig_VisibilityRoundTrip(t *testing.T) {
 		ToolVisibility: map[string]string{
 			"list_sessions": "name-only",
 			"create_agent":  "full",
-			"secret_get":    "hidden",
+			"secret":        "hidden",
 		},
 	}); err != nil {
 		t.Fatalf("set: %v", err)
@@ -39,7 +39,7 @@ func TestWorkspaceToolConfig_VisibilityRoundTrip(t *testing.T) {
 	}
 	if cfg.ToolVisibility["list_sessions"] != "name-only" ||
 		cfg.ToolVisibility["create_agent"] != "full" ||
-		cfg.ToolVisibility["secret_get"] != "hidden" {
+		cfg.ToolVisibility["secret"] != "hidden" {
 		t.Fatalf("visibility = %v", cfg.ToolVisibility)
 	}
 	// Legacy lists must NOT be written back.

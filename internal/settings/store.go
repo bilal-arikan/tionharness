@@ -304,6 +304,10 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.ProgressResume != nil {
 		next.ProgressResume = *p.ProgressResume
 	}
+	if p.AutonomousAutoContinue != nil {
+		next.AutonomousAutoContinue = *p.AutonomousAutoContinue
+	}
+	applyInt(&next.AutonomousAutoContinueMax, p.AutonomousAutoContinueMax)
 	if p.FileFreshnessGuard != nil {
 		next.FileFreshnessGuard = *p.FileFreshnessGuard
 	}

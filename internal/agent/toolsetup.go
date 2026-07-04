@@ -145,19 +145,13 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// (no-op outside interactive chat — the navigate sink is only wired onto a
 		// chat turn's context).
 		tools.NewFocusViewTool(),
-		// Session goal: set/complete this session's persistent "north star" — the
-		// SAME field the user edits in the UI, injected into every turn (no-op
-		// without a goal sink, i.e. outside a session-bound turn).
-		tools.NewSetSessionGoalTool(),
-		tools.NewCompleteGoalTool(),
-		// Session edit: rename / set working dir / archive THIS session (no-op
-		// without a session sink, i.e. outside a session-bound turn).
-		tools.NewSetSessionTitleTool(),
-		tools.NewSetWorkingDirTool(),
-		tools.NewArchiveSessionTool(),
-		// Session tags: edit THIS session's tags (shared with the UI; also enrols the
-		// session into tag-triggered automations). No-op without a session sink.
-		tools.NewSetSessionTagsTool(),
+		// update_session: mutate THIS session's metadata in one call — title,
+		// working dir, persistent goal (+ complete), tags, archive. Replaces the
+		// former per-field tools (set_session_title/_working_dir/archive_session/
+		// set_session_goal/complete_goal/set_session_tags). No-op without a session
+		// sink (i.e. outside a session-bound turn). Tags shared with the UI also
+		// enrol the session into tag-triggered automations.
+		tools.NewUpdateSessionTool(),
 		// mermaid_validate: lint a Mermaid diagram (recognised type + balanced
 		// brackets/quotes) before emitting it. Pure, read-only, no deps.
 		tools.NewMermaidValidateTool(),
@@ -234,13 +228,23 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		builtins = append(builtins, tools.NewReadSessionDebugTool(r.db))
 	}
 
-	// Workspace secret vault: let agents discover and fetch stored credentials
-	// (API keys, tokens, passwords) for the tasks they run.
+	// get_session_info: the read counterpart of the session-edit tools — the
+	// agent inspects its own session's metadata (title/state/tags/goal/cwd/role/
+	// lineage) before mutating it, or orients itself in a fresh autonomous turn.
+	builtins = append(builtins, tools.NewGetSessionInfoTool(r.db))
+
+	// update_user_preferences: persist durable user facts (name/location/timezone/
+	// preference notes) into the app-wide profile injected into every turn. A
+	// narrow wrapper over the settings bridge, so only offered when it is wired.
+	if r.settingsBridge != nil {
+		builtins = append(builtins, tools.NewUpdateUserPreferencesTool(r.settingsBridge))
+	}
+
+	// Workspace secret vault: one tool (action=list/get/set/delete) to discover,
+	// fetch, store and remove stored credentials (API keys, tokens, passwords) for
+	// the tasks agents run. Replaces the former secret_list/get/set/delete quartet.
 	if r.vault != nil {
-		builtins = append(builtins,
-			tools.NewSecretListTool(r.vault),
-			tools.NewSecretGetTool(r.vault),
-		)
+		builtins = append(builtins, tools.NewSecretTool(r.vault))
 	}
 
 	// Filesystem tools, rooted at this turn's working directory (the session's
@@ -303,11 +307,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 				builtins = append(builtins, ps.WithManager(shellMgr))
 			}
 			if shellMgr != nil {
-				builtins = append(builtins,
-					tools.NewShellOutputTool(shellMgr),
-					tools.NewShellKillTool(shellMgr),
-					tools.NewShellListTool(shellMgr),
-				)
+				// One control tool (action=output/kill/list) polls and reaps the
+				// detached processes started with run_in_background.
+				builtins = append(builtins, tools.NewShellManageTool(shellMgr))
 			}
 			builtins = append(builtins, tools.NewTransformDataTool(sb))
 		}
@@ -371,11 +373,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// catalog entirely — more aggressive than name-only).
 	reg.MarkNameOnly(
 		// Session lifecycle & navigation — names say it all; rarely the turn's point.
-		"set_session_goal", "complete_goal",
-		"set_session_title", "set_working_dir", "archive_session",
+		"update_session",
 		"notify", "focus_view", "schedule_wake",
 		// Cross-session & self-diagnostics — occasional, discoverable by name.
 		"list_sessions", "conversation_search", "read_session_debug",
+		"get_session_info", "update_user_preferences",
 		// Memory recall — recall is already auto-injected via ContextBlock.
 		"memory_recall",
 		// Artifact revise + meta — create_artifact stays eager (behavioral); revise
@@ -384,7 +386,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// Validation tools — read-only, used only around authoring/diagram emission.
 		"skill_validate", "config_validate", "mermaid_validate",
 		// Background-shell management — reached only after a run_in_background launch.
-		"shell_output", "shell_kill", "shell_list",
+		"shell_manage",
 		// Promoted out of the hidden self-management group: common enough to advertise
 		// by name (handoff at context limit, add a memory, DM a peer agent) rather than
 		// fold into the self-management skill pointer. MarkNameOnly clears the earlier
@@ -398,11 +400,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// are already hidden — so hiding the reads keeps the secret/config family
 	// consistent instead of split across the name-only and hidden tiers.
 	//   - read/write/list_config : the agent editing its OWN prompts/instructions
-	//   - secret_list/secret_get  : vault reads, only on credential-backed tasks
+	//   - secret                  : vault list/get/set/delete, only on credential tasks
 	// MarkHidden on a name not built for this agent is a harmless no-op.
 	reg.MarkHidden(
 		"read_config", "write_config", "list_config",
-		"secret_list", "secret_get",
+		"secret",
 	)
 	// Role-aware eager trim: a read-only agent can never have a write approved, so
 	// shipping the mutating tools' schemas every turn is pure waste. Demote them to
@@ -415,6 +417,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// AFTER AttachMCP below (so they win over both code defaults and the MCP
 	// name-only default). Loaded here once.
 	wsToolCfg, _ := r.db.GetWorkspaceToolConfig(ctx)
+
+	// MCP catalog (may stay empty when there are no enabled servers): populated in
+	// the pool branch below and reused by run_code's bindings.
+	var mcpEntries []mcp.CatalogEntry
+	var mcpCaller tools.MCPCaller
 
 	if servers, err := r.db.ListEnabledMCPServers(ctx); err != nil {
 		r.logger.Warn("list mcp servers failed", "error", err)
@@ -435,15 +442,44 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			return r.mcpPool.Call(cctx, cfgByServer, namespaced, args)
 		}
 		reg.AttachMCP(entries, cfgByServer, caller)
+		mcpEntries, mcpCaller = entries, caller
+	}
 
-		// Code-execution mode (POC, _Docs/44): expose the MCP catalog as generated
-		// Python bindings behind a single run_code tool, so tool schemas stay OUT of
-		// the context window and intermediate data stays in the execution
-		// environment. Gated like the other code-exec tools (ShellEnabled) plus its
-		// own opt-in toggle; the bridge re-applies this agent's tool filter, so code
-		// mode grants no tool the agent could not call directly. Native path only —
-		// the CLI bridge excludes it (bridgeExcluded).
-		if r.tun.CodeModeEnabled() && r.tun.ShellEnabled() && sb.Ready() && len(entries) > 0 {
+	// Code-execution mode (POC, _Docs/44): expose the MCP catalog AND SwarmGo's own
+	// eligible built-in tools as generated Python bindings behind a single run_code
+	// tool, so tool schemas stay OUT of the context window and intermediate data
+	// stays in the execution environment (the model orchestrates list→filter→act in
+	// ONE call). Gated by CodeMode+Shell toggles + a working dir; the bridge re-
+	// applies this agent's tool filter (plus the code-mode eligibility filter), so
+	// code mode grants no tool the agent could not call directly. Available even
+	// WITHOUT MCP servers now — the built-ins alone are enough. Native path only
+	// (the CLI bridge excludes run_code, bridgeExcluded).
+	if r.tun.CodeModeEnabled() && r.tun.ShellEnabled() && sb.Ready() {
+		toolFilter := r.toolFilter(ctx, agent)
+		// codeAllow = code-mode eligibility AND the agent's own filter. Eligibility is
+		// keyed on bare built-in names; a namespaced MCP name is always eligible (never
+		// in the exclude set), so this is safe for both binding kinds.
+		codeAllow := func(name string) bool {
+			return tools.CodeModeEligible(name) && (toolFilter == nil || toolFilter(name))
+		}
+		// Built-in tool defs to expose as the `swarmgo` module (eligible + permitted).
+		// run_code and the meta-tools are not in reg yet, so they can't self-expose.
+		biDefs := reg.BuiltinDefs(codeAllow)
+		biBindings := make([]codemode.BuiltinDef, 0, len(biDefs))
+		for _, d := range biDefs {
+			biBindings = append(biBindings, codemode.BuiltinDef{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
+		}
+		var callBI tools.MCPCaller
+		if len(biBindings) > 0 {
+			// Dispatch a built-in through the SAME registry the native tool loop uses,
+			// on the TURN ctx (carried in by run_code's Call), so sink/session-scoped
+			// built-ins behave identically to a direct call.
+			callBI = func(cctx context.Context, name string, args json.RawMessage) (mcp.CallToolResult, error) {
+				res := reg.Call(cctx, providers.ToolCall{Name: name, Input: args})
+				return mcp.CallToolResult{Text: res.Content, IsError: res.IsError}, nil
+			}
+		}
+		if len(mcpEntries) > 0 || len(biBindings) > 0 {
 			// Faz 2 hooks. Gate: the EXACT decision the native tool loop makes for a
 			// direct call of the same tool in the same turn — permGate with this
 			// agent's mode, the ctx-carried prompter/grants, and the audit logger. So
@@ -455,7 +491,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 				return permGate(withPermLogger(cctx, r.logger), agent.PermissionMode,
 					providers.ToolCall{Name: tool, Input: args})
 			}
-			// Observer: one debug-journal tool event per in-script MCP call, so the
+			// Observer: one debug-journal tool event per in-script call, so the
 			// per-message debug panel lists them exactly like native tool calls —
 			// the observability that folding N calls into one run_code card loses.
 			// The sub-step sink on the call ctx feeds the UI: each in-script call
@@ -495,7 +531,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 					obMu.Unlock()
 				}
 			}
-			reg.Add(tools.NewRunCodeTool(sb, entries, caller, r.toolFilter(ctx, agent), gate, observe))
+			reg.Add(tools.NewRunCodeTool(sb, mcpEntries, mcpCaller, biBindings, callBI, codeAllow, gate, observe))
 		}
 	}
 

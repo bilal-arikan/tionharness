@@ -171,16 +171,11 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		// focus_view drives the user's UI to a view/entity to direct attention.
 		// Non-blocking; advertised on autonomous turns too (no-op with no open window).
 		tools.NewFocusViewTool().Def(),
-		// set_session_goal / complete_goal write THIS session's persistent objective
-		// (the same db.Session.Goal the user edits). Non-blocking; advertised on
-		// autonomous turns too (a scheduled run can set/complete its own goal).
-		tools.NewSetSessionGoalTool().Def(),
-		tools.NewCompleteGoalTool().Def(),
-		// set_session_title / set_working_dir / archive_session mutate THIS session's
-		// own metadata. Non-blocking; advertised on autonomous turns too.
-		tools.NewSetSessionTitleTool().Def(),
-		tools.NewSetWorkingDirTool().Def(),
-		tools.NewArchiveSessionTool().Def(),
+		// update_session mutates THIS session's own metadata (title, working dir,
+		// persistent goal + completion, tags, archive) in one call — the same
+		// db.Session fields the user edits. Non-blocking; advertised on autonomous
+		// turns too (a scheduled run can set/complete its own goal or retag itself).
+		tools.NewUpdateSessionTool().Def(),
 		// schedule_wake replaces the CLI's native ScheduleWakeup (which SwarmGo
 		// disallows): the CLI runs one-shot, so its built-in wake never fires —
 		// ours arms a real SwarmGo timer that re-delivers into this session.
@@ -257,13 +252,9 @@ var (
 		}
 		return tools.WithArtifacts(context.Background(), s), true
 	}
-	goalAttach = func(ctx context.Context, run *chatRun) (context.Context, bool) {
-		s := run.goalSinkFor()
-		if s == nil {
-			return nil, false
-		}
-		return tools.WithGoal(ctx, s), true
-	}
+	// update_session reads the SessionSink (a superset of GoalSink), so a single
+	// sessionAttach covers title/working-dir/goal/tags/archive — no separate
+	// goalAttach is needed any more.
 	sessionAttach = func(ctx context.Context, run *chatRun) (context.Context, bool) {
 		s := run.sessionSinkFor()
 		if s == nil {
@@ -301,11 +292,9 @@ var sinkToolTable = map[string]sinkTool{
 		}
 		return tools.WithNavigate(context.Background(), s), true
 	}, missing: "no UI is available to navigate for this turn"},
-	"set_session_goal":  {newTool: func() tools.Tool { return tools.NewSetSessionGoalTool() }, attach: goalAttach, missing: "no session goal is available for this turn"},
-	"complete_goal":     {newTool: func() tools.Tool { return tools.NewCompleteGoalTool() }, attach: goalAttach, missing: "no session goal is available for this turn"},
-	"set_session_title": {newTool: func() tools.Tool { return tools.NewSetSessionTitleTool() }, attach: sessionAttach, missing: "no session is available to edit for this turn"},
-	"set_working_dir":   {newTool: func() tools.Tool { return tools.NewSetWorkingDirTool() }, attach: sessionAttach, missing: "no session is available to edit for this turn"},
-	"archive_session":   {newTool: func() tools.Tool { return tools.NewArchiveSessionTool() }, attach: sessionAttach, missing: "no session is available to edit for this turn"},
+	// update_session covers title/working-dir/goal/tags/archive; it reads the
+	// SessionSink (a superset of GoalSink), so sessionAttach alone suffices.
+	"update_session": {newTool: func() tools.Tool { return tools.NewUpdateSessionTool() }, attach: sessionAttach, missing: "no session is available to edit for this turn"},
 }
 
 // callViaSink runs a sink-bound tool: attach the per-run sink, then call the shared

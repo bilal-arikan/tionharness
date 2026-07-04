@@ -22,9 +22,9 @@
 | 2 | `call_llm` (hafif LLM alt-görevi) | Yeni araç | **P1** | Açık |
 | 3 | `transform_data` | Yeni araç | **P1** | ✅ Tamamlandı (2026-06-30) |
 | 4 | `PowerShell` (ayrı shell) | Yeni araç | **P1** | ✅ Tamamlandı (2026-06-30) |
-| 5 | `get_session_info` | Yeni araç | **P2** | Açık |
-| 6 | `set_session_labels` / `set_session_status` | Yeni araç | **P2** | Açık |
-| 7 | `update_user_preferences` | Yeni araç | **P2** | Açık (kısmen core_memory) |
+| 5 | `get_session_info` | Yeni araç | **P2** | ✅ Tamamlandı (2026-07-03) |
+| 6 | `set_session_labels` / `set_session_status` | Yeni araç | **P2** | ❌ Kapsam dışı (2026-07-03 — `set_session_tags` + `archive_session`/Kanban karşılıyor) |
+| 7 | `update_user_preferences` | Yeni araç | **P2** | ✅ Tamamlandı (2026-07-03) |
 | 8 | `render_template` | Yeni araç | **P2** | Açık |
 | 9 | `source_credential_prompt` benzeri güvenli credential UI | Yeni araç | **P3** | Açık |
 | 10 | `Monitor` (koşul bekleme) | Yeni araç | **P3** | Açık |
@@ -121,42 +121,36 @@
   (`NewShellRunner` OS-pick), `mcp_interaction.go` (CLI advertise + core + dispatch).
 - **Risk sınıfı:** `RiskExec` (her iki shell).
 
-### 5. `get_session_info` — tekil oturum metadata — **P2**
+### 5. `get_session_info` — tekil oturum metadata — **P2** — ✅ TAMAMLANDI (2026-07-03)
 
-- **Durum:** Yok. Yalnızca `list_sessions` var (tüm oturumlar). Tek oturumun etiket/durum/cwd/goal/izin
-  modunu dönen ucuz "kendini incele" yolu yok.
-- **Neden önemli:** Ajanın kendi oturum bağlamını (özellikle `set_session_labels`/`status` eklenince)
-  okuması için `list_sessions`'tan daha ucuz ve nokta-atışı. Otomasyon/koşullu mantık için temel.
-- **Yaklaşım:** `sessionId?` (boşsa mevcut oturum) → metadata objesi. `currentsession.go` zaten mevcut
-  oturum referansını taşıyor.
-- **Dosyalar:** yeni `internal/tools/builtin_sessioninfo.go` (+ test), `registry.go`.
-- **Risk sınıfı:** `RiskRead`.
+- **Durum:** ~~Yok.~~ **Uygulandı** (`internal/tools/builtin_sessioninfo.go` + test).
+- **Uygulanan:** `session_id?` (boşsa ctx'teki mevcut oturum, `currentsession.go`) → id/title/state/
+  kind/agent (ad+id)/mesaj sayısı/tags/goal/working_dir/role/coordinator_session/parent_session.
+  Oturumsuz turda zarif mesaj (hata değil); bilinmeyen id'de açık hata. Session-edit araçlarının
+  okuma eşi — mutasyondan önce incele, otonom turda kendini yönelt.
+- **Kayıt:** koşulsuz (`toolsetup.go`, read_session_debug'ın yanı); tier `MarkNameOnly`; claude-cli
+  köprüsü `runtime.go BridgeTools` `extra` (call ctx'e sid zaten enjekte). `RiskRead`, kategori `agents`.
 
-### 6. `set_session_labels` / `set_session_status` — **P2**
+### 6. `set_session_labels` / `set_session_status` — **P2** — ❌ KAPSAM DIŞI (2026-07-03, kullanıcı kararı)
 
-- **Durum:** Yok. SwarmGo'da `set_session_goal`/`complete_goal`/`set_session_title`/`archive_session`
-  var ama **etiket** ve **durum (todo/in_progress/done)** kavramı oturum seviyesinde yok (benzeri kanban
-  task'larında `move_task`).
-- **Neden önemli:** (a) Oturumları sınıflandırma/filtreleme (`list_sessions` filtresi güçlenir);
-  (b) **Otomasyon tetikleyici** — etiket/durum değişimi hook/schedule tetikleyebilir → kendi-kapanan
-  iş akışları (iş biter → status=done → downstream webhook). the external agent project'ta tam bu desen var.
-- **Yaklaşım:** `db.Session`'a `Labels []string` + `Status string` alanları (zaten `archive` benzeri
-  durum var; genelleştir). İki builtin + `list_sessions` filtre güncellemesi + (varsa) hook event'i.
-- **Dosyalar:** `internal/db/models_*` (Session alanları), yeni `builtin_sessionstate.go` (+ test),
-  `builtin_sessions.go` filtre, hook entegrasyonu.
-- **Risk sınıfı:** `RiskWrite`.
+- **Gerekçe:** Etiket tarafını **`set_session_tags`** (2026-07-02, `_Docs/46-ETIKET-OTOMASYON.md`)
+  zaten karşılıyor — UI ile paylaşımlı `Session.Tags` + etiket-tetikleyicili otomasyonlar, yani
+  the external agent project'ın "label → automation → kendi-kapanan iş akışı" deseninin SwarmGo karşılığı kurulu.
+  Durum tarafında da oturum `State` + `archive_session` + Kanban task'ları (`move_task`) mevcut
+  akışları karşılıyor; ayrı bir `set_session_status` aracı eklenmeyecek (bkz. Bölüm C mantığı).
 
-### 7. `update_user_preferences` — yapısal kullanıcı profili — **P2**
+### 7. `update_user_preferences` — yapısal kullanıcı profili — **P2** — ✅ TAMAMLANDI (2026-07-03)
 
-- **Durum:** Kısmen `core_memory` "human" bloğu karşılıyor ama **yapısal değil** (timezone/city/country/
-  name serbest metinde). the external agent project'ta ayrı, alanları belli bir araç var.
-- **Neden önemli:** Yapısal tercihler (ad, saat dilimi, dil, konum, co-author tercihi) tutarlı biçimde
-  her ajana/oturuma enjekte edilebilir; serbest-metin core memory'den daha güvenilir okunur.
-- **Yaklaşım:** `name?`, `timezone?`, `city?`, `region?`, `country?`, `language?`, `notes?`,
-  `includeCoAuthoredBy?`. Workspace/global ayar dosyasına yazar; sistem promptuna yapısal blok olarak
-  girer. core_memory "human" ile çakışmayı önlemek için: bu yapısal alan, human bloğu serbest-metin kalır.
-- **Dosyalar:** `settings`/`wsconfig` alanı, yeni `builtin_userprefs.go` (+ test), prompt enjeksiyonu.
-- **Risk sınıfı:** `RiskWrite`.
+- **Durum:** ~~Kısmen core_memory.~~ **Uygulandı** (`internal/tools/builtin_userprefs.go` + test).
+- **Uygulanan:** `name?`/`timezone?`/`city?`/`country?`/`notes?` (REPLACE) / `notes_append?` (mevcut
+  notlara satır ekle) → mevcut **Settings ▸ Profil** alanlarına (`userName`/`userTimezone`/`userCity`/
+  `userCountry`/`userNotes`) `SettingsBridge.Apply` ile yazar. Profil zaten her turda "About the user"
+  bloğu olarak enjekte ediliyor (`api/settings.go userContextBlock`) → yeni prompt-enjeksiyon katmanı
+  GEREKMEDİ. Dar sarmalayıcı: yalnız 5 profil alanına dokunur (update_settings'in aksine yanlışlıkla
+  başka ayar değiştiremez); `notes`+`notes_append` birlikte → hata. core_memory "human" bloğu ajanın
+  kendi gözlemleri için serbest-metin olarak ayrı yaşamaya devam eder.
+- **Kayıt:** `settingsBridge` varken (`toolsetup.go`); tier `MarkNameOnly`; claude-cli köprüsü
+  `runtime.go BridgeTools` `extra`. Risk: haritalanmadı → varsayılan `RiskWrite`; kategori `config`.
 
 ### 8. `render_template` — şablonlu çıktı render — **P2**
 
@@ -299,8 +293,8 @@ the external agent project'ta olup SwarmGo'nun **kapsam/felsefe farkı** nedeniy
 
 1. **Dalga 1 (P0–P1):** `WebSearch`, `call_llm` (veya `run_subagent` hafif mod), `transform_data`/
    `script_sandbox`, `PowerShell`. En yüksek getiri/çaba.
-2. **Dalga 2 (P2):** `get_session_info`, `set_session_labels`/`set_session_status`,
-   `update_user_preferences`, `render_template`.
+2. **Dalga 2 (P2):** ~~`get_session_info`~~ ✅, ~~`set_session_labels`/`set_session_status`~~ ❌ kapsam
+   dışı, ~~`update_user_preferences`~~ ✅ (üçü 2026-07-03'te kapandı) — kalan: `render_template`.
 3. **Dalga 3 (P3–P4):** `Monitor`, `EnterWorktree`/`ExitWorktree`, güvenli credential UI, `NotebookEdit`.
 
 Her araç eklemesinde ortak kontrol listesi:

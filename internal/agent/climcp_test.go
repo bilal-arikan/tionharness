@@ -23,7 +23,7 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 		URL:               "http://127.0.0.1:8090/mcp/interaction",
 		Token:             "tok-123",
 		CoreToolNames:     []string{"Bash", "ask_user", "permission_prompt"},
-		ExtendedToolNames: []string{"set_session_goal", "create_agent"},
+		ExtendedToolNames: []string{"update_session", "create_agent"},
 	}
 
 	// mcpEnabled=false so the test doesn't depend on any stored MCP servers.
@@ -78,7 +78,7 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 		"mcp__swarmgo_interaction__Bash":              true,
 		"mcp__swarmgo_interaction__ask_user":          true,
 		"mcp__swarmgo_interaction__permission_prompt": true,
-		"mcp__swarmgo_extended__set_session_goal":     true,
+		"mcp__swarmgo_extended__update_session":       true,
 		"mcp__swarmgo_extended__create_agent":         true,
 	}
 	got := map[string]bool{}

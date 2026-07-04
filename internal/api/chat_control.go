@@ -43,8 +43,7 @@ type chatRun struct {
 	artifacts   tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
 	notify      tools.NotifySink             // current agent's notify sink, for Interaction MCP notify (desktop notification)
 	nav         tools.NavigateSink           // current agent's navigate sink, for Interaction MCP focus_view (UI navigation)
-	goal        tools.GoalSink               // current session's goal sink, for Interaction MCP set_session_goal/complete_goal
-	session     tools.SessionSink            // current session's edit sink, for Interaction MCP set_session_title/set_working_dir/archive_session
+	session     tools.SessionSink            // current session's edit sink, for the Interaction MCP update_session tool (title/working-dir/goal/tags/archive)
 	todos       tools.TodoSink               // current agent's todo sink, for Interaction MCP todo_write persistence
 	grants      *tools.PermissionGrants      // session "Always allow" set, for the CLI permission-prompt tool
 	wake        tools.WakeFunc               // current agent's self-wake scheduler, for the Interaction MCP schedule_wake tool
@@ -279,25 +278,10 @@ func (r *chatRun) navSink() tools.NavigateSink {
 	return r.nav
 }
 
-// setGoal installs the goal sink for this session so the set_session_goal /
-// complete_goal tools (native via context, CLI via the Interaction MCP) can read
-// and write the session's persistent objective.
-func (r *chatRun) setGoal(sink tools.GoalSink) {
-	r.mu.Lock()
-	r.goal = sink
-	r.mu.Unlock()
-}
-
-// goalSinkFor returns the current goal sink (nil if none installed).
-func (r *chatRun) goalSinkFor() tools.GoalSink {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.goal
-}
-
-// setSession installs the session edit sink so the set_session_title /
-// set_working_dir / archive_session tools (native via context, CLI via the
-// Interaction MCP) can mutate this session.
+// setSession installs the session edit sink so the update_session tool (native
+// via context, CLI via the Interaction MCP) can mutate this session's title,
+// working dir, goal, tags and archive state. SessionSink is a superset of
+// GoalSink, so this single sink also backs the goal read/write.
 func (r *chatRun) setSession(sink tools.SessionSink) {
 	r.mu.Lock()
 	r.session = sink

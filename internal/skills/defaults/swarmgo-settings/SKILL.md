@@ -118,6 +118,10 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
 - `progressPersist` (default true) — persist the `todo_write` list to `<cwd>/.swarmgo/progress.json`.
 - `progressResume` (default true) — restore that list on a fresh session.
 
+### Autonomous self-completion (see _Docs/05)
+- `autonomousAutoContinue` (default true) — when an autonomous turn (scheduler/spawn/wake) ends with unfinished work (it left `todo_write` items open, or its last action was a lazy-tool activation whose tools only take effect next turn), automatically run a continuation turn so the work self-completes instead of stalling. Each continuation is history-aware and budget-gated; the loop stops when the work is done, a turn makes no tool progress, or the daily budget is hit.
+- `autonomousAutoContinueMax` (default 10, 0 = default) — hard cap on auto-issued continuation turns per autonomous run.
+
 ### File freshness guard (Claude Code parity)
 - `fileFreshnessGuard` (default true) — the built-in `Edit`/`Write` tools require a
   file to have been `Read` this session and to be unchanged since, before it may be

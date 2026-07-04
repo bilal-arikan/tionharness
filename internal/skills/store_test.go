@@ -623,6 +623,44 @@ func TestEnsureDefaultsSeeds(t *testing.T) {
 	}
 }
 
+// TestEnsureDefaultsRefreshesPristine covers the version-aware re-seed: an on-disk
+// default that is an UNMODIFIED previously-shipped version (its hash is the one
+// recorded in the manifest) gets refreshed to the current embedded content, while
+// a user-edited one is preserved.
+func TestEnsureDefaultsRefreshesPristine(t *testing.T) {
+	dir := t.TempDir()
+	if err := EnsureDefaults(dir); err != nil {
+		t.Fatal(err)
+	}
+	guide := filepath.Join(dir, "swarmgo-guide", "SKILL.md")
+	embedded, _ := os.ReadFile(guide) // current embedded content (just seeded)
+
+	// Simulate a PRIOR ship: an older on-disk body whose hash is recorded in the
+	// manifest as the last-shipped version (i.e. the user never touched it).
+	oldBody := []byte("OLD SHIPPED BODY that should be refreshed")
+	if err := os.WriteFile(guide, oldBody, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := loadShippedManifest(dir)
+	m["swarmgo-guide/SKILL.md"] = sha256Hex(oldBody)
+	if err := saveShippedManifest(dir, m); err != nil {
+		t.Fatal(err)
+	}
+
+	// Re-seed: the pristine old copy must be refreshed back to the embedded content.
+	if err := EnsureDefaults(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(guide)
+	if string(got) != string(embedded) {
+		t.Errorf("pristine prior-shipped default was NOT refreshed to embedded content")
+	}
+	// The manifest must now record the fresh embedded hash.
+	if loadShippedManifest(dir)["swarmgo-guide/SKILL.md"] != sha256Hex(embedded) {
+		t.Errorf("manifest not updated to the refreshed hash")
+	}
+}
+
 // TestUseSkillBodySK1 covers SK-1: ${SKILL_DIR} expansion + bundled-files footer.
 func TestUseSkillBodySK1(t *testing.T) {
 	dir := t.TempDir()
