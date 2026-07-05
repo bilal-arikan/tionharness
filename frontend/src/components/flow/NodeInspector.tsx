@@ -84,6 +84,7 @@ export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onMake
               value={node.agentId ?? ''}
               onChange={(id) => onPatch({ agentId: id })}
               placeholder="— ajan seç —"
+              clearable
             />
           </div>
           <div className="block">

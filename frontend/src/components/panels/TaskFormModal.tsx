@@ -219,7 +219,7 @@ export function TaskFormModal({
           <div className="grid grid-cols-2 gap-4">
             <Field label="Ajan (atanan)">
               <div data-testid="task-detail-owner-wrap">
-                <AgentPicker agents={agents} value={ownerAgentId} onChange={setOwnerAgentId} placeholder="Ajan seç (opsiyonel)" />
+                <AgentPicker agents={agents} value={ownerAgentId} onChange={setOwnerAgentId} placeholder="Ajan seç (opsiyonel)" clearable />
               </div>
             </Field>
             <Field label="Akış (opsiyonel)">

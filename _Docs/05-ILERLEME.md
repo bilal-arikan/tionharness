@@ -2,6 +2,26 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-05**
 
+## Ağ ekranı: istatistik + yenile başlık çubuğuna taşındı ✅ (2026-07-05)
+
+`NetworkPanel` App'in generic başlığını kullanıyordu ("Ağ"). Artık kendi başlık
+çubuğu var: "Ağ" solda, **"9 ajan · 13 görev · 2 akış · 0 beceri · 2 MCP"** istatistiği
+sağa dayalı (`ml-auto`), **Yenile** butonu en sağda. İstatistik + yenile eski
+toolbar satırından kaldırıldı; `network` `HEADERLESS_VIEWS`'e eklendi (çift başlık
+olmasın). Playwright: title "Ağ", stats sağda, refresh en sağda, App çift başlığı yok.
+Build temiz.
+
+## AgentPicker: seçili ajan artık kaldırılabilir ✅ (2026-07-05)
+
+- `AgentPicker`'a `clearable` prop'u eklendi. Aktifken seçili bir ajanı temizlemek
+  için iki yol var: **trigger'daki ✕** düğmesi (sağda, `▾` yerine) ve **açılır listenin
+  başındaki "Seçimi kaldır"** seçeneği. İkisi de `onChange('')` çağırıp değeri boşaltır.
+- Etkinleştirildiği yerler: **Board görev formu** (`TaskFormModal` — atama zaten
+  opsiyonel) ve **Akış ajan node'u** (`flow/NodeInspector`). Kullanıcı her ikisinde de
+  seçili ajanı silemiyordu; artık silinebiliyor.
+- Dosyalar: `agents/AgentPicker.tsx`, `panels/TaskFormModal.tsx`, `flow/NodeInspector.tsx`.
+  `tsc -b` temiz.
+
 ## Agents: aktivite paneli chat Detay gibi yan-drawer oldu ✅ (2026-07-05)
 
 - `AgentsView` aktivite paneli artık `SessionDetailPanel` (chat "Detay") ile aynı

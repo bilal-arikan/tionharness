@@ -99,14 +99,28 @@ export function NetworkPanel({ onError }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Toolbar row 1: stats + layout toggle + refresh */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] px-4 py-2 text-xs">
+      {/* Title bar: screen name + right-aligned graph stats + far-right refresh. */}
+      <header className="flex items-center gap-3 border-b border-[var(--color-border)] py-3 max-md:px-3 md:px-6">
+        <span className="shrink-0 text-sm font-semibold">Ağ</span>
         {graph && (
-          <span className="text-[var(--color-text-dim)]">
+          <span className="ml-auto truncate text-xs text-[var(--color-text-dim)]">
             {graph.stats.agents} ajan · {graph.stats.tasks} görev · {graph.stats.flows} akış ·{' '}
             {graph.stats.skills ?? 0} beceri · {graph.stats.mcp ?? 0} MCP
           </span>
         )}
+        <button
+          onClick={load}
+          disabled={loading}
+          className={`flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40 ${graph ? '' : 'ml-auto'}`}
+          title="Yenile"
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          <span className="hidden sm:inline">Yenile</span>
+        </button>
+      </header>
+
+      {/* Toolbar row 1: layout toggle + legend */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] px-4 py-2 text-xs">
         <div className="ml-auto flex items-center gap-3">
           {mode === 'relation' &&
             EDGE_LEGEND.map((l) => (
@@ -136,27 +150,18 @@ export function NetworkPanel({ onError }: Props) {
               className={`flex items-center gap-1 rounded px-2 py-0.5 transition ${
                 mode === 'live' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
               }`}
-              title="Canlı sütun akışı (görevler durum sütunlarında, ajan aktif göreve bağlanır)"
+              title="Canlı boards (görevler durum sütunlarında, ajan aktif göreve bağlanır)"
             >
               <Radio size={13} /> Canlı
             </button>
           </div>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40"
-            title="Yenile"
-          >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            Yenile
-          </button>
         </div>
       </div>
 
       {/* Toolbar row 2: layer chips + density slider */}
       <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] px-4 py-1.5 text-xs">
         <span className="text-[var(--color-text-dim)]">
-          {mode === 'live' ? 'Sütun akışı · katmanlar:' : 'Katmanlar:'}
+          {mode === 'live' ? 'boards · katmanlar:' : 'Katmanlar:'}
         </span>
         {layers.map((l) => {
           const on = visible.has(l.type)
