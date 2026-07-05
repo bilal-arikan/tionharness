@@ -207,3 +207,35 @@ yaptırma**; tüm değişiklikler **native-only**.
 En büyük kazanç **P1**: native yolda volatile dinamiği system'den çıkarıp (claude-cli'nin zaten
 yaptığı gibi) uçuştaki mesaja taşımak → **tools+System zaten HIT olan yapıya mesaj-geçmişi
 cache'ini de eklemek**; ardından **P2** ile özeti cache'li mesaja çevirmek.
+
+## 8. claude-cli süreç modeli ölçümü — respawn+resume vs kalıcı süreç (2026-07-05)
+
+> Bağlam: claude-cli yolunda cache YERLEŞİM disiplini `external-agent-oss` ile aynı (statik
+> system + volatil mesaj-kuyruğu). Tek gerçek fark **süreç sıcaklık modeli**: Craft her tur
+> subprocess'i **respawn+`--resume`** eder; TionSwarm buna ek olarak **kalıcı süreç havuzu**
+> (`claudecli_session.go`) sunar. Bu ikisini aynı statik system + aynı volatil saatle, aynı 3
+> turda kafa-kafaya ölçen benchmark: `providers.TestLiveCacheCompareModes`
+> (`claudecli_cachebench_test.go`, `TIONSWARM_LIVE_CLI=1` ile).
+
+| mod | tur | wall_ms | input | cache_read | cache_write |
+|-----|-----|---------|-------|-----------|-------------|
+| respawn+resume | 1 | 8474 | 3654 | 0 | 43448 |
+| respawn+resume | 2 | 8446 | 1570 | 0 | 57458 |
+| respawn+resume | 3 | 5840 | 2 | 57458 | 1638 |
+| persistent | 1 | 10481 | 3654 | 37998 | 5625 |
+| persistent | 2 | 4810 | 2412 | 0 | 64057 |
+| persistent | 3 | 4893 | 2 | 64057 | 2480 |
+
+**Bulgular:**
+- **Latency net kazanç:** warm-tur (2–3) ortalaması **persistent 4851 ms vs respawn 7143 ms (~%32 hızlı)** —
+  kalıcı süreç her tur process-startup ödemiyor. Bedeli tur-1'de (10481 ms soğuk başlatma) → uzun
+  oturumda net pozitif.
+- **Cache-read eşdeğer:** iki modda da büyüyen transcript tur-2'de yeni cache yazar (read=0),
+  tur-3'te okur (read≈57–64k). Server-side reuse asıl tur-3'te ve ikisi de alıyor.
+- **Metodoloji sınırı:** tek koşu, warm n=2, minik prompt. Ayrıca **çapraz-koşu cache bulaşması**
+  (persistent tur-1 read=37998, hemen önceki respawn koşusunun aynı statik prefix'i ısıtmasından) →
+  temiz cache kıyası için koşuları >5 dk (TTL) ayır veya prefix'i benzersizleştir.
+
+**Sonuç:** §0'daki *"claude-cli yolu zaten optimal (cache yerleşimi)"* tespiti doğrulandı; kalıcı
+süreç havuzunun katkısı **cache değil, warm-latency (~%30)**. Kalıcı havuzu varsayılan açmadan önce
+daha büyük N + TTL-ayrık koşularla tekrar ölçülmeli.
