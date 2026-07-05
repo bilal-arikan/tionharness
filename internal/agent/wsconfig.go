@@ -13,7 +13,7 @@ import (
 //
 //	<workspace>/
 //	├── config/
-//	│   ├── prompts/{summary,reflect,title}.md   runtime utility prompts
+//	│   ├── prompts/{summary,title,compact}.md   runtime utility prompts
 //	│   ├── instructions.md                      workspace-wide agent guidance
 //	│   └── README.md                            human notes (free-form)
 //	├── store/
@@ -24,7 +24,7 @@ import (
 // fallback, so a missing or blank file never breaks a turn.
 
 // PromptKeys lists the editable runtime prompt keys in display order.
-var PromptKeys = []string{"summary", "reflect", "title", "compact"}
+var PromptKeys = []string{"summary", "title", "compact"}
 
 // promptDefaults maps a prompt key to its compiled-in default text, used both to
 // seed a fresh workspace and as the fallback when a file is missing or blank.
@@ -103,8 +103,7 @@ Bu klasör bu workspace'e özel, **düzenlenebilir** dosyaları içerir. Hem sen
 (doğrudan diskten) hem de uygulama (Ayarlar ekranı / ajanlar) bu dosyaları
 değiştirebilir.
 
-- ` + "`prompts/summary.md`" + ` — ` + "`/memory` · `/board` · `/flows`" + ` özet komutlarının sistem promptu
-- ` + "`prompts/reflect.md`" + ` — ` + "`/reflect`" + ` (dream cycle) yansıma promptu
+- ` + "`prompts/summary.md`" + ` — ` + "`/board` · `/flows`" + ` özet komutlarının sistem promptu
 - ` + "`prompts/title.md`" + ` — otomatik başlık üretimi sistem promptu
 - ` + "`prompts/compact.md`" + ` — bağlam sıkıştırma (compaction) promptu — **iki ` + "`%s`" + ` yer tutucusu** (mevcut özet, yeni mesajlar) korunmalı; bozuksa gömülü varsayılana düşer
 - ` + "`instructions.md`" + ` — bu workspace'teki tüm ajanlara eklenen yönergeler

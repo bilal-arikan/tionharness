@@ -33,7 +33,7 @@ type cliMCPServer struct {
 
 // interactionCoreKey / interactionExtendedKey are the two mcp-config keys for the
 // in-process Interaction MCP server. Core keeps the historical "tionswarm_interaction"
-// key so existing namespaced references (use_skill, core_memory, trace stripping)
+// key so existing namespaced references (use_skill, trace stripping)
 // stay valid; Extended is a separate key whose tools the CLI defers via ToolSearch
 // (claude-cli 2.1.x+). The CLI namespaces tools as mcp__<key>__<tool>.
 const (

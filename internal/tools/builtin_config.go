@@ -18,8 +18,8 @@ import (
 // README) — separately from the regular workspace files. They are bound to a
 // sandbox rooted at the config directory, so paths can never escape it.
 //
-// Editing config/prompts/{summary,reflect,title}.md changes how the runtime
-// summarizes / reflects / titles for this workspace on the next call; editing
+// Editing config/prompts/{summary,title,compact}.md changes how the runtime
+// summarizes / titles / compacts for this workspace on the next call; editing
 // instructions.md takes effect on the next workspace load (the file is the
 // source of truth there).
 
@@ -34,7 +34,7 @@ func NewConfigReadTool(sb Sandbox) ConfigReadTool { return ConfigReadTool{sb: sb
 func (ConfigReadTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "read_config",
-		Description: "Read a workspace config file (under config/: prompts/summary.md, prompts/reflect.md, prompts/title.md, instructions.md, README.md). Paths are relative to the config folder.",
+		Description: "Read a workspace config file (under config/: prompts/summary.md, prompts/title.md, prompts/compact.md, instructions.md, README.md). Paths are relative to the config folder.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"path":{"type":"string","description":"File path relative to the config folder, e.g. prompts/summary.md"}},
@@ -81,7 +81,7 @@ func NewConfigWriteTool(sb Sandbox) ConfigWriteTool { return ConfigWriteTool{sb:
 func (ConfigWriteTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "write_config",
-		Description: "Create or overwrite a workspace config file (under config/). Use this to edit your own runtime prompts (prompts/summary.md, prompts/reflect.md, prompts/title.md), the workspace instructions (instructions.md) or notes (README.md). A blank prompt file makes the runtime use its built-in default. Paths are relative to the config folder.",
+		Description: "Create or overwrite a workspace config file (under config/). Use this to edit your own runtime prompts (prompts/summary.md, prompts/title.md, prompts/compact.md), the workspace instructions (instructions.md) or notes (README.md). A blank prompt file makes the runtime use its built-in default. Paths are relative to the config folder.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{

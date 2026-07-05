@@ -267,7 +267,7 @@ type WorkspacePayload struct {
 	Columns      []BoardColumn `json:"columns,omitempty"`
 
 	// Editable config files (all optional). Prompts holds only NON-DEFAULT runtime
-	// prompt overrides (key → content, e.g. summary/reflect/title); a key at its
+	// prompt overrides (key → content, e.g. summary/title/compact); a key at its
 	// compiled-in default is omitted. Readme is the free-form config/README.md.
 	// Both are seeded as files under <workspace>/config/ on install.
 	Prompts map[string]string `json:"prompts,omitempty"`
