@@ -57,7 +57,10 @@ graph LR
 > Testler: `anthropic_test.go` (yeni: `TestToAnthropicMessages_DynamicTrailsAfterBreakpoint`,
 > `TestToAnthropicMessages_DynamicIgnoredWhenCacheOff`, güncellenen systemField testleri) +
 > `minimax_test.go` `TestOpenRouter_SystemCacheControl` yeni yerleşimi doğrular. **289 test yeşil.**
-> **Kalan:** canlı `cache_read>0` ölçümü (anthropic/openrouter anahtarı + gerçek tur gerekir).
+> **Canlı doğrulandı (2026-07-05, OpenRouter `anthropic/claude-haiku-4.5`):** statik System
+> (~8.2k tok) + geçmiş, dinamik **her tur değişmesine rağmen** turn-2'de `cache_read=8197`
+> HIT aldı → dinamiğin mesaj tail'ine taşınması önekin cache'ini bozmuyor. (P1'den önce
+> dinamik system'de olduğu için bu 0 olurdu.)
 
 - **Değişim:** `composeTurnRequest`/provider'lar `req.SystemDynamic`'i artık `system` alanına
   koymasın; **son (yeni) kullanıcı mesajına ek metin bloğu** olarak eklesin, **persist etmeden**.
@@ -89,7 +92,9 @@ graph LR
 > `TestBuildSystemAndMessages_SummaryHeadCachedWhenOn` / `...FoldsIntoSystemWhenOff`),
 > `minimax_test.go` (`TestOpenRouter_SummaryHeadMessage`, `TestMinimax_SummaryFoldsIntoSystem`),
 > `claudecli_live_test.go` (özet [Context] tail regresyon guard'ı). **311 test yeşil, tsc temiz.**
-> **Kalan:** canlı `cache_read>0` (P1 ile ortak — anahtar + gerçek tur gerekir).
+> **Canlı doğrulandı (2026-07-05, OpenRouter):** turn-1 özet head'i yazıldıktan sonra turn-2
+> aynı özet + geçmiş için `cache_read=8216` HIT aldı → stabil özet head'i cache'li önekin
+> parçası, her tur taze gönderilmiyor.
 
 - **Değişim:** `conversationSummaryBlock`'u Dinamik'ten çıkar; özeti canlı mesaj dizisinin
   **başına** bir mesaj olarak koy (ör. `role=user`, `"[Önceki konuşmanın özeti]\n<summary>"`),
@@ -133,6 +138,11 @@ graph LR
 > `CacheBreaks`/`LastCacheBreak` + anomali (1→info, ≥2→warn). Frontend: Debug kartında "Cache
 > kırılması" pill + event filtresi + etiket. Testler: `cachebreak_test.go` (sig/atıf/kind),
 > `debug_journal_test.go TestDebugSummaryCacheBreaks`. **go test yeşil, tsc temiz.**
+> **Canlı doğrulama (2026-07-05) sırasında bulunan iyileştirme:** OpenRouter cache-write
+> sayacını raporlamıyor (soğuk öneki düz `input` olarak faturalıyor). Tetik koşulu
+> `cacheWrite≥floor`'dan **`cacheWrite+input≥floor`**'a genişletildi → kırılma hem native
+> Anthropic'te (prefix cache_creation'da) hem OpenRouter'da (prefix input'ta) yakalanır.
+> Canlı: sistem öneki başından değişince `cache_read` 8216→0, soğuk önek input=8222 → tetiklenir.
 
 - `promptCacheBreakDetection.ts` deseni: oturum-başına system+tools+cache_control hash'le,
   turdan tura karşılaştır; `cache_read` %5+ ve 2k+ token düşerse sebep ata (systemPromptChanged

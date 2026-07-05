@@ -17,8 +17,12 @@ type cacheProbe struct {
 	warmed bool // at least one warm cache READ has been observed for this session
 }
 
-// cacheBreakMinTokens is the cold-write floor below which a prefix re-write is not
-// worth flagging (small prompts are cheap and their write is noise).
+// cacheBreakMinTokens is the cold-prefix floor below which a re-write is not worth
+// flagging (small prompts are cheap and their miss is noise). It is measured against
+// cacheWrite + input because providers report a cold prefix differently: native
+// Anthropic puts the re-written prefix in cache_creation (cacheWrite) with a small
+// input, while OpenRouter reports NO write counter and bills the whole cold prefix
+// as plain input — so summing the two catches a break on either transport.
 const cacheBreakMinTokens = 2000
 
 // cachePrefixSig hashes the part of a request that MUST stay byte-stable for the
@@ -80,9 +84,11 @@ func (r *Runtime) noteCacheOutcome(ctx context.Context, agent db.Agent, req prov
 		return
 	}
 
-	// A large cold prefix re-write (write ≥ floor, no read) AFTER the session had been
-	// warm = the cache broke. Attribute the most likely cause from what changed.
-	if prev.warmed && u.CacheWriteTokens >= cacheBreakMinTokens {
+	// A large cold prefix (no read, and the prefix was re-paid — as cacheWrite on
+	// Anthropic or as plain input on OpenRouter) AFTER the session had been warm =
+	// the cache broke. Attribute the most likely cause from what changed.
+	coldPrefix := u.CacheWriteTokens + u.InputTokens
+	if prev.warmed && coldPrefix >= cacheBreakMinTokens {
 		tag, detail := attributeCacheBreak(prev, sig, model)
 		r.emitDebug(ctx, db.DebugEvent{
 			Type:       db.DebugCacheBreak,

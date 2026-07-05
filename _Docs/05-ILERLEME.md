@@ -29,10 +29,17 @@
 build edildi (tek-binary'e gömülü). Dokümanlar: `_Docs\50` (P2–P5 ✅), `_Docs\38` (cache_break
 olayı), default skill `tionswarm-settings`.
 
-> ⚠️ **Kalan (opsiyonel, kullanıcı onayı gerekir):** Canlı `cache_read>0` ölçümü — gerçek bir
-> anthropic/openrouter turu (API anahtarı + token harcaması) gerektirir. Unit testler istek
-> şeklini kanıtlıyor; canlı cache kazanımı bir anahtarla ölçülmeli. Kullanıcının backend'i yeni
-> kodu almak için `.\scripts\dev.ps1` ile yeniden başlatılmalı (şu an çalışan örnek yok).
+**Canlı doğrulandı ✅ (2026-07-05, OpenRouter `anthropic/claude-haiku-4.5`, gerçek API):**
+- **P1** — statik System (~8.2k tok) + geçmiş, **dinamik her tur değişmesine rağmen** turn-2'de
+  `cache_read=8197` HIT aldı (P1'den önce dinamik system'de olduğu için bu 0 olurdu).
+- **P2** — stabil özet head'i turn-2'de `cache_read=8216` HIT → özet cache'li önekin parçası.
+- **P4** — sistem öneki başından değişince `cache_read` 8216→0 çöktü → detektör kırılmayı yakalar.
+  Canlı test bir eksik ortaya çıkardı ve düzeltildi: OpenRouter write sayacını raporlamadığından
+  tetik `cacheWrite+input` üzerinden ölçülüyor (native Anthropic + OpenRouter ikisini de kapsar).
+
+> Not: Native anthropic anahtarı store'da sahte (`asdfasdf…`) olduğu için doğrulama gerçek
+> OpenRouter anahtarıyla yapıldı (aynı native cache kod yolu: OpenAICompat cacheSystem). Kullanıcının
+> backend'i yeni kodu almak için `.\scripts\dev.ps1` ile yeniden başlatılmalı (şu an çalışan örnek yok).
 
 
 ## Ağ ekranı mobilde kasması giderildi (vis-network lite modu) ✅ (2026-07-05)
