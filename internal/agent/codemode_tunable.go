@@ -10,7 +10,7 @@ package agent
 // on), the MCP catalog is exposed as generated Python bindings behind the
 // run_code tool so MCP schemas stay out of the model's context window. Driven
 // live from the Settings screen (enableCodeMode) via applySettings; the
-// SWARMGO_CODE_MODE env var seeds the setting once at boot.
+// TIONSWARM_CODE_MODE env var seeds the setting once at boot.
 func (t *Tunables) SetCodeMode(enabled bool) {
 	t.mu.Lock()
 	t.codeMode = enabled

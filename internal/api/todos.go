@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/progress"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/progress"
 )
 
 // todoContextBlock builds a system-prompt section showing the session's active

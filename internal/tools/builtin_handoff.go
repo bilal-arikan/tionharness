@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // HandoffResult is the outcome of a context-reset handoff: the fresh session that

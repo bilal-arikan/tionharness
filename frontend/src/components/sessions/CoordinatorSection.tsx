@@ -25,12 +25,12 @@ export function CoordinatorSection({ sessionId, role, refreshKey, onError, onRol
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
   // Worker roster collapse (persisted) — the list can get long, so let it fold.
   const [workersOpen, setWorkersOpen] = useState(
-    () => localStorage.getItem('swarmgo.coordWorkersOpen') !== '0',
+    () => localStorage.getItem('tionswarm.coordWorkersOpen') !== '0',
   )
   const toggleWorkers = () =>
     setWorkersOpen((v) => {
       const next = !v
-      localStorage.setItem('swarmgo.coordWorkersOpen', next ? '1' : '0')
+      localStorage.setItem('tionswarm.coordWorkersOpen', next ? '1' : '0')
       return next
     })
 

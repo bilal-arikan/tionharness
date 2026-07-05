@@ -2,13 +2,13 @@ package conversation
 
 // CLI-wrapper (claude-cli / Claude Code) token overhead reference.
 //
-// When SwarmGo delegates a turn to a CLI-wrapper provider (claude-cli), the CLI
-// wraps SwarmGo's appended payload inside its OWN harness before sending it to the
+// When TionSwarm delegates a turn to a CLI-wrapper provider (claude-cli), the CLI
+// wraps TionSwarm's appended payload inside its OWN harness before sending it to the
 // model: a large built-in system prompt, its own built-in tool schemas, and the
 // MCP bridge that re-serializes every exposed tool. That harness is invisible to
-// SwarmGo's segment estimator (EstimateTokens / the session-context TotalTokens)
+// TionSwarm's segment estimator (EstimateTokens / the session-context TotalTokens)
 // yet is fully billed as model input. The gap it creates is the "claude-cli tax":
-// the measured per-call input runs ~3x SwarmGo's own estimate on typical turns.
+// the measured per-call input runs ~3x TionSwarm's own estimate on typical turns.
 //
 // These constants are EMPIRICALLY MEASURED (claude-cli 2.1.201, 2026-07-04) so any
 // token-accounting code can PREDICT the tax before the first turn is even sent —
@@ -24,10 +24,10 @@ package conversation
 // Observed:
 //   - pure system prompt, 0 tools (all built-ins disallowed):        17067
 //   - + Claude Code built-in tool schemas (~15 tools):               26265  (built-ins ≈ 9198)
-//   - avg bridged SwarmGo tool JSON schema (name+desc+inputSchema):  ~215   (range 42–710)
+//   - avg bridged TionSwarm tool JSON schema (name+desc+inputSchema):  ~215   (range 42–710)
 //
 // Numbers are approximate (±~15%): the CLI re-serializes MCP schemas more verbosely
-// than SwarmGo's ~4 chars/token heuristic, and the real tokenizer differs from the
+// than TionSwarm's ~4 chars/token heuristic, and the real tokenizer differs from the
 // character-count estimate. Re-run the measurement when the claude-cli major version
 // changes (its baseline system prompt grows over releases).
 const (
@@ -40,18 +40,18 @@ const (
 	// Measured: 26265 - 17067 ≈ 9200.
 	CLIBuiltinToolsTokens = 9200
 
-	// CLIBaseTokens is the fixed floor a CLI-wrapper turn pays before ANY SwarmGo
+	// CLIBaseTokens is the fixed floor a CLI-wrapper turn pays before ANY TionSwarm
 	// payload or bridged MCP tool: base system prompt + the CLI's own built-in tools.
 	CLIBaseTokens = CLIBaseSystemTokens + CLIBuiltinToolsTokens // ~26200
 
-	// CLIAvgBridgedToolTokens is the average JSON-schema cost of ONE SwarmGo tool
+	// CLIAvgBridgedToolTokens is the average JSON-schema cost of ONE TionSwarm tool
 	// exposed over the MCP bridge (name + description + inputSchema + the
 	// mcp__<server>__<tool> namespacing). Measured across the live tool catalog:
 	// mean ~215, range 42–710 (large external MCP tools can exceed 1600).
 	CLIAvgBridgedToolTokens = 215
 )
 
-// PredictCLIOverhead estimates the CLI-wrapper harness token cost that SwarmGo's
+// PredictCLIOverhead estimates the CLI-wrapper harness token cost that TionSwarm's
 // own segment estimate (EstimateTokens / session-context TotalTokens) does NOT
 // include, for a turn that eagerly exposes loadedTools bridged tools. This is the
 // projected gap between "Tahmin" and "Gerçek" before the first turn is measured.

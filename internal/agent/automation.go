@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
 )
 
 // TurnFinished is the signal a completed agent turn delivers to the automation

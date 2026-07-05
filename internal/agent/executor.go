@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/orchestration"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // renderFlowTranscript turns a finished flow run into a plain-text transcript: a

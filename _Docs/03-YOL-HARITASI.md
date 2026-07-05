@@ -1,4 +1,4 @@
-# SwarmGo — Yol Haritası (Aşama Aşama)
+# TionSwarm — Yol Haritası (Aşama Aşama)
 
 > İlke: **MVP ile başla, katman katman büyüt.** Her faz çalışan ve test edilebilir bir çıktı verir.
 
@@ -112,14 +112,14 @@ graph LR
 - [ ] GitHub Actions: Win/macOS/Linux otomatik derleme
 - **Çıktı:** Dağıtıma hazır masaüstü uygulaması.
 
-> **Fikir (2026-06-22) — Sistem tepsisi (system tray) entegrasyonu.** SwarmGo arka planda
+> **Fikir (2026-06-22) — Sistem tepsisi (system tray) entegrasyonu.** TionSwarm arka planda
 > çalışan otonom-ajanlı bir runtime; masaüstü dağıtımında **tray'e küçülme + durum göstergesi**
 > (kaç ajan aktif/çalışıyor) + hızlı menü (workspace aç/durdur, çıkış) + mevcut tür-bazlı
 > masaüstü bildirimleriyle bütünleşme doğal bir tamamlayıcı.
 > - **Önce Wails'in yerleşik tray API'sine bak** — varsa ayrı bağımlılığa gerek yok.
 > - **B planı:** [`gogpu/systray`](https://github.com/gogpu/systray) — **saf Go, CGO'suz** tray
 >   kütüphanesi (Win `Shell_NotifyIconW` · macOS `NSStatusBar` · Linux D-Bus
->   StatusNotifierItem). SwarmGo'nun "tek binary, çapraz-derleme, minimal bağımlılık"
+>   StatusNotifierItem). TionSwarm'nun "tek binary, çapraz-derleme, minimal bağımlılık"
 >   felsefesiyle birebir uyumlu. **Uyarılar:** (1) v0.1.0 — çok genç, üretime erken; (2) Wails'in
 >   kendi event loop'u ile systray message-pump'ı çakışabilir (özellikle macOS main-thread →
 >   deadlock riski), entegrasyonda test şart. Yalnız native masaüstü modunda anlamlı; web
@@ -145,7 +145,7 @@ graph LR
 - [x] **C1** — Sistem-prompt **cache sınırı**: `Request.System` (statik: persona+profil) / `Request.SystemDynamic` (dinamik: bellek+özet); Anthropic cache breakpoint yalnız statik blokta → araç+statik prefix cache'lenir, dinamik suffix cache'i bozmaz
 - [x] **Ara özellikler** — otonom olay akışı (`/api/events`), workspace switcher + çapraz-ws rozet, tıklanabilir bildirimler, sessions-only sidebar + okundu/okunmadı, tema presetleri
 - [x] **A1 (loop recovery)** — Agent loop **recovery + `continuationReason`**: saf karar katmanı (`agent/recovery.go`: `loopState`+`decideRecovery`), max-token resume (guard'lı + partial-stitch + withhold), reaktif compaction (`conversation/reactive.go`, assistant-sınır fold), minimax `length`→`max_tokens` map; `recovery_test.go`+`reactive_test.go`. **Kalan:** max-token escalation merdiveni (8k→64k) *(A3 iptal sentetiği ✅ 2026-06-19)*
-- [x] **Self-management genişlemesi** ✅ 2026-06-19 — öz-yönetim araç ailesine **hooks/MCP/secret/skill/settings** eklendi (`builtin_{hookmgmt,mcpmgmt,secretmgmt,skillmgmt,settings}.go`); provenance guard'ı (`created_by`); öğretici default skill `swarmgo-self-management` + ayar referansı `swarmgo-settings`. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
+- [x] **Self-management genişlemesi** ✅ 2026-06-19 — öz-yönetim araç ailesine **hooks/MCP/secret/skill/settings** eklendi (`builtin_{hookmgmt,mcpmgmt,secretmgmt,skillmgmt,settings}.go`); provenance guard'ı (`created_by`); öğretici default skill `tionswarm-self-management` + ayar referansı `tionswarm-settings`. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
 - [x] **Ayarlar canlı-uygulama + validation** ✅ 2026-06-19 — `get_settings`/`update_settings` tool'ları + `settings.Validate` (enum reddi/clamp) + bridge wiring + `settings` SSE event'i ile çok-pencere senkronu. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
 - [x] **İlişki Grafiği** ✅ 2026-06-19 — Workspace Ağı (NavRail) + Hafıza Bilgi Grafiği (salt-okunur React Flow ağları, Fizik/Küme yerleşim). Bkz. `_Docs/23-ILISKI-GRAFIGI.md`
 - [x] **CLI araç köprüsü (CLI-1/2/3)** ✅ 2026-06-19 — claude-cli ajanları Interaction MCP üzerinden: `use_skill` skill-gövde yükleme (CLI-1), advertise+allowlist tek-kaynak (`InteractionEndpoint.ToolNames`, CLI-2), lazy self-management ailesi köprüsü (`BridgeTools`/`Tools(token)`, CLI-3). Bkz. `_Docs/11-INTERACTION-MCP.md`. Kalan: claude-cli ile canlı uçtan-uca doğrulama.
@@ -179,7 +179,7 @@ graph LR
   sistem-uyarısı enjekte eder ("bağlam doluyor, önemliyi belleğe yaz") + ajan `memory_write` (C3) ile neyin
   kalıcı olacağına karar verir (sessiz oto-katlamadan önce); (b) **self-editing core memory bloğu**:
   `SystemDynamic` içinde ajanın `core_memory_append/replace` araçlarıyla güncelleyebildiği küçük kalıcı
-  "çalışma belleği" bloğu (Letta'nın human/persona memory-block'larına karşılık). SwarmGo'nun iki-parçalı
+  "çalışma belleği" bloğu (Letta'nın human/persona memory-block'larına karşılık). TionSwarm'nun iki-parçalı
   sistem promptu + Faz 6 recall + C3 bunun altyapısı; eksik olan **ajana açık araç yüzeyi + pressure
   sinyali**. İlişkili: **C2** (compaction), **C3** (memory_write), **HA-1** (kullanıcı modelleme).
   **Detaylı uygulama planı:** [`31-MEMGPT-CORE-MEMORY.md`](31-MEMGPT-CORE-MEMORY.md) (Mod C — neden doğrudan
@@ -198,7 +198,7 @@ graph LR
 
 ## external-agent-oss İncelemesinden (2026-06-17)
 
-> Kaynak: [external-agent-project/external-agent-oss](https://github.com/external-agent-project/external-agent-oss) v0.2.19→v0.10.3 (71 release) analizi. Tam gerekçe + kod-doğrulama (EXISTS/MISSING) + sürüm-sürüm liste: [13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md). Maddeler SwarmGo koduna karşı doğrulandı.
+> Kaynak: [external-agent-project/external-agent-oss](https://github.com/external-agent-project/external-agent-oss) v0.2.19→v0.10.3 (71 release) analizi. Tam gerekçe + kod-doğrulama (EXISTS/MISSING) + sürüm-sürüm liste: [13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md). Maddeler TionSwarm koduna karşı doğrulandı.
 
 ### 🔴 P0 — Doğrulanmış boşluklar (yüksek etki)
 - [x] **CG-1 — Tool çıktısı boyut sınırı** ✅ **YAPILDI** (commit `69601ab`, 2026-06-17): `tools/registry.go` `capToolOutput()` (100K bayt, UTF-8 sınırında trunc + `…[truncated N bytes]`) `Registry.Call`/`CallStream`'de built-in + MCP tüm başarılı çıktılara uygulanır. `registry_cap_test.go`. *(craft v0.4.4)*
@@ -246,7 +246,7 @@ graph LR
 
 > Kaynak + tam analiz: [14-PROVIDER-MIMARISI-INCELEME.md](arsiv/14-PROVIDER-MIMARISI-INCELEME.md).
 > İncelenen referans proje ~70 provider'ı "metadata'yı protokolden ayır" deseniyle düşük eforla ekliyor;
-> SwarmGo zaten aynı mimaride (CG-19). Aşağıdakiler opsiyonel genişletmeler. **Plan — uygulanmadı.**
+> TionSwarm zaten aynı mimaride (CG-19). Aşağıdakiler opsiyonel genişletmeler. **Plan — uygulanmadı.**
 
 - [x] **SC-1 — Built-in API provider preset kataloğu** (CLI değil) ✅ (2026-06-25): market'e **22 provider pack'i** eklendi (toplam 26), her biri `{id,label,kind,baseUrl,defaultModel,models}` — DeepSeek/Groq/OpenRouter/Ollama (mevcut) + xAI/Mistral/Gemini/Together/Fireworks/Perplexity/Cerebras/SambaNova/DeepInfra/Hyperbolic/Novita/Nebius/NVIDIA-NIM/Cohere/Moonshot/Qwen/Zhipu-GLM/MiniMax/SiliconFlow/GitHub-Models + Anthropic-uyumlu kimi/glm. Sıfır yeni protokol kodu; tek-tıkla market kurulumu. Betik: `gen_providers.py`. bkz. `21-MARKET.md`.
 - [ ] **SC-2 — Generic CLI factory** (CLI ailesi): referans projenin `streamGenericCliChat` deseni (binary spawn + stdout satır-stream, JSON parse yok) ile yapısal çıktısı olmayan onlarca coding-CLI'yi tek handler + veri listesiyle ekle. Yeni `kind_genericcli.go` + `[]genericCLI{id,label,binary}`. **CLI işi — CLI fazı açılınca, SC-1'den sonra.**
@@ -256,17 +256,17 @@ graph LR
 ## the external agent-Agent incelemesinden — Kendini-geliştiren ajan özellikleri (2026-06-19)
 
 > Kaynak: [nousresearch/external-context-agent](https://github.com/nousresearch/external-context-agent) ("seninle büyüyen ajan")
-> ile SwarmGo karşılaştırması. the external agent mesajlaşma-merkezli, kendini-geliştiren bir kişisel asistan;
-> SwarmGo web-UI merkezli, tek-binary self-hosted orkestrasyon. İki alanda the external agent açık ara önde ve
-> SwarmGo'ya değer katacak. **Plan — uygulanmadı; ileride eklenebilecek featureler.**
+> ile TionSwarm karşılaştırması. the external agent mesajlaşma-merkezli, kendini-geliştiren bir kişisel asistan;
+> TionSwarm web-UI merkezli, tek-binary self-hosted orkestrasyon. İki alanda the external agent açık ara önde ve
+> TionSwarm'ya değer katacak. **Plan — uygulanmadı; ileride eklenebilecek featureler.**
 
 - [ ] **HA-1 — Gelişmiş hafıza: tam-metin arama + LLM özet + kullanıcı modelleme** *(yüksek değer)*:
-  the external agent hafızası üç katman taşıyor — (a) **FTS5 tam-metin arama** oturumlar üzerinde (SwarmGo'da
+  the external agent hafızası üç katman taşıyor — (a) **FTS5 tam-metin arama** oturumlar üzerinde (TionSwarm'da
   mevcut **CG-16** ile örtüşür; Go tarafında ripgrep veya bleve/saf-Go ters-indeks ile, DB-siz
-  felsefeye uygun), (b) **LLM-destekli özetleme** ile çapraz-oturum recall (SwarmGo'da `Reflect`
+  felsefeye uygun), (b) **LLM-destekli özetleme** ile çapraz-oturum recall (TionSwarm'da `Reflect`
   dream-cycle + rolling summary kısmen var; oturumlar-arası kalıcı özet indeksine genişletilir),
   (c) **Honcho-benzeri kullanıcı modelleme** — etkileşimlerden kalıcı kullanıcı profili çıkarma
-  (tercihler/bağlam/davranış). SwarmGo'nun mevcut lexical-cosine recall'ı (Faz 6) bunun altyapısı;
+  (tercihler/bağlam/davranış). TionSwarm'nun mevcut lexical-cosine recall'ı (Faz 6) bunun altyapısı;
   üzerine kalıcı kullanıcı-profili entity'si + oto-güncelleme eklenir. İlişkili: **CG-16**, **C3** (memory_write).
   > ✅ **(c) kullanıcı modelleme TAMAMLANDI (2026-06-23):** `human` çekirdek bloğu dream-cycle'a
   > piggyback eden bir geçişle journal'dan otomatik doldurulur (C6 / `31-MEMGPT-CORE-MEMORY.md` Parça 4b).
@@ -274,7 +274,7 @@ graph LR
 - [ ] **HA-2 — Kendini-geliştiren prosedürel skill + skill hub** *(yüksek değer — ayırt edici)*:
   harici ajanin en özgün yanı: ajan zor bir görevi tamamladıktan sonra **kendi prosedürel skill'ini
   otonom yazar** ve tekrar kullanımla **iyileştirir** (procedural memory); skill'ler
-  [agentskills.io](https://agentskills.io) merkezi hub'ında paylaşılır. SwarmGo'da skill sistemi
+  [agentskills.io](https://agentskills.io) merkezi hub'ında paylaşılır. TionSwarm'da skill sistemi
   (dosya-tabanlı, global/workspace tier, `create_skill`/`delete_skill`) + market (SwarmPack v1)
   **zaten var** — eksik olan **otonom skill üretimi** (görev sonrası ajanın deneyimden skill
   damıtması) ve **skill'in zamanla iyileşmesi** (kullanım geri-bildirimiyle revizyon). Mevcut
@@ -282,7 +282,7 @@ graph LR
   "görev-sonrası skill-damıtma" hook'u + agentskills.io uyumlu içe/dışa aktarım eklenir.
   İlişkili: market (`_Docs/21-MARKET.md`), self-management (`_Docs/24-SELF-MANAGEMENT.md`).
 
-> **Not:** İkisi de SwarmGo'nun mevcut alt sistemlerinin (Faz 6 hafıza, skill sistemi, market,
+> **Not:** İkisi de TionSwarm'nun mevcut alt sistemlerinin (Faz 6 hafıza, skill sistemi, market,
 > `Reflect`) **üzerine** kurulabilir; sıfırdan değil. harici ajanin diğer güçlü yanları (mesajlaşma
 > gateway → **CG-21**; çoklu çalıştırma backend'i Docker/SSH/Modal → kapsam dışı/D3) ayrı maddelerde.
 
@@ -292,7 +292,7 @@ graph LR
 
 > Kaynak: bu oturumda caveman (juliusbrussee/caveman) + genel CC skill ekosistemi
 > (anthropics/skills, agentskills.io, tonsofskills, alirezarezvani/claude-skills…) incelemesi.
-> CC ile SwarmGo skill formatının **çekirdeği aynı** (SKILL.md = frontmatter + markdown gövde)
+> CC ile TionSwarm skill formatının **çekirdeği aynı** (SKILL.md = frontmatter + markdown gövde)
 > → "talimat" skill'leri ~kopyala-yapıştır portlanır. **Kısmen uygulandı (2026-06-24).**
 
 - [x] **SK-IMP — Gömülü CC skill importer** *(Seviye 2)* ✅ **TAMAMLANDI (2026-06-24)** — çekirdek + local + GitHub + agent tool + UI:
@@ -323,7 +323,7 @@ graph LR
     - [x] **SK-1 ✅ (2026-06-23) — Çok-dosyalı skill (bundled resources):** skill bir KLASÖR olabilsin; SKILL.md gövdesinin
       atıf yaptığı ek dosyalar (reference.md, şablon, script) on-demand `fs` ile okunsun. Bugün skill tek-dosya
       → birçok CC skill'i tam portlanamaz. **CC deseni:** `createSkillCommand` `baseDir` taşır + gövdede
-      `${CLAUDE_SKILL_DIR}`/`${CLAUDE_SESSION_ID}` ikamesi → gömülü dosyalara/scriptlere atıf. SwarmGo'da
+      `${CLAUDE_SKILL_DIR}`/`${CLAUDE_SESSION_ID}` ikamesi → gömülü dosyalara/scriptlere atıf. TionSwarm'da
       `Store.Body`'ye `${SKILL_DIR}` ikamesi + ajanın sibling dosyaları `fs` ile okuması. **Porter için ön-şart.**
     - [x] **SK-2 ✅ (2026-06-23) — Ölçeklenebilir keşif (`skill_search` + koşullu `paths:`):**
       Uygulandı: `paths:` taşıyan skill auto-advertise'dan çıkar + `Store.Search` + `skill_search`
@@ -333,14 +333,14 @@ graph LR
       shared özetleri her tura enjekte etmek prompt'u şişirir. **CC iki mekanizma kullanıyor (örnek al):**
       (a) `paths:` frontmatter ile **koşullu skill** — skill yalnız eşleşen dosyaya dokunulunca aktive olur
       (`activateConditionalSkillsForPaths`, gitignore-tarzı eşleşme); (b) dosya yolundan yukarı yürüyüp
-      `.claude/skills` keşfi. SwarmGo'da: `paths:` koşullu aktivasyon (PostToolUse/fs-touch ile) + `skill_search`
+      `.claude/skills` keşfi. TionSwarm'da: `paths:` koşullu aktivasyon (PostToolUse/fs-touch ile) + `skill_search`
       aracı (`tool_search` ikizi) + `estimateSkillFrontmatterTokens` benzeri özet-token ölçümü. **Ölçek ön-şartı.**
     - [x] **SK-3 ✅ (2026-06-23) — `allowed_tools` enforcement:** `AlwaysAllow` bugün yalnız UI'da, **uygulanmıyor**. **CC deseni:**
       skill çalışırken `allowedTools` → `alwaysAllowRules.command`'a enjekte edilir (skill kapsamında auto-allow).
-      SwarmGo'da skill yüklenince ilan ettiği araçları oturum/skill kapsamında scope/auto-allow et.
+      TionSwarm'da skill yüklenince ilan ettiği araçları oturum/skill kapsamında scope/auto-allow et.
     - [x] **SK-4 ✅ (2026-06-23) — Zengin frontmatter passthrough:** CC `version`/`disable-model-invocation`/`user-invocable`/
       `context: fork`/`agent`/`model`/`effort`/`hooks`/`paths` taşıyor. En azından `version`/`source_url`/`license`
-      (provenance) + `user-invocable` SwarmGo'ya eklensin; gerisi degrade-gracefully korunur (parser zaten bilinmeyen
+      (provenance) + `user-invocable` TionSwarm'ya eklensin; gerisi degrade-gracefully korunur (parser zaten bilinmeyen
       anahtarı tutuyor).
     - [ ] **SK-5 — Kategori/etiket + onay-guard + dedup:** etiketli filtreli katalog; `disable-model-invocation`
       muadili "yan-etkili skill, otomatik tetikleme yok" guard'ı; **realpath ile dedup** (CC `getFileIdentity` —
@@ -357,19 +357,19 @@ graph LR
 > Kaynak: bir dev-oturumunun (`260617-gentle-coyote`) analizi. Oturumda agent'ın
 > **kendi muhakemesiyle** çözdüğü üç sürtünme (paralel-commit yarışı, port çakışması,
 > elle temizlik) ve bir yanlış karar (varlık-kontrolü yapmadan "özellik yok" demek)
-> SwarmGo'nun da yaşayacağı gerçek mimari boşluklara birebir oturuyor — çünkü ürün de
+> TionSwarm'nun da yaşayacağı gerçek mimari boşluklara birebir oturuyor — çünkü ürün de
 > birden çok ajanı **aynı workspace'te** shell/fs/git araçlarıyla eşzamanlı koşturuyor.
 > Amaç: bu davranışları muhakemeden **mekanizmaya** taşımak. Önceliklendirme: 1. dalga
 > RG-6 + RG-1 + RG-4; 2. dalga RG-2 + RG-3 + RG-5.
 
 - [ ] **RG-1 — Entity versioning + CAS** *(1. dalga, S-M, yüksek değer)*: `db` entity'lerine `Version int`; her `mutate*Locked` bump'lar; yazım araç/API'sinde opsiyonel `If-Match` → bayat sürüm reddedilir. Belgelenmiş **"son yazan kazanır"** veri-kaybını kapatır. Temel: atomik `*.tmp`→`rename` + `store.go mutateSessionLocked` deseni (zaten var).
 - [ ] **RG-2 — Workspace git-lock + provenance-scoped staging** *(2. dalga, M, yüksek değer)*: workspace başına tek-yazar git kilidi + ajan yalnız dokunduğu/`created_by` path'leri stage eder (oturumda elle Python ile yapılanın ürünleşmiş hali). Temel: `created_by` provenance (`_Docs/24-SELF-MANAGEMENT.md`) + `builtin_shell.go` git çağrıları.
-- [ ] **RG-3 — Kaynak kira (lease) registry** *(2. dalga, M, orta değer)*: ajan port/temp-dir ister, runtime boş olanı verir, `stop`'ta otomatik bırakır. `:8090` çakışması bir daha olmaz; SwarmGo'nun kendi açılış preflight'ı için de kullanılır. Yer: `agent/runtime.go` yaşam döngüsü.
+- [ ] **RG-3 — Kaynak kira (lease) registry** *(2. dalga, M, orta değer)*: ajan port/temp-dir ister, runtime boş olanı verir, `stop`'ta otomatik bırakır. `:8090` çakışması bir daha olmaz; TionSwarm'nun kendi açılış preflight'ı için de kullanılır. Yer: `agent/runtime.go` yaşam döngüsü.
 - [ ] **RG-4 — Tur yan-etki defteri → otomatik teardown** *(1. dalga, M, yüksek değer)*: tur başına spawn edilen PID / geçici workspace / temp dosya kaydı; tur biter veya çökerse otomatik teardown. Agent'ın elle yaptığı "test ws sil, sunucu durdur" işini garantiye alır. Temel: `agent/recovery.go` (A1) + `db/inflight.go` sidecar deseni.
 - [ ] **RG-5 — Boot orphan reconcile genişletmesi** *(2. dalga, S-M, orta değer)*: açılışta takılı child süreç + sahipsiz temp workspace temizliği. Şu an yalnız tur (`inflight.go`) ve flow (`ResumeRunningFlows`, `flow.go`) resume ediliyor; aynı boot yoluna süreç/kaynak reconcile eklenir.
-- [x] **RG-6 — Implement-öncesi keşif guard'ı** ✅ (2026-06-22) *(1. dalga, XS, yüksek değer — KOD YOK)*: agent'a "uygulamadan önce ilgili dosyaları okuyup özelliğin zaten var olup olmadığını doğrula" adımını zorunlu kıldık. `swarmgo-guide` SKILL.md'ye **"Before you build: discover first"** bölümü (search→read→confirm→extend; "X yok" demeden önce ne aradığını söyle, sıfırdan yazmak yerine genişlet) + `swarmgo-self-management` "Prefer reading first" maddesi güçlendirildi (entity oluşturmadan önce mevcudu kontrol et). Var olan özelliği "yok" sanıp yeniden yazma riskini önler. Skill düzeyi → tüm ajanlara uygulanır.
+- [x] **RG-6 — Implement-öncesi keşif guard'ı** ✅ (2026-06-22) *(1. dalga, XS, yüksek değer — KOD YOK)*: agent'a "uygulamadan önce ilgili dosyaları okuyup özelliğin zaten var olup olmadığını doğrula" adımını zorunlu kıldık. `tionswarm-guide` SKILL.md'ye **"Before you build: discover first"** bölümü (search→read→confirm→extend; "X yok" demeden önce ne aradığını söyle, sıfırdan yazmak yerine genişlet) + `tionswarm-self-management` "Prefer reading first" maddesi güçlendirildi (entity oluşturmadan önce mevcudu kontrol et). Var olan özelliği "yok" sanıp yeniden yazma riskini önler. Skill düzeyi → tüm ajanlara uygulanır.
 
-> **Ürün mü, skill mi?** RG-1/2/3/4/5 = SwarmGo **ürün kodu** (runtime ajanlarına verilen guard'lar); RG-6 = **skill/system-prompt**. İkisi farklı yere yazar.
+> **Ürün mü, skill mi?** RG-1/2/3/4/5 = TionSwarm **ürün kodu** (runtime ajanlarına verilen guard'lar); RG-6 = **skill/system-prompt**. İkisi farklı yere yazar.
 
 ---
 

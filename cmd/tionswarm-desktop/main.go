@@ -1,15 +1,15 @@
 //go:build windows
 
-// Command swarmgo-desktop runs SwarmGo as a native desktop application: it
-// boots the same in-process server as cmd/swarmgo on a free loopback port, then
+// Command tionswarm-desktop runs TionSwarm as a native desktop application: it
+// boots the same in-process server as cmd/tionswarm on a free loopback port, then
 // shows the embedded UI in a WebView2 window instead of a browser tab. It is
 // Windows-only and uses github.com/jchv/go-webview2 (pure Go, no CGO; relies on
 // the WebView2 runtime, which ships with Windows 11).
 //
 // Multi-window: go-webview2 is single-window-per-process, so each extra window
 // is a separate "connect-only" instance of this binary pointed at the already-
-// running server via SWARMGO_WEBVIEW_URL. The primary process owns the server
-// and exposes a JS bridge (swarmgoOpenWindow) that spawns those instances.
+// running server via TIONSWARM_WEBVIEW_URL. The primary process owns the server
+// and exposes a JS bridge (tionswarmOpenWindow) that spawns those instances.
 // See _Docs/30-COKLU-PENCERE.md.
 package main
 
@@ -26,14 +26,14 @@ import (
 
 	"github.com/jchv/go-webview2"
 
-	"github.com/bilal-arikan/swarmgo/internal/app"
-	"github.com/bilal-arikan/swarmgo/internal/config"
-	"github.com/bilal-arikan/swarmgo/internal/logbuf"
+	"github.com/bilal-arikan/tionswarm/internal/app"
+	"github.com/bilal-arikan/tionswarm/internal/config"
+	"github.com/bilal-arikan/tionswarm/internal/logbuf"
 )
 
 // envWebviewURL, when set, makes this a connect-only secondary window: it boots
 // no server and just renders the given loopback URL in a native window.
-const envWebviewURL = "SWARMGO_WEBVIEW_URL"
+const envWebviewURL = "TIONSWARM_WEBVIEW_URL"
 
 func main() {
 	// Opt into per-monitor DPI awareness before any window exists, so high-DPI
@@ -52,7 +52,7 @@ func main() {
 }
 
 // runPrimary boots the in-process server and shows the first window. It also
-// binds the swarmgoOpenWindow JS function so the UI can spawn more windows.
+// binds the tionswarmOpenWindow JS function so the UI can spawn more windows.
 func runPrimary(logs *logbuf.Buffer, logger *slog.Logger) {
 	cfg, err := config.Load()
 	if err != nil {
@@ -88,12 +88,12 @@ func runPrimary(logs *logbuf.Buffer, logger *slog.Logger) {
 	}
 	defer w.Destroy()
 
-	// JS bridge: window.swarmgoOpenWindow(route) spawns a new native window
+	// JS bridge: window.tionswarmOpenWindow(route) spawns a new native window
 	// (a connect-only secondary process) scoped to that hash route.
-	if err := w.Bind("swarmgoOpenWindow", func(route string) {
+	if err := w.Bind("tionswarmOpenWindow", func(route string) {
 		spawnWindow(base, route)
 	}); err != nil {
-		logger.Warn("bind swarmgoOpenWindow failed", "error", err)
+		logger.Warn("bind tionswarmOpenWindow failed", "error", err)
 	}
 
 	hwnd := uintptr(w.Window())
@@ -119,7 +119,7 @@ func runPrimary(logs *logbuf.Buffer, logger *slog.Logger) {
 func runSecondary(logger *slog.Logger, target string) {
 	u, err := url.Parse(target)
 	if err != nil || !isLoopback(u) {
-		logger.Error("refusing non-loopback SWARMGO_WEBVIEW_URL", "url", target)
+		logger.Error("refusing non-loopback TIONSWARM_WEBVIEW_URL", "url", target)
 		return
 	}
 	base := u.Scheme + "://" + u.Host
@@ -143,13 +143,13 @@ func runSecondary(logger *slog.Logger, target string) {
 	w.Run()
 }
 
-// newWindow creates the standard SwarmGo WebView2 window (nil if the runtime is
+// newWindow creates the standard TionSwarm WebView2 window (nil if the runtime is
 // unavailable).
 func newWindow() webview2.WebView {
 	return webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug: false,
 		WindowOptions: webview2.WindowOptions{
-			Title:  "SwarmGo",
+			Title:  "TionSwarm",
 			Width:  1600,
 			Height: 1000,
 			Center: true,
@@ -194,7 +194,7 @@ func fetchAppearance(base string) (preset, theme string) {
 }
 
 // isLoopback reports whether u points at the local machine, so connect-only
-// windows can only ever render the local SwarmGo server.
+// windows can only ever render the local TionSwarm server.
 func isLoopback(u *url.URL) bool {
 	switch u.Hostname() {
 	case "127.0.0.1", "localhost", "::1":

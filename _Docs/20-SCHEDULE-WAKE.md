@@ -1,8 +1,8 @@
-# SwarmGo — `schedule_wake`: Ajanın Kendi Sohbetine Geri Dönmesi
+# TionSwarm — `schedule_wake`: Ajanın Kendi Sohbetine Geri Dönmesi
 
 ## Neden gerekti?
 
-SwarmGo'nun `claude-cli` sağlayıcısı `claude -p --output-format stream-json` ile çalışır — her tur bir **tek-seferlik alt süreç**; tamamlanınca ölür. Claude Code'un yerleşik `ScheduleWakeup` aracı yalnızca `claude /loop` harness bağlamında anlamlıdır; bu harness SwarmGo'da yoktur. Sonuç: ajan "bekliyorum, 5 dakika sonra devam edeceğim" deyip `ScheduleWakeup` çağırıyordu, fakat hiçbir şey olmuyor, sohbet orada bitiyordu.
+TionSwarm'nun `claude-cli` sağlayıcısı `claude -p --output-format stream-json` ile çalışır — her tur bir **tek-seferlik alt süreç**; tamamlanınca ölür. Claude Code'un yerleşik `ScheduleWakeup` aracı yalnızca `claude /loop` harness bağlamında anlamlıdır; bu harness TionSwarm'da yoktur. Sonuç: ajan "bekliyorum, 5 dakika sonra devam edeceğim" deyip `ScheduleWakeup` çağırıyordu, fakat hiçbir şey olmuyor, sohbet orada bitiyordu.
 
 ## Mimari
 
@@ -37,8 +37,8 @@ Ajan turunda (native veya CLI)
 | `internal/api/chat_stream.go` | `wakeFn` closure; `WithWakeScheduler` + `setWakeScheduler` |
 | `internal/api/chat_control.go` | `chatRun.wake` alanı + getter/setter |
 | `internal/api/mcp_interaction.go` | `schedule_wake` araç tanımı + `callWake` dispatch |
-| `internal/api/mcp_interaction.go` | `schedule_wake`, `interactionToolSpecs`'e eklenir (extended tier); allowlist `inter.Core/ExtendedToolNames`'ten otomatik türer (tek kaynak). CLI'da `mcp__swarmgo_extended__schedule_wake` |
-| `internal/agent/climcp.go` | `"ScheduleWakeup"` (CLI native) → disallowed (SwarmGo'nun schedule_wake'i yerine geçer) |
+| `internal/api/mcp_interaction.go` | `schedule_wake`, `interactionToolSpecs`'e eklenir (extended tier); allowlist `inter.Core/ExtendedToolNames`'ten otomatik türer (tek kaynak). CLI'da `mcp__tionswarm_extended__schedule_wake` |
+| `internal/agent/climcp.go` | `"ScheduleWakeup"` (CLI native) → disallowed (TionSwarm'nun schedule_wake'i yerine geçer) |
 | `internal/api/schedules.go` | One-shot satırları liste filtresi |
 | `internal/tools/builtin_schedulemgmt.go` | One-shot satırları `list_schedules` filtresi |
 | `frontend/src/App.tsx` | `chat` event: `phase=start` → `markPending`, `phase=done` → `clearPending` |
@@ -60,7 +60,7 @@ Ajan turunda (native veya CLI)
 
 **Native provider yolu:** `ScheduleWakeTool.Call` → `wakeFrom(ctx)` → `Runtime.ScheduleWake`.
 
-**claude-cli yolu:** `mcp__swarmgo_extended__schedule_wake` (NameOnly/extended tier → ToolSearch ile lazy gelir) → `mcp_interaction.go callWake` → `run.wakeScheduler()` → aynı `Runtime.ScheduleWake`. CLI'ın kendi `ScheduleWakeup` aracı `disallowed` listesinde (işe yaramaz, kafa karıştırır).
+**claude-cli yolu:** `mcp__tionswarm_extended__schedule_wake` (NameOnly/extended tier → ToolSearch ile lazy gelir) → `mcp_interaction.go callWake` → `run.wakeScheduler()` → aynı `Runtime.ScheduleWake`. CLI'ın kendi `ScheduleWakeup` aracı `disallowed` listesinde (işe yaramaz, kafa karıştırır).
 
 ## Gecikmeler ve sınırlar
 
@@ -90,7 +90,7 @@ internal/agent/wake_test.go
 ## Canlı test özeti (2026-06-18)
 
 Playwright ile doğrulandı:
-1. SwarmGo yeni oturumunda `schedule_wake` 10s ile tetiklendi
+1. TionSwarm yeni oturumunda `schedule_wake` 10s ile tetiklendi
 2. Agent "kurdum, bekliyorum" yanıtı verdi
 3. 10 saniye sonra wake prompt aynı sohbet oturumuna otomatik enjekte edildi
 4. Agent yeniden yanıt verdi — sohbet ekranda görünür şekilde devam etti
@@ -153,7 +153,7 @@ yanıtlar"** yönergesini döndürür (tahmine zorlamak yerine). Tam headless ko
 
 Native tool döngüsü sınırı `maxToolIters` **8 → 24** (3 kat) yükseltildi —
 schedule_wake güdümlü çok-adımlı async akışlar limit'e takılmadan tamamlansın
-diye. `SWARMGO_MAX_TOOL_ITERS` env değişkeniyle (pozitif tamsayı) override edilebilir
+diye. `TIONSWARM_MAX_TOOL_ITERS` env değişkeniyle (pozitif tamsayı) override edilebilir
 (`internal/agent/toolloop.go`).
 
 ## Geçmiş-duyarlı wake turu (2026-06-23)

@@ -7,7 +7,7 @@ import (
 )
 
 // TestParseAskInput covers every option/question shape a model might send: the
-// native SwarmGo form, claude-cli's AskUserQuestion option objects (the SES73
+// native TionSwarm form, claude-cli's AskUserQuestion option objects (the SES73
 // failure), a single scalar, a mixed array, and the native questions[] wrapper.
 func TestParseAskInput(t *testing.T) {
 	cases := []struct {
@@ -17,7 +17,7 @@ func TestParseAskInput(t *testing.T) {
 		wantOpts []string
 	}{
 		{
-			name:     "swarmgo string array",
+			name:     "tionswarm string array",
 			raw:      `{"question":"Pick one","options":["A","B"]}`,
 			wantQ:    "Pick one",
 			wantOpts: []string{"A", "B"},

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/events"
 )
 
 // busForwardable reports whether a live TurnStep should be broadcast on the

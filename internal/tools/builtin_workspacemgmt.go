@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // Workspace self-management tools let an agent list, create, rename and delete

@@ -3,9 +3,9 @@ package agent
 import (
 	"context"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // sessionSink is a DB-backed tools.SessionSink bound to one session. It reads and

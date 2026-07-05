@@ -13,7 +13,7 @@
 | **Edinme (acquisition)** | Byte'ları nereden al (GitHub tarball, local ağaç) | `skills` + `market-remote`'ta çift kod |
 | **Çeviri (adapter)** | Yabancı format → native entity | Yalnız `mapCCSkill` (skill) |
 
-Ayrıca **market** = SwarmGo'nun **kendi formatındaki** paketleri dağıtır (publish↔install,
+Ayrıca **market** = TionSwarm'nun **kendi formatındaki** paketleri dağıtır (publish↔install,
 sürümlü, registry; 7 entity türü kurar). **Import** = **yabancı formatı** (Claude Code
 skill/agent/command, MCP config) alıp native entity'ye çevirir. Bunlar farklı işlerdir.
 
@@ -31,7 +31,7 @@ Yeni bir içe-aktarılabilir özellik eklemek = **tek bir `Adapter` yazmak**.
 ```mermaid
 graph TD
     fetch[internal/fetch<br/>edinme + tree gruplama]
-    skills[internal/skills<br/>CC→SwarmGo skill eşleme + frontmatter]
+    skills[internal/skills<br/>CC→TionSwarm skill eşleme + frontmatter]
     market[internal/market<br/>Pack envelope + InstallSkill]
     ingest[internal/ingest<br/>Adapter registry + orchestrator]
     api[internal/api<br/>installPackInto + endpoints]
@@ -141,7 +141,7 @@ import" ile "registry'den install" aynı yere düşer.
 
 - Birim: `fetch` (group/find/parse/normalize), `ingest` (scan/build/adapters/dedup),
   `market` (InstallSkill nested + BuildSkillPack files), `skills` (block-scalar, safe path).
-- Canlı (network-gated, `SWARMGO_LIVE_TEST=1`): `ingest.Scan` →
+- Canlı (network-gated, `TIONSWARM_LIVE_TEST=1`): `ingest.Scan` →
   **caveman 10** (3 agent + 7 skill; `plugins/` aynası dedup'landı),
   **taste-skill 13**, **marketingskills 45**.
 
@@ -149,7 +149,7 @@ import" ile "registry'den install" aynı yere düşer.
 
 - **Dizin-sitesi adaptörü:** crossaitools/skillsmp/claudeskillsmarket'i `swarmregistry/v1`
   uzak registry olarak köprülemek.
-- CC `model` → SwarmGo provider/model eşleme tablosu (agent adapter).
+- CC `model` → TionSwarm provider/model eşleme tablosu (agent adapter).
 - **Yapıldı (2026-06-25):** `.toml` command desteği (`toml.go`) + `marketplace.json`
   güdümlü keşif (`marketplace.go`). Canlı: caveman artık 11 (3 agent + 8 skill; `.toml`
   komutlardan `caveman-init` eklendi, kalan 3 skill-folder ile dedup'landı).

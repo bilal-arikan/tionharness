@@ -10,7 +10,7 @@ import (
 )
 
 // defaultClaudeConfigDir is the baseline CLAUDE_CONFIG_DIR for claude-cli: a
-// SwarmGo-managed, isolated config home (~/.swarmgo/claude-home) so the CLI runs
+// TionSwarm-managed, isolated config home (~/.tionswarm/claude-home) so the CLI runs
 // against a clean skills/settings/commands/login set instead of the user's shared
 // ~/.claude out of the box. Requires a one-time `claude` login in that directory.
 // If the home dir can't be resolved we return "" — that is the correct fallback
@@ -20,7 +20,7 @@ func defaultClaudeConfigDir() string {
 	if err != nil || home == "" {
 		return ""
 	}
-	return filepath.Join(home, ".swarmgo", "claude-home")
+	return filepath.Join(home, ".tionswarm", "claude-home")
 }
 
 // Theme options for the UI.
@@ -162,7 +162,7 @@ type Settings struct {
 
 	// Persistent progress (Anthropic claude-progress convention). When
 	// ProgressPersist is on, the todo_write checklist is persisted to
-	// <cwd>/.swarmgo/progress.json so it survives across sessions; ProgressResume
+	// <cwd>/.tionswarm/progress.json so it survives across sessions; ProgressResume
 	// injects it back into a fresh session's context at start.
 	ProgressPersist bool `json:"progressPersist"`
 	ProgressResume  bool `json:"progressResume"`
@@ -216,7 +216,7 @@ type Settings struct {
 	// turn leaves it unset. 0 = auto: resolve per model family (providers.
 	// MaxOutputFor), which keeps answers from being truncated at the providers'
 	// 4096 fallback. A positive value pins a fixed global cap across all models
-	// (overriding the family table); the SWARMGO_MAX_OUTPUT_TOKENS env is the
+	// (overriding the family table); the TIONSWARM_MAX_OUTPUT_TOKENS env is the
 	// fallback when this is 0.
 	MaxOutputTokens int `json:"maxOutputTokens"`
 
@@ -387,7 +387,7 @@ func Default() Settings {
 		TitleModel:       "",
 
 		// CLI-path hooks default ON (preserves the hook-passthrough behaviour); turn
-		// off when a hook authored for SwarmGo's shell misbehaves under the CLI's.
+		// off when a hook authored for TionSwarm's shell misbehaves under the CLI's.
 		EnableCLIHooks: true,
 
 		// claude-cli session resume default ON: each turn passes --resume <id> and

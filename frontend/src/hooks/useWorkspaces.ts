@@ -7,15 +7,15 @@ import type { Workspace } from '../types'
 import type { NewWorkspaceData } from '../components/workspace/WorkspaceCreateModal'
 
 // The unread-activity badge set is SHARED across every browser window of the same
-// origin via localStorage + the 'storage' event. SwarmGo is single-user, so a
+// origin via localStorage + the 'storage' event. TionSwarm is single-user, so a
 // workspace that gained activity should show a dot in every open window, and
 // reading it in any window (becoming its active workspace, or live-viewing new
 // activity in it) clears the dot everywhere — "seen anywhere = seen".
-const UNREAD_KEY = 'swarmgo.unreadWs'
+const UNREAD_KEY = 'tionswarm.unreadWs'
 
 // The favorite workspace opens on a fresh launch (cold start with no deep-linked
 // workspace in the URL). Device-local, like the active-workspace pointer.
-const FAVORITE_KEY = 'swarmgo.favoriteWs'
+const FAVORITE_KEY = 'tionswarm.favoriteWs'
 
 function readFavorite(): string | null {
   try {

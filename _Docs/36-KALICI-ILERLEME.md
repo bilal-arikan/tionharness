@@ -3,7 +3,7 @@
 > **Durum (2026-06-25): UYGULANDI.** Anthropic'in *"Effective harnesses for
 > long-running agents"* + *"Effective context engineering for AI agents"*
 > makalelerindeki **kalıcı not dosyası** (`claude-progress.txt` + `feature_list.json`
-> / `NOTES.md`) konvansiyonunun SwarmGo karşılığı.
+> / `NOTES.md`) konvansiyonunun TionSwarm karşılığı.
 >
 > İlişkili: [`31-MEMGPT-CORE-MEMORY.md`](31-MEMGPT-CORE-MEMORY.md) (core memory),
 > [`17-TOKEN-OPTIMIZASYON.md`](17-TOKEN-OPTIMIZASYON.md) (compaction),
@@ -31,15 +31,15 @@ hedeftir, adım listesi değil.
 `todo_write` listesi **çalışma dizinine** (proje) bağlı bir progress dosyasına
 yazılır ve fresh oturum açılışında geri yüklenir.
 
-- **Konum:** `<cwd>/.swarmgo/progress.json` — session'ın **explicit** working
+- **Konum:** `<cwd>/.tionswarm/progress.json` — session'ın **explicit** working
   dir'i ayarlıysa (git-commit'lenebilir, proje'ye bağlı; **aynı projedeki tüm
   oturumlar paylaşır** = cross-session resume). Explicit proje dizini yoksa
-  fallback **per-session**: `<store>/progress/<sessionID>/.swarmgo/progress.json`
+  fallback **per-session**: `<store>/progress/<sessionID>/.tionswarm/progress.json`
   (önceden ajan-başına idi → proje dizini olmayan farklı oturumlar tek dosyayı
   ezeyordu; 2026-06-26'da oturum-başına izole edildi, detay-paneldeki "Kalıcı
   ilerleme" kartı artık oturuma özel görünür). Tek resolver: `Runtime.ProgressDir`
   (yaz=NewTodoSink + oku=resume bloğu + detay-panel hep onu kullanır). Aynı
-  `.swarmgo/` dizini handoff dosyasıyla (`handoff.md`) paylaşılır.
+  `.tionswarm/` dizini handoff dosyasıyla (`handoff.md`) paylaşılır.
 - **Format:** `internal/progress` paketi, `Record{Version, UpdatedAt, SessionID,
   AgentID, Todos[], Log[]}`. `Todos[].Status` = `pending|in_progress|completed`;
   `completed` ≡ Anthropic `feature_list` `passes:true`. `Log[]` = rolling ilerleme
@@ -50,7 +50,7 @@ yazılır ve fresh oturum açılışında geri yüklenir.
 graph TD
     AGENT["Ajan: todo_write"] --> TOOL["TodoWriteTool.Call"]
     TOOL -->|"ctx'te sink varsa"| SINK["TodoSink.SaveTodos"]
-    SINK --> DISK["progress.Save<br/>&lt;cwd&gt;/.swarmgo/progress.json"]
+    SINK --> DISK["progress.Save<br/>&lt;cwd&gt;/.tionswarm/progress.json"]
     TOOL --> STEP["StepTodo trace<br/>(session.jsonl)"]
     FRESH["Yeni/restart oturum"] --> CB["todoContextBlock"]
     CB -->|"oturum trace'i boş"| LOAD["progress.Load"]
@@ -88,7 +88,7 @@ kopyası), böylece `todo_write` aracı bağımlılık-hafif kalır:
   (scheduler/spawn/flow) tarafından run'a kurulur.
 - **Native araç gölgeleme (2026-06-25, fix):** claude-cli kendi built-in checklist
   aracını sunar; eski sürümlerde `TodoWrite`, yenilerde **`TaskCreate`/`TaskUpdate`/
-  `TaskList`/`TaskGet`** ailesi. Bu native araç SwarmGo'nun bridged `todo_write`'ını
+  `TaskList`/`TaskGet`** ailesi. Bu native araç TionSwarm'nun bridged `todo_write`'ını
   **gölgeler** → model native'i çağırır, sink'e hiçbir şey gitmez, progress kartı boş
   kalır. `climcp.go::writeCLIMCPConfig` artık `--disallowedTools` ile her iki ad
   ailesini de bastırır (CLI'da olmayan adı disallow etmek zararsız) ve
@@ -111,7 +111,7 @@ liste; hepsi tamamsa boş). `chat_turn.go::composeTurnRequest` cwd + agentID +
 |---|---|---|---|---|
 | Core memory ([31](31-MEMGPT-CORE-MEMORY.md)) | Ajan kim / kullanıcı kim | Serbest metin | Ajan | `knowledge_sources` |
 | Session Goal | Tek kuzey-yıldızı | Tek cümle | Oturum | `db.Session.Goal` |
-| **Progress (bu doküman)** | Ne bitti / sırada ne var | Yapılı todo + log | **Proje (cwd)** | `<cwd>/.swarmgo/progress.json` |
+| **Progress (bu doküman)** | Ne bitti / sırada ne var | Yapılı todo + log | **Proje (cwd)** | `<cwd>/.tionswarm/progress.json` |
 
 Üçü tamamlayıcı, çakışmaz; üçü de `SystemDynamic`'e ayrı bloklar girer. Progress
 recall'a girmez (disk dosyası, knowledge_source değil).
@@ -137,7 +137,7 @@ taşır: `category` (gruplama etiketi, ör. `functional`/`tests`/`docs`) ve `ste
 
 ## PROGRESS.md konvansiyon skill'i
 
-Yeni default skill **`swarmgo-progress`** (`internal/skills/defaults/swarmgo-progress/
+Yeni default skill **`tionswarm-progress`** (`internal/skills/defaults/tionswarm-progress/
 SKILL.md`, `access: shared`): ajana hem **otomatik** progress.json katmanını (her
 `todo_write` diske yazılır, fresh oturum geri yükler) hem de **insan-okunur**
 `PROGRESS.md` konvansiyonunu (mevcut kilitsiz `Read`/`Write`/`Edit` ile proje
@@ -158,7 +158,7 @@ tipi (`types/session.ts`).
 
 - **Yeni:** `internal/progress/progress.go` (+test), `internal/tools/todosink.go`,
   `internal/tools/builtin_todo_test.go`, `internal/agent/todosink.go` (+test),
-  `internal/api/progress.go`, `internal/skills/defaults/swarmgo-progress/SKILL.md`.
+  `internal/api/progress.go`, `internal/skills/defaults/tionswarm-progress/SKILL.md`.
 - **Değişen:** `internal/tools/builtin_todo.go` (sink kancası + category/steps),
   `internal/agent/toolloop.go` (native fallback), `internal/agent/tunables.go` (knob),
   `internal/agent/workdir_ctx.go` (`SessionWorkdir`), `internal/db/db.go` (`Root()`),
@@ -176,7 +176,7 @@ tipi (`types/session.ts`).
 ## Doğrulama
 
 ```powershell
-cd C:\Users\user\Desktop\Projects\SwarmGo
+cd C:\Users\user\Desktop\Projects\TionSwarm
 go build ./...
 go test ./internal/progress/... ./internal/agent/... ./internal/tools/... ./internal/api/... ./internal/settings/...
 cd frontend; npm run build

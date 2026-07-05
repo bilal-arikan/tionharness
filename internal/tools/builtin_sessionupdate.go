@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // maxSessionTitleLen bounds a session title so it stays a label, not a document.
@@ -62,7 +62,7 @@ func (UpdateSessionTool) Def() providers.ToolDef {
 			json.RawMessage(`{"title":"Refactor tool registry"}`),
 			json.RawMessage(`{"goal":"Ship the merged update_session tool with green tests"}`),
 			json.RawMessage(`{"add":["loop"]}`),
-			json.RawMessage(`{"working_dir":"C:\\Users\\user\\Desktop\\Projects\\SwarmGo"}`),
+			json.RawMessage(`{"working_dir":"C:\\Users\\user\\Desktop\\Projects\\TionSwarm"}`),
 			json.RawMessage(`{"goal_done":true,"archive":true}`),
 		},
 	}

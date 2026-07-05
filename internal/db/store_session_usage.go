@@ -20,7 +20,7 @@ type SessionUsage struct {
 	CacheReadTokens  int                 `json:"cacheReadTokens,omitempty"`
 	CacheWriteTokens int                 `json:"cacheWriteTokens,omitempty"`
 	// ProviderCalls is the cumulative number of underlying model API round-trips
-	// behind Calls over this session's life (for claude-cli one SwarmGo turn is
+	// behind Calls over this session's life (for claude-cli one TionSwarm turn is
 	// several internal calls — result num_turns). The CLI-overhead preview divides
 	// the cumulative token totals by it to recover the per-call (single-pass) context
 	// when the per-turn debug journal is unavailable.

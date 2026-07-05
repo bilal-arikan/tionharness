@@ -25,7 +25,7 @@ yanlış çözüm seçtirir:
 - **Prompt cache** → *cost*'u düşürür (cache-read ucuzdur) ama pencere **doluluğunu**
   ve attention yükünü **düşürmez**. Şema hâlâ pencerede, hâlâ modelin ilgi alanını
   n² ilişkiyle yoruyor.
-- **Deferral / tier occupancy** (SwarmGo'nun mevcut 4-tier'i) → tier doluluğunu
+- **Deferral / tier occupancy** (TionSwarm'nun mevcut 4-tier'i) → tier doluluğunu
   düşürür ama araç *gerektiğinde* tam şemayla pencereye girer.
 - **Code execution with MCP** → araçları modele **hiç şema olarak vermez**. Araçları
   bir kod API'si gibi sunar; ara sonuçlar execution ortamında kalır, pencereye
@@ -79,7 +79,7 @@ print(f"{len(urgent)} urgent issue işlendi")        # SADECE bu döner
    modülün tanımını *on-demand* okur (bir `search_tools` / dosya okuma adımıyla).
    Kullanılmayan 60 aracın şeması pencereye hiç girmez.
 2. **Ara sonuçlar bağlamda kalmaz** — 500 satırlık `list_issues` çıktısı sandbox
-   değişkeninde durur; modele yalnız `print` ile döndürülen özet girer. (SwarmGo'da
+   değişkeninde durur; modele yalnız `print` ile döndürülen özet girer. (TionSwarm'da
    `transform_data`'nın "data dosyada kalır, sadece log döner" davranışının aynısı.)
 3. **Kontrol akışı kod tarafında** — döngü/filtre/koşul model turlarına değil,
    tek bir kod yürütmesine iner. Tur sayısı ve dolayısıyla tekrarlanan şema maliyeti
@@ -87,10 +87,10 @@ print(f"{len(urgent)} urgent issue işlendi")        # SADECE bu döner
 
 ---
 
-## 3. SwarmGo'ya Oturma Senaryoları
+## 3. TionSwarm'ya Oturma Senaryoları
 
-SwarmGo'nun iki yürütme yolu var; her biri için ayrı bir tasarım seçeneği ele
-alınmalı. **İyi haber:** SwarmGo bu deseni kurmak için gereken parçaların
+TionSwarm'nun iki yürütme yolu var; her biri için ayrı bir tasarım seçeneği ele
+alınmalı. **İyi haber:** TionSwarm bu deseni kurmak için gereken parçaların
 **çoğuna zaten sahip** — kod yürütme sandbox'ı (`transform_data`), fs araçları,
 namespace'li MCP çağrı yolu, ve kod-dışı çağrı için `mcp.CallNamespaced`.
 
@@ -105,7 +105,7 @@ namespace'li MCP çağrı yolu, ve kod-dışı çağrı için `mcp.CallNamespace
 | **MCP havuzu** | `internal/mcp/pool.go` (+ `client.go` stdio, `http.go` streamable) | Kalıcı bağlantı — kod içinden tekrarlı çağrılar yeni süreç açmaz. |
 | **4-tier görünürlük** | `internal/tools/registry.go` (`VisibilityFull/Summary/NameOnly/Hidden`) | Kod moduyla birlikte yaşayacak; §8. |
 | **Sandbox** | `internal/tools/sandbox.go` | `NewSandbox` (unconfined, izin katmanı sınır) / `NewConfinedSandbox` (config dizini). |
-| **Worktree izolasyonu** | `internal/agent/worktree.go` (`ensureWorktree`) | Otonom turlarda per-session git worktree + branch (`swarmgo/session-<id>`). |
+| **Worktree izolasyonu** | `internal/agent/worktree.go` (`ensureWorktree`) | Otonom turlarda per-session git worktree + branch (`tionswarm/session-<id>`). |
 | **Ölçüm** | `internal/agent/debugjournal.go` + `GetTurnDebug` | `debug.jsonl` `llm_call` olayları (`in/out/cacheRead/cacheWrite`), `TurnID`. |
 
 ### Seçenek A — Native tool-loop için "MCP-as-code" (önerilen ana hat)
@@ -119,7 +119,7 @@ graph LR
     M[Model] -->|kod yazar| RC[run_code / transform_data]
     RC --> SB[İzole subprocess<br/>minimalScriptEnv]
     SB -->|import servers.x| API[Generate edilmiş<br/>MCP binding'leri<br/>./servers/*.py]
-    API -->|localhost köprü| BR[SwarmGo MCP proxy]
+    API -->|localhost köprü| BR[TionSwarm MCP proxy]
     BR --> POOL[mcp.pool.CallNamespaced]
     POOL --> EXT[(Harici MCP<br/>server)]
     SB -->|stdout + dosya| RC
@@ -128,9 +128,9 @@ graph LR
 
 **Nasıl kurulur (kavramsal):**
 
-1. Tur başında SwarmGo, etkin MCP sunucularının araçlarını tarayıp sandbox
+1. Tur başında TionSwarm, etkin MCP sunucularının araçlarını tarayıp sandbox
    çalışma dizinine bir **binding ağacı** yazar: `./servers/<server>/<tool>.py`
-   (veya tek `servers.py`). Her binding, SwarmGo'da açılan bir **loopback köprüye**
+   (veya tek `servers.py`). Her binding, TionSwarm'da açılan bir **loopback köprüye**
    (kısa ömürlü localhost HTTP ya da named-pipe) çağrı yapan ince bir fonksiyon.
 2. Köprü, gelen `(server, tool, args)` çağrısını `mcp.CallNamespaced` ile kalıcı
    havuz üzerinden gerçek MCP sunucusuna iletir; sonucu script'e döndürür.
@@ -138,7 +138,7 @@ graph LR
    sonra `run_code` ile kodu çalıştırır. Araç şemaları **pencereye hiç girmez.**
 
 **Artı:**
-- Anahtarsız değil, tam SwarmGo kontrolünde — çağrı `mcp.pool`'dan geçtiği için
+- Anahtarsız değil, tam TionSwarm kontrolünde — çağrı `mcp.pool`'dan geçtiği için
   trace, izin, compaction, budget muhasebesi korunabilir.
 - `transform_data`'nın secret-izolasyonu + timeout'u devralınır.
 - Occupancy **ve** cost aynı anda düşer (deseninin tam kazancı).
@@ -174,7 +174,7 @@ desenin tam kazancına daha uygun; CLI yolu için gerçekçi hedef B1'i olgunla�
 
 ## 4. Güvenlik / Sandbox
 
-Kod yürütme = keyfi host kodu. SwarmGo'nun mevcut sınırları ve boşlukları:
+Kod yürütme = keyfi host kodu. TionSwarm'nun mevcut sınırları ve boşlukları:
 
 | Katman | Mevcut durum | Kod-execution için not |
 |--------|--------------|------------------------|
@@ -219,7 +219,7 @@ Her faz küçük, tek başına doğrulanabilir ve ölçülebilir kazanç üretir
 
 ### Faz 2 — İzin + mutasyon (write araçları)
 - Köprüde per-call izin kancası; `ask` modunda kod içi mutasyon çağrıları
-  SwarmGo onay UI'ına düşer. Otonom ağ-mutasyon guard'ı köprüye taşınır.
+  TionSwarm onay UI'ına düşer. Otonom ağ-mutasyon guard'ı köprüye taşınır.
 - **Kazanç:** güvenli write; per-call gözlemlenebilirlik geri kazanılır.
 
 ### Faz 3 — Çok-server + on-demand tanım okuma
@@ -323,9 +323,9 @@ graph TB
 
 ## 9. Özet & Önerilen İlk Faz
 
-**Özet:** Code execution with MCP, SwarmGo'nun *occupancy* sorununu (mevcut tier
+**Özet:** Code execution with MCP, TionSwarm'nun *occupancy* sorununu (mevcut tier
 sistemi *deferral*'ı çözüyor ama şema gerektiğinde hâlâ pencereye giriyor) kökten
-çözen tek yaklaşım. En büyük avantaj: SwarmGo, deseni kurmak için gereken parçaların
+çözen tek yaklaşım. En büyük avantaj: TionSwarm, deseni kurmak için gereken parçaların
 çoğuna **zaten sahip** — `transform_data`'nın izole-subprocess + secret-allowlist +
 "data dosyada kalır" çekirdeği, `mcp.pool.CallNamespaced` çağrı yolu, worktree
 izolasyonu ve `debug.jsonl` ölçüm altyapısı. Sıfırdan inşa değil; mevcut çekirdeği
@@ -353,15 +353,15 @@ Seçenek A'nın (native "MCP-as-code") ilk iki fazı uygulandı. Bileşenler:
 | Bileşen | Konum | Not |
 |---------|-------|-----|
 | Loopback köprü | `internal/codemode/bridge.go` | Per-execution: 127.0.0.1 rastgele port, rastgele Bearer token (constant-time compare), 200 çağrı/koşu tavanı, 120s per-call timeout, çağrı sayacı + özet |
-| Binding üreticisi | `internal/codemode/bindings.go` | `.swarmgo/mcp/` altına `_bridge.py` + server-başına Python modülü; docstring = açıklama + normalize schema; her çağrıda sıfırdan regen |
+| Binding üreticisi | `internal/codemode/bindings.go` | `.tionswarm/mcp/` altına `_bridge.py` + server-başına Python modülü; docstring = açıklama + normalize schema; her çağrıda sıfırdan regen |
 | `run_code` aracı | `internal/tools/builtin_runcode.go` | Boş script → discovery (modül/fonksiyon listesi); script → stripped env + `PYTHONPATH` + köprü env; yalnız stdout/stderr (16KB) + MCP çağrı özeti döner; 60s default / 300s max |
 | Risk sınıfı | `internal/tools/classify.go` | `run_code` = RiskExec → "ask" modda bütünüyle onay, "read-only"de blok |
-| Gate | `internal/agent/tunables.go` + `codemode_tunable.go` + `internal/app/app.go` | `SWARMGO_CODE_MODE=1` (default KAPALI) **VE** `ShellEnabled` **VE** MCP kataloğu dolu |
+| Gate | `internal/agent/tunables.go` + `codemode_tunable.go` + `internal/app/app.go` | `TIONSWARM_CODE_MODE=1` (default KAPALI) **VE** `ShellEnabled` **VE** MCP kataloğu dolu |
 | Kayıt | `internal/agent/toolsetup.go` (AttachMCP bloğu) | Köprüye ajanın kendi `toolFilter`'ı verilir; CLI köprüsüne verilmez (`bridgeExcluded`) |
 | **Per-call izin (Faz 2)** | `codemode.Config.Gate` + `toolsetup.go` closure | Script içi her MCP çağrısı, native loop'un aynı çağrıya uygulayacağı **`permGate`'in birebir kendisinden** geçer: "ask" modda per-call onay kartı (standing "always allow" grant'ları geçerli), "read-only"de blok, otonom ask-turlarında prompter yok → red. Red, script'e loud `MCPError` olarak döner; ayrı politika kodu yok — tam parite. |
 | **Per-call gözlemlenebilirlik (Faz 2)** | `codemode.Config.Observe` + `toolsetup.go` closure | Script içi her çağrı (dispatch edilen VEYA reddedilen) `debug.jsonl`'a `tool` tipi olay yazar (`Detail: "via run_code"` / `"permission denied (via run_code)"`, DurMs/OutBytes/Err) — per-message debug paneli köprü çağrılarını native araç çağrıları gibi listeler. Araç sonucundaki özet artık red sayısını da içerir. |
 
-**Akış:** model `run_code` (boş) → listing → `Read .swarmgo/mcp/<module>.py` (tanım
+**Akış:** model `run_code` (boş) → listing → `Read .tionswarm/mcp/<module>.py` (tanım
 on-demand) → `run_code(script)` → script `from <server> import <tool>` ile çağırır,
 köprü `mcp.pool.Call`'a yönlendirir → modele yalnız `print()` çıktısı + çağrı özeti döner.
 
@@ -399,7 +399,7 @@ bypass denemesinin köprüde reddi).
 **UI + settings entegrasyonu (2026-07-02, Faz 5'ten öne alındı):**
 - **Settings toggle:** `enableCodeMode` alanı (settings.json, Ayarlar → Geçişli
   yetenekler ekranı, `AppToolsPanel`) — canlı uygulanır (`applySettings` →
-  `SetCodeMode`). `SWARMGO_CODE_MODE=1` artık doğrudan tunable değil, `EnableShell`
+  `SetCodeMode`). `TIONSWARM_CODE_MODE=1` artık doğrudan tunable değil, `EnableShell`
   gibi **tek seferlik boot seed**'i; source of truth Settings ekranı. Kabuk yetkisi
   kapalıyken UI uyarı gösterir (run_code kaydedilmez).
 - **Trace kartları:** `CallObservation`'a `Args` eklendi; `toolsetup` observer'ı her
@@ -440,7 +440,7 @@ provider tokenizer'ı ile birebir değil.
 | Senaryo | Tur-başı maliyet | Eager-full'a göre |
 |---------|------------------|-------------------|
 | 1. Eager-full (endüstri baseline) | **67.050 B ≈ 17.049 tok** her tur | — |
-| 2. Tier-lazy (SwarmGo bugünü) | 4 per-server özet satırı ≈ **69 tok**/tur (+~236 tok/aktive araç) | **−99,6%** |
+| 2. Tier-lazy (TionSwarm bugünü) | 4 per-server özet satırı ≈ **69 tok**/tur (+~236 tok/aktive araç) | **−99,6%** |
 | 3. Code-mode (`run_code`) | 1 şema ≈ **374 tok**/tur; binding'ler diskte 101.698 B (0 bağlam); discovery ≈ 375 tok (tek seferlik) | **−97,8%** |
 
 ### Gerçek kullanım profili (28 oturum, 204 `llm_call`, debug.jsonl)
@@ -449,7 +449,7 @@ provider tokenizer'ı ile birebir değil.
 - `cacheRead`: ort 107.569 · p50 68.299 · p90 186.387 · max 1.286.364 tok
 - `out`: ort 673 · p50 515 tok
 - Araç olayları: 336 toplam; MCP-namespaced 130'un **yalnız ~5'i gerçek harici MCP**
-  (kalanı CLI köprüsünün `swarmgo_interaction`/`extended` built-in'leri) — harici MCP
+  (kalanı CLI köprüsünün `tionswarm_interaction`/`extended` built-in'leri) — harici MCP
   kullanımı henüz seyrek; A/B testi kasıtlı MCP-yoğun senaryo gerektirir.
 
 ### Dürüst bulgu — ölçüm odağı düzeltmesi
@@ -545,13 +545,13 @@ Def açıklaması "ACCURACY:" paragrafı — B1 hatasını sistemik önler).
 İlk PoC yalnız **MCP** kataloğunu binding'e döküyordu; `run_code` MCP sunucusu
 yoksa hiç açılmıyordu (`len(entries)==0`→hata). Bu faz built-in araçları da açar:
 kod-modunun asıl kaldıracı — çok-araçlı iş akışını (list→filter→act) **tek** çağrıda
-kod yazarak yapmak — artık SwarmGo'nun kendi araçlarını da kapsar.
+kod yazarak yapmak — artık TionSwarm'nun kendi araçlarını da kapsar.
 
 - **Binding üretimi** (`codemode.WriteBindings(dir, entries, builtins, allow)`): MCP
-  sunucu modüllerinin yanına tek **`swarmgo`** modülü yazılır (`from swarmgo import <tool>`),
-  her fonksiyon `_bridge.call("swarmgo__<tool>", args)` çağırır. MCP entry'leri
-  namespaced isimle, built-in'ler bare isimle `allow`'dan geçer. Rezerve `swarmgo`
-  isimli gerçek bir MCP sunucusu çakışırsa `swarmgo_server`'a yeniden adlandırılır.
+  sunucu modüllerinin yanına tek **`tionswarm`** modülü yazılır (`from tionswarm import <tool>`),
+  her fonksiyon `_bridge.call("tionswarm__<tool>", args)` çağırır. MCP entry'leri
+  namespaced isimle, built-in'ler bare isimle `allow`'dan geçer. Rezerve `tionswarm`
+  isimli gerçek bir MCP sunucusu çakışırsa `tionswarm_server`'a yeniden adlandırılır.
 - **Köprü yönlendirme** (`codemode.Config.Builtin`): `handleCall` `SplitNamespaced`
   ile server'ı çözer; `server == BuiltinServer` ise dispatcher `cfg.Builtin`, ve
   allow/gate/observe **bare** isimle çalışır (native araç isimleriyle birebir; MCP

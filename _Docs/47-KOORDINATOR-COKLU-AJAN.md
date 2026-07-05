@@ -4,7 +4,7 @@
 > M3 scratchpad + efemeral worker hedefi — bkz. §9 Uygulama Durumu). §1–§8 orijinal
 > tasarım metnidir. **LLM-in-the-loop görsel deneme ✅ canlı doğrulandı (2026-07-03,
 > bkz. §10)** — deneme sırasında bulunan non-stream CLI köprü boşluğu da düzeltildi.
-> **Amaç:** SwarmGo'ya Claude Code'un "koordinatör modu"na denk bir çok-ajan
+> **Amaç:** TionSwarm'ya Claude Code'un "koordinatör modu"na denk bir çok-ajan
 > koordinasyon katmanı eklemek — bir üst ajan (koordinatör) birden çok işçiyi
 > (worker) paralel yönetir; ayrıca **birden fazla koordinasyon yöntemi**
 > (parallel fan-out / koordinatör-işçi / takım-karatahta / flow) tek bir çatı
@@ -30,10 +30,10 @@ uygular:
 4. Fazlar: Araştırma (paralel işçiler) → Sentez (koordinatör) → Uygulama →
    Doğrulama.
 
-SwarmGo bugün bu döngünün **çoğu parçasına sahip** ama "async işçi → koordinatöre
+TionSwarm bugün bu döngünün **çoğu parçasına sahip** ama "async işçi → koordinatöre
 geri bildirim → koordinatör devam eder" halkası eksik.
 
-### 1.1 SwarmGo'da bugün ne var (yeniden kullanılacak)
+### 1.1 TionSwarm'da bugün ne var (yeniden kullanılacak)
 
 | Yetenek | Kod | Not |
 |--------|-----|-----|
@@ -223,7 +223,7 @@ Role                 string   // "coordinator" | "worker" | "" (normal)
 
 ## 4. Koordinatör Sistem Promptu / Skill
 
-Yeni gömülü skill `swarmgo-coordinator` (`internal/skills/defaults/`), Claude
+Yeni gömülü skill `tionswarm-coordinator` (`internal/skills/defaults/`), Claude
 Code'un `getCoordinatorSystemPrompt()`'undan uyarlanır (Türkçe doküman / İngilizce
 prompt kuralına göre prompt İngilizce):
 
@@ -262,10 +262,10 @@ gerçek workspace ajanı adı verir.
 
 | Faz | Kapsam | Dosyalar |
 |-----|--------|----------|
-| **F0** | Bu tasarım dokümanı + koordinatör skill taslağı | `_Docs/47`, `skills/defaults/swarmgo-coordinator` |
+| **F0** | Bu tasarım dokümanı + koordinatör skill taslağı | `_Docs/47`, `skills/defaults/tionswarm-coordinator` |
 | **F1** | Çekirdek backend: session alanları + `NotifyCoordinator` + per-session tur kuyruğu + `CoordinationEngine.OnWorkerFinished` (workspace manager'a `SetTurnHook` zincirine ekle) | `db/models.go`, `agent/coordination.go`, `agent/runtime.go`, `workspace/manager.go` |
 | **F2** | Araçlar: `spawn_worker`/`send_to_worker`/`stop_worker`/`list_workers` + worker araç kısıtı + guard'lar (`CoordinatorMaxWorkers`/`MaxTurns`) | `tools/builtin_coordination.go`, `agent/subagent.go`, `agent/tunables.go` |
-| **F3** | Koordinatör sistem promptu (koşullu enjeksiyon) + `swarmgo-coordinator` skill | `agent/prompts*`, `api/*compose*`, `skills/defaults/` |
+| **F3** | Koordinatör sistem promptu (koşullu enjeksiyon) + `tionswarm-coordinator` skill | `agent/prompts*`, `api/*compose*`, `skills/defaults/` |
 | **F4** | UI: koordinasyon paneli + yöntem seçici + `worker` SSE event | `frontend/src/components/`, `agent/coordination.go` (emit) |
 | **F5** | M3 ortak scratchpad + M1/M4 birleşik "yöntem" belgeleme + testler + doküman güncelleme | `_Docs/28`,`15`,`47`, `*_test.go`, `SKILL.md` |
 
@@ -332,7 +332,7 @@ keyed-lock+flag; M3 scratchpad ertelendi.
   engeli). Wiring: `toolloop.go withCoordination` + `toolsetup.go` koşullu kayıt.
 - **Prompt/skill** (F3): `api/coordinator_prompt.go` (`composeTurnRequest`'te
   `Role=="coordinator"` iken enjekte → wake yolunu da kapsar) + gömülü default
-  skill `swarmgo-coordinator`.
+  skill `tionswarm-coordinator`.
 - **Guard'lar** (`agent/tunables.go`): `CoordinatorMaxWorkers` (8) +
   `CoordinatorMaxTurns` (50) + `SetCoordinatorLimits`.
 - **API** (F4): `session_info`'ya `role`+`coordinatorSessionId`; yeni
@@ -409,7 +409,7 @@ Görseller + API çıktısı: `_Docs/gorseller/coord-02-before-ses104.png` (önc
 
 ### Bulunan ve düzeltilen boşluk: non-stream CLI turunda köprü yok
 
-İlk deneme `POST /api/chat` (non-stream) ile yapılmıştı ve koordinatör SwarmGo'nun
+İlk deneme `POST /api/chat` (non-stream) ile yapılmıştı ve koordinatör TionSwarm'nun
 `spawn_worker`'ı yerine **claude-cli'nin kendi `Agent` aracını** kullandı: worker
 roster hiç dolmadı, log `cli mcp config written … interaction=false` gösterdi.
 

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/memory"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/memory"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // userModelPrompt drives HA-1: a Honcho-style pass that keeps the agent's "human"

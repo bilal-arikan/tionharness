@@ -170,8 +170,8 @@ export interface SessionContextPreview {
   totalTokens: number
   cache: CachePreview
   // Present only for CLI-wrapper providers (claude-cli): the gap
-  // between SwarmGo's segment estimate (totalTokens) and the real prompt the CLI
-  // sends (its own system + tools + MCP bridge, which SwarmGo never sees).
+  // between TionSwarm's segment estimate (totalTokens) and the real prompt the CLI
+  // sends (its own system + tools + MCP bridge, which TionSwarm never sees).
   cliOverhead?: CLIOverhead
   // True when this preview was requested with compaction simulated (?compact=1):
   // the message array reflects this turn's budgeted fold (read-only, no summary

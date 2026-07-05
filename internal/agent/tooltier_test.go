@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // hasTool reports whether a tool name is present in a catalog.
@@ -109,14 +109,14 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 
 // TestLazyCatalogHidesSelfManageBehindSkillPointer verifies the rendered block
 // does NOT enumerate hidden self-management tools but emits a single pointer to
-// the swarmgo-self-management skill (and still names the visible lazy tools).
+// the tionswarm-self-management skill (and still names the visible lazy tools).
 func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 	visible := []providers.ToolDef{{Name: "WebFetch", Description: "fetch a page"}}
 	out := renderLazyToolCatalog(visible, 12, false)
 	if !strings.Contains(out, "WebFetch") {
 		t.Error("visible lazy tools must still be listed")
 	}
-	if !strings.Contains(out, "swarmgo-self-management") {
+	if !strings.Contains(out, "tionswarm-self-management") {
 		t.Error("hidden suite must be replaced by a pointer to the self-management skill")
 	}
 	if !strings.Contains(out, "12 self-management tools") {
@@ -124,7 +124,7 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 	}
 	// With no hidden tools, no pointer line.
 	out = renderLazyToolCatalog(visible, 0, false)
-	if strings.Contains(out, "swarmgo-self-management") {
+	if strings.Contains(out, "tionswarm-self-management") {
 		t.Error("no pointer when there are no hidden tools")
 	}
 	// Empty + no hidden → empty block.
@@ -146,7 +146,7 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	}
 	out := renderLazyToolCatalog(lazy, 3, true)
 
-	if !strings.Contains(out, "mcp__swarmgo_extended__update_session") {
+	if !strings.Contains(out, "mcp__tionswarm_extended__update_session") {
 		t.Errorf("CLI form must namespace lazy built-ins under the extended tier:\n%s", out)
 	}
 	if !strings.Contains(out, "mcp__srvA__alpha") {
@@ -162,7 +162,7 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 		t.Errorf("CLI form must point at ToolSearch:\n%s", out)
 	}
 	// Self-management pointer uses the namespaced use_skill on the CLI path.
-	if !strings.Contains(out, "mcp__swarmgo_interaction__use_skill") {
+	if !strings.Contains(out, "mcp__tionswarm_interaction__use_skill") {
 		t.Errorf("CLI self-management pointer must namespace use_skill:\n%s", out)
 	}
 

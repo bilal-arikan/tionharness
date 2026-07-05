@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 type summaryReq struct {

@@ -24,7 +24,7 @@ func setupTree(t *testing.T) Sandbox {
 }
 
 func TestGrepOutputModes(t *testing.T) {
-	t.Setenv("SWARMGO_GREP_NO_RG", "1") // pin the deterministic Go engine
+	t.Setenv("TIONSWARM_GREP_NO_RG", "1") // pin the deterministic Go engine
 	sb := setupTree(t)
 	ctx := context.Background()
 	g := NewFSGrepTool(sb)
@@ -68,7 +68,7 @@ func TestGrepOutputModes(t *testing.T) {
 }
 
 func TestGrepContext(t *testing.T) {
-	t.Setenv("SWARMGO_GREP_NO_RG", "1")
+	t.Setenv("TIONSWARM_GREP_NO_RG", "1")
 	sb := setupTree(t)
 	g := NewFSGrepTool(sb)
 	// -B 1 includes the line before the match with a '-' separator.
@@ -81,7 +81,7 @@ func TestGrepContext(t *testing.T) {
 }
 
 func TestGrepOnlyMatching(t *testing.T) {
-	t.Setenv("SWARMGO_GREP_NO_RG", "1")
+	t.Setenv("TIONSWARM_GREP_NO_RG", "1")
 	sb := setupTree(t)
 	g := NewFSGrepTool(sb)
 	out, _ := g.Call(context.Background(), mustJSON(t, map[string]any{
@@ -178,9 +178,9 @@ func TestGrepRGGoParity(t *testing.T) {
 	}
 	for i, c := range cases {
 		rgOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, c))
-		t.Setenv("SWARMGO_GREP_NO_RG", "1")
+		t.Setenv("TIONSWARM_GREP_NO_RG", "1")
 		goOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, c))
-		os.Unsetenv("SWARMGO_GREP_NO_RG")
+		os.Unsetenv("TIONSWARM_GREP_NO_RG")
 		if rgOut != goOut {
 			t.Errorf("case %d (%v) parity mismatch\nrg:\n%q\ngo:\n%q", i, c, rgOut, goOut)
 		}

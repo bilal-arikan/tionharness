@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // TestFormatTaskNotification checks the coordinator-facing XML carries the

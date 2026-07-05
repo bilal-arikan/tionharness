@@ -22,7 +22,7 @@ aracı. Bugün yalnız oturum **başlığı + rolling summary** üzerinden fark�
 
 ## Kilit gerçek — neden ripgrep/indeks gerekmez
 
-SwarmGo dosya-tabanlı ama **boot'ta tüm oturumları belleğe yükler**:
+TionSwarm dosya-tabanlı ama **boot'ta tüm oturumları belleğe yükler**:
 `internal/db/store.go` içinde `d.messages map[sessionID][]Message` (her oturumun
 `session.jsonl`'i `loadSessions` ile okunup RAM'e alınır, bkz. `08-DEPOLAMA.md`).
 Yani aranacak veri **zaten bellekte**. Sonuç:
@@ -198,7 +198,7 @@ ortak temelidir; Adım 2 en düşük eforla en görünür ajan-değerini verir (
 ## Doğrulama
 
 ```powershell
-cd C:\Users\user\Desktop\Projects\SwarmGo
+cd C:\Users\user\Desktop\Projects\TionSwarm
 go build ./...
 go test ./internal/db/... ./internal/tools/... ./internal/api/...
 ```

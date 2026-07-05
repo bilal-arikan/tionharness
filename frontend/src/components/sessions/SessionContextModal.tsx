@@ -390,7 +390,7 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
               >
                 {data.cliOverhead ? (
                   <HintNote>
-                    claude-cli: bu araçlar SwarmGo'nun kendi isteğinde şema olarak DEĞİL,{' '}
+                    claude-cli: bu araçlar TionSwarm'nun kendi isteğinde şema olarak DEĞİL,{' '}
                     <strong>CLI'nin built-in araçları + MCP köprüsüyle</strong> iletilir; aşağıdaki
                     token sayısı yaklaşıktır (gerçek yük CLI'nin kendi temsiline göre değişir — bkz.
                     yukarıdaki “CLI ek yükü”).

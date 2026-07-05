@@ -8,23 +8,23 @@ import (
 	"time"
 )
 
-// startPprof launches a loopback-only profiling server when SWARMGO_PPROF is
+// startPprof launches a loopback-only profiling server when TIONSWARM_PPROF is
 // truthy. It is OFF by default: production binaries expose no profiling surface.
 //
 // The endpoints (/debug/pprof/...) are served on http.DefaultServeMux, which the
 // main API server does not use (it has its own mux via server.Routes()), so the
 // profiler stays fully isolated from application routes.
 //
-// Override the bind address with SWARMGO_PPROF_ADDR (default 127.0.0.1:6060).
+// Override the bind address with TIONSWARM_PPROF_ADDR (default 127.0.0.1:6060).
 // Binding to loopback only keeps the profiler off the network and away from the
 // Windows Firewall inbound prompt.
 func startPprof(logger *slog.Logger) {
-	v := os.Getenv("SWARMGO_PPROF")
+	v := os.Getenv("TIONSWARM_PPROF")
 	if v != "1" && v != "true" && v != "TRUE" {
 		return
 	}
 
-	addr := os.Getenv("SWARMGO_PPROF_ADDR")
+	addr := os.Getenv("TIONSWARM_PPROF_ADDR")
 	if addr == "" {
 		addr = "127.0.0.1:6060"
 	}

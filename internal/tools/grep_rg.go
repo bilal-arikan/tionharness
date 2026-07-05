@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/proc"
 )
 
 // rgTimeout bounds a delegated ripgrep run; a search that outlasts it falls back to
@@ -25,12 +25,12 @@ var (
 )
 
 // rgExe resolves the ripgrep binary. It returns "" (fast path disabled) when rg is
-// not on PATH or SWARMGO_GREP_NO_RG is set — in which case Grep uses its built-in Go
+// not on PATH or TIONSWARM_GREP_NO_RG is set — in which case Grep uses its built-in Go
 // engine. The PATH lookup is cached for the process lifetime; the env opt-out is
 // re-checked on every call so it can be toggled (e.g. per test) without the cache
 // pinning an earlier decision.
 func rgExe() string {
-	if os.Getenv("SWARMGO_GREP_NO_RG") != "" {
+	if os.Getenv("TIONSWARM_GREP_NO_RG") != "" {
 		return ""
 	}
 	rgOnce.Do(func() {

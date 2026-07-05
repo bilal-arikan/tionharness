@@ -5,7 +5,7 @@
 
 ## Neden?
 
-SwarmGo'nun native agentic döngüsünde (`agent/toolloop.go`) her araç çağrısının çıktısı bir
+TionSwarm'nun native agentic döngüsünde (`agent/toolloop.go`) her araç çağrısının çıktısı bir
 `ToolResult` olarak konuşmaya eklenir ve sonraki model çağrısında **girdi token'ı** olarak ücretlenir.
 `Bash` gibi araçlar 64 KB'ye kadar ham çıktı döndürebilir. `git status`, test runner, `ls -R`, `grep`
 gibi komutlar context'i hızla şişirir. Bu katman, çıktı transcript'e *girmeden önce* onu kırpar — mevcut
@@ -74,7 +74,7 @@ orijinali verir).
   ile günlük rollup'a (`Usage.CompactSavedBytesLLM`, `compactSavedBytesLLM` JSON) yazılır — Sistem A ölçerinden
   **ayrı** (özet çağrısının kendi token maliyeti `UsageKindCompact` altında zaten kayıtlı; bu, brüt çıktı azaltımı).
 - Yalnız **native döngüde** (Anthropic/MiniMax) etkilidir; claude-cli delegasyonu kendi döngüsünü sürdürür
-  (çıktıları SwarmGo'nun `ToolResult` katmanından geçmez).
+  (çıktıları TionSwarm'nun `ToolResult` katmanından geçmez).
 
 ## Ayarlar
 
@@ -117,7 +117,7 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
   (yalnız `wire="hook"` ise frontend `TOOL_HOOK_TEMPLATES`'e ek şablon gerekir).
 - Frontend: `systemApi.externalTools()` + `HooksPanel`; araçlar `category`'ye göre gruplanır, `wire`'a
   göre rozet/buton gösterilir (`hook`→Bağla/Aktif toggle, `mcp`→MCP rozeti, `cli`→CLI rozeti) + repo linki.
-- Bu yalnızca **bilgilendirme + opsiyonel wire-up**'tır; SwarmGo bu araçları kendiliğinden çalıştırmaz
+- Bu yalnızca **bilgilendirme + opsiyonel wire-up**'tır; TionSwarm bu araçları kendiliğinden çalıştırmaz
   (token sıkıştırması Sistem A/B native'dir). `cli` araçları (`crabbox`/`mmdc`) ajan tarafından
   geliştirme sırasında Bash ile kullanılır.
 
@@ -162,7 +162,7 @@ farketmez (trailing `tool_result` da olur). Politika birleşik: yalnız `extende
 ## the external agent project'tan Aktarılan Fikirler
 
 > Kaynak: `external-agent-oss` ([repo](https://github.com/external-agent-project/external-agent-oss)) bağlam-yönetimi
-> incelemesi (2026-06-22). the external agent project çoğu bağlam işini Claude Agent SDK'ye devreder; SwarmGo'nun açık
+> incelemesi (2026-06-22). the external agent project çoğu bağlam işini Claude Agent SDK'ye devreder; TionSwarm'nun açık
 > motoru genel olarak daha kontrollü. Aşağıda **sırada bekleyen** dokunuşlar (TODO) + **tamamlananların**
 > tek-satır özeti (tam tarihçe → [05-ILERLEME.md](05-ILERLEME.md)).
 
@@ -172,7 +172,7 @@ farketmez (trailing `tool_result` da olur). Politika birleşik: yalnız `extende
 
 the external agent project yerel **RTK (Rewrite Toolkit)** binary'siyle `git diff`, `ls -R`, `bun test`, `npm install`,
 `grep` gibi gürültülü bash çıktılarını **model'e gitmeden önce** komut-ailesine özel kurallarla yeniden yazar
-(tasarruf istatistiği de tutar). SwarmGo'da Sistem A jeneriktir (dedupe + boş-satır + ortadan kırpma);
+(tasarruf istatistiği de tutar). TionSwarm'da Sistem A jeneriktir (dedupe + boş-satır + ortadan kırpma);
 komut-özel akıllı kısaltıcı yok.
 
 - **Yapılacak:** `internal/tools/compact` içine komut-aile tanıyıcı bir katman (ör. `compact/rules_*.go`):
@@ -184,7 +184,7 @@ komut-özel akıllı kısaltıcı yok.
 #### 2. `_intent` — açık niyet enjeksiyonu 🔶
 
 the external agent project her MCP tool çağrısında şemaya bir **`_intent`** alanı enjekte eder; bu, büyük-sonuç
-özetlemesinin **neye odaklanacağını** açıkça söyler. SwarmGo'da Sistem B niyeti *çıkarımla* buluyor
+özetlemesinin **neye odaklanacağını** açıkça söyler. TionSwarm'da Sistem B niyeti *çıkarımla* buluyor
 (tool adı + ilk `intentInputRunes=300` input). Açık niyet daha iyi sinyal verir.
 
 - **Yapılacak:** native tool-use döngüsünde (`agent/toolloop.go`) modelin tool çağrısına opsiyonel bir
@@ -241,7 +241,7 @@ the external agent project her MCP tool çağrısında şemaya bir **`_intent`**
 **Notlar / sınırlar:**
 - Hook'lar (`PreToolUse`/`PostToolUse`) hâlâ tasarruf **ölçmez** (Claude Code sözleşmesi; gerçek token-tasarruf
   mekanizması Sistem A/B'dir). `rtk`/`sqz` harici araçları yalnız **presence-only** tespit edilir,
-  SwarmGo çıktıları onlardan geçirmez → ölçülen kazanç yok; yerel eşdeğer = Sistem A.
+  TionSwarm çıktıları onlardan geçirmez → ölçülen kazanç yok; yerel eşdeğer = Sistem A.
 - Bayt→token→USD: Sistem A/B için yalnız bayt + ~token gösterilir, **USD'ye çevrilmez** (uydurma sayı olmaması
   için). Gerçek USD yalnız prompt-cache'te.
 - Geriye-uyumlu: eski usage dosyaları yeni alanları taşımaz (omitempty → 0); session rollup yeni turlardan dolar.
@@ -275,15 +275,15 @@ retrieval and long-range reasoning"*) — model uzun bağlamda hâlâ yetkin ama
 Ham pencereye alternatifler: compaction · structured note-taking · just-in-time retrieval · sub-agent
 izolasyonu.
 
-**SwarmGo'nun önceki bahsi (§7, 2026-06-23).** `EffectiveBudget` `fraction=0.6 / ceil=512K`'ye
+**TionSwarm'nun önceki bahsi (§7, 2026-06-23).** `EffectiveBudget` `fraction=0.6 / ceil=512K`'ye
 çıkarılmıştı ("1M pencerede her şeyi ham tut" → Claude Code/External Agent davranışına yaklaşmak). Bu,
 **bilinçli olarak rot ile takastı**: ham pencere büyüdükçe `n²` yüzeyi ve recall hassasiyeti kaybı
-büyür. Ayrıca Claude Code o davranışı **prompt-cache + fork**'la ucuzlatır; SwarmGo'nun birincil yolu
+büyür. Ayrıca Claude Code o davranışı **prompt-cache + fork**'la ucuzlatır; TionSwarm'nun birincil yolu
 (`claude-cli`, anahtarsız) bu paylaşımı CC gibi kontrol edemez → büyük ham pencerenin getiri/maliyet
-oranı SwarmGo'da daha zayıf.
+oranı TionSwarm'da daha zayıf.
 
 **Kritik içgörü — dayanıklılık ≠ ham pencere boyutu.** Bir detayın kaybolmaması için 512K ham
-transkript *gerekmez*. SwarmGo'nun dayanıklılığı zaten **retrieval katmanında**: `memory_add` + lexical
+transkript *gerekmez*. TionSwarm'nun dayanıklılığı zaten **retrieval katmanında**: `memory_add` + lexical
 recall (uzun-dönem) · `core_memory_replace/append` (her tur enjekte working memory) · `conversation_search`
 (`full=true`/`context=N` ile **birebir** kurtarma, §10) · post-compact kurtarma notu ("tahmin etme;
 ara ya da yeniden oku", §9) · `memoryPressureWarn` ("şimdi yaz" uyarısı). Katlanan detay **birebir geri
@@ -339,7 +339,7 @@ bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen 
 
 ## claude-cli Prompt-Cache Sıcaklığı (2026-06-29)
 
-claude-cli sağlayıcısında modele giden gerçek girdi, SwarmGo'nun kendi enjekte
+claude-cli sağlayıcısında modele giden gerçek girdi, TionSwarm'nun kendi enjekte
 ettiği katmandan daha büyüktür (CLI kendi sistem promptu + araç şemaları + MCP
 köprüsünü ekler; context-preview'daki `cliOverhead` bunu **num_turns ile bölünmüş
 çağrı-başı** gerçek girdiyle gösterir). Bu yükün her tur yeniden **yazılması**
@@ -386,7 +386,7 @@ toplam girdi = usage.input_tokens + cache_creation_input_tokens + cache_read_inp
 | Saf sistem promptu (0 araç, tüm built-in disallow) | 17.067 | `CLIBaseSystemTokens` (17000) |
 | + Claude Code dahili araç şemaları (~15 tool) | 26.265 → +9.198 | `CLIBuiltinToolsTokens` (9200) |
 | **Taban zemin** (sistem + dahili araçlar) | ~26.200 | `CLIBaseTokens` |
-| Köprülü SwarmGo aracı başına ort. şema (name+desc+inputSchema+`mcp__…__` ns) | ~215 (42–710) | `CLIAvgBridgedToolTokens` |
+| Köprülü TionSwarm aracı başına ort. şema (name+desc+inputSchema+`mcp__…__` ns) | ~215 (42–710) | `CLIAvgBridgedToolTokens` |
 
 **Formül** (`conversation.PredictCLIOverhead(loadedTools)`):
 
@@ -397,7 +397,7 @@ Yalnız **eager** (always-load) araçlar tam şema taşır; deferred/lazy araçl
 kabul edilebilir). Doğrulama: SES104'te Tahmin 29.573 → Gerçek 88.425 (Δ 58.852), bu
 referansla (17K sys + 9K dahili + ~19–33K köprü araçları) ~%15 içinde örtüşür.
 
-Rakamlar ±~15% (CLI, MCP şemalarını SwarmGo'nun ~4 karakter/token sezgisinden daha
+Rakamlar ±~15% (CLI, MCP şemalarını TionSwarm'nun ~4 karakter/token sezgisinden daha
 ayrıntılı serileştirir + tokenizer farkı). **claude-cli major sürümü değişince
 ölçümü yenile** (taban sistem promptu sürümler arası büyür). `cliOverheadPreview`
 artık `predictedOverhead` alanı taşır → UI ilk turdan önce de uyarabilir.

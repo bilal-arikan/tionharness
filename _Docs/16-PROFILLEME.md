@@ -1,4 +1,4 @@
-# SwarmGo — Profilleme (pprof) Rehberi
+# TionSwarm — Profilleme (pprof) Rehberi
 
 > Performans darboğazlarını **tahmin etmeden** bulmak için. Önce profil, sonra optimize.
 
@@ -16,10 +16,10 @@ Uçlar `http.DefaultServeMux` üzerinde yayınlanır; ana API sunucusu kendi mux
 PowerShell:
 
 ```powershell
-$env:SWARMGO_PPROF = "1"          # profiler'ı aç (varsayılan kapalı)
+$env:TIONSWARM_PPROF = "1"          # profiler'ı aç (varsayılan kapalı)
 # opsiyonel: bind adresini değiştir (varsayılan 127.0.0.1:6060)
-$env:SWARMGO_PPROF_ADDR = "127.0.0.1:6060"
-.\swarmgo.exe
+$env:TIONSWARM_PPROF_ADDR = "127.0.0.1:6060"
+.\tionswarm.exe
 ```
 
 Açıldığında loglarda şu satır görünür:
@@ -77,7 +77,7 @@ Web arayüzü (tarayıcıda interaktif flame graph):
 go tool pprof -http=127.0.0.1:8000 http://127.0.0.1:6060/debug/pprof/heap
 ```
 
-## SwarmGo'da öncelikli bakılacak sıcak yollar
+## TionSwarm'da öncelikli bakılacak sıcak yollar
 
 Profil alırken şu adaylara dikkat et (mimariden türetilmiş hipotezler):
 
@@ -116,4 +116,4 @@ go tool pprof mem.prof
 
 - Profiler dinleyicisi graceful shutdown'a bağlı değildir; süreç bitince kapanır
   (loopback-only ve teşhis amaçlı olduğundan kabul edilebilir).
-- Wiring: `cmd/swarmgo/pprof.go` (`startPprof`), `cmd/swarmgo/main.go` (config sonrası çağrı).
+- Wiring: `cmd/tionswarm/pprof.go` (`startPprof`), `cmd/tionswarm/main.go` (config sonrası çağrı).

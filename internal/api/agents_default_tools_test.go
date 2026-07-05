@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // TestCreateAgentPerCallerFlipDefault pins the per-creation-path default-on

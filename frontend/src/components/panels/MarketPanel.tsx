@@ -606,7 +606,7 @@ function packTargetKey(pack: Pack): { set: keyof ExistingKeys; key: string } | n
 
 export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   const [packs, setPacks] = useState<Pack[]>([])
-  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.marketListOpen')
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.marketListOpen')
   const [tab, setTab] = useState<PackKind>(KIND_NAV[0].key)
   const [selected, setSelected] = useState<Pack | null>(null)
   const [busy, setBusy] = useState(false)
@@ -838,7 +838,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
       <ListPane
         open={listOpen}
         onToggle={toggleList}
-        widthKey="swarmgo.marketListWidth"
+        widthKey="tionswarm.marketListWidth"
         defaultWidth={200}
         minWidth={160}
         label="Kategoriler"

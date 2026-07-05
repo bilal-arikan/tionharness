@@ -848,7 +848,7 @@ func renderCatalog(list []Skill, skillTool string) string {
 	}
 	// Sibling skill_search tool name + deferred-activation guidance. A claude-cli
 	// agent reaches these through the Interaction MCP bridge, where the names are
-	// namespaced (mcp__swarmgo_interaction__use_skill) AND may be DEFERRED by the CLI
+	// namespaced (mcp__tionswarm_interaction__use_skill) AND may be DEFERRED by the CLI
 	// when many MCP tools are present (e.g. a large gateway). When the tool is
 	// namespaced, point the model at ToolSearch up front so it does not waste its
 	// first call on a rejected/unloaded name. We deliberately keep this to a single

@@ -4,9 +4,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/fetch"
-	"github.com/bilal-arikan/swarmgo/internal/market"
-	"github.com/bilal-arikan/swarmgo/internal/skills"
+	"github.com/bilal-arikan/tionswarm/internal/fetch"
+	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
 // agentAdapter detects Claude Code subagents (Markdown files under an agents/ dir
@@ -17,9 +17,9 @@ type agentAdapter struct{}
 
 func (agentAdapter) Kind() string { return market.KindAgent }
 
-// mapCCModel translates a Claude Code subagent `model:` value into a SwarmGo
+// mapCCModel translates a Claude Code subagent `model:` value into a TionSwarm
 // (provider, model) pair. CC subagents name a model family (haiku/sonnet/opus) or
-// "inherit"; SwarmGo needs a concrete provider+model. It targets the keyless
+// "inherit"; TionSwarm needs a concrete provider+model. It targets the keyless
 // `claude-cli` provider (works out of the box, no API key) with the canonical model
 // id for that family. An empty/"inherit" value leaves both blank (agent uses the
 // workspace default). An unrecognised value (a non-Anthropic model, or a dated id we

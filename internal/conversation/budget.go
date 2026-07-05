@@ -1,6 +1,6 @@
 package conversation
 
-import "github.com/bilal-arikan/swarmgo/internal/providers"
+import "github.com/bilal-arikan/tionswarm/internal/providers"
 
 // Model-aware transcript budget (Option B). A flat default budget wastes a large
 // model's context window: a 200K–1M model could keep far more history before
@@ -24,12 +24,12 @@ const (
 	// _Docs/17 §12): 256K keeps the live window in the gradient's high-precision zone
 	// (~¼ of 512K's n² attention surface) while the retrieval layer carries durability
 	// of folded detail. Users who want more raise it from Settings (or
-	// SWARMGO_CONTEXT_BUDGET_CEIL); MaxContextTokens is the floor.
+	// TIONSWARM_CONTEXT_BUDGET_CEIL); MaxContextTokens is the floor.
 	defaultBudgetAutoCeil = 262144
 )
 
 // EffectiveBudget returns the transcript token budget for an agent's model. The
-// configured value (settings.MaxContextTokens / SWARMGO_MAX_CONTEXT_TOKENS) is
+// configured value (settings.MaxContextTokens / TIONSWARM_MAX_CONTEXT_TOKENS) is
 // the floor; when the model's context window is known we allow a larger budget —
 // clamp(window * fraction, configured, ceil) — so big-context models aren't
 // pinned to the small default. An unknown window (0) falls back to configured, so

@@ -10,9 +10,9 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // scheduleTimeout bounds a single scheduled fire (task run or prompt delivery).

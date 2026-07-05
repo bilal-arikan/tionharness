@@ -147,7 +147,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk artifact deletion.
   const sel = useMultiSelect()
-  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.artifactsListOpen')
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.artifactsListOpen')
   const bulkDelete = useCallback(async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
@@ -324,7 +324,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       <ListPane
         open={listOpen}
         onToggle={toggleList}
-        widthKey="swarmgo.artifactsListWidth"
+        widthKey="tionswarm.artifactsListWidth"
         defaultWidth={288}
         label="Artifactlar"
         testId="artifacts-list-toggle"

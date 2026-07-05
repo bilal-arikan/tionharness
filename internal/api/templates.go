@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/market"
-	"github.com/bilal-arikan/swarmgo/internal/orchestration"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // Workspace templates seed a freshly created workspace with a curated set of

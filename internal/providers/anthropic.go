@@ -94,7 +94,7 @@ type anthropicReq struct {
 }
 
 // thinkingParam enables extended reasoning. The model emits thinking blocks
-// (not shown by SwarmGo) before its answer; max_tokens must exceed budget.
+// (not shown by TionSwarm) before its answer; max_tokens must exceed budget.
 type thinkingParam struct {
 	Type         string `json:"type"` // "enabled"
 	BudgetTokens int    `json:"budget_tokens"`

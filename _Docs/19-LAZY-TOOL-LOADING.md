@@ -104,20 +104,20 @@
   satırı `- \`ad\`` (özetsiz) basar (`writeLazyToolLine`). `Unlazy` ("Göster")
   `nameOnly` işaretini de temizler. Native yolda token kazandırır; **claude-cli
   yolunda NameOnly tek başına etkisiz** (bridge tam şema ilan eder) — ama bu artık
-  aşağıdaki **iki-tier köprü** ile çözüldü: lazy/NameOnly araçlar `swarmgo_extended`
+  aşağıdaki **iki-tier köprü** ile çözüldü: lazy/NameOnly araçlar `tionswarm_extended`
   sunucusuna gidip CLI'ın kendi ToolSearch deferral'ına tabi olur.
   Test: `TestMarkNameOnlyKeepsNameDropsSummary`.
 - **claude-cli 2.1.x+ iki-tier köprü (`alwaysLoad` + `ENABLE_TOOL_SEARCH`, 2026-06-26):**
   CLI'da eager/lazy ayrımı artık gerçekten uygulanıyor. `writeCLIMCPConfig` Interaction
   MCP'yi **iki sunucu anahtarına** böler (aynı in-process endpoint'e farklı path
   son-ek'leriyle bağlanır):
-  - **`swarmgo_interaction`** (CORE, `alwaysLoad: true`) → eager tier
+  - **`tionswarm_interaction`** (CORE, `alwaysLoad: true`) → eager tier
     (`coreInteractionTools`: `Bash`, `ask_user`, `request_confirmation`, `todo_write`,
     `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`,
     `core_memory_replace`/`append`, `permission_prompt`). CLI tool-search'ten **muaf**
     → ilk turda `ToolSearch` gerekmeden hazır. Eski anahtar adı korundu → mevcut
     namespaced referanslar (`use_skill`, `core_memory`, trace stripping) bozulmaz.
-  - **`swarmgo_extended`** (EXTENDED) → self-management suite + NameOnly oturum
+  - **`tionswarm_extended`** (EXTENDED) → self-management suite + NameOnly oturum
     araçları (`notify`, `focus_view`, `set_session_goal`/`complete_goal`,
     `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`,
     `spawn_session`, `conversation_search`, `read_session_debug`, …). `alwaysLoad`
@@ -137,7 +137,7 @@
 - **Dış MCP araçları da NameOnly (2026-07-01):** `AttachMCP` artık her MCP aracını
   `lazy` **VE** `nameOnly` işaretliyor (önceden yalnız `lazy`). Sebep: katalog
   bloğunda dış MCP araçları (ör. `mcp__mcp-chrome__*`, ~30 araç) ≤ `lazyCatalogMCPListLimit`
-  iken **tam açıklamalarıyla** dökülüyordu — `swarmgo_extended` (NameOnly) araçların
+  iken **tam açıklamalarıyla** dökülüyordu — `tionswarm_extended` (NameOnly) araçların
   yalnız-ad davranışıyla çelişiyor ve kullanıcı o aracı kullanmasa bile her tur
   ~800–1200 ölü token harcıyordu. Artık tutarlı: **hiçbir deferred araç katalogda
   tam açıklama taşımaz.** Mekanizma tekrar kullanıldı (yeni render yolu yok):
@@ -178,7 +178,7 @@
   - **Self-management daima açık:** `enableSelfManage` master toggle'ı (ayar UI +
     `toolsetup` gate) kaldırıldı; paket **daima kurulur**, varsayılan tier `hidden`
     (token davranışı aynı). **Tam sökme (2026-07-01):** `settings.EnableSelfManage`
-    alanı (+ Snapshot/Patch/applyBool), `SWARMGO_ENABLE_SELFMANAGE` env seed'i,
+    alanı (+ Snapshot/Patch/applyBool), `TIONSWARM_ENABLE_SELFMANAGE` env seed'i,
     `Tunables.selfManage` + `Set/SelfManageEnabled` metodları ve tüm çağrı yerleri
     (`chat_stream`/`autonomous_interaction`/`mcp_interaction` artık spawn_session'ı
     koşulsuz ilan eder) **silindi**. `SelfManageEnabled` gate'i kalmadı.
@@ -213,7 +213,7 @@
   - **Web + bellek** (önceden lazy+özet): `WebFetch`, `memory_recall`
   - **Doğrulama araçları (2026-06-29)**: `skill_validate`, `config_validate`,
     `mermaid_validate` — salt-okuma, yalnız authoring/diyagram anlarında kullanılır.
-    Native builtin + NameOnly → lazy olduğundan claude-cli'da `swarmgo_extended`
+    Native builtin + NameOnly → lazy olduğundan claude-cli'da `tionswarm_extended`
     köprüsünden ToolSearch ile gelir (BridgeableDefs otomatik kapsar).
 
   **Eager kalanlar** (davranışsal dürtü veya yüksek frekans): `todo_write`,
@@ -276,12 +276,12 @@ Skill sisteminde bunu zaten çözdük: katalogta yalnızca **özet** durur, tam 
 > olduğunu bil, ara sıra kullan"; hidden = "toplu/nadir admin, per-turn ödeme yok".
 > Self-management ailesinin tamamını (46) name-only enumerate ETMEME kararı: patlamalı/
 > nadir admin; CLI'de satır başına ~15 token (namespaced) → ~600 token/tur düşük getiri;
-> kategori-pointer + `swarmgo-self-management` skill + tool_search zaten keşfi sağlıyor.
+> kategori-pointer + `tionswarm-self-management` skill + tool_search zaten keşfi sağlıyor.
 
 > **CLI-uyumlu Tools kataloğu (2026-06-26):** "# Available Tools (load on demand)"
 > bloğu artık **claude-cli için doğru namespaced adları** basıyor — skills bloğunun
 > (`CatalogBlockForAgentTool`) zaten yaptığını araç tarafına da taşıdık. claude-cli
-> tüm bu araçları MCP aracı olarak görür: built-in'ler `mcp__swarmgo_interaction__<ad>`,
+> tüm bu araçları MCP aracı olarak görür: built-in'ler `mcp__tionswarm_interaction__<ad>`,
 > MCP araçları `mcp__<server>__<tool>` olarak listelenir; yönerge native
 > `activate_tools` yerine **`ToolSearch`** (CLI'nin kendi deferred-tool mekanizması);
 > CLI-native built-in'ler (WebFetch) CLI formundan düşürülür. Native (anthropic/minimax)
@@ -303,7 +303,7 @@ Skill sisteminde bunu zaten çözdük: katalogta yalnızca **özet** durur, tam 
 > `skill_search`'e yönlendirir. Toggle: `Store.SetNameOnly` + `PUT /api/skills/{slug}/name-only`,
 > UI'da SkillsPanel "NameOnly" çipi/butonu. `isNameOnly`/`setFrontmatterNameOnly`
 > `auto_summary` desenini yansıtır. Etki (ölçüm, WS5): tek bir verbose skill
-> (`swarmgo-autonomous-ops`) NameOnly olunca satırı **839→26 karakter**, blok
+> (`tionswarm-autonomous-ops`) NameOnly olunca satırı **839→26 karakter**, blok
 > **3376→2563** (~813 karakter ≈ ~200 token). Test: `TestNameOnlySkillRendersSlugOnly`.
 
 > **Skill 4-tier görünürlük (tek seçici, 2026-07-01):** skiller artık araçlarla
@@ -416,7 +416,7 @@ bırakır.
 **POC.** Hidden tier (self-management suite, onlarca araç) CLI'ya **hiç
 köprülenmezse** o şemalar o tur CLI sürecine hiç gitmez. Araçlar tur-içi
 çağrılamaz; "aktive" muadili **bir sonraki tur** yeniden-allowlist olur (model/
-kullanıcı isteyince SwarmGo yeniden ilan eder).
+kullanıcı isteyince TionSwarm yeniden ilan eder).
 
 **Kod (izole, geri-alınır):**
 - `internal/tools/bridge_filter.go` — `BridgeableDefsFiltered(allow, skipHidden)`
@@ -426,10 +426,10 @@ kullanıcı isteyince SwarmGo yeniden ilan eder).
   `SetCLIBridgeSkipHidden`/`CLIBridgeSkipHidden` accessor'ları (**default true**).
 - `internal/agent/runtime.go` `BridgeTools` — gate'i okur, `skipHidden` iken
   atlanan hidden araç sayısını Logs'a yazar (ölçüm).
-- `internal/app/app.go` — boot'ta `SWARMGO_CLI_BRIDGE_SKIP_HIDDEN` env'iyle seed.
+- `internal/app/app.go` — boot'ta `TIONSWARM_CLI_BRIDGE_SKIP_HIDDEN` env'iyle seed.
 
 **Default:** **AÇIK** (2026-07-01, `NewTunables`) — hidden araçlar CLI'ya
-köprülenmez. `SWARMGO_CLI_BRIDGE_SKIP_HIDDEN` env'i iki yönlü override:
+köprülenmez. `TIONSWARM_CLI_BRIDGE_SKIP_HIDDEN` env'i iki yönlü override:
 `0/false/off` → kapatır (eski davranış: hidden köprülenir), `1/true/on` → açar.
 Test: `TestBridgeableDefsFilteredSkipsHidden`.
 

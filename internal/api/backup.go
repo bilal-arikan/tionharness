@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/swarmgo/internal/backup"
+	"github.com/bilal-arikan/tionswarm/internal/backup"
 )
 
 // backupTargets maps the workspace manager's targets into the backup package's

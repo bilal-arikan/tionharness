@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // DefaultMinScore is the cosine floor below which a memory is considered

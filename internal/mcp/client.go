@@ -1,6 +1,6 @@
 // Package mcp implements a minimal Model Context Protocol client. It speaks
 // JSON-RPC 2.0 over a stdio transport (the server is launched as a subprocess)
-// and exposes the calls SwarmGo needs: tools/list and tools/call.
+// and exposes the calls TionSwarm needs: tools/list and tools/call.
 //
 // The protocol is intentionally implemented by hand (no SDK) to stay
 // dependency-light and match the rest of the codebase.
@@ -23,12 +23,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/proc"
 )
 
 const (
 	protocolVersion = "2024-11-05"
-	clientName      = "swarmgo"
+	clientName      = "tionswarm"
 	clientVersion   = "0.0.1"
 )
 

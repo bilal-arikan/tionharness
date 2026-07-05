@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // TestFormatAgentMessage checks the sender-identity tag, with and without summary.

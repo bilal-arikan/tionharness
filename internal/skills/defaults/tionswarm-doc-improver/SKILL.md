@@ -1,19 +1,19 @@
 ---
-name: "SwarmGo Doc Improver"
-description: "A 6-criterion audit-and-improve workflow for SwarmGo's own context documents — skills (SKILL.md), workspace CLAUDE.md/AGENTS.md rules, and _Docs reference files. Scores each doc on commands, architecture clarity, non-obvious gotchas, brevity, currency and actionability, then applies only the edits that provide real benefit. Built to catch the 'changelog-leak' anti-pattern where reference docs silently accumulate dated history that belongs in a progress log."
+name: "TionSwarm Doc Improver"
+description: "A 6-criterion audit-and-improve workflow for TionSwarm's own context documents — skills (SKILL.md), workspace CLAUDE.md/AGENTS.md rules, and _Docs reference files. Scores each doc on commands, architecture clarity, non-obvious gotchas, brevity, currency and actionability, then applies only the edits that provide real benefit. Built to catch the 'changelog-leak' anti-pattern where reference docs silently accumulate dated history that belongs in a progress log."
 when_to_use: "When a SKILL.md, CLAUDE.md, or _Docs file has grown bloated, stale, or hard to scan — or after a feature lands and you want to verify the docs that describe it are still tight and correct. Use it to audit one doc or sweep many, produce a scored report, and apply targeted trims without losing unique information."
 icon: "🩺"
 color: "#14b8a6"
 ---
-# SwarmGo — Doc Improver (audit & tighten context docs)
+# TionSwarm — Doc Improver (audit & tighten context docs)
 
 Context documents are part of the agent's runtime: skills sit in the prompt, the
 workspace CLAUDE.md shapes every turn, and `_Docs` is the project's memory. When
 they bloat or drift, every turn pays for it. This skill is a repeatable audit that
 scores a doc on six dimensions and applies **only the edits that earn their place**
-— a repeatable discipline adapted to SwarmGo's own doc surfaces.
+— a repeatable discipline adapted to TionSwarm's own doc surfaces.
 
-> SwarmGo's context lives in many places (skills, workspace rules, `_Docs`), so this
+> TionSwarm's context lives in many places (skills, workspace rules, `_Docs`), so this
 > audit generalises `CLAUDE.md`-style hygiene across all of them.
 
 ## What this skill audits
@@ -22,7 +22,7 @@ scores a doc on six dimensions and applies **only the edits that earn their plac
 |---------|-------|--------|
 | **Skills** | `internal/skills/defaults/*/SKILL.md` (shipped) · workspace skills dir | Mostly *action* (instructions) |
 | **Workspace rules** | a workspace's editable prompt/instructions, `CLAUDE.md`/`AGENTS.md` | Action |
-| **Reference context** | `_Docs/*.md`, the `swarmgo-project`-style reference skill | *Reference* (knowledge) |
+| **Reference context** | `_Docs/*.md`, the `tionswarm-project`-style reference skill | *Reference* (knowledge) |
 
 The **action vs reference** distinction drives how hard the brevity knob turns —
 see "Calibrate by doc type" below.
@@ -34,7 +34,7 @@ see "Calibrate by doc type" below.
 2. **Architecture clarity** — folder map, tech stack, key decisions legible at a glance?
 3. **Non-obvious patterns (gotchas)** — the traps a fresh agent would hit
    (`--bare` breaks claude-cli login, port 8080 collides with unity-mcp, the vite
-   IPv6 fix). These are the highest-value lines in any SwarmGo doc — never cut them.
+   IPv6 fix). These are the highest-value lines in any TionSwarm doc — never cut them.
 4. **Brevity** — does every sentence do work, or is there padding / duplication /
    leaked changelog?
 5. **Currency** — does it match the code as it is *now*? Removed features marked,
@@ -43,9 +43,9 @@ see "Calibrate by doc type" below.
 
 Report a total /30 with a one-line verdict per criterion (see report format below).
 
-## The #1 SwarmGo anti-pattern: changelog-leak
+## The #1 TionSwarm anti-pattern: changelog-leak
 
-Reference docs (especially `swarmgo-project` and `_Docs` mechanics sections) tend
+Reference docs (especially `tionswarm-project` and `_Docs` mechanics sections) tend
 to absorb dated, blow-by-blow history — *"X cache (2026-06-25, file.go): now parses
 … → field …; also Y breakpoint (2026-06-25) …"*. That belongs in
 `_Docs/05-ILERLEME.md` (the live changelog), **not** in a reference doc that answers
@@ -64,9 +64,9 @@ The improver principle is **only propose edits that provide real benefit** — n
 pad, and never cut working content to hit a line target.
 
 - **Reference docs / always-loaded context** (workspace CLAUDE.md, the
-  `swarmgo-project` reference skill): brevity matters *most* — these sit in the
+  `tionswarm-project` reference skill): brevity matters *most* — these sit in the
   prompt every turn. Trim hard; delegate detail to `_Docs`.
-- **Action skills loaded on demand** (the `swarmgo-*` default skills): the body is
+- **Action skills loaded on demand** (the `tionswarm-*` default skills): the body is
   pulled only by `use_skill`, so body length costs little per turn — what's always
   in the prompt is the `description`/`when_to_use`. Here, **functional density is
   fine**: a tool catalog or a settings field-reference *should* be dense. Cut only

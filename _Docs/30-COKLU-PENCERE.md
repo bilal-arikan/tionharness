@@ -1,12 +1,12 @@
-# SwarmGo — Masaüstünde Çoklu Pencere (Workspace'i Yeni Pencerede Aç)
+# TionSwarm — Masaüstünde Çoklu Pencere (Workspace'i Yeni Pencerede Aç)
 
 > Durum: **UYGULANDI ✅ (2026-06-23)** — N süreç / N pencere modeli. "Workspace'i yeni
-> pencerede aç" artık Edge'e sızmadan, aynı sunucuya bağlı yeni bir native SwarmGo
+> pencerede aç" artık Edge'e sızmadan, aynı sunucuya bağlı yeni bir native TionSwarm
 > penceresi açar. Canlı doğrulandı: birincil (Bind çökmedi) + connect-only ikincil
 > (kendi sunucusunu kurmaz, aynı porta bağlanır) + loopback-dışı URL reddi.
 >
-> Gerçekleşen wiring: `cmd/swarmgo-desktop/main.go` (`runPrimary`/`runSecondary` + `w.Bind
-> ("swarmgoOpenWindow")` + HTTP `fetchAppearance` ile connect-only başlık teması),
+> Gerçekleşen wiring: `cmd/tionswarm-desktop/main.go` (`runPrimary`/`runSecondary` + `w.Bind
+> ("tionswarmOpenWindow")` + HTTP `fetchAppearance` ile connect-only başlık teması),
 > `openwindow_windows.go` (`spawnWindow` self-exec), frontend
 > `WorkspaceSwitcher.openInNewWindow` (WebView2 köprüsü + tarayıcı fallback).
 >
@@ -29,7 +29,7 @@ açar → üstte adres çubuğu + kopuk bağlam; composer ajan seçili olmadığ
 go-webview2'nin `Run()`'ı **süreç başına tek, bloklayan bir mesaj döngüsüdür**; tek süreçte
 ikinci bir WebView2 penceresi açmak zahmetli/desteklenmiyor. Bu yüzden:
 
-> **Her ek pencere = `swarmgo-desktop.exe`'nin yeni bir "connect-only" örneği**, aynı
+> **Her ek pencere = `tionswarm-desktop.exe`'nin yeni bir "connect-only" örneği**, aynı
 > halihazırda çalışan sunucuya (loopback portu) bağlanır. Sunucu tek (birincil süreçte);
 > ek pencereler yalnız o sunucuyu render eder.
 
@@ -37,10 +37,10 @@ Bu, go-webview2'nin tek-pencere modeline tam uyar ve tüm sunucu/durum mantığ�
 
 ```mermaid
 graph TD
-    P[Birincil süreç<br/>swarmgo-desktop.exe] -->|app.Bootstrap| S[(HTTP sunucu<br/>127.0.0.1:PORT)]
+    P[Birincil süreç<br/>tionswarm-desktop.exe] -->|app.Bootstrap| S[(HTTP sunucu<br/>127.0.0.1:PORT)]
     P --> W1[WebView2 Pencere 1<br/>WS1/chat]
-    P -->|Bind: swarmgoOpenWindow route| SPAWN[exec.Command<br/>kendini connect-only başlat]
-    SPAWN --> C[İkincil süreç<br/>SWARMGO_WEBVIEW_URL=...]
+    P -->|Bind: tionswarmOpenWindow route| SPAWN[exec.Command<br/>kendini connect-only başlat]
+    SPAWN --> C[İkincil süreç<br/>TIONSWARM_WEBVIEW_URL=...]
     C --> W2[WebView2 Pencere 2<br/>WS2/chat]
     W1 --> S
     W2 --> S
@@ -50,29 +50,29 @@ graph TD
 
 1. **Birincil süreç** (mevcut): `app.Bootstrap` ile sunucuyu `127.0.0.1:0`'da açar, Pencere 1'i
    gösterir. **Yeni:** WebView'e bir host fonksiyonu **bind** eder:
-   `w.Bind("swarmgoOpenWindow", openWindow)`.
+   `w.Bind("tionswarmOpenWindow", openWindow)`.
 2. **Frontend** (`openInNewWindow`): WebView2 algılarsa (`window.chrome?.webview` **ve**
-   `window.swarmgoOpenWindow` var) → `window.swarmgoOpenWindow(route)` çağırır; aksi halde
+   `window.tionswarmOpenWindow` var) → `window.tionswarmOpenWindow(route)` çağırır; aksi halde
    (tarayıcı/dev) eski `window.open` davranışı korunur.
 3. **`openWindow(route)` (Go, birincil)**: `exec.Command(os.Executable())`'ı
-   `SWARMGO_WEBVIEW_URL = baseURL + "/#" + route` env'i ile başlatır (düz `exec.Command` —
+   `TIONSWARM_WEBVIEW_URL = baseURL + "/#" + route` env'i ile başlatır (düz `exec.Command` —
    `proc.Command` DEĞİL, çünkü onun `HideWindow`'u webview penceresini de gizlerdi → konsol
    yanıp sönmesi yok). Fire-and-forget.
-4. **İkincil süreç** (connect-only): `SWARMGO_WEBVIEW_URL` set ise **sunucu açmaz**
+4. **İkincil süreç** (connect-only): `TIONSWARM_WEBVIEW_URL` set ise **sunucu açmaz**
    (`app.Bootstrap` atlanır); yalnız DPI + WebView2 penceresi kurup o URL'ye `Navigate` eder.
 
 ## Kod değişiklikleri
 
-### Backend — `cmd/swarmgo-desktop`
+### Backend — `cmd/tionswarm-desktop`
 
-- **`main.go`**: başta `if url := os.Getenv("SWARMGO_WEBVIEW_URL"); url != "" { runSecondary(url); return }`.
+- **`main.go`**: başta `if url := os.Getenv("TIONSWARM_WEBVIEW_URL"); url != "" { runSecondary(url); return }`.
   - `runSecondary(url)`: loopback doğrula (`http://127.0.0.1:` öneki — güvenlik), `setDPIAware`,
     `LockOSThread`, WebView2 penceresi (aynı boyut/başlık), title bar temasını **HTTP'den** çek
     (`GET <base>/api/settings` → preset) `applyTitleBar`, `Navigate(url)`, `Run()`.
-  - Birincil yol (mevcut): `app.Bootstrap` + Pencere; ek olarak `w.Bind("swarmgoOpenWindow", ...)`.
+  - Birincil yol (mevcut): `app.Bootstrap` + Pencere; ek olarak `w.Bind("tionswarmOpenWindow", ...)`.
 - **`openwindow_windows.go` (yeni)**: `spawnWindow(baseURL, route string)` →
   `exe, _ := os.Executable(); cmd := exec.Command(exe); cmd.Env = append(os.Environ(),
-  "SWARMGO_WEBVIEW_URL="+baseURL+"/#"+route); cmd.Start()`.
+  "TIONSWARM_WEBVIEW_URL="+baseURL+"/#"+route); cmd.Start()`.
 - **Title bar — connect-only varyantı**: `app.App.Appearance()` yok; küçük bir HTTP yardımcı
   `fetchAppearance(base) (preset, theme string)` (`GET /api/settings`, mevcut DTO `themePreset`/
   `theme` döner) + aynı `watchTitleBar` mantığı HTTP poll ile. (Basit v1: yalnız açılışta uygula.)
@@ -83,8 +83,8 @@ graph TD
 function openInNewWindow(id: string) {
   const route = buildRoute({ workspaceId: id, view: 'chat', id: null })
   const w = window as any
-  if (w.chrome?.webview && typeof w.swarmgoOpenWindow === 'function') {
-    w.swarmgoOpenWindow(route)          // native: yeni SwarmGo penceresi (ayrı süreç)
+  if (w.chrome?.webview && typeof w.tionswarmOpenWindow === 'function') {
+    w.tionswarmOpenWindow(route)          // native: yeni TionSwarm penceresi (ayrı süreç)
     return
   }
   // Tarayıcı/dev: eski davranış (aynı app, yeni sekme)
@@ -102,7 +102,7 @@ soyutla, ileride başka yerlerde de kullanılsın.)
 | İkincil pencere kapatıldı | O süreç biter; sunucu ve diğer pencereler etkilenmez |
 | **Birincil** pencere kapatıldı | Sunucu kapanır → ikincil pencereler backend'siz kalır (fetch'ler düşer) |
 | Birincil kapanınca ikincilleri de kapat | **v1 kapsamı dışı.** İkincil pencere `/health` poll edip sunucu gidince kendini kapatabilir (v2 iyileştirmesi) |
-| Güvenlik | `SWARMGO_WEBVIEW_URL` yalnız `http://127.0.0.1:`/`http://localhost:` kabul; aksi halde reddet+çık |
+| Güvenlik | `TIONSWARM_WEBVIEW_URL` yalnız `http://127.0.0.1:`/`http://localhost:` kabul; aksi halde reddet+çık |
 | Çok sayıda pencere | Her biri ayrı süreç (~ek RAM); WebView2 runtime paylaşılır, makul |
 | Tarayıcı/dev modu | Hiç değişmez — `window.open` ile eski davranış |
 
@@ -116,16 +116,16 @@ soyutla, ileride başka yerlerde de kullanılsın.)
 
 ## Doğrulama planı
 
-1. `go build ./...`/`vet` yeşil; başsız `swarmgo` ve birincil masaüstü davranışı değişmedi.
-2. Canlı: masaüstünü aç → WS2'yi "yeni pencerede aç" → **ayrı bir native SwarmGo penceresi**
+1. `go build ./...`/`vet` yeşil; başsız `tionswarm` ve birincil masaüstü davranışı değişmedi.
+2. Canlı: masaüstünü aç → WS2'yi "yeni pencerede aç" → **ayrı bir native TionSwarm penceresi**
    açılır (Edge değil, adres çubuğu yok), WS2/chat yüklenir, **mesaj gönderilebilir**.
 3. Başlık çubuğu ikincil pencerede de temaya uygun.
 4. İkincil pencereyi kapat → birincil etkilenmez. Tarayıcı/dev modunda eski davranış korunur.
-5. Güvenlik: `SWARMGO_WEBVIEW_URL=http://evil.com` ile başlat → reddedilir.
+5. Güvenlik: `TIONSWARM_WEBVIEW_URL=http://evil.com` ile başlat → reddedilir.
 
 ## Uygulama adımları (sıra)
 
-1. `cmd/swarmgo-desktop/main.go`: connect-only dalı + `runSecondary` + `w.Bind("swarmgoOpenWindow")`.
+1. `cmd/tionswarm-desktop/main.go`: connect-only dalı + `runSecondary` + `w.Bind("tionswarmOpenWindow")`.
 2. `openwindow_windows.go`: `spawnWindow` (düz `exec.Command` ile self-exec; `proc.Command` değil).
 3. Title bar connect-only: `fetchAppearance(base)` HTTP yardımcı.
 4. Frontend `WorkspaceSwitcher.openInNewWindow`: WebView2 köprüsü + fallback (+ ops. `lib/desktop.ts`).

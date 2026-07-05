@@ -172,7 +172,7 @@ export default function App() {
   // moment a workspace exists, so the splash never reappears after setup.
   const [hadSetupAtBoot] = useState(() => {
     try {
-      return localStorage.getItem('swarmgo.hasSetup') === '1'
+      return localStorage.getItem('tionswarm.hasSetup') === '1'
     } catch {
       return false
     }
@@ -180,7 +180,7 @@ export default function App() {
   useEffect(() => {
     if (workspaces.length > 0) {
       try {
-        localStorage.setItem('swarmgo.hasSetup', '1')
+        localStorage.setItem('tionswarm.hasSetup', '1')
       } catch {
         /* storage unavailable — non-fatal, splash logic just falls back to load timing */
       }
@@ -208,20 +208,20 @@ export default function App() {
 
   // App-headed list screens (workspace / settings) own their category-rail
   // collapse here so the app header's toggle button and the panel share one flag.
-  const workspaceNav = useCollapsibleList('swarmgo.workspaceNavOpen')
-  const settingsNav = useCollapsibleList('swarmgo.settingsNavOpen')
+  const workspaceNav = useCollapsibleList('tionswarm.workspaceNavOpen')
+  const settingsNav = useCollapsibleList('tionswarm.settingsNavOpen')
 
   // Right-hand session detail panel visibility (persisted).
   // Next-turn context preview modal (moved here from the detail panel so it opens
   // straight from the chat header without first opening the detail inspector).
   const [ctxPreviewOpen, setCtxPreviewOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(
-    () => localStorage.getItem('swarmgo.detailOpen') === '1',
+    () => localStorage.getItem('tionswarm.detailOpen') === '1',
   )
   const toggleDetail = useCallback(() => {
     setDetailOpen((v) => {
       const next = !v
-      localStorage.setItem('swarmgo.detailOpen', next ? '1' : '0')
+      localStorage.setItem('tionswarm.detailOpen', next ? '1' : '0')
       return next
     })
   }, [])
@@ -229,7 +229,7 @@ export default function App() {
   // Default agent for NEW sessions (chosen from the roster). Persisted so it
   // survives reloads; unmentioned turns in a session use the session's own agent.
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(
-    () => localStorage.getItem('swarmgo.defaultAgentId'),
+    () => localStorage.getItem('tionswarm.defaultAgentId'),
   )
   // Desktop-notification preference, read live in callbacks without re-binding.
   const notifyEnabled = useRef(false)
@@ -779,7 +779,7 @@ export default function App() {
   // Pick the default agent for NEW sessions (from the roster).
   const pickDefaultAgent = useCallback((id: string) => {
     setDefaultAgentId(id)
-    localStorage.setItem('swarmgo.defaultAgentId', id)
+    localStorage.setItem('tionswarm.defaultAgentId', id)
   }, [])
 
   // Roster click: set it as the default agent (for new chats) and as the active

@@ -38,7 +38,7 @@ credential-secret
 /.flowids.json
 /.testids.json
 /.mcptest/
-/frontend/swarmgo_title_test.mjs
+/frontend/tionswarm_title_test.mjs
 
 # Dependencies
 /frontend/node_modules/

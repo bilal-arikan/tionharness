@@ -110,7 +110,7 @@ export function BackupPanel({ draft, set }: PanelProps) {
           <input type="number" min={1} value={draft.backupRetain} onChange={(e) => set('backupRetain', Number(e.target.value))} className={inputCls} />
         </Field>
       </div>
-      <Field label="Yedek klasörü" hint="Boş bırakılırsa veri dizinindeki backups/ kullanılır. Mutlak yol verebilirsin (ör. D:\\Backups\\SwarmGo).">
+      <Field label="Yedek klasörü" hint="Boş bırakılırsa veri dizinindeki backups/ kullanılır. Mutlak yol verebilirsin (ör. D:\\Backups\\TionSwarm).">
         <input value={draft.backupDir} onChange={(e) => set('backupDir', e.target.value)} placeholder="boş = <veri dizini>/backups" className={inputCls} />
       </Field>
 

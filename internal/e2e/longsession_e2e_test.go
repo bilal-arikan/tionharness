@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // TestLongSession_CompactsWhenOverBudget grows a session past the context-token

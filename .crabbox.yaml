@@ -1,7 +1,7 @@
-# Crabbox repo config for SwarmGo.
+# Crabbox repo config for TionSwarm.
 # Local Docker (local-container) test boxes — no coordinator/login required.
 # Run jobs with:  crabbox job run ci   |   crabbox job run frontend
-profile: swarmgo-check
+profile: tionswarm-check
 
 # Sync: git ls-files manifest over rsync+ssh. Keep build/output dirs out.
 sync:

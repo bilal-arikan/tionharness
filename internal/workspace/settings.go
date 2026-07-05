@@ -8,17 +8,17 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // wsSettingsFile is the per-workspace settings document inside the workspace dir.
 const wsSettingsFile = "ws-settings.json"
 
 // defaultInstructions is the seed workspace prompt (workspace-specific system
-// prompt addendum) a fresh workspace starts with. SwarmGo has no monolithic
+// prompt addendum) a fresh workspace starts with. TionSwarm has no monolithic
 // system prompt of its own — the workspace prompt IS the standing guidance every
 // agent in the workspace carries — so this default gives new workspaces a full,
-// SwarmGo-specific baseline instead of an empty prompt. A workspace whose
+// TionSwarm-specific baseline instead of an empty prompt. A workspace whose
 // ws-settings.json sets its own `instructions` overrides this seed.
 //
 //go:embed defaults/default-instructions.md

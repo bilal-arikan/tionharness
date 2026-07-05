@@ -38,7 +38,7 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
 
   // The exact command the user runs once to mint a subscription OAuth token. The
   // CLAUDE_CONFIG_DIR prefix is only needed so the login lands in the same isolated
-  // dir SwarmGo drives (harmless if empty → omit it).
+  // dir TionSwarm drives (harmless if empty → omit it).
   const setupCmd = configDir
     ? `$env:CLAUDE_CONFIG_DIR="${configDir}"; claude setup-token`
     : 'claude setup-token'

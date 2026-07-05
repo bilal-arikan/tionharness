@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // TestWake_ScheduleWakeArmsViaContext drives the self-wake path: with a wake

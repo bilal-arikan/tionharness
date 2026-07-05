@@ -8,10 +8,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // sessionInfoResp is the rich detail payload behind the session detail panel:

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // defaultMaxToolIters bounds the native agentic loop so a misbehaving model can't
@@ -19,14 +19,14 @@ import (
 const defaultMaxToolIters = 500
 
 // maxToolIters is the live loop bound, defaulting to defaultMaxToolIters and
-// overridable via SWARMGO_MAX_TOOL_ITERS (positive integer) for power users who
+// overridable via TIONSWARM_MAX_TOOL_ITERS (positive integer) for power users who
 // want longer or shorter native tool loops without a rebuild.
 var maxToolIters = resolveMaxToolIters()
 
 // resolveMaxToolIters reads the env override once at package init, falling back to
 // the default for an unset, empty, non-numeric or non-positive value.
 func resolveMaxToolIters() int {
-	if v := os.Getenv("SWARMGO_MAX_TOOL_ITERS"); v != "" {
+	if v := os.Getenv("TIONSWARM_MAX_TOOL_ITERS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n
 		}
@@ -72,7 +72,7 @@ func resolveThinkingBudget(model, level string) int {
 //   - MCP disabled            → a single plain completion.
 //   - claude-cli + MCP        → delegate: the CLI runs the tool loop itself
 //     using a generated --mcp-config (keyless path).
-//   - other provider + MCP    → SwarmGo's own agentic loop drives the tools via
+//   - other provider + MCP    → TionSwarm's own agentic loop drives the tools via
 //     the unified registry (built-ins + MCP).
 //
 // autonomous gates the daily budget; usage is always recorded.

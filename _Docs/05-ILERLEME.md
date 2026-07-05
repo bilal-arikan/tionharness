@@ -1,4 +1,4 @@
-# SwarmGo — İlerleme Takibi
+# TionSwarm — İlerleme Takibi
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-05**
 
@@ -332,7 +332,7 @@ kazanır"), eşi olmayan custom id'ler sona eklenir; girdi dilimleri değişmez.
 `handleCatalog` artık bunu kullanıyor. Birim test: `merge_test.go` (çakışma → tek
 kayıt, sıra korunur, custom kazanır, girdi mutasyonu yok) — geçti. `go build ./internal/...` temiz.
 
-> ⚠️ Etki için backend restart gerekir — çalışan `go run ./cmd/swarmgo` (kullanıcı
+> ⚠️ Etki için backend restart gerekir — çalışan `go run ./cmd/tionswarm` (kullanıcı
 > oturumu) yeniden başlayınca devreye girer.
 
 ## Bütçe: iç header üst-title'a (PaneHeader) taşındı ✅ (2026-07-04)
@@ -567,7 +567,7 @@ sessizce bozuktu).
 alıyordu, ama volatile **Dinamik `system` alanında** (tools+mesajların önünde) durduğu için
 asıl büyüyen kısmın (mesaj geçmişi) rolling breakpoint'i **her tur ıskalıyordu** → pratikte
 ölü. External Agents bunu yaşamıyor çünkü cache/compaction'ı native `claude` binary'ye (Claude
-Agent SDK) devrediyor; SwarmGo kendi yazdığı için boşluk oluşmuş.
+Agent SDK) devrediyor; TionSwarm kendi yazdığı için boşluk oluşmuş.
 
 **Yapılan (yalnız `extendedCache`/`cacheSystem` açıkken; cache-kapalı yol birebir korundu):**
 - `anthropic.go`: `systemField` artık **statik-only** (tam cache'lenebilir); `toAnthropicMessages`
@@ -625,7 +625,7 @@ bileşenler **empirik ölçüldü** ve uygulama geneli generic bir referansa dö
   "Tahmin → beklenen ~X (+Y tahmini ek yük, henüz ölçülmedi)" satırı. Ölçüm gelince eski
   "Gerçek" görünümü. Benim dosyalarım `tsc` temiz.
 - **Docs/skill:** `_Docs\17` "claude-cli ek yükü — ölçülmüş referans" bölümü;
-  `swarmgo-session-debug` skill'ine "Tahmin↔Gerçek farkı" ölçüm-referansı + tekrar-
+  `tionswarm-session-debug` skill'ine "Tahmin↔Gerçek farkı" ölçüm-referansı + tekrar-
   ölçüm komutu eklendi. `clioverhead_test.go` regresyon kilidi.
 
 ## Liste panelleri tam sohbet paritesi: masaüstü hep açık + hamburger sadece mobil ✅ (2026-07-04)
@@ -851,7 +851,7 @@ indirgendi. `tsc -b && vite build` temiz.
 - **Sohbet listesinde oturum ID'si alt satıra taşındı** (`SessionsSidebar` — başlık
   satırından çıkıp meta satırında sağa hizalı; başlık artık daha geniş).
 - **Koordinatör worker listesi daraltılabilir** (`CoordinatorSection` — "Worker'lar · N"
-  başlığı + chevron, kalıcı `swarmgo.coordWorkersOpen`).
+  başlığı + chevron, kalıcı `tionswarm.coordWorkersOpen`).
 
 `tsc -b && vite build` temiz.
 
@@ -883,14 +883,14 @@ Kullanıcı isteğiyle 5 UI iyileştirmesi. `tsc -b && vite build` temiz.
    **ikisinden de farklı (kullanıcı edit'i)**→koru. İlk boot'ta manifest kendini
    seed'ler (senkronladığımız kopyalar gömülüyle eşit → hepsi kaydolur). Testler:
    `TestEnsureDefaultsSeeds` (edit korunur) + yeni `TestEnsureDefaultsRefreshesPristine`.
-2. **`swarmgo-project` workspace skill'i sadeleştirildi** (~194→~150 satır): "Mevcut
+2. **`tionswarm-project` workspace skill'i sadeleştirildi** (~194→~150 satır): "Mevcut
    Yetenekler" bölümü changelog seviyesi tarih/commit/test-ismi/env-minutiae'den
    arındırılıp "ne var + hangi `_Docs\NN`" özet haritasına indirildi (her-tur cache'li
    prefix küçüldü). Yetenek bilgisi korundu.
 3. **`run_code`'a built-in araç binding'leri** (`_Docs\44`): code-execution artık yalnız
-   MCP'yi değil, **SwarmGo built-in araçlarını** da `swarmgo` Python modülü olarak sunar
-   (`from swarmgo import <tool>`). `codemode.WriteBindings(dir, entries, builtins, allow)`
-   + `Config.Builtin` dispatcher (reserved `swarmgo__<tool>` namespace, bare-name
+   MCP'yi değil, **TionSwarm built-in araçlarını** da `tionswarm` Python modülü olarak sunar
+   (`from tionswarm import <tool>`). `codemode.WriteBindings(dir, entries, builtins, allow)`
+   + `Config.Builtin` dispatcher (reserved `tionswarm__<tool>` namespace, bare-name
    allow/gate/dispatch); built-in'ler **tur ctx**'iyle `reg.Call`'a gider → sink/oturum
    davranışı direkt-çağrıyla birebir. Eligibility hard-exclude (`CodeModeEligible`:
    interaktif/exec-in-exec/delegasyon/meta/worker araçları hariç) + ajan tool-filter.
@@ -987,14 +987,14 @@ Fazla/parçalı built-in araçlar tek çok-amaçlı araçlara indirildi (per-tur
   `mcp_interaction.go` (spec+sinkToolTable), `categories.go`, frontend `toolIcons.ts`,
   `default-instructions.md`. Tüm testler yeşil (650 passed / 34 paket). Detay:
   `_Docs\24-SELF-MANAGEMENT.md`.
-- **Gömülü default skiller güncellendi (2026-07-04, ayrı tur):** 3 skill (`swarmgo-guide`,
-  `swarmgo-progress`, `swarmgo-self-management`) yeni araç isimlerine (`update_session`,
+- **Gömülü default skiller güncellendi (2026-07-04, ayrı tur):** 3 skill (`tionswarm-guide`,
+  `tionswarm-progress`, `tionswarm-self-management`) yeni araç isimlerine (`update_session`,
   `secret`) göre düzeltildi. **Bulgu:** `skills.EnsureDefaults` diske seed ederken
   **mevcut dosyanın üzerine yazmıyor** → önceden çalışmış kurulumlarda global skills
-  dizini (`~/.swarmgo/skills`, tüm workspace'ler paylaşır) **genel olarak bayat**
+  dizini (`~/.tionswarm/skills`, tüm workspace'ler paylaşır) **genel olarak bayat**
   kalmış (11 default skill'in hepsi farklı: self-management 361, settings 306, guide
   303 satır). On-disk kopyalar güncel gömülü içerikle **elle senkronlandı** (yedek:
-  `~/.swarmgo/skills-backup-20260704-preconsolidation`; `otonom-dispatch` gibi kullanıcı
+  `~/.tionswarm/skills-backup-20260704-preconsolidation`; `otonom-dispatch` gibi kullanıcı
   skill'lerine dokunulmadı). **Açık gap:** `EnsureDefaults` sürüm-farkında değil →
   ileride gömülü skill güncellemeleri mevcut kurulumlara otomatik yansımıyor; içerik-hash
   ile "kullanıcı düzenlememişse tazele" mantığı eklenebilir (ileride).
@@ -1092,7 +1092,7 @@ eklendi. Canlı doğrulandı (Playwright, WS2/AGT9 + WS1/SES89).
   (yan-etkisiz; bütçeye yakın oturumda modele gerçekte gidenden fazla mesaj
   görünebilir); (2) claude-cli'da (`data.cliOverhead != null`) Dinamik bölümünde —
   dinamik ayrı system bloğu değil **son kullanıcı mesajına dokunularak** gider;
-  (3) claude-cli'da Araçlar bölümünde — araçlar SwarmGo isteğinde şema olarak değil
+  (3) claude-cli'da Araçlar bölümünde — araçlar TionSwarm isteğinde şema olarak değil
   **CLI built-in + MCP köprüsüyle** iletilir, token yaklaşık. `npx tsc --noEmit` temiz.
 - **Provider alanı + "Compaction'ı simüle et" toggle + AgentContextModal cli notu
   (2026-07-04):** her iki önizleme yanıtına `provider` alanı eklendi
@@ -1205,10 +1205,10 @@ pencere sahipleniyorsa (yerel SSE) no-op. `chatRef` (App'te chat hook'una canlı
 mesaj-yükleme effect'i chat tanımından ÖNCE geldiği için deps-dizisi TDZ'sini atlar.
 `go build`+db+api testleri yeşil, `tsc --noEmit` temiz.
 
-## Workspace default promptu SwarmGo-native yeniden yazıldı ✅ (2026-07-03)
+## Workspace default promptu TionSwarm-native yeniden yazıldı ✅ (2026-07-03)
 
 `internal/workspace/defaults/default-instructions.md` hâlâ the external agent project sistem
-promptunun mekanik "the external agent project→SwarmGo" kopyasıydı — SwarmGo'da **olmayan**
+promptunun mekanik "the external agent project→TionSwarm" kopyasıydı — TionSwarm'da **olmayan**
 onlarca yeteneği öğretiyor (`datatable`/`spreadsheet`, `html/pdf/markdown-preview`,
 `render_template`, `call_llm`, `~/.external-agent/docs/*`, `_displayName` MCP meta,
 External Sources+`guide.md` modeli), **gerçek** yüzeyi (run_subagent, use_skill,
@@ -1218,9 +1218,9 @@ context / Complete user message / SDK config bölümleri + mini-agent promptu) v
 makineye özel sızıntı (gömülü Bilal tercihleri + sabit `C:/Users/user/...` yolları)
 içeriyordu.
 
-**Yapılan:** dosya sıfırdan SwarmGo-native olarak yeniden yazıldı (~750 → ~150
+**Yapılan:** dosya sıfırdan TionSwarm-native olarak yeniden yazıldı (~750 → ~150
 satır). Tasarım ilkesi the external agent project'ın "her şeyi inline et" (~37K token) yaklaşımı
-yerine SwarmGo'nun **küçük cache'li prefix + skill'e devret** felsefesi (`_Docs/17`,
+yerine TionSwarm'nun **küçük cache'li prefix + skill'e devret** felsefesi (`_Docs/17`,
 `_Docs/19`): skill kataloğu + `GoalUsageHint` zaten prefix'te enjekte edildiği için
 prompt artık ansiklopedi değil, doğru araç yüzeyi + skill pointer'ları. İçerik
 İngilizce (kod/prompt kuralı). Render fence'leri gerçek koda göre doğrulandı
@@ -1228,9 +1228,9 @@ prompt artık ansiklopedi değil, doğru araç yüzeyi + skill pointer'ları. İ
 Document Tools bölümü **kullanıcı kararıyla korundu** ("ileride eklenecek" notuyla).
 
 **Regresyon kilidi:** `internal/workspace/defaults_test.go` —
-`TestDefaultInstructionsAreSwarmGoNative` embed'in yasak the external agent project-ism string'leri
+`TestDefaultInstructionsAreTionSwarmNative` embed'in yasak the external agent project-ism string'leri
 (`datatable`/`call_llm`/`render_template`/`~/.external-agent/docs`/`_displayName`/
-`html-preview`…) içermemesini ve gerçek SwarmGo terimlerini (`run_subagent`/
+`html-preview`…) içermemesini ve gerçek TionSwarm terimlerini (`run_subagent`/
 `use_skill`/`set_session_goal`/`mermaid`) içermesini garanti eder. Enjeksiyon yolu
 `TestSystemPromptInjectsWorkspaceInstructions` ile zaten kilitli. `go build ./...` +
 118 test (agent+workspace) yeşil. Not: yalnız **yeni** workspace'leri etkiler;
@@ -1299,8 +1299,8 @@ ayrıca kirli bir ekrandan ayrılmaya çalışınca uyarı gösterilir.
 
 ## Araç boşluk kapatma: arka-plan shell + apply_patch + CLI tool latency + built-in hook görünürlüğü ✅ (2026-07-03)
 
-claude-cli built-in araç yüzeyi ile SwarmGo native araçları arasındaki boşlukların
-kapatılması (the external agent project↔SwarmGo backlog `_Docs/41`).
+claude-cli built-in araç yüzeyi ile TionSwarm native araçları arasındaki boşlukların
+kapatılması (the external agent project↔TionSwarm backlog `_Docs/41`).
 
 - **Arka-plan / uzun-süren shell (`BashOutput`/`KillShell` paritesi):** `Bash`/`PowerShell`
   araçlarına `run_in_background` argümanı → detached süreç başlatıp shell id döner
@@ -1334,7 +1334,7 @@ kapatılması (the external agent project↔SwarmGo backlog `_Docs/41`).
   read-only bölüm (scope/event badge + ayar anahtarı + Aktif/Pasif); `types/hook.ts
   BuiltinHook` + `api/hooks.ts listBuiltinHooks`.
 - **#2 (freshness-guard'ı CLI yoluna taşı) YAPILMADI — bilinçli:** CLI'nin **native**
-  Read/Edit/Write'ı zaten kendi read-before-write guard'ını uyguluyor (SwarmGo'nun
+  Read/Edit/Write'ı zaten kendi read-before-write guard'ını uyguluyor (TionSwarm'nun
   `readtracker.go`'su bunu "mirrors Claude Code's readFileState guard" diye kopyaladı).
   Hook tabanlı ikinci guard redundant + kırılgan olurdu (hook executor'ı değiştiremez,
   yalnız deny/observe/updatedInput; `updatedInput` Edit'te bug'lı #47853).
@@ -1382,14 +1382,14 @@ Async+ephemeral reddi provider/bütçe işinden **önce** açıklayıcı mesajla
 
 **Kök neden 2 (timeout):** sync `run_subagent`'ta alt-ajanın tüm işi tool çağrısında
 koşuyor ve claude-cli'nin ~60 sn MCP araç-çağrısı timeout'unu aşıyor → CLI `The operation
-timed out.` verir (SwarmGo işi arka planda bitirir). **Fix:** `claudecli.go runAttempt`
+timed out.` verir (TionSwarm işi arka planda bitirir). **Fix:** `claudecli.go runAttempt`
 CLI process'ine `MCP_TOOL_TIMEOUT=600000` + `MCP_TIMEOUT=60000` ms enjekte eder (kullanıcı
 override kazanır → `ensureEnvDefault`).
 
 **Dokunulan:** `internal/agent/subagent.go` (çözümleme sırası + Guard 4), `internal/
 providers/claudecli.go` (`ensureEnvDefault` + MCP timeout env), testler
 `TestResolveSubagentAgentBeatsProfile`/`TestAsyncProfileRejected`. Doküman `_Docs\25` +
-skill `swarmgo-session-debug` (desen G/H). `go build`/`go test ./internal/agent
+skill `tionswarm-session-debug` (desen G/H). `go build`/`go test ./internal/agent
 ./internal/providers` (186) yeşil.
 
 ## Feature: Read/Grep/Glob araç-paritesi — offset/limit + satır no, ripgrep-stili Grep, mtime Glob, .gitignore ✅ (2026-07-03)
@@ -1427,7 +1427,7 @@ type/multiline/head_limit, Glob mtime sıralama + path, ve .gitignore farkındal
   `--glob`, tip→uzantı-glob'ları, `--no-ignore`, `--regexp` (dash-güvenli). Çıktı Go
   motoruyla **aynı şekle** normalize edilir (lider `./` sıyrılır, head-limit uygulanır).
   **Herhangi bir belirsizlikte** (rg yok / bilinmeyen mode/tip / rg exit≠0/1 / timeout)
-  sessizce **Go motoruna düşer** → davranış her iki yolda birebir. `SWARMGO_GREP_NO_RG=1`
+  sessizce **Go motoruna düşer** → davranış her iki yolda birebir. `TIONSWARM_GREP_NO_RG=1`
   ile kapatılır. rgExe env kontrolü `sync.Once` DIŞINDA (test-toggle edilebilir; LookPath cache'li).
 - **Edit satır-no toleransı (Read numaralama davranış değişikliği için):** Read çıktısı artık
   `<no>\t<içerik>` numaralı; model bazen bu öneki `old_string`'e kopyalar. Doğrudan eşleşme
@@ -1447,7 +1447,7 @@ type/multiline/head_limit, Glob mtime sıralama + path, ve .gitignore farkındal
 **İstek:** Claude Code'un Edit toolundaki *"File has been modified since read… Read
 it again before attempting to write it"* tespiti bizde yoktu; ekleyelim.
 
-**Sorun:** SwarmGo'nun `Edit`/`Write` araçları önceki bir `Read`'i takip etmiyordu →
+**Sorun:** TionSwarm'nun `Edit`/`Write` araçları önceki bir `Read`'i takip etmiyordu →
 bir oturum dosyayı okuduktan sonra dosya dışarıdan (kullanıcı/linter/başka tool)
 değişse bile edit **sessizce üzerine yazıyordu** (stale-write footgun).
 
@@ -1465,7 +1465,7 @@ değişse bile edit **sessizce üzerine yazıyordu** (stale-write footgun).
   zinciri araya Read istemez. Tool açıklamalarına "önce Read" notu eklendi.
 - **Ayar/gating:** `Tunables.fileFreshnessGuard` (default **açık**) + `settings.
   FileFreshnessGuard` (Default/public/patch/store + `server.go applySettings`); default
-  skill `swarmgo-settings`'e belgelendi. `buildRegistry` session-id'yi (`SessionIDFrom`)
+  skill `tionswarm-settings`'e belgelendi. `buildRegistry` session-id'yi (`SessionIDFrom`)
   çözüp `Runtime.readTrackers` (sync.Map, session-başına kalıcı) üzerinden tracker'ı
   3 fs tool'a bağlar; katalog/preview build'lerinde (session yok) veya ayar kapalıysa
   **nil** → guard devre dışı. Yalnız **native** yol; claude-cli'nin kendi karşılığı var.
@@ -1524,7 +1524,7 @@ koordinatör modu gibi) + farklı koordinasyon yöntemleri.
 - **Session modeli:** `Role` + `CoordinatorSessionID`; worker `Kind="worker"`.
   `turnHook` → çoklu `turnHooks` (`AddTurnHook`), otomasyonu ezmeden.
 - **Prompt/skill:** `api/coordinator_prompt.go` (`composeTurnRequest`'te koşullu enjekte,
-  wake yolunu da kapsar) + gömülü default skill `swarmgo-coordinator`.
+  wake yolunu da kapsar) + gömülü default skill `tionswarm-coordinator`.
 - **API:** `session_info`'ya `role`+`coordinatorSessionId`; `PUT /api/sessions/{id}/role`
   + `GET /api/sessions/{id}/workers`.
 - **UI:** `CoordinatorSection.tsx` (aç/kapa + canlı worker roster, running varken 3sn
@@ -1601,7 +1601,7 @@ yapılmalı (veya kaldırıp yeniden "Bağla"). `go build`/`test` + `tsc` yeşil
 **İstek:** `_Docs/44` §5 Faz 3 — klasik tool-loop vs kod-modu, gerçek LLM + gerçek
 MCP sunucusuyla uçtan uca karşılaştırma.
 
-**Düzenek:** Geçici ikinci SwarmGo instance'ı (ayrı port + temp data dir — canlı
+**Düzenek:** Geçici ikinci TionSwarm instance'ı (ayrı port + temp data dir — canlı
 örneğe dokunulmadı), native ajan **minimax-anthropic/MiniMax-M3** (anthropic
 anahtarı geçersiz çıktı), gerçek `sqz-mcp`; görev: 5 dizinin girdi sayımı
 (ground truth 336). Metrikler `debug.jsonl`.
@@ -1677,7 +1677,7 @@ guardrail'ler (maks. iterasyon, cooldown, aç/kapa) ile önlenir. Otomasyon ayr�
 + 73 api test + `npx tsc --noEmit` yeşil.
 
 **Sıradaki:** Canlı loop doğrulaması (gerçek sağlayıcıyla uçtan uca); opsiyonel
-`swarmgo-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi.
+`tionswarm-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi.
 
 ## Code Execution with MCP — Settings toggle + UI trace kartları ✅ (2026-07-02)
 
@@ -1687,7 +1687,7 @@ MCP çağrılarını sohbet trace'inde kart olarak göstermek (`_Docs/44` kalan 
 **Yapılan:**
 - **Settings toggle `enableCodeMode`:** `settings.go` (Settings/DTO/Patch/mapping) +
   `store.go` apply + `api/server.go` `applySettings → SetCodeMode` (canlı) +
-  `app.go`'da `SWARMGO_CODE_MODE` artık `EnableShell` gibi **tek seferlik boot seed**
+  `app.go`'da `TIONSWARM_CODE_MODE` artık `EnableShell` gibi **tek seferlik boot seed**
   (doğrudan tunable set kaldırıldı; source of truth Settings ekranı).
 - **Frontend:** `types/settings.ts` + `SettingsPanel` patch'i + `AppToolsPanel`'e
   toggle ("Kod-modu (run_code + MCP binding'leri)"); kabuk kapalıyken sarı uyarı
@@ -1768,7 +1768,7 @@ geri kazanılması (debug.jsonl).
 **Yapılan:**
 - **Yeni paket `internal/codemode`:** `bridge.go` (per-execution loopback HTTP köprüsü —
   127.0.0.1 rastgele port, rastgele Bearer token, agent tool-filter parity, 200 çağrı/koşu
-  tavanı, 120s per-call timeout, çağrı sayacı/özeti) + `bindings.go` (`.swarmgo/mcp/`
+  tavanı, 120s per-call timeout, çağrı sayacı/özeti) + `bindings.go` (`.tionswarm/mcp/`
   altına `_bridge.py` + server-başına Python modülü; docstring = açıklama + input schema;
   Python identifier sanitizasyonu; her çağrıda sıfırdan regen — bayat stub kalmaz).
 - **Yeni araç `run_code`** (`internal/tools/builtin_runcode.go`): boş script → binding
@@ -1776,7 +1776,7 @@ geri kazanılması (debug.jsonl).
   (`minimalScriptEnv`) + `PYTHONPATH` + köprü URL/token env'i ile python çalıştırır;
   yalnız stdout/stderr (16KB cap) + MCP çağrı özeti döner — **veri context'e girmez**.
   RiskExec (`classify.go`), varsayılan 60s / max 300s timeout.
-- **Gate'ler:** `Tunables.codeMode` (default KAPALI, `SWARMGO_CODE_MODE=1` ile boot'ta
+- **Gate'ler:** `Tunables.codeMode` (default KAPALI, `TIONSWARM_CODE_MODE=1` ile boot'ta
   açılır — `codemode_tunable.go` + `app.go`) VE `ShellEnabled` VE MCP kataloğu dolu.
   Kayıt `toolsetup.go` AttachMCP bloğunda; CLI köprüsüne verilmez (`bridgeExcluded` +
   `cliLazyBridgeExcluded`).
@@ -1806,7 +1806,7 @@ edilebiliyor; ikinci bir master toggle gereksiz.
   `toolsetup.go`, CLI köprüsü `mcp_interaction.go`, `subagent.go RunSubagentRunner`
   koşulsuz). `Tunables.delegation`/`SetDelegationEnabled`/`DelegationEnabled` silindi;
   `settings.EnableDelegation` (3 struct + patch pointer + `applyBool` + `server.go`
-  push + `app.go` env seed `SWARMGO_ENABLE_DELEGATION`) tamamen çıkarıldı. **Kalan
+  push + `app.go` env seed `TIONSWARM_ENABLE_DELEGATION`) tamamen çıkarıldı. **Kalan
   frenler:** `delegationMaxDepth` (1–10, vars. 3) + `delegationMaxCalls` (1–100, vars. 8)
   — her delegasyon çağrısında geçerli güvenlik/bütçe guard'ları.
 - **Frontend:** `AppToolsPanel` toggle'ı bilgi kartıyla değiştirildi (araç Araçlar
@@ -1816,7 +1816,7 @@ edilebiliyor; ikinci bir master toggle gereksiz.
   daima var); `TestDelegation_DisabledToolAbsent` → `TestDelegation_ToolAlwaysAvailable`
   (unknown-tool hatası ALMAZ); `store_test`/`subagent_test`/`delegation_e2e_test`
   `EnableDelegation`/`SetDelegationEnabled(true)` referanslarından temizlendi.
-- **Dokümanlar:** `swarmgo-settings`/`swarmgo-self-management`/`swarmgo-autonomous-ops`
+- **Dokümanlar:** `tionswarm-settings`/`tionswarm-self-management`/`tionswarm-autonomous-ops`
   skill'leri + `_Docs/11/22/24/25` "gated" ifadelerinden "daima kurulu, görünürlük
   araç-bazlı"ya güncellendi.
 - **Doğrulama:** `go build` ✅, tüm backend testleri ✅, frontend `tsc --noEmit` ✅.
@@ -1842,7 +1842,7 @@ breakpoint'i zaten vardı).
 
 ## Claude Fable 5 tam desteği ✅ (2026-07-02)
 
-**İstek:** SwarmGo'ya Fable 5 (claude-fable-5) desteği ekle.
+**İstek:** TionSwarm'ya Fable 5 (claude-fable-5) desteği ekle.
 
 **Mevcut durum (kısmi destek vardı):** thinking resolver (`RequiresAdaptiveThinking` —
 Fable/Mythos `thinking:disabled`'ı 400 ile reddeder, off/low → min adaptif 1024) ve
@@ -1859,8 +1859,8 @@ eşliyordu. Eksikler tamamlandı:
   (opus/sonnet sınıfı; eskiden 0.40). Genel-Claude fallback'i 200K/16K/0.40 kaldı.
 - **Pricing:** OpenRouter tablosuna `anthropic/claude-fable-5` (3/15, Anthropic
   cache tier 0.10×/1.25×) eklendi.
-- **Metinler:** ContextPanel çıktı-tavanı ipucu, `swarmgo-settings` default skill,
-  `_Docs/17` adaptif-fraction tablosu ve `swarmgo-project` skill'i yeni aile
+- **Metinler:** ContextPanel çıktı-tavanı ipucu, `tionswarm-settings` default skill,
+  `_Docs/17` adaptif-fraction tablosu ve `tionswarm-project` skill'i yeni aile
   sınıflamasına güncellendi (opus/sonnet/fable 32K · haiku 16K).
 - **Testler:** `context_window_test`/`maxoutput_test` yeni beklentilere güncellendi
   (+`fable` alias satırları). Doğrulama: `go build` ✅, providers/agent/conversation/
@@ -1877,9 +1877,9 @@ eşliyordu. Eksikler tamamlandı:
   `05-ILERLEME` içindeki referans güncellendi). Plan modu 40'ta kaldı.
 - `00-GENEL-BAKIS.md` index'ine 37/38/39/40/41/42/43/45 + `analiz-craftagent-arac-eslestirme.md`
   satırları eklendi; "Numara notu" 40→45 taşınmasını belgeliyor.
-- `swarmgo-project` skill'i (the external agent project workspace) düzeltildi: modül yolu
-  `github.com/bilal-arikan/swarmgo` (yanlış `bilal/swarmgo` idi), go.mod'a `jchv/go-webview2`
-  eklendiği bilgisi, klasör yapısına `cmd/swarmgo-desktop` + `internal/app`, doc index'e
+- `tionswarm-project` skill'i (the external agent project workspace) düzeltildi: modül yolu
+  `github.com/bilal-arikan/tionswarm` (yanlış `bilal/tionswarm` idi), go.mod'a `jchv/go-webview2`
+  eklendiği bilgisi, klasör yapısına `cmd/tionswarm-desktop` + `internal/app`, doc index'e
   39=Dizin-Site-Registry / 40=Plan-Modu / 44 / 45, kırık `39-PLAN-MODE.md` referansı →
   `40-PLAN-MODE.md`, bayat "Sırada: Faz 9 Wails" → native pencere zaten yapıldı (Wails'siz),
   Bash+PowerShell ayrımı + WebSearch + transform_data araçları eklendi.
@@ -1911,7 +1911,7 @@ ekranından açıp kapatmak yeterli.
   kaldırılıp yerine Zamanlamalar'a yönlendiren not kondu. **Zamanlamalar ekranının üstüne**
   workspace-özel pause toggle'ı eklendi (`Schedules.tsx`: `getWorkspaceSettings` ile yüklenir,
   `updateWorkspaceSettings({pauseAutonomy})` ile optimistic toggle; `data-testid=workspace-pause-autonomy`).
-- **Dokümanlar/skill:** `swarmgo-settings` + `swarmgo-autonomous-ops` skill'leri güncellendi
+- **Dokümanlar/skill:** `tionswarm-settings` + `tionswarm-autonomous-ops` skill'leri güncellendi
   (pause artık app-settings key'i değil, workspace-özel + Zamanlamalar ekranı); `06-WORKSPACES.md`
   tablosu not düştü. `update_settings` araç örnekleri `pauseAutonomy` yerine `autoTitleEnabled` kullanıyor.
 - **Durum:** `go build ./...` ✅, ilgili paket testleri ✅ (agent/tools/settings 256 test), frontend `tsc` temiz.
@@ -1985,7 +1985,7 @@ workspace'lerin default (seed) promptu yap — summary/reflect/title gibi.
 
 **İstek:** (1) Skilleri de araçlardaki gibi 4 görünürlük kategorisinden birine
 ayarlanabilir yap. (2) Yeni workspace'lerin default prompt'unu the external agent project'ın tam
-sistem promptu gibi yap (SwarmGo'da monolitik sistem promptu yok — workspace prompt
+sistem promptu gibi yap (TionSwarm'da monolitik sistem promptu yok — workspace prompt
 onun yerini tutar). (3) `ClaudeResume`'u default açık yap.
 
 **Yapılan:**
@@ -2010,10 +2010,10 @@ onun yerini tutar). (3) `ClaudeResume`'u default açık yap.
   tip-uyumlu oldu).
 
 **Cross-runtime cache benchmark (claude-cli resume vs the external agent project SDK):** aynı 3-mesajlık
-konuşma iki runtime'da ölçüldü. SwarmGo (claude-cli, resume açık) ilk turları **soğuk**
+konuşma iki runtime'da ölçüldü. TionSwarm (claude-cli, resume açık) ilk turları **soğuk**
 yazıp tur-başı ~70-90K cache **yeniden yazıyor** (warm-read tutarsız, yalnız bazı
 turlarda); the external agent project SDK 1. turdan **istikrarlı sıcak** cache okuyor (cR≫cW) → aynı
-konuşmada ~3× ucuz. Ağır (~40KB) workspace prompt eklemek SwarmGo'da cache-write'ı
+konuşmada ~3× ucuz. Ağır (~40KB) workspace prompt eklemek TionSwarm'da cache-write'ı
 +42K büyüttü (input değişmez — prompt cache'e gider). Sonuç: darboğaz claude-cli'nin
 sıcak prefix'i turlar arası **tutarlı** koruyamaması.
 
@@ -2159,7 +2159,7 @@ UI'da görünmeyenler (örnekler, when-to-use) gösterilsin.
   override'ları en son `SetVisibility` ile uygular. `workspace-tools` API `visibility`
   + `examples` döndürür, PUT `toolVisibility` map'i alır (`validVisibility` doğrular).
 - **Self-manage:** master toggle kaldırıldı → paket daima kurulu, varsayılan `hidden`.
-  **Tam sökme (aynı gün):** `settings.EnableSelfManage` alanı + `SWARMGO_ENABLE_SELFMANAGE`
+  **Tam sökme (aynı gün):** `settings.EnableSelfManage` alanı + `TIONSWARM_ENABLE_SELFMANAGE`
   env + `Tunables.SelfManageEnabled`/`selfManage` + ayar UI toggle'ı **tamamen silindi**;
   `spawn_session` CLI köprüsünde koşulsuz ilan edilir. `TestInteractionAdvertisedNames`
   + `store_test` güncellendi.
@@ -2195,11 +2195,11 @@ kaldırılsın; onun yerine her tema **renginin** açık ve koyu karşılığı 
 **Backend:**
 - `settings.Default().ThemePreset` `"midnight-violet"` → `"violet-dark"`; alan yorumu
   güncellendi. `Theme`/`Accent` alanları geriye-uyum için kaldı (artık UI'yı etkilemiyor).
-- `cmd/swarmgo-desktop/titlebar_windows.go`: preset→renk haritası kaldırıldı; titlebar
+- `cmd/tionswarm-desktop/titlebar_windows.go`: preset→renk haritası kaldırıldı; titlebar
   artık id son-ekine (`-light`/`-dark`) göre mod-neutrals seçiyor (accent kullanılmıyor).
 
 **Doğrulama:** `go build ./...` + desktop build ✅, frontend `tsc --noEmit` temiz ✅.
-`swarmgo-settings` skill'i güncellendi.
+`tionswarm-settings` skill'i güncellendi.
 
 ## Journal gürültü filtresi + recall eşiği ayarlanabilir ✅ (2026-07-01)
 
@@ -2261,10 +2261,10 @@ token'dan çok dikkat/context-rot maliyeti.
   cümlesi) artık **yalnız** `internal/agent/toolsetup.go` `renderLazyToolCatalog` CLI intro'sunda
   (tek canonical yer). Native vs CLI varyant farkı korundu (native eager → not yok).
 - **Adım 2 — Deliverables skill'e taşındı:** Yeni shipped skill
-  `internal/skills/defaults/swarmgo-deliverables/SKILL.md` (`access: shared`, on-demand). Tüm
+  `internal/skills/defaults/tionswarm-deliverables/SKILL.md` (`access: shared`, on-demand). Tüm
   detaylı kurallar (binary `sourcePath`, inline media, gallery, `update_artifact` by id) skill
   body'sine taşındı. `internal/api/artifacts.go` `artifactDeliverableGuidance` 2 satırlık özet +
-  `use_skill swarmgo-deliverables` pointer'ına indirildi. Bilgi **kaybolmadı** — sadece prefix'ten
+  `use_skill tionswarm-deliverables` pointer'ına indirildi. Bilgi **kaybolmadı** — sadece prefix'ten
   skill'e taşındı; `//go:embed defaults` deseni otomatik gömüyor (ek kayıt gerekmedi).
 
 `go build ./...` temiz; `go test ./internal/skills ./internal/agent ./internal/api` (197) temiz.
@@ -2293,8 +2293,8 @@ Detay: `_Docs/19-LAZY-TOOL-LOADING.md`.
 ## Dış MCP araçları katalogda yalnız-ad (NameOnly) ✅ (2026-07-01)
 
 **İstek:** Context-payload optimizasyonu. "Available Tools (load on demand)" bloğunda
-dış MCP araçları (ör. `mcp__mcp-chrome__*`) tam açıklamalarıyla dökülüyordu; SwarmGo'nun
-kendi `swarmgo_extended` araçları ise zaten yalnız-ad. Tutarsızlık + her tur ölü token.
+dış MCP araçları (ör. `mcp__mcp-chrome__*`) tam açıklamalarıyla dökülüyordu; TionSwarm'nun
+kendi `tionswarm_extended` araçları ise zaten yalnız-ad. Tutarsızlık + her tur ölü token.
 
 **Yapılan:** `internal/tools/registry.go` `AttachMCP` artık her MCP aracını `lazy` **VE**
 `nameOnly` işaretliyor (tek satırlık ekleme: `r.nameOnly[e.NamespacedName] = true`).
@@ -2355,8 +2355,8 @@ store.go (apply + logLevel clamp), validate.go (+ validate_test.go logLevel case
 frontend `types/settings.ts` + save payload'undan tamamen kaldırıldı.
 
 **Doğrulama:** `go build ./...` ✅, `go vet ./...` temiz ✅, `go test` 208 test ✅,
-frontend `tsc --noEmit` temiz ✅. Skill dökümanları (`swarmgo-settings`,
-`swarmgo-autonomous-ops`) güncellendi.
+frontend `tsc --noEmit` temiz ✅. Skill dökümanları (`tionswarm-settings`,
+`tionswarm-autonomous-ops`) güncellendi.
 
 ## Ayarlar ▸ Gelişmiş'ten ölü alt-bölümler kaldırıldı ✅ (2026-06-30)
 
@@ -2367,14 +2367,14 @@ kalksın; loglar zaten Logs ekranına gidiyor, oradan filtrelenebiliyor.
 - `mcpGatewayUrl` ("MCP & Araçlar"): tüm repoda yalnız kaydedilip yükleniyor, runtime
   hiç **tüketmiyor**. Gerçek MCP sunucu yönetimi ayrı "Araçlar & MCP" (`mcptools`)
   kategorisinde → alt-bölüm gereksiz.
-- `logLevel` ("Tanılama"): `cmd/swarmgo`'da hiç okunmuyor → logger'a **uygulanmıyor**.
+- `logLevel` ("Tanılama"): `cmd/tionswarm`'da hiç okunmuyor → logger'a **uygulanmıyor**.
   Ayrıca `LogsPanel.tsx` zaten seviye filtresi + metin araması sunuyor → gereksiz.
 
 **Yapılan (frontend):** `SettingsPanel.tsx`'ten iki `AdvSection` (MCP & Araçlar,
 Tanılama) + `McpPanel`/`DiagnosticsPanel` import'ları + kullanılmayan `Plug`/`Activity`
 ikonları kaldırıldı; `settings/appPanels.tsx`'ten `McpPanel` ve `DiagnosticsPanel`
 fonksiyonları silindi. Backend alanları (`mcpGatewayUrl`/`logLevel`) geriye-uyum için
-settings.json'da kalır (zararsız). `swarmgo-settings` skill'inde ikisi deprecated/unused
+settings.json'da kalır (zararsız). `tionswarm-settings` skill'inde ikisi deprecated/unused
 not edildi. `tsc --noEmit` temiz.
 
 ## Bütçe/limit UI kaldırıldı — ajanlar daima sınırsız ✅ (2026-06-30)
@@ -2402,15 +2402,15 @@ düzenlenemez → yeni ajanlar daima sınırsız. Enforcement (budget.go) 0'da n
 `kaç`→`kaÃ§`); uyarı `internal/memory` (journal) + `conversation/db` JSONL byte
 handling'i işaret ediyordu.
 
-**Teşhis (ampirik, kapatıldı):** Kök neden SwarmGo'da **DEĞİL**. Kanıtlar:
+**Teşhis (ampirik, kapatıldı):** Kök neden TionSwarm'da **DEĞİL**. Kanıtlar:
 (1) Go I/O uçtan uca UTF-8 — `internal/db/store.go` (JSONL) `encoding/json` + atomik
 bayt yazımı, `internal/memory` + `agent/reflector.go` (journal=`"Q: "+req.Message+...`)
 saf Go string; tüm `internal`'da **tek `DecodeString` base64**, hiçbir charset decoder
-(`x/text/charmap`/CP125x) yok. (2) `claude-cli` provider'ı SwarmGo'nun bire-bir byte
+(`x/text/charmap`/CP125x) yok. (2) `claude-cli` provider'ı TionSwarm'nun bire-bir byte
 yoluyla (stdin raw UTF-8 / stdout raw) Türkçe'yi **doğru** round-trip eder (probe ile
 doğrulandı). (3) Diskteki yer-gerçeği: asistan cevapları `×`/`÷`/`−` çok-baytlı Unicode'u
 **kusursuz** saklamış; yalnız **user mesajları** bozuk → bozulma `req.Message`
-SwarmGo'ya gelmeden, **gönderen istemcide** (double-encode: UTF-8 bayt CP1254 çözülüp
+TionSwarm'ya gelmeden, **gönderen istemcide** (double-encode: UTF-8 bayt CP1254 çözülüp
 tekrar UTF-8). Klasik **Windows PowerShell 5.1** `Invoke-RestMethod` string-gövde /
 BOM'suz-UTF-8-dosya-ANSI-okuma hatası (`dev.ps1` ASCII-only kuralının aynısı).
 
@@ -2429,7 +2429,7 @@ kalıntı, 0 geçersiz JSON. (2) `scripts\e2e-smoke.ps1` `Api-Post`/`Api-Put` se
 
 ## claude-cli kimlik popup'ı (Max OAuth / API token) ✅ (2026-06-30)
 
-**Hedef:** İzole config dizini için **SwarmGo UI'ından** login akışı — bir popup'ta
+**Hedef:** İzole config dizini için **TionSwarm UI'ından** login akışı — bir popup'ta
 ya Max/Pro hesabı ya API anahtarı eklenebilsin; dizinde ayrı `claude login` gerekmesin.
 
 **Mekanik:** Claude CLI auth-precedence'ı token'ı env'den kabul ediyor
@@ -2470,15 +2470,15 @@ dizininde**.
 env olarak enjekte edilir. Boş = ortak `~/.claude`; bir yol verilince CLI
 skill/ayar/komut/global CLAUDE.md/login'i o izole dizinden okur.
 
-**Default (2026-06-30):** Artık **izole-by-default** → `~/.swarmgo/claude-home`
+**Default (2026-06-30):** Artık **izole-by-default** → `~/.tionswarm/claude-home`
 (`settings.defaultClaudeConfigDir()`, home çözülemezse `""`=ortak `~/.claude` fallback).
 Yani claude-cli kutudan çıktığı gibi temiz bir config evinden çalışır; **tek seferlik
 `claude` login** o dizinde gerekir. Anahtarsız-mevcut-login davranışı istenirse alan
-boşaltılır (UI placeholder `otomatik (~/.claude)`). Bilinçli ürün kararı: SwarmGo runtime'ı
-kullanıcının kişisel `~/.claude` skill/tool kirliliğinden ayrışır. (SwarmGo zaten
+boşaltılır (UI placeholder `otomatik (~/.claude)`). Bilinçli ürün kararı: TionSwarm runtime'ı
+kullanıcının kişisel `~/.claude` skill/tool kirliliğinden ayrışır. (TionSwarm zaten
 `--strict-mcp-config` ile MCP'leri izole ediyordu; bu, eksik olan skill/ayar/CLAUDE.md
 katmanını da kapatır.) CLI bu env'e saygı duyar (doğrulandı: Claude Code env-vars docs +
-issue #25762); SwarmGo CLI'ı doğrudan subprocess çağırdığı için VS Code eklentisindeki
+issue #25762); TionSwarm CLI'ı doğrudan subprocess çağırdığı için VS Code eklentisindeki
 bug yolu etkilemiyor.
 
 **Dokunulan katmanlar (mevcut `claudeCliPath` aynalandı):** `settings.go`
@@ -2488,12 +2488,12 @@ bug yolu etkilemiyor.
 (`NewClaudeCLI` 3. param), `claudecli.go` (`configDir` alanı + `runAttempt`'ta
 `cmd.Env` enjeksiyonu), `api/server.go applySettings` (canlı uygula), frontend
 (`settings.ts` tip, `SettingsPanel` save, `ProvidersPanel` Anthropic kartında opsiyonel
-2. endpoint alanı "claude config dizini"). Default skill `swarmgo-settings` belgelendi.
+2. endpoint alanı "claude config dizini"). Default skill `tionswarm-settings` belgelendi.
 `go build`/`go vet`/`tsc` ✅.
 
 ## Token/bütçe muhasebesi denetimi + CLI ek-yükü düzeltmesi ✅ (2026-06-30)
 
-**Hedef:** Token ve bütçe hesaplamalarında yanlışlık var mı? (SwarmGo↔the external agent project
+**Hedef:** Token ve bütçe hesaplamalarında yanlışlık var mı? (TionSwarm↔the external agent project
 token kıyası oturumunun ardından). **Denetim sonucu:** Çekirdek muhasebe **doğru** —
 OpenAI-uyumlu yol `prompt_tokens`'tan `cached`'i çıkarıyor (çift-sayım yok,
 `minimax.go toUsage`), Anthropic native ayrık sayaçlar, fiyat kademeleri
@@ -2506,7 +2506,7 @@ adımlarının KÜMÜLATİF** toplamıdır (tek-geçiş bağlamını kat kat aş
 çağrısı cache'ten yazılandan fazlasını okuyamaz; kanıt: SES5 tur 2 `cacheRead=269485`
 iken yazılan ≤ ~86K → ~5 iç çağrının toplamı). **Maliyet için doğru** ama **bağlam
 boyutu değil**. Eski kod bunu "çağrı başına gerçek girdi" sayıp `In+CacheRead+
-CacheWrite` ile sahte ~5–7× ek-yük üretiyordu (kıyas oturumunda SwarmGo'yu olduğundan
+CacheWrite` ile sahte ~5–7× ek-yük üretiyordu (kıyas oturumunda TionSwarm'yu olduğundan
 ağır gösteren rakam buydu).
 
 **Değişiklik:** `computeCLIOverhead` artık cacheRead katkısını çağrı başına bağlam
@@ -2583,7 +2583,7 @@ M3'ün gerçek sınırı ~512K).
   clamp 256–512000) → `Tunables.SetMaxOutputTokens`/`MaxOutputTokens()` →
   `api/server.go applySettings`. UI: "Çıktı token tavanı" alanı (recovery grid'i,
   `appPanels.tsx` + `types/settings.ts` + `SettingsPanel.tsx`). **Öncelik (MaxTokens
-  boşken):** Settings override (>0) → env `SWARMGO_MAX_OUTPUT_TOKENS` (>0) → aile
+  boşken):** Settings override (>0) → env `TIONSWARM_MAX_OUTPUT_TOKENS` (>0) → aile
   tablosu → sağlayıcı fallback (4096).
 - Testler: `providers/maxoutput_test.go` (aile + katalog), `agent/maxoutput_test.go`
   (fill/explicit-korunur/override). Doğrulama: `go build ./...` ✅, `go test` 166 ✅.
@@ -2615,13 +2615,13 @@ M3'ün gerçek sınırı ~512K).
 ## Zengin görev alanları + PM-benzeri kart modalı + Obsidian-pm köprüsü ✅ (2026-06-29)
 
 **Hedef:** Board kartlarını obsidian-pm (Obsidian "Project Manager" eklentisi)
-deneyimine yaklaştırmak; SwarmGo board'unu Obsidian'da Kanban/Tablo/Gantt olarak
+deneyimine yaklaştırmak; TionSwarm board'unu Obsidian'da Kanban/Tablo/Gantt olarak
 görüp **çift yön** senkronlamak.
 
 > **Güncelleme (2026-06-30):** `type` (task/subtask/milestone) ve `parentId`
-> SwarmGo'dan kaldırıldı (ihtiyaç yok) — `Task` modeli, API, araçlar ve modal
+> TionSwarm'dan kaldırıldı (ihtiyaç yok) — `Task` modeli, API, araçlar ve modal
 > Tür alanı temizlendi. Subtask hiyerarşisi yalnız Obsidian (PM) tarafında yaşar;
-> köprü onu PM-only tutar. SwarmGo'da kalan zengin alanlar: **priority + tags**.
+> köprü onu PM-only tutar. TionSwarm'da kalan zengin alanlar: **priority + tags**.
 
 **Zengin görev modeli (backend):**
 - `db.Task` yeni opsiyonel alanlar: `priority` (critical/high/medium/low),
@@ -2641,40 +2641,40 @@ görüp **çift yön** senkronlamak.
   modalden çıkarıldı; backend alanları omitempty olarak duruyor.)
 - `types/task.ts`/`api/tasks.ts` yeni alanlarla genişledi.
 
-**Obsidian-pm köprüsü (harici, `Desktop\Progs\swarmgo-obsidian-sync`, Python):**
-- SwarmGo REST API (`/api/tasks`) ↔ obsidian-pm projesi (düz Markdown: `<proje>.md`
+**Obsidian-pm köprüsü (harici, `Desktop\Progs\tionswarm-obsidian-sync`, Python):**
+- TionSwarm REST API (`/api/tasks`) ↔ obsidian-pm projesi (düz Markdown: `<proje>.md`
   + `<proje>_tasks/*.md`, `pm-project`/`pm-task` frontmatter). Sunucu/DB yok.
 - **Tam çift-yön:** başlık/açıklama/durum/owner/deps + **priority/tags/type/parentId**
   + subtask hiyerarşisi (subtask'lar proje `taskIds`/gövdeden hariç, parent `subtaskIds`
-  yeniden hesaplanır). `parentId` link tablosundan PM-id↔SG-id çevrilir.
+  yeniden hesaplanır). `parentId` link tablosundan PM-id↔TS-id çevrilir.
 - Çakışma: *boş tarafı doldur; ikisi de doluysa son-yazan-kazanır* (LWW **tur başındaki
   orijinal** zaman damgalarıyla — çekirdek push'un PM dosyasını yeniden yazıp updatedAt
   bumplaması kaynaklı yanlış-yön hatası bu şekilde giderildi). İdempotent.
-- Durum eşlemesi: SG `failed`↔PM `blocked`, `review`↔`review`, gerisi birebir.
-  Bağ + son-senkron anlık görüntüsü sidecar `state/<proje>.json`'da; `swarmgoId`
+- Durum eşlemesi: TS `failed`↔PM `blocked`, `review`↔`review`, gerisi birebir.
+  Bağ + son-senkron anlık görüntüsü sidecar `state/<proje>.json`'da; `tionswarmId`
   PM frontmatter'ına gömülü (sidecar kaybolsa bağ kurtarılır).
 - **`watch` modu:** periyodik otomatik senkron; Progs altında arka plan servisi olarak
   Windows zamanlanmış görevle (logon'da) çalışır.
-- Canlı backend'de uçtan uca doğrulandı (SG↔PM priority/tags/type/parent, idempotent).
+- Canlı backend'de uçtan uca doğrulandı (TS↔PM priority/tags/type/parent, idempotent).
 
 ### Köprü → çoklu-provider mimarisi (kanban soyutlaması) ✅ (2026-06-30)
 
 **Hedef:** Kanban kontrolünü tek bir platforma (obsidian-pm) sabitlemek yerine
 **değiştirilebilir provider** arkasına almak; ileride Trello/Asana/WeKan'a yalnız
-yeni bir dosya yazarak geçebilmek (`mermaid-cli` benzeri soyutlama). SwarmGo task
+yeni bir dosya yazarak geçebilmek (`mermaid-cli` benzeri soyutlama). TionSwarm task
 store'u **canonical kaynak** olarak kalır (ajan orkestrasyonu onun üstünde).
 
 - **Faz 1 — soyutlama (davranış değişmedi):** `sgsync/providers/` paketi eklendi.
-  `base.py` provider sözleşmesi (`Card` canonical model — status'u SwarmGo board
+  `base.py` provider sözleşmesi (`Card` canonical model — status'u TionSwarm board
   sözlüğünde; `ProjectInfo`; `Caps` yetenek bayrakları; `KanbanProvider` ~5 metot).
   Tüm obsidian-pm mantığı engine'den `providers/obsidian.py`'ye taşındı
-  (status/hiyerarşi map, `swarmgoId` gömme, `subtaskIds` roll-up). `engine.py` artık
+  (status/hiyerarşi map, `tionswarmId` gömme, `subtaskIds` roll-up). `engine.py` artık
   **provider-bağımsız** — yalnız `Card` + `KanbanProvider` konuşur; çakışma çözümü,
   kimlik eşleme, çoklu-workspace fan-out, watch kilidi aynen korundu.
 - **Capability modeli:** provider tutamadığı alanı bildirir (`Caps`); engine zorla
   map etmez, **atlar** (ör. Trello'da priority/deps/hierarchy yok → es geçilir).
 - **Faz 2 — Trello provider:** `providers/trello.py` (REST: list↔status, label↔tag,
-  arşiv↔close, SG id desc marker'ına gömülü; key+token auth). `config.json`'a
+  arşiv↔close, TS id desc marker'ına gömülü; key+token auth). `config.json`'a
   `_trello_example` mapping bloğu + factory (`make_provider`, mapping `provider`
   anahtarı, varsayılan `obsidian`, geriye uyumlu).
 - **State göçü:** snapshot `pm_status` artık canonical tutulduğu için tek-seferlik
@@ -2682,13 +2682,13 @@ store'u **canonical kaynak** olarak kalır (ajan orkestrasyonu onun üstünde).
   sonrası ilk sync'te sahte churn olmadı.
 - **Doğrulama:** obsidian yolu canlı backend'de **dry 0/0 stabil** (davranış birebir);
   `tests/test_providers.py` → Trello map mantığı + factory hataları + **engine'in
-  board-bağımsızlığı** (sahte provider/SG ile iki-yön kart üretimi) yeşil. Watch
+  board-bağımsızlığı** (sahte provider/TS ile iki-yön kart üretimi) yeşil. Watch
   servisi yeni kodla yeniden başlatıldı, idle teyit edildi. Detay: köprü README.
 
 ### Köprü sadeleştirme: Trello provider kaldırıldı + dosyalar workspace içine (2026-06-30)
 
 **Hedef:** Generic board yönetim sistemini korumak ama Trello provider'ını sökmek;
-obsidian-pm dosyalarını harici tek vault yerine **her SwarmGo workspace'inin kendi
+obsidian-pm dosyalarını harici tek vault yerine **her TionSwarm workspace'inin kendi
 klasörüne** taşımak (Obsidian kullanıcısı o klasörü manuel vault olarak açar).
 
 - **Trello kaldırıldı:** `providers/trello.py` silindi, registry'den çıkarıldı,
@@ -2696,12 +2696,12 @@ klasörüne** taşımak (Obsidian kullanıcısı o klasörü manuel vault olarak
   seam (`base.py`/`obsidian.py`/factory) **aynen duruyor** — registry'de tek slug
   (`obsidian`); yeni provider eklemek hâlâ tek dosya + tek satır.
 - **Workspace-içi yerleşim:** yol artık mapping'in `workspace_id`'sinden türüyor →
-  `<swarmgo.data_dir>/workspaces/<WS_ID>/<obsidian.subdir>/`. `_resolve_projects_dir`
+  `<tionswarm.data_dir>/workspaces/<WS_ID>/<obsidian.subdir>/`. `_resolve_projects_dir`
   önceliği: `obsidian_dir` override → `data_dir`+workspace → eski `projects_dir`
   (geriye uyumlu). `data_dir` var ama `workspace_id` yoksa **sessizce yanlış yere
   yazmaz, hata fırlatır.** Backend değişikliği gerekmedi (yol bridge tarafında türetiliyor).
-- **Veri göçü:** mevcut 3 proje (`SwarmGo`/`DenemeBilimsel`/`SwarmGoRepo` ↔ WS1/WS2/WS5)
-  eski vault'tan `…/.swarmgo/workspaces/<WS>/obsidian/`'e taşındı; state link'leri
+- **Veri göçü:** mevcut 3 proje (`TionSwarm`/`DenemeBilimsel`/`TionSwarmRepo` ↔ WS1/WS2/WS5)
+  eski vault'tan `…/.tionswarm/workspaces/<WS>/obsidian/`'e taşındı; state link'leri
   pm_id bazlı olduğundan korundu (`pull` yeni konumdan aynı kartları/id'leri okudu).
   `ikariam` örnek projesi (mapping'siz) eski vault'ta bırakıldı.
 - **Doğrulama:** `tests/test_providers.py` (yol çözümü + factory + board-bağımsızlık)
@@ -2811,14 +2811,14 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
 
 **Faz 4 — Kalıcı claude-cli süreci (opsiyonel, deneysel, default off).** `providers.CLISession` + `CLISessionPool` (`claudecli_session.go`): session başına uzun-ömürlü `claude --input-format stream-json` süreci; soğuk başta tam transkript, sıcakta yalnız son kullanıcı mesajı (süreç gerisini hatırlar). `Runtime.cliSessions` pool'u (CloseMCP'de kapanır, 30dk idle eviction), tek-huni `recordedComplete`'te session-id ile devreye girer (hata → tek-atış fallback); `ClaudePersistentSession` açıkken `planClaudeResume` trim'i devre dışı. Ayar tüm sitelere bağlandı (Settings/DTO/Patch/Apply/tunable/server apply). **Canlı:** context korunuyor (ZEBRA-9) + cache ısındı (turn 2 cache_read=87.672); warmth TTL'e bağlı, default off. Live test `TestLivePersistentSession`.
 
-Doğrulama: `go build ./...` + `go vet` + paket testleri temiz; `SWARMGO_LIVE_CLI=1` ile iki live test PASS.
+Doğrulama: `go build ./...` + `go vet` + paket testleri temiz; `TIONSWARM_LIVE_CLI=1` ile iki live test PASS.
 
 ## Context-preview "CLI ek yükü" satırı ✅ (2026-06-29)
 
 **Sorun:** `GET /api/sessions/{id}/context-preview` çıktısı (`systemTokens`/
-`toolTokens`/`totalTokens`) yalnızca SwarmGo'nun **kendi** enjekte ettiği katmanı
+`toolTokens`/`totalTokens`) yalnızca TionSwarm'nun **kendi** enjekte ettiği katmanı
 sayar. `claude-cli` sağlayıcısında alttaki CLI **kendi sistem
-promptu + araç şemaları + MCP köprüsünü** modele ekler — SwarmGo bunu hiç
+promptu + araç şemaları + MCP köprüsünü** modele ekler — TionSwarm bunu hiç
 görmediği için `totalTokens` gerçek faturalanan girdiyi ciddi şekilde **az
 raporlar**. Canlı ölçüm (AGT1 Coder, opus, SES75, 3 çağrı ort.): tahmin **6.832**
 → gerçek **49.844** token (~**7,3×**, +43.012 ek yük).
@@ -2920,7 +2920,7 @@ garanti değil; araç/prompt değişimi prefix'i bozabiliyor.
 the external agent project'taki gibi silinen/eklenen satırların görüldüğü belirgin bir diff paneli
 açılsın. Sorun: native tool-loop düzenlemeleri zaten `diff` adımı → güzel **DiffCard**
 veriyordu; ama asıl provider olan **claude-cli** düzenlemeyi kendi uyguladığı için
-SwarmGo `recordDiff` çağrılmıyor → düzenleme generic `tool` adımı olarak **ActivityCard**
+TionSwarm `recordDiff` çağrılmıyor → düzenleme generic `tool` adımı olarak **ActivityCard**
 ile (yalnızca açınca, sönük) gösteriliyordu → iki yol arasında tutarsızlık.
 
 **Yapılanlar (frontend-only; Go değişmedi):**
@@ -3013,20 +3013,20 @@ Tam suite **524 test** yeşil.
 
 **Sorun (SES73):** claude-cli modeli köprülü `ask_user`'ı native `AskUserQuestion`
 şemasıyla çağırdı — `options`'ı **obje dizisi** (`[{"content":"..."}]`) olarak yolladı;
-SwarmGo ise `[]string` bekliyordu → `json: cannot unmarshal array into ... askInput.options
+TionSwarm ise `[]string` bekliyordu → `json: cannot unmarshal array into ... askInput.options
 of type string` → 3 ardışık `ask_user` hatası, model 4. turda options'ı bırakıp düz metinle sordu.
 
 **Çözüm:** `ask_user` şeması native ile uyumlu hale getirildi (`internal/tools/builtin_ask.go`):
 - `options` öğesi artık **string VEYA obje** olabilir (`{label|content|value|text|description}`
   → görünen metne normalize; `askOption` + `flexOptions`).
-- Native **`questions[]` wrapper** da tolere edilir (ilki kullanılır — SwarmGo tek soru sorar).
+- Native **`questions[]` wrapper** da tolere edilir (ilki kullanılır — TionSwarm tek soru sorar).
 - Ortak `tools.ParseAskInput` hem native tool yolunda hem claude-cli Interaction MCP köprüsünde
   (`callAsk`) kullanılır → iki yol birebir aynı çözümler. Şema `oneOf` (string|object), ekstra
   native alanlar (header/multiSelect) yok sayılır. Test: `TestParseAskInput` (7 şekil) geçti.
 
 ## Doğrulama araçları (skill/config/mermaid) + interaction köprü konsolidasyonu ✅ (2026-06-29)
 
-External Agent `session-tools-core` ↔ SwarmGo araç eşleştirmesindeki boşluk analizinden
+External Agent `session-tools-core` ↔ TionSwarm araç eşleştirmesindeki boşluk analizinden
 (bkz. `_Docs/analiz-craftagent-arac-eslestirme.md`) çıkan üç **salt-okuma doğrulama
 aracı** eklendi:
 
@@ -3034,13 +3034,13 @@ aracı** eklendi:
   `name`/`description`, boş gövde). Mantık tek kaynak: `skills.Store.ValidateSkill`
   (`internal/skills/validate.go`); tool `internal/tools/builtin_skillvalidate.go`
   (`SkillValidator` arayüzü, agent tarafı `agentSkillWriter.ValidateSkill` adaptörü).
-- **`config_validate`** — SwarmGo JSON config dosyalarını doğrular (geçerli JSON +
+- **`config_validate`** — TionSwarm JSON config dosyalarını doğrular (geçerli JSON +
   tanınan şekiller için beklenen alanlar: settings.json / tools-config.json / agent /
   mcp-server). `internal/tools/builtin_configvalidate.go`, çalışma dizini sandbox'ı.
 - **`mermaid_validate`** — saf-Go hafif lint (tanınan diyagram tipi + denge kontrolü;
   tam parser DEĞİL, sınır belgelendi). `internal/tools/builtin_mermaidvalidate.go`.
 
-Üçü de native builtin + **NameOnly (lazy)** → claude-cli'da `swarmgo_extended`
+Üçü de native builtin + **NameOnly (lazy)** → claude-cli'da `tionswarm_extended`
 köprüsünden `BridgeableDefs` ile otomatik gelir. Kayıt: `toolsetup.go` (mermaid base,
 skill_validate `r.skills!=nil`, config_validate `sb.Ready()`; üçü NameOnly tier'a eklendi).
 
@@ -3048,12 +3048,12 @@ skill_validate `r.skills!=nil`, config_validate `sb.Ready()`; üçü NameOnly ti
 (todo/artifact/notify/focus/goal/sessionEdit) tek tablo-güdümlü `sinkToolTable` +
 `callViaSink` yardımcısına indirildi — davranış birebir korundu, ~120 satır boilerplate
 kalktı. (Not: bu, "tek Context, çok-backend" refactor taslağının düşük-riskli/kozmetik
-parçası; büyük `ToolContext` arayüzü gereksiz bulunup uygulanmadı — SwarmGo deseni zaten
+parçası; büyük `ToolContext` arayüzü gereksiz bulunup uygulanmadı — TionSwarm deseni zaten
 ctx-value injection ile gerçekliyor.)
 
 **Test:** `builtin_validate_test.go` (mermaid/config/skill_validate), `skills/validate_test.go`
 (ValidateSkill) + tüm suite **510 test** yeşil. Doküman/skill: `_Docs/19` (NameOnly seti),
-`swarmgo-self-management` (skill_validate notu), `swarmgo-guide` (mermaid_validate notu).
+`tionswarm-self-management` (skill_validate notu), `tionswarm-guide` (mermaid_validate notu).
 
 ## Plan modu bağlandı + ölü `planningMode` alanı kaldırıldı ✅ (2026-06-28)
 
@@ -3204,18 +3204,18 @@ Test `db/session_meta_test.go` (round-trip + clear). Build+vet+test + frontend
 ## claude-cli 2.1.x+ iki-tier araç köprüsü: eager-core + lazy-extended ✅ (2026-06-26)
 
 **Sorun:** claude-cli ajanlarında (ör. WS5/AGT4) `Bash` ilk turda `No such tool
-available` veriyordu. Kök neden: SwarmGo tüm bridged araçları (eager + tüm
-self-management suite) **tek** `swarmgo_interaction` MCP sunucusuna full-şema koyuyor;
+available` veriyordu. Kök neden: TionSwarm tüm bridged araçları (eager + tüm
+self-management suite) **tek** `tionswarm_interaction` MCP sunucusuna full-şema koyuyor;
 toplam şema bağlam penceresinin %10'unu aşınca claude-cli 2.1.x **hepsini erteliyordu**
 (Bash dahil). UI'daki "her tur şema gönderilen · 19" metriği **native** yola aitti;
 CLI yolunda lazy-loading kazanımı gerçekleşmiyordu.
 
 **Çözüm:** Interaction MCP'yi **iki sunucuya** böldük (claude-cli'ın native Tool
 Search mekanizmasını doğru kullanarak):
-- `swarmgo_interaction` (CORE, `alwaysLoad: true`) → eager tier, tool-search'ten muaf
+- `tionswarm_interaction` (CORE, `alwaysLoad: true`) → eager tier, tool-search'ten muaf
   → Bash/ask_user/use_skill ilk turdan hazır. Eski anahtar korundu (namespaced
   referanslar bozulmadı).
-- `swarmgo_extended` (EXTENDED) → self-management + NameOnly oturum araçları;
+- `tionswarm_extended` (EXTENDED) → self-management + NameOnly oturum araçları;
   `ENABLE_TOOL_SEARCH=auto` (CLI env) ile lazy keşfedilir.
 
 **Dosyalar:** `internal/tools/interaction.go` (Core/ExtendedToolNames), `internal/
@@ -3230,7 +3230,7 @@ claudecli.go` (`ENABLE_TOOL_SEARCH=auto` env), `internal/api/server.go` (subtree
 **Test:** `TestWriteCLIMCPConfigTwoTierInteraction`, `TestInteractionTierSplit`,
 `TestLazyCatalogCLIFormNamespacesNames` + tüm suite (504 test) yeşil. Canlı doğrulandı
 (WS5/AGT4, Playwright): `Bash` tek adımda (ToolSearch'süz), `list_agents` ise
-`mcp__swarmgo_extended__` namespace'inden ToolSearch ile lazy yüklendi. Detay: `_Docs/19`.
+`mcp__tionswarm_extended__` namespace'inden ToolSearch ile lazy yüklendi. Detay: `_Docs/19`.
 
 ## Oturum bilgisi panelinden "Ajanın bugünkü harcaması" kaldırıldı ✅ (2026-06-26)
 
@@ -3337,7 +3337,7 @@ Market item'ına tıklayınca açılan detay popup'ı genişletildi (`max-w-lg`�
   + **Zamanlamalar** (cron + agent-key + prompt) + **Gömülü skill'ler** (frontmatter'dan ad/açıklama) +
   board kolonları + yönergeler. Frontend tipleri (`types/market.ts`) yeni payload alanlarıyla genişletildi.
 - **Doğrulama:** `tsc` + `vite build` yeşil. Canlı (8090, tarayıcı): Market ▸ Workspaces ▸ "Yazılım
-  Geliştirme" → geniş popup; meta (Gömülü·SwarmGo + #template #workspace), stat (4 ajan/2 akış/0 zam/1 skill),
+  Geliştirme" → geniş popup; meta (Gömülü·TionSwarm + #template #workspace), stat (4 ajan/2 akış/0 zam/1 skill),
   ajan kartları (read-only/auto + thinking + sw-conventions çipleri), akış zincirleri render edildi.
 
 ## Workspace'i şablon olarak publish (seeding'in tersi) ✅ (2026-06-26)
@@ -3417,7 +3417,7 @@ nameOnly ikisi de "NameOnly" görünüyordu):
 
 - **eager** → chip yok (her tur tam şema)
 - **NameOnly** (amber) → lazy + isimle listelenir (örn. set_session_goal, notify)
-- **Self-mgmt** (gri) → hidden tier: katalogda ismi bile yok, `swarmgo-self-management`
+- **Self-mgmt** (gri) → hidden tier: katalogda ismi bile yok, `tionswarm-self-management`
   skill pointer'a katlanır, tool_search ile keşfedilir (örn. create_agent… + Part A'da
   taşınan read/write/list_config, secret_list/get)
 
@@ -3460,7 +3460,7 @@ Pointer metnine "your own prompts/config" eklendi.
 
 - **Karar (Part B = HAYIR):** self-management ailesinin tamamını (46) name-only enumerate
   ETMEDİK. Patlamalı/nadir admin araçları; her tur 46 satır (CLI'de ~600 token) düşük
-  getiri. Kategori-pointer + `swarmgo-self-management` skill + tool_search zaten keşfi
+  getiri. Kategori-pointer + `tionswarm-self-management` skill + tool_search zaten keşfi
   sağlıyor. **Kural:** NameOnly = "var olduğunu bil, ara sıra kullan"; hidden = "toplu/
   nadir admin, per-turn ödeme yok".
 - **Kod:** `toolsetup.go` — config+secret-read'ler `MarkNameOnly`'den `MarkHidden`'a.
@@ -3474,12 +3474,12 @@ Pointer metnine "your own prompts/config" eklendi.
 SES12 (WS2, claude-cli ajan) incelemesinde fark edildi: "# Available Tools (load on
 demand)" bloğu built-in araçları **bare adlarla** (`set_session_goal`, `notify`…) +
 native `activate_tools` yönergesiyle listeliyordu. Ama claude-cli bu araçları MCP aracı
-olarak (`mcp__swarmgo_interaction__*`) görür ve kendi ToolSearch'üyle yükler — yani blok
+olarak (`mcp__tionswarm_interaction__*`) görür ve kendi ToolSearch'üyle yükler — yani blok
 yanıltıcıydı (skills bloğu zaten doğru namespaced biçimi kullanıyordu, tools bloğu değil).
 Default-NameOnly değişikliği 10 built-in'i daha bu bloğa eklediği için fark belirginleşti.
 
 - **Düzeltme:** `LazyToolsCatalogBlock` artık ajanın `provider`'ına göre dallanır.
-  claude-cli formunda: built-in → `mcp__swarmgo_interaction__<ad>`, MCP → `mcp__<server>__<tool>`,
+  claude-cli formunda: built-in → `mcp__tionswarm_interaction__<ad>`, MCP → `mcp__<server>__<tool>`,
   yönerge `ToolSearch` (native `activate_tools` değil), CLI-native built-in'ler (WebFetch)
   düşürülür. Native (anthropic/minimax) form **değişmedi** (bare ad + activate_tools).
 - **Kod:** `catalogDisplayName` ad eşlemesi + `renderLazyToolCatalog(..., cli bool)` +
@@ -3506,7 +3506,7 @@ boş karşılama ekranında bekler.
 - **Frontend gate:** `useWorkspaces` artık `loading` bayrağı taşır (ilk liste çözülene
   kadar `true`). `App.tsx` tüm hook'lardan SONRA gate'ler:
   `loading && !hadSetupAtBoot` → `SplashScreen`; `!loading && workspaces.length===0` →
-  `OnboardingScreen`. `swarmgo.hasSetup` localStorage bayrağı bir workspace var olunca
+  `OnboardingScreen`. `tionswarm.hasSetup` localStorage bayrağı bir workspace var olunca
   set edilir → splash yalnız **taze kurulumda** (kurulum yapılmamışken) görünür, dönen
   kullanıcı doğrudan uygulamaya girer.
 - **Yeni bileşenler:** `components/SplashScreen.tsx` (self-contained, tema-değişkenli),
@@ -3514,7 +3514,7 @@ boş karşılama ekranında bekler.
   `WorkspaceCreateModal`'ı açar; popup başta açık, kapatılırsa kurulum yapılmaz).
 - **Splash marka + min-süre (2026-06-26):** Splash gerçek logoyu (`/favicon.svg` — mor gradyan
   swarm markası, hem Vite dev hem embed binary'de servis ediliyor) dönen aksan halkası +
-  "SwarmGo" wordmark + "Yükleniyor…" ile gösterir (logoda pulse + ekran fade-in keyframe'leri
+  "TionSwarm" wordmark + "Yükleniyor…" ile gösterir (logoda pulse + ekran fade-in keyframe'leri
   bileşene gömülü). **Minimum görünme süresi** `SPLASH_MIN_MS=1100` (App.tsx): liste anında
   çözülse bile splash en az bu kadar kalır → tek-kare flaş olmaz. Gate:
   `!hadSetupAtBoot && (wsLoading || !minSplashElapsed)`; dönen kullanıcı min-süreyi de atlar.
@@ -3528,14 +3528,14 @@ boş karşılama ekranında bekler.
   `activeWorkspaceId=null` → App gate `workspaces.length===0` ile **canlı (reload'suz)**
   onboarding'e döner. Son workspace için onay metni farklı: "… son workspace — silinince ilk
   kurulum ekranına dönersin."
-- **Doğrulama:** `go build ./...` + frontend `tsc --noEmit` yeşil. Taze `SWARMGO_DATA_DIR`
+- **Doğrulama:** `go build ./...` + frontend `tsc --noEmit` yeşil. Taze `TIONSWARM_DATA_DIR`
   ile canlı test (8091): `GET /api/workspaces` → `count=0` + `workspaces.json` yok (otomatik
   oluşturma gerçekten kalktı), ardından `POST /api/workspaces` → WS1 oluştu, `count=1`.
 - **Canlı UI smoke testi (2026-06-26, tek-binary 8091 + Playwright):** taze örnekte tarayıcı
   `http://127.0.0.1:8091` → **onboarding + create popup** render edildi (snapshot doğrulandı);
   ad girip **Oluştur** → URL `#/w/WS1/chat`, uygulama yüklendi; Workspace ▸ "Workspace'i sil"
   → yeni "son workspace" onay metni çıktı → kabul → **onboarding canlı geri döndü** (popup
-  yeniden açıldı), `GET /api/workspaces` → `[]`. Gerçek veri (`~/.swarmgo`, 4 ws) izole tutuldu.
+  yeniden açıldı), `GET /api/workspaces` → `[]`. Gerçek veri (`~/.tionswarm`, 4 ws) izole tutuldu.
 
 ## Skill NameOnly: skill'ler için slug-only katman ✅ (2026-06-26)
 
@@ -3554,7 +3554,7 @@ görür, detayı `skill_search` ile keşfeder, `use_skill` ile yükler. "Tam öz
   `PUT /api/skills/{slug}/name-only` (`handleSetSkillNameOnly`).
 - **Frontend:** `Skill.nameOnly` tipi, `api.setSkillNameOnly`, SkillsPanel "NameOnly"
   badge + toggle butonu (liste + detay).
-- **Etki (canlı ölçüm, WS5):** `swarmgo-autonomous-ops` NameOnly → satır **839→26
+- **Etki (canlı ölçüm, WS5):** `tionswarm-autonomous-ops` NameOnly → satır **839→26
   karakter**, Available Skills bloğu **3376→2563** (~813 karakter ≈ ~200 token, tek skill).
 - Test: `TestNameOnlySkillRendersSlugOnly`. Go build+test ✅, `tsc` ✅. Canlı
   toggle on/off doğrulandı, config geri alındı. Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
@@ -3639,7 +3639,7 @@ Backend `go build`/`vet` + agent/db/api testleri (185) + frontend `tsc --noEmit`
 
 Kullanıcı geri bildirimiyle 4 iyileştirme:
 1. **Kalıcı ilerleme artık oturum-başına.** Eskiden proje dizini olmayan oturumlar
-   workspace-default `<cwd>/.swarmgo/progress.json`'u paylaşıyordu → detay-panelde
+   workspace-default `<cwd>/.tionswarm/progress.json`'u paylaşıyordu → detay-panelde
    "ajan-bazlı" görünüyordu. Tek resolver **`Runtime.ProgressDir(sessionID)`**:
    explicit proje dizini varsa onu (cross-session paylaşım korunur), yoksa
    per-session fallback `<store>/progress/<sessionID>`. Yaz (NewTodoSink, artık
@@ -3689,7 +3689,7 @@ kayıtlıydı; **claude-cli ajanı interaction köprüsünde göremiyordu** (kö
 - Araç hidden-lazy self-manage tier'ından **çıkarılıp** core/her-zaman-açık yapıldı
   (toolsetup, `conversation_search` yanında, `DebugJournalEnabled` gated) → native
   yolda da eager.
-- **Canlı sonuç:** ajan `mcp__swarmgo_interaction__read_session_debug`'i araç
+- **Canlı sonuç:** ajan `mcp__tionswarm_interaction__read_session_debug`'i araç
   listesinde gördü, çağırdı ve `turns=2, llmCalls=2, anomalies=0` raporladı; API
   ground-truth tur bitince `turns=3` (fark beklenen: araç tur-içinde çağrıldı).
   Özet/seri/cache muhasebesi (read 41956 / write 67146) gerçek veriyle doğrulandı.
@@ -3724,7 +3724,7 @@ Oturum debug günlüğünün üstüne üç yetenek:
   ≤5 oturumunun dedup'lı anomalilerini reflect prompt'una "Performance observations"
   olarak ekler → kalıcı reflection belleğine ders olarak yedirilir (gated, best-effort).
 - UI: kartta anomaliler (warn=kırmızı/info=gri) + sparkline'lar; tool `read_session_debug`
-  ve API özeti otomatik içerir. Skill `swarmgo-self-debug` + `_Docs\38` güncellendi.
+  ve API özeti otomatik içerir. Skill `tionswarm-self-debug` + `_Docs\38` güncellendi.
 - Test: `db/debug_journal_test.go` +2 (`AnomaliesAndSeries`, `NoAnomaliesOnHealthy`).
   Build + vet + frontend `tsc` temiz.
 
@@ -3752,7 +3752,7 @@ geliştirmesi** (kendi metriklerini okuyup davranış ayarı).
   modele göre token + tembel ham olay log'u), oturum detayında harcama kartından sonra.
 - **Ayar:** `debugJournalEnabled` (vars. açık) + `debugJournalCap` (vars. 5000);
   `Tunables.SetDebugJournal`, `applySettings` canlı uygular; UI Ayarlar ▸ Uygulama.
-- **Default skill** `swarmgo-self-debug` (ajana metriklerini optimize için nasıl
+- **Default skill** `tionswarm-self-debug` (ajana metriklerini optimize için nasıl
   okuyacağını öğretir). **Test** `db/debug_journal_test.go` (round-trip + cap budama).
 - Detay: `_Docs\38-SESSION-DEBUG.md`. Build + `go vet` + 311 test (5 paket) + frontend `tsc` temiz.
 
@@ -3766,7 +3766,7 @@ medya/satır-içi medya inline kalır). (2) **Video desteği** — `lib/paths.ts
 `<video controls>` olur, galeri item'ı video ise thumbnail `<video>` + **play ikonu**
 ve Lightbox'ta `<video autoPlay controls>` (kendi kontrolleri pan'ı çalmaz). `Lightbox`
 `LightboxImage.type` ('image'|'video'), `Gallery` ext'ten tip türetir. Guidance +
-`swarmgo-guide` güncellendi. Playwright doğrulaması: 2 görsel+1 video ardışık → tek
+`tionswarm-guide` güncellendi. Playwright doğrulaması: 2 görsel+1 video ardışık → tek
 galeri (1 video thumbnail), tek video satırı → inline player, metinle ayrılmış tek
 görsel → gruplanmadı. Binary :8090 restart.
 
@@ -3779,7 +3779,7 @@ gövde JSON `{"title","images":[{"src","alt"}]}` veya düz satır/virgül-ayrık
 listesi → **thumbnail grid**, tık→**Lightbox o index'te** açılır, ←/→ + ok butonları +
 "n / N" sayaç ile gezinilir. `Lightbox` `images[]`+`index` desteğiyle genişletildi
 (`go(delta)` sarmalı navigasyon, ArrowLeft/Right). `CodeBlock` `gallery`/`image-preview`/
-`images` → `Gallery`. Ajan guidance'ı (`artifactDeliverableGuidance` + `swarmgo-guide`
+`images` → `Gallery`. Ajan guidance'ı (`artifactDeliverableGuidance` + `tionswarm-guide`
 Rich replies) inline görsel + galeri bloğunu öğretecek şekilde güncellendi. Playwright
 ile grid + index'li açılış + ileri-geri navigasyon doğrulandı; binary :8090 restart.
 
@@ -3832,7 +3832,7 @@ Dizin-sitelerini market'e bağlama (`_Docs\38`) Faz A+B uygulandı:
 
 ## Ingest: CC model eşleme + dizin-sitesi köprü planı (2026-06-25)
 
-- **CC model → SwarmGo provider/model eşleme** ✅: `agentAdapter` artık CC subagent
+- **CC model → TionSwarm provider/model eşleme** ✅: `agentAdapter` artık CC subagent
   `model:` değerini eşliyor (`mapCCModel`): aile anahtar kelimesi → keysiz `claude-cli`
   provider + kanonik model id (`opus`→`claude-opus-4-8`, `sonnet`→`claude-sonnet-4-6`,
   `haiku`→`claude-haiku-4-5-20251001`, `fable`→`claude-fable-5`). `inherit`/boş → workspace
@@ -3884,7 +3884,7 @@ aynı alanı düzenliyor). Daha önce ajan hedefi `goalContextBlock` ile **gör�
 - **Concrete sink (`agent/goalsink.go`):** `Runtime.NewGoalSink` → `db.GetSession`/`SetSessionGoal`
   (`artifactsink.go` deseni). chat_stream + autonomous_interaction `setGoal`; CLI köprüsü
   `mcp_interaction.go` `callGoal`. Native registry'ye iki eager built-in.
-- **Skill:** `swarmgo-progress` north-star satırı + `swarmgo-guide` interaction bölümü güncellendi.
+- **Skill:** `tionswarm-progress` north-star satırı + `tionswarm-guide` interaction bölümü güncellendi.
 - **Test:** 7 yeni birim test; tools/agent/api `build`/`vet`/`test` yeşil. Detay: `_Docs\11` §19.
 - **Not:** Goal kartı canlı-refresh event'i bu fazda yok (panel yeniden açılınca tazelenir;
   kalıcılık+context enjeksiyonu anında). Faz 3 kalan: `set_session_title`/cwd/archive.
@@ -4000,28 +4000,28 @@ etiketli `OptionPills` (radiogroup) ile değiştirildi; ikon dili composer ile
 ortak (`components/agents/agentOptions.ts`). Düşünme "Kapalı" = boş string
 (depolama korunur).
 
-## Default skill: `swarmgo-doc-improver` (6-ölçütlü doküman denetimi) ✅ (2026-06-25)
+## Default skill: `tionswarm-doc-improver` (6-ölçütlü doküman denetimi) ✅ (2026-06-25)
 
-**Ne:** Yeni gömülü default skill — SwarmGo'nun kendi bağlam dokümanlarını (skill'ler,
+**Ne:** Yeni gömülü default skill — TionSwarm'nun kendi bağlam dokümanlarını (skill'ler,
 workspace CLAUDE.md/AGENTS.md kuralları, `_Docs`) denetleyip iyileştiren tekrarlanabilir
-iş akışı. Anthropic'in resmi `claude-md-improver` skill'inden ilham; SwarmGo'nun daha
+iş akışı. Anthropic'in resmi `claude-md-improver` skill'inden ilham; TionSwarm'nun daha
 geniş doküman yüzeyine genelleştirildi.
 
 **İçerik:** 6 ölçüt (komutlar / mimari açıklığı / açık-olmayan gotcha'lar / kısalık /
-güncellik / uygulanabilirlik, her biri /5) + puanlı rapor formatı. SwarmGo'ya özgü
-çekirdek içgörü: **changelog-leak anti-pattern** — referans dokümanların (`swarmgo-project`,
+güncellik / uygulanabilirlik, her biri /5) + puanlı rapor formatı. TionSwarm'ya özgü
+çekirdek içgörü: **changelog-leak anti-pattern** — referans dokümanların (`tionswarm-project`,
 `_Docs` mekanik bölümleri) tarih damgalı geçmişi biriktirmesi; çözüm "1 cümle güncel durum
 + → `_Docs/NN`" kalıbı. **Doc-type kalibrasyonu:** referans/her-tur-yüklenen dokümanda
 kısalık sert, on-demand action skill gövdesinde işlevsel yoğunluk normal → sağlıklı
 dokümanı zorla kesme.
 
 **Gömme:** Go değişikliği **gerekmedi** — `internal/skills/defaults.go` `//go:embed defaults`
-tüm ağacı gömer ve slug'ları alt-dizinlerden türetir; yalnız `defaults/swarmgo-doc-improver/SKILL.md`
+tüm ağacı gömer ve slug'ları alt-dizinlerden türetir; yalnız `defaults/tionswarm-doc-improver/SKILL.md`
 eklendi. Build + 29 test yeşil.
 
-**Yan iş (aynı oturum, davranışsız doküman temizliği):** `swarmgo-project` referans skill'i
+**Yan iş (aynı oturum, davranışsız doküman temizliği):** `tionswarm-project` referans skill'i
 ~%11 kısaltıldı (changelog-leak temizlendi + PowerShell çalıştırma komut bloğu eklendi);
-`swarmgo-guide` Memory maddesi okunabilirlik için alt-maddelere bölündü; default-skill listesi
+`tionswarm-guide` Memory maddesi okunabilirlik için alt-maddelere bölündü; default-skill listesi
 güncellendi (progress/gan-loop/doc-improver eklendi).
 
 ## Agent avatar mojibake onarımı + model adı gösterimi ✅ (2026-06-25)
@@ -4072,7 +4072,7 @@ olarak çizilir (akış/sıra/durum/sınıf/ER/gantt vb.). `diff` bloklarının
 - **Test (Playwright, 2026-06-25):** geçici harness ile flowchart/sequence/state
   render, dark+light tema geçişinde yeniden renklenme ve geçersiz blok → kaynak
   fallback (crash yok, bomba leak yok) gerçek tarayıcıda doğrulandı.
-- **Ajan farkındalığı:** `swarmgo-guide` default skill'ine "Rich replies"
+- **Ajan farkındalığı:** `tionswarm-guide` default skill'ine "Rich replies"
   bölümü eklendi (mermaid/diff/kod render edildiğini ajana öğretir).
 - **Davranış fix'i (2026-06-26):** Ajan "diyagram çiz" deyince mermaid'i mesaja
   gömmek yerine `create_artifact(kind=mermaid)` yapıyordu (ART11/ART12). Kök neden:
@@ -4084,7 +4084,7 @@ olarak çizilir (akış/sıra/durum/sınıf/ER/gantt vb.). `diff` bloklarının
   Ayrıca default skill'ler diske bir kez **seed** edildiğinden (`skills.EnsureDefaults`,
   "existing files never overwritten") disk kopyası eski kalıyordu → disk kopyası elle
   güncellendi (skill gövdesi her `use_skill`'de diskten okunur → anında geçerli).
-  Binary yeniden derlenip :8090'da restart edildi (eski binary `swarmgo.bak.exe`).
+  Binary yeniden derlenip :8090'da restart edildi (eski binary `tionswarm.bak.exe`).
 - Detay: `_Docs\07-CHAT-UX.md`.
 
 ## Workspace'e özel görünüm/tema + Dil → Profil ✅ (2026-06-25)
@@ -4166,7 +4166,7 @@ mevcut node tipleriyle, döngünün (cycle) bilinçli kullanımıyla kuruldu.
 
 - **Motor teyidi:** `orchestration.Validate()` acyclicity kontrol **etmiyor**, engine döngüye
   izin verip `maxSteps=50` ile sınırlıyor → `evaluate → decide → generate` geri-kenarı
-  doğrudan kurulabiliyor. (Eski `swarmgo-flows` skill'i "must be acyclic" diyordu — **yanlıştı**,
+  doğrudan kurulabiliyor. (Eski `tionswarm-flows` skill'i "must be acyclic" diyordu — **yanlıştı**,
   düzeltildi.)
 - **Kısıt → karar:** branch yalnız string eşler (sayısal eşik yok) → skor→pivot kararı
   **keyword verdict** (`VERDICT: SHIP|REFINE|PIVOT`, `decide` `matchMode:regex` son satıra
@@ -4175,18 +4175,18 @@ mevcut node tipleriyle, döngünün (cycle) bilinçli kullanımıyla kuruldu.
 - **Dağıtım:** gömülü gallery şablonu `gan-loop` (`frontend/src/lib/flowTemplates.ts`) +
   market paketleri `flow.gan-generator-evaluator` / `agent.skeptical-evaluator` /
   `mcp.playwright` (global market dizinine yazıldı) + yeni default skill
-  `swarmgo-gan-loop`. Şablon agent-bağımsız → kurulumdan sonra **iki ayrı ajan** atanır.
+  `tionswarm-gan-loop`. Şablon agent-bağımsız → kurulumdan sonra **iki ayrı ajan** atanır.
 - **Test:** `engine_test.go` — `TestValidate_AllowsCyclicGraph`, `TestRun_GANLoop_RefinesThenShips`
   (2× REFINE → SHIP → finalize), `TestRun_GANLoop_StepCapBackstop` (hiç ship etmeyen →
   `step cap` hatası). `go build`/`vet`/`test ./internal/orchestration` ✅; `tsc -b`/`vite build` ✅.
 - Detay: [`15-FLOW-CANVAS.md`](15-FLOW-CANVAS.md) §Generator↔Evaluator döngü şablonu;
-  kullanım kılavuzu: `swarmgo-gan-loop` skill.
+  kullanım kılavuzu: `tionswarm-gan-loop` skill.
 
 ## Yapılandırılmış subagent görev sözleşmesi ✅ (2026-06-25)
 
 Anthropic *"Multi-agent research system"* rehberi: her subagent'a **objective +
 output format + tool/source guidance + boundaries** verilmezse iş tekrarı/boşluk
-oluşur. SwarmGo'da `run_subagent` yalnız serbest-metin `task` alıyordu; bu 4 alanı
+oluşur. TionSwarm'da `run_subagent` yalnız serbest-metin `task` alıyordu; bu 4 alanı
 yapısal teşvik etmiyordu.
 
 - **Şema:** `run_subagent` input'una **üç opsiyonel alan** eklendi — `objective`,
@@ -4208,13 +4208,13 @@ yapısal teşvik etmiyordu.
 
 Anthropic *"Effective harnesses for long-running agents"* + *"Effective context
 engineering"* makalelerindeki **kalıcı not dosyası** (`claude-progress.txt` +
-`feature_list.json` `passes` boolean) konvansiyonu SwarmGo'ya getirildi. `todo_write`
+`feature_list.json` `passes` boolean) konvansiyonu TionSwarm'ya getirildi. `todo_write`
 listesi artık **diske kalıcı**: oturumlar arası kaybolmuyor, yeni oturum devralıyor.
 
 - **Sorun:** `todo_write` stateless'tı; liste yalnız oturum-içi (mesaj trace'inden
   `todoContextBlock` ile yeniden inşa) yaşıyordu. Oturum restart/yeni oturum/ajan
   değişiminde kayboluyordu. Core memory (serbest persona/human) bunu karşılamıyor.
-- **Çözüm:** Liste, çalışma dizinine bağlı **`<cwd>/.swarmgo/progress.json`**'a
+- **Çözüm:** Liste, çalışma dizinine bağlı **`<cwd>/.tionswarm/progress.json`**'a
   yazılır (cwd yoksa `<store>/progress/<agentID>/`); fresh oturum açılışında
   geri yüklenip "Resumed progress" bloğu olarak `SystemDynamic`'e enjekte edilir.
   `completed` ≡ Anthropic `passes:true`. Rolling `log` = `claude-progress.txt`.
@@ -4236,8 +4236,8 @@ listesi artık **diske kalıcı**: oturumlar arası kaybolmuyor, yeni oturum dev
 - **`feature_list` zenginliği:** `todo_write` öğelerine opsiyonel `category` +
   `steps` (Anthropic feature_list paritesi); şema + `TodoSinkItem` +
   `progress.TodoItem` + sink mapping uçtan uca taşır (`omitempty`).
-- **`swarmgo-progress` default skill'i:** ajana otomatik progress.json + insan-okunur
-  `PROGRESS.md` konvansiyonunu öğretir (`internal/skills/defaults/swarmgo-progress/`;
+- **`tionswarm-progress` default skill'i:** ajana otomatik progress.json + insan-okunur
+  `PROGRESS.md` konvansiyonunu öğretir (`internal/skills/defaults/tionswarm-progress/`;
   `//go:embed` ile otomatik, baseline skill setine girer).
 - **UI görüntüleyici:** `GET /api/sessions/{id}/progress` (`api/progress.go`) +
   `SessionDetailPanel` "Kalıcı ilerleme" salt-okunur kartı (`ProgressCard` — statü
@@ -4248,12 +4248,12 @@ listesi artık **diske kalıcı**: oturumlar arası kaybolmuyor, yeni oturum dev
 
 Anthropic *"Effective harnesses for long-running agents"* makalesindeki **standart
 oturum açılış sırası** (yönelim → hatırlama → tek görev seç → temel testi doğrula →
-işi yap → döngüyü kapat) SwarmGo'nun otonom turlarına getirildi. Kayıp bağlamı telafi
+işi yap → döngüyü kapat) TionSwarm'nun otonom turlarına getirildi. Kayıp bağlamı telafi
 eden, düşük-riskli, çoğunlukla skill+doküman değişikliği.
 
-- **Skill reçetesi (ana iş):** `swarmgo-autonomous-ops/SKILL.md` → yeni **§10 "The
+- **Skill reçetesi (ana iş):** `tionswarm-autonomous-ops/SKILL.md` → yeni **§10 "The
   autonomous boot sequence"** (Step 0 Orient → Step 5 Close); referans setup'a `0.` adımı
-  ve Pitfalls'a "Skipping the boot sequence" maddesi. Reçete `.swarmgo/progress.json`
+  ve Pitfalls'a "Skipping the boot sequence" maddesi. Reçete `.tionswarm/progress.json`
   (progressPersist) + `list_tasks` (append-only board) + git log'u "hafıza" olarak
   okur; kapanışta git commit + append-only not. One-task-per-run + append-only kullanıcı
   tercihiyle hizalı.
@@ -4274,20 +4274,20 @@ eden, düşük-riskli, çoğunlukla skill+doküman değişikliği.
 
 ## Context-rot farkındalığı + adaptif bütçe stratejisi ✅ (2026-06-25)
 
-Anthropic *Effective context engineering* makalesi: token arttıkça recall hassasiyeti düşer ("context rot", `n²` dikkat ilişkisi → **performans gradyanı**, uçurum değil). SwarmGo'nun önceki "her şeyi ham tut" bahsi (512K/0.6) bu rot ile bilinçli bir takastı. Dayanıklılığın aslında **retrieval katmanında** (memory/`conversation_search`/core blocks) olduğu, ham pencere boyutunda olmadığı tespit edildi → ham pencere küçültülebilir, recall kaybetmeden.
+Anthropic *Effective context engineering* makalesi: token arttıkça recall hassasiyeti düşer ("context rot", `n²` dikkat ilişkisi → **performans gradyanı**, uçurum değil). TionSwarm'nun önceki "her şeyi ham tut" bahsi (512K/0.6) bu rot ile bilinçli bir takastı. Dayanıklılığın aslında **retrieval katmanında** (memory/`conversation_search`/core blocks) olduğu, ham pencere boyutunda olmadığı tespit edildi → ham pencere küçültülebilir, recall kaybetmeden.
 
 - **Adaptif fraction:** `providers.AdaptiveBudgetFraction(provider, model)` — `ContextWindowFor`'un aile sınıflamasını yeniden kullanır; Opus/Sonnet 0.45, Haiku/Fable 0.40, MiniMax/DeepSeek/Gemini 0.35, bilinmeyen 0 (caller fallback).
 - **Yeni semantik:** `ContextBudgetFraction = 0` → **otomatik/adaptif** (pozitif = manuel sabit). `EffectiveBudget` `fraction<=0`'da adaptif tabloyu kullanır; `Manager.SetBudgetShape` artık 0'ı (auto) saklar; `store.go` validate 0'ı korur (negatif → 0).
 - **Yeni varsayılanlar:** `ContextBudgetCeil` 512K→**256K** (`262144`), `ContextBudgetFraction` 0.6→**0 (auto)**, `memoryPressureWarn` 0.75→**0.70** (`settings.go`+`tunables.go`). Eski `0.6` persisted değer manuel sabit olarak yaşar; yeni kurulum adaptif başlar.
 - **Frontend:** Ayarlar▸Bağlam "Pencere oranı"/"Bütçe tavanı" hint'leri auto+rot açıklamasıyla güncellendi (`appPanels.tsx`).
 - **Test:** `budget_test.go` (`TestEffectiveBudgetAdaptive`) + `context_window_test.go` (`TestAdaptiveBudgetFraction`); `go build ./...` + `go test ./internal/conversation ./internal/providers ./internal/settings` yeşil (83 test).
-- **Doküman:** `_Docs\17` yeni **§12** (takas analizi + strateji + tablolar + mermaid) + §7 çapraz-referans; `swarmgo-settings` skill + `swarmgo-project` skill güncellendi.
+- **Doküman:** `_Docs\17` yeni **§12** (takas analizi + strateji + tablolar + mermaid) + §7 çapraz-referans; `tionswarm-settings` skill + `tionswarm-project` skill güncellendi.
 
 ## Context Reset + Handoff Artifact ✅ (2026-06-25)
 
-Anthropic "harness design for long-running apps" bulgusu: in-place compaction tek başına **"context anxiety"**yi (model limite yaklaşınca erken toparlama) çözmez. Çözüm = **context reset** + **handoff artifact**: pencereyi özetlemek yerine, devamı taşıyan bir handoff dosyası yazıp **temiz bir oturumda** sürdür. SwarmGo'da önceden yalnız in-place rolling-summary vardı; bu, onun opt-in tamamlayıcısı.
+Anthropic "harness design for long-running apps" bulgusu: in-place compaction tek başına **"context anxiety"**yi (model limite yaklaşınca erken toparlama) çözmez. Çözüm = **context reset** + **handoff artifact**: pencereyi özetlemek yerine, devamı taşıyan bir handoff dosyası yazıp **temiz bir oturumda** sürdür. TionSwarm'da önceden yalnız in-place rolling-summary vardı; bu, onun opt-in tamamlayıcısı.
 
-- **Çekirdek:** `internal/conversation/handoff.go` (`handoffPrompt` 10-bölüm + DONE/TODO + Next Step, `HandoffEnv`, `BuildHandoff` — compaction çekirdeğini `KindCompact` ile yeniden kullanır) + `internal/agent/handoff.go` (`HandoffSession`: üret→artifact yaz→(ops.) `<workdir>/.swarmgo/handoff.md`→`SpawnSession(ParentSessionID)` ile taze oturum→tombstone; `maybeAutoHandoff`/`handoffChainDepth`/`handoffEnv`/`buildContinuationPrompt`).
+- **Çekirdek:** `internal/conversation/handoff.go` (`handoffPrompt` 10-bölüm + DONE/TODO + Next Step, `HandoffEnv`, `BuildHandoff` — compaction çekirdeğini `KindCompact` ile yeniden kullanır) + `internal/agent/handoff.go` (`HandoffSession`: üret→artifact yaz→(ops.) `<workdir>/.tionswarm/handoff.md`→`SpawnSession(ParentSessionID)` ile taze oturum→tombstone; `maybeAutoHandoff`/`handoffChainDepth`/`handoffEnv`/`buildContinuationPrompt`).
 - **Üç tetik:** manuel `/handoff` (`POST /api/sessions/{id}/handoff` → `summary.go handleSessionHandoff`); ajan aracı `handoff_session` (`tools/builtin_handoff.go`, self-manage gated, `toolsetup.go` kapanışı); **otomatik** (yalnız otonom tur — `runSpawn`/`deliverPrompt` tur-sonu; overflow sinyali `callkind.go withOverflowFlag`/`markContextOverflow`, tetik `toolloop.go` reactive compaction'da).
 - **Ayarlar:** `HandoffAuto` (vars. **kapalı**) / `HandoffPressure` (0.90) / `HandoffMaxChain` (20) / `HandoffWriteFile` (kapalı) — `settings.go`+`store.go` clamp + `server.go applySettings → tun.SetHandoff`; UI Ayarlar▸Bağlam "Context reset (handoff)" bölümü. Tunables `DefaultHandoffPressure`/`DefaultHandoffMaxChain`.
 - **Soyağacı:** `db.Session.ParentSessionID`/`HandoffArtifactID` (+`SetSessionHandoffArtifact`); `GET .../info` döner; UI `SessionDetailPanel` "↩ Devraldığı oturum" tıklanır link + `useChatStream` `/handoff` komutu yeni oturuma geçer.
@@ -4300,7 +4300,7 @@ Market pack katmanları üçten (bundled/global/workspace) **bir yerele** (globa
 
 - **Kaldırılanlar:** `internal/market/defaults.go` (`//go:embed defaults`) + `internal/market/defaults/` klasörü + `EnsureDefaults` çağrısı (runtime.go) + workspace pack tier'ı. Binary artık market item taşımaz, workspace'te `market/` klasörü oluşmaz.
 - **`market.New(globalDir, ledgerDir)`:** tek yerel tier = global; `Publish` global dizine yazar; install ledger (`installed.json`) per-workspace **kökte** (eski `<workspace>/market/` yerine; `workspaceLedgerDir`). Store'da `writeDir` → `globalDir`+`ledgerDir` ayrımı.
-- **Mevcut paketler korundu:** 28 başlangıç paketi zaten global dizinde (`~/.swarmgo/market`); silinmedi. Yeni kurulumlarda market boş başlar → global'e elle paket konur veya uzak registry eklenir.
+- **Mevcut paketler korundu:** 28 başlangıç paketi zaten global dizinde (`~/.tionswarm/market`); silinmedi. Yeni kurulumlarda market boş başlar → global'e elle paket konur veya uzak registry eklenir.
 - **Test:** `store_test.go` `EnsureDefaults`'tan arındırıldı (global'e elle pack yazıp test eder) + ledger/semver testleri eklendi; `go build ./...` + `go test` (145, market/api/agent) yeşil. Çalışan instance global'den 28 paket (`source=global`) döndürüyor.
 - Detay: `_Docs\21-MARKET.md` §3.1.
 
@@ -4320,7 +4320,7 @@ kozmetik — çözümleme/reklam/yükleme davranışını etkilemez.
   güncellendi (partial update'te `cur.Group` korunur, aksi halde silinirdi). Mock + test güncellendi.
 - **UI (`SkillsPanel.tsx`):** `groupSkills()` listeyi gruba göre kovalar (adlandırılmış gruplar
   alfabetik, "Grupsuz" en sonda); her grup `ChevronDown/Right`'lı, sayaç rozetli katlanabilir
-  başlık. Katlı gruplar `localStorage` (`swarmgo.skillsCollapsedGroups`) ile kalıcı. `SkillEditor`
+  başlık. Katlı gruplar `localStorage` (`tionswarm.skillsCollapsedGroups`) ile kalıcı. `SkillEditor`
   grup input'u + mevcut gruplardan `datalist` önerisi; detay başlığında grup rozeti.
 - **Build/test:** `go build ./...` + `go test ./internal/skills ./internal/tools` ✅, frontend `tsc` ✅.
 
@@ -4333,7 +4333,7 @@ kozmetik — çözümleme/reklam/yükleme davranışını etkilemez.
   butonu — tüm grupları tek tıkla katlar/açar (`toggleAll`, `allCollapsed` türetimi).
 - **Market:** skill paketi zaten tam `SKILL.md` gövdesini (`SkillPayload.Body`) taşıdığından
   `group` install/publish ile **kendiliğinden korunuyor** — değişiklik gerekmedi.
-- **Git hijyeni:** `.gitignore`'a `*.log.err`/`*.err`; sızan `vite-run.log.err`/`swarmgo-run.log.err`
+- **Git hijyeni:** `.gitignore`'a `*.log.err`/`*.err`; sızan `vite-run.log.err`/`tionswarm-run.log.err`
   izlemeden çıkarıldı (`git rm --cached`).
 
 ## Bütçe refactor faz 3 — RollupOf birleştirmesi (costOf+modelRowsFor → billing) ✅ (2026-06-25)
@@ -4629,7 +4629,7 @@ SK-IMP'in son parçası: importer artık UI'dan kullanılıyor (SK-IMP tamamen t
 Seviye 2 importer'ın ilk iki increment'i. Önkoşullar SK-1..SK-4 hazırdı.
 
 - **Çekirdek (`internal/skills/import.go`):** `mapCCSkill(raw, sourceURL, shared)` CC frontmatter'ını
-  SwarmGo'ya eşler — name/description/when_to_use→aynı, `allowed-tools`→`always_allow`, `paths`→koşullu,
+  TionSwarm'ya eşler — name/description/when_to_use→aynı, `allowed-tools`→`always_allow`, `paths`→koşullu,
   version/license→aynı, source_url=import kaynağı (provenance), `disable-model-invocation:true`→shared
   değil, `user-invocable`→`user_invocable`. Uyumsuzu (`context:fork`, `hooks`, `model`/`agent`/`effort`,
   slash-arg `$ARGUMENTS`/`$1`, inline-shell `` !` ``) ayıklayıp **warning** döndürür. `Store.ImportCCSkill`
@@ -4735,7 +4735,7 @@ Belirti flow'larda ardıl `node "<X>" (agent): context canceled` olarak da gör�
 
 ## "Gizli" çip artık gerçek context durumunu yansıtıyor + self-management'ı kapsıyor ✅ (2026-06-23)
 
-Sorun: self-management araçları (ajanın SwarmGo'yu kontrol eden tool'ları) kodda
+Sorun: self-management araçları (ajanın TionSwarm'yu kontrol eden tool'ları) kodda
 zorla `MarkHidden` olduğu için context'te görünmüyordu, ama Araçlar ekranındaki
 "Gizli" çip yalnızca kullanıcının `HiddenTools` listesini yansıtıyordu → bu araçlar
 çipsiz "normal" görünüyordu (yanıltıcı) ve kullanıcı bunları context'e alamıyordu.
@@ -4823,12 +4823,12 @@ skill düzenlenebilir (global/bundled korunur). Mimari:
   değerleri okuyup merge eder, tier guard (`Source==workspace`), `store.Update` çağırır.
 - `toolsetup.go`: create/delete arasına eklendi → self-management aralığında olduğu için
   otomatik **hidden-lazy** (cached prefix'i şişirmez; `tool_search`/`activate_tools` ile erişilir).
-- Doc: `swarmgo-self-management` SKILL.md güncellendi. Test: `builtin_skillmgmt_test.go`
+- Doc: `tionswarm-self-management` SKILL.md güncellendi. Test: `builtin_skillmgmt_test.go`
   (partial forwarding + validation). Toplam testler yeşil.
 
 ## Dış-ajan otomasyon dostluğu — UI seçicileri + API rehberi ✅ (2026-06-23)
 
-Soru: "SwarmGo'yu dışarıdan ajanlar (chrome-mcp/playwright-mcp) baştan sona kullanabilir mi,
+Soru: "TionSwarm'yu dışarıdan ajanlar (chrome-mcp/playwright-mcp) baştan sona kullanabilir mi,
 eksik/iyileştirilecek yer var mı?" İki yol değerlendirildi:
 
 - **HTTP API yolu zaten eksiksiz (9/10):** 138+ endpoint tüm alt sistemleri kapsıyor, **auth yok**
@@ -4902,12 +4902,12 @@ compact/`: `prompt.ts` 9-bölümlü + `<analysis>` scratchpad, `compact.ts`, `au
   → uzun özet anthropic 4096 default'unda kesilmiyor.
 - `go build ./...` + `internal/conversation` testleri yeşil. Detay: `_Docs/17` §8.
 
-**Bilinçli ertelendi:** fork/cache (SwarmGo özetleyiciye yalnız katlanan dilimi yollar →
+**Bilinçli ertelendi:** fork/cache (TionSwarm özetleyiciye yalnız katlanan dilimi yollar →
 çağrı zaten ucuz, fork'un çözeceği pahalılık yok; claude-cli cache paylaşımını kontrol edemez).
 
 ## Post-compact kurtarma işaretçisi — Claude Code parite 2. faz ✅ (2026-06-23)
 
-CC compact sonrası transcript pointer + son okunan dosya re-injection yapar. SwarmGo'ya
+CC compact sonrası transcript pointer + son okunan dosya re-injection yapar. TionSwarm'ya
 **birebir port mimariye ters:** turlar arası yalnız `role+text` taşınır (`toProviderMessages`)
 → tool sonuçları/dosya okumaları zaten cross-turn context'te değil; ajan serbest fs ile
 istediğinde yeniden okur. Kalıcı durum (artifacts/todos/core-memory/goal/summary) zaten her
@@ -4947,7 +4947,7 @@ geçiliyor; çöküş bu kırılgan yolda. Tam başarısız bileşen crash-tail'
    `provider=""` ile kaydedilmişti (örtük fallback'e bağımlı, teşhisi zor); artık
    boşsa `claude-cli`'a default'lanır.
 
-> Sıradaki kesin adım: SwarmGo'yu yeniden derleyip flow'u tekrar çalıştır →
+> Sıradaki kesin adım: TionSwarm'yu yeniden derleyip flow'u tekrar çalıştır →
 > geliştirilen crash-tail tam başarısız bileşeni (hangi MCP/permission) yazacak.
 
 ## Self-correcting tool hataları (yayma) + claude-cli çöküş teşhisi ✅ (2026-06-23)
@@ -4978,7 +4978,7 @@ argErr/enumErr) ve `claudecli_crashtail_test.go`. Toplam 120 test geçer.
 **Sorun (WS2/SES2):** Bir agent paralel flow kurarken `parallel` node'unu yanlış
 şemayla (`branches:["id"]` + `next`) kurdu → ham Go hatası
 `cannot unmarshal string into ... Node.nodes.branches of type orchestration.Branch`.
-Hata "ne yapmalı" demediği ve `swarmgo-flows` skill'i node JSON şemasını hiç
+Hata "ne yapmalı" demediği ve `tionswarm-flows` skill'i node JSON şemasını hiç
 belgelemediği (sadece soyut "steps/edges" anlatıyordu) + `create_flow` örneklerinde
 paralel örnek olmadığı için agent doğru şemayı bulamadı, sıralı flow'a düştü.
 
@@ -4987,8 +4987,8 @@ hatasına kısa, eyleme dönük bir ipucu ekliyor (`graphSchemaHint` + `nodeSche
 hatadaki imzaya göre ("Node.nodes.branches", "has no children", "must be an agent
 node" vb.) doğru alanı 5-6 kelimeyle söyler — ör. *"parallel fan-out uses
 parallel:[...],joinNext — not branches/next"*. Ayrıca `create_flow`'a paralel
-fan-out+join örneği ve `swarmgo-flows` skill'ine node-tipi/alan tablosu + paralel
-örnek eklendi. (`builtin_flowmgmt.go`, `skills/defaults/swarmgo-flows/SKILL.md`.)
+fan-out+join örneği ve `tionswarm-flows` skill'ine node-tipi/alan tablosu + paralel
+örnek eklendi. (`builtin_flowmgmt.go`, `skills/defaults/tionswarm-flows/SKILL.md`.)
 Doğru paralel şema: `{type:"parallel","parallel":["a","b"],"joinNext":"merge"}`
 (çocuklar agent node id'leri; `branches`/`next` DEĞİL).
 
@@ -5001,7 +5001,7 @@ Doğru paralel şema: `{type:"parallel","parallel":["a","b"],"joinNext":"merge"}
 Üç kullanıcı isteği tek turda:
 
 **1) `create_agent` artık skill atayabiliyor.** Yeni opsiyonel `skills` (slug dizisi)
-parametresi; verilmezse yeni agent **default SwarmGo skill seti** ile tohumlanır
+parametresi; verilmezse yeni agent **default TionSwarm skill seti** ile tohumlanır
 (`skills.DefaultSkillSlugs()` — embed'deki `defaults/` alt-dizinlerinden türetilir).
 Sağlanan slug'lar skill store'a karşı doğrulanır (`r.skillExists`); bilinmeyenler atlanır
 ve sonuçta `skippedUnknownSkills` olarak raporlanır. (`builtin_agentmgmt.go`,
@@ -5027,7 +5027,7 @@ Wiring: `Runtime.runSched` + `SetScheduleRunner` (manager `sched.RunNow` bağlar
 
 Test: `tools` (create_agent skills + run_schedule), `agent` (NewArtifactSink persist),
 mevcutlar uyarlandı. **`tools`+`agent`+`skills`+`api`+`workspace` 221 test yeşil**,
-build+vet+gofmt temiz. Skill `swarmgo-self-management` güncellendi (+ on-disk senkron).
+build+vet+gofmt temiz. Skill `tionswarm-self-management` güncellendi (+ on-disk senkron).
 
 ---
 
@@ -5036,7 +5036,7 @@ build+vet+gofmt temiz. Skill `swarmgo-self-management` güncellendi (+ on-disk s
 **Sorun:** Self-management araçları zaten lazy'di (şema yok), ama ~40+ aracın **isim+özet
 satırı** her turun "Available Tools (load on demand)" bloğunda (cached prefix) yer alıyordu —
 gereksiz token. **Çözüm:** lazy araçlara **hidden** alt-katmanı eklendi; self-management suite
-artık blokta **listelenmez**, yerine `swarmgo-self-management` skill'ine yönlendiren tek satır
+artık blokta **listelenmez**, yerine `tionswarm-self-management` skill'ine yönlendiren tek satır
 durur. Araçlar aktive-edilebilir ve aranabilir kalır.
 
 - **`internal/tools/registry.go`:** yeni `hidden map[string]bool` (hidden ⊆ lazy) +
@@ -5046,9 +5046,9 @@ durur. Araçlar aktive-edilebilir ve aranabilir kalır.
 - **`internal/agent/toolsetup.go`:** self-management suite (`builtins[selfManageStart:]`)
   `MarkLazy` yerine **`MarkHidden`**. `LazyToolsCatalogBlock` artık `VisibleLazyCatalog` +
   `HiddenLazyCount` kullanır; `renderLazyToolCatalog(visible, hiddenCount)` hiddenCount>0 ise
-  "**N self-management tools … not listed here … load the `swarmgo-self-management` skill … or
+  "**N self-management tools … not listed here … load the `tionswarm-self-management` skill … or
   `tool_search`**" pointer satırını basar.
-- **Keşif yolu:** Available Skills bloğu `swarmgo-self-management` skill'ini zaten ilan ediyor
+- **Keşif yolu:** Available Skills bloğu `tionswarm-self-management` skill'ini zaten ilan ediyor
   (giriş noktası). Skill **kataloğun kendisi** oldu; metni güncellendi ("bu skill araçların
   listesidir; isimleri buradan/`tool_search`'ten al, `activate_tools` et"). On-disk seed kopya
   da güncel kaynakla senkronlandı (EnsureDefaults üzerine yazmadığı için).
@@ -5074,7 +5074,7 @@ workspace etiketine yukarı toplanır.
   (`useSyncExternalStore` modül store + `useRegisterDirty`). `NavRail` `NavDots`
   ile 3 durumu çizer; `WorkspaceSwitcher`/collapsed ikon aktif workspace'i toplar.
 - **Kayıtlı dirty ekranlar**: Settings, WorkspaceView, FlowsPanel.
-- **Pencere dışı**: tab başlığı `(N) SwarmGo` (odak dışıyken) + taskbar/dock
+- **Pencere dışı**: tab başlığı `(N) TionSwarm` (odak dışıyken) + taskbar/dock
   rozeti (`navigator.setAppBadge`, Edge/WebView2'de native taskbar). Toplam
   görülmemiş sayısı `App.tsx` `unreadTotal`. `lib/appBadge.ts`,
   `hooks/useUnreadBadge.ts`.
@@ -5109,7 +5109,7 @@ Ajan ekranındaki "ID + klasörü aç/kopyala" deseni diğer ekranlara da yayıl
    **zamanlama ID'si**.
 4. **Loglar (LogsPanel)** — kontrol çubuğunda **log dosyası yolunu kopyala** +
    **klasörü aç**. Loglar artık disk dosyasına da yazılıyor: `SetupLogging`
-   stdout + `io.MultiWriter` ile `<dataDir>/logs/swarmgo.log` (append, best-effort).
+   stdout + `io.MultiWriter` ile `<dataDir>/logs/tionswarm.log` (append, best-effort).
    Yeni: `config.DefaultDataDir()`, `config.LogFilePath()`, `GET /api/logs/path`,
    `POST /api/logs/reveal` (`api/logs_path.go`).
 
@@ -5132,7 +5132,7 @@ ayar korundu. API: `api/flows.ts`, `api/system.ts`. Build + tsc yeşil.
    ve **Faz 4** (yapısal protokol) ertelendi.
 
 Testler: `sendmessage_test.go` (+broadcast), `chat_tool_summary_test.go`. Build +
-131 test yeşil (cmd/swarmgo-desktop WIP hariç). Detay: `_Docs\07-CHAT-UX.md`,
+131 test yeşil (cmd/tionswarm-desktop WIP hariç). Detay: `_Docs\07-CHAT-UX.md`,
 `_Docs\28-PEER-MESAJLASMA-PLANI.md`.
 
 ## Medya/binary artifact desteği (create_artifact sourcePath + auto-capture) ✅ (2026-06-23)
@@ -5190,7 +5190,7 @@ Build + tüm api/db/tools testleri yeşil.
    (`api/chat_tool_summary.go`). Wake/inbox turları da dahil.
 
 Testler: `sendmessage_test.go`, `chat_tool_summary_test.go` (+ mevcutlar). Build +
-241 test yeşil (cmd/swarmgo-desktop'taki ilgisiz WIP hariç). Detay:
+241 test yeşil (cmd/tionswarm-desktop'taki ilgisiz WIP hariç). Detay:
 `_Docs\07-CHAT-UX.md`, `_Docs\28-PEER-MESAJLASMA-PLANI.md`.
 
 ## MCP kalıcı bağlantı havuzu (persistent pool) ✅ (2026-06-23)
@@ -5213,7 +5213,7 @@ Yeni API: `SetOnToolsChanged`, `Alive`. (`proc.Command` süreç-grubu kill korun
   **sonraki çağrıda da yaşar** → dinamik araç ekleme artık çalışır (tur-ötesi).
 - **listChanged → invalidate:** sunucu araç listesi değişince entry stale işaretlenir,
   sonraki `Catalog` aynı canlı oturumda yeniden listeler. Ek emniyet: TTL
-  (`SWARMGO_MCP_POOL_TTL_SEC`, vars. 60sn) — listChanged göndermeyen sunucular için.
+  (`TIONSWARM_MCP_POOL_TTL_SEC`, vars. 60sn) — listChanged göndermeyen sunucular için.
 - Config (command/args/url/env fingerprint) değişiminde veya bağlantı ölümünde şeffaf
   re-dial; çağrı ölü bağlantıda bir kez retry eder.
 
@@ -5243,7 +5243,7 @@ temiz (ilgisiz `internal/e2e` MemGPT WIP build hatası hariç).
   kimliğiyle `<teammate_message teammate_id>` etiketiyle düşer; plain çıktı diğer ajana
   görünmez. Kimlik **doğuştan**; ardışık-rol çakışması hiç oluşmaz.
 
-SwarmGo iki modeli birden taşıyor: paylaşılan-thread (etiketleme+coalesce ile sağlamlaştırıldı)
+TionSwarm iki modeli birden taşıyor: paylaşılan-thread (etiketleme+coalesce ile sağlamlaştırıldı)
 ve izole `run_subagent`. Eksik olan "akran ajana adresli DM" için **uyarlama planı** yazıldı:
 `_Docs\28-PEER-MESAJLASMA-PLANI.md` (mevcut `GetOrCreateKindSession` inbox + `SpawnSession`
 üzerine). Kavramsal not: `_Docs\10-KAVRAMSAL-TASARIM-NOTLARI.md` §10. **Uygulama kullanıcı
@@ -5288,18 +5288,18 @@ uyardı: *"Your client did not advertise tools.listChanged support… reconnect 
 **Kök neden — iki birleşen mimari gerçek:**
 1. **`tools.listChanged` yok:** istemci `initialize`'da `capabilities:{}` gönderir
    (`internal/mcp/client.go`), yani sunucu "araç listem değişti" bildirimini gönderse bile
-   SwarmGo `tools/list`'i yeniden çağırmaz.
+   TionSwarm `tools/list`'i yeniden çağırmaz.
 2. **Dial-per-operation (havuzsuz):** `BuildCatalog`/`CallNamespaced` her işlemde **yeni
    session** açıp kapatır. Gateway'in `activate_tools`'u **oturum-kapsamlıdır** → araçları
    o anlık session'a ekler, session `Close()` ile kapanınca kaybolur. Eklenen araçlar
-   SwarmGo'nun kataloğuna hiç girmez → çağrılamaz.
+   TionSwarm'nun kataloğuna hiç girmez → çağrılamaz.
 
-→ Sonuç: **runtime'da araç ekleyen/çıkaran MCP sunucularıyla SwarmGo uyumsuz.**
+→ Sonuç: **runtime'da araç ekleyen/çıkaran MCP sunucularıyla TionSwarm uyumsuz.**
 
 **Geçici çözüm (uygulandı):** İstenen araçlar sunucunun bağlantı URL'indeki **preset'e**
 konur; preset her taze session'da başlangıçta yüklendiği için dial-per-operation modeliyle
-sorunsuz çalışır. MCP Gateway `swarmgo` preset'ine `mcp-chrome` eklendi
-(`mcp-server/config.json`: `swarmgo: [<remote-service>, mcp-chrome]`); `?preset=swarmgo` artık
+sorunsuz çalışır. MCP Gateway `tionswarm` preset'ine `mcp-chrome` eklendi
+(`mcp-server/config.json`: `tionswarm: [<remote-service>, mcp-chrome]`); `?preset=tionswarm` artık
 47→**76 araç** döndürüyor. Doğrulandı.
 
 **Kalıcı çözüm (Sırada / öneri):** ya (a) `initialize`'da `tools.listChanged` ilan edip
@@ -5361,7 +5361,7 @@ ajanın istediği etikette tanımlayabildiği **dinamik bloklar**a genelleşti; 
 
 1. **Oturum-başına taslak.** Yeni `useSessionDraft` hook'u (`hooks/useSessionDraft.ts`):
    composer'a yazılıp **gönderilmeyen** metin `localStorage`'da oturum-id ile saklanır
-   (`swarmgo:draft:<sessionId>`). Oturum değiştirip dönünce ve sayfa yenilenince korunur;
+   (`tionswarm:draft:<sessionId>`). Oturum değiştirip dönünce ve sayfa yenilenince korunur;
    gönderme/temizleme taslağı siler (boş taslak saklanmaz). Composer `useState('')` yerine
    bu hook'u kullanır — tüm mevcut `setText` çağrıları otomatik kalıcı. **Yan fayda:** eskiden
    metin oturumlar arası sızıyordu (Composer `key`'siz, monte kalıyor); artık her oturum kendi taslağını taşır.
@@ -5394,7 +5394,7 @@ bağlamını dizer, akışlı araç döngüsünü koşar, yanıtı kalıcılaşt
 - **Çok-ajanlı tur:** tek kullanıcı mesajı, iki ajan sırayla yanıtlar; ikinci ajan birincinin cevabını geçmişte görür (`multiagent_e2e_test.go`).
 
 Harness genişletildi: `decorate` ctx-kancası (prompter/grants/wake enjeksiyonu) + `sendMulti` (çok-ajanlı tur sürücüsü).
-İzolasyon: `SWARMGO_DATA_DIR` temp'e yönlendirilir → gerçek `~/.swarmgo` skill/market seed'ine dokunulmaz.
+İzolasyon: `TIONSWARM_DATA_DIR` temp'e yönlendirilir → gerçek `~/.tionswarm` skill/market seed'ine dokunulmaz.
 ✅ `go test ./internal/e2e/` 16/16 yeşil, `go vet` temiz.
 
 ## Native pencere — konsol penceresi yanıp sönmesi düzeltildi ✅ (2026-06-23)
@@ -5413,7 +5413,7 @@ WebView2 penceresinin native başlık çubuğu (caption + küçült/büyüt/kapa
 artık uygulama temasına boyanıyor — beyaz Windows frame'i koyu temayla çelişmiyor. **DWM** ile
 (`dwmapi.dll` `DwmSetWindowAttribute`, salt `syscall`, yeni bağımlılık yok): `DWMWA_USE_IMMERSIVE_DARK_MODE`
 (Win10 1809+) + `DWMWA_CAPTION_COLOR`/`TEXT_COLOR`/`BORDER_COLOR` (Win11 22000+). `app.App.Appearance()`
-çözülen `ThemePreset`/`Theme`/`Accent`'i verir; `cmd/swarmgo-desktop/titlebar_windows.go` 8 curated paletin
+çözülen `ThemePreset`/`Theme`/`Accent`'i verir; `cmd/tionswarm-desktop/titlebar_windows.go` 8 curated paletin
 bg/text/border'ını (`themePresets.ts` ile elle senkron) COLORREF'e (`0x00BBGGRR`) çevirir. Bilinmeyen
 preset → yalnız dark/light frame (caption rengi atlanır); eski Windows'ta desteklenmeyen attribute'lar
 sessizce yok sayılır (pencere yine çalışır). **Canlı güncelleme:** `watchTitleBar` 1.5sn poll ile tema
@@ -5423,18 +5423,18 @@ panik/hata yok). Detay: [32-NATIVE-PENCERE.md](32-NATIVE-PENCERE.md).
 
 ## Native masaüstü penceresi — WebView2 (CGO'suz) ✅ (2026-06-22)
 
-SwarmGo artık tarayıcı yerine **kendi masaüstü penceresinde** açılabiliyor. Plan:
+TionSwarm artık tarayıcı yerine **kendi masaüstü penceresinde** açılabiliyor. Plan:
 [32-NATIVE-PENCERE.md](32-NATIVE-PENCERE.md). **Ön koşul refactor (davranış-korumalı):**
-`cmd/swarmgo/main.go`'nun boot dizisi yeni **`internal/app`** paketine taşındı
+`cmd/tionswarm/main.go`'nun boot dizisi yeni **`internal/app`** paketine taşındı
 (`SetupLogging` + `Bootstrap`/`Serve`/`Shutdown`/`Addr`/`URL`); `Bootstrap` artık listener'ı
 önden açar (`net.Listen`, `:0` boş port desteği) ve `SetBaseURL`'i çözülen adresle çağırır.
-`main.go` ~130→~50 satır. **Yeni giriş noktası** `cmd/swarmgo-desktop` (`//go:build windows`,
+`main.go` ~130→~50 satır. **Yeni giriş noktası** `cmd/tionswarm-desktop` (`//go:build windows`,
 [`jchv/go-webview2`](https://github.com/jchv/go-webview2) — **saf Go, CGO yok**; Win11'de
 yerleşik WebView2 runtime): sunucuyu `127.0.0.1:0`'da başlatır, `waitForHealth` ile hazır olunca
 1280×800 WebView2 penceresi açar, pencere kapanınca graceful `Shutdown`. WebView2 yoksa →
 varsayılan tarayıcıya fallback (`rundll32 url.dll`). `!windows` stub mevcut. `scripts/build.ps1`
 `-Desktop` bayrağı (`-H windowsgui` → konsolsuz). Bağımlılık: `go-webview2` (direct) +
-`go-winloader`/`x/sys` (indirect) — yalnız desktop hedefinde derlenir; **başsız `swarmgo`
+`go-winloader`/`x/sys` (indirect) — yalnız desktop hedefinde derlenir; **başsız `tionswarm`
 hâlâ saf-Go/çapraz-derlenebilir**. ✅ `go build ./...`/`vet` yeşil; başsız smoke (refactor sonrası
 `/`+`/health` 200, boot logları aynı); desktop canlı (rastgele port 60385'te boot, `/health`+`/`
 200, pencere açıldı); `-H windowsgui` build 12 MB. README "Native Masaüstü Uygulaması" eklendi.
@@ -5475,7 +5475,7 @@ hata zamanlayıcıda değil, uydurmadaydı.)
 
 ## MCP katalog önbelleği — gateway'de session birikmesi düzeltildi ✅ (2026-06-22)
 
-**Sorun:** Yerel MCP Gateway'de saniyeler içinde 4 ayrı `swarmgo` session açılıyordu
+**Sorun:** Yerel MCP Gateway'de saniyeler içinde 4 ayrı `tionswarm` session açılıyordu
 (her biri `requestCount:3`). Kök neden: native MCP istemcisi **havuzsuz** (`manager.go`
 dial-per-operation) ve `buildRegistry` tek bir sohbet turunda birden çok kez çağrılıyor
 (tur girişi `runtime.go`, native döngü `toolloop.go`, UI/araç önizleme endpoint'leri).
@@ -5489,7 +5489,7 @@ istemci HTTP `DELETE` göndermediğinden gateway session'ları idle olarak birik
 - **Fingerprint-tabanlı geçersizleme:** anahtar = enabled server config'lerinin
   SHA-256 fingerprint'i (sıra-bağımsız). Server toggle/ekle/sil/düzenle → fingerprint
   değişir → otomatik rebuild. **Ayrı invalidation hook'u gerekmez.**
-- **TTL:** varsayılan **60 sn** (`SWARMGO_MCP_CATALOG_TTL_SEC` ile override; `0` =
+- **TTL:** varsayılan **60 sn** (`TIONSWARM_MCP_CATALOG_TTL_SEC` ile override; `0` =
   önbellek kapalı, eski davranış). Config'in göremediği dış değişiklikleri (server
   farklı tool sunması) sınırlar.
 - Sadece pahalı dial sonucu (entries) önbelleklenir; ucuz dispatch haritası
@@ -5575,8 +5575,8 @@ native eşleniği, son web-parite boşluğu kapandı. Build+vet temiz, **300 tes
 
 - **Kök neden (yarış değil, isim uyuşmazlığı):** "# Available Skills" prompt bloğu modele
   **çıplak** `use_skill` adını söylüyordu (`skills/store.go renderCatalog`). Native
-  ajanlarda araç gerçekten `use_skill`; ama **claude-cli** ajanlarında SwarmGo built-in'leri
-  Interaction MCP köprüsünden **namespaced** geliyor: `mcp__swarmgo_interaction__use_skill`.
+  ajanlarda araç gerçekten `use_skill`; ama **claude-cli** ajanlarında TionSwarm built-in'leri
+  Interaction MCP köprüsünden **namespaced** geliyor: `mcp__tionswarm_interaction__use_skill`.
   Model prompt'u harfiyen izleyip çıplak adı deniyor → CLI reddediyor. (`trace.go` namespace'i
   soyduğu için başarılı 2. çağrı izde yine `use_skill` görünüyor — kafa karıştırıcı.)
 - **Çözüm:** Katalog bloğu artık aracı **ajanın göreceği adla** yazıyor. `renderCatalog`
@@ -5648,7 +5648,7 @@ tokenLimitFor zemini). Kullanıcı isteği.
   > 4.8 ve Sonnet 4.6 aslında **1M**, sadece Haiku 200K. Per-tier eşlemeyle düzeltildi.
 - **Test:** `context_window_test.go` (aile eşleme + Catalog dolduruyor mu) — providers
   paketi **43 test** yeşil, `go vet` temiz. `api`'ye dokunulmadı (JSON tag otomatik akar).
-- **Phase 2 (tokenLimitFor) bilinçle ertelendi:** model penceresine ölçekleme SwarmGo'nun
+- **Phase 2 (tokenLimitFor) bilinçle ertelendi:** model penceresine ölçekleme TionSwarm'nun
   12K transcript bütçesiyle çelişir (bir tool sonucu tüm bütçeyi aşar); doğru hamle
   "modele göre akıllı varsayılan bütçe". Detay: `17-TOKEN-OPTIMIZASYON.md` §6.
 
@@ -5657,7 +5657,7 @@ tokenLimitFor zemini). Kullanıcı isteği.
 ## CG-9 ikinci yarı — bütçe-orantılı tool eşikleri ✅ (2026-06-22)
 
 **Hedef:** the external agent project'ın `tokenLimitFor` (tool-result eşiği context window'a göre)
-deseninin SwarmGo karşılığı. Model context-window metadata'sı yok (`ModelInfo`
+deseninin TionSwarm karşılığı. Model context-window metadata'sı yok (`ModelInfo`
 sadece ID/Label), o yüzden mevcut **transcript bütçesine** (`MaxContextTokens`)
 orantıladım — kullanıcının zaten modeline göre ayarladığı knob.
 
@@ -5692,7 +5692,7 @@ orantıladım — kullanıcının zaten modeline göre ayarladığı knob.
   server canlı uygulama) ve skill dokümanında vardı ama frontend `AppSettings`
   tipinde, UI'da ve patch'te **yoktu**. Tipe eklendi, Tools paneline kontrol
   (1–128 / 1–64) eklendi, patch'e eklendi → uçtan uca bağlandı.
-- **Doğrulama:** `tsc --noEmit` temiz. Skill `swarmgo-settings` zaten tüm alanları
+- **Doğrulama:** `tsc --noEmit` temiz. Skill `tionswarm-settings` zaten tüm alanları
   doğru belgeliyordu (değişiklik gerekmedi).
 
 **Diğer düzenleme ekranlarının denetimi (aynı tur):** Workspace (`WorkspaceView`),
@@ -5806,12 +5806,12 @@ büyük yanlış kararın mekanizma karşılığı; kod değil, skill/system-pro
 
 Yapılan:
 
-- **`swarmgo-guide` SKILL.md → "Before you build: discover first" bölümü:** uygulamadan
+- **`tionswarm-guide` SKILL.md → "Before you build: discover first" bölümü:** uygulamadan
   ya da "bu yok" demeden önce **search → read → confirm → extend** disiplini;
   absence iddiası ancak gerçekten arandıktan sonra ("Y ve Z için grepledim, bulamadım"),
   ve sıfırdan yazmak yerine mevcudu genişletme kuralı. Kod/konfig/agent/flow/skill/
   memory — hepsine uygulanır.
-- **`swarmgo-self-management` → "Prefer reading first" güçlendirildi:** entity
+- **`tionswarm-self-management` → "Prefer reading first" güçlendirildi:** entity
   (agent/flow/skill/schedule/hook/MCP) oluşturmadan önce mevcudu kontrol et,
   duplicate yerine genişlet; guide bölümüne çapraz-referans.
 - **Doğrulama:** `go build ./...` ✅ + `go test ./internal/skills/...` (14 test) yeşil.
@@ -5891,10 +5891,10 @@ Yapılan (4 adım uçtan uca):
   `WorkspaceDefaultDir`; `effectiveWorkDir` artık oturum → workspace-default →
   fiziksel workDir sırasıyla çözüyor. Ayarlar ▸ Bu Workspace ▸ "Varsayılan çalışma
   dizini" alanı (`WorkspacePanel.tsx`, `workspace_settings.go` DTO/patch).
-- **Canlı duman testi (8088):** `GET /api/fs/browse` ✓; bir oturuma SwarmGo deposu
+- **Canlı duman testi (8088):** `GET /api/fs/browse` ✓; bir oturuma TionSwarm deposu
   set edildi → `{exists:true,isGitRepo:true,branch:"main"}` ✓ (git branch tespiti),
   sonra sıfırlandı. **Not:** varsayılan 8080 portu mcp-for-unity backend'iyle
-  çakıştığı için bu örnek `SWARMGO_ADDR=127.0.0.1:8088` ile çalışıyor.
+  çakıştığı için bu örnek `TIONSWARM_ADDR=127.0.0.1:8088` ile çalışıyor.
 
 ## fs/shell sandbox kilidi kaldırıldı (kilitsiz dosya/komut erişimi) ✅ (2026-06-22)
 

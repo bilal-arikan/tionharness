@@ -1,4 +1,4 @@
-# 11 — SwarmGo Interaction MCP (Tasarım / Plan)
+# 11 — TionSwarm Interaction MCP (Tasarım / Plan)
 
 > **Durum:** Plan (uygulanmadı). Onay sonrası Faz 1 ile başlanacak.
 > **Amaç:** Tüm insan-etkileşimli (human-in-the-loop) ve UI-etkileyen araçları
@@ -20,16 +20,16 @@ Kendi agentic tool döngüsünü çalıştıran her CLI ajanında "soru sorma" �
 
 | Mekanizma | Çalıştığı yol | CLI'de durum |
 |-----------|---------------|--------------|
-| SwarmGo `ask_user` (Faz P1) → AskPrompt | native (anthropic/minimax) | **bağlı değil** — CLI kendi döngüsünü sürüyor |
+| TionSwarm `ask_user` (Faz P1) → AskPrompt | native (anthropic/minimax) | **bağlı değil** — CLI kendi döngüsünü sürüyor |
 | claude-cli'nin built-in `AskUserQuestion`'ı | claude-cli | `-p` non-interactive modda **cevaplanamaz** → iptal/red |
-| Codex / Gemini / Vibe'ın kendi soru mekanizması | ilgili CLI | non-interactive/headless modda SwarmGo UI'ına **bağlı değil** |
+| Codex / Gemini / Vibe'ın kendi soru mekanizması | ilgili CLI | non-interactive/headless modda TionSwarm UI'ına **bağlı değil** |
 
 Aynı kopukluk `todo_write`, `create_artifact`/`update_artifact` gibi **diğer tüm
-built-in etkileşim araçları** için de geçerli: CLI yollarında hiçbiri SwarmGo
+built-in etkileşim araçları** için de geçerli: CLI yollarında hiçbiri TionSwarm
 UI'ına bağlı değil.
 
 **Kök sebep:** Bu CLI'lar (`claude -p`, `codex exec`, `gemini`, `vibe`) **kendi**
-agentic tool döngüsünü çalıştırır. SwarmGo yalnızca **dış** MCP sunucularını CLI'ye
+agentic tool döngüsünü çalıştırır. TionSwarm yalnızca **dış** MCP sunucularını CLI'ye
 delege eder (`internal/agent/climcp.go`); **kendi** etkileşim araçlarını CLI'ye hiç
 sunmaz.
 
@@ -51,7 +51,7 @@ graph TD
     end
     T --> N[Native adaptör<br/>tools.Registry + context köprüsü]
     T --> M[MCP adaptör<br/>Interaction MCP server]
-    N --> NP[anthropic / minimax<br/>SwarmGo tool döngüsü]
+    N --> NP[anthropic / minimax<br/>TionSwarm tool döngüsü]
     M --> CP[claude-cli · Codex · Gemini · Vibe<br/>MCP-over-HTTP ile bağlanır]
     NP --> UI[Aynı AskPrompt / TodoCard / ArtifactCard]
     CP --> UI
@@ -84,7 +84,7 @@ birebir aynı**.
 ```mermaid
 sequenceDiagram
     participant CLI as Agent CLI (kendi döngüsü)<br/>claude-cli / Codex / Gemini / Vibe
-    participant MCP as SwarmGo Interaction MCP<br/>(/mcp/interaction)
+    participant MCP as TionSwarm Interaction MCP<br/>(/mcp/interaction)
     participant Run as chatRun (RunSession)
     participant UI as Tarayıcı (SSE)
 
@@ -110,8 +110,8 @@ TodoCard / ArtifactCard) CLI yolunda da görünür.
 
 | Seçenek | Artı | Eksi | Karar |
 |---------|------|------|-------|
-| **In-process HTTP (Streamable MCP)** — SwarmGo HTTP sunucusunda `/mcp/interaction` | Tek süreç; run registry'ye, SSE'ye, DB'ye **doğrudan** erişim; ekstra process yok; **tüm CLI'lar HTTP MCP destekliyor** | MCP-over-HTTP **server** protokolünü yazmak gerek | ✅ **SEÇİLDİ** |
-| stdio alt-komut (`swarmgo mcp-bridge`) | stdio JSON-RPC daha basit | Ayrı process → ana sürece IPC + korelasyon; iki sıçrama | Fallback (yalnız HTTP handshake takılırsa) |
+| **In-process HTTP (Streamable MCP)** — TionSwarm HTTP sunucusunda `/mcp/interaction` | Tek süreç; run registry'ye, SSE'ye, DB'ye **doğrudan** erişim; ekstra process yok; **tüm CLI'lar HTTP MCP destekliyor** | MCP-over-HTTP **server** protokolünü yazmak gerek | ✅ **SEÇİLDİ** |
+| stdio alt-komut (`tionswarm mcp-bridge`) | stdio JSON-RPC daha basit | Ayrı process → ana sürece IPC + korelasyon; iki sıçrama | Fallback (yalnız HTTP handshake takılırsa) |
 
 **Neden HTTP kazandı:** Araştırma (2026-06) tüm hedef CLI'ların **Streamable HTTP
 MCP** desteklediğini gösterdi (Codex: yalnız HTTP, SSE deprecated; Gemini: `httpUrl`;
@@ -138,7 +138,7 @@ claude: `type:"http"`; Vibe v2.0: MCP). Tek HTTP server hepsini karşılar.
 - **Hata modeli:** JSON-RPC `error{code,message}`; tool seviyesi hatalar
   `tools/call` sonucunda `isError:true` + `content[]` ile döner (model devam edebilsin).
 
-> Not: SwarmGo'da MCP **client** (`internal/mcp`) zaten var; bu plan MCP **server**
+> Not: TionSwarm'da MCP **client** (`internal/mcp`) zaten var; bu plan MCP **server**
 > tarafını ekler. **Mesaj tipleri (`Request`/`Response`/`Error`) `internal/mcp`'ten
 > yeniden kullanılır**, kopyalanmaz.
 
@@ -219,9 +219,9 @@ Her CLI'nin kendi mcp-config formatı + built-in-disable bayrağı var. Ortak ç
 
 1. mcp-config'e **her zaman** interaction server entry'si eklenir (dış MCP yoksa bile).
    Bunun için `writeCLIMCPConfig` boş-dönüş davranışı değişir (entry her durumda var).
-2. `--allowedTools` listesine `mcp__swarmgo_interaction__ask_user` vb. eklenir.
+2. `--allowedTools` listesine `mcp__tionswarm_interaction__ask_user` vb. eklenir.
 3. **Built-in çakışanlar kapatılır:** `--disallowedTools AskUserQuestion TodoWrite`
-   (CLI artık SwarmGo MCP eşdeğerlerini kullanır; çıkmaz sokak biter).
+   (CLI artık TionSwarm MCP eşdeğerlerini kullanır; çıkmaz sokak biter).
 4. `--append-system-prompt`'a kısa kullanım notu: "Kullanıcıya soru sormak için
    `ask_user`, ilerleme listesi için `todo_write` araçlarını kullan."
 
@@ -303,7 +303,7 @@ setini (`AllowedFor`) uygulayan bir skill yükleyici kurar (`setSkillLoader` →
 `Runtime.LoadSkillForAgent`); backend dispatch `use_skill` adıyla buna yönlendirir
 ve çıktıyı native `UseSkillTool.Call` ile birebir aynı biçimde döndürür
 (`# Skill: <slug>\n\n<body>`). Erişim kontrolü, sub-skill footer'ı ve lazy disk
-okuma native yolla tam parite. Tek kaynak SwarmGo skill store'u kalır —
+okuma native yolla tam parite. Tek kaynak TionSwarm skill store'u kalır —
 dosya kopyası/symlink yok.
 
 **`skill_search` + SK-3 auto-grant (2026-06-23):** SK-2 ile gelen `skill_search`
@@ -462,8 +462,8 @@ ile `claude -p --mcp-config` canlı test edildi. **Sonuç: tam başarı.**
 5. POST tools/call ping    {msg:"hello-from-cli"} → "pong: hello-from-cli"
 ```
 
-claude `system/init` çıktısı: `"mcp_servers":[{"name":"swarmgo_interaction",
-"status":"connected"}]` ve araç listesinde `mcp__swarmgo_interaction__ping` +
+claude `system/init` çıktısı: `"mcp_servers":[{"name":"tionswarm_interaction",
+"status":"connected"}]` ve araç listesinde `mcp__tionswarm_interaction__ping` +
 `ask_user` göründü; tool sonucu modele döndü, tur `success` bitti.
 
 **Kesinleşen kararlar / öğrenilenler:**
@@ -478,13 +478,13 @@ claude `system/init` çıktısı: `"mcp_servers":[{"name":"swarmgo_interaction",
 4. 🔎 **`elicitation` capability**: claude-code initialize'da
    `capabilities:{roots:{},elicitation:{}}` ilan ediyor — MCP'nin standart
    "kullanıcıdan girdi iste" mekanizması. Ama bu **claude'un kendi UI'ına** sorar;
-   biz soruyu **SwarmGo UI'ında** istediğimizden `ask_user` (long-poll → AskPrompt)
+   biz soruyu **TionSwarm UI'ında** istediğimizden `ask_user` (long-poll → AskPrompt)
    doğru tercih. Elicitation yalnız alternatif/yedek olarak not edildi.
 5. 🔎 **Açık iş (Faz 1):** bloklayan `tools/call` (gerçek kullanıcı beklerken) istemci
    tarafı timeout sınırı; gerekirse progress-notification keep-alive ile çözülecek.
 
 Spike kodu repo dışında (throwaway); üretim implementasyonu §9 dosya planına göre
-SwarmGo içinde yazılacak.
+TionSwarm içinde yazılacak.
 
 ## 15. Faz 1 sonucu (2026-06-16 — TAMAMLANDI ✅)
 
@@ -502,7 +502,7 @@ MVP implemente edildi ve canlı claude-cli ile uçtan uca doğrulandı.
 - `internal/agent/climcp.go` — `writeCLIMCPConfig(ctx, mcpEnabled, inter)` imzası; interaction entry (`type:http`, `headers: Bearer`) + allow/disallow listeleri; `cliMCPServer.Headers`.
 - `internal/agent/toolloop.go` — claude-cli, MCP kapalı olsa bile interaction endpoint varsa MCP-delegasyon yoluna girer.
 - `internal/providers/claudecli.go` — `ConfigureMCP(..., disallowedTools)`; `--disallowedTools` (AskUserQuestion/TodoWrite) + interaction sistem-prompt notu.
-- `cmd/swarmgo/main.go` — `server.SetBaseURL(cfg.Addr)`.
+- `cmd/tionswarm/main.go` — `server.SetBaseURL(cfg.Addr)`.
 
 **Canlı test (claude-cli, MCP kapalı yeni ajan):** "önce ask_user ile renk sor"
 promptu → `cli mcp config written servers=1 interaction=true` → SSE'de `ask` adımı
@@ -531,7 +531,7 @@ Interaction MCP araç seti genişletildi ve CLI iz paritesi sağlandı.
   koyup mevcut tool'u çağırır → tek-kaynak.
 
 **CLI iz paritesi (`agent/trace.go`):** `traceStepToTurnStep` artık (a) interaction
-namespace'ini (`mcp__swarmgo_interaction__`) tool adından **soyar** → kartlar native
+namespace'ini (`mcp__tionswarm_interaction__`) tool adından **soyar** → kartlar native
 ile aynı bare adla eşleşir (artifact/ask), (b) `todo_write` çağrısını **`StepTodo`
 checklist kartına** yükseltir. Böylece CLI yolunda da TodoCard + ArtifactCard kalıcı
 izde doğru render olur (canlı emit yerine izden — çift kart yok).
@@ -552,9 +552,9 @@ artifact dispatch, todo no-emit).
 
 ## Faz: Shell köprüsü + native araç bastırma (2026-06-19)
 
-**Sorun:** Bir claude-cli ajanı (özellikle scheduled koşuda) SwarmGo skill'ini
+**Sorun:** Bir claude-cli ajanı (özellikle scheduled koşuda) TionSwarm skill'ini
 yükleyemiyor ("Unknown skill") ve `ConvertFrom-Json` gibi PowerShell sözdizimini
-POSIX bash'e verince hata alıyordu. Kök neden: CLI ajanı SwarmGo'nun köprülenen
+POSIX bash'e verince hata alıyordu. Kök neden: CLI ajanı TionSwarm'nun köprülenen
 `use_skill`/`shell` araçları yerine **kendi native `Skill`/`Bash`** araçlarını
 seçiyordu; ayrıca `shell` hiç köprülenmiyordu (eager olduğu için bridge dışı).
 
@@ -563,7 +563,7 @@ seçiyordu; ayrıca `shell` hiç köprülenmiyordu (eager olduğu için bridge d
   `ShellEnabled` iken — native shell gate'iyle aynı). `chatRun`'a per-agent
   **shell runner** (`setShellRunner`/`shellRunnerFor`) eklendi; chat_stream her
   ajan turunda `Runtime.NewShellRunner()` ile workspace-sandbox'lı, **PowerShell**
-  (Windows) shell'i kurar. Backend dispatch: `callShell` → SwarmGo'nun
+  (Windows) shell'i kurar. Backend dispatch: `callShell` → TionSwarm'nun
   `ShellTool`'u (sandbox + timeout + permission_prompt ask modunda). Tek kaynak:
   `interactionToolSpecs`.
 - **Native araç bastırma (`climcp.go`):** interaction mevcutken `disallowed`
@@ -616,7 +616,7 @@ disallow'u da bu turlarda etkin (endpoint mevcut olduğundan).
   yola sızmasın). `toolloop.go` cliMCP bloğu settings'i yazıp geçirir + cleanup.
 
 **Uyarı:** CLI hook'ları CLI'nin kendi hook runner/shell'inde koşar; bu,
-SwarmGo'nun `execHook`'undan (Windows'ta PowerShell) farklı olabilir — SwarmGo
+TionSwarm'nun `execHook`'undan (Windows'ta PowerShell) farklı olabilir — TionSwarm
 shell'i için yazılmış bir hook komutu burada uyarlama gerektirebilir.
 
 **Test:** `go build`/`vet`/`go test ./...` yeşil; yeni test:
@@ -723,7 +723,7 @@ koyduğu hedef **sonraki turdan** itibaren onu yönlendirir.
 - `internal/api/chat_control.go` — `chatRun.goal` + `setGoal`/`goalSinkFor()`.
 - `internal/api/chat_stream.go` + `autonomous_interaction.go` — `wsp.Runtime.NewGoalSink` / `rt.NewGoalSink` ile bağlanır.
 - `internal/api/mcp_interaction.go` — spec ×2 + `Call` case + `callGoal` (set/complete dispatch).
-- Skill: `swarmgo-progress` (north-star satırı genişletildi) + `swarmgo-guide` (interaction bölümü).
+- Skill: `tionswarm-progress` (north-star satırı genişletildi) + `tionswarm-guide` (interaction bölümü).
 
 **Yetki nüansı:** Hedef kullanıcıyla **paylaşımlı**. `set_session_goal` üzerine yazabilir ama
 değişikliği yanıtta açıkça bildirir (provenance ayrımı veri modelinde yok; şeffaflık yeterli
@@ -767,7 +767,7 @@ Target:{sessionId}}` yayınlar → SSE → `App.tsx onEvent` `session` tipini er
 `agent/sessionsink.go` (goalsink.go→bu; emit'li, 5 metod), `agent/toolsetup.go`, `api/chat_control.go`
 (`session` alanı), `api/chat_stream.go` + `autonomous_interaction.go`, `api/mcp_interaction.go`
 (spec ×3 + `callSessionEdit`), `db/store.go` (`SetSessionState`), `frontend/App.tsx` (`session` event),
-skill `swarmgo-guide`.
+skill `tionswarm-guide`.
 
 **Test:** tools/agent/api/db `build`/`vet`/`test` + `tsc`/`vite` yeşil. Canlı claude-cli doğrulaması.
 
@@ -797,8 +797,8 @@ da erteleniyordu → ilk turda `No such tool available`.
 
 | Anahtar | Path | `alwaysLoad` | İçerik |
 |---------|------|--------------|--------|
-| `swarmgo_interaction` (CORE) | `/mcp/interaction/core` | **true** | eager: `Bash`, `ask_user`, `request_confirmation`, `todo_write`, `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`, `core_memory_replace`/`append`, `permission_prompt` |
-| `swarmgo_extended` (EXTENDED) | `/mcp/interaction/extended` | yok | self-management suite + NameOnly: `notify`, `focus_view`, `set_session_goal`/`complete_goal`, `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`, `spawn_session`, `conversation_search`, `read_session_debug` |
+| `tionswarm_interaction` (CORE) | `/mcp/interaction/core` | **true** | eager: `Bash`, `ask_user`, `request_confirmation`, `todo_write`, `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`, `core_memory_replace`/`append`, `permission_prompt` |
+| `tionswarm_extended` (EXTENDED) | `/mcp/interaction/extended` | yok | self-management suite + NameOnly: `notify`, `focus_view`, `set_session_goal`/`complete_goal`, `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`, `spawn_session`, `conversation_search`, `read_session_debug` |
 
 - `alwaysLoad: true` → CORE tool-search'ten muaf (her zaman inline). CLI process env'ine
   `ENABLE_TOOL_SEARCH=auto` geçilir (`claudecli.go runAttempt`) → EXTENDED %10 eşiğini
@@ -808,7 +808,7 @@ da erteleniyordu → ilk turda `No such tool available`.
   tier'ı `interaction.tierFromPath` (path son-eki). Bridged self-management **daima**
   extended. `bareToolName` her iki prefix'i de soyar; lazy katalog extended built-in'leri
   `extendedToolPrefix` ile namespace'ler (`toolsetup.go`), `trace.go` ikisini de soyar.
-- CORE anahtarı **eski `swarmgo_interaction` adını korur** → mevcut namespaced referanslar
+- CORE anahtarı **eski `tionswarm_interaction` adını korur** → mevcut namespaced referanslar
   (use_skill, core_memory, trace) bozulmaz; yalnız EXTENDED yeni prefix alır.
 - **Kapsam:** 2.1.x ve üzeri (sürüm guard yok). Test: `TestWriteCLIMCPConfigTwoTierInteraction`,
   `TestInteractionTierSplit`. Detay: `_Docs/19`.

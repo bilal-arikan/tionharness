@@ -8,16 +8,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
-	"github.com/bilal-arikan/swarmgo/internal/progress"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/progress"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // todoSink is a tools.TodoSink that persists the agent's working checklist to a
 // durable progress file (internal/progress) so the list survives across
 // sessions. When the session has an explicit project working directory the file
-// lives in the project (<cwd>/.swarmgo/progress.json) — git-committable, portable
+// lives in the project (<cwd>/.tionswarm/progress.json) — git-committable, portable
 // and SHARED across every session working on that same project. With no explicit
 // project dir it falls back to a PER-SESSION file under the workspace store, so
 // unrelated sessions (which would otherwise all share the workspace-default dir)

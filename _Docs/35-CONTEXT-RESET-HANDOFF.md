@@ -14,7 +14,7 @@ ajanın temiz pencerede devralabileceği yeterli state taşıyan bir **handoff
 artifact** bırak. Compaction "süreklilik" verir ama "temiz sayfa" vermez; reset
 ikisini ayırır.
 
-SwarmGo'da önceden **yalnız** in-place rolling-summary vardı
+TionSwarm'da önceden **yalnız** in-place rolling-summary vardı
 (`internal/conversation/manager.go`). Bu özellik, onun **tamamlayıcısı** olarak
 reset modunu ekler — mevcut compaction'ı değiştirmeden.
 
@@ -46,7 +46,7 @@ graph LR
    (9 bölüm, aşağıda). Env snapshot enjekte edilir.
 3. **Artifact yaz:** eski oturuma first-class markdown artifact (`Handoff — <başlık>`).
    `db.SetSessionHandoffArtifact` ile eski oturuma id'si işlenir.
-4. **(Ops.) Dosya yaz:** `HandoffWriteFile` açıksa `<workdir>/.swarmgo/handoff.md`
+4. **(Ops.) Dosya yaz:** `HandoffWriteFile` açıksa `<workdir>/.tionswarm/handoff.md`
    (Anthropic'in "disk üstü progress dosyası" deseni; best-effort).
 5. **Spawn:** `SpawnSession(agent, continuationPrompt, {ParentSessionID: eski})` —
    **taze** bağımsız oturum. `continuationPrompt` handoff'u **inline** gömer + eski
@@ -74,7 +74,7 @@ eğilimi kırılır. `HandoffEnv` (Goal/WorkingDir/GitBranch/GitStatus/Todos/Art
 
 ## Otomatik tetik mekaniği
 
-SwarmGo'da otonom turlar (scheduler/spawn) **tek-prompt + tool-loop**'tur; turlar
+TionSwarm'da otonom turlar (scheduler/spawn) **tek-prompt + tool-loop**'tur; turlar
 arası geçmiş modele gönderilmez. Bu yüzden basınç **tur içinde** birikir ve
 reactive compaction (`toolloop.go` → `CompactInFlightMessages`) ile karşılanır.
 "Limite yaklaşma" sinyali = **bu turun reactive compaction tetiklemesi**.
@@ -116,7 +116,7 @@ yönlü link.
 
 ## claude-cli `--resume` ile etkileşim
 
-Warm `--resume` modunda bağlam yönetimi CLI'a geçer (SwarmGo compaction'ı baypas).
+Warm `--resume` modunda bağlam yönetimi CLI'a geçer (TionSwarm compaction'ı baypas).
 Reset zaten **yeni oturum** açtığı için warm CLI session doğal olarak düşer; yeni
 oturum cold başlar. Uyumlu — özel bir iş gerektirmez.
 

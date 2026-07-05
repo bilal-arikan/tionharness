@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // FSGlobTool finds files in the sandbox matching a glob pattern.

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bilal-arikan/swarmgo/internal/mcp"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // workspaceTool is one entry in the workspace tools screen: a tool plus whether

@@ -1,4 +1,4 @@
-// Package api exposes the SwarmGo HTTP/JSON interface.
+// Package api exposes the TionSwarm HTTP/JSON interface.
 package api
 
 import (
@@ -9,18 +9,18 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/backup"
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
-	"github.com/bilal-arikan/swarmgo/internal/interaction"
-	"github.com/bilal-arikan/swarmgo/internal/logbuf"
-	"github.com/bilal-arikan/swarmgo/internal/market"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/settings"
-	"github.com/bilal-arikan/swarmgo/internal/web"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/backup"
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/interaction"
+	"github.com/bilal-arikan/tionswarm/internal/logbuf"
+	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/settings"
+	"github.com/bilal-arikan/tionswarm/internal/web"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // ctxKey is the private type for request-context values.
@@ -78,7 +78,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		// onboarding. No ledger dir: install-status tracking is per-workspace.
 		market: market.New(agent.MarketGlobalDir(), ""),
 	}
-	// Interaction MCP: lets CLI agents (claude-cli, ...) reach SwarmGo's
+	// Interaction MCP: lets CLI agents (claude-cli, ...) reach TionSwarm's
 	// human-in-the-loop tools over in-process HTTP. See _Docs/11-INTERACTION-MCP.md.
 	s.interactionMCP = interaction.Handler(&interactionBackend{runs: s.runs, tun: tun}, logger)
 	// Headless Interaction MCP: give autonomous (scheduler/spawn) CLI
@@ -306,7 +306,7 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	// Disarm a pending one-shot self-wake (schedule_wake) for a session — the
 	// user pressed "Durdur" on the waiting banner before the wake fired.
 	mux.HandleFunc("POST /api/chat/wake/cancel", s.handleCancelWake)
-	// Interaction MCP endpoint: CLI agents (claude-cli, ...) call SwarmGo's
+	// Interaction MCP endpoint: CLI agents (claude-cli, ...) call TionSwarm's
 	// human-in-the-loop tools (ask_user/todo_write) here over MCP-over-HTTP.
 	// Bound to all methods; the handler does its own bearer auth + method switch.
 	// Guarded so a bare &Server{} (route-registration test) doesn't panic on a
@@ -590,7 +590,7 @@ func withCORS(next http.Handler) http.Handler {
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":     "ok",
-		"service":    "swarmgo",
+		"service":    "tionswarm",
 		"version":    "0.0.1",
 		"workspaces": len(s.workspaces.List()),
 	})

@@ -6,14 +6,14 @@ import (
 	"encoding/json"
 	"os/exec"
 
-	"github.com/bilal-arikan/swarmgo/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/proc"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // Hook execution policy. Hooks run arbitrary shell commands, so they are bounded

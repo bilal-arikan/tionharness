@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/interaction"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/interaction"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // askTimeout bounds a blocking ask_user call so a never-answering user can't pin
@@ -34,12 +34,12 @@ func (b *interactionBackend) Valid(token string) bool {
 }
 
 // coreInteractionTools is the eager tier of Interaction MCP tools: the ones the
-// CLI MCP-config advertises on the alwaysLoad `swarmgo_interaction` server so they
+// CLI MCP-config advertises on the alwaysLoad `tionswarm_interaction` server so they
 // are NEVER deferred by the CLI's tool search (Bash, ask_user, the artifact/skill
 // path, working-memory edits, permission_prompt). Everything else (notify,
 // focus_view, the session-lifecycle setters, schedule_wake, spawn_session) plus the
 // entire bridged self-management suite is the EXTENDED tier → a separate
-// `swarmgo_extended` server subject to ToolSearch deferral. This mirrors the native
+// `tionswarm_extended` server subject to ToolSearch deferral. This mirrors the native
 // registry's eager-vs-lazy split (see _Docs/19) and is the single source for both
 // the tier filter below and the per-tier CLI allowlist.
 var coreInteractionTools = map[string]bool{
@@ -176,11 +176,11 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		// db.Session fields the user edits. Non-blocking; advertised on autonomous
 		// turns too (a scheduled run can set/complete its own goal or retag itself).
 		tools.NewUpdateSessionTool().Def(),
-		// schedule_wake replaces the CLI's native ScheduleWakeup (which SwarmGo
+		// schedule_wake replaces the CLI's native ScheduleWakeup (which TionSwarm
 		// disallows): the CLI runs one-shot, so its built-in wake never fires —
-		// ours arms a real SwarmGo timer that re-delivers into this session.
+		// ours arms a real TionSwarm timer that re-delivers into this session.
 		tools.NewScheduleWakeTool().Def(),
-		// use_skill loads a SwarmGo skill body on demand. The CLI sees the skill
+		// use_skill loads a TionSwarm skill body on demand. The CLI sees the skill
 		// catalog in its appended system prompt but has no native way to load a
 		// body; this bridge gives it the same lazy-load path native agents use.
 		tools.NewUseSkillTool(nil).Def(),
@@ -190,7 +190,7 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 	}
 	// shell is bridged only when enabled, mirroring the native tool loop's shell
 	// gate. The CLI gets ONE shell: the OS-native one — PowerShell on Windows, Bash
-	// on Unix — so a claude-cli agent runs commands through SwarmGo's sandboxed shell
+	// on Unix — so a claude-cli agent runs commands through TionSwarm's sandboxed shell
 	// (and the CLI's own native Bash can be safely disallowed). The runner that backs
 	// it (NewShellRunner) picks the SAME shell, and callShell dispatches both names.
 	if tun != nil && tun.ShellEnabled() {
@@ -313,13 +313,13 @@ func (b *interactionBackend) callViaSink(ctx context.Context, run *chatRun, st s
 }
 
 // bareToolName strips the Interaction MCP namespace so dispatch matches whether
-// the CLI sends a namespaced name (core: mcp__swarmgo_interaction__ask_user,
-// extended: mcp__swarmgo_extended__create_agent) or the bare name.
+// the CLI sends a namespaced name (core: mcp__tionswarm_interaction__ask_user,
+// extended: mcp__tionswarm_extended__create_agent) or the bare name.
 func bareToolName(name string) string {
-	if s := strings.TrimPrefix(name, "mcp__swarmgo_interaction__"); s != name {
+	if s := strings.TrimPrefix(name, "mcp__tionswarm_interaction__"); s != name {
 		return s
 	}
-	return strings.TrimPrefix(name, "mcp__swarmgo_extended__")
+	return strings.TrimPrefix(name, "mcp__tionswarm_extended__")
 }
 
 // Call implements interaction.Backend.

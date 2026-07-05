@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 func (s *Server) handleListHooks(w http.ResponseWriter, r *http.Request) {
@@ -17,7 +17,7 @@ func (s *Server) handleListHooks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, hooks)
 }
 
-// builtinHook describes one automatic, non-user-editable behaviour SwarmGo injects
+// builtinHook describes one automatic, non-user-editable behaviour TionSwarm injects
 // around the tool loop (freshness guard, CLI native-tool bridging, hook
 // passthrough, ...). It is surfaced read-only in the Hooks screen so a user can see
 // what runs implicitly. Enabled reflects the current setting for the toggleable
@@ -31,7 +31,7 @@ type builtinHook struct {
 	Setting     string `json:"setting,omitempty"`
 }
 
-// handleListBuiltinHooks returns the read-only list of SwarmGo's auto-injected tool
+// handleListBuiltinHooks returns the read-only list of TionSwarm's auto-injected tool
 // behaviours, computed from the current app settings. Purely informational — there
 // is no create/update/delete counterpart.
 func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) {
@@ -50,7 +50,7 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Scope:       "cli",
 			Event:       "System",
 			Enabled:     true,
-			Description: "On the claude-cli path, native tools that can't be honoured headless are suppressed (--disallowedTools) and routed to SwarmGo equivalents: AskUserQuestion→ask_user, TodoWrite/Task*→todo_write, ScheduleWakeup→schedule_wake, Skill→use_skill, Task/Agent→run_subagent.",
+			Description: "On the claude-cli path, native tools that can't be honoured headless are suppressed (--disallowedTools) and routed to TionSwarm equivalents: AskUserQuestion→ask_user, TodoWrite/Task*→todo_write, ScheduleWakeup→schedule_wake, Skill→use_skill, Task/Agent→run_subagent.",
 		},
 		{
 			Name:        "Bash → PowerShell bridge",
@@ -58,7 +58,7 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Event:       "System",
 			Setting:     "enableShell",
 			Enabled:     cur.EnableShell,
-			Description: "When the built-in shell is enabled, the CLI's native Bash is suppressed so shell commands route through SwarmGo's own Bash/PowerShell tool (correct Windows syntax + streaming + background shells).",
+			Description: "When the built-in shell is enabled, the CLI's native Bash is suppressed so shell commands route through TionSwarm's own Bash/PowerShell tool (correct Windows syntax + streaming + background shells).",
 		},
 		{
 			Name:        "CLI hook passthrough",
@@ -80,7 +80,7 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Scope:       "cli",
 			Event:       "System",
 			Enabled:     true,
-			Description: "In ask / read-only modes the CLI's ExitPlanMode is routed through SwarmGo's plan-approval card; in auto mode plan tools are disallowed so the agent just executes.",
+			Description: "In ask / read-only modes the CLI's ExitPlanMode is routed through TionSwarm's plan-approval card; in auto mode plan tools are disallowed so the agent just executes.",
 		},
 		{
 			Name:        "Autonomous git brake",

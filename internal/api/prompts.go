@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"os/exec"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
 )
 
 type promptsResp struct {

@@ -1,6 +1,6 @@
-# SwarmGo - development run (backend + frontend together).
+# TionSwarm - development run (backend + frontend together).
 #
-# Starts the Go backend (go run ./cmd/swarmgo on 127.0.0.1:8090) and the Vite
+# Starts the Go backend (go run ./cmd/tionswarm on 127.0.0.1:8090) and the Vite
 # dev server (npm run dev on :5173, proxies /api to 8090) side by side.
 # Closing this window or pressing Ctrl+C kills BOTH process trees so no orphan
 # node/go server is left listening.
@@ -19,8 +19,8 @@
 #   Firewall blocks inbound on Public, and the go run temp exe gets a NEW path on
 #   every compile so a program-based allow rule goes stale. Fix (elevated shell):
 #     Set-NetConnectionProfile -InterfaceAlias 'Wi-Fi' -NetworkCategory Private
-#     New-NetFirewallRule -DisplayName 'SwarmGo Dev 5173' -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow -Profile Private
-#     New-NetFirewallRule -DisplayName 'SwarmGo Dev 8090' -Direction Inbound -LocalPort 8090 -Protocol TCP -Action Allow -Profile Private
+#     New-NetFirewallRule -DisplayName 'TionSwarm Dev 5173' -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow -Profile Private
+#     New-NetFirewallRule -DisplayName 'TionSwarm Dev 8090' -Direction Inbound -LocalPort 8090 -Protocol TCP -Action Allow -Profile Private
 #   Port-based rules survive recompiles; the phone hits Vite (:5173, node), which
 #   proxies /api to the backend (:8090).
 #
@@ -119,12 +119,12 @@ try {
     if (-not $FrontendOnly) {
         # Pre-flight: clear any orphan still holding the backend port.
         Free-Port $Port "Backend"
-        Write-Host "==> Backend baslatiliyor: go run ./cmd/swarmgo  (${bindHost}:$Port)" -ForegroundColor Cyan
-        $env:SWARMGO_ADDR = "${bindHost}:$Port"
+        Write-Host "==> Backend baslatiliyor: go run ./cmd/tionswarm  (${bindHost}:$Port)" -ForegroundColor Cyan
+        $env:TIONSWARM_ADDR = "${bindHost}:$Port"
         # Gated features (see SKILL.md / Ortam Notlari): shell + self-management.
-        $env:SWARMGO_ENABLE_SHELL = "1"
-        $env:SWARMGO_ENABLE_SELFMANAGE = "1"
-        $backend = Start-Process -FilePath "go" -ArgumentList "run", "./cmd/swarmgo" `
+        $env:TIONSWARM_ENABLE_SHELL = "1"
+        $env:TIONSWARM_ENABLE_SELFMANAGE = "1"
+        $backend = Start-Process -FilePath "go" -ArgumentList "run", "./cmd/tionswarm" `
             -WorkingDirectory $root -NoNewWindow -PassThru
         $procs += $backend
     }

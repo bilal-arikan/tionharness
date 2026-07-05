@@ -74,14 +74,14 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
   // wide screens but CLOSED on narrow (< md) ones, where it otherwise squeezes the
   // canvas and breaks the vertical layout.
   const [traceOpen, setTraceOpen] = useState(() => {
-    const v = localStorage.getItem('swarmgo.flowTraceOpen')
+    const v = localStorage.getItem('tionswarm.flowTraceOpen')
     if (v !== null) return v !== '0'
     return typeof window === 'undefined' || window.innerWidth >= 768
   })
   const toggleTrace = () =>
     setTraceOpen((o) => {
       const next = !o
-      localStorage.setItem('swarmgo.flowTraceOpen', next ? '1' : '0')
+      localStorage.setItem('tionswarm.flowTraceOpen', next ? '1' : '0')
       return next
     })
   const traceCount = (st?.trace ?? []).length

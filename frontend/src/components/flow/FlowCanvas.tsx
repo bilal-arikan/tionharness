@@ -126,7 +126,7 @@ interface Props {
 }
 
 // dataTransfer key for palette drag-and-drop of a new node.
-export const FLOW_NODE_DND_MIME = 'application/swarmgo-flow-node'
+export const FLOW_NODE_DND_MIME = 'application/tionswarm-flow-node'
 
 // CanvasInner holds the actual <ReactFlow>. It lives inside ReactFlowProvider so
 // it can use screenToFlowPosition to convert a drop point into graph space.

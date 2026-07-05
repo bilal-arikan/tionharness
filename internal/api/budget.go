@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/billing"
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/billing"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // kindStat is one origin's slice of consumption in a budget response.

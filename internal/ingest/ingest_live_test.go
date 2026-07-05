@@ -6,10 +6,10 @@ import (
 )
 
 // TestLiveGitHubScan is a network-gated smoke test against the real community skill
-// collections. Run with: SWARMGO_LIVE_TEST=1 go test -run TestLiveGitHubScan ./internal/ingest/
+// collections. Run with: TIONSWARM_LIVE_TEST=1 go test -run TestLiveGitHubScan ./internal/ingest/
 func TestLiveGitHubScan(t *testing.T) {
-	if os.Getenv("SWARMGO_LIVE_TEST") != "1" {
-		t.Skip("set SWARMGO_LIVE_TEST=1 to run the live GitHub scan")
+	if os.Getenv("TIONSWARM_LIVE_TEST") != "1" {
+		t.Skip("set TIONSWARM_LIVE_TEST=1 to run the live GitHub scan")
 	}
 	repos := []string{
 		"juliusbrussee/caveman",

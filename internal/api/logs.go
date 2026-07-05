@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/logbuf"
+	"github.com/bilal-arikan/tionswarm/internal/logbuf"
 )
 
 // handleListLogs returns recent captured log entries (application + all

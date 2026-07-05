@@ -1,4 +1,4 @@
-// Package db is SwarmGo's persistence layer. It is backed entirely by the
+// Package db is TionSwarm's persistence layer. It is backed entirely by the
 // filesystem (no SQL database): every entity is a human-readable JSON file and
 // each conversation is a JSONL file (header line + one message per line), so a
 // workspace's data is portable, git-friendly and inspectable on disk.

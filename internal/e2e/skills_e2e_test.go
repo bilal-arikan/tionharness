@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/skills"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
 // TestSkills_AdvertiseAndLoad covers the full skill lifecycle through a turn: a

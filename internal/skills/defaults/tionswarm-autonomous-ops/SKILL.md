@@ -1,30 +1,30 @@
 ---
-name: "SwarmGo Autonomous Ops"
-description: "How to reach the 'expert' level of agentic operation in SwarmGo: stop hand-prompting and review-looping, and instead encode repeatable work as skills, fire it on triggers with schedules and hooks, let goal-bounded autonomous agents loop until done, run work in parallel across isolated workspaces, mix models per task, and guard it all with budgets and the permission layer. The SwarmGo-native translation of the expert 'vibe coding' automation playbook."
-when_to_use: "When a user (or you) keeps doing the same prompt/review cycle by hand and wants to automate it — set up recurring sweeps (docs/tests/logs), event-driven reactions (hooks), long-running goal loops, parallel fan-out, or a multi-model build→write→review pipeline — and needs to know which SwarmGo primitive maps to which automation pattern."
+name: "TionSwarm Autonomous Ops"
+description: "How to reach the 'expert' level of agentic operation in TionSwarm: stop hand-prompting and review-looping, and instead encode repeatable work as skills, fire it on triggers with schedules and hooks, let goal-bounded autonomous agents loop until done, run work in parallel across isolated workspaces, mix models per task, and guard it all with budgets and the permission layer. The TionSwarm-native translation of the expert 'vibe coding' automation playbook."
+when_to_use: "When a user (or you) keeps doing the same prompt/review cycle by hand and wants to automate it — set up recurring sweeps (docs/tests/logs), event-driven reactions (hooks), long-running goal loops, parallel fan-out, or a multi-model build→write→review pipeline — and needs to know which TionSwarm primitive maps to which automation pattern."
 icon: "♻️"
 color: "#6366f1"
 access: shared
 ---
-# SwarmGo — Autonomous Ops Playbook
+# TionSwarm — Autonomous Ops Playbook
 
 There are levels to agentic work. **Beginners** prompt, wait, review, prompt
 again — a human in every loop. **Experts** encode the loop once and let the
 system run it: reusable skills, triggered automations, goal-bounded loops,
 parallel fan-out, and the right model for each step. This skill is the
-SwarmGo-native translation of that playbook — every pattern below maps to a real
-SwarmGo primitive, not an aspiration.
+TionSwarm-native translation of that playbook — every pattern below maps to a real
+TionSwarm primitive, not an aspiration.
 
-> Reference context (what SwarmGo *is*): load `swarmgo-guide`.
-> The tools that *do* these things: load `swarmgo-self-management`.
-> Flow graph schema: load `swarmgo-flows`. App settings: `swarmgo-settings`.
+> Reference context (what TionSwarm *is*): load `tionswarm-guide`.
+> The tools that *do* these things: load `tionswarm-self-management`.
+> Flow graph schema: load `tionswarm-flows`. App settings: `tionswarm-settings`.
 
-## Concept map (playbook → SwarmGo)
+## Concept map (playbook → TionSwarm)
 
-| Expert pattern | SwarmGo primitive |
+| Expert pattern | TionSwarm primitive |
 |----------------|-------------------|
 | Coding agents (multiple harnesses) | **Agents** over providers: `claude-cli` (keyless), `anthropic`, `minimax`/OpenAI-compat, + custom providers |
-| `agents.md` / `CLAUDE.md` rules | **Workspace config** (editable prompt/instructions) + per-agent system prompt + `swarmgo-settings` |
+| `agents.md` / `CLAUDE.md` rules | **Workspace config** (editable prompt/instructions) + per-agent system prompt + `tionswarm-settings` |
 | Skills ("anything done twice") | **File-based skills**: `create_skill` / `use_skill`, global+workspace tiers, auto-summary |
 | Automations (trigger → prompt) | **Schedules** (cron, workspace-scoped prompt delivery) for time triggers; **Hooks** (PreToolUse/PostToolUse) for event triggers |
 | Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`run_subagent` async** (detached background run), and **Flows** (graph engine) — all budget-guarded |
@@ -37,7 +37,7 @@ SwarmGo primitive, not an aspiration.
 
 ## 1. Agents & providers — pick the harness per job
 
-SwarmGo runs each agent as its own runtime over a provider. You are not locked to
+TionSwarm runs each agent as its own runtime over a provider. You are not locked to
 one vendor:
 
 - **`claude-cli`** — local Claude CLI, keyless (uses the machine login). Drives its
@@ -58,7 +58,7 @@ Define *how* you want agents to behave once, not in every prompt:
   ("short and sweet, no essays"), coding conventions, commit style.
 - **Workspace config files** — editable prompt/instructions that apply to the
   whole workspace.
-- **`swarmgo-settings`** — app-wide behavior an agent can read/live-apply with
+- **`tionswarm-settings`** — app-wide behavior an agent can read/live-apply with
   `get_settings` / `update_settings`.
 
 Start with the model's voice and your hard preferences; refine as you learn what
@@ -106,7 +106,7 @@ automation + part of your quality gate.
 ## 5. Loops — run until a goal is met
 
 A loop is just **trigger + repeated action + stopping goal** (so it does not run
-forever). SwarmGo gives you these options — there is no longer a periodic
+forever). TionSwarm gives you these options — there is no longer a periodic
 heartbeat ticker; every autonomous run requires an explicit trigger:
 
 - **Schedules** — a cron schedule re-invokes an agent on a timer. Give it a
@@ -149,16 +149,16 @@ graph LR
   (disable per-agent from the Tools screen). Concurrency is bounded by
   `SpawnMaxConcurrent` and `DelegationMaxCalls`.
 - **Physical workspace isolation** — each workspace is a separate `store/` +
-  runtime + scheduler. This is SwarmGo's "isolated environment" answer to the
+  runtime + scheduler. This is TionSwarm's "isolated environment" answer to the
   cloud-agent pitch: agents in different workspaces never collide.
 
 **The worktree caveat (be honest):** the expert playbook uses git worktrees so
-parallel agents don't clobber the same files. SwarmGo isolates at the
+parallel agents don't clobber the same files. TionSwarm isolates at the
 *workspace* level, not per-agent-within-a-workspace. So multiple agents writing
 the **same files in the same workspace** can still conflict — split them across
 workspaces, or give each a non-overlapping area of the codebase.
 
-> SwarmGo has no built-in git merge/deploy orchestration — the "many agents
+> TionSwarm has no built-in git merge/deploy orchestration — the "many agents
 > racing to merge into main" problem from the playbook is out of scope here. If
 > agents touch a real git repo, serialize merges yourself or batch them.
 
@@ -191,7 +191,7 @@ graph LR
   need the frontier model.
 - **Review** with a *different* model than wrote it, for an independent viewpoint.
 
-In SwarmGo: distinct agents (each pinned to its provider/model) wired as nodes in
+In TionSwarm: distinct agents (each pinned to its provider/model) wired as nodes in
 a flow, or a skill that says which agent to hand off to at each stage.
 
 ## 9. Guardrails — keep autonomy safe
@@ -215,7 +215,7 @@ Headless turns get a short reminder of this sequence injected automatically (gat
 the `autonomousBootSeq` setting, default on); this section is the full recipe behind it.
 
 > One turn = **one task**. Orient, verify, do exactly one unit of work, then close
-> the loop. Do not batch many tasks into a single autonomous turn (see [[swarmgo-automation-prefs]]).
+> the loop. Do not batch many tasks into a single autonomous turn (see [[tionswarm-automation-prefs]]).
 
 ### Step 0 — Orient
 - Confirm where you are: `Bash` → `pwd` (or the cwd badge / `Session.WorkingDir`),
@@ -227,7 +227,7 @@ the `autonomousBootSeq` setting, default on); this section is the full recipe be
 ### Step 1 — Recall (git + progress file + board are your memory)
 - `Bash` → `git log --oneline -15` — what shipped recently and in what state.
 - Read the **persisted progress file** if the workspace keeps one
-  (`<cwd>/.swarmgo/progress.json`, written when `progressPersist` is on — SwarmGo's
+  (`<cwd>/.tionswarm/progress.json`, written when `progressPersist` is on — TionSwarm's
   `claude-progress` analog); it records what the previous turn left half-done. With
   `progressResume` on, a fresh session already gets this injected.
 - `list_tasks` — the append-only Kanban board is the workspace's feature/work ledger.
@@ -283,7 +283,7 @@ the `autonomousBootSeq` setting, default on); this section is the full recipe be
 - **`run_subagent` fan-out is capped** — `DelegationMaxCalls` (default 8) per turn and `SpawnMaxConcurrent` (default 16) overall. Design fan-out within these limits.
 - **MCP/server changes apply next turn** — a newly created server's tools aren't
   available until the following turn.
-- **No git merge/deploy layer** — handle real-repo merges outside SwarmGo.
+- **No git merge/deploy layer** — handle real-repo merges outside TionSwarm.
 - **Skipping the boot sequence** — an autonomous turn that dives straight into code
   without orient → recall → baseline-verify will eventually build on a broken tree.
   Always run §10 first.

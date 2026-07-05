@@ -194,7 +194,7 @@ func downloadTarball(u string) (Tree, []string, error) {
 		return nil, nil, fmt.Errorf("refusing non-GitHub host %q", pu.Host)
 	}
 	req, _ := http.NewRequest(http.MethodGet, u, nil)
-	req.Header.Set("User-Agent", "SwarmGo-skill-importer")
+	req.Header.Set("User-Agent", "TionSwarm-skill-importer")
 	resp, err := (&http.Client{Timeout: HTTPTimeout}).Do(req)
 	if err != nil {
 		return nil, nil, err

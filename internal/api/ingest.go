@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/ingest"
-	"github.com/bilal-arikan/swarmgo/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/ingest"
+	"github.com/bilal-arikan/tionswarm/internal/market"
 )
 
 // registerIngestRoutes wires the generic import pipeline: scan a foreign source

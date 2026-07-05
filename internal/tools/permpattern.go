@@ -75,7 +75,7 @@ func globMatch(pattern, s string) bool {
 
 // execArgTools are the tools whose risk depends on their argument (a command),
 // so the gate can derive an argument-scoped grant instead of a whole-tool one.
-// "Bash" is the shared exec built-in name (SwarmGo's native shell and the
+// "Bash" is the shared exec built-in name (TionSwarm's native shell and the
 // claude-cli analog both report it).
 var execArgTools = map[string]bool{"Bash": true}
 

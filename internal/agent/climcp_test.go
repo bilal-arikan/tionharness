@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // TestWriteCLIMCPConfigTwoTierInteraction locks the claude-cli 2.1.x+ two-tier
@@ -51,7 +51,7 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 		t.Fatalf("unmarshal config: %v\n%s", err, data)
 	}
 
-	core, ok := cfg.MCPServers["swarmgo_interaction"]
+	core, ok := cfg.MCPServers["tionswarm_interaction"]
 	if !ok {
 		t.Fatalf("core server entry missing:\n%s", data)
 	}
@@ -62,7 +62,7 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 		t.Errorf("core URL must target the /core tier, got %q", core.URL)
 	}
 
-	ext, ok := cfg.MCPServers["swarmgo_extended"]
+	ext, ok := cfg.MCPServers["tionswarm_extended"]
 	if !ok {
 		t.Fatalf("extended server entry missing:\n%s", data)
 	}
@@ -75,11 +75,11 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 
 	// Allowlist entries are namespaced under each tier's server key.
 	want := map[string]bool{
-		"mcp__swarmgo_interaction__Bash":              true,
-		"mcp__swarmgo_interaction__ask_user":          true,
-		"mcp__swarmgo_interaction__permission_prompt": true,
-		"mcp__swarmgo_extended__update_session":       true,
-		"mcp__swarmgo_extended__create_agent":         true,
+		"mcp__tionswarm_interaction__Bash":              true,
+		"mcp__tionswarm_interaction__ask_user":          true,
+		"mcp__tionswarm_interaction__permission_prompt": true,
+		"mcp__tionswarm_extended__update_session":       true,
+		"mcp__tionswarm_extended__create_agent":         true,
 	}
 	got := map[string]bool{}
 	for _, a := range allowed {

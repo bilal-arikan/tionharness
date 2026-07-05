@@ -1,4 +1,4 @@
-// Maps SwarmGo's relationship graphs (workspace collaboration network and the
+// Maps TionSwarm's relationship graphs (workspace collaboration network and the
 // per-agent memory knowledge graph) into vis-network node/edge data — the same
 // library Agent-MCP's dashboard uses, so layout/physics are handled by its
 // engine (see components/graph/VisNetworkGraph).

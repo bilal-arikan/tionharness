@@ -213,7 +213,7 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 - **Düşünme seviyesi seçici (`ThinkingPicker`):** textarea'nın solunda `🧠` butonu +
   üstte açılan menü (**Oto**=ajan ayarı / **Kapalı** / **Düşük** / **Orta** / **Yüksek**,
   dışarı-tıkla-kapat). Seçim `App.tsx` `thinkingLevel` state'inde + `localStorage`
-  (`swarmgo.thinkingLevel`) ile kalıcı; `chatStream` gövdesine `thinkingLevel` olarak gider
+  (`tionswarm.thinkingLevel`) ile kalıcı; `chatStream` gövdesine `thinkingLevel` olarak gider
   ve o turun reasoning bütçesini **ajan ayarından bağımsız** belirler (bkz. Notlar).
 
 ### Session-bazlı sohbet (tek ajan, dropdown ile seçim)
@@ -311,7 +311,7 @@ oturum gerçek konuşma sayılır, korunur. (Sidebar'daki yenile butonu silmeyi 
 ### Yerleşim
 - Sohbet **tam genişlik** kullanır (`MessageList`/`Composer`'daki `max-w-3xl` kaldırıldı).
 - `Sidebar` (Ajanlar + Oturumlar) **sürüklenerek yeniden boyutlandırılır**: sağ kenardaki
-  tutamak (200–560px), genişlik `localStorage` (`swarmgo.sidebarWidth`).
+  tutamak (200–560px), genişlik `localStorage` (`tionswarm.sidebarWidth`).
 - Bir turdaki üç adım türü de **tek-satır açılır-kapanır kart**: 💭 Düşünme (`thinking`),
   💬 Düşünce (ara `text` — `TextStep`), 🛠️ Tool (`tool` — `ActivityCard`). Nihai
   cevap tam görünür kalır.
@@ -332,11 +332,11 @@ oturum gerçek konuşma sayılır, korunur. (Sidebar'daki yenile butonu silmeyi 
 
 ## Doğrulama (anahtarsız claude-cli, uçtan uca)
 
-- Ajan: `StepTest` (claude-cli, anahtarsız). Mesaj: "Bash aracıyla `echo hello-from-swarmgo`
+- Ajan: `StepTest` (claude-cli, anahtarsız). Mesaj: "Bash aracıyla `echo hello-from-tionswarm`
   çalıştır, sonra çıktıyı tek cümlede söyle."
 - Yanıt `steps`: `[{kind:text,"Komutu çalıştırıyorum."}, {kind:tool, tool:"Bash",
-  input:{command,description}, output:"hello-from-swarmgo"}]` — dosya deposuna kalıcı yazıldı.
-- Chrome DOM: ara metin → **▶️ Bash** tool kartı (açınca GIRDI/ÇIKTI: `hello-from-swarmgo`)
+  input:{command,description}, output:"hello-from-tionswarm"}]` — dosya deposuna kalıcı yazıldı.
+- Chrome DOM: ara metin → **▶️ Bash** tool kartı (açınca GIRDI/ÇIKTI: `hello-from-tionswarm`)
   → markdown cevap. **API anahtarı kullanılmadı.**
 
 ## Notlar / Sıradaki

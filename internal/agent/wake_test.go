@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // TestScheduleWake_ArmsOneShot verifies ScheduleWake persists a one-shot schedule

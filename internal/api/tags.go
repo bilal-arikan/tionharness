@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/events"
 )
 
 // tagsReq is the body for every "set tags" endpoint: the full replacement tag

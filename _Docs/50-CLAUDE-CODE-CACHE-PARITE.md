@@ -1,6 +1,6 @@
 # 50 — Claude Code Cache/Context Paritesi Planı
 
-> **Amaç:** SwarmGo'nun **native sağlayıcı** (anthropic / OpenAI-compat) context "paketini",
+> **Amaç:** TionSwarm'nun **native sağlayıcı** (anthropic / OpenAI-compat) context "paketini",
 > Claude Code'un prompt-cache + compaction mekaniğine yaklaştırmak — **SDK'ya bağımlı
 > olmadan** (çok-sağlayıcı, anahtarsız claude-cli, dosya-tabanlı felsefe korunur).
 >
@@ -92,7 +92,7 @@ graph LR
 - Anthropic `context_management` beta: `clear_tool_uses_20250919` (trigger `input_tokens`,
   `keep` son N tool_use, `clear_at_least`) + `clear_thinking_20251015`.
 - Sunucu, cache'li önekteki eski tool-result/thinking'i **yerinde** siler (`cache_edits`),
-  önek tam yeniden yazılmaz → sıcak kalır. SwarmGo'nun mevcut deterministik tool-output
+  önek tam yeniden yazılmaz → sıcak kalır. TionSwarm'nun mevcut deterministik tool-output
   sıkıştırması (Sistem A/B, `CompactSavedBytes`) ile **tamamlayıcı**.
 - `anthropic.go`'ya `extendedCache` açıkken ekle; beta header gerekir; ayar
   `anthropicContextEditing` (vars. kapalı). Client-side fold'a alternatif/ek.
@@ -107,9 +107,9 @@ graph LR
 
 ### P5 — TTL / breakpoint kararlılığı (hardening)
 - Claude Code 1h eligibility'yi **oturum-stabil latch**'liyor (mid-session flip cache bozar).
-  SwarmGo tüm breakpoint'lerde sabit 1h TTL kullanıyor → doğrula: hiçbir ayar mid-session
+  TionSwarm tüm breakpoint'lerde sabit 1h TTL kullanıyor → doğrula: hiçbir ayar mid-session
   TTL/scope flip'i yapmıyor.
-- "Tek mesaj-seviyesi marker" ilkesi: SwarmGo 3 breakpoint (limit 4) — history breakpoint P1
+- "Tek mesaj-seviyesi marker" ilkesi: TionSwarm 3 breakpoint (limit 4) — history breakpoint P1
   sonrası **son stabil mesajda** (volatile ekte değil) olmalı.
 
 ### P6 — Önizleme cache haritasını gerçeğe hizala ✅ UYGULANDI (2026-07-04)

@@ -1,5 +1,5 @@
-// Package main is the SwarmGo entry point.
-// SwarmGo is a self-hosted multi-agent AI runtime written in Go with a
+// Package main is the TionSwarm entry point.
+// TionSwarm is a self-hosted multi-agent AI runtime written in Go with a
 // custom UI/UX.
 package main
 
@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/app"
-	"github.com/bilal-arikan/swarmgo/internal/config"
+	"github.com/bilal-arikan/tionswarm/internal/app"
+	"github.com/bilal-arikan/tionswarm/internal/config"
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	}
 	logger.Info("config loaded", "data_dir", cfg.DataDir, "addr", cfg.Addr)
 
-	// Optional profiling server (loopback-only, off by default; SWARMGO_PPROF=1).
+	// Optional profiling server (loopback-only, off by default; TIONSWARM_PPROF=1).
 	startPprof(logger)
 
 	application, err := app.Bootstrap(cfg, logs, logger)

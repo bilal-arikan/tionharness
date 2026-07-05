@@ -3,7 +3,7 @@ package tools
 import (
 	"sort"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // bridge_filter.go — POC: optional hidden-tier exclusion for the claude-cli
@@ -21,7 +21,7 @@ import (
 // This POC lets us ask: what if the hidden tier (the self-management suite,
 // dozens of tools) is NOT bridged to the CLI at all? Then those schemas never
 // travel to the CLI process for that turn. The tools are not callable in-turn;
-// the CLI-side analogue of "activate" becomes a NEXT-turn re-allowlist (SwarmGo
+// the CLI-side analogue of "activate" becomes a NEXT-turn re-allowlist (TionSwarm
 // re-advertises them once the model/user asks for them). skipHidden=false
 // reproduces BridgeableDefs exactly. The runtime gate that drives this defaults
 // to ON as of 2026-07-01 (Tunables.cliBridgeSkipHidden).

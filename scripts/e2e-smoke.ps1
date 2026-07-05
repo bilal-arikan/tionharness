@@ -1,4 +1,4 @@
-﻿# SwarmGo — HTTP API uçtan-uca smoke testi.
+﻿# TionSwarm — HTTP API uçtan-uca smoke testi.
 #
 # _Docs\33-DIS-AJAN-OTOMASYONU.md'deki "A. HTTP API Yolu" akışını baştan sona
 # doğrular: sağlık → CORS/no-auth → hata sözleşmesi → workspaces → agents →
@@ -7,9 +7,9 @@
 # (transform, LLM'siz) → schedule "run now" (otonom teslim) → flow branch routing
 # (contains/equals/regex) → branch default arm → parallel fan-out+join (LLM) →
 # kalıcılık → temizlik.
-# Bir dış ajanın SwarmGo'yu API ile sürebildiğini kanıtlar ve regresyonları yakalar.
+# Bir dış ajanın TionSwarm'yu API ile sürebildiğini kanıtlar ve regresyonları yakalar.
 #
-# Önkoşul: SwarmGo sunucusu çalışıyor olmalı (varsayılan dev portu :8090).
+# Önkoşul: TionSwarm sunucusu çalışıyor olmalı (varsayılan dev portu :8090).
 #
 # Kullanım:
 #   .\scripts\e2e-smoke.ps1                       # default ws, ilk ajan, varsayılan port
@@ -129,7 +129,7 @@ function Run-FlowGraph {
     }
 }
 
-Write-Host "==> SwarmGo E2E smoke testi — $BaseUrl (ws='$(if($Workspace){$Workspace}else{'<default>'})', llm=$(if($SkipLLM){'kapali'}else{'acik'}))" -ForegroundColor Cyan
+Write-Host "==> TionSwarm E2E smoke testi — $BaseUrl (ws='$(if($Workspace){$Workspace}else{'<default>'})', llm=$(if($SkipLLM){'kapali'}else{'acik'}))" -ForegroundColor Cyan
 
 # 1) Sağlık
 Test-Step "GET /health" {
@@ -187,7 +187,7 @@ Test-Step "POST /api/sessions" {
 # 7) Working-directory round-trip (oturum-başına cwd, doc 26)
 Test-Step "PUT+GET /api/sessions/{id}/workdir (cwd round-trip)" {
     if (-not $script:sessionId) { throw "oturum yok" }
-    $repo = (Resolve-Path "$PSScriptRoot\..").Path     # SwarmGo repo kökü (mevcut + git)
+    $repo = (Resolve-Path "$PSScriptRoot\..").Path     # TionSwarm repo kökü (mevcut + git)
     $set = Api-Put "/api/sessions/$($script:sessionId)/workdir" @{ dir = $repo }
     if (-not $set.exists) { throw "set sonrası exists=false ($repo)" }
     $got = Api-Get "/api/sessions/$($script:sessionId)/workdir"
@@ -199,7 +199,7 @@ Test-Step "PUT+GET /api/sessions/{id}/workdir (cwd round-trip)" {
 }
 
 # 8) GERÇEK sohbet turu (SSE) — canlı LLM çağrısı
-$marker = "SwarmGo smoke OK"
+$marker = "TionSwarm smoke OK"
 Test-Step "POST /api/chat/stream (gerçek LLM turu)" {
     if (-not $script:sessionId) { throw "oturum yok (önceki adım başarısız)" }
     if ($SkipLLM) { return "__SKIP__" }

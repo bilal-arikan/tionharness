@@ -1,5 +1,5 @@
 ---
-name: "SwarmGo Deliverables"
+name: "TionSwarm Deliverables"
 description: "How to surface produced output — files, documents, datasets, reports, diagrams, images, video — so the user actually sees it (artifacts vs. inline chat media)."
 when_to_use: "When a task asks you to produce a file/document/dataset/report/code, or to show a diagram, image, video, or gallery to the user."
 icon: "📦"

@@ -1,7 +1,7 @@
 # 39 — Dizin-Sitesi Köprüsü (Search Connector)
 
 > **Durum: UYGULANDI (canlı arama + önizleme, 2026-06-26).** crossaitools.com /
-> skillsmp.com gibi **skill dizin sitelerini** SwarmGo market'ine bağlar. Mevcut
+> skillsmp.com gibi **skill dizin sitelerini** TionSwarm market'ine bağlar. Mevcut
 > `internal/ingest` (SK-IMP3) + uzak registry (`swarmregistry/v1`, `21-MARKET.md` §3)
 > üzerine kurulur.
 >
@@ -69,7 +69,7 @@ yayınlar. Kullanıcı bu URL'yi uzak kaynak olarak ekler.
 - ❌ Ayrı barındırma + güncelleme pipeline'ı; gerçek-zamanlı değil (snapshot)
 
 ### B. Uygulama-içi connector (in-app catalog connector)
-SwarmGo'ya **connector** kavramı eklenir: her site için bir connector site API'sini
+TionSwarm'ya **connector** kavramı eklenir: her site için bir connector site API'sini
 **canlı** çeker, kayıtları katalogda gösterir; kurulumda ilgili GitHub URL'ini `ingest`'e
 verir.
 - ✅ Gerçek-zamanlı, tek üründe; arama/sayfalama app'te

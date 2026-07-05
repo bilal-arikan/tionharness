@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // turnMeta captures the provider-side metadata of a completed turn (the model

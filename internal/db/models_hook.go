@@ -1,7 +1,7 @@
 package db
 
 // Hook event names. These mirror Claude Code's hook contract so the same
-// external hook scripts work against SwarmGo's native tool loop.
+// external hook scripts work against TionSwarm's native tool loop.
 const (
 	HookPreToolUse  = "PreToolUse"
 	HookPostToolUse = "PostToolUse"

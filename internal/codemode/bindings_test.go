@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/mcp"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
 )
 
 func entry(server, tool, desc string) mcp.CatalogEntry {
@@ -116,8 +116,8 @@ func TestWriteBindingsBuiltinModule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), `_bridge.call("swarmgo__update_flow", args)`) {
-		t.Fatalf("built-in wrapper must dispatch under swarmgo__ namespace, got:\n%s", src)
+	if !strings.Contains(string(src), `_bridge.call("tionswarm__update_flow", args)`) {
+		t.Fatalf("built-in wrapper must dispatch under tionswarm__ namespace, got:\n%s", src)
 	}
 	if strings.Contains(string(src), "blocked_builtin") {
 		t.Fatal("disallowed built-in leaked into bindings")
@@ -126,7 +126,7 @@ func TestWriteBindingsBuiltinModule(t *testing.T) {
 
 // TestWriteBindingsBuiltinServerCollision covers the guard: an MCP server that
 // sanitises to the reserved built-ins module name is renamed so it never clobbers
-// the swarmgo built-ins module.
+// the tionswarm built-ins module.
 func TestWriteBindingsBuiltinServerCollision(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "mcp")
 	entries := []mcp.CatalogEntry{entry(BuiltinServer, "alpha", "x")}

@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
 )
 
 // Auto-tag: derive well-known session tags from what happened during a turn +

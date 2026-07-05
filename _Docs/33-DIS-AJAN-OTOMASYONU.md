@@ -1,6 +1,6 @@
-# 33 — Dış Ajan Otomasyonu (SwarmGo'yu Dışarıdan Sürmek)
+# 33 — Dış Ajan Otomasyonu (TionSwarm'yu Dışarıdan Sürmek)
 
-> SwarmGo'yu **harici bir ajanın** (chrome-mcp, playwright-mcp veya düz HTTP istemcisi)
+> TionSwarm'yu **harici bir ajanın** (chrome-mcp, playwright-mcp veya düz HTTP istemcisi)
 > baştan sona kontrol etmesi için referans. İki yol vardır; çoğu senaryoda **API yolu**
 > tercih edilir, UI yolu yalnızca gerçek tarayıcı/oturum gerektiğinde kullanılır.
 
@@ -20,7 +20,7 @@ gözünden" doğrulama veya tarayıcı-bağımlı senaryolar için.
 
 ### A.1 Temel Bilgiler
 
-- **Base URL (dev):** `http://127.0.0.1:8090` · **Varsayılan:** `http://127.0.0.1:8080` (`SWARMGO_ADDR`)
+- **Base URL (dev):** `http://127.0.0.1:8090` · **Varsayılan:** `http://127.0.0.1:8080` (`TIONSWARM_ADDR`)
 - **Kimlik doğrulama: YOK.** Hiçbir token/anahtar gerekmez (`server.go:withCORS`). Yerel,
   tek-kullanıcılı runtime için bilinçli. Ağa açarsan (`0.0.0.0`) önüne reverse-proxy auth koy.
 - **CORS: wildcard açık** — `Access-Control-Allow-Origin: *`, izinli header'lar
@@ -34,7 +34,7 @@ gözünden" doğrulama veya tarayıcı-bağımlı senaryolar için.
 
 ### A.1.1 UTF-8 Gövde — Türkçe Karakter Tuzağı (önemli)
 
-SwarmGo'nun depolama/bellek/conversation yolu **uçtan uca UTF-8 temizdir** (Go string'leri
+TionSwarm'nun depolama/bellek/conversation yolu **uçtan uca UTF-8 temizdir** (Go string'leri
 UTF-8; `encoding/json` + atomik bayt yazımı; hiçbir yerde charset decode yok — doğrulandı:
 asistan cevapları `×`/`÷`/`−` gibi çok-baytlı Unicode'u kusursuz saklar). Türkçe metin
 bozulması (mojibake, ör. `Kısaca`→`KÄ±saca`, `kaç`→`kaÃ§`) **yalnızca isteği gönderen
@@ -322,8 +322,8 @@ turlara bir **açılış (boot) sırası** dayatılır: yönelim → hatırlama 
 - **Enjeksiyon:** `agent/runtime.go autonomousSystemPrompt` her otonom turun sistem-promptuna
   kısa bir `autonomousBootReminder` (skill'e yönlendiren pointer) ekler. Tek nokta dört otonom
   yolu da kapsar (`executor.go` + `subagent.go` ortak kurucu); interaktif sohbet etkilenmez.
-- **Tam reçete:** `swarmgo-autonomous-ops` becerisi **§10**. Ajan ihtiyaç duyarsa
-  `use_skill "swarmgo-autonomous-ops"` ile açar.
+- **Tam reçete:** `tionswarm-autonomous-ops` becerisi **§10**. Ajan ihtiyaç duyarsa
+  `use_skill "tionswarm-autonomous-ops"` ile açar.
 - **Ayar:** `autonomousBootSeq` (vars. açık) — Ayarlar ▸ Çalışma dizini frenleri altında
   "Otonom boot doğrulama sırası" toggle'ı; kapatınca tur başına birkaç token geri kazanılır.
 - **Dış-ajan açısından:** Bir schedule'ı `POST /api/schedules/{id}/run` ("Run now") ile
@@ -332,7 +332,7 @@ turlara bir **açılış (boot) sırası** dayatılır: yönelim → hatırlama 
 
 ## Sınırlar & Sıradaki İyileştirmeler
 
-- **API auth yok:** Ağa açılırsa (`SWARMGO_ADDR=0.0.0.0`) öncesinde token/proxy katmanı şart.
+- **API auth yok:** Ağa açılırsa (`TIONSWARM_ADDR=0.0.0.0`) öncesinde token/proxy katmanı şart.
 - **UI seçici kapsamı:** Çekirdek akışlar + tüm panel formları (Agents/Tasks/Schedules/Settings/
   Skills/Market/Secrets/Memory/Artifacts/Flows) testid taşır (Faz 1+2+3, ~183 testid). Yeni panel/
   form eklenince aynı konvansiyonu uygula (statik=`{panel}-{eylem}`, liste=sabit testid+`data-*-id`).

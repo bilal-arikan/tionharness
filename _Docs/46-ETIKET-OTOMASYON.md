@@ -180,5 +180,5 @@ vs politika-reddi ayrımı).
 ## Sıradaki
 - Canlı loop doğrulaması (gerçek sağlayıcıyla uçtan uca; token maliyeti nedeniyle
   unit testlerle ayrıldı).
-- Opsiyonel: `swarmgo-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi;
+- Opsiyonel: `tionswarm-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi;
   flow/schedule etiketlerini de tetikleyiciye açma (şimdilik yalnız session).

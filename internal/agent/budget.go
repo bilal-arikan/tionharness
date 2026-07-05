@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // ErrAutonomyPaused is returned when the workspace autonomy brake is engaged and an

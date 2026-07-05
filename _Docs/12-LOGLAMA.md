@@ -1,4 +1,4 @@
-# SwarmGo — Loglama Sistemi
+# TionSwarm — Loglama Sistemi
 
 > Son güncelleme: **2026-06-23**
 > Uygulama logları bir **bellek-içi ring buffer**'a yakalanır, **stdout'a** ve
@@ -7,9 +7,9 @@
 ## Disk log dosyası + UI'dan erişim (2026-06-23)
 
 `SetupLogging` artık stdout'a ek olarak `io.MultiWriter` ile bir **disk dosyasına**
-da yazar: `<dataDir>/logs/swarmgo.log` (append, best-effort — açılamazsa sessizce
+da yazar: `<dataDir>/logs/tionswarm.log` (append, best-effort — açılamazsa sessizce
 stdout-only'e düşer). Yol çözümü `config.LogFilePath()` (= `config.DefaultDataDir()`
-+ `logs/swarmgo.log`), böylece `api` paketi `app`'i import etmeden yolu bilir.
++ `logs/tionswarm.log`), böylece `api` paketi `app`'i import etmeden yolu bilir.
 
 Loglar ekranında (`LogsPanel`) **yolu kopyala** + **klasörü aç** (Explorer
 `/select`) eklendi. Endpoint'ler: `GET /api/logs/path`, `POST /api/logs/reveal`
@@ -39,7 +39,7 @@ Açıkça `logger.Warn/Error` ile loglanmayan hataların da kaydı tutulur:
 
 ## Genel Bakış
 
-SwarmGo standart kütüphane `log/slog`'u kullanır. Boot'ta `main.go` tek bir
+TionSwarm standart kütüphane `log/slog`'u kullanır. Boot'ta `main.go` tek bir
 `slog.Logger` kurar; bu logger her workspace runtime'ına, scheduler'a, API
 sunucusuna ve tüm alt sistemlere **enjekte edilir** (paket-geneli global logger
 yok). Böylece tüm app + tüm workspace logları **tek akışta** toplanır.
@@ -181,14 +181,14 @@ dış süreç/ajan** tüm app + workspace loglarını (hatalar dahil) okuyabilir
 
 ```mermaid
 graph LR
-    A[Dış ajan] -->|HTTP GET /api/logs?level=error| B[SwarmGo :8090]
+    A[Dış ajan] -->|HTTP GET /api/logs?level=error| B[TionSwarm :8090]
     B --> A
 ```
 
 Sınırlar ve güvenlik:
 
 - **Loopback bind (varsayılan `127.0.0.1`):** yalnız **aynı makinedeki** süreçler
-  erişir. Ağa açmak için `SWARMGO_ADDR=0.0.0.0:8090` (bkz. `02-VERI-MODELI.md`,
+  erişir. Ağa açmak için `TIONSWARM_ADDR=0.0.0.0:8090` (bkz. `02-VERI-MODELI.md`,
   Windows Güvenlik Duvarı notu).
 - **Kimlik doğrulama yok:** yerel tek-kullanıcı dev varsayımı. Ağa açılırsa
   bearer/token koruması eklenmeli (bkz. *Gelecek*).
@@ -239,4 +239,4 @@ Sınırlar ve güvenlik:
 - `internal/agent/{worker,executor,flow,reflector}.go` — otonom/runtime logları
 - `frontend/src/components/panels/LogsPanel.tsx` — Loglar ekranı (filtre + gruplama)
 - `frontend/src/lib/logGroup.ts` — ardışık aynı kayıtları katlama (`groupConsecutive`)
-- `cmd/swarmgo/main.go` — logger kurulumu
+- `cmd/tionswarm/main.go` — logger kurulumu

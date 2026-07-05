@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/proc"
 )
 
 // gitRepoToplevel returns the repository root for dir, or "" when dir is not in a
@@ -54,7 +54,7 @@ func (r *Runtime) ensureWorktree(ctx context.Context, base, sessionID string) st
 		r.logger.Warn("worktree mkdir failed", "error", err)
 		return base
 	}
-	branch := "swarmgo/session-" + sessionID
+	branch := "tionswarm/session-" + sessionID
 	// -b creates the branch at HEAD; if it already exists (re-create after a manual
 	// rmdir) fall back to attaching without -b.
 	addCmd := proc.CommandContext(ctx, "git", "-C", repo, "worktree", "add", "-b", branch, wtPath, "HEAD")

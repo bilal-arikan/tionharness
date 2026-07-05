@@ -28,7 +28,7 @@ Editör yerleşimi sadeleştirildi:
   popup'ıyla (`TaskFormModal`) aynı:** `max-h-[90vh] w-full max-w-2xl rounded-xl`.
 - **Palet sürükle-bırak:** node ekleme listesindeki her tip hem tıklanabilir hem
   **canvas'a sürüklenebilir**. `dataTransfer` MIME `FLOW_NODE_DND_MIME`
-  (`application/swarmgo-flow-node`); `FlowCanvas` içindeki `CanvasInner` (artık
+  (`application/tionswarm-flow-node`); `FlowCanvas` içindeki `CanvasInner` (artık
   `ReactFlowProvider` altında ayrı bileşen) `onDrop`'ta `screenToFlowPosition` ile
   ekran noktasını graf uzayına çevirir → `onDropNode(type, pos)` → `FlowsPanel.addNodeAt`
   node'u **bırakılan konumda** oluşturur. Tık ile ekleme origin yakınına kaskad bırakır.
@@ -259,7 +259,7 @@ node tipleriyle kuruldu; tek "yenilik" döngünün (cycle) bilinçli kullanımı
 **etmez**; `engine.go` döngüye izin verip `maxSteps` (50) ile sınırlar (*"a cyclic graph
 (loops are allowed)"*). Frontend flow editöründe de cycle reddi yok (`TaskDetailPanel`'deki
 `hasCycle` yalnız kanban görev bağımlılıkları içindir, flow'a değmez). Bu yüzden
-`evaluate → decide → generate` **geri-kenarı** doğrudan kurulabilir. _(Düzeltme: `swarmgo-flows`
+`evaluate → decide → generate` **geri-kenarı** doğrudan kurulabilir. _(Düzeltme: `tionswarm-flows`
 skill'i eskiden "graph must be acyclic" diyordu — yanlıştı, düzeltildi.)_
 
 **Graf:** `contract(gen) → review-contract(eval) → generate(gen) → evaluate(eval) →
@@ -278,7 +278,7 @@ decide(branch)`; `decide` → `VERDICT: SHIP` ise `finalize(transform)`, `VERDIC
 
 **Dağıtım:** gömülü gallery şablonu `gan-loop` ("Generator↔Evaluator (GAN)",
 `lib/flowTemplates.ts`) + market paketleri (`flow.gan-generator-evaluator`,
-`agent.skeptical-evaluator`, `mcp.playwright`) + yeni default skill `swarmgo-gan-loop`.
+`agent.skeptical-evaluator`, `mcp.playwright`) + yeni default skill `tionswarm-gan-loop`.
 Şablon agent-bağımsız; kurulumdan sonra **iki ayrı ajan** atanır (generator vs evaluator) —
 aynı ajanı iki role atamak deseni bozar. UI/E2E hedeflerinde evaluator `mcp.playwright` ile
 gerçek tarayıcı testi yapar; saf metin/kod hedeflerinde kod okuma + `Bash`'e düşer (opsiyonel).
@@ -377,7 +377,7 @@ ikonlarına** geçti: `Bot / Split / Zap / Timer / Puzzle` (`nodeStyles.NODE_ICO
 ## Daraltılabilir "Node ekle" paleti + yukarı büyüyen run input (2026-07-04)
 
 - **Daraltılabilir palet.** Sol paletteki "Node ekle" başlığı artık chevron'lu bir **toggle**
-  (`paletteOpen`, `localStorage: swarmgo.flowPaletteOpen`). Daraltınca ipucu + node tip butonları
+  (`paletteOpen`, `localStorage: tionswarm.flowPaletteOpen`). Daraltınca ipucu + node tip butonları
   gizlenir; "Görünüm" bölümü hep görünür kalır.
 - **Run input yukarı büyür.** Çalıştır girdisi `rows={1}` sabit yükseklikten **auto-grow**'a geçti
   (`runInputRef` + effect: `height=auto` → `min(scrollHeight,160)`; `resize-none max-h-40`). Run
@@ -409,7 +409,7 @@ sağlanıyor; panele ayrıca eklenen `pb-24` girdi altında ölü boşluk + gere
   "🗺 harita" toggle'ı hâlâ elle aç/kapa yapıyor.
 - **Sol palet gizle/göster.** Node ekle + Görünüm kolonu **canvas'ın üzerinde sol üstte** yüzen
   (`absolute left-2 top-2 z-10`) `PanelLeftClose`/`PanelLeftOpen` butonuyla tümüyle gizlenip
-  açılabilir (`paletteVisible`, `localStorage: swarmgo.flowPaletteVisible`). Canvas sarmalayıcı
+  açılabilir (`paletteVisible`, `localStorage: tionswarm.flowPaletteVisible`). Canvas sarmalayıcı
   `relative`; React Flow toolbar'ı top-right, Controls bottom-left olduğundan sol üst boş.
   Gizliyken canvas tam genişlik. (Palet içi "Node ekle" bölüm-daraltma `paletteOpen`'dan ayrıdır.)
 
@@ -417,7 +417,7 @@ sağlanıyor; panele ayrıca eklenen `pb-24` girdi altında ölü boşluk + gere
 
 - **Adım izi toggle.** `RunView`'deki "Adım izi" (step trace) bölümü artık **alttan açılıp
   kapanabilen** bir panel: başlık satırı chevron'lu toggle (`ChevronUp` kapalı → yukarı aç,
-  `ChevronDown` açık) + "N adım" sayacı. `traceOpen` `localStorage: swarmgo.flowTraceOpen`'da
+  `ChevronDown` açık) + "N adım" sayacı. `traceOpen` `localStorage: tionswarm.flowTraceOpen`'da
   kalıcı; **default dar ekranda (`< md`) kapalı**, md+'da açık.
 - **Dikey yükseklik fix.** `RunView` kökü `min-h-0` aldı (flex çocukları düzgün küçülsün diye);
   trace listesi `max-h-[40%]` → `max-h-[40vh]` (kesin-yükseklik gerektirmeyen, daha kararlı).

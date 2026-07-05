@@ -1,12 +1,12 @@
 ---
-name: "SwarmGo Self-Debug"
-description: "How to read your own per-session debug journal in SwarmGo to self-diagnose and optimise: the read_session_debug tool over the parallel debug.jsonl observability stream (turn timings, per-call token spend by model, per-tool latency/size/errors, hook decisions, compaction and recovery). Use it to find where tokens and time go, which tools are slow or failing, and how often context is compacted — then change behaviour."
+name: "TionSwarm Self-Debug"
+description: "How to read your own per-session debug journal in TionSwarm to self-diagnose and optimise: the read_session_debug tool over the parallel debug.jsonl observability stream (turn timings, per-call token spend by model, per-tool latency/size/errors, hook decisions, compaction and recovery). Use it to find where tokens and time go, which tools are slow or failing, and how often context is compacted — then change behaviour."
 when_to_use: "When a session feels slow, expensive, or error-prone, or when you are explicitly asked to optimise token/latency usage or investigate why a run misbehaved. Also useful at the end of a long autonomous run to reflect on cost/latency and record a lesson. Read the summary first; drill into raw events only when a number looks wrong."
 icon: "🐞"
 color: "#ef4444"
 access: shared
 ---
-# SwarmGo — Self-Debug (read your own observability stream)
+# TionSwarm — Self-Debug (read your own observability stream)
 
 Every session has a **parallel debug journal** next to its conversation:
 `store/sessions/<id>/debug.jsonl`. Where `session.jsonl` is what the user sees,

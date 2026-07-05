@@ -16,13 +16,13 @@ import (
 // poolTTL bounds how long a pooled server's cached tool list is reused before a
 // refresh, as a safety net for servers that do not emit tools/list_changed. The
 // refresh runs on the EXISTING persistent connection (cheap — no re-dial).
-// Overridable via SWARMGO_MCP_POOL_TTL_SEC (0 disables the timer; listChanged
+// Overridable via TIONSWARM_MCP_POOL_TTL_SEC (0 disables the timer; listChanged
 // still refreshes).
 const poolTTL = 60 * time.Second
 
 // Pool maintains one persistent stdio client per MCP server (keyed by sanitized
 // server name). Persistent connections — as opposed to the old dial-per-
-// operation model — give three properties SwarmGo needs:
+// operation model — give three properties TionSwarm needs:
 //
 //   - The repeated per-turn catalog builds reuse a live session instead of
 //     opening (and leaking) a fresh one every time — no session churn on
@@ -282,7 +282,7 @@ func configFingerprint(cfg ServerConfig) string {
 }
 
 func poolTTLFromEnv() time.Duration {
-	if v := os.Getenv("SWARMGO_MCP_POOL_TTL_SEC"); v != "" {
+	if v := os.Getenv("TIONSWARM_MCP_POOL_TTL_SEC"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			return time.Duration(n) * time.Second
 		}

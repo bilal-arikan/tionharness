@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // Defaults are conservative; override via env for larger-context models.
@@ -135,15 +135,15 @@ func (m *Manager) log(level slog.Level, msg string, args ...any) {
 	}
 }
 
-// NewManager builds a manager, reading SWARMGO_MAX_CONTEXT_TOKENS,
-// SWARMGO_KEEP_RECENT_MSGS, SWARMGO_CONTEXT_BUDGET_FRACTION and
-// SWARMGO_CONTEXT_BUDGET_CEIL when set.
+// NewManager builds a manager, reading TIONSWARM_MAX_CONTEXT_TOKENS,
+// TIONSWARM_KEEP_RECENT_MSGS, TIONSWARM_CONTEXT_BUDGET_FRACTION and
+// TIONSWARM_CONTEXT_BUDGET_CEIL when set.
 func NewManager() *Manager {
 	return &Manager{
-		maxTokens:      envInt("SWARMGO_MAX_CONTEXT_TOKENS", defaultMaxTokens),
-		keepRecent:     envInt("SWARMGO_KEEP_RECENT_MSGS", defaultKeepRecent),
-		budgetFraction: envFloat("SWARMGO_CONTEXT_BUDGET_FRACTION", 0), // 0 = auto (per-family adaptive)
-		budgetCeil:     envInt("SWARMGO_CONTEXT_BUDGET_CEIL", defaultBudgetAutoCeil),
+		maxTokens:      envInt("TIONSWARM_MAX_CONTEXT_TOKENS", defaultMaxTokens),
+		keepRecent:     envInt("TIONSWARM_KEEP_RECENT_MSGS", defaultKeepRecent),
+		budgetFraction: envFloat("TIONSWARM_CONTEXT_BUDGET_FRACTION", 0), // 0 = auto (per-family adaptive)
+		budgetCeil:     envInt("TIONSWARM_CONTEXT_BUDGET_CEIL", defaultBudgetAutoCeil),
 	}
 }
 

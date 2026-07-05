@@ -5,8 +5,8 @@ import (
 	"os/exec"
 )
 
-// knownExternalTools are optional third-party helpers SwarmGo can detect on the
-// host. They are NOT bundled, installed, or run by SwarmGo — detection is
+// knownExternalTools are optional third-party helpers TionSwarm can detect on the
+// host. They are NOT bundled, installed, or run by TionSwarm — detection is
 // presence-only so the user can see whether a tool they may want to wire up
 // exists on this machine.
 //

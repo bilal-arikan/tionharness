@@ -56,18 +56,18 @@ export function AgentsView({
   const catalog = useCatalog()
 
   // Left roster collapse (standard list pane) — toggled from the PaneHeader.
-  const { open: rosterOpen, toggle: toggleRoster } = useCollapsibleList('swarmgo.agentsListOpen')
+  const { open: rosterOpen, toggle: toggleRoster } = useCollapsibleList('tionswarm.agentsListOpen')
 
   // Right-hand activity panel visibility (persisted) — mirrors the chat
   // SessionDetailPanel open/close affordance so the middle settings area can use
   // the full width when the feed isn't needed.
   const [activityOpen, setActivityOpen] = useState(
-    () => localStorage.getItem('swarmgo.agentActivityOpen') !== '0',
+    () => localStorage.getItem('tionswarm.agentActivityOpen') !== '0',
   )
   const toggleActivity = () =>
     setActivityOpen((v) => {
       const next = !v
-      localStorage.setItem('swarmgo.agentActivityOpen', next ? '1' : '0')
+      localStorage.setItem('tionswarm.agentActivityOpen', next ? '1' : '0')
       return next
     })
 
@@ -128,7 +128,7 @@ export function AgentsView({
       <ListPane
         open={rosterOpen}
         onToggle={toggleRoster}
-        widthKey="swarmgo.agentsListWidth"
+        widthKey="tionswarm.agentsListWidth"
         defaultWidth={256}
         label="Ajanlar"
         testId="agents-list-toggle"

@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/proc"
 )
 
 // --- Persistent claude-cli session (Phase 4) ---
@@ -154,7 +154,7 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 	sys, _ := c.buildSystemAndPrompt(req)
 	var sysPath string
 	if sys != "" {
-		f, ferr := os.CreateTemp("", "swarmgo-sysprompt-persist-*.txt")
+		f, ferr := os.CreateTemp("", "tionswarm-sysprompt-persist-*.txt")
 		if ferr != nil {
 			return nil, fmt.Errorf("write system prompt file: %w", ferr)
 		}

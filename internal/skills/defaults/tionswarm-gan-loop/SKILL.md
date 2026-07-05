@@ -30,7 +30,7 @@ contract(gen) → review-contract(eval) → generate(gen) → evaluate(eval) →
 ```
 
 - **Döngü kasıtlıdır.** `evaluate → decide → generate` bir **geri-kenar (cycle)**'dır.
-  SwarmGo orchestration motoru döngülere **izin verir** ve `maxSteps` (50) ile sınırlar —
+  TionSwarm orchestration motoru döngülere **izin verir** ve `maxSteps` (50) ile sınırlar —
   yani graf *acyclic olmak zorunda değildir*. İterasyon başına ~3 adım → ~15 iterasyon sert
   tavan; pratikte döngü evaluator SHIP dediğinde biter.
 
@@ -109,4 +109,4 @@ test çalıştırmaya düşer.
 - Sözleşmeyi küçük, ölçülebilir kriterlere böl — belirsiz kriter = güvenilmez verdict.
 - Generator her turda **önceki değerlendirmenin tüm FAIL'lerini** ele almalı.
 - Bütçe guard'ları otonom koşularda geçerli; iterasyon sayısını hedefle orantılı tut.
-- Bu desen `[[swarmgo-flows]]` üzerine kuruludur (flow node tipleri/şablon değişkenleri orada).
+- Bu desen `[[tionswarm-flows]]` üzerine kuruludur (flow node tipleri/şablon değişkenleri orada).

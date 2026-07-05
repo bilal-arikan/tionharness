@@ -3,9 +3,9 @@ package ingest
 import (
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/fetch"
-	"github.com/bilal-arikan/swarmgo/internal/market"
-	"github.com/bilal-arikan/swarmgo/internal/skills"
+	"github.com/bilal-arikan/tionswarm/internal/fetch"
+	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
 // skillAdapter detects Claude Code skills (SKILL.md marker folders) in a tree and

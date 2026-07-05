@@ -17,7 +17,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
       </div>
       <Toggle
         label="Kabuk (Bash) aracı"
-        hint="Built-in `Bash`: ajan komut çalıştırır (Windows'ta PowerShell). claude-cli ajanlarında bu araç köprülenir ve CLI'nin native `Bash`'i bastırılır — tüm komutlar SwarmGo kabuğundan geçer. Yüksek risk."
+        hint="Built-in `Bash`: ajan komut çalıştırır (Windows'ta PowerShell). claude-cli ajanlarında bu araç köprülenir ve CLI'nin native `Bash`'i bastırılır — tüm komutlar TionSwarm kabuğundan geçer. Yüksek risk."
         checked={draft.enableShell}
         onChange={(v) => set('enableShell', v)}
       />
@@ -37,7 +37,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
       )}
       <Toggle
         label="Hook'ları claude-cli'ye geçir"
-        hint="Açıkken workspace PreToolUse/PostToolUse hook'ları claude-cli ajanlarına da `--settings` ile uygulanır (yalnız native değil). Uyarı: CLI hook'ları CLI'nin kendi shell'inde koşar; SwarmGo shell'i (PowerShell) için yazılmış bir hook uyumsuz olabilir — sorun çıkarsa kapatın."
+        hint="Açıkken workspace PreToolUse/PostToolUse hook'ları claude-cli ajanlarına da `--settings` ile uygulanır (yalnız native değil). Uyarı: CLI hook'ları CLI'nin kendi shell'inde koşar; TionSwarm shell'i (PowerShell) için yazılmış bir hook uyumsuz olabilir — sorun çıkarsa kapatın."
         checked={draft.enableCliHooks}
         onChange={(v) => set('enableCliHooks', v)}
       />
@@ -122,7 +122,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
       />
       <Toggle
         label="Otonom boot doğrulama sırası"
-        hint="Açıkken zamanlama/spawn/flow/subagent turlarına kısa bir açılış sırası hatırlatıcısı enjekte edilir (yönelim → hatırlama → tek görev seç → temel testi doğrula → işi yap → döngüyü kapat). Tam reçete: swarmgo-autonomous-ops becerisi (§10). Otonom tur başına birkaç token; kapatınca geri kazanılır. Önerilen: AÇIK."
+        hint="Açıkken zamanlama/spawn/flow/subagent turlarına kısa bir açılış sırası hatırlatıcısı enjekte edilir (yönelim → hatırlama → tek görev seç → temel testi doğrula → işi yap → döngüyü kapat). Tam reçete: tionswarm-autonomous-ops becerisi (§10). Otonom tur başına birkaç token; kapatınca geri kazanılır. Önerilen: AÇIK."
         checked={draft.autonomousBootSeq}
         onChange={(v) => set('autonomousBootSeq', v)}
       />

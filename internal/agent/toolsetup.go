@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bilal-arikan/swarmgo/internal/codemode"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/mcp"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/codemode"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // skillExists reports whether a skill slug is known to this workspace (global or
@@ -117,7 +117,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// WebSearch: native web search for every NATIVE-API provider (anthropic,
 		// minimax, openrouter). Registered unconditionally — exactly like
 		// its sibling WebFetch — so it also appears in the workspace tools catalog. The
-		// claude-cli path never receives it: SwarmGo built-ins reach the CLI ONLY through
+		// claude-cli path never receives it: TionSwarm built-ins reach the CLI ONLY through
 		// the explicit interactionToolSpecs bridge (which does not list it), so a CLI
 		// agent transparently uses its OWN native WebSearch instead. Backed by the
 		// workspace vault (a self-hosted SEARXNG_URL or a TAVILY_API_KEY).
@@ -282,7 +282,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			tools.NewFSListDirTool(sb),
 			tools.NewFSGlobTool(sb),
 			tools.NewFSGrepTool(sb),
-			// config_validate: well-formed-JSON + known-shape check for SwarmGo config
+			// config_validate: well-formed-JSON + known-shape check for TionSwarm config
 			// files, rooted at this turn's working dir. Read-only.
 			tools.NewConfigValidateTool(sb),
 		)
@@ -348,7 +348,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// HIDDEN: the self-management family is also kept OUT of the rendered
 	// load-on-demand catalog block — dozens of name+summary lines would otherwise
 	// ride in every turn's cached prefix. Their catalog + usage lives in the
-	// `swarmgo-self-management` skill (advertised in Available Skills); the block
+	// `tionswarm-self-management` skill (advertised in Available Skills); the block
 	// shows a single pointer to it. They stay activatable (activate_tools) and
 	// searchable (tool_search), so the skill is the documented path, not the only one.
 	for _, t := range builtins[selfManageStart:] {
@@ -394,7 +394,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		"handoff_session", "memory_add", "send_message",
 	)
 	// Admin-rare tools fold into the HIDDEN self-management group (not enumerated
-	// per turn — surfaced via the swarmgo-self-management skill / tool_search). These
+	// per turn — surfaced via the tionswarm-self-management skill / tool_search). These
 	// are confined config edits and secret reads: used in a tiny fraction of turns,
 	// and their WRITE siblings (secret_set/secret_delete via the self-manage suite)
 	// are already hidden — so hiding the reads keeps the secret/config family
@@ -445,7 +445,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		mcpEntries, mcpCaller = entries, caller
 	}
 
-	// Code-execution mode (POC, _Docs/44): expose the MCP catalog AND SwarmGo's own
+	// Code-execution mode (POC, _Docs/44): expose the MCP catalog AND TionSwarm's own
 	// eligible built-in tools as generated Python bindings behind a single run_code
 	// tool, so tool schemas stay OUT of the context window and intermediate data
 	// stays in the execution environment (the model orchestrates list→filter→act in
@@ -462,7 +462,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		codeAllow := func(name string) bool {
 			return tools.CodeModeEligible(name) && (toolFilter == nil || toolFilter(name))
 		}
-		// Built-in tool defs to expose as the `swarmgo` module (eligible + permitted).
+		// Built-in tool defs to expose as the `tionswarm` module (eligible + permitted).
 		// run_code and the meta-tools are not in reg yet, so they can't self-expose.
 		biDefs := reg.BuiltinDefs(codeAllow)
 		biBindings := make([]codemode.BuiltinDef, 0, len(biDefs))
@@ -634,7 +634,7 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 	reg := r.buildRegistry(ctx, agent)
 	filter := r.toolFilter(ctx, agent)
 	// A claude-cli agent reaches these tools as MCP tools (namespaced) via the CLI's
-	// own ToolSearch — NOT SwarmGo's native activate_tools. Render the block in CLI
+	// own ToolSearch — NOT TionSwarm's native activate_tools. Render the block in CLI
 	// form for it (mirrors how the skills block uses skillToolNameFor). The empty
 	// provider is the keyless claude-cli default; native API providers take false.
 	cli := agent.Provider == "" || agent.Provider == "claude-cli"
@@ -649,7 +649,7 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 // this keeps the cached system-prompt prefix lean in MCP-heavy workspaces, where
 // a single server can expose hundreds of tools. Built-in lazy tools (the
 // self-management family) are always listed in full: they are few and high-value.
-// This is the SwarmGo analogue of the Anthropic "tool search" pattern — search
+// This is the TionSwarm analogue of the Anthropic "tool search" pattern — search
 // instead of enumerate once the catalog grows large.
 const lazyCatalogMCPListLimit = 30
 
@@ -662,7 +662,7 @@ var cliLazyBridgeExcluded = map[string]bool{
 	"WebSearch":    true, // CLI has its own native WebSearch (defensive: eager, so not normally lazy)
 	"run_subagent": true, // bridged explicitly via interactionToolSpecs, not the lazy path
 	"run_code":     true, // code-execution mode is native-path-only (mirrors tools.bridgeExcluded)
-	// deactivate_tools is a SwarmGo-native meta-tool (paired with activate_tools);
+	// deactivate_tools is a TionSwarm-native meta-tool (paired with activate_tools);
 	// the CLI uses its OWN ToolSearch, so this is never bridged — keep it out of the
 	// CLI catalog even though it is name-only on the native path.
 	"deactivate_tools": true,
@@ -694,13 +694,13 @@ func catalogDisplayName(name string, cli bool) (string, bool) {
 // VISIBLE lazy tool defs (name + description). Built-in lazy tools are always
 // listed; namespaced MCP tools are listed individually only while under
 // lazyCatalogMCPListLimit, otherwise summarised per server. hiddenCount > 0 appends
-// a single pointer to the `swarmgo-self-management` skill in place of enumerating
+// a single pointer to the `tionswarm-self-management` skill in place of enumerating
 // the hidden suite. Returns "" when there is nothing to show.
 //
 // cli renders the block for a claude-cli agent, which reaches these tools as MCP
-// tools: names are namespaced (mcp__swarmgo_interaction__<name> for built-ins,
+// tools: names are namespaced (mcp__tionswarm_interaction__<name> for built-ins,
 // mcp__<server>__<tool> for MCP) and loaded via the CLI's own ToolSearch — NOT
-// SwarmGo's native activate_tools (the CLI has neither activate_tools nor
+// TionSwarm's native activate_tools (the CLI has neither activate_tools nor
 // tool_search). CLI-native built-ins (WebFetch) are dropped. This mirrors how the
 // skills block (CatalogBlockForAgentTool) already adapts to the CLI.
 func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool) string {
@@ -720,7 +720,7 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool) 
 	var b strings.Builder
 	b.WriteString("# Available Tools (load on demand)\n")
 	if cli {
-		b.WriteString("These SwarmGo tools are exposed as MCP tools and may be DEFERRED (schema not " +
+		b.WriteString("These TionSwarm tools are exposed as MCP tools and may be DEFERRED (schema not " +
 			"preloaded). They are listed by their EXACT namespaced names below (some with a short summary). " +
 			"Before your first call, load one with `ToolSearch` (e.g. `select:<name>`); calling an unloaded " +
 			"name returns \"No such tool available\". Load everything you expect to need in one call.\n")
@@ -785,7 +785,7 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool) 
 		}
 		fmt.Fprintf(&b, "\n%d self-management tools (manage agents, flows, schedules, tasks, hooks, "+
 			"MCP servers, skills, workspaces, app settings, your own prompts/config, secrets, memory, logs) are available but "+
-			"not listed here to save context. Load the `swarmgo-self-management` skill (via `%s`) "+
+			"not listed here to save context. Load the `tionswarm-self-management` skill (via `%s`) "+
 			"for the full catalog and how to use them, or find one directly with `%s` "+
 			"— then `%s` the names you need.\n", hiddenCount, skillTool, findHint, actHint)
 	}

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/bilal-arikan/swarmgo/internal/orchestration"
+	"github.com/bilal-arikan/tionswarm/internal/orchestration"
 )
 
 // graphNode is one entity in the workspace collaboration network. ID is
@@ -221,7 +221,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// MCP servers: one node per enabled server; an agent→server edge for every
-	// MCP-enabled agent (coarse access signal — SwarmGo gates tools per agent via
+	// MCP-enabled agent (coarse access signal — TionSwarm gates tools per agent via
 	// an allowlist, not per server, so this shows "which agents can reach MCP").
 	mcpCount := 0
 	for _, srv := range mcpServers {

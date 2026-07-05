@@ -15,7 +15,7 @@
 >
 > **Katman sadeleştirme (2026-06-25):** bundled (binary'e gömülü) ve workspace
 > pack tier'ları **kaldırıldı**. Paketler artık **yalnız global dizinde**
-> (`<DataDir>/market`, ~/.swarmgo/market) ve **uzak registry'lerde** yaşar.
+> (`<DataDir>/market`, ~/.tionswarm/market) ve **uzak registry'lerde** yaşar.
 > `//go:embed defaults` + `EnsureDefaults` + `internal/market/defaults/` silindi →
 > binary market item taşımıyor, workspace'te market klasörü yok. Mevcut başlangıç
 > paketleri (52 adet; 2026-06-25'te **GAN üçlüsü** eklendi — `flow.gan-generator-evaluator`
@@ -35,7 +35,7 @@
 > `sessions/.../data/gen_providers.py`. Model listeleri kurulumda düzenlenebilir.
 >
 > **Sistem entegrasyonu (2026-06-25):** Provider pack'leri artık **capability metadata**
-> taşır ve SwarmGo'nun token/maliyet/cache/düşünme sistemlerine bağlanır:
+> taşır ve TionSwarm'nun token/maliyet/cache/düşünme sistemlerine bağlanır:
 > - **`payload.provider.reasoning`** (bool) — `true` ise OpenAI-uyumlu uç için
 >   `reasoning_effort` (ajanın ThinkingLevel'ından `low/medium/high`) gönderilir
 >   (`OpenAICompat`, gated; bilinmeyen alan 400'ünü önlemek için varsayılan kapalı).
@@ -97,7 +97,7 @@
 
 ## 1. Amaç ve kapsam
 
-SwarmGo'da yedi "paylaşılabilir varlık" var:
+TionSwarm'da yedi "paylaşılabilir varlık" var:
 
 | Tür | Kaynak | Depolama | Kurulum hedefi |
 |-----|--------|----------|----------------|

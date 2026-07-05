@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/market"
-	"github.com/bilal-arikan/swarmgo/internal/orchestration"
-	"github.com/bilal-arikan/swarmgo/internal/skills"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // handlePublishMarket packages an existing entity into the workspace tier of the

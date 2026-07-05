@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // artifactDeliverableGuidance is the always-on instruction (kept in the static
@@ -19,12 +19,12 @@ import (
 // artifacts by default — the user expects deliverables to open in the Artifacts
 // screen, not be buried in chat or written only via an ad-hoc script. Only the
 // two-line rule of thumb lives here to keep the cached prefix small; the full
-// rules (binary files, inline media, galleries) live in the `swarmgo-deliverables`
+// rules (binary files, inline media, galleries) live in the `tionswarm-deliverables`
 // skill so they cost attention/tokens only when a deliverable is actually in play.
 const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
 	"When asked to produce a file/document/dataset/report/code, write it with your file tool (write_file / Write) or call create_artifact — don't deliver substantial output only as inline chat text or an ad-hoc shell command (that bypasses artifact capture). " +
 	"Content meant to be SEEN (a diagram, an image/video, a gallery) goes INLINE in your reply (markdown ![alt](path), a ```mermaid block) — not hidden in a separate Artifacts tab. " +
-	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `swarmgo-deliverables` skill before producing the deliverable."
+	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `tionswarm-deliverables` skill before producing the deliverable."
 
 // artifactsContextBlock builds a system-prompt section listing the artifacts a
 // session already has, so the agent can revise them with update_artifact (by id)
@@ -131,7 +131,7 @@ func (s artifactSink) UpdateArtifact(ctx context.Context, id, content string) (t
 }
 
 // AppendPlanArtifact records an approved plan (ExitPlanMode) in this session's
-// single rolling plan artifact. It is a SwarmGo-specific capability used by the
+// single rolling plan artifact. It is a TionSwarm-specific capability used by the
 // plan-approval bridge (callExitPlan), kept off the generic tools.ArtifactSink
 // interface and reached there via a duck-typed assertion. Best-effort.
 func (s artifactSink) AppendPlanArtifact(ctx context.Context, planMarkdown string) (tools.ArtifactRef, error) {

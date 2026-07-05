@@ -1,4 +1,4 @@
-// Package agent implements SwarmGo's multi-agent ("swarm") runtime: it owns each
+// Package agent implements TionSwarm's multi-agent ("swarm") runtime: it owns each
 // agent's provider calls, tool loop, delegation, cron scheduler and the headless
 // autonomous entry points (schedule/spawn/flow).
 package agent
@@ -17,16 +17,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
-	"github.com/bilal-arikan/swarmgo/internal/logbuf"
-	"github.com/bilal-arikan/swarmgo/internal/market"
-	"github.com/bilal-arikan/swarmgo/internal/mcp"
-	"github.com/bilal-arikan/swarmgo/internal/memory"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/secrets"
-	"github.com/bilal-arikan/swarmgo/internal/skills"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/logbuf"
+	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionswarm/internal/memory"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/secrets"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // Runtime owns the lifecycle of all autonomous agent workers.
@@ -264,7 +264,7 @@ func (r *Runtime) SessionContextRecentCount() int {
 // workspace's secret store handed to the secret_* tools (may be nil).
 func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, vault *secrets.Vault, bus *events.Bus, wsID, wsName string, logs *logbuf.Buffer, logger *slog.Logger) *Runtime {
 	// Seed the shipped default skills into the global dir (idempotent, never
-	// overwrites) so every workspace inherits the SwarmGo guide skills.
+	// overwrites) so every workspace inherits the TionSwarm guide skills.
 	_ = skills.EnsureDefaults(globalSkillsDir())
 	// The marketplace has no bundled/workspace tiers: packs live only in the
 	// global market dir (<DataDir>/market) and remote registries. No seeding.
@@ -312,20 +312,20 @@ func (r *Runtime) CloseMCP() {
 	}
 }
 
-// globalSkillsDir is SwarmGo's data-dir-level global skills directory
-// (<DataDir>/skills, default ~/.swarmgo/skills). Deliberately under SwarmGo's
-// OWN data dir — not the cross-tool ~/.agents/skills convention — so SwarmGo's
+// globalSkillsDir is TionSwarm's data-dir-level global skills directory
+// (<DataDir>/skills, default ~/.tionswarm/skills). Deliberately under TionSwarm's
+// OWN data dir — not the cross-tool ~/.agents/skills convention — so TionSwarm's
 // global skills stay isolated from other agent tools that share that directory.
-// Honors SWARMGO_DATA_DIR so a custom data dir is respected (mirrors config).
+// Honors TIONSWARM_DATA_DIR so a custom data dir is respected (mirrors config).
 func globalSkillsDir() string {
-	if d := os.Getenv("SWARMGO_DATA_DIR"); d != "" {
+	if d := os.Getenv("TIONSWARM_DATA_DIR"); d != "" {
 		return filepath.Join(d, "skills")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".swarmgo", "skills")
+	return filepath.Join(home, ".tionswarm", "skills")
 }
 
 // workspaceSkillsDir is this workspace's skills directory (<workspace>/skills),
@@ -390,7 +390,7 @@ func (r *Runtime) WorkspaceID() string { return r.wsID }
 // NewShellRunner returns a closure that runs a shell command through the
 // workspace-sandboxed shell tool (PowerShell on Windows, /bin/sh elsewhere), for
 // the claude-cli Interaction MCP bridge — so a CLI agent runs commands through
-// SwarmGo's own shell (sandboxed, bounded, permission/hook-gated) instead of the
+// TionSwarm's own shell (sandboxed, bounded, permission/hook-gated) instead of the
 // CLI's native POSIX Bash. Returns nil when shell is disabled or no sandbox is
 // configured, so the bridge advertises shell only when it can honour it.
 func (r *Runtime) NewShellRunner() func(ctx context.Context, args json.RawMessage) (string, error) {
@@ -419,17 +419,17 @@ func (r *Runtime) NewShellRunner() func(ctx context.Context, args json.RawMessag
 // template picker, which must work even with zero workspaces during onboarding).
 func MarketGlobalDir() string { return marketGlobalDir() }
 
-// marketGlobalDir is SwarmGo's data-dir-level global market directory
-// (<DataDir>/market, default ~/.swarmgo/market). Mirrors globalSkillsDir.
+// marketGlobalDir is TionSwarm's data-dir-level global market directory
+// (<DataDir>/market, default ~/.tionswarm/market). Mirrors globalSkillsDir.
 func marketGlobalDir() string {
-	if d := os.Getenv("SWARMGO_DATA_DIR"); d != "" {
+	if d := os.Getenv("TIONSWARM_DATA_DIR"); d != "" {
 		return filepath.Join(d, "market")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".swarmgo", "market")
+	return filepath.Join(home, ".tionswarm", "market")
 }
 
 // workspaceLedgerDir is the workspace root where the market install ledger
@@ -452,8 +452,8 @@ func (r *Runtime) SkillsCatalogBlockForAgent(agent db.Agent) string {
 		return ""
 	}
 	// Name the use_skill tool exactly as THIS agent will see it. A claude-cli agent
-	// reaches SwarmGo's built-ins through the Interaction MCP bridge, where they are
-	// namespaced (mcp__swarmgo_interaction__use_skill). Advertising the bare name to
+	// reaches TionSwarm's built-ins through the Interaction MCP bridge, where they are
+	// namespaced (mcp__tionswarm_interaction__use_skill). Advertising the bare name to
 	// it makes the model emit an unqualified `use_skill` call the CLI rejects with
 	// "No such tool available: use_skill" on the first turn (it recovers on retry by
 	// finding the namespaced tool, but the wasted round-trip + error is avoidable).
@@ -989,7 +989,7 @@ func buildSystemPrompt(a db.Agent) string {
 
 // GoalUsageHint is a single cached-prefix line teaching proactive goal use. The
 // tools are always available (eager); this nudges the agent to actually reach for
-// them on substantial work. Full guidance lives in the swarmgo-guide skill.
+// them on substantial work. Full guidance lives in the tionswarm-guide skill.
 // Exported so the api package's parallel buildSystemPrompt (chat + preview path)
 // appends the identical line — both prompt assemblers share ONE source.
 const GoalUsageHint = "For substantial multi-turn work, set a durable objective with `set_session_goal` " +
@@ -1026,7 +1026,7 @@ func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
 	// a headless turn starts with a fresh context, so nudge it through the fixed
 	// orient → recall → select-one → verify-baseline → work → close-the-loop routine
 	// before acting. We inject only a pointer to keep the cached prefix small; the
-	// full recipe lives in the swarmgo-autonomous-ops skill.
+	// full recipe lives in the tionswarm-autonomous-ops skill.
 	if r.tun.AutonomousBootSeq() {
 		out = strings.TrimSpace(out + "\n\n" + autonomousBootReminder)
 	}
@@ -1040,7 +1040,7 @@ func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
 
 // autonomousBootReminder nudges every headless turn (schedule/spawn/flow/subagent)
 // to run the fixed boot/verification sequence before acting. The full recipe lives
-// in the swarmgo-autonomous-ops skill (§10); we inject only this pointer so the
+// in the tionswarm-autonomous-ops skill (§10); we inject only this pointer so the
 // cached system prefix stays small. Mirrors the long-running-agent "open the
 // project the same way every time" discipline that compensates for lost context.
 const autonomousBootReminder = "# Autonomous boot sequence\n" +
@@ -1049,4 +1049,4 @@ const autonomousBootReminder = "# Autonomous boot sequence\n" +
 	"if any + list_tasks) → select ONE task → verify the baseline (smoke/e2e) and " +
 	"fix it first if it is red → do the one task → close the loop (git commit + " +
 	"append a board/progress note, never overwrite a prior note). " +
-	"Full recipe: use_skill \"swarmgo-autonomous-ops\" (§10)."
+	"Full recipe: use_skill \"tionswarm-autonomous-ops\" (§10)."

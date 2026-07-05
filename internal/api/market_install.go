@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/ingest"
-	"github.com/bilal-arikan/swarmgo/internal/market"
-	"github.com/bilal-arikan/swarmgo/internal/orchestration"
-	"github.com/bilal-arikan/swarmgo/internal/settings"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/ingest"
+	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionswarm/internal/settings"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // handleInstallMarketPack installs a pack into the workspace via the shared install

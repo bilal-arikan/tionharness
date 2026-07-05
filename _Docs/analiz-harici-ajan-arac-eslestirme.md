@@ -1,21 +1,21 @@
-# Analiz: External Agent `session-tools-core` Araç Envanteri ve SwarmGo Eşleştirmesi
+# Analiz: External Agent `session-tools-core` Araç Envanteri ve TionSwarm Eşleştirmesi
 
 > Kaynaklar: External Agent OSS (`external-agent-project/external-agent-oss`, `main`) — tek kaynak dosyası
-> `packages/session-tools-core/src/tool-defs.ts` (`SESSION_TOOL_DEFS`). SwarmGo (yerel) —
+> `packages/session-tools-core/src/tool-defs.ts` (`SESSION_TOOL_DEFS`). TionSwarm (yerel) —
 > `internal/tools/builtin_*.go` ve interaction köprüsü (`internal/api/mcp_interaction.go`).
-> Analiz salt-okuma yapılmıştır; SwarmGo kodu değiştirilmemiştir.
+> Analiz salt-okuma yapılmıştır; TionSwarm kodu değiştirilmemiştir.
 >
 > **GÜNCELLEME:** Aksiyon (yapılacaklar) karşılığı artık ayrı dosyada:
 > [`41-ARAC-BOSLUKLARI-YAPILACAKLAR.md`](./41-ARAC-BOSLUKLARI-YAPILACAKLAR.md).
 > Bu analizden sonra `config_validate`, `skill_validate`, `mermaid_validate` araçları **eklendi**
-> (artık SwarmGo'da mevcut) → §4a'daki ilgili maddeler **KAPANDI**; güncel açık boşluk listesi için
+> (artık TionSwarm'da mevcut) → §4a'daki ilgili maddeler **KAPANDI**; güncel açık boşluk listesi için
 > 41 numaralı dokümana bakın.
 
 ## Özet
 
 - **External Agent session araçları:** **25 araç** (`SESSION_TOOL_DEFS` dizisi, `getToolDefsAsJsonSchema()`
   ile MCP/Codex tarafına da aynen sunuluyor — `session-mcp-server` ile envanter birebir doğrulandı).
-- **SwarmGo araçları:** **~80 builtin araç** (`builtin_*.go` içindeki `Def()` kayıtları) + interaction
+- **TionSwarm araçları:** **~80 builtin araç** (`builtin_*.go` içindeki `Def()` kayıtları) + interaction
   köprüsünden gelen `run_subagent`. Bu doküman özellikle self-management + session/spawn/subagent
   ailesine odaklanır, ancak tüm builtin envanteri de gruplanmıştır.
 
@@ -25,7 +25,7 @@
   şablon/veri dönüştürme, oturumlar-arası mesajlaşma) üzerine kurulu; çekirdek dosya/şüt araçlarını
   (Read/Write/Bash...) Claude/Codex SDK'sından **natif** alır, bu yüzden `session-tools-core` içinde
   yer almazlar.
-- **SwarmGo**, bir multi-agent platformudur: ajan/flow/task/schedule/hook/workspace CRUD'u, kalıcı
+- **TionSwarm**, bir multi-agent platformudur: ajan/flow/task/schedule/hook/workspace CRUD'u, kalıcı
   bellek (core + long-term), secret vault, artifact ve skill yönetimi gibi **platform yönetim
   araçlarını** kendi builtin'leri olarak taşır. Dosya/şal araçları da builtin'dir.
 
@@ -66,11 +66,11 @@ backend (Pi/Claude/Electron adaptörü).
 
 > Not: Çekirdek dosya/şal araçları (Read, Write, Edit, Bash, Glob, Grep, WebFetch vb.) External Agent'ta
 > **Claude/Codex SDK'sından natif** gelir; `session-tools-core` envanterine dahil değildir. Bu yüzden
-> yukarıdaki 25'lik listede yer almazlar — ama SwarmGo karşılaştırması için aşağıda dikkate alınmıştır.
+> yukarıdaki 25'lik listede yer almazlar — ama TionSwarm karşılaştırması için aşağıda dikkate alınmıştır.
 
 ---
 
-## 2. SwarmGo Araç Envanteri (gruplanmış)
+## 2. TionSwarm Araç Envanteri (gruplanmış)
 
 `builtin_*.go` içindeki `Def()` kayıtları + interaction köprüsü. Toplam ~80 builtin + 1 köprülü araç.
 
@@ -96,50 +96,50 @@ backend (Pi/Claude/Electron adaptörü).
 
 ---
 
-## 3. Eşleştirme Tablosu (External Agent → SwarmGo)
+## 3. Eşleştirme Tablosu (External Agent → TionSwarm)
 
-Durum: `birebir` / `kısmi` / `SwarmGo'da yok`.
+Durum: `birebir` / `kısmi` / `TionSwarm'da yok`.
 
-| External Agent aracı | SwarmGo karşılığı | Durum | Not |
+| External Agent aracı | TionSwarm karşılığı | Durum | Not |
 |-------------------|--------------------|-------|-----|
-| `SubmitPlan` | claude-cli plan modu (`ExitPlanMode` köprüsü) | kısmi | SwarmGo'da bağımsız bir builtin plan aracı yok; plan onayı CLI'nin `ExitPlanMode`'una bağlanmış (son commit: "claude-cli plan modu"). |
+| `SubmitPlan` | claude-cli plan modu (`ExitPlanMode` köprüsü) | kısmi | TionSwarm'da bağımsız bir builtin plan aracı yok; plan onayı CLI'nin `ExitPlanMode`'una bağlanmış (son commit: "claude-cli plan modu"). |
 | `config_validate` | `read_config` / `write_config` / `list_config` | kısmi | Config dosyalarını okuma/yazma var; **doğrulama (schema validation) yok**. |
 | `skill_validate` | `create_skill` / `update_skill` | kısmi | Skill CRUD var ama ayrı `validate` adımı yok. |
-| `mermaid_validate` | — | SwarmGo'da yok | Diyagram doğrulama aracı yok. |
-| `source_test` | `create_mcp_server` / `toggle_mcp_server` / `list_mcp_servers` | kısmi | MCP sunucu yönetimi var; "doğrula + bağlantı testi + otomatik aktive et" tek-adımı yok. SwarmGo source ≈ MCP sunucu kavramı. |
-| `source_oauth_trigger` | — | SwarmGo'da yok | OAuth-tabanlı source akışı yok (kimlik bilgileri vault'tan). |
-| `source_google_oauth_trigger` | — | SwarmGo'da yok | — |
-| `source_slack_oauth_trigger` | — | SwarmGo'da yok | — |
-| `source_microsoft_oauth_trigger` | — | SwarmGo'da yok | — |
+| `mermaid_validate` | — | TionSwarm'da yok | Diyagram doğrulama aracı yok. |
+| `source_test` | `create_mcp_server` / `toggle_mcp_server` / `list_mcp_servers` | kısmi | MCP sunucu yönetimi var; "doğrula + bağlantı testi + otomatik aktive et" tek-adımı yok. TionSwarm source ≈ MCP sunucu kavramı. |
+| `source_oauth_trigger` | — | TionSwarm'da yok | OAuth-tabanlı source akışı yok (kimlik bilgileri vault'tan). |
+| `source_google_oauth_trigger` | — | TionSwarm'da yok | — |
+| `source_slack_oauth_trigger` | — | TionSwarm'da yok | — |
+| `source_microsoft_oauth_trigger` | — | TionSwarm'da yok | — |
 | `source_credential_prompt` | `secret_set` (+ `ask_user`) | kısmi | Secret vault var ama "güvenli credential giriş UI'ı" yok; ajan secret'ı kendisi yazar. |
 | `update_user_preferences` | `core_memory_append`/`core_memory_replace` (label="human"), `memory_add` | kısmi | Kullanıcı hakkında kalıcı bilgi core memory'de tutulur; yapısal alanlar (timezone/city/country) yok. |
 | `transform_data` | `Bash`/`Shell` + `Write` | kısmi | İzole subprocess + yapısal çıktı sözleşmesi yok; aynı sonuç shell ile elde edilebilir. |
 | `script_sandbox` | `Bash` (sandbox'lı PowerShell shell) | kısmi | Sandbox'lı shell var; ağ-izolasyonlu satır-içi script tanılama aracı ayrı değil. |
-| `render_template` | — | SwarmGo'da yok | Mustache/HTML şablon render aracı yok. |
-| `send_developer_feedback` | — | SwarmGo'da yok | Geliştiriciye geri bildirim kanalı yok. |
+| `render_template` | — | TionSwarm'da yok | Mustache/HTML şablon render aracı yok. |
+| `send_developer_feedback` | — | TionSwarm'da yok | Geliştiriciye geri bildirim kanalı yok. |
 | `call_llm` | `run_subagent` (sync, izole) | kısmi | `run_subagent` araçlı tam bir ajan (daha ağır); `call_llm` tek-completion/ucuz. En yakın karşılık. |
 | `spawn_session` | `spawn_session` | birebir | Her ikisi de bağımsız yeni oturum başlatır (fire-and-forget). |
-| `browser_tool` | — (MCP: playwright / mcp-chrome) | SwarmGo'da yok | Natif tarayıcı aracı yok; tarayıcı MCP sunucuları üzerinden kullanılır. |
-| `set_session_labels` | — (`move_task` kanban kolonları) | SwarmGo'da yok | Oturum-seviyesi etiket kavramı yok; benzer "durum" mantığı kanban task'larında. |
+| `browser_tool` | — (MCP: playwright / mcp-chrome) | TionSwarm'da yok | Natif tarayıcı aracı yok; tarayıcı MCP sunucuları üzerinden kullanılır. |
+| `set_session_labels` | — (`move_task` kanban kolonları) | TionSwarm'da yok | Oturum-seviyesi etiket kavramı yok; benzer "durum" mantığı kanban task'larında. |
 | `set_session_status` | `archive_session` / `complete_goal` / `move_task` | kısmi | Oturum için done≈`archive_session`; durum-makinesi task board'unda (`move_task`). |
 | `get_session_info` | `list_sessions` | kısmi | Tekil oturum metadata'sını dönen ayrı araç yok; `list_sessions` durumsal farkındalık verir. |
 | `list_sessions` | `list_sessions` | birebir | Her ikisi de workspace oturumlarını listeler. |
-| `send_agent_message` | `send_message` | kısmi | SwarmGo başka **ajana** DM yollar; Craft başka **oturuma**. Amaç aynı (sürmekte olan koordinasyon). |
-| `list_messaging_channels` | — | SwarmGo'da yok | Telegram/WhatsApp gateway entegrasyonu yok. |
-| `unbind_messaging_channel` | — | SwarmGo'da yok | — |
+| `send_agent_message` | `send_message` | kısmi | TionSwarm başka **ajana** DM yollar; Craft başka **oturuma**. Amaç aynı (sürmekte olan koordinasyon). |
+| `list_messaging_channels` | — | TionSwarm'da yok | Telegram/WhatsApp gateway entegrasyonu yok. |
+| `unbind_messaging_channel` | — | TionSwarm'da yok | — |
 
 > Çekirdek araç eşi (envanter-dışı, her iki tarafta var): `Read/Write/Edit/Bash/Glob/Grep/WebFetch`
-> SwarmGo'da builtin, External Agent'ta SDK-natif. `mermaid_validate` hariç bu çekirdek küme örtüşür.
+> TionSwarm'da builtin, External Agent'ta SDK-natif. `mermaid_validate` hariç bu çekirdek küme örtüşür.
 
 ---
 
 ## 4. Boşluk Analizi
 
-### 4a. External Agent'ta var, SwarmGo'da yok (eklenmesi mantıklı olanlar)
+### 4a. External Agent'ta var, TionSwarm'da yok (eklenmesi mantıklı olanlar)
 
 | Craft aracı | Öneri (1 cümle) |
 |-------------|------------------|
-| `config_validate` | SwarmGo config/settings dosyaları için bir `config_validate` builtin'i, `write_config`/`update_settings` öncesi schema doğrulaması yaparak hatalı yapılandırmaları erken yakalar. |
+| `config_validate` | TionSwarm config/settings dosyaları için bir `config_validate` builtin'i, `write_config`/`update_settings` öncesi schema doğrulaması yaparak hatalı yapılandırmaları erken yakalar. |
 | `skill_validate` | `create_skill`/`update_skill` akışına bir `skill_validate` aracı eklemek, frontmatter/slug/gövde tutarlılığını yayınlamadan önce garanti eder. |
 | `transform_data` | İzole subprocess'te yapısal JSON/datatable üreten bir `transform_data` builtin'i, büyük veri setlerini token-verimli işlemeyi standardize eder (şu an ad-hoc shell). |
 | `render_template` | Source/artifact verisini Mustache HTML şablonuyla render eden bir araç, rapor/önizleme çıktılarını tutarlı ve markalı hale getirir. |
@@ -148,9 +148,9 @@ Durum: `birebir` / `kısmi` / `SwarmGo'da yok`.
 | `source_credential_prompt` | Kullanıcıya güvenli credential giriş UI'ı açan bir araç, ajanların secret'ı kendilerinin yazmasına (veya tahmin etmesine) gerek bırakmaz. |
 | `call_llm` | `run_subagent`'ten ayrı, araçsız tek-completion bir `call_llm`, ucuz özet/sınıflandırma alt görevleri için ağır subagent yerine doğru maliyet katmanını verir. |
 
-### 4b. SwarmGo'da var, External Agent'ta yok (SwarmGo'nun platform üstünlüğü)
+### 4b. TionSwarm'da var, External Agent'ta yok (TionSwarm'nun platform üstünlüğü)
 
-Bunlar SwarmGo'nun multi-agent platform doğasından gelir ve External Agent'ın oturum-kapsamlı modelinde
+Bunlar TionSwarm'nun multi-agent platform doğasından gelir ve External Agent'ın oturum-kapsamlı modelinde
 karşılığı yoktur (eksiklik değil, kapsam farkı):
 
 - **Tam CRUD aileleri:** ajan (`create/update/delete/list_agent`), flow (`create/.../run_flow`),
@@ -175,8 +175,8 @@ karşılığı yoktur (eksiklik değil, kapsam farkı):
 
 ## Sonuç
 
-İki araç seti, **oturum-yardımcısı** (External Agent) ve **multi-agent platform yönetimi** (SwarmGo) olarak
+İki araç seti, **oturum-yardımcısı** (External Agent) ve **multi-agent platform yönetimi** (TionSwarm) olarak
 ayrışır. Örtüşme delegasyon (`spawn_session`), oturum farkındalığı (`list_sessions`) ve oturumlar-arası
-mesajlaşmada yoğunlaşır. SwarmGo'ya en yüksek değerli adaylar: doğrulama araçları
+mesajlaşmada yoğunlaşır. TionSwarm'ya en yüksek değerli adaylar: doğrulama araçları
 (`config_validate`, `skill_validate`, `mermaid_validate`), `transform_data`/`render_template` çıktı
 katmanı ve ucuz `call_llm` katmanı.

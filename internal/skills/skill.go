@@ -34,7 +34,7 @@ const (
 type Source string
 
 const (
-	// SourceGlobal is SwarmGo's data-dir global skills dir (<DataDir>/skills).
+	// SourceGlobal is TionSwarm's data-dir global skills dir (<DataDir>/skills).
 	SourceGlobal Source = "global"
 	// SourceWorkspace is this workspace's skills dir (<workspace>/skills).
 	SourceWorkspace Source = "workspace"
@@ -91,7 +91,7 @@ type Skill struct {
 	SourceURL string `json:"sourceUrl,omitempty"`
 	License   string `json:"license,omitempty"`
 	// UserInvocable mirrors Claude Code's `user-invocable` (default true): a
-	// background-knowledge skill sets it false. Informational in SwarmGo today
+	// background-knowledge skill sets it false. Informational in TionSwarm today
 	// (skills load via use_skill, not slash commands); carried for import fidelity.
 	UserInvocable bool `json:"userInvocable"`
 	// AlwaysAllow lists tool-name patterns a skill expects to be auto-allowed.

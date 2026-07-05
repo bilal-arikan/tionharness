@@ -1,15 +1,15 @@
 ---
-name: "SwarmGo Settings"
-description: "Every application-wide setting in SwarmGo (settings.json) — what each field does, its valid range/default — and how to read and change them live with the get_settings / update_settings tools."
-when_to_use: "When you need to inspect or change SwarmGo's application settings: theme, providers, default model, context/memory budgets, autonomy, compaction, or the gated tool capabilities"
+name: "TionSwarm Settings"
+description: "Every application-wide setting in TionSwarm (settings.json) — what each field does, its valid range/default — and how to read and change them live with the get_settings / update_settings tools."
+when_to_use: "When you need to inspect or change TionSwarm's application settings: theme, providers, default model, context/memory budgets, autonomy, compaction, or the gated tool capabilities"
 icon: "⚙️"
 color: "#8b5cf6"
 access: shared
 auto_summary: false
 ---
-# SwarmGo — Application Settings
+# TionSwarm — Application Settings
 
-SwarmGo keeps all application-wide configuration in a single JSON document,
+TionSwarm keeps all application-wide configuration in a single JSON document,
 `settings.json`, in the data directory. It backs the Settings screen and is the
 single source of truth. Changes are **persisted to that file AND pushed into
 every live subsystem immediately** — no restart.
@@ -51,7 +51,7 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
 - `defaultProvider` — `"claude-cli"` | `"anthropic"` (default `claude-cli`).
 - `defaultModel` — model id; `""` = the provider's own default.
 - `claudeCliPath` — path to the `claude` binary; `""` = auto-detect on PATH.
-- `claudeConfigDir` — `CLAUDE_CONFIG_DIR` for claude-cli subprocesses. **Default: `~/.swarmgo/claude-home`** (a SwarmGo-managed isolated config home → clean skills/settings/commands/global `CLAUDE.md`/login, separate from the user's `~/.claude`). Authenticate it via `claudeCliAuthToken` below (no in-dir login needed) or run a one-time `claude` login there. Set `""` to inherit the shared `~/.claude` instead (keyless out-of-box, but picks up the user's installed skills/tools).
+- `claudeConfigDir` — `CLAUDE_CONFIG_DIR` for claude-cli subprocesses. **Default: `~/.tionswarm/claude-home`** (a TionSwarm-managed isolated config home → clean skills/settings/commands/global `CLAUDE.md`/login, separate from the user's `~/.claude`). Authenticate it via `claudeCliAuthToken` below (no in-dir login needed) or run a one-time `claude` login there. Set `""` to inherit the shared `~/.claude` instead (keyless out-of-box, but picks up the user's installed skills/tools).
 - `claudeCliAuthKind` — claude-cli credential kind injected into the subprocess env: `"oauth"` → `CLAUDE_CODE_OAUTH_TOKEN` (Max/Pro subscription token from `claude setup-token`), `"apikey"` → `ANTHROPIC_API_KEY` (API billing), `""` → none. Lets an isolated `claudeConfigDir` authenticate without an interactive in-dir login.
 - `claudeCliAuthToken` — **write-only**; the credential value for `claudeCliAuthKind`. `""` clears. Read shows only `claudeCliAuthSet`. Set via the Settings → Providers → "claude-cli kimlik" popup (Max/Pro or API key).
 - `anthropicKey` — **write-only**; `""` clears. Read shows only `anthropicKeySet`.
@@ -85,7 +85,7 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
   0 resolves per model family (opus/sonnet/fable+minimax 32K, haiku 16K,
   deepseek/gemini 8K, unknown → provider 4096 fallback); a positive value (clamped
   256–512000) pins a fixed cap across all models. Env fallback when 0:
-  `SWARMGO_MAX_OUTPUT_TOKENS`.
+  `TIONSWARM_MAX_OUTPUT_TOKENS`.
 
 ### Session debug journal (observability)
 - `debugJournalEnabled` (default true) — write the parallel `debug.jsonl` stream per session (turn timings, per-call token spend, per-tool latency/size/errors, hook decisions, compaction/recovery). Off = no debug events written.
@@ -115,7 +115,7 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
 - `handoffWriteFile` (default false) — also write the handoff doc to a file.
 
 ### Persistent progress (see _Docs/36)
-- `progressPersist` (default true) — persist the `todo_write` list to `<cwd>/.swarmgo/progress.json`.
+- `progressPersist` (default true) — persist the `todo_write` list to `<cwd>/.tionswarm/progress.json`.
 - `progressResume` (default true) — restore that list on a fresh session.
 
 ### Autonomous self-completion (see _Docs/05)
@@ -136,19 +136,19 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
   consumed by the runtime. MCP servers are managed in the "Araçlar & MCP" category.)
 - `enableShell` — the built-in shell tool. On claude-cli agents it is bridged
   (PowerShell on Windows) and the CLI's native `Bash` is suppressed so commands
-  route through SwarmGo's shell.
+  route through TionSwarm's shell.
 - `enableSelfManage` — **REMOVED (2026-07-01).** The self-management suite is now
   ALWAYS built; visibility is per-tool (full / summary / name-only / hidden) on the
-  "Araçlar" screen, defaulting to `hidden`. The settings field, its `SWARMGO_ENABLE_SELFMANAGE`
+  "Araçlar" screen, defaulting to `hidden`. The settings field, its `TIONSWARM_ENABLE_SELFMANAGE`
   env seed, and the `SelfManageEnabled` tunable were all deleted. See `_Docs/19`.
 - `enableCliHooks` — pass PreToolUse/PostToolUse hooks to claude-cli agents via
   `--settings` (default true). Turn off to keep hooks native-only when a hook
-  authored for SwarmGo's shell misbehaves under the CLI's own hook runner.
+  authored for TionSwarm's shell misbehaves under the CLI's own hook runner.
 - `claudeResume` — keep the claude-cli session warm across turns (default **true**).
   When on, each single-agent turn passes `--resume <id>` and sends only the new
   delta (not the full transcript), so the CLI reuses its server-side prompt cache
   (much cheaper). The resume id is tracked per session; warm mode delegates context
-  management to the CLI, so SwarmGo's own compaction is bypassed for that session.
+  management to the CLI, so TionSwarm's own compaction is bypassed for that session.
   Effective only because the appended system prompt is now byte-stable (the volatile
   dynamic context rides in the message tail, not the cached system prefix).
 - `claudePersistentSession` — keep ONE long-lived claude-cli process alive per
@@ -176,7 +176,7 @@ for autonomous (no-human) turns; interactive chat is unaffected.
 - `autonomousBootSeq` (default true) — on scheduler/spawn/flow/subagent turns,
   inject a short boot/verification-sequence reminder (orient → recall → select one
   task → verify the baseline → work → close the loop) into the system prompt. The
-  full recipe is in the `swarmgo-autonomous-ops` skill (§10). Costs a few tokens per
+  full recipe is in the `tionswarm-autonomous-ops` skill (§10). Costs a few tokens per
   headless turn; turn off to reclaim them. Interactive chat is unaffected.
 
 ### Workspace backups
@@ -191,7 +191,7 @@ available over `POST /api/backups/run` (not an agent tool).
 
 ### Diagnostics
 - `logLevel` — `"info"` | `"debug"` | `"warn"` | `"error"`. **Not wired to the logger**
-  (never read by `cmd/swarmgo`) and removed from the Settings UI (2026-06-30); the Logs
+  (never read by `cmd/tionswarm`) and removed from the Settings UI (2026-06-30); the Logs
   screen already filters by level + text, so it was redundant. Field kept in
   settings.json for backward compat only.
 
@@ -204,4 +204,4 @@ available over `POST /api/backups/run` (not an agent tool).
 - Invalid enum/format values (e.g. an unknown `theme`, a malformed `accent`, a
   bad `defaultPermissionMode`) are **rejected** with a clear error and nothing is
   changed — fix the value and retry.
-- For the full conceptual overview of SwarmGo, see the `swarmgo-guide` skill.
+- For the full conceptual overview of TionSwarm, see the `tionswarm-guide` skill.

@@ -1,4 +1,4 @@
-// Package compact implements System A of SwarmGo's tool-output token
+// Package compact implements System A of TionSwarm's tool-output token
 // optimization: a dependency-free, deterministic compactor inspired by
 // rtk-ai/rtk ("Rust Token Killer"). It shrinks a tool's combined output before
 // it re-enters the LLM context by collapsing repeated lines, trimming blank

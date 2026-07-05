@@ -106,7 +106,7 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The feed is read-only, so the
   // one bulk action is copying the selected session ids (handy for cross-tooling).
   const sel = useMultiSelect()
-  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.executionsListOpen')
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.executionsListOpen')
   const bulkCopyIds = () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
@@ -197,7 +197,7 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
       <ListPane
         open={listOpen}
         onToggle={toggleList}
-        widthKey="swarmgo.executionsListWidth"
+        widthKey="tionswarm.executionsListWidth"
         defaultWidth={320}
         label="Yürütmeler"
         testId="executions-list-toggle"

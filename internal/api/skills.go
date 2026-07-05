@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/skills"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
 // skillDetail is a skill plus its (lazily read) markdown body, returned by the

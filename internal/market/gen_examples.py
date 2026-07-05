@@ -1,6 +1,6 @@
 """Generate bundled marketplace example packs (skill/agent/provider/flow).
 
-Run from the SwarmGo repo root:
+Run from the TionSwarm repo root:
     python internal/market/gen_examples.py
 
 Writes <kind>.<slug>.swarmpack.json files into internal/market/defaults/.
@@ -28,7 +28,7 @@ def skill_md(name, desc, when, icon, color, body):
     )
 
 
-def pack(kind, slug, name, desc, icon, color, tags, payload, version="1.0.0", author="swarmgo"):
+def pack(kind, slug, name, desc, icon, color, tags, payload, version="1.0.0", author="tionswarm"):
     return {
         "schema": "swarmpack/v1",
         "id": f"{kind}.{slug}",

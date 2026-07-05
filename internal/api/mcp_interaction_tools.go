@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/interaction"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/interaction"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // callAsk emits a transient ask step and blocks until the user answers (via
 // POST /api/chat/control {action:"answer"}), the turn ends, or the timeout fires.
 func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
-	// Shared tolerant parser: accepts SwarmGo's {question, options} and claude-cli's
+	// Shared tolerant parser: accepts TionSwarm's {question, options} and claude-cli's
 	// native AskUserQuestion shapes (option objects + questions[] wrapper) so a model
 	// trained on the native tool no longer errors with a schema mismatch (SES73).
 	question, options, err := tools.ParseAskInput(args)
@@ -313,7 +313,7 @@ func (b *interactionBackend) callSkillSearch(run *chatRun, args json.RawMessage)
 }
 
 // callShell runs a shell command through the run's per-agent shell runner (CLI
-// path), which is bound to the workspace sandbox and uses SwarmGo's own shell
+// path), which is bound to the workspace sandbox and uses TionSwarm's own shell
 // (PowerShell on Windows). Returns a graceful error result when shell is not
 // available for this turn (disabled or no sandbox).
 func (b *interactionBackend) callShell(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {

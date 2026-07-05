@@ -92,7 +92,7 @@ func TestUpdateSessionSetAndCompleteGoalInOneCall(t *testing.T) {
 
 func TestUpdateSessionWorkingDirValidates(t *testing.T) {
 	ctx := WithSession(context.Background(), &fakeSessionSink{})
-	if _, err := NewUpdateSessionTool().Call(ctx, json.RawMessage(`{"working_dir":"/no/such/dir/swarmgo-xyz"}`)); err == nil {
+	if _, err := NewUpdateSessionTool().Call(ctx, json.RawMessage(`{"working_dir":"/no/such/dir/tionswarm-xyz"}`)); err == nil {
 		t.Fatal("expected error for non-existent path")
 	}
 }

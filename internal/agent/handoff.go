@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // handoffGitTimeout bounds the git calls used to snapshot the working tree for a
@@ -205,14 +205,14 @@ func (r *Runtime) handoffEnv(ctx context.Context, session db.Session) conversati
 	return env
 }
 
-// writeHandoffFile optionally persists the handoff to <workdir>/.swarmgo/handoff.md
+// writeHandoffFile optionally persists the handoff to <workdir>/.tionswarm/handoff.md
 // when HandoffWriteFile is on. Returns the written path, or "" when disabled or on
 // any error (the reset never depends on the file succeeding).
 func (r *Runtime) writeHandoffFile(dir, content string) string {
 	if !r.tun.HandoffWriteFile() || strings.TrimSpace(dir) == "" {
 		return ""
 	}
-	outDir := filepath.Join(dir, ".swarmgo")
+	outDir := filepath.Join(dir, ".tionswarm")
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		r.logger.Warn("handoff: mkdir failed", "dir", outDir, "error", err)
 		return ""

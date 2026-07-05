@@ -3,7 +3,7 @@ package skills
 import (
 	"path"
 
-	"github.com/bilal-arikan/swarmgo/internal/fetch"
+	"github.com/bilal-arikan/tionswarm/internal/fetch"
 )
 
 // Skill discovery in a directory tree (a GitHub repo, a Claude Code plugin, or a

@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/progress"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/progress"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // TestNewTodoSinkPersistsToCwd verifies the todo sink writes the checklist to the

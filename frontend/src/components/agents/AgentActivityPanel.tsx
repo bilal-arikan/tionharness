@@ -52,11 +52,11 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
   // Resizable width (persisted, clamped). 320px == the old w-80. Drag the handle
   // on the panel's LEFT edge: moving it left widens the panel.
   const [width, setWidth] = useState(() => {
-    const v = Number(localStorage.getItem('swarmgo.agentActivityWidth'))
+    const v = Number(localStorage.getItem('tionswarm.agentActivityWidth'))
     return v >= 240 && v <= 720 ? v : 320
   })
   useEffect(() => {
-    localStorage.setItem('swarmgo.agentActivityWidth', String(width))
+    localStorage.setItem('tionswarm.agentActivityWidth', String(width))
   }, [width])
 
   const startResize = useCallback(

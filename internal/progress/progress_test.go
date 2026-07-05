@@ -91,7 +91,7 @@ func TestSaveTrimsLog(t *testing.T) {
 
 func TestFilePath(t *testing.T) {
 	got := File("/proj")
-	want := filepath.Join("/proj", ".swarmgo", "progress.json")
+	want := filepath.Join("/proj", ".tionswarm", "progress.json")
 	if got != want {
 		t.Fatalf("File() = %q want %q", got, want)
 	}

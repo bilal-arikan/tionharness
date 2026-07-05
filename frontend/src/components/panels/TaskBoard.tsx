@@ -106,7 +106,7 @@ export function TaskBoard({ agents, onError }: Props) {
     setEditorOpen(false)
     // Tell the Network screen so its live-mode column anchors can refresh
     // immediately (without waiting for an autonomous task event).
-    window.dispatchEvent(new CustomEvent('swarmgo:board-columns-changed'))
+    window.dispatchEvent(new CustomEvent('tionswarm:board-columns-changed'))
   }
 
   const move = async (task: Task, boardState: string) => {
@@ -327,7 +327,7 @@ export function TaskBoard({ agents, onError }: Props) {
                         onDragStart={(e) => {
                           if (pending) return
                           setDragId(t.id)
-                          e.dataTransfer.setData('application/x-swarmgo-task', t.id)
+                          e.dataTransfer.setData('application/x-tionswarm-task', t.id)
                           e.dataTransfer.effectAllowed = 'link'
                         }}
                         onClick={(e) => {

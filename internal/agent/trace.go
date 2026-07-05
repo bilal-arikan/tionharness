@@ -4,18 +4,18 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // interactionToolPrefix / extendedToolPrefix are the two MCP namespaces the
 // Interaction MCP server uses (core eager tier vs extended deferred tier). The CLI
-// reports its tools namespaced (mcp__swarmgo_interaction__ask_user,
-// mcp__swarmgo_extended__create_agent); we strip either so the persisted trace shows
+// reports its tools namespaced (mcp__tionswarm_interaction__ask_user,
+// mcp__tionswarm_extended__create_agent); we strip either so the persisted trace shows
 // the bare tool name and renders with the same cards as the native tool path (todo
 // checklist, artifact card, ask).
 const (
-	interactionToolPrefix = "mcp__swarmgo_interaction__"
-	extendedToolPrefix    = "mcp__swarmgo_extended__"
+	interactionToolPrefix = "mcp__tionswarm_interaction__"
+	extendedToolPrefix    = "mcp__tionswarm_extended__"
 )
 
 // StepKind tags the kind of activity captured in a turn trace.

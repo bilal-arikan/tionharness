@@ -3,7 +3,7 @@ package api
 import (
 	"sync"
 
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // permGrantStore holds per-session permission grants ("Always allow" choices) so

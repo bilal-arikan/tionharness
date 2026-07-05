@@ -58,7 +58,7 @@ export function ToolsPanel({ onError }: Props) {
   const [visBusy, setVisBusy] = useState<string | null>(null)
   // Selection persists across screen switches within the session (resets on reload).
   const [selectedName, setSelectedName] = useSessionState<string | null>('tools.selectedName', null)
-  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.toolsListOpen')
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.toolsListOpen')
   const [query, setQuery] = useState('')
   // List filters: a set of visibility tiers (empty = all) and an enabled/disabled
   // status filter. Independent of the search query — they narrow the same list.
@@ -74,7 +74,7 @@ export function ToolsPanel({ onError }: Props) {
   // Collapsed group labels (accordion). Persisted so the choice sticks.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
-      return new Set<string>(JSON.parse(localStorage.getItem('swarmgo.toolsCollapsed') || '[]'))
+      return new Set<string>(JSON.parse(localStorage.getItem('tionswarm.toolsCollapsed') || '[]'))
     } catch {
       return new Set<string>()
     }
@@ -84,7 +84,7 @@ export function ToolsPanel({ onError }: Props) {
       const next = new Set(prev)
       if (next.has(label)) next.delete(label)
       else next.add(label)
-      localStorage.setItem('swarmgo.toolsCollapsed', JSON.stringify([...next]))
+      localStorage.setItem('tionswarm.toolsCollapsed', JSON.stringify([...next]))
       return next
     })
   }
@@ -376,7 +376,7 @@ export function ToolsPanel({ onError }: Props) {
       <ListPane
         open={listOpen}
         onToggle={toggleList}
-        widthKey="swarmgo.toolsListWidth"
+        widthKey="tionswarm.toolsListWidth"
         defaultWidth={288}
         label="Araçlar"
         testId="tools-list-toggle"

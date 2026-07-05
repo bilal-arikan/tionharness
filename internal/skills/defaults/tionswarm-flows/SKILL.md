@@ -1,13 +1,13 @@
 ---
-name: "SwarmGo Flows"
+name: "TionSwarm Flows"
 description: "Detailed guide to building and running orchestration flows: multi-step, multi-agent graphs with inputs, dependencies and a recorded run history."
-when_to_use: "When designing, creating or running a flow (multi-step or multi-agent orchestration) in SwarmGo"
+when_to_use: "When designing, creating or running a flow (multi-step or multi-agent orchestration) in TionSwarm"
 icon: "🔀"
 color: "#0ea5e9"
 access: shared
 auto_summary: false
 ---
-# SwarmGo Flows — Detailed Guide
+# TionSwarm Flows — Detailed Guide
 
 A **flow** is a directed graph of steps that orchestrates one or more agents to
 complete a larger task. Each run is recorded as a session in the executions feed,
@@ -18,9 +18,9 @@ so a flow run is replayable like any chat.
 - **Steps (nodes)** — each step delegates a prompt to a chosen agent. A step may
   consume the output of earlier steps it depends on.
 - **Edges (dependencies)** — declare which steps must finish before a step runs.
-  SwarmGo deep-validates the graph before running. **Cycles are allowed** — a
+  TionSwarm deep-validates the graph before running. **Cycles are allowed** — a
   `branch` can route back to an earlier node to form an iteration loop; the engine
-  bounds any loop with a step cap (`maxSteps`, 50). See `[[swarmgo-gan-loop]]` for
+  bounds any loop with a step cap (`maxSteps`, 50). See `[[tionswarm-gan-loop]]` for
   the generator↔evaluator refine/pivot loop built on a back edge.
 - **Input** — the flow's initial input is threaded to entry steps.
 

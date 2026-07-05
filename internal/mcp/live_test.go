@@ -10,16 +10,16 @@ import (
 
 // TestLiveFilesystem exercises the stdio client against the real
 // @modelcontextprotocol/server-filesystem (launched via npx). It is gated on
-// SWARMGO_MCP_LIVE=1 so it never runs in CI without Node/network.
+// TIONSWARM_MCP_LIVE=1 so it never runs in CI without Node/network.
 //
-//	SWARMGO_MCP_LIVE=1 SWARMGO_MCP_DIR=<dir> go test ./internal/mcp -run Live -v
+//	TIONSWARM_MCP_LIVE=1 TIONSWARM_MCP_DIR=<dir> go test ./internal/mcp -run Live -v
 func TestLiveFilesystem(t *testing.T) {
-	if os.Getenv("SWARMGO_MCP_LIVE") != "1" {
-		t.Skip("set SWARMGO_MCP_LIVE=1 to run the live MCP test")
+	if os.Getenv("TIONSWARM_MCP_LIVE") != "1" {
+		t.Skip("set TIONSWARM_MCP_LIVE=1 to run the live MCP test")
 	}
-	dir := os.Getenv("SWARMGO_MCP_DIR")
+	dir := os.Getenv("TIONSWARM_MCP_DIR")
 	if dir == "" {
-		t.Fatal("SWARMGO_MCP_DIR is required")
+		t.Fatal("TIONSWARM_MCP_DIR is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

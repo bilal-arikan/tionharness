@@ -1,4 +1,4 @@
-# SwarmGo — Workspace İzolasyonu
+# TionSwarm — Workspace İzolasyonu
 
 > Her workspace **tamamen bağımsızdır**: kendi dosya-tabanlı `store/` dizini + kendi agent runtime'ı. Bir workspace'in içeriği asla diğerine sızmaz.
 > Depolama biçimi (JSON/JSONL) için: **`_Docs/08-DEPOLAMA.md`**.
@@ -9,7 +9,7 @@ Workspace switcher dropdown'ında her satırda bir **yıldız** ile bir workspac
 "başlangıç favorisi" olarak işaretlenebilir. Soğuk açılışta (URL'de açık bir
 workspace deep-link'i yokken) favori workspace açılır; deep-link verildiğinde
 route makinesi onu sonradan uygular, yani açık linkler favoriyi ezer. Cihaz-yerel
-saklanır (`localStorage: swarmgo.favoriteWs`), aktif-workspace işaretçisiyle aynı
+saklanır (`localStorage: tionswarm.favoriteWs`), aktif-workspace işaretçisiyle aynı
 desen. Seçim sırası: `(işaretçi yoksa) favori → son-aktif → favori → ilk`.
 Kod: `hooks/useWorkspaces.ts`, `WorkspaceSwitcher.tsx`.
 
@@ -176,7 +176,7 @@ penceresinde/sekmesinde eşzamanlı açılabilir** (paylaşılan localStorage'a 
 ### Çapraz-pencere "okunmadı" rozet senkronu
 
 Workspace etkinlik rozetleri (`unreadWs`) **tüm pencereler arasında paylaşılır**
-(`localStorage` anahtarı `swarmgo.unreadWs` + `storage` event). SwarmGo tek-kullanıcılı
+(`localStorage` anahtarı `tionswarm.unreadWs` + `storage` event). TionSwarm tek-kullanıcılı
 olduğundan ilke: **"herhangi bir pencerede görüldü = her yerde okundu"**.
 
 - `hooks/useWorkspaces.ts` paylaşılan ham seti `localStorage`'da tutar; her yazımda

@@ -31,7 +31,7 @@ func TestAutonomousBootReminderContent(t *testing.T) {
 	for _, want := range []string{
 		"Autonomous boot sequence",
 		"verify the baseline",
-		`use_skill "swarmgo-autonomous-ops"`,
+		`use_skill "tionswarm-autonomous-ops"`,
 	} {
 		if !strings.Contains(autonomousBootReminder, want) {
 			t.Errorf("autonomousBootReminder missing %q:\n%s", want, autonomousBootReminder)

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
 )
 
 // Per-workspace, editable configuration lives in <workspace>/config/, a sibling

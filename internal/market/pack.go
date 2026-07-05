@@ -35,7 +35,7 @@ type Source string
 const (
 	// SourceBundled is the set of packs shipped embedded in the binary.
 	SourceBundled Source = "bundled"
-	// SourceGlobal is SwarmGo's data-dir market dir (<DataDir>/market).
+	// SourceGlobal is TionSwarm's data-dir market dir (<DataDir>/market).
 	SourceGlobal Source = "global"
 	// SourceWorkspace is this workspace's market dir (<workspace>/market).
 	SourceWorkspace Source = "workspace"

@@ -38,7 +38,7 @@ func TestStdoutCrashTail(t *testing.T) {
 // containing the invocation, full stdout and stderr — the diagnostic that the
 // 12-line inline tail can miss (e.g. an early exit after SessionStart hooks).
 func TestDumpCLIFailure(t *testing.T) {
-	args := []string{"-p", "--output-format", "stream-json", "--mcp-config", "/tmp/swarmgo-mcp-xyz.json"}
+	args := []string{"-p", "--output-format", "stream-json", "--mcp-config", "/tmp/tionswarm-mcp-xyz.json"}
 	stdout := []byte(`{"type":"system","subtype":"hook_started","hook_name":"SessionStart:startup"}` + "\n")
 	stderr := []byte("the real fatal error line")
 

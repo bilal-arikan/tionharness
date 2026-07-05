@@ -1,4 +1,4 @@
-# SwarmGo — Oturum Debug Günlüğü (Paralel Gözlemlenebilirlik Akışı)
+# TionSwarm — Oturum Debug Günlüğü (Paralel Gözlemlenebilirlik Akışı)
 
 > Son güncelleme: **2026-06-26**
 > Her oturum için `session.jsonl`'in **yanına** yapılandırılmış, append-only bir
@@ -87,7 +87,7 @@ etkinse; `conversation_search`'ün gözlemlenebilirlik kardeşi) — hidden-lazy
 self-manage tier'ında **değil**, böylece kutudan çıkar çıkmaz çalışır. **claude-cli
 köprüsü:** `Runtime.BridgeTools` aracı `extra` listesine ekler (yalnız `r.db`
 gerektiren eager builtin, `conversation_search` gibi) → varsayılan keyless
-claude-cli ajanı da `mcp__swarmgo_interaction__read_session_debug` olarak görür ve
+claude-cli ajanı da `mcp__tionswarm_interaction__read_session_debug` olarak görür ve
 çağırır. Köprü çağrı closure'ı build ctx'inden yakalanan oturum id'yi enjekte eder
 (interaction server request ctx'inde olmadığından). Varsayılan **özet** döndürür;
 `summary=false` ile ham olay listesi (`type` filtresi + `limit`). `session_id`
@@ -112,7 +112,7 @@ modele göre token + tembel yüklenen **ham olay** log'u (tip filtreli).
 
 ## Ayarlar
 
-`settings.json` (default skill `swarmgo-settings`'te de belgeli):
+`settings.json` (default skill `tionswarm-settings`'te de belgeli):
 
 | Alan | Vars. | Açıklama |
 |------|-------|----------|
@@ -123,9 +123,9 @@ Tunables: `Tunables.SetDebugJournal/DebugJournalEnabled/DebugJournalCap`;
 `api/server.go applySettings` canlı uygular. UI: Ayarlar ▸ Uygulama ▸ (kalıcı
 ilerleme bölümünün altında) "Debug günlüğü".
 
-## Default skill — `swarmgo-self-debug`
+## Default skill — `tionswarm-self-debug`
 
-`internal/skills/defaults/swarmgo-self-debug/SKILL.md`. Ajana `read_session_debug`
+`internal/skills/defaults/tionswarm-self-debug/SKILL.md`. Ajana `read_session_debug`
 ile kendi metriklerini okuyup (token/gecikme/araç/hata) davranışını nasıl
 optimize edeceğini öğretir. `read_logs` (kaba, süreç-geneli) ile per-session
 budget (para) arasındaki yeri netleştirir.

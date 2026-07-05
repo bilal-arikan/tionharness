@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/market"
-	"github.com/bilal-arikan/swarmgo/internal/orchestration"
+	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/orchestration"
 )
 
 // TestResolveTemplateFlowGraph covers the agent-key resolution for both the

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // drainSpawns waits for all fire-and-forget spawn goroutines to finish so the

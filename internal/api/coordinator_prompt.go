@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // coordinationScratchpadBlock returns a system-context line pointing a coordinator
@@ -38,7 +38,7 @@ func coordinationScratchpadBlock(wsp *workspace.Workspace, session db.Session) s
 
 // coordinator_prompt.go holds the coordinator operating manual injected into a
 // coordinator session's system prompt (M2, _Docs/47). Adapted from Claude Code's
-// coordinator mode, rewritten for SwarmGo's real tool surface: workers are async
+// coordinator mode, rewritten for TionSwarm's real tool surface: workers are async
 // background sessions launched with spawn_worker, continued with send_to_worker,
 // stopped with stop_worker, and inspected with list_workers; their results arrive
 // as <task-notification> user messages that auto-trigger the next coordinator turn.

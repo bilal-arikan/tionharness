@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/secrets"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/secrets"
 )
 
 // webSearchMaxOutBytes caps the result list fed back to the model (context).

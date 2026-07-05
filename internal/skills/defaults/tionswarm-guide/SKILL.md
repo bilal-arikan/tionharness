@@ -1,15 +1,15 @@
 ---
-name: "SwarmGo Guide"
-description: "Overview of how SwarmGo works — agents, sessions, tasks, flows, schedules, skills, memory and tools — and how the pieces fit together."
-when_to_use: "When you need to understand SwarmGo itself, or to orient before using one of its subsystems"
+name: "TionSwarm Guide"
+description: "Overview of how TionSwarm works — agents, sessions, tasks, flows, schedules, skills, memory and tools — and how the pieces fit together."
+when_to_use: "When you need to understand TionSwarm itself, or to orient before using one of its subsystems"
 icon: "🗺️"
 color: "#6366f1"
 access: shared
-subskills: [swarmgo-flows, swarmgo-settings, swarmgo-self-management]
+subskills: [tionswarm-flows, tionswarm-settings, tionswarm-self-management]
 ---
-# SwarmGo — How It Works
+# TionSwarm — How It Works
 
-SwarmGo is a multi-agent runtime. Everything lives inside a **workspace**: an
+TionSwarm is a multi-agent runtime. Everything lives inside a **workspace**: an
 isolated unit with its own agents, data store, secrets and settings. Switching
 workspaces never leaks content between them.
 
@@ -23,7 +23,7 @@ workspaces never leaks content between them.
   flow / schedule).
 - **Tasks** — a kanban board. Each task owns one run session.
 - **Flows** — multi-step / multi-agent orchestration graphs (see the
-  `swarmgo-flows` skill for details).
+  `tionswarm-flows` skill for details).
 - **Schedules (routines)** — cron-driven prompts delivered to an agent.
 - **Memory** — durable facts an agent recalls across sessions. Two layers:
   - *Recall memory* — auto-injected into the prompt each turn; the explicit
@@ -93,7 +93,7 @@ before the broken block reaches the user.
 
 ## Reaching the user (interaction tools)
 
-These tools surface in the SwarmGo UI on every interactive chat turn (both native
+These tools surface in the TionSwarm UI on every interactive chat turn (both native
 and claude-cli agents). They are always available — no `activate_tools` needed.
 
 - **`ask_user`** — pause and ask a clarifying question with optional clickable
@@ -127,22 +127,22 @@ tools (`ask_user`/`request_confirmation`) are withdrawn, while `notify`/
 - **Run work now** → start a chat session with the right agent.
 - **Track work** → create a task on the board.
 - **Automate multi-step / multi-agent work** → build a flow. Load the
-  `swarmgo-flows` skill first.
+  `tionswarm-flows` skill first.
 - **Repeat on a schedule** → create a schedule (routine).
 - **Persist knowledge** → add a memory.
 
 - **Tune the app** → read or change application-wide settings live with the
-  `get_settings` / `update_settings` tools. Load the `swarmgo-settings` skill for
+  `get_settings` / `update_settings` tools. Load the `tionswarm-settings` skill for
   the full field reference.
-- **Manage SwarmGo itself** → create/edit agents, flows, schedules, tasks, hooks,
+- **Manage TionSwarm itself** → create/edit agents, flows, schedules, tasks, hooks,
   MCP servers and skills, spawn parallel workers, store secrets, or manage
   artifacts/memory/logs with the self-management tools. They are loaded on demand
-  — `activate_tools` pulls the one you need. Load the `swarmgo-self-management`
+  — `activate_tools` pulls the one you need. Load the `tionswarm-self-management`
   skill for the catalog and the activation workflow.
 
 When a subsystem needs deeper instructions, load the matching skill rather than
-guessing — start with `swarmgo-flows` for orchestration, `swarmgo-self-management`
-for operating SwarmGo, or `swarmgo-settings` for configuration.
+guessing — start with `tionswarm-flows` for orchestration, `tionswarm-self-management`
+for operating TionSwarm, or `tionswarm-settings` for configuration.
 
 ## Before you build: discover first
 
@@ -155,7 +155,7 @@ overwrite a working implementation.
 So, before building or concluding absence:
 
 1. **Search and read.** Use `grep`/`glob` to find related code, then `read` the
-   files that look relevant. For SwarmGo's own entities, use the matching
+   files that look relevant. For TionSwarm's own entities, use the matching
    `list_*` / `get_*` self-management tool to see current state.
 2. **Confirm, don't guess.** Only say a feature is absent after you have actually
    looked for it and found nothing — name what you searched. "I didn't find X

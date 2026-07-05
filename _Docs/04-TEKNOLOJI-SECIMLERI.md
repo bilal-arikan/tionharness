@@ -1,4 +1,4 @@
-# SwarmGo — Teknoloji Seçimleri
+# TionSwarm — Teknoloji Seçimleri
 
 Her seçim, TypeScript dünyasındaki karşılığının Go ekosistemindeki en uygun eşleniğidir.
 

@@ -5,8 +5,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/proc"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // workspaceListItem is the switcher-facing view: registry metadata plus the
@@ -88,7 +88,7 @@ type pickFolderResp struct {
 func (s *Server) handlePickFolder(w http.ResponseWriter, r *http.Request) {
 	const script = `Add-Type -AssemblyName System.Windows.Forms | Out-Null
 $d = New-Object System.Windows.Forms.FolderBrowserDialog
-$d.Description = 'SwarmGo workspace klasörü seç'
+$d.Description = 'TionSwarm workspace klasörü seç'
 $d.ShowNewFolderButton = $true
 $top = New-Object System.Windows.Forms.Form
 $top.TopMost = $true

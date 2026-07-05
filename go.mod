@@ -1,4 +1,4 @@
-module github.com/bilal-arikan/swarmgo
+module github.com/bilal-arikan/tionswarm
 
 go 1.26.4
 

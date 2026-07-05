@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // repairMojibake undoes the classic corruption where UTF-8 bytes were mis-decoded
@@ -74,7 +74,7 @@ func (d agentDeps) requireAgentCreatedByAgent(ctx context.Context, id string) (d
 type CreateAgentTool struct {
 	d agentDeps
 	// defaultSkills is the baseline skill-slug set every new agent is seeded with
-	// when the caller doesn't provide its own (the shipped SwarmGo defaults).
+	// when the caller doesn't provide its own (the shipped TionSwarm defaults).
 	defaultSkills []string
 	// skillExists reports whether a skill slug is known (global/workspace), so
 	// caller-provided slugs are validated and unknown ones skipped (no dangling
@@ -92,7 +92,7 @@ func NewCreateAgentTool(database *db.DB, actorID string, defaultSkills []string,
 func (CreateAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_agent",
-		Description: "Create a new AI agent in this workspace. Provide a name and optionally a soul (personality/system prompt), identity, provider, model and skills. The new agent is tagged as created by you, so you can later edit or delete it. If you omit \"skills\", the agent is seeded with the default SwarmGo skill set. Returns the new agent's id.",
+		Description: "Create a new AI agent in this workspace. Provide a name and optionally a soul (personality/system prompt), identity, provider, model and skills. The new agent is tagged as created by you, so you can later edit or delete it. If you omit \"skills\", the agent is seeded with the default TionSwarm skill set. Returns the new agent's id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -103,7 +103,7 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"model":{"type":"string","description":"Model id for the chosen provider"},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
 				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"},
-				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default SwarmGo skill set; unknown slugs are skipped."}
+				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionSwarm skill set; unknown slugs are skipped."}
 			},
 			"required":["name"],
 			"additionalProperties":false
@@ -151,7 +151,7 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	}
 
 	// Resolve the skill set: caller-provided (validated) or, when none given, the
-	// default SwarmGo set. Unknown caller slugs are dropped and reported.
+	// default TionSwarm set. Unknown caller slugs are dropped and reported.
 	skills, skipped := t.resolveSkills(in.Skills)
 
 	created, err := t.d.db.CreateAgent(ctx, db.Agent{

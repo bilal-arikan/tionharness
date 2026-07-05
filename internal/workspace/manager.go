@@ -15,13 +15,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
-	"github.com/bilal-arikan/swarmgo/internal/logbuf"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/secrets"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/logbuf"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/secrets"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // Meta is the persisted descriptor of a workspace (no live handles). Path, when
@@ -334,7 +334,7 @@ func (m *Manager) Create(name, parentPath, createdBy string) (*Workspace, error)
 	}
 	meta := Meta{ID: m.nextWorkspaceID(), Name: name, CreatedAt: time.Now().Unix(), CreatedBy: createdBy}
 	if parentPath != "" {
-		meta.Path = filepath.Join(parentPath, "swarmgo-"+meta.ID)
+		meta.Path = filepath.Join(parentPath, "tionswarm-"+meta.ID)
 	}
 	if err := m.open(meta); err != nil {
 		return nil, err

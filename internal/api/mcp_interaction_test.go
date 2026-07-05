@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/interaction"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/interaction"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // captureRun installs a write capture on a run and returns the collected events.
@@ -216,7 +216,7 @@ func TestInteractionBridge(t *testing.T) {
 	}
 
 	// Dispatched through the bridge (namespaced name is stripped before dispatch).
-	res, err := b.Call(context.Background(), run.token, "mcp__swarmgo_interaction__create_agent", json.RawMessage(`{"name":"x"}`))
+	res, err := b.Call(context.Background(), run.token, "mcp__tionswarm_interaction__create_agent", json.RawMessage(`{"name":"x"}`))
 	if err != nil {
 		t.Fatalf("call: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestInteractionBackend_Confirm(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 		run.answer <- "Onayla"
 	}()
-	res, err := b.Call(context.Background(), run.token, "mcp__swarmgo_interaction__request_confirmation",
+	res, err := b.Call(context.Background(), run.token, "mcp__tionswarm_interaction__request_confirmation",
 		json.RawMessage(`{"question":"Delete the file?"}`))
 	if err != nil {
 		t.Fatalf("call: %v", err)

@@ -1,17 +1,17 @@
 ---
-name: "SwarmGo Progress Notes"
-description: "How to keep durable, cross-session progress for long-running work in SwarmGo: the automatic todo_write progress file (<cwd>/.swarmgo/progress.json) that the next session resumes from, plus the human-readable PROGRESS.md convention you maintain with the file tools. A progress.txt + feature_list.json style note-taking pattern for long-horizon agents."
+name: "TionSwarm Progress Notes"
+description: "How to keep durable, cross-session progress for long-running work in TionSwarm: the automatic todo_write progress file (<cwd>/.tionswarm/progress.json) that the next session resumes from, plus the human-readable PROGRESS.md convention you maintain with the file tools. A progress.txt + feature_list.json style note-taking pattern for long-horizon agents."
 when_to_use: "When a task spans more than one session, may be interrupted, or is large enough that you will lose context — and you want the next session (or a different agent) to pick up exactly where you left off. Use it to record what is done, what is in progress, and what is next, so progress survives compaction and restarts."
 icon: "🗒️"
 color: "#0ea5e9"
 access: shared
 ---
-# SwarmGo — Progress Notes (durable, cross-session)
+# TionSwarm — Progress Notes (durable, cross-session)
 
 Long tasks outlive a single context window. The lesson from long-horizon agent
 practice is blunt: agents that keep **structured notes on disk** — a progress log plus a
 checked feature list — can run for hours and hand off cleanly, because the next
-session *reads the notes to get up to speed* instead of starting blind. SwarmGo
+session *reads the notes to get up to speed* instead of starting blind. TionSwarm
 gives you two complementary layers for this. Use them.
 
 ## Layer 1 — `todo_write` is now durable (automatic)
@@ -19,7 +19,7 @@ gives you two complementary layers for this. Use them.
 Your working checklist is no longer ephemeral. Every `todo_write` call is
 persisted to a progress file tied to the **project working directory**:
 
-- **Location:** `<cwd>/.swarmgo/progress.json` (when the session has a working
+- **Location:** `<cwd>/.tionswarm/progress.json` (when the session has a working
   directory), else a per-SESSION file under the workspace store (so unrelated
   sessions without a project dir don't share one progress file).
 - **Resume:** when a fresh session starts with no checklist of its own, the most

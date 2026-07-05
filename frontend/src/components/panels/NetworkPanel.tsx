@@ -67,8 +67,8 @@ export function NetworkPanel({ onError }: Props) {
         .then((s: { boardColumns?: BoardColumnDef[] }) => { if (s && Array.isArray(s.boardColumns)) setBoardColumns(s.boardColumns) })
         .catch(() => { /* non-fatal */ })
     }
-    window.addEventListener('swarmgo:board-columns-changed', handler)
-    return () => window.removeEventListener('swarmgo:board-columns-changed', handler)
+    window.addEventListener('tionswarm:board-columns-changed', handler)
+    return () => window.removeEventListener('tionswarm:board-columns-changed', handler)
   }, [])
 
   // Live mode: re-fetch the graph when an autonomous event (task run, schedule)

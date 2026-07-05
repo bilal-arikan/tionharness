@@ -35,7 +35,7 @@ func (b searxngBackend) search(ctx context.Context, client *http.Client, query s
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "swarmgo/0.0.1")
+	req.Header.Set("User-Agent", "tionswarm/0.0.1")
 
 	resp, err := client.Do(req)
 	if err != nil {

@@ -40,7 +40,7 @@ export function AgentRoster({
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
   const catalog = useCatalog()
   const { width, startDrag } = useResizableSidebar({
-    storageKey: 'swarmgo.rosterWidth',
+    storageKey: 'tionswarm.rosterWidth',
     defaultWidth: 256,
   })
 

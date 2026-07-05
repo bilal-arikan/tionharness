@@ -19,7 +19,7 @@ export const NOTIFY_TYPES: NotifTypeMeta[] = [
   { type: 'agent', label: 'Ajan', hint: 'Genel ajan bildirimleri.' },
 ]
 
-const KEY = 'swarmgo.notifyMutedTypes'
+const KEY = 'tionswarm.notifyMutedTypes'
 
 // We persist the MUTED set (not the enabled set), so a newly added event type
 // defaults to enabled without a migration.

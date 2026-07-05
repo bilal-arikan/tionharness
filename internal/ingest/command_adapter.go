@@ -4,13 +4,13 @@ import (
 	"path"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/fetch"
-	"github.com/bilal-arikan/swarmgo/internal/market"
-	"github.com/bilal-arikan/swarmgo/internal/skills"
+	"github.com/bilal-arikan/tionswarm/internal/fetch"
+	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
 // commandAdapter detects Claude Code slash commands (Markdown OR TOML files under a
-// commands/ dir) and converts each into a SKILL pack — SwarmGo has no "command"
+// commands/ dir) and converts each into a SKILL pack — TionSwarm has no "command"
 // entity, so a command becomes a loadable skill (its body is the instructions) with
 // the slug taken from the filename. Markdown commands carry YAML frontmatter; TOML
 // commands carry `description`/`prompt` keys (parsed without a TOML dependency).
@@ -85,7 +85,7 @@ func parseCommand(p, raw, base string) (name, desc, body string) {
 }
 
 // commandHasArgs reports whether a command template uses argument placeholders that
-// SwarmGo won't substitute when the command is imported as a skill.
+// TionSwarm won't substitute when the command is imported as a skill.
 func commandHasArgs(raw, body string) bool {
 	if strings.Contains(body, "$ARGUMENTS") || strings.Contains(body, "{{args}}") {
 		return true
@@ -103,7 +103,7 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// synthSkillMD assembles a SwarmGo SKILL.md from a command's parts (commands carry no
+// synthSkillMD assembles a TionSwarm SKILL.md from a command's parts (commands carry no
 // SKILL.md of their own). group, when non-empty, namespaces the command into a single
 // Skills-UI group alongside the rest of the same import.
 func synthSkillMD(name, desc, sourceURL string, shared bool, group, body string) string {

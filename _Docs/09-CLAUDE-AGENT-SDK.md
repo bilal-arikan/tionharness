@@ -1,8 +1,8 @@
 # Karar — Claude Agent SDK ve "SDK Paritesi" Yol Haritası
 
 > Bu doküman bir **karar kaydı** (ADR) + **yol haritası**dır. Soru şuydu:
-> *"SwarmGo'yu Claude Agent SDK'ya geçirmenin artıları ne olur?"*
-> Cevap: SwarmGo bir **Go** projesi ve Claude Agent SDK'nın **resmi Go desteği yok**
+> *"TionSwarm'yu Claude Agent SDK'ya geçirmenin artıları ne olur?"*
+> Cevap: TionSwarm bir **Go** projesi ve Claude Agent SDK'nın **resmi Go desteği yok**
 > (yalnız Python + TypeScript). Bu yüzden "geçiş" temiz bir `import` değil; üç
 > yoldan birini seçmek demek. Aşağıda yetenek karşılaştırması, yolların gerçek
 > maliyeti, alınan karar ve özelliklerin fazlara dağılımı var.
@@ -19,12 +19,12 @@
 - **Native (anthropic) yolda eksik SDK özellikleri Go'da seçerek eklenir:**
   built-in araç seti → permission katmanı → hooks. "Geçiş" değil, **parite**.
 
-## SDK'nın Sağladıkları vs. SwarmGo'nun Mevcut Durumu
+## SDK'nın Sağladıkları vs. TionSwarm'nun Mevcut Durumu
 
-| Yetenek | Agent SDK | SwarmGo (bugün) | Boşluk |
+| Yetenek | Agent SDK | TionSwarm (bugün) | Boşluk |
 |---|---|---|---|
 | Built-in araçlar (file/bash/grep/glob/web) | Kutudan | `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`/`Bash`/`WebFetch` (claude-cli ile aynı isimler) + `memory_recall` | Kapandı (P2) |
-| Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters` varsayılan 24, `SWARMGO_MAX_TOOL_ITERS` ile override) + tur kurtarma (`recovery.go`: max-token resume + reaktif compaction, A1) | Yok |
+| Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters` varsayılan 24, `TIONSWARM_MAX_TOOL_ITERS` ile override) + tur kurtarma (`recovery.go`: max-token resume + reaktif compaction, A1) | Yok |
 | Context yönetimi / compaction | Otomatik | `internal/conversation` (token-bütçeli) | Yok |
 | Prompt caching | İnce ayarlı | Yok (native HTTP) | Küçük |
 | Permission / onay modları | Var (mod + hook) | **Var** — `internal/agent/permission.go` + `tools/permission.go` (auto/ask/read-only modları, arg-bazlı grant desenleri, claude-cli `--permission-prompt-tool`) | ✅ (Faz P3) |
@@ -41,7 +41,7 @@ katmana yaslanmak. Ama bu, Go projesinde yalnızca **claude-cli yolu** üzerinde
 
 ```mermaid
 graph TD
-    A[SwarmGo - Go projesi] --> B[Yol 1: TS/Python yeniden yazim]
+    A[TionSwarm - Go projesi] --> B[Yol 1: TS/Python yeniden yazim]
     A --> C[Yol 2: SDK CLI'a shell-out]
     A --> D[Yol 3: SDK desenlerini Go'da uygula]
     B --> B1[Tek-binary / capraz derleme felsefesi olur<br/>Node/Python runtime bagimliligi<br/>RED]
@@ -80,7 +80,7 @@ graph TD
   eski `read_file`/`write_file`/… adları.)
 - [x] `Bash` (Windows'ta PowerShell, diğerinde `/bin/sh`; eski ad `shell`) → `internal/tools/builtin_shell.go`
   (timeout + sandbox cwd + 64KB çıktı cap). **Varsayılan KAPALI** (`Tunables.shellEnabled`);
-  `SWARMGO_ENABLE_SHELL=1` ile açılır. Permission katmanı (P3) gelene dek opt-in kalır.
+  `TIONSWARM_ENABLE_SHELL=1` ile açılır. Permission katmanı (P3) gelene dek opt-in kalır.
 - [x] `WebFetch` (2026-06-22) — `http_get` zengin fetch'e yükseltildi: HTML→Markdown (stdlib-only converter `htmltomarkdown.go`, script/style/nav ayıklama, göreli link çözümleme), metinsel içerik verbatim, ikili içerik özet; SSRF guard korunur. `builtin_http.go` (`WebFetchTool`).
 
 ### Faz SM — Self-Management Araçları ✅ (2026-06-17)
@@ -95,7 +95,7 @@ graph TD
   ajan yalnız agent-created kaynakları siler, kullanıcınınkine dokunamaz. **Görevde sınır
   gevşek:** oku/oluştur/düzenle/taşı her görevde serbest (ajan panoyu yönetsin
   diye), yalnız **silme** provenance-kısıtlı.
-- [x] **Varsayılan KAPALI** (`Tunables.SelfManageEnabled`); `SWARMGO_ENABLE_SELFMANAGE=1`
+- [x] **Varsayılan KAPALI** (`Tunables.SelfManageEnabled`); `TIONSWARM_ENABLE_SELFMANAGE=1`
   ile açılır (shell gate deseni — katalog 19→35, token maliyeti opt-in).
 
 > **Yürütme yolu:** Built-in araçlar **native** tool-use döngüsünde (`agent/toolloop.go`

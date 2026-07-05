@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"os/exec"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // handleAgentPath returns the absolute path of an agent's on-disk JSON file.

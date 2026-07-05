@@ -10,12 +10,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/events"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // handleChatStream runs one chat turn over Server-Sent Events, emitting each
@@ -306,7 +306,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		run.setWakeScheduler(wakeFn)
 
 		// use_skill (CLI path): mirror the native built-in for claude-cli agents,
-		// which reach SwarmGo skills only through the Interaction MCP bridge. The
+		// which reach TionSwarm skills only through the Interaction MCP bridge. The
 		// loader enforces the same per-agent allowlist as the native use_skill tool,
 		// so a restricted skill stays unreachable unless assigned/shared.
 		skillAgent := agentRow
@@ -324,14 +324,14 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		})
 
 		// shell (CLI path): mirror the native built-in for claude-cli agents, which
-		// reach SwarmGo tools only through the Interaction MCP bridge. When shell is
+		// reach TionSwarm tools only through the Interaction MCP bridge. When shell is
 		// enabled, install a sandboxed runner so the bridge's shell dispatch runs
-		// commands through SwarmGo's PowerShell shell — letting the CLI's own POSIX
+		// commands through TionSwarm's PowerShell shell — letting the CLI's own POSIX
 		// Bash be safely disallowed. nil when shell is off (then Bash stays allowed).
 		run.setShellRunner(wsp.Runtime.NewShellRunner())
 
 		// Spawn (CLI path): mirror the native built-in for claude-cli agents, which
-		// reach SwarmGo tools only through the Interaction MCP bridge. Install a
+		// reach TionSwarm tools only through the Interaction MCP bridge. Install a
 		// per-agent spawn tool on the run so the bridge's spawn_session dispatch can
 		// launch independent sessions. Self-management is always on now; a fresh
 		// instance per turn resets the per-turn spawn budget.

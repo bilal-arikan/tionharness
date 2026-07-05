@@ -106,7 +106,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
       </Field>
       <Toggle
         label="Handoff'u dosyaya da yaz"
-        hint="Artifact'ın yanı sıra çalışma dizinine <workdir>/.swarmgo/handoff.md olarak yazar (disk üstü progress dosyası deseni)."
+        hint="Artifact'ın yanı sıra çalışma dizinine <workdir>/.tionswarm/handoff.md olarak yazar (disk üstü progress dosyası deseni)."
         checked={draft.handoffWriteFile}
         onChange={(v) => set('handoffWriteFile', v)}
       />
@@ -114,7 +114,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
       <SubHead icon={ListChecks}>Kalıcı ilerleme (progress)</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
         Anthropic'in <span className="font-medium text-[var(--color-text)]">claude-progress</span> konvansiyonu: <code>todo_write</code> kontrol listesi proje çalışma dizinine
-        <code> &lt;cwd&gt;/.swarmgo/progress.json</code> olarak yazılır (cwd yoksa ajan-başına depo dosyasına). Böylece liste oturumlar arası kaybolmaz; yeni bir oturum
+        <code> &lt;cwd&gt;/.tionswarm/progress.json</code> olarak yazılır (cwd yoksa ajan-başına depo dosyasına). Böylece liste oturumlar arası kaybolmaz; yeni bir oturum
         açıldığında kaldığı yerden devralınır. Dosya git-commit'lenebilir ve ajan dosya araçlarıyla okunabilir.
       </div>
       <Toggle

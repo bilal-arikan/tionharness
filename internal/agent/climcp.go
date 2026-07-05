@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/mcp"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // cliMCPConfig is the on-disk shape claude --mcp-config expects.
@@ -32,18 +32,18 @@ type cliMCPServer struct {
 }
 
 // interactionCoreKey / interactionExtendedKey are the two mcp-config keys for the
-// in-process Interaction MCP server. Core keeps the historical "swarmgo_interaction"
+// in-process Interaction MCP server. Core keeps the historical "tionswarm_interaction"
 // key so existing namespaced references (use_skill, core_memory, trace stripping)
 // stay valid; Extended is a separate key whose tools the CLI defers via ToolSearch
 // (claude-cli 2.1.x+). The CLI namespaces tools as mcp__<key>__<tool>.
 const (
-	interactionCoreKey     = "swarmgo_interaction"
-	interactionExtendedKey = "swarmgo_extended"
+	interactionCoreKey     = "tionswarm_interaction"
+	interactionExtendedKey = "tionswarm_extended"
 )
 
 // permissionPromptToolID is the namespaced Interaction MCP tool the claude CLI is
 // pointed at via --permission-prompt-tool (only in "ask" mode) so risky tools are
-// gated through SwarmGo's approval UI instead of auto-approved. It lives on the core
+// gated through TionSwarm's approval UI instead of auto-approved. It lives on the core
 // (always-loaded) server so the permission round-trip never waits on tool search.
 const permissionPromptToolID = "mcp__" + interactionCoreKey + "__permission_prompt"
 
@@ -53,7 +53,7 @@ const permissionPromptToolID = "mcp__" + interactionCoreKey + "__permission_prom
 //   - "ask":       every write/exec tool is gated through the prompt for approval.
 //   - "read-only": the CLI also runs in --permission-mode plan (mutations blocked
 //     outright); the ONLY call that reaches the prompt is ExitPlanMode, which
-//     SwarmGo renders as a plan-approval card.
+//     TionSwarm renders as a plan-approval card.
 //
 // "auto" uses bypass and needs no prompt.
 func promptToolForMode(mode string, inter tools.InteractionEndpoint) string {
@@ -69,7 +69,7 @@ func promptToolForMode(mode string, inter tools.InteractionEndpoint) string {
 //
 //   - When mcpEnabled, every enabled external MCP server is included.
 //   - When inter.URL is set, the in-process Interaction MCP server is added so the
-//     CLI can reach SwarmGo's human-in-the-loop tools (ask_user/todo_write), and
+//     CLI can reach TionSwarm's human-in-the-loop tools (ask_user/todo_write), and
 //     the conflicting CLI built-ins (AskUserQuestion/TodoWrite) are disallowed.
 //
 // Returns an empty path when there is nothing to wire.
@@ -135,12 +135,12 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		}
 		// Suppress the CLI's own equivalents, which can't be answered/honored in
 		// one-shot -p mode: AskUserQuestion has no live client, and ScheduleWakeup
-		// schedules a wake the CLI subprocess never lives to fire — SwarmGo's own
+		// schedules a wake the CLI subprocess never lives to fire — TionSwarm's own
 		// schedule_wake (above) replaces it with a real timer.
 		//
 		// The checklist family is the subtle one: newer Claude Code CLIs renamed the
 		// old TodoWrite into a TaskCreate/TaskUpdate/TaskList/TaskGet family. Whichever
-		// the CLI version exposes, it SHADOWS SwarmGo's bridged todo_write — the model
+		// the CLI version exposes, it SHADOWS TionSwarm's bridged todo_write — the model
 		// reaches for the native tool, so nothing reaches the progress sink and the
 		// progress card stays empty. Suppress BOTH names (disallowing a tool the CLI
 		// doesn't have is harmless) so todo_write is the only checklist path.
@@ -149,27 +149,27 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 			"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet",
 			"ScheduleWakeup")
 		// Skill: the CLI's native skill tool only sees its own .claude/skills dirs,
-		// never SwarmGo's workspace skills — so a weak model reaching for it fails
+		// never TionSwarm's workspace skills — so a weak model reaching for it fails
 		// with "Unknown skill". The bridged use_skill (above) is the correct path,
 		// so suppress the native one to force it.
 		disallowed = append(disallowed, "Skill")
 		// Subagent launcher: the CLI's native delegation tool (older CLIs call it
 		// `Task`, newer ones `Agent`) spawns a child entirely inside the CLI process —
-		// invisible to SwarmGo, so it bypasses the bridged run_subagent (no `subagent`
-		// trace, no SwarmGo agent/profile target, no budget accounting). When
+		// invisible to TionSwarm, so it bypasses the bridged run_subagent (no `subagent`
+		// trace, no TionSwarm agent/profile target, no budget accounting). When
 		// delegation is enabled run_subagent is the gated replacement; when it is
 		// disabled the agent should not delegate at all. Either way the native launcher
 		// must be suppressed — same shadowing class as TodoWrite/Skill above.
 		disallowed = append(disallowed, "Task", "Agent")
-		// Bash: only suppress the CLI's native POSIX Bash when SwarmGo's own shell is
+		// Bash: only suppress the CLI's native POSIX Bash when TionSwarm's own shell is
 		// bridged (shell enabled) as its replacement — otherwise the agent would lose
-		// shell entirely (SwarmGo's shell is not bridged when disabled). With the
-		// bridge present, all commands route through SwarmGo's PowerShell shell.
+		// shell entirely (TionSwarm's shell is not bridged when disabled). With the
+		// bridge present, all commands route through TionSwarm's PowerShell shell.
 		if r.tun.ShellEnabled() {
 			disallowed = append(disallowed, "Bash")
 		}
 		// Plan mode: claude-cli's EnterPlanMode/ExitPlanMode only complete when their
-		// exit approval can be answered. SwarmGo answers it via the permission-prompt
+		// exit approval can be answered. TionSwarm answers it via the permission-prompt
 		// tool, which is wired only in "ask" and "read-only" modes (see
 		// promptToolForMode). In "auto" (bypass) there is no approver, so a voluntary
 		// plan-mode entry would hang on the headless "Exit plan mode?" prompt and the
@@ -187,7 +187,7 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 	if err != nil {
 		return "", nil, nil, nil, err
 	}
-	f, err := os.CreateTemp("", "swarmgo-mcp-*.json")
+	f, err := os.CreateTemp("", "tionswarm-mcp-*.json")
 	if err != nil {
 		return "", nil, nil, nil, err
 	}
@@ -205,7 +205,7 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 	return path, allowed, disallowed, cleanup, nil
 }
 
-// cliSettings is the subset of the claude CLI's settings.json SwarmGo generates
+// cliSettings is the subset of the claude CLI's settings.json TionSwarm generates
 // per turn: a permission deny-list (defense-in-depth alongside --disallowedTools,
 // with pattern support) plus the workspace's PreToolUse/PostToolUse hooks so the
 // CLI's own tool loop fires the same hooks the native loop does (CLI-path hooks).
@@ -240,7 +240,7 @@ type cliHookSpec struct {
 // the caller passes --settings only when it carries something.
 //
 // Caveat: CLI hooks run under the CLI's own hook runner/shell, which may differ
-// from SwarmGo's execHook (PowerShell on Windows). A hook authored for SwarmGo's
+// from TionSwarm's execHook (PowerShell on Windows). A hook authored for TionSwarm's
 // shell may need adjusting to run identically here.
 func (r *Runtime) writeCLISettings(ctx context.Context, deny []string) (string, func(), error) {
 	set := cliSettings{}
@@ -282,7 +282,7 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string) (string, 
 	if err != nil {
 		return "", func() {}, err
 	}
-	f, err := os.CreateTemp("", "swarmgo-settings-*.json")
+	f, err := os.CreateTemp("", "tionswarm-settings-*.json")
 	if err != nil {
 		return "", func() {}, err
 	}

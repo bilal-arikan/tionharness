@@ -1,6 +1,6 @@
-name: SwarmGo CI (crabbox)
+name: TionSwarm CI (crabbox)
 
-# Build + test SwarmGo on a Crabbox local-container box.
+# Build + test TionSwarm on a Crabbox local-container box.
 # GitHub's ubuntu runners ship Docker + rsync + ssh, so the local-container
 # provider works natively (no coordinator/login, no Windows rsync setup).
 # The actual command lives in .crabbox.yaml (job: ci) — single source of truth.

@@ -11,7 +11,7 @@
 1. **Alt-ajan izolasyonu (A2):** Ana ajan, ana bağlamını kirletmeden **geçici**,
    **izole bağlamlı**, **tipli**, **paralel** alt-ajanlar başlatabilsin; alt-ajan
    işi kendi temiz bağlamında bitirip ana ajana **yalnız final sonucu** döndürsün.
-   (Claude Code / External Agent `Task` aracının SwarmGo karşılığı.)
+   (Claude Code / External Agent `Task` aracının TionSwarm karşılığı.)
 2. **Primitif birleştirme:** Bugünkü üç çatallı çok-ajan primitifini
    (`call_agent`, `spawn_session`, `send_agent_message`) **tek generic çekirdeğe**
    indir; heartbeat kaldırıldıktan sonra anlamsız kalanı **sil**.
@@ -153,7 +153,7 @@ Bu yüzden `run_subagent` şemasına **üç opsiyonel alan** eklendi:
 
 - **Yalnız dolu alanlar** satır olur; **hiçbiri yoksa blok boştur** → eski düz-`task`
   davranışı bayt-bazında korunur (geriye-uyumlu).
-- **Tool/source guidance** (4. alan) için yeni alan eklenmedi; SwarmGo'da profil
+- **Tool/source guidance** (4. alan) için yeni alan eklenmedi; TionSwarm'da profil
   allowlist'leri (explore/coder/reviewer) + `task` bunu zaten karşılıyor.
 - **Profil etkileşimi:** persona (kim olduğun) **kalır**, sözleşme (bu çağrıda ne/nasıl)
   altına eklenir — `explore` yine read-only davranır ama bu çağrının objective/format/
@@ -162,8 +162,8 @@ Bu yüzden `run_subagent` şemasına **üç opsiyonel alan** eklendi:
   noktada enjeksiyon her iki yürütmeyi kapsar.
 - **Native launcher gölgeleme (2026-06-25, fix):** claude-cli'ın kendi delegasyon
   aracı (eski sürüm `Task`, yeni sürüm `Agent`) çocuğu **tamamen CLI süreci içinde**
-  başlatır → SwarmGo'ya görünmez, bridged `run_subagent`'ı baypas eder (`subagent`
-  trace yok, SwarmGo ajan/profil hedefi yok, bütçe muhasebesi yok). `climcp.go::
+  başlatır → TionSwarm'ya görünmez, bridged `run_subagent`'ı baypas eder (`subagent`
+  trace yok, TionSwarm ajan/profil hedefi yok, bütçe muhasebesi yok). `climcp.go::
   writeCLIMCPConfig` artık `--disallowedTools` ile `Task` + `Agent`'ı bastırır
   (`run_subagent` daima kurulu muadildir — 2026-07-02'den beri gate yok, görünürlük
   araç-bazlı). `TodoWrite`/`Skill` ile aynı gölgeleme sınıfı (bkz. `_Docs\36` native
@@ -287,7 +287,7 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
 | `frontend/src/lib/{stepKinds,tools}.ts`, `types/*.ts` | düzenle | `subagent` kind + `run_subagent` |
 
 > **Dokümantasyon temizliği (ayrı geçiş):** heartbeat kaldırıldığı için
-> `00-GENEL-BAKIS`, `05-ILERLEME`, `24-SELF-MANAGEMENT`, `swarmgo-autonomous-ops`
+> `00-GENEL-BAKIS`, `05-ILERLEME`, `24-SELF-MANAGEMENT`, `tionswarm-autonomous-ops`
 > ve proje SKILL'i "heartbeat/`Wake`/`send_agent_message`" referanslarından
 > arındırılmalı; otonomi anlatımı scheduler + schedule_wake + spawn + flows'a
 > dayandırılmalı.

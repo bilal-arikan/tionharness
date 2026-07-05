@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/memory"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/memory"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // isFirstUntitledTurn reports whether this is the opening message of a fresh chat
@@ -187,8 +187,8 @@ func dateTimeContextBlock() string {
 // recover exact pre-compaction detail when it actually needs it rather than
 // guessing from the digest: full-text search the past messages (conversation_search)
 // or simply re-open the relevant files (the fs tools are unlocked). This is
-// SwarmGo's equivalent of Claude Code's post-compaction transcript pointer,
-// adapted to the recovery tools SwarmGo already ships — no readFileState tracker
+// TionSwarm's equivalent of Claude Code's post-compaction transcript pointer,
+// adapted to the recovery tools TionSwarm already ships — no readFileState tracker
 // is needed because file contents are never cross-turn context here anyway, so a
 // re-read on demand fully restores them. Returns "" for an empty summary so the
 // caller can append it unconditionally.

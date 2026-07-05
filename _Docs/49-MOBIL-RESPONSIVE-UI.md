@@ -2,7 +2,7 @@
 
 > **Durum:** F1 + F2 + F3 + panel UX iyileştirmeleri UYGULANDI ✅ (2026-07-04) —
 > kalan F4 tasarım 📐. Bkz. §7 (F3 sonrası liste panelleri drawer'a yükseltildi).
-> **Amaç:** SwarmGo web UI'ını **dikey (portrait) telefon ekranlarına** uyumlu
+> **Amaç:** TionSwarm web UI'ını **dikey (portrait) telefon ekranlarına** uyumlu
 > hale getirmek. Bugün UI **masaüstü-sabit** (yatay çok-sütunlu düzen, sabit
 > genişlikli raylar/sidebar'lar); telefonda kullanılamaz. Bu doküman kırılma
 > noktalarını somut `dosya:satır` referanslarıyla tespit eder ve mobile-first
@@ -18,7 +18,7 @@
 
 ## 1. Motivasyon
 
-`48-VPS-REMOTE-CLIENT` telefondan (PWA/WebView) uzak SwarmGo'ya bağlanmayı
+`48-VPS-REMOTE-CLIENT` telefondan (PWA/WebView) uzak TionSwarm'ya bağlanmayı
 tarifliyor. Ama mevcut UI **yatay masaüstü düzeni** varsayıyor: soldan sağa
 `NavRail → Sidebar → main → DetailPanel` diye 3-4 sütun yan yana diziliyor.
 360-420px genişlikteki bir telefonda bu düzen ezilir, sütunlar okunamaz hale
@@ -310,9 +310,9 @@ cilalar. `tsc -b && vite build` temiz.
   F3'ün bu panellerdeki `max-md:flex-col` + `max-h-[45vh]` stack'i **geri alındı**
   (artık drawer). (Executions + Agents roster hâlâ F3 stack — istek dışıydı.)
 - **Flows node inspector (istek 4):** editördeki sağ `w-72` node paneli de
-  daraltılabilir (`PanelRightClose`/`PanelRightOpen`, `swarmgo.flowInspectorOpen`).
+  daraltılabilir (`PanelRightClose`/`PanelRightOpen`, `tionswarm.flowInspectorOpen`).
 - **Agents aktivite paneli (istek 1):** `AgentActivityPanel` sohbet DetayPaneli gibi
-  aç/kapa (`onClose` X + kapalıyken sağda "Aktivite" rayı; `swarmgo.agentActivityOpen`);
+  aç/kapa (`onClose` X + kapalıyken sağda "Aktivite" rayı; `tionswarm.agentActivityOpen`);
   mobilde tam-genişlik stack.
 - **Agents "yolu kopyala" (istek 2):** `AgentSettingsForm`'da icon-only
   (`labelClassName="hidden"`).

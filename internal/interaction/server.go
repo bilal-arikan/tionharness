@@ -1,8 +1,8 @@
-// Package interaction implements the SwarmGo Interaction MCP server: a minimal
+// Package interaction implements the TionSwarm Interaction MCP server: a minimal
 // MCP-over-HTTP (Streamable HTTP) endpoint that lets agent CLIs which run their
-// own agentic loop (claude-cli first; Codex/Vibe later) call SwarmGo's
+// own agentic loop (claude-cli first; Codex/Vibe later) call TionSwarm's
 // human-in-the-loop tools (ask_user, todo_write, ...) and have them surface in
-// the SwarmGo UI — the same behaviour the native (anthropic/minimax) tool path
+// the TionSwarm UI — the same behaviour the native (anthropic/minimax) tool path
 // already provides via a context bridge. See _Docs/11-INTERACTION-MCP.md.
 //
 // This package is transport+protocol only (no agent/api imports) so it stays
@@ -81,7 +81,7 @@ type rpcError struct {
 }
 
 // Handler returns an http.Handler implementing the Streamable HTTP MCP subset
-// SwarmGo needs: initialize, notifications/initialized, tools/list, tools/call.
+// TionSwarm needs: initialize, notifications/initialized, tools/list, tools/call.
 func Handler(b Backend, logger *slog.Logger) http.Handler {
 	if logger == nil {
 		logger = slog.Default()
@@ -127,7 +127,7 @@ func (h *mcpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Mcp-Session-Id", token)
 		h.writeRPC(w, req.ID, map[string]any{
 			"protocolVersion": ProtocolVersion,
-			"serverInfo":      map[string]string{"name": "swarmgo-interaction", "version": "0.0.1"},
+			"serverInfo":      map[string]string{"name": "tionswarm-interaction", "version": "0.0.1"},
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 		}, nil)
 	case "notifications/initialized":

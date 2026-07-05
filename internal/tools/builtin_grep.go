@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // FSGrepTool searches file contents in the sandbox for a regular expression, with

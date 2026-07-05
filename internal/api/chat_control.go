@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // chatRun is the live control handle for one in-flight streaming chat turn.
@@ -143,7 +143,7 @@ func (r *chatRun) skillAllowedFor() skillAllowedFunc {
 
 // shellRunner runs a shell command for the responding agent (CLI path), bound to
 // the workspace sandbox. Mirrors the native shell built-in over the Interaction
-// MCP bridge so a claude-cli agent runs commands through SwarmGo's own shell
+// MCP bridge so a claude-cli agent runs commands through TionSwarm's own shell
 // (PowerShell on Windows, sandboxed + bounded) instead of the CLI's POSIX Bash.
 type shellRunner func(ctx context.Context, args json.RawMessage) (string, error)
 

@@ -61,10 +61,10 @@ export interface AppSettings {
   handoffAuto: boolean        // auto-reset an autonomous turn that hit the context limit into a fresh session
   handoffPressure: number     // context-fill ratio above which auto-reset is allowed (0 = default 0.90)
   handoffMaxChain: number     // max consecutive resets before falling back to plain compaction (0 = default 20)
-  handoffWriteFile: boolean   // also write the handoff to <workdir>/.swarmgo/handoff.md
+  handoffWriteFile: boolean   // also write the handoff to <workdir>/.tionswarm/handoff.md
 
   // Persistent progress (Anthropic claude-progress convention).
-  progressPersist: boolean    // persist the todo_write checklist to <cwd>/.swarmgo/progress.json
+  progressPersist: boolean    // persist the todo_write checklist to <cwd>/.tionswarm/progress.json
   progressResume: boolean     // inject a resumed-progress block into a fresh session at start
 
   // Event-driven session auto-tagging (tool-error/error/goal/goal-done/archived).

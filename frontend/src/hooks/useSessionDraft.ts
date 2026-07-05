@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 // session (and back) and a full page reload. Sending or clearing the composer
 // removes the draft; an empty draft is never stored.
 
-const PREFIX = 'swarmgo:draft:'
+const PREFIX = 'tionswarm:draft:'
 
 function read(sessionId?: string): string {
   if (!sessionId) return ''

@@ -9,17 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/codemode"
-	"github.com/bilal-arikan/swarmgo/internal/mcp"
-	"github.com/bilal-arikan/swarmgo/internal/proc"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/codemode"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 const (
 	// runCodeBindingsDir is where the generated Python MCP bindings live, under
-	// the turn's working directory — a sibling of .swarmgo/progress.json and
+	// the turn's working directory — a sibling of .tionswarm/progress.json and
 	// handoff.md. Regenerated (from scratch) on every run_code call.
-	runCodeBindingsDir = ".swarmgo/mcp"
+	runCodeBindingsDir = ".tionswarm/mcp"
 	// runCodeDefaultTimeout / runCodeMaxTimeout bound a script's wall-clock
 	// runtime. Wider than transform_data's fixed 30s because a script may chain
 	// several (slow) MCP calls.
@@ -33,7 +33,7 @@ const (
 
 // RunCodeTool is the code-execution-with-MCP entry point (_Docs/44): instead of
 // shipping every MCP tool's schema to the model, the enabled MCP catalog is
-// rendered as a generated Python module tree under .swarmgo/mcp/ and the model
+// rendered as a generated Python module tree under .tionswarm/mcp/ and the model
 // CALLS tools by writing code. Intermediate results stay in the script's
 // variables/files; only stdout/stderr (capped) plus a per-execution MCP call
 // summary return to the conversation.
@@ -54,7 +54,7 @@ type RunCodeTool struct {
 	sb       Sandbox
 	entries  []mcp.CatalogEntry
 	caller   MCPCaller
-	builtins []codemode.BuiltinDef // SwarmGo built-in tools exposed as the `swarmgo` module
+	builtins []codemode.BuiltinDef // TionSwarm built-in tools exposed as the `tionswarm` module
 	callBI   MCPCaller             // dispatches a built-in by bare name (nil = built-ins off)
 	allow    func(string) bool     // agent tool filter (nil = allow all)
 	gate     RunCodeGate           // per-call permission (nil = allow all)
@@ -72,7 +72,7 @@ type RunCodeObserver func(ctx context.Context, ob codemode.CallObservation)
 
 // NewRunCodeTool binds the tool to the turn's working-dir sandbox, the MCP
 // catalog to expose, the pool-backed MCP dispatcher, the built-in tools to expose
-// (as the `swarmgo` module) with their dispatcher, the agent's tool filter and the
+// (as the `tionswarm` module) with their dispatcher, the agent's tool filter and the
 // per-call permission/observability hooks. entries/caller may be empty (built-ins
 // only); builtins/callBI may be nil (MCP only); gate/observe may be nil.
 func NewRunCodeTool(sb Sandbox, entries []mcp.CatalogEntry, caller MCPCaller, builtins []codemode.BuiltinDef, callBI MCPCaller, allow func(string) bool, gate RunCodeGate, observe RunCodeObserver) RunCodeTool {
@@ -114,9 +114,9 @@ func (RunCodeTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "run_code",
 		Description: "Run a Python script that calls tools as ordinary functions (code-execution mode). " +
-			"Every enabled MCP tool AND SwarmGo's own built-in tools are exposed as generated Python modules under " + runCodeBindingsDir + "/ " +
-			"(one module per MCP server + a `swarmgo` module for built-ins, on PYTHONPATH — `from <server> import <tool>` / " +
-			"`from swarmgo import <tool>`). This lets you orchestrate a multi-tool workflow (list → filter → act) in ONE " +
+			"Every enabled MCP tool AND TionSwarm's own built-in tools are exposed as generated Python modules under " + runCodeBindingsDir + "/ " +
+			"(one module per MCP server + a `tionswarm` module for built-ins, on PYTHONPATH — `from <server> import <tool>` / " +
+			"`from tionswarm import <tool>`). This lets you orchestrate a multi-tool workflow (list → filter → act) in ONE " +
 			"call instead of many tool round-trips. Call with NO script first: " +
 			"the bindings are (re)generated and the module/function listing is returned; then Read a module file " +
 			"to see each function's docstring + input schema. Pass arguments as keywords; functions return the " +
@@ -164,7 +164,7 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 		return "", fmt.Errorf("bindings dir: %w", err)
 	}
 	// Stateless regeneration on every call: the bindings always mirror the
-	// current catalog (MCP servers + the `swarmgo` built-ins module), so a
+	// current catalog (MCP servers + the `tionswarm` built-ins module), so a
 	// changed/removed tool can never serve stale stubs.
 	modules, err := codemode.WriteBindings(bindDir, t.entries, t.builtins, t.allow)
 	if err != nil {
@@ -240,8 +240,8 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	// execution's bridge, and dies with it.
 	cmd.Env = append(minimalScriptEnv(),
 		"PYTHONPATH="+bindDir,
-		"SWARMGO_MCP_BRIDGE_URL="+bridge.URL(),
-		"SWARMGO_MCP_BRIDGE_TOKEN="+bridge.Token(),
+		"TIONSWARM_MCP_BRIDGE_URL="+bridge.URL(),
+		"TIONSWARM_MCP_BRIDGE_TOKEN="+bridge.Token(),
 	)
 	var logBuf bytes.Buffer
 	w := &capWriter{buf: &logBuf, max: runCodeMaxLogBytes}
@@ -289,7 +289,7 @@ func renderBindingListing(modules map[string][]string) string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Tool bindings regenerated under %s/ (on PYTHONPATH for run_code scripts).\n"+
-		"Modules: one per MCP server, plus `swarmgo` for SwarmGo's built-in tools.\nModules:\n", runCodeBindingsDir)
+		"Modules: one per MCP server, plus `tionswarm` for TionSwarm's built-in tools.\nModules:\n", runCodeBindingsDir)
 	for _, m := range names {
 		fmt.Fprintf(&b, "- %s: %s\n", m, strings.Join(modules[m], ", "))
 	}

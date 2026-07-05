@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // configValidateInput is the ask shape for the config_validate tool.
@@ -16,7 +16,7 @@ type configValidateInput struct {
 	Path string `json:"path"`
 }
 
-// ConfigValidateTool validates a SwarmGo JSON config file: that it is well-formed
+// ConfigValidateTool validates a TionSwarm JSON config file: that it is well-formed
 // JSON and, for recognised file shapes (settings.json, tools-config.json,
 // agent/mcp-server records), that the expected top-level fields are present. A
 // malformed config file is the classic cause of a silent load failure, so this
@@ -30,7 +30,7 @@ func NewConfigValidateTool(sb Sandbox) ConfigValidateTool { return ConfigValidat
 func (ConfigValidateTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "config_validate",
-		Description: "Validate a SwarmGo JSON config file (well-formed JSON + expected fields for known " +
+		Description: "Validate a TionSwarm JSON config file (well-formed JSON + expected fields for known " +
 			"shapes like settings.json / tools-config.json / agent / mcp-server records). Use before or after " +
 			"editing a config to catch malformed JSON that would silently break loading. Read-only.",
 		InputSchema: json.RawMessage(`{

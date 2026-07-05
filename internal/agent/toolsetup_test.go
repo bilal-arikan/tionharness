@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // newTestRuntime builds a Runtime backed by a real file store and a workspace
@@ -116,8 +116,8 @@ func TestShellToolGate(t *testing.T) {
 
 	// Enabled → present and actually executes.
 	tun.SetShellEnabled(true)
-	res := callTool(t, rt, agent, "Bash", map[string]any{"command": "echo swarmgo-shell-ok"})
-	if res.IsError || !strings.Contains(res.Content, "swarmgo-shell-ok") {
+	res := callTool(t, rt, agent, "Bash", map[string]any{"command": "echo tionswarm-shell-ok"})
+	if res.IsError || !strings.Contains(res.Content, "tionswarm-shell-ok") {
 		t.Fatalf("shell run got %q (err=%v)", res.Content, res.IsError)
 	}
 }

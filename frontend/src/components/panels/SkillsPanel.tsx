@@ -160,7 +160,7 @@ export function SkillsPanel({ onError }: Props) {
   const [bulkGroupBusy, setBulkGroupBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
-  const { open: listOpen, toggle: toggleList } = useCollapsibleList('swarmgo.skillsListOpen')
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.skillsListOpen')
 
   // Skills bucketed by group (named groups first, ungrouped last), with
   // persisted per-group collapse state. Recomputed only when the catalog changes.
@@ -173,7 +173,7 @@ export function SkillsPanel({ onError }: Props) {
   } = useGroupedList(list, {
     keyOf: skillGroupKey,
     sortGroups: sortSkillGroups,
-    persistKey: 'swarmgo.skillsCollapsedGroups',
+    persistKey: 'tionswarm.skillsCollapsedGroups',
   })
   // Distinct existing group names, offered as editor autocomplete suggestions.
   const groupNames = useMemo(
@@ -364,7 +364,7 @@ export function SkillsPanel({ onError }: Props) {
       <ListPane
         open={listOpen}
         onToggle={toggleList}
-        widthKey="swarmgo.skillsListWidth"
+        widthKey="tionswarm.skillsListWidth"
         defaultWidth={288}
         label="Skills"
         testId="skills-list-toggle"
@@ -407,7 +407,7 @@ export function SkillsPanel({ onError }: Props) {
               <Sparkles size={28} className="opacity-40" />
               <p>
                 Henüz beceri yok. <code>SKILL.md</code> içeren bir klasörü{' '}
-                <code>~/.swarmgo/skills/</code> (global) ya da workspace{' '}
+                <code>~/.tionswarm/skills/</code> (global) ya da workspace{' '}
                 <code>skills/</code> altına koyup <strong>Tara</strong>'ya bas.
               </p>
             </div>

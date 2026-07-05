@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/bilal-arikan/swarmgo/internal/config"
+	"github.com/bilal-arikan/tionswarm/internal/config"
 )
 
 // handleLogsPath returns the absolute on-disk log file path the Logs screen can

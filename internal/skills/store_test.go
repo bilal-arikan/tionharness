@@ -280,7 +280,7 @@ func TestCatalogBlockForAgentTool(t *testing.T) {
 	writeSkill(t, dir, "triage", "---\nname: Triage\ndescription: sort issues\nshared: true\n---\nbody")
 	s := New("", dir)
 
-	const ns = "mcp__swarmgo_interaction__use_skill"
+	const ns = "mcp__tionswarm_interaction__use_skill"
 	block := s.CatalogBlockForAgentTool(nil, ns)
 	if !contains(block, ns) {
 		t.Errorf("block missing namespaced tool %q:\n%s", ns, block)
@@ -606,11 +606,11 @@ func TestEnsureDefaultsSeeds(t *testing.T) {
 	if err := EnsureDefaults(dir); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "swarmgo-guide", "SKILL.md")); err != nil {
-		t.Errorf("swarmgo-guide not seeded: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, "tionswarm-guide", "SKILL.md")); err != nil {
+		t.Errorf("tionswarm-guide not seeded: %v", err)
 	}
 	// Idempotent + non-overwriting: edit a default, re-seed, edit survives.
-	guide := filepath.Join(dir, "swarmgo-guide", "SKILL.md")
+	guide := filepath.Join(dir, "tionswarm-guide", "SKILL.md")
 	if err := os.WriteFile(guide, []byte("edited"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -632,7 +632,7 @@ func TestEnsureDefaultsRefreshesPristine(t *testing.T) {
 	if err := EnsureDefaults(dir); err != nil {
 		t.Fatal(err)
 	}
-	guide := filepath.Join(dir, "swarmgo-guide", "SKILL.md")
+	guide := filepath.Join(dir, "tionswarm-guide", "SKILL.md")
 	embedded, _ := os.ReadFile(guide) // current embedded content (just seeded)
 
 	// Simulate a PRIOR ship: an older on-disk body whose hash is recorded in the
@@ -642,7 +642,7 @@ func TestEnsureDefaultsRefreshesPristine(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := loadShippedManifest(dir)
-	m["swarmgo-guide/SKILL.md"] = sha256Hex(oldBody)
+	m["tionswarm-guide/SKILL.md"] = sha256Hex(oldBody)
 	if err := saveShippedManifest(dir, m); err != nil {
 		t.Fatal(err)
 	}
@@ -656,7 +656,7 @@ func TestEnsureDefaultsRefreshesPristine(t *testing.T) {
 		t.Errorf("pristine prior-shipped default was NOT refreshed to embedded content")
 	}
 	// The manifest must now record the fresh embedded hash.
-	if loadShippedManifest(dir)["swarmgo-guide/SKILL.md"] != sha256Hex(embedded) {
+	if loadShippedManifest(dir)["tionswarm-guide/SKILL.md"] != sha256Hex(embedded) {
 		t.Errorf("manifest not updated to the refreshed hash")
 	}
 }

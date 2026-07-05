@@ -19,11 +19,11 @@ export function SessionDebugCard({
   const [sum, setSum] = useState<SessionDebugSummary | null>(null)
   // Whole-card fold (collapsed by default — debug is secondary; the header line
   // still shows a one-glance summary). Persisted so the choice sticks.
-  const [open, setOpen] = useState(() => localStorage.getItem('swarmgo.debugCardOpen') === '1')
+  const [open, setOpen] = useState(() => localStorage.getItem('tionswarm.debugCardOpen') === '1')
   const toggleOpen = () =>
     setOpen((v) => {
       const next = !v
-      localStorage.setItem('swarmgo.debugCardOpen', next ? '1' : '0')
+      localStorage.setItem('tionswarm.debugCardOpen', next ? '1' : '0')
       return next
     })
   const [expanded, setExpanded] = useState(false)

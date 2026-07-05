@@ -9,18 +9,18 @@ import (
 )
 
 // TestLiveClaudeCLIResume is a REAL end-to-end check of the claude-cli --resume
-// path: it spends actual tokens, so it is gated behind SWARMGO_LIVE_CLI=1 and
+// path: it spends actual tokens, so it is gated behind TIONSWARM_LIVE_CLI=1 and
 // skipped in normal runs. It proves the core resume promise — turn 2 sends ONLY a
 // follow-up question (no transcript) yet the model still recalls a fact stated in
 // turn 1, because the CLI resumed its own server-side session.
 //
-//	SWARMGO_LIVE_CLI=1 go test ./internal/providers/ -run TestLiveClaudeCLIResume -v
+//	TIONSWARM_LIVE_CLI=1 go test ./internal/providers/ -run TestLiveClaudeCLIResume -v
 func TestLiveClaudeCLIResume(t *testing.T) {
-	if os.Getenv("SWARMGO_LIVE_CLI") != "1" {
-		t.Skip("set SWARMGO_LIVE_CLI=1 to run the live claude-cli resume test")
+	if os.Getenv("TIONSWARM_LIVE_CLI") != "1" {
+		t.Skip("set TIONSWARM_LIVE_CLI=1 to run the live claude-cli resume test")
 	}
 	bin := "claude"
-	if p := os.Getenv("SWARMGO_CLAUDE_BIN"); p != "" {
+	if p := os.Getenv("TIONSWARM_CLAUDE_BIN"); p != "" {
 		bin = p
 	}
 	c := NewClaudeCLI(bin, "", "", "", "") // "" → CLI default (logged-in) model
@@ -95,15 +95,15 @@ func TestLiveClaudeCLIResume(t *testing.T) {
 // path (Phase 4): two turns through one warm CLISessionPool process. Turn 2 must
 // (a) still know a fact from turn 1 (the process held the conversation) and (b)
 // REUSE the prompt cache (cache_read > 0) despite a volatile SystemDynamic. Gated
-// behind SWARMGO_LIVE_CLI=1 (spends tokens).
+// behind TIONSWARM_LIVE_CLI=1 (spends tokens).
 //
-//	SWARMGO_LIVE_CLI=1 go test ./internal/providers/ -run TestLivePersistentSession -v
+//	TIONSWARM_LIVE_CLI=1 go test ./internal/providers/ -run TestLivePersistentSession -v
 func TestLivePersistentSession(t *testing.T) {
-	if os.Getenv("SWARMGO_LIVE_CLI") != "1" {
-		t.Skip("set SWARMGO_LIVE_CLI=1 to run the live persistent-session test")
+	if os.Getenv("TIONSWARM_LIVE_CLI") != "1" {
+		t.Skip("set TIONSWARM_LIVE_CLI=1 to run the live persistent-session test")
 	}
 	bin := "claude"
-	if p := os.Getenv("SWARMGO_CLAUDE_BIN"); p != "" {
+	if p := os.Getenv("TIONSWARM_CLAUDE_BIN"); p != "" {
 		bin = p
 	}
 	c := NewClaudeCLI(bin, "", "", "", "")

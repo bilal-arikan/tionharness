@@ -1,6 +1,6 @@
 // External tools settings panel. Detects optional CLI tools used alongside
-// SwarmGo (token optimisation, dev, render — e.g. `sqz`, `crabbox`, `mmdc`) on
-// PATH and lets the user wire the hook-based ones into SwarmGo with one click.
+// TionSwarm (token optimisation, dev, render — e.g. `sqz`, `crabbox`, `mmdc`) on
+// PATH and lets the user wire the hook-based ones into TionSwarm with one click.
 // Read-only detection — nothing is installed or executed. Self-contained (own
 // load), exempt from the global Save bar — like the Hooks panel. Split out of
 // HooksPanel into its own settings category.
@@ -16,7 +16,7 @@ interface Props {
   onError: (msg: string) => void
 }
 
-// One-click hook templates that wire a detected external tool into SwarmGo as a
+// One-click hook templates that wire a detected external tool into TionSwarm as a
 // PreToolUse/PostToolUse hook. Only tools whose `wire` is 'hook' (from
 // /api/external-tools) need an entry here; 'mcp'/'cli' tools render an info badge
 // instead of a toggle (driven by ExternalToolStatus.wire, not this map).
@@ -85,7 +85,7 @@ export function ExternalToolsPanel({ onError }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // The hook (if any) currently wiring a given external tool into SwarmGo,
+  // The hook (if any) currently wiring a given external tool into TionSwarm,
   // matched by the tool name appearing in the hook command.
   const wiredHook = (toolName: string): Hook | undefined =>
     hooks.find((h) => h.command.includes(toolName))
@@ -110,7 +110,7 @@ export function ExternalToolsPanel({ onError }: Props) {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        SwarmGo ile birlikte kullanılabilecek isteğe bağlı CLI araçlarının (token optimizasyonu, geliştirme, render — ör.{' '}
+        TionSwarm ile birlikte kullanılabilecek isteğe bağlı CLI araçlarının (token optimizasyonu, geliştirme, render — ör.{' '}
         <code>sqz</code>, <code>crabbox</code>, <code>mmdc</code>) bu cihazda{' '}
         <span className="font-medium text-[var(--color-text)]">kurulu olup olmadığını</span> kontrol eder.
         Yalnız PATH'te aranır — araçlar <span className="font-medium text-[var(--color-text)]">kurulmaz, çalıştırılmaz, değiştirilmez</span>.
@@ -167,8 +167,8 @@ export function ExternalToolsPanel({ onError }: Props) {
                             }`}
                             title={
                               wiredHook(t.name)
-                                ? 'SwarmGo hook bağlantısını aç/kapat'
-                                : 'Bu araç için SwarmGo hook’u oluştur ve etkinleştir'
+                                ? 'TionSwarm hook bağlantısını aç/kapat'
+                                : 'Bu araç için TionSwarm hook’u oluştur ve etkinleştir'
                             }
                           >
                             {toolBusy === t.name

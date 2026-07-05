@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/conversation"
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/providers"
-	"github.com/bilal-arikan/swarmgo/internal/workspace"
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // sessionContextPreview is the EXACT next-turn context a session's agent would be
@@ -62,9 +62,9 @@ type sessionContextPreview struct {
 }
 
 // cliOverheadPreview surfaces, for CLI-wrapper providers (claude-cli),
-// the gap between SwarmGo's own segment estimate (TotalTokens) and the real prompt
+// the gap between TionSwarm's own segment estimate (TotalTokens) and the real prompt
 // the underlying CLI actually sends to the model. The CLI injects its OWN system
-// prompt + tool schemas + MCP bridge that SwarmGo never composes or sees, so for
+// prompt + tool schemas + MCP bridge that TionSwarm never composes or sees, so for
 // these providers TotalTokens under-reports the billed input. MeasuredTokens is the
 // real model input of ONE call (input + cacheRead + cacheWrite): claude-cli reports
 // those counters CUMULATIVELY across its internal tool-loop round-trips within a
@@ -75,7 +75,7 @@ type sessionContextPreview struct {
 // has been sent.
 type cliOverheadPreview struct {
 	Note            string `json:"note"`
-	EstimatedTokens int    `json:"estimatedTokens"` // SwarmGo segment sum (== TotalTokens)
+	EstimatedTokens int    `json:"estimatedTokens"` // TionSwarm segment sum (== TotalTokens)
 	MeasuredTokens  int    `json:"measuredTokens"`  // real model input per call (turn total ÷ num_turns); 0 until first turn
 	OverheadTokens  int    `json:"overheadTokens"`  // max(0, measured - estimated)
 	Calls           int    `json:"calls"`           // CLI internal round-trips behind measuredTokens (num_turns)
@@ -130,7 +130,7 @@ func (s *Server) computeCachePreview(provider string, session db.Session, msgCou
 		_ = hasDynamic // dynamic now rides the message tail, not a cached system block
 		return c
 	case "openrouter":
-		// SwarmGo sends an Anthropic-style cache_control breakpoint on the static
+		// TionSwarm sends an Anthropic-style cache_control breakpoint on the static
 		// System prefix for OpenRouter. It is honoured by Anthropic/Gemini backends;
 		// OpenAI/DeepSeek models cache implicitly anyway. Either way the Tools +
 		// System prefix is the warm part; Dynamic + messages go fresh.
@@ -167,7 +167,7 @@ func (s *Server) computeCachePreview(provider string, session db.Session, msgCou
 			Note:           "claude-cli --resume (sıcak): statik Sistem + ilk " + strconv.Itoa(cached) + " mesaj CLI'da server-side sıcak.",
 		}
 	default:
-		return cachePreview{Mode: "none", Note: "Bu sağlayıcı için SwarmGo cache breakpoint göndermez → istek her tur taze."}
+		return cachePreview{Mode: "none", Note: "Bu sağlayıcı için TionSwarm cache breakpoint göndermez → istek her tur taze."}
 	}
 }
 
@@ -424,7 +424,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 // computeCLIOverhead derives the CLI-wrapper overhead preview for claude-cli
 // agents (nil for native providers). The real billed input is measured
 // from the session's recorded lifetime usage (input + cacheRead + cacheWrite,
-// averaged per call) and compared against SwarmGo's own segment estimate, so the
+// averaged per call) and compared against TionSwarm's own segment estimate, so the
 // UI can warn that TotalTokens excludes the CLI's injected prompt + tools + MCP
 // bridge. Returns a populated (overhead-0) preview with a "not measured yet" note
 // when the session has no recorded calls.
@@ -465,7 +465,7 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	// Fallback (debug journal off / no llm_call yet): lifetime average per call. The
 	// session rollup tracks ProviderCalls (Σ num_turns), so dividing the cumulative
 	// token totals by it recovers the per-call (single-pass) context just like the
-	// debug path — not merely a per-SwarmGo-turn average. Sessions recorded before
+	// debug path — not merely a per-TionSwarm-turn average. Sessions recorded before
 	// the counter existed have ProviderCalls 0 → fall back to the turn count.
 	if measured == 0 && sessionID != "" {
 		if u, err := wsp.DB.GetSessionUsage(ctx, sessionID); err == nil && u.Calls > 0 {

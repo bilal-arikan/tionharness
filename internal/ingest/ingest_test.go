@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/market"
 )
 
 func write(t *testing.T, root, rel, content string) {

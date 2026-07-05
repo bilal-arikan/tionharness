@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // autoContinuePrompt is the nudge delivered to an autonomous session that ended a

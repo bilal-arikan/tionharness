@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // TestNewArtifactSinkPersists verifies the autonomous artifact sink persists an

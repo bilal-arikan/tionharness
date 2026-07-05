@@ -1,4 +1,4 @@
-// Adapter between SwarmGo's orchestration graph (FlowGraph: start + nodes with
+// Adapter between TionSwarm's orchestration graph (FlowGraph: start + nodes with
 // next/branches/parallel/joinNext) and React Flow's nodes+edges model. The
 // FlowNode itself is carried as RFNode.data so custom node components and the
 // inspector edit it directly; edges are derived from the routing fields.

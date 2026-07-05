@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/codemode"
-	"github.com/bilal-arikan/swarmgo/internal/mcp"
+	"github.com/bilal-arikan/tionswarm/internal/codemode"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
 )
 
 func runCodeEntries() []mcp.CatalogEntry {
@@ -41,10 +41,10 @@ func TestRunCodeDiscoveryListsModules(t *testing.T) {
 	if !strings.Contains(out, "demo: ping") {
 		t.Fatalf("listing must name the module + function, got:\n%s", out)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".swarmgo", "mcp", "demo.py")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, ".tionswarm", "mcp", "demo.py")); err != nil {
 		t.Fatalf("bindings not written: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".swarmgo", "mcp", "_bridge.py")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, ".tionswarm", "mcp", "_bridge.py")); err != nil {
 		t.Fatalf("_bridge.py not written: %v", err)
 	}
 }
@@ -206,13 +206,13 @@ func TestRunCodeDispatchesBuiltinModule(t *testing.T) {
 	}}
 	var gotName string
 	callBI := func(_ context.Context, name string, _ json.RawMessage) (mcp.CallToolResult, error) {
-		gotName = name // must be the BARE built-in name, not the swarmgo__ namespace
+		gotName = name // must be the BARE built-in name, not the tionswarm__ namespace
 		return mcp.CallToolResult{Text: `{"echoed":true}`}, nil
 	}
 	// No MCP entries at all — built-ins alone drive run_code.
 	tool := NewRunCodeTool(NewSandbox(dir), nil, nil, builtins, callBI, nil, nil, nil)
 
-	script := "from swarmgo import echo_tool\nprint('ok:', echo_tool(x=1)['echoed'])"
+	script := "from tionswarm import echo_tool\nprint('ok:', echo_tool(x=1)['echoed'])"
 	args, _ := json.Marshal(map[string]any{"script": script})
 	out, err := tool.Call(t.Context(), args)
 	if err != nil {
@@ -224,13 +224,13 @@ func TestRunCodeDispatchesBuiltinModule(t *testing.T) {
 	if gotName != "echo_tool" {
 		t.Fatalf("dispatcher must receive the bare built-in name, got %q", gotName)
 	}
-	if !strings.Contains(out, "swarmgo__echo_tool") {
+	if !strings.Contains(out, "tionswarm__echo_tool") {
 		t.Fatalf("summary should count the namespaced built-in call, got:\n%s", out)
 	}
 }
 
 // TestRunCodeBuiltinsOnlyDiscovery verifies run_code is usable with ZERO MCP
-// servers: the discovery listing shows the swarmgo built-ins module.
+// servers: the discovery listing shows the tionswarm built-ins module.
 func TestRunCodeBuiltinsOnlyDiscovery(t *testing.T) {
 	dir := t.TempDir()
 	builtins := []codemode.BuiltinDef{{
@@ -241,10 +241,10 @@ func TestRunCodeBuiltinsOnlyDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discovery failed: %v", err)
 	}
-	if !strings.Contains(out, "swarmgo: list_flows") {
-		t.Fatalf("listing must name the swarmgo module + function, got:\n%s", out)
+	if !strings.Contains(out, "tionswarm: list_flows") {
+		t.Fatalf("listing must name the tionswarm module + function, got:\n%s", out)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".swarmgo", "mcp", "swarmgo.py")); err != nil {
-		t.Fatalf("swarmgo bindings not written: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, ".tionswarm", "mcp", "tionswarm.py")); err != nil {
+		t.Fatalf("tionswarm bindings not written: %v", err)
 	}
 }

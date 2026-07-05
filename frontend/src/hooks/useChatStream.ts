@@ -113,21 +113,21 @@ export function useChatStream(deps: ChatStreamDeps) {
   // Per-turn reasoning level picked in the composer ('' = use the agent's own
   // setting). Persisted so the choice carries across messages and reloads.
   const [thinkingLevel, setThinkingLevel] = useState(
-    () => localStorage.getItem('swarmgo.thinkingLevel') ?? '',
+    () => localStorage.getItem('tionswarm.thinkingLevel') ?? '',
   )
   const setThinkingLevelPersist = useCallback((v: string) => {
     setThinkingLevel(v)
-    localStorage.setItem('swarmgo.thinkingLevel', v)
+    localStorage.setItem('tionswarm.thinkingLevel', v)
   }, [])
 
   // Per-turn permission-mode override picked in the composer ('' = use the
   // agent's own setting). Persisted across messages and reloads.
   const [permissionMode, setPermissionMode] = useState(
-    () => localStorage.getItem('swarmgo.permissionMode') ?? '',
+    () => localStorage.getItem('tionswarm.permissionMode') ?? '',
   )
   const setPermissionModePersist = useCallback((v: string) => {
     setPermissionMode(v)
-    localStorage.setItem('swarmgo.permissionMode', v)
+    localStorage.setItem('tionswarm.permissionMode', v)
   }, [])
 
   // Staged interventions shown above the composer while a turn streams.
@@ -324,7 +324,7 @@ export function useChatStream(deps: ChatStreamDeps) {
             setPendingAsks((p) => withoutKey(p, sid))
             onSid((prev) => prev.map((x) => (x.id === id ? r.replyMessage : x)))
             // Clicking the notification jumps to the source chat session.
-            notify(notifyEnabled.current, 'SwarmGo — yanıt hazır', r.replyMessage.text, () => {
+            notify(notifyEnabled.current, 'TionSwarm — yanıt hazır', r.replyMessage.text, () => {
               setView('chat')
               selectSession(sid)
             }, `chat-reply:${sid}:${r.replyMessage.id}`)
@@ -345,7 +345,7 @@ export function useChatStream(deps: ChatStreamDeps) {
             // Surface the failure inline in the transcript (hierarchy) instead of
             // a top banner. Clicking the notification jumps to this chat.
             renderTurnError(err, replyMessage)
-            notify(notifyEnabled.current, 'SwarmGo — hata', err, () => {
+            notify(notifyEnabled.current, 'TionSwarm — hata', err, () => {
               setView('chat')
               selectSession(sid)
             }, `chat-error:${sid}:${liveId}`)
@@ -358,7 +358,7 @@ export function useChatStream(deps: ChatStreamDeps) {
           const msg = (e as Error).message
           // Client-side/transport failure: show it inline in the transcript.
           renderTurnError(msg)
-          notify(notifyEnabled.current, 'SwarmGo — hata', msg, () => {
+          notify(notifyEnabled.current, 'TionSwarm — hata', msg, () => {
             setView('chat')
             selectSession(sid)
           }, `chat-error:${sid}:${liveId}`)

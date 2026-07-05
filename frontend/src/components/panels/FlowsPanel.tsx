@@ -84,23 +84,23 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   const [tagFilter, setTagFilter] = useState<string[]>([])
   // "Node ekle" palette section: vertically collapsible (persisted).
   const [paletteOpen, setPaletteOpen] = useState(
-    () => localStorage.getItem('swarmgo.flowPaletteOpen') !== '0',
+    () => localStorage.getItem('tionswarm.flowPaletteOpen') !== '0',
   )
   const togglePalette = () =>
     setPaletteOpen((o) => {
       const next = !o
-      localStorage.setItem('swarmgo.flowPaletteOpen', next ? '1' : '0')
+      localStorage.setItem('tionswarm.flowPaletteOpen', next ? '1' : '0')
       return next
     })
   // Whole left palette column (Node ekle + Görünüm) show/hide, toggled from the
   // top bar. Persisted; hidden gives the canvas full width.
   const [paletteVisible, setPaletteVisible] = useState(
-    () => localStorage.getItem('swarmgo.flowPaletteVisible') !== '0',
+    () => localStorage.getItem('tionswarm.flowPaletteVisible') !== '0',
   )
   const togglePaletteVisible = () =>
     setPaletteVisible((v) => {
       const next = !v
-      localStorage.setItem('swarmgo.flowPaletteVisible', next ? '1' : '0')
+      localStorage.setItem('tionswarm.flowPaletteVisible', next ? '1' : '0')
       return next
     })
   // Auto-grow the run input upward: the run panel is bottom-anchored (below the
@@ -122,12 +122,12 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   // Edge presentation (cosmetic). Stored per-flow in the graph; localStorage
   // holds the last-used edge style as the default for flows that have none.
   const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>(
-    () => (localStorage.getItem('swarmgo.flowEdgeStyle') as EdgeStyle) || 'default',
+    () => (localStorage.getItem('tionswarm.flowEdgeStyle') as EdgeStyle) || 'default',
   )
   const [animated, setAnimated] = useState(false)
   const changeEdgeStyle = (s: EdgeStyle) => {
     setEdgeStyle(s)
-    localStorage.setItem('swarmgo.flowEdgeStyle', s)
+    localStorage.setItem('tionswarm.flowEdgeStyle', s)
   }
 
   // Run state.
@@ -210,7 +210,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         setStart(g.start ?? '')
         setEdgeStyle(
           (g.edgeStyle as EdgeStyle) ||
-            ((localStorage.getItem('swarmgo.flowEdgeStyle') as EdgeStyle) || 'default'),
+            ((localStorage.getItem('tionswarm.flowEdgeStyle') as EdgeStyle) || 'default'),
         )
         setAnimated(!!g.animated)
       } catch {
@@ -410,7 +410,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   // run / delete. Runs fire-and-forget with an empty input.
   const sel = useMultiSelect()
   // Left flow list collapse (slim rail / mobile drawer).
-  const { open: flowsListOpen, toggle: toggleFlowsList } = useCollapsibleList('swarmgo.flowsListOpen')
+  const { open: flowsListOpen, toggle: toggleFlowsList } = useCollapsibleList('tionswarm.flowsListOpen')
   // Node editor popup: clicking a node (not dragging) opens a modal to edit it,
   // instead of a docked side panel. Closing keeps the node selected on canvas.
   const [nodeEditorOpen, setNodeEditorOpen] = useState(false)
@@ -561,7 +561,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
       <ListPane
         open={flowsListOpen}
         onToggle={toggleFlowsList}
-        widthKey="swarmgo.flowsListWidth"
+        widthKey="tionswarm.flowsListWidth"
         defaultWidth={224}
         minWidth={180}
         label="Akışlar"

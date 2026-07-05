@@ -1,7 +1,7 @@
-# SwarmGo — Depolama Katmanı (Dosya Sistemi)
+# TionSwarm — Depolama Katmanı (Dosya Sistemi)
 
 > Son güncelleme: **2026-06-19**
-> SwarmGo'nun kalıcılık katmanı **SQLite'tan tamamen dosya sistemine** taşındı.
+> TionSwarm'nun kalıcılık katmanı **SQLite'tan tamamen dosya sistemine** taşındı.
 > SQLite (`modernc.org/sqlite`), migration runner ve `.sql` dosyaları kaldırıldı.
 
 ## Neden dosya sistemi?
@@ -118,12 +118,12 @@ uygulama numaralamaya kaldığı yerden devam eder.
   yapılan referanslar yine token-replacement ile düzeltilir.
 - Kullanım:
   ```powershell
-  go run ./cmd/migrate-ids                          # dry-run (~/.swarmgo)
+  go run ./cmd/migrate-ids                          # dry-run (~/.tionswarm)
   go run ./cmd/migrate-ids -apply                   # uygula (önce yedek)
   go run ./cmd/migrate-ids -data D:\sg -apply -workspaces=false
   ```
 
-> Eski yol `{wsID}/swarmgo.db` idi; artık `{wsID}/store/` dizini.
+> Eski yol `{wsID}/tionswarm.db` idi; artık `{wsID}/store/` dizini.
 
 ## Oturum biçimi (JSONL — Craft tarzı)
 
@@ -183,21 +183,21 @@ biriktirilir) + o ana kadarki kalıcı iz (`TurnStep[]`).
 istemci) aynı sorunu **çok-katmanlı** çözer. İlginç olan, aynı **`session.jsonl`
 (header + satırlar) + atomik `tmp→rename`** desenini kullanmasıdır:
 
-| Konu | external-agent-oss | SwarmGo |
+| Konu | external-agent-oss | TionSwarm |
 |------|------------------|---------|
 | Artımlı persist | Her olay sınırında (`text_complete`/`tool_*`/`error`) **tüm oturumu** debounce'lı (500ms) yeniden yazar (`SessionPersistenceQueue`) | Final mesaj O(1) append; tur-içi durum ayrı **sidecar**'a snapshot |
 | Stream'lenen kısmi metin | ❌ Yalnız bellekte (`streamingText`), `text_complete`'e dek diske yazılmaz | ✅ `delta`'lar sidecar'a birikir (biraz daha granüler) |
 | Kurtarma yeri | Ağırlıklı **istemci** (reconnect replay + stale-watchdog + sunucudan tazele) | **Sunucu boot** (`recoverInflight`) |
-| Kullanıcı mesajı | ack öncesi senkron `flushSession` (regression eb81086e) | Stream öncesi senkron append (bu açık SwarmGo'da hiç yoktu) |
+| Kullanıcı mesajı | ack öncesi senkron `flushSession` (regression eb81086e) | Stream öncesi senkron append (bu açık TionSwarm'da hiç yoktu) |
 
 Neden farklı: external-agent sunucusu oturumları RAM'de tutar → asıl risk istemci↔sunucu
-desenkronu; SwarmGo tek binary → asıl risk sürecin tamamen ölmesi (boot recovery mantıklı).
+desenkronu; TionSwarm tek binary → asıl risk sürecin tamamen ölmesi (boot recovery mantıklı).
 
 ### Gelecek iş (external-agent'tan devşirilebilecek, henüz YOK)
 
 1. **Stale-session watchdog** — backend ölmeden tek bir SSE olayı düşerse frontend
    "düşünüyor…"da takılabilir. external-agent'taki `useStaleSessionRecovery` gibi
-   periyodik "X sn'dir olay yok → sunucudan tazele" güvenlik ağı SwarmGo'da yok.
+   periyodik "X sn'dir olay yok → sunucudan tazele" güvenlik ağı TionSwarm'da yok.
 2. **`preserved_stale_messages` kuralı** — oturum yeniden yüklenirken sunucu listesi
    istemcidekinden kısa olsa bile istemcideki mesajları **silmeme** garantisi.
 
@@ -240,7 +240,7 @@ saklanır.
 ## Eski veri (SQLite)
 
 Otomatik migration **yok** — kullanıcı talebiyle SQLite tamamen kaldırıldı.
-Eski `swarmgo.db` dosyaları okunmaz; yeni kurulum `store/` dizininde sıfırdan
+Eski `tionswarm.db` dosyaları okunmaz; yeni kurulum `store/` dizininde sıfırdan
 başlar. Gerekirse eski DB'den dışa aktarım ayrı bir tek-seferlik script ile
 yapılabilir.
 

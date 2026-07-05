@@ -1,15 +1,15 @@
 ---
-name: "SwarmGo Self-Management"
-description: "The self-management tool suite an agent uses to run SwarmGo itself — create/edit agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces, delegate work to subagents, manage artifacts/memory/secrets/logs and app settings — plus how to activate these load-on-demand tools with activate_tools when a task needs them."
-when_to_use: "When you need to create or change SwarmGo entities (agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces), delegate a sub-task to an isolated worker, store a secret, manage artifacts/memory, read logs, or change app settings — and the matching tool is not active yet"
+name: "TionSwarm Self-Management"
+description: "The self-management tool suite an agent uses to run TionSwarm itself — create/edit agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces, delegate work to subagents, manage artifacts/memory/secrets/logs and app settings — plus how to activate these load-on-demand tools with activate_tools when a task needs them."
+when_to_use: "When you need to create or change TionSwarm entities (agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces), delegate a sub-task to an isolated worker, store a secret, manage artifacts/memory, read logs, or change app settings — and the matching tool is not active yet"
 icon: "🛠️"
 color: "#10b981"
 access: shared
 auto_summary: false
 ---
-# SwarmGo — Self-Management Tools
+# TionSwarm — Self-Management Tools
 
-These tools let an agent operate SwarmGo from the inside: build and edit the same
+These tools let an agent operate TionSwarm from the inside: build and edit the same
 entities a user would from the UI. They are **gated** (only present when the
 workspace has the *Self-management* capability on) and **loaded on demand** — they
 do not ship at the start of a turn to keep the prompt lean.
@@ -44,7 +44,7 @@ prompt. To use one:
 
 **Agents** — `list_agents`, `create_agent`, `update_agent`, `delete_agent`.
 `create_agent` takes an optional `skills` array (slugs); omit it and the new agent
-is seeded with the default SwarmGo skill set, unknown slugs are skipped.
+is seeded with the default TionSwarm skill set, unknown slugs are skipped.
 Provenance enforced: you can delete only agents you created, never the user's and
 never yourself. Deleting an agent cascades: it also removes the agent's sessions,
 the schedules bound to it, and the tasks it owns (with their runs) — so delete
@@ -85,7 +85,7 @@ deliberately, it is not reversible.
 
 **Flows** — `list_flows`, `get_flow`, `create_flow`, `update_flow`, `delete_flow`,
 `run_flow` (drive a flow to completion, recorded in the Activity feed). Load the
-`swarmgo-flows` skill for the graph schema before authoring one.
+`tionswarm-flows` skill for the graph schema before authoring one.
 
 **Schedules (routines)** — `list_schedules`, `create_schedule`, `update_schedule`,
 `delete_schedule`, `run_schedule`. Cron-driven prompts delivered to an agent.
@@ -167,7 +167,7 @@ the CLI's own native WebFetch is used.)
 
 **Application settings** — `get_settings`, `update_settings` (read and live-apply
 the app-wide settings.json). These change config for the WHOLE application — see
-the `swarmgo-settings` skill for the full field reference and safety notes.
+the `tionswarm-settings` skill for the full field reference and safety notes.
 
 ## Working principles
 
@@ -179,9 +179,9 @@ the `swarmgo-settings` skill for the full field reference and safety notes.
   current state before you create or edit. Never create an entity (agent, flow,
   skill, schedule, hook, MCP server…) without first checking whether one that
   already does the job exists — extend it instead of duplicating. See
-  `swarmgo-guide` → "Before you build: discover first".
+  `tionswarm-guide` → "Before you build: discover first".
 - **Background work via `run_subagent`:** to start work that runs without
   blocking the current turn, call `run_subagent` with `wait:"async"` (targets
   an existing agent, not a profile). This internally starts a new detached
   session via the same machinery as the old `spawn_session` primitive.
-- For a conceptual overview of SwarmGo's pieces, load `swarmgo-guide`.
+- For a conceptual overview of TionSwarm's pieces, load `tionswarm-guide`.

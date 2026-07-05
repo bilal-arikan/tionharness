@@ -11,7 +11,7 @@ import (
 	"sort"
 )
 
-// defaultsFS holds the built-in skills shipped with SwarmGo. They are seeded
+// defaultsFS holds the built-in skills shipped with TionSwarm. They are seeded
 // into the global skills dir on startup so every workspace inherits them.
 //
 //go:embed defaults
@@ -27,7 +27,7 @@ const shippedManifestName = ".shipped-versions.json"
 
 // DefaultSkillSlugs returns the slugs of the shipped default skills (the
 // subdirectories under defaults/), so callers can seed new agents with the
-// baseline SwarmGo skill set. Sorted for a stable order. Single source of truth:
+// baseline TionSwarm skill set. Sorted for a stable order. Single source of truth:
 // the embedded defaults tree.
 func DefaultSkillSlugs() []string {
 	entries, err := fs.ReadDir(defaultsFS, "defaults")

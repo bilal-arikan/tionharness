@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/memory"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/memory"
 )
 
 func openTestDB(t *testing.T) *db.DB {
@@ -50,9 +50,9 @@ func TestCreateAgentStampsCreatedBy(t *testing.T) {
 func TestCreateAgentSeedsSkills(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
-	known := map[string]bool{"swarmgo-guide": true, "custom": true}
+	known := map[string]bool{"tionswarm-guide": true, "custom": true}
 	exists := func(s string) bool { return known[s] }
-	create := NewCreateAgentTool(d, "actor", []string{"swarmgo-guide"}, exists)
+	create := NewCreateAgentTool(d, "actor", []string{"tionswarm-guide"}, exists)
 
 	// No skills → defaults seeded + persisted.
 	out, err := create.Call(ctx, json.RawMessage(`{"name":"A"}`))
@@ -66,11 +66,11 @@ func TestCreateAgentSeedsSkills(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &r1); err != nil {
 		t.Fatal(err)
 	}
-	if len(r1.Skills) != 1 || r1.Skills[0] != "swarmgo-guide" {
+	if len(r1.Skills) != 1 || r1.Skills[0] != "tionswarm-guide" {
 		t.Fatalf("default skills = %v", r1.Skills)
 	}
 	got, _ := d.GetAgent(ctx, r1.ID)
-	if len(got.Skills) != 1 || got.Skills[0] != "swarmgo-guide" {
+	if len(got.Skills) != 1 || got.Skills[0] != "tionswarm-guide" {
 		t.Fatalf("persisted skills = %v", got.Skills)
 	}
 

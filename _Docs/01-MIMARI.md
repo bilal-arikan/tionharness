@@ -1,4 +1,4 @@
-# SwarmGo — Mimari
+# TionSwarm — Mimari
 
 ## Yüksek Seviye Mimari
 
@@ -89,10 +89,10 @@ graph LR
 > Yukarıdaki yüksek seviye diyagram **hedef** mimaridir. Aşağıdaki yapı **gerçekte mevcut** olandır (Faz 0–8). `orchestration`, `mcp`, `tools` artık mevcut. Ayrı bir `tasks` paketi yerine görev mantığı `db` + `api` + `agent/executor.go` içinde yaşar.
 
 ```
-SwarmGo/
+TionSwarm/
 ├── _Docs/                       # Plan ve tasarim dokumanlari (Turkce)
 ├── cmd/
-│   ├── swarmgo/main.go          # Giris: Manager + API server + graceful shutdown
+│   ├── tionswarm/main.go          # Giris: Manager + API server + graceful shutdown
 │   └── migrate-ids/             # Tek-seferlik WS/AGT/SES prefix'li ID migrasyon araci
 ├── internal/
 │   ├── config/                  # env + AES-GCM secret
@@ -105,7 +105,7 @@ SwarmGo/
 │   ├── orchestration/           # akış graf motoru (model.go, engine.go)
 │   ├── mcp/                     # SDK'sız stdio JSON-RPC istemci (client.go, manager.go)
 │   ├── tools/                   # built-in (fs/shell akan + todo_write/ask_user + artifact + lazy-load meta) + MCP birleşik registry (registry.go, builtin_*.go, activetools.go, builtin_activate.go)
-│   ├── skills/                  # dosya-tabanlı skill sistemi (2 katman: global ~/.swarmgo/skills + workspace/skills); frontmatter-only katalog, lazy body; subskills; koşullu paths:+skill_search (SK-2); ${SKILL_DIR}+bundled files (SK-1); allowed_tools auto-grant (SK-3); provenance (SK-4); varsayılan seeding (defaults/)
+│   ├── skills/                  # dosya-tabanlı skill sistemi (2 katman: global ~/.tionswarm/skills + workspace/skills); frontmatter-only katalog, lazy body; subskills; koşullu paths:+skill_search (SK-2); ${SKILL_DIR}+bundled files (SK-1); allowed_tools auto-grant (SK-3); provenance (SK-4); varsayılan seeding (defaults/)
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
 │   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs (bkz. 12-LOGLAMA.md)
 │   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE

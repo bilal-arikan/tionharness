@@ -226,7 +226,7 @@ export function HooksPanel({ onError }: Props) {
             <Lock size={14} /> Yerleşik davranışlar (salt-okunur)
           </p>
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            SwarmGo'nun araç döngüsünün etrafına otomatik enjekte ettiği kancalar. Düzenlenemezler;
+            TionSwarm'nun araç döngüsünün etrafına otomatik enjekte ettiği kancalar. Düzenlenemezler;
             bazıları Ayarlar'daki ilgili anahtarla açılıp kapatılır.
           </p>
           {builtins.map((b) => (

@@ -128,10 +128,10 @@ type Tunables struct {
 	handoffAuto      bool    // auto-reset after an autonomous turn that hit the context limit (default off)
 	handoffPressure  float64 // context-fill ratio above which auto-reset is allowed (0 → DefaultHandoffPressure)
 	handoffMaxChain  int     // max reset-chain depth before falling back to plain compaction (0 → DefaultHandoffMaxChain)
-	handoffWriteFile bool    // also write the handoff to <workdir>/.swarmgo/handoff.md (default off)
+	handoffWriteFile bool    // also write the handoff to <workdir>/.tionswarm/handoff.md (default off)
 
 	// Persistent progress (Anthropic claude-progress convention). When on, the
-	// todo_write checklist is persisted to <cwd>/.swarmgo/progress.json so it
+	// todo_write checklist is persisted to <cwd>/.tionswarm/progress.json so it
 	// survives across sessions; a fresh session reads it back at start.
 	progressPersist bool // persist the checklist to disk (default on)
 	progressResume  bool // inject a resumed-progress block on a fresh session (default on)
@@ -156,7 +156,7 @@ type Tunables struct {
 	// self-management suite) are NOT bridged to claude-cli's Interaction MCP at
 	// all, so their full schemas never travel to the CLI process. Default TRUE
 	// (2026-07-01): hidden tools are withheld from the CLI; disable per boot with
-	// SWARMGO_CLI_BRIDGE_SKIP_HIDDEN=0. See clibridge_tunable.go.
+	// TIONSWARM_CLI_BRIDGE_SKIP_HIDDEN=0. See clibridge_tunable.go.
 	cliBridgeSkipHidden bool
 
 	// fileFreshnessGuard (Claude Code parity) — when true, the built-in Edit and
@@ -175,7 +175,7 @@ type Tunables struct {
 	// catalog is additionally exposed as generated Python bindings behind the
 	// run_code tool (code execution with MCP: schemas stay out of context,
 	// intermediate data stays in the execution environment). Settings-driven
-	// (enableCodeMode, default off); SWARMGO_CODE_MODE=1 seeds the setting at
+	// (enableCodeMode, default off); TIONSWARM_CODE_MODE=1 seeds the setting at
 	// boot. See codemode_tunable.go.
 	codeMode bool
 }
@@ -231,7 +231,7 @@ func NewTunables() *Tunables {
 		// POC default ON (2026-07-01): hidden-tier self-management tools are NOT
 		// bridged to claude-cli, so their full schemas never reach the CLI process.
 		// CLI agents reach them via a next-turn re-allowlist instead of in-turn.
-		// Disable per boot with SWARMGO_CLI_BRIDGE_SKIP_HIDDEN=0.
+		// Disable per boot with TIONSWARM_CLI_BRIDGE_SKIP_HIDDEN=0.
 		cliBridgeSkipHidden: true,
 		// File freshness guard on by default (Claude Code parity): Edit/Write refuse to
 		// clobber a file changed out-of-band since it was last read. Production overrides
@@ -281,7 +281,7 @@ func (t *Tunables) ShellEnabled() bool {
 
 // SetCLIHooksEnabled toggles whether the workspace's PreToolUse/PostToolUse hooks
 // are passed to claude-cli agents (via the generated --settings file). On by
-// default; turn off to keep hooks native-only when a hook authored for SwarmGo's
+// default; turn off to keep hooks native-only when a hook authored for TionSwarm's
 // shell misbehaves under the CLI's own hook runner.
 func (t *Tunables) SetCLIHooksEnabled(enabled bool) {
 	t.mu.Lock()

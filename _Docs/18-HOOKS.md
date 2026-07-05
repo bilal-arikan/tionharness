@@ -20,12 +20,12 @@ otomatik onay kuralları, dış araç-çıktısı sıkıştırma (sqz).
 
 Kancalar **yalnız native (anthropic/minimax) araç döngüsünde** uygulanır
 (`agent/toolloop.go`). **claude-cli** kendi döngüsünü sürer ve kendi
-hook'larını `~/.claude/settings.json`'dan okur — SwarmGo hook'ları oraya yazılmaz.
+hook'larını `~/.claude/settings.json`'dan okur — TionSwarm hook'ları oraya yazılmaz.
 Bu, Faz P3'teki (permission) "CLI vs native ayrımı" deseninin aynısıdır.
 
 > sqz'i claude-cli ajanlarında kullanmak için: `sqz init --global` (sqz kendini
-> Claude Code'un PreToolUse hook'u olarak kurar; SwarmGo'da bir şey gerekmez).
-> Native ajanlarda kullanmak için: SwarmGo'da bir PostToolUse hook olarak `sqz`
+> Claude Code'un PreToolUse hook'u olarak kurar; TionSwarm'da bir şey gerekmez).
+> Native ajanlarda kullanmak için: TionSwarm'da bir PostToolUse hook olarak `sqz`
 > komutunu tanımlayın.
 
 ## Sözleşme (Claude Code paritesi)

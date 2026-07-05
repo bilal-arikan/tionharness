@@ -3,8 +3,8 @@ package api
 import (
 	"encoding/json"
 
-	"github.com/bilal-arikan/swarmgo/internal/settings"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/settings"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // settingsBridge adapts the application settings store + the server's live-apply

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // maxActiveSessionsInBlock bounds how many active sessions the cross-session

@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-// TestDefaultInstructionsAreSwarmGoNative guards the embedded workspace prompt
+// TestDefaultInstructionsAreTionSwarmNative guards the embedded workspace prompt
 // against regressing back into a copy of the external agent project's system prompt. The seed
-// must describe SwarmGo's real surface and must not teach capabilities SwarmGo
+// must describe TionSwarm's real surface and must not teach capabilities TionSwarm
 // does not have (datatable/spreadsheet rendering, call_llm, render_template,
 // the external agent project doc paths, MCP tool metadata requirements).
-func TestDefaultInstructionsAreSwarmGoNative(t *testing.T) {
+func TestDefaultInstructionsAreTionSwarmNative(t *testing.T) {
 	forbidden := []string{
 		"datatable",
 		"spreadsheet",
@@ -30,7 +30,7 @@ func TestDefaultInstructionsAreSwarmGoNative(t *testing.T) {
 	}
 
 	required := []string{
-		"SwarmGo",
+		"TionSwarm",
 		"run_subagent",
 		"use_skill",
 		"update_session",
@@ -38,7 +38,7 @@ func TestDefaultInstructionsAreSwarmGoNative(t *testing.T) {
 	}
 	for _, s := range required {
 		if !strings.Contains(defaultInstructions, s) {
-			t.Errorf("default instructions missing required SwarmGo term %q", s)
+			t.Errorf("default instructions missing required TionSwarm term %q", s)
 		}
 	}
 }

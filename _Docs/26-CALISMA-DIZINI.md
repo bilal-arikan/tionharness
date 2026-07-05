@@ -1,7 +1,7 @@
 # Çalışma Dizini (Working Directory) — Oturum-Başına cwd
 
 > Eklendi: **2026-06-22**. the external agent project (external-agent-oss) "working directory"
-> mekaniğinin SwarmGo'ya uyarlaması.
+> mekaniğinin TionSwarm'ya uyarlaması.
 
 ## Amaç
 
@@ -81,7 +81,7 @@ için iki fren var (Ayarlar ▸ MCP & Araçlar):
 
 - **Eşit:** oturum-başına cwd, klasör rozeti, cwd değiştirme, git branch göstergesi,
   CLAUDE.md farkındalığı, makine geneli erişim.
-- **SwarmGo'ya özgü:** otonom turlar (scheduler/flow/spawn) için confine + worktree
+- **TionSwarm'ya özgü:** otonom turlar (scheduler/flow/spawn) için confine + worktree
   frenleri — the external agent project interaktif olduğu için bunlara ihtiyaç duymaz.
 
 ## Workspace varsayılan çalışma dizini (2026-06-22)

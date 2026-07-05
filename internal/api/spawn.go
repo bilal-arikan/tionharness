@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/agent"
 )
 
 // spawnSessionReq is the body for POST /api/sessions/spawn.

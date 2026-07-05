@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/swarmgo/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // mermaidValidateInput is the ask shape for the mermaid_validate tool.
@@ -24,7 +24,7 @@ var knownMermaidTypes = []string{
 	"packet-beta", "architecture-beta",
 }
 
-// MermaidValidateTool lints Mermaid diagram source. SwarmGo is pure Go with no JS
+// MermaidValidateTool lints Mermaid diagram source. TionSwarm is pure Go with no JS
 // engine, so this is a SYNTAX LINT, not a full parse: it checks the diagram has a
 // recognised type header and that brackets/quotes are balanced — the failures that
 // most often make a diagram fail to render. It cannot catch every semantic error a

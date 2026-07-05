@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bilal-arikan/swarmgo/internal/db"
-	"github.com/bilal-arikan/swarmgo/internal/skills"
-	"github.com/bilal-arikan/swarmgo/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // selfManageBuiltins builds the self-management tool suite: the tools that let an
@@ -23,7 +23,7 @@ import (
 // their dependency is absent — the visibility marks tolerate missing names.
 func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 	builtins := []tools.Tool{
-		// Agents. New agents are seeded with the default SwarmGo skill set when
+		// Agents. New agents are seeded with the default TionSwarm skill set when
 		// the caller passes none; caller-supplied slugs are validated against the
 		// skill store.
 		tools.NewCreateAgentTool(r.db, agent.ID, skills.DefaultSkillSlugs(), r.skillExists),
