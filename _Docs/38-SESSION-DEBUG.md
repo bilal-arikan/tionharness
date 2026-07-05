@@ -112,6 +112,13 @@ bileşen; `SessionDetailPanel`'de harcama kartından sonra render edilir). Metri
 ızgarası + sağlık rozetleri (hata/compaction/recovery/süre) + en yavaş araçlar +
 modele göre token + tembel yüklenen **ham olay** log'u (tip filtreli).
 
+**Cache metrikleri (2026-07-05):** metrik ızgarası artık **Cache oku** + **Cache yaz**
++ **Cache isabet** (`cacheRead / (input + cacheRead + cacheWrite)`) gösterir — mesaj-başına
+paneldeki (`MessageDebugPanel`) sıcak/soğuk göstergesiyle aynı formül, oturum geneline
+toplanmış. Veri hattı zaten mevcuttu (`budget.go RecordUsage` → `llm_call` olayı `CacheRead`/
+`CacheWrite` ile, tüm yollar + **claude-cli** dahil; `GetDebugSummary` toplar); bu değişiklik
+yalnız session kartında write + isabet oranını görünür kıldı (önceden sadece "Cache tok"=read).
+
 ## Ayarlar
 
 `settings.json` (default skill `tionswarm-settings`'te de belgeli):

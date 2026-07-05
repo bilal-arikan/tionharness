@@ -66,6 +66,15 @@ export function SessionDebugCard({
 
   const warnCount = (sum.anomalies ?? []).filter((a) => a.severity === 'warn').length
 
+  // Prompt-cache hit rate across the whole session: the share of prompt tokens served
+  // warm (cache read) out of everything paid on the input side (fresh input + cache
+  // read + cache write). Mirrors the per-message panel's warm/cold indicator so the
+  // session card and the message card agree. '—' when there is no prompt spend yet.
+  const promptTotal = sum.inputTokens + sum.cacheReadTokens + sum.cacheWriteTokens
+  const cacheHitPct = promptTotal > 0
+    ? `%${Math.round((sum.cacheReadTokens / promptTotal) * 100)}`
+    : '—'
+
   return (
     <section>
       {/* Foldable header: click to expand/collapse the whole card. Collapsed, it
@@ -99,7 +108,9 @@ export function SessionDebugCard({
         <Metric label="Araç" value={String(sum.toolCalls)} />
         <Metric label="Giriş tok" value={fmtTok(sum.inputTokens)} />
         <Metric label="Çıkış tok" value={fmtTok(sum.outputTokens)} />
-        <Metric label="Cache tok" value={fmtTok(sum.cacheReadTokens)} />
+        <Metric label="Cache oku" value={fmtTok(sum.cacheReadTokens)} />
+        <Metric label="Cache yaz" value={fmtTok(sum.cacheWriteTokens)} />
+        <Metric label="Cache isabet" value={cacheHitPct} />
       </div>
 
       {/* Health row: errors / compactions / recoveries */}
