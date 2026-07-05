@@ -40,24 +40,33 @@ interface Props {
   // When true, hovering a node dims every non-neighbour node/edge so the
   // hovered memory and its similar peers stand out (focus + context).
   highlightNeighbors?: boolean
+  // Low-power rendering (phones): drop shadows, curved edges, improvedLayout and
+  // hover to keep pan/zoom smooth. See buildOptions.
+  lite?: boolean
 }
 
 // buildOptions configures the vis-network instance. Relation mode uses a
 // forceAtlas2 force field (even organic spread); live mode drops central gravity
 // so the fixed board-state column anchors govern the horizontal layout while
 // tasks spring under their column. `density` scales repulsion/springs.
-function buildOptions(density = 1, mode: VisMode = 'relation'): Options {
+// `lite` trims the per-frame canvas cost for low-power/touch devices (phones):
+// node shadows and curved edges are the two biggest repaint costs while panning /
+// zooming, and improvedLayout + a high stabilization count make first paint janky.
+// Dropping them keeps the same graph, just cheaper to render.
+function buildOptions(density = 1, mode: VisMode = 'relation', lite = false): Options {
   const d = Math.min(2, Math.max(0.4, density))
   return {
     autoResize: true,
     nodes: {
       borderWidth: 2,
       font: { color: '#e5e7eb', size: 13, face: 'Inter, system-ui, sans-serif' },
-      shadow: { enabled: true, size: 8, x: 0, y: 2, color: 'rgba(0,0,0,0.35)' },
+      shadow: lite ? { enabled: false } : { enabled: true, size: 8, x: 0, y: 2, color: 'rgba(0,0,0,0.35)' },
     },
     edges: {
       color: { color: '#475569', highlight: '#94a3b8', opacity: 0.7 },
-      smooth: { enabled: true, type: 'continuous', roundness: 0.5 },
+      // Straight edges on mobile: continuous smoothing recomputes bezier control
+      // points every frame, which is the main pan/zoom stutter on phones.
+      smooth: lite ? false : { enabled: true, type: 'continuous', roundness: 0.5 },
       width: 1,
     },
     physics: {
@@ -75,11 +84,15 @@ function buildOptions(density = 1, mode: VisMode = 'relation'): Options {
       },
       maxVelocity: 50,
       minVelocity: 0.75,
-      stabilization: { enabled: true, iterations: 300, fit: true },
+      // Fewer settle iterations on mobile so the initial simulation burst is short.
+      stabilization: { enabled: true, iterations: lite ? 120 : 300, fit: true },
     },
-    layout: { improvedLayout: true },
+    // improvedLayout runs an expensive pre-layout pass that can freeze the main
+    // thread on load; skip it on mobile.
+    layout: { improvedLayout: !lite },
     interaction: {
-      hover: true,
+      // Touch devices have no hover; disabling it drops the neighbour-dim repaint.
+      hover: !lite,
       tooltipDelay: 120,
       navigationButtons: false,
       keyboard: false,
@@ -99,6 +112,7 @@ export function VisNetworkGraph({
   density = 1,
   onSelect,
   highlightNeighbors = false,
+  lite = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const networkRef = useRef<Network | null>(null)
@@ -106,6 +120,8 @@ export function VisNetworkGraph({
   const edgesDSRef = useRef<DataSet<Edge> | null>(null)
   const modeRef = useRef(mode)
   const densityRef = useRef(density)
+  const liteRef = useRef(lite)
+  liteRef.current = lite
   const populatedRef = useRef(false)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
@@ -125,7 +141,7 @@ export function VisNetworkGraph({
     const network = new Network(
       containerRef.current,
       { nodes: nodesDS, edges: edgesDS },
-      buildOptions(densityRef.current, modeRef.current),
+      buildOptions(densityRef.current, modeRef.current, liteRef.current),
     )
     networkRef.current = network
     network.on('selectNode', (p: { nodes: string[] }) => onSelectRef.current?.(p.nodes[0] ?? null))
@@ -221,12 +237,12 @@ export function VisNetworkGraph({
     densityRef.current = density
     const net = networkRef.current
     if (!net) return
-    net.setOptions(buildOptions(density, mode))
+    net.setOptions(buildOptions(density, mode, lite))
     const fit = () => fitAndCap(net, true)
     net.once('stabilizationIterationsDone', fit)
     const t = setTimeout(fit, 1600)
     return () => clearTimeout(t)
-  }, [mode, density])
+  }, [mode, density, lite])
 
   return <div ref={containerRef} className="h-full w-full" />
 }

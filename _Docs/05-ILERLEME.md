@@ -2,6 +2,20 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-05**
 
+## Ağ ekranı mobilde kasması giderildi (vis-network lite modu) ✅ (2026-07-05)
+
+Neden: `vis-network` canvas'ında **node gölgeleri**, **eğri (continuous) kenarlar**,
+**`improvedLayout`** ön-yerleşim geçişi ve yüksek stabilizasyon iterasyonu — mobil
+GPU'da pan/zoom sırasında her karede yeniden çizim çok pahalı → kasma.
+
+Çözüm: `VisNetworkGraph`'a `lite` prop'u eklendi; `NetworkPanel` bunu `useIsMobile()`
+ile besliyor. Lite modda (`< md`): gölge kapalı, kenarlar düz (`smooth: false`),
+`improvedLayout: false`, stabilizasyon 300→120, hover kapalı (touch'ta zaten yok).
+Grafın kendisi (düğüm/kenar/fizik yerleşimi) aynı, sadece çizim ucuzladı. Masaüstünde
+tam kalite korunur. Build temiz; mobil (390px) canvas temiz render ediyor.
+
+> ⚠️ `VisNetworkGraph.tsx` bu oturumda eşzamanlı bir süreç tarafından bir kez geri
+> alındı; değişiklikler yeniden uygulandı.
 ## Ağ ekranı: istatistik + yenile başlık çubuğuna taşındı ✅ (2026-07-05)
 
 `NetworkPanel` App'in generic başlığını kullanıyordu ("Ağ"). Artık kendi başlık

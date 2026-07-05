@@ -4,6 +4,7 @@ import { api } from '../../api'
 import type { WorkspaceGraph, WorkspaceNodeType, BoardColumnDef } from '../../types'
 import { VisNetworkGraph } from '../graph/VisNetworkGraph'
 import { workspaceToVis, EDGE_LEGEND, NODE_LAYERS, type WorkspaceMode } from '../../lib/relationGraph'
+import { useIsMobile } from '../../hooks/useMediaQuery'
 
 interface Props {
   onError: (msg: string) => void
@@ -30,6 +31,10 @@ export function NetworkPanel({ onError }: Props) {
   const [visible, setVisible] = useState<Set<WorkspaceNodeType>>(
     () => new Set<WorkspaceNodeType>(['task', 'flow', 'run']),
   )
+
+  // Phones get the lightweight vis-network render (no shadows/curved edges) so
+  // pan/zoom stays smooth on low-power GPUs.
+  const isMobile = useIsMobile()
 
   const toggleLayer = (t: WorkspaceNodeType) =>
     setVisible((prev) => {
@@ -206,7 +211,7 @@ export function NetworkPanel({ onError }: Props) {
             belirir.
           </div>
         ) : (
-          <VisNetworkGraph nodes={nodes} edges={edges} mode={mode} density={density} />
+          <VisNetworkGraph nodes={nodes} edges={edges} mode={mode} density={density} lite={isMobile} />
         )}
       </div>
     </div>
