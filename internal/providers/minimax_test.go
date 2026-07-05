@@ -197,6 +197,74 @@ func TestOpenRouter_HistoryBreakpoint(t *testing.T) {
 	}
 }
 
+// P2 (OpenRouter, caching on): the rolling summary rides a synthetic head user
+// message right after the system message — inside the cached prefix — while the
+// volatile dynamic still trails on the last message. So the summary is a cache
+// READ between folds, not re-sent every turn.
+func TestOpenRouter_SummaryHeadMessage(t *testing.T) {
+	var gotReq oaiReq
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&gotReq)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"model":"m","usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+	}))
+	defer srv.Close()
+
+	m := NewOpenAICompat("openrouter", "k", srv.URL, "anthropic/claude-sonnet-4.6")
+	_, err := m.Complete(context.Background(), Request{
+		System:        "SYS",
+		SystemDynamic: "DYN",
+		Summary:       "PRIOR SUMMARY",
+		Messages:      []Message{{Role: RoleAssistant, Text: "hello"}, {Role: RoleUser, Text: "again"}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// messages: [system, user:PRIOR SUMMARY, assistant:hello, user:again(+DYN)]
+	if len(gotReq.Messages) != 4 {
+		t.Fatalf("got %d messages, want 4 (system + summary head + 2), %+v", len(gotReq.Messages), gotReq.Messages)
+	}
+	head := gotReq.Messages[1]
+	if head.Role != RoleUser {
+		t.Fatalf("summary head must be a user message, got role %q", head.Role)
+	}
+	if s, _ := head.Content.(string); s != "PRIOR SUMMARY" {
+		t.Errorf("summary head content = %#v, want \"PRIOR SUMMARY\"", head.Content)
+	}
+}
+
+// P2 (non-OpenRouter, caching off): the summary folds back into the plain-string
+// system message; there is no head summary message.
+func TestMinimax_SummaryFoldsIntoSystem(t *testing.T) {
+	var gotReq oaiReq
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&gotReq)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"model":"m","usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+	}))
+	defer srv.Close()
+
+	m := NewMinimax("k", srv.URL)
+	_, err := m.Complete(context.Background(), Request{
+		System:        "STATIC",
+		SystemDynamic: "DYN",
+		Summary:       "PRIOR SUMMARY",
+		Messages:      []Message{{Role: RoleUser, Text: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s, ok := gotReq.Messages[0].Content.(string)
+	if !ok {
+		t.Fatalf("system content should be a plain string, got %#v", gotReq.Messages[0].Content)
+	}
+	if s != "STATIC\n\nDYN\n\nPRIOR SUMMARY" {
+		t.Errorf("summary must fold into system when caching is off, got %q", s)
+	}
+	// Only [system, user:hi] — no head summary message.
+	if len(gotReq.Messages) != 2 {
+		t.Errorf("got %d messages, want 2 (no head summary), %+v", len(gotReq.Messages), gotReq.Messages)
+	}
+}
+
 func TestMinimax_NoCacheControl(t *testing.T) {
 	// Non-OpenRouter endpoints keep plain string system content (no breakpoint).
 	var gotReq oaiReq

@@ -2,6 +2,39 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-05**
 
+## Claude Code cache paritesi: P2–P5 tamamlandı ✅ (2026-07-05)
+
+`_Docs\50-CLAUDE-CODE-CACHE-PARITE.md` planının kalan tüm iş paketleri uygulandı
+(P1+P6 önceki oturumda bitmişti):
+
+- **P2 — Özet=compact-boundary mesajı:** Rolling özet volatile Dinamik'ten çıkıp
+  `providers.Request.Summary` ile taşınıyor; native yollar (anthropic + openrouter) onu
+  cache'li önekin başına **sentetik head mesajı** koyuyor (`prependSummaryMessage`) → iki
+  katlama arası **cache-read**. Cache kapalıyken `system`'e katlanır. **claude-cli native-only
+  kararı gereği değişmedi** (özet hâlâ `[Context]` tail'inde, her tur taze). Önizleme
+  `SummaryCached` ile özet bölümünü yeşil gösterir.
+- **P4 — Cache-break telemetrisi:** `internal/agent/cachebreak.go` — oturum-başına önek
+  hash'i (statik System + araç şeması) + model + warmth; ana konuşma turlarında sıcak önek
+  kaybını (warmed && cacheRead==0 && cacheWrite≥2000) `cache_break` debug olayı olarak sebep
+  atıflı kaydeder (model / prompt-tools / TTL-server). Debug kartında "Cache kırılması" pill +
+  anomali. Claude Code `promptCacheBreakDetection` muadili.
+- **P3 — API-native context editing:** anthropic `context_management` beta (`clear_tool_uses_
+  20250919`), ayar `anthropicContextEditing` (vars. kapalı), ContextPanel toggle'ı. Microcompact
+  muadili; client-side fold'a ek.
+- **P5 — TTL/breakpoint kararlılığı:** tüm anthropic breakpoint'leri tek `cacheTTL="1h"`
+  sabitinden türer (karışık-TTL drift'i imkânsız); `TestCacheBreakpointStability` tek stabil
+  rolling marker'ı (son persist blokta) kilitler.
+
+**Doğrulama:** `go test ./...` **680 yeşil**, `go vet` temiz, `tsc` temiz, `dist` yeniden
+build edildi (tek-binary'e gömülü). Dokümanlar: `_Docs\50` (P2–P5 ✅), `_Docs\38` (cache_break
+olayı), default skill `tionswarm-settings`.
+
+> ⚠️ **Kalan (opsiyonel, kullanıcı onayı gerekir):** Canlı `cache_read>0` ölçümü — gerçek bir
+> anthropic/openrouter turu (API anahtarı + token harcaması) gerektirir. Unit testler istek
+> şeklini kanıtlıyor; canlı cache kazanımı bir anahtarla ölçülmeli. Kullanıcının backend'i yeni
+> kodu almak için `.\scripts\dev.ps1` ile yeniden başlatılmalı (şu an çalışan örnek yok).
+
+
 ## Ağ ekranı mobilde kasması giderildi (vis-network lite modu) ✅ (2026-07-05)
 
 Neden: `vis-network` canvas'ında **node gölgeleri**, **eğri (continuous) kenarlar**,

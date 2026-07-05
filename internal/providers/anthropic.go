@@ -14,7 +14,18 @@ import (
 // 1M window GA at standard pricing on 2026-03-13 (no header needed) and turned
 // the beta header off on 2026-04-30, so it is no longer sent.
 const (
-	betaExtendedCacheTTL = "extended-cache-ttl-2025-04-11"
+	betaExtendedCacheTTL  = "extended-cache-ttl-2025-04-11"
+	betaContextManagement = "context-management-2025-06-27"
+)
+
+// Context-editing defaults (P3): the server clears old tool_use/tool_result blocks
+// from the cached prefix in place (cache_edits) once the prompt grows past the
+// trigger, keeping the most recent tool uses — Claude Code's microcompact analogue.
+// Conservative floors so short turns are untouched and recent context is preserved.
+const (
+	contextClearTriggerTokens = 100000 // start clearing past this input size
+	contextClearKeepToolUses  = 3      // always keep the newest N tool uses
+	contextClearAtLeastTokens = 5000   // minimum tokens to reclaim per clear
 )
 
 const (
@@ -24,6 +35,13 @@ const (
 	defaultMaxTokens   = 4096
 	requestTimeoutSecs = 120
 )
+
+// cacheTTL is the SINGLE ttl used by EVERY prompt-cache breakpoint (tools, static
+// system, rolling history). Anthropic requires that a breakpoint's TTL never be
+// shorter than one appearing later in the tools → system → messages prefix order,
+// so a mixed TTL would silently break caching. Defining it once (P5 hardening)
+// makes a mid-request TTL drift impossible: change the policy here, everywhere.
+const cacheTTL = "1h"
 
 // Anthropic is a thin client for the Anthropic Messages API.
 // It avoids the official SDK to stay dependency-light and version-stable.
@@ -39,7 +57,8 @@ type Anthropic struct {
 	defaultModel string // model applied when a request omits one
 	name         string // provider identity reported by Name()
 
-	extendedCache bool // 1h extended prompt cache TTL beta
+	extendedCache  bool // 1h extended prompt cache TTL beta
+	contextEditing bool // API-native context editing (clear_tool_uses) beta
 }
 
 // NewAnthropic creates a client with the given API key, defaulting to the
@@ -73,9 +92,11 @@ func (a *Anthropic) WithEndpoint(name, messagesURL, defaultModel string) *Anthro
 }
 
 // WithBetas enables optional Anthropic beta capabilities and returns the client
-// for chaining.
-func (a *Anthropic) WithBetas(extendedCache bool) *Anthropic {
+// for chaining. extendedCache = 1h prompt-cache TTL; contextEditing = API-native
+// context editing (server-side clear_tool_uses, the microcompact analogue).
+func (a *Anthropic) WithBetas(extendedCache, contextEditing bool) *Anthropic {
 	a.extendedCache = extendedCache
+	a.contextEditing = contextEditing
 	return a
 }
 
@@ -84,13 +105,52 @@ func (a *Anthropic) Name() string { return a.name }
 
 // anthropicReq mirrors the Messages API request body.
 type anthropicReq struct {
-	Model     string             `json:"model"`
-	MaxTokens int                `json:"max_tokens"`
-	System    any                `json:"system,omitempty"` // string, or []systemBlock when caching
-	Messages  []anthropicMessage `json:"messages"`
-	Tools     []anthropicTool    `json:"tools,omitempty"`
-	Thinking  *thinkingParam     `json:"thinking,omitempty"`
-	Stream    bool               `json:"stream,omitempty"`
+	Model             string             `json:"model"`
+	MaxTokens         int                `json:"max_tokens"`
+	System            any                `json:"system,omitempty"` // string, or []systemBlock when caching
+	Messages          []anthropicMessage `json:"messages"`
+	Tools             []anthropicTool    `json:"tools,omitempty"`
+	Thinking          *thinkingParam     `json:"thinking,omitempty"`
+	ContextManagement *contextManagement `json:"context_management,omitempty"`
+	Stream            bool               `json:"stream,omitempty"`
+}
+
+// contextManagement carries the API-native context-editing directives (P3). The
+// server applies them to the CACHED prefix in place — clearing old tool_use/
+// tool_result blocks past a size trigger while keeping the newest N — so the warm
+// prefix shrinks without a full rewrite (cache_edits), the microcompact analogue.
+type contextManagement struct {
+	Edits []contextEdit `json:"edits"`
+}
+
+type contextEdit struct {
+	Type         string            `json:"type"`
+	Trigger      *contextThreshold `json:"trigger,omitempty"`
+	Keep         *contextThreshold `json:"keep,omitempty"`
+	ClearAtLeast *contextThreshold `json:"clear_at_least,omitempty"`
+	ExcludeTools []string          `json:"exclude_tools,omitempty"`
+}
+
+type contextThreshold struct {
+	Type  string `json:"type"`
+	Value int    `json:"value"`
+}
+
+// contextMgmt builds the context-editing directive when the beta is enabled, else
+// nil (the field is omitted). One strategy: clear_tool_uses_20250919 with
+// conservative defaults (see the context-editing constants).
+func (a *Anthropic) contextMgmt() *contextManagement {
+	if !a.contextEditing {
+		return nil
+	}
+	return &contextManagement{
+		Edits: []contextEdit{{
+			Type:         "clear_tool_uses_20250919",
+			Trigger:      &contextThreshold{Type: "input_tokens", Value: contextClearTriggerTokens},
+			Keep:         &contextThreshold{Type: "tool_uses", Value: contextClearKeepToolUses},
+			ClearAtLeast: &contextThreshold{Type: "input_tokens", Value: contextClearAtLeastTokens},
+		}},
+	}
 }
 
 // thinkingParam enables extended reasoning. The model emits thinking blocks
@@ -204,13 +264,15 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	}
 	thinking, maxTokens := thinkingFor(req.ThinkingBudget, maxTokens)
 
+	sysField, msgs := a.buildSystemAndMessages(req)
 	body := anthropicReq{
-		Model:     model,
-		MaxTokens: maxTokens,
-		System:    a.systemField(req.System, req.SystemDynamic),
-		Messages:  toAnthropicMessages(req.Messages, a.extendedCache, req.SystemDynamic),
-		Tools:     toAnthropicTools(req.Tools, a.extendedCache),
-		Thinking:  thinking,
+		Model:             model,
+		MaxTokens:         maxTokens,
+		System:            sysField,
+		Messages:          msgs,
+		Tools:             toAnthropicTools(req.Tools, a.extendedCache),
+		Thinking:          thinking,
+		ContextManagement: a.contextMgmt(),
 	}
 
 	headers := map[string]string{
@@ -287,11 +349,12 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 	}
 	thinking, maxTokens := thinkingFor(req.ThinkingBudget, maxTokens)
 
+	sysField, msgs := a.buildSystemAndMessages(req)
 	body := anthropicReq{
 		Model:     model,
 		MaxTokens: maxTokens,
-		System:    a.systemField(req.System, req.SystemDynamic),
-		Messages:  toAnthropicMessages(req.Messages, a.extendedCache, req.SystemDynamic),
+		System:    sysField,
+		Messages:  msgs,
 		Thinking:  thinking,
 		Stream:    true,
 	}
@@ -398,6 +461,9 @@ func (a *Anthropic) betaHeader() string {
 	if a.extendedCache {
 		betas = append(betas, betaExtendedCacheTTL)
 	}
+	if a.contextEditing {
+		betas = append(betas, betaContextManagement)
+	}
 	return strings.Join(betas, ",")
 }
 
@@ -408,6 +474,22 @@ func (a *Anthropic) betaHeader() string {
 // while the dynamic suffix (recalled memory + running summary) that changes every
 // turn stays outside the cached prefix and never invalidates it. Without caching
 // the two parts are concatenated into a plain string.
+// buildSystemAndMessages assembles the system field and message list for one
+// request, placing the rolling summary (req.Summary) for maximum cache reuse.
+// With caching ON the summary rides a synthetic head user message INSIDE the
+// cached prefix (before the rolling history breakpoint) so it is a cache READ
+// between folds, while the volatile dynamic trails AFTER the breakpoint. With
+// caching OFF there is no cached prefix to protect, so both the summary and the
+// dynamic fold back into the system prompt (byte-parity with the pre-cache path).
+func (a *Anthropic) buildSystemAndMessages(req Request) (any, []anthropicMessage) {
+	if a.extendedCache {
+		msgs := prependSummaryMessage(req.Messages, req.Summary)
+		return a.systemField(req.System, req.SystemDynamic), toAnthropicMessages(msgs, true, req.SystemDynamic)
+	}
+	dyn := joinNonEmpty(req.SystemDynamic, req.Summary)
+	return a.systemField(req.System, dyn), toAnthropicMessages(req.Messages, false, dyn)
+}
+
 func (a *Anthropic) systemField(static, dynamic string) any {
 	static = strings.TrimSpace(static)
 	dynamic = strings.TrimSpace(dynamic)
@@ -432,7 +514,7 @@ func (a *Anthropic) systemField(static, dynamic string) any {
 	if static == "" {
 		return nil
 	}
-	return []systemBlock{{Type: "text", Text: static, CacheControl: &cacheControl{Type: "ephemeral", TTL: "1h"}}}
+	return []systemBlock{{Type: "text", Text: static, CacheControl: &cacheControl{Type: "ephemeral", TTL: cacheTTL}}}
 }
 
 // toAnthropicMessages converts provider messages to content-block form,
@@ -490,7 +572,7 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic string) []a
 		if len(out) > 0 {
 			last := &out[len(out)-1]
 			if n := len(last.Content); n > 0 {
-				last.Content[n-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: "1h"}
+				last.Content[n-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: cacheTTL}
 			}
 		}
 		// Volatile dynamic (date/time, recalled memory, running summary, …) rides as
@@ -532,7 +614,7 @@ func toAnthropicTools(tools []ToolDef, extendedCache bool) []anthropicTool {
 		out = append(out, anthropicTool{Name: t.Name, Description: t.Description, InputSchema: schema})
 	}
 	if extendedCache {
-		out[len(out)-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: "1h"}
+		out[len(out)-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: cacheTTL}
 	}
 	return out
 }

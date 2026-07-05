@@ -207,6 +207,10 @@ export interface CachePreview {
   systemCached: boolean
   dynamicCached: boolean
   toolsCached: boolean
+  // Since P2 the rolling summary rides a synthetic head message inside the cached
+  // prefix on native providers (a cache READ between folds); on claude-cli it rides
+  // the uncached tail. So the summary segment can be marked warm independently.
+  summaryCached: boolean
   cachedMsgCount: number
 }
 

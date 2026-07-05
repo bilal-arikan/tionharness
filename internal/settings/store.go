@@ -259,6 +259,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.ClaudeCliAuthKind, p.ClaudeCliAuthKind)
 
 	applyBool(&next.ExtendedPromptCache, p.ExtendedPromptCache)
+	applyBool(&next.AnthropicContextEditing, p.AnthropicContextEditing)
 	applyBool(&next.DesktopNotifications, p.DesktopNotifications)
 	applyBool(&next.KeepAwake, p.KeepAwake)
 

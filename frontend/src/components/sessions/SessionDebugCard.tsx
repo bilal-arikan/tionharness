@@ -111,6 +111,13 @@ export function SessionDebugCard({
         />
         <Pill label="Compaction" value={sum.compactions} tone="dim" />
         <Pill label="Recovery" value={sum.recoveries} tone="dim" />
+        {sum.cacheBreaks > 0 && (
+          <Pill
+            label="Cache kırılması"
+            value={sum.cacheBreaks}
+            tone={sum.cacheBreaks >= 2 ? 'error' : 'dim'}
+          />
+        )}
         {sum.turnDurMs > 0 && (
           <Pill label="Toplam süre" value={fmtDur(sum.turnDurMs)} tone="dim" raw />
         )}
@@ -222,7 +229,7 @@ export function SessionDebugCard({
       {expanded && (
         <div className="mt-1.5">
           <div className="mb-1.5 flex flex-wrap gap-1">
-            {['', 'turn', 'llm_call', 'tool', 'hook', 'error', 'compaction', 'recovery'].map(
+            {['', 'turn', 'llm_call', 'tool', 'hook', 'error', 'compaction', 'recovery', 'cache_break'].map(
               (t) => (
                 <button
                   key={t || 'all'}
@@ -372,6 +379,10 @@ function eventLabel(e: SessionDebugEvent): string {
       return `${e.detail ?? ''}${e.savedBytes ? ` · ${fmtBytes(e.savedBytes)}` : ''}`
     case 'recovery':
       return e.detail ?? ''
+    case 'cache_break':
+      return `${e.name ?? 'cache-break'}${e.detail ? ` · ${e.detail}` : ''}${
+        e.cacheWrite ? ` · yeniden yazılan ${e.cacheWrite}` : ''
+      }`
     case 'error':
       return e.detail ?? ''
     default:

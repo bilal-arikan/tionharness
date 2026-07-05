@@ -313,7 +313,8 @@ func (pl *CLISessionPool) Turn(ctx context.Context, key string, c *ClaudeCLI, re
 	// Cold start ships the whole transcript; a warm reuse ships only the new turn.
 	prompt := fullPrompt
 	if !cold {
-		prompt = withDynamic(lastUserText(req.Messages), req.SystemDynamic)
+		// Summary rides the uncached tail (fresh each turn) — see buildSystemAndPrompt.
+		prompt = withDynamic(lastUserText(req.Messages), joinNonEmpty(req.SystemDynamic, req.Summary))
 	}
 
 	resp, err := sess.Turn(ctx, prompt, onEvent)

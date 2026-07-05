@@ -312,7 +312,18 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                     {/* Rolling summary — the compacted stand-in for the dropped
                         turns below. Shown as its own category (was buried in Dynamic). */}
                     {data.summary && (
-                      <Section title="Özet (katlanmış mesajların yerine geçer)" bulk={bulk}>
+                      <Section
+                        title="Özet (katlanmış mesajların yerine geçer)"
+                        cached={data.cache.summaryCached}
+                        bulk={bulk}
+                      >
+                        {data.cache.summaryCached && (
+                          <HintNote>
+                            Özet artık volatile Dinamik'te değil; <strong>cache'li önekin
+                            başında bir mesaj</strong> olarak gönderiliyor (P2) → iki katlama
+                            arasında <strong>cache-read</strong> (her tur taze değil).
+                          </HintNote>
+                        )}
                         <Markdown>{data.summary}</Markdown>
                       </Section>
                     )}

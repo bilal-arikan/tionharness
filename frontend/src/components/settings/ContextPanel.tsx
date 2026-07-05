@@ -18,6 +18,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
       <SubHead icon={FlaskConical}>Anthropic beta</SubHead>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">Yalnız anthropic sağlayıcıda etkili; claude-cli'da etkisizdir. (1M bağlam artık GA — ayar gerekmez.)</p>
       <Toggle label="Uzatılmış prompt cache (1 saat)" hint="Sistem promptunu 1 saatlik cache_control ile önbelleğe alır — tekrar eden büyük persona/bağlam ucuzlar." checked={draft.extendedPromptCache} onChange={(v) => set('extendedPromptCache', v)} />
+      <Toggle label="API-native bağlam düzenleme (clear_tool_uses)" hint="Sunucu, cache'li önekteki eski tool sonuçlarını yerinde budar (microcompact muadili) — önek soğumadan küçülür. İstemci-tarafı compaction'ı tamamlar, değiştirmez." checked={draft.anthropicContextEditing} onChange={(v) => set('anthropicContextEditing', v)} />
 
       <SubHead icon={Database}>Hafıza geri çağırma (recall)</SubHead>
       <div className="grid grid-cols-2 gap-3">

@@ -47,10 +47,11 @@ alanı taşır:
 {"ts":1719..., "type":"error",      "detail":"provider_error: 429 rate limit", "err":true}
 {"ts":1719..., "type":"compaction", "detail":"context_overflow"}
 {"ts":1719..., "type":"recovery",   "detail":"max_output_tokens"}
+{"ts":1719..., "type":"cache_break", "name":"ttl-or-server-eviction", "detail":"Önek değişmedi ama cache okunmadı → 1s TTL doldu…", "cacheWrite":9000}
 ```
 
 Tip sabitleri (`internal/db/debug_journal.go`): `turn`, `llm_call`, `tool`,
-`hook`, `error`, `compaction`, `recovery`.
+`hook`, `error`, `compaction`, `recovery`, `cache_break`.
 
 ## Emit noktaları (tek huni: `Runtime.emitDebug`)
 
@@ -67,6 +68,7 @@ kapalıysa veya oturum yoksa no-op'tur (best-effort, hata yutulur).
 | `error` | `toolloop.go fail()` + permission/budget hataları |
 | `compaction` | `toolloop.go` — reaktif compact başarılı olduğunda |
 | `recovery` | `toolloop.go` — çıktı-cap resume kurtarması |
+| `cache_break` | `cachebreak.go noteCacheOutcome` — sıcak prompt-cache öneki kaybolup soğuk yeniden yazıldığında (yalnız ana konuşma turları: chat/task/schedule/flow/spawn); sebep atıflı (`model-changed`/`prompt-or-tools-changed`/`ttl-or-server-eviction`). Claude Code `promptCacheBreakDetection` muadili — veri zaten `Usage.Cache*`'te, bu yalnız atıf ekler |
 
 ## Dosya yönetimi (cap + budama)
 

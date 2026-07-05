@@ -76,7 +76,21 @@ graph LR
   `appendVolatileToLastUser(msgs, dynamic)` helper'ı.
 - **Kabul:** turn-2'de volatile dinamik varken `cache_read > 0` (yeni live test).
 
-### P2 — Özeti mesaja çevir (compact boundary), cache'lenebilir yap
+### P2 — Özeti mesaja çevir (compact boundary), cache'lenebilir yap ✅ UYGULANDI (2026-07-05)
+> **Durum:** Özet artık volatile Dinamik'ten çıktı; `providers.Request.Summary` alanıyla
+> taşınıyor. Native yollar (anthropic + openrouter) onu **sentetik head user mesajı** olarak
+> cache'li önekin başına koyuyor (`prependSummaryMessage`, `internal/providers/summary.go`) →
+> rolling breakpoint son mesajda kaldığı için özet iki katlama arası **cache-read**. Cache
+> KAPALI yolda özet `system`'e geri katlanıyor (pre-P2 paritesi). **claude-cli native-only
+> kararı gereği DEĞİŞMEDİ** — özet hâlâ `[Context]` tail'ine dokunularak her tur taze gider
+> (warm delta yolunda katlama sonrası bayat kalmasın diye; `joinNonEmpty(dynamic, summary)`).
+> Önizleme (P6): `cachePreview.SummaryCached` + "Özet" bölümü yeşil + cache-read notu; token
+> `req.Summary` üzerinden. Testler: `anthropic_test.go` (`TestPrependSummaryMessage`,
+> `TestBuildSystemAndMessages_SummaryHeadCachedWhenOn` / `...FoldsIntoSystemWhenOff`),
+> `minimax_test.go` (`TestOpenRouter_SummaryHeadMessage`, `TestMinimax_SummaryFoldsIntoSystem`),
+> `claudecli_live_test.go` (özet [Context] tail regresyon guard'ı). **311 test yeşil, tsc temiz.**
+> **Kalan:** canlı `cache_read>0` (P1 ile ortak — anahtar + gerçek tur gerekir).
+
 - **Değişim:** `conversationSummaryBlock`'u Dinamik'ten çıkar; özeti canlı mesaj dizisinin
   **başına** bir mesaj olarak koy (ör. `role=user`, `"[Önceki konuşmanın özeti]\n<summary>"`),
   böylece cache önekinin parçası olur.
@@ -88,7 +102,17 @@ graph LR
   olarak işaretlenir (yeşil); "Artık gönderilmeyen" turuncu grup korunur.
 - **Bağımlılık:** P1'den sonra temiz (dinamik tail'de → özet head-message ile çakışmaz).
 
-### P3 — API-native context editing (opsiyonel, anthropic-only) — *microcompact muadili*
+### P3 — API-native context editing (opsiyonel, anthropic-only) — *microcompact muadili* ✅ UYGULANDI (2026-07-05)
+> **Durum:** `anthropic.go` — `context_management` beta (`context-management-2025-06-27` header).
+> `anthropicReq.ContextManagement` + `contextMgmt()` yalnız `contextEditing` açıkken bir
+> `clear_tool_uses_20250919` edit'i ekler (trigger 100k input_tokens, keep 3 tool_uses,
+> clear_at_least 5k). `WithBetas(extendedCache, contextEditing)` genişledi; `ResolvedConfig.
+> ContextEditing` + `Registry.betaContextEditing` + `SetAnthropicBetas(...)`. Ayar
+> `AnthropicContextEditing` (settings.go/store.go, **vars. kapalı**), `api/server.go` canlı
+> uygular. Frontend: ContextPanel'de yeni toggle + `AppSettings.anthropicContextEditing`.
+> Default skill `tionswarm-settings` belgeler. Testler: `TestContextEditing_Off/On`
+> (contextMgmt + betaHeader + body serileştirme). Client-side fold'a **ek**, alternatif değil.
+
 - Anthropic `context_management` beta: `clear_tool_uses_20250919` (trigger `input_tokens`,
   `keep` son N tool_use, `clear_at_least`) + `clear_thinking_20251015`.
 - Sunucu, cache'li önekteki eski tool-result/thinking'i **yerinde** siler (`cache_edits`),
@@ -97,7 +121,19 @@ graph LR
 - `anthropic.go`'ya `extendedCache` açıkken ekle; beta header gerekir; ayar
   `anthropicContextEditing` (vars. kapalı). Client-side fold'a alternatif/ek.
 
-### P4 — Cache-break tespiti + telemetri (debug journal)
+### P4 — Cache-break tespiti + telemetri (debug journal) ✅ UYGULANDI (2026-07-05)
+> **Durum:** `internal/agent/cachebreak.go` — `Runtime.cacheProbes` (sync.Map, oturum-başına
+> `{prefixSig, model, warmed}`) turlar-arası durum tutar. `noteCacheOutcome` her ana konuşma
+> turu provider çağrısında (recordedComplete ×2 + recordedStream; yalnız `isConversationKind`:
+> chat/task/schedule/flow/spawn — yardımcı title/summary/reflect/compact/subagent hariç) sıcak
+> önek kaybını yakalar: **warmed && cacheRead==0 && cacheWrite≥2000** → `cache_break` debug
+> olayı, sebep atıflı (`attributeCacheBreak`: model-changed / prompt-or-tools-changed /
+> ttl-or-server-eviction). `cachePrefixSig` yalnız statik System + araç adı/şemasını hash'ler
+> (dinamik/mesajlar hariç — P1/P2 sonrası önek dışı). `db.DebugCacheBreak` sabiti + `DebugSummary`
+> `CacheBreaks`/`LastCacheBreak` + anomali (1→info, ≥2→warn). Frontend: Debug kartında "Cache
+> kırılması" pill + event filtresi + etiket. Testler: `cachebreak_test.go` (sig/atıf/kind),
+> `debug_journal_test.go TestDebugSummaryCacheBreaks`. **go test yeşil, tsc temiz.**
+
 - `promptCacheBreakDetection.ts` deseni: oturum-başına system+tools+cache_control hash'le,
   turdan tura karşılaştır; `cache_read` %5+ ve 2k+ token düşerse sebep ata (systemPromptChanged
   / toolSchemasChanged / modelChanged / TTL-expiry / server-side).
@@ -105,7 +141,17 @@ graph LR
 - Veri zaten var (`Usage.CacheRead/CacheWrite`) → yalnız atıf/attribution eklenir. P1/P2'nin
   gerçekten HIT ürettiğini **kanıtlamak** için şart.
 
-### P5 — TTL / breakpoint kararlılığı (hardening)
+### P5 — TTL / breakpoint kararlılığı (hardening) ✅ UYGULANDI (2026-07-05)
+> **Durum:** Tüm anthropic breakpoint'leri (tools + statik System + rolling history) artık
+> tek `cacheTTL = "1h"` sabitinden türer (`anthropic.go`) → istek-içi TTL drift'i (Anthropic'in
+> "sonraki breakpoint daha kısa TTL taşıyamaz" kuralını bozacak karışık-TTL) imkânsız. P1/P2
+> sonrası tek-stabil-marker ilkesi test'le kilitlendi: `TestCacheBreakpointStability` bir tam
+> istekte (tools+system+summary head+dynamic+mesajlar) **tam olarak bir** rolling mesaj
+> breakpoint'i olduğunu ve son **persist** blokta durduğunu (volatile dinamik trailer'da veya
+> özet head'inde DEĞİL), ve tüm TTL'lerin `cacheTTL` olduğunu doğrular. openrouter/minimax
+> yolu tek tip `ephemeral` kullanır (TTL yok → drift riski yok). Mid-session flip yalnız
+> kullanıcı ayarı değişince olur (beklenen; P4 detektörü yakalar).
+
 - Claude Code 1h eligibility'yi **oturum-stabil latch**'liyor (mid-session flip cache bozar).
   TionSwarm tüm breakpoint'lerde sabit 1h TTL kullanıyor → doğrula: hiçbir ayar mid-session
   TTL/scope flip'i yapmıyor.

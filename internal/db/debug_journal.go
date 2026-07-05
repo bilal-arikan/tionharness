@@ -34,8 +34,9 @@ const (
 	DebugTool       = "tool"       // one tool execution (name, durMs, outBytes, err)
 	DebugHook       = "hook"       // one PreToolUse/PostToolUse hook ran (name, detail)
 	DebugError      = "error"      // a turn-level / permission / budget error
-	DebugCompaction = "compaction" // in-flight history was compacted (savedBytes)
-	DebugRecovery   = "recovery"   // a turn recovery fired (output resume / compact)
+	DebugCompaction = "compaction"  // in-flight history was compacted (savedBytes)
+	DebugRecovery   = "recovery"    // a turn recovery fired (output resume / compact)
+	DebugCacheBreak = "cache_break" // the prompt-cache warm prefix was lost (attributed reason in Name/Detail)
 )
 
 // DebugEvent is one structured observability record. Fields are sparse
@@ -197,6 +198,7 @@ type DebugSummary struct {
 	Errors       int                      `json:"errors"`
 	Compactions  int                      `json:"compactions"`
 	Recoveries   int                      `json:"recoveries"`
+	CacheBreaks  int                      `json:"cacheBreaks"`
 	SavedBytes   int                      `json:"savedBytes"`
 	TurnDurMs    int64                    `json:"turnDurMs"`
 	ByTool       map[string]DebugToolStat `json:"byTool,omitempty"`
@@ -205,6 +207,9 @@ type DebugSummary struct {
 	LastError    string                   `json:"lastError,omitempty"`
 	FirstTs      int64                    `json:"firstTs,omitempty"`
 	LastTs       int64                    `json:"lastTs,omitempty"`
+	// LastCacheBreak is the human-readable reason of the most recent prompt-cache
+	// break (empty when none) — surfaced in the Debug card + the cache_break anomaly.
+	LastCacheBreak string `json:"lastCacheBreak,omitempty"`
 	// Time series for sparklines (newest debugSeriesCap points, oldest→newest):
 	// per-turn duration (ms) and per-llm-call total tokens (in+out).
 	TurnDurSeries []int64 `json:"turnDurSeries,omitempty"`
@@ -265,6 +270,11 @@ func (d *DB) GetDebugSummary(ctx context.Context, sessionID string) (DebugSummar
 			sum.SavedBytes += e.SavedBytes
 		case DebugRecovery:
 			sum.Recoveries++
+		case DebugCacheBreak:
+			sum.CacheBreaks++
+			if e.Detail != "" {
+				sum.LastCacheBreak = e.Detail
+			}
 		}
 	}
 	// TopTools: tool names ordered by total duration (the optimisation hot list).
@@ -442,6 +452,23 @@ func computeDebugAnomalies(sum DebugSummary) []DebugAnomaly {
 			Severity: "warn",
 			Code:     "frequent_compaction",
 			Message:  "Bağlam " + itoa(sum.Compactions) + " kez sıkıştırıldı — önemli bilgileri core memory'ye yaz veya handoff yap.",
+		})
+	}
+
+	// 4b) Prompt-cache breaks: the warm prefix was lost and re-written cold. A single
+	// break can be normal (first turn, a genuine model/prompt change); repeated breaks
+	// mean the cache rarely holds — the token bill is paying full price turn after turn.
+	if sum.CacheBreaks >= 2 {
+		out = append(out, DebugAnomaly{
+			Severity: "warn",
+			Code:     "cache_breaks",
+			Message:  "Prompt-cache " + itoa(sum.CacheBreaks) + " kez kırıldı (sıcak önek yeniden yazıldı) — son sebep: " + clip(sum.LastCacheBreak, 80),
+		})
+	} else if sum.CacheBreaks == 1 && sum.LastCacheBreak != "" {
+		out = append(out, DebugAnomaly{
+			Severity: "info",
+			Code:     "cache_break",
+			Message:  "Prompt-cache bir kez kırıldı — " + clip(sum.LastCacheBreak, 80),
 		})
 	}
 

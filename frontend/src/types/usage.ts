@@ -149,6 +149,10 @@ export interface SessionDebugSummary {
   errors: number
   compactions: number
   recoveries: number
+  // cacheBreaks counts prompt-cache breaks (warm prefix lost + re-written cold);
+  // lastCacheBreak is the most recent attributed reason (P4).
+  cacheBreaks: number
+  lastCacheBreak?: string
   savedBytes: number
   turnDurMs: number
   byTool?: Record<string, SessionDebugToolStat>
@@ -170,7 +174,7 @@ export interface SessionDebugAnomaly {
 
 export interface SessionDebugEvent {
   ts: number
-  type: 'turn' | 'llm_call' | 'tool' | 'hook' | 'error' | 'compaction' | 'recovery'
+  type: 'turn' | 'llm_call' | 'tool' | 'hook' | 'error' | 'compaction' | 'recovery' | 'cache_break'
   sessionId?: string
   turnId?: string
   agentId?: string

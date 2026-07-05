@@ -2,6 +2,7 @@ package providers
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -196,5 +197,178 @@ func TestToAnthropicMessages_NoCacheWhenDisabled(t *testing.T) {
 		if b.CacheControl != nil {
 			t.Error("no breakpoint expected when extendedCache is off")
 		}
+	}
+}
+
+// P2: prependSummaryMessage inserts the summary as a synthetic head user message
+// without mutating the caller's slice, and is a no-op for an empty summary.
+func TestPrependSummaryMessage(t *testing.T) {
+	orig := []Message{{Role: RoleAssistant, Text: "hello"}}
+	got := prependSummaryMessage(orig, "  SUMMARY  ")
+	if len(got) != 2 {
+		t.Fatalf("got %d messages, want 2 (head summary + original)", len(got))
+	}
+	if got[0].Role != RoleUser || got[0].Text != "SUMMARY" {
+		t.Errorf("head message = %+v, want trimmed user summary", got[0])
+	}
+	if got[1].Text != "hello" {
+		t.Errorf("original message must follow the summary head, got %+v", got[1])
+	}
+	if len(orig) != 1 {
+		t.Errorf("caller slice must NOT be mutated, got len %d", len(orig))
+	}
+	if same := prependSummaryMessage(orig, "   "); len(same) != 1 {
+		t.Errorf("empty summary must be a no-op, got %d messages", len(same))
+	}
+}
+
+// P2 (caching ON): the summary rides a head user message INSIDE the cached prefix
+// (the rolling breakpoint sits on the LAST message, so the summary head is cached),
+// and the volatile dynamic still trails after the breakpoint on the last message.
+func TestBuildSystemAndMessages_SummaryHeadCachedWhenOn(t *testing.T) {
+	a := &Anthropic{extendedCache: true}
+	req := Request{
+		System:        "PERSONA",
+		SystemDynamic: "NOW-VOLATILE",
+		Summary:       "PRIOR SUMMARY",
+		Messages:      []Message{{Role: RoleAssistant, Text: "hello"}, {Role: RoleUser, Text: "again"}},
+	}
+	sysField, msgs := a.buildSystemAndMessages(req)
+	// System is static-only (summary is NOT here — it moved to the message head).
+	blocks := asBlocks(t, sysField)
+	if len(blocks) != 1 || blocks[0].Text != "PERSONA" {
+		t.Fatalf("system must be static-only PERSONA, got %+v", blocks)
+	}
+	// First message is the summary head, uncached (a middle-of-prefix block).
+	if len(msgs) != 3 {
+		t.Fatalf("got %d messages, want 3 (summary head + 2)", len(msgs))
+	}
+	if msgs[0].Role != RoleUser || msgs[0].Content[0].Text != "PRIOR SUMMARY" {
+		t.Errorf("first message must be the summary head, got %+v", msgs[0])
+	}
+	if msgs[0].Content[0].CacheControl != nil {
+		t.Error("summary head must NOT carry the breakpoint (it is a cached-prefix READ, not the marker)")
+	}
+	// The rolling breakpoint sits on the persisted block of the LAST message.
+	last := msgs[len(msgs)-1].Content
+	if last[0].Text != "again" || last[0].CacheControl == nil {
+		t.Errorf("rolling breakpoint must sit on the last persisted block, got %+v", last[0])
+	}
+	if last[len(last)-1].Text != "NOW-VOLATILE" || last[len(last)-1].CacheControl != nil {
+		t.Errorf("volatile dynamic must trail after the breakpoint, uncached, got %+v", last[len(last)-1])
+	}
+}
+
+// P5 hardening: across a full cached request (tools + static system + rolling
+// history) EVERY cache_control breakpoint must share the single cacheTTL, and there
+// must be EXACTLY ONE rolling message-level breakpoint, sitting on the last
+// PERSISTED block — never on the volatile dynamic trailer or the summary head.
+// A mixed TTL or a stray second message marker silently breaks Anthropic caching.
+func TestCacheBreakpointStability(t *testing.T) {
+	a := &Anthropic{extendedCache: true}
+	req := Request{
+		System:        "PERSONA",
+		SystemDynamic: "NOW-VOLATILE",
+		Summary:       "PRIOR SUMMARY",
+		Tools:         []ToolDef{{Name: "read", InputSchema: json.RawMessage(`{"type":"object"}`)}},
+		Messages:      []Message{{Role: RoleAssistant, Text: "hello"}, {Role: RoleUser, Text: "again"}},
+	}
+	sysField, msgs := a.buildSystemAndMessages(req)
+	tools := toAnthropicTools(req.Tools, a.extendedCache)
+
+	// Every TTL present must equal cacheTTL.
+	for _, b := range asBlocks(t, sysField) {
+		if b.CacheControl != nil && b.CacheControl.TTL != cacheTTL {
+			t.Errorf("system breakpoint TTL = %q, want %q", b.CacheControl.TTL, cacheTTL)
+		}
+	}
+	if tc := tools[len(tools)-1].CacheControl; tc == nil || tc.TTL != cacheTTL {
+		t.Errorf("tools breakpoint TTL = %+v, want %q", tc, cacheTTL)
+	}
+
+	// Exactly one message-level breakpoint, on the last persisted block.
+	markers := 0
+	var markedText string
+	for _, m := range msgs {
+		for _, b := range m.Content {
+			if b.CacheControl != nil {
+				markers++
+				markedText = b.Text
+				if b.CacheControl.TTL != cacheTTL {
+					t.Errorf("message breakpoint TTL = %q, want %q", b.CacheControl.TTL, cacheTTL)
+				}
+			}
+		}
+	}
+	if markers != 1 {
+		t.Fatalf("want exactly one rolling message breakpoint, got %d", markers)
+	}
+	if markedText != "again" {
+		t.Errorf("rolling breakpoint must sit on the last persisted block (\"again\"), got %q", markedText)
+	}
+}
+
+// P3: with the context-editing beta OFF, no context_management is attached and the
+// beta header omits context-management; with it ON, the clear_tool_uses strategy is
+// present with sane defaults and the beta header advertises it.
+func TestContextEditing_OffByDefault(t *testing.T) {
+	a := &Anthropic{extendedCache: true} // contextEditing off
+	if cm := a.contextMgmt(); cm != nil {
+		t.Errorf("context_management must be nil when the beta is off, got %+v", cm)
+	}
+	if strings.Contains(a.betaHeader(), betaContextManagement) {
+		t.Errorf("beta header must not advertise context-management when off: %q", a.betaHeader())
+	}
+}
+
+func TestContextEditing_On(t *testing.T) {
+	a := (&Anthropic{}).WithBetas(true, true)
+	cm := a.contextMgmt()
+	if cm == nil || len(cm.Edits) != 1 {
+		t.Fatalf("expected one context edit, got %+v", cm)
+	}
+	e := cm.Edits[0]
+	if e.Type != "clear_tool_uses_20250919" {
+		t.Errorf("edit type = %q, want clear_tool_uses_20250919", e.Type)
+	}
+	if e.Trigger == nil || e.Trigger.Type != "input_tokens" || e.Trigger.Value != contextClearTriggerTokens {
+		t.Errorf("trigger = %+v, want input_tokens/%d", e.Trigger, contextClearTriggerTokens)
+	}
+	if e.Keep == nil || e.Keep.Type != "tool_uses" || e.Keep.Value != contextClearKeepToolUses {
+		t.Errorf("keep = %+v, want tool_uses/%d", e.Keep, contextClearKeepToolUses)
+	}
+	if e.ClearAtLeast == nil || e.ClearAtLeast.Value != contextClearAtLeastTokens {
+		t.Errorf("clearAtLeast = %+v, want input_tokens/%d", e.ClearAtLeast, contextClearAtLeastTokens)
+	}
+	if !strings.Contains(a.betaHeader(), betaContextManagement) {
+		t.Errorf("beta header must advertise context-management when on: %q", a.betaHeader())
+	}
+	// The request body serializes context_management with the beta on.
+	raw, _ := json.Marshal(anthropicReq{Model: "m", ContextManagement: a.contextMgmt()})
+	if !strings.Contains(string(raw), `"context_management"`) || !strings.Contains(string(raw), `"clear_tool_uses_20250919"`) {
+		t.Errorf("serialized body missing context_management: %s", raw)
+	}
+}
+
+// P2 (caching OFF): there is no cached prefix to protect, so the summary folds back
+// into the concatenated system prompt (its pre-P2 home) and is NOT a head message.
+func TestBuildSystemAndMessages_SummaryFoldsIntoSystemWhenOff(t *testing.T) {
+	a := &Anthropic{} // extendedCache off
+	req := Request{
+		System:        "PERSONA",
+		SystemDynamic: "DYN",
+		Summary:       "PRIOR SUMMARY",
+		Messages:      []Message{{Role: RoleUser, Text: "hi"}},
+	}
+	sysField, msgs := a.buildSystemAndMessages(req)
+	s, ok := sysField.(string)
+	if !ok {
+		t.Fatalf("caching off must yield a plain string system, got %T", sysField)
+	}
+	if s != "PERSONA\n\nDYN\n\nPRIOR SUMMARY" {
+		t.Errorf("summary must fold into system when caching is off, got %q", s)
+	}
+	if len(msgs) != 1 || msgs[0].Content[0].Text != "hi" {
+		t.Errorf("no head summary message when caching is off, got %+v", msgs)
 	}
 }

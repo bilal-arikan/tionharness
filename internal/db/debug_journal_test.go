@@ -131,6 +131,47 @@ func TestDebugSummaryAnomaliesAndSeries(t *testing.T) {
 	}
 }
 
+// TestDebugSummaryCacheBreaks verifies cache_break events are counted, the last
+// reason is captured, and the anomaly escalates from info (1) to warn (>=2).
+func TestDebugSummaryCacheBreaks(t *testing.T) {
+	ctx := context.Background()
+	d, _ := Open(filepath.Join(t.TempDir(), "store"))
+	agent, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
+
+	// One break → info anomaly, reason captured.
+	s1, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "one"})
+	_ = d.AppendDebugEvent(s1.ID, DebugEvent{Type: DebugCacheBreak, Name: "ttl-or-server-eviction", Detail: "TTL doldu"}, 0)
+	sum1, _ := d.GetDebugSummary(ctx, s1.ID)
+	if sum1.CacheBreaks != 1 || sum1.LastCacheBreak != "TTL doldu" {
+		t.Fatalf("cacheBreaks=%d last=%q, want 1 / TTL doldu", sum1.CacheBreaks, sum1.LastCacheBreak)
+	}
+	if code := anomalyCode(sum1.Anomalies, "cache_break"); code == nil || code.Severity != "info" {
+		t.Errorf("one break should raise an info cache_break anomaly, got %+v", sum1.Anomalies)
+	}
+
+	// Two breaks → warn anomaly.
+	s2, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "two"})
+	_ = d.AppendDebugEvent(s2.ID, DebugEvent{Type: DebugCacheBreak, Detail: "model değişti"}, 0)
+	_ = d.AppendDebugEvent(s2.ID, DebugEvent{Type: DebugCacheBreak, Detail: "prompt değişti"}, 0)
+	sum2, _ := d.GetDebugSummary(ctx, s2.ID)
+	if sum2.CacheBreaks != 2 {
+		t.Fatalf("cacheBreaks=%d, want 2", sum2.CacheBreaks)
+	}
+	if code := anomalyCode(sum2.Anomalies, "cache_breaks"); code == nil || code.Severity != "warn" {
+		t.Errorf("two breaks should raise a warn cache_breaks anomaly, got %+v", sum2.Anomalies)
+	}
+}
+
+// anomalyCode returns the first anomaly with the given code, or nil.
+func anomalyCode(as []DebugAnomaly, code string) *DebugAnomaly {
+	for i := range as {
+		if as[i].Code == code {
+			return &as[i]
+		}
+	}
+	return nil
+}
+
 // TestDebugSummaryNoAnomaliesOnHealthy verifies a healthy session is quiet.
 func TestDebugSummaryNoAnomaliesOnHealthy(t *testing.T) {
 	ctx := context.Background()

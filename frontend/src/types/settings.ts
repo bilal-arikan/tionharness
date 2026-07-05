@@ -31,6 +31,7 @@ export interface AppSettings {
   openrouterBaseUrl: string
 
   extendedPromptCache: boolean
+  anthropicContextEditing: boolean
 
   desktopNotifications: boolean
   keepAwake: boolean

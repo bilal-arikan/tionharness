@@ -434,14 +434,24 @@ func toOAITools(tools []ToolDef) []oaiTool {
 // them are expanded into one "tool" role message per result. In-band system-role
 // turns and empty text-only turns are dropped.
 func toOAIMessages(req Request, cacheSystem bool) []oaiMessage {
-	msgs := make([]oaiMessage, 0, len(req.Messages)+1)
-	if sysMsg, ok := buildSystemMessage(req.System, req.SystemDynamic, cacheSystem); ok {
+	msgs := make([]oaiMessage, 0, len(req.Messages)+2)
+	// Place the rolling summary for cache reuse: with caching on it rides a
+	// synthetic head user message inside the cached prefix (a cache READ between
+	// folds); with caching off it folds back into the system prompt (pre-P2 home).
+	chatMsgs := req.Messages
+	sysDynamic := req.SystemDynamic
+	if cacheSystem {
+		chatMsgs = prependSummaryMessage(req.Messages, req.Summary)
+	} else {
+		sysDynamic = joinNonEmpty(req.SystemDynamic, req.Summary)
+	}
+	if sysMsg, ok := buildSystemMessage(req.System, sysDynamic, cacheSystem); ok {
 		msgs = append(msgs, sysMsg)
 	}
 	// Merge back-to-back same-role plain-text turns (e.g. several agents replying
 	// in one shared thread) so the role sequence stays clean for stricter
 	// OpenAI-compatible backends.
-	for _, mm := range coalescePlainSameRole(req.Messages) {
+	for _, mm := range coalescePlainSameRole(chatMsgs) {
 		if mm.Role == RoleSystem {
 			continue
 		}

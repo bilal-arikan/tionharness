@@ -119,7 +119,7 @@ func (s *Server) applySettings() {
 	s.providers.SetClaudeConfigDir(cur.ClaudeConfigDir)
 	s.providers.SetClaudeAuth(s.settings.ClaudeCliAuthToken(), cur.ClaudeCliAuthKind)
 	s.providers.SetDefaultModel(cur.DefaultModel)
-	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache)
+	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache, cur.AnthropicContextEditing)
 	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
 	s.providers.SetOpenRouter(s.settings.OpenRouterKey(), cur.OpenRouterBaseURL)
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))

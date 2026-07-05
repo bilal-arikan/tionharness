@@ -185,7 +185,14 @@ func (c *ClaudeCLI) buildSystemAndPrompt(req Request) (sys, prompt string) {
 	if c.usesInteractionTools() {
 		sys = strings.TrimSpace(sys + "\n\n" + interactionSystemNote)
 	}
-	prompt = withDynamic(serializeTranscript(req.Messages), req.SystemDynamic)
+	// The rolling summary (req.Summary) stays woven into the uncached [Context]
+	// tail here — the claude-cli path is already cache-optimal via --resume (its
+	// warm server-side prefix is untouched), and weaving the summary each turn
+	// keeps it FRESH after a mid-session fold, which the native head-message
+	// placement (P2) cannot do on the warm delta path. So P2 is native-only; the
+	// CLI behaviour is unchanged (summary simply moves from SystemDynamic back into
+	// the effective dynamic here).
+	prompt = withDynamic(serializeTranscript(req.Messages), joinNonEmpty(req.SystemDynamic, req.Summary))
 	return sys, prompt
 }
 

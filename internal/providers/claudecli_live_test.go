@@ -199,4 +199,22 @@ func TestBuildSystemAndPrompt(t *testing.T) {
 	if _, p := c.buildSystemAndPrompt(Request{System: "S", Messages: []Message{{Role: RoleUser, Text: "hi"}}}); p != "hi" {
 		t.Errorf("empty dynamic should yield a bare prompt, got %q", p)
 	}
+
+	// P2 regression guard: the rolling summary (now carried in req.Summary, not
+	// SystemDynamic) must still ride the uncached [Context] tail on the claude-cli
+	// path — P2 is native-only, so the CLI keeps weaving a FRESH summary each turn
+	// and must never lose it. It must NOT leak into the cached system prefix.
+	reqSum := Request{
+		System:        "STATIC-PERSONA",
+		SystemDynamic: "VOLATILE-CLOCK-2026",
+		Summary:       "PRIOR-SUMMARY-TEXT",
+		Messages:      []Message{{Role: RoleUser, Text: "hello"}},
+	}
+	sysS, promptS := c.buildSystemAndPrompt(reqSum)
+	if strings.Contains(sysS, "PRIOR-SUMMARY-TEXT") {
+		t.Errorf("summary must not leak into the cached system prompt: %q", sysS)
+	}
+	if !strings.Contains(promptS, "PRIOR-SUMMARY-TEXT") {
+		t.Errorf("summary must ride the [Context] tail on the claude-cli path, got %q", promptS)
+	}
 }

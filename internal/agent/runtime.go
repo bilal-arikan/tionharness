@@ -189,6 +189,12 @@ type Runtime struct {
 	// message. Off by default; nil-safe (recordedComplete falls back to one-shot
 	// Complete). Closed via CloseMCP on workspace teardown.
 	cliSessions *providers.CLISessionPool
+
+	// cacheProbes holds the per-session last-known prompt-cache state (prefix hash +
+	// model + warmth) used to detect and attribute a prompt-cache break turn-to-turn
+	// (P4, cachebreak.go). Keyed by session id; zero value ready. Best-effort
+	// telemetry only — never gates a turn.
+	cacheProbes sync.Map
 }
 
 // trackSession marks a session as actively running an autonomous invoke.

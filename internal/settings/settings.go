@@ -104,6 +104,10 @@ type Settings struct {
 	// Anthropic beta capabilities (anthropic provider only; claude-cli ignores).
 	// (The 1M-context beta was retired — 1M is GA since 2026-03, no toggle needed.)
 	ExtendedPromptCache bool `json:"extendedPromptCache"` // 1h extended prompt cache TTL
+	// AnthropicContextEditing enables API-native context editing (server-side
+	// clear_tool_uses on the cached prefix — the microcompact analogue, P3). Off by
+	// default; complements the client-side compaction, does not replace it.
+	AnthropicContextEditing bool `json:"anthropicContextEditing"`
 
 	// Desktop / display behaviour (applied client-side).
 	DesktopNotifications bool `json:"desktopNotifications"` // browser notifications
@@ -443,7 +447,8 @@ type DTO struct {
 
 	CustomProviders []CustomProviderDTO `json:"customProviders"`
 
-	ExtendedPromptCache bool `json:"extendedPromptCache"`
+	ExtendedPromptCache     bool `json:"extendedPromptCache"`
+	AnthropicContextEditing bool `json:"anthropicContextEditing"`
 
 	DesktopNotifications bool `json:"desktopNotifications"`
 	KeepAwake            bool `json:"keepAwake"`
@@ -558,7 +563,8 @@ func (s Settings) ToDTO() DTO {
 		OpenRouterBaseURL:     s.OpenRouterBaseURL,
 		CustomProviders:       customProvidersToDTO(s.CustomProviders),
 
-		ExtendedPromptCache: s.ExtendedPromptCache,
+		ExtendedPromptCache:     s.ExtendedPromptCache,
+		AnthropicContextEditing: s.AnthropicContextEditing,
 
 		DesktopNotifications: s.DesktopNotifications,
 		KeepAwake:            s.KeepAwake,
@@ -668,7 +674,8 @@ type Patch struct {
 	OpenRouterKey         *string `json:"openrouterKey"` // write-only
 	OpenRouterBaseURL     *string `json:"openrouterBaseUrl"`
 
-	ExtendedPromptCache *bool `json:"extendedPromptCache"`
+	ExtendedPromptCache     *bool `json:"extendedPromptCache"`
+	AnthropicContextEditing *bool `json:"anthropicContextEditing"`
 
 	DesktopNotifications *bool `json:"desktopNotifications"`
 	KeepAwake            *bool `json:"keepAwake"`

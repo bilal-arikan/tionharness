@@ -119,9 +119,12 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, message, 5); block != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + block)
 	}
-	if sb := conversationSummaryBlock(prep.Summary); sb != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
-	}
+	// The rolling compaction summary is NOT folded into the volatile dynamic here
+	// anymore (P2, _Docs/50): it is stable between two folds, so it travels in
+	// req.Summary and cache-capable providers place it as a synthetic head message
+	// INSIDE the cached prefix (a cache READ turn-to-turn) instead of re-shipping it
+	// every turn. Providers without caching fold it back into the system prompt.
+	summary := conversationSummaryBlock(prep.Summary)
 	// Surface the session's existing artifacts so the agent revises them
 	// (update_artifact by id) instead of creating duplicates.
 	if ab := artifactsContextBlock(ctx, wsp.DB, session.ID); ab != "" {
@@ -164,6 +167,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		Model:         agentRow.Model,
 		System:        system,
 		SystemDynamic: dynamic,
+		Summary:       summary,
 		Messages:      prep.Messages,
 	}
 }

@@ -75,11 +75,20 @@ type Request struct {
 	// tool definitions that precede it), so it is cached and reused turn-to-turn.
 	System string
 	// SystemDynamic is the VOLATILE system-prompt suffix appended after System:
-	// recalled memory, the running conversation summary, and anything that changes
-	// every turn. It is kept outside the cached prefix so it never invalidates the
-	// cache. Providers without caching simply concatenate it onto System.
+	// recalled memory and anything that changes every turn. It is kept outside the
+	// cached prefix so it never invalidates the cache. Providers without caching
+	// simply concatenate it onto System.
 	SystemDynamic string
-	Messages      []Message
+	// Summary is the rolling compaction summary (already wrapped with its recovery
+	// note) that stands in for the turns folded away by /compact. Unlike
+	// SystemDynamic it is STABLE between two folds, so cache-capable providers place
+	// it as a synthetic head message INSIDE the cached prefix (before the rolling
+	// history breakpoint) — the Claude Code "compact boundary message" pattern — so
+	// it becomes a cache READ turn-to-turn instead of being re-sent every turn.
+	// Empty when the session has no summary. Providers without caching fold it back
+	// into the system prompt (parity with the pre-P2 placement).
+	Summary  string
+	Messages []Message
 	MaxTokens     int
 	Tools         []ToolDef
 	// ThinkingBudget, when > 0, requests extended reasoning with that many

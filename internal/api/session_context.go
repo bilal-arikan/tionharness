@@ -100,6 +100,11 @@ type cachePreview struct {
 	SystemCached   bool   `json:"systemCached"`
 	DynamicCached  bool   `json:"dynamicCached"`
 	ToolsCached    bool   `json:"toolsCached"`
+	// SummaryCached reports whether the rolling summary is served warm. Since P2 the
+	// native providers place it as a synthetic head message INSIDE the cached prefix
+	// (a cache READ between folds), so it is cached there; on claude-cli it rides the
+	// uncached tail (woven fresh each turn), so it is not.
+	SummaryCached  bool   `json:"summaryCached"`
 	CachedMsgCount int    `json:"cachedMsgCount"` // leading messages served warm
 }
 
@@ -117,7 +122,7 @@ func (s *Server) computeCachePreview(provider string, session db.Session, msgCou
 		// message. The volatile Dinamik now rides the message TAIL (after the rolling
 		// breakpoint), so it no longer busts the prefix → Araçlar + Sistem + mesaj
 		// geçmişi hepsi cache'li; yalnız en yeni mesaj + dinamik ek taze.
-		c := cachePreview{Mode: "anthropic", ToolsCached: hasTools}
+		c := cachePreview{Mode: "anthropic", ToolsCached: hasTools, SummaryCached: true}
 		if msgCount > 1 {
 			c.CachedMsgCount = msgCount - 1
 		}
@@ -134,7 +139,7 @@ func (s *Server) computeCachePreview(provider string, session db.Session, msgCou
 		// System prefix for OpenRouter. It is honoured by Anthropic/Gemini backends;
 		// OpenAI/DeepSeek models cache implicitly anyway. Either way the Tools +
 		// System prefix is the warm part; Dynamic + messages go fresh.
-		c := cachePreview{Mode: "openrouter", ToolsCached: hasTools}
+		c := cachePreview{Mode: "openrouter", ToolsCached: hasTools, SummaryCached: true}
 		// Two breakpoints: one on the static System prefix, one on the tail of the
 		// transcript → in steady state the whole history except the newest message
 		// is a cache hit (the first turn pays a cache write).
@@ -332,24 +337,18 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		droppedTok += conversation.EstimateText(m.Text)
 	}
 
-	// Split the rolling summary out of the composed dynamic suffix so the preview can
-	// show it as its own "summary" category (the compacted stand-in for the dropped
-	// messages) instead of burying it inside Dynamic. Recompute the exact block
-	// composeTurnRequest appended and remove that one occurrence.
+	// The rolling summary now travels in req.Summary (P2, _Docs/50) instead of being
+	// folded into the dynamic suffix: cache-capable providers place it as a synthetic
+	// HEAD message inside the cached prefix (a cache READ between folds) — the Claude
+	// Code compact-boundary pattern. So the preview shows it as its own "summary"
+	// category and dynText already excludes it (no stripBlock needed). Its token cost
+	// is the wrapped block that req.Summary carries.
 	dynText := req.SystemDynamic
 	hasDynamic := strings.TrimSpace(dynText) != ""
 	summaryText := strings.TrimSpace(session.Summary)
 	summaryTok := 0
 	if summaryText != "" {
-		block := conversationSummaryBlock(session.Summary)
-		if stripped, ok := stripBlock(dynText, block); ok {
-			dynText = stripped
-			summaryTok = conversation.EstimateText(block)
-		} else {
-			// Block not found verbatim (unexpected) → keep it in Dynamic; leave the
-			// dedicated summary segment empty to avoid double-counting.
-			summaryText = ""
-		}
+		summaryTok = conversation.EstimateText(req.Summary)
 	}
 
 	// Split the skills catalog block out of the composed system prompt so the
