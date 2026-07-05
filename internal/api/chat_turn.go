@@ -96,6 +96,10 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if wb := workdirContextBlock(cwd); wb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + wb)
 	}
+	// Machine-environment marker (OS/arch/native shell) so the agent writes shell
+	// commands in the right syntax without guessing. Shares ONE source with the
+	// headless path (agent.autonomousSystemPrompt). Volatile side, never cached.
+	dynamic = strings.TrimSpace(dynamic + "\n\n" + agent.EnvironmentContextBlock())
 	// Coordination scratchpad (M2/M3): a shared folder the coordinator and ALL its
 	// workers can read/write, for durable cross-worker knowledge that shouldn't ride
 	// in every prompt. Injected for a coordinator session and for its workers so

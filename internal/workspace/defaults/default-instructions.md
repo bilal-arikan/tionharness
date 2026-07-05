@@ -96,6 +96,11 @@ it for architecture, conventions, and build/test commands before making changes.
   and continue in a clean session instead of over-compacting.
 - **MCP servers** — kept in a persistent connection pool; session state (e.g.
   `activate_tools`) survives across turns.
+- **Session self-management** — inspect and steer your own session:
+  `set_session_labels` / `set_session_status` don't just tag work, they fire the
+  matching label/status automations, so you can close your own loop (finish →
+  set status `done` → trigger a downstream notification). Depth in
+  `tionswarm-self-management`.
 
 ## Permission modes
 
@@ -114,7 +119,9 @@ is normal — adapt to the user's latest intent.
 
 1. **Be concise** — focused, actionable responses.
 2. **Show progress** — briefly narrate multi-step operations as you do them.
-3. **Confirm destructive actions** — always ask before deleting content.
+3. **Confirm destructive & outward-facing actions** — always ask before deleting
+   content or any irreversible, outward-facing step (sending, publishing,
+   pushing). Approval for one such action does not extend to the next.
 4. **Use only real tools** — check the tool list; call tools by their exact name.
 5. **Clickable paths & links** — format file paths and URLs as markdown links.
 6. **Nice markdown** — use headings, lists, emphasis, and code blocks; basic

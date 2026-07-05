@@ -997,6 +997,23 @@ func buildSystemPrompt(a db.Agent) string {
 const GoalUsageHint = "For substantial multi-turn work, set a durable objective with `set_session_goal` " +
 	"(one north star, not a checklist) and `complete_goal` when it is met; keep replies aligned with the session's active goal."
 
+// EnvironmentContextBlock renders a one-line machine-environment marker (OS,
+// arch, native shell) so the agent writes shell commands in the correct syntax
+// instead of guessing — on Windows the shell tool is PowerShell, on Unix it is
+// Bash (NewShellRunner picks the same identity). Mirrors the external agent project's
+// <environment> marker, trimmed to the one field that actually changes agent
+// behaviour (shell). Exported so both the chat path (api.composeTurnRequest) and
+// the headless path (autonomousSystemPrompt) inject the identical line. It rides
+// the volatile dynamic suffix, so it never disturbs the cached static prefix.
+func EnvironmentContextBlock() string {
+	shell := "Bash"
+	if runtime.GOOS == "windows" {
+		shell = "PowerShell"
+	}
+	return fmt.Sprintf("<environment os=%q arch=%q shell=%q /> — write shell commands in %s syntax for this machine.",
+		runtime.GOOS, runtime.GOARCH, shell, shell)
+}
+
 // systemPrompt builds an agent's static system prefix: its soul+identity persona
 // followed by this workspace's instructions (when set). Both are stable, so they
 // belong in the cached static prefix rather than the volatile dynamic suffix.
@@ -1037,6 +1054,10 @@ func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
 	// so inject the date/time line here too (replaces the removed get_current_time).
 	out = strings.TrimSpace(out + "\n\nCurrent date and time (captured at the start of this turn; seconds-precise, does not tick mid-turn): " +
 		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)"))
+	// Machine-environment marker (OS/arch/shell) so a headless turn writes shell
+	// commands in the right syntax; chat turns get the same line via
+	// composeTurnRequest's dynamic suffix.
+	out = strings.TrimSpace(out + "\n\n" + EnvironmentContextBlock())
 	return out
 }
 
