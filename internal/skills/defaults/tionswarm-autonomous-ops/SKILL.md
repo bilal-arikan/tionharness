@@ -215,7 +215,7 @@ Headless turns get a short reminder of this sequence injected automatically (gat
 the `autonomousBootSeq` setting, default on); this section is the full recipe behind it.
 
 > One turn = **one task**. Orient, verify, do exactly one unit of work, then close
-> the loop. Do not batch many tasks into a single autonomous turn (see [[tionswarm-automation-prefs]]).
+> the loop. Do not batch many tasks into a single autonomous turn.
 
 ### Step 0 — Orient
 - Confirm where you are: `Bash` → `pwd` (or the cwd badge / `Session.WorkingDir`),

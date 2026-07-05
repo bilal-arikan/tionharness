@@ -63,13 +63,11 @@ The chat UI renders your markdown richly — use it directly in your reply:
   Source/Expand/Copy controls and re-themes with the app.
 - **Diffs** — a ```` ```diff ```` block renders as a colored diff view.
 - **Code** — fenced blocks get syntax highlighting and a copy button.
-- **Images & video** — a single image or video with `![alt](path-or-URL)` renders
-  inline (local paths served automatically): an image is click-to-zoom, a `.mp4`/
-  `.webm`/… file becomes an inline player. Put **several** media each on its OWN line
-  as `![alt](path)` and consecutive lines auto-group into one thumbnail gallery (or
-  write an explicit ```` ```gallery ```` block: JSON
-  `{"images":[{"src":"path","alt":"…"}, …]}` or a newline-separated path list). The
-  gallery opens a zoom/pan lightbox with prev/next; videos play inside it.
+- **Images & video** — a single `![alt](path-or-URL)` renders inline (local paths
+  served automatically; an image is click-to-zoom, a `.mp4`/`.webm`/… file becomes
+  an inline player). Several media each on their own `![alt](path)` line auto-group
+  into a gallery. The full media rules (explicit ```` ```gallery ```` block shape,
+  artifact-vs-inline decision) live in the `tionswarm-deliverables` skill.
 - Standard GFM (tables, task lists, headings) renders too.
 
 While a reply streams, an incomplete mermaid block shows its source until the
