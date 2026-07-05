@@ -217,25 +217,39 @@ cache'ini de eklemek**; ardından **P2** ile özeti cache'li mesaja çevirmek.
 > turda kafa-kafaya ölçen benchmark: `providers.TestLiveCacheCompareModes`
 > (`claudecli_cachebench_test.go`, `TIONSWARM_LIVE_CLI=1` ile).
 
+### İlk koşu (3 tur, n=2 warm) — GÜRÜLTÜLÜ, aşağıda düzeltildi
+warm-tur ort. persistent 4851 ms vs respawn 7143 ms → görünüşte ~%32. Ama n=2, bir 8446 ms
+aykırı değer ve çapraz-koşu cache bulaşması (persistent tur-1 read=37998) sonucu şişirdi.
+
+### Sağlamlaştırılmış koşu (6 tur, n=5 warm, mod-başına benzersiz prefix nonce) — 2026-07-05
+
 | mod | tur | wall_ms | input | cache_read | cache_write |
 |-----|-----|---------|-------|-----------|-------------|
-| respawn+resume | 1 | 8474 | 3654 | 0 | 43448 |
-| respawn+resume | 2 | 8446 | 1570 | 0 | 57458 |
-| respawn+resume | 3 | 5840 | 2 | 57458 | 1638 |
-| persistent | 1 | 10481 | 3654 | 37998 | 5625 |
-| persistent | 2 | 4810 | 2412 | 0 | 64057 |
-| persistent | 3 | 4893 | 2 | 64057 | 2480 |
+| respawn+resume | 1 | 8876 | 3654 | 37998 | 5580 |
+| respawn+resume | 2 | 7574 | 1570 | 48093 | 9549 |
+| respawn+resume | 3 | 5922 | 2 | 57642 | 1644 |
+| respawn+resume | 4 | 5421 | 2 | 59286 | 70 |
+| respawn+resume | 5 | 5839 | 2 | 59356 | 78 |
+| respawn+resume | 6 | 5572 | 2 | 59434 | 70 |
+| persistent | 1 | 8317 | 3654 | 37998 | 5754 |
+| persistent | 2 | 5414 | 2412 | 54622 | 9537 |
+| persistent | 3 | 6102 | 2 | 64159 | 2486 |
+| persistent | 4 | 7638 | 2 | 66645 | 70 |
+| persistent | 5 | 4623 | 2 | 66715 | 78 |
+| persistent | 6 | 4777 | 2 | 66793 | 70 |
 
-**Bulgular:**
-- **Latency net kazanç:** warm-tur (2–3) ortalaması **persistent 4851 ms vs respawn 7143 ms (~%32 hızlı)** —
-  kalıcı süreç her tur process-startup ödemiyor. Bedeli tur-1'de (10481 ms soğuk başlatma) → uzun
-  oturumda net pozitif.
-- **Cache-read eşdeğer:** iki modda da büyüyen transcript tur-2'de yeni cache yazar (read=0),
-  tur-3'te okur (read≈57–64k). Server-side reuse asıl tur-3'te ve ikisi de alıyor.
-- **Metodoloji sınırı:** tek koşu, warm n=2, minik prompt. Ayrıca **çapraz-koşu cache bulaşması**
-  (persistent tur-1 read=37998, hemen önceki respawn koşusunun aynı statik prefix'i ısıtmasından) →
-  temiz cache kıyası için koşuları >5 dk (TTL) ayır veya prefix'i benzersizleştir.
+warm (2–6, n=5): **respawn** wall mean=6065 median=5839, cache_read mean=56762 · **persistent**
+wall mean=5710 median=5414, cache_read mean=63786.
 
-**Sonuç:** §0'daki *"claude-cli yolu zaten optimal (cache yerleşimi)"* tespiti doğrulandı; kalıcı
-süreç havuzunun katkısı **cache değil, warm-latency (~%30)**. Kalıcı havuzu varsayılan açmadan önce
-daha büyük N + TTL-ayrık koşularla tekrar ölçülmeli.
+**Düzeltilmiş bulgular:**
+- **Latency avantajı ~%32 DEĞİL, ~%6–7** (medyan 5414 vs 5839 ms). Sağlamlaştırma (N↑, benzersiz
+  prefix, medyan) ilk koşunun gürültüsünü ayıkladı — **hardening'in asıl değeri: yanlış sonucu düzeltti.**
+- **Cache_read'de persistent ~%12 yüksek** (63786 vs 56762) — kalıcı süreç in-memory tam transcript'i
+  tutup her tur daha büyük warm prefix okuyor.
+- İki modun da **tur-1 cache_read=37998** okuması → bizim (nonce'lu) prefix'imiz değil, **claude CLI'ın
+  kendi sabit preset'i** (global server-side cache) — gerçekçi, bulaşma değil.
+- Medyan < ortalama (persistent tur-4'te 7638 ms aykırı) → küçük N'de medyan daha dürüst.
+
+**Sonuç:** §0'daki *"claude-cli yolu zaten optimal (cache yerleşimi)"* doğrulandı. Kalıcı havuzun
+katkısı ölçülü: **warm-latency ~%6–7 + cache_read ~%12** — dramatik değil ama pozitif. Varsayılan
+açmadan önce çok-koşulu (repeat) + TTL-ayrık ölçümle teyit et. Test: `TestLiveCacheCompareModes`.
