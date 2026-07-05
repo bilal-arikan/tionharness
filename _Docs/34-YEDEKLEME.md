@@ -49,6 +49,9 @@ graph LR
 - Arşiv içinde yollar **göreli** tutulur (`store/a.json`, `config/instructions.md`…).
 - `zipDir` yalnız **düzenli dosyaları** alır; backups kökü (ve altı) özyinelemeyi
   önlemek için **dışlanır** (bir workspace verisi backups klasörünün üstündeyse bile).
+- **Credential dışlama:** `backupExcludeNames` = `{.credentials.json, .claude.json}` —
+  per-workspace `claude-home` altındaki claude-cli login/token dosyaları hiçbir yedek
+  zip'ine yazılmaz (arşiv makine dışına taşınabilir → sızıntı olmasın). Detay `51`.
 - İsim string olarak kronolojik sıralanır → budama (`prune`) en eski arşivleri siler,
   workspace başına en yeni `backupRetain` adedi kalır. Yalnız `<id>-*.zip` deseni
   budanır; klasördeki alakasız dosyalara dokunulmaz.

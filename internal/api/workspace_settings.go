@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
@@ -21,6 +22,14 @@ type workspaceSettingsDTO struct {
 	PauseAutonomy     bool   `json:"pauseAutonomy"`
 	DefaultWorkingDir string `json:"defaultWorkingDir"`
 	CreatedAt         int64  `json:"createdAt"`
+
+	// ClaudeHomeDir is THIS workspace's resolved claude-cli config home
+	// (<workspace>/claude-home), exported into the CLI subprocess as
+	// CLAUDE_CONFIG_DIR. Read-only/informational: it is derived from the workspace
+	// root, not user-editable. Surfaced so the Settings screen can show the real
+	// per-workspace path instead of the app-global fallback (which is identical for
+	// every workspace). Mirrors agent.workspaceClaudeHomeDir / EnsureWorkspaceClaudeHome.
+	ClaudeHomeDir string `json:"claudeHomeDir"`
 
 	// Per-workspace appearance overrides (empty = inherit global).
 	Theme       string `json:"theme"`
@@ -57,6 +66,10 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		PauseAutonomy:     s.PauseAutonomy,
 		DefaultWorkingDir: s.DefaultWorkingDir,
 		CreatedAt:         w.CreatedAt,
+
+		// <workspace>/claude-home — DataDir is the workspace root (see workspace
+		// manager: EnsureWorkspaceClaudeHome(dir) with the same join).
+		ClaudeHomeDir: filepath.Join(w.DataDir, "claude-home"),
 
 		Theme:       s.Theme,
 		Accent:      s.Accent,

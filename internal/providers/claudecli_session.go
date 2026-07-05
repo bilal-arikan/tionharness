@@ -152,23 +152,30 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 	args = append(args, c.permissionArgs(req)...)
 
 	sys, _ := c.buildSystemAndPrompt(req)
+	// Delivery mirrors the one-shot Complete path: inline by default, temp file when
+	// req.SysPromptFile is set (see claudecli.go). sysPath stays "" in inline mode so
+	// Close has nothing to remove.
 	var sysPath string
 	if sys != "" {
-		f, ferr := os.CreateTemp("", "tionswarm-sysprompt-persist-*.txt")
-		if ferr != nil {
-			return nil, fmt.Errorf("write system prompt file: %w", ferr)
+		if req.SysPromptFile {
+			f, ferr := os.CreateTemp("", "tionswarm-sysprompt-persist-*.txt")
+			if ferr != nil {
+				return nil, fmt.Errorf("write system prompt file: %w", ferr)
+			}
+			sysPath = f.Name()
+			if _, werr := f.WriteString(sys); werr != nil {
+				f.Close()
+				os.Remove(sysPath)
+				return nil, fmt.Errorf("write system prompt file: %w", werr)
+			}
+			if cerr := f.Close(); cerr != nil {
+				os.Remove(sysPath)
+				return nil, fmt.Errorf("write system prompt file: %w", cerr)
+			}
+			args = append(args, "--append-system-prompt-file", sysPath)
+		} else {
+			args = append(args, "--append-system-prompt", sys)
 		}
-		sysPath = f.Name()
-		if _, werr := f.WriteString(sys); werr != nil {
-			f.Close()
-			os.Remove(sysPath)
-			return nil, fmt.Errorf("write system prompt file: %w", werr)
-		}
-		if cerr := f.Close(); cerr != nil {
-			os.Remove(sysPath)
-			return nil, fmt.Errorf("write system prompt file: %w", cerr)
-		}
-		args = append(args, "--append-system-prompt-file", sysPath)
 	}
 	args = append(args, c.mcpArgs()...)
 

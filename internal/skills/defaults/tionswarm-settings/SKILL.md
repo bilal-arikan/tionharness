@@ -154,9 +154,16 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
   dynamic context rides in the message tail, not the cached system prefix).
 - `claudePersistentSession` — keep ONE long-lived claude-cli process alive per
   session and feed turns over stdin (stream-json input) instead of spawning a fresh
-  process each turn; warm turns ship only the new user message (default **false**,
-  experimental). Supersedes `claudeResume` when on. Retains context in-process and
-  can reuse the prompt cache, but is unvalidated at scale — leave off unless testing.
+  process each turn; warm turns ship only the new user message (default **true**).
+  Supersedes `claudeResume` when on (when both are on, only the persistent process is
+  used — the `--resume` delta path is disabled). Retains context in-process and reuses
+  the prompt cache.
+- `claudeSysPromptFile` — how the appended claude-cli system prompt is delivered
+  (default **false** = inline). Off: passed on the command line via
+  `--append-system-prompt <text>` — simplest, no temp file. On: written to a temp file
+  and passed via `--append-system-prompt-file <path>`, which sidesteps the Windows
+  ~32 KB command-line limit (errno 206) for very large system prompts. Turn on only if
+  a large prompt keeps the process from launching in inline mode.
 - `run_subagent` (isolated subagent workers, agent→agent delegation) is ALWAYS
   installed (the `enableDelegation` master toggle was removed 2026-07-02); enable/
   disable it per-agent from the Tools screen. `delegationMaxDepth` (1–10, default 3)

@@ -407,15 +407,26 @@ artık `predictedOverhead` alanı taşır → UI ilk turdan önce de uyarabilir.
   (saniye-hassas saat + bellek recall + özet) konuşma prompt'una `[Context]` bloğu
   olarak gider. Aksi halde dinamik her tur cache'lenen ~30K prefix'i bozar (turn 2
   soğuk → ölçülen sorun).
+- **Sistem promptu teslimi (`claudeSysPromptFile`, varsayılan kapalı = doğrudan):**
+  statik prompt claude-cli'ye iki yoldan verilebilir. **Doğrudan (varsayılan):**
+  `--append-system-prompt <metin>` komut satırı argümanı — basit, geçici dosya yok.
+  **Dosya:** `os.CreateTemp` → `--append-system-prompt-file <yol>`; yalnız kısa bir yol
+  komut satırında taşınır, böylece çok büyük promptlarda Windows'un ~32 KB komut satırı
+  limiti (errno 206 / `ERROR_FILENAME_EXCED_RANGE`) aşılmaz. Tercih `providers.Request.
+  SysPromptFile` ile taşınır (Tunables `ClaudeSysPromptFile` → `recordedComplete`); iki
+  yol da (tek-atış `Complete` + kalıcı `startPersistent`) aynı dalı kullanır. **Not:**
+  doğrudan mod, prompt ~32 KB'ı aşarsa süreci hiç başlatmadan çöktürebilir — o durumda
+  dosya modunu açın.
 - **`--resume` (Faz 2, varsayılan açık):** tek-ajan turunda `--resume <id>` + yalnız
   delta gönderilir; CLI server-side sıcak cache'ini yeniden kullanır. Canlı: turn 2
   `cache_read≈45K`, dinamikli turda `cache_read≈55K / cacheWrite≈61`.
 - **Deterministik statik prefix (Faz 3):** statik prompt aynı ajan için byte-aynı
   (kataloglar Name'e göre sort'lu) → cross-session reuse mümkün.
-- **Kalıcı süreç (Faz 4, opsiyonel/deneysel, `claudePersistentSession` default off):**
+- **Kalıcı süreç (Faz 4, `claudePersistentSession` varsayılan AÇIK):**
   session başına uzun-ömürlü `claude --input-format stream-json`; sıcak turda yalnız
   yeni kullanıcı mesajı gider. Context korur; cache TTL'e bağlı ısınır. Hata → tek-
-  atış fallback. `providers.CLISessionPool`, `Runtime.cliSessions`.
+  atış fallback. `providers.CLISessionPool`, `Runtime.cliSessions`. (2026-07-05:
+  canlı doğrulama sonrası deneysellikten çıkarıldı, varsayılan açık.)
 
 > **⚠️ `--resume` ⟂ Kalıcı süreç KARŞILIKLI DIŞLAYAN (chat_resume.go:29):**
 > `enabled := set.ClaudeResume && !set.ClaudePersistentSession && ...` →

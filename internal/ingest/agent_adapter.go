@@ -33,7 +33,7 @@ func mapCCModel(cc string) (provider, model, warn string) {
 	case strings.Contains(s, "opus"):
 		return "claude-cli", "claude-opus-4-8", ""
 	case strings.Contains(s, "sonnet"):
-		return "claude-cli", "claude-sonnet-4-6", ""
+		return "claude-cli", "claude-sonnet-5", ""
 	case strings.Contains(s, "haiku"):
 		return "claude-cli", "claude-haiku-4-5-20251001", ""
 	case strings.Contains(s, "fable"):

@@ -110,7 +110,7 @@ func (CreateAgentTool) Def() providers.ToolDef {
 		}`),
 		Examples: []json.RawMessage{
 			// anthropic provider needs an explicit model id.
-			json.RawMessage(`{"name":"Reviewer","provider":"anthropic","model":"claude-sonnet-4-6","soul":"You are a meticulous code reviewer; be terse."}`),
+			json.RawMessage(`{"name":"Reviewer","provider":"anthropic","model":"claude-sonnet-5","soul":"You are a meticulous code reviewer; be terse."}`),
 			// claude-cli provider is keyless and needs no model id.
 			json.RawMessage(`{"name":"Helper","provider":"claude-cli"}`),
 		},

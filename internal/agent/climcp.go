@@ -148,10 +148,11 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 			"AskUserQuestion",
 			"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet",
 			"ScheduleWakeup")
-		// Skill: the CLI's native skill tool only sees its own .claude/skills dirs,
-		// never TionSwarm's workspace skills — so a weak model reaching for it fails
-		// with "Unknown skill". The bridged use_skill (above) is the correct path,
-		// so suppress the native one to force it.
+		// Skill: the CLI's native skill tool only sees its own <CLAUDE_CONFIG_DIR>/skills
+		// dir, never TionSwarm's workspace tier (<workspace>/skills) or global tier
+		// (~/.tionswarm/skills) — so a weak model reaching for it fails with "Unknown
+		// skill". The bridged use_skill (above) is the single correct path (it serves
+		// both tiers), so suppress the native one to force it.
 		disallowed = append(disallowed, "Skill")
 		// Subagent launcher: the CLI's native delegation tool (older CLIs call it
 		// `Task`, newer ones `Agent`) spawns a child entirely inside the CLI process —

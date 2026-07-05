@@ -9,11 +9,23 @@ import (
 	"strings"
 )
 
+// backupExcludeNames are file basenames NEVER written into a workspace backup zip:
+// the claude-cli credential/login files that live under <workspace>/claude-home.
+// They hold the OAuth token / login and would otherwise leak into backup archives
+// that can be moved off-machine. The per-workspace copies stay on disk (auth keeps
+// working); they are simply omitted from backups. A restored workspace re-seeds these
+// on next open (from the global home) or relies on the injected auth env. See _Docs/51.
+var backupExcludeNames = map[string]bool{
+	".credentials.json": true, // claude-cli OAuth/API credential
+	".claude.json":      true, // claude-cli login/session state
+}
+
 // zipDir writes every regular file under srcDir into a zip archive at dstPath,
 // preserving the relative directory layout. Any path inside `skip` (the backups
 // root) is excluded so a workspace whose data dir is an ancestor of the backups
-// folder never archives its own backups recursively. Returns the archive size
-// in bytes.
+// folder never archives its own backups recursively. Files whose basename is in
+// backupExcludeNames (claude-cli credentials) are omitted so secrets never leak into
+// backup zips. Returns the archive size in bytes.
 func zipDir(srcDir, dstPath, skip string) (int64, error) {
 	out, err := os.Create(dstPath)
 	if err != nil {
@@ -45,6 +57,11 @@ func zipDir(srcDir, dstPath, skip string) (int64, error) {
 		}
 		// Only regular files; skip sockets/symlinks/etc. that can't be archived.
 		if !info.Mode().IsRegular() {
+			return nil
+		}
+		// Never archive claude-cli credential/login files — they must not leak into
+		// backup zips that can move off-machine.
+		if backupExcludeNames[info.Name()] {
 			return nil
 		}
 		rel, rerr := filepath.Rel(srcDir, path)

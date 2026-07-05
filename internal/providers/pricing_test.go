@@ -10,26 +10,26 @@ func approx(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 // TestCostDetailed_CacheTiers verifies fresh input, cache-read (cheap),
 // cache-write (premium) and output are each priced at the right multiplier.
 func TestCostDetailed_CacheTiers(t *testing.T) {
-	p, ok := PriceFor("anthropic", "claude-opus-4-8") // 15 in / 75 out per Mtok
+	p, ok := PriceFor("anthropic", "claude-opus-4-8") // 5 in / 25 out per Mtok
 	if !ok {
 		t.Fatal("opus price missing")
 	}
 
-	// 1M fresh input = $15; 1M output = $75.
-	if got := p.Cost(1_000_000, 1_000_000); !approx(got, 90) {
-		t.Errorf("plain cost = %v, want 90", got)
+	// 1M fresh input = $5; 1M output = $25.
+	if got := p.Cost(1_000_000, 1_000_000); !approx(got, 30) {
+		t.Errorf("plain cost = %v, want 30", got)
 	}
-	// 1M cache-read = 15 * 0.10 = $1.50.
-	if got := p.CostDetailed(0, 0, 1_000_000, 0); !approx(got, 1.5) {
-		t.Errorf("cache-read cost = %v, want 1.5", got)
+	// 1M cache-read = 5 * 0.10 = $0.50.
+	if got := p.CostDetailed(0, 0, 1_000_000, 0); !approx(got, 0.5) {
+		t.Errorf("cache-read cost = %v, want 0.5", got)
 	}
-	// 1M cache-write = 15 * 1.25 = $18.75.
-	if got := p.CostDetailed(0, 0, 0, 1_000_000); !approx(got, 18.75) {
-		t.Errorf("cache-write cost = %v, want 18.75", got)
+	// 1M cache-write = 5 * 1.25 = $6.25.
+	if got := p.CostDetailed(0, 0, 0, 1_000_000); !approx(got, 6.25) {
+		t.Errorf("cache-write cost = %v, want 6.25", got)
 	}
-	// Savings on 1M cache-read = 15 * 0.90 = $13.50.
-	if got := p.CacheSavings(1_000_000); !approx(got, 13.5) {
-		t.Errorf("savings = %v, want 13.5", got)
+	// Savings on 1M cache-read = 5 * 0.90 = $4.50.
+	if got := p.CacheSavings(1_000_000); !approx(got, 4.5) {
+		t.Errorf("savings = %v, want 4.5", got)
 	}
 }
 
@@ -67,6 +67,19 @@ func TestPriceFor_OpenRouter(t *testing.T) {
 	}
 	if _, ok := PriceFor("openrouter", "some/unlisted-model"); ok {
 		t.Error("unlisted openrouter model should be unpriced (ballpark screen)")
+	}
+}
+
+// TestPriceFor_Sonnet5 pins the Sonnet 5 list price on both the anthropic and
+// openrouter tables (standard $3/$15, Anthropic pass-through cache tier).
+func TestPriceFor_Sonnet5(t *testing.T) {
+	p, ok := PriceFor("anthropic", "claude-sonnet-5")
+	if !ok || p.InputPerMTok != 3 || p.OutputPerMTok != 15 {
+		t.Errorf("anthropic sonnet-5: ok=%v in=%v out=%v, want true/3/15", ok, p.InputPerMTok, p.OutputPerMTok)
+	}
+	q, ok := PriceFor("openrouter", "anthropic/claude-sonnet-5")
+	if !ok || q.InputPerMTok != 3 || q.OutputPerMTok != 15 || q.cacheReadMult() != 0.10 {
+		t.Errorf("openrouter sonnet-5: ok=%v in=%v out=%v read=%v, want true/3/15/0.10", ok, q.InputPerMTok, q.OutputPerMTok, q.cacheReadMult())
 	}
 }
 

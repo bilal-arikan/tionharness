@@ -29,9 +29,12 @@ export function CollapsibleListShell({ open, onToggle, children }: Props) {
       {open && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={onToggle} />}
       {/* Desktop: static column (always visible). Mobile: fixed left drawer that
           slides in/out with `open`. Solid surface + shadow so it never shows the
-          content/backdrop through it. */}
+          content/backdrop through it. The mobile drawer is `inset-y-0` (full
+          viewport height), so without a bottom inset its last rows (and any
+          sticky bottom bar) would hide behind the fixed MobileNavBar (z-50).
+          Reserve the same nav height `<main>` reserves so they stay clickable. */}
       <div
-        className={`relative flex shrink-0 bg-[var(--color-surface)] shadow-[var(--shadow-sm)] md:static md:translate-x-0 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-xl max-md:transition-transform ${
+        className={`relative flex shrink-0 bg-[var(--color-surface)] shadow-[var(--shadow-sm)] md:static md:translate-x-0 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))] max-md:shadow-xl max-md:transition-transform ${
           open ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
         }`}
       >

@@ -7,7 +7,7 @@ const openrouterBaseURL = "https://openrouter.ai/api/v1"
 
 // openrouterDefaultModel is applied when a request omits a model. A widely
 // available, capable default.
-const openrouterDefaultModel = "anthropic/claude-sonnet-4.6"
+const openrouterDefaultModel = "anthropic/claude-sonnet-5"
 
 // openrouterKind is the OpenRouter transport: a single OpenAI-compatible
 // endpoint that proxies hundreds of models from every major lab behind one key
@@ -34,7 +34,8 @@ func init() {
 				{ID: "anthropic/claude-opus-4.8", Label: "Claude Opus 4.8 — en yetenekli", Description: "Anthropic amiral; karmaşık akıl yürütme + ajan"},
 				{ID: "anthropic/claude-opus-4.8-fast", Label: "Claude Opus 4.8 (Fast)", Description: "Opus 4.8'in hızlı varyantı"},
 				{ID: "anthropic/claude-opus-4.7", Label: "Claude Opus 4.7", Description: "Önceki Opus nesli"},
-				{ID: "anthropic/claude-sonnet-4.6", Label: "Claude Sonnet 4.6 — dengeli", Description: "Güçlü ve hızlı; çoğu iş için iyi varsayılan"},
+				{ID: "anthropic/claude-sonnet-5", Label: "Claude Sonnet 5 — dengeli", Description: "En yeni Anthropic dengeli nesli; 1M bağlam, güçlü ajan/kodlama"},
+					{ID: "anthropic/claude-sonnet-4.6", Label: "Claude Sonnet 4.6 — önceki dengeli", Description: "Güçlü ve hızlı; önceki nesil dengeli model"},
 				{ID: "anthropic/claude-haiku-4.5", Label: "Claude Haiku 4.5 — hızlı/ucuz", Description: "Düşük gecikme, yüksek hacim"},
 				{ID: "openai/gpt-5.5", Label: "GPT-5.5", Description: "OpenAI amiral genel-amaçlı"},
 				{ID: "openai/gpt-5.5-pro", Label: "GPT-5.5 Pro", Description: "GPT-5.5'in en güçlü katmanı"},

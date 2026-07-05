@@ -31,7 +31,7 @@ const (
 const (
 	anthropicURL       = "https://api.anthropic.com/v1/messages"
 	anthropicVersion   = "2023-06-01"
-	DefaultModel       = "claude-sonnet-4-6"
+	DefaultModel       = "claude-sonnet-5"
 	defaultMaxTokens   = 4096
 	requestTimeoutSecs = 120
 )

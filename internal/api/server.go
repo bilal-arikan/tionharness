@@ -143,6 +143,7 @@ func (s *Server) applySettings() {
 	s.tun.SetCLIHooksEnabled(cur.EnableCLIHooks)
 	s.tun.SetCodeMode(cur.EnableCodeMode)
 	s.tun.SetClaudePersistentSession(cur.ClaudePersistentSession)
+	s.tun.SetClaudeSysPromptFile(cur.ClaudeSysPromptFile)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
 	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns)

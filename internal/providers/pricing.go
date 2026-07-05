@@ -73,7 +73,10 @@ func (p Price) CacheSavings(cacheReadTokens int) float64 {
 // reports them as unpriced so the UI shows "abonelik" instead of a fake cost.
 var priceTable = map[string]map[string]Price{
 	"anthropic": {
-		"claude-opus-4-8":           {InputPerMTok: 15, OutputPerMTok: 75},
+		"claude-opus-4-8":           {InputPerMTok: 5, OutputPerMTok: 25},
+		// Sonnet 5 standard list price ($3/$15). Introductory $2/$10 runs through
+		// 2026-08-31; the table tracks the standard rate as a stable ballpark.
+		"claude-sonnet-5":           {InputPerMTok: 3, OutputPerMTok: 15},
 		"claude-sonnet-4-6":         {InputPerMTok: 3, OutputPerMTok: 15},
 		"claude-haiku-4-5-20251001": {InputPerMTok: 1, OutputPerMTok: 5},
 		"claude-fable-5":            {InputPerMTok: 3, OutputPerMTok: 15},
@@ -92,7 +95,8 @@ var priceTable = map[string]map[string]Price{
 	// "openai/gpt-…": {InputPerMTok: …, OutputPerMTok: …, CacheReadMultOverride: 0.25}).
 	// Unlisted models fall through to unpriced (the screen is explicitly ballpark).
 	"openrouter": {
-		"anthropic/claude-opus-4.8":   {InputPerMTok: 15, OutputPerMTok: 75, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
+		"anthropic/claude-opus-4.8":   {InputPerMTok: 5, OutputPerMTok: 25, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
+		"anthropic/claude-sonnet-5":   {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-sonnet-4.6": {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-haiku-4.5":  {InputPerMTok: 1, OutputPerMTok: 5, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-fable-5":    {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},

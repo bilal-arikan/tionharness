@@ -112,6 +112,38 @@ func TestZipUnzipRoundTrip(t *testing.T) {
 	}
 }
 
+// TestZipExcludesClaudeCredentials verifies the claude-cli credential/login files
+// under <workspace>/claude-home are NEVER written into a backup zip (they hold the
+// OAuth token and must not leak into archives), while ordinary claude-home content
+// (skills/settings) is still archived. See _Docs/51.
+func TestZipExcludesClaudeCredentials(t *testing.T) {
+	src := t.TempDir()
+	writeFile(t, filepath.Join(src, "store", "a.json"), `{"x":1}`)
+	writeFile(t, filepath.Join(src, "claude-home", ".credentials.json"), `{"token":"SECRET"}`)
+	writeFile(t, filepath.Join(src, "claude-home", ".claude.json"), `{"login":"SECRET"}`)
+	writeFile(t, filepath.Join(src, "claude-home", "settings.json"), `{"ok":true}`)
+	writeFile(t, filepath.Join(src, "claude-home", "skills", "s", "SKILL.md"), "body")
+
+	archive := filepath.Join(t.TempDir(), "out.zip")
+	if _, err := zipDir(src, archive, filepath.Join(src, "backups")); err != nil {
+		t.Fatalf("zipDir: %v", err)
+	}
+	dst := t.TempDir()
+	if err := Unzip(archive, dst); err != nil {
+		t.Fatalf("Unzip: %v", err)
+	}
+	for _, rel := range []string{"claude-home/.credentials.json", "claude-home/.claude.json"} {
+		if _, err := os.Stat(filepath.Join(dst, filepath.FromSlash(rel))); !os.IsNotExist(err) {
+			t.Errorf("credential file %q leaked into backup (err=%v)", rel, err)
+		}
+	}
+	for _, rel := range []string{"store/a.json", "claude-home/settings.json", "claude-home/skills/s/SKILL.md"} {
+		if _, err := os.Stat(filepath.Join(dst, filepath.FromSlash(rel))); err != nil {
+			t.Errorf("expected %q archived, missing: %v", rel, err)
+		}
+	}
+}
+
 // TestUnzipRejectsZipSlip feeds Unzip a malicious archive whose entry escapes
 // the destination via "..". The zip-slip guard (archive.go) must reject it and
 // nothing may be written outside destDir. The existing tests only covered

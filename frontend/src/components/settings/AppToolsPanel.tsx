@@ -48,10 +48,16 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('claudeResume', v)}
       />
       <Toggle
-        label="claude-cli kalıcı süreç (deneysel)"
-        hint="Açıkken oturum başına TEK uzun-ömürlü claude süreci canlı tutulur ve turlar stdin'den beslenir (her tur yeni süreç açılmaz); sıcak turda yalnız yeni kullanıcı mesajı gider, süreç gerisini hatırlar. Açıkken --resume'un yerine geçer. Cache ısınması TTL'e bağlıdır. Deneysel — varsayılan kapalı; açmadan önce bir sohbette doğrulayın."
+        label="claude-cli kalıcı süreç"
+        hint="Varsayılan açık. Oturum başına TEK uzun-ömürlü claude süreci canlı tutulur ve turlar stdin'den beslenir (her tur yeni süreç açılmaz); sıcak turda yalnız yeni kullanıcı mesajı gider, süreç gerisini hatırlar. Açıkken --resume'un yerine geçer. Cache ısınması TTL'e bağlıdır."
         checked={draft.claudePersistentSession}
         onChange={(v) => set('claudePersistentSession', v)}
+      />
+      <Toggle
+        label="claude-cli sistem promptunu dosyayla ekle (--append-system-prompt-file)"
+        hint="Kapalı (varsayılan): sistem promptu doğrudan komut satırında --append-system-prompt <metin> ile geçer — daha basit, geçici dosya bırakmaz. Açık: geçici bir dosyaya yazılıp --append-system-prompt-file <yol> ile verilir. Dosya modu, çok büyük sistem promptlarında Windows'un ~32 KB komut satırı limitini (errno 206) aşmayı önler; prompt'unuz çok büyükse ve doğrudan modda süreç başlamıyorsa bunu açın."
+        checked={draft.claudeSysPromptFile}
+        onChange={(v) => set('claudeSysPromptFile', v)}
       />
       {draft.claudeResume && draft.claudePersistentSession && (
         <div className="rounded-lg border border-[var(--color-warning,#f59e0b)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">

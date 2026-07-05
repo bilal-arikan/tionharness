@@ -2,6 +2,99 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-05**
 
+## Claude Sonnet 5 desteği ✅ (2026-07-05)
+
+Yeni **Claude Sonnet 5** (`claude-sonnet-5`) modeli katalog + fiyat tablosuna eklendi.
+
+- **Katalog:** `kind_anthropic.go` (`claude-sonnet-5`) + `kind_openrouter.go`
+  (`anthropic/claude-sonnet-5`) manifestlerine "dengeli" etiketiyle eklendi; Sonnet 4.6
+  "önceki dengeli" olarak yeniden etiketlendi. Katalog context-window / max-output
+  değerleri aile tablosundan otomatik türer (`sonnet` substring → 1M bağlam, 32K çıktı,
+  0.45 adaptif oran) → `context_window.go`/`thinking.go` değişmedi.
+- **Fiyat:** `pricing.go` anthropic + openrouter haritalarına **$3/$15** (standart liste;
+  giriş fiyatı $2/$10, 31 Ağu 2026'ya kadar) eklendi. OpenRouter satırı Anthropic
+  pass-through cache tier'ı (0.10× okuma / 1.25× yazma) taşır.
+- **claude-cli:** ayrı işlem gerekmedi — `sonnet` alias'ı aboneliğin sunduğu güncel
+  Sonnet'i zaten çözer.
+- **Varsayılan model Sonnet 5'e taşındı:** `anthropic.go DefaultModel` ve
+  `kind_openrouter.go openrouterDefaultModel` → `claude-sonnet-5`
+  (`anthropic/claude-sonnet-5`). Ingest adapter `mapCCModel` `sonnet` ailesi →
+  `claude-sonnet-5` (CC subagent import'u); örnek snippet'ler (Reviewer ajanı,
+  settings patch örneği) da güncellendi.
+- **Fast varyantı EKLENMEDİ (bilinçli):** Fast mode yalnızca Opus sınıfına özgü;
+  Anthropic Sonnet 5 için Fast tarifesi yayınlamadı → uydurma model eklenmedi.
+- `go build ./...` ✅ · providers/ingest/billing/tools/api/settings **349 test geçti**
+  · yeni `TestPriceFor_Sonnet5` regresyon kilidi.
+
+## Per-workspace claude-cli config evi (birleşik config) ✅ (2026-07-05)
+
+claude-cli'nin config evi artık **per-workspace**: `<workspace>/claude-home` =
+`CLAUDE_CONFIG_DIR`. Böylece TionSwarm ve driver ettiği CLI **aynı skill/settings/
+login** setini kullanır. Detay `51-CLAUDE-CONFIG-BIRLESIK.md`.
+
+- **Faz 1:** `providers.ClaudeCLI.SetConfigDir` (turluk override) + `Runtime.claudeHomeDir()`;
+  `toolloop.go` choke point'te (`provider.(*providers.ClaudeCLI)` sonrası) her CLI turu
+  için set edilir. `agent.EnsureWorkspaceClaudeHome` workspace açılışında global
+  `~/.tionswarm/claude-home`'u per-workspace eve tohumlar (çalışma-anı dizinleri atlanır),
+  idempotent.
+- **Faz 2:** ~~`workspaceSkillsDir` → `<workspace>/claude-home/skills`~~ **GERİ ALINDI (2026-07-05)** —
+  skill'ler `<workspace>/skills`'te kalıyor; taşınmış skill'ler (WS1:4, WS8:14) geri alındı,
+  `claude-home/skills` silindi. claude-home skill içermez, yalnız login/settings.
+- **Faz 3:** ~~native `Skill` disallow kaldırıldı~~ **GERİ ALINDI (2026-07-05)** — native `Skill`
+  KAPALI kalıyor; tek skill yolu `use_skill` köprüsü (hem workspace hem global tier'ı sunar).
+- Sınırda bırakılan (bilinçli): MCP/hooks/izinler/agent'lar DB'de kalır, `--mcp-config`/
+  `--settings` ile enjekte edilmeye devam eder.
+- `go build ./...` ✅ · etkilenen 4 paket testi 241 passed.
+
+**Ek (UI + güvenlik):**
+- Settings → Sağlayıcılar → "claude config dizini" alanı **salt-okunur** yapıldı
+  (`ProvidersPanel.tsx endpoint2ReadOnly`; per-workspace türetiliyor, global yalnız
+  fallback). `tsc --noEmit` temiz.
+- **Yedek sızıntısı kapatıldı:** migration credential/login dosyalarını (`.claude.json`,
+  `.credentials.json`) her workspace'e kopyaladığından, workspace dizinini tümüyle
+  zip'leyen periyodik yedek bunları arşive sızdırabilirdi. `backup/archive.go`'ya
+  `backupExcludeNames` eklendi → bu dosyalar hiçbir yedek zip'ine yazılmaz (credential
+  diskte kalır, arşive girmez). Test `TestZipExcludesClaudeCredentials`. Mevcut zip'ler
+  (2026-06-25, migration öncesi) tarandı — sızıntı yok.
+
+## claude-cli kalıcı süreç varsayılan AÇIK + sistem-prompt teslim toggle'ı ✅ (2026-07-05)
+
+İki değişiklik:
+
+1. **`claudePersistentSession` deneysellikten çıkarıldı, varsayılan AÇIK.**
+   `settings.Default()` → `ClaudePersistentSession: true`. `--resume` ile karşılıklı
+   dışlar; ikisi de açıkken persistent süreç kazanır (tasarım gereği). Struct/DTO/UI
+   yorumlarından "experimental/deneysel" ibaresi kaldırıldı; UI toggle etiketi
+   "(deneysel)" → sade. Tunables/skill/17. dokümanı güncellendi.
+
+2. **Yeni ayar `claudeSysPromptFile` (varsayılan KAPALI = doğrudan).** claude-cli'ye
+   eklenen sistem promptunun nasıl verileceğini seçer:
+   - **Kapalı (varsayılan):** `--append-system-prompt <metin>` — komut satırında doğrudan, geçici dosya yok.
+   - **Açık:** temp dosya + `--append-system-prompt-file <yol>` — Windows ~32 KB komut satırı limitini (errno 206) aşan çok büyük promptlar için.
+
+   Plumbing: `settings` (struct+DTO+Patch+default) → `store.applyBool` → `api/server.go`
+   `SetClaudeSysPromptFile` → `agent.Tunables.cliSysPromptFile` (Set/Get) →
+   `recordedComplete` `req.SysPromptFile` → `providers.Request.SysPromptFile` →
+   `claudecli.go` (tek-atış) + `claudecli_session.go` (kalıcı) dallanır. Persistent
+   fingerprint'e eklenmedi (teslim yöntemi değişse de CLI'ye giden metin aynı — sıcak
+   süreç yeniden başlatma gerektirmez). Frontend `types/settings.ts` + `SettingsPanel`
+   patch + `AppToolsPanel` toggle.
+
+   ⚠️ **Not:** doğrudan mod, prompt ~32 KB'ı aşarsa süreci başlatmadan çöktürebilir —
+   o durumda dosya toggle'ını açın. (Bilinçli tercih: sessiz guard eklenmedi; hata
+   gerekiyorsa görünür versin.)
+
+   `go build`/`go vet`/285 test yeşil; `tsc --noEmit` temiz.
+
+## Fix: "claude-cli kalıcı süreç" toggle'ı kaydedilmiyordu 🐛 (2026-07-05)
+
+Ayarlar ekranındaki **claude-cli kalıcı süreç (deneysel)** toggle'ı açık kalmıyordu.
+Neden: `SettingsPanel.tsx` içindeki kaydetme (patch) yükü `claudeResume`'u gönderiyor
+ama `claudePersistentSession` alanını atlıyordu → toggle draft state'i değişiyor,
+kaydet'e basınca backend'e hiç ulaşmıyor, yeniden yüklemede eski (kapalı) değere dönüyordu.
+Düzeltme: patch objesine `claudePersistentSession: draft.claudePersistentSession` eklendi
+(backend `store.go`/`settings.go` alanı zaten kabul ediyordu). `tsc --noEmit` temiz.
+
 ## Claude Code cache paritesi: P2–P5 tamamlandı ✅ (2026-07-05)
 
 `_Docs\50-CLAUDE-CODE-CACHE-PARITE.md` planının kalan tüm iş paketleri uygulandı

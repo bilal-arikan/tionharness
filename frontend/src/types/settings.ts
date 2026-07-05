@@ -16,8 +16,10 @@ export interface AppSettings {
   defaultModel: string
   defaultPermissionMode: string
   claudeCliPath: string
-  // CLAUDE_CONFIG_DIR for claude-cli subprocesses. "" = inherit the shared
-  // ~/.claude; a path runs the CLI against an isolated, clean config home.
+  // CLAUDE_CONFIG_DIR for claude-cli subprocesses. Now a FALLBACK only: each turn
+  // is overridden to the per-workspace config home (<workspace>/claude-home) so the
+  // CLI shares skills/settings/login with its workspace (see _Docs/51). This global
+  // value is used solely when no workspace is derivable; shown read-only in the UI.
   claudeConfigDir: string
   // claude-cli credential injected into the subprocess env so an isolated config
   // dir authenticates without an interactive in-dir login. kind selects the env
@@ -104,6 +106,9 @@ export interface AppSettings {
   enableCodeMode: boolean
   claudeResume: boolean
   claudePersistentSession: boolean
+  // How the claude-cli appended system prompt is delivered: false (default) inline
+  // via --append-system-prompt, true via a temp file (--append-system-prompt-file).
+  claudeSysPromptFile: boolean
   // run_subagent is always installed; availability is per-tool from the Tools screen.
   // These remain as per-turn delegation guards.
   delegationMaxDepth: number

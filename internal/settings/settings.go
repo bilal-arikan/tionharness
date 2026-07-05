@@ -256,8 +256,15 @@ type Settings struct {
 	// ClaudePersistentSession keeps ONE long-lived claude-cli process alive per
 	// (session, agent) and feeds turns over stdin (stream-json input) instead of
 	// spawning a fresh process each turn — warm turns ship only the new user
-	// message. Supersedes --resume when on. Default off (experimental). _Docs/17.
+	// message. Supersedes --resume when on. Default on. _Docs/17.
 	ClaudePersistentSession bool `json:"claudePersistentSession"`
+	// ClaudeSysPromptFile controls HOW the appended system prompt is handed to the
+	// claude-cli subprocess: false (default) passes it inline via
+	// --append-system-prompt <text>; true writes it to a temp file and passes
+	// --append-system-prompt-file <path>. The file mode sidesteps the Windows ~32 KB
+	// command-line limit (errno 206) for very large system prompts; inline is simpler
+	// and leaves no temp file behind. _Docs/17.
+	ClaudeSysPromptFile bool `json:"claudeSysPromptFile"`
 	// run_subagent (isolated subagents / agent→agent delegation) is always installed;
 	// availability is managed per-tool from the Tools screen. These remain as
 	// per-turn safety guards on every delegation call.
@@ -401,6 +408,18 @@ func Default() Settings {
 		// keeps the cached prefix warm turn-to-turn. _Docs/17.
 		ClaudeResume: true,
 
+		// Persistent claude-cli process default ON: keeps ONE warm process per
+		// (session, agent) fed over stdin, so warm turns ship only the new message
+		// and the process holds the rest. Supersedes --resume when both are on.
+		// _Docs/17.
+		ClaudePersistentSession: true,
+
+		// System prompt handed to claude-cli INLINE by default (--append-system-prompt
+		// <text>). Flip ClaudeSysPromptFile on to route it through a temp file
+		// (--append-system-prompt-file) when a very large prompt would overflow the
+		// Windows command-line limit.
+		ClaudeSysPromptFile: false,
+
 		DelegationMaxDepth: 3,
 		DelegationMaxCalls: 8,
 
@@ -519,11 +538,14 @@ type DTO struct {
 	// (session, agent) and feeds turns over stdin (stream-json input) instead of
 	// spawning a fresh process each turn. The process holds the conversation
 	// in-memory so warm turns ship only the new user message — maximal prompt-cache
-	// reuse + no per-turn startup. Supersedes --resume when on. Default off
-	// (experimental; validate live before enabling). _Docs/17.
+	// reuse + no per-turn startup. Supersedes --resume when on. Default on. _Docs/17.
 	ClaudePersistentSession bool `json:"claudePersistentSession"`
-	DelegationMaxDepth      int  `json:"delegationMaxDepth"`
-	DelegationMaxCalls      int  `json:"delegationMaxCalls"`
+	// ClaudeSysPromptFile: false (default) hands the appended system prompt inline
+	// via --append-system-prompt; true routes it through a temp file
+	// (--append-system-prompt-file) to survive the Windows command-line limit. _Docs/17.
+	ClaudeSysPromptFile bool `json:"claudeSysPromptFile"`
+	DelegationMaxDepth  int  `json:"delegationMaxDepth"`
+	DelegationMaxCalls  int  `json:"delegationMaxCalls"`
 
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"`
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`
@@ -632,6 +654,7 @@ func (s Settings) ToDTO() DTO {
 		EnableCodeMode:          s.EnableCodeMode,
 		ClaudeResume:            s.ClaudeResume,
 		ClaudePersistentSession: s.ClaudePersistentSession,
+		ClaudeSysPromptFile:     s.ClaudeSysPromptFile,
 		DelegationMaxDepth:      s.DelegationMaxDepth,
 		DelegationMaxCalls:      s.DelegationMaxCalls,
 
@@ -743,6 +766,7 @@ type Patch struct {
 	EnableCodeMode          *bool `json:"enableCodeMode"`
 	ClaudeResume            *bool `json:"claudeResume"`
 	ClaudePersistentSession *bool `json:"claudePersistentSession"`
+	ClaudeSysPromptFile     *bool `json:"claudeSysPromptFile"`
 	DelegationMaxDepth      *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls      *int  `json:"delegationMaxCalls"`
 

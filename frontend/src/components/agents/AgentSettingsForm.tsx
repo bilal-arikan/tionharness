@@ -162,20 +162,16 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
 
       <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
         <Field label="Ad">
-          <input
-            data-testid="agent-name-input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
-          />
-        </Field>
-
-        <Field label="Görsel (emoji)">
-          <EmojiField
-            value={avatar}
-            onChange={setAvatar}
-            label={(v) => (v ? 'Emojiyi değiştir' : 'Emoji seç (varsayılan: baş harf)')}
-          />
+          <div className="flex items-center gap-2">
+            {/* Icon-only emoji picker sits to the left of the name input. */}
+            <EmojiField value={avatar} onChange={setAvatar} compact />
+            <input
+              data-testid="agent-name-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
+            />
+          </div>
         </Field>
 
         <Field label="Renk">

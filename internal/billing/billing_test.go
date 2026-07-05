@@ -13,18 +13,18 @@ func approxUSD(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 // through: real list price, equivalent-API estimate for subscription providers,
 // the no-spend short-circuit, and a fully unpriced/unknown model.
 func TestPriceStat(t *testing.T) {
-	// Real price (anthropic opus: 15 in / 75 out per Mtok), with a 1M cache read.
+	// Real price (anthropic opus: 5 in / 25 out per Mtok), with a 1M cache read.
 	cost, save, priced, est := PriceStat("anthropic", "claude-opus-4-8",
 		db.KindStat{InputTokens: 1_000_000, OutputTokens: 1_000_000, CacheReadTokens: 1_000_000})
 	if !priced || est {
 		t.Errorf("anthropic: priced=%v est=%v, want true/false", priced, est)
 	}
-	// 15 (input) + 75 (output) + 15*0.10 (cache read) = 91.5
-	if !approxUSD(cost, 91.5) {
-		t.Errorf("anthropic cost = %v, want 91.5", cost)
+	// 5 (input) + 25 (output) + 5*0.10 (cache read) = 30.5
+	if !approxUSD(cost, 30.5) {
+		t.Errorf("anthropic cost = %v, want 30.5", cost)
 	}
-	if !approxUSD(save, 13.5) { // 15 * 0.90 per 1M
-		t.Errorf("anthropic savings = %v, want 13.5", save)
+	if !approxUSD(save, 4.5) { // 5 * 0.90 per 1M
+		t.Errorf("anthropic savings = %v, want 4.5", save)
 	}
 
 	// Subscription provider (claude-cli) → unpriced but equivalent-API estimated.
@@ -58,7 +58,7 @@ func TestRollupOf(t *testing.T) {
 	roll := RollupOf(map[string]db.KindStat{
 		// Cheap haiku (1 in / 5 out): 1M+1M = 6 USD.
 		"anthropic|claude-haiku-4-5-20251001": {Calls: 1, InputTokens: 1_000_000, OutputTokens: 1_000_000},
-		// Pricey opus (15 in / 75 out): 1M+1M = 90 USD.
+		// Pricey opus (5 in / 25 out): 1M+1M = 30 USD.
 		"anthropic|claude-opus-4-8": {Calls: 1, InputTokens: 1_000_000, OutputTokens: 1_000_000, CacheReadTokens: 500_000},
 		// Unpriced/unknown model with real spend → flips Priced false.
 		"openrouter|some/unknown": {Calls: 1, InputTokens: 100, OutputTokens: 10},
@@ -67,13 +67,13 @@ func TestRollupOf(t *testing.T) {
 	if len(roll.Rows) != 3 {
 		t.Fatalf("rows = %d, want 3", len(roll.Rows))
 	}
-	// Costliest first: opus (90) > haiku (6) > unknown (0).
+	// Costliest first: opus (30) > haiku (6) > unknown (0).
 	if roll.Rows[0].Model != "claude-opus-4-8" || roll.Rows[2].Model != "some/unknown" {
 		t.Errorf("sort order wrong: %s ... %s", roll.Rows[0].Model, roll.Rows[2].Model)
 	}
-	// Aggregate cost = 90 + 6 + opus cache read (15 * 0.10 * 0.5M/1M = 0.75) = 96.75.
-	if !approxUSD(roll.CostUSD, 96.75) {
-		t.Errorf("total cost = %v, want 96.75", roll.CostUSD)
+	// Aggregate cost = 30 + 6 + opus cache read (5 * 0.10 * 0.5M/1M = 0.25) = 36.25.
+	if !approxUSD(roll.CostUSD, 36.25) {
+		t.Errorf("total cost = %v, want 36.25", roll.CostUSD)
 	}
 	if roll.CacheReadTokens != 500_000 {
 		t.Errorf("cacheRead = %d, want 500000", roll.CacheReadTokens)

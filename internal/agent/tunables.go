@@ -56,13 +56,14 @@ const (
 // shared (by pointer) with every Runtime and the API server, so a settings
 // change applies uniformly regardless of which workspace runtime reads it.
 type Tunables struct {
-	mu            sync.RWMutex
-	titleModel    string
-	shellEnabled  bool // gates the high-risk built-in `shell` tool (off by default)
-	cliHooks      bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
-	cliPersist    bool // keep a long-lived claude-cli process per session (off by default, experimental)
-	delegMaxDepth int  // 0 → DefaultMaxDelegationDepth
-	delegMaxCalls int  // 0 → DefaultMaxDelegationCalls
+	mu               sync.RWMutex
+	titleModel       string
+	shellEnabled     bool // gates the high-risk built-in `shell` tool (off by default)
+	cliHooks         bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
+	cliPersist       bool // keep a long-lived claude-cli process per session (on by default)
+	cliSysPromptFile bool // hand claude-cli system prompt via temp file vs inline (off by default = inline)
+	delegMaxDepth    int  // 0 → DefaultMaxDelegationDepth
+	delegMaxCalls    int  // 0 → DefaultMaxDelegationCalls
 
 	spawnMaxConcurrent int // 0 → DefaultSpawnMaxConcurrent
 	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
@@ -297,8 +298,8 @@ func (t *Tunables) CLIHooksEnabled() bool {
 }
 
 // SetClaudePersistentSession toggles keeping a long-lived claude-cli process per
-// (session, agent) so warm turns ship only the new user message. Off by default
-// (experimental). See providers.CLISessionPool / _Docs/17.
+// (session, agent) so warm turns ship only the new user message. On by default.
+// See providers.CLISessionPool / _Docs/17.
 func (t *Tunables) SetClaudePersistentSession(enabled bool) {
 	t.mu.Lock()
 	t.cliPersist = enabled
@@ -311,6 +312,23 @@ func (t *Tunables) ClaudePersistentSession() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.cliPersist
+}
+
+// SetClaudeSysPromptFile toggles routing the appended claude-cli system prompt
+// through a temp file (--append-system-prompt-file) instead of inline
+// (--append-system-prompt). Off by default (inline). See _Docs/17.
+func (t *Tunables) SetClaudeSysPromptFile(enabled bool) {
+	t.mu.Lock()
+	t.cliSysPromptFile = enabled
+	t.mu.Unlock()
+}
+
+// ClaudeSysPromptFile reports whether the claude-cli system prompt is handed to
+// the subprocess via a temp file (true) or inline (false, default).
+func (t *Tunables) ClaudeSysPromptFile() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.cliSysPromptFile
 }
 
 // SetDelegationLimits sets the per-turn delegation guards: max nesting depth and

@@ -358,6 +358,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyBool(&next.EnableCodeMode, p.EnableCodeMode)
 	applyBool(&next.ClaudeResume, p.ClaudeResume)
 	applyBool(&next.ClaudePersistentSession, p.ClaudePersistentSession)
+	applyBool(&next.ClaudeSysPromptFile, p.ClaudeSysPromptFile)
 	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
 	applyInt(&next.SpawnMaxConcurrent, p.SpawnMaxConcurrent)

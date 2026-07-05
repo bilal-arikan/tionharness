@@ -77,6 +77,19 @@ func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools, disallowedTool
 	c.settingsPath = settingsPath
 }
 
+// SetConfigDir overrides the CLAUDE_CONFIG_DIR this provider exports into its
+// subprocess, replacing the value baked in at construction. TionSwarm calls this
+// per turn so each workspace drives the CLI against its OWN config home
+// (<workspace>/claude-home) — sharing skills/settings/login with that workspace
+// instead of one global home. Empty is ignored so the constructed default (the
+// global claudeConfigDir setting) survives when no workspace is derivable.
+func (c *ClaudeCLI) SetConfigDir(dir string) {
+	if dir == "" {
+		return
+	}
+	c.configDir = dir
+}
+
 // Name implements Provider.
 func (c *ClaudeCLI) Name() string { return "claude-cli" }
 
@@ -288,29 +301,33 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	// plus the conversation prompt with the volatile dynamic context folded into the
 	// message tail. See buildSystemAndPrompt / _Docs/17.
 	sys, prompt := c.buildSystemAndPrompt(req)
-	// The system prompt is handed to the subprocess. Windows caps a process
-	// command line at ~32 KB (ERROR_FILENAME_EXCED_RANGE / errno 206), and a
-	// large system prompt (skills + core memory blocks + dynamic context) blows
-	// past that when passed as a plain --append-system-prompt argument. Write it
-	// to a temp file and pass --append-system-prompt-file so only a short path
-	// rides on the command line. The conversation prompt already goes via stdin
-	// for the same reason (see runAttempt). The temp file is removed once both
-	// retry attempts finish.
+	// The system prompt is handed to the subprocess one of two ways (req.SysPromptFile):
+	//   - inline (default): --append-system-prompt <text>. Simplest, no temp file.
+	//   - file: --append-system-prompt-file <path>. Windows caps a process command
+	//     line at ~32 KB (ERROR_FILENAME_EXCED_RANGE / errno 206), so a very large
+	//     system prompt (skills + core memory + dynamic context) can overflow it as
+	//     an inline argument; the file mode rides only a short path on the command
+	//     line. The conversation prompt already goes via stdin (see runAttempt). The
+	//     temp file is removed once both retry attempts finish.
 	if sys != "" {
-		f, ferr := os.CreateTemp("", "tionswarm-sysprompt-*.txt")
-		if ferr != nil {
-			return nil, fmt.Errorf("write system prompt file: %w", ferr)
+		if req.SysPromptFile {
+			f, ferr := os.CreateTemp("", "tionswarm-sysprompt-*.txt")
+			if ferr != nil {
+				return nil, fmt.Errorf("write system prompt file: %w", ferr)
+			}
+			sysPromptPath := f.Name()
+			defer os.Remove(sysPromptPath)
+			if _, werr := f.WriteString(sys); werr != nil {
+				f.Close()
+				return nil, fmt.Errorf("write system prompt file: %w", werr)
+			}
+			if cerr := f.Close(); cerr != nil {
+				return nil, fmt.Errorf("write system prompt file: %w", cerr)
+			}
+			args = append(args, "--append-system-prompt-file", sysPromptPath)
+		} else {
+			args = append(args, "--append-system-prompt", sys)
 		}
-		sysPromptPath := f.Name()
-		defer os.Remove(sysPromptPath)
-		if _, werr := f.WriteString(sys); werr != nil {
-			f.Close()
-			return nil, fmt.Errorf("write system prompt file: %w", werr)
-		}
-		if cerr := f.Close(); cerr != nil {
-			return nil, fmt.Errorf("write system prompt file: %w", cerr)
-		}
-		args = append(args, "--append-system-prompt-file", sysPromptPath)
 	}
 
 	args = append(args, c.mcpArgs()...)

@@ -191,6 +191,13 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// delegation path when external MCP is enabled OR an Interaction MCP endpoint
 	// is wired for this turn (so ask_user/todo_write work even with MCP off).
 	cli, isCLI := provider.(*providers.ClaudeCLI)
+	// Point the CLI at THIS workspace's config home (<workspace>/claude-home) so it
+	// reads the same skills/settings/login as the workspace instead of one global
+	// home. No-op when the workspace dir is unknown (keeps the provider's global
+	// default). This is the single per-turn seam every CLI turn passes through.
+	if isCLI {
+		cli.SetConfigDir(r.claudeHomeDir())
+	}
 	inter := tools.InteractionFrom(ctx)
 	// CLI turns that arrive without an Interaction endpoint — autonomous ones
 	// (scheduler/spawn/flow) AND the non-stream /api/chat path (only /api/chat/stream
@@ -657,6 +664,10 @@ func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []
 
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
 	req = r.withMaxOutput(agent.Provider, req)
+	// How claude-cli receives its appended system prompt (inline vs temp file). Set
+	// on every path (one-shot + persistent) since both flow through here. Ignored by
+	// non-CLI providers. See providers.ClaudeCLI / _Docs/17.
+	req.SysPromptFile = r.tun.ClaudeSysPromptFile()
 	// Persistent claude-cli session (opt-in): route the turn through the warm
 	// long-lived process keyed by SESSION + AGENT, so each agent in a multi-agent
 	// session keeps its OWN warm process (with its own system prompt) instead of

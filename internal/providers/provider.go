@@ -87,10 +87,10 @@ type Request struct {
 	// it becomes a cache READ turn-to-turn instead of being re-sent every turn.
 	// Empty when the session has no summary. Providers without caching fold it back
 	// into the system prompt (parity with the pre-P2 placement).
-	Summary  string
-	Messages []Message
-	MaxTokens     int
-	Tools         []ToolDef
+	Summary   string
+	Messages  []Message
+	MaxTokens int
+	Tools     []ToolDef
 	// ThinkingBudget, when > 0, requests extended reasoning with that many
 	// thinking tokens (providers that support it, e.g. anthropic). 0 = off.
 	ThinkingBudget int
@@ -114,6 +114,12 @@ type Request struct {
 	// HTTP providers ignore it. See Response.SessionID for the (rotated) id to store
 	// for the next turn.
 	ResumeSessionID string
+	// SysPromptFile, when true, tells a CLI provider (claude-cli) to hand the
+	// appended system prompt through a temp file (--append-system-prompt-file <path>)
+	// instead of inline (--append-system-prompt <text>, the default). File mode
+	// sidesteps the Windows ~32 KB command-line limit for very large prompts; inline
+	// leaves no temp file behind. HTTP providers ignore it.
+	SysPromptFile bool
 }
 
 // Usage reports token consumption. For providers with prompt caching, the cache

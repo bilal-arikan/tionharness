@@ -80,6 +80,10 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
   const [test, setTest] = useState<Record<string, ProviderTestResult | 'pending'>>({})
   // Workspace secret names, offered as an import source for the key fields.
   const [secrets, setSecrets] = useState<Secret[]>([])
+  // Active workspace's resolved claude-cli config home (<workspace>/claude-home),
+  // shown read-only in the Providers panel. Per-workspace, unlike the app-global
+  // claudeConfigDir fallback — fetched from the workspace-settings endpoint.
+  const [wsClaudeHome, setWsClaudeHome] = useState('')
 
   const [saving, setSaving] = useState(false)
 
@@ -93,6 +97,8 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
     api.getSettings().then((s) => { setDraft(s); setOriginal(s) }).catch((e) => onError((e as Error).message))
     api.getPrompts().then((p) => { setPrompts(p.prompts); setPromptsDir(p.dir) }).catch(() => {})
     api.listSecrets().then(setSecrets).catch(() => {})
+    // Active workspace's real claude-home path for the read-only Providers field.
+    api.getWorkspaceSettings().then((w) => setWsClaudeHome(w.claudeHomeDir)).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -152,6 +158,8 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       enableShell: draft.enableShell,
       enableCliHooks: draft.enableCliHooks, enableCodeMode: draft.enableCodeMode,
       claudeResume: draft.claudeResume,
+      claudePersistentSession: draft.claudePersistentSession,
+      claudeSysPromptFile: draft.claudeSysPromptFile,
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
       spawnMaxConcurrent: draft.spawnMaxConcurrent, spawnMaxPerTurn: draft.spawnMaxPerTurn,
       coordinatorMaxWorkers: draft.coordinatorMaxWorkers, coordinatorMaxTurns: draft.coordinatorMaxTurns,
@@ -288,6 +296,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
                   secrets={secrets}
                   onImportSecret={async (name) => (await api.revealSecret(name)).value}
                   onManageSecrets={() => setCat('secrets')}
+                  workspaceClaudeHome={wsClaudeHome}
                 />
               )}
               {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}

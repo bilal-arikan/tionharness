@@ -201,6 +201,12 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 
+	// Provision this workspace's per-workspace claude-cli config home
+	// (<workspace>/claude-home): seed it from the global home on first open and
+	// migrate any legacy <workspace>/skills into it. Must run BEFORE NewRuntime so
+	// the skill store scans the migrated (populated) tier. Idempotent.
+	agent.EnsureWorkspaceClaudeHome(dir)
+
 	storeDir := filepath.Join(dir, "store")
 	database, err := db.Open(storeDir)
 	if err != nil {

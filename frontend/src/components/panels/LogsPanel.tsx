@@ -27,16 +27,21 @@ const LEVEL_COLOR: Record<string, string> = {
   DEBUG: 'text-[var(--color-text-dim)]',
 }
 
-function fmtTime(ms: number): string {
-  const d = new Date(ms)
-  const p = (n: number, w = 2) => String(n).padStart(w, '0')
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`
-}
-
 function clockTime(ms: number): string {
   const d = new Date(ms)
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+// Milliseconds fragment (".123"), shown only when the panel is wide enough.
+function msPart(ms: number): string {
+  return String(new Date(ms).getMilliseconds()).padStart(3, '0')
+}
+
+// Full HH:MM:SS.mmm, used for the hover tooltip so precision stays reachable
+// even when the visible column drops milliseconds on a narrow panel.
+function fmtTime(ms: number): string {
+  return `${clockTime(ms)}.${msPart(ms)}`
 }
 
 // LogsPanel shows the application + all-workspace log stream from the backend
@@ -132,6 +137,13 @@ export function LogsPanel({ onError }: Props) {
               labelClassName="hidden sm:inline"
               title="Log klasörünü aç"
             />
+            <button
+              onClick={() => void load()}
+              className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
+              title="Logları yenile"
+            >
+              Yenile
+            </button>
           </>
         }
       />
@@ -166,17 +178,11 @@ export function LogsPanel({ onError }: Props) {
           <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
           Canlı
         </label>
-        <button
-          onClick={() => void load()}
-          className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
-        >
-          Yenile
-        </button>
       </div>
 
       {/* Log lines */}
       <div className="relative flex min-h-0 flex-1 flex-col">
-      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto p-3 font-mono text-xs leading-relaxed">
+      <div ref={scrollRef} onScroll={onScroll} className="@container flex-1 overflow-y-auto p-3 font-mono text-xs leading-relaxed">
         {rows.length === 0 && (
           <p className="text-[var(--color-text-dim)]">Kayıt yok.</p>
         )}
@@ -186,11 +192,20 @@ export function LogsPanel({ onError }: Props) {
             <div key={e.seq} className="flex gap-2 border-b border-[var(--color-border)]/30 py-0.5">
               <span
                 className="shrink-0 text-[var(--color-text-dim)]"
-                title={g.count > 1 ? `${clockTime(g.firstTime)} → ${clockTime(g.lastTime)}` : undefined}
+                title={g.count > 1 ? `${clockTime(g.firstTime)} → ${clockTime(g.lastTime)}` : fmtTime(e.time)}
               >
-                {fmtTime(e.time)}
+                {clockTime(e.time)}
+                {/* Milliseconds hidden on a narrow panel to save horizontal room. */}
+                <span className="hidden @sm:inline">.{msPart(e.time)}</span>
               </span>
-              <span className={`w-12 shrink-0 font-semibold ${LEVEL_COLOR[e.level] ?? ''}`}>{e.level}</span>
+              {/* Level: single-letter (I/W/E/D) when narrow, full label when wide. */}
+              <span
+                className={`w-3 shrink-0 font-semibold @sm:w-12 ${LEVEL_COLOR[e.level] ?? ''}`}
+                title={e.level}
+              >
+                <span className="@sm:hidden">{e.level.charAt(0)}</span>
+                <span className="hidden @sm:inline">{e.level}</span>
+              </span>
               {g.count > 1 && (
                 <span
                   className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 font-semibold text-[var(--color-accent)]"

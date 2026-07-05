@@ -336,12 +336,22 @@ func globalSkillsDir() string {
 
 // workspaceSkillsDir is this workspace's skills directory (<workspace>/skills),
 // a sibling of store/, config/ and workspace/. Empty when workDir is unknown.
+// This is the workspace skill tier for TionSwarm's use_skill bridge. It is
+// deliberately NOT the claude CLI's native skills dir (<CLAUDE_CONFIG_DIR>/skills):
+// the native Skill tool stays disabled (see climcp.go) so use_skill is the single
+// skill path serving both this tier and the global tier.
 func workspaceSkillsDir(workDir string) string {
 	if workDir == "" {
 		return ""
 	}
 	return filepath.Join(filepath.Dir(workDir), "skills")
 }
+
+// claudeHomeDir is this workspace's per-workspace claude-cli config home
+// (<workspace>/claude-home), exported into the CLI subprocess as CLAUDE_CONFIG_DIR
+// so each workspace drives the CLI against its own skills/settings/login. Empty
+// when workDir is unknown (the provider then keeps its global-default config dir).
+func (r *Runtime) claudeHomeDir() string { return workspaceClaudeHomeDir(r.workDir) }
 
 // Skills returns this runtime's skill store (never nil after construction).
 func (r *Runtime) Skills() *skills.Store { return r.skills }

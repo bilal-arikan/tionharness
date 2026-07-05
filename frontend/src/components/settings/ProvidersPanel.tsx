@@ -54,6 +54,11 @@ interface Props {
   secrets: Secret[]
   onImportSecret: (name: string) => Promise<string>
   onManageSecrets: () => void
+  // Active workspace's resolved claude-cli config home (<workspace>/claude-home),
+  // shown read-only in the claude config field. Empty falls back to the app-global
+  // claudeConfigDir. This is what actually differs per workspace — the global draft
+  // value is identical for all workspaces and was previously (wrongly) shown here.
+  workspaceClaudeHome?: string
 }
 
 // KeyPicker is the vault-only key selector (no free text): the key can only be
@@ -132,6 +137,7 @@ function BuiltinProvider({
   endpoint2Placeholder,
   onEndpoint2,
   endpoint2Hint,
+  endpoint2ReadOnly,
   extra,
   test,
   runTest,
@@ -159,6 +165,9 @@ function BuiltinProvider({
   endpoint2Placeholder?: string
   onEndpoint2?: (v: string) => void
   endpoint2Hint?: string
+  // When true the second field is display-only (used for claudeConfigDir, which is
+  // now a per-workspace-derived value and only a fallback — not user-editable).
+  endpoint2ReadOnly?: boolean
   // Optional extra controls (e.g. a "kimlik doğrula" button) rendered full-width
   // between the endpoint fields and the test footer.
   extra?: React.ReactNode
@@ -208,9 +217,10 @@ function BuiltinProvider({
           <span className="text-xs font-medium text-[var(--color-text-dim)]">{endpoint2Label}</span>
           <input
             value={endpoint2Value ?? ''}
-            onChange={(e) => onEndpoint2(e.target.value)}
+            onChange={(e) => { if (!endpoint2ReadOnly) onEndpoint2(e.target.value) }}
+            readOnly={endpoint2ReadOnly}
             placeholder={endpoint2Placeholder}
-            className={inputCls}
+            className={endpoint2ReadOnly ? `${inputCls} cursor-not-allowed opacity-60` : inputCls}
           />
           {endpoint2Hint && <span className="text-[10px] text-[var(--color-text-dim)]">{endpoint2Hint}</span>}
         </div>
@@ -484,6 +494,7 @@ export function ProvidersPanel({
   secrets,
   onImportSecret,
   onManageSecrets,
+  workspaceClaudeHome,
 }: Props) {
   const [authOpen, setAuthOpen] = useState(false)
   return (
@@ -542,11 +553,16 @@ export function ProvidersPanel({
             endpointValue={draft.claudeCliPath}
             endpointPlaceholder="otomatik (PATH)"
             onEndpoint={(v) => set('claudeCliPath', v)}
-            endpoint2Label="claude config dizini"
-            endpoint2Value={draft.claudeConfigDir}
-            endpoint2Placeholder="otomatik (~/.claude)"
+            endpoint2Label="claude config dizini (bu workspace · salt-okunur)"
+            endpoint2Value={workspaceClaudeHome || draft.claudeConfigDir}
+            endpoint2Placeholder="per-workspace: <workspace>/claude-home"
             onEndpoint2={(v) => set('claudeConfigDir', v)}
-            endpoint2Hint="Boş = ortak ~/.claude. Bir yol verince claude-cli o izole dizinden çalışır (temiz skill/ayar/login)."
+            endpoint2ReadOnly
+            endpoint2Hint={
+              workspaceClaudeHome
+                ? 'Aktif workspace\'in kendi CLAUDE_CONFIG_DIR yolu — skill/ayar/login bu workspace ile paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden türetilir).'
+                : 'Uygulama-geneli fallback (workspace çözülemedi). Normalde her workspace kendi <workspace>/claude-home dizinini kullanır; salt-okunur.'
+            }
             extra={
               <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2.5">
                 <div className="flex flex-wrap items-center gap-2">

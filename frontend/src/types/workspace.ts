@@ -37,6 +37,10 @@ export interface WorkspaceSettings {
   defaultModel: string
   pauseAutonomy: boolean
   defaultWorkingDir: string
+  // This workspace's resolved claude-cli config home (<workspace>/claude-home),
+  // used as CLAUDE_CONFIG_DIR. Read-only/derived (not in the patch); shown in the
+  // Providers settings instead of the app-global fallback.
+  claudeHomeDir: string
   // Per-workspace appearance overrides (empty = inherit the app-global appearance).
   theme: string
   accent: string

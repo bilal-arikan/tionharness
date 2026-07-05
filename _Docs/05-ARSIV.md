@@ -1384,7 +1384,7 @@ binary'e gömülü bundle rebuild gerektirir (şu an `ArtifactsPanel` WIP hatas�
   ByKind'in yanında ByModel'i de günceller. `RecordUsage(ctx, agent, model, usage)`
   (model boşsa `agent.Model`), compaction `recordCompaction` provider+model damgalı.
 - **Fiyat tablosu** `providers/pricing.go`: `Price{InputPerMTok, OutputPerMTok}` (USD),
-  `PriceFor(provider, model)`. anthropic (opus 15/75, sonnet 3/15, haiku 1/5, fable
+  `PriceFor(provider, model)`. anthropic (opus 5/25, sonnet 3/15, haiku 1/5, fable
   3/15) + minimax (M2.1 0.30/1.20, lightning 0.20/0.80, M2 0.30/1.20); `minimax-anthropic`
   minimax tablosunu paylaşır. **claude-cli kasıtlı yok** → abonelik (OAuth), token
   başına ücret yok; `PriceFor` `ok=false` döner → UI "abonelik / fiyatsız" gösterir.
