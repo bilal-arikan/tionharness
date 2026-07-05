@@ -245,7 +245,6 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `Bash` (CLI köprüsü, eski `shell`) | bloklamayan (komut çıktısı) | 2026-06-19 |
 | `spawn_session` (CLI köprüsü) | bloklamayan (fire-and-forget) | Faz 4 |
 | `run_subagent` (CLI köprüsü) | **bloklayan (cevabı bu turda döndürür)** | 2026-06-22 |
-| `core_memory_replace` / `core_memory_append` (CLI köprüsü) | bloklamayan (working-memory düzenler) | 2026-06-22 |
 | `conversation_search` (CLI köprüsü) | bloklamayan (geçmiş tam-metin arama) | 2026-06-22 |
 | `notify` (masaüstü bildirim) | bloklamayan | Faz 3 |
 | `focus_view` (UI navigasyon) | bloklamayan | Faz 3 |
@@ -797,7 +796,7 @@ da erteleniyordu → ilk turda `No such tool available`.
 
 | Anahtar | Path | `alwaysLoad` | İçerik |
 |---------|------|--------------|--------|
-| `tionswarm_interaction` (CORE) | `/mcp/interaction/core` | **true** | eager: `Bash`, `ask_user`, `request_confirmation`, `todo_write`, `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`, `core_memory_replace`/`append`, `permission_prompt` |
+| `tionswarm_interaction` (CORE) | `/mcp/interaction/core` | **true** | eager: `Bash`, `ask_user`, `request_confirmation`, `todo_write`, `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`, `permission_prompt` |
 | `tionswarm_extended` (EXTENDED) | `/mcp/interaction/extended` | yok | self-management suite + NameOnly: `notify`, `focus_view`, `set_session_goal`/`complete_goal`, `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`, `spawn_session`, `conversation_search`, `read_session_debug` |
 
 - `alwaysLoad: true` → CORE tool-search'ten muaf (her zaman inline). CLI process env'ine
@@ -809,7 +808,7 @@ da erteleniyordu → ilk turda `No such tool available`.
   extended. `bareToolName` her iki prefix'i de soyar; lazy katalog extended built-in'leri
   `extendedToolPrefix` ile namespace'ler (`toolsetup.go`), `trace.go` ikisini de soyar.
 - CORE anahtarı **eski `tionswarm_interaction` adını korur** → mevcut namespaced referanslar
-  (use_skill, core_memory, trace) bozulmaz; yalnız EXTENDED yeni prefix alır.
+  (use_skill, trace) bozulmaz; yalnız EXTENDED yeni prefix alır.
 - **Kapsam:** 2.1.x ve üzeri (sürüm guard yok). Test: `TestWriteCLIMCPConfigTwoTierInteraction`,
   `TestInteractionTierSplit`. Detay: `_Docs/19`.
 

@@ -148,4 +148,4 @@ oturum cold başlar. Uyumlu — özel bir iş gerektirmez.
 
 - `_Docs/17-TOKEN-OPTIMIZASYON.md` — in-place compaction (rolling-summary) + tool-output sıkıştırma; reset onun tamamlayıcısıdır.
 - `_Docs/22-SPAWN-SESSION.md` — reset'in motoru olan `SpawnSession`.
-- `_Docs/31-MEMGPT-CORE-MEMORY.md` — bağlam-basıncı uyarısı (reset'ten önceki ilk savunma hattı).
+- _(Önceki bağlam-basıncı uyarısı + MemGPT çekirdek bellek — `31-MEMGPT-CORE-MEMORY.md` — 2026-07-05'te memory alt sistemiyle birlikte kaldırıldı. Bağlam sınırına karşı savunma artık in-place compaction + handoff'tur.)_

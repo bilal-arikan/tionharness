@@ -84,7 +84,7 @@ backend (Pi/Claude/Electron adaptörü).
 **Workspace yönetimi:** `create_workspace`, `rename_workspace`, `delete_workspace`, `list_workspaces`
 **Secret vault:** `secret_set`, `secret_get`, `secret_list`, `secret_delete`
 **Ayarlar:** `get_settings`, `update_settings`
-**Bellek:** `memory_add`, `memory_recall`, `core_memory_append`, `core_memory_replace`
+_(**Bellek:** `memory_add`/`memory_recall`/`core_memory_*` — memory alt sistemiyle birlikte 2026-07-05'te KALDIRILDI.)_
 **Artifact:** `create_artifact`, `update_artifact`, `read_artifact`, `delete_artifact`, `list_artifacts`
 **Oturum kendi-yönetimi:** `set_session_goal`, `complete_goal`, `set_session_title`, `set_working_dir`, `archive_session`, `handoff_session`, `list_sessions`
 **Kullanıcı etkileşimi:** `ask_user`, `request_confirmation`, `notify`, `focus_view`, `todo_write`
@@ -112,7 +112,7 @@ Durum: `birebir` / `kısmi` / `TionSwarm'da yok`.
 | `source_slack_oauth_trigger` | — | TionSwarm'da yok | — |
 | `source_microsoft_oauth_trigger` | — | TionSwarm'da yok | — |
 | `source_credential_prompt` | `secret_set` (+ `ask_user`) | kısmi | Secret vault var ama "güvenli credential giriş UI'ı" yok; ajan secret'ı kendisi yazar. |
-| `update_user_preferences` | `core_memory_append`/`core_memory_replace` (label="human"), `memory_add` | kısmi | Kullanıcı hakkında kalıcı bilgi core memory'de tutulur; yapısal alanlar (timezone/city/country) yok. |
+| `update_user_preferences` | `update_user_preferences` (builtin) | kısmi | Yapısal tercih alanları var; önceki serbest-metin core-memory yolu (memory alt sistemi) 2026-07-05'te kaldırıldı. |
 | `transform_data` | `Bash`/`Shell` + `Write` | kısmi | İzole subprocess + yapısal çıktı sözleşmesi yok; aynı sonuç shell ile elde edilebilir. |
 | `script_sandbox` | `Bash` (sandbox'lı PowerShell shell) | kısmi | Sandbox'lı shell var; ağ-izolasyonlu satır-içi script tanılama aracı ayrı değil. |
 | `render_template` | — | TionSwarm'da yok | Mustache/HTML şablon render aracı yok. |
@@ -156,8 +156,6 @@ karşılığı yoktur (eksiklik değil, kapsam farkı):
 - **Tam CRUD aileleri:** ajan (`create/update/delete/list_agent`), flow (`create/.../run_flow`),
   task/kanban (`create/move/.../list_tasks`), schedule (`create/.../run_schedule`),
   hook (`create/delete/list_hooks`), MCP sunucu, workspace.
-- **Kalıcı bellek:** `core_memory_append/replace` (her turda bağlamda) + `memory_add/recall`
-  (uzun-dönem). Craft `update_user_preferences` ile yalnızca dar bir tercih kümesi tutar.
 - **Secret vault:** `secret_set/get/list/delete` — Craft'ta source-OAuth/credential-prompt modeli var.
 - **Artifact yönetimi:** `create/update/read/delete/list_artifact` — sürümlü içerik saklama.
 - **Gözlemlenebilirlik:** `read_logs`, `read_session_debug`, `conversation_search`.

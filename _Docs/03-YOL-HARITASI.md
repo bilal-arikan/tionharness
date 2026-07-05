@@ -78,7 +78,9 @@ graph LR
 - [~] **Görev dispatcher'ı:** pivot sonrası **kapsam dışı** — pano pasif olduğundan
   "ajan todo'yu otomatik koşar" akışı artık hedef değil. Otomasyon flow/schedule katmanında.
 
-## Faz 6 — Memory ✅
+## Faz 6 — Memory ✅ → **KALDIRILDI (2026-07-05)**
+> ⚠️ Memory alt sistemi (journal recall + core memory + hafıza grafiği + ilgili tool/API/UI/veri)
+> projeden **tamamen çıkarıldı**. Aşağısı tarihsel kayıttır; bu özellikler artık yoktur.
 - [x] `internal/memory`: doküman + journal + reflection
 - [x] Recall: **embedding yerine saf Go lexical cosine** (anahtarsız/çevrimdışı; embedding ileride takılabilir)
 - [x] Dream cycle (`Reflect`) — journal'ı provider'a özetletip reflection üret
@@ -102,7 +104,7 @@ graph LR
 - [x] `internal/mcp`: **SDK yerine elle JSON-RPC 2.0** istemci (mark3labs/mcp-go değil — bağımlılıksız felsefe)
 - [~] Transport: **yalnızca stdio**; SSE / HTTP → henüz yok (net "desteklenmiyor")
 - [x] Native tool-use protokolü (`providers` ToolDef/ToolCall/ToolResult + anthropic content-block + `agent/toolloop.go`) **ve** anahtarsız claude-cli MCP delegasyonu (`--mcp-config`)
-- [x] `internal/tools`: built-in (get_current_time/http_get/memory_recall) + MCP birleşik registry; ajan başına `mcp_enabled` + allowlist
+- [x] `internal/tools`: built-in (get_current_time/http_get) + MCP birleşik registry; ajan başına `mcp_enabled` + allowlist _(memory_recall sonradan KALDIRILDI 2026-07-05)_
 - [x] UI: "🔌 Araçlar" paneli (`ToolsPanel.tsx`) + "🔀 Akışlar"
 - **Çıktı:** Harici MCP sunucularına bağlanan, araç kullanan ajanlar. ✅
 
@@ -140,14 +142,14 @@ graph LR
 - [x] **E3** — Trace `StepKind` genişletme: `ask`/`todo`/`recovery`/`error`/`steer` + `tool_delta`/`tombstone` (akan shell üreticili) + **Ayarlar ▸ Adım Türleri** referans ekranı
 - [x] **Faz A1** — Artifact sistemi: sürümlü içerik (doküman/kod/HTML/SVG/Mermaid), `create/update_artifact` araçları, Artifactlar ekranı + sohbet kartı
 - [x] **İki-seviyeli araç yönetimi** — workspace-geneli aktivasyon (denylist `tools-config.json`) + ajan-bazlı seçim (allowlist); `WorkspaceToolCatalog`/`ActiveToolCatalog`/`ToolCatalog` + `GET/PUT /api/workspace-tools`
-- [x] **Talep-üzerine özetler** — "/" komut paleti: hafıza/görev panosu/akışlar (ucuz model) + araç listesi (deterministik); `Runtime.Summarize` + `POST /api/sessions/{id}/summary`
+- [x] **Talep-üzerine özetler** — "/" komut paleti: görev panosu/akışlar (ucuz model) + araç listesi (deterministik); `Runtime.Summarize` + `POST /api/sessions/{id}/summary` _(hafıza özeti KALDIRILDI 2026-07-05)_
 - [x] **D2** — Provider **retry middleware**: `transport.go` `doWithRetry` (üstel backoff + jitter, `Retry-After` saygılı, 429/5xx/529 + ağ hatası); `postJSON`/`postSSE` sarıldı (+ token streaming `Streamer`)
 - [x] **C1** — Sistem-prompt **cache sınırı**: `Request.System` (statik: persona+profil) / `Request.SystemDynamic` (dinamik: bellek+özet); Anthropic cache breakpoint yalnız statik blokta → araç+statik prefix cache'lenir, dinamik suffix cache'i bozmaz
 - [x] **Ara özellikler** — otonom olay akışı (`/api/events`), workspace switcher + çapraz-ws rozet, tıklanabilir bildirimler, sessions-only sidebar + okundu/okunmadı, tema presetleri
 - [x] **A1 (loop recovery)** — Agent loop **recovery + `continuationReason`**: saf karar katmanı (`agent/recovery.go`: `loopState`+`decideRecovery`), max-token resume (guard'lı + partial-stitch + withhold), reaktif compaction (`conversation/reactive.go`, assistant-sınır fold), minimax `length`→`max_tokens` map; `recovery_test.go`+`reactive_test.go`. **Kalan:** max-token escalation merdiveni (8k→64k) *(A3 iptal sentetiği ✅ 2026-06-19)*
 - [x] **Self-management genişlemesi** ✅ 2026-06-19 — öz-yönetim araç ailesine **hooks/MCP/secret/skill/settings** eklendi (`builtin_{hookmgmt,mcpmgmt,secretmgmt,skillmgmt,settings}.go`); provenance guard'ı (`created_by`); öğretici default skill `tionswarm-self-management` + ayar referansı `tionswarm-settings`. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
 - [x] **Ayarlar canlı-uygulama + validation** ✅ 2026-06-19 — `get_settings`/`update_settings` tool'ları + `settings.Validate` (enum reddi/clamp) + bridge wiring + `settings` SSE event'i ile çok-pencere senkronu. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
-- [x] **İlişki Grafiği** ✅ 2026-06-19 — Workspace Ağı (NavRail) + Hafıza Bilgi Grafiği (salt-okunur React Flow ağları, Fizik/Küme yerleşim). Bkz. `_Docs/23-ILISKI-GRAFIGI.md`
+- [x] **İlişki Grafiği** ✅ 2026-06-19 — Workspace Ağı (NavRail) salt-okunur React Flow ağı, Fizik/Küme yerleşim. Bkz. `_Docs/23-ILISKI-GRAFIGI.md` _(Hafıza Bilgi Grafiği KALDIRILDI 2026-07-05)_
 - [x] **CLI araç köprüsü (CLI-1/2/3)** ✅ 2026-06-19 — claude-cli ajanları Interaction MCP üzerinden: `use_skill` skill-gövde yükleme (CLI-1), advertise+allowlist tek-kaynak (`InteractionEndpoint.ToolNames`, CLI-2), lazy self-management ailesi köprüsü (`BridgeTools`/`Tools(token)`, CLI-3). Bkz. `_Docs/11-INTERACTION-MCP.md`. Kalan: claude-cli ile canlı uçtan-uca doğrulama.
 - [x] **Lazy araç yükleme** ✅ — Self-management + MCP araç şemaları tura girmez; sistem promptunda özet katalog yayımlanır, `tool_search` ile keşfedilir, `activate_tools`/`deactivate_tools` ile istenince tam şema aktive edilir (`internal/tools/activetools.go`, `builtin_activate.go`). Bkz. `_Docs/19-LAZY-TOOL-LOADING.md`.
 - [x] **Prefix'li insan-okunabilir ID'ler** ✅ — Workspace `WS<n>`, ajan `AGT<n>`, oturum `SES<n>` biçiminde monoton sayaç ID'leri; `internal/workspace/id.go` + `ws-counter.json` ile yeniden başlamada sayaç korunur; tek seferlik migrasyon: `cmd/migrate-ids/`.
@@ -163,6 +165,8 @@ graph LR
 - [x] **Faz P4** — Hooks (`PreToolUse`/`PostToolUse`, subprocess JSON I/O) ✅ 2026-06-18 — `internal/agent/hooks.go`, Ayarlar → Hooks; bkz. `_Docs/18-HOOKS.md`
 
 ### Bağlam, bellek, trace
+> ⚠️ **Bellek (C3/C5/C6) — KALDIRILDI (2026-07-05):** memory alt sistemi tamamen çıkarıldı;
+> aşağıdaki bellek maddeleri artık geçersiz tarihsel kayıttır. Bağlam maddeleri (compaction/handoff) geçerli.
 - [ ] **C5** — **Recency + importance ağırlıklı recall** (Generative Agents, Park et al. 2023): mevcut
   `memory.Recall` saf cosine (yalnız *relevance*). Üzerine iki sinyal eklenir →
   `score = α·relevance + β·recency + γ·importance`. **recency** = son erişimden bu yana üstel sönüm

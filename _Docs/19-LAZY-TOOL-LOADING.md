@@ -14,8 +14,7 @@
   azında kullanılan 8 araç da lazy'ye indirildi (`toolsetup.go`, açık `MarkLazy`):
   `read_config`/`write_config`/`list_config` (workspace prompt/instruction
   editing — nadir), `secret_list`/`secret_get` (yalnız kimlik-bilgili görevler),
-  `list_sessions` (context bloğu zaten push'lanıyor), `memory_recall` (recall
-  `ContextBlock` ile otomatik enjekte), `WebFetch` (çoğu tur dış istek yapmıyor).
+  `list_sessions` (context bloğu zaten push'lanıyor), `WebFetch` (çoğu tur dış istek yapmıyor).
   `MarkLazy` builtins'te olmayan ada **no-op** olduğundan gate'li araçlar (vault/
   config kapalı) için ek koruma gerekmez.
 - **Kalan eager çekirdek:** `Read`/`Write`/`Edit`/`LS`/
@@ -81,10 +80,7 @@
     katlandığından bu en büyük kalemdi.
   - `create_artifact` (`builtin_artifact.go`): açıklama kısaltıldı (image/binary
     yönergesi + base64-etmeyin uyarısı korundu).
-  - `core_memory_append`/`core_memory_replace` (`builtin_memory_core.go`): iki
-    araçta tekrar eden core-memory tanımı tek `coreMemoryDesc` const'una çıkarıldı;
-    her açıklama bu ortak cümleye + role özgü tek satıra indi. Core memory araçları
-    **lazy yapılmadı** (bağlam-basıncı anında gerekir → eager kalmalı).
+  - _(Core memory araçları — `core_memory_append`/`replace` — 2026-07-05'te memory alt sistemiyle birlikte KALDIRILDI.)_
   - Tahmini kazanç: ~1.3 KB ham metin / her eager tur ≈ **~300-350 token**.
     Build temiz, `go test ./internal/tools/...` 152 geçti; şema/örnek JSON
     geçerliliği doğrulandı. **Öneri (Strateji B, uygulanmadı):** `run_subagent` +
@@ -114,9 +110,9 @@
   - **`tionswarm_interaction`** (CORE, `alwaysLoad: true`) → eager tier
     (`coreInteractionTools`: `Bash`, `ask_user`, `request_confirmation`, `todo_write`,
     `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`,
-    `core_memory_replace`/`append`, `permission_prompt`). CLI tool-search'ten **muaf**
+    `permission_prompt`). CLI tool-search'ten **muaf**
     → ilk turda `ToolSearch` gerekmeden hazır. Eski anahtar adı korundu → mevcut
-    namespaced referanslar (`use_skill`, `core_memory`, trace stripping) bozulmaz.
+    namespaced referanslar (`use_skill`, trace stripping) bozulmaz.
   - **`tionswarm_extended`** (EXTENDED) → self-management suite + NameOnly oturum
     araçları (`notify`, `focus_view`, `set_session_goal`/`complete_goal`,
     `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`,
@@ -210,7 +206,7 @@
   - **Workspace config düzenleme** (önceden lazy+özet): `read_config`,
     `write_config`, `list_config`
   - **Secret kasası okuma** (önceden lazy+özet): `secret_list`, `secret_get`
-  - **Web + bellek** (önceden lazy+özet): `WebFetch`, `memory_recall`
+  - **Web** (önceden lazy+özet): `WebFetch`
   - **Doğrulama araçları (2026-06-29)**: `skill_validate`, `config_validate`,
     `mermaid_validate` — salt-okuma, yalnız authoring/diyagram anlarında kullanılır.
     Native builtin + NameOnly → lazy olduğundan claude-cli'da `tionswarm_extended`
@@ -218,7 +214,7 @@
 
   **Eager kalanlar** (davranışsal dürtü veya yüksek frekans): `todo_write`,
   `ask_user`, `request_confirmation`, `create_artifact`/`update_artifact`,
-  `core_memory_*`, `use_skill`/`skill_search`, `run_subagent`,
+  `use_skill`/`skill_search`, `run_subagent`,
   `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`, `Bash`. Self-management ailesi
   `MarkHidden` kalır (katalogdan tamamen düşer — name-only'den daha agresif).
   Etki (ölçüm, WS5/AGT1): eager 30→20 araç, eager şema **~5931→3857 token**
@@ -340,8 +336,8 @@ graph LR
 ### 1. Araç meta katmanı
 Her `Tool`/`ToolDef` için zaten `Name` + `Description` var. Eklenecek:
 - `Lazy bool` — araç "her zaman açık" mı yoksa "lazy" mı. (`providers.ToolDef.Lazy`, JSON serileşmez: `json:"-"`)
-- Çekirdek, sık kullanılan araçlar (Read, Write, memory_recall,
-  todo_write…) **eager** kalır — şemaları hep yüklü.
+- Çekirdek, sık kullanılan araçlar (Read, Write, todo_write…) **eager** kalır —
+  şemaları hep yüklü.
 - Geri kalan built-in'ler (self-management suite) ve **tüm MCP araçları** **lazy**
   olur.
 
@@ -439,3 +435,72 @@ Test: `TestBridgeableDefsFilteredSkipsHidden`.
 
 **Ölçülecek:** kapalı vs açık — CLI'ya giden şema baytı / prompt token farkı ve
 self-management araçlarına erişimin tur-ötesine kaymasının ajan davranışına etkisi.
+
+## Görünürlük tier'ının claude-cli teline HİZALANMASI (2026-07-05)
+
+> **Durum: UYGULANDI + gerçek claude-cli turlarıyla doğrulandı.** İzole backend
+> (`TIONSWARM_DATA_DIR` ayrı, port 8099) + 4 gerçek tur, çalışan `claude.exe`'nin
+> komut satırı (`--mcp-config` / `--allowedTools`) CIM ile yakalanarak ölçüldü.
+
+**Sorun (ampirik).** 4-tier görünürlük (`full/summary/name-only/hidden`) **native
+yolda** tam çalışıyordu (`ActiveDefs`: full→eager, gerisi→lazy), ama **claude-cli
+yolunda tier büyük ölçüde yok sayılıyordu**: core/extended ayrımı statik
+`coreInteractionTools` haritasına bağlıydı, `VisibilityOf()`'a değil. Ölçülen üç
+kırık:
+
+| Kırık | Önce (CLI teli) | Sebep |
+|---|---|---|
+| `full` ≠ eager | `update_session`/`notify` full → hâlâ EXTENDED (deferred) | statik harita full'ü core'a taşımıyor |
+| `hidden` yok sayılıyor | statik araç hidden → hâlâ CORE/EXTENDED ilan ediliyor | advertisement görünürlüğe bakmıyor |
+| `full` self-mgmt aracını **siliyor** | `create_agent` full → ABSENT | `BridgeableDefs` yalnız *lazy* araçları köprüler; full=non-lazy=köprülenmez |
+
+**Çözüm.** CLI core/extended ayrımı, TionSwarm'ın 4-tier modelini claude-cli'nın
+kendi **iki durumlu** modeline (alwaysLoad eager vs ToolSearch deferred) iz düşüren
+görünürlük-farkında bir sınıflandırıcıya (`api.cliTier`) bağlandı:
+
+- **full → core** (alwaysLoad/eager) — native "her tur şema" ile eşleşir.
+- **summary + name-only → extended** (deferred) — claude-cli bu ikisini zaten
+  ayıramaz; tek deferred duruma birleşir.
+- **hidden → hiçbir sunucuda ilan edilmez** — bir sonraki turda görünürlük
+  yükseltilirse re-allowlist olur (native `activate_tools`'un CLI muadili).
+- **Zorunlu-core istisnası:** `coreInteractionTools` üyeleri (permission_prompt,
+  bridged shell, ask_user/request_confirmation, artifact/skill/todo yolu) görünürlükten
+  bağımsız **daima core** — davranışsal/correctness primitifleri. Bunlar zaten
+  varsayılan `full` olduğundan hiçbir mevcut eager araç regresyona uğramaz.
+
+**Kod dokunuşları:**
+- `tools/registry.go` — kararlı `selfManaged` üyelik seti (`MarkSelfManaged`/
+  `IsSelfManaged`): görünürlük override'ı full'e çekip lazy bayrağını temizlese bile
+  self-mgmt aracının köprülenebilir kalmasını sağlar (#3 fix).
+- `tools/bridge_filter.go` — `BridgeableDefsFiltered` gate'i `lazy || selfManaged`
+  oldu; full'e çıkarılmış self-mgmt aracı da köprülenir (non-self-managed eager
+  built-in'ler hâlâ dışarıda).
+- `agent/toolsetup.go` — self-manage paketi `MarkSelfManaged` ile damgalanır;
+  yeni `Runtime.ToolVisibilityFunc(ctx, agent)` per-ajan `VisibilityOf` verir.
+- `api/mcp_interaction.go` — `cliTier(name, visOf)` sınıflandırıcı (core/extended/
+  **hidden**); `interactionTier` = `cliTier(_, nil)` (preview için statik fallback);
+  `splitInteractionTiers(..., visOf)` hidden'ı her iki tier'dan düşürür; `Tools()`
+  run'ın visOf'uyla aynı sınıflandırmayı yapar (tools/list ↔ allowlist tutarlı).
+- `api/chat_control.go` — `chatRun.tierVis` alanı + `setTierVis`/`tierVisFor`
+  (bridge ile lockstep kurulur).
+- `api/chat_stream.go` + `api/autonomous_interaction.go` — gerçek turda
+  `ToolVisibilityFunc` ile visOf hesaplanıp run'a kurulur ve split'e geçirilir.
+
+**Ampirik öncesi/sonrası** (aynı harness, gerçek `claude-fable-5` turları):
+
+| tool | tier | native | CLI önce | CLI sonra |
+|---|---|---|---|---|
+| update_session | full | EAGER | EXTENDED ❌ | **CORE** ✓ |
+| notify | full | EAGER | EXTENDED ❌ | **CORE** ✓ |
+| create_agent | full | EAGER | ABSENT ❌ | **CORE** ✓ |
+| update_session | hidden | LAZY | EXTENDED ❌ | **ABSENT** ✓ |
+| notify | hidden | LAZY | EXTENDED ❌ | **ABSENT** ✓ |
+| todo_write | hidden | LAZY | CORE | CORE (zorunlu-core, kasıtlı) |
+| create_agent | summary/name-only | LAZY | EXTENDED ✓ | EXTENDED ✓ |
+
+**Tasarım notu — neden 4 tier'ı 2'ye indirmedik.** `summary`/`name-only`/`hidden`
+native yolda gerçek token farkı yaratır (ad+özet vs yalnız-ad vs katalog-dışı), bu
+yüzden kaynak model 4 tier kalır. claude-cli inherently 2 durumludur → 4 tier CLI'da
+**iyi tanımlı bir projeksiyona** iz düşer. Tests: `api/clitier_test.go`
+(`TestCLITierProjectsVisibility`, `TestSplitInteractionTiersHonorsVisibility`),
+`tools/bridge_filter_test.go` (`TestBridgeableDefsIncludesFullSelfManaged`).

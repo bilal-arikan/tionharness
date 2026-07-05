@@ -23,7 +23,7 @@
 
 | Yetenek | Agent SDK | TionSwarm (bugün) | Boşluk |
 |---|---|---|---|
-| Built-in araçlar (file/bash/grep/glob/web) | Kutudan | `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`/`Bash`/`WebFetch` (claude-cli ile aynı isimler) + `memory_recall` | Kapandı (P2) |
+| Built-in araçlar (file/bash/grep/glob/web) | Kutudan | `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`/`Bash`/`WebFetch` (claude-cli ile aynı isimler) | Kapandı (P2) |
 | Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters` varsayılan 24, `TIONSWARM_MAX_TOOL_ITERS` ile override) + tur kurtarma (`recovery.go`: max-token resume + reaktif compaction, A1) | Yok |
 | Context yönetimi / compaction | Otomatik | `internal/conversation` (token-bütçeli) | Yok |
 | Prompt caching | İnce ayarlı | Yok (native HTTP) | Küçük |
@@ -85,8 +85,8 @@ graph TD
 
 ### Faz SM — Self-Management Araçları ✅ (2026-06-17)
 - [x] Ajanın **kendi runtime'ını yönetmesi**: `create/update/delete/list_agent`,
-  `…_flow`, `…_schedule`, `delete/list_artifact`, `memory_add`, `read_logs` (16 araç,
-  `internal/tools/builtin_*mgmt.go` + `builtin_memory_add.go` + `builtin_logs.go`).
+  `…_flow`, `…_schedule`, `delete/list_artifact`, `read_logs`
+  (`internal/tools/builtin_*mgmt.go` + `builtin_logs.go`). _(`memory_add` KALDIRILDI 2026-07-05.)_
 - [x] **Kanban panosu yönetimi (2026-06-18, COMMITSİZ):** `list_tasks`, `create_task`
   (açıklama; başlık otomatik), `update_task`, `move_task`, `delete_task`
   (`builtin_taskmgmt.go`, **5 araç** — pano pasif bir durum panosudur, **`run_task` YOK**:

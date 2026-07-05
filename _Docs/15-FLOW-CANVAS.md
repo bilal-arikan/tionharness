@@ -271,8 +271,9 @@ decide(branch)`; `decide` → `VERDICT: SHIP` ise `finalize(transform)`, `VERDIC
   (`VERDICT: SHIP|REFINE|PIVOT`) olarak kodlanır; `decide` `matchMode:regex` ile
   `(?m)^VERDICT:\s*SHIP` desenini son satıra demirler.
 - Döngüde `Outputs[id]` üzerine yazılır → skor **trend'i** graf state'inde tutulamaz →
-  evaluator trend'i `core:sprint-scorelog` çekirdek bellek bloğuna **append** eder ve oradan
-  okur. Sözleşme `core:sprint-contract` bloğunda yaşar.
+  evaluator trend'i kalıcı bir dosyaya/artifact'e yazar ve oradan okur. Sözleşme de aynı
+  şekilde bir dosyada yaşar. _(Önceki `core:sprint-scorelog`/`core:sprint-contract` çekirdek
+  bellek blokları, memory alt sistemiyle birlikte 2026-07-05'te kaldırıldı.)_
 - Loop sayacı branch'e açık değil → döngü evaluator SHIP dediğinde biter; `maxSteps=50`
   (~15 iterasyon) sert backstop.
 

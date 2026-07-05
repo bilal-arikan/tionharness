@@ -108,7 +108,7 @@ export interface WorkspaceTool {
   description: string
   source: 'builtin' | 'mcp'
   server: string
-  // Functional group key for built-ins (e.g. "files", "memory"); empty for MCP
+  // Functional group key for built-ins (e.g. "files", "search"); empty for MCP
   // tools, which group by server instead.
   category?: string
   enabled: boolean
