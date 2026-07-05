@@ -3,7 +3,6 @@ package e2e
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -236,7 +235,6 @@ func (h *harness) send(a db.Agent, sess db.Session, userText string) turnResult 
 	if err != nil {
 		h.t.Fatalf("persist assistant message: %v", err)
 	}
-	h.rt.Journal(ctx, a.ID, "Q: "+userText+"\nA: "+resp.Text)
 
 	return turnResult{resp: resp, steps: steps, streamed: streamed, reply: reply, prep: prep}
 }
@@ -292,28 +290,11 @@ func (h *harness) sendMulti(agents []db.Agent, sess db.Session, userText string)
 	return out
 }
 
-// composeDynamic mirrors the memory half of api/chat_turn.composeTurnRequest:
-// the agent's MemGPT-style core memory (re-injected verbatim every turn) followed
-// by similarity-recalled long-term memory for this turn's query.
+// composeDynamic previously mirrored the memory half of the per-turn dynamic
+// context. The memory subsystem was removed, so there is no per-turn dynamic
+// suffix to compose here; kept as a no-op so the turn drivers stay unchanged.
 func (h *harness) composeDynamic(ctx context.Context, a db.Agent, query string) string {
-	var parts []string
-	if blocks, err := h.rt.Memory().ReadCoreBlocks(ctx, a.ID); err == nil {
-		var b strings.Builder
-		for _, blk := range blocks {
-			content := strings.TrimSpace(blk.Content)
-			if content == "" {
-				continue
-			}
-			fmt.Fprintf(&b, "## %s\n%s\n", strings.Title(blk.Label), content)
-		}
-		if b.Len() > 0 {
-			parts = append(parts, strings.TrimSpace("# Core Memory\n"+b.String()))
-		}
-	}
-	if cb := h.rt.Memory().ContextBlock(ctx, a.ID, query, 5); cb != "" {
-		parts = append(parts, cb)
-	}
-	return strings.Join(parts, "\n\n")
+	return ""
 }
 
 // --- assertion helpers -------------------------------------------------------

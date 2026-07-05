@@ -4,7 +4,7 @@
 
 ## Amaç
 
-Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-ajan (multi-agent) AI çalışma ortamı (runtime)** ve **kontrol düzlemi (control plane)** inşa etmek. Birden fazla otonom AI ajanını yöneten, görev dağıtan, hafıza tutan ve zamanlanmış işler çalıştıran bir sistem.
+Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-ajan (multi-agent) AI çalışma ortamı (runtime)** ve **kontrol düzlemi (control plane)** inşa etmek. Birden fazla otonom AI ajanını yöneten, görev dağıtan ve zamanlanmış işler çalıştıran bir sistem.
 
 ## Neden Go?
 
@@ -28,10 +28,9 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 ## Temel Kavramlar
 
-- **Agent (Ajan):** Kalıcı kimlik, hafıza ve araç erişimi olan otonom AI varlığı. Bir LLM sağlayıcı/modeline bağlanır.
-- **Swarm (Sürü):** Delegasyon ve paylaşımlı hafıza ile işbirliği yapan ajan toplulukları.
+- **Agent (Ajan):** Kalıcı kimlik ve araç erişimi olan otonom AI varlığı. Bir LLM sağlayıcı/modeline bağlanır.
+- **Swarm (Sürü):** Delegasyon ile işbirliği yapan ajan toplulukları.
 - **Session (Oturum):** Mesaj geçmişini ve bağlamı koruyan konuşma dizisi.
-- **Memory (Hafıza):** Hibrit hatırlama — dokümanlar, günlük (journal), yansıtma (reflection) notları.
 - **Task (Görev):** Yürütme politikaları, retry mantığı ve bağımlılıkları olan pano-tabanlı iş kuyruğu.
 - **Provider (Sağlayıcı):** LLM uç noktası soyutlaması (5 kind: `anthropic`, `claude-cli`, `minimax`, `minimax-anthropic`, `openrouter`).
 
@@ -61,7 +60,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [20-SCHEDULE-WAKE.md](20-SCHEDULE-WAKE.md) | `schedule_wake`: ajanın kendi sohbetine geri dönmesi |
 | [21-MARKET.md](21-MARKET.md) | Uygulama içi market sistemi (marketplace) |
 | [22-SPAWN-SESSION.md](22-SPAWN-SESSION.md) | Spawn session (fire-and-forget paralel işçi) |
-| [23-ILISKI-GRAFIGI.md](23-ILISKI-GRAFIGI.md) | İlişki grafiği: workspace ağı + hafıza bilgi grafiği (vis-network) |
+| [23-ILISKI-GRAFIGI.md](23-ILISKI-GRAFIGI.md) | İlişki grafiği: workspace ağı (vis-network) |
 | [24-SELF-MANAGEMENT.md](24-SELF-MANAGEMENT.md) | Self-management + ayarlar alt sistemi |
 | [25-SUBAGENT-ISOLATION.md](25-SUBAGENT-ISOLATION.md) | Generic ajan yürütme çekirdeği + alt-ajan (subagent) izolasyonu |
 | [26-CALISMA-DIZINI.md](26-CALISMA-DIZINI.md) | Çalışma dizini (working directory) — oturum-başına cwd |
@@ -69,7 +68,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [28-PEER-MESAJLASMA-PLANI.md](28-PEER-MESAJLASMA-PLANI.md) | Ajanlar-arası peer mesajlaşma (send_message / mailbox) |
 | [29-BILDIRIM-SINYALLERI.md](29-BILDIRIM-SINYALLERI.md) | Generic bildirim sinyalleri (nav + workspace) |
 | [30-COKLU-PENCERE.md](30-COKLU-PENCERE.md) | Masaüstünde çoklu pencere (N süreç / N pencere) |
-| [31-MEMGPT-CORE-MEMORY.md](31-MEMGPT-CORE-MEMORY.md) | MemGPT/Letta tarzı self-editing çekirdek bellek |
+| [31-MEMGPT-CORE-MEMORY.md](31-MEMGPT-CORE-MEMORY.md) | ~~MemGPT/Letta tarzı self-editing çekirdek bellek~~ (**KALDIRILDI 2026-07-05** — memory alt sistemiyle birlikte çıkarıldı; tarihsel referans) |
 | [32-NATIVE-PENCERE.md](32-NATIVE-PENCERE.md) | Native masaüstü penceresi (WebView2, CGO'suz) |
 | [33-DIS-AJAN-OTOMASYONU.md](33-DIS-AJAN-OTOMASYONU.md) | TionSwarm'yu dışarıdan (API/UI) sürme dostluğu |
 | [34-YEDEKLEME.md](34-YEDEKLEME.md) | Workspace periyodik zip yedekleme + geri yükleme |
@@ -107,6 +106,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 ## Proje Durumu (2026-06-23)
 
-✅ **Faz 0–8 + kapsamlı backlog tamamlandı** ve Chrome'da canlı test edildi: İskelet · DB/Config · Provider+Chat (5 kind: anthropic/claude-cli/minimax/minimax-anthropic/openrouter) · React Web UI · Agent Runtime · Workspace İzolasyonu · Tasks+Schedules · Memory · Sağlamlaştırma (compaction + bütçe guardrail) · Tool-use+MCP · Orchestration (akışlar) · Lazy tool yükleme · Prefix'li insan-okunabilir ID'ler (WS/AGT/SES, `cmd/migrate-ids`) · İlişki grafiği · Self-management suite · Hooks · İzin modeli.
-✅ **Sonradan eklenenler (06-22 → 06-23):** native masaüstü penceresi (WebView2, CGO'suz) + çoklu pencere · oturum-başına çalışma dizini (cwd) · MemGPT/Letta tarzı self-editing çekirdek bellek · MCP kalıcı bağlantı havuzu · oturumlar-arası tam-metin arama · ajanlar-arası peer mesajlaşma · generic bildirim sinyalleri.
+✅ **Faz 0–8 + kapsamlı backlog tamamlandı** ve Chrome'da canlı test edildi: İskelet · DB/Config · Provider+Chat (5 kind: anthropic/claude-cli/minimax/minimax-anthropic/openrouter) · React Web UI · Agent Runtime · Workspace İzolasyonu · Tasks+Schedules · Sağlamlaştırma (compaction + bütçe guardrail) · Tool-use+MCP · Orchestration (akışlar) · Lazy tool yükleme · Prefix'li insan-okunabilir ID'ler (WS/AGT/SES, `cmd/migrate-ids`) · İlişki grafiği (workspace ağı) · Self-management suite · Hooks · İzin modeli.
+✅ **Sonradan eklenenler (06-22 → 06-23):** native masaüstü penceresi (WebView2, CGO'suz) + çoklu pencere · oturum-başına çalışma dizini (cwd) · MCP kalıcı bağlantı havuzu · oturumlar-arası tam-metin arama · ajanlar-arası peer mesajlaşma · generic bildirim sinyalleri.
+> **Not (2026-07-05):** Memory (hafıza) alt sistemi — journal recall + MemGPT/Letta tarzı core memory + hafıza grafiği + ilgili tool/API/UI/veri — projeden **tamamen kaldırıldı**. Detay: `05-ILERLEME.md`.
 ➡️ **Sıradaki (2026-07-03 akşam):** Code Execution with MCP — büyük-çıktılı senaryoyla A/B tekrarı + Faz 4 (claude-cli) / Faz 5 (trace + default aç) ([44](44-CODE-EXECUTION-MCP.md)) · araç backlog'u açık kalemler — `call_llm` (P1), `render_template`, `Monitor`, worktree araçları, credential UI, `NotebookEdit` + I1–I5 iyileştirmeleri (`get_session_info`+`update_user_preferences` ✅, labels/status ❌ kapsam dışı — 2026-07-03; [41](41-ARAC-BOSLUKLARI-YAPILACAKLAR.md)) · dış-ajan adaptörü olarak Codex (MCP delegasyonlu) · koordinatör LLM-in-the-loop görsel deneme (opsiyonel, [47](47-KOORDINATOR-COKLU-AJAN.md)). (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Detay: [05-ILERLEME.md](05-ILERLEME.md) · arşiv: [05-ARSIV.md](05-ARSIV.md).

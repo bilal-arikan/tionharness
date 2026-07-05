@@ -106,8 +106,8 @@ func (s *Server) installPackInto(r *http.Request, wsp *workspace.Workspace, pack
 		return s.installMCPPack(r, wsp, pack)
 	case market.KindWorkspace:
 		return s.installWorkspacePack(pack)
-	case market.KindMemory:
-		return s.installMemoryPack(r, wsp, pack, req.AgentID)
+	case market.KindHook:
+		return s.installHookPack(r, wsp, pack)
 	default:
 		return market.InstallResult{}, httpErr{http.StatusNotImplemented, "installing " + pack.Kind + " packs is not yet supported"}
 	}
@@ -201,51 +201,6 @@ func (s *Server) installWorkspacePack(pack market.Pack) (market.InstallResult, e
 	return market.InstallResult{
 		Kind: market.KindWorkspace, Ref: created.ID,
 		Message: "Workspace \"" + wp.Name + "\" oluşturuldu",
-	}, nil
-}
-
-// installMemoryPack seeds memory entries into a target agent (memory is per-agent).
-// agentID selects the target; an empty agentID falls back to the first agent. It
-// errors if no agent exists, or if a supplied agentID is unknown.
-func (s *Server) installMemoryPack(r *http.Request, wsp *workspace.Workspace, pack market.Pack, agentID string) (market.InstallResult, error) {
-	mp := pack.Payload.Memory
-	if mp == nil || len(mp.Entries) == 0 {
-		return market.InstallResult{}, httpErr{http.StatusBadRequest, "memory pack has no entries"}
-	}
-	agents, _ := wsp.DB.ListAgents(r.Context())
-	if len(agents) == 0 {
-		return market.InstallResult{}, httpErr{http.StatusBadRequest, "önce bir ajan oluştur (bellek girdileri ajana eklenir)"}
-	}
-	target := agents[0]
-	if agentID != "" {
-		found := false
-		for _, a := range agents {
-			if a.ID == agentID {
-				target = a
-				found = true
-				break
-			}
-		}
-		if !found {
-			return market.InstallResult{}, httpErr{http.StatusBadRequest, "seçili ajan bulunamadı"}
-		}
-	}
-	n := 0
-	for _, e := range mp.Entries {
-		if strings.TrimSpace(e.Content) == "" {
-			continue
-		}
-		kind := e.Kind
-		if kind == "" {
-			kind = db.MemoryDocument
-		}
-		if _, err := wsp.Runtime.Memory().Remember(r.Context(), target.ID, kind, e.Content); err == nil {
-			n++
-		}
-	}
-	return market.InstallResult{
-		Kind: market.KindMemory, Ref: target.ID,
-		Message: fmt.Sprintf("%d bellek girdisi \"%s\" ajanına eklendi", n, target.Name),
 	}, nil
 }
 

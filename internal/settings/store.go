@@ -271,23 +271,9 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 
 	applyInt(&next.MaxContextTokens, p.MaxContextTokens)
 	applyInt(&next.KeepRecentMsgs, p.KeepRecentMsgs)
-	applyInt(&next.RecallTopN, p.RecallTopN)
-	if p.RecallMinScore != nil {
-		next.RecallMinScore = *p.RecallMinScore
-	}
 	applyInt(&next.ContextBudgetCeil, p.ContextBudgetCeil)
 	if p.ContextBudgetFraction != nil {
 		next.ContextBudgetFraction = *p.ContextBudgetFraction
-	}
-	applyInt(&next.JournalCap, p.JournalCap)
-	applyInt(&next.JournalMaxLen, p.JournalMaxLen)
-	applyInt(&next.JournalMinLen, p.JournalMinLen)
-	applyInt(&next.ReflectionCap, p.ReflectionCap)
-	if p.MemoryPressureWarn != nil {
-		next.MemoryPressureWarn = *p.MemoryPressureWarn
-	}
-	if p.CoreMemoryTools != nil {
-		next.CoreMemoryTools = *p.CoreMemoryTools
 	}
 	if p.HandoffAuto != nil {
 		next.HandoffAuto = *p.HandoffAuto
@@ -319,13 +305,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.DebugJournalEnabled = *p.DebugJournalEnabled
 	}
 	applyInt(&next.DebugJournalCap, p.DebugJournalCap)
-	if p.AutoReflect != nil {
-		next.AutoReflect = *p.AutoReflect
-	}
-	applyInt(&next.AutoReflectThreshold, p.AutoReflectThreshold)
-	if p.AutoUserModel != nil {
-		next.AutoUserModel = *p.AutoUserModel
-	}
 
 	if p.ReactiveCompact != nil {
 		next.ReactiveCompact = *p.ReactiveCompact
@@ -475,15 +454,6 @@ func normalize(v Settings) Settings {
 	if v.KeepRecentMsgs < 1 {
 		v.KeepRecentMsgs = 1
 	}
-	if v.RecallTopN < 0 {
-		v.RecallTopN = 0
-	}
-	if v.RecallMinScore < 0 {
-		v.RecallMinScore = 0
-	}
-	if v.RecallMinScore > 1 {
-		v.RecallMinScore = 1
-	}
 	// Model-aware transcript budget. Ceil 0 → restore the default (a blank field
 	// must not disable big-window budgeting); clamp to a sane band. Fraction is a
 	// window share in [0,1]: 0 = "auto" (per-family adaptive, preserved), >0 = fixed.
@@ -501,41 +471,6 @@ func normalize(v Settings) Settings {
 	}
 	if v.ContextBudgetFraction > 1 {
 		v.ContextBudgetFraction = 1
-	}
-	// Journal bounds: keep at least a small buffer; clamp to sane ceilings.
-	if v.JournalCap < 1 {
-		v.JournalCap = 1
-	}
-	if v.JournalCap > 1000 {
-		v.JournalCap = 1000
-	}
-	if v.JournalMaxLen < 64 {
-		v.JournalMaxLen = 64
-	}
-	if v.JournalMaxLen > 65536 {
-		v.JournalMaxLen = 65536
-	}
-	// JournalMinLen is a write-side gate, not a buffer bound: 0 is valid (gate
-	// off). Clamp negatives to 0 and cap at the per-entry max so the gate can
-	// never reject everything.
-	if v.JournalMinLen < 0 {
-		v.JournalMinLen = 0
-	}
-	if v.JournalMinLen > v.JournalMaxLen {
-		v.JournalMinLen = v.JournalMaxLen
-	}
-	if v.ReflectionCap < 1 {
-		v.ReflectionCap = 1
-	}
-	if v.ReflectionCap > 1000 {
-		v.ReflectionCap = 1000
-	}
-	// Memory-pressure warning ratio: clamp to [0,1]; 0 disables the warning.
-	if v.MemoryPressureWarn < 0 {
-		v.MemoryPressureWarn = 0
-	}
-	if v.MemoryPressureWarn > 1 {
-		v.MemoryPressureWarn = 1
 	}
 	// Handoff pressure ratio: 0 selects the default; otherwise clamp to a sane band
 	// (well above the memory-pressure warning, below a full window).
@@ -555,13 +490,6 @@ func normalize(v Settings) Settings {
 		if v.HandoffMaxChain > 100 {
 			v.HandoffMaxChain = 100
 		}
-	}
-	// Auto-reflect threshold: at least 2 entries to summarize; cap at 1000.
-	if v.AutoReflectThreshold < 2 {
-		v.AutoReflectThreshold = 2
-	}
-	if v.AutoReflectThreshold > 1000 {
-		v.AutoReflectThreshold = 1000
 	}
 	// Turn recovery (A1): 0 resume attempts is valid (disables resume); clamp the
 	// ceiling. Compaction tail needs ≥2 to guarantee a safe fold boundary.

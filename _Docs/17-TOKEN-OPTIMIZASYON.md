@@ -69,7 +69,7 @@ orijinali verir).
   o yüzden ajanın sağlayıcısıyla uyumlu, ucuz bir model (ör. `claude-haiku-4-5`) verilmelidir.
   **Niyet** = tool adı + (varsa) input özeti (`intentInputRunes=300`).
   Sistem prompt: olguları (yol/kimlik/hata/sayı/sonuç) koru, uydurma yapma, sadece sonucu döndür.
-- Bütçeyi **gate'lemez** (autonomous=false) — titler/summary/reflect ile aynı politika; usage yine işlenir.
+- Bütçeyi **gate'lemez** (autonomous=false) — titler/summary ile aynı politika; usage yine işlenir.
 - **Tasarruf sayacı (2026-06-24):** özet başarılıysa `len(içerik)-len(özet)` bayt `db.AddLLMCompactionSavings`
   ile günlük rollup'a (`Usage.CompactSavedBytesLLM`, `compactSavedBytesLLM` JSON) yazılır — Sistem A ölçerinden
   **ayrı** (özet çağrısının kendi token maliyeti `UsageKindCompact` altında zaten kayıtlı; bu, brüt çıktı azaltımı).
@@ -283,19 +283,24 @@ büyür. Ayrıca Claude Code o davranışı **prompt-cache + fork**'la ucuzlatı
 oranı TionSwarm'da daha zayıf.
 
 **Kritik içgörü — dayanıklılık ≠ ham pencere boyutu.** Bir detayın kaybolmaması için 512K ham
-transkript *gerekmez*. TionSwarm'nun dayanıklılığı zaten **retrieval katmanında**: `memory_add` + lexical
-recall (uzun-dönem) · `core_memory_replace/append` (her tur enjekte working memory) · `conversation_search`
+transkript *gerekmez*. TionSwarm'nun dayanıklılığı zaten **retrieval katmanında**: `conversation_search`
 (`full=true`/`context=N` ile **birebir** kurtarma, §10) · post-compact kurtarma notu ("tahmin etme;
-ara ya da yeniden oku", §9) · `memoryPressureWarn` ("şimdi yaz" uyarısı). Katlanan detay **birebir geri
-alınabilir** → ham pencereyi küçültmek recall **kaybettirmez**, sadece dayanıklılığı "büyük pencere"den
+ara ya da yeniden oku", §9). Katlanan detay **birebir geri
+alınabilir** → ham pencereyi küçültmek retrieval'i **kaybettirmez**, sadece dayanıklılığı "büyük pencere"den
 "ucuz retrieval"a kaydırır ve `n²` rot yükünü azaltır.
+
+> **Not (2026-07-05):** Bu bölüm eskiden retrieval katmanının parçası olarak
+> `memory_add` + lexical recall ve `core_memory_replace/append` (her tur enjekte
+> working memory) mekanizmalarına da dayanıyordu. Memory alt sistemi kaldırıldığında
+> bunlar çıktı; dayanıklılık artık `conversation_search` + fs re-read + kalıcı
+> progress (`36-KALICI-ILERLEME.md`) ile sağlanır.
 
 ```mermaid
 graph LR
     A["Ham pencere ↑ (512K)"] --> B["n² ilişki ↑"]
     B --> C["recall hassasiyeti ↓ (context rot)"]
     A --> D["dayanıklılık (kaybolmama)"]
-    E["retrieval katmanı:<br/>memory · conv_search · core"] --> D
+    E["retrieval katmanı:<br/>conv_search · fs re-read · progress"] --> D
     E -.zaten var.-> F["ham pencere küçülse de<br/>detay birebir kurtarılır"]
     style C fill:#d66,stroke:#900,color:#fff
     style E fill:#2d6,stroke:#093
@@ -310,7 +315,7 @@ uçurum değil → ne aşırı büyük (rot) ne aşırı küçük (gereksiz sık
 |---|---|---|---|
 | `ContextBudgetCeil` | 512K | **256K** (`262144`) | `n²` yükü ~¼; gradyanın yüksek-hassasiyet bölgesi |
 | `ContextBudgetFraction` | 0.6 (sabit) | **0 = otomatik** → adaptif 0.35–0.45 | aile-bazlı rot toleransı |
-| `memoryPressureWarn` | 0.75 | **0.70** | "şimdi yaz" penceresini katlamadan önce öne al |
+| ~~`memoryPressureWarn`~~ | ~~0.75~~ | ~~**0.70**~~ | **KALDIRILDI (2026-07-05):** memory alt sistemiyle birlikte çıkarıldı |
 
 **Adaptif fraction (`providers.AdaptiveBudgetFraction`).** `ContextWindowFor`'un aile sınıflamasını
 yeniden kullanır → yeni model ailesi eklenince tek yerde güncellenir. Uzun-bağlam-güvenilir aileler
@@ -404,7 +409,7 @@ artık `predictedOverhead` alanı taşır → UI ilk turdan önce de uyarabilir.
 
 - **Stabil prefix (Faz 1):** `providers.ClaudeCLI.buildSystemAndPrompt` — `--append-
   system-prompt` yalnız statik `req.System` taşır; volatil `req.SystemDynamic`
-  (saniye-hassas saat + bellek recall + özet) konuşma prompt'una `[Context]` bloğu
+  (saniye-hassas saat + özet) konuşma prompt'una `[Context]` bloğu
   olarak gider. Aksi halde dinamik her tur cache'lenen ~30K prefix'i bozar (turn 2
   soğuk → ölçülen sorun).
 - **Sistem promptu teslimi (`claudeSysPromptFile`, varsayılan kapalı = doğrudan):**
@@ -433,7 +438,15 @@ artık `predictedOverhead` alanı taşır → UI ilk turdan önce de uyarabilir.
 > **`ClaudePersistentSession`, `ClaudeResume`'i EZER.** İkisi de açıksa `--resume`
 > delta yolu devre dışı kalır (persistent süreç konuşmayı kendi tutar, cold restart'ta
 > tam transcript ister → delta'ya kırpılmaz). İki ayrı sürerlik mekanizması aynı anda
-> çalışamaz; **birini seç.** UI'da ikisini birden açmak sessizce persistent'i seçer.
+> çalışamaz; **birini seç.**
+>
+> **UI (2026-07-05):** iki boolean artık tek bir 3'lü seçici olarak düzenlenir
+> (`AppToolsPanel` `Segmented` "claude-cli cache/oturum modu"): **Kalıcı süreç** /
+> **--resume (delta)** / **Kapalı**. Seçici aynı boolean'lara map'lenir (persistent →
+> `{persistent:true}`, resume → `{persistent:false, resume:true}`, off → ikisi de false),
+> böylece "ikisi de açık" belirsiz durumu UI'dan **artık erişilemez** (eski uyarı banner'ı
+> kaldırıldı). Not: **--resume (delta)**, External Agent'ın kullandığı modun ta kendisidir
+> (her tur respawn + `resume: sessionId`); kalıcı süreç TionSwarm'a özgüdür.
 
 ### Canlı ölçüm (2026-07-02) — resume vs persistent vs "hiçbiri"
 
@@ -463,31 +476,13 @@ gate saf fonksiyona çıkarıldı (`resumeGateEnabled`) + regresyon testi
 (`TestResumeGateEnabled`). Anlamlı metrik **cacheWrite** (cold-write pahalıdır); output
 turdan tura değiştiği için maliyeti tam normalize etme.
 
-## Dinamik bağlam (recall) gürültü kapısı
+## Dinamik bağlam (recall) gürültü kapısı — KALDIRILDI (2026-07-05)
 
-Stabil-prefix optimizasyonu (yukarısı) **statik** prefix'i cache'te tutar; ancak her turun
-**dinamik** bloğu (saat + bellek recall + özet) `[Context]` olarak konuşma prompt'una gider ve
-**cache-dışıdır** → her tur taze token. Bu bloğun "Relevant memory" kısmı önemsiz journal
-kayıtlarıyla kirlenirse (ör. `Q: 2+2 kaç eder? A: 4 eder.`) her tur gereksiz token + dikkat dağıtma
-maliyeti doğar. İki ayarlanabilir kapı bunu keser:
-
-| Ayar | Default | Etki |
-|------|---------|------|
-| `journalMinLen` | `40` rune (0 = kapalı) | **Yazma-tarafı:** içeriği bu uzunluktan kısa turlar hiç saklanmaz (`Journal()` boş-check'in yanında eler). Gürültü kaynakta kesilir; recall havuzuna hiç girmez. Muhafazakâr default — kısa ama anlamlı notlar korunur. |
-| `recallMinScore` | `0.04` (= eski sabit) | **Okuma-tarafı:** cosine benzerlik eşiği. Eskiden `memory.go`'da sert-kodlu `const minScore = 0.04` idi; artık `memory.Store` canlı provider'dan okur, runtime `Tunables.RecallMinScore`'a bağlar (restart'sız geçerli). Yükseltmek düşük-alâkalı recall'ı keser. |
-
-**Tasarım notları:**
-- `journalMinLen` için `0` **anlamlı** (kapı kapalı) — cap deseninden farklı olarak getter `0`'ı
-  default'a çevirmez. Clamp: `0 ≤ minLen ≤ journalMaxLen`. Test runtime'larında (`tun==nil`) kapı
-  kapalıdır.
-- `recallMinScore` ayarı settings/frontend'de zaten vardı ama **bağlı değildi** (ölü konfig,
-  default 0.05). Artık bağlandı ve default `0.04`'e çekildi — gerçekte yürürlükteki değer 0.04'tü, yani
-  geriye dönük uyum korunur.
-- Import döngüsü yok: `memory` paketi `agent`'ı import etmez; eşik bir `func() float64` provider ile
-  geçer (`Store.SetMinScoreProvider`, `runtime.go`'da `tun.RecallMinScore`'a bağlanır).
-
-Tunables: `SetJournalLimits(cap, maxLen, minLen)` / `JournalMinLen()` / `SetRecallMinScore` /
-`RecallMinScore()`. Settings alanları: `journalMinLen`, `recallMinScore`.
+> **KALDIRILDI (2026-07-05):** Bu bölüm memory alt sistemine ait recall/journal
+> enjeksiyonu ile `journalMinLen`/`recallMinScore` gürültü kapılarını anlatıyordu.
+> Memory alt sistemi (journal recall + core memory) projeden tamamen çıkarıldığında
+> bu ayarlar ve dinamik "Relevant memory" bloğu da kaldırıldı. Bölüm yalnız tarihsel
+> referans olarak korunur.
 
 ## Ayrıca Bakınız
 

@@ -63,6 +63,7 @@ var registry = []Adapter{
 	agentAdapter{},
 	commandAdapter{},
 	mcpAdapter{},
+	hookAdapter{},
 }
 
 // ScanResult is the full discovery across all adapters.

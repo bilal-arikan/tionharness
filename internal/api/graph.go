@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
 )
@@ -45,10 +44,9 @@ type workspaceGraph struct {
 }
 
 // registerGraphRoutes registers the relationship-graph endpoints: the
-// workspace-wide collaboration network and the per-agent memory knowledge graph.
+// workspace-wide collaboration network.
 func (s *Server) registerGraphRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/graph", s.handleWorkspaceGraph)
-	mux.HandleFunc("GET /api/agents/{id}/memory-graph", s.handleMemoryGraph)
 }
 
 // handleWorkspaceGraph returns the workspace collaboration network: agents,
@@ -294,35 +292,3 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleMemoryGraph returns an agent's memory knowledge graph: each memory is a
-// node and pairs with lexical-cosine similarity at/above ?threshold (default
-// 0.18) are linked, capped at ?max edges (default 400).
-func (s *Server) handleMemoryGraph(w http.ResponseWriter, r *http.Request) {
-	agentID := r.PathValue("id")
-
-	threshold := 0.18
-	if v := r.URL.Query().Get("threshold"); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			threshold = f
-		}
-	}
-	maxEdges := 400
-	if v := r.URL.Query().Get("max"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			maxEdges = n
-		}
-	}
-
-	if _, err := ws(r).DB.GetAgent(r.Context(), agentID); err != nil {
-		writeError(w, http.StatusNotFound, "agent not found")
-		return
-	}
-
-	// Store.Graph already returns non-nil node/edge slices, so the client always
-	// receives arrays.
-	graph, err := ws(r).Runtime.Memory().Graph(r.Context(), agentID, threshold, maxEdges)
-	if writeDBError(w, err, "") {
-		return
-	}
-	writeJSON(w, http.StatusOK, graph)
-}

@@ -49,7 +49,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 			return "", nil, fmt.Errorf("wake turn: prepare: %w", err)
 		}
 		// freshSession=false: a wake always continues an existing conversation.
-		req := s.composeTurnRequest(ctx, wsp, session, ag, []db.Agent{ag}, prompt, prep, false, multiAgent)
+		req := s.composeTurnRequest(ctx, wsp, session, ag, []db.Agent{ag}, prompt, prep, false, multiAgent, "")
 		// autonomous=true: a wake is a headless, budget-gated run (no live client);
 		// completeTraced auto-wires the Interaction MCP bridge for CLI agents. The
 		// session-step emitter streams this turn's activity to the bus so a window

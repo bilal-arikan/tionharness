@@ -217,14 +217,14 @@ func TestAgentTierIntersectsWorkspace(t *testing.T) {
 	}
 
 	// Agent allowlists both a disabled tool and an active one.
-	allow, _ := json.Marshal([]string{"WebFetch", "memory_recall"})
+	allow, _ := json.Marshal([]string{"WebFetch", "WebSearch"})
 	agent := db.Agent{ID: "a1", MCPEnabled: true, AllowedTools: string(allow)}
 
 	eff := rt.ToolCatalog(ctx, agent)
 	if hasTool(eff, "WebFetch") {
 		t.Fatal("workspace-disabled tool must not reach the agent even if allowlisted")
 	}
-	if !hasTool(eff, "memory_recall") {
+	if !hasTool(eff, "WebSearch") {
 		t.Fatal("allowlisted + active tool must be offered to the agent")
 	}
 	// A tool that is active but not in the allowlist is excluded.

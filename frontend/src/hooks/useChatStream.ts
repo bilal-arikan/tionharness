@@ -726,8 +726,8 @@ export function useChatStream(deps: ChatStreamDeps) {
     setQueuedItems((prev) => prev.filter((p) => p.id !== id))
   }, [])
 
-  // Run a "/" command that posts an assistant message: summary (memory/board/
-  // flows/tools), reflection or conversation compaction.
+  // Run a "/" command that posts an assistant message: summary (board/flows/
+  // tools) or conversation compaction.
   const summarize = useCallback(
     (kind: string) => {
       const sid = activeSessionId
@@ -736,7 +736,7 @@ export function useChatStream(deps: ChatStreamDeps) {
       const userTmp = `cmd-u-${Date.now()}`
       const botTmp = `cmd-a-${Date.now()}`
       const busyLabel =
-        kind === 'reflect' ? '⏳ Yansıma üretiliyor…' : kind === 'compact' ? '⏳ Sohbet sıkıştırılıyor…' : '⏳ Özetleniyor…'
+        kind === 'compact' ? '⏳ Sohbet sıkıştırılıyor…' : '⏳ Özetleniyor…'
       const cmdBubble: Message = { id: userTmp, sessionId: sid, role: 'user', text: '/' + kind, createdAt: now }
       const placeholder: Message = {
         id: botTmp,
@@ -883,11 +883,9 @@ export function useChatStream(deps: ChatStreamDeps) {
   // commands plus one entry per flow (🔀, takes the rest of the line as input).
   const chatCommands = useMemo<SlashCommand[]>(
     () => [
-      { name: 'reflect', icon: '✦', description: 'Ajana yansıma (dream cycle) ürettir', run: () => summarize('reflect') },
       { name: 'compact', icon: '🗜', description: 'Sohbeti şimdi özete sıkıştır', run: () => summarize('compact') },
       { name: 'handoff', icon: '↪', description: 'Context reset — temiz pencerede devam et', run: () => handoff() },
       { name: 'rewind', icon: '⟲', description: 'Sohbeti bir checkpoint\'e geri sar — mesajları geri al', run: () => openRewind() },
-      { name: 'memory', icon: '⛁', description: 'Hafıza kayıtlarını özetle', run: () => summarize('memory') },
       { name: 'tools', icon: '🔌', description: 'Kullanılabilir araçları listele', run: () => summarize('tools') },
       { name: 'board', icon: '🗂', description: 'Görev panosunu özetle', run: () => summarize('board') },
       { name: 'flows', icon: '🔀', description: 'Akışları özetle', run: () => summarize('flows') },

@@ -10,7 +10,6 @@ import {
   Plug,
   GitBranch,
   Boxes,
-  Database,
   Menu,
   Wrench,
   Server,
@@ -22,7 +21,7 @@ import {
   Timer,
   type LucideIcon,
 } from 'lucide-react'
-import type { Agent, Pack, PackKind, Secret, WorkspacePayload, WorkspaceTemplateFlow } from '../../types'
+import type { Pack, PackKind, Secret, WorkspacePayload, WorkspaceTemplateFlow } from '../../types'
 import { api } from '../../api'
 import type { PriceTable } from '../../api/providers'
 import type { PreviewItem } from '../../api/ingest'
@@ -74,7 +73,6 @@ const KIND_NAV: { key: PackKind; label: string; icon: LucideIcon }[] = [
   { key: 'provider', label: 'Providers', icon: Plug },
   { key: 'flow', label: 'Flows', icon: GitBranch },
   { key: 'workspace', label: 'Workspaces', icon: Boxes },
-  { key: 'memory', label: 'Memories', icon: Database },
   { key: 'mcp', label: 'Tools (MCP)', icon: Wrench },
 ]
 
@@ -84,7 +82,6 @@ const KIND_LABEL: Record<PackKind, string> = {
   provider: 'Sağlayıcı',
   flow: 'Akış',
   workspace: 'Workspace',
-  memory: 'Bellek',
   mcp: 'MCP',
 }
 
@@ -94,7 +91,6 @@ const INSTALL_LABEL: Record<PackKind, string> = {
   provider: 'Sağlayıcıyı ekle',
   flow: 'Akışı içe aktar',
   workspace: 'Workspace oluştur',
-  memory: 'Belleğe ekle',
   mcp: 'Sunucuyu ekle',
 }
 
@@ -268,23 +264,6 @@ function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }) {
         <Row k="URL" v={m.url} />
         <p className="pt-2 text-[11px] text-[var(--color-text-dim)]">
           Kurunca workspace'e bir MCP sunucusu eklenir; araçları sonraki turda görünür.
-        </p>
-      </div>
-    )
-  }
-  if (pack.kind === 'memory' && p?.memory) {
-    return (
-      <div className="space-y-2">
-        <p className="text-xs text-[var(--color-text-dim)]">{p.memory.entries.length} bellek girdisi:</p>
-        <ul className="space-y-1.5">
-          {p.memory.entries.map((e, i) => (
-            <li key={i} className="rounded bg-[var(--color-surface-2)] p-2 text-[11px] leading-relaxed">
-              {e.content}
-            </li>
-          ))}
-        </ul>
-        <p className="pt-1 text-[11px] text-[var(--color-text-dim)]">
-          Eklenince bu girdiler workspace'in ilk ajanının belleğine yazılır.
         </p>
       </div>
     )
@@ -599,8 +578,6 @@ function packTargetKey(pack: Pack): { set: keyof ExistingKeys; key: string } | n
       return { set: 'workspaces', key: pack.name.trim().toLowerCase() }
     case 'mcp':
       return { set: 'mcp', key: pack.name.trim().toLowerCase() }
-    case 'memory':
-      return null
   }
 }
 
@@ -625,10 +602,6 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   const [secrets, setSecrets] = useState<Secret[]>([])
   const [pickedSecret, setPickedSecret] = useState('')
   const [apiKey, setApiKey] = useState('')
-  // Target agent for a memory pack install (memory is per-agent). Defaults to the
-  // first agent; the user can pick another in the detail drawer.
-  const [agents, setAgents] = useState<Agent[]>([])
-  const [pickedAgent, setPickedAgent] = useState('')
   // Skill import dialog (moved here from the Skills screen).
   const [importing, setImporting] = useState(false)
   // Remote registry manager modal ("Kaynaklar").
@@ -673,7 +646,6 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         workspaces: new Set(workspaces.map((wsp) => wsp.name.trim().toLowerCase())),
         mcp: new Set(mcp.map((m) => m.name.trim().toLowerCase())),
       })
-      setAgents(agents) // keep the list for the memory-pack target picker
     } catch {
       // Non-fatal: without this snapshot, packs simply aren't pre-marked.
     }
@@ -686,11 +658,6 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
     void api.prices().then(setPrices).catch(() => {})
   }, [load, loadSecrets, loadExisting])
 
-  // Default the memory-pack target to the first agent whenever the selection or
-  // the agent list changes.
-  useEffect(() => {
-    if (selected?.kind === 'memory') setPickedAgent(agents[0]?.id ?? '')
-  }, [selected, agents])
 
   // Live directory-site (connector) search — skill tab only, debounced. The sites
   // hold thousands of skills, so results come from a search query, not a bulk list.
@@ -814,9 +781,8 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
           onInstalled?.('skill')
           return
         }
-        const body: { overwrite?: boolean; apiKey?: string; agentId?: string } = { overwrite }
+        const body: { overwrite?: boolean; apiKey?: string } = { overwrite }
         if (pack.kind === 'provider' && apiKey.trim()) body.apiKey = apiKey.trim()
-        if (pack.kind === 'memory' && pickedAgent) body.agentId = pickedAgent
         const res = await api.installPack(pack.id, body)
         setInstalled((prev) => new Set(prev).add(pack.id))
         onError(`✓ ${res.message}`)
@@ -829,7 +795,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         setBusy(false)
       }
     },
-    [onError, apiKey, pickedAgent, loadExisting, load, onInstalled],
+    [onError, apiKey, loadExisting, load, onInstalled],
   )
 
   return (
@@ -1109,40 +1075,15 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
                 </p>
               </div>
             )}
-            {selected.kind === 'memory' && (
-              <div className="mt-3">
-                <label className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Hedef ajan
-                </label>
-                <select
-                  data-testid="market-memory-agent"
-                  value={pickedAgent}
-                  onChange={(e) => setPickedAgent(e.target.value)}
-                  disabled={agents.length === 0}
-                  className="mt-1 w-full rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-xs"
-                >
-                  {agents.length === 0 && <option value="">Ajan yok — önce bir ajan oluştur</option>}
-                  {agents.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-                  Bellek girdileri seçili ajanın belleğine yazılır.
-                </p>
-              </div>
-            )}
             {(() => {
               const here = isInstalled(selected)
               const canUpdate = updateAvailable(selected)
               // Providers are id-keyed (Upsert) so re-installing just updates the
-              // config/key — allowed and labelled "Güncelle". memory seeds entries
-              // and is always re-runnable. A pack with a newer version than the one
-              // recorded in the ledger is always updatable (overwrite). Other kinds
-              // with identity are blocked once present to avoid duplicates.
-              const reRunnable = selected.kind === 'memory'
-              const blocked = here && selected.kind !== 'provider' && !reRunnable && !canUpdate
-              // A memory pack needs a target agent; block install when none exist.
-              const noAgentForMemory = selected.kind === 'memory' && agents.length === 0
+              // config/key — allowed and labelled "Güncelle". A pack with a newer
+              // version than the one recorded in the ledger is always updatable
+              // (overwrite). Other kinds with identity are blocked once present to
+              // avoid duplicates.
+              const blocked = here && selected.kind !== 'provider' && !canUpdate
               const label = canUpdate
                 ? `Güncelle (v${selected.installedVersion}→v${selected.version})`
                 : blocked
@@ -1154,7 +1095,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
                 <div data-testid="market-pack-install" data-pack-id={selected.id} className="contents">
                   <Button
                     onClick={() => void install(selected, canUpdate)}
-                    disabled={busy || blocked || noAgentForMemory}
+                    disabled={busy || blocked}
                     className="mt-3 flex w-full items-center justify-center gap-1.5"
                   >
                     {canUpdate ? <ArrowUpCircle size={13} /> : blocked ? <Check size={13} /> : <Download size={13} />} {label}

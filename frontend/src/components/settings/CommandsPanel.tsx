@@ -28,11 +28,9 @@ export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpen
             // Map a command to the built-in prompt behind it; /tools is
             // deterministic (no prompt).
             const p =
-              c.name === 'reflect'
-                ? prompts.find((x) => x.key === 'reflect')
-                : c.name === 'memory' || c.name === 'board' || c.name === 'flows'
-                  ? prompts.find((x) => x.key === 'summary')
-                  : undefined
+              c.name === 'board' || c.name === 'flows'
+                ? prompts.find((x) => x.key === 'summary')
+                : undefined
             const open = !!openCmds[c.name]
             return (
               <div key={c.name} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">

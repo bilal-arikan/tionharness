@@ -1,5 +1,7 @@
 # 31 — MemGPT/Letta Tarzı Self-Editing Bellek (Mod C uygulama planı)
 
+> **KALDIRILDI (2026-07-05):** Memory/core-memory alt sistemi projeden tamamen çıkarıldı. Bu doküman tarihsel referanstır.
+
 > **Durum (2026-06-23): Parça 1–5 + 4a + 4b UYGULANDI (TAMAMLANDI).** Çekirdek
 > bellek **adlandırılmış bloklar + karakter limiti** (Parça 5); `human` bloğu
 > dream-cycle ile **otomatik** doldurulur (Parça 4b/HA-1). Özet + `05-ILERLEME.md`.

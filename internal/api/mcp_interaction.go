@@ -53,8 +53,6 @@ var coreInteractionTools = map[string]bool{
 	"use_skill":            true,
 	"skill_search":         true,
 	"run_subagent":         true,
-	"core_memory_replace":  true,
-	"core_memory_append":   true,
 	"permission_prompt":    true,
 }
 

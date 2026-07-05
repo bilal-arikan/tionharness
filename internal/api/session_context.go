@@ -297,7 +297,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		Summary:  session.Summary,
 		Messages: historyToPreviewMessages(liveHistory),
 	}
-	req := s.composeTurnRequest(ctx, wsp, session, agent, []db.Agent{agent}, sample, prep, false, multiAgent)
+	req := s.composeTurnRequest(ctx, wsp, session, agent, []db.Agent{agent}, sample, prep, false, multiAgent, "")
 
 	// Shipped (eager) tool catalog — schemas actually sent each turn.
 	defs := wsp.Runtime.ShippedToolCatalog(ctx, agent)

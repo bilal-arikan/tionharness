@@ -75,7 +75,6 @@ export function toolCategory(t: WorkspaceTool): string {
 export const CATEGORY_LABELS: Record<string, string> = {
   files: 'Dosya & Kabuk',
   search: 'Arama & Web',
-  memory: 'Bellek',
   agents: 'Ajanlar & Oturumlar',
   automation: 'Otomasyon (Akış / Zamanlama / Görev)',
   interaction: 'Etkileşim',
@@ -91,7 +90,6 @@ export const CATEGORY_LABELS: Record<string, string> = {
 export const CATEGORY_ORDER: string[] = [
   'files',
   'search',
-  'memory',
   'agents',
   'automation',
   'interaction',

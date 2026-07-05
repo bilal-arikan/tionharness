@@ -120,11 +120,9 @@ type Settings struct {
 	UserCountry  string `json:"userCountry"`
 	UserNotes    string `json:"userNotes"`
 
-	// Context & memory.
-	MaxContextTokens int     `json:"maxContextTokens"`
-	KeepRecentMsgs   int     `json:"keepRecentMsgs"`
-	RecallTopN       int     `json:"recallTopN"`
-	RecallMinScore   float64 `json:"recallMinScore"`
+	// Context.
+	MaxContextTokens int `json:"maxContextTokens"`
+	KeepRecentMsgs   int `json:"keepRecentMsgs"`
 	// Model-aware transcript budget (see internal/conversation/budget.go). The live
 	// budget is clamp(window * ContextBudgetFraction, MaxContextTokens, ContextBudgetCeil)
 	// when the model's context window is known. ContextBudgetFraction = 0 means "auto"
@@ -134,24 +132,6 @@ type Settings struct {
 	// first silent compaction (trades recall precision for raw history, _Docs/17 §12).
 	ContextBudgetCeil     int     `json:"contextBudgetCeil"`
 	ContextBudgetFraction float64 `json:"contextBudgetFraction"`
-
-	// Journal (long-term memory) ring-buffer bounds.
-	JournalCap    int `json:"journalCap"`    // newest journal entries kept per agent (0 = default)
-	JournalMaxLen int `json:"journalMaxLen"` // max runes stored per journal entry (0 = default)
-	// JournalMinLen is the write-side low-info gate: a per-turn journal whose
-	// content is shorter than this many runes is dropped instead of stored, so
-	// trivial exchanges (a one-word/one-number answer) never enter the recall
-	// pool and waste fresh tokens in the uncached dynamic context every turn.
-	// 0 disables the gate (every non-empty turn is journaled).
-	JournalMinLen int `json:"journalMinLen"`
-	ReflectionCap int `json:"reflectionCap"` // newest reflections kept per agent; older pruned each dream cycle (0 = default)
-
-	// MemGPT-style self-editing memory (C6). MemoryPressureWarn is the context-fill
-	// ratio (0..1) above which a turn warns the agent to persist important facts
-	// before the next silent compaction; 0 disables the warning. CoreMemoryTools
-	// offers the core_memory_replace/append editing tools.
-	MemoryPressureWarn float64 `json:"memoryPressureWarn"`
-	CoreMemoryTools    bool    `json:"coreMemoryTools"`
 
 	// Context reset / handoff (Anthropic "harness design"). When HandoffAuto is on,
 	// an autonomous turn that hits the context limit writes a handoff artifact and
@@ -202,14 +182,6 @@ type Settings struct {
 	// (0 = default).
 	DebugJournalEnabled bool `json:"debugJournalEnabled"`
 	DebugJournalCap     int  `json:"debugJournalCap"`
-
-	// Auto-reflect (dream cycle): consolidate journals into a reflection once the
-	// journal count crosses AutoReflectThreshold.
-	AutoReflect          bool `json:"autoReflect"`
-	AutoReflectThreshold int  `json:"autoReflectThreshold"`
-	// AutoUserModel (HA-1): during the dream cycle, refresh the agent's "human"
-	// core block from the journal so it learns durable facts about the user.
-	AutoUserModel bool `json:"autoUserModel"`
 
 	// Turn recovery (A1): structural handling of output-token cutoffs and context
 	// overflow inside the native agentic tool loop.
@@ -313,33 +285,12 @@ func Default() Settings {
 
 		MaxContextTokens: 12000,
 		KeepRecentMsgs:   8,
-		RecallTopN:       5,
-		// Recall cosine floor. 0.04 matches the historically hard-coded
-		// memory.DefaultMinScore (the value actually in effect before this knob was
-		// wired), so the default preserves existing recall behaviour. Raise it to
-		// cut low-relevance recall noise from the dynamic context.
-		RecallMinScore: 0.04,
 		// Context-rot-aware default (2026-06-25, _Docs/17 §12): ceil 256K keeps the
 		// live window in the gradient's high-precision zone; fraction 0 = "auto"
 		// (per-family adaptive). Durability of folded detail comes from retrieval
 		// (memory / conversation_search / core blocks), not from a huge raw window.
 		ContextBudgetCeil:     262144,
 		ContextBudgetFraction: 0,
-
-		JournalCap:    50,
-		JournalMaxLen: 1024,
-		// Drop trivial per-turn journals (e.g. "Q: 2+2? A: 4") shorter than 40
-		// runes so they never pollute recall. Conservative on purpose — a short but
-		// substantive note survives; raise it to filter more aggressively, set 0 to
-		// disable the gate entirely.
-		JournalMinLen: 40,
-		ReflectionCap: 20,
-
-		// MemGPT memory: warn at 70% context fill, offer the core editing tools. Lowered
-		// 0.75→0.70 (2026-06-25) to bring the "persist now" window earlier — pairs with
-		// the smaller raw budget so important facts are written before the earlier fold.
-		MemoryPressureWarn: 0.70,
-		CoreMemoryTools:    true,
 
 		// Context reset / handoff: off by default; the manual /handoff command and the
 		// handoff_session tool work regardless. Defaults match agent.DefaultHandoff*.
@@ -371,10 +322,6 @@ func Default() Settings {
 		// existing behaviour. 5000 newest events kept per session.
 		DebugJournalEnabled: true,
 		DebugJournalCap:     5000,
-
-		AutoReflect:          true,
-		AutoReflectThreshold: 20,
-		AutoUserModel:        true,
 
 		ReactiveCompact:    true,
 		MaxTokenRetries:    3,
@@ -478,21 +425,11 @@ type DTO struct {
 	UserCountry  string `json:"userCountry"`
 	UserNotes    string `json:"userNotes"`
 
-	MaxContextTokens int     `json:"maxContextTokens"`
-	KeepRecentMsgs   int     `json:"keepRecentMsgs"`
-	RecallTopN       int     `json:"recallTopN"`
-	RecallMinScore   float64 `json:"recallMinScore"`
+	MaxContextTokens int `json:"maxContextTokens"`
+	KeepRecentMsgs   int `json:"keepRecentMsgs"`
 
 	ContextBudgetCeil     int     `json:"contextBudgetCeil"`
 	ContextBudgetFraction float64 `json:"contextBudgetFraction"`
-
-	JournalCap    int `json:"journalCap"`
-	JournalMaxLen int `json:"journalMaxLen"`
-	JournalMinLen int `json:"journalMinLen"`
-	ReflectionCap int `json:"reflectionCap"`
-
-	MemoryPressureWarn float64 `json:"memoryPressureWarn"`
-	CoreMemoryTools    bool    `json:"coreMemoryTools"`
 
 	HandoffAuto      bool    `json:"handoffAuto"`
 	HandoffPressure  float64 `json:"handoffPressure"`
@@ -510,10 +447,6 @@ type DTO struct {
 
 	DebugJournalEnabled bool `json:"debugJournalEnabled"`
 	DebugJournalCap     int  `json:"debugJournalCap"`
-
-	AutoReflect          bool `json:"autoReflect"`
-	AutoReflectThreshold int  `json:"autoReflectThreshold"`
-	AutoUserModel        bool `json:"autoUserModel"`
 
 	ReactiveCompact    bool `json:"reactiveCompact"`
 	MaxTokenRetries    int  `json:"maxTokenRetries"`
@@ -599,19 +532,9 @@ func (s Settings) ToDTO() DTO {
 
 		MaxContextTokens: s.MaxContextTokens,
 		KeepRecentMsgs:   s.KeepRecentMsgs,
-		RecallTopN:       s.RecallTopN,
-		RecallMinScore:   s.RecallMinScore,
 
 		ContextBudgetCeil:     s.ContextBudgetCeil,
 		ContextBudgetFraction: s.ContextBudgetFraction,
-
-		JournalCap:    s.JournalCap,
-		JournalMaxLen: s.JournalMaxLen,
-		JournalMinLen: s.JournalMinLen,
-		ReflectionCap: s.ReflectionCap,
-
-		MemoryPressureWarn: s.MemoryPressureWarn,
-		CoreMemoryTools:    s.CoreMemoryTools,
 
 		HandoffAuto:      s.HandoffAuto,
 		HandoffPressure:  s.HandoffPressure,
@@ -629,10 +552,6 @@ func (s Settings) ToDTO() DTO {
 
 		DebugJournalEnabled: s.DebugJournalEnabled,
 		DebugJournalCap:     s.DebugJournalCap,
-
-		AutoReflect:          s.AutoReflect,
-		AutoReflectThreshold: s.AutoReflectThreshold,
-		AutoUserModel:        s.AutoUserModel,
 
 		ReactiveCompact:    s.ReactiveCompact,
 		MaxTokenRetries:    s.MaxTokenRetries,
@@ -709,21 +628,11 @@ type Patch struct {
 	UserCountry  *string `json:"userCountry"`
 	UserNotes    *string `json:"userNotes"`
 
-	MaxContextTokens *int     `json:"maxContextTokens"`
-	KeepRecentMsgs   *int     `json:"keepRecentMsgs"`
-	RecallTopN       *int     `json:"recallTopN"`
-	RecallMinScore   *float64 `json:"recallMinScore"`
+	MaxContextTokens *int `json:"maxContextTokens"`
+	KeepRecentMsgs   *int `json:"keepRecentMsgs"`
 
 	ContextBudgetCeil     *int     `json:"contextBudgetCeil"`
 	ContextBudgetFraction *float64 `json:"contextBudgetFraction"`
-
-	JournalCap    *int `json:"journalCap"`
-	JournalMaxLen *int `json:"journalMaxLen"`
-	JournalMinLen *int `json:"journalMinLen"`
-	ReflectionCap *int `json:"reflectionCap"`
-
-	MemoryPressureWarn *float64 `json:"memoryPressureWarn"`
-	CoreMemoryTools    *bool    `json:"coreMemoryTools"`
 
 	HandoffAuto      *bool    `json:"handoffAuto"`
 	HandoffPressure  *float64 `json:"handoffPressure"`
@@ -741,10 +650,6 @@ type Patch struct {
 
 	DebugJournalEnabled *bool `json:"debugJournalEnabled"`
 	DebugJournalCap     *int  `json:"debugJournalCap"`
-
-	AutoReflect          *bool `json:"autoReflect"`
-	AutoReflectThreshold *int  `json:"autoReflectThreshold"`
-	AutoUserModel        *bool `json:"autoUserModel"`
 
 	ReactiveCompact    *bool `json:"reactiveCompact"`
 	MaxTokenRetries    *int  `json:"maxTokenRetries"`

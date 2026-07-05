@@ -127,18 +127,12 @@ func (s *Server) applySettings() {
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
 	s.tun.SetContextBudget(cur.MaxContextTokens)                             // scale tool-output thresholds to the budget (CG-9)
 	s.tun.SetTitleModel(cur.TitleModel)
-	s.tun.SetJournalLimits(cur.JournalCap, cur.JournalMaxLen, cur.JournalMinLen)
-	s.tun.SetRecallMinScore(cur.RecallMinScore)
-	s.tun.SetReflectionCap(cur.ReflectionCap)
-	s.tun.SetMemoryControls(cur.MemoryPressureWarn, cur.CoreMemoryTools)
 	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffPressure, cur.HandoffMaxChain, cur.HandoffWriteFile)
 	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
 	s.tun.SetAutoContinue(cur.AutonomousAutoContinue, cur.AutonomousAutoContinueMax)
 	s.tun.SetFileFreshnessGuard(cur.FileFreshnessGuard)
 	s.tun.SetAutoTagSessions(cur.AutoTagSessions)
 	s.tun.SetDebugJournal(cur.DebugJournalEnabled, cur.DebugJournalCap)
-	s.tun.SetAutoReflect(cur.AutoReflect, cur.AutoReflectThreshold)
-	s.tun.SetUserModel(cur.AutoUserModel)
 	s.tun.SetShellEnabled(cur.EnableShell)
 	s.tun.SetCLIHooksEnabled(cur.EnableCLIHooks)
 	s.tun.SetCodeMode(cur.EnableCodeMode)
@@ -194,7 +188,6 @@ func (s *Server) Routes() http.Handler {
 	s.registerMarketRoutes(mux)
 	s.registerIngestRoutes(mux)
 	s.registerSettingsRoutes(mux)
-	s.registerMemoryRoutes(mux)
 	s.registerGraphRoutes(mux)
 	s.registerSecretRoutes(mux)
 	s.registerMiscRoutes(mux)
@@ -461,19 +454,6 @@ func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/backups/archives", s.handleDeleteArchive)
 }
 
-// registerMemoryRoutes registers per-agent knowledge (documents, journal,
-// reflections).
-func (s *Server) registerMemoryRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/agents/{id}/memories", s.handleListMemories)
-	mux.HandleFunc("POST /api/agents/{id}/memories", s.handleCreateMemory)
-	mux.HandleFunc("GET /api/agents/{id}/core", s.handleGetCore)
-	mux.HandleFunc("PUT /api/agents/{id}/core", s.handlePutCore)
-	mux.HandleFunc("POST /api/agents/{id}/core/blocks", s.handleDefineCoreBlock)
-	mux.HandleFunc("DELETE /api/agents/{id}/core/blocks/{label}", s.handleDeleteCoreBlock)
-	mux.HandleFunc("POST /api/agents/{id}/reflect", s.handleReflect)
-	mux.HandleFunc("POST /api/agents/{id}/recall", s.handleRecall)
-	mux.HandleFunc("DELETE /api/memories/{id}", s.handleDeleteMemory)
-}
 
 // registerSecretRoutes registers the per-workspace secret vault (resolved from
 // X-Workspace-Id). Values are write-only except for the explicit reveal action.

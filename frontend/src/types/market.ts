@@ -9,7 +9,6 @@ export type PackKind =
   | 'provider'
   | 'flow'
   | 'workspace'
-  | 'memory'
   | 'mcp'
 export type PackSource = 'bundled' | 'global' | 'workspace' | 'remote'
 
@@ -121,22 +120,12 @@ export interface MCPPayload {
   envConfig?: string
 }
 
-export interface MemoryEntry {
-  content: string
-  kind?: string
-}
-
-export interface MemoryPayload {
-  entries: MemoryEntry[]
-}
-
 export interface PackPayload {
   skill?: SkillPayload
   agent?: AgentPayload
   provider?: ProviderPayload
   flow?: FlowPayload
   workspace?: WorkspacePayload
-  memory?: MemoryPayload
   mcp?: MCPPayload
 }
 

@@ -1,7 +1,7 @@
 ---
 name: "TionSwarm Self-Management"
-description: "The self-management tool suite an agent uses to run TionSwarm itself — create/edit agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces, delegate work to subagents, manage artifacts/memory/secrets/logs and app settings — plus how to activate these load-on-demand tools with activate_tools when a task needs them."
-when_to_use: "When you need to create or change TionSwarm entities (agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces), delegate a sub-task to an isolated worker, store a secret, manage artifacts/memory, read logs, or change app settings — and the matching tool is not active yet"
+description: "The self-management tool suite an agent uses to run TionSwarm itself — create/edit agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces, delegate work to subagents, manage artifacts/secrets/logs and app settings — plus how to activate these load-on-demand tools with activate_tools when a task needs them."
+when_to_use: "When you need to create or change TionSwarm entities (agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces), delegate a sub-task to an isolated worker, store a secret, manage artifacts, read logs, or change app settings — and the matching tool is not active yet"
 icon: "🛠️"
 color: "#10b981"
 access: shared
@@ -151,11 +151,8 @@ FILE you produced on disk (e.g. a screenshot) use `kind=image|video|audio|file` 
 `sourcePath` set to the file path — never base64-embed bytes into `content`.
 (Screenshots and exported files are also auto-captured from a tool's saved path.)
 
-**Memory & logs** — `memory_add` (store a durable fact), `memory_recall` (pull
-matching facts on demand — note recall results are also auto-injected into the
-prompt each turn, so explicit recall is only for targeted lookups), `read_logs`
-(read the app log ring buffer). Both memory tools are load-on-demand — activate
-them like the rest of this suite.
+**Logs** — `read_logs` (read the app log ring buffer). Load-on-demand — activate
+it like the rest of this suite.
 
 **Secrets & sessions** — `secret` (one tool, `action: list|get|set|delete`) reads
 the encrypted vault and stores/removes a credential, `list_sessions` (enumerate sibling sessions; a context

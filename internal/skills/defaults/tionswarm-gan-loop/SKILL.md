@@ -46,13 +46,14 @@ Desenin tüm değeri ayrımdadır. Şablonu kurduktan sonra:
 ## Sprint contract (sözleşme)
 
 Uygulamadan **önce** generator ne inşa edeceğini ve başarının nasıl doğrulanacağını yazar;
-evaluator bunu gözden geçirir ("doğru şeyi mi inşa ediyoruz?"). Sözleşme iki çekirdek bellek
-bloğunda yaşar (yeni veri tipi gerekmez):
+evaluator bunu gözden geçirir ("doğru şeyi mi inşa ediyoruz?"). Sözleşme ve skor kaydı
+kalıcı iki dosya/artifact'te yaşar (proje cwd'sine bağlı, oturumlar-arası paylaşılır):
 
-- `core:sprint-contract` — generator yazar (`core_memory_replace`), her turda bağlama enjekte
-  edilir, evaluator okur.
-- `core:sprint-scorelog` — evaluator her iterasyonda **ekler** (`core_memory_append`); skor
-  **trend'i** buradan okunur (döngüde graf çıktıları üzerine yazıldığı için trend orada tutulamaz).
+- `sprint-contract` (ör. proje kökünde `SPRINT.md` ya da bir artifact) — generator yazar,
+  her turda referans alınır, evaluator okur.
+- `sprint-scorelog` (ör. `SPRINT-SCORES.md` ya da bir artifact) — evaluator her iterasyonda
+  **ekler**; skor **trend'i** buradan okunur (döngüde graf çıktıları üzerine yazıldığı için
+  trend orada tutulamaz).
 
 Sözleşme gövdesi (bloğa markdown/JSON olarak yazılır):
 

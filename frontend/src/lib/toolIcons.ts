@@ -8,8 +8,6 @@ import {
   FileText, FilePlus2, FilePen, FolderTree, FolderSearch, TextSearch, SquareTerminal,
   // web
   Globe,
-  // memory
-  Brain, BrainCog, BookPlus, BookOpenCheck,
   // search / view
   MessagesSquare, ScanSearch, Search, Focus,
   // agents / sessions
@@ -66,12 +64,6 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   webfetch: Globe,
   http_get: Globe,
   http_request: Globe,
-
-  // memory
-  memory_recall: Brain,
-  memory_add: BrainCog,
-  core_memory_append: BookPlus,
-  core_memory_replace: BookOpenCheck,
 
   // search / view
   conversation_search: MessagesSquare,

@@ -22,7 +22,6 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/logbuf"
 	"github.com/bilal-arikan/tionswarm/internal/market"
 	"github.com/bilal-arikan/tionswarm/internal/mcp"
-	"github.com/bilal-arikan/tionswarm/internal/memory"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/secrets"
 	"github.com/bilal-arikan/tionswarm/internal/skills"
@@ -33,7 +32,6 @@ import (
 type Runtime struct {
 	db        *db.DB
 	providers *providers.Registry
-	mem       *memory.Store
 	tun       *Tunables
 	logger    *slog.Logger
 
@@ -162,11 +160,6 @@ type Runtime struct {
 	sessionCtxEveryTurn atomic.Bool
 	sessionCtxRecent    atomic.Int64
 
-	// reflecting guards against concurrent auto-reflects for the same agent: a
-	// burst of journaled turns must not spawn overlapping dream cycles. Keyed by
-	// agent id; presence means a reflection is in flight.
-	reflecting sync.Map
-
 	// activeSessions tracks sessions currently executing an autonomous invoke
 	// (schedule / spawn). Keyed by session id; value is struct{}.
 	// Used by the executions feed to show a live "running" indicator for
@@ -277,7 +270,6 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	r := &Runtime{
 		db:          database,
 		providers:   registry,
-		mem:         memory.New(database),
 		tun:         tun,
 		workDir:     workDir,
 		vault:       vault,
@@ -290,12 +282,6 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		market:      market.New(marketGlobalDir(), workspaceLedgerDir(workDir)),
 		mcpPool:     mcp.NewPool(),
 		cliSessions: providers.NewCLISessionPool(),
-	}
-	// Wire the recall cosine floor to this workspace's live Tunables so a settings
-	// change applies on the next recall without restart (memory.Store can't import
-	// agent, so it reads the floor through this provider).
-	if tun != nil {
-		r.mem.SetMinScoreProvider(tun.RecallMinScore)
 	}
 	// Surface MCP connection lifecycle (dial / re-dial / list_changed) in the
 	// in-app Logs screen; the persistent pool is otherwise opaque.
@@ -362,6 +348,17 @@ func (r *Runtime) Market() *market.Store { return r.market }
 // WorkspaceSkillsDir is the workspace's skills directory, where the market
 // installs skill packs. Exposed so the API layer can pass it to InstallSkill.
 func (r *Runtime) WorkspaceSkillsDir() string { return workspaceSkillsDir(r.workDir) }
+
+// WorkspaceHookScriptsDir is where imported hook packs materialise their bundled
+// scripts (one subdir per hook slug). ${CLAUDE_PLUGIN_ROOT} in an imported hook
+// command is rewritten to that subdir. Sibling of the skills dir so it is
+// per-workspace and survives restarts.
+func (r *Runtime) WorkspaceHookScriptsDir() string {
+	if r.workDir == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(r.workDir), "hook-scripts")
+}
 
 // ShellEnabled reports whether the built-in shell tool may be offered. Exposed so
 // the CLI Interaction MCP bridge gates the bridged shell exactly like the native
@@ -550,17 +547,9 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	// already holds). They stay eager on the native path — we just advertise them
 	// to the CLI here; the call closure below dispatches them via reg.Call by name,
 	// exactly like the lazy bridged tools. Gated to match buildRegistry's own gates.
-	//   - core_memory_replace/append : let a CLI agent EDIT the working-memory block
-	//     it already SEES in its prompt (previously read-only for CLI agents).
 	//   - conversation_search        : full-text history search (deeper than the
 	//     list_sessions pull tool, which is already bridged).
 	var extra []providers.ToolDef
-	if r.tun.CoreMemoryTools() {
-		extra = append(extra,
-			tools.NewCoreMemoryReplaceTool(r.mem, agent.ID).Def(),
-			tools.NewCoreMemoryAppendTool(r.mem, agent.ID).Def(),
-		)
-	}
 	if r.SessionContextEnabled() {
 		extra = append(extra, tools.NewConversationSearchTool(r.db).Def())
 	}
@@ -977,9 +966,6 @@ func (r *Runtime) agentName(id string) string {
 	}
 	return id
 }
-
-// Memory exposes the runtime's memory store for handlers in the same workspace.
-func (r *Runtime) Memory() *memory.Store { return r.mem }
 
 // buildSystemPrompt composes the agent's persona from soul + identity.
 func buildSystemPrompt(a db.Agent) string {

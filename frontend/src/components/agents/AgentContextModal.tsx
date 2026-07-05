@@ -14,8 +14,8 @@ interface Props {
 
 // AgentContextModal previews the context an agent starts a turn with: the static
 // system prompt + the tool catalog. With an optional sample message it also
-// simulates the message-dependent dynamic suffix (recalled memory + cross-session
-// block); session-only parts (summary/artifacts/todos) need a live session.
+// simulates the message-dependent dynamic suffix (cross-session block);
+// session-only parts (summary/artifacts/todos) need a live session.
 export function AgentContextModal({ agentId, agentName, onClose }: Props) {
   const [data, setData] = useState<AgentContextPreview | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -172,7 +172,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && load(message)}
-            placeholder="Örnek mesaj yaz → bu mesaj için hafıza recall + çapraz-oturum bağlamı simüle edilir"
+            placeholder="Örnek mesaj yaz → bu mesaj için çapraz-oturum bağlamı simüle edilir"
             className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
           />
           {/* Expand/collapse-all (icon-only), sitting next to the simulate button. */}
@@ -213,7 +213,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                   )
                 ) : (
                   <p className="text-xs text-[var(--color-text-dim)]">
-                    Bu mesaj için recall yok. Özet · oturum artifact'ları · todo listesi gerçek bir
+                    Bu mesaj için dinamik bağlam yok. Özet · oturum artifact'ları · todo listesi gerçek bir
                     oturumda, tur anında eklenir (burada simüle edilmez).
                   </p>
                 )}

@@ -41,7 +41,6 @@ type DB struct {
 	tasks     map[string]Task
 	runs      map[string]Run
 	schedules map[string]Schedule
-	knowledge map[string]KnowledgeSource
 	mcp       map[string]MCPServer
 	flows       map[string]Flow
 	flowRuns    map[string]FlowRun
@@ -80,7 +79,6 @@ func Open(path string) (*DB, error) {
 		tasks:     map[string]Task{},
 		runs:      map[string]Run{},
 		schedules: map[string]Schedule{},
-		knowledge: map[string]KnowledgeSource{},
 		mcp:       map[string]MCPServer{},
 		flows:       map[string]Flow{},
 		flowRuns:    map[string]FlowRun{},
@@ -121,7 +119,6 @@ const (
 	dirTasks     = "tasks"
 	dirRuns      = "runs"
 	dirSchedules = "schedules"
-	dirKnowledge = "knowledge"
 	dirMCP       = "mcp-servers"
 	dirFlows       = "flows"
 	dirFlowRuns    = "flow-runs"
@@ -359,9 +356,6 @@ func (d *DB) load() error {
 		d.hooks[h.ID] = h
 	}
 
-	if err := d.loadKnowledge(); err != nil {
-		return err
-	}
 	if err := d.loadUsage(); err != nil {
 		return err
 	}

@@ -28,8 +28,7 @@ interface Props {
 
 // Human labels for each runtime prompt key.
 const PROMPT_LABELS: Record<string, { label: string; hint: string }> = {
-  summary: { label: 'Genel bakış promptu', hint: 'Yalnızca /memory · /board · /flows komutlarının anlık genel-bakış sistem promptu (kısa liste özeti). Konuşma özetlemesi (compaction) DEĞİL — o ayrı "Compaction promptu" alanıdır. Boş bırakırsan gömülü varsayılan kullanılır.' },
-  reflect: { label: 'Yansıma promptu', hint: '/reflect (dream cycle) yansıma talimatı. Günlük kayıtları otomatik eklenir.' },
+  summary: { label: 'Genel bakış promptu', hint: 'Yalnızca /board · /flows komutlarının anlık genel-bakış sistem promptu (kısa liste özeti). Konuşma özetlemesi (compaction) DEĞİL — o ayrı "Compaction promptu" alanıdır. Boş bırakırsan gömülü varsayılan kullanılır.' },
   title: { label: 'Başlık promptu', hint: 'Otomatik başlık üretimi sistem promptu.' },
   compact: { label: 'Compaction promptu', hint: 'Bağlam sınırına yaklaşınca geçmişi tek bir yapılandırılmış özete katlayan ASIL prompt (8 bölüm + anti-decay). İki %s yer tutucusu (mevcut özet, yeni mesajlar) KORUNMALI — bozarsan gömülü varsayılana düşer. Boş bırakırsan varsayılan kullanılır.' },
 }

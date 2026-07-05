@@ -16,16 +16,19 @@ import "io/fs"
 const SchemaV1 = "swarmpack/v1"
 
 // Pack kinds — the shareable entity types. The first four are the original
-// SwarmPack v1 kinds; workspace/memory/mcp were added so the market can share
-// workspace templates, seed memories and MCP tool servers.
+// SwarmPack v1 kinds; workspace/mcp were added so the market can share
+// workspace templates and MCP tool servers.
 const (
 	KindSkill     = "skill"
 	KindAgent     = "agent"
 	KindProvider  = "provider"
 	KindFlow      = "flow"
 	KindWorkspace = "workspace"
-	KindMemory    = "memory"
 	KindMCP       = "mcp"
+	// KindHook is a lifecycle/tool hook imported from a foreign plugin (Claude
+	// Code plugin.json / hooks.json). Its scripts ride in Pack.Files and the
+	// installer materialises them + rewrites ${CLAUDE_PLUGIN_ROOT}.
+	KindHook = "hook"
 )
 
 // Source identifies which tier a pack was resolved from. Higher tiers override
@@ -110,8 +113,19 @@ type Payload struct {
 	Provider  *ProviderPayload  `json:"provider,omitempty"`
 	Flow      *FlowPayload      `json:"flow,omitempty"`
 	Workspace *WorkspacePayload `json:"workspace,omitempty"`
-	Memory    *MemoryPayload    `json:"memory,omitempty"`
 	MCP       *MCPPayload       `json:"mcp,omitempty"`
+	Hook      *HookPayload      `json:"hook,omitempty"`
+}
+
+// HookPayload is a single lifecycle/tool hook imported from a foreign plugin.
+// Command may contain the ${CLAUDE_PLUGIN_ROOT} placeholder; the installer
+// rewrites it to the directory where the pack's bundled scripts (Pack.Files) are
+// materialised. Matcher/Event follow TionSwarm's db.Hook semantics.
+type HookPayload struct {
+	Event      string `json:"event"`             // PreToolUse | PostToolUse | UserPromptSubmit | SessionStart | Stop | SubagentStop | PreCompact | Notification | SessionEnd
+	Matcher    string `json:"matcher,omitempty"` // tool-name glob (tool events) or source/trigger selector (some lifecycle events)
+	Command    string `json:"command"`           // shell/exec command; ${CLAUDE_PLUGIN_ROOT} rewritten at install
+	TimeoutSec int    `json:"timeoutSec,omitempty"`
 }
 
 // SkillPayload carries a skill as its portable SKILL.md text (frontmatter +
@@ -278,13 +292,3 @@ type MCPPayload struct {
 	EnvConfig string `json:"envConfig,omitempty"` // JSON object of env vars
 }
 
-// MemoryEntry is one seed memory in a memory pack.
-type MemoryEntry struct {
-	Content string `json:"content"`
-	Kind    string `json:"kind,omitempty"` // default "document"
-}
-
-// MemoryPayload seeds a set of memories into the installing workspace's first agent.
-type MemoryPayload struct {
-	Entries []MemoryEntry `json:"entries"`
-}

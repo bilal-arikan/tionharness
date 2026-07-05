@@ -117,7 +117,7 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
         {
           id: 'contract', type: 'agent', title: 'Generator: Sözleşme', agentId: '',
           prompt:
-            'You are the GENERATOR. Before building anything, turn this goal into a written sprint contract.\nGoal: {{input}}\n\nProduce a contract with: (1) deliverable — one sentence; (2) success criteria — a numbered list of specific, TESTABLE checks, each with a weight (high/med/low) and how to verify it (Playwright / API / code); (3) grading weights. Save it to your core memory block "sprint-contract" using core_memory_replace so it survives the whole loop, then output it.',
+            'You are the GENERATOR. Before building anything, turn this goal into a written sprint contract.\nGoal: {{input}}\n\nProduce a contract with: (1) deliverable — one sentence; (2) success criteria — a numbered list of specific, TESTABLE checks, each with a weight (high/med/low) and how to verify it (Playwright / API / code); (3) grading weights. Output the full contract so downstream nodes can reference it.',
           next: 'review-contract', x: 100, y: 40,
         },
         {
@@ -129,13 +129,13 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
         {
           id: 'generate', type: 'agent', title: 'Generator: Üret', agentId: '',
           prompt:
-            'You are the GENERATOR. Build or iterate the deliverable against the sprint contract.\nContract (core:sprint-contract):\n{{node.contract}}\n\nPrevious evaluation (empty on the first pass):\n{{node.evaluate}}\n\nPivot direction (empty unless pivoting):\n{{node.pivot}}\n\nProduce the concrete deliverable. Address EVERY failed criterion from the previous evaluation. State what you changed and why.',
+            'You are the GENERATOR. Build or iterate the deliverable against the sprint contract.\nContract:\n{{node.contract}}\n\nPrevious evaluation (empty on the first pass):\n{{node.evaluate}}\n\nPivot direction (empty unless pivoting):\n{{node.pivot}}\n\nProduce the concrete deliverable. Address EVERY failed criterion from the previous evaluation. State what you changed and why.',
           next: 'evaluate', x: 100, y: 320,
         },
         {
           id: 'evaluate', type: 'agent', title: 'Evaluator: Değerlendir', agentId: '',
           prompt:
-            'You are an INDEPENDENT, SKEPTICAL evaluator. You did NOT write this work — find what is wrong, do not praise it. A criterion is PASS only if you can OBSERVE it passing.\nSprint contract:\n{{node.contract}}\nWork to evaluate:\n{{node.generate}}\n\nFor EACH success criterion, actually verify it: use the Playwright MCP tools to click through the running app like a user for UI/E2E checks, call the endpoint for API checks, or read the exact code path otherwise. Mark each PASS or FAIL; for every FAIL give a CODE-LOCATED bug report (file:line or function, observed vs expected, the concrete fix). Append one line to core:sprint-scorelog with core_memory_append: "ITER n | SCORE x/total (pct%) | TREND up|flat|down | VERDICT ...".\n\nDecide from the score TREND (recall core:sprint-scorelog): all high/med criteria PASS -> SHIP; scores improving and gaps fixable -> REFINE; scores flat or declining for 2+ iterations -> PIVOT.\n\nThe LAST line of your reply MUST be exactly one of:\nVERDICT: SHIP\nVERDICT: REFINE\nVERDICT: PIVOT',
+            'You are an INDEPENDENT, SKEPTICAL evaluator. You did NOT write this work — find what is wrong, do not praise it. A criterion is PASS only if you can OBSERVE it passing.\nSprint contract:\n{{node.contract}}\nWork to evaluate:\n{{node.generate}}\n\nFor EACH success criterion, actually verify it: use the Playwright MCP tools to click through the running app like a user for UI/E2E checks, call the endpoint for API checks, or read the exact code path otherwise. Mark each PASS or FAIL; for every FAIL give a CODE-LOCATED bug report (file:line or function, observed vs expected, the concrete fix). Record one score line: "ITER n | SCORE x/total (pct%) | TREND up|flat|down | VERDICT ...".\n\nDecide from the score TREND: all high/med criteria PASS -> SHIP; scores improving and gaps fixable -> REFINE; scores flat or declining for 2+ iterations -> PIVOT.\n\nThe LAST line of your reply MUST be exactly one of:\nVERDICT: SHIP\nVERDICT: REFINE\nVERDICT: PIVOT',
           next: 'decide', x: 100, y: 460,
         },
         {

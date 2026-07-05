@@ -1,6 +1,6 @@
 ---
 name: "TionSwarm Guide"
-description: "Overview of how TionSwarm works — agents, sessions, tasks, flows, schedules, skills, memory and tools — and how the pieces fit together."
+description: "Overview of how TionSwarm works — agents, sessions, tasks, flows, schedules, skills and tools — and how the pieces fit together."
 when_to_use: "When you need to understand TionSwarm itself, or to orient before using one of its subsystems"
 icon: "🗺️"
 color: "#6366f1"
@@ -25,18 +25,6 @@ workspaces never leaks content between them.
 - **Flows** — multi-step / multi-agent orchestration graphs (see the
   `tionswarm-flows` skill for details).
 - **Schedules (routines)** — cron-driven prompts delivered to an agent.
-- **Memory** — durable facts an agent recalls across sessions. Two layers:
-  - *Recall memory* — auto-injected into the prompt each turn; the explicit
-    `memory_recall`/`memory_add` tools are load-on-demand (`activate_tools` for a
-    targeted lookup).
-  - *Core memory* (re-injected verbatim every turn) — **named blocks**:
-    **persona** (about yourself) + **human** (about the user) by default, plus custom
-    blocks. Edit in place with `core_memory_replace`/`core_memory_append` (pass
-    `label`, default persona). Each block is **character-limited** — a write past it
-    is refused, so you condense rather than grow context unbounded.
-  - The **human** block is also auto-refreshed: the dream cycle distills durable user
-    facts from the journal into it (HA-1, toggleable). When context fills up, a turn
-    warns you to persist anything important before it is compacted away.
 - **Skills** — reusable instruction sets (like this one). Their summaries are
   advertised in the prompt; load a full body on demand with `use_skill`. Some
   skills are deliberately kept OUT of the prompt (on-demand or file-conditional,
@@ -52,8 +40,7 @@ workspaces never leaks content between them.
 
 1. A **static prefix** (cached): the agent's soul/identity, the tool catalog and
    the **Available Skills** block (skill slugs + summaries only).
-2. A **dynamic suffix**: memory recalled for the message plus cross-session
-   context, when enabled.
+2. A **dynamic suffix**: cross-session context and the current clock, when enabled.
 
 Skills keep the context lean: only summaries sit in the prompt; you pull a full
 body with `use_skill` exactly when a task matches it. If a task seems to need a
@@ -129,14 +116,13 @@ tools (`ask_user`/`request_confirmation`) are withdrawn, while `notify`/
 - **Automate multi-step / multi-agent work** → build a flow. Load the
   `tionswarm-flows` skill first.
 - **Repeat on a schedule** → create a schedule (routine).
-- **Persist knowledge** → add a memory.
 
 - **Tune the app** → read or change application-wide settings live with the
   `get_settings` / `update_settings` tools. Load the `tionswarm-settings` skill for
   the full field reference.
 - **Manage TionSwarm itself** → create/edit agents, flows, schedules, tasks, hooks,
   MCP servers and skills, spawn parallel workers, store secrets, or manage
-  artifacts/memory/logs with the self-management tools. They are loaded on demand
+  artifacts/logs with the self-management tools. They are loaded on demand
   — `activate_tools` pulls the one you need. Load the `tionswarm-self-management`
   skill for the catalog and the activation workflow.
 
@@ -164,5 +150,5 @@ So, before building or concluding absence:
 3. **Prefer extending over rewriting.** If something close already exists, build
    on it (extend, wire in, refactor) instead of starting a parallel version.
 
-This applies to code, configuration, agents, flows, skills, memories — anything
+This applies to code, configuration, agents, flows, skills — anything
 you might otherwise create from scratch.

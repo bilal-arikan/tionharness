@@ -65,11 +65,11 @@ func TestApplyClampsNumerics(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	huge := 9_999_999
-	out, err := st.Apply(Patch{MaxContextTokens: &huge, JournalCap: &huge})
+	out, err := st.Apply(Patch{MaxContextTokens: &huge, DelegationMaxCalls: &huge})
 	if err != nil {
 		t.Fatalf("Apply clamped numerics should not error: %v", err)
 	}
-	if out.JournalCap != 1000 {
-		t.Errorf("journalCap not clamped: %d", out.JournalCap)
+	if out.DelegationMaxCalls != 100 {
+		t.Errorf("delegationMaxCalls not clamped: %d", out.DelegationMaxCalls)
 	}
 }

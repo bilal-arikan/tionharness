@@ -33,7 +33,6 @@ var PromptKeys = []string{"summary", "reflect", "title", "compact"}
 // compaction core validates and falls back to the default if they are broken.
 var promptDefaults = map[string]string{
 	"summary": summarySystemPrompt,
-	"reflect": reflectPrompt,
 	"title":   titleSystemPrompt,
 	"compact": conversation.CompactPromptDefault(),
 }

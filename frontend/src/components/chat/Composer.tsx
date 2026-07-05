@@ -374,12 +374,12 @@ export function Composer({
 
   return (
     <div
-      className={`relative border-t bg-[var(--color-surface)] px-3 py-3 transition-shadow md:px-6 md:py-4 ${
+      className={`relative bg-gradient-to-t from-black via-black/85 to-transparent px-3 py-3 transition-shadow md:px-6 md:py-4 ${
         dragOver
-          ? 'border-[var(--color-border)] ring-2 ring-inset ring-[var(--color-accent)]'
+          ? 'ring-2 ring-inset ring-[var(--color-accent)]'
           : active
-            ? 'border-[color-mix(in_srgb,var(--color-accent)_45%,var(--color-border))] ring-1 ring-inset ring-[color-mix(in_srgb,var(--color-accent)_35%,transparent)]'
-            : 'border-[var(--color-border)]'
+            ? 'ring-1 ring-inset ring-[color-mix(in_srgb,var(--color-accent)_35%,transparent)]'
+            : ''
       }`}
       onDragOver={(e) => {
         if (!sessionId) return
@@ -425,7 +425,7 @@ export function Composer({
           the controls live on a fixed toolbar row beneath it, so they never stretch
           or shift as the text area expands. The card carries the border/focus ring. */}
       <div
-        className={`flex flex-col gap-2 rounded-2xl border bg-[var(--color-bg)] px-3 pb-2 pt-2.5 transition-colors focus-within:border-[var(--color-accent)] ${
+        className={`flex flex-col gap-2 rounded-2xl border bg-transparent px-3 pb-2 pt-2.5 transition-colors focus-within:border-[var(--color-accent)] ${
           active
             ? 'border-[color-mix(in_srgb,var(--color-accent)_55%,var(--color-border))]'
             : 'border-[var(--color-border)]'

@@ -9,7 +9,7 @@ interface Props {
 }
 
 // AgentSettingsModal wraps the shared AgentSettingsForm in a centered dialog.
-// Used by the roster gear button (sidebar in memory/tools views).
+// Used by the roster gear button (sidebar in tools views).
 export function AgentSettingsModal({ agent, onClose, onSave }: Props) {
   return (
     <ModalOverlay onClose={onClose}>

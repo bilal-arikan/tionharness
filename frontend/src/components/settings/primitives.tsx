@@ -108,6 +108,50 @@ export function Toggle({
   )
 }
 
+// Segmented is a single-choice control (radio-as-buttons) for a small set of
+// mutually-exclusive options. Preferred over multiple booleans when the choices
+// exclude each other — it makes the "only one" contract visual and removes the need
+// for a "both on → which wins?" warning. The active option's own hint is shown when
+// present, so the description updates with the selection.
+export function Segmented<T extends string>({
+  label,
+  hint,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  hint?: string
+  value: T
+  options: { value: T; label: string; hint?: string }[]
+  onChange: (v: T) => void
+}) {
+  const active = options.find((o) => o.value === value)
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+      <span className="text-sm font-medium">{label}</span>
+      <div className="mt-0.5 flex gap-0.5 rounded-md bg-[var(--color-surface-2)] p-0.5">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={`flex-1 rounded px-2 py-1 text-xs font-medium transition ${
+              o.value === value
+                ? 'bg-[var(--color-accent)] text-white'
+                : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {(active?.hint ?? hint) && (
+        <span className="text-xs text-[var(--color-text-dim)]">{active?.hint ?? hint}</span>
+      )}
+    </div>
+  )
+}
+
 // Slider is a labelled range input with a live value badge and an optional
 // sub-line (e.g. a derived/absolute figure). Used where a raw 0–1 number is
 // unintuitive — the badge and sub turn it into a readable control.

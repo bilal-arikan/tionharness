@@ -10,7 +10,6 @@ import { sessionApi } from './api/sessions'
 import { chatApi } from './api/chat'
 import { uploadsApi } from './api/uploads'
 import { taskApi } from './api/tasks'
-import { memoryApi } from './api/memory'
 import { graphApi } from './api/graph'
 import { mcpApi } from './api/mcp'
 import { hookApi } from './api/hooks'
@@ -34,7 +33,6 @@ export const api = {
   ...chatApi,
   ...uploadsApi,
   ...taskApi,
-  ...memoryApi,
   ...graphApi,
   ...mcpApi,
   ...hookApi,

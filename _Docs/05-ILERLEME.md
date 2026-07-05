@@ -2,6 +2,19 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-05**
 
+## Memory alt sistemi kaldırıldı ✅ (2026-07-05)
+
+2026-07-05 — Memory alt sistemi (journal recall + core memory + hafıza grafiği +
+ilgili tool/API/UI/veri) tamamen kaldırıldı. Çıkarılanlar: `internal/memory` paketi;
+ajan araçları `Remember`/`Recall`/`core_memory_replace`/`core_memory_append`/`reflect`;
+API uçları `/api/agents/{id}/memories`, `/core`, `/reflect`, `/recall`, `memory-graph`;
+frontend Hafıza ekranı/MemoryPanel/CoreMemoryCard/hafıza grafiği; ayarlar
+`journalMinLen`/`recallMinScore`/`journalCap`/`journalMaxLen`/`autoReflectThreshold`
+(+ `memoryPressureWarn`). Workspace Ağı / İlişki Grafiği'nin workspace tarafı
+(`/api/graph`) korundu. Doküman güncellemeleri: `31-MEMGPT-CORE-MEMORY.md` (kaldırıldı
+notu), `23-ILISKI-GRAFIGI.md` (yalnız Hafıza Bilgi Grafiği bölümü çıkarıldı),
+`17-TOKEN-OPTIMIZASYON.md` (recall/journal kapıları), `00-GENEL-BAKIS.md`.
+
 ## Claude Sonnet 5 desteği ✅ (2026-07-05)
 
 Yeni **Claude Sonnet 5** (`claude-sonnet-5`) modeli katalog + fiyat tablosuna eklendi.

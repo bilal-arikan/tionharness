@@ -26,14 +26,23 @@ const (
 )
 
 // hookPayload is the JSON written to a hook command's stdin. It mirrors Claude
-// Code's hook contract so the same external scripts (e.g. sqz) work unchanged.
+// Code's hook contract so the same external scripts (e.g. sqz, caveman) work
+// unchanged — both the tool-call fields (ToolName/ToolInput/ToolResponse) and
+// the lifecycle fields (Prompt/Source/Reason/Trigger/StopHookActive).
 type hookPayload struct {
 	SessionID     string          `json:"session_id,omitempty"`
 	Cwd           string          `json:"cwd,omitempty"`
 	HookEventName string          `json:"hook_event_name"`
-	ToolName      string          `json:"tool_name"`
+	ToolName      string          `json:"tool_name,omitempty"`
 	ToolInput     json.RawMessage `json:"tool_input,omitempty"`
 	ToolResponse  *hookToolResp   `json:"tool_response,omitempty"`
+
+	// Lifecycle-event fields (Claude Code parity):
+	Prompt         string `json:"prompt,omitempty"`           // UserPromptSubmit: the submitted user prompt
+	Source         string `json:"source,omitempty"`           // SessionStart: startup|resume|clear
+	Trigger        string `json:"trigger,omitempty"`          // PreCompact: manual|auto ; SessionEnd: reason
+	Message        string `json:"message,omitempty"`          // Notification: the notification text
+	StopHookActive bool   `json:"stop_hook_active,omitempty"` // Stop/SubagentStop: already in a hook-forced continuation
 }
 
 type hookToolResp struct {
@@ -55,6 +64,11 @@ type hookDecision struct {
 type hookSpecificOutput struct {
 	PermissionDecision       string `json:"permissionDecision"` // allow | deny | ask
 	PermissionDecisionReason string `json:"permissionDecisionReason"`
+	// AdditionalContext is the Claude Code channel by which SessionStart /
+	// UserPromptSubmit hooks inject text into the model's context. We accept it
+	// here AND at the top level (dec.AdditionalContext) so scripts written either
+	// way work.
+	AdditionalContext string `json:"additionalContext"`
 }
 
 // preHookOutcome is the aggregate of every matching PreToolUse hook for a call.
@@ -192,6 +206,99 @@ func (r *Runtime) runPostToolHooks(ctx context.Context, sessionID string, call p
 			out.block = true
 			out.denyMsg = firstNonEmpty(dec.Reason, "hook blocked the tool result")
 			out.steps = append(out.steps, hookStep(h, call.Name, "hook_block", "Araç sonucu hook tarafından engellendi", out.denyMsg, true))
+			return out
+		}
+	}
+	return out
+}
+
+// LifecycleExtras carries the event-specific fields for a lifecycle hook run.
+// Only the fields relevant to Event are populated by the caller.
+type LifecycleExtras struct {
+	Prompt         string // UserPromptSubmit
+	Source         string // SessionStart (startup|resume|clear)
+	Trigger        string // PreCompact (manual|auto) / SessionEnd (reason)
+	Message        string // Notification
+	StopHookActive bool   // Stop / SubagentStop
+}
+
+// selector returns the string a lifecycle hook's matcher is tested against for
+// this event (Claude Code semantics): SessionStart matches on source, PreCompact
+// on trigger; the rest have no selector (an empty matcher matches all).
+func (e LifecycleExtras) selector(event string) string {
+	switch event {
+	case db.HookSessionStart:
+		return e.Source
+	case db.HookPreCompact:
+		return e.Trigger
+	}
+	return ""
+}
+
+// LifecycleOutcome aggregates the effect of every matching lifecycle hook for one
+// event: injected context, a block decision, and audit cards. Context is the
+// concatenation of every hook's additionalContext (folded into the turn's dynamic
+// system prompt by the caller). Block short-circuits the turn (UserPromptSubmit)
+// or forces continuation (Stop) depending on the event.
+type LifecycleOutcome struct {
+	Context string
+	Block   bool
+	Reason  string
+	Steps   []TurnStep
+}
+
+// RunLifecycleHooks runs every enabled hook for a turn/session lifecycle event,
+// in creation order, aggregating their injected context and honouring a block
+// decision. Unlike the tool hooks it is EXPORTED because it fires from the API
+// turn orchestrator (chat_stream / subagent / compaction), not the native tool
+// loop. Hook errors fail open. Matching: an empty matcher matches every
+// invocation; a non-empty matcher is tested against the event's selector
+// (SessionStart→source, PreCompact→trigger).
+func (r *Runtime) RunLifecycleHooks(ctx context.Context, sessionID, event string, extras LifecycleExtras) LifecycleOutcome {
+	var out LifecycleOutcome
+	if !db.IsLifecycleEvent(event) {
+		return out
+	}
+	hooks, err := r.db.ListEnabledHooksByEvent(ctx, event)
+	if err != nil || len(hooks) == 0 {
+		return out
+	}
+	sel := extras.selector(event)
+	for _, h := range hooks {
+		if !hookMatches(h.Matcher, sel) {
+			continue
+		}
+		payload := hookPayload{
+			SessionID:      sessionID,
+			Cwd:            r.workDir,
+			HookEventName:  event,
+			Prompt:         extras.Prompt,
+			Source:         extras.Source,
+			Trigger:        extras.Trigger,
+			Message:        extras.Message,
+			StopHookActive: extras.StopHookActive,
+		}
+		hookStart := time.Now()
+		dec, derr := r.execHook(ctx, h, payload)
+		if derr != nil {
+			r.logger.Warn("lifecycle hook failed (fail-open)", "hook", h.ID, "event", event, "error", derr)
+			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: event, DurMs: time.Since(hookStart).Milliseconds(), Detail: "error", Err: true})
+			continue
+		}
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: event, DurMs: time.Since(hookStart).Milliseconds(), Detail: hookDecisionLabel(dec)})
+		// Injected context: accept both the top-level and hookSpecificOutput channels.
+		add := strings.TrimSpace(dec.AdditionalContext)
+		if dec.HookSpecificOutput != nil && strings.TrimSpace(dec.HookSpecificOutput.AdditionalContext) != "" {
+			add = strings.TrimSpace(add + "\n" + strings.TrimSpace(dec.HookSpecificOutput.AdditionalContext))
+		}
+		if add != "" {
+			out.Context = strings.TrimSpace(out.Context + "\n\n" + add)
+			out.Steps = append(out.Steps, hookStep(h, event, "hook_context", "Hook ek bağlam ekledi", add, false))
+		}
+		if dec.Decision == "block" {
+			out.Block = true
+			out.Reason = firstNonEmpty(dec.Reason, out.Reason, "hook blocked the turn")
+			out.Steps = append(out.Steps, hookStep(h, event, "hook_block", "Tur hook tarafından engellendi", out.Reason, true))
 			return out
 		}
 	}

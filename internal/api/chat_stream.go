@@ -206,6 +206,52 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
+	// Lifecycle hooks (Claude Code parity), fired once per user turn BEFORE any
+	// agent runs. SessionStart primes a fresh session; UserPromptSubmit sees the
+	// submitted prompt and may inject context (e.g. a caveman "respond terse"
+	// ruleset) or BLOCK the turn entirely. Injected context is folded into every
+	// responding agent's dynamic system prompt below. Fail-open by construction.
+	var lifecycleContext string
+	if freshSession {
+		ss := wsp.Runtime.RunLifecycleHooks(ctx, session.ID, db.HookSessionStart, agent.LifecycleExtras{Source: "startup"})
+		for _, st := range ss.Steps {
+			sse("step", st)
+		}
+		lifecycleContext = ss.Context
+	}
+	ups := wsp.Runtime.RunLifecycleHooks(ctx, session.ID, db.HookUserPromptSubmit, agent.LifecycleExtras{Prompt: req.Message})
+	for _, st := range ups.Steps {
+		sse("step", st)
+	}
+	if c := strings.TrimSpace(ups.Context); c != "" {
+		lifecycleContext = strings.TrimSpace(lifecycleContext + "\n\n" + c)
+	}
+	if ups.Block {
+		// A UserPromptSubmit hook vetoed this prompt: persist the reason as the
+		// assistant reply (so it survives reload) and end the turn without calling
+		// any model. Not a failure — an intentional, hook-driven stop.
+		reason := strings.TrimSpace(ups.Reason)
+		if reason == "" {
+			reason = "Prompt bir hook tarafından engellendi."
+		}
+		blockMsg, berr := database.AddMessage(ctx, db.Message{
+			ID:        uuid.NewString(),
+			SessionID: session.ID,
+			Role:      providers.RoleAssistant,
+			AgentID:   agents[0].ID,
+			Text:      reason,
+			Steps:     marshalSteps(ups.Steps),
+		})
+		if berr != nil {
+			s.failTurn(ctx, database, sse, session.ID, agents[0].ID, "hook_block_persist", berr.Error())
+			return
+		}
+		sse("reply", map[string]any{"replyMessage": blockMsg})
+		sse("done", map[string]any{"sessionTitle": strings.TrimSpace(session.Title)})
+		emitted = true
+		return
+	}
+
 	// Each agent answers in turn, re-reading the (growing) history so later
 	// agents see the earlier replies.
 	for i, agentRow := range agents {
@@ -250,7 +296,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent)
+		llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent, lifecycleContext)
 		// claude-cli session resume (opt-in): when engaged, this trims llmReq to the
 		// unseen delta and sets ResumeSessionID so the CLI reuses its warm cache.
 		resumePlan := s.planClaudeResume(provider, len(agents), session, rawHistory, &llmReq)
@@ -480,7 +526,6 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		// Reply is durable now; drop this agent's sidecar before the next agent
 		// (the top-level defer is the catch-all for early-return paths).
 		_ = database.ClearInflight(session.ID)
-		wsp.Runtime.Journal(ctx, agentRow.ID, "Q: "+req.Message+"\nA: "+resp.Text)
 		// Auto-capture any files the agent wrote this turn as artifacts.
 		s.captureFileArtifacts(ctx, database, session.ID, agentRow.ID, steps)
 		sse("reply", map[string]any{"replyMessage": replyMsg})

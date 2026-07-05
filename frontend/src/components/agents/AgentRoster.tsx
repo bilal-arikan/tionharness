@@ -22,7 +22,7 @@ interface Props {
 
 // AgentRoster lists the workspace's agents and doubles as the "default agent for
 // new chats" picker. It hosts agent creation + the per-agent settings modal.
-// Used both as the sidebar for agent-scoped views (memory/tools) and as the
+// Used both as the sidebar for agent-scoped views (tools) and as the
 // standalone "Ajanlar" view (panel mode).
 export function AgentRoster({
   agents,

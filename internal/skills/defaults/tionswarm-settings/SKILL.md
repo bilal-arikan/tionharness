@@ -1,7 +1,7 @@
 ---
 name: "TionSwarm Settings"
 description: "Every application-wide setting in TionSwarm (settings.json) — what each field does, its valid range/default — and how to read and change them live with the get_settings / update_settings tools."
-when_to_use: "When you need to inspect or change TionSwarm's application settings: theme, providers, default model, context/memory budgets, autonomy, compaction, or the gated tool capabilities"
+when_to_use: "When you need to inspect or change TionSwarm's application settings: theme, providers, default model, context budgets, autonomy, compaction, or the gated tool capabilities"
 icon: "⚙️"
 color: "#8b5cf6"
 access: shared
@@ -67,17 +67,9 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
   with the reply-language directive. **Chat path only** — autonomous/scheduler/flow turns
   do not currently inject this block.
 
-### Context & memory
+### Context
 - `maxContextTokens` (min 500, default 12000), `keepRecentMsgs` (min 1, default 8).
 - `contextBudgetCeil` (8000–2000000, default 262144 ≈ 256K) — hard cap on the model-aware transcript budget; the operative number for 1M-window models. Lowered from 512K to keep the live window in the context-rot gradient's high-precision zone; raise to keep more history verbatim (trades recall precision for raw history). `contextBudgetFraction` (0–1, default **0 = auto**) — share of the model's context window spendable on transcript. **0 selects a per-family adaptive share** (Opus/Sonnet 0.45, Haiku 0.40, MiniMax/DeepSeek/Gemini 0.35); a positive value pins a fixed manual share. Effective budget = clamp(window × fraction, maxContextTokens, ceil). Rationale: see `_Docs/17` §12.
-- `recallTopN` (default 5), `recallMinScore` (0–1, default **0.04**) — cosine floor below which a recalled memory is dropped from the dynamic "Relevant memory" block. Raise it to cut low-relevance recall noise (which is uncached, costing fresh tokens every turn). `0` falls back to the default. Applies on the next recall without restart.
-- `journalCap` (1–1000, default 50), `journalMaxLen` runes (64–65536, default 1024).
-- `journalMinLen` runes (0–`journalMaxLen`, default **40**) — write-side low-info gate: a per-turn journal whose content is shorter than this is dropped instead of stored, so trivial exchanges (e.g. a one-word/one-number answer) never pollute recall. **`0` disables the gate** (every non-empty turn is journaled). Conservative default keeps short-but-substantive notes; raise it (e.g. 60–80) to filter more aggressively.
-- `reflectionCap` (1–1000, default 20) — newest reflections kept per agent; older ones are pruned after each dream cycle so reflections (unlike journals) can't accumulate without bound.
-- `memoryPressureWarn` (0–1, default 0.70) — context-fill ratio above which a turn warns the agent to persist important facts before the next silent compaction; `0` disables the warning. (Lowered 0.75→0.70 to pair with the smaller raw budget — see `_Docs/17` §12.)
-- `coreMemoryTools` (default true) — offer the `core_memory_replace`/`core_memory_append` tools that edit the agent's persistent **named core blocks** (persona + human by default, plus any custom blocks; each character-limited, re-injected every turn).
-- `autoReflect` (default true), `autoReflectThreshold` (2–1000, default 20).
-- `autoUserModel` (default true) — during the dream cycle, refresh the agent's "human" core block from the journal (HA-1 automatic user modelling).
 
 ### Turn recovery
 - `reactiveCompact` (default true) — fold history + retry on context overflow.
@@ -158,6 +150,13 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
   Supersedes `claudeResume` when on (when both are on, only the persistent process is
   used — the `--resume` delta path is disabled). Retains context in-process and reuses
   the prompt cache.
+  > UI: these two booleans are edited as a SINGLE 3-way selector in Settings ▸
+  > Yetenekler (`AppToolsPanel` `Segmented` "claude-cli cache/oturum modu"):
+  > **Kalıcı süreç** (`persistent=true`), **--resume (delta)** (`persistent=false,
+  > resume=true`), **Kapalı** (both false). The selector maps to the same booleans, so
+  > the mutual-exclusion "both on → persistent wins" state is no longer reachable from
+  > the UI. Note: `--resume (delta)` is the exact mode External Agent uses (respawn +
+  > `resume: sessionId` per turn); the persistent process is a TionSwarm-only addition.
 - `claudeSysPromptFile` — how the appended claude-cli system prompt is delivered
   (default **false** = inline). Off: passed on the command line via
   `--append-system-prompt <text>` — simplest, no temp file. On: written to a temp file

@@ -48,13 +48,6 @@ type Agent struct {
 	// (global/workspace/project tiers) — never agent-owned.
 	Skills []string `json:"skills"`
 
-	// CoreBlocks defines this agent's named core-memory blocks (MemGPT memory
-	// blocks): their labels, char limits, descriptions and read-only flags. The
-	// block text itself lives in knowledge_sources under CoreKind(label). Empty
-	// means the agent uses DefaultCoreBlocks (persona + human) — no migration for
-	// agents created before named blocks existed.
-	CoreBlocks []CoreBlock `json:"coreBlocks,omitempty"`
-
 	// CreatedBy records the ID of the agent that created this agent through a
 	// self-management tool. Empty means it was created by the user (UI/API).
 	// Agents may only edit/delete entities that were created by an agent.

@@ -83,10 +83,8 @@ Suggested shape:
 - NOTE: progress.json is keyed to the project cwd (shared across sessions on it); falls back to a per-session store file when there is no project cwd
 ```
 
-## How this relates to your other memory
+## How this relates to the session goal
 
-- **Core memory** (`core_memory_replace`/`append`) = who you are / who the user is
-  — free-form, persistent persona/human. Not task state.
 - **Progress (this skill)** = what is done / in progress / next — structured task
   state, tied to the project.
 - **Goal** = the session's single north-star objective. Set it with
@@ -95,8 +93,8 @@ Suggested shape:
   parallel), injected into every turn until done. One durable objective, not a task
   checklist (that's progress/todos).
 
-Keep them distinct: don't dump task checklists into core memory, and don't put
-durable user facts in PROGRESS.md.
+Keep them distinct: the goal is the single objective; progress is the structured
+checklist of steps toward it.
 
 ## Rules of thumb
 

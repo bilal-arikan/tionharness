@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/memory"
 )
 
 func openTestDB(t *testing.T) *db.DB {
@@ -226,26 +225,6 @@ func TestFlowCreateValidatesGraph(t *testing.T) {
 	}
 	if f.CreatedBy != actor {
 		t.Fatalf("CreatedBy = %q, want %q", f.CreatedBy, actor)
-	}
-}
-
-// TestMemoryAdd verifies memory_add stores under the acting agent's id.
-func TestMemoryAdd(t *testing.T) {
-	ctx := context.Background()
-	d := openTestDB(t)
-	mem := memory.New(d)
-	const actor = "actor-1"
-
-	add := NewMemoryAddTool(mem, actor)
-	if _, err := add.Call(ctx, json.RawMessage(`{"content":"remember this","kind":"document"}`)); err != nil {
-		t.Fatalf("memory_add: %v", err)
-	}
-	list, err := mem.List(ctx, actor)
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if len(list) != 1 || list[0].Content != "remember this" {
-		t.Fatalf("memory not stored correctly: %+v", list)
 	}
 }
 

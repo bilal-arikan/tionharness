@@ -11,10 +11,9 @@ import (
 
 // Summary kinds the chat composer can request on demand from the "/" palette.
 const (
-	SummaryMemory = "memory"
-	SummaryBoard  = "board"
-	SummaryFlows  = "flows"
-	SummaryTools  = "tools"
+	SummaryBoard = "board"
+	SummaryFlows = "flows"
+	SummaryTools = "tools"
 )
 
 // summarySystemPrompt keeps the model terse and grounded strictly in the
@@ -74,18 +73,6 @@ func (r *Runtime) Summarize(ctx context.Context, agentID, kind string) (string, 
 func (r *Runtime) gatherSummaryData(ctx context.Context, agent db.Agent, kind string) (data, label string, err error) {
 	var sb strings.Builder
 	switch kind {
-	case SummaryMemory:
-		mems, e := r.mem.List(ctx, agent.ID)
-		if e != nil {
-			return "", "hafıza kaydı", e
-		}
-		if len(mems) > maxSummaryItems {
-			mems = mems[:maxSummaryItems]
-		}
-		for _, m := range mems {
-			fmt.Fprintf(&sb, "- [%s] %s\n", m.Kind, oneLine(m.Content))
-		}
-		return sb.String(), "hafıza kaydı", nil
 	case SummaryBoard:
 		tasks, e := r.db.ListTasks(ctx)
 		if e != nil {

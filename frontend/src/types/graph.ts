@@ -1,5 +1,5 @@
-// Relationship-graph payloads: the workspace collaboration network and the
-// per-agent memory knowledge graph. Both feed the vis-network canvas.
+// Relationship-graph payloads: the workspace collaboration network.
+// Feeds the vis-network canvas.
 
 // A node in the workspace collaboration network. `id` is type-prefixed by the
 // backend ("agent:…" / "task:…" / "flow:…").
@@ -31,24 +31,4 @@ export interface WorkspaceGraph {
   nodes: WorkspaceGraphNode[]
   edges: WorkspaceGraphEdge[]
   stats: Record<string, number>
-}
-
-// A node in an agent's memory knowledge graph (one per memory).
-export interface MemoryGraphNode {
-  id: string
-  kind: 'document' | 'journal' | 'reflection'
-  content: string
-  createdAt: number
-  degree: number
-}
-
-export interface MemoryGraphEdge {
-  source: string
-  target: string
-  score: number // lexical-cosine similarity in [0,1]
-}
-
-export interface MemoryGraph {
-  nodes: MemoryGraphNode[]
-  edges: MemoryGraphEdge[]
 }

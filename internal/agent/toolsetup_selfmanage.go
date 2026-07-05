@@ -104,8 +104,6 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewDeleteArtifactTool(r.db, agent.ID),
 		tools.NewListArtifactsTool(r.db, agent.ID),
 		tools.NewReadArtifactTool(r.db, agent.ID),
-		// Memory (recall already provided above) + logs.
-		tools.NewMemoryAddTool(r.mem, agent.ID),
 		tools.NewReadLogsTool(r.logs),
 	}
 	// Secret vault: list/get/set/delete are unified in the single `secret` tool

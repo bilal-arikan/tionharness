@@ -138,7 +138,7 @@ func TestInteractionTierSplit(t *testing.T) {
 	}
 	// Pure classification: the eager shell/edit tools are core even when gated off
 	// the advertised set (tun nil drops the shell spec, so assert the classifier).
-	for _, n := range []string{"Bash", "core_memory_replace", "run_subagent"} {
+	for _, n := range []string{"Bash", "run_subagent"} {
 		if interactionTier(n) != "core" {
 			t.Errorf("interactionTier(%q) must be core", n)
 		}

@@ -19,7 +19,6 @@ const KIND_LABEL: Record<IngestKind, string> = {
   flow: 'Flows',
   provider: 'Providers',
   workspace: 'Workspaces',
-  memory: 'Memories',
   mcp: 'MCP araçları',
 }
 

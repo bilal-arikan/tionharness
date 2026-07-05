@@ -3,14 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/memory"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
@@ -31,7 +29,7 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // artifacts) that changes every turn and is kept outside the cached prefix.
 //
 // Shared by both the blocking (chat.go) and streaming (chat_stream.go) handlers.
-func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool) providers.Request {
+func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool, lifecycleContext string) providers.Request {
 	system := buildSystemPrompt(agentRow)
 	// Coordinator sessions (M2, _Docs/47) lead with the coordinator operating manual
 	// so the agent drives workers, synthesizes their notifications itself, and runs
@@ -105,20 +103,6 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if sb := coordinationScratchpadBlock(wsp, session); sb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
 	}
-	// Core memory (MemGPT-style): the agent's self-maintained named working-memory
-	// blocks, re-injected verbatim every turn (edited via core_memory_replace/
-	// append). Default blocks are persona (about itself) + human (about the user);
-	// an agent may define more. Sits above recall because it is the agent's own
-	// durable context, not a similarity hit; recall excludes core kinds, so it
-	// never appears twice.
-	if blocks, err := wsp.Runtime.Memory().ReadCoreBlocks(ctx, agentRow.ID); err == nil {
-		if cb := coreMemoryBlock(blocks); cb != "" {
-			dynamic = strings.TrimSpace(dynamic + "\n\n" + cb)
-		}
-	}
-	if block := wsp.Runtime.Memory().ContextBlock(ctx, agentRow.ID, message, 5); block != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + block)
-	}
 	// The rolling compaction summary is NOT folded into the volatile dynamic here
 	// anymore (P2, _Docs/50): it is stable between two folds, so it travels in
 	// req.Summary and cache-capable providers place it as a synthetic head message
@@ -150,17 +134,12 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		}
 	}
 
-	// Memory-pressure signal (MemGPT-style paging hint): when the context budget is
-	// nearly full, warn the agent — BEFORE the next silent compaction — to persist
-	// anything that must survive. Volatile (recomputed each turn) so it leads the
-	// dynamic suffix without disturbing the cached static prefix. Threshold 0 = off.
-	if warn := s.tun.MemoryPressureWarn(); warn > 0 && prep.Pressure >= warn {
-		note := fmt.Sprintf(
-			"⚠️ Context is %d%% full and older turns will soon be compacted into a summary. "+
-				"If any fact, decision, or detail here must survive, persist it now "+
-				"(memory_add for long-term recall, or core_memory_replace/append for working memory).",
-			int(prep.Pressure*100))
-		dynamic = strings.TrimSpace(note + "\n\n" + dynamic)
+	// Context injected by SessionStart / UserPromptSubmit lifecycle hooks (e.g. a
+	// caveman-style "respond terse" ruleset). Volatile per turn, so it rides the
+	// dynamic suffix and never invalidates the cached static prefix. Leads the
+	// suffix so a style directive is read before the rest of the volatile context.
+	if lc := strings.TrimSpace(lifecycleContext); lc != "" {
+		dynamic = strings.TrimSpace(lc + "\n\n" + dynamic)
 	}
 
 	return providers.Request{
@@ -205,31 +184,6 @@ func conversationSummaryBlock(summary string) string {
 		"If you need exact pre-compaction detail — a code snippet, an error message, file contents, or a specific decision — " +
 		"recover it instead of guessing: use conversation_search to find what was said, or re-open the relevant files with your file tools."
 	return "## Conversation summary so far\n" + summary + recovery
-}
-
-// coreMemoryBlock formats the agent's named core-memory blocks for prompt
-// injection, emitting only the non-empty ones under a shared header. Each block
-// shows its description (as guidance) and a usage counter against its limit, so
-// the agent sees how full it is and which label to target. Returns "" when every
-// block is blank so the caller can append it unconditionally.
-func coreMemoryBlock(blocks []memory.BlockView) string {
-	var body strings.Builder
-	for _, blk := range blocks {
-		content := strings.TrimSpace(blk.Content)
-		if content == "" {
-			continue
-		}
-		fmt.Fprintf(&body, "\n### %s (%d/%d chars)", blk.Label, len([]rune(content)), blk.CharLimit)
-		if d := strings.TrimSpace(blk.Description); d != "" {
-			fmt.Fprintf(&body, " — %s", d)
-		}
-		body.WriteString("\n")
-		body.WriteString(content)
-	}
-	if body.Len() == 0 {
-		return ""
-	}
-	return "## Core memory (you maintain this; edit with core_memory_replace/append using the block label)" + body.String()
 }
 
 // adoptMentionedAgent makes the first @mentioned agent the session's default

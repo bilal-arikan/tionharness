@@ -122,7 +122,6 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// agent transparently uses its OWN native WebSearch instead. Backed by the
 		// workspace vault (a self-hosted SEARXNG_URL or a TAVILY_API_KEY).
 		tools.NewWebSearchTool(r.vault),
-		tools.NewMemoryRecallTool(r.mem, agent.ID),
 		// Interaction tools: todo_write surfaces a live checklist; ask_user pauses
 		// the turn for a clarifying question; request_confirmation blocks for a
 		// yes/no on a risky action (all no-ops outside interactive chat).
@@ -155,17 +154,6 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// mermaid_validate: lint a Mermaid diagram (recognised type + balanced
 		// brackets/quotes) before emitting it. Pure, read-only, no deps.
 		tools.NewMermaidValidateTool(),
-	}
-
-	// Core memory (MemGPT-style): the agent edits its own persistent working-memory
-	// block, re-injected into every prompt by composeTurnRequest. Opt-in per
-	// settings (on by default) so a minimal-surface workspace can drop the two
-	// tools. Eager: the model should reach for them readily as facts change.
-	if r.tun.CoreMemoryTools() {
-		builtins = append(builtins,
-			tools.NewCoreMemoryReplaceTool(r.mem, agent.ID),
-			tools.NewCoreMemoryAppendTool(r.mem, agent.ID),
-		)
 	}
 
 	// Skills: an agent may load its ASSIGNED skills plus every SHARED (on-demand)
@@ -368,7 +356,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	//
 	// Deliberately kept EAGER (behavioral nudges or high-frequency): todo_write,
 	// ask_user, request_confirmation, create_artifact/update_artifact,
-	// core_memory_*, use_skill/skill_search, run_subagent, Read/Write/Edit/list_dir/
+	// use_skill/skill_search, run_subagent, Read/Write/Edit/list_dir/
 	// Glob/Grep, shell. The self-management suite stays MarkHidden (dropped from the
 	// catalog entirely — more aggressive than name-only).
 	reg.MarkNameOnly(
@@ -378,8 +366,6 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// Cross-session & self-diagnostics — occasional, discoverable by name.
 		"list_sessions", "conversation_search", "read_session_debug",
 		"get_session_info", "update_user_preferences",
-		// Memory recall — recall is already auto-injected via ContextBlock.
-		"memory_recall",
 		// Artifact revise + meta — create_artifact stays eager (behavioral); revise
 		// and the deactivate meta-tool are reached on demand.
 		"update_artifact", "deactivate_tools",
@@ -388,10 +374,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// Background-shell management — reached only after a run_in_background launch.
 		"shell_manage",
 		// Promoted out of the hidden self-management group: common enough to advertise
-		// by name (handoff at context limit, add a memory, DM a peer agent) rather than
-		// fold into the self-management skill pointer. MarkNameOnly clears the earlier
-		// MarkHidden on these (disjoint tiers, last mark wins).
-		"handoff_session", "memory_add", "send_message",
+		// by name (handoff at context limit, DM a peer agent) rather than fold into the
+		// self-management skill pointer. MarkNameOnly clears the earlier MarkHidden on
+		// these (disjoint tiers, last mark wins).
+		"handoff_session", "send_message",
 	)
 	// Admin-rare tools fold into the HIDDEN self-management group (not enumerated
 	// per turn — surfaced via the tionswarm-self-management skill / tool_search). These

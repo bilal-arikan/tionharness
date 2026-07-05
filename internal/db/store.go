@@ -46,13 +46,6 @@ func (d *DB) mutateAgentLocked(id string, fn func(*Agent)) (Agent, error) {
 	return a, nil
 }
 
-// SetAgentCoreBlocks replaces an agent's core-memory block definitions
-// (labels/limits/descriptions/read-only). The block text in knowledge_sources is
-// untouched — callers prune orphaned content separately. Returns the stored row.
-func (d *DB) SetAgentCoreBlocks(ctx context.Context, agentID string, blocks []CoreBlock) (Agent, error) {
-	return d.mutateAgentLocked(agentID, func(a *Agent) { a.CoreBlocks = blocks })
-}
-
 // CreateAgent inserts a new agent and returns the stored row.
 func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	a.ID = d.nextID(idAgent)

@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react'
-import { Field, Toggle, inputCls } from './primitives'
+import { Field, Toggle, Segmented, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
 
@@ -41,17 +41,33 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         checked={draft.enableCliHooks}
         onChange={(v) => set('enableCliHooks', v)}
       />
-      <Toggle
-        label="claude-cli oturum sürekliliği (--resume)"
-        hint="Varsayılan açık. Her turda --resume ile önceki oturumu sürdürür ve yalnız yeni mesajı gönderir — CLI'nin sıcak prompt cache'ini tekrar kullanır (çok daha ucuz). Etkili olmasının sebebi: sistem promptu artık sabit (değişken bağlam mesaj kuyruğuna taşındı), böylece cache'li önek turdan tura bozulmaz. Yalnız tek-ajanlı sohbetlerde."
-        checked={draft.claudeResume}
-        onChange={(v) => set('claudeResume', v)}
-      />
-      <Toggle
-        label="claude-cli kalıcı süreç"
-        hint="Varsayılan açık. Oturum başına TEK uzun-ömürlü claude süreci canlı tutulur ve turlar stdin'den beslenir (her tur yeni süreç açılmaz); sıcak turda yalnız yeni kullanıcı mesajı gider, süreç gerisini hatırlar. Açıkken --resume'un yerine geçer. Cache ısınması TTL'e bağlıdır."
-        checked={draft.claudePersistentSession}
-        onChange={(v) => set('claudePersistentSession', v)}
+      <Segmented
+        label="claude-cli cache/oturum modu"
+        value={draft.claudePersistentSession ? 'persistent' : draft.claudeResume ? 'resume' : 'off'}
+        onChange={(mode) => {
+          // Two mutually-exclusive booleans drive the runtime (toolloop.go picks
+          // persistent when on; chat_resume.go gates --resume only when persistent is
+          // off). Map each segment to a deterministic pair so exactly one path is live.
+          set('claudePersistentSession', mode === 'persistent')
+          set('claudeResume', mode === 'persistent' || mode === 'resume')
+        }}
+        options={[
+          {
+            value: 'persistent',
+            label: 'Kalıcı süreç',
+            hint: 'Oturum başına TEK uzun-ömürlü claude süreci canlı tutulur; turlar stdin\'den beslenir (her tur yeni süreç açılmaz), sıcak turda yalnız yeni mesaj gider. En düşük cache-write + ~%6–7 daha hızlı warm tur (ölçüm: _Docs/50). Cache ısınması TTL\'e bağlı. TionSwarm\'a özgü — External Agent\'ta yoktur.',
+          },
+          {
+            value: 'resume',
+            label: '--resume (delta)',
+            hint: 'Her tur yeni süreç açılır ama --resume ile önceki oturum sürdürülür; yalnız yeni mesaj (delta) gönderilir → CLI\'nin sıcak server-side cache\'i tekrar kullanılır. En düşük input. External Agent de tam olarak bu modu kullanır. Yalnız tek-ajanlı sohbetlerde.',
+          },
+          {
+            value: 'off',
+            label: 'Kapalı',
+            hint: 'Ne kalıcı süreç ne --resume: her tur yeni süreç + TAM transcript gönderilir. En pahalı; yalnız hata ayıklama/karşılaştırma için.',
+          },
+        ]}
       />
       <Toggle
         label="claude-cli sistem promptunu dosyayla ekle (--append-system-prompt-file)"
@@ -59,14 +75,6 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         checked={draft.claudeSysPromptFile}
         onChange={(v) => set('claudeSysPromptFile', v)}
       />
-      {draft.claudeResume && draft.claudePersistentSession && (
-        <div className="rounded-lg border border-[var(--color-warning,#f59e0b)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-          ⚠️ <b>Kalıcı süreç, --resume'u geçersiz kılar.</b> İkisi de açık: yalnız kalıcı
-          süreç etkin olur (<code>--resume</code> delta yolu devre dışı). İkisi karşılıklı
-          dışlar — birini seçin. Kalıcı süreç en düşük cache-write'ı verir; --resume ise en
-          düşük input'u (yalnız delta gönderir).
-        </div>
-      )}
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         <b>Ajan→ajan delegasyon (run_subagent).</b> Bu araç artık daima kuruludur; açıp
         kapatmayı ajan bazında <b>Araçlar</b> ekranından yaparsınız. Aşağıdaki değerler her

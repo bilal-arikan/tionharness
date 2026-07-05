@@ -1,7 +1,7 @@
 # 23 — İlişki Grafiği (Relation Graph)
 
 Agent-MCP'nin "Multi-Agent Collaboration Network" görselleştirmesinden esinlenen,
-entity'ler arası ilişkileri tek bakışta gösteren iki **salt-okunur** ağ görünümü.
+entity'ler arası ilişkileri tek bakışta gösteren **salt-okunur** workspace ağ görünümü.
 Görselleştirme, Agent-MCP'nin de kullandığı **`vis-network` (vis.js)** ile yapılır —
 gerçek sürekli fizik motoru (sürükle/hover, canlı denge, forceAtlas2 ile homojen yayılım).
 
@@ -15,9 +15,7 @@ ayarı kırılgandı. Agent-MCP dashboard'unun `package.json`'ında graf için
 kaynağı budur. Maliyet: ~515KB ek (yalnız grafik görünümleri açılınca lazy yüklenen
 ayrı chunk; ana bundle'a binmez).
 
-## İki görünüm
-
-### 1. Workspace Ağı ("Ağ" — NavRail)
+## Workspace Ağı ("Ağ" — NavRail)
 Tüm workspace'in işbirliği ağı. **Düğüm türleri / şekilleri:** ajan (renkli disk),
 görev (**durum-renkli kare**; başlık altında etiket, **hover'da açıklama tooltip'i**),
 akış (mor baklava), **beceri/skill** (sarı **yıldız**), **MCP sunucusu** (teal **üçgen**).
@@ -39,8 +37,6 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   başlangıç). ("Geçmiş" katmanı yalnız Canlı modda etkindir.)
 - **Yoğunluk kaydırıcısı (0.4×–2×):** fizik itme + yay uzunluğunu canlı ölçekler —
   yüksek değer = daha sıkı paketleme, düşük = daha geniş yayılım.
-- **Hafıza neden burada yok?** Bir ajanın hafızaları yüzlerce düğüm olabilir;
-  workspace ağını boğmamak için hafıza ayrı **Hafıza → Ağ** grafiğinde gösterilir.
 - **Yerleşim — fizik (forceAtlas2):** vis-network `forceAtlas2Based` çözücüsü.
   Bağsız/seyrek graflarda bile düğümleri **eşit/organik (homojen)** bir buluta
   yayar (barnesHut'ın aksine kümeye çökmez/dağılıp uçmaz). `avoidOverlap` geniş
@@ -106,59 +102,27 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
   > (Doğrudan task çalıştırma yolu henüz yok — task'lar flow-backed ya da otonom
   > çalışır; doğrudan run path eklenince aynı tracker'la otomatik kapsanır.)
 
-### 2. Hafıza Bilgi Grafiği ("Hafıza" → Ağ sekmesi)
-Bir ajanın hafızalarının benzerlik grafiği: her hafıza bir düğüm, lexical-cosine
-benzerliği **eşik** üstündeki çiftler bağlanır.
-
-- Hafıza ekranında **Liste / Ağ** geçişi (Ağ sekmesi vis-network'ü lazy yükler).
-  **Varsayılan görünüm: Ağ** (bilgi grafiği birincil; Liste'ye tek tıkla geçilir).
-- Yerleşim: vis-network `forceAtlas2Based` fizik — benzer hafızalar birbirini çeker,
-  loose hafızalar eşit yayılır.
-- **İçerik etiketi:** her düğüm kısa bir içerik önizlemesi gösterir (hangi hafıza
-  olduğu bir bakışta okunur) — eskiden etiketsiz gri noktalardı.
-- **Zengin tooltip:** tür rozeti + içerik + tarih (`tip()` HTMLElement).
-- **Türe göre şekil/boyut:** yansıma (üst-düzey özet) = **yıldız + büyük**;
-  belge/günlük = disk; boyut ayrıca bağ derecesiyle (degree) ölçeklenir → hub'lar büyük.
-- Düğüm rengi hafıza türü (belge mavi / günlük slate / yansıma yeşil).
-- Kenar kalınlığı/opaklığı benzerlik skoruyla orantılı; kenar hover'da "benzerlik: %X".
-- **Benzerlik eşiği** kaydırıcısı (0.05–0.60): yoğun ağdan yalnız en güçlü bağlara süzme.
-- **Yoğunluk kaydırıcısı (0.4×–2×):** fizik itme + yay uzunluğunu canlı ölçekler
-  (workspace ağındaki ile aynı mekanik; `VisNetworkGraph density` prop'u).
-- **Hover komşu vurgusu:** bir düğümün üstüne gelince yalnız o düğüm, doğrudan
-  komşuları ve aralarındaki kenarlar parlak kalır; geri kalan her şey soldurulur
-  (odak + bağlam). `VisNetworkGraph highlightNeighbors` prop'u; blur'da geri döner.
-- **Tıkla → detay paneli:** bir hafızaya tıklayınca sağ üstte bir kart açılır —
-  tür rozeti, **tam içerik** (kaydırılabilir), bağ sayısı ve tarih; ✕ ile kapanır.
-  Düğüm seçimi `onSelect` → `selectedId` ile sürülür.
-- **Tür çapa (toggle):** Belge/Günlük/Yansıma için sürüklenebilir, fizik-bağışık
-  çapa kutuları; her hafıza kendi tür çapasına yaylanır → bulut türe göre kümelenir
-  (canlı moddaki sütun mekaniğiyle aynı). `memoryToVis({ kindAnchors })`.
-- **Küme rengi (toggle):** benzerlik kenarları üzerinden union-find ile bağlı
-  bileşenler (konu grupları) hesaplanır; ≥2 üyeli her bileşen altın-açı ile üretilen
-  ayrı bir tonla boyanır (tekil düğümler tür rengini korur). `memoryToVis({ clusterColor })`.
+> **Not (2026-07-05):** Bu doküman eskiden ikinci bir görünüm (**Hafıza Bilgi
+> Grafiği**) daha anlatıyordu; memory alt sistemi projeden tamamen kaldırıldığında
+> o bölüm ile ilgili backend (`memory-graph`) ve frontend (`MemoryGraphView`) de çıktı.
+> Aşağıdaki mimari yalnız **Workspace Ağı**nı kapsar.
 
 ## Backend
 
-- `internal/memory/graph.go` — `Store.Graph(ctx, agentID, threshold, maxEdges)`:
-  tüm hafızalar arası O(n²) pairwise cosine; eşik üstü kenarlar, skora göre
-  sıralı + `maxEdges` ile cap; düğüm degree'leri hesaplanır. (`graph_test.go`)
 - `internal/api/graph.go` — `registerGraphRoutes`:
   - `GET /api/graph` → workspace ağı (`workspaceGraph{nodes,edges,stats}`).
     Düğüm id'leri tür-önekli: `agent:` / `task:` / `flow:` / `skill:<slug>` / `mcp:<id>`
     (türler arası benzersiz). Akış→ajan kenarları `orchestration.ParseGraph` ile
     akış graf'ından; skill kenarları `Agent.Skills`'ten; mcp kenarları etkin
     `ListMCPServers` + `Agent.MCPEnabled`'dan çıkarılır. `stats` skills/mcp sayılarını da içerir.
-  - `GET /api/agents/{id}/memory-graph?threshold=&max=` → hafıza grafiği
-    (varsayılan threshold 0.18, max 400).
 
 ## Frontend
 
-- `types/graph.ts` — `WorkspaceGraph`/`MemoryGraph` DTO'ları (barrel: `types.ts`).
-- `api/graph.ts` — `graphApi.workspaceGraph()` / `memoryGraph()` (barrel: `api.ts`).
-- `lib/relationGraph.ts` — DTO → vis-network `{nodes, edges}` eşleyiciler
-  (`workspaceToVis(graph, visible, mode)`, `memoryToVis(graph, { kindAnchors, clusterColor })`)
-  + kenar/lejant/tür renk sabitleri + yardımcılar (`connectedComponents` union-find,
-  `clusterHue` altın-açı, `tip`/`fmtDate`/`truncate`).
+- `types/graph.ts` — `WorkspaceGraph` DTO'su (barrel: `types.ts`).
+- `api/graph.ts` — `graphApi.workspaceGraph()` (barrel: `api.ts`).
+- `lib/relationGraph.ts` — DTO → vis-network `{nodes, edges}` eşleyici
+  (`workspaceToVis(graph, visible, mode)`) + kenar/lejant/tür renk sabitleri
+  + yardımcılar (`tip`/`fmtDate`/`truncate`).
 - `components/graph/VisNetworkGraph.tsx` — vis-network sarmalayıcı: `Network`+`DataSet`
   yaşam döngüsü, forceAtlas2 fizik düzeni. Prop'lar: **`mode`** (`relation`|`live` —
   canlı modda merkez-çekimi düşük), **`density`** (itme/yay uzunluğunu ölçekler — canlı
@@ -167,18 +131,16 @@ benzerliği **eşik** üstündeki çiftler bağlanır.
   konumlarını korur), stabilize sonrası `fit`.
 - `components/panels/NetworkPanel.tsx` — workspace ağı paneli (App'te lazy);
   İlişki/Canlı mod, yoğunluk kaydırıcısı, katman chip'leri, Canlı modda SSE aboneliği.
-- `components/graph/MemoryGraphView.tsx` — hafıza grafiği (MemoryPanel'de lazy);
-  eşik + yoğunluk kaydırıcıları, Tür çapaları / Küme rengi toggle'ları, tıkla→detay paneli.
 
 > Eski React Flow tabanlı `RelationGraph.tsx`/`EntityNode.tsx` ve saf-TS force
-> layout fonksiyonları (`forcePositions`/`workspaceLayout`/`memoryLayout`) vis-network
+> layout fonksiyonları (`forcePositions`/`workspaceLayout`) vis-network
 > geçişinde kaldırıldı.
 
 ## Code-split
 
-Her iki giriş noktası (NetworkPanel, MemoryGraphView) vis-network'ü ayrı bir lazy
-chunk olarak yükler (~515KB); ana bundle (~870KB) etkilenmez. Akışlar (React Flow)
-hâlâ kendi ayrı chunk'ında.
+Giriş noktası (NetworkPanel) vis-network'ü ayrı bir lazy chunk olarak yükler
+(~515KB); ana bundle (~870KB) etkilenmez. Akışlar (React Flow) hâlâ kendi ayrı
+chunk'ında.
 
 ## Durum
 

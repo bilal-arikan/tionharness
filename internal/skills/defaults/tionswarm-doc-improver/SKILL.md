@@ -8,7 +8,7 @@ color: "#14b8a6"
 # TionSwarm — Doc Improver (audit & tighten context docs)
 
 Context documents are part of the agent's runtime: skills sit in the prompt, the
-workspace CLAUDE.md shapes every turn, and `_Docs` is the project's memory. When
+workspace CLAUDE.md shapes every turn, and `_Docs` is the project's written record. When
 they bloat or drift, every turn pays for it. This skill is a repeatable audit that
 scores a doc on six dimensions and applies **only the edits that earn their place**
 — a repeatable discipline adapted to TionSwarm's own doc surfaces.

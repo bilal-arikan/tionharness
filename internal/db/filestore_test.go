@@ -44,9 +44,6 @@ func TestRoundTrip(t *testing.T) {
 	if err := d.AddUsage(ctx, agent.ID, 1, 100, 50); err != nil {
 		t.Fatalf("add usage: %v", err)
 	}
-	if _, err := d.CreateKnowledge(ctx, KnowledgeSource{AgentID: agent.ID, Kind: MemoryDocument, Content: "fact", Embedding: []byte{1, 2, 3}}); err != nil {
-		t.Fatalf("create knowledge: %v", err)
-	}
 
 	// session.jsonl must exist on disk.
 	if _, err := os.Stat(filepath.Join(storeDir, dirSessions, sess.ID, "session.jsonl")); err != nil {
@@ -84,10 +81,6 @@ func TestRoundTrip(t *testing.T) {
 	u, err := d2.GetUsageToday(ctx, agent.ID)
 	if err != nil || u.Calls != 1 || u.InputTokens != 100 {
 		t.Fatalf("usage wrong: %+v err=%v", u, err)
-	}
-	ks, err := d2.ListKnowledge(ctx, agent.ID)
-	if err != nil || len(ks) != 1 || len(ks[0].Embedding) != 3 {
-		t.Fatalf("knowledge/embedding wrong: %+v err=%v", ks, err)
 	}
 
 	// Deletion must remove the file and the in-memory entry.

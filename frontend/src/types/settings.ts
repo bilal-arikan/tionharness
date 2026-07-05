@@ -46,19 +46,8 @@ export interface AppSettings {
 
   maxContextTokens: number
   keepRecentMsgs: number
-  recallTopN: number
-  recallMinScore: number
   contextBudgetCeil: number
   contextBudgetFraction: number
-
-  journalCap: number
-  journalMaxLen: number
-  journalMinLen: number        // write-side low-info gate (runes); 0 = gate off
-  reflectionCap: number       // newest reflections kept per agent; older pruned each dream cycle
-
-  // MemGPT-style self-editing memory (C6).
-  memoryPressureWarn: number  // context-fill ratio (0..1) above which the agent is warned; 0 = off
-  coreMemoryTools: boolean    // offer core_memory_replace/append editing tools
 
   // Context reset / handoff (Anthropic "harness design").
   handoffAuto: boolean        // auto-reset an autonomous turn that hit the context limit into a fresh session
@@ -76,10 +65,6 @@ export interface AppSettings {
   // Per-session debug journal (parallel observability stream).
   debugJournalEnabled: boolean // emit structured debug events to debug.jsonl
   debugJournalCap: number      // newest events kept per session (0 = default 5000)
-
-  autoReflect: boolean
-  autoReflectThreshold: number
-  autoUserModel: boolean      // HA-1: refresh the "human" core block from journals during the dream cycle
 
   // Turn recovery (A1).
   reactiveCompact: boolean
@@ -239,7 +224,7 @@ export interface ExternalToolStatus {
   path?: string
 }
 
-// A built-in runtime prompt (summary/reflect/title), shown read-only in the
+// A built-in runtime prompt (summary/title/compact), shown read-only in the
 // Komutlar settings screen.
 export interface PromptInfo {
   key: string

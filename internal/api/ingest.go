@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/ingest"
 	"github.com/bilal-arikan/tionswarm/internal/market"
 )
@@ -85,6 +86,7 @@ func (s *Server) decorateExisting(r *http.Request, items []ingest.Discovered) {
 	skillStore := wsp.Runtime.Skills()
 	agents, _ := wsp.DB.ListAgents(r.Context())
 	mcps, _ := wsp.DB.ListMCPServers(r.Context())
+	hooks, _ := wsp.DB.ListHooks(r.Context())
 	agentSet := lowerSet(agentNames(agents))
 	mcpSet := lowerSet(mcpNames(mcps))
 	for i := range items {
@@ -96,8 +98,32 @@ func (s *Server) decorateExisting(r *http.Request, items []ingest.Discovered) {
 			items[i].Exists = agentSet[strings.ToLower(strings.TrimSpace(items[i].Name))]
 		case market.KindMCP:
 			items[i].Exists = mcpSet[strings.ToLower(strings.TrimSpace(items[i].Name))]
+		case market.KindHook:
+			items[i].Exists = hookAlreadyInstalled(hooks, items[i].Name)
 		}
 	}
+}
+
+// hookAlreadyInstalled reports whether a discovered hook (named "<Event>:
+// <label>") matches an existing workspace hook — same event and a command that
+// still references the same script label. Best-effort dedup so re-importing a
+// package doesn't stack duplicate hooks.
+func hookAlreadyInstalled(existing []db.Hook, discoveredName string) bool {
+	event, label, ok := strings.Cut(discoveredName, ": ")
+	if !ok {
+		return false
+	}
+	event = strings.TrimSpace(event)
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return false
+	}
+	for _, h := range existing {
+		if h.Event == event && strings.Contains(h.Command, label) {
+			return true
+		}
+	}
+	return false
 }
 
 // ingestInstallReq is the bulk-install payload: the source plus the selected item

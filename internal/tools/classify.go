@@ -16,7 +16,6 @@ const (
 // effects, so Explore (read-only) agents can still use them.
 var toolRisk = map[string]Risk{
 	// TionSwarm-specific built-ins (no claude-cli analog).
-	"memory_recall":        RiskRead,
 	"ask_user":             RiskRead,
 	"request_confirmation": RiskRead,
 	"todo_write":           RiskRead,

@@ -2,20 +2,9 @@ package agent
 
 import "sync"
 
-// Default journal bounds, used when the settings-driven values are unset (0).
-const (
-	DefaultJournalCap           = 50   // newest journal entries kept per agent
-	DefaultJournalMaxLen        = 1024 // max runes stored per journal entry
-	DefaultJournalMinLen        = 40   // write-side low-info gate (runes); applied via settings, 0 = gate off
-	DefaultAutoReflectThreshold = 20   // journal count that triggers auto-reflect
-	DefaultReflectionCap        = 20   // newest reflections kept per agent (older pruned)
-	DefaultSessionContextRecent = 5    // past sessions listed in the cross-session block
-)
-
-// DefaultRecallMinScore is the cosine floor below which a recalled memory is
-// considered irrelevant, used when the settings-driven value is unset (<= 0). It
-// mirrors memory.DefaultMinScore so default recall behaviour is unchanged.
-const DefaultRecallMinScore = 0.04
+// DefaultSessionContextRecent bounds the past sessions listed in the
+// cross-session context block.
+const DefaultSessionContextRecent = 5
 
 // Default turn-recovery (A1) bounds, applied to a freshly constructed Tunables so
 // test runtimes (which never call applySettings) get production-sane behaviour.
@@ -69,19 +58,6 @@ type Tunables struct {
 	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
 	coordMaxWorkers    int // 0 → DefaultCoordinatorMaxWorkers
 	coordMaxTurns      int // 0 → DefaultCoordinatorMaxTurns
-	journalCap         int // 0 → DefaultJournalCap
-	journalMaxLen      int // 0 → DefaultJournalMaxLen
-	journalMinLen      int // write-side low-info gate (runes); 0 = gate off (NOT defaulted — 0 is meaningful)
-	reflectionCap      int // 0 → DefaultReflectionCap (newest reflections kept; older pruned each dream cycle)
-
-	// recallMinScore is the cosine floor below which a recalled memory is dropped.
-	// 0 → DefaultRecallMinScore. Raising it cuts low-relevance recall noise from
-	// the (uncached) dynamic context. Read live by memory.Store via a provider.
-	recallMinScore float64
-
-	autoReflect          bool // run the dream cycle automatically as journals grow
-	autoReflectThreshold int  // 0 → DefaultAutoReflectThreshold
-	autoUserModel        bool // HA-1: refresh the "human" core block from journals during the dream cycle
 
 	// Turn recovery (A1) — structural handling of output-token cutoffs and
 	// context overflow inside the native agentic tool loop.
@@ -112,10 +88,6 @@ type Tunables struct {
 	// discipline). When on, headless turns get a short reminder to orient → recall
 	// → select one task → verify the baseline → work → close the loop before acting.
 	autonomousBootSeq bool // inject the boot-sequence reminder on autonomous turns (default on)
-
-	// MemGPT-style self-editing memory (C6).
-	memoryPressureWarn float64 // context-fill ratio (0..1) above which the agent is warned to persist; 0 = off
-	coreMemoryTools    bool    // offer the core_memory_replace/append tools (default on)
 
 	// Native tool-loop iteration cap (applied each iteration, so settings changes
 	// take effect on the next turn without restart). <0 → defaultMaxToolIters;
@@ -210,12 +182,6 @@ func NewTunables() *Tunables {
 		// Boot-sequence reminder on by default: a few tokens per headless turn buys
 		// orient → verify-baseline discipline. Production overrides from settings.
 		autonomousBootSeq: true,
-		// MemGPT memory defaults: warn at 70% context fill, offer the core tools,
-		// and auto-model the user during the dream cycle. Production overrides these
-		// from settings via SetMemoryControls / SetUserModel.
-		memoryPressureWarn: 0.70,
-		coreMemoryTools:    true,
-		autoUserModel:      true,
 		// Persistent progress on by default: it only adds a per-project file and is
 		// transparent to existing behaviour. Production overrides from settings.
 		progressPersist: true,
@@ -242,10 +208,6 @@ func NewTunables() *Tunables {
 		// SetAutoTagSessions); test runtimes that skip applySettings still auto-tag.
 		autoTagSessions: true,
 		maxToolIters:    -1,
-		// Recall floor at the historical default so test runtimes (which skip
-		// applySettings) recall exactly as before. journalMinLen is left at 0 (gate
-		// off) for the same reason — only production turns the write-gate on.
-		recallMinScore: DefaultRecallMinScore,
 	}
 }
 
@@ -424,128 +386,6 @@ func (t *Tunables) CoordinatorMaxTurns() int {
 		return DefaultCoordinatorMaxTurns
 	}
 	return t.coordMaxTurns
-}
-
-// SetJournalLimits sets the journal ring-buffer cap (max entries kept per agent),
-// the per-entry length cap, and the write-side low-info gate (min runes a turn
-// must carry to be journaled). A value of 0 selects the built-in default for cap
-// and maxLen; for minLen, 0 disables the gate (it is not defaulted).
-func (t *Tunables) SetJournalLimits(cap, maxLen, minLen int) {
-	t.mu.Lock()
-	t.journalCap = cap
-	t.journalMaxLen = maxLen
-	t.journalMinLen = minLen
-	t.mu.Unlock()
-}
-
-// JournalCap returns how many journal entries an agent keeps (default when unset).
-func (t *Tunables) JournalCap() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.journalCap <= 0 {
-		return DefaultJournalCap
-	}
-	return t.journalCap
-}
-
-// JournalMaxLen returns the per-entry journal length cap in runes (default when unset).
-func (t *Tunables) JournalMaxLen() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.journalMaxLen <= 0 {
-		return DefaultJournalMaxLen
-	}
-	return t.journalMaxLen
-}
-
-// JournalMinLen returns the write-side low-info gate in runes: a journal entry
-// shorter than this is dropped instead of stored. Unlike the caps above, 0 is a
-// meaningful value (gate disabled), so it is NOT replaced with a default; only a
-// negative (invalid) value is normalised to 0.
-func (t *Tunables) JournalMinLen() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.journalMinLen < 0 {
-		return 0
-	}
-	return t.journalMinLen
-}
-
-// SetRecallMinScore sets the cosine floor below which a recalled memory is
-// dropped. A value of 0 selects DefaultRecallMinScore (current behaviour).
-func (t *Tunables) SetRecallMinScore(score float64) {
-	t.mu.Lock()
-	t.recallMinScore = score
-	t.mu.Unlock()
-}
-
-// RecallMinScore returns the recall cosine floor (default when unset/<=0).
-func (t *Tunables) RecallMinScore() float64 {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.recallMinScore <= 0 {
-		return DefaultRecallMinScore
-	}
-	return t.recallMinScore
-}
-
-// SetReflectionCap sets how many newest reflections an agent keeps; older ones
-// are pruned after each dream cycle. A value of 0 selects the built-in default.
-func (t *Tunables) SetReflectionCap(cap int) {
-	t.mu.Lock()
-	t.reflectionCap = cap
-	t.mu.Unlock()
-}
-
-// ReflectionCap returns how many reflections an agent keeps (default when unset).
-func (t *Tunables) ReflectionCap() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.reflectionCap <= 0 {
-		return DefaultReflectionCap
-	}
-	return t.reflectionCap
-}
-
-// SetAutoReflect configures the automatic dream cycle: whether it runs and the
-// journal count that triggers it (0 threshold selects the built-in default).
-func (t *Tunables) SetAutoReflect(enabled bool, threshold int) {
-	t.mu.Lock()
-	t.autoReflect = enabled
-	t.autoReflectThreshold = threshold
-	t.mu.Unlock()
-}
-
-// AutoReflect reports whether auto-reflect is enabled.
-func (t *Tunables) AutoReflect() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.autoReflect
-}
-
-// AutoReflectThreshold returns the journal count that triggers auto-reflect.
-func (t *Tunables) AutoReflectThreshold() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.autoReflectThreshold <= 0 {
-		return DefaultAutoReflectThreshold
-	}
-	return t.autoReflectThreshold
-}
-
-// SetUserModel toggles HA-1 automatic user modelling (refreshing the "human" core
-// block from the journal during the dream cycle).
-func (t *Tunables) SetUserModel(enabled bool) {
-	t.mu.Lock()
-	t.autoUserModel = enabled
-	t.mu.Unlock()
-}
-
-// UserModel reports whether HA-1 automatic user modelling is enabled.
-func (t *Tunables) UserModel() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.autoUserModel
 }
 
 // SetRecoveryLimits configures the A1 turn-recovery knobs: whether reactive
@@ -782,31 +622,6 @@ func (t *Tunables) AutonomousBootSeq() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.autonomousBootSeq
-}
-
-// SetMemoryControls configures the MemGPT-style memory knobs: the context-fill
-// ratio above which the agent is warned to persist important facts (0 disables
-// the warning), and whether the core_memory_* editing tools are offered.
-func (t *Tunables) SetMemoryControls(pressureWarn float64, coreTools bool) {
-	t.mu.Lock()
-	t.memoryPressureWarn = pressureWarn
-	t.coreMemoryTools = coreTools
-	t.mu.Unlock()
-}
-
-// MemoryPressureWarn returns the context-fill ratio above which a turn injects a
-// "persist now" warning. A returned 0 means the warning is disabled.
-func (t *Tunables) MemoryPressureWarn() float64 {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.memoryPressureWarn
-}
-
-// CoreMemoryTools reports whether the core_memory_replace/append tools are offered.
-func (t *Tunables) CoreMemoryTools() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.coreMemoryTools
 }
 
 // SetHandoff configures the context-reset/handoff knobs: whether autonomous turns

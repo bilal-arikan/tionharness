@@ -110,10 +110,13 @@ type hookReq struct {
 	Enabled    bool   `json:"enabled"`
 }
 
-// validHookEvent reports whether e is a supported hook event.
+// validHookEvent reports whether e is a supported hook event (tool or lifecycle).
 func validHookEvent(e string) bool {
-	return e == db.HookPreToolUse || e == db.HookPostToolUse
+	return db.ValidHookEvent(e)
 }
+
+// hookEventError is the 400 message listing every accepted event.
+const hookEventError = "event must be one of: PreToolUse, PostToolUse, UserPromptSubmit, SessionStart, Stop, SubagentStop, PreCompact, Notification, SessionEnd"
 
 func (s *Server) handleCreateHook(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
@@ -122,7 +125,7 @@ func (s *Server) handleCreateHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validHookEvent(req.Event) {
-		writeError(w, http.StatusBadRequest, "event must be PreToolUse or PostToolUse")
+		writeError(w, http.StatusBadRequest, hookEventError)
 		return
 	}
 	if req.Command == "" {
@@ -152,7 +155,7 @@ func (s *Server) handleUpdateHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validHookEvent(req.Event) {
-		writeError(w, http.StatusBadRequest, "event must be PreToolUse or PostToolUse")
+		writeError(w, http.StatusBadRequest, hookEventError)
 		return
 	}
 	if req.Command == "" {

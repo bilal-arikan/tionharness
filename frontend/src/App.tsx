@@ -8,7 +8,6 @@ import type { Agent, AgentPatch, Artifact, Session, Message, AppEvent, TurnStep 
 import { NavRail, type View } from './components/NavRail'
 import { MobileNavBar } from './components/MobileNavBar'
 import { SessionsSidebar } from './components/sessions/SessionsSidebar'
-import { AgentRoster } from './components/agents/AgentRoster'
 import { AgentsView } from './components/agents/AgentsView'
 import { MessageList } from './components/chat/MessageList'
 import { Composer } from './components/chat/Composer'
@@ -23,7 +22,6 @@ import { TodoPanel } from './components/chat/TodoPanel'
 import { latestTodos } from './lib/todos'
 import { TaskBoard } from './components/panels/TaskBoard'
 import { Schedules } from './components/panels/Schedules'
-import { MemoryPanel } from './components/panels/MemoryPanel'
 // Code-split: the Flows panel pulls in React Flow (~300KB), loaded only when
 // the user opens the Akışlar view.
 const FlowsPanel = lazy(() =>
@@ -91,7 +89,6 @@ const VIEW_TITLE: Record<View, string> = {
   network: 'Ağ',
   board: 'Görevler',
   schedules: 'Otomasyon',
-  memory: 'Hafıza',
   flows: 'Akışlar',
   artifacts: 'Artifactlar',
   skills: 'Skills',
@@ -105,10 +102,10 @@ const VIEW_TITLE: Record<View, string> = {
 
 // Views that render their own left list-sidebar INSIDE the main area. For these we
 // skip the app-level top header entirely so the sidebar (and the panel's own
-// in-pane headers) reach the very top — matching the chat/memory layout where the
+// in-pane headers) reach the very top — matching the chat layout where the
 // sidebar is a sibling of <main>. Errors for these still surface via ErrorToast.
 const HEADERLESS_VIEWS = new Set<View>([
-  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs', 'budget', 'board', 'memory', 'network',
+  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs', 'budget', 'board', 'network',
 ])
 
 export default function App() {
@@ -201,7 +198,7 @@ export default function App() {
   // Portrait-phone layout flag: below Tailwind's `md` breakpoint the desktop rail
   // and persistent sidebars collapse into a bottom nav + slide-in drawers.
   const isMobile = useIsMobile()
-  // Mobile-only: the left list column (chat sessions OR the memory agent roster)
+  // Mobile-only: the left list column (chat sessions OR the agents roster)
   // is a slide-in drawer instead of an always-visible column. Opened via the
   // header hamburger; closed on select. One flag shared across list-bearing views.
   const [mobileListOpen, setMobileListOpen] = useState(false)
@@ -342,7 +339,7 @@ export default function App() {
             sid = want.id
             aid = ss.find((s) => s.id === want.id)?.agentId ?? aid
           } else if (
-            (want.view === 'agents' || want.view === 'memory') &&
+            want.view === 'agents' &&
             want.id &&
             ag.some((a) => a.id === want.id)
           ) {
@@ -783,7 +780,7 @@ export default function App() {
   }, [])
 
   // Roster click: set it as the default agent (for new chats) and as the active
-  // agent (so the Memory/Tools panels, which are agent-scoped, follow along).
+  // agent (so the Tools panel, which is agent-scoped, follows along).
   const pickAgent = useCallback(
     (id: string) => {
       setActiveAgentId(id)
@@ -792,7 +789,7 @@ export default function App() {
     [pickDefaultAgent],
   )
 
-  // Focus an agent across agent-scoped views (Agents/Memory/Tools) without
+  // Focus an agent across agent-scoped views (Agents/Tools) without
   // changing which agent is the default for new chats.
   const focusAgent = useCallback((id: string) => {
     setActiveAgentId(id)
@@ -988,7 +985,7 @@ export default function App() {
       }
       if (r.view === 'chat') {
         if (r.id) selectSession(r.id)
-      } else if (r.view === 'agents' || r.view === 'memory') {
+      } else if (r.view === 'agents') {
         if (r.id) focusAgent(r.id)
       } else if (r.view === 'artifacts') {
         setArtifactTarget(r.id)
@@ -1097,41 +1094,11 @@ export default function App() {
         </>
       )}
 
-      {/* Agent-scoped views need an agent picker; reuse the roster as a sidebar.
-          Desktop: an always-visible column. Mobile: a left slide-in drawer (same
-          hamburger + backdrop pattern as the chat sessions list). */}
-      {view === 'memory' && (
-        <>
-          {isMobile && mobileListOpen && (
-            <div
-              className="fixed inset-0 z-30 bg-black/50 md:hidden"
-              onClick={() => setMobileListOpen(false)}
-            />
-          )}
-          <div
-            className={`shrink-0 md:static ${
-              mobileListOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
-            } max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-xl max-md:transition-transform`}
-          >
-            <AgentRoster
-              agents={agents}
-              defaultAgentId={defaultAgentId}
-              onSelectAgent={(id) => {
-                pickAgent(id)
-                setMobileListOpen(false)
-              }}
-              onCreateAgent={createAgent}
-              onUpdateAgent={updateAgent}
-            />
-          </div>
-        </>
-      )}
-
       {/* Key the view subtree by the active workspace so switching (or creating
           and switching into) a workspace REMOUNTS every panel. The panels here
           fetch their own workspace-scoped data on mount (flows, tasks, schedules,
-          executions, network, artifacts, secrets, skills, market, budget, logs,
-          memory), so without a remount they would keep showing the previous
+          executions, network, artifacts, secrets, skills, market, budget,
+          logs), so without a remount they would keep showing the previous
           workspace's data until a manual page refresh. App-level agents/sessions
           are reset+refetched by the activeWorkspaceId effect above. */}
       <main
@@ -1141,11 +1108,11 @@ export default function App() {
         {!HEADERLESS_VIEWS.has(view) && (
           <header className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] py-3 max-md:px-3 md:px-6">
             <div className="flex min-w-0 items-center gap-2">
-              {(view === 'chat' || view === 'memory') && (
+              {view === 'chat' && (
                 <button
                   onClick={() => setMobileListOpen(true)}
-                  aria-label={view === 'memory' ? 'Ajanlar' : 'Oturumlar'}
-                  title={view === 'memory' ? 'Ajanlar' : 'Oturumlar'}
+                  aria-label="Oturumlar"
+                  title="Oturumlar"
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] md:hidden"
                 >
                   <Menu size={18} />
@@ -1323,13 +1290,6 @@ export default function App() {
         {view === 'board' && <TaskBoard agents={agents} onError={setError} />}
         {view === 'schedules' && (
           <Schedules agents={agents} focusId={scheduleTarget} onError={setError} />
-        )}
-        {view === 'memory' && (
-          <MemoryPanel
-            agent={agents.find((a) => a.id === activeAgentId) ?? null}
-            onError={setError}
-            onToggleList={() => setMobileListOpen(true)}
-          />
         )}
         {view === 'flows' && (
           <Suspense

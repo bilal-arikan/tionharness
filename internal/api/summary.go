@@ -20,16 +20,15 @@ type summaryReq struct {
 // summaryHeaders gives each summary kind a self-explanatory chat header so the
 // resulting assistant message reads clearly on its own.
 var summaryHeaders = map[string]string{
-	agent.SummaryMemory: "🧠 **Hafıza özeti**",
-	agent.SummaryBoard:  "🗂 **Görev panosu özeti**",
-	agent.SummaryFlows:  "🔀 **Akışlar özeti**",
-	agent.SummaryTools:  "🔌 **Araçlar**",
+	agent.SummaryBoard: "🗂 **Görev panosu özeti**",
+	agent.SummaryFlows: "🔀 **Akışlar özeti**",
+	agent.SummaryTools: "🔌 **Araçlar**",
 }
 
-// handleSessionSummary produces an on-demand summary (memory/board/flows), a
-// tool listing, a reflection (dream cycle) or a forced conversation compaction
-// for the session's agent, persists the result as an assistant message in the
-// session, and returns that message. Powers the chat "/" commands.
+// handleSessionSummary produces an on-demand summary (board/flows), a tool
+// listing or a forced conversation compaction for the session's agent, persists
+// the result as an assistant message in the session, and returns that message.
+// Powers the chat "/" commands.
 func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
@@ -46,18 +45,10 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	kind := strings.TrimSpace(req.Kind)
 
-	// Resolve the header + body for this command. reflect/compact are handled
-	// specially; the rest go through the model-summary path.
+	// Resolve the header + body for this command. compact is handled specially;
+	// the rest go through the model-summary path.
 	var header, body string
 	switch kind {
-	case "reflect":
-		header = "✦ **Yansıma (dream cycle)**"
-		reflection, rerr := wsp.Runtime.Reflect(ctx, session.AgentID)
-		if rerr != nil {
-			writeError(w, http.StatusInternalServerError, "reflect failed: "+rerr.Error())
-			return
-		}
-		body = reflection.Content
 	case "compact":
 		header = "🗜 **Sohbet sıkıştırma**"
 		cbody, cerr := s.compactSession(ctx, wsp, session)

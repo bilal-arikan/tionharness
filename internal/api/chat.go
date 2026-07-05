@@ -159,7 +159,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession, multiAgent)
+	// Blocking (non-streaming) path: lifecycle hooks fire on the streaming path
+	// (the UI default); "" here satisfies the request builder signature.
+	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession, multiAgent, "")
 
 	// Manual chat is not budget-gated (autonomous=false). When the agent has
 	// tools enabled this drives the agentic loop (native) or CLI delegation;
@@ -192,9 +194,6 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	// Usage already recorded inside CompleteWithTools; just journal the turn.
-	ws(r).Runtime.Journal(ctx, agent.ID, "Q: "+req.Message+"\nA: "+resp.Text)
 
 	// Auto-capture any files the agent wrote this turn as artifacts.
 	s.captureFileArtifacts(ctx, database, session.ID, agent.ID, steps)

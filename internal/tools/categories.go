@@ -11,7 +11,6 @@ package tools
 const (
 	CategoryFiles       = "files"       // filesystem + shell
 	CategorySearch      = "search"      // web + conversation search
-	CategoryMemory      = "memory"      // long-term + core memory
 	CategoryAgents      = "agents"      // agents, subagents, sessions, delegation
 	CategoryAutomation  = "automation"  // flows, schedules, tasks, hooks
 	CategoryInteraction = "interaction" // user-facing prompts/notifications
@@ -35,10 +34,6 @@ var builtinCategory = map[string]string{
 	// Search & web
 	"WebFetch": CategorySearch, "WebSearch": CategorySearch,
 	"conversation_search": CategorySearch,
-
-	// Memory
-	"memory_recall": CategoryMemory, "memory_add": CategoryMemory,
-	"core_memory_append": CategoryMemory, "core_memory_replace": CategoryMemory,
 
 	// Agents, subagents, sessions, delegation
 	"create_agent": CategoryAgents, "update_agent": CategoryAgents,

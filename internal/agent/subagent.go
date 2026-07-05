@@ -33,7 +33,7 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 			"workspace, read the relevant files, and report precise findings (file:line, names, facts). " +
 			"You never modify anything. Return a concise, structured answer — your reply is the only " +
 			"thing the caller sees, so make it self-contained.",
-		AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch", "memory_recall"},
+		AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch"},
 	},
 	"coder": {
 		ID: "coder",

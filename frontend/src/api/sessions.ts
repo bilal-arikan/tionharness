@@ -126,7 +126,7 @@ export const sessionApi = {
   listWorkers: (sessionId: string) =>
     req<{ workers: WorkerInfo[] }>(`/api/sessions/${sessionId}/workers`),
   // On-demand summary/listing posted as an assistant message in the session.
-  // kind: 'memory' | 'board' | 'flows' | 'tools'. Returns the new message.
+  // kind: 'board' | 'flows' | 'tools'. Returns the new message.
   summarizeSession: (sessionId: string, kind: string) =>
     req<{ userMessage: Message; replyMessage: Message }>(`/api/sessions/${sessionId}/summary`, {
       method: 'POST',

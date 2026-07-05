@@ -34,18 +34,11 @@ func Prompts() []PromptInfo {
 	return []PromptInfo{
 		{
 			Key:    "summary",
-			Label:  "Özet komutları — /memory · /board · /flows",
+			Label:  "Özet komutları — /board · /flows",
 			File:   "summarizer.go",
 			System: summarySystemPrompt,
 			User:   "Summarize the following <etiket> for the user:\n\n<toplanan veri>",
-			Note:   "Veri sunucuda toplanır (<etiket> = hafıza kaydı / görev / akış), en fazla 40 öğe. Ucuz title-modeli varsa o, yoksa ajanın modeli kullanılır.",
-		},
-		{
-			Key:   "reflect",
-			Label: "Yansıma — /reflect (dream cycle)",
-			File:  "reflector.go",
-			User:  reflectPrompt,
-			Note:  "%s yerine ajanın son 20 journal kaydı gömülür; sonuç kalıcı bir reflection hafızası olarak saklanır.",
+			Note:   "Veri sunucuda toplanır (<etiket> = görev / akış), en fazla 40 öğe. Ucuz title-modeli varsa o, yoksa ajanın modeli kullanılır.",
 		},
 		{
 			Key:    "title",
