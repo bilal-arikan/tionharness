@@ -176,11 +176,22 @@ export function HooksPanel({ onError }: Props) {
                   onChange={(e) => set('event', e.target.value as HookEvent)}
                   className={inputCls}
                 >
-                  <option value="PreToolUse">PreToolUse (çağrı öncesi)</option>
-                  <option value="PostToolUse">PostToolUse (çağrı sonrası)</option>
+                  <optgroup label="Araç (yalnız native döngü)">
+                    <option value="PreToolUse">PreToolUse (çağrı öncesi)</option>
+                    <option value="PostToolUse">PostToolUse (çağrı sonrası)</option>
+                  </optgroup>
+                  <optgroup label="Yaşam döngüsü (native + claude-cli)">
+                    <option value="UserPromptSubmit">UserPromptSubmit (prompt öncesi — bağlam ekle/engelle)</option>
+                    <option value="SessionStart">SessionStart (oturum ilk turu)</option>
+                    <option value="Stop">Stop (ana ajan turu bitti)</option>
+                    <option value="SubagentStop">SubagentStop (alt-ajan bitti)</option>
+                    <option value="PreCompact">PreCompact (özetleme öncesi)</option>
+                    <option value="Notification">Notification (bildirim)</option>
+                    <option value="SessionEnd">SessionEnd (oturum silindi)</option>
+                  </optgroup>
                 </select>
               </Field>
-              <Field label="Eşleşme (araç adı glob)" hint="Boş = tüm araçlar. Örn: Bash, Write, http_*">
+              <Field label="Eşleşme" hint="Araç olayları: araç adı glob'u (boş = tümü, örn: Bash, Write, http_*). SessionStart: kaynak (startup|resume). PreCompact: tetik (manual|auto). Diğer yaşam-döngüsü olayları: boş bırakın.">
                 <input data-testid="hook-matcher-input" data-hook-id={editing} value={draft.matcher} onChange={(e) => set('matcher', e.target.value)} className={inputCls} placeholder="*" />
               </Field>
               <Field label="Komut" hint="Shell komutu (Windows: PowerShell). JSON stdin alır, JSON stdout döner.">

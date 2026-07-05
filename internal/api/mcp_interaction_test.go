@@ -165,7 +165,7 @@ func TestInteractionTierSplit(t *testing.T) {
 	// splitInteractionTiers must place every bridged self-management def in the
 	// extended tier and keep eager statics in core.
 	bridge := []providers.ToolDef{{Name: "create_agent"}, {Name: "list_flows"}}
-	gotCore, gotExt := splitInteractionTiers(interactionAdvertisedNames(nil, false), bridge)
+	gotCore, gotExt := splitInteractionTiers(interactionAdvertisedNames(nil, false), bridge, nil)
 	if !contains(gotCore, "ask_user") || contains(gotCore, "update_session") {
 		t.Errorf("split core tier wrong: %v", gotCore)
 	}

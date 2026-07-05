@@ -44,3 +44,36 @@ func TestBridgeableDefsFilteredSkipsHidden(t *testing.T) {
 		}
 	}
 }
+
+// TestBridgeableDefsIncludesFullSelfManaged verifies a self-management tool promoted
+// to the full tier (lazy flag cleared) is STILL bridged, via the stable selfManaged
+// stamp. Without it, a full-tier self-management tool would vanish from the CLI
+// (BridgeableDefs bridges lazy built-ins only) — the create_agent-full regression.
+func TestBridgeableDefsIncludesFullSelfManaged(t *testing.T) {
+	reg := NewRegistry(
+		stubTool{name: "create_agent", desc: "self-mgmt"},
+		stubTool{name: "todo_write", desc: "eager behavioral"},
+	)
+	reg.MarkSelfManaged("create_agent") // stable membership
+	reg.MarkHidden("create_agent")      // default hidden tier
+	reg.SetVisibility("create_agent", VisibilityFull) // user promotes to full (clears lazy)
+
+	got := names(reg.BridgeableDefsFiltered(nil, true))
+	if !eq(got, []string{"create_agent"}) {
+		t.Fatalf("full-tier self-managed tool must still bridge, got %v", got)
+	}
+	// A plain eager built-in that is NOT self-managed must NOT be bridged (it rides
+	// the static specs or the CLI's own equivalent).
+	if contains2(got, "todo_write") {
+		t.Errorf("non-self-managed eager tool must not leak into the bridge: %v", got)
+	}
+}
+
+func contains2(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}

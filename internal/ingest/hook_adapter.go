@@ -180,10 +180,15 @@ func filterKnownEvents(m map[string][]ccHookEntry) map[string][]ccHookEntry {
 
 // pluginRootFor resolves the ${CLAUDE_PLUGIN_ROOT} directory for a config file:
 // the parent of a `.claude-plugin/` folder, else the config file's own directory.
+// A "." result (config at the tree root) is normalised to "" so tree-path joins
+// stay clean.
 func pluginRootFor(cfgPath string) string {
 	dir := path.Dir(cfgPath)
 	if path.Base(dir) == ".claude-plugin" {
-		return path.Dir(dir)
+		dir = path.Dir(dir)
+	}
+	if dir == "." {
+		return ""
 	}
 	return dir
 }

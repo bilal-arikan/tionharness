@@ -2,6 +2,81 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-05**
 
+## İlk kurulum: "Mevcut Workspace Seç" butonu ✅ (2026-07-05)
+
+Onboarding ekranına (hiç workspace yokken) "Workspace Oluştur"un yanına ikinci
+buton eklendi: **Mevcut Workspace Seç** → native klasör seçici → seçilen klasör
+geçerliyse (içinde `store/` var) taşınmadan kayıt defterine eklenip aktifleşir.
+
+- **Backend:** `Manager.Attach(path)` + `isWorkspaceDir`/`workspaceNameFromDir`/`sameDir`
+  yardımcıları (`internal/workspace/manager.go`); `POST /api/workspaces/attach`
+  (`internal/api/workspaces.go` + route `server.go`). Geçersiz/zaten-ekli klasör 400 +
+  Türkçe mesaj. Yeni `WS<n>` id, `Meta.Path` doğrudan seçilen klasör; `open()` mevcut
+  içeriği yerinde kullanır. Ad klasör adından (`tionswarm-` öneki soyulur); ikon/renk
+  `ws-settings.json`'dan.
+- **Frontend:** `api.attachWorkspace` (`api/workspaces.ts`),
+  `useWorkspaces.attachWorkspace` (hata fırlatır → satır-içi göster),
+  `OnboardingScreen` iki-buton düzeni + inline hata (`data-testid`:
+  `select-existing-workspace` / `onboarding-error`), `App.tsx` `onAttach` prop.
+- **Doğrulama:** `go build ./...` ve `tsc --noEmit` temiz. Detay: `06-WORKSPACES.md`
+  "İlk Kurulum: Oluştur veya Mevcut Klasör Seç".
+
+## UI: composer max-yükseklik + Budget dar-ekran uyumu ✅ (2026-07-05)
+
+- **Composer textarea max-yükseklik:** `max-h-[5.5rem]` (~3 satır) → `max-h-[12rem]`
+  (~7 satır); aşınca iç kaydırma. Doğrulandı: clientH=192px, scroll aktif.
+- **Budget ekranı responsive:** özet kart satırları `flex` → `grid grid-cols-2
+  lg:grid-cols-4`; Tasarruf Merkezi `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`
+  (divide yönü de responsive); Köken+Trend `grid-cols-2` → `grid-cols-1
+  lg:grid-cols-2`; provider/ajan tabloları `overflow-x-auto` + `min-w` ile yatay
+  kaydırılır; içerik dolgusu `p-5` → `p-3 md:p-5`. Doğrulandı: 430px'de yatay taşma
+  0, özet 2 sütun; 1280px'de 4 sütun. Tema-uyumlu gradient de eklendi (composer).
+
+## Sohbet: yüzen composer overlay + opak input + son mesaj görünürlüğü ✅ (2026-07-05)
+
+Composer artık transkriptin **üstüne yüzen bir overlay** (App.tsx chat view'i
+`relative` sarmalayıcı + `absolute bottom-0` bottom-stack). Böylece:
+
+- **Gradient arka plan (tema-uyumlu):** composer sarmalayıcısı
+  `bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(...var(--color-bg)_85%...)]
+  to-transparent` — mesaj balonları alttan geçerken şeffaf üst kısımdan görünüp arka
+  plana karışarak composer'ın **arkasına kayar** (açık/koyu temada tutarlı).
+- **Opak input:** iç input kartı `bg-[var(--color-surface)]` + `shadow-lg` — okunur,
+  gradient'in üstünde net durur.
+- **Son mesaj görünürlüğü (bug):** overlay'in canlı yüksekliği `ResizeObserver` ile
+  ölçülüp `MessageList`'e `bottomInset` (scroll padding) olarak verilir → en yeni
+  kullanıcı/asistan mesajı **daima opak input'un üstünde** kalır, "agent bitene kadar
+  son kullanıcı mesajı görünmüyor" belirtisi giderilir. Ask/todo/pending/wake
+  banner'ları da bu yüzen yığına taşındı (ölçüme dahil, mesajları örtmez).
+- **Doğrulama (standalone Playwright, sistem Chrome):** kısa+uzun cevap boyunca
+  kullanıcı mesajı `everHidden=false`; seri tool (`Glob/Glob/PowerShell`), subagent
+  (`run_subagent`), `schedule_wake` (kuruldu **ve tetiklendi**, takip turu üretti)
+  turları geçti; hepsinde `userShown=true`. Detay: `07-CHAT-UX.md`.
+
+## Sohbet: tur-ortası reload'da canlı cevap kaybolması düzeltildi ✅ (2026-07-05)
+
+Başka sohbete geçip geri gelince (veya sayfa yenileyince) **kendi penceresinin**
+stream ettiği asistan cevabının kaybolması giderildi. Kök neden: `App.tsx`
+session-değişim effect'i `listMessages` ile in-memory `live-*` balonu siliyordu;
+`recoverInflight` ise pencere turu sahiplenmeye devam ettiği için (`runsRef`) erken
+dönüyordu ve yerel SSE handler'ları `prev.map(id===liveId)` ile güncellediğinden
+balon silinince sonraki delta'lar + final `onReply` sessizce düşüyordu.
+
+- **Fix A (self-heal / UPSERT):** `useChatStream.ts` canlı metin+iz artık closure
+  var'larında biriktirilir; `syncLive` balonu yoksa tam içerikle yeniden yaratır
+  (`onStep`/`delta`/`onReply` map-only yerine upsert). `onReply` kalıcı mesajı
+  farklı id ile append eder (map yerine) → reload sonrası da hayatta kalır.
+- **Fix B (reseed):** yeni `liveBubblesRef` (session→canlı balon) + `reseedLive`;
+  App effect'i `listMessages` sonrası çağırır → dönüşte balon anında geri gelir.
+- **Fix C (metin ilerletme):** sahiplenilmeyen/refresh sonrası ghost balonun cevap
+  metni donuyordu (bus `delta`'yı düşürür). `useChatStream` artık aktif session'da
+  sahiplenilmeyen tur pending iken `/inflight`'i saniyede bir çekip yalnız `text`'i
+  ilerletir (iz bus'a ait kalır); tur bitince poll durur.
+- **Temizlik:** bırakılmış `[DBG:delta]` debug console.log'u kaldırıldı.
+- Mimari refactor **gerekmedi** — backend zaten detached tur + `inflight.json` +
+  `session_step` bus ile tek doğru kaynak. Detay: `07-CHAT-UX.md` (tur-ortası
+  reload/navigasyon kurtarma bölümü).
+
 ## Memory alt sistemi kaldırıldı ✅ (2026-07-05)
 
 2026-07-05 — Memory alt sistemi (journal recall + core memory + hafıza grafiği +

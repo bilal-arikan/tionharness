@@ -1,8 +1,79 @@
-# 18 — Hooks (PreToolUse / PostToolUse) — Faz P4
+# 18 — Hooks (Araç + Yaşam Döngüsü) — Faz P4 + Lifecycle Parite
 
 > Kullanıcı-tanımlı dış komutların, native araç döngüsünde her araç çağrısının
-> etrafında çalışması. Claude Code hook sözleşmesiyle uyumlu — aynı script'ler
-> (ör. **sqz**) değiştirilmeden çalışır.
+> **ve** turun/oturumun yaşam-döngüsü noktalarında çalışması. Claude Code'un **tam
+> 9-olaylık** hook sözleşmesiyle uyumlu — aynı script'ler (ör. **sqz**, **caveman**)
+> değiştirilmeden çalışır.
+
+## Olay kümesi (9 — Claude Code paritesi)
+
+| Olay | Ne zaman | Kapsam | Etki |
+|------|----------|--------|------|
+| `PreToolUse` | araç çağrısı öncesi | yalnız native | girdi rewrite / onayla / **engelle** |
+| `PostToolUse` | araç çağrısı sonrası | yalnız native | çıktı dönüştür / bağlam ekle / engelle |
+| `UserPromptSubmit` | her kullanıcı promptu öncesi | **native + claude-cli** | bağlam enjekte / **turu engelle** |
+| `SessionStart` | oturumun ilk turu | **native + claude-cli** | bağlam enjekte (matcher = kaynak) |
+| `Stop` | ana ajan turu bitti | native + claude-cli | audit + **block→devam** (sınırlı yeniden-tur) |
+| `SubagentStop` | `run_subagent` bitti | native + claude-cli | audit + alt-ize bağlam ekler |
+| `PreCompact` | özetleme (fold) öncesi | — | audit (matcher = tetik `auto`/`manual`) |
+| `Notification` | ajan bildirim yükseltti | — | audit (her `notify` çağrısı) |
+| `SessionEnd` | oturum silindi/arşivlendi | — | temizlik (silmeden önce, fire-and-forget) |
+
+**Neden yaşam-döngüsü olayları claude-cli'da DA çalışır:** araç hook'ları (Pre/Post)
+native döngüye özeldir çünkü claude-cli kendi tool loop'unu sürer. Ama
+`UserPromptSubmit`/`SessionStart` **araç değil bağlam enjeksiyonudur** — dönen
+`additionalContext` turun `SystemDynamic`'ine katlanır ve bu claude-cli'ya da geçer.
+Bir **caveman**-tarzı paketin "mesaj birden itibaren otomatik" davranışı böylece
+native olarak desteklenir.
+
+### Motor (generic runner)
+
+`Runtime.RunLifecycleHooks(ctx, sessionID, event, LifecycleExtras)` — `execHook`
+üzerine ince bir generic katman (agent/hooks.go). Enabled hook'ları olay bazında
+listeler, matcher'ı olayın **seçicisine** göre test eder (`SessionStart`→kaynak,
+`PreCompact`→tetik; diğerleri seçicisiz, boş matcher = tümü), her hook'un
+`additionalContext`'ini (üst-seviye **veya** `hookSpecificOutput.additionalContext`)
+toplar ve ilk `decision:"block"`'ta durur. Fail-open. API tur orkestratöründen
+(`chat_stream`/`subagent`/`sessions`) çağrılır — bu yüzden **exported**.
+
+**Düz-stdout paritesi (kritik):** Claude Code, `SessionStart` ve `UserPromptSubmit`
+hook'larının **düz (JSON-olmayan) stdout**'unu doğrudan enjekte edilen bağlam sayar —
+caveman'in `caveman-activate.js`'i gibi birçok gerçek hook kuralları JSON değil düz
+metin basar. `execHook` non-JSON çıktıyı `rawStdout`'a taşır; `RunLifecycleHooks` bu
+iki olay için `additionalContext` yoksa `rawStdout`'u bağlam olarak kullanır (araç
+hook'ları `rawStdout`'u yok sayar → "izin ver, değişiklik yok" davranışı korunur).
+
+**Uçtan uca doğrulandı (2026-07-05):** caveman reposu `ingest` ile hook'larıyla
+(`SessionStart`×2 + `UserPromptSubmit`) WS9'a kuruldu; **Soul'unda caveman OLMAYAN**
+düz bir claude-cli ajanı, yalnız hook enjeksiyonuyla caveman-full stilinde yanıtladı
+(611→281 kelime, −%54). Materyalize node script'i (`caveman-activate.js`) bağımlılıksız
+çalıştı; düz stdout paritesi olmadan enjekte edilmezdi.
+
+### Tetikleme noktaları (kod)
+
+| Olay | Tetik yeri |
+|------|-----------|
+| `SessionStart` + `UserPromptSubmit` | `api/chat_stream.go` — ajan döngüsünden önce; context `composeTurnRequest`'in `lifecycleContext` parametresiyle `dynamic`'e katlanır; `UserPromptSubmit` block → tur kısa-devre (reason asistan mesajı olarak kalıcı) |
+| `Stop` | `api/chat_stream.go` — ajan döngüsü **continuation loop ile sarılı**: her geçiş sonrası Stop tetiklenir; `block` dönerse reason bir sonraki geçişe `[A Stop hook asked you to keep working…]` bağlamı olarak enjekte edilir. `StopHookActive` (geçiş>0) hook'a zorlanmış devam olduğunu bildirir; `maxStopPasses=3` sert tavan. Hook yoksa tek geçiş. |
+| `SubagentStop` | `agent/subagent.go` — sync `runAgent` tamamlanınca |
+| `PreCompact` | `conversation.Manager.Prepare` — `summarize` (fold) öncesi `WithPreCompact(ctx, fn)` callback'i (import döngüsünü kırar); `api/chat_stream.go` fn'i PreCompact hook'unu tetikler |
+| `Notification` | `api/notifysink.go` — `notifySink.onNotify` callback'i her `notify` çağrısında Notification hook'unu tetikler (`api/chat_stream.go`'da bağlanır) |
+| `SessionEnd` | `api/sessions.go` — `DeleteSession`'dan **önce** |
+
+### Generic hook import (caveman gibi paketler)
+
+Bir Claude Code plugin'inin **hook'ları da** tek importla kurulur (`ingest`
+pipeline'ı, 5. adapter):
+- **`ingest/hook_adapter.go`** — `.claude-plugin/plugin.json` / `hooks.json` /
+  `settings.json` içindeki `hooks` bloğunu keşfeder, her komutu bir `market.KindHook`
+  pack'ine çevirir; `${CLAUDE_PLUGIN_ROOT}/...` ile atıfta bulunulan script'leri (+
+  kardeş dosyaları) `Pack.Files`'a bundle'lar, placeholder'ı **korur**.
+- **`api/market_install_hook.go`** — script'leri `<workspace>/hook-scripts/<slug>/`'a
+  materyalize eder, `${CLAUDE_PLUGIN_ROOT}`'u o dizine rewrite eder, `db.Hook` oluşturur
+  (path-traversal guard'lı). Tek-install-otoritesi (`installPackInto`) üzerinden.
+- **Sınırlama:** `fetch` `node_modules/`'ı eler → dış runtime bağımlılığı olan script
+  bundle edilmez (uyarı verilir); saf-stdlib script'ler doğrudan çalışır, aksi halde
+  kullanıcı materyalize dizinde paket yöneticisini çalıştırır.
 
 ## Ne işe yarar?
 
@@ -16,12 +87,15 @@
 Tipik kullanım: denetim/audit log, güvenlik politikası (tehlikeli komutu blokla),
 otomatik onay kuralları, dış araç-çıktısı sıkıştırma (sqz).
 
-## Kapsam: yalnız native yol
+## Kapsam: araç hook'ları native, yaşam-döngüsü hook'ları her ikisi
 
-Kancalar **yalnız native (anthropic/minimax) araç döngüsünde** uygulanır
-(`agent/toolloop.go`). **claude-cli** kendi döngüsünü sürer ve kendi
-hook'larını `~/.claude/settings.json`'dan okur — TionSwarm hook'ları oraya yazılmaz.
-Bu, Faz P3'teki (permission) "CLI vs native ayrımı" deseninin aynısıdır.
+**Araç** hook'ları (`PreToolUse`/`PostToolUse`) **yalnız native (anthropic/minimax)
+araç döngüsünde** uygulanır (`agent/toolloop.go`). **claude-cli** kendi döngüsünü
+sürer ve kendi hook'larını `~/.claude/settings.json`'dan okur — TionSwarm araç
+hook'ları oraya yazılmaz (Faz P3 "CLI vs native ayrımı" deseni). **Yaşam-döngüsü**
+hook'ları (`UserPromptSubmit`/`SessionStart`/…) ise turun `SystemDynamic`'ine bağlam
+enjekte ettiği veya turu gözlemlediği için **hem native hem claude-cli** yolunda
+çalışır (üstteki tabloya bak).
 
 > sqz'i claude-cli ajanlarında kullanmak için: `sqz init --global` (sqz kendini
 > Claude Code'un PreToolUse hook'u olarak kurar; TionSwarm'da bir şey gerekmez).

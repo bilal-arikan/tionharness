@@ -1,9 +1,20 @@
-// PreToolUse / PostToolUse hooks (Phase P4) — mirrors db.Hook. A hook runs an
-// external command around a native tool call: it may rewrite the input/output,
-// auto-approve, or block the call. The command speaks the Claude Code hook
-// contract (JSON on stdin, JSON on stdout, exit 2 = block).
+// Hooks (Phase P4 + lifecycle parity) — mirrors db.Hook. A hook runs an external
+// command around a native tool call (PreToolUse/PostToolUse) OR at a turn/session
+// lifecycle point (the rest). Tool hooks may rewrite input/output, auto-approve
+// or block; lifecycle hooks inject context or observe, and some may block the
+// turn (UserPromptSubmit). The command speaks the Claude Code hook contract
+// (JSON on stdin, JSON on stdout, exit 2 = block).
 
-export type HookEvent = 'PreToolUse' | 'PostToolUse'
+export type HookEvent =
+  | 'PreToolUse'
+  | 'PostToolUse'
+  | 'UserPromptSubmit'
+  | 'SessionStart'
+  | 'Stop'
+  | 'SubagentStop'
+  | 'PreCompact'
+  | 'Notification'
+  | 'SessionEnd'
 
 export interface Hook {
   id: string

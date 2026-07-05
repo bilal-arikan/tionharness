@@ -11,7 +11,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -349,6 +351,83 @@ func (m *Manager) Create(name, parentPath, createdBy string) (*Workspace, error)
 		return nil, err
 	}
 	return m.Get(meta.ID)
+}
+
+// ErrNotAWorkspace is returned by Attach when the chosen folder does not look
+// like a TionSwarm workspace data directory (it lacks a store/ subfolder).
+var ErrNotAWorkspace = errors.New("seçilen klasör geçerli bir workspace değil (içinde store/ klasörü yok)")
+
+// Attach registers an EXISTING on-disk workspace data directory as a workspace
+// without moving or recreating its content — used to adopt a folder from a prior
+// install or another machine (copied verbatim). The folder must already contain a
+// store/ subdirectory (the file-based DB). A fresh registry id is issued and its
+// Path points directly at the chosen folder, so open() reuses the existing
+// store/config/workspace content in place. Returns ErrNotAWorkspace for an
+// invalid folder, and an error if the same folder is already attached.
+func (m *Manager) Attach(path string) (*Workspace, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, errors.New("klasör yolu boş")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	if !isWorkspaceDir(abs) {
+		return nil, ErrNotAWorkspace
+	}
+
+	// Reject a folder that is already an attached workspace (same data dir), so the
+	// same content is never registered under two ids.
+	m.mu.RLock()
+	for _, ws := range m.workspaces {
+		if sameDir(ws.DataDir, abs) {
+			name := ws.Meta.Name
+			m.mu.RUnlock()
+			return nil, fmt.Errorf("bu klasör zaten '%s' workspace'i olarak ekli", name)
+		}
+	}
+	m.mu.RUnlock()
+
+	meta := Meta{ID: m.nextWorkspaceID(), Name: workspaceNameFromDir(abs), CreatedAt: time.Now().Unix(), Path: abs}
+	if err := m.open(meta); err != nil {
+		return nil, err
+	}
+	if err := m.persist(); err != nil {
+		return nil, err
+	}
+	return m.Get(meta.ID)
+}
+
+// isWorkspaceDir reports whether dir is a plausible TionSwarm workspace data
+// directory: it exists and contains a store/ subdirectory (the file-based DB
+// every workspace owns). This is the single validity signal the onboarding
+// "select existing workspace" flow relies on.
+func isWorkspaceDir(dir string) bool {
+	info, err := os.Stat(filepath.Join(dir, "store"))
+	return err == nil && info.IsDir()
+}
+
+// workspaceNameFromDir derives a display name from a workspace folder path,
+// stripping the "tionswarm-" prefix Create() adds so an attached folder reads
+// back with a sensible label. The original name is not stored inside the folder
+// (it lived in the source install's registry), so the user may rename afterward.
+func workspaceNameFromDir(dir string) string {
+	base := strings.TrimPrefix(filepath.Base(dir), "tionswarm-")
+	if strings.TrimSpace(base) == "" {
+		return "Eklenen Workspace"
+	}
+	return base
+}
+
+// sameDir compares two directory paths for equality after cleaning, case-
+// insensitively on Windows (whose filesystem paths are case-insensitive).
+func sameDir(a, b string) bool {
+	ca, cb := filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(ca, cb)
+	}
+	return ca == cb
 }
 
 // Delete removes a workspace and all its data. Deleting the last workspace IS

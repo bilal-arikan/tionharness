@@ -45,6 +45,11 @@ interface Props {
   // Open an agent's settings page (Agents view) — fired when the assistant's
   // avatar/name header is clicked in the transcript.
   onOpenAgent?: (id: string) => void
+  // Height (px) of the floating bottom stack (composer + banners) that overlays
+  // the transcript. Applied as extra scroll padding so the newest message always
+  // clears the opaque input instead of hiding behind it, while the rows above it
+  // still scroll UNDER the composer's transparent-topped gradient.
+  bottomInset?: number
 }
 
 // MessageList is the scrolling transcript. It owns scroll-pinning and per-message
@@ -68,6 +73,7 @@ export function MessageList({
   onRetry,
   onFeedback,
   onOpenAgent,
+  bottomInset,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Transiently highlighted message (from a search deep-link); cleared after the
@@ -191,6 +197,7 @@ export function MessageList({
         aria-live="polite"
         aria-label="Sohbet geçmişi"
         className="h-full overflow-y-auto px-[1px] pb-6 pt-2 md:px-6"
+        style={bottomInset ? { paddingBottom: bottomInset } : undefined}
       >
       <div className="flex w-full flex-col gap-4">
         {messages.map((m, i) => {

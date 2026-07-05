@@ -59,6 +59,11 @@ type hookDecision struct {
 	UpdatedInput       json.RawMessage     `json:"updatedInput"`  // PreToolUse: replace tool_input
 	UpdatedOutput      *string             `json:"updatedOutput"` // PostToolUse: replace tool output
 	AdditionalContext  string              `json:"additionalContext"`
+
+	// rawStdout holds a hook's plain (non-JSON) stdout — see the note on
+	// hookSpecificOutput. Populated by execHook, consumed only by
+	// RunLifecycleHooks for the two context-injecting events. Not serialised.
+	rawStdout string
 }
 
 type hookSpecificOutput struct {
@@ -70,6 +75,12 @@ type hookSpecificOutput struct {
 	// way work.
 	AdditionalContext string `json:"additionalContext"`
 }
+
+// rawStdout is set (on hookDecision, not serialised) when a hook exits cleanly
+// with NON-JSON stdout. Claude Code treats a SessionStart / UserPromptSubmit
+// hook's plain stdout AS injected context — many real hooks (e.g. caveman's
+// activate script) print the ruleset as plain text rather than JSON. Tool hooks
+// ignore this field, so their non-JSON stdout stays "allow, no change".
 
 // preHookOutcome is the aggregate of every matching PreToolUse hook for a call.
 type preHookOutcome struct {
@@ -291,6 +302,11 @@ func (r *Runtime) RunLifecycleHooks(ctx context.Context, sessionID, event string
 		if dec.HookSpecificOutput != nil && strings.TrimSpace(dec.HookSpecificOutput.AdditionalContext) != "" {
 			add = strings.TrimSpace(add + "\n" + strings.TrimSpace(dec.HookSpecificOutput.AdditionalContext))
 		}
+		// Claude Code parity: a SessionStart / UserPromptSubmit hook's plain (non-JSON)
+		// stdout IS injected context. Only these two events treat stdout this way.
+		if add == "" && dec.rawStdout != "" && (event == db.HookSessionStart || event == db.HookUserPromptSubmit) {
+			add = strings.TrimSpace(dec.rawStdout)
+		}
 		if add != "" {
 			out.Context = strings.TrimSpace(out.Context + "\n\n" + add)
 			out.Steps = append(out.Steps, hookStep(h, event, "hook_context", "Hook ek bağlam ekledi", add, false))
@@ -356,10 +372,12 @@ func (r *Runtime) execHook(ctx context.Context, h db.Hook, payload hookPayload) 
 	trimmed := bytes.TrimSpace(out)
 	if len(trimmed) > 0 {
 		if err := json.Unmarshal(trimmed, &dec); err != nil {
-			// Non-JSON stdout on a clean exit is treated as "allow, no change"
-			// rather than an error — many hooks just print diagnostics.
-			r.logger.Debug("hook stdout not JSON (ignored)", "hook", h.ID)
-			return hookDecision{}, nil
+			// Non-JSON stdout on a clean exit is not a decision. For tool hooks it
+			// means "allow, no change". For the two context-injecting lifecycle
+			// events, RunLifecycleHooks treats it as injected context (Claude Code
+			// parity) — so carry the raw text through in rawStdout.
+			r.logger.Debug("hook stdout not JSON (raw)", "hook", h.ID)
+			return hookDecision{rawStdout: string(trimmed)}, nil
 		}
 	}
 	return dec, nil

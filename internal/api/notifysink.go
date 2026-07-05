@@ -17,6 +17,9 @@ type notifySink struct {
 	// emit publishes the workspace-scoped event. Optional (nil-safe) — a turn with
 	// no runtime emitter simply doesn't surface the toast.
 	emit func(events.Event)
+	// onNotify, when set, fires the Notification lifecycle hook for each notify call
+	// (Claude Code parity). Optional (nil-safe); set by the turn orchestrator.
+	onNotify func(spec tools.NotifySpec)
 }
 
 // newNotifySink builds a sink bound to the given session/agent. emit may be nil
@@ -29,6 +32,11 @@ func newNotifySink(sessionID, agentID string, emit func(events.Event)) notifySin
 // for general agent notifications in the frontend NOTIFY_TYPES, mutable per
 // device). Best-effort and nil-safe.
 func (s notifySink) Notify(_ context.Context, spec tools.NotifySpec) error {
+	// Notification lifecycle hook (Claude Code parity): fire regardless of whether a
+	// toast is emitted, so an audit/relay hook sees every agent notification.
+	if s.onNotify != nil {
+		s.onNotify(spec)
+	}
 	if s.emit == nil {
 		return nil
 	}

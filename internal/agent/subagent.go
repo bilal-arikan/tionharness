@@ -223,6 +223,14 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	if sink := subStepSinkFrom(ctx); sink != nil {
 		sink.steps = steps
 	}
+	// SubagentStop lifecycle hook (Claude Code parity): a delegated subagent
+	// finished. Fire-and-forget audit; its injected context (if any) is folded
+	// onto the subagent's returned trace so the parent still sees it.
+	if sub := r.RunLifecycleHooks(ctx, "", db.HookSubagentStop, LifecycleExtras{}); len(sub.Steps) > 0 {
+		if sink := subStepSinkFrom(ctx); sink != nil {
+			sink.steps = append(sink.steps, sub.Steps...)
+		}
+	}
 	return tools.RunAgentResult{AgentName: agent.Name, Reply: resp.Text}, nil
 }
 

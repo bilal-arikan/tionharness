@@ -361,11 +361,13 @@ func Default() Settings {
 		// _Docs/17.
 		ClaudePersistentSession: true,
 
-		// System prompt handed to claude-cli INLINE by default (--append-system-prompt
-		// <text>). Flip ClaudeSysPromptFile on to route it through a temp file
-		// (--append-system-prompt-file) when a very large prompt would overflow the
-		// Windows command-line limit.
-		ClaudeSysPromptFile: false,
+		// System prompt handed to claude-cli via a temp file by default
+		// (--append-system-prompt-file): a large appended prompt (skills + lazy tool
+		// catalog + dynamic context) as an inline --append-system-prompt argument can
+		// overflow the Windows ~32 KB command-line limit and crash fork/exec. The file
+		// carries only a short path, so it is robust regardless of prompt size. Flip
+		// off for the inline form only if a platform lacks temp-file access.
+		ClaudeSysPromptFile: true,
 
 		DelegationMaxDepth: 3,
 		DelegationMaxCalls: 8,
@@ -473,9 +475,9 @@ type DTO struct {
 	// in-memory so warm turns ship only the new user message — maximal prompt-cache
 	// reuse + no per-turn startup. Supersedes --resume when on. Default on. _Docs/17.
 	ClaudePersistentSession bool `json:"claudePersistentSession"`
-	// ClaudeSysPromptFile: false (default) hands the appended system prompt inline
-	// via --append-system-prompt; true routes it through a temp file
-	// (--append-system-prompt-file) to survive the Windows command-line limit. _Docs/17.
+	// ClaudeSysPromptFile: true (default) routes the appended system prompt through a
+	// temp file (--append-system-prompt-file) to survive the Windows command-line
+	// limit; false hands it inline via --append-system-prompt. _Docs/17.
 	ClaudeSysPromptFile bool `json:"claudeSysPromptFile"`
 	DelegationMaxDepth  int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls  int  `json:"delegationMaxCalls"`

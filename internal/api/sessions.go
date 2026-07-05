@@ -296,6 +296,9 @@ func (s *Server) handleMarkSessionRead(w http.ResponseWriter, r *http.Request) {
 // handleDeleteSession removes a session and its on-disk folder.
 func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	// SessionEnd lifecycle hook (Claude Code parity): fire BEFORE the delete so a
+	// cleanup hook can still read the session's files. Fire-and-forget audit.
+	ws(r).Runtime.RunLifecycleHooks(r.Context(), id, db.HookSessionEnd, agent.LifecycleExtras{Trigger: "delete"})
 	if err := ws(r).DB.DeleteSession(r.Context(), id); writeDBError(w, err, "session not found") {
 		return
 	}

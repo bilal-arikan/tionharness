@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
@@ -188,7 +190,16 @@ func (s *Server) handleRunSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	// Run synchronously like task "run now"; the attempt is recorded on the
 	// schedule even when it fails, so we always return the updated row.
-	runErr := wsp.Scheduler.RunNow(r.Context(), id)
+	//
+	// DETACH the turn from the client request: a page refresh / navigation aborts
+	// this POST, and if RunNow ran on r.Context() that abort would cancel the
+	// in-flight turn mid-generation — the schedule would persist a partial reply
+	// and look "cut off". Mirror the chat-stream detach (context.WithoutCancel) so
+	// generation runs to completion regardless of the client; a generous timeout
+	// still bounds a genuinely hung run. Cron fires already detach via Background.
+	runCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Minute)
+	defer cancel()
+	runErr := wsp.Scheduler.RunNow(runCtx, id)
 	sc, err := wsp.DB.GetSchedule(r.Context(), id)
 	if writeDBError(w, err, "schedule not found") {
 		return

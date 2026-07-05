@@ -129,7 +129,7 @@ export function Composer({
   }, [selectedAgent])
 
   // Auto-grow the textarea with its content: reset to a single row, then expand to
-  // fit the text. A CSS max-height (max-h-[5.5rem] ≈ 3 lines) caps the growth and
+  // fit the text. A CSS max-height (max-h-[12rem] ≈ 7 lines) caps the growth and
   // turns on the internal scrollbar beyond that, so the composer never pushes the
   // toolbar around. Runs on every text change (typing, draft restore, clear).
   useLayoutEffect(() => {
@@ -374,7 +374,7 @@ export function Composer({
 
   return (
     <div
-      className={`relative bg-gradient-to-t from-black via-black/85 to-transparent px-3 py-3 transition-shadow md:px-6 md:py-4 ${
+      className={`relative bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent px-3 py-3 transition-shadow md:px-6 md:py-4 ${
         dragOver
           ? 'ring-2 ring-inset ring-[var(--color-accent)]'
           : active
@@ -425,7 +425,7 @@ export function Composer({
           the controls live on a fixed toolbar row beneath it, so they never stretch
           or shift as the text area expands. The card carries the border/focus ring. */}
       <div
-        className={`flex flex-col gap-2 rounded-2xl border bg-transparent px-3 pb-2 pt-2.5 transition-colors focus-within:border-[var(--color-accent)] ${
+        className={`flex flex-col gap-2 rounded-2xl border bg-[var(--color-surface)] px-3 pb-2 pt-2.5 shadow-lg transition-colors focus-within:border-[var(--color-accent)] ${
           active
             ? 'border-[color-mix(in_srgb,var(--color-accent)_55%,var(--color-border))]'
             : 'border-[var(--color-border)]'
@@ -445,7 +445,7 @@ export function Composer({
               ? 'Otomatik devam bekleniyor — yazarsan konuşmayı devralırsın'
               : 'Mesaj yaz — @ ajan adı, # artifact, / komut, 📎 dosya'
           }
-          className="max-h-[5.5rem] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 text-sm leading-5 outline-none placeholder:text-[var(--color-text-dim)]"
+          className="max-h-[12rem] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 text-sm leading-5 outline-none placeholder:text-[var(--color-text-dim)]"
         />
 
         {/* Toolbar row: left = target agent + per-turn pickers + workdir + attach;

@@ -134,6 +134,37 @@ DATA_DIR/
 > Bir prompt dosyası boş/yoksa uygulama gömülü varsayılana düşer. Detay: `agent/wsconfig.go`,
 > `api/workspace_config.go`.
 
+## İlk Kurulum: Oluştur veya Mevcut Klasör Seç (2026-07-05)
+
+Fresh install'da (hiç workspace yokken) `OnboardingScreen` gösterilir; backend
+**varsayılan workspace tohumlamaz** (üstteki "Çalışma Şekli 2." maddesi eski
+davranıştır). Karşılama kartında **iki** aksiyon vardır:
+
+- **Workspace Oluştur** → `WorkspaceCreateModal` (ad + opsiyonel veri klasörü + emoji
+  + şablon) → `POST /api/workspaces`.
+- **Mevcut Workspace Seç** → native klasör seçici (`POST /api/pick-folder`) → seçilen
+  yol `POST /api/workspaces/attach` ile **taşınmadan** kayıt defterine eklenir. Bu,
+  başka makineden kopyalanan ya da önceki kurulumdan kalan bir workspace veri
+  klasörünü olduğu yerde benimsemek içindir.
+
+**Geçerlilik (validasyon):** Bir klasörün "geçerli workspace" sayılması için içinde
+**`store/` alt klasörü** (dosya-tabanlı DB) bulunmalıdır — `Manager.isWorkspaceDir`.
+Geçersiz klasör veya **zaten ekli** bir klasör 400 + Türkçe mesajla reddedilir ve
+mesaj onboarding ekranında satır-içi gösterilir (`data-testid="onboarding-error"`).
+
+- **Backend:** `Manager.Attach(path)` (`internal/workspace/manager.go`) — yeni `WS<n>`
+  id verir, `Meta.Path`'i **doğrudan seçilen klasöre** ayarlar (Create'in `tionswarm-<id>`
+  alt klasörü açmasının aksine), `open()` mevcut `store/config/workspace` içeriğini
+  yerinde yeniden kullanır, `persist()` eder. Ad, klasör adından türetilir (`tionswarm-`
+  öneki soyulur) — özgün ad klasörde saklanmadığından kullanıcı sonradan yeniden
+  adlandırabilir. İkon/renk `ws-settings.json`'dan otomatik gelir. Aynı klasörün iki
+  kez eklenmesi `sameDir` (Windows'ta büyük/küçük harf duyarsız) ile engellenir.
+- **Frontend:** `api.attachWorkspace(path)` → `useWorkspaces.attachWorkspace` (hata
+  **fırlatır**, `createWorkspace`'in aksine, ki onboarding satır-içi gösterebilsin) →
+  başarıda yeni workspace aktifleşir ve App uygulama kabuğuna geçer. Kod:
+  `components/workspace/OnboardingScreen.tsx`, `hooks/useWorkspaces.ts`,
+  `api/workspaces.ts`.
+
 ## Çalışma Şekli
 
 1. **Manager** (`internal/workspace/manager.go`) açılışta `workspaces.json`'ı okur, her workspace için `store/` dizinini açar (diskten belleğe yükler) + runtime başlatır.
@@ -202,7 +233,8 @@ düştü ✅. Z'siz durumda açılan **yeni** pencere (aktif Y) `{X}` rozetini d
 |-------|-----|----------|
 | GET | `/api/workspaces` | Workspace listesi |
 | POST | `/api/workspaces` | Yeni workspace oluştur |
-| DELETE | `/api/workspaces/{id}` | Workspace sil (son workspace silinemez) |
+| POST | `/api/workspaces/attach` | Mevcut bir workspace klasörünü (`{path}`) ekle (bkz. aşağıdaki bölüm) |
+| DELETE | `/api/workspaces/{id}` | Workspace sil (son workspace de silinebilir → ilk kurulum ekranına döner) |
 
 Diğer tüm uçlar (`/api/agents`, `/api/chat`, `/api/runtime` ...) `X-Workspace-Id` header'ına göre çalışır.
 

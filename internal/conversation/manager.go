@@ -105,14 +105,36 @@ func compactPromptFromCtx(ctx context.Context) string {
 	return compactPrompt
 }
 
+// preCompactCtxKey carries a callback fired just before Prepare folds history
+// into the rolling summary — the seam the API layer uses to run PreCompact
+// lifecycle hooks without conversation importing agent (which would cycle).
+type preCompactCtxKey struct{}
+
+// WithPreCompact returns a context carrying a callback invoked once, right before
+// a budgeted compaction runs, with the trigger ("auto" for the routine fold).
+// nil is a no-op.
+func WithPreCompact(ctx context.Context, fn func(trigger string)) context.Context {
+	if fn == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, preCompactCtxKey{}, fn)
+}
+
+// firePreCompact invokes the ctx-carried PreCompact callback if present.
+func firePreCompact(ctx context.Context, trigger string) {
+	if fn, ok := ctx.Value(preCompactCtxKey{}).(func(string)); ok && fn != nil {
+		fn(trigger)
+	}
+}
+
 // Manager performs token-budgeted compaction. It is safe to share and its
 // limits can be updated live from the Settings screen.
 type Manager struct {
 	mu             sync.RWMutex
 	maxTokens      int
 	keepRecent     int
-	budgetFraction float64 // share of the model window spendable on transcript
-	budgetCeil     int     // hard cap on the auto-derived budget (tokens)
+	budgetFraction float64      // share of the model window spendable on transcript
+	budgetCeil     int          // hard cap on the auto-derived budget (tokens)
 	logger         *slog.Logger // optional: compaction events to the in-app Logs (nil-safe)
 }
 
@@ -219,6 +241,10 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	compacted := false
 	if before := EstimateTokens(summary, pending); before > maxTokens {
 		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok {
+			// PreCompact lifecycle hook seam: fire before the fold runs (Claude Code
+			// parity). "auto" = the routine budgeted fold (manual /compact passes
+			// "manual" via its own path).
+			firePreCompact(ctx, "auto")
 			newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
 			if err != nil {
 				return Prepared{}, err

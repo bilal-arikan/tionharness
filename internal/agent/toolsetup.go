@@ -341,6 +341,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// searchable (tool_search), so the skill is the documented path, not the only one.
 	for _, t := range builtins[selfManageStart:] {
 		reg.MarkHidden(t.Def().Name)
+		// Stamp stable self-management membership so the claude-cli bridge keeps
+		// advertising these even if a workspace override later promotes one to the
+		// full tier (which clears the hidden/lazy marks). See BridgeableDefsFiltered.
+		reg.MarkSelfManaged(t.Def().Name)
 	}
 	// Default NAME-ONLY tier: a curated set of always-built tools that are
 	// self-descriptive AND used in only a minority of turns. They are listed in the
@@ -610,6 +614,17 @@ func (r *Runtime) ShippedToolCatalog(ctx context.Context, agent db.Agent) []prov
 // are NOT shipped at turn start; they live in the system prompt catalog block.
 func (r *Runtime) LazyToolCatalog(ctx context.Context, agent db.Agent) []providers.ToolDef {
 	return r.buildRegistry(ctx, agent).LazyCatalog(r.toolFilter(ctx, agent))
+}
+
+// ToolVisibilityFunc returns a per-agent resolver reporting a tool's effective
+// visibility tier ("full" | "summary" | "name-only" | "hidden"), reflecting the
+// workspace ToolVisibility overrides applied in buildRegistry. The claude-cli tier
+// classifier (api.cliTier) consults it so the CLI core/extended split honors the
+// same 4-tier model the native path uses: full → eager (core/alwaysLoad), summary/
+// name-only → deferred (extended), hidden → not advertised. Built once per call.
+func (r *Runtime) ToolVisibilityFunc(ctx context.Context, agent db.Agent) func(name string) string {
+	reg := r.buildRegistry(ctx, agent)
+	return reg.VisibilityOf
 }
 
 // LazyToolsCatalogBlock renders the "Available Tools (load on demand)" system-

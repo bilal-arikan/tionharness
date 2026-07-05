@@ -56,13 +56,44 @@ var coreInteractionTools = map[string]bool{
 	"permission_prompt":    true,
 }
 
-// interactionTier classifies a bare tool name into "core" or "extended".
-func interactionTier(name string) string {
+// cliTier classifies a bare tool name into the claude-cli wire tier: "core"
+// (eager — advertised on the alwaysLoad tionswarm_interaction server, never deferred),
+// "extended" (deferred — the tionswarm_extended server, discovered via the CLI's
+// ToolSearch), or "hidden" (advertised on NEITHER server this turn).
+//
+// This is the projection of TionSwarm's 4-tier visibility model onto claude-cli's
+// own two-state model (alwaysLoad vs tool-search). visOf reports a tool's effective
+// visibility (from the per-agent registry); nil reproduces the historical static
+// split (core set eager, everything else deferred, nothing hidden):
+//   - coreInteractionTools members are eager regardless of visibility — they are the
+//     behavioral/required primitives (permission_prompt, the shell, ask_user, the
+//     artifact/skill/todo path) that must not pay a discovery round-trip.
+//   - full        → core     (matches the native path's "schema shipped every turn")
+//   - summary     → extended  (deferred; claude-cli cannot distinguish these two, so
+//   - name-only   → extended   both project to a single deferred state)
+//   - hidden      → hidden    (not advertised; re-allowlisted on a later turn if the
+//     user raises the tool's visibility — the CLI analogue of native activate_tools)
+func cliTier(name string, visOf func(string) string) string {
 	if coreInteractionTools[name] {
 		return "core"
 	}
-	return "extended"
+	if visOf == nil {
+		return "extended"
+	}
+	switch visOf(name) {
+	case tools.VisibilityFull:
+		return "core"
+	case tools.VisibilityHidden:
+		return "hidden"
+	default: // summary, name-only
+		return "extended"
+	}
 }
+
+// interactionTier is the visibility-agnostic classifier (static core set eager,
+// the rest deferred). Retained for the context-preview projection, which has no
+// live per-agent registry to consult.
+func interactionTier(name string) string { return cliTier(name, nil) }
 
 // Tools implements interaction.Backend. The specs come from the single tool
 // definitions in the tools package — the schema is never re-declared here, so the
@@ -93,9 +124,18 @@ func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 	if tier == "" {
 		return specs
 	}
+	// Classify with the run's per-agent visibility so tools/list agrees with the
+	// allowlist splitInteractionTiers produced (same cliTier + same visOf). Without
+	// a run (token unresolved) visOf is nil → the static split. A tool whose tier is
+	// "hidden" matches neither "core" nor "extended", so it is advertised on neither
+	// server this turn — the CLI analogue of the native hidden tier.
+	var visOf func(string) string
+	if run != nil {
+		visOf = run.tierVisFor()
+	}
 	filtered := make([]interaction.ToolSpec, 0, len(specs))
 	for _, s := range specs {
-		if interactionTier(s.Name) == tier {
+		if cliTier(s.Name, visOf) == tier {
 			filtered = append(filtered, s)
 		}
 	}
@@ -130,17 +170,23 @@ var interactiveOnlyTools = map[string]bool{
 // self-management tool names (CLI-3), deduped and split into the core (eager,
 // alwaysLoad) and extended (deferred) tiers — the CLI allowlist source. Mirrors
 // what Tools(token, tier) advertises so allowlist and tools/list agree per tier.
-func splitInteractionTiers(static []string, bridge []providers.ToolDef) (core, extended []string) {
+// visOf reports each tool's effective visibility so the split honors the 4-tier
+// model (full→core, summary/name-only→extended, hidden→neither); nil reproduces the
+// historical static split. A hidden tool lands on neither list — it is not
+// advertised on the wire this turn.
+func splitInteractionTiers(static []string, bridge []providers.ToolDef, visOf func(string) string) (core, extended []string) {
 	seen := make(map[string]bool, len(static)+len(bridge))
 	add := func(name string) {
 		if seen[name] {
 			return
 		}
 		seen[name] = true
-		if interactionTier(name) == "core" {
+		switch cliTier(name, visOf) {
+		case "core":
 			core = append(core, name)
-		} else {
+		case "extended":
 			extended = append(extended, name)
+			// "hidden" → advertised on neither tier this turn.
 		}
 	}
 	for _, n := range static {

@@ -36,7 +36,13 @@ import (
 func (r *Registry) BridgeableDefsFiltered(allow func(name string) bool, skipHidden bool) []providers.ToolDef {
 	var out []providers.ToolDef
 	for name, t := range r.builtins {
-		if !r.lazy[name] || bridgeExcluded[name] {
+		// Bridge lazy built-ins (the usual case) AND self-management tools even when a
+		// per-workspace override has promoted them to the full tier (lazy flag cleared).
+		// Without the selfManaged branch, a self-management tool set to "full" would be
+		// bridged by neither this list nor the eager path → it would vanish from the CLI
+		// agent entirely. Eager non-self-managed built-ins (Read/Write/todo_write/...)
+		// stay excluded: the CLI has its own or they ride the static interaction specs.
+		if (!r.lazy[name] && !r.selfManaged[name]) || bridgeExcluded[name] {
 			continue
 		}
 		if skipHidden && r.hidden[name] {

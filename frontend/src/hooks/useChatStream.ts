@@ -109,6 +109,12 @@ export function useChatStream(deps: ChatStreamDeps) {
   const [streamingSessions, setStreamingSessions] = useState<ReadonlySet<string>>(() => new Set())
   const [pendingSessions, setPendingSessions] = useState<ReadonlySet<string>>(() => new Set())
   const runsRef = useRef<Map<string, { runId: string; ac: AbortController }>>(new Map())
+  // Latest live (unpersisted) assistant bubble per session that THIS window owns.
+  // Kept in a ref (not React state) so it survives a session-switch reload that
+  // wipes `messages` to the persisted-only list: reseedLive re-injects it when the
+  // user returns, and the local SSE handlers keep it in sync. Deleted the moment
+  // the turn's reply persists (onReply) or fails (renderTurnError / finally).
+  const liveBubblesRef = useRef<Map<string, Message>>(new Map())
 
   // Per-turn reasoning level picked in the composer ('' = use the agent's own
   // setting). Persisted so the choice carries across messages and reloads.
@@ -185,9 +191,41 @@ export function useChatStream(deps: ChatStreamDeps) {
       setStreamingSessions((p) => withAdded(p, sid))
 
       // The live bubble for the agent currently answering (multi-agent turns
-      // produce several bubbles, one per agent, in order).
+      // produce several bubbles, one per agent, in order). Text and steps are
+      // accumulated in closure vars so the bubble can be rebuilt in full at any
+      // moment — this is what makes syncLive an UPSERT (self-healing) instead of a
+      // map-only update that silently drops frames when the bubble was wiped.
       let liveId = ''
       let liveSteps: TurnStep[] = []
+      let liveText = ''
+      let liveAgentId = agentIds[0]
+      let liveCreatedAt = 0
+
+      // composeLive rebuilds the current live bubble from the accumulated state.
+      const composeLive = (): Message => ({
+        id: liveId,
+        sessionId: sid,
+        role: 'assistant',
+        agentId: liveAgentId,
+        text: liveText,
+        steps: JSON.stringify(liveSteps),
+        createdAt: liveCreatedAt,
+      })
+      // syncLive pushes the current live bubble into the transcript (UPSERT: map if
+      // present, append if the bubble was wiped by a session-switch reload) and
+      // mirrors it into liveBubblesRef so reseedLive can restore it on return. The
+      // ref is updated even when this session is off-screen (onSid no-ops there),
+      // so switching back re-seeds the freshest bubble.
+      const syncLive = () => {
+        if (!liveId) return
+        const bubble = composeLive()
+        liveBubblesRef.current.set(sid, bubble)
+        onSid((prev) =>
+          prev.some((x) => x.id === liveId)
+            ? prev.map((x) => (x.id === liveId ? bubble : x))
+            : [...prev, bubble],
+        )
+      }
 
       // Render a turn failure INTO the transcript (not just a top banner) so the
       // error is visible in the message hierarchy with its detail and survives a
@@ -197,6 +235,7 @@ export function useChatStream(deps: ChatStreamDeps) {
       // client-side/transport failure — we synthesize a local error bubble.
       const renderTurnError = (detail: string, replyMessage?: Message) => {
         setPendingAsks((p) => withoutKey(p, sid))
+        liveBubblesRef.current.delete(sid)
         onSid((prev) => {
           const base = prev.filter((m) => !m.id.startsWith('live-'))
           if (replyMessage) return [...base, replyMessage]
@@ -225,20 +264,13 @@ export function useChatStream(deps: ChatStreamDeps) {
           onAgentStart: (a) => {
             liveId = `live-${a.index}-${Date.now()}`
             liveSteps = []
-            const bubble: Message = {
-              id: liveId,
-              sessionId: sid,
-              role: 'assistant',
-              agentId: a.agentId,
-              text: '',
-              steps: '[]',
-              createdAt: Math.floor(Date.now() / 1000),
-            }
-            onSid((prev) => [...prev, bubble])
+            liveText = ''
+            liveAgentId = a.agentId
+            liveCreatedAt = Math.floor(Date.now() / 1000)
+            syncLive()
             setPendingSessions((p) => withRemoved(p, sid))
           },
           onStep: (st) => {
-            const id = liveId
             // Interactive prompt: the agent paused on ask_user. Surface the
             // question (transient — not added to the persisted trace); the user's
             // answer resumes the turn over the same stream.
@@ -268,26 +300,12 @@ export function useChatStream(deps: ChatStreamDeps) {
             }
             // Streaming providers emit incremental "delta" steps: append the
             // chunk to the live bubble's text instead of the activity trace.
+            // syncLive UPSERTs, so a delta arriving after a session-switch reload
+            // wiped the bubble re-creates it (with the full accumulated text)
+            // instead of being silently dropped.
             if (st.kind === 'delta') {
-              const chunk = st.text || ''
-              // DEBUG-PAGELEAK: temporary — see "SoHbet başka sayfada cevap kayboluyor"
-              // hypothesis. Logs every delta arrival + whether the in-memory
-              // live bubble already carries text (so we can tell if state was
-              // actually being updated while the user was on another view).
-              // Drop after the fix lands.
-              // eslint-disable-next-line no-console
-              console.log('[DBG:delta]', {
-                sid,
-                activeOnScreen: activeSessionIdRef.current,
-                view: typeof window !== 'undefined' ? window.location.hash : '?',
-                msgsLen: (messagesRef.current ?? []).length,
-                liveId: id,
-                liveTxtBefore: (messagesRef.current ?? []).find((m) => m.id === id)?.text?.length ?? -1,
-                chunkLen: chunk.length,
-              })
-              onSid((prev) =>
-                prev.map((x) => (x.id === id ? { ...x, text: x.text + chunk } : x)),
-              )
+              liveText += st.text || ''
+              syncLive()
               return
             }
             // Tombstone: retract a previously emitted live step by id.
@@ -314,15 +332,20 @@ export function useChatStream(deps: ChatStreamDeps) {
             } else {
               liveSteps = [...liveSteps, st]
             }
-            const json = JSON.stringify(liveSteps)
-            onSid((prev) =>
-              prev.map((x) => (x.id === id ? { ...x, steps: json } : x)),
-            )
+            syncLive()
           },
           onReply: (r) => {
-            const id = liveId
             setPendingAsks((p) => withoutKey(p, sid))
-            onSid((prev) => prev.map((x) => (x.id === id ? r.replyMessage : x)))
+            // The reply persists under a DIFFERENT id (the server's replyId) than the
+            // synthetic live-* bubble. Drop the live bubble (and any stale copy of the
+            // persisted one) and append the authoritative message — appending, not
+            // map, so it survives a reload that wiped the live bubble. The live entry
+            // is no longer "unpersisted", so clear it from the ref.
+            liveBubblesRef.current.delete(sid)
+            onSid((prev) => {
+              const without = prev.filter((x) => x.id !== liveId && x.id !== r.replyMessage.id)
+              return [...without, r.replyMessage]
+            })
             // Clicking the notification jumps to the source chat session.
             notify(notifyEnabled.current, 'TionSwarm — yanıt hazır', r.replyMessage.text, () => {
               setView('chat')
@@ -369,6 +392,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         setStreamingSessions((p) => withRemoved(p, sid))
         setPendingSessions((p) => withRemoved(p, sid))
         setPendingAsks((p) => withoutKey(p, sid))
+        liveBubblesRef.current.delete(sid)
         const h = runsRef.current.get(sid)
         if (h && h.ac === ac) runsRef.current.delete(sid)
       }
@@ -665,6 +689,70 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionIdRef, setMessages],
   )
 
+  // reseedLive restores the live (unpersisted) assistant bubble THIS window is
+  // streaming after a session-switch reload wiped `messages` to the persisted-only
+  // list. It is the owning-window counterpart to recoverInflight: recoverInflight
+  // handles the NON-owning path (seeds a ghost from the server snapshot + bus),
+  // and early-returns when this window owns the run — so without reseedLive the
+  // owned bubble would stay gone until the next SSE frame re-created it. Uses the
+  // freshest bubble the local SSE handlers mirror into liveBubblesRef. No-op when
+  // no live bubble is owned, the user switched away, or it is already present.
+  const reseedLive = useCallback(
+    (sid: string, loadedMsgs: Message[]) => {
+      const bubble = liveBubblesRef.current.get(sid)
+      if (!bubble) return
+      if (activeSessionIdRef.current !== sid) return
+      if (loadedMsgs.some((m) => m.id === bubble.id)) return
+      setMessages((prev) => (prev.some((m) => m.id === bubble.id) ? prev : [...prev, bubble]))
+    },
+    [activeSessionIdRef, setMessages],
+  )
+
+  // ---- inflight text polling (non-owning / post-refresh observer) ----
+
+  // The session-step bus deliberately DROPS delta/tool_delta frames (see
+  // sessionstep.go busForwardable) to avoid flooding the shared bus with token
+  // chunks — so a ghost bubble (recoverInflight-seeded, bus-grown) shows the
+  // activity trace live but its ANSWER TEXT freezes at the snapshot taken when the
+  // page reloaded. This poll advances just that text: while the ACTIVE session has
+  // a running turn THIS window does not own, re-fetch the inflight snapshot every
+  // second and fold its (throttled, ≤600ms-fresh) text into the ghost bubble. Only
+  // `text` is touched — `steps` stays owned by the bus (applyAutoStep), so the two
+  // never fight. Stops the instant the turn ends (pending clears → transcript
+  // reload swaps in the authoritative message) or this window takes over the run.
+  useEffect(() => {
+    const sid = activeSessionId
+    if (!sid) return
+    if (!pendingSessions.has(sid)) return
+    if (runsRef.current.has(sid)) return // this window owns the turn — its own SSE streams the text
+    let cancelled = false
+    const tick = async () => {
+      let snap: InflightSnapshot | null = null
+      try {
+        snap = await api.getInflight(sid)
+      } catch {
+        return
+      }
+      if (cancelled || !snap || !snap.messageId) return
+      if (activeSessionIdRef.current !== sid) return
+      if (runsRef.current.has(sid)) return // took over mid-poll
+      const text = snap.text || ''
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === snap!.messageId)
+        if (idx < 0 || prev[idx].text === text) return prev
+        const next = prev.slice()
+        next[idx] = { ...prev[idx], text }
+        return next
+      })
+    }
+    const iv = setInterval(() => void tick(), 1000)
+    void tick()
+    return () => {
+      cancelled = true
+      clearInterval(iv)
+    }
+  }, [activeSessionId, pendingSessions, activeSessionIdRef, setMessages])
+
   // ---- self-wake (schedule_wake) waiting state ----
 
   // Arm the waiting banner: a schedule_wake event (phase=armed) said this session
@@ -932,6 +1020,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     applyAutoStep,
     clearAutoLive,
     recoverInflight,
+    reseedLive,
     setWakeWait,
     clearWakeWait,
     cancelWake,

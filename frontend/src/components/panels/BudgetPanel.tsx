@@ -322,13 +322,13 @@ export function BudgetPanel({ onError }: Props) {
           </>
         }
       />
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto p-3 md:p-5">
       {!usage ? (
         <div className="text-sm text-[var(--color-text-dim)]">{loading ? 'Yükleniyor…' : 'Veri yok.'}</div>
       ) : (
         <>
           {/* Summary cards — today */}
-          <div className="mb-5 flex gap-3">
+          <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <SummaryCard
               icon={<Coins size={12} />}
               label="Bugünkü toplam token"
@@ -376,7 +376,7 @@ export function BudgetPanel({ onError }: Props) {
           {/* Window-cumulative ROI — cross-session totals over the selected
               window (today's cards above are just one day). The cache hit rate
               and total savings are the caching ROI signal. */}
-          <div className="mb-5 flex gap-3">
+          <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <SummaryCard
               icon={<Sigma size={12} />}
               label={`Toplam maliyet (son ${days}g)`}
@@ -413,7 +413,7 @@ export function BudgetPanel({ onError }: Props) {
               <span className="text-sm font-medium text-[var(--color-text)]">Tasarruf Merkezi</span>
               <span className="text-xs text-[var(--color-text-dim)]">· son {days}g · tüm optimizasyon kaynakları</span>
             </div>
-            <div className="grid grid-cols-3 divide-x divide-[var(--color-border)]">
+            <div className="grid grid-cols-1 divide-y divide-[var(--color-border)] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               {/* Prompt-cache — the only source with real USD billing impact. */}
               <SavingsCell
                 title="Prompt-cache"
@@ -447,7 +447,7 @@ export function BudgetPanel({ onError }: Props) {
             </div>
           </div>
 
-          <div className="mb-5 grid grid-cols-2 gap-4">
+          <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
             {/* Origin breakdown */}
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
               <div className="mb-3 text-sm font-medium text-[var(--color-text)]">Köken kırılımı (bugün)</div>
@@ -551,7 +551,8 @@ export function BudgetPanel({ onError }: Props) {
                 bilgisi taşımaz; yeni turlar burada görünecek.)
               </div>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[36rem] text-sm">
                 <thead>
                   <tr className="text-left text-xs text-[var(--color-text-dim)]">
                     <th className="px-4 py-2 font-medium">Provider / Model</th>
@@ -576,6 +577,7 @@ export function BudgetPanel({ onError }: Props) {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
 
@@ -587,7 +589,8 @@ export function BudgetPanel({ onError }: Props) {
             {usage.agents.length === 0 ? (
               <div className="px-4 py-3 text-xs text-[var(--color-text-dim)]">Ajan yok.</div>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[28rem] text-sm">
                 <thead>
                   <tr className="text-left text-xs text-[var(--color-text-dim)]">
                     <th className="px-4 py-2 font-medium">Ajan</th>
@@ -627,6 +630,7 @@ export function BudgetPanel({ onError }: Props) {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </>

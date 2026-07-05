@@ -219,6 +219,8 @@ func (s *Server) registerWebRoutes(mux *http.ServeMux) {
 func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspaces", s.handleListWorkspaces)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
+	// Adopt an existing on-disk workspace data dir (first-run "select workspace").
+	mux.HandleFunc("POST /api/workspaces/attach", s.handleAttachWorkspace)
 	mux.HandleFunc("DELETE /api/workspaces/{id}", s.handleDeleteWorkspace)
 	// Workspace templates catalog (agents/flow blueprints for new workspaces).
 	mux.HandleFunc("GET /api/workspace-templates", s.handleListWorkspaceTemplates)

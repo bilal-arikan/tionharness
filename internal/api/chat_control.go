@@ -59,6 +59,28 @@ type chatRun struct {
 	// self-management is off. Installed per agent turn by the stream handler.
 	bridgeDefs []providers.ToolDef
 	bridgeCall func(ctx context.Context, name string, args json.RawMessage) (string, error)
+	// tierVis reports the responding agent's effective per-tool visibility so the
+	// Interaction MCP's tools/list (Tools) classifies each tool into the same CLI
+	// wire tier (core/extended/hidden) that splitInteractionTiers used to build the
+	// allowlist. Installed per agent turn alongside the bridge. nil → the static
+	// split (used when no per-agent registry is available).
+	tierVis func(name string) string
+}
+
+// setTierVis installs the responding agent's visibility resolver for the CLI wire
+// tier classifier. Kept in lockstep with setBridge so tools/list and the allowlist
+// classify identically.
+func (r *chatRun) setTierVis(visOf func(name string) string) {
+	r.mu.Lock()
+	r.tierVis = visOf
+	r.mu.Unlock()
+}
+
+// tierVisFor returns the installed visibility resolver (nil if none).
+func (r *chatRun) tierVisFor() func(name string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.tierVis
 }
 
 // setBridge installs the responding agent's self-management tool catalog +

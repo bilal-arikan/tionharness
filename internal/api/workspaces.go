@@ -75,6 +75,27 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, wsNew.Meta)
 }
 
+type attachWorkspaceReq struct {
+	Path string `json:"path"` // absolute path of an existing workspace data dir
+}
+
+// handleAttachWorkspace registers an existing on-disk workspace data directory
+// (chosen via the folder picker in first-run onboarding) as a workspace, without
+// recreating its content. A folder that is not a valid workspace, or is already
+// attached, yields 400 with a human message so the UI can show it inline.
+func (s *Server) handleAttachWorkspace(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[attachWorkspaceReq](w, r)
+	if !ok {
+		return
+	}
+	wsNew, err := s.workspaces.Attach(req.Path)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, wsNew.Meta)
+}
+
 // pickFolderReq/Resp carry the native folder-picker exchange.
 type pickFolderResp struct {
 	Path     string `json:"path"`

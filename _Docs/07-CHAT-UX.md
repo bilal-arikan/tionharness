@@ -40,6 +40,45 @@ sohbet ekranı gibi.
   yarım yanıtı `Message.Interrupted=true` olarak kurtarır → frontend asistan
   balonunda **"Bu yanıt yarıda kesildi (sunucu yeniden başladı)"** banner'ı
   (`MessageList.tsx`). Mekanizma + external-agent karşılaştırması: `_Docs/08-DEPOLAMA.md`.
+- **Tur-ortası reload/navigasyon kurtarma (istemci tarafı, crash'ten AYRI):** tur
+  `context.WithoutCancel` ile client bağlantısından **detached** çalışır → sayfa
+  yenileme/başka sohbete geçiş üretimi kesmez, yanıt yine persist olur. Yeniden
+  girişte `App.tsx` `listMessages` ile transkripti kalıcı-mesajlarla yükler; canlı
+  balon iki yoldan geri gelir:
+  - **Sahip-olmayan pencere** (başka pencere / otonom tur): `recoverInflight`
+    `GET /sessions/{id}/inflight` snapshot'ından ghost balon tohumlar, `session_step`
+    bus'ı (`applyAutoStep`) canlı büyütür. Not: bus `delta/tool_delta`'yı düşürür
+    (`sessionstep.go busForwardable`) → metin gövdesi snapshot throttle'ı (≤600ms)
+    kadar tazedir, tam metin tur bitince gelir.
+  - **Sahip pencere** (turu bu pencere stream'liyor): `listMessages` in-memory
+    `live-*` balonunu siler; `runsRef` sahipliği sürdüğü için `recoverInflight`
+    erken döner. `useChatStream` bunu iki savunmayla kurtarır: (1) yerel SSE
+    handler'ları **UPSERT** (`syncLive` — balon yoksa biriktirilmiş tam
+    metin/iz ile yeniden yaratır, `map`-only artık frame düşürmez); (2)
+    `reseedLive` (App effect'inden) `liveBubblesRef`'teki en taze balonu dönüşte
+    hemen geri enjekte eder. Böylece "başka sohbete gidip gelince cevap kayboluyor"
+    sorunu çözülür.
+  - **Metin ilerletme (inflight polling):** bus `delta`'yı düşürdüğü için ghost
+    balonun **cevap metni** reload anındaki snapshot'ta donardı. `useChatStream`
+    artık aktif session'da **sahiplenilmeyen** bir tur pending iken
+    `GET /sessions/{id}/inflight`'i **saniyede bir** çekip yalnız `text` alanını
+    ilerletir (iz `steps` bus'a ait kalır → çakışma yok). Tur bitince pending
+    temizlenir → poll durur, transkript reload otoriter mesajı koyar.
+
+### Yüzen composer + son mesaj görünürlüğü
+- **Overlay yerleşim:** chat view'i `relative` sarmalayıcı; bottom-stack
+  (ask/todo/pending/wake banner + `Composer`) `absolute inset-x-0 bottom-0 z-20`
+  ile transkriptin **üstüne yüzer** (`pointer-events-none` + `[&>*]:pointer-events-auto`
+  → şeffaf boşluklar scroll'a geçer). Mesaj balonları alttan composer'ın arkasına kayar.
+- **Gradient + opak input:** composer sarmalayıcısı tema-uyumlu
+  `bg-gradient-to-t from-[var(--color-bg)]
+  via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent`; iç input
+  kartı `bg-[var(--color-surface)]` (opak) + `shadow-lg`. Şeffaf üst kısım balonların
+  görünüp arka plana karışmasını sağlar (açık/koyu temada tutarlı).
+- **`bottomInset` (bug fix):** overlay yüksekliği `ResizeObserver` ile ölçülüp
+  `MessageList`'e scroll padding olarak verilir → en yeni mesaj **daima opak input'un
+  üstünde** kalır. Bu, "agent yanıtı tamamlanana kadar son kullanıcı mesajı
+  görünmüyor" belirtisini giderir (mesaj artık input'un arkasında saklanmaz).
 
 ### Inline görsel sunucu
 - `internal/api/files.go` — `GET /api/files?path=<yol>`: sohbet içeriğinde

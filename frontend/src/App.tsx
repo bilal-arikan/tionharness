@@ -157,6 +157,7 @@ export default function App() {
     markWorkspaceRead,
     switchWorkspace,
     createWorkspace,
+    attachWorkspace,
     deleteActiveWorkspace,
     deleteWorkspace,
     refreshWorkspaces,
@@ -411,11 +412,37 @@ export default function App() {
         // chat is defined below in render order; the callback runs post-render so
         // the binding is initialised by the time this fires (same pattern as the
         // SSE onEvent handler). Keep it out of the deps array to avoid a TDZ read.
+        // recoverInflight restores the NON-owning path (server snapshot + bus);
+        // reseedLive restores the bubble THIS window is actively streaming (which
+        // listMessages above just wiped). The two are mutually exclusive per session.
         void chatRef.current?.recoverInflight(sid, msgs)
+        chatRef.current?.reseedLive(sid, msgs)
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId])
+
+  // Floating composer overlay: the chat bottom stack (composer + ask/todo/pending/
+  // wake banners) is absolutely positioned OVER the transcript so message bubbles
+  // scroll UNDER its transparent-topped gradient. We measure the stack's live
+  // height and feed it to MessageList as bottom padding, so the newest message
+  // always clears the opaque input instead of hiding behind it (which is what made
+  // the last user message look "missing" until the turn finished).
+  const bottomStackRef = useRef<HTMLDivElement>(null)
+  const [bottomInset, setBottomInset] = useState(0)
+  useEffect(() => {
+    if (view !== 'chat') {
+      setBottomInset(0)
+      return
+    }
+    const el = bottomStackRef.current
+    if (!el) return
+    const measure = () => setBottomInset(el.offsetHeight)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [view, activeSessionId])
 
   // Artifacts offered by the composer's "#" picker so the user can include an
   // artifact's content in the next turn. ALL workspace artifacts are referencable
@@ -1027,7 +1054,7 @@ export default function App() {
   // List resolved and there are zero workspaces → onboarding. Closing the popup
   // without creating one provisions nothing (no default workspace).
   if (!wsLoading && workspaces.length === 0) {
-    return <OnboardingScreen onCreate={createWorkspace} />
+    return <OnboardingScreen onCreate={createWorkspace} onAttach={attachWorkspace} />
   }
 
   return (
@@ -1185,7 +1212,7 @@ export default function App() {
         )}
 
         {view === 'chat' && (
-          <>
+          <div className="relative flex min-h-0 flex-1 flex-col">
             <MessageList
               messages={messages}
               sessionId={activeSessionId ?? undefined}
@@ -1202,50 +1229,59 @@ export default function App() {
               onRetry={chat.retryMessage}
               onFeedback={rateMessage}
               onOpenAgent={openAgentSettings}
+              bottomInset={bottomInset}
             />
-            {chat.activeAsk &&
-              (chat.activeAsk.kind === 'permission' ? (
-                <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-              ) : chat.activeAsk.kind === 'plan' ? (
-                <PlanPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-              ) : (
-                <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-              ))}
-            <TodoPanel todos={currentTodos} />
-            <PendingTray items={chat.activeQueued} onRemove={chat.removePending} />
-            {chat.activeWakeWait && (
-              <WakeWaitBanner
-                reason={chat.activeWakeWait.reason}
-                fireAt={chat.activeWakeWait.fireAt}
-                onCancel={chat.cancelWake}
+            {/* Floating bottom stack: overlays the transcript so bubbles scroll UNDER
+                the composer's transparent→black gradient. pointer-events pass through
+                the transparent gaps to the transcript; each child re-enables them. */}
+            <div
+              ref={bottomStackRef}
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col [&>*]:pointer-events-auto"
+            >
+              {chat.activeAsk &&
+                (chat.activeAsk.kind === 'permission' ? (
+                  <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+                ) : chat.activeAsk.kind === 'plan' ? (
+                  <PlanPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+                ) : (
+                  <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+                ))}
+              <TodoPanel todos={currentTodos} />
+              <PendingTray items={chat.activeQueued} onRemove={chat.removePending} />
+              {chat.activeWakeWait && (
+                <WakeWaitBanner
+                  reason={chat.activeWakeWait.reason}
+                  fireAt={chat.activeWakeWait.fireAt}
+                  onCancel={chat.cancelWake}
+                />
+              )}
+              <Composer
+                key={composerKey}
+                disabled={!activeSessionId}
+                sessionId={activeSessionId ?? undefined}
+                streaming={chat.activeStreaming}
+                waiting={!!chat.activeWakeWait}
+                onCancelWait={chat.cancelWake}
+                onSend={(text, attachments) => chat.sendMessage(text, undefined, attachments)}
+                onStop={chat.stopTurn}
+                onInterrupt={chat.interruptTurn}
+                onQueue={chat.queueMessage}
+                onSteer={chat.steerTurn}
+                thinkingLevel={chat.thinkingLevel}
+                onThinkingLevelChange={chat.setThinkingLevel}
+                permissionMode={chat.permissionMode}
+                onPermissionModeChange={chat.setPermissionMode}
+                agentId={activeAgentId ?? ''}
+                onAgentChange={changeChatAgent}
+                agents={agents}
+                commands={chat.chatCommands}
+                artifacts={sessionArtifacts}
               />
-            )}
-            <Composer
-              key={composerKey}
-              disabled={!activeSessionId}
-              sessionId={activeSessionId ?? undefined}
-              streaming={chat.activeStreaming}
-              waiting={!!chat.activeWakeWait}
-              onCancelWait={chat.cancelWake}
-              onSend={(text, attachments) => chat.sendMessage(text, undefined, attachments)}
-              onStop={chat.stopTurn}
-              onInterrupt={chat.interruptTurn}
-              onQueue={chat.queueMessage}
-              onSteer={chat.steerTurn}
-              thinkingLevel={chat.thinkingLevel}
-              onThinkingLevelChange={chat.setThinkingLevel}
-              permissionMode={chat.permissionMode}
-              onPermissionModeChange={chat.setPermissionMode}
-              agentId={activeAgentId ?? ''}
-              onAgentChange={changeChatAgent}
-              agents={agents}
-              commands={chat.chatCommands}
-              artifacts={sessionArtifacts}
-            />
+            </div>
             {chat.rewindOpen && (
               <RewindDialog messages={messages} onClose={chat.closeRewind} onRewind={handleRewind} />
             )}
-          </>
+          </div>
         )}
         {view === 'agents' && (
           <AgentsView

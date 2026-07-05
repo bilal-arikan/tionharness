@@ -105,7 +105,12 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		bridgeDefs, bridgeCall := rt.BridgeTools(ctx, ag)
 		run.setBridge(bridgeDefs, bridgeCall)
 
-		coreNames, extNames := splitInteractionTiers(interactionAdvertisedNames(s.tun, true), bridgeDefs)
+		// Visibility-aware CLI wire split (see chat_stream): full→core, summary/
+		// name-only→extended, hidden→neither. Installed on the run so tools/list
+		// classifies identically to the allowlist.
+		visOf := rt.ToolVisibilityFunc(ctx, ag)
+		run.setTierVis(visOf)
+		coreNames, extNames := splitInteractionTiers(interactionAdvertisedNames(s.tun, true), bridgeDefs, visOf)
 		ctx = tools.WithInteractionEndpoint(ctx, url, run.token, coreNames, extNames)
 		return ctx, func() { s.runs.unregister(runID) }
 	}

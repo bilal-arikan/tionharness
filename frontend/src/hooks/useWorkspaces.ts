@@ -153,6 +153,24 @@ export function useWorkspaces(setError: (msg: string) => void) {
     }
   }, [setError])
 
+  // Adopt an existing on-disk workspace folder (first-run "select workspace"):
+  // attach it on the backend, then make it active. Unlike createWorkspace this
+  // RE-THROWS on failure so the caller (onboarding screen) can render the
+  // validation error inline (invalid folder / already attached).
+  const attachWorkspace = useCallback(async (path: string) => {
+    const wsNew = await api.attachWorkspace(path)
+    // Re-fetch so the icon/color from the adopted ws-settings.json show at once;
+    // fall back to appending the create response on a list-fetch hiccup.
+    try {
+      setWorkspaces(await api.listWorkspaces())
+    } catch {
+      setWorkspaces((prev) => [...prev, wsNew])
+    }
+    setActiveWorkspace(wsNew.id)
+    setActiveWorkspaceId(wsNew.id)
+    return wsNew
+  }, [])
+
   // Delete the active workspace, then switch to another. Deleting the LAST one is
   // allowed: with nothing remaining we clear the active pointer so App falls back
   // to the onboarding screen (no default workspace is re-seeded).
@@ -244,6 +262,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
     markWorkspaceRead,
     switchWorkspace,
     createWorkspace,
+    attachWorkspace,
     deleteActiveWorkspace,
     deleteWorkspace,
     refreshWorkspaces,

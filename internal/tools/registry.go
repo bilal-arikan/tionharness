@@ -71,6 +71,14 @@ type Registry struct {
 	// nameOnly ⊆ lazy and is disjoint from hidden. The workspace tools screen's
 	// "NameOnly" chip maps here.
 	nameOnly map[string]bool
+	// selfManaged marks built-ins that belong to the self-management suite — a
+	// STABLE membership set stamped at registration, independent of the visibility
+	// marks above (which a per-workspace override can flip). The claude-cli bridge
+	// uses it to keep advertising a self-management tool even when the user promotes
+	// it to the full tier (which clears its lazy flag): without this, a full-tier
+	// self-management tool would vanish from the CLI entirely (BridgeableDefs bridges
+	// lazy built-ins only). See BridgeableDefsFiltered.
+	selfManaged map[string]bool
 
 	mcpEntries     []mcp.CatalogEntry
 	mcpCfgByServer map[string]mcp.ServerConfig
@@ -91,6 +99,7 @@ func NewRegistry(builtins ...Tool) *Registry {
 		lazy:           map[string]bool{},
 		hidden:         map[string]bool{},
 		nameOnly:       map[string]bool{},
+		selfManaged:    map[string]bool{},
 		mcpCfgByServer: map[string]mcp.ServerConfig{},
 	}
 	for _, t := range builtins {
@@ -138,6 +147,20 @@ func (r *Registry) MarkNameOnly(names ...string) {
 		delete(r.hidden, n) // nameOnly and hidden are disjoint; last mark wins
 	}
 }
+
+// MarkSelfManaged records the named tools as members of the self-management suite.
+// This is a stable membership stamp (not a visibility tier), set once at build time
+// so the claude-cli bridge can still advertise a self-management tool after the user
+// promotes it to the full tier (which clears its lazy flag). Idempotent; unknown
+// names are harmless.
+func (r *Registry) MarkSelfManaged(names ...string) {
+	for _, n := range names {
+		r.selfManaged[n] = true
+	}
+}
+
+// IsSelfManaged reports whether a tool is a member of the self-management suite.
+func (r *Registry) IsSelfManaged(name string) bool { return r.selfManaged[name] }
 
 // Unlazy forces the named tools eager (shipped every turn): it clears any lazy,
 // hidden AND name-only marks, overriding code defaults like the self-management
