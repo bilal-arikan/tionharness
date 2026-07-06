@@ -84,11 +84,11 @@ func TestLiveExternalGateway(t *testing.T) {
 	defer back.Close()
 	pool := mcp.NewPool()
 	defer pool.Close()
-	servers := func(context.Context) ([]mcp.ServerConfig, error) {
+	servers := func(context.Context, string) ([]mcp.ServerConfig, error) {
 		return []mcp.ServerConfig{{Name: "fake", Transport: "http", URL: back.URL}}, nil
 	}
 	const token = "gw-live-tok"
-	b := NewBackend(func() *mcp.Pool { return pool }, servers, nil)
+	b := NewBackend(func(string) *mcp.Pool { return pool }, servers, nil)
 	srv := NewServer(b, func(tok string) bool { return tok == token }, nil)
 	b.SetServer(srv)
 	gw := httptest.NewServer(srv)

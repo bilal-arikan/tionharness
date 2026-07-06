@@ -107,18 +107,26 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	// token it is loopback-only. Default OFF — external exposure must be explicit.
 	if envTruthy(os.Getenv("TIONSWARM_GATEWAY_EXTERNAL")) {
 		token := strings.TrimSpace(os.Getenv("TIONSWARM_GATEWAY_AUTH_TOKEN"))
-		// Share the default workspace's persistent MCP pool (#11) — no dedicated pool, so
-		// internal agent turns and external gateway clients reuse one connection per server.
-		// Resolved live so it always tracks the current default workspace.
-		poolFn := func() *mcp.Pool {
-			wsp := s.workspaces.Default()
+		// Per-workspace routing: a client picks its workspace via the X-Workspace-Id
+		// header (captured at initialize); "" or unknown falls back to the default. Each
+		// workspace's own persistent MCP pool is SHARED (#11) — no dedicated pool.
+		resolveWs := func(wsID string) *workspace.Workspace {
+			if wsID != "" {
+				if wsp, err := s.workspaces.Get(wsID); err == nil {
+					return wsp
+				}
+			}
+			return s.workspaces.Default()
+		}
+		poolFn := func(wsID string) *mcp.Pool {
+			wsp := resolveWs(wsID)
 			if wsp == nil || wsp.Runtime == nil {
 				return nil
 			}
 			return wsp.Runtime.MCPPool()
 		}
-		serversFn := func(ctx context.Context) ([]mcp.ServerConfig, error) {
-			wsp := s.workspaces.Default()
+		serversFn := func(ctx context.Context, wsID string) ([]mcp.ServerConfig, error) {
+			wsp := resolveWs(wsID)
 			if wsp == nil || wsp.DB == nil {
 				return nil, nil
 			}
@@ -139,6 +147,24 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		gb := gateway.NewBackend(poolFn, serversFn, logger)
 		s.gatewaySrv = gateway.NewServer(gb, authFn, logger)
 		gb.SetServer(s.gatewaySrv)
+		// Audit parity: log each proxied backend tool call to a JSONL file (TS gateway's
+		// gateway-audit.jsonl equivalent). Opt-in via TIONSWARM_GATEWAY_AUDIT_LOG=<path>;
+		// fire-and-forget so a write error never breaks a tool call.
+		if p := strings.TrimSpace(os.Getenv("TIONSWARM_GATEWAY_AUDIT_LOG")); p != "" && !strings.EqualFold(p, "off") {
+			gb.SetAudit(func(e gateway.AuditEntry) {
+				line, err := json.Marshal(e)
+				if err != nil {
+					return
+				}
+				f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+				if err != nil {
+					return
+				}
+				defer f.Close()
+				_, _ = f.Write(append(line, '\n'))
+			})
+			logger.Info("external gateway audit log enabled", "path", p)
+		}
 		s.gatewayRequireLoopback = token == ""
 		if token == "" {
 			logger.Warn("external MCP gateway ENABLED at /mcp/gateway — loopback-only (no TIONSWARM_GATEWAY_AUTH_TOKEN set)")

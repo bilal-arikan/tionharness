@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,10 +60,10 @@ func TestGatewayActivateAndProxy(t *testing.T) {
 
 	pool := mcp.NewPool()
 	defer pool.Close()
-	servers := func(context.Context) ([]mcp.ServerConfig, error) {
+	servers := func(context.Context, string) ([]mcp.ServerConfig, error) {
 		return []mcp.ServerConfig{{Name: "fake", Transport: "http", URL: back.URL}}, nil
 	}
-	b := NewBackend(func() *mcp.Pool { return pool }, servers, nil)
+	b := NewBackend(func(string) *mcp.Pool { return pool }, servers, nil)
 	srv := NewServer(b, nil, nil)
 	b.SetServer(srv)
 
@@ -121,7 +122,7 @@ func TestGatewayActivateAndProxy(t *testing.T) {
 func TestGatewayAuth(t *testing.T) {
 	pool := mcp.NewPool()
 	defer pool.Close()
-	b := NewBackend(func() *mcp.Pool { return pool }, func(context.Context) ([]mcp.ServerConfig, error) { return nil, nil }, nil)
+	b := NewBackend(func(string) *mcp.Pool { return pool }, func(context.Context, string) ([]mcp.ServerConfig, error) { return nil, nil }, nil)
 	srv := NewServer(b, func(tok string) bool { return tok == "secret" }, nil)
 	b.SetServer(srv)
 	ts := httptest.NewServer(srv)
@@ -164,6 +165,65 @@ func post(t *testing.T, url, auth, body string) int {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode
+}
+
+// TestGatewayPerWorkspaceRouting verifies a session sees only its bound workspace's
+// servers (X-Workspace-Id → OpenSession), so one gateway serves many workspaces.
+func TestGatewayPerWorkspaceRouting(t *testing.T) {
+	back := httptest.NewServer(fakeMCP{})
+	defer back.Close()
+	pool := mcp.NewPool()
+	defer pool.Close()
+	// Only workspace "wsA" exposes the server.
+	servers := func(_ context.Context, wsID string) ([]mcp.ServerConfig, error) {
+		if wsID == "wsA" {
+			return []mcp.ServerConfig{{Name: "fake", Transport: "http", URL: back.URL}}, nil
+		}
+		return nil, nil
+	}
+	b := NewBackend(func(string) *mcp.Pool { return pool }, servers, nil)
+	srv := NewServer(b, nil, nil)
+	b.SetServer(srv)
+	ctx := context.Background()
+
+	b.OpenSession("sA", "wsA")
+	if res, _ := b.Call(ctx, "sA", "list_servers", nil); !strings.Contains(res.Text, "fake") {
+		t.Fatalf("wsA session must see its server, got %q", res.Text)
+	}
+	b.OpenSession("sB", "wsB")
+	if res, _ := b.Call(ctx, "sB", "list_servers", nil); strings.Contains(res.Text, "fake") {
+		t.Fatalf("wsB session must NOT see wsA's server, got %q", res.Text)
+	}
+}
+
+// TestGatewayAuditRecordsProxiedCalls verifies the audit sink fires for proxied backend
+// tool calls (server+tool+ok) but NOT for meta-tools (gateway-audit parity).
+func TestGatewayAuditRecordsProxiedCalls(t *testing.T) {
+	back := httptest.NewServer(fakeMCP{})
+	defer back.Close()
+	pool := mcp.NewPool()
+	defer pool.Close()
+	servers := func(context.Context, string) ([]mcp.ServerConfig, error) {
+		return []mcp.ServerConfig{{Name: "fake", Transport: "http", URL: back.URL}}, nil
+	}
+	b := NewBackend(func(string) *mcp.Pool { return pool }, servers, nil)
+	srv := NewServer(b, nil, nil)
+	b.SetServer(srv)
+	var mu sync.Mutex
+	var entries []AuditEntry
+	b.SetAudit(func(e AuditEntry) { mu.Lock(); entries = append(entries, e); mu.Unlock() })
+
+	ctx := context.Background()
+	// Meta-tool: not audited.
+	b.Call(ctx, "s1", "activate_tools", json.RawMessage(`{"servers":["fake"]}`))
+	if len(entries) != 0 {
+		t.Fatalf("meta-tools must not be audited, got %+v", entries)
+	}
+	// Proxied backend tool: audited.
+	b.Call(ctx, "s1", mcp.NamespaceTool("fake", "echo"), json.RawMessage(`{}`))
+	if len(entries) != 1 || entries[0].Server != "fake" || entries[0].Tool != "echo" || !entries[0].OK {
+		t.Fatalf("proxied call must be audited as fake/echo/ok, got %+v", entries)
+	}
 }
 
 func toolNames(specs []ToolSpec) []string {

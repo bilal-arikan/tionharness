@@ -48,6 +48,10 @@ type CallResult struct {
 // (which backend servers are activated) lives in the Backend, keyed by the minted
 // session id the server passes in.
 type Backend interface {
+	// OpenSession binds a freshly minted session to a workspace (from the initialize
+	// request's X-Workspace-Id header; "" means the default workspace). Lets one gateway
+	// serve multiple workspaces — each client session sees its own workspace's servers.
+	OpenSession(sessionID, workspaceID string)
 	// Tools returns the tools advertised for a session: the meta-tools plus any
 	// dynamically activated backend-server tools.
 	Tools(sessionID string) []ToolSpec
@@ -57,6 +61,10 @@ type Backend interface {
 	// when the session's stream ends.
 	CloseSession(sessionID string)
 }
+
+// WorkspaceHeader is the request header an external client sets to choose which
+// workspace's MCP servers the gateway exposes. Absent → the default workspace.
+const WorkspaceHeader = "X-Workspace-Id"
 
 type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -145,6 +153,7 @@ func (s *Server) servePost(w http.ResponseWriter, r *http.Request) {
 	switch req.Method {
 	case "initialize":
 		sid = s.mintSession()
+		s.backend.OpenSession(sid, r.Header.Get(WorkspaceHeader))
 		w.Header().Set("Mcp-Session-Id", sid)
 		s.writeResult(w, req.ID, map[string]any{
 			"protocolVersion": ProtocolVersion,

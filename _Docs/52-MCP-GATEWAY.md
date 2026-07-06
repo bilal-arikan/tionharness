@@ -721,7 +721,18 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
 
 > Bu checklist geçerse gateway üretimde tam doğrulanmış sayılır; mekanizma zaten otomatik kanıtlı.
 
-### Kalan (opsiyonel, ileri)
+### ✅ İleri opsiyoneller (2026-07-06)
 
-- Workspace seçimi: header/token→workspace eşlemesi (MVP default workspace'e bağlı).
-- Audit paritesi: gateway proxied çağrıları için `gateway-audit.jsonl` muadili (debug.jsonl'e).
+- ✅ **Per-workspace routing:** harici client `X-Workspace-Id` header'ıyla workspace seçer
+  (`gateway.WorkspaceHeader`); server `initialize`'da `OpenSession(sid, wsID)` ile session'ı
+  workspace'e bağlar; `ServersFunc`/`PoolFunc` artık `workspaceID` alır (boş/bilinmeyen →
+  default). Böylece tek gateway çok workspace sunar. Test: `TestGatewayPerWorkspaceRouting`.
+- ✅ **Audit paritesi:** proxied backend tool çağrıları `AuditEntry{ts,server,tool,ok,error}`
+  ile kaydedilir (TS `gateway-audit.jsonl` muadili). Opt-in `TIONSWARM_GATEWAY_AUDIT_LOG=<path>`
+  (JSONL append, fire-and-forget; meta-araçlar denetlenmez). Test: `TestGatewayAuditRecordsProxiedCalls`.
+- ⏳ **Canlı VPS göç uygulaması — HAZIR, onay bekliyor:** `migrate-vps.py` gerçek `config.json`
+  + `secrets.json` üzerinde doğrulandı (**23 server** normalize: 7 vps http + local; secrets
+  çözüldü). Canlı instance :8090'da çalışıyor (WS1/WS5/WS8/WS9). **Canlı import yapılmadı**
+  çünkü: (a) hangi workspace? (b) 23 gerçek-secret config yazımı geri-alması zor, (c) çakışma
+  (ör. WS5'te `mcp-chrome` zaten var). Bilal workspace seçip onaylayınca tek komutla yapılır
+  (§11-B prosedürü).

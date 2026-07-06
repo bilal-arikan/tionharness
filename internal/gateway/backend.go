@@ -12,22 +12,27 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/mcp"
 )
 
-// ServersFunc returns the backend MCP servers the gateway may expose (the enabled
-// servers of the bound workspace). Read live so a config change is picked up without a
-// gateway restart, mirroring the TS gateway's readConfig-per-call behaviour.
-type ServersFunc func(ctx context.Context) ([]mcp.ServerConfig, error)
+// ServersFunc returns the enabled MCP servers of a WORKSPACE the gateway may expose
+// (workspaceID "" = default workspace). Read live so a config change is picked up without
+// a gateway restart, mirroring the TS gateway's readConfig-per-call behaviour.
+type ServersFunc func(ctx context.Context, workspaceID string) ([]mcp.ServerConfig, error)
 
-// PoolFunc returns the MCP connection pool to dispatch through. Resolved live so the
-// gateway SHARES the current workspace's persistent pool (#11) — internal agent turns and
-// external gateway clients reuse one backend connection per server. May return nil (no
-// workspace ready) → the backend reports a clean error instead of dispatching.
-type PoolFunc func() *mcp.Pool
+// PoolFunc returns a WORKSPACE's MCP connection pool to dispatch through (workspaceID ""
+// = default). Resolved live so the gateway SHARES that workspace's persistent pool (#11) —
+// internal agent turns and external gateway clients reuse one backend connection per
+// server. May return nil (no workspace) → the backend reports a clean error.
+type PoolFunc func(workspaceID string) *mcp.Pool
+
+// AuditFunc records one proxied backend tool call (gateway-audit parity with the TS
+// gateway's gateway-audit.jsonl). Fire-and-forget; nil disables auditing.
+type AuditFunc func(AuditEntry)
 
 // mcpBackend implements Backend over TionSwarm's mcp.Pool: it starts each session with
 // meta-tools only and grows the surface when the client activates a backend server.
 type mcpBackend struct {
 	poolFn  PoolFunc
 	servers ServersFunc
+	audit   AuditFunc
 	srv     *Server // set via SetServer, for tools/list_changed pushes
 	logger  *slog.Logger
 
@@ -36,14 +41,16 @@ type mcpBackend struct {
 }
 
 type gwSession struct {
+	// workspaceID is the workspace this client session is bound to ("" = default).
+	workspaceID string
 	// activated maps a sanitized server name to its advertised namespaced tools.
 	activated map[string][]ToolSpec
 	// cfgByServer is the accumulated pool dispatch map (sanitized server -> config).
 	cfgByServer map[string]mcp.ServerConfig
 }
 
-// NewBackend builds the gateway backend. poolFn resolves the shared workspace pool live.
-// Wire the returned *Server's pusher with SetServer after constructing it around this backend.
+// NewBackend builds the gateway backend. poolFn/servers resolve a workspace's shared pool
+// + enabled servers live. Wire the *Server's pusher with SetServer after constructing it.
 func NewBackend(poolFn PoolFunc, servers ServersFunc, logger *slog.Logger) *mcpBackend {
 	if logger == nil {
 		logger = slog.Default()
@@ -51,16 +58,23 @@ func NewBackend(poolFn PoolFunc, servers ServersFunc, logger *slog.Logger) *mcpB
 	return &mcpBackend{poolFn: poolFn, servers: servers, logger: logger, sessions: map[string]*gwSession{}}
 }
 
-// pool resolves the shared pool, or nil when no workspace is ready.
-func (b *mcpBackend) pool() *mcp.Pool {
-	if b.poolFn == nil {
-		return nil
-	}
-	return b.poolFn()
-}
-
 // SetServer wires the streaming server so activate can push tools/list_changed.
 func (b *mcpBackend) SetServer(s *Server) { b.srv = s }
+
+// SetAudit wires an audit sink for proxied tool calls (gateway-audit parity). nil disables.
+func (b *mcpBackend) SetAudit(fn AuditFunc) { b.audit = fn }
+
+// OpenSession binds a new session to a workspace (from the X-Workspace-Id header).
+func (b *mcpBackend) OpenSession(sid, workspaceID string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	s := b.sessions[sid]
+	if s == nil {
+		s = &gwSession{activated: map[string][]ToolSpec{}, cfgByServer: map[string]mcp.ServerConfig{}}
+		b.sessions[sid] = s
+	}
+	s.workspaceID = workspaceID
+}
 
 func (b *mcpBackend) session(sid string) *gwSession {
 	b.mu.Lock()
@@ -73,9 +87,34 @@ func (b *mcpBackend) session(sid string) *gwSession {
 	return s
 }
 
+// workspaceOf returns the workspace id a session is bound to.
+func (b *mcpBackend) workspaceOf(sid string) string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if s := b.sessions[sid]; s != nil {
+		return s.workspaceID
+	}
+	return ""
+}
+
+// pool resolves a session's workspace pool, or nil when none is ready.
+func (b *mcpBackend) pool(sid string) *mcp.Pool {
+	if b.poolFn == nil {
+		return nil
+	}
+	return b.poolFn(b.workspaceOf(sid))
+}
+
+// serversFor resolves a session's workspace's enabled servers.
+func (b *mcpBackend) serversFor(ctx context.Context, sid string) ([]mcp.ServerConfig, error) {
+	if b.servers == nil {
+		return nil, nil
+	}
+	return b.servers(ctx, b.workspaceOf(sid))
+}
+
 // CloseSession drops a session's activation state. The pool's backend connections are
-// shared and persistent (workspace-lifetime), so they are NOT closed here — a follow-up
-// may add per-session ref-counting (Doc 52 brainstorm #11).
+// shared and persistent (workspace-lifetime), so they are NOT closed here.
 func (b *mcpBackend) CloseSession(sid string) {
 	b.mu.Lock()
 	delete(b.sessions, sid)
@@ -123,7 +162,7 @@ func (b *mcpBackend) Call(ctx context.Context, sid, name string, args json.RawMe
 		return b.callActiveTools(sid)
 	}
 	// Otherwise it is a proxied backend tool (namespaced server__tool).
-	pool := b.pool()
+	pool := b.pool(sid)
 	if pool == nil {
 		return CallResult{Text: "gateway has no active workspace pool", IsError: true}, nil
 	}
@@ -132,6 +171,7 @@ func (b *mcpBackend) Call(ctx context.Context, sid, name string, args json.RawMe
 	cfgByServer := s.cfgByServer
 	b.mu.Unlock()
 	res, err := pool.Call(ctx, cfgByServer, name, args)
+	b.recordAudit(name, err, res.IsError) // gateway-audit parity (proxied calls only)
 	if err != nil {
 		return CallResult{Text: "call failed: " + err.Error(), IsError: true}, nil
 	}
@@ -139,7 +179,7 @@ func (b *mcpBackend) Call(ctx context.Context, sid, name string, args json.RawMe
 }
 
 func (b *mcpBackend) callListServers(ctx context.Context, sid string) (CallResult, error) {
-	cfgs, err := b.servers(ctx)
+	cfgs, err := b.serversFor(ctx, sid)
 	if err != nil {
 		return CallResult{Text: "list_servers failed: " + err.Error(), IsError: true}, nil
 	}
@@ -183,11 +223,11 @@ func (b *mcpBackend) callActivate(ctx context.Context, sid string, args json.Raw
 	if len(in.Servers) == 0 {
 		return CallResult{Text: "no server names given", IsError: true}, nil
 	}
-	pool := b.pool()
+	pool := b.pool(sid)
 	if pool == nil {
 		return CallResult{Text: "gateway has no active workspace pool", IsError: true}, nil
 	}
-	cfgs, err := b.servers(ctx)
+	cfgs, err := b.serversFor(ctx, sid)
 	if err != nil {
 		return CallResult{Text: "server list failed: " + err.Error(), IsError: true}, nil
 	}
