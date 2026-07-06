@@ -50,5 +50,8 @@ func (s *Server) handleSetSessionGoal(w http.ResponseWriter, r *http.Request) {
 	if err := database.SetSessionGoal(ctx, id, goal, done); writeDBError(w, err, "") {
 		return
 	}
+	// Cross-window sync: a sibling window's session-detail meter reflects the
+	// new goal/done state immediately.
+	emitSessionChange(ws(r), id, "goal")
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "goal": goal, "goalDone": done})
 }

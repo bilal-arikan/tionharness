@@ -230,6 +230,11 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	// Per-workspace settings (resolved from X-Workspace-Id).
 	mux.HandleFunc("GET /api/workspace-settings", s.handleGetWorkspaceSettings)
 	mux.HandleFunc("PUT /api/workspace-settings", s.handleUpdateWorkspaceSettings)
+	mux.HandleFunc("GET /api/workspace-settings/claude-auth", s.handleWorkspaceClaudeAuth)
+	mux.HandleFunc("POST /api/workspace-settings/claude-auth/oauth/start", s.handleClaudeOAuthStart)
+	mux.HandleFunc("POST /api/workspace-settings/claude-auth/oauth/complete", s.handleClaudeOAuthComplete)
+	mux.HandleFunc("POST /api/workspace-settings/claude-auth/oauth/loopback/start", s.handleClaudeOAuthLoopbackStart)
+	mux.HandleFunc("GET /api/workspace-settings/claude-auth/oauth/loopback/status", s.handleClaudeOAuthLoopbackStatus)
 
 	// Per-workspace editable config files (prompts/instructions/README under
 	// <workspace>/config/), editable by the user on disk or via the UI.
@@ -256,6 +261,7 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("GET /api/sessions/active", s.handleActiveSessions)
 	mux.HandleFunc("GET /api/sessions/{id}/inflight", s.handleSessionInflight)
+	mux.HandleFunc("DELETE /api/sessions/{id}/cli-process", s.handleDropSessionCLIProcess)
 	mux.HandleFunc("GET /api/sessions/search", s.handleSearchMessages)
 	mux.HandleFunc("POST /api/sessions", s.handleCreateSession)
 	mux.HandleFunc("POST /api/sessions/spawn", s.handleSpawnSession)

@@ -23,7 +23,14 @@ type claudeResumePlan struct {
 // after the turn together with the rotated Response.SessionID.
 func (s *Server) planClaudeResume(provider providers.Provider, agentCount int, session db.Session, rawHistory []db.Message, llmReq *providers.Request) claudeResumePlan {
 	set := s.settings.Get()
-	enabled := resumeGateEnabled(set.ClaudeResume, set.ClaudePersistentSession, agentCount, provider.Name())
+	// A multi-participant thread (2+ agents have taken part) must NOT warm-resume:
+	// the CLI session id is tracked per session, so resuming it for a DIFFERENT agent
+	// would (a) continue the wrong persona/claude-home and (b) drop the author-labeled
+	// history (labelMultiAgentHistory) in favour of the raw delta, defeating cross-
+	// agent attribution. agentCount==1 alone is insufficient — each turn routes to one
+	// agent, but the SESSION may still be shared by several agents across turns.
+	multiParticipant := len(db.SessionParticipants(session)) > 1
+	enabled := resumeGateEnabled(set.ClaudeResume, set.ClaudePersistentSession, agentCount, provider.Name(), multiParticipant)
 	plan, resumeID, deltaStart := claudeResumeDecision(enabled, session.CLISessionID, session.CLISentMsgCount, len(rawHistory))
 	if resumeID != "" {
 		// Warm resume: send only the unseen delta and ask the CLI to --resume.
@@ -38,9 +45,12 @@ func (s *Server) planClaudeResume(provider providers.Provider, agentCount int, s
 // holds the conversation itself and needs the FULL transcript on a cold (re)start, so
 // when it is on we must NOT trim to the delta here — persistent supersedes --resume.
 // Also single-agent only (the resume id is tracked per session, so a multi-agent
-// thread would collide) and claude-cli only.
-func resumeGateEnabled(claudeResume, persistentSession bool, agentCount int, providerName string) bool {
-	return claudeResume && !persistentSession && agentCount == 1 && providerName == "claude-cli"
+// thread would collide) and claude-cli only. multiParticipant blocks resume once a
+// session is shared by 2+ agents across turns — the per-turn agentCount==1 check
+// does not catch that, and resuming one agent's CLI session for another loses the
+// author-labeled history + continues the wrong persona.
+func resumeGateEnabled(claudeResume, persistentSession bool, agentCount int, providerName string, multiParticipant bool) bool {
+	return claudeResume && !persistentSession && agentCount == 1 && providerName == "claude-cli" && !multiParticipant
 }
 
 // claudeResumeDecision is the pure (testable) core of planClaudeResume. Given the

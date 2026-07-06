@@ -140,6 +140,18 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	r.logger.Info("spawn: launched",
 		"session", session.ID, "agent", agent.ID, "model", agent.Model, "by", opts.CreatedBy)
 
+	// Cross-window live refresh: the open session sidebar + ExecutionsPanel
+	// activity feed must show the new row immediately. Carrying op="spawn" lets
+	// the listener tell a brand-new session apart from a handoff continuation
+	// (which would also touch the new-session id but with op="create"). The
+	// later emitSpawnEvent("spawned" event) drives the executions-feed live
+	// status (running/completed); this one drives the session list.
+	r.publish(events.Event{
+		Type:   "session",
+		Level:  "info",
+		Target: map[string]string{"sessionId": session.ID, "op": "spawn", "kind": kind},
+	})
+
 	// Fire-and-forget: run the turn detached from the caller's context so a closed
 	// HTTP request or finished tool call can never cancel the spawn mid-flight. A
 	// worker takes the coordinator-aware path (history-aware turn + notify-back);

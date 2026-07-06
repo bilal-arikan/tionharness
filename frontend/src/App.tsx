@@ -52,6 +52,7 @@ import { useUnreadViews } from './hooks/useUnreadViews'
 import { useUnreadBadge } from './hooks/useUnreadBadge'
 import { useDirtyViews } from './lib/dirtySignals'
 import { viewForEventType } from './lib/eventViews'
+import { bumpSignalsForEvent } from './lib/eventToRefreshSignals'
 import { useChatStream } from './hooks/useChatStream'
 import { useUrlSync } from './hooks/useUrlSync'
 import { useIsMobile } from './hooks/useMediaQuery'
@@ -159,7 +160,6 @@ export default function App() {
     createWorkspace,
     attachWorkspace,
     deleteActiveWorkspace,
-    deleteWorkspace,
     refreshWorkspaces,
   } = useWorkspaces(setError)
 
@@ -687,10 +687,23 @@ export default function App() {
     // via the session tools). Refresh the session list (title/order/archived) and,
     // when it's the open session, bump the detail panel so its goal/title/cwd card
     // updates live. No toast — it's a quiet live-refresh signal.
+    //
+    // The op hint lets a subset of mutations also reload the active transcript
+    // when something material changed inside it (a rewind, a deleted message, a
+    // /summary or /handoff command landing, a new feedback rating). Plain
+    // metadata edits (title/goal/workdir/pin/agent/role/tags/state) only touch
+    // the row + the detail meter — no listMessages call needed.
     if (e.type === 'session') {
+      const sid = e.target?.sessionId
+      const op = e.target?.op
       refreshSessions()
-      if (e.target?.sessionId === activeSessionIdRef.current) {
+      if (sid === activeSessionIdRef.current) {
         setMeterRefresh((n) => n + 1)
+        const transcriptOp = op === 'rewind' || op === 'delete_message' ||
+          op === 'feedback' || op === 'summary' || op === 'handoff' || op === 'message_added'
+        if (transcriptOp) {
+          api.listMessages(sid).then(setMessages).catch(() => {})
+        }
       }
       return
     }
@@ -761,6 +774,17 @@ export default function App() {
         }
       }
     }
+    // Cross-window panel refresh: every event that closes the workspace-match
+    // gate above may move rows / status / memberships inside one or more
+    // panels (TaskBoard, NetworkPanel, ExecutionsPanel, useActivity, ...). We
+    // hand the event to a central mapper that returns the set of signal keys
+    // panels subscribe to (board / network / activity / executions / agents /
+    // flows / schedules / artifacts) and bump each with a 200ms per-key
+    // debounce so a burst of events collapses into a single re-fetch per
+    // panel. Placed AFTER the workspace-match block so cross-workspace events
+    // (which only fire the badge / toast side) don't trigger a wasted GET
+    // here — the same gate the chat/session logic already uses.
+    bumpSignalsForEvent(e)
     // Chat completions only drive the badge (the streaming turn already raises
     // its own reply notification); other event types raise a desktop
     // notification that deep-links to the target on click.
@@ -1072,7 +1096,6 @@ export default function App() {
         onSetFavoriteWorkspace={setFavoriteWorkspace}
         onSwitchWorkspace={switchWorkspace}
         onCreateWorkspace={createWorkspace}
-        onDeleteWorkspace={deleteWorkspace}
       />
 
       {/* The agent/session list only applies to agent-scoped views. Board and
@@ -1409,6 +1432,7 @@ export default function App() {
               onRename={renameSession}
               onDeleteSession={deleteSession}
               onSelectSession={selectSession}
+              onRerun={() => chat.rerunLast()}
             />
           </div>
         </>

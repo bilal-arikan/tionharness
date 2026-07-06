@@ -26,3 +26,29 @@ func TestIsPermissionDenyError(t *testing.T) {
 		}
 	}
 }
+
+func TestIsAuthErrorText(t *testing.T) {
+	auth := []string{
+		`provider error: claude CLI failed: exit status 1 ... {"error":"authentication_failed"}`,
+		"Not logged in · Please run /login",
+		"invalid x-api-key",
+		"OAuth token has expired",
+	}
+	for i, s := range auth {
+		if !isAuthErrorText(s) {
+			t.Errorf("auth[%d] should be an auth error: %q", i, s)
+		}
+	}
+
+	notAuth := []string{
+		"provider error: context canceled",
+		"claude CLI usage/rate limit reached",
+		"exit status 1: command not found",
+		"",
+	}
+	for i, s := range notAuth {
+		if isAuthErrorText(s) {
+			t.Errorf("notAuth[%d] should NOT be an auth error: %q", i, s)
+		}
+	}
+}

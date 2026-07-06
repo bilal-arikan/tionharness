@@ -446,6 +446,30 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionIdRef, messagesRef, setMessages],
   )
 
+  // rerunLast re-runs the most recent turn of the active session — the "restart"
+  // action in the Session Info panel. It retries the last assistant turn (removing
+  // the old pair and re-sending its prompt) so it reuses the one true turn path; if
+  // no assistant turn exists yet (e.g. a turn still running with nothing persisted),
+  // it simply re-sends the last user message. The caller (panel) stops any in-flight
+  // run via the backend first, so this never double-runs.
+  const rerunLast = useCallback(async () => {
+    const sid = activeSessionIdRef.current
+    if (!sid) return
+    const msgs = messagesRef.current ?? []
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'assistant') {
+        await retryMessage(msgs[i].id)
+        return
+      }
+    }
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') {
+        await sendMessageRef.current(msgs[i].text, sid, msgs[i].attachments ?? [])
+        return
+      }
+    }
+  }, [activeSessionIdRef, messagesRef, retryMessage])
+
   // Rewind ("/rewind"): conversation-only checkpoint restore. The command opens a
   // picker (rewindOpen) listing the session's user prompts; choosing one truncates
   // the transcript back to that checkpoint. File changes are NOT reverted.
@@ -1009,6 +1033,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     setPermissionMode: setPermissionModePersist,
     sendMessage,
     retryMessage,
+    rerunLast,
     stopTurn,
     answerAsk,
     interruptTurn,

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Share2, Radio } from 'lucide-react'
 import { api } from '../../api'
+import { useRefreshTrigger } from '../../hooks/useRefreshTrigger'
 import type { WorkspaceGraph, WorkspaceNodeType, BoardColumnDef } from '../../types'
 import { VisNetworkGraph } from '../graph/VisNetworkGraph'
 import { workspaceToVis, EDGE_LEGEND, NODE_LAYERS, type WorkspaceMode } from '../../lib/relationGraph'
@@ -58,35 +59,30 @@ export function NetworkPanel({ onError }: Props) {
     load()
   }, [load])
 
-  // Board editor save hook: re-pull workspace settings whenever the Board
-  // column editor saves. Works without SSE and across workspaces.
+  // Board editor save hook: re-pull BOTH the workspace graph and settings
+  // whenever the Board column editor saves. load() is the canonical refresh
+  // (Promise.all of graph + settings); calling it covers the column-shape
+  // change AND any concurrent task mutation that may have happened alongside.
+  // Works without SSE and across workspaces.
   useEffect(() => {
-    const handler = () => {
-      api
-        .getWorkspaceSettings()
-        .then((s: { boardColumns?: BoardColumnDef[] }) => { if (s && Array.isArray(s.boardColumns)) setBoardColumns(s.boardColumns) })
-        .catch(() => { /* non-fatal */ })
-    }
+    const handler = () => { load() }
     window.addEventListener('tionswarm:board-columns-changed', handler)
     return () => window.removeEventListener('tionswarm:board-columns-changed', handler)
-  }, [])
+  }, [load])
 
-  // Live mode: re-fetch the graph when an autonomous event (task run, schedule)
-  // lands, so the flow animates as agents pick up / finish work. A
-  // short debounce coalesces bursts. The incremental DataSet update in
-  // VisNetworkGraph means the physics engine glides nodes to their new bonds.
-  const debounceRef = useRef<number | null>(null)
+  // Cross-window live sync: App.tsx's central SSE handler bumps the 'network'
+  // refresh signal on every task / agent / flow / session / schedule / spawn
+  // event in the active workspace. The 200ms debounce in the dispatcher
+  // coalesces bursts so a flurry of CRUDs triggers a single re-fetch.
+  //
+  // This replaces the per-panel live-mode SSE subscription AND extends to
+  // relation mode (the previous design was live-only because the user opted
+  // out of SSE there). With the central dispatcher the workspace filter is
+  // applied once in App.tsx, so we can just trust the bump and re-pull.
+  const networkTick = useRefreshTrigger('network')
   useEffect(() => {
-    if (mode !== 'live') return
-    const unsub = api.subscribeEvents(() => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current)
-      debounceRef.current = window.setTimeout(() => load(), 600)
-    })
-    return () => {
-      unsub()
-      if (debounceRef.current) window.clearTimeout(debounceRef.current)
-    }
-  }, [mode, load])
+    load()
+  }, [networkTick, load])
 
   const { nodes, edges } = useMemo(
     () => (graph ? workspaceToVis(graph, visible, mode, boardColumns) : { nodes: [], edges: [] }),

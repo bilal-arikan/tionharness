@@ -154,6 +154,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// mermaid_validate: lint a Mermaid diagram (recognised type + balanced
 		// brackets/quotes) before emitting it. Pure, read-only, no deps.
 		tools.NewMermaidValidateTool(),
+		// render_template: fill a branded HTML template (Go html/template) with JSON
+		// data, write it under the session render dir, and return only the path +
+		// warnings (never the HTML) for inline html-preview. Session-scoped: an empty
+		// render dir (catalog/preview build with no session) makes the tool fail loudly
+		// when called. No arbitrary code execution, so it is NOT behind the shell gate.
+		tools.NewRenderTemplateTool(r.SessionRenderDir(SessionIDFrom(ctx))),
 	}
 
 	// Skills: an agent may load its ASSIGNED skills plus every SHARED (on-demand)
@@ -375,6 +381,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		"update_artifact", "deactivate_tools",
 		// Validation tools — read-only, used only around authoring/diagram emission.
 		"skill_validate", "config_validate", "mermaid_validate",
+		// render_template — occasional (only when a branded-HTML skill is in play);
+		// name says it, model pulls the schema on demand.
+		"render_template",
 		// Background-shell management — reached only after a run_in_background launch.
 		"shell_manage",
 		// Promoted out of the hidden self-management group: common enough to advertise

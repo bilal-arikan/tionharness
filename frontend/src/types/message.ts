@@ -78,8 +78,16 @@ export interface Message {
   sessionId: string
   role: 'user' | 'assistant' | 'system' | 'tool'
   // Which agent produced an assistant turn (empty for user/system). Multi-agent
-  // sessions tag each turn so the UI can show the responding agent's avatar.
+  // sessions tag each turn so the UI can show the responding agent's avatar. On a
+  // user turn it carries the legacy "routed recipient agent" (see recipientId).
   agentId?: string
+  // Generic participant model (db.Message): who wrote this turn and, when directed,
+  // whom it addresses. authorKind ∈ "user" | "agent" | "system"; authorId is the
+  // agent id or "user"; recipientId is an agent id, "*" (broadcast), or empty
+  // (thread at large). The UI renders a "→ <name>" direction cue from recipientId.
+  authorKind?: 'user' | 'agent' | 'system'
+  authorId?: string
+  recipientId?: string
   text: string
   // JSON-encoded TurnStep[] as persisted by the backend (empty "[]" for plain
   // replies). Parsed lazily by the renderer.

@@ -59,6 +59,24 @@ type sessionInfoResp struct {
 	// Agents lists every agent that produced a turn in this session, with the
 	// session's default agent always included even with zero turns.
 	Agents []sessionAgentStat `json:"agents"`
+
+	// Running describes an in-flight turn (background claude-cli/provider process)
+	// for this session, or nil when idle. Lets the panel show + stop/restart it.
+	Running *runningTurnDTO `json:"running,omitempty"`
+
+	// WarmCLIProcess is true when a persistent-pool claude-cli process is kept warm
+	// between turns for this session (only in persistent-pool mode). The panel offers
+	// to recycle it so the next turn cold-restarts fresh.
+	WarmCLIProcess bool `json:"warmCliProcess"`
+}
+
+// runningTurnDTO is the client view of an in-flight turn behind the Session Info
+// panel's "running process" card.
+type runningTurnDTO struct {
+	RunID      string `json:"runId"`
+	StartedAt  int64  `json:"startedAt"` // unix seconds
+	Autonomous bool   `json:"autonomous"`
+	Provider   string `json:"provider,omitempty"`
 }
 
 type contextFiller struct {
@@ -172,6 +190,18 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 			resp.AgentName = resp.Agents[i].Name
 		}
 	}
+
+	// Live background process: an in-flight turn (chat-streaming or autonomous) and,
+	// in persistent-pool mode, a warm claude-cli process kept between turns.
+	if info, ok := s.runs.sessionRunInfo(id); ok {
+		resp.Running = &runningTurnDTO{
+			RunID:      info.RunID,
+			StartedAt:  info.StartedAt.Unix(),
+			Autonomous: info.Autonomous,
+			Provider:   info.Provider,
+		}
+	}
+	resp.WarmCLIProcess = wsp.Runtime.HasWarmCLISession(id)
 
 	writeJSON(w, http.StatusOK, resp)
 }

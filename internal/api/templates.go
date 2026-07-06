@@ -105,8 +105,14 @@ func (s *Server) seedWorkspaceFromTemplate(ctx context.Context, wsNew *workspace
 		patch.BoardColumns = &cols
 	}
 	if patch.Instructions != nil || patch.BoardColumns != nil {
-		if _, err := s.workspaces.UpdateSettings(wsNew.ID, patch); err != nil {
+		if updated, err := s.workspaces.UpdateSettings(wsNew.ID, patch); err != nil {
 			s.logger.Warn("seed template settings failed", "workspace", wsNew.ID, "error", err)
+		} else if patch.BoardColumns != nil {
+			// Mirror handleUpdateWorkspaceSettings / market_install: a freshly
+			// created workspace seeded from a template still needs the live-mode
+			// Network anchors + any open TaskBoard to see the new columns.
+			publishEntityChange(updated, "board", "Boards sütunları güncellendi", "",
+				map[string]string{"view": "board", "op": "columns_changed"})
 		}
 	}
 	s.seedWorkspaceTeam(ctx, wsNew, wp)

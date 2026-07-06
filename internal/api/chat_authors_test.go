@@ -79,3 +79,42 @@ func TestLabelMultiAgentHistory(t *testing.T) {
 		t.Errorf("handover prior-author turn mislabelled: %q", out3[1].Text)
 	}
 }
+
+// TestLabelMultiAgentHistoryDirectedAndBroadcast covers the participant-model
+// tagging: an undirected agent turn gets no arrow, a broadcast turn renders
+// "→ all", and an agent turn addressed to a specific peer renders that peer.
+func TestLabelMultiAgentHistoryDirectedAndBroadcast(t *testing.T) {
+	database, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("db open: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	ctx := context.Background()
+
+	ada, _ := database.CreateAgent(ctx, db.Agent{Name: "Ada"})
+	kai, _ := database.CreateAgent(ctx, db.Agent{Name: "Kai"})
+
+	history := []db.Message{
+		// Undirected agent turn (to the thread at large): no arrow.
+		{AuthorKind: db.AuthorAgent, AuthorID: ada.ID, Text: "herkese acik"},
+		// Broadcast from Ada.
+		{AuthorKind: db.AuthorAgent, AuthorID: ada.ID, RecipientID: db.BroadcastRecipientID, Text: "duyuru"},
+		// Ada addressing Kai specifically.
+		{AuthorKind: db.AuthorAgent, AuthorID: ada.ID, RecipientID: kai.ID, Text: "kai bak"},
+	}
+
+	s := &Server{}
+	out, multi := s.labelMultiAgentHistory(ctx, database, kai.ID, history)
+	if !multi {
+		t.Fatal("expected multiAgent=true (Ada != responder Kai)")
+	}
+	if out[0].Text != "[Ada]: herkese acik" {
+		t.Errorf("undirected turn mislabelled: %q", out[0].Text)
+	}
+	if out[1].Text != "[Ada → all]: duyuru" {
+		t.Errorf("broadcast turn mislabelled: %q", out[1].Text)
+	}
+	if out[2].Text != "[Ada → Kai (you)]: kai bak" {
+		t.Errorf("directed-to-peer turn mislabelled: %q", out[2].Text)
+	}
+}

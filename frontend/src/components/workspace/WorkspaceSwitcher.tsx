@@ -17,7 +17,9 @@ interface Props {
   onToggleFavorite?: (id: string) => void
   onSwitch: (id: string) => void
   onCreate: (data: NewWorkspaceData) => void
-  onDelete: (id: string) => void
+  // The row's "delete" button no longer deletes inline — it navigates to that
+  // workspace's Settings screen, where deletion (with confirmation) lives.
+  onOpenSettings: (id: string) => void
   // Optional control rendered inline to the right of the trigger (e.g. the rail
   // collapse toggle), so it shares the workspace row instead of a separate line.
   trailing?: ReactNode
@@ -41,7 +43,7 @@ function openInNewWindow(id: string) {
   window.open(`${window.location.origin}${window.location.pathname}#${route}`, '_blank', 'noopener')
 }
 
-export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy, activeDirty, favoriteId, onToggleFavorite, onSwitch, onCreate, onDelete, trailing }: Props) {
+export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy, activeDirty, favoriteId, onToggleFavorite, onSwitch, onCreate, onOpenSettings, trailing }: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   // Close the dropdown when clicking anywhere outside it (detached while closed).
@@ -135,7 +137,14 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
                 >
                   {w.icon || '⬡'}
                 </span>
-                <span className="flex-1 truncate">{w.name || 'İsimsiz'}</span>
+                <span className="flex-1 truncate">
+                  {w.name || 'İsimsiz'}
+                  {/* Faint workspace id next to the name — a quick reference for
+                      routing / debugging without cluttering the primary label. */}
+                  <span className="ml-1.5 font-mono text-[10px] text-[var(--color-text-dim)] opacity-60">
+                    {w.id}
+                  </span>
+                </span>
                 {unreadIds.has(w.id) && (
                   <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Yeni etkinlik" />
                 )}
@@ -161,10 +170,12 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
                 <ExternalLink size={14} strokeWidth={2} />
               </button>
               <button
-                onClick={() => onDelete(w.id)}
-                disabled={workspaces.length <= 1}
-                title={workspaces.length <= 1 ? 'Son workspace silinemez' : 'Workspace’i sil'}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--color-text-dim)] opacity-0 transition hover:bg-[var(--color-surface)] hover:text-[var(--color-danger)] focus:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+                onClick={() => {
+                  onOpenSettings(w.id)
+                  setOpen(false)
+                }}
+                title="Workspace’i sil — ayarlar ekranından"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--color-text-dim)] opacity-0 transition hover:bg-[var(--color-surface)] hover:text-[var(--color-danger)] focus:opacity-100 group-hover:opacity-100"
               >
                 <Trash2 size={14} strokeWidth={2} />
               </button>

@@ -3,6 +3,7 @@ import hljs from 'highlight.js/lib/common'
 import { DiffView } from './DiffView'
 import { MermaidDiagram } from './MermaidDiagram'
 import { Gallery } from './Gallery'
+import { HtmlPreview } from './HtmlPreview'
 import { looksLikeDiff } from '../../lib/diff'
 import { copyToClipboard } from '../../lib/clipboard'
 import { Copy, Check } from 'lucide-react'
@@ -21,9 +22,10 @@ export function CodeBlock({ code, lang }: Props) {
   const isDiff = lang === 'diff' || (!lang && looksLikeDiff(code))
   const isMermaid = lang === 'mermaid'
   const isGallery = lang === 'gallery' || lang === 'image-preview' || lang === 'images'
+  const isHtmlPreview = lang === 'html-preview'
 
   const html = useMemo(() => {
-    if (isDiff || isMermaid || isGallery) return ''
+    if (isDiff || isMermaid || isGallery || isHtmlPreview) return ''
     try {
       if (lang && hljs.getLanguage(lang)) {
         return hljs.highlight(code, { language: lang }).value
@@ -32,11 +34,12 @@ export function CodeBlock({ code, lang }: Props) {
     } catch {
       return ''
     }
-  }, [code, lang, isDiff, isMermaid, isGallery])
+  }, [code, lang, isDiff, isMermaid, isGallery, isHtmlPreview])
 
   if (isDiff) return <DiffView text={code} />
   if (isMermaid) return <MermaidDiagram code={code} />
   if (isGallery) return <Gallery code={code} />
+  if (isHtmlPreview) return <HtmlPreview code={code} />
 
   const copy = () => {
     copyToClipboard(code).then((ok) => {

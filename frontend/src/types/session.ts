@@ -2,7 +2,13 @@
 
 export interface Session {
   id: string
+  // The DEFAULT responder: the agent that answers when a turn carries no explicit
+  // per-turn routing. `participants` is the full roster the composer can route to.
   agentId: string
+  // Roster of agent ids taking part in this thread, beyond the implicit human
+  // "user". Grows as agents author or are addressed. Empty on legacy sessions →
+  // treat as [agentId]. (db.Session.Participants; generic participant model.)
+  participants?: string[]
   // Broad category of what produced the transcript: chat | task | flow |
   // schedule. Drives the executions feed's kind badge.
   kind: string
@@ -167,6 +173,10 @@ export interface SessionContextPreview {
   droppedTokens: number
   tools: { name: string; description: string; inputSchema?: unknown }[]
   toolTokens: number
+  // Lazy (on-demand) tools: schemas NOT shipped at turn start; name+desc only.
+  // Their token cost is already inside systemTokens (load-on-demand catalog block).
+  // tools + lazyTools = the effective catalog the session/agent info screen counts.
+  lazyTools: { name: string; description: string }[]
   totalTokens: number
   cache: CachePreview
   // Present only for CLI-wrapper providers (claude-cli): the gap
@@ -277,6 +287,21 @@ export interface SessionInfo {
 
   fillers: ContextFiller[]
   agents: SessionAgentStat[]
+
+  // An in-flight turn (background provider/claude-cli process) for this session,
+  // or absent when idle. Drives the "running process" card (stop / restart).
+  running?: RunningTurn
+  // True when a persistent-pool claude-cli process is kept warm between turns for
+  // this session (persistent-pool mode only). Offer to recycle it.
+  warmCliProcess: boolean
+}
+
+// RunningTurn describes an in-flight turn behind the Session Info panel's process card.
+export interface RunningTurn {
+  runId: string
+  startedAt: number // unix seconds
+  autonomous: boolean
+  provider?: string
 }
 
 // WorkerInfo is one worker's status under a coordinator session (M2).

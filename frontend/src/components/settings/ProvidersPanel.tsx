@@ -497,6 +497,20 @@ export function ProvidersPanel({
   workspaceClaudeHome,
 }: Props) {
   const [authOpen, setAuthOpen] = useState(false)
+  // Pre-flight login check for THIS workspace's claude-home (distinct from the
+  // generic "test et", which probes the app-global config dir). 'idle' before run.
+  const [wsAuth, setWsAuth] = useState<
+    'idle' | 'pending' | { loggedIn: boolean; detail?: string }
+  >('idle')
+  const checkWsAuth = async () => {
+    setWsAuth('pending')
+    try {
+      const r = await api.checkWorkspaceClaudeAuth()
+      setWsAuth({ loggedIn: r.loggedIn, detail: r.detail })
+    } catch (e) {
+      setWsAuth({ loggedIn: false, detail: (e as Error).message })
+    }
+  }
   return (
     <>
       {authOpen && (
@@ -596,6 +610,29 @@ export function ProvidersPanel({
                   <span className="text-[11px] text-[var(--color-text-dim)]">
                     (yandaki “Test et” Anthropic HTTP API anahtarını dener)
                   </span>
+                </div>
+                {/* Pre-flight: verify THIS workspace's claude-home is logged in
+                    before an agent turn burns on an auth wall. Cheap tool-free probe
+                    against <workspace>/claude-home (not the app-global config dir). */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    data-testid="workspace-claude-auth-check"
+                    onClick={checkWsAuth}
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                  >
+                    <KeyRound size={12} /> Bu workspace login doğrula
+                  </button>
+                  {wsAuth === 'pending' && (
+                    <span className="text-[11px] text-[var(--color-warning)]">kontrol ediliyor…</span>
+                  )}
+                  {typeof wsAuth === 'object' && wsAuth.loggedIn && (
+                    <span className="text-[11px] text-[var(--color-success)]">✓ giriş yapılmış</span>
+                  )}
+                  {typeof wsAuth === 'object' && !wsAuth.loggedIn && (
+                    <span className="text-[11px] text-[var(--color-error)]" title={wsAuth.detail}>
+                      ✕ giriş yok — {wsAuth.detail || 'claude /login gerekli'}
+                    </span>
+                  )}
                 </div>
               </div>
             }

@@ -358,7 +358,13 @@ export function BudgetPanel({ onError }: Props) {
           {/* General claude-cli overhead note: when a subscription CLI provider is
               in use (estimated cost), remind that the real billed input dwarfs the
               context-preview segment estimate (the CLI injects its own prompt +
-              tools + MCP bridge), and that THESE Budget figures are the real spend. */}
+              tools + MCP bridge), and that THESE Budget figures are the real spend.
+              The eager-vs-lazy tool split is called out here too: the "info screen
+              counts N tools but the context popup shows few" gap is the same effect —
+              only eager schemas ship each turn; deferred (lazy) MCP + self-management
+              tools activated mid-session via ToolSearch stay warm in --resume and
+              inflate the real billed input without appearing in the popup's eager
+              "Araçlar" count. See the session context popup's "Talep-üzerine" chip. */}
           {usage.totals.estimated && (
             <div className="mb-5 flex items-start gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#d97706)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#d97706)_8%,transparent)] px-3 py-2 text-[11px] text-[var(--color-text-dim)]">
               <span className="text-[var(--color-warning,#d97706)]">ⓘ</span>
@@ -369,6 +375,16 @@ export function BudgetPanel({ onError }: Props) {
                 rakamlar <strong>gerçek faturalanan</strong> tüketimdir (eşdeğer-API maliyeti) —
                 önizleme tahminine değil bunlara güvenin. Tek bir mesajın kırılımı için sohbette o
                 mesajın debug butonunu kullanın.
+                <br />
+                <span className="mt-1 inline-block">
+                  <strong className="text-[var(--color-text)]">Araç sayısı farkı:</strong> Bilgi
+                  ekranı ajanın erişebildiği tüm kataloğu (ör. 129) sayar; bağlam popup'ının{' '}
+                  <em>“Araçlar”</em> satırı yalnız her tur şeması gönderilen <em>eager</em> kümedir.
+                  Oturum boyunca <code className="rounded bg-[var(--color-surface-2)] px-1">ToolSearch</code>{' '}
+                  ile aktive edilen <em>deferred (lazy)</em> araçlar <code className="rounded bg-[var(--color-surface-2)] px-1">--resume</code>{' '}
+                  ile sıcak kalıp gerçek girdiyi büyütür ama popup'ın eager sayısına girmez — bkz.
+                  popup'taki <em>“Talep-üzerine”</em> chip'i.
+                </span>
               </span>
             </div>
           )}

@@ -55,6 +55,11 @@ func (s *Server) handleSetSessionState(w http.ResponseWriter, r *http.Request) {
 			_ = database.SetSessionTags(ctx, id, out)
 		}
 	}
+	// Cross-window sync: other windows on the same workspace move the row
+	// between Active/Archived filters immediately. Note: emitted AFTER the
+	// tag reconcile so the "tags" op (if any) is observed first chronologically
+	// and the "state" op is the authoritative one for the filter.
+	emitSessionChange(ws(r), id, "state")
 	writeJSON(w, http.StatusOK, map[string]string{"id": id, "state": state})
 }
 
@@ -116,6 +121,9 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.logger.Info("session created", "session", session.ID, "agent", req.AgentID)
+	// Cross-window sync: a second window on the same workspace (or any other
+	// listener) should immediately see the new row in its session list.
+	emitSessionChange(ws(r), session.ID, "create")
 	writeJSON(w, http.StatusCreated, session)
 }
 
@@ -153,6 +161,7 @@ func (s *Server) handleGenerateSessionTitle(w http.ResponseWriter, r *http.Reque
 		if err := wsp.DB.SetSessionTitle(ctx, id, t); writeDBError(w, err, "session not found") {
 			return
 		}
+		emitSessionChange(wsp, id, "title")
 		writeJSON(w, http.StatusOK, titleResp{ID: id, Title: t})
 		return
 	}
@@ -177,6 +186,7 @@ func (s *Server) handleGenerateSessionTitle(w http.ResponseWriter, r *http.Reque
 	if err := wsp.DB.SetSessionTitle(ctx, id, title); writeDBError(w, err, "session not found") {
 		return
 	}
+	emitSessionChange(wsp, id, "title")
 	writeJSON(w, http.StatusOK, titleResp{ID: id, Title: title})
 }
 
@@ -224,6 +234,16 @@ func (s *Server) handleActiveSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string][]string{"sessionIds": s.runs.activeSessionIDs()})
 }
 
+// handleDropSessionCLIProcess recycles the session's warm claude-cli process(es)
+// (persistent-pool mode) so the next turn cold-restarts with a fresh process. The
+// conversation/history is untouched — only the background process is dropped. A
+// no-op (dropped:0) when no warm process exists.
+func (s *Server) handleDropSessionCLIProcess(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	dropped := ws(r).Runtime.DropWarmCLISession(id)
+	writeJSON(w, http.StatusOK, map[string]int{"dropped": dropped})
+}
+
 // handleSessionInflight returns the session's in-progress streaming snapshot (the
 // partial assistant reply — agent, text and trace so far — written on a throttle
 // while the turn runs), or null when no turn is streaming. A page reloaded
@@ -250,9 +270,15 @@ func (s *Server) handleSessionInflight(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 	msgID := r.PathValue("msgId")
-	if err := ws(r).DB.DeleteMessage(r.Context(), sessionID, msgID); writeDBError(w, err, "message not found") {
+	wsp := ws(r)
+	if err := wsp.DB.DeleteMessage(r.Context(), sessionID, msgID); writeDBError(w, err, "message not found") {
 		return
 	}
+	// Cross-window sync: the active session's transcript in a sibling window
+	// reloads so the dropped message disappears. The op hint lets the listener
+	// skip the network call when the deleted message belongs to a non-active
+	// session (the list update is enough).
+	emitSessionChange(wsp, sessionID, "delete_message")
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": msgID})
 }
 
@@ -267,6 +293,7 @@ type rewindReq struct {
 // transcript afterwards.
 func (s *Server) handleRewindSession(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
+	wsp := ws(r)
 	req, ok := bindJSON[rewindReq](w, r)
 	if !ok {
 		return
@@ -276,11 +303,15 @@ func (s *Server) handleRewindSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "messageId is required")
 		return
 	}
-	removed, err := ws(r).DB.DeleteMessagesFrom(r.Context(), sessionID, msgID)
+	removed, err := wsp.DB.DeleteMessagesFrom(r.Context(), sessionID, msgID)
 	if writeDBError(w, err, "message not found") {
 		return
 	}
 	s.logger.Info("session rewound", "session", sessionID, "from", msgID, "removed", removed)
+	// Cross-window sync: the active session's transcript reloads (rewind can drop
+	// the in-flight ghost bubble too — handled by the chat hook if the same
+	// session is being viewed live).
+	emitSessionChange(wsp, sessionID, "rewind")
 	writeJSON(w, http.StatusOK, map[string]int{"removed": removed})
 }
 
@@ -296,16 +327,21 @@ func (s *Server) handleMarkSessionRead(w http.ResponseWriter, r *http.Request) {
 // handleDeleteSession removes a session and its on-disk folder.
 func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	wsp := ws(r)
 	// SessionEnd lifecycle hook (Claude Code parity): fire BEFORE the delete so a
 	// cleanup hook can still read the session's files. Fire-and-forget audit.
-	ws(r).Runtime.RunLifecycleHooks(r.Context(), id, db.HookSessionEnd, agent.LifecycleExtras{Trigger: "delete"})
-	if err := ws(r).DB.DeleteSession(r.Context(), id); writeDBError(w, err, "session not found") {
+	wsp.Runtime.RunLifecycleHooks(r.Context(), id, db.HookSessionEnd, agent.LifecycleExtras{Trigger: "delete"})
+	if err := wsp.DB.DeleteSession(r.Context(), id); writeDBError(w, err, "session not found") {
 		return
 	}
 	// Tear down this session's git worktree if isolation ever created one
 	// (no-op otherwise), so deleting a session never leaks a worktree.
-	ws(r).Runtime.RemoveSessionWorktree(id)
+	wsp.Runtime.RemoveSessionWorktree(id)
 	s.logger.Info("session deleted", "session", id)
+	// Cross-window sync: a sibling window showing this session in its sidebar
+	// drops the row immediately; the active session (if it was the deleted one)
+	// falls back to the next chat session in App.tsx's session-list effect.
+	emitSessionChange(wsp, id, "delete")
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
 }
 

@@ -59,7 +59,7 @@ func (r *Runtime) DeliverAgentMessage(ctx context.Context, fromAgentID, toRef, s
 	if target.ID == fromAgentID {
 		return "", fmt.Errorf("cannot send a message to yourself")
 	}
-	if err := r.deliverOne(ctx, fromName, target, summary, message); err != nil {
+	if err := r.deliverOne(ctx, fromAgentID, fromName, target, summary, message); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("Message delivered to %q (inbox). It processes it in the background; the reply is NOT relayed here — it may message you back with send_message.", target.Name), nil
@@ -78,7 +78,7 @@ func (r *Runtime) broadcastAgentMessage(ctx context.Context, fromAgentID, fromNa
 		if a.ID == fromAgentID {
 			continue
 		}
-		if err := r.deliverOne(ctx, fromName, a, summary, message); err != nil {
+		if err := r.deliverOne(ctx, fromAgentID, fromName, a, summary, message); err != nil {
 			skipped++
 			r.logger.Warn("broadcast: delivery skipped", "to", a.ID, "error", err)
 			continue
@@ -100,8 +100,9 @@ func (r *Runtime) broadcastAgentMessage(ctx context.Context, fromAgentID, fromNa
 
 // deliverOne appends the sender-tagged message to one recipient's inbox and fires
 // its background turn (fire-and-forget). Takes a concurrency slot, released when
-// the inbox turn finishes.
-func (r *Runtime) deliverOne(ctx context.Context, fromName string, target db.Agent, summary, message string) error {
+// the inbox turn finishes. fromAgentID is the sender (the message author in the
+// participant model); fromName is its display name for the visible tag.
+func (r *Runtime) deliverOne(ctx context.Context, fromAgentID, fromName string, target db.Agent, summary, message string) error {
 	if !r.acquireSpawnSlot() {
 		return fmt.Errorf("message delivery limit reached (%d concurrent background turns); try again once some finish", r.tun.SpawnMaxConcurrent())
 	}
@@ -111,10 +112,18 @@ func (r *Runtime) deliverOne(ctx context.Context, fromName string, target db.Age
 		return err
 	}
 	text := formatAgentMessage(fromName, summary, message)
+	// Generic participant model: the inbox message is projected to the recipient
+	// as a "user"-role input (so it drives the turn), but its true author is the
+	// SENDING agent — record that so the roster + labelMultiAgentHistory attribute
+	// it correctly ("[Ada → Kai (you)]"), not as a human "user" message. The
+	// formatAgentMessage wrapper is kept for the human-readable inbox view + summary.
 	if _, err := r.db.AddMessage(ctx, db.Message{
-		SessionID: inbox.ID,
-		Role:      "user",
-		Text:      text,
+		SessionID:   inbox.ID,
+		Role:        "user",
+		Text:        text,
+		AuthorKind:  db.AuthorAgent,
+		AuthorID:    fromAgentID,
+		RecipientID: target.ID,
 	}); err != nil {
 		r.releaseSpawnSlot()
 		return err

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { api } from '../../api'
+import { useRefreshTrigger } from '../../hooks/useRefreshTrigger'
 import type { Agent, Task, Flow, BoardColumnDef } from '../../types'
 import { AgentIdentity } from '../agents/AgentIdentity'
 import { normalizeAvatar } from '../../lib/avatar'
@@ -99,6 +100,18 @@ export function TaskBoard({ agents, onError }: Props) {
     api.listFlows().then(setFlows).catch((e) => onError(e.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Cross-window live sync: App.tsx's central SSE handler bumps the 'board'
+  // refresh signal on every task CRUD / board column change in the active
+  // workspace (200ms debounced). We re-pull BOTH the task list and the
+  // columns since a "board" event could be either, and a single GET per
+  // panel keeps the wire cheap.
+  const boardTick = useRefreshTrigger('board')
+  useEffect(() => {
+    reload()
+    loadColumns()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardTick])
 
   const saveColumns = async (cols: BoardColumnDef[]) => {
     const updated = await api.updateWorkspaceSettings({ boardColumns: cols })

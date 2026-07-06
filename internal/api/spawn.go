@@ -36,6 +36,9 @@ func (s *Server) handleSpawnSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.logger.Info("session spawned", "session", res.SessionID, "agent", req.AgentID)
+	// Cross-window sync: Runtime.SpawnSession itself emits the "session" event
+	// (so the agent-initiated spawn_session tool path gets the same refresh), so
+	// the handler does NOT publish a duplicate here.
 	writeJSON(w, http.StatusCreated, map[string]string{
 		"sessionId": res.SessionID,
 		"agentName": res.AgentName,

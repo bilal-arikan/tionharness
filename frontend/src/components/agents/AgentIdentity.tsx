@@ -32,6 +32,12 @@ interface Props {
   active?: boolean
   /** Render the name muted + italic (e.g. a disabled agent). */
   dim?: boolean
+  /**
+   * Show the agent id dimly next to the name (e.g. "Ada  AGT3"). Used where an
+   * agent is picked from a list or addressed by id, so the id is discoverable
+   * without opening the agent — the same id the send_message tool accepts.
+   */
+  showId?: boolean
   /** Inline content appended right after the name (e.g. an owner star). */
   nameSuffix?: ReactNode
   /** Content pinned to the right edge of the row (badges, actions). */
@@ -55,6 +61,7 @@ export function AgentIdentity({
   subtitle = 'none',
   active,
   dim,
+  showId,
   nameSuffix,
   trailing,
   mobileIconOnly,
@@ -74,13 +81,20 @@ export function AgentIdentity({
     <span className={`flex min-w-0 items-center text-left ${s.gap} ${className ?? ''}`}>
       <AgentAvatar agent={agent} size={s.avatar} active={active} />
       <span className={`min-w-0 flex-1 flex-col leading-tight ${mobileIconOnly ? 'hidden md:flex' : 'flex'}`}>
-        <span
-          className={`truncate ${s.name} ${
-            dim ? 'italic text-[var(--color-text-dim)]' : 'text-[var(--color-text)]'
-          }`}
-        >
-          {agent.name}
-          {nameSuffix}
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span
+            className={`truncate ${s.name} ${
+              dim ? 'italic text-[var(--color-text-dim)]' : 'text-[var(--color-text)]'
+            }`}
+          >
+            {agent.name}
+            {nameSuffix}
+          </span>
+          {showId && (
+            <span className="shrink-0 font-mono text-[10px] text-[var(--color-text-dim)] opacity-60">
+              {agent.id}
+            </span>
+          )}
         </span>
         {sub != null && sub !== '' && (
           <span className={`truncate ${s.sub} text-[var(--color-text-dim)]`}>{sub}</span>

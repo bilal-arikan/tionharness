@@ -232,6 +232,20 @@
   (`ShippedToolCatalog`); lazy'ler sistem bloğunda sayılır → dürüst token ayrımı.
 - Doğrulama: `/api/agents/{id}/context` — MCP araçları lazy blokta, eager listede
   yalnızca çekirdek + meta-araçlar.
+- **Oturum bağlam önizlemesi de lazy ayrımını gösterir (2026-07-06):**
+  `session_context.go` yanıtı artık `agent_context.go` gibi `lazyTools` alanı
+  taşır (`Runtime.LazyToolCatalog`), `SessionContextModal` bunu **"Talep-üzerine
+  (N)"** chip'i + ayrı lazy liste bölümüyle render eder. Motivasyon: "Oturum
+  bilgisi/araçlar ekranı **129** araç sayarken bağlam popup'ı **az** gösteriyor"
+  kafa karışıklığı. Kök neden bug değil, **kapsam farkı**: info ekranı efektif
+  kataloğu (eager + lazy) sayar; popup'ın "Araçlar" satırı yalnız her tur şeması
+  gönderilen **eager** kümedir. Özellikle **claude-cli** ajanda (ör. `Manager`/AGT4)
+  lazy küme = deferred MCP + self-management araçları; oturum boyunca `ToolSearch`
+  ile aktive edilir, `--resume` ile sıcak kalır ama popup'ın eager sayısına girmez.
+  Artık ikisi de görününce fark açıkça okunur. **Bütçe paneli** (`BudgetPanel.tsx`)
+  claude-cli ek-yük notu da aynı eager↔lazy ayrımını açıklar: deferred araçların
+  `--resume` sıcak bağlamı gerçek faturalanan girdiyi büyütür ama popup'ın eager
+  "Araçlar" sayısına girmez → kullanıcı "129 vs az"ı faturayla ilişkilendirir.
 
 ## Sorun
 

@@ -34,15 +34,18 @@ func (r *Runtime) NewSessionSink(sessionID string) tools.SessionSink {
 }
 
 // notify publishes a "session" change event so the open session list + detail
-// panel refresh live when an agent mutates session metadata.
-func (s *sessionSink) notify() {
+// panel refresh live when an agent mutates session metadata. `op` is a short,
+// stable verb matching the http-side emitSessionChange values (title / goal /
+// workdir / tags / state) so the listener can decide whether to also reload the
+// active transcript vs only the row + detail meter.
+func (s *sessionSink) notify(op string) {
 	if s.publish == nil {
 		return
 	}
 	s.publish(events.Event{
 		Type:   "session",
 		Level:  "info",
-		Target: map[string]string{"sessionId": s.sessionID},
+		Target: map[string]string{"sessionId": s.sessionID, "op": op},
 	})
 }
 
@@ -62,7 +65,7 @@ func (s *sessionSink) SetGoal(ctx context.Context, text string, done bool) error
 	if err := s.db.SetSessionGoal(ctx, s.sessionID, text, done); err != nil {
 		return err
 	}
-	s.notify()
+	s.notify("goal")
 	return nil
 }
 
@@ -70,7 +73,7 @@ func (s *sessionSink) SetTitle(ctx context.Context, title string) error {
 	if err := s.db.SetSessionTitle(ctx, s.sessionID, title); err != nil {
 		return err
 	}
-	s.notify()
+	s.notify("title")
 	return nil
 }
 
@@ -78,7 +81,7 @@ func (s *sessionSink) SetWorkingDir(ctx context.Context, dir string) error {
 	if err := s.db.SetSessionWorkingDir(ctx, s.sessionID, dir); err != nil {
 		return err
 	}
-	s.notify()
+	s.notify("workdir")
 	return nil
 }
 
@@ -94,7 +97,7 @@ func (s *sessionSink) SetTags(ctx context.Context, tags []string) error {
 	if err := s.db.SetSessionTags(ctx, s.sessionID, tags); err != nil {
 		return err
 	}
-	s.notify()
+	s.notify("tags")
 	return nil
 }
 
@@ -109,6 +112,6 @@ func (s *sessionSink) Archive(ctx context.Context) error {
 			_ = s.db.SetSessionTags(ctx, s.sessionID, append(sess.Tags, TagArchived))
 		}
 	}
-	s.notify()
+	s.notify("state")
 	return nil
 }

@@ -2,8 +2,6 @@ package api
 
 import (
 	"net/http"
-
-	"github.com/bilal-arikan/tionswarm/internal/events"
 )
 
 // tagsReq is the body for every "set tags" endpoint: the full replacement tag
@@ -30,11 +28,7 @@ func (s *Server) handleSetSessionTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Refresh open session list + detail panel live (same event agent mutations use).
-	wsp.Runtime.Emit(events.Event{
-		Type:   "session",
-		Level:  "info",
-		Target: map[string]string{"sessionId": id},
-	})
+	emitSessionChange(wsp, id, "tags")
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "tags": req.Tags})
 }
 

@@ -191,8 +191,14 @@ func (s *Server) installWorkspacePack(pack market.Pack) (market.InstallResult, e
 		cols := toBoardColumnDefs(wp.Columns)
 		patch.BoardColumns = &cols
 	}
-	if _, err := s.workspaces.UpdateSettings(created.ID, patch); err != nil {
+	if updated, err := s.workspaces.UpdateSettings(created.ID, patch); err != nil {
 		s.logger.Warn("workspace pack: apply settings failed", "id", created.ID, "error", err)
+	} else if patch.BoardColumns != nil {
+		// Bypasses the HTTP handler that already publishes, so emit here too
+		// so the live-mode Network screen + cross-window TaskBoards refresh
+		// when a pack brings its own column layout.
+		publishEntityChange(updated, "board", "Boards sütunları güncellendi", "",
+			map[string]string{"view": "board", "op": "columns_changed"})
 	}
 	// Seed the starter team (agents + flow + disabled schedules) when the template
 	// carries one, so a market-installed workspace arrives as ready as one created

@@ -44,10 +44,15 @@ func delegStateFrom(ctx context.Context) (delegState, bool) {
 }
 
 // resolveAgent finds a workspace agent by id first, then by case-insensitive
-// display name. A leading "@" (the chat mention form) is tolerated. Shared by the
-// subagent runner and the spawn path.
+// display name. It tolerates the wrappers a model tends to add: surrounding
+// whitespace, a leading "@" (the chat mention form), and the value wrapped in
+// quotes (e.g. `"Ada"` passed verbatim) — so send_message accepts a plain NAME
+// or an id equally. Shared by the subagent runner and the spawn path.
 func (r *Runtime) resolveAgent(ctx context.Context, ref string) (db.Agent, error) {
-	ref = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(ref), "@"))
+	ref = strings.TrimSpace(ref)
+	ref = strings.TrimSpace(strings.Trim(ref, `"'`))
+	ref = strings.TrimSpace(strings.TrimPrefix(ref, "@"))
+	ref = strings.TrimSpace(strings.Trim(ref, `"'`))
 	if ref == "" {
 		return db.Agent{}, fmt.Errorf("no agent specified")
 	}

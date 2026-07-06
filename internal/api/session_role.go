@@ -33,6 +33,9 @@ func (s *Server) handleSetSessionRole(w http.ResponseWriter, r *http.Request) {
 	if err := database.SetSessionRole(ctx, id, role); writeDBError(w, err, "") {
 		return
 	}
+	// Cross-window sync: a sibling window's sidebar swaps the role chip and the
+	// coordination tools panel becomes visible/hidden as appropriate.
+	emitSessionChange(ws(r), id, "role")
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "role": role})
 }
 

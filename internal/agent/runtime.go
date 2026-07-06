@@ -304,6 +304,21 @@ func (r *Runtime) CloseMCP() {
 	}
 }
 
+// HasWarmCLISession reports whether the session has a warm (persistent-pool)
+// claude-cli process kept alive between turns. Nil-safe (pool may be unset).
+func (r *Runtime) HasWarmCLISession(sessionID string) bool {
+	return r.cliSessions != nil && r.cliSessions.AliveForSession(sessionID)
+}
+
+// DropWarmCLISession recycles the session's warm claude-cli process(es) so the next
+// turn cold-restarts fresh. Returns how many were dropped. Nil-safe.
+func (r *Runtime) DropWarmCLISession(sessionID string) int {
+	if r.cliSessions == nil {
+		return 0
+	}
+	return r.cliSessions.DropSession(sessionID)
+}
+
 // globalSkillsDir is TionSwarm's data-dir-level global skills directory
 // (<DataDir>/skills, default ~/.tionswarm/skills). Deliberately under TionSwarm's
 // OWN data dir — not the cross-tool ~/.agents/skills convention — so TionSwarm's

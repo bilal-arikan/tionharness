@@ -171,6 +171,10 @@ export const sessionApi = {
   // Rich session detail: disk footprint, context composition, participating agents.
   sessionInfo: (sessionId: string) =>
     req<SessionInfo>(`/api/sessions/${sessionId}/info`),
+  // Recycle the session's warm (persistent-pool) claude-cli process so the next
+  // turn cold-restarts fresh. Conversation untouched. Returns how many were dropped.
+  dropSessionCliProcess: (sessionId: string) =>
+    req<{ dropped: number }>(`/api/sessions/${sessionId}/cli-process`, { method: 'DELETE' }),
   // Open the session's folder in the OS file manager (local desktop).
   revealSession: (sessionId: string) =>
     req<{ path: string }>(`/api/sessions/${sessionId}/reveal`, { method: 'POST' }),

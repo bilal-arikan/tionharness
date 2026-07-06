@@ -83,7 +83,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
         aria-modal="true"
         aria-label="Yeni workspace"
         data-testid="workspace-create-modal"
-        className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
+        className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
       >
         <h2 className="mb-4 text-base font-semibold">Yeni Workspace</h2>
 
@@ -120,21 +120,19 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
           </>
         )}
 
-        {/* Name */}
-        <label className="mb-1 block text-xs text-[var(--color-text-dim)]">Ad</label>
-        <input
-          ref={nameRef}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-          placeholder="ör. Müşteri Projesi"
-          className="mb-4 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
-        />
-
-        {/* Icon */}
-        <label className="mb-1 block text-xs text-[var(--color-text-dim)]">Simge</label>
-        <div className="mb-4">
-          <EmojiField value={icon} onChange={setIcon} clearLabel="⬡" />
+        {/* Icon + Name on one row: the icon is a compact square to the left of the
+            name input (same inline pattern as the agent editor). */}
+        <label className="mb-1 block text-xs text-[var(--color-text-dim)]">Simge ve ad</label>
+        <div className="mb-4 flex items-center gap-2">
+          <EmojiField value={icon} onChange={setIcon} clearLabel="⬡" compact />
+          <input
+            ref={nameRef}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+            placeholder="ör. Müşteri Projesi"
+            className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+          />
         </div>
 
         {/* Folder */}

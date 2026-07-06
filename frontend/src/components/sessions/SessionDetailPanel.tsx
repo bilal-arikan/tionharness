@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, PiggyBank, ListChecks, Square, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, PiggyBank, ListChecks, Square, ChevronRight, RotateCcw, Flame, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionInfo, SessionUsageDetail, SessionProgress } from '../../types'
 import { SessionDebugCard } from './SessionDebugCard'
@@ -26,6 +26,10 @@ interface Props {
   onSelectAgent?: (id: string) => void
   // Navigate to another session (used by the context-reset lineage link).
   onSelectSession?: (id: string) => void
+  // Restart the last turn (stop any in-flight run + re-send the last user prompt).
+  // Wired to the chat hook's rerunLast so it reuses the one true turn path. Optional
+  // so legacy/test usages still compile; the button hides when absent.
+  onRerun?: (id: string) => void | Promise<void>
 }
 
 // SessionDetailPanel is the right-hand inspector for the active chat session:
@@ -40,8 +44,13 @@ export function SessionDetailPanel({
   onDeleteSession,
   onSelectSession,
   onSelectAgent,
+  onRerun,
 }: Props) {
   const [info, setInfo] = useState<SessionInfo | null>(null)
+  // In-flight action guard for the running-process card (stop/restart/drop).
+  const [procBusy, setProcBusy] = useState<'' | 'stop' | 'restart' | 'drop'>('')
+  // Ticks once a second while a turn is running, so the elapsed timer is live.
+  const [nowTick, setNowTick] = useState(() => Math.floor(Date.now() / 1000))
   const [sessionUsage, setSessionUsage] = useState<SessionUsageDetail | null>(null)
   const [progress, setProgress] = useState<SessionProgress | null>(null)
   const [loading, setLoading] = useState(false)
@@ -97,6 +106,83 @@ export function SessionDetailPanel({
       alive = false
     }
   }, [sessionId, refreshKey, localRefresh])
+
+  // While a turn is running (or a warm CLI process is held), poll the info endpoint
+  // so the process card appears/updates/clears live even without a chat SSE bound to
+  // this panel (e.g. an autonomous or detached turn). Light 3s cadence, no spinner.
+  const isBusy = !!info?.running || !!info?.warmCliProcess
+  useEffect(() => {
+    if (!isBusy) return
+    let alive = true
+    const t = setInterval(() => {
+      api
+        .sessionInfo(sessionId)
+        .then((d) => alive && setInfo(d))
+        .catch(() => {})
+    }, 3000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [isBusy, sessionId])
+
+  // Live elapsed timer: tick every second while a turn is running.
+  useEffect(() => {
+    if (!info?.running) return
+    const t = setInterval(() => setNowTick(Math.floor(Date.now() / 1000)), 1000)
+    return () => clearInterval(t)
+  }, [info?.running])
+
+  // Stop the in-flight turn: cancels the run's context, which terminates the
+  // background provider/claude-cli subprocess. Works for detached/autonomous turns.
+  const handleStopProc = async () => {
+    if (!info?.running || procBusy) return
+    setProcBusy('stop')
+    try {
+      await api.chatControl(info.running.runId, 'stop')
+      setInfo((prev) => (prev ? { ...prev, running: undefined } : prev))
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setProcBusy('')
+      setLocalRefresh((n) => n + 1)
+    }
+  }
+
+  // Restart: delegate to the chat hook (stop in-flight + re-send the last user
+  // prompt) so the turn goes through the one true streaming path.
+  const handleRestartProc = async () => {
+    if (!onRerun || procBusy) return
+    setProcBusy('restart')
+    try {
+      // Stop the in-flight turn via the backend runId first (robust for detached /
+      // autonomous turns this window doesn't own), then re-send the last prompt.
+      if (info?.running) await api.chatControl(info.running.runId, 'stop').catch(() => {})
+      await onRerun(sessionId)
+      setInfo((prev) => (prev ? { ...prev, running: undefined } : prev))
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setProcBusy('')
+      setLocalRefresh((n) => n + 1)
+    }
+  }
+
+  // Recycle the warm (persistent-pool) claude-cli process so the next turn cold-
+  // restarts fresh. Conversation untouched.
+  const handleDropProc = async () => {
+    if (procBusy) return
+    setProcBusy('drop')
+    try {
+      await api.dropSessionCliProcess(sessionId)
+      setInfo((prev) => (prev ? { ...prev, warmCliProcess: false } : prev))
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setProcBusy('')
+      setLocalRefresh((n) => n + 1)
+    }
+  }
 
   // Regenerate the title, showing an inline spinner, then refresh the panel so
   // the new title is reflected here too.
@@ -283,6 +369,65 @@ export function SessionDetailPanel({
               </button>
             )}
           </div>
+
+          {/* Background process: an in-flight turn and/or a warm persistent CLI
+              process for this session — with stop / restart / recycle controls. */}
+          {(info.running || info.warmCliProcess) && (
+            <section className="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-2.5 py-2">
+              {info.running && (
+                <>
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    <Loader2 size={13} className="shrink-0 animate-spin text-[var(--color-accent)]" />
+                    <span className="font-medium text-[var(--color-text)]">
+                      {info.running.autonomous ? 'Otonom tur çalışıyor' : 'Tur çalışıyor'}
+                    </span>
+                    {info.running.provider && (
+                      <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)]">
+                        {info.running.provider}
+                      </span>
+                    )}
+                    <span className="ml-auto font-mono text-[10px] text-[var(--color-text-dim)]">
+                      {formatElapsed(Math.max(0, nowTick - info.running.startedAt))}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <ProcBtn
+                      icon={Square}
+                      label="Durdur"
+                      onClick={handleStopProc}
+                      busy={procBusy === 'stop'}
+                      disabled={procBusy !== ''}
+                    />
+                    {onRerun && (
+                      <ProcBtn
+                        icon={RotateCcw}
+                        label="Yeniden başlat"
+                        onClick={handleRestartProc}
+                        busy={procBusy === 'restart'}
+                        disabled={procBusy !== ''}
+                      />
+                    )}
+                  </div>
+                </>
+              )}
+              {info.warmCliProcess && (
+                <div className="flex items-center gap-1.5">
+                  <Flame size={13} className="shrink-0 text-[var(--color-warning)]" />
+                  <span className="min-w-0 flex-1 text-[11px] text-[var(--color-text-dim)]">
+                    Sıcak claude-cli süreci (turlar arası)
+                  </span>
+                  <ProcBtn
+                    icon={RotateCcw}
+                    label="Tazele"
+                    onClick={handleDropProc}
+                    busy={procBusy === 'drop'}
+                    disabled={procBusy !== ''}
+                    title="Sıcak süreci kapat — sonraki tur temiz başlar (konuşma korunur)"
+                  />
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Goal ("north star") — persistent objective injected into context */}
           <section>
@@ -658,6 +803,35 @@ function SaveRow({ label, value, hint }: { label: string; value: string; hint?: 
   )
 }
 
+// ProcBtn is a compact control in the background-process card (stop/restart/drop).
+function ProcBtn({
+  icon: Icon,
+  label,
+  onClick,
+  busy,
+  disabled,
+  title,
+}: {
+  icon: LucideIcon
+  label: string
+  onClick: () => void
+  busy?: boolean
+  disabled?: boolean
+  title?: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title ?? label}
+      className="flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text)] transition hover:border-[var(--color-accent)] disabled:opacity-40"
+    >
+      {busy ? <Loader2 size={12} className="shrink-0 animate-spin" /> : <Icon size={12} className="shrink-0" />}
+      {label}
+    </button>
+  )
+}
+
 function Pill({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
   return (
     <span
@@ -723,6 +897,16 @@ function formatBytes(bytes: number): string {
 function formatTokens(t: number): string {
   if (t < 1000) return String(t)
   return `${(t / 1000).toFixed(1)}k`
+}
+
+// formatElapsed renders a running duration in seconds as "42sn" / "3d 5sn".
+function formatElapsed(sec: number): string {
+  if (sec < 60) return `${sec}sn`
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  if (m < 60) return `${m}d ${s}sn`
+  const h = Math.floor(m / 60)
+  return `${h}s ${m % 60}d`
 }
 
 // pctOf returns n as a whole-number percent of total (0 when total is 0).

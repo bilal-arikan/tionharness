@@ -46,6 +46,37 @@ export const workspaceApi = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
+  // Pre-flight: probe whether THIS workspace's claude-home is logged in. Spawns a
+  // minimal `claude -p` on the backend, so it is on-demand (behind a button).
+  checkWorkspaceClaudeAuth: () =>
+    req<{ loggedIn: boolean; claudeHomeDir: string; detail?: string }>(
+      '/api/workspace-settings/claude-auth',
+    ),
+  // Begin an in-app Claude subscription (Max/Pro) OAuth login: returns the
+  // authorization URL to open + a flow id to complete with.
+  startClaudeOAuth: () =>
+    req<{ flowId: string; authUrl: string }>(
+      '/api/workspace-settings/claude-auth/oauth/start',
+      { method: 'POST' },
+    ),
+  // Finish the OAuth login: exchange the pasted "<code>#<state>" for a credential
+  // and write it into THIS workspace's claude-home.
+  completeClaudeOAuth: (flowId: string, code: string) =>
+    req<{ ok: boolean; claudeHomeDir: string; expiresAt: number; subscription?: string }>(
+      '/api/workspace-settings/claude-auth/oauth/complete',
+      { method: 'POST', body: JSON.stringify({ flowId, code }) },
+    ),
+  // Paste-less (loopback) OAuth: the backend binds a local callback listener; the
+  // browser redirects straight back to it, so no code paste is needed — poll status.
+  startClaudeOAuthLoopback: () =>
+    req<{ flowId: string; authUrl: string; port: number }>(
+      '/api/workspace-settings/claude-auth/oauth/loopback/start',
+      { method: 'POST' },
+    ),
+  claudeOAuthLoopbackStatus: (flowId: string) =>
+    req<{ status: 'pending' | 'ok' | 'error' | 'unknown'; detail?: string; claudeHomeDir?: string }>(
+      `/api/workspace-settings/claude-auth/oauth/loopback/status?flowId=${encodeURIComponent(flowId)}`,
+    ),
 
   // Per-workspace editable config files (prompts/instructions/README).
   getWorkspaceConfig: () => req<WorkspaceConfig>('/api/workspace-config'),

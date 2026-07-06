@@ -681,9 +681,14 @@ export function SkillsPanel({ onError }: Props) {
                 )}
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto px-[1px] py-3 md:p-5">
               {active.body ? (
-                <Markdown>{active.body}</Markdown>
+                // Render the skill body inside the same bubble shell used for an
+                // assistant message in chat (AssistantTurn), so a skill reads like a
+                // message from the agent.
+                <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3 text-[var(--color-text)]">
+                  <Markdown>{active.body}</Markdown>
+                </div>
               ) : (
                 <p className="text-sm text-[var(--color-text-dim)]">Bu becerinin gövde içeriği yok.</p>
               )}

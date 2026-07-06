@@ -1,0 +1,5 @@
+{
+  "id": "email",
+  "description": "A branded email: subject/heading, recipient greeting, body paragraphs, optional CTA button, and footer.",
+  "requiredFields": ["subject", "paragraphs"]
+}

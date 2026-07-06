@@ -21,29 +21,60 @@ import { req } from './client'
 // (which reconnects automatically on drop). `onEvent` receives notification
 // frames (`notify`); the optional `onStep` receives live turn-activity frames
 // (`step`, type === 'session_step') so autonomous/other-window turns render their
-// thinking/tool steps live. Both ride ONE EventSource. Returns an unsubscribe fn.
-function subscribeEvents(
-  onEvent: (e: AppEvent) => void,
-  onStep?: (e: AppEvent) => void,
-): () => void {
-  const es = new EventSource('/api/events')
-  es.addEventListener('notify', (ev) => {
+// thinking/tool steps live.
+//
+// Connection is multiplexed at the module level: the first subscriber creates
+// the single EventSource, additional subscribers share it, and the source is
+// closed when the last subscriber unsubscribes. This keeps N mounted panels
+// (NetworkPanel + TaskBoard + future listeners) from holding N independent
+// HTTP/1.1 SSE keep-alives against the backend.
+type EventCb = (e: AppEvent) => void
+let sharedES: EventSource | null = null
+const eventSubs = new Set<EventCb>()
+const stepSubs = new Set<EventCb>()
+
+function ensureConnection(): void {
+  if (sharedES) return
+  sharedES = new EventSource('/api/events')
+  sharedES.addEventListener('notify', (ev) => {
+    let parsed: AppEvent
     try {
-      onEvent(JSON.parse((ev as MessageEvent).data) as AppEvent)
+      parsed = JSON.parse((ev as MessageEvent).data) as AppEvent
     } catch {
-      // ignore malformed frames
+      return // ignore malformed frames
     }
+    // Snapshot the sets so a callback that unsubscribes mid-dispatch doesn't
+    // skip its peers or mutate the live iteration.
+    eventSubs.forEach((cb) => cb(parsed))
   })
-  if (onStep) {
-    es.addEventListener('step', (ev) => {
-      try {
-        onStep(JSON.parse((ev as MessageEvent).data) as AppEvent)
-      } catch {
-        // ignore malformed frames
-      }
-    })
+  sharedES.addEventListener('step', (ev) => {
+    let parsed: AppEvent
+    try {
+      parsed = JSON.parse((ev as MessageEvent).data) as AppEvent
+    } catch {
+      return
+    }
+    stepSubs.forEach((cb) => cb(parsed))
+  })
+  // EventSource auto-reconnects on transport errors; we don't tear it down
+  // here so transient drops don't churn N subscribers.
+}
+
+function subscribeEvents(onEvent: EventCb, onStep?: EventCb): () => void {
+  ensureConnection()
+  eventSubs.add(onEvent)
+  if (onStep) stepSubs.add(onStep)
+  let unsubscribed = false
+  return () => {
+    if (unsubscribed) return
+    unsubscribed = true
+    eventSubs.delete(onEvent)
+    if (onStep) stepSubs.delete(onStep)
+    if (eventSubs.size === 0 && stepSubs.size === 0 && sharedES) {
+      sharedES.close()
+      sharedES = null
+    }
   }
-  return () => es.close()
 }
 
 export const systemApi = {

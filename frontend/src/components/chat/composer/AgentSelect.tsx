@@ -38,7 +38,7 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
         }`}
       >
         {selected ? (
-          <AgentIdentity agent={selected} size="sm" subtitle="model" mobileIconOnly className="md:max-w-[180px]" />
+          <AgentIdentity agent={selected} size="sm" subtitle="model" showId mobileIconOnly className="md:max-w-[220px]" />
         ) : (
           <span>Ajan seç</span>
         )}
@@ -74,7 +74,7 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
                   : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'
               }`}
             >
-              <AgentIdentity agent={a} size="sm" subtitle="model" />
+              <AgentIdentity agent={a} size="sm" subtitle="model" showId />
             </button>
           ))}
         </div>

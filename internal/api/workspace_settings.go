@@ -4,8 +4,10 @@ import (
 	"context"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
@@ -98,17 +100,63 @@ func (s *Server) handleGetWorkspaceSettings(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, toWorkspaceSettingsDTO(r.Context(), ws(r)))
 }
 
+// claudeAuthDTO reports whether THIS workspace's claude-home is authenticated,
+// as measured by a live pre-flight probe.
+type claudeAuthDTO struct {
+	LoggedIn      bool   `json:"loggedIn"`
+	ClaudeHomeDir string `json:"claudeHomeDir"`
+	Detail        string `json:"detail,omitempty"` // failure reason when LoggedIn is false
+}
+
+// handleWorkspaceClaudeAuth runs a lightweight, tool-free pre-flight probe against
+// this workspace's claude-home and reports whether the claude-cli is logged in. It
+// spawns a minimal `claude -p` (a few hundred ms), so it is ON-DEMAND only — the
+// Settings screen calls it behind a "Verify login" action, never on every load — and
+// lets the user catch an auth lapse before an agent turn burns on it.
+func (s *Server) handleWorkspaceClaudeAuth(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	home := filepath.Join(wsp.DataDir, "claude-home")
+	p, err := s.providers.Get("claude-cli")
+	if err != nil {
+		writeJSON(w, http.StatusOK, claudeAuthDTO{ClaudeHomeDir: home, Detail: err.Error()})
+		return
+	}
+	cli, ok := p.(*providers.ClaudeCLI)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "claude-cli provider unavailable")
+		return
+	}
+	cli.SetConfigDir(home)
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	if perr := cli.ProbeAuth(ctx); perr != nil {
+		writeJSON(w, http.StatusOK, claudeAuthDTO{ClaudeHomeDir: home, Detail: perr.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, claudeAuthDTO{LoggedIn: true, ClaudeHomeDir: home})
+}
+
 // handleUpdateWorkspaceSettings applies a partial update (including rename) to
 // the active workspace and persists it.
 func (s *Server) handleUpdateWorkspaceSettings(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
 	patch, ok := bindJSON[workspace.WSSettingsPatch](w, r)
 	if !ok {
 		return
 	}
-	updated, err := s.workspaces.UpdateSettings(ws(r).ID, patch)
+	updated, err := s.workspaces.UpdateSettings(wsp.ID, patch)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// Board-column shape (keys / labels / colors) lives in workspace settings,
+	// so a save here is the only way those changes reach the Network screen's
+	// live-mode column anchors. Publishing a board event — the same channel
+	// task CRUD uses — lets every open window refresh without polling and
+	// covers cross-window sync (where window.dispatchEvent never reaches).
+	if patch.BoardColumns != nil {
+		publishEntityChange(wsp, "board", "Boards sütunları güncellendi", "",
+			map[string]string{"view": "board", "op": "columns_changed"})
 	}
 	writeJSON(w, http.StatusOK, toWorkspaceSettingsDTO(r.Context(), updated))
 }

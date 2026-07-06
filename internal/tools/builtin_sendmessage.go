@@ -46,14 +46,18 @@ func (*SendMessageTool) Def() providers.ToolDef {
 			"that agent's inbox tagged with your name, and it processes the message on its own, in the " +
 			"background — you do NOT wait for it, and its reply does NOT come back into this conversation " +
 			"(it may message you back with send_message, landing in YOUR inbox). Your plain reply text is " +
-			"NOT visible to other agents; to reach one you MUST use this tool. Refer to the agent by name. " +
-			"To REPLY to a message you received, set `to` to the `from` name on that message. Set `to` to " +
-			"\"*\" to broadcast to every other agent (expensive — one background turn each; use sparingly). " +
-			"Use this for ongoing peer collaboration; use run_subagent when you need a result back in THIS turn.",
+			"NOT visible to other agents; to reach one you MUST use this tool. Set `to` to the recipient's " +
+			"NAME or its agent ID (e.g. \"AGT3\") — both are accepted. To REPLY to a message you received, set " +
+			"`to` to the `from` name on that message. Set `to` to \"*\" to broadcast to every other agent " +
+			"(expensive — one background turn each; use sparingly). If a call fails with \"no agent named …\", " +
+			"the name was misspelled — do NOT give up: list the workspace agents, then retry with the exact " +
+			"name or the agent ID. Recipients need NOT be running — delivery lands in the recipient's durable " +
+			"inbox and is processed later. Use this for ongoing peer collaboration; use run_subagent when you " +
+			"need a result back in THIS turn.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "to": { "type": "string", "description": "Recipient agent name (or id), or \"*\" to broadcast to all other agents. To reply, use the sender's 'from' name." },
+    "to": { "type": "string", "description": "Recipient agent NAME or agent ID (e.g. \"AGT3\") — both accepted; or \"*\" to broadcast to all other agents. The recipient need not be running. To reply, use the sender's 'from' name. On \"no agent named …\", list agents and retry with the exact name/id." },
     "message": { "type": "string", "description": "The message to deliver to that agent." },
     "summary": { "type": "string", "description": "Optional 5-10 word preview shown in the UI." }
   },

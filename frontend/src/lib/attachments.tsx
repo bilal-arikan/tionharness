@@ -67,6 +67,21 @@ export function fileURL(relPath?: string): string | null {
   return `/api/files?rel=${encodeURIComponent(relPath)}${wsq}`
 }
 
+// fileTextURL builds a URL that serves a local ABSOLUTE file path as text/plain
+// for inline preview (the ```html-preview block). The backend as=text mode is
+// restricted to the workspace render root and never returns text/html, so the
+// fetched markup can only be injected into a sandboxed iframe — never executed as
+// a same-origin page. The workspace id rides as a query param, mirroring the
+// media helpers for one consistent serving path. Returns null when there is no
+// path.
+export function fileTextURL(path?: string): string | null {
+  if (!path) return null
+  const ws = getActiveWorkspace()
+  const wsq = ws ? `&ws=${encodeURIComponent(ws)}` : ''
+  const clean = path.replace(/^file:\/\//, '')
+  return `/api/files?path=${encodeURIComponent(clean)}&as=text${wsq}`
+}
+
 // PASTE_AS_FILE_THRESHOLD: pasted text longer than this becomes a text attachment
 // instead of going into the textarea (Claude.ai-style "pasted text").
 export const PASTE_AS_FILE_THRESHOLD = 2000

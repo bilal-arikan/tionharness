@@ -60,8 +60,26 @@ type Agent struct {
 // SessionSchemaVersion is the current session-header format version, stamped on
 // new sessions (Session.SchemaVersion). Bump it whenever header fields are added
 // so a future loader can branch on the version. 1 = first versioned header
-// (added pinned + the enriched per-message fields).
-const SessionSchemaVersion = 1
+// (added pinned + the enriched per-message fields). 2 = generic participant model
+// (Session.Participants + per-message AuthorKind/AuthorID/RecipientID).
+const SessionSchemaVersion = 2
+
+// UserParticipantID is the stable participant id of the human principal — the
+// top-authority participant every session implicitly contains. A human-authored
+// message has AuthorID == UserParticipantID, distinguishing it uniformly from an
+// agent-authored one (whose AuthorID is the agent id).
+const UserParticipantID = "user"
+
+// BroadcastRecipientID addresses every other participant in the thread at once.
+const BroadcastRecipientID = "*"
+
+// AuthorKind classifies who wrote a message in the participant model: the human
+// principal, an agent, or the system.
+const (
+	AuthorUser   = "user"
+	AuthorAgent  = "agent"
+	AuthorSystem = "system"
+)
 
 // Session is a conversation thread belonging to an agent.
 //
@@ -135,6 +153,15 @@ type Session struct {
 	ParentSessionID   string `json:"parentSessionId,omitempty"`
 	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
 
+	// Participants is the roster of agent ids taking part in this thread, beyond
+	// the implicit human "user" (UserParticipantID) which is always a participant.
+	// It grows as agents author or are addressed in the session (see
+	// store.AddMessage). AgentID stays the DEFAULT responder — the agent that
+	// answers when a turn carries no explicit routing — while Participants is the
+	// full set the UI offers to route a message to. Empty on legacy sessions →
+	// treat as [AgentID] via SessionParticipants.
+	Participants []string `json:"participants,omitempty"`
+
 	// Multi-agent coordination (see internal/agent/coordination.go, _Docs/47).
 	// Role marks a session's part in a coordinator/worker relationship:
 	// "coordinator" (drives workers, gets the coordinator system prompt + the
@@ -167,9 +194,32 @@ type Message struct {
 	Role      string `json:"role"` // system | user | assistant | tool
 	// AgentID records which agent produced an assistant turn (empty for user/
 	// system). In a multi-agent session different turns may come from different
-	// agents (via "@mention" routing); the UI shows each turn's agent.
-	AgentID          string `json:"agentId"`
-	Text             string `json:"text"`
+	// agents (via per-turn routing); the UI shows each turn's agent. On a USER
+	// turn it carries the legacy dual meaning "routed recipient agent" — retained
+	// for backward compatibility; the participant fields below are the canonical
+	// source. For an agent turn AgentID == AuthorID.
+	AgentID string `json:"agentId"`
+
+	// Author/recipient participant model (generic multi-participant threads). A
+	// session is a thread among participants: the human "user" (top authority) and
+	// one or more agents. Every message records who wrote it and, optionally, whom
+	// it is addressed to, so any responding agent can reconstruct the full
+	// who→whom map of the conversation.
+	//
+	//   AuthorKind  the writer's class: "user" | "agent" | "system".
+	//   AuthorID    the participant id: the agent id for an agent author,
+	//               UserParticipantID for the human, empty for system.
+	//   RecipientID the participant this message is directed at: an agent id,
+	//               BroadcastRecipientID ("*"), or empty = the thread at large.
+	//
+	// Populated going forward on every write. For messages stored before this
+	// model they are derived at read time from Role + the legacy AgentID by
+	// NormalizeParticipants, so old session.jsonl stays readable without migration.
+	AuthorKind  string `json:"authorKind,omitempty"`
+	AuthorID    string `json:"authorId,omitempty"`
+	RecipientID string `json:"recipientId,omitempty"`
+
+	Text string `json:"text"`
 	ToolCalls        string `json:"toolCalls"`
 	ReasoningContent string `json:"reasoningContent"`
 	// Steps is a JSON array of agent.TurnStep records: the ordered trace of
@@ -215,6 +265,41 @@ type Message struct {
 	// sandboxed read_file tool (see Attachment.RelPath).
 	Attachments []Attachment `json:"attachments,omitempty"`
 	CreatedAt   int64        `json:"createdAt"`
+}
+
+// NormalizeParticipants back-fills AuthorKind/AuthorID/RecipientID from a
+// message's Role and the legacy dual meaning of AgentID, for messages written
+// before the participant model (or any that omitted the fields). Idempotent: a
+// no-op once AuthorKind is set. Called on every write and on legacy read so the
+// participant fields are always populated in memory without a disk migration.
+func (m *Message) NormalizeParticipants() {
+	if m.AuthorKind != "" {
+		return
+	}
+	switch m.Role {
+	case "assistant":
+		m.AuthorKind = AuthorAgent
+		m.AuthorID = m.AgentID // the authoring agent
+	case "user":
+		m.AuthorKind = AuthorUser
+		m.AuthorID = UserParticipantID
+		m.RecipientID = m.AgentID // legacy: AgentID on a user turn = routed recipient
+	case "system":
+		m.AuthorKind = AuthorSystem
+	}
+}
+
+// SessionParticipants returns a session's participant agent roster, falling back
+// to its single default agent for legacy sessions that predate the roster field.
+// The human "user" participant is implicit and never included here.
+func SessionParticipants(s Session) []string {
+	if len(s.Participants) > 0 {
+		return s.Participants
+	}
+	if s.AgentID != "" {
+		return []string{s.AgentID}
+	}
+	return nil
 }
 
 // MessageUsage is a single assistant turn's token consumption, stored on the

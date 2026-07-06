@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -34,11 +35,16 @@ type chatRun struct {
 	// "is a turn in flight for session X?" after a page reload (turns are
 	// detached from the client connection and keep running server-side).
 	sessionID string
+	// startedAt stamps when this turn was registered, so the Session Info panel
+	// can show how long the background process has been running. Set once at
+	// register (read-only after) so no lock is needed to read it.
+	startedAt time.Time
 
 	// mu serialises SSE writes: the stream handler goroutine and the Interaction
 	// MCP handler goroutine both emit steps onto the same ResponseWriter. It also
 	// guards artifacts (swapped per responding agent in a multi-agent turn).
 	mu          sync.Mutex
+	provider    string                       // responding agent's provider id (e.g. "claude-cli"), for the Session Info panel
 	write       func(event string, data any) // installed by the stream handler; nil once the turn ends
 	artifacts   tools.ArtifactSink           // current agent's artifact sink, for Interaction MCP create/update
 	notify      tools.NotifySink             // current agent's notify sink, for Interaction MCP notify (desktop notification)
@@ -65,6 +71,21 @@ type chatRun struct {
 	// allowlist. Installed per agent turn alongside the bridge. nil → the static
 	// split (used when no per-agent registry is available).
 	tierVis func(name string) string
+}
+
+// setProvider records the responding agent's provider id so the Session Info
+// panel can label the running background process (e.g. "claude-cli").
+func (r *chatRun) setProvider(p string) {
+	r.mu.Lock()
+	r.provider = p
+	r.mu.Unlock()
+}
+
+// providerOf returns the recorded provider id (empty if none installed yet).
+func (r *chatRun) providerOf() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.provider
 }
 
 // setTierVis installs the responding agent's visibility resolver for the CLI wire
@@ -376,6 +397,7 @@ func (c *chatRuns) register(id, sessionID string, cancel context.CancelFunc) *ch
 		done:      make(chan struct{}),
 		token:     uuid.NewString(),
 		sessionID: sessionID,
+		startedAt: time.Now(),
 	}
 	c.mu.Lock()
 	c.runs[id] = run
@@ -402,6 +424,37 @@ func (c *chatRuns) activeSessionIDs() []string {
 		ids = append(ids, run.sessionID)
 	}
 	return ids
+}
+
+// runInfo is a snapshot of one in-flight turn, for the Session Info panel.
+type runInfo struct {
+	RunID      string
+	StartedAt  time.Time
+	Autonomous bool
+	Provider   string
+}
+
+// sessionRunInfo returns a snapshot of the (first) in-flight turn for a session,
+// or ok=false when the session has no running turn. Used by the Session Info panel
+// to show + control the background process.
+func (c *chatRuns) sessionRunInfo(sessionID string) (runInfo, bool) {
+	if sessionID == "" {
+		return runInfo{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for id, run := range c.runs {
+		if run.sessionID != sessionID {
+			continue
+		}
+		return runInfo{
+			RunID:      id,
+			StartedAt:  run.startedAt,
+			Autonomous: run.autonomous,
+			Provider:   run.providerOf(),
+		}, true
+	}
+	return runInfo{}, false
 }
 
 func (c *chatRuns) unregister(id string) {

@@ -97,6 +97,12 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "session not found") {
 		return
 	}
+	// Cross-window sync: the new user+assistant pair lands in the transcript —
+	// a sibling window viewing this session reloads so the slash command + its
+	// output appear without a manual refresh. op="summary" / "message_added" so
+	// the listener knows to refresh the transcript and update last-message
+	// metadata.
+	emitSessionChange(wsp, session.ID, "summary")
 	writeJSON(w, http.StatusOK, map[string]any{"userMessage": userMsg, "replyMessage": msg})
 }
 
@@ -139,6 +145,12 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 
 	// HandoffSession already dropped a tombstone (with the new session link) into
 	// the old session; return it as the reply message so the chat renders it.
+	//
+	// Cross-window sync: Runtime.HandoffSession itself emits the "session"
+	// events for both the old (op="handoff") and the new (op="create") sessions
+	// — the same runtime call also backs the agent-driven handoff_session tool
+	// and the auto-handoff path, so all three entry points get a refresh. The
+	// handler therefore does NOT publish duplicates here.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"userMessage":  userMsg,
 		"newSessionId": res.NewSessionID,

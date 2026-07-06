@@ -82,6 +82,9 @@ func (s *Server) handleSetSessionWorkdir(w http.ResponseWriter, r *http.Request)
 	if err := wsp.DB.SetSessionWorkingDir(ctx, id, dir); writeDBError(w, err, "") {
 		return
 	}
+	// Cross-window sync: a sibling window's session-detail meter (the working-
+	// directory pill / chip) reflects the change live.
+	emitSessionChange(wsp, id, "workdir")
 	// Reuse the GET shape so the client refreshes the badge in one round-trip.
 	s.handleGetSessionWorkdir(w, r)
 }

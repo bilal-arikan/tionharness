@@ -18,6 +18,7 @@ import (
 const (
 	TagToolError = "tool-error" // a real tool call failed this turn
 	TagError     = "error"      // the turn itself failed (provider/action error)
+	TagAuthError = "auth-error" // the turn failed on authentication (login/token) — TERMINAL, not repairable
 	TagGoal      = "goal"       // session has a persistent goal set
 	TagGoalDone  = "goal-done"  // that goal is marked done
 	TagArchived  = "archived"   // session is archived
@@ -44,6 +45,19 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 	// Turn-level failure → "error" (skip a clean user cancel).
 	if e := strings.TrimSpace(turnErr); e != "" && e != "stopped" {
 		add = append(add, TagError)
+	}
+
+	// An authentication failure (this claude-home is not logged in / token expired)
+	// is TERMINAL — no amount of auto-repair can log the CLI in, so an "error"-tag
+	// repair automation would loop in vain until MaxIterations/Cooldown. Tag it
+	// distinctly so a repair automation can EXCLUDE auth-error sessions and a human
+	// (or the fixer's soul) knows to run /login instead. The auth detail lives in an
+	// error step's text (turnErr carries only the machine reason, e.g. provider_error).
+	for _, st := range steps {
+		if st.Kind == StepError && isAuthErrorText(st.Text) {
+			add = append(add, TagAuthError)
+			break
+		}
 	}
 
 	// Any REAL tool error → "tool-error". A claude-cli attempt at a disallowed tool
@@ -131,6 +145,33 @@ var permissionDenyMarkers = []string{
 	"isn't allowed",
 	"tool is not permitted",
 	"disallowed",
+}
+
+// authErrorMarkers identify a turn that failed because the provider could not
+// authenticate — this claude-home never ran /login, or its OAuth token / API key
+// expired or was revoked. Matched case-insensitively against a StepError's text.
+// Kept in sync with providers.isAuthErrorText (separate package, so duplicated).
+var authErrorMarkers = []string{
+	"authentication failed",
+	"authentication_failed",
+	"not logged in",
+	"please run /login",
+	"invalid api key",
+	"invalid x-api-key",
+	"oauth token has expired",
+	"invalid bearer token",
+}
+
+// isAuthErrorText reports whether an error step's text signals an authentication
+// failure (login/token), which is terminal — not repairable by an auto-repair turn.
+func isAuthErrorText(s string) bool {
+	s = strings.ToLower(s)
+	for _, m := range authErrorMarkers {
+		if strings.Contains(s, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // isPermissionDenyError reports whether an errored tool step is actually a policy

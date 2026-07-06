@@ -124,6 +124,7 @@ const (
 	dirFlowRuns    = "flow-runs"
 	dirAutomations = "automations"
 	dirArtifacts = "artifacts"
+	dirRender    = "render" // per-session render_template output (transient, swept)
 	dirHooks     = "hooks"
 	dirUsage     = "usage"
 	dirSessionUsage = "session-usage"
@@ -376,6 +377,9 @@ func (d *DB) load() error {
 	// Consolidate any pre-unification files into the per-session artifacts layout
 	// and back existing chat attachments with artifacts (idempotent, best-effort).
 	d.migrateUnifiedLayout()
+	// Reclaim transient render_template output: drop dirs for sessions that no
+	// longer exist and TTL-sweep stale files (startup-only, best-effort).
+	d.cleanupRenders()
 	return nil
 }
 

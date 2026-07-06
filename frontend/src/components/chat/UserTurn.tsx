@@ -3,6 +3,7 @@ import { UserBubble } from './UserBubble'
 import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
 import { RewindButton } from './RewindButton'
+import { DirectionBadge } from './DirectionBadge'
 
 // UserTurn renders a real user message: the bubble plus a right-aligned meta row
 // (rewind + delete on hover + timestamp). Auto-generated prompts use
@@ -15,6 +16,7 @@ export function UserTurn({
   onRewind,
   onOpenArtifact,
   clamp,
+  recipientLabel,
 }: {
   message: Message
   agents: Agent[]
@@ -25,6 +27,9 @@ export function UserTurn({
   onOpenArtifact?: (id: string) => void
   // Clamp the bubble text to 2 lines (used when this turn is pinned to the top).
   clamp?: boolean
+  // "→ <name>" cue for the agent this message was routed to, in a multi-participant
+  // thread (generic participant model). Undefined = single-participant / no cue.
+  recipientLabel?: string
 }) {
   const m = message
   return (
@@ -38,6 +43,7 @@ export function UserTurn({
         clamp={clamp}
       />
       <div className="flex items-center justify-end gap-2 pr-1">
+        <DirectionBadge label={recipientLabel} />
         {onRewind && <RewindButton onClick={() => onRewind(m.id)} />}
         {onDelete && <DeleteButton onClick={() => onDelete(m.id)} />}
         <MessageTime unixSec={m.createdAt} />

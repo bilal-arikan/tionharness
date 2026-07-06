@@ -58,6 +58,12 @@ func TestDeliverAgentMessage_Synchronous(t *testing.T) {
 	if !strings.Contains(first.Text, `from="Ada"`) || !strings.Contains(first.Text, "task #1") {
 		t.Errorf("delivered message missing sender tag/body: %q", first.Text)
 	}
+	// Generic participant model: the inbox message is a "user"-role input, but its
+	// author is the SENDING agent and its recipient is the inbox owner.
+	if first.AuthorKind != db.AuthorAgent || first.AuthorID != sender.ID || first.RecipientID != target.ID {
+		t.Errorf("participant fields wrong: kind=%q author=%q recipient=%q (want agent/%s/%s)",
+			first.AuthorKind, first.AuthorID, first.RecipientID, sender.ID, target.ID)
+	}
 }
 
 // TestDeliverAgentMessage_Broadcast delivers to every OTHER agent's inbox.

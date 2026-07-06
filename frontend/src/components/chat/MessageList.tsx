@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Agent, Artifact, Message } from '../../types'
 import { MessageTime, LiveTimer } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
@@ -88,6 +88,29 @@ export function MessageList({
   const firstId = messages[0]?.id
   const prevFirstId = useRef(firstId)
   const agentById = (id?: string) => (id ? agents.find((a) => a.id === id) : undefined)
+  // Multi-participant thread detection (generic participant model): count the
+  // distinct agents that authored or were addressed in this transcript. Only when
+  // 2+ agents take part do we surface the "→ <recipient>" direction cue — a 1:1
+  // chat stays clean (every user turn is trivially "→ the one agent").
+  const multiParticipant = useMemo(() => {
+    const ids = new Set<string>()
+    for (const m of messages) {
+      if (m.role === 'assistant' && m.agentId) ids.add(m.agentId)
+      if (m.recipientId && m.recipientId !== '*') ids.add(m.recipientId)
+      if (ids.size > 1) return true
+    }
+    return false
+  }, [messages])
+  // Resolve a turn's "→ <name>" recipient label from recipientId (falling back to
+  // the legacy agentId a user turn carries). Empty in a 1:1 thread or an undirected
+  // (thread-at-large) turn; "herkes" for a broadcast ("*").
+  const recipientLabel = (m: Message): string | undefined => {
+    if (!multiParticipant) return undefined
+    const rid = m.recipientId || (m.role === 'user' ? m.agentId : undefined)
+    if (!rid) return undefined
+    if (rid === '*') return 'herkes'
+    return agents.find((a) => a.id === rid)?.name ?? rid
+  }
   // Per-message collapse of the tool-activity trace (the TurnSteps block). Keyed
   // by message id; a message is shown expanded unless its id is in the set.
   const [collapsedTools, setCollapsedTools] = useState<ReadonlySet<string>>(() => new Set())
@@ -224,6 +247,7 @@ export function MessageList({
                 onDelete={onDeleteMessage}
                 onRewind={onRewind}
                 onOpenArtifact={onOpenArtifact}
+                recipientLabel={recipientLabel(m)}
               />
             )
           } else {
@@ -251,6 +275,7 @@ export function MessageList({
                 onRetry={onRetry}
                 onFeedback={onFeedback}
                 onOpenAgent={onOpenAgent}
+                recipientLabel={recipientLabel(m)}
               />
             )
           }

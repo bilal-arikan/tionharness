@@ -375,6 +375,58 @@ func (pl *CLISessionPool) Drop(key string) {
 	}
 }
 
+// keyPrefixForSession is the pool-key prefix for all warm sessions belonging to a
+// chat session, regardless of responding agent. The pool key is "<sessionID>|<agentID>"
+// (see toolloop.go), so a session's warm processes are exactly the keys with this
+// prefix. Kept as a helper so the match rule lives in one place.
+func keyPrefixForSession(sessionID string) string { return sessionID + "|" }
+
+// AliveForSession reports whether the session has at least one warm (open) CLI
+// process kept alive between turns (persistent-pool mode). Used by the Session Info
+// panel to surface a "hot process" the user can drop.
+func (pl *CLISessionPool) AliveForSession(sessionID string) bool {
+	if sessionID == "" {
+		return false
+	}
+	prefix := keyPrefixForSession(sessionID)
+	pl.mu.Lock()
+	defer pl.mu.Unlock()
+	for k, s := range pl.sessions {
+		if strings.HasPrefix(k, prefix) && s != nil && !s.closed {
+			return true
+		}
+	}
+	return false
+}
+
+// DropSession closes and removes every warm session for a chat session (all agents),
+// so the NEXT turn cold-restarts with a fresh process. Returns how many were dropped.
+// The conversation itself is untouched — only the warm process is recycled.
+func (pl *CLISessionPool) DropSession(sessionID string) int {
+	if sessionID == "" {
+		return 0
+	}
+	prefix := keyPrefixForSession(sessionID)
+	pl.mu.Lock()
+	var dead []*CLISession
+	for k, s := range pl.sessions {
+		if strings.HasPrefix(k, prefix) {
+			dead = append(dead, s)
+			delete(pl.sessions, k)
+		}
+	}
+	pl.mu.Unlock()
+	for _, s := range dead {
+		if s != nil {
+			s.Close()
+		}
+	}
+	if len(dead) > 0 {
+		pl.log(slog.LevelInfo, "cli persistent sessions dropped (user restart)", "session", sessionID, "count", len(dead))
+	}
+	return len(dead)
+}
+
 // Close terminates every live session. Called on workspace/runtime teardown.
 func (pl *CLISessionPool) Close() {
 	pl.mu.Lock()

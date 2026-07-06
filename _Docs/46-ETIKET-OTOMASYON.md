@@ -135,9 +135,18 @@ Atanan etiketler (`agent/autotag.go` sabitleri):
 |--------|----------|
 | `tool-error` | Turda **gerçek** bir tool hatası (`StepTool.IsError`) |
 | `error` | Tur-seviyesi hata (provider/aksiyon hatası; kullanıcı "stopped" hariç) |
+| `auth-error` | Tur bir **kimlik doğrulama** hatasında bitti (claude-cli login/token) — **TERMINAL** |
 | `goal` | Oturumda kalıcı hedef var |
 | `goal-done` | Hedef tamamlandı |
 | `archived` | Oturum arşivlendi |
+
+**`auth-error` — terminal, onarılamaz (2026-07-06):** Bir tur claude-cli kimlik
+doğrulaması (login/token süresi/geçersiz anahtar) yüzünden başarısız olduğunda `error`'a
+**ek olarak** `auth-error` atanır (`isAuthErrorText` bir `StepError` metniyle eşleşir).
+Auto-repair, login'i düzeltemez — `error` tarayan bir onarım otomasyonu `auth-error`
+etiketli oturumları **dışlamalı** (aksi halde MaxIterations/Cooldown'a kadar boşuna
+döner). Çözüm: ilgili workspace'te `claude /login` (bkz. `tionswarm-session-debug`
+skill "I) authentication_failed") ya da ajanı API-key sağlayıcıya al.
 
 **"disallowed tool" istisnası:** claude-cli izin verilmeyen bir tool'u denerse
 `is_error` sonucu döner ama bu bir **politika reddi**, tool hatası değil — `tool-error`

@@ -127,6 +127,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	// A fresh session opened by @mentioning an agent adopts it as the main agent.
 	session = s.adoptMentionedAgent(ctx, database, session, req.AgentIDs, agents)
+	// Label the run with the responding agent's provider so the Session Info panel
+	// can show which kind of background process is running (e.g. "claude-cli").
+	run.setProvider(agents[0].Provider)
 
 	// Persist the incoming user message once. Stamp the routed recipient agent
 	// (agents[0]) so a multi-agent thread's history can show which agent each

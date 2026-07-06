@@ -13,20 +13,22 @@ func TestResumeGateEnabled(t *testing.T) {
 		persistent bool
 		agentCount int
 		provider   string
+		multiPart  bool
 		want       bool
 	}{
-		{"resume only, single claude-cli", true, false, 1, "claude-cli", true},
-		{"persistent supersedes resume", true, true, 1, "claude-cli", false},
-		{"persistent only", false, true, 1, "claude-cli", false},
-		{"resume off", false, false, 1, "claude-cli", false},
-		{"multi-agent blocks resume", true, false, 2, "claude-cli", false},
-		{"non-cli provider blocks resume", true, false, 1, "anthropic", false},
+		{"resume only, single claude-cli", true, false, 1, "claude-cli", false, true},
+		{"persistent supersedes resume", true, true, 1, "claude-cli", false, false},
+		{"persistent only", false, true, 1, "claude-cli", false, false},
+		{"resume off", false, false, 1, "claude-cli", false, false},
+		{"multi-agent turn blocks resume", true, false, 2, "claude-cli", false, false},
+		{"multi-participant session blocks resume", true, false, 1, "claude-cli", true, false},
+		{"non-cli provider blocks resume", true, false, 1, "anthropic", false, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := resumeGateEnabled(c.resume, c.persistent, c.agentCount, c.provider); got != c.want {
-				t.Errorf("resumeGateEnabled(%v,%v,%d,%q) = %v, want %v",
-					c.resume, c.persistent, c.agentCount, c.provider, got, c.want)
+			if got := resumeGateEnabled(c.resume, c.persistent, c.agentCount, c.provider, c.multiPart); got != c.want {
+				t.Errorf("resumeGateEnabled(%v,%v,%d,%q,%v) = %v, want %v",
+					c.resume, c.persistent, c.agentCount, c.provider, c.multiPart, got, c.want)
 			}
 		})
 	}

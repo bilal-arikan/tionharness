@@ -49,7 +49,14 @@ export function AutocompleteMenu({ mode, items, sel, onHover, onChoose }: Props)
             </span>
           )}
           <span className="flex min-w-0 flex-col">
-            <span className="truncate font-medium text-[var(--color-text)]">{it.label}</span>
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span className="truncate font-medium text-[var(--color-text)]">{it.label}</span>
+              {it.agent && (
+                <span className="shrink-0 font-mono text-[10px] text-[var(--color-text-dim)] opacity-60">
+                  {it.agent.id}
+                </span>
+              )}
+            </span>
             {it.sub && <span className="truncate text-xs opacity-70">{it.sub}</span>}
           </span>
         </button>

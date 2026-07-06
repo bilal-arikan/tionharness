@@ -25,3 +25,26 @@ func publishEntityChange(wsp *workspace.Workspace, typ, title, body string, targ
 		Target: target,
 	})
 }
+
+// emitSessionChange is the per-session "session" notify every session mutation
+// handler fires on success. It carries the sessionId in the target so the
+// listener can decide whether to:
+//   - always refresh the open session list (all op kinds).
+//   - also reload the ACTIVE transcript when the changed session is the one on
+//     screen (op-specific: rewind/delete_message/handoff/summary).
+//   - bump the session-detail meter when the active session's own metadata
+//     (title/goal/workdir/pin) changed.
+//
+// `op` is a short, stable verb (create, delete, state, title, pin, goal, workdir,
+// agent, role, tags, rewind, delete_message, feedback, spawn, handoff, summary,
+// message_added). Best-effort and nil-safe — callers can fire-and-forget.
+func emitSessionChange(wsp *workspace.Workspace, id, op string) {
+	if wsp == nil || wsp.Runtime == nil || id == "" {
+		return
+	}
+	wsp.Runtime.Emit(events.Event{
+		Type:   "session",
+		Level:  "info",
+		Target: map[string]string{"sessionId": id, "op": op},
+	})
+}

@@ -70,8 +70,14 @@ fenced blocks natively — use them where they add clarity:
 - **`diff`** — unified code diffs render as a rich diff view. Use them to show
   changes.
 - **`gallery`** / **`image-preview`** — render local images inline.
+- **`html-preview`** — render a local HTML file inline in a sandboxed iframe:
+  `{"src":"<abs-path>.html","title":"…"}` (or `{"items":[…]}` for tabs). The
+  file is fetched as text and isolated (scripts run, but cannot reach the page).
 - **`transform_data`** tool — run an isolated Python/Node/Bun script to reshape
   data (e.g. into JSON) without bloating your context.
+- **`render_template`** tool — fill a branded HTML template (Go `html/template`)
+  with data and get back a file path (not the HTML), shown inline via
+  `html-preview`. Load the `tionswarm-templates` skill for the templates + flow.
 
 ## Working directory & project context
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
@@ -107,6 +108,23 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	if err != nil {
 		return HandoffResult{}, fmt.Errorf("spawn continuation session: %w", err)
 	}
+
+	// Cross-window live refresh: TWO sessions change here. The old session gets
+	// a tombstone (transcript reload) and the new session appears in the
+	// sidebar/activity feed. We publish BOTH explicitly so a sibling window
+	// following the handoff chain updates without polling — the inner
+	// SpawnSession call would only emit op="spawn", which is the wrong semantic
+	// for a handoff continuation (it's not a fresh user-driven spawn).
+	r.publish(events.Event{
+		Type:   "session",
+		Level:  "info",
+		Target: map[string]string{"sessionId": session.ID, "op": "handoff"},
+	})
+	r.publish(events.Event{
+		Type:   "session",
+		Level:  "info",
+		Target: map[string]string{"sessionId": spawn.SessionID, "op": "create", "kind": "spawned"},
+	})
 
 	// Tombstone the old session so the thread reads as handed off and deep-links
 	// to its continuation.

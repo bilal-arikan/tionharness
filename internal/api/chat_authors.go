@@ -5,46 +5,53 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
-// labelMultiAgentHistory annotates a chat history so a responding agent can tell
-// WHICH agent authored each prior assistant turn.
+// labelMultiAgentHistory projects a multi-participant thread onto the transcript
+// the responding agent reads, annotating every turn with WHO wrote it and, when
+// directed, WHOM it was addressed to — from the generic participant model
+// (Message.AuthorKind/AuthorID/RecipientID), not the legacy AgentID dual meaning.
 //
-// In a multi-agent session (several agents reply in the same thread) the stored
-// messages keep each author's AgentID, but the provider transcript collapses
-// every assistant turn into one undifferentiated "assistant" voice — so an agent
-// reading the history couldn't see that a *different* agent said something, and
-// would even mistake another agent's words for its own. That is the cause of
-// "agents can't see who sent each message" in a thread shared by two agents.
+// A session is a thread among participants: the human "user" (the top-authority
+// principal) and one or more agents. The provider transcript, however, collapses
+// to just user/assistant roles, so without annotation a responding agent could
+// not tell that a *different* participant spoke — it would even mistake another
+// agent's words for its own. This is the fix: each turn's text is prefixed with
+// "[Author → Recipient]:" (the "→ Recipient" part is omitted when the message was
+// not directed at a specific participant), and the responder's own turns carry a
+// "(you)" marker so it can still find its own voice.
 //
-// When the history contains an assistant turn authored by an agent OTHER than
-// the one now responding (a thread shared by 2+ agents, or a session handed over
-// from agent A to agent B), every assistant turn's text is prefixed with its
-// author's display name ("[Ada]: …"); the responding agent's own earlier turns
-// get a "(you)" marker so it can still tell its own voice apart. Pure
-// single-agent sessions (only the responder has ever spoken) are returned
-// unchanged (natural transcript, no labels) so normal 1:1 chats and prompt
-// caching are unaffected.
+// Attribution is applied only when the thread actually has more than one author
+// (2+ agents, or a handover from agent A to agent B). A pure 1:1 thread — only
+// the responder and the user — is returned unchanged so the natural transcript
+// and prompt caching stay intact. (The user alone is never "another author":
+// their turns are the responder's own inputs in the ordinary case.)
 //
 // It works on a COPY — the stored messages are never mutated — and returns
-// whether the session is multi-author, so the caller can add a one-line system
-// note explaining the bracket convention.
+// whether the thread is multi-participant, so the caller can add the one-line
+// system note explaining the convention.
 func (s *Server) labelMultiAgentHistory(ctx context.Context, database *db.DB, currentAgentID string, history []db.Message) ([]db.Message, bool) {
-	// Distinct agents that authored an assistant turn so far.
+	// Work on a normalized COPY: back-fill the participant fields defensively (a
+	// caller may hand us raw history whose legacy messages predate the model) and
+	// never mutate the input. All scanning and tagging below reads this copy.
+	norm := make([]db.Message, len(history))
+	for i, m := range history {
+		m.NormalizeParticipants()
+		norm[i] = m
+	}
+	history = norm
+
+	// Distinct AGENTS that authored a turn so far (the human "user" is not counted
+	// as a separate author — see the doc comment).
 	authors := make(map[string]struct{})
 	for _, m := range history {
-		if m.Role == providers.RoleAssistant && m.AgentID != "" {
-			authors[m.AgentID] = struct{}{}
+		if m.AuthorKind == db.AuthorAgent && m.AuthorID != "" {
+			authors[m.AuthorID] = struct{}{}
 		}
 	}
-	// Attribution is needed whenever the history contains an assistant turn
-	// authored by an agent OTHER than the one now responding — otherwise the
-	// responder could mistake another agent's words for its own. This covers
-	// both a thread shared by 2+ agents AND a handed-over session (a single
-	// prior author A, now answered by B). A pure single-agent thread (only the
-	// responder has ever spoken) stays unlabeled to keep the natural transcript
-	// and prompt caching intact.
+	// Labels are needed once any agent OTHER than the responder has spoken — a
+	// thread shared by 2+ agents or a handed-over session. A pure single-agent
+	// thread (only the responder among the agents) stays unlabeled.
 	needsLabels := false
 	for id := range authors {
 		if id != currentAgentID {
@@ -74,31 +81,52 @@ func (s *Server) labelMultiAgentHistory(ctx context.Context, database *db.DB, cu
 		names[id] = name
 		return name
 	}
+	// participantLabel renders a participant id as a display name, mapping the
+	// human principal to "User" and flagging the responder itself with "(you)".
+	participantLabel := func(id string) string {
+		if id == "" {
+			return ""
+		}
+		label := nameOf(id)
+		if id == db.UserParticipantID {
+			label = "User"
+		}
+		if id == currentAgentID {
+			label += " (you)"
+		}
+		return label
+	}
 
 	out := make([]db.Message, len(history))
 	for i, m := range history {
-		switch {
-		case m.Role == providers.RoleAssistant && m.AgentID != "":
-			// Who authored this reply.
-			tag := "[" + nameOf(m.AgentID) + "]"
-			if m.AgentID == currentAgentID {
-				tag = "[" + nameOf(m.AgentID) + " (you)]"
-			}
-			m.Text = tag + ": " + m.Text
-		case m.Role == providers.RoleUser && m.AgentID != "":
-			// Who this user message was directed at (the routed recipient agent).
-			rcpt := nameOf(m.AgentID)
-			if m.AgentID == currentAgentID {
-				rcpt += " (you)"
-			}
-			m.Text = "[User → " + rcpt + "]: " + m.Text
+		// System turns (if any survive into the transcript) are left untouched.
+		if m.AuthorKind != db.AuthorAgent && m.AuthorKind != db.AuthorUser {
+			out[i] = m
+			continue
 		}
+		author := participantLabel(m.AuthorID)
+		if author == "" {
+			out[i] = m
+			continue
+		}
+		tag := "[" + author
+		switch m.RecipientID {
+		case "", db.BroadcastRecipientID:
+			// Undirected (thread at large) or broadcast: no explicit recipient.
+			if m.RecipientID == db.BroadcastRecipientID {
+				tag += " → all"
+			}
+		default:
+			tag += " → " + participantLabel(m.RecipientID)
+		}
+		m.Text = tag + "]: " + m.Text
 		out[i] = m
 	}
 	return out, true
 }
 
-// multiAgentHistoryNote is the system-prompt note added (only in a multi-author
-// session) that explains the bracket attribution convention applied to the
-// history, and tells the agent not to copy it into its own reply.
-const multiAgentHistoryNote = "This conversation is shared by MULTIPLE agents. In the history each assistant turn is prefixed with its author in brackets — e.g. \"[Ada]: …\" for another agent, and \"[<your name> (you)]: …\" for your own earlier turns — and each user turn is prefixed with the agent it was directed at — e.g. \"[User → Ada]: …\". This lets you tell exactly who said what and who each question was meant for (the user may ask). The labelling is only a reading aid: do NOT imitate it — write your own reply as plain text with no prefix."
+// multiAgentHistoryNote is the system-prompt note added (only in a multi-
+// participant thread) that explains the bracket attribution convention applied to
+// the history, tells the agent not to copy it into its own reply, and states the
+// authority order: the human "User" is the principal and outranks agent turns.
+const multiAgentHistoryNote = "This conversation is a thread shared by MULTIPLE participants — the human \"User\" and one or more agents. In the history each turn is prefixed with its author, and its recipient when directed — e.g. \"[Ada]: …\" (Ada wrote it, to the thread at large), \"[User → Bo]: …\" (the user, addressing Bo), \"[<your name> (you)]: …\" (your own earlier turn). This lets you tell exactly who said what and who each message was meant for (the user may ask). Authority: the \"User\" is the human principal and carries the highest authority — when instructions conflict, follow the User over any agent. The labelling is only a reading aid: do NOT imitate it — write your own reply as plain text with no prefix."

@@ -425,6 +425,15 @@ artık `predictedOverhead` alanı taşır → UI ilk turdan önce de uyarabilir.
 - **`--resume` (Faz 2, varsayılan açık):** tek-ajan turunda `--resume <id>` + yalnız
   delta gönderilir; CLI server-side sıcak cache'ini yeniden kullanır. Canlı: turn 2
   `cache_read≈45K`, dinamikli turda `cache_read≈55K / cacheWrite≈61`.
+  - **⚠️ Çok-katılımcılı guard (2026-07-06, `resumeGateEnabled` `multiParticipant`):**
+    generic participant modelinde bir session **birden fazla ajanla** paylaşılabilir
+    (her tur tek ajan, ama session'ın toplamı 2+). Bu durumda warm-resume **kapatılır**
+    (`len(SessionParticipants(session)) > 1`): CLI oturum id'si session-başına tutulur,
+    onu **başka bir ajan** için resume etmek (a) yanlış persona/claude-home sürdürür,
+    (b) `labelMultiAgentHistory` etiketli geçmişi ham delta ile ezip **çapraz-ajan
+    atfını yok eder** → yanıtlayan ajan diğerinin turunu kendi sesi sanır. Yalnız
+    `agentCount==1` yetmiyordu (tur başına tekti). Cold-start'a düşerek tam etiketli
+    geçmiş gider. Test: `TestResumeGateEnabled` (multi-participant vakası).
 - **Deterministik statik prefix (Faz 3):** statik prompt aynı ajan için byte-aynı
   (kataloglar Name'e göre sort'lu) → cross-session reuse mümkün.
 - **Kalıcı süreç (Faz 4, `claudePersistentSession` varsayılan AÇIK):**

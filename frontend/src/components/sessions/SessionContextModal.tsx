@@ -149,6 +149,9 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                     <Stat label={`Katlanmış (${data.droppedMessages.length})`} value={data.droppedTokens} dropped />
                   )}
                   <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
+                  {data.lazyTools.length > 0 && (
+                    <Stat label={`Talep-üzerine (${data.lazyTools.length})`} value={0} dim />
+                  )}
                   {data.cliOverhead && data.cliOverhead.measuredTokens > 0 && (
                     <Stat label="Gerçek (CLI, ölçülen)" value={data.cliOverhead.measuredTokens} accent />
                   )}
@@ -452,6 +455,51 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                   </ul>
                 )}
               </CollapsibleSection>
+
+              {/* Lazy ("load on demand") tools: schemas are NOT shipped each turn —
+                  only name+summary live in the system prompt's catalog block (already
+                  counted under Sistem). Listing them here explains why the info screen
+                  counts a much larger effective catalog (eager + these) than the small
+                  per-turn "Araçlar" schema set — the gap the user sees at 129 vs few.
+                  For a claude-cli agent these are the deferred MCP + self-management
+                  tools it activates on demand via ToolSearch across the session. */}
+              {data.lazyTools.length > 0 && (
+                <CollapsibleSection
+                  title={<>Araçlar — talep üzerine (lazy) · {data.lazyTools.length}</>}
+                  bulk={bulk}
+                >
+                  <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
+                    Şema tura girmez — yalnızca ad+özet sistem promptundaki{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1">Available Tools (load on demand)</code>{' '}
+                    bölümünde durur (token maliyeti “Sistem”de sayılır). Ajan{' '}
+                    {data.cliOverhead ? (
+                      <>
+                        bunlara CLI'nin kendi <code className="rounded bg-[var(--color-surface-2)] px-1">ToolSearch</code>'üyle
+                        ulaşır; oturum boyunca aktive edilenler sıcak kalır ama bu popup'ın “Araçlar”
+                        (her tur şema) sayısına girmez.
+                      </>
+                    ) : (
+                      <>
+                        <code className="rounded bg-[var(--color-surface-2)] px-1">activate_tools</code>{' '}
+                        ile istediğini bir sonraki adımda etkinleştirir.
+                      </>
+                    )}
+                  </p>
+                  <ul className="space-y-1">
+                    {data.lazyTools.map((t) => (
+                      <li
+                        key={t.name}
+                        className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 opacity-75"
+                      >
+                        <code className="text-xs font-medium text-[var(--color-text-dim)]">{t.name}</code>
+                        {t.description && (
+                          <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">{t.description}</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </CollapsibleSection>
+              )}
             </>
           )}
         </div>
@@ -597,11 +645,16 @@ function Stat({
   value,
   accent,
   dropped,
+  dim,
 }: {
   label: string
   value: number
   accent?: boolean
   dropped?: boolean
+  // dim marks a zero-cost chip (e.g. lazy tools): the label is shown alone, muted,
+  // with no ": token" tail so it doesn't read as "0 tokens" when the point is that
+  // the schemas never ship (their cost already lives in the Sistem segment).
+  dim?: boolean
 }) {
   const cls = dropped
     ? 'bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] text-[var(--color-warning)]'
@@ -609,8 +662,17 @@ function Stat({
       ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
       : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
   return (
-    <span className={`rounded-md px-2 py-1 ${cls}`} title={dropped ? 'Özete katlandı — toplama dahil değil' : undefined}>
-      {label}: <strong>{value.toLocaleString()}</strong>
+    <span
+      className={`rounded-md px-2 py-1 ${cls} ${dim ? 'opacity-60' : ''}`}
+      title={
+        dropped
+          ? 'Özete katlandı — toplama dahil değil'
+          : dim
+            ? 'Şema tura girmez — maliyeti Sistem segmentinde'
+            : undefined
+      }
+    >
+      {dim ? label : <>{label}: <strong>{value.toLocaleString()}</strong></>}
     </span>
   )
 }

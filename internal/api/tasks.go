@@ -100,6 +100,10 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.logger.Info("task created", "task", task.ID, "title", task.Title, "owner", req.OwnerAgentID)
+	// Broadcast so other open windows (Network live-mode, future badge
+	// listeners) refresh without polling — mirrors the updateTask branch.
+	publishEntityChange(ws(r), "board", "Görev oluşturuldu: "+task.Title, task.BoardState,
+		map[string]string{"view": "board", "taskId": task.ID, "op": "create"})
 	writeJSON(w, http.StatusCreated, task)
 }
 
@@ -128,6 +132,15 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	oldBoard := task.BoardState
+	// Snapshot the fields the Network screen renders from, so we know exactly
+	// what actually changed (vs. just which fields the request touched) and can
+	// publish a single, focused "board" event downstream.
+	oldTitle := task.Title
+	oldOwner := task.OwnerAgentID
+	oldFlowID := task.FlowID
+	oldPriority := task.Priority
+	oldTags := append([]string(nil), task.Tags...)
+	oldProgress := task.Progress
 
 	req, ok := bindJSON[updateTaskReq](w, r)
 	if !ok {
@@ -183,19 +196,63 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	// Board move → generic "board" change event so other windows badge the
 	// Görevler view + workspace label (the user's own window clears it on view).
+	// This covers the most visually loud change; non-BoardState edits below
+	// only publish when the move signal didn't already fire (no spam).
 	if req.BoardState != nil && *req.BoardState != oldBoard {
 		publishEntityChange(wsp, "board", "Görev taşındı: "+task.Title, *req.BoardState,
-			map[string]string{"view": "board", "taskId": task.ID})
+			map[string]string{"view": "board", "taskId": task.ID, "op": "move"})
+	} else {
+		// Detect *actual* changes to network-rendering fields so a no-op PATCH
+		// (request carries a field but its value is identical) doesn't trigger
+		// a useless refresh elsewhere.
+		changed := task.Title != oldTitle ||
+			task.OwnerAgentID != oldOwner ||
+			task.FlowID != oldFlowID ||
+			task.Priority != oldPriority ||
+			task.Progress != oldProgress ||
+			!equalStringSlice(task.Tags, oldTags)
+		if changed {
+			publishEntityChange(wsp, "board", "Görev güncellendi: "+task.Title, task.BoardState,
+				map[string]string{"view": "board", "taskId": task.ID, "op": "update"})
+		}
 	}
 	writeJSON(w, http.StatusOK, task)
 }
 
+// equalStringSlice reports whether two string slices contain the same elements
+// in the same order. Used to detect *real* tag-list changes (vs. a PATCH that
+// re-sent an identical array).
+func equalStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
-	err := ws(r).DB.DeleteTask(r.Context(), r.PathValue("id"))
+	wsp := ws(r)
+	ctx := r.Context()
+	id := r.PathValue("id")
+	// Read the task first so the broadcast carries its title (deleted rows no
+	// longer exist when listeners process the event a moment later).
+	task, err := wsp.DB.GetTask(ctx, id)
 	if writeDBError(w, err, "task not found") {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"id": r.PathValue("id"), "result": "deleted"})
+	if err := wsp.DB.DeleteTask(ctx, id); writeDBError(w, err, "task not found") {
+		return
+	}
+	s.logger.Info("task deleted", "task", id, "title", task.Title)
+	// Mirror handleUpdateTask's "board" notify so the Network screen drops
+	// the node immediately (live-mode SSE subscriptions refresh on notify).
+	publishEntityChange(wsp, "board", "Görev silindi: "+task.Title, task.BoardState,
+		map[string]string{"view": "board", "taskId": id, "op": "delete"})
+	writeJSON(w, http.StatusOK, map[string]string{"id": id, "result": "deleted"})
 }
 
 // handleGenerateTaskTitle (re)generates a task's title from its prompt (falling

@@ -1,0 +1,5 @@
+{
+  "id": "report",
+  "description": "A branded report sheet: title, subtitle/date, summary, and a list of heading+body sections.",
+  "requiredFields": ["title", "items"]
+}

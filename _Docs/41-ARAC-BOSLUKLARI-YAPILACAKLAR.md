@@ -25,7 +25,7 @@
 | 5 | `get_session_info` | Yeni araç | **P2** | ✅ Tamamlandı (2026-07-03) |
 | 6 | `set_session_labels` / `set_session_status` | Yeni araç | **P2** | ❌ Kapsam dışı (2026-07-03 — `set_session_tags` + `archive_session`/Kanban karşılıyor) |
 | 7 | `update_user_preferences` | Yeni araç | **P2** | ✅ Tamamlandı (2026-07-03) |
-| 8 | `render_template` | Yeni araç | **P2** | Açık |
+| 8 | `render_template` | Yeni araç | **P2** | ✅ Tamamlandı (2026-07-06 — _Docs/53) |
 | 9 | `source_credential_prompt` benzeri güvenli credential UI | Yeni araç | **P3** | Açık |
 | 10 | `Monitor` (koşul bekleme) | Yeni araç | **P3** | Açık |
 | 11 | `EnterWorktree` / `ExitWorktree` (ajan-kontrollü) | Yeni araç | **P3** | Açık |
@@ -152,18 +152,26 @@
 - **Kayıt:** `settingsBridge` varken (`toolsetup.go`); tier `MarkNameOnly`; claude-cli köprüsü
   `runtime.go BridgeTools` `extra`. Risk: haritalanmadı → varsayılan `RiskWrite`; kategori `config`.
 
-### 8. `render_template` — şablonlu çıktı render — **P2**
+### 8. `render_template` — şablonlu çıktı render — **P2** — ✅ Tamamlandı (2026-07-06)
 
-- **Durum:** Yok. Artifact sistemi var ama kaynak/veriden **Mustache/HTML şablonu** ile tutarlı,
-  markalı çıktı (rapor/önizleme/e-posta) üretecek araç yok.
-- **Neden önemli:** Ajanların ürettiği raporları/önizlemeleri her seferinde elle HTML yazmak yerine
-  şablonla render etmek tutarlılık + token tasarrufu sağlar; artifact olarak saklanır.
-- **Yaklaşım:** `source/template/data` → render → artifact. Go tarafında hafif bir template motoru
-  (`text/template` veya bir Mustache kütüphanesi — go.mod minimalizmi gözetilerek). Şablonlar workspace
-  altında saklanır.
-- **Dosyalar:** yeni `internal/tools/builtin_rendertemplate.go` (+ test), şablon depolama konvansiyonu,
-  artifact entegrasyonu.
-- **Risk sınıfı:** `RiskWrite`.
+- **Durum:** ✅ Yapıldı. Ayrıntılı tasarım + uygulama: **_Docs/53-SOURCE-TEMPLATES-RENDER.md**.
+- **Ne yapıldı (özet):**
+  - Motor: Go **`html/template`** (auto-escape / XSS-güvenli), naive string-ikame değil.
+  - Araç: `internal/tools/builtin_render_template.go` (+ `render_template.go` saf motor + test).
+    `template` (mutlak yol) + `data` (JSON) → **session render dir**'e yazar, modele **yalnız yol +
+    uyarılar** döner (HTML değil → token tasarrufu). Session-scoped; session yoksa hard-fail.
+  - Soft-validation: sidecar `<template>.meta.json` `requiredFields` → eksik alan **SOFT** (render + warning),
+    bozuk template / JSON / sidecar **HARD** (CLAUDE.md "sessizce yutma" ilkesi).
+  - Inline gösterim: yeni ```` ```html-preview ```` bloğu (`HtmlPreview.tsx`) — izole sandbox iframe
+    (`allow-scripts`, `allow-same-origin` YOK → opaque origin). Backend `GET /api/files?...&as=text`
+    yalnız render kökü altını `text/plain` ile servis eder.
+  - Depolama: **skill-bundled** (`tionswarm-templates` skill; `${SKILL_DIR}/templates/*.html`), yeni
+    "Sources/template store" alt-sistemi kurulmadı.
+- **Dosyalar:** `internal/tools/{render_template.go, builtin_render_template.go, *_test.go}`,
+  `internal/agent/renderdir.go` + `toolsetup.go`, `internal/api/files.go`,
+  `frontend/src/components/markdown/{HtmlPreview.tsx, CodeBlock.tsx}`, `frontend/src/lib/attachments.tsx`,
+  `internal/skills/defaults/tionswarm-templates/**`, prompt + guard güncellendi.
+- **Risk sınıfı:** `RiskWrite` (kontrollü: yalnız render dir'e yazar, çıktı adı basename'e indirgenir).
 
 ### 9. `source_credential_prompt` benzeri güvenli credential giriş UI — **P3**
 
@@ -294,7 +302,8 @@ the external agent project'ta olup TionSwarm'nun **kapsam/felsefe farkı** neden
 1. **Dalga 1 (P0–P1):** `WebSearch`, `call_llm` (veya `run_subagent` hafif mod), `transform_data`/
    `script_sandbox`, `PowerShell`. En yüksek getiri/çaba.
 2. **Dalga 2 (P2):** ~~`get_session_info`~~ ✅, ~~`set_session_labels`/`set_session_status`~~ ❌ kapsam
-   dışı, ~~`update_user_preferences`~~ ✅ (üçü 2026-07-03'te kapandı) — kalan: `render_template`.
+   dışı, ~~`update_user_preferences`~~ ✅ (üçü 2026-07-03'te kapandı), ~~`render_template`~~ ✅
+   (2026-07-06, _Docs/53) — **Dalga 2 tamamlandı.**
 3. **Dalga 3 (P3–P4):** `Monitor`, `EnterWorktree`/`ExitWorktree`, güvenli credential UI, `NotebookEdit`.
 
 Her araç eklemesinde ortak kontrol listesi:

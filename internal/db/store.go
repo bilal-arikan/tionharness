@@ -481,8 +481,9 @@ func (d *DB) DeleteSession(ctx context.Context, sessionID string) error {
 
 // deleteSessionFilesLocked removes a session's artifacts when the session is
 // deleted: every artifact entity (JSON) belonging to it and the per-session file
-// folder (workspace/artifacts/<sid>/) that holds their content/uploads, so the
-// files don't outlive the session. Caller holds d.mu.
+// folder (workspace/artifacts/<sid>/) that holds their content/uploads, plus the
+// session's transient render_template output (<root>/render/<sid>/), so none of
+// it outlives the session. Caller holds d.mu.
 func (d *DB) deleteSessionFilesLocked(sessionID string) {
 	for id, a := range d.artifacts {
 		if a.SessionID == sessionID {
@@ -491,6 +492,7 @@ func (d *DB) deleteSessionFilesLocked(sessionID string) {
 		}
 	}
 	_ = os.RemoveAll(d.ArtifactsDir(sessionID))
+	_ = os.RemoveAll(d.RenderDir(sessionID))
 }
 
 // SessionDir returns the absolute folder holding a session's JSONL file.
@@ -552,6 +554,9 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	if m.Steps == "" {
 		m.Steps = "[]"
 	}
+	// Ensure the participant fields are populated before the line is persisted, so
+	// the on-disk transcript is canonical (author/recipient recorded, not derived).
+	m.NormalizeParticipants()
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -566,6 +571,11 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	if m.Role == "assistant" {
 		s.Unread = true
 	}
+	// Keep the participant roster in sync: any agent that authors a message or is
+	// addressed by one joins the thread. The human "user" and broadcast ("*") are
+	// implicit and never stored in the roster.
+	s.Participants = addParticipant(s.Participants, m.AuthorKind, m.AuthorID)
+	s.Participants = addParticipant(s.Participants, AuthorAgent, m.RecipientID)
 	d.sessions[s.ID] = s
 	// Hot path: append only the new message line (O(1)) instead of rewriting the
 	// whole conversation file (which was O(n) per message → O(n²) per session).
@@ -573,6 +583,21 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	// recomputed from the message lines on load and refreshed by the next full
 	// rewrite (title/summary change).
 	return m, d.appendMessageLocked(s.ID, m)
+}
+
+// addParticipant appends an agent id to a session's participant roster when it is
+// a real, not-yet-present agent participant. Only AuthorAgent ids join: the human
+// "user", the broadcast marker "*", and empty ids are implicit and never stored.
+func addParticipant(list []string, kind, id string) []string {
+	if kind != AuthorAgent || id == "" || id == UserParticipantID || id == BroadcastRecipientID {
+		return list
+	}
+	for _, x := range list {
+		if x == id {
+			return list
+		}
+	}
+	return append(list, id)
 }
 
 // appendMessageLocked appends a single encoded message line to a session's
@@ -749,11 +774,21 @@ func readSessionFile(path string) (Session, []Message, error) {
 			}
 			return Session{}, nil, err
 		}
+		// Back-fill the participant fields for messages stored before the model
+		// (idempotent once set), so consumers never see empty AuthorKind on legacy
+		// transcripts. No disk rewrite — this is an in-memory projection.
+		m.NormalizeParticipants()
 		msgs = append(msgs, m)
 	}
 	// The append hot-path leaves the header's counters stale; recompute them from
-	// the actual message lines so in-memory state is always authoritative.
+	// the actual message lines so in-memory state is always authoritative. The
+	// participant roster is rebuilt the same way (an agent added via the append
+	// path never reached the header), so it self-heals across a restart.
 	s.MessageCount = len(msgs)
+	for _, m := range msgs {
+		s.Participants = addParticipant(s.Participants, m.AuthorKind, m.AuthorID)
+		s.Participants = addParticipant(s.Participants, AuthorAgent, m.RecipientID)
+	}
 	if n := len(msgs); n > 0 && msgs[n-1].CreatedAt > s.UpdatedAt {
 		s.UpdatedAt = msgs[n-1].CreatedAt
 	}

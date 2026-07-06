@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import type { Agent, Message } from '../../types'
 import { api } from '../../api'
+import { useRefreshTrigger } from '../../hooks/useRefreshTrigger'
 import { copyToClipboard } from '../../lib/clipboard'
 import { MessageList } from '../chat/MessageList'
 import { AgentAvatar } from '../agents/AgentAvatar'
@@ -189,6 +190,27 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
     }, RUNNING_POLL_MS)
     return () => clearInterval(t)
   }, [selectedId, selectedRunning])
+
+  // Cross-window live sync: App.tsx's central SSE handler bumps the
+  // 'executions' refresh signal on every chat / flow / schedule / spawn /
+  // worker / task / session event in the active workspace. We re-pull the
+  // list AND (if there's a selected execution) its transcript so the user
+  // sees both the new row + the new assistant message. The central
+  // dispatcher applies the workspace filter + 200ms debounce once; this
+  // panel is just a consumer.
+  const executionsTick = useRefreshTrigger('executions')
+  useEffect(() => {
+    reloadItems()
+    const sid = selectedRef.current
+    if (sid) {
+      api
+        .listMessages(sid)
+        .then((m) => {
+          if (selectedRef.current === sid) setMessages(m)
+        })
+        .catch(() => { /* best-effort */ })
+    }
+  }, [executionsTick, reloadItems])
 
   return (
     <div className="flex h-full min-h-0">

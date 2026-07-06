@@ -44,7 +44,6 @@ interface Props {
   onSetFavoriteWorkspace?: (id: string) => void
   onSwitchWorkspace: (id: string) => void
   onCreateWorkspace: (data: NewWorkspaceData) => void
-  onDeleteWorkspace: (id: string) => void
 }
 
 // NAV is the primary view list. Exported so the mobile bottom bar renders the
@@ -153,7 +152,6 @@ export function NavRail({
   onSetFavoriteWorkspace,
   onSwitchWorkspace,
   onCreateWorkspace,
-  onDeleteWorkspace,
 }: Props) {
   // The active workspace's signals rolled up for its label: any busy view, any
   // unsaved edit. (Other workspaces surface via the unread-badge set.)
@@ -219,7 +217,10 @@ export function NavRail({
           onToggleFavorite={onSetFavoriteWorkspace}
           onSwitch={onSwitchWorkspace}
           onCreate={onCreateWorkspace}
-          onDelete={onDeleteWorkspace}
+          onOpenSettings={(id) => {
+            onSwitchWorkspace(id)
+            onSelectView('workspace')
+          }}
           trailing={
             <button
               onClick={() => setCollapsed(true)}

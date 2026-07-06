@@ -195,8 +195,10 @@ export function LogsPanel({ onError }: Props) {
                 title={g.count > 1 ? `${clockTime(g.firstTime)} → ${clockTime(g.lastTime)}` : fmtTime(e.time)}
               >
                 {clockTime(e.time)}
-                {/* Milliseconds hidden on a narrow panel to save horizontal room. */}
-                <span className="hidden @sm:inline">.{msPart(e.time)}</span>
+                {/* Milliseconds only on a genuinely wide panel (@2xl ≈ 672px) — on
+                    narrow/medium widths they crowd the row and add little (the full
+                    time incl. ms is always in the row's title tooltip). */}
+                <span className="hidden @2xl:inline">.{msPart(e.time)}</span>
               </span>
               {/* Level: single-letter (I/W/E/D) when narrow, full label when wide. */}
               <span

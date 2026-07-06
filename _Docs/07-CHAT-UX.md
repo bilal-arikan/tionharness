@@ -123,7 +123,15 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   sanılıp yerel yollar düşürülür); Windows ters-bölü yolları parse öncesi `/`'e
   normalize edilir.
 - `CodeBlock.tsx` — dil etiketi + kopyala düğmesi + `highlight.js` vurgusu;
-  `diff` blokları `DiffView`'e, `mermaid` blokları `MermaidDiagram`'a gider.
+  `diff` blokları `DiffView`'e, `mermaid` blokları `MermaidDiagram`'a, `gallery`/
+  `image-preview` `Gallery`'ye, `html-preview` `HtmlPreview`'e gider.
+- `HtmlPreview.tsx` — ```` ```html-preview ```` bloğunu **izole sandbox iframe**'de
+  inline render eder (2026-07-06, _Docs/53). Gövde JSON `{"src":"<abs>.html","title"}`
+  ya da çoklu-sekme `{"items":[{"src","label"}]}`. Dosya **metin olarak** `fileTextURL`
+  (`/api/files?...&as=text`) ile çekilir → `<iframe srcDoc sandbox="allow-scripts">`
+  (opaque origin: script çalışır ama parent DOM/cookie/API'ye erişemez). Backend
+  `as=text` yalnız workspace **render kökü** (`<store>/render/`) altını `text/plain`
+  ile servis eder; asla `text/html` değil. Kaynak: `render_template` aracı çıktısı.
 - `DiffView.tsx` — unified diff'i satır bazlı +/- renkli ve `+N / −M` istatistik
   başlığıyla çizer (`lib/diff.ts` ayrıştırır).
 - `MermaidDiagram.tsx` — ```` ```mermaid ```` blokunu **tema-duyarlı SVG**'ye
@@ -255,7 +263,10 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   (`tionswarm.thinkingLevel`) ile kalıcı; `chatStream` gövdesine `thinkingLevel` olarak gider
   ve o turun reasoning bütçesini **ajan ayarından bağımsız** belirler (bkz. Notlar).
 
-### Session-bazlı sohbet (tek ajan, dropdown ile seçim)
+### Session-bazlı sohbet (varsayılan ajan + çok-katılımcılı thread)
+> Bir oturum **çok-katılımcılı** olabilir (aşağıdaki "Generic participant modeli"):
+> `AgentID` varsayılan yanıtlayıcıdır, dropdown'dan başka bir ajan seçmek turu ona
+> yönlendirir ve o ajanı thread'e katar. "Her seferinde tek ajan" akışı budur.
 - Sohbet **session-bazlı**: sol panel (`SessionsSidebar.tsx`) oturumları **zaman
   kovalarına** gruplar (Bugün/Dün/Geçen hafta/Geçen ay/Daha eski; ajan altında gruplama
   yok), `updatedAt` desc; her oturum **tek bir ajana bağlıdır** (`Session.AgentID`) ve
@@ -292,6 +303,39 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   `agents[0]`); metindeki `@Ad` yalnız bilgi amaçlıdır, yönlendirme yapmaz. Çok-yazarlı
   geçmişte kullanıcı turları `"[User → Ada]: …"` olarak etiketlenir → ajan **hangi
   sorunun kime sorulduğunu** da görür. (1:1 oturumda etiket çıkmaz.)
+- **Generic participant modeli (2026-07-06):** Oturum artık **çok-katılımcılı bir
+  thread** olarak modellenir: örtük **`user`** (insan, en üst yetkili principal) +
+  bir veya daha fazla ajan. Her mesaj `Message.AuthorKind` (`user`|`agent`|`system`)
+  + `AuthorID` (ajan id / `user`) + `RecipientID` (ajan id / `*` broadcast / boş =
+  thread geneli) taşır (`db/models.go`). Alanlar her yazımda `NormalizeParticipants`
+  ile Role+legacy `AgentID`'den türetilir (assistant→author=AgentID, user→
+  author=`user` & recipient=AgentID) → **eski `session.jsonl` migrationsuz** okunur.
+  `Session.Participants` roster'ı, bir ajan yazdıkça/adres alındıkça büyür; append
+  hot-path header'ı tazelemediği için **reload'da mesaj satırlarından yeniden
+  hesaplanır** (MessageCount gibi self-healing; `user` ve `*` roster'a yazılmaz).
+  `AgentID` **varsayılan yanıtlayıcı** olarak kalır; `Participants` composer'ın
+  yönlendirebileceği tam kümedir (`SessionParticipants` legacy boş roster'da
+  `[AgentID]`'e düşer). `labelMultiAgentHistory` artık bu alanlardan çalışır:
+  `"[Author → Recipient]: …"` (yön yoksa oksuz, broadcast `→ all`), yanıtlayanın
+  kendi turu `(you)`. Sistem notu (`multiAgentHistoryNote`) **yetki sırasını** da
+  belirtir: `User` insan principal'dir, çelişkide ajan yerine User izlenir. Not:
+  provider rol üçlüsü (`system`/`user`/`assistant`) sabit olduğundan katılımcılar
+  **rol-flip edilmez**, yalnız metin etiketlenir → 1:1 için prompt-cache korunur.
+  Frontend: `Session.participants` tipe eklendi; her balon yazarını zaten
+  `m.agentId`'den çizer (`MessageList`). Testler: `db/participants_test.go`,
+  `chat_authors_test.go` (directed/broadcast).
+- **RecipientID yön rozeti (frontend, 2026-07-06):** `Message` tipine `authorKind`/
+  `authorId`/`recipientId` eklendi. `DirectionBadge.tsx` bir turun `recipientId`'sinden
+  **"→ &lt;ad&gt;"** ipucu çizer (broadcast `*` → "herkes"; boş = thread geneli, rozet yok).
+  `MessageList` yalnız **çok-katılımcılı** thread'de (2+ ayrı ajan yazar/adres) gösterir —
+  1:1 sohbet temiz kalır: asistan balonunda `AgentHeader` yanında, user balonunda meta
+  satırında. Asistan yanıtları normal sohbette thread-geneli (RecipientID boş); yönlü
+  atıf şimdilik **inbox/peer** mesajlarında görünür (`agentmsg.go` katılımcı damgası).
+- **Inbox mesajı genericleştirildi (2026-07-06):** `agent/agentmsg.go: deliverOne` inbox
+  mesajına `AuthorKind=agent`/`AuthorID=fromAgentID`/`RecipientID=target.ID` damgalar →
+  gönderen ajan inbox thread'inin katılımcısı olur, `labelMultiAgentHistory` (inbox turu
+  `wake_turn.go` üzerinden bundan geçer) mesajı `[Gönderen → Alıcı (you)]` atfeder.
+  Detay `_Docs/47`.
 - **Sıradaki-tur bağlam önizleme (debug, 2026-06-23):** Agent ekranındaki bağlam
   önizlemesinin oturum karşılığı. SessionDetailPanel → **"Bağlam önizle (debug)"** →
   `SessionContextModal`, `GET /api/sessions/{id}/context-preview?message=`. Ajanın bu
@@ -305,6 +349,17 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   turu yönlendirildiği ajan (`→ Ad`). Tek-ajan oturumunda da görünür (metinde `[Ad]:`
   prefix'i yokken bile). `previewMessage.author/self` alanları, modele giden user/assistant
   turlarıyla 1:1 hizalı kurulur (`composeTurnRequest` `prep.Messages`'i değiştirmez).
+- **Arka-plan süreç kontrolü (SessionDetailPanel, 2026-07-06):** Oturum bilgisi paneli,
+  o oturum için **uçuştaki turu** (background provider/claude-cli süreci) ve varsa
+  **sıcak persistent-pool sürecini** gösterir + kontrol ettirir. Kaynak `GET /info` yeni
+  `running {runId, startedAt, autonomous, provider}` + `warmCliProcess` alanları
+  (`chatRuns.sessionRunInfo` + `Runtime.HasWarmCLISession`). Butonlar: **Durdur**
+  (`POST /api/chat/control {action:stop}` → `run.cancel()` → subprocess ölür),
+  **Yeniden başlat** (chat hook `rerunLast` — backend runId ile durdur, son promptu
+  yeniden gönder), **Tazele** (`DELETE /api/sessions/{id}/cli-process` →
+  `CLISessionPool.DropSession`, sonraki tur cold-restart, konuşma korunur). Kart, süreç
+  canlıyken 3sn'de bir poll eder + geçen-süre sayacı gösterir; detached/otonom turlar için
+  de çalışır (runId backend'den gelir, pencere sahipliğine bağlı değil).
 - **Son turların araç I/O özeti (2026-06-23):** Geçmiş provider'a çevrilirken araç
   çağrı/sonuçları düşüyordu (`toProviderMessages` yalnız metin) → ajan "az önce ne
   yaptın / o komut ne döndü" diye soramıyordu. Artık `Prepare`'den önce son **N=4**

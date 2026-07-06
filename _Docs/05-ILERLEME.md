@@ -1,6 +1,162 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-05**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-06**
+
+## `render_template` + `html-preview` (şablonlu HTML render) ✅ (2026-07-06)
+
+**İstek:** the external agent project'ın "Source Templates / `render_template`" özelliğini TionSwarm'a taşı —
+motor markalı HTML şablonu doldurur, modele **yalnız dosya yolu** döner (HTML değil → token
+tasarrufu), sohbette **inline izole iframe**'de gösterilir. Tam tasarım: **_Docs/53**.
+
+**Ne yapıldı:**
+- **Motor:** Go `html/template` (auto-escape/XSS-güvenli). `internal/tools/render_template.go`
+  (saf: render + sidecar `.meta.json` oku + missing-field), `builtin_render_template.go` (Tool),
+  `builtin_render_template_test.go` (8 test: escape, soft-warn, hard-fail'ler, traversal, no-session).
+- **Session çıktı dizini:** `internal/agent/renderdir.go` `SessionRenderDir` = `<db.Root>/render/<sid>`
+  (`progress/`'in kardeşi). Session yoksa boş → araç hard-fail.
+- **Kayıt:** `toolsetup.go` builtins + `MarkNameOnly("render_template")`. Shell gate GEREKTİRMEZ (saf render).
+- **Servis:** `internal/api/files.go` `serveTextFile` — `GET /api/files?path&as=text` yalnız render
+  kökü altını (`underDir` whitelist) `text/plain`+`nosniff` ile döndürür (asla `text/html`).
+- **Inline UI:** `HtmlPreview.tsx` (```html-preview``` → `<iframe srcDoc sandbox="allow-scripts">`,
+  opaque origin, tab desteği) + `CodeBlock.tsx` dispatch + `attachments.tsx` `fileTextURL`.
+- **Şablonlar:** skill-bundled `tionswarm-templates` (report + email şablonu + meta). "Template store"
+  alt-sistemi KURULMADI (source kavramı yok; `${SKILL_DIR}` yeterli).
+- **Soft vs hard:** eksik `requiredField` → render + warning; bozuk template/JSON/sidecar → hata.
+- **Prompt + guard:** "## Rendering"e `html-preview`/`render_template` eklendi; `defaults_test.go`
+  bu ikisini yasak listesinden çıkardı (artık TionSwarm-native).
+- **Ömür/temizlik (aynı gün eklendi):** render çıktısı iki katmanda toplanır —
+  `deleteSessionFilesLocked` session silmede `<render>/<sid>`'i siler; `DB.Open` → `cleanupRenders`
+  startup'ta orphan dizinleri + `renderTTL` (14g) üstü eski dosyaları temizler, boş dizini budar.
+  Yol tek kaynak `db.RenderDir(sid)`. Dosyalar: `internal/db/render_cleanup.go` + 3 test.
+
+**Doğrulama:** `go build ./...` ✓, `go vet` ✓, tools+agent 304 test ✓, db+agent 169 test ✓ (render sweep 3/3),
+workspace+skills 35 test ✓, `tsc` ✓.
+**AÇIK:** UI'da gerçek bir render'ın görsel doğrulaması (iframe + `as=text` fetch) canlı denemeyle yapılmalı.
+
+## Uygulama-içi claude-cli OAuth login (tarayıcıyla, popup senkron) ✅ (2026-07-06)
+
+**İstek:** Terminal açmadan, popup'tan tıklayarak Max/Pro girişi — link verilir, tarayıcı
+açılır, popup'a koddan yapıştırılır, arka planda kimlik senkron yazılır.
+
+**Yaklaşım B (native PKCE):** `claude setup-token`/`auth login` interaktif TUI'sini sürmek
+yerine OAuth authorization-code + PKCE akışını **Go'da kendimiz** kurduk. Sabitler kurulu
+CLI binary'sinden (v2.1.201) + public client-metadata dokümanından çıkarıldı (domain'ler
+`platform.claude.com`/`claude.com/cai`'ye taşınmış — eski `console.anthropic.com` değil):
+- client_id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`, authorize `claude.com/cai/oauth/authorize`,
+  token `platform.claude.com/v1/oauth/token`, redirect `platform.claude.com/oauth/code/callback`, S256.
+
+**Parçalar:**
+- `internal/claudeauth/oauth.go` — `Begin()` (PKCE verifier/state + authorize URL),
+  `Exchange()` (kod→credential, state doğrulama, `code#state` parse), `WriteCredentials()`
+  (`<home>/.credentials.json`'a `claudeAiOauth{...}` atomik yaz, .bak yedek). Birim test 3/3.
+- API: `POST /api/workspace-settings/claude-auth/oauth/{start,complete}` — start URL+flowId
+  döner (verifier server-side stash, 10dk TTL), complete kodu exchange edip **aktif
+  workspace'in claude-home'una** yazar (refresh token'lı → CLI kendi tazeler).
+- Frontend: `ClaudeAuthDialog`'a **"Tarayıcıyla giriş"** sekmesi (varsayılan) — "Giriş başlat"
+  → URL aç → `kod#state` yapıştır → "Girişi tamamla" → ✓. Manuel token-paste + API-key
+  sekmeleri yedek kaldı. `api.startClaudeOAuth`/`completeClaudeOAuth`.
+
+**AÇIK DOĞRULAMA:** Canlı token-exchange (platform.claude.com'a gerçek POST) yalnız gerçek
+bir login ile doğrulanabilir — sabitler doğru ama scope/param ince ayarı gerekirse tek dosya
+(`oauth.go` const bloğu). Go build+vet+78 test yeşil, tsc temiz.
+
+**Loopback (paste'siz) varyant ✅ (2026-07-06):** İkinci akış eklendi — client-metadata
+`http://127.0.0.1:<port>/callback` redirect'ini kullanır (client_id = metadata URL,
+`LoopbackConfig`). Backend efemeral portta yerel dinleyici açar (`claude_oauth_loopback.go`);
+tarayıcı yetkilendirmeden sonra doğrudan geri döner, callback handler kodu exchange edip
+credential'ı yazar, tarayıcıya HTML başarı sayfası basar. Popup `.../oauth/loopback/status`'ı
+poll eder → paste GEREKMEZ. `oauth.go` `Begin`→`BeginWith(FlowConfig)` refaktörüyle iki akış
+tek çekirdeği paylaşır (`PendingLogin` client/redirect taşır). Popup'ta "Otomatik (önerilen)"
+vs "Elle kod" alt-modu; otomatik varsayılan. Yalnız tarayıcı backend ile aynı makinedeyken
+(masaüstü/yerel) çalışır — uzak/LAN'da manuel-paste'e düşülür.
+
+**Rebuild+test (2026-07-06):** `go build ./cmd/tionswarm` (binary + gömülü dist) ✓,
+`go vet ./...` ✓, `go test ./...` **673 test / 34 paket** ✓, frontend `npm run build` ✓, tsc temiz.
+
+## Oturum bilgisi panelinde arka-plan süreç kontrolü (gör/durdur/yeniden başlat/tazele) ✅ (2026-07-06)
+
+**İstek:** Bir sohbetin arkasında çalışan claude-cli/provider işlemini "Oturum bilgisi"
+panelinde görebilmek ve durdurma/yeniden başlatma yapabilmek. 3 tier uygulandı:
+
+**Tier 1 — Gör + Durdur (backend-driven, detached/autonomous turlar için de sağlam):**
+- `chatRun`'a `startedAt` + `provider` (setter `setProvider`, `chat_stream` agents[0]'dan
+  doldurur); `chatRuns.sessionRunInfo(sid)` snapshot döndürür.
+- `sessionInfoResp`'e `running {runId, startedAt, autonomous, provider}` + `warmCliProcess`.
+- Panelde canlı "Tur çalışıyor" kartı (geçen süre sayacı, provider rozeti) + **Durdur** →
+  mevcut `POST /api/chat/control {action:stop}` → `run.cancel()` → `exec.CommandContext`
+  claude.exe'yi öldürür. Panel `running`/`warmCliProcess` varken 3sn'de bir poll eder.
+
+**Tier 2 — Yeniden başlat:** chat hook'una `rerunLast()` (son asistan turunu `retryMessage`
+ile tekrar; yoksa son user mesajını yeniden gönder) → App `onRerun` ile panele bağlar.
+Panel önce backend runId ile durdurur, sonra yeniden gönderir (tek gerçek tur yolu korunur).
+
+**Tier 3 — Persistent süreç tazeleme:** `CLISessionPool`'a `AliveForSession`/`DropSession`
+(pool anahtarı `<sid>|<agentID>` prefix eşleşmesi) + Runtime `HasWarmCLISession`/
+`DropWarmCLISession` + `DELETE /api/sessions/{id}/cli-process`. Panelde "Sıcak claude-cli
+süreci" satırı + **Tazele** → sonraki tur cold-restart (konuşma korunur). Yalnız
+persistent-pool modunda görünür.
+
+**Dosyalar:** `internal/api/{chat_control,chat_stream,session_info,sessions,server}.go`,
+`internal/agent/runtime.go`, `internal/providers/claudecli_session.go`,
+`frontend/src/{types/session.ts, api/sessions.ts, hooks/useChatStream.ts,
+components/sessions/SessionDetailPanel.tsx, App.tsx}`. Go build+vet+159 test yeşil, tsc temiz.
+
+## claude-cli auth hatası: sınıflandırma + ön-uçuş probe + terminal etiket ✅ (2026-07-06)
+
+**Problem:** claude-cli sağlayıcılı bir ajanın workspace claude-home'u giriş yapmamışsa
+tur ilk LLM çağrısında `authentication_failed` / "Not logged in · Please run /login"
+ile reddediliyordu. Bu hata **jenerik `claude CLI failed: exit status 1`'e** düşüyor,
+`retryable=true` ile **boşuna 2. kez** deneniyor, kullanıcıya hangi claude-home'un login
+gerektirdiği söylenmiyordu. (Rate-limit için çözülmüştü, auth atlanmıştı.)
+
+**5 maddelik çözüm:**
+1. **Sınıflandırma (retry-EDİLMEZ):** `claudecli.go` yeni `isAuthErrorText` +
+   parser `notLoggedIn`/`authMsg` alanları; `feed()` hem standalone
+   `{"error":"authentication_failed"}` satırını (yeni `cliEvent.Error`) hem result-error'ı
+   yakalar. `runAttempt` rate-limit dalının üstünde net, retry-edilmez auth hatası döndürür.
+2. **Aksiyon mesajı:** Hata metni ilgili `CLAUDE_CONFIG_DIR=<claude-home>` yolunu + "`claude
+   /login` çalıştır veya API-key sağlayıcıya al" önerisini gömer.
+3. **Ön-uçuş probe:** `ClaudeCLI.ProbeAuth(ctx)` (araçsız minimal `claude -p`, aktif
+   workspace'in claude-home'unu test eder) + `GET /api/workspace-settings/claude-auth`
+   (`handleWorkspaceClaudeAuth`) + Ayarlar→Sağlayıcılar'da **"Bu workspace login doğrula"**
+   butonu (`ProvidersPanel.tsx`, `api.checkWorkspaceClaudeAuth`). Not: jenerik "Test et"
+   global config dir'i dener; bu probe workspace-özeldir.
+4. **Terminal etiket:** `autotag.go` yeni `TagAuthError = "auth-error"` — auth hatası
+   turlarına `error`'a ek olarak eklenir; auto-repair otomasyonu bunu **dışlamalı**
+   (login onarılamaz, aksi halde MaxIterations'a kadar boşuna döner).
+5. **Doküman:** `tionswarm-session-debug` skill'ine "I) authentication_failed" deseni +
+   ön-uçuş probe reçetesi eklendi.
+
+**Dosyalar:** `internal/providers/claudecli.go`, `internal/agent/autotag.go`,
+`internal/api/workspace_settings.go` + `server.go` (route), `frontend/src/api/workspaces.ts`,
+`frontend/src/components/settings/ProvidersPanel.tsx`. Go `build ./...` + `tsc --noEmit` yeşil.
+
+## Schedule manuel "Run" turu sayfa yenileyince kesiliyordu ✅ (2026-07-05)
+
+**Bug:** Bir schedule'ı elle "Run" ile çalıştırıp (senkron `POST /api/schedules/{id}/run`)
+tur devam ederken sayfayı yenileyince/başka yere gidince tur **yarıda kalıyordu**
+(yarım asistan cevabı persist, `lastDeliveryStatus=success`, hata bayrağı yok).
+
+**Kök neden:** `handleRunSchedule` → `Scheduler.RunNow(r.Context(), id)` turu **istek
+context'ine** bağlıyordu. Tarayıcı yenileme POST'u abort eder → `r.Context()` iptal →
+`deliverPrompt`/`invokeTraced`/claude-cli turu üretim ortasında iptal. (Cron-fire zaten
+`context.Background()` ile detach; sadece manuel Run bağlıydı.)
+
+**Fix:** `handleRunSchedule` artık turu istekten ayırıyor:
+`context.WithTimeout(context.WithoutCancel(r.Context()), 10*dk)` — chat-stream detach'ı
+gibi. Böylece yenileme/navigasyon turu kesmiyor; 10dk güvenlik timeout'u hung run'ı sınırlar.
+
+**Doğrulama (empirik):** eski binary'de RunNow'ı 12sn'de abort → tur 12sn'de kesildi
+(out=4, partial). Fix'li binary'de aynı abort → tur detached tamamlandı (2045 char, 197sn).
+Kesintisiz RunNow zaten tam çalışıyordu (175sn, tam plan + artifact). Dosya:
+`internal/api/schedules.go`.
+
+**Flow tarafı (kontrol edildi, değişiklik gerekmedi):** 4 flow-run endpoint'i
+(`handleRunFlow`/`handleRunFlowStream`/`handleSessionRunFlow`/`handleSessionRunFlowStream`)
+zaten `context.WithoutCancel` ile detached (`flows.go`). **Flow-backed schedule** manuel
+Run'ı aynı `Scheduler.run(ctx)` → `deliverFlow` yolundan geçtiği için bu fix onu da
+kapsar. Cron/automation/agent-tool flow yolları zaten server-side (istemciye bağlı değil).
+Tek boşluk prompt-backed schedule manuel Run'dı.
 
 ## İlk kurulum: "Mevcut Workspace Seç" butonu ✅ (2026-07-05)
 

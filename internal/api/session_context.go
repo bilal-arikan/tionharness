@@ -47,6 +47,13 @@ type sessionContextPreview struct {
 	DroppedTokens   int              `json:"droppedTokens"`
 	Tools         []toolSummary    `json:"tools"`
 	ToolTokens    int              `json:"toolTokens"`
+	// LazyTools are the on-demand tools whose schemas are NOT shipped at turn start.
+	// Their names+descriptions live in the system prompt's load-on-demand catalog
+	// block (counted under SystemTokens); activated via activate_tools / ToolSearch.
+	// Mirrors agentContextPreview.LazyTools so the session popup shows the same
+	// eager-vs-lazy split the agent preview does — the effective catalog the info
+	// screen counts is Tools+LazyTools, not just the eager schemas shipped per turn.
+	LazyTools     []toolSummary    `json:"lazyTools"`
 	TotalTokens   int              `json:"totalTokens"`
 	Cache         cachePreview     `json:"cache"`
 	// CLIOverhead is set only for CLI-wrapper providers (claude-cli),
@@ -307,6 +314,17 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		toolList = append(toolList, toolSummary{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
 	}
 
+	// Lazy (on-demand) tool catalog — name+description only (schemas not shipped at
+	// turn start; their token cost already lives in the system prompt's catalog
+	// block under SystemTokens). Surfaced so the popup can show the same eager-vs-
+	// lazy split the agent preview does, matching the effective catalog the info
+	// screen counts (e.g. deferred MCP + self-management tools).
+	lazyDefs := wsp.Runtime.LazyToolCatalog(ctx, agent)
+	lazyList := make([]toolSummary, 0, len(lazyDefs))
+	for _, d := range lazyDefs {
+		lazyList = append(lazyList, toolSummary{Name: d.Name, Description: d.Description})
+	}
+
 	msgs := make([]previewMessage, 0, len(req.Messages))
 	msgTok := 0
 	for i, m := range req.Messages {
@@ -412,6 +430,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		DroppedTokens:       droppedTok,
 		Tools:               toolList,
 		ToolTokens:          toolTok,
+		LazyTools:           lazyList,
 		TotalTokens:         totalTok,
 		Cache:               cache,
 		CLIOverhead:         cliOver,

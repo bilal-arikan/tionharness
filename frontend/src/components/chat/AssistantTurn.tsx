@@ -5,6 +5,7 @@ import { TurnSteps, parseSteps } from './TurnSteps'
 import { ThinkingBlock } from './ThinkingBlock'
 import { MessageTime, TurnDuration, LiveTimer } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
+import { DirectionBadge } from './DirectionBadge'
 import { WorkingDots } from './WorkingDots'
 import { DeleteButton } from './DeleteButton'
 import { MessageDebugPanel } from './MessageDebugPanel'
@@ -32,6 +33,9 @@ interface Props {
   onFeedback?: (id: string, rating: number) => void
   // Open this agent's settings page — fired when its header (avatar/name) is clicked.
   onOpenAgent?: (id: string) => void
+  // "→ <name>" direction cue when this reply is addressed to a specific participant
+  // in a multi-participant thread (generic participant model). Undefined = no cue.
+  recipientLabel?: string
 }
 
 // fmtTok renders a token count compactly (1234 → "1.2k").
@@ -73,6 +77,7 @@ export function AssistantTurn({
   onRetry,
   onFeedback,
   onOpenAgent,
+  recipientLabel,
 }: Props) {
   const steps = parseSteps(m.steps)
   const stopNote = stopReasonLabel(m.stopReason)
@@ -92,6 +97,7 @@ export function AssistantTurn({
           <div className="flex items-center gap-1.5">
             {sessionId && !isLastLive && <MessageDebugPanel sessionId={sessionId} turnId={m.id} />}
             <AgentHeader agent={agent} onOpenAgent={onOpenAgent} />
+            <DirectionBadge label={recipientLabel} />
           </div>
           {m.reasoningContent && <ThinkingBlock text={m.reasoningContent} />}
           {/* Per-message toggle to hide/show the tool-activity trace. */}

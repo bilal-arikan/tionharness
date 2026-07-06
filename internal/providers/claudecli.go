@@ -252,6 +252,7 @@ type cliEvent struct {
 	Message        *cliMessage                `json:"message"`
 	IsError        bool                       `json:"is_error"`
 	APIErrorStatus string                     `json:"api_error_status"` // result envelope: upstream API error (e.g. rate_limit)
+	Error          string                     `json:"error"`            // standalone error line (e.g. {"error":"authentication_failed"})
 	Result         string                     `json:"result"`
 	Usage          *cliUsage                  `json:"usage"`
 	ModelUsage     map[string]json.RawMessage `json:"modelUsage"`
@@ -351,6 +352,74 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 		}
 	}
 	return nil, lastErr
+}
+
+// ProbeAuth runs a minimal, tool-free `claude -p` against this provider's config
+// home to verify the CLI is authenticated WITHOUT spending a real agent turn. It
+// returns nil when logged in, a classified auth error (see isAuthErrorText) when
+// the login is missing/expired/revoked, or the raw failure for any other startup
+// problem. Intended as a pre-flight check so an auth lapse surfaces up front instead
+// of failing the first real turn. It reflects the EFFECTIVE credential: an injected
+// auth token (env) wins over the config dir's own login, matching turn behaviour.
+func (c *ClaudeCLI) ProbeAuth(ctx context.Context) error {
+	// No MCP, no system prompt, tiny prompt — the cheapest invocation that still
+	// exercises the auth/login path. --strict-mcp-config + empty config keeps the
+	// CLI from loading any project/user MCP servers (fast, isolated).
+	args := []string{"-p", "--output-format", "stream-json", "--verbose",
+		"--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`}
+	if c.model != "" {
+		args = append(args, "--model", c.model)
+	}
+	cmd := proc.CommandContext(ctx, c.binPath, args...)
+	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
+	if c.configDir != "" {
+		cmd.Env = append(cmd.Env, "CLAUDE_CONFIG_DIR="+c.configDir)
+	}
+	if c.authToken != "" {
+		switch c.authKind {
+		case "oauth":
+			cmd.Env = append(cmd.Env, "CLAUDE_CODE_OAUTH_TOKEN="+c.authToken)
+		case "apikey":
+			cmd.Env = append(cmd.Env, "ANTHROPIC_API_KEY="+c.authToken)
+		}
+	}
+	cmd.Stdin = strings.NewReader("ok")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdout, serr := cmd.StdoutPipe()
+	if serr != nil {
+		return serr
+	}
+	if serr := cmd.Start(); serr != nil {
+		return serr
+	}
+	p := newCLIParser(c.model, nil)
+	rd := bufio.NewReader(stdout)
+	for {
+		line, rerr := rd.ReadString('\n')
+		if line != "" {
+			p.feed(line)
+		}
+		if rerr != nil {
+			break
+		}
+	}
+	runErr := cmd.Wait()
+	if p.notLoggedIn {
+		msg := strings.TrimSpace(p.authMsg)
+		if msg == "" {
+			msg = "authentication_failed"
+		}
+		home := c.configDir
+		if home == "" {
+			home = "the CLI's default config dir (~/.claude)"
+		}
+		return fmt.Errorf("claude CLI not logged in (%s): run `claude /login` with CLAUDE_CONFIG_DIR=%s, or switch this agent to an API-key provider", msg, home)
+	}
+	if runErr != nil {
+		return fmt.Errorf("claude CLI auth probe failed: %v %s", runErr, strings.TrimSpace(stderr.String()))
+	}
+	return nil
 }
 
 // runAttempt runs the claude CLI subprocess once and parses its stream. It
@@ -516,6 +585,23 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	if logPath := dumpCLIFailure(c.binPath, args, req.WorkDir, runErr, fullOut.Bytes(), stderr.Bytes()); logPath != "" {
 		detail = strings.TrimSpace(detail + " | full-log: " + logPath)
 	}
+	// Authentication failure: this claude-home has no valid login (never ran
+	// /login, or the token/key expired or was revoked). The request was refused
+	// before any answer and a retry hits the same wall in milliseconds — classify
+	// it clearly, mark it NON-retryable, and point at the exact config dir to fix.
+	if p.notLoggedIn {
+		msg := strings.TrimSpace(p.authMsg)
+		if msg == "" {
+			msg = "authentication_failed"
+		}
+		home := c.configDir
+		if home == "" {
+			home = "the CLI's default config dir (~/.claude)"
+		}
+		return nil, false, fmt.Errorf(
+			"claude CLI authentication failed (%s): this workspace's claude-home is not logged in — run `claude /login` with CLAUDE_CONFIG_DIR=%s, or switch this agent to an API-key provider (anthropic/openrouter) (exit: %v)",
+			msg, home, runErr)
+	}
 	// Usage / rate-limit rejection: the subscription window is exhausted (overage
 	// disabled), so the request was refused before any answer. Retrying immediately
 	// only burns the next attempt against the same wall — classify it clearly and
@@ -623,6 +709,8 @@ type cliStreamParser struct {
 	sawModelTurn bool                 // any assistant/tool/result content seen (vs. only system/init noise)
 	rateLimited  bool                 // the turn was rejected by a subscription usage / rate limit
 	rateLimitMsg string               // human-readable detail for the rate-limit failure
+	notLoggedIn  bool                 // the turn was rejected because this claude-home is not authenticated
+	authMsg      string               // human-readable detail for the auth failure ("Not logged in · ...")
 	toolStart    map[string]time.Time // tool_use id → time the event was seen (for per-tool latency)
 }
 
@@ -694,6 +782,15 @@ func (p *cliStreamParser) feed(line string) {
 	// later events overwrite is correct.
 	if ev.SessionID != "" {
 		p.resp.SessionID = ev.SessionID
+	}
+	// A login lapse surfaces first as a standalone {"error":"authentication_failed"}
+	// line (before the result envelope). Catch it here so the failure is classified
+	// as auth regardless of which event carried the signal.
+	if isAuthErrorText(ev.Error) {
+		p.notLoggedIn = true
+		if p.authMsg == "" {
+			p.authMsg = strings.TrimSpace(ev.Error)
+		}
 	}
 
 	switch ev.Type {
@@ -778,6 +875,15 @@ func (p *cliStreamParser) feed(line string) {
 				p.rateLimited = true
 				if p.rateLimitMsg == "" {
 					p.rateLimitMsg = strings.TrimSpace(ev.APIErrorStatus + " " + ev.Result)
+				}
+			}
+			// A login lapse commonly surfaces here as result "Not logged in · Please
+			// run /login". Classify it so the caller fails fast with an actionable
+			// message instead of a bare "exit status 1" that gets retried in vain.
+			if isAuthErrorText(ev.APIErrorStatus) || isAuthErrorText(ev.Result) {
+				p.notLoggedIn = true
+				if p.authMsg == "" {
+					p.authMsg = strings.TrimSpace(ev.Result)
 				}
 			}
 			return
@@ -896,6 +1002,22 @@ func isRateLimitText(s string) bool {
 		strings.Contains(s, "usage limit") ||
 		strings.Contains(s, "usage_limit") ||
 		strings.Contains(s, "quota")
+}
+
+// isAuthErrorText reports whether a result/api-error/error string signals an
+// authentication failure — this claude-home has no valid login (never ran
+// /login, or the OAuth token / API key expired or was revoked). Such failures
+// are NOT retryable: a second attempt hits the same wall in milliseconds.
+func isAuthErrorText(s string) bool {
+	s = strings.ToLower(s)
+	return strings.Contains(s, "authentication_failed") ||
+		strings.Contains(s, "not logged in") ||
+		strings.Contains(s, "please run /login") ||
+		strings.Contains(s, "invalid api key") ||
+		strings.Contains(s, "invalid x-api-key") ||
+		strings.Contains(s, "oauth token has expired") ||
+		strings.Contains(s, "oauth authentication is currently not supported") ||
+		strings.Contains(s, "invalid bearer token")
 }
 
 // salvage recovers whatever assistant content the parser accumulated when the

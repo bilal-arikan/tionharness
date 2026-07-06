@@ -36,5 +36,8 @@ func (s *Server) handleSetSessionAgent(w http.ResponseWriter, r *http.Request) {
 	if err := database.SetSessionAgent(ctx, id, agentID); writeDBError(w, err, "") {
 		return
 	}
+	// Cross-window sync: a sibling window's sidebar swaps the agent chip / next-
+	// turn attribution immediately.
+	emitSessionChange(ws(r), id, "agent")
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "agentId": agentID})
 }
