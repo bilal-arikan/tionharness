@@ -17,13 +17,12 @@ func specNames(specs []interaction.ToolSpec) []string {
 	return out
 }
 
-// TestGatewayDynamicExtendedSurface locks Doc 52 Faz 1-b: with GatewayDynamicExtended
-// on, the extended tier starts EMPTY, the core tier advertises activate_tools/
-// deactivate_tools, and activating a tool makes it appear on the extended tier
-// (deactivating removes it). Unknown names are reported, not silently registered.
+// TestGatewayDynamicExtendedSurface locks Doc 52 Faz 1-b: the claude-cli extended tier
+// starts EMPTY, the core tier advertises activate_tools/deactivate_tools/active_tools, and
+// activating a tool makes it appear on the extended tier (deactivating removes it).
+// Unknown names are reported, not silently registered.
 func TestGatewayDynamicExtendedSurface(t *testing.T) {
 	tun := agent.NewTunables()
-	tun.SetGatewayDynamicExtended(true)
 
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs, tun: tun}
@@ -81,32 +80,11 @@ func TestGatewayDynamicExtendedSurface(t *testing.T) {
 	}
 }
 
-// TestGatewayDynamicExtendedOffIsFullSurface verifies the default (flag off): the
-// extended tier advertises its full set and the meta-tools are NOT present.
-func TestGatewayDynamicExtendedOffIsFullSurface(t *testing.T) {
-	tun := agent.NewTunables() // GatewayDynamicExtended defaults off
-	runs := newChatRuns()
-	b := &interactionBackend{runs: runs, tun: tun}
-	run := runs.register("r1", "s1", func() {})
-	tok := runs.interactionToken("s1", "a1")
-	runs.bindActive(tok, run)
-
-	ext := b.Tools(tok, "extended")
-	if len(ext) == 0 {
-		t.Fatal("with the flag off the extended tier must advertise its full set, got empty")
-	}
-	core := b.Tools(tok, "core")
-	if specHasTool(core, "activate_tools") || specHasTool(core, "deactivate_tools") {
-		t.Fatalf("meta-tools must not be advertised when the flag is off, got %v", specNames(core))
-	}
-}
-
 // TestGatewayActivateAcceptsNamespacedName verifies activate_tools accepts the
 // namespaced name the catalog shows (mcp__tionswarm_extended__notify), not just the
 // bare form — the model may echo either.
 func TestGatewayActivateAcceptsNamespacedName(t *testing.T) {
 	tun := agent.NewTunables()
-	tun.SetGatewayDynamicExtended(true)
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs, tun: tun}
 	run := runs.register("r1", "s1", func() {})

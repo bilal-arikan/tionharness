@@ -34,20 +34,14 @@ type interactionBackend struct {
 	// converges on its next tools/list instead of via an immediate push.
 	srv *interaction.Server
 	// mu guards activated. activated maps a session token to the set of extended tool
-	// names the model has turned on this session (gateway dynamic surface). Only
-	// consulted when tun.GatewayDynamicExtended() is on; otherwise the extended tier
-	// advertises its full set and activated is unused.
+	// names the model has turned on this session — the gateway dynamic surface: the
+	// claude-cli extended tier starts EMPTY and grows only as the model activates tools.
 	mu        sync.Mutex
 	activated map[string]map[string]bool
 }
 
 // setServer wires the streaming server so the backend can push tools/list_changed.
 func (b *interactionBackend) setServer(s *interaction.Server) { b.srv = s }
-
-// dynamicExtended reports whether the gateway dynamic extended surface is on.
-func (b *interactionBackend) dynamicExtended() bool {
-	return b.tun != nil && b.tun.GatewayDynamicExtended()
-}
 
 // isActivated reports whether name is in the session's activated extended set.
 func (b *interactionBackend) isActivated(token, name string) bool {
@@ -142,8 +136,7 @@ var coreInteractionTools = map[string]bool{
 	"permission_prompt":    true,
 	// Gateway meta-tools (Doc 52 Faz 1-b/2): activate/deactivate/list the extended
 	// surface. Always core (eager) so the model can always grow the surface without a
-	// discovery round-trip. Only advertised when GatewayDynamicExtended is on (see
-	// interactionToolSpecs).
+	// discovery round-trip.
 	"activate_tools":   true,
 	"deactivate_tools": true,
 	"active_tools":     true,
@@ -226,11 +219,10 @@ func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 	if run != nil {
 		visOf = run.tierVisFor()
 	}
-	// Gateway dynamic surface (Doc 52 Faz 1-b): when on, the EXTENDED tier advertises
-	// only the tools the model has activated this session — it starts empty and grows
-	// via activate_tools + tools/list_changed. Core is unaffected (always eager). When
-	// off, the extended tier advertises its full set (historical behaviour).
-	dynExtended := tier == "extended" && b.dynamicExtended()
+	// Gateway dynamic surface (Doc 52 Faz 1-b): the EXTENDED tier advertises only the
+	// tools the model has activated this session — it starts empty and grows via
+	// activate_tools + tools/list_changed. Core is unaffected (always eager).
+	dynExtended := tier == "extended"
 	filtered := make([]interaction.ToolSpec, 0, len(specs))
 	for _, s := range specs {
 		if cliTier(s.Name, visOf) != tier {
@@ -402,29 +394,27 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		Description: "Internal permission handler: the CLI calls this before running a tool that requires approval; it returns an allow/deny decision.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"tool_name":{"type":"string"},"input":{"type":"object"}},"required":["tool_name"]}`),
 	})
-	// Gateway meta-tools (Doc 52 Faz 1-b): only advertised when the dynamic extended
-	// surface is on. With it on, the extended tier starts empty and the model grows it
-	// by calling activate_tools; the backend registers the tool and pushes
-	// tools/list_changed so the CLI re-lists and can call it the same turn.
-	if tun != nil && tun.GatewayDynamicExtended() {
-		specs = append(specs,
-			interaction.ToolSpec{
-				Name:        "activate_tools",
-				Description: "Load one or more on-demand tools (from the 'Available Tools' catalog) into this session so you can call them. After activating, the tool becomes callable immediately. Pass tool names in `tools`.",
-				InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"On-demand tool names to activate"}},"required":["tools"]}`),
-			},
-			interaction.ToolSpec{
-				Name:        "deactivate_tools",
-				Description: "Unload previously activated on-demand tools from this session to free context. Pass tool names in `tools`.",
-				InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"Tool names to deactivate"}},"required":["tools"]}`),
-			},
-			interaction.ToolSpec{
-				Name:        "active_tools",
-				Description: "List the on-demand tools you have activated in this session (the ones you can call now, besides the always-loaded core tools).",
-				InputSchema: json.RawMessage(`{"type":"object","properties":{}}`),
-			},
-		)
-	}
+	// Gateway meta-tools (Doc 52 Faz 1-b): the extended tier starts empty and the model
+	// grows it by calling activate_tools; the backend registers the tool and pushes
+	// tools/list_changed so the CLI re-lists and can call it the same turn. Always
+	// advertised on the core (eager) tier.
+	specs = append(specs,
+		interaction.ToolSpec{
+			Name:        "activate_tools",
+			Description: "Load one or more on-demand tools (from the 'Available Tools' catalog) into this session so you can call them. After activating, the tool becomes callable immediately. Pass tool names in `tools`.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"On-demand tool names to activate"}},"required":["tools"]}`),
+		},
+		interaction.ToolSpec{
+			Name:        "deactivate_tools",
+			Description: "Unload previously activated on-demand tools from this session to free context. Pass tool names in `tools`.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"Tool names to deactivate"}},"required":["tools"]}`),
+		},
+		interaction.ToolSpec{
+			Name:        "active_tools",
+			Description: "List the on-demand tools you have activated in this session (the ones you can call now, besides the always-loaded core tools).",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{}}`),
+		},
+	)
 	return specs
 }
 
@@ -581,11 +571,6 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 // are validated against the run's real extended candidates so a typo is reported
 // rather than silently registering a phantom tool.
 func (b *interactionBackend) callActivate(token string, run *chatRun, args json.RawMessage, activate bool) (interaction.CallResult, error) {
-	if !b.dynamicExtended() {
-		// Meta-tools are only advertised when the dynamic surface is on; a stray call
-		// with it off is a no-op the model can recover from.
-		return interaction.CallResult{Text: "dynamic tool activation is not enabled", IsError: true}, nil
-	}
 	var in struct {
 		Tools []string `json:"tools"`
 	}
@@ -651,9 +636,6 @@ func (b *interactionBackend) callActivate(token string, run *chatRun, args json.
 // active_tools). Config-level MCP server management (list/enable/disable) is a separate
 // concern served by the self-management suite (list_mcp_servers / toggle_mcp_server).
 func (b *interactionBackend) callActiveTools(token string) interaction.CallResult {
-	if !b.dynamicExtended() {
-		return interaction.CallResult{Text: "dynamic tool activation is not enabled", IsError: true}
-	}
 	active := b.activeExtended(token)
 	if len(active) == 0 {
 		return interaction.CallResult{Text: "No on-demand tools activated. Use activate_tools to load one from the 'Available Tools' catalog."}

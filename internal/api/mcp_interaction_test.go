@@ -124,38 +124,52 @@ func TestInteractionAdvertisedNames(t *testing.T) {
 	}
 }
 
-// TestInteractionTierSplit locks the two-tier CLI bridge (claude-cli 2.1.x+): the
-// eager core set (alwaysLoad server) and the deferred extended set (ToolSearch
-// server) partition the advertised tools, and the union equals the full set.
+// TestInteractionTierSplit locks the two-tier CLI bridge (claude-cli 2.1.x+): the eager
+// core set (alwaysLoad server) and the deferred extended set. The extended ADVERTISED
+// surface is now dynamic (Doc 52 gateway): it starts EMPTY and grows via activate_tools,
+// so the partition is verified by CLASSIFICATION (cliTier) rather than by the advertised
+// extended list — every full tool is core or extended, and advertised core matches.
 func TestInteractionTierSplit(t *testing.T) {
 	b := &interactionBackend{runs: newChatRuns()} // tun nil → self-manage off
 	full := b.Tools("", "")
 	core := b.Tools("", "core")
-	ext := b.Tools("", "extended")
 
-	if len(core)+len(ext) != len(full) {
-		t.Fatalf("core(%d)+extended(%d) must equal full(%d)", len(core), len(ext), len(full))
+	// Extended advertises only ACTIVATED tools → empty at the start of a session.
+	if ext := b.Tools("", "extended"); len(ext) != 0 {
+		t.Fatalf("extended tier must start empty (dynamic gateway surface), got %d", len(ext))
 	}
-	// Pure classification: the eager shell/edit tools are core even when gated off
-	// the advertised set (tun nil drops the shell spec, so assert the classifier).
+	// Classification partitions the full set into core + extended (no hidden with nil visOf).
+	var coreC, extC int
+	for _, s := range full {
+		switch cliTier(s.Name, nil) {
+		case "core":
+			coreC++
+		case "extended":
+			extC++
+		}
+	}
+	if coreC+extC != len(full) {
+		t.Fatalf("classification must partition full: core(%d)+extended(%d) != full(%d)", coreC, extC, len(full))
+	}
+	if len(core) != coreC {
+		t.Fatalf("advertised core(%d) must equal core-classified(%d)", len(core), coreC)
+	}
+	// Pure classification: the eager shell/edit tools are core.
 	for _, n := range []string{"Bash", "run_subagent"} {
 		if interactionTier(n) != "core" {
 			t.Errorf("interactionTier(%q) must be core", n)
 		}
 	}
-	// Eager essentials present without a tun live in core and never in extended.
+	// Eager essentials present without a tun live in core.
 	for _, n := range []string{"ask_user", "use_skill", "permission_prompt", "todo_write", "create_artifact"} {
 		if !specHasTool(core, n) {
 			t.Errorf("%q must be in the core (alwaysLoad) tier", n)
 		}
-		if specHasTool(ext, n) {
-			t.Errorf("%q must NOT be in the extended tier", n)
-		}
 	}
-	// NameOnly session-lifecycle tools are deferred (extended), not core.
+	// NameOnly session-lifecycle tools classify as extended (deferred), never core.
 	for _, n := range []string{"update_session", "notify"} {
-		if !specHasTool(ext, n) {
-			t.Errorf("%q must be in the extended (deferred) tier", n)
+		if interactionTier(n) != "extended" {
+			t.Errorf("%q must classify as extended (deferred)", n)
 		}
 		if specHasTool(core, n) {
 			t.Errorf("%q must NOT be in the core tier", n)

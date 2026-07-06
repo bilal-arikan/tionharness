@@ -601,9 +601,13 @@ unit+canlı+ölçüm ile kanıtlı; risk flag'le izole. Ön koşullar:
   `TestLiveGatewayActivate` (gerçek `interaction.Server` + fake backend) ile kanıtlı; tam
   runtime turu hâlâ manuel/QA adımı.
 
-**Öneri:** YENİ-A kapandığına ve mekanizma kanıtlı olduğuna göre `GatewayDynamicExtended`
-**default ON** yapmak güvenli — ama bu üretim davranışını değiştiren tek-yön bir karar
-olduğundan **Bilal'in açık onayı** bekleniyor (flag ile hemen geri alınabilir).
+**✅ KARAR (Bilal, 2026-07-06): flag KALDIRILDI — dinamik extended TEK davranış.** "Geri
+dönük uyum yok, temiz kurulum" onayıyla `GatewayDynamicExtended` tunable + env seed + OFF-yolu
+**tamamen silindi** (`gateway_tunable.go` silindi, `tunables.go`/`app.go` temizlendi,
+`mcp_interaction.go` koşulsuzlaştı, `toolsetup.go` CLI katalogu daima activate_tools formu).
+Extended tier artık her CLI turunda boş başlar ve activate_tools ile büyür. Obsolete testler
+(`...OffIsFullSurface`, `...GatewayFormUsesActivateTools`) kaldırıldı; `TestInteractionTierSplit`
+sınıflandırma-partisyonuna güncellendi. `go test ./...` **705 passed**.
 
 ### ✅ Faz 3 — harici `/mcp/gateway` endpoint (UYGULANDI, 2026-07-06)
 

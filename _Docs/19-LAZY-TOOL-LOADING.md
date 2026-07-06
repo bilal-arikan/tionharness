@@ -539,18 +539,20 @@ yüzden kaynak model 4 tier kalır. claude-cli inherently 2 durumludur → 4 tie
 - **Etki:** persistent+MCP birlikte artık turn-arası **warm** kalır (önceden her tur soğuk).
   Detay + spike sonuçları: Doc **52** §3-E, §12.
 
-### Gateway dinamik extended yüzeyi — feature-flag (2026-07-06, Faz 1-b)
+### Gateway dinamik extended yüzeyi — TEK DAVRANIŞ (2026-07-06, Faz 1-b; flag kaldırıldı)
 
-- **`GatewayDynamicExtended` tunable (default OFF)** + `TIONSWARM_GATEWAY_DYNAMIC_EXTENDED=1`
-  boot seed. Açıkken claude-cli extended tier'ı **boş başlar**; model core'daki
-  **`activate_tools`** meta-tool'unu çağırınca backend aracı kaydeder + `tools/list_changed`
-  push eder → CLI re-list eder → aynı turda çağrılabilir (Doc 52 spike Q1/Q2). `deactivate_tools`
-  bağlamı boşaltır.
-- Kapalıyken (varsayılan) davranış aynen eski: extended tam set ilan eder, CLI kendi
-  ToolSearch'iyle defer eder. `renderLazyToolCatalog` CLI+gateway modunda katalog nudge'ını
-  "ToolSearch yerine `activate_tools`" olarak render eder.
-- **CLI'da 2-durum projeksiyonu netleşir:** flag açıkken `hidden`/name-only tümü gerçekten
-  "tools/list'te yok, activate ile gelir" = **deferred-usable**. summary/name-only CLI'da
-  anlamsızlaşır (yalnız native). Bu, §7-15'teki 2-durum modeline giden yol.
-- Kod: `agent/gateway_tunable.go`, `api/mcp_interaction.go` (`callActivate`, `activated`,
-  `Tools` filtre), `interaction/server.go` (push). Detay: Doc **52** §12.
+> **Not:** Başta `GatewayDynamicExtended` feature-flag'i vardı (default OFF); 2026-07-06'da
+> kullanıcı onayıyla **flag tamamen kaldırıldı** — dinamik extended yüzeyi CLI'ın **tek
+> davranışı** (geri dönük uyum yok, temiz kurulum). `tunable`, env seed ve OFF-yolu silindi.
+
+- claude-cli extended tier'ı **her zaman boş başlar**; model core'daki **`activate_tools`**
+  meta-tool'unu çağırınca backend aracı kaydeder + `tools/list_changed` push eder → CLI
+  re-list eder → **aynı turda** çağrılabilir (Doc 52 spike Q1/Q2 + canlı validation).
+  `deactivate_tools` bağlamı boşaltır, `active_tools` aktif olanları listeler.
+- `renderLazyToolCatalog` CLI formunda nudge'ı daima "yüklemek için `activate_tools` çağır"
+  (ToolSearch değil; harici MCP araçları hâlâ ToolSearch ile) olarak render eder.
+- **CLI'da 2-durum projeksiyonu:** summary/name-only zaten `cliTier`'da tek `extended`
+  durumuna iner; artık extended de gerçekten "tools/list'te yok, activate ile gelir" =
+  **deferred-usable**. summary/name-only CLI'da anlamsız (yalnız native token farkı için).
+- Kod: `api/mcp_interaction.go` (`callActivate`/`callActiveTools`/`activated`/`Tools` filtre —
+  koşulsuz), `interaction/server.go` (push). Detay: Doc **52** §12.

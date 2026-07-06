@@ -79,7 +79,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 		{Name: "srvA__alpha", Description: "mcp tool alpha"},
 		{Name: "srvA__beta", Description: "mcp tool beta"},
 	}
-	out := renderLazyToolCatalog(small, 0, false, false)
+	out := renderLazyToolCatalog(small, 0, false)
 	if !strings.Contains(out, "create_agent") || !strings.Contains(out, "srvA__alpha") {
 		t.Fatalf("small catalog should list every tool, got:\n%s", out)
 	}
@@ -92,7 +92,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 			Description: "an mcp tool",
 		})
 	}
-	out = renderLazyToolCatalog(big, 0, false, false)
+	out = renderLazyToolCatalog(big, 0, false)
 	if !strings.Contains(out, "create_agent") {
 		t.Error("built-in lazy tool must still be listed in full")
 	}
@@ -112,7 +112,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 // the tionswarm-self-management skill (and still names the visible lazy tools).
 func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 	visible := []providers.ToolDef{{Name: "WebFetch", Description: "fetch a page"}}
-	out := renderLazyToolCatalog(visible, 12, false, false)
+	out := renderLazyToolCatalog(visible, 12, false)
 	if !strings.Contains(out, "WebFetch") {
 		t.Error("visible lazy tools must still be listed")
 	}
@@ -123,12 +123,12 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 		t.Errorf("pointer must state the hidden count, got:\n%s", out)
 	}
 	// With no hidden tools, no pointer line.
-	out = renderLazyToolCatalog(visible, 0, false, false)
+	out = renderLazyToolCatalog(visible, 0, false)
 	if strings.Contains(out, "tionswarm-self-management") {
 		t.Error("no pointer when there are no hidden tools")
 	}
 	// Empty + no hidden → empty block.
-	if renderLazyToolCatalog(nil, 0, false, false) != "" {
+	if renderLazyToolCatalog(nil, 0, false) != "" {
 		t.Error("empty catalog with no hidden tools must render nothing")
 	}
 }
@@ -136,15 +136,15 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 // TestLazyCatalogCLIFormNamespacesNames verifies the claude-cli rendering of the
 // load-on-demand catalog: lazy built-in tools carry the EXTENDED Interaction MCP
 // prefix (the deferred tier), MCP tools carry the mcp__ prefix, CLI-native built-ins
-// (WebFetch) are dropped, and the guidance points at ToolSearch instead of the
-// native activate_tools.
+// (WebFetch) are dropped, and the guidance loads deferred built-ins via the gateway
+// activate_tools (Doc 52) — external MCP tools still noted for ToolSearch.
 func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	lazy := []providers.ToolDef{
 		{Name: "update_session"},               // lazy built-in → extended namespace
 		{Name: "WebFetch", Description: "fetch"},  // CLI-native → dropped
 		{Name: "srvA__alpha", Description: "mcp"}, // MCP → mcp__ prefix
 	}
-	out := renderLazyToolCatalog(lazy, 3, true, false)
+	out := renderLazyToolCatalog(lazy, 3, true)
 
 	if !strings.Contains(out, "mcp__tionswarm_extended__update_session") {
 		t.Errorf("CLI form must namespace lazy built-ins under the extended tier:\n%s", out)
@@ -155,11 +155,11 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	if strings.Contains(out, "WebFetch") {
 		t.Errorf("CLI-native WebFetch must be dropped from the CLI catalog:\n%s", out)
 	}
-	if strings.Contains(out, "activate_tools") {
-		t.Errorf("CLI form must NOT reference native activate_tools:\n%s", out)
+	if !strings.Contains(out, "activate_tools") {
+		t.Errorf("CLI form must load deferred built-ins via activate_tools (gateway):\n%s", out)
 	}
-	if !strings.Contains(out, "ToolSearch") {
-		t.Errorf("CLI form must point at ToolSearch:\n%s", out)
+	if strings.Contains(out, "select:") {
+		t.Errorf("CLI form must NOT instruct ToolSearch select for built-ins (gateway path):\n%s", out)
 	}
 	// Self-management pointer uses the namespaced use_skill on the CLI path.
 	if !strings.Contains(out, "mcp__tionswarm_interaction__use_skill") {
@@ -167,34 +167,12 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	}
 
 	// Native form keeps bare names + activate_tools (regression guard).
-	nat := renderLazyToolCatalog(lazy, 0, false, false)
+	nat := renderLazyToolCatalog(lazy, 0, false)
 	if !strings.Contains(nat, "- `update_session`") || !strings.Contains(nat, "- `WebFetch`") {
 		t.Errorf("native form keeps bare names incl. WebFetch:\n%s", nat)
 	}
 	if !strings.Contains(nat, "activate_tools") {
 		t.Errorf("native form keeps activate_tools guidance:\n%s", nat)
-	}
-}
-
-// TestLazyCatalogGatewayFormUsesActivateTools verifies the CLI+gateway form (Doc 52
-// Faz 1-b) instructs the model to load deferred tools with activate_tools, NOT the
-// CLI's own ToolSearch (which cannot find an un-advertised tool) — while still
-// namespacing the tool names.
-func TestLazyCatalogGatewayFormUsesActivateTools(t *testing.T) {
-	lazy := []providers.ToolDef{{Name: "update_session"}}
-	out := renderLazyToolCatalog(lazy, 0, true, true)
-
-	if !strings.Contains(out, "activate_tools") {
-		t.Errorf("gateway form must instruct activate_tools:\n%s", out)
-	}
-	if !strings.Contains(out, "mcp__tionswarm_extended__update_session") {
-		t.Errorf("gateway form must still namespace the tool name:\n%s", out)
-	}
-	// It should NOT tell the model to load the built-in via `ToolSearch select` — that
-	// path can't find an un-advertised extended tool. (The MCP-tools note may still
-	// mention ToolSearch for external servers, but there are no MCP tools here.)
-	if strings.Contains(out, "select:") {
-		t.Errorf("gateway form must not instruct ToolSearch select for built-ins:\n%s", out)
 	}
 }
 
