@@ -745,3 +745,21 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   > import sonrası bunları `toggle {enabled:false}` ile kapatır. Canlıda 4 workspace'te 13'er
   > server disable edildi → enabled set TS ile eşleşti (10 server). Kalan enabled http backend'leri
   > (mcp-chrome/unity/mcp-alpha/vps-*) çalışmadıkça hâlâ warn verebilir — bu TS'nin enabled setiyle aynı.
+
+- ⛔ **VPS göçü GERİ ALINDI (2026-07-06):** Bilal netleştirdi — asıl istek dış `mcp-server`
+  gateway'inin server'larını TionSwarm'a **import etmek değildi**; istek, TionSwarm'ın *kendi*
+  built-in tool'larını + kullanıcının TionSwarm'a **kendi eklediği** harici MCP'leri gateway-benzeri
+  yüzeyle yönetmesiydi (bu zaten `internal/gateway` + iki-katmanlı interaction ile mevcut).
+  Dolayısıyla göç bir yanlış-anlama ürünüydü. **Temizlik:** VPS gateway'e (`<vps-host>:9090`,
+  yani `mcp-server`) işaret eden **tüm `vps-*` server'lar** 4 workspace'ten silindi (WS1:1, WS5/8/9:7'şer
+  = 22 toplam, 0 leftover doğrulandı). Kullanıcının gerçek local tool'ları korundu
+  (mcp-alpha :55643, unity-mcp :8080, mcp-chrome :12306, playwright, desktop-commander, stitch,
+  photopea, codebase-memory — hepsi stdio/local). `migrate-vps.py`/`apply-migration.py` araçları
+  `_spikes`'te referans olarak duruyor ama **canlıya artık uygulanmıyor**. Not: import'tan kalan
+  bazı **disabled** config-only stdio server'lar (figma, docker, telegram, mcpvault, mobile-mcp,
+  flutter-dart, github, app-store, play-store) da Bilal'in isteğiyle silindi (**32 disabled server**,
+  4 workspace). Nihai temiz durum — yalnız kullanıcının gerçek tool'ları:
+  **WS1(5):** mcp-chrome, playwright, mcp-alpha, stitch, photopea ·
+  **WS5(8):** +unity-mcp, desktop-commander, codebase-memory ·
+  **WS8(7)/WS9(7):** unity-mcp, desktop-commander, mcp-chrome, playwright, stitch, photopea, mcp-alpha.
+  Gateway mekanizmasının kendisi (asıl hedef) değişmedi.
