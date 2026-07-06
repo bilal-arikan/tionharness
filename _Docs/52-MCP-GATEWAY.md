@@ -434,6 +434,30 @@ anahtarın AKTİF run'ına** çözsün (turn başında set edilen `activeRun[key
   (Bun) bağımlılığının kalkması. İç CLI-fix (Faz 0-2) bundan **bağımsız** değerli; Faz 3
   ayrı tetiklenir.
 
+**✅ Göç aracı (2026-07-06): `_spikes/52-gateway/migrate-vps.py`.** TS `config.json`'ı
+TionSwarm'ın **mevcut** `POST /api/mcp-servers/import` endpoint'inin kabul ettiği standart
+`{"mcpServers":{...}}` formatına dönüştürür (yeni endpoint gerekmedi). Dönüşümler:
+`transportType`/`url` → `type:"http"`; `${VAR}` placeholder'ları `secrets.json`/env'den çözer;
+`options.disabled` işaretlenir (entry yine yazılır, UI'dan kapatılır); gateway-only alanlar
+düşürülür. Masked template üzerinde doğrulandı (18 server: stdio/http doğru çıkarıldı).
+
+**Uygulama prosedürü (canlı, elle — secrets içerir):**
+```bash
+# 1) TS config'i normalize et (gerçek config.json + secrets.json ile)
+python _spikes/52-gateway/migrate-vps.py \
+  C:/Users/user/Desktop/Projects/mcp-server/config.json \
+  --secrets C:/Users/user/Desktop/Projects/mcp-server/secrets.json > import.json
+# 2) default workspace'e toplu import et
+curl -X POST http://127.0.0.1:8090/api/mcp-servers/import \
+  -H "X-Workspace-Id: <default-ws-id>" --data-binary @import.json
+# 3) TS'de disabled olanları TionSwarm UI'dan kapat (özet import.json summary'sinde işaretli)
+# 4) harici client'ı TionSwarm /mcp/gateway + TIONSWARM_GATEWAY_AUTH_TOKEN'a yönelt
+# 5) TS gateway-manager'ı durdur (emekli). vps-* URL'li girişler zaten çalışır (ServersFunc canlı okur).
+```
+> **Not:** vps-* girişleri gerçek `config.json`'da (template'te değil); script onları `url`
+> ile http olarak çıkarır. Adım 2 secrets içerdiğinden **elle** çalıştırılır (bu oturumda
+> uygulanmadı — canlı config/secrets'a dokunulmadı).
+
 ---
 
 ## 12. Uygulama durumu

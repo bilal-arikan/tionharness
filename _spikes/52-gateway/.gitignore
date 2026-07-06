@@ -3,3 +3,7 @@ server/server.log
 *.stream.json
 *.err.log
 *.log
+
+# migration test outputs
+import*.json
+summary.txt
