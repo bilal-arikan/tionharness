@@ -569,6 +569,19 @@ seçiyordu; ayrıca `shell` hiç köprülenmiyordu (eager olduğu için bridge d
   listesine `Skill` **her zaman** (köprülenen `use_skill` doğru yol), `Bash` ise
   **yalnız `ShellEnabled` iken** (köprülenen `shell` yerini aldığı için) eklendi.
   Shell kapalıysa Bash'e dokunulmaz (yoksa ajan kabuğu tamamen kaybeder).
+  - **Tam gölgeleme seti (genişletildi):** TionSwarm'a-özel köprülü bir aracı
+    **farklı isimle** taklit eden CLI-native araçlar bastırılır:
+    `Skill` (↔`use_skill`), `TodoWrite`+`Task`/`TaskCreate`/`TaskUpdate`/`TaskList`/`TaskGet` (↔`todo_write`),
+    `Task`/`Agent` (↔`run_subagent`/`spawn_*`), **`SendMessage` (↔`send_message`,
+    2026-07-06 — native olan CLI'nin kendi subagent'larıyla konuşur, TionSwarm
+    ajanını geçerli ID'de bile "bulunamadı" der; model `ToolSearch` ile keşfedip
+    seçince her teslim başarısız oluyordu)**, `AskUserQuestion` (↔`ask_user`),
+    `EnterPlanMode`/`ExitPlanMode` (auto/olmayan modda), ve `ShellEnabled` iken
+    `Bash`+`BashOutput`+`KillShell` (↔bridged shell + `shell_manage`). Aynı-isimli
+    fs/web araçları (Read/Write/Edit/Glob/Grep/WebSearch/WebFetch) **bilerek**
+    native kullanılır — gölgeleme değil. Olmayan aracı disallow etmek no-op olduğu
+    için sürümler arası güvenli. Canlı doğrulama: haiku ajan bile isimle
+    `send_message` gönderiyor (SES109/112), native `SendMessage` katalogda yok.
 
 **Kapsam sınırı (Faz 1):** Bu köprü yalnız **sohbet** turunda devrede; otonom
 koşular için bkz. aşağıdaki Faz 2.

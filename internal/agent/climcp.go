@@ -123,16 +123,28 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 			URL:     base + "/extended",
 			Headers: authHeader,
 		}
-		// Allowlist derives from the names the backend advertises for this turn
-		// (InteractionEndpoint.Core/ExtendedToolNames) — a single source shared with
-		// Tools(), so a tool added to the backend is allowlisted automatically. Each
-		// name is namespaced under its tier's server key.
+		// Core tier stays per-tool (eager, alwaysLoad — a small, stable set): each name
+		// is namespaced under the core server key.
 		for _, t := range inter.CoreToolNames {
 			allowed = append(allowed, "mcp__"+interactionCoreKey+"__"+t)
 		}
-		for _, t := range inter.ExtendedToolNames {
-			allowed = append(allowed, "mcp__"+interactionExtendedKey+"__"+t)
-		}
+		// Extended tier uses a SERVER-LEVEL wildcard (`mcp__tionswarm_extended`, no tool
+		// suffix) instead of enumerating each tool — the same shape external MCP servers
+		// already use above (`mcp__`+key). Two reasons (Doc 52 §3-D / §11-decision 4):
+		//   - Gateway pattern: a tool added mid-session via tools/list_changed is already
+		//     permitted without touching --allowedTools (verified: a server-level wildcard
+		//     covers a late-registered tool — spike Q2).
+		//   - Persistent-session warmth: a per-tool list changes whenever the extended set
+		//     changes, churning the launch fingerprint and cold-restarting the process
+		//     every turn. A constant wildcard keeps the allowlist — and the fingerprint —
+		//     stable across turns.
+		// The real per-tool gate remains: (a) the backend only advertises the tools it
+		// wants callable in tools/list, and (b) the permission-prompt layer (ask mode).
+		// Unconditional: the extended server entry is always wired above, so its wildcard
+		// is always present — forward-compatible with the gateway's empty-start surface
+		// (extended advertises nothing until tools/list_changed grows it, yet each grown
+		// tool is already permitted).
+		allowed = append(allowed, "mcp__"+interactionExtendedKey)
 		// Suppress the CLI's own equivalents, which can't be answered/honored in
 		// one-shot -p mode: AskUserQuestion has no live client, and ScheduleWakeup
 		// schedules a wake the CLI subprocess never lives to fire — TionSwarm's own
@@ -174,7 +186,13 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		// shell entirely (TionSwarm's shell is not bridged when disabled). With the
 		// bridge present, all commands route through TionSwarm's PowerShell shell.
 		if r.tun.ShellEnabled() {
-			disallowed = append(disallowed, "Bash")
+			// Also suppress the native background-shell siblings (BashOutput/KillShell):
+			// they only operate on shells the native Bash spawned, which is now gone, so
+			// they are inert — but suppressing them keeps the whole native shell family
+			// off the menu so a model never reaches for them instead of TionSwarm's
+			// bridged run_in_background + shell_manage. Disallowing an absent tool is a
+			// no-op, so this is safe across CLI versions.
+			disallowed = append(disallowed, "Bash", "BashOutput", "KillShell")
 		}
 		// Plan mode: claude-cli's EnterPlanMode/ExitPlanMode only complete when their
 		// exit approval can be answered. TionSwarm answers it via the permission-prompt
