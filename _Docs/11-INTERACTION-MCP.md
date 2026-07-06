@@ -835,3 +835,34 @@ da erteleniyordu → ilk turda `No such tool available`.
 - MCP Streamable HTTP transport spec — `Mcp-Session-Id`, protokol sürümü
 - OpenAI Codex CLI — MCP `config.toml` `[mcp_servers]`, yalnız Streamable HTTP (`url` + `bearer_token_env_var`), SSE deprecated
 - Mistral Vibe v2.0 (27 Oca 2026) — MCP desteği eklendi (`mistralai/mistral-vibe`)
+
+---
+
+## Streaming yükseltmesi — stateful server + tools/list_changed push (2026-07-06)
+
+> Gateway entegrasyonunun (Doc **52**) Faz 1-a'sı. Interaction MCP server artık
+> **stateless POST-only** değil; **stateful + streaming**. Eski "GET→405, tool
+> sonuçları POST cevabında" MVP notu güncellendi.
+
+- **`initialize` artık `capabilities.tools.listChanged:true`** ilan eder (eskiden `{}`).
+- **`GET /mcp/interaction[/tier]` gerçek bir server→client SSE kanalı açar** ve açık tutar
+  (eskiden 405). Tool sonuçları hâlâ **POST cevabında inline** döner; SSE kanalı yalnız
+  **server-initiated bildirimler** içindir (`notifications/tools/list_changed`).
+- **`Server.PushToolsChanged(token)`** açık stream'e list_changed frame'i iter (non-blocking;
+  stream yoksa/buffer doluysa güvenli no-op). `HasStream(token)` canlı stream var mı sorar.
+- **Çoklu-stream (token+tier) anahtarlama:** core ve extended **iki ayrı MCP bağlantısı** ama
+  **tek Bearer token** paylaşır. `streams` yalnız token'la anahtarlanırsa bir GET stream
+  diğerini ezer → push yanlış bağlantıya gider ve claude ilgili tier'ı **re-list etmez**. Bu
+  yüzden stream'ler **`token + "\x00" + tier`** ile anahtarlanır; `PushToolsChanged` token'ın
+  **tüm** stream'lerine broadcast eder (doğru tier re-list olur; diğeri ucuz no-op). Bu bug
+  canlı validation'da (`TestLiveGatewayActivate`) yakalandı — Doc 52 §12.
+- Session kimliği = Bearer token (stable per-(session,agent), Doc 52 §3-D) → bir persistent
+  claude-cli process'i için tier başına kalıcı SSE stream.
+- `interaction.Handler` compat shim olarak korundu (`NewServer`'a delege eder).
+- **Davranış:** Faz 1-a tek başına araç yüzeyini değiştirmez (extended hâlâ tam set ilan
+  eder); yalnız **push altyapısını** kurar. Dinamik büyütme (extended boş→activate ile
+  büyüme) Faz 1-b'de bağlanacak.
+- Kod: `internal/interaction/server.go` (`Server`, `serveStream`, `PushToolsChanged`),
+  `internal/api/server.go` (`interactionSrv` concrete alan). Test:
+  `TestInteraction_GetStreamReceivesPush`, `TestInteraction_PushNoStreamIsNoop`.
+- Spike prototipi: `_spikes/52-gateway/server/main.go` (aynı desen, claude-cli 2.1.201 ile doğrulandı).

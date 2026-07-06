@@ -173,7 +173,10 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		// delegation is enabled run_subagent is the gated replacement; when it is
 		// disabled the agent should not delegate at all. Either way the native launcher
 		// must be suppressed — same shadowing class as TodoWrite/Skill above.
-		disallowed = append(disallowed, "Task", "Agent")
+		// AgentOutputTool is the reader alias newer CLIs expose for a launched
+		// subagent's output; with the launcher gone it has nothing to read, but
+		// suppressing it too keeps the whole native delegation family off the menu.
+		disallowed = append(disallowed, "Task", "Agent", "AgentOutputTool")
 		// Peer messaging: claude-cli 2.x ships a native `SendMessage` tool (sibling of
 		// Task/Agent) that talks to the CLI's OWN in-process subagents — it knows
 		// nothing about TionSwarm agents, so it fails with "agent not found" even for a
@@ -186,13 +189,18 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		// shell entirely (TionSwarm's shell is not bridged when disabled). With the
 		// bridge present, all commands route through TionSwarm's PowerShell shell.
 		if r.tun.ShellEnabled() {
-			// Also suppress the native background-shell siblings (BashOutput/KillShell):
-			// they only operate on shells the native Bash spawned, which is now gone, so
-			// they are inert — but suppressing them keeps the whole native shell family
-			// off the menu so a model never reaches for them instead of TionSwarm's
-			// bridged run_in_background + shell_manage. Disallowing an absent tool is a
-			// no-op, so this is safe across CLI versions.
-			disallowed = append(disallowed, "Bash", "BashOutput", "KillShell")
+			// Also suppress the native background-shell siblings (BashOutput/KillShell,
+			// renamed TaskOutput/TaskStop in newer CLIs): they only operate on shells the
+			// native Bash spawned, which is now gone, so they are inert — but suppressing
+			// them keeps the whole native shell family off the menu so a model never
+			// reaches for them instead of TionSwarm's bridged run_in_background +
+			// shell_manage. Both old and new names are listed because a CLI upgrade could
+			// swap the exposed name; disallowing an absent tool is a no-op, so covering
+			// both is safe across CLI versions. These stay INSIDE the ShellEnabled guard
+			// on purpose: when shell is disabled the native Bash lives, and TaskOutput/
+			// TaskStop are then the only way to manage the background tasks it spawns.
+			disallowed = append(disallowed,
+				"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop")
 		}
 		// Plan mode: claude-cli's EnterPlanMode/ExitPlanMode only complete when their
 		// exit approval can be answered. TionSwarm answers it via the permission-prompt

@@ -52,6 +52,9 @@ type Server struct {
 	selfURL string
 	// interactionMCP serves the Interaction MCP endpoint (/mcp/interaction).
 	interactionMCP http.Handler
+	// interactionSrv is the same server as a concrete type, so the activate path can
+	// push tools/list_changed to a live CLI session's SSE stream (gateway, Doc 52).
+	interactionSrv *interaction.Server
 	// backups runs the periodic workspace-backup loop; reconfigured on every
 	// settings change. nil until wired by SetBackupManager (after construction).
 	backups *backup.Manager
@@ -80,7 +83,11 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	}
 	// Interaction MCP: lets CLI agents (claude-cli, ...) reach TionSwarm's
 	// human-in-the-loop tools over in-process HTTP. See _Docs/11-INTERACTION-MCP.md.
-	s.interactionMCP = interaction.Handler(&interactionBackend{runs: s.runs, tun: tun}, logger)
+	interBackend := &interactionBackend{runs: s.runs, tun: tun}
+	s.interactionSrv = interaction.NewServer(interBackend, logger)
+	// Wire the pusher back so activate_tools can push tools/list_changed (gateway, Doc 52).
+	interBackend.setServer(s.interactionSrv)
+	s.interactionMCP = s.interactionSrv
 	// Headless Interaction MCP: give autonomous (scheduler/spawn) CLI
 	// turns the same use_skill/shell/self-manage bridge chat turns get.
 	manager.SetAutonomousInteraction(s.autonomousInteraction)

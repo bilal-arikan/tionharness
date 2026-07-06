@@ -161,6 +161,31 @@ hâlâ o dosyaya referans verirken dosya siliniyor (Windows'ta açık handle sor
 
 **Faz 0 çıktısı:** Q0/Q1/Q2/Q3 için evet/hayır + token sayıları tablosu; `52`'ye işlenir.
 
+### 3-E. Faz 0 spike SONUÇLARI (2026-07-06, gerçek claude-cli 2.1.201 + claude-fable-5)
+
+Harness: `_spikes/52-gateway/` — stateful streamable-HTTP Go MCP server (`server/main.go`)
+GET SSE akışını açık tutuyor, `spike_grow` çağrılınca `spike_secret`'i `registerTool` edip
+**`notifications/tools/list_changed`** push ediyor. claude tek `-p` turunda, allowlist
+**yalnız `mcp__spike`** wildcard'ı ile sürüldü.
+
+| Soru | Sonuç | Kanıt |
+|---|---|---|
+| **Q1** — mid-turn list_changed + AYNI turda çağrı | ✅ **EVET** | Tek turda: `spike_grow` → server push (`pushed list_changed`, `flushed`) → claude `spike_secret`'i çağırıp **`SECRET=GATEWAY_OK_42`** aldı. |
+| **Q2** — wildcard allowlist sonradan gelen aracı kapsıyor | ✅ **EVET** | Allowlist spawn'da `mcp__spike` sabit; `spike_secret` yalnız grow'dan SONRA belirdi, yine de restart'sız çağrılabildi. |
+| **Q3** — mid-turn list_changed cache prefix'i siliyor mu | ✅ **HAYIR (marjinal)** | list_changed sonrası model çağrıları `cacheRead≈29360–29570`, yalnız `cacheCreate 56–210` delta. Tam prefix rebuild YOK. Final: cacheRead 79456 > cacheCreate 63778. |
+| **Q0** — persistent+MCP config kararsızlığı (§3-D) | ⚠️ **KOD-DOĞRULANDI, ampirik bekliyor** | `writeCLIMCPConfig` temp yol churn'ü + `defer cleanup` + fingerprint(mcpConfigPath) kesin. Ampirik teyit TionSwarm'ı çalıştırmayı gerektirir; düzeltme unit-testlenebilir (içerik-hash fingerprint). |
+
+**Beklenmedik + kritik gözlem — ToolSearch aracılığı.** claude, spike araçlarını **inline
+ETMEDİ**; her birini çağırmadan önce `ToolSearch select:mcp__spike__<tool>` ile şemasını
+**on-demand yükledi**. Yani #40314 (HTTP-transport defer edilmez) claude 2.1.201'de artık
+geçerli değil gibi görünüyor — HTTP MCP araçları da deferral'a giriyor. Bu, gateway
+modelini claude-cli'nın kendi ToolSearch'iyle **uyumlu** kılar: extended yüzeyi başta
+BOŞ/az ilan et → şemalar bağlama hiç girmez → list_changed ile büyüt → ToolSearch select
+ile yüklenir → wildcard izin verir → aynı turda çağrılır. **name-only'nin yapamadığı
+gerçek tasarruf budur.**
+
+**Karar:** Faz 0 **YEŞİL** (Q1/Q2/Q3 olumlu, Q0 kod-net). Uygulamaya geçilir.
+
 ---
 
 ## 4. Mimari kritiği + karar
@@ -334,3 +359,217 @@ onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyo
 
 > Onaydan sonra: Faz 0 spike harness'i + §3-D düzeltme prototipi ile başlanır; sonuçlar
 > bu dosyaya (§3) işlenir ve gerçek uygulama fazları planlanır.
+
+---
+
+## 11. ONAYLANAN KARARLAR (Bilal, 2026-07-06)
+
+1. ✅ **Mimari: S2** (gateway desenini TionSwarm içine kat). Faz 3 opsiyonel/sonraki.
+2. ✅ **Kod yazımından önce Q0-Q3 spike** çalıştırıldı → §3-E: **YEŞİL**.
+3. ✅ **§3-D düzeltmesi öneri gibi uygulanacak:** session-ömürlü kararlı config yolu,
+   içerik-hash fingerprint, session-ömürlü token, wildcard allowlist.
+4. ✅ **Extended tier → `mcp__tionswarm_extended` wildcard** allowlist'ine geçecek.
+5. ✅ **summary/name-only emekliye ayrılacak** — CLI projeksiyonu 2-durum (core /
+   gateway-managed), native 4-tier korunur (bkz. §7-15).
+6. ✅ **Interaction token → per-(session,agent)** (aşağıda detaylı sonuçlar).
+7. ✅ **Faz 3 kapsamı: auth (loopback+token) + VPS zincir göçü dahil** (aşağıda detay).
+
+### 11-A. Token'ı per-run → per-(session,agent) yapmanın DETAYLI SONUÇLARI
+
+**Bugünkü durum.** Interaction MCP her şeyi **per-run Bearer token**'a bağlar
+(`chatRuns.byToken(token)` → o anki canlı turn). Token bir turn (chatRun) yaşam süresine
+eşit. One-shot `-p` yolunda sorun yok: her turn yeni process, yeni config, yeni token.
+
+**Persistent'te çelişki.** Persistent process config'i (dolayısıyla token'ı Authorization
+header'ında) **spawn'da sabitlenir** ve process **birçok turn'ü** kapsar. Sabit token ↔
+değişen run → `byToken` sonraki turn'lerde **eski/ölü run'a** çözer (veya `Valid=false` →
+401). Yani bugün persistent+interaction düzgün çalışmaz (config churn bunu maskeliyordu).
+
+**Değişiklik.** Token'ı `(session,agent)` kimliğine bağla; backend `byToken`'ı **o
+anahtarın AKTİF run'ına** çözsün (turn başında set edilen `activeRun[key]`).
+
+**Sonuçlar (olumlu):**
+- Persistent process ömrü boyunca **tek kararlı token** → config değişmez → fingerprint
+  değişmez → **warm-reuse korunur** (§3-D'nin diğer yarısı). Gateway list_changed'i canlı
+  SSE'ye push edebilir çünkü bağlantı/oturum turn'ler arası **yaşıyor**.
+- Token artık kararlı bir sırrın parçası → mcp-config dosyası turn'ler arası **aynı kalır**.
+
+**Sonuçlar (dikkat/risk):**
+- **Güvenlik ömrü uzar:** token artık turn değil, session+agent ömürlü. Sızarsa pencere
+  daha geniş. Azaltma: yüksek-entropi token, **loopback-only** endpoint (zaten öyle),
+  process ölünce token'ı geçersiz kıl (pool Drop/evict ile bağla).
+- **Yetki kapsamı:** `byToken` "aktif run" çözümü, iki turn arası boşlukta (run yokken)
+  gelen çağrıyı **temiz reddetmeli** (sessiz kabul yok) — CLI process turn dışında tool
+  çağırmaz ama defansif ol.
+- **Çoklu-agent izolasyonu:** anahtar `session|agent` olduğundan her agent'ın kendi warm
+  process'i + kendi token'ı; çapraz-agent token karışması yok (mevcut `cliSessions` anahtarıyla hizalı).
+- **Migration:** `interactionBackend.Valid/Tools/Call` imzaları token→key çözümüyle
+  güncellenir; `chatRuns` bir `activeRun map[key]*chatRun` taşır. Token üretimi
+  run-başından **session-başına** taşınır. Testler: token round-trip + turn-arası reddi.
+
+### 11-B. Faz 3 — harici sunum: auth (loopback+token) + VPS zincir göçü DETAY
+
+**Kapsam onaylandı** ama **opsiyonel/sonraki faz** (S2 iç-fix'ten bağımsız değer).
+
+**Auth (loopback + token).**
+- TionSwarm API'sinde bugün **auth YOK + CORS wildcard** (§7-9). `/mcp/gateway` dış
+  client'a açılırsa bu kabul edilemez.
+- Model: gateway'in `SISTEM.md` kuralı — **default `127.0.0.1` (loopback)**; ağa/Tailscale'e
+  açmak için explicit `0.0.0.0` + **`GATEWAY_AUTH_TOKEN` muadili ŞART**. Token setliyse
+  `/health` hariç her istek `Authorization: Bearer <token>` ister.
+- Interaction endpoint'in mevcut Bearer middleware'i (`bearer()`/`Valid`) **yeniden
+  kullanılır** (YENİ-F) → ayrı auth yazma yükü düşük.
+
+**VPS zincir göçü (gateway-of-gateways).**
+- TS gateway bugün `vps-*` sunucuları streamable-http URL'li backend olarak zincirliyor
+  (Tailscale `<vps-host>:9090/servers/{name}/mcp`). TionSwarm `internal/mcp` **zaten
+  streamable-http backend destekliyor** → `vps-*` sadece URL'li MCP kaynağı olarak eklenir
+  (§7-8). Zincirleme neredeyse bedava.
+- Göç adımları: (a) TS `config.json`'daki 18 server + 7 vps girişini TionSwarm MCP-server
+  kayıtlarına aktar (transport/headers/env korunarak), (b) `autoActivate`/preset ↔ TionSwarm
+  tier/görünürlük eşle, (c) auth token + loopback default, (d) audit paritesi (gateway-audit.jsonl
+  ↔ debug.jsonl), (e) uçtan uca doğrula (Craft/harici Claude Code → TionSwarm `/mcp/gateway`
+  → vps zincir → backend).
+- **ROI notu:** TS gateway çalışıyor; göç faydası = tek Go binary + tek pool + TS runtime
+  (Bun) bağımlılığının kalkması. İç CLI-fix (Faz 0-2) bundan **bağımsız** değerli; Faz 3
+  ayrı tetiklenir.
+
+---
+
+## 12. Uygulama durumu
+
+### ✅ Faz 0-b — config kararlılığı (UYGULANDI, 2026-07-06)
+
+§3-D'nin üç kaynağı da kapatıldı; `go test ./...` **693 passed**. Değişiklikler:
+
+1. **Extended tier wildcard allowlist** — `internal/agent/climcp.go`: extended tier artık
+   per-tool (`mcp__tionswarm_extended__<tool>` × N) yerine **tek sunucu-seviyesi wildcard
+   `mcp__tionswarm_extended`** (dış MCP'lerin `mcp__<key>` deseniyle aynı). Sonradan
+   list_changed ile gelen araç zaten izinli + allowlist turn-arası sabit. Core tier
+   per-tool kaldı (küçük/stabil). Test: `climcp_test.go` güncellendi.
+2. **İçerik-hash fingerprint** — `internal/providers/claudecli_session.go`:
+   `persistentFingerprint` artık `mcpConfigPath`/`settingsPath` **yollarını** değil dosya
+   **içeriğini** hash'liyor (`hashFileContent`). Aynı içerik farklı temp yolda → aynı
+   fingerprint → warm reuse. Test: `claudecli_fingerprint_test.go`.
+3. **Stable per-(session,agent) token** — `internal/api/chat_control.go` +
+   `chat_stream.go` + `autonomous_interaction.go`: Bearer token artık per-run uuid değil,
+   **(session,agent) başına kararlı sır** (`interactionToken`); `byToken` bunu `active`
+   map ile in-flight run'a çözer (per-run fallback korundu). Token turn-arası sabit →
+   mcp-config byte-identical → fingerprint churn yok. Test: `interaction_token_test.go`.
+
+**Birlikte etki:** wildcard (allowlist sabit) + stable token (config içeriği sabit) +
+içerik-hash (yol churn'ü önemsiz) → persistent+MCP artık turn-arası **warm** kalır.
+Ampirik warm-reuse oranı ölçümü Faz 4'e bırakıldı (çalışan TionSwarm gerektirir).
+
+> **Kalan minör:** `writeCLIMCPConfig` hâlâ her tur temp dosya yazıp `defer cleanup` ile
+> siliyor (israf, correctness değil — claude config'i yalnız spawn'da okur). Faz 1'de
+> session-ömürlü config dosyasına geçilebilir.
+
+### ✅ Faz 1-a — stateful streaming server (UYGULANDI, 2026-07-06)
+
+`interaction/server.go` POST-only stateless'ten **stateful + streaming**'e yükseltildi
+(`go test ./...` **694 passed**). Spike server (`_spikes/52-gateway/server`) referans alındı.
+
+- `initialize` → `capabilities.tools.listChanged:true` (eskiden `{}`).
+- `GET` → gerçek server→client **SSE stream** açar + tutar (eskiden 405). Tool sonuçları
+  hâlâ POST'ta inline; SSE yalnız bildirim (`notifications/tools/list_changed`) taşır.
+- `Server.PushToolsChanged(token)` + `HasStream(token)` — push kanalı (non-blocking,
+  stream yoksa güvenli no-op). `api.Server.interactionSrv` concrete alanı push'u erişilebilir kılar.
+- `interaction.Handler` compat shim korundu. Test: `TestInteraction_GetStreamReceivesPush`,
+  `TestInteraction_PushNoStreamIsNoop`. Doc 11 güncellendi.
+- **Davranış:** araç yüzeyi DEĞİŞMEDİ (extended hâlâ tam set); yalnız push altyapısı kuruldu
+  → güvenli/inert increment. Dinamik büyütme Faz 1-b'de.
+
+### ✅ Faz 1-b — dinamik extended yüzeyi + tek activate semantiği (UYGULANDI, 2026-07-06)
+
+extended `Tools(token,"extended")` artık (flag ON) **boş başlar**; model `activate_tools`
+çağırınca backend aracı aktif sete ekler + `PushToolsChanged(token)` ile list_changed push
+eder → claude re-list → ToolSearch select ile yükler → wildcard allowlist izin verir → aynı
+turda çağırır (spike Q1/Q2 mekaniği). `go test ./...` **701 passed**, flag **default OFF**.
+
+**Uygulanan parçalar:**
+1. **Feature-flag `GatewayDynamicExtended`** (`gateway_tunable.go`, `tunables.go` alanı,
+   default OFF) + boot env seed `TIONSWARM_GATEWAY_DYNAMIC_EXTENDED` (`app.go`).
+2. **Per-token aktif-extended durumu** — `interactionBackend.activated map[token]map[string]bool`
+   + mutex; `Tools(token,"extended")` flag ON iken bunu filtreler (`isActivated`).
+3. **Core meta-tools `activate_tools`/`deactivate_tools`** — yalnız flag ON iken ilan edilir
+   (`interactionToolSpecs`), core (alwaysLoad) tier. `Call` → `callActivate` → aktif seti
+   mutate + `srv.PushToolsChanged(token)`. Bilinmeyen ad → temiz hata (`extendedCandidates`
+   ile doğrulama). Namespaced ad da kabul (`bareToolName` ile normalize).
+4. **Pusher referansı** — `interactionBackend.setServer(srv)` (server construct sonrası,
+   `api/server.go`); nil-safe (stream yoksa sonraki tools/list'te converge).
+5. **Keşif nudge'ı** — `renderLazyToolCatalog` artık `gateway` parametresi alır; CLI+gateway
+   modunda "yüklemek için `activate_tools` çağır (ToolSearch değil)" der. Harici MCP araçları
+   hâlâ ToolSearch ile.
+6. **YENİ-D sıralama** — activate push'u sonuç dönmeden ÖNCE queue'lanır (SSE flush arası).
+
+**Testler:** `gateway_dynamic_test.go` (boş başlama, activate→görünür, deactivate,
+bilinmeyen ad, namespaced ad, flag-OFF tam yüzey), `tooltier_test.go`
+(`TestLazyCatalogGatewayFormUsesActivateTools`), `interaction/server_test.go` (push).
+
+### ✅ Faz 1-b canlı validation (2026-07-06, gerçek claude-cli 2.1.201 + claude-fable-5)
+
+Harness: `internal/interaction/live_gateway_test.go` (`TestLiveGatewayActivate`, gate
+`TIONSWARM_LIVE_CLI=1`). **GERÇEK `interaction.Server`** (fake dinamik backend) +
+`writeCLIMCPConfig` birebir yapısı (core=alwaysLoad `/core`, extended `/extended`, extended
+**wildcard `mcp__gwext`** allowlist) + gerçek `claude -p` turu.
+
+**Sonuç: ✅ tek turda uçtan uca çalıştı.** claude-fable-5:
+1. `activate_tools(tools=["gizmo_secret"])` → "activated: … now callable"
+2. Server `tools/list_changed` push etti → `gizmo_secret` **extended (`gwext`)** bağlantısında belirdi
+3. `mcp__gwext__gizmo_secret` çağrıldı → **`SECRET=GATEWAY_LIVE_OK_77`** alındı (num_turns=4, tek `-p`)
+4. Cache: `cache_read=176137`, `cache_creation=9685` — büyük ölçüde warm.
+
+**Validation'ın yakaladığı GERÇEK bug (düzeltildi):** core ve extended **iki ayrı MCP
+bağlantısı** ama **tek token** paylaşıyor. `streams` map'i token'la anahtarlanınca bir GET
+stream diğerini eziyordu → push yanlış bağlantıya gidip claude **extended'i hiç re-list
+etmeyebilirdi**. Fix: `streams` artık **token+tier** ile anahtarlanır; `PushToolsChanged`
+token'ın **tüm** stream'lerine broadcast eder (doğru tier re-list olur, diğeri ucuz no-op).
+Model bunu doğruladı: "aktive edilen araç `activate_tools`'un olduğu `gwcore`'da değil
+`gwext`'te yayınlandı" — **beklenen/doğru davranış** (activate_tools=core, aktive edilen=extended).
+
+**KALAN (default-on ÖNCESİ):**
+- **Tam-yol validation:** gerçek `api.interactionBackend` + canlı chatRun ile (fake backend
+  yerine) — mekanik unit+live ile kanıtlandı; tam-yol Faz 4 ölçümüyle birlikte.
+- permission_prompt yeni-aktive aracı ask modunda gate'liyor mu (YENİ-A).
+- Öncesi/sonrası token ölçümü: boş-extended gerçekten name-only'den fazla kazandırıyor mu (Faz 4).
+
+### ✅ Faz 2 — meta-araç konsolidasyonu + CLI 2-durum projeksiyonu (UYGULANDI, 2026-07-06)
+
+**Birleşik meta-araç seti (gateway ↔ TionSwarm eşlemesi):**
+
+| Gateway (TS) | TionSwarm karşılığı | Seviye | Nerede |
+|---|---|---|---|
+| `activate_tools` | `activate_tools` | session | core interaction (Faz 1-b, flag) |
+| `deactivate_tools` | `deactivate_tools` | session | core interaction (Faz 1-b, flag) |
+| `active_tools` | **`active_tools`** (YENİ, Faz 2) | session | core interaction (flag) |
+| `list_servers` | `list_mcp_servers` | config | self-management (bridged extended) |
+| `enable_server`/`disable_server` | `toggle_mcp_server` | config | self-management (bridged extended) |
+| — | `create_mcp_server` | config | self-management (gateway'de yok, ekstra) |
+
+Model tek tutarlı yüzey görür: **session-seviyesi** activate/deactivate/active (core, eager,
+flag ON iken), **config-seviyesi** list/toggle/create MCP server (self-management). İki
+`activate_tools` çakışması yok — CLI'da tek semantik (interaction meta-tool → aktif set +
+`PushToolsChanged`); native path kendi registry `activate_tools`'unu kullanır (ayrı yol).
+
+- **`active_tools`** — `callActiveTools`: session'ın aktive edilmiş extended araçlarını
+  listeler (`activeExtended` sıralı snapshot). Test: `gateway_dynamic_test.go`.
+
+**CLI 2-durum projeksiyonu (summary/name-only "emekliliği"):** `cliTier` **zaten**
+summary ve name-only'yi tek `extended` durumuna indiriyordu (`full→core`,
+`summary|name-only→extended`, `hidden→absent`) — yani CLI teli **zaten 2+1 durum**. Faz 1-b
+katalog nudge'ı (activate_tools) bunu UX'te tamamladı: CLI'da model için tek anlamlı ayrım
+**core (eager) vs extended (activate ile gelir)**. Native yol 4-tier'ı korur (token farkı
+gerçek). **Kod değişikliği gerekmedi** — projeksiyon mevcut; Faz 2 bunu belgeliyor.
+
+**Bilinçli DEFER (ayrı iş):** `hidden→deferred-usable` (native `tool_search`+activate
+muadili CLI'da). Bugün `hidden→absent` (katalogda yok, `cliBridgeSkipHidden` ile köprülenmez).
+Gateway'de hidden'ı da aktive edilebilir yapmak, CLI için **hidden araçları arayan bir
+`tool_search` meta-tool** + hidden'ı köprüleme gerektirir → görünürlük postürünü değiştirir,
+gateway default-on kararıyla (Faz 4) birlikte ele alınmalı.
+
+### Sıradaki (Faz 2 sonrası)
+
+- **Faz 3:** harici `/mcp/gateway` (auth loopback+token, VPS zincir göçü) — §11-B.
+- **Faz 4:** öncesi/sonrası token ölçümü (aynı harness) + default-on kararı; sonra
+  hidden→deferred-usable + gateway `tool_search` follow-up.

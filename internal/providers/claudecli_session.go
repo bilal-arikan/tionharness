@@ -232,13 +232,35 @@ func (c *ClaudeCLI) persistentFingerprint(req Request, sys string) string {
 	}
 	fmt.Fprintln(h, model)
 	fmt.Fprintln(h, req.PermissionMode)
-	fmt.Fprintln(h, c.mcpConfigPath)
-	fmt.Fprintln(h, c.settingsPath)
+	// Hash the MCP config + settings file CONTENT, not their temp PATHS. Both
+	// writeCLIMCPConfig and writeCLISettings write a fresh os.CreateTemp file every
+	// turn, so the path churns even when the file is byte-identical — which would flip
+	// this fingerprint and cold-restart the persistent process on EVERY turn, defeating
+	// warm reuse whenever MCP is enabled (Doc 52 §3-D). Hashing content keeps the
+	// process warm across turns whose config did not actually change.
+	hashFileContent(h, c.mcpConfigPath)
+	hashFileContent(h, c.settingsPath)
 	fmt.Fprintln(h, c.permissionPromptTool)
 	fmt.Fprintln(h, strings.Join(c.allowedTools, ","))
 	fmt.Fprintln(h, strings.Join(c.disallowedTools, ","))
 	fmt.Fprintln(h, sys)
 	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// hashFileContent feeds a file's bytes into h so the persistent fingerprint tracks
+// config CONTENT rather than its churning temp path. Falls back to the path string
+// when the file is missing/unreadable — so an unreadable config still contributes a
+// deterministic value instead of silently hashing nothing (which would collapse two
+// genuinely different configs into the same fingerprint).
+func hashFileContent(h io.Writer, path string) {
+	if path == "" {
+		return
+	}
+	if data, err := os.ReadFile(path); err == nil {
+		_, _ = h.Write(data)
+		return
+	}
+	fmt.Fprintln(h, path)
 }
 
 // CLISessionPool keeps one warm CLISession per conversation key (session id +

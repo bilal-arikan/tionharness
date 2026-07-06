@@ -383,9 +383,55 @@ func (r *chatRun) clearWrite() {
 type chatRuns struct {
 	mu   sync.Mutex
 	runs map[string]*chatRun
+	// secrets holds a STABLE Interaction MCP Bearer secret per (session,agent) — the
+	// value a persistent claude-cli process presents across ALL its turns. Minted once,
+	// reused, so the CLI mcp-config (which carries the token in an Authorization header)
+	// stays byte-identical turn-to-turn → the persistent launch fingerprint does not
+	// churn → the warm process is reused (Doc 52 §3-D, §11-decision 6). Keyed
+	// "sessionID\x00agentID". A per-run uuid (the old scheme) changed every turn and
+	// forced a cold restart of any persistent session with the Interaction MCP wired.
+	secrets map[string]string
+	// active maps a live Bearer secret → the run currently serving it, so byToken can
+	// resolve a stable (reused) token to the single in-flight turn. Only one turn per
+	// (session,agent) runs at a time (turns serialise), so this is unambiguous.
+	active map[string]*chatRun
 }
 
-func newChatRuns() *chatRuns { return &chatRuns{runs: make(map[string]*chatRun)} }
+func newChatRuns() *chatRuns {
+	return &chatRuns{
+		runs:    make(map[string]*chatRun),
+		secrets: make(map[string]string),
+		active:  make(map[string]*chatRun),
+	}
+}
+
+// interactionToken returns the STABLE Interaction MCP Bearer secret for a
+// (session,agent) pair, minting one on first use. The same value is returned for
+// every turn of that pair so the CLI mcp-config stays byte-identical and the
+// persistent claude-cli process is not cold-restarted each turn (Doc 52 §3-D).
+// Callers must also bindActive(token, run) for the turn so byToken can resolve it.
+func (c *chatRuns) interactionToken(sessionID, agentID string) string {
+	key := sessionID + "\x00" + agentID
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if t, ok := c.secrets[key]; ok {
+		return t
+	}
+	t := uuid.NewString()
+	c.secrets[key] = t
+	return t
+}
+
+// bindActive marks run as the turn currently serving token, so byToken resolves the
+// stable (reused-across-turns) token to this in-flight run. Cleared in unregister.
+func (c *chatRuns) bindActive(token string, run *chatRun) {
+	if token == "" || run == nil {
+		return
+	}
+	c.mu.Lock()
+	c.active[token] = run
+	c.mu.Unlock()
+}
 
 // register creates a control handle for a run (with a fresh per-run token) and
 // returns it. sessionID ties the run to its chat session for activeSessionIDs.
@@ -461,6 +507,16 @@ func (c *chatRuns) unregister(id string) {
 	c.mu.Lock()
 	run := c.runs[id]
 	delete(c.runs, id)
+	// Drop any stable-token bindings that pointed at this run so a later Bearer call
+	// (a CLI process turn that has since ended) no longer resolves to a dead turn.
+	// The (session,agent) secret itself survives in c.secrets for the NEXT turn.
+	if run != nil {
+		for tok, r := range c.active {
+			if r == run {
+				delete(c.active, tok)
+			}
+		}
+	}
 	c.mu.Unlock()
 	if run != nil {
 		close(run.done)
@@ -473,13 +529,20 @@ func (c *chatRuns) get(id string) *chatRun {
 	return c.runs[id]
 }
 
-// byToken resolves a run by its per-run Bearer token (Interaction MCP correlation).
+// byToken resolves a run by its Interaction MCP Bearer token. It checks the stable
+// per-(session,agent) binding first (the current scheme — one token reused across a
+// persistent process's turns, resolved to the in-flight run via active), then falls
+// back to matching a run's own per-run token (autonomous turns / any caller that has
+// not bound a stable token).
 func (c *chatRuns) byToken(token string) *chatRun {
 	if token == "" {
 		return nil
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if run := c.active[token]; run != nil {
+		return run
+	}
 	for _, run := range c.runs {
 		if run.token == token {
 			return run

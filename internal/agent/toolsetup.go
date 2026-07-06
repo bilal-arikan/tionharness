@@ -207,6 +207,13 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// context block). Gated per-workspace by the same master toggle.
 	if r.SessionContextEnabled() {
 		builtins = append(builtins, tools.NewListSessionsTool(r.db))
+		// archive_sessions: bulk-archive OTHER sessions in THIS workspace (the
+		// "manage siblings" complement to update_session, which only edits the
+		// current one). Bound to r.db so it is physically workspace-scoped, and it
+		// always excludes the current session (resolved here at build time) — so an
+		// agent asked to "clean up old sessions" never has to fall back to raw REST
+		// (which loses workspace scoping and once archived the wrong workspace).
+		builtins = append(builtins, tools.NewArchiveSessionsTool(r.db, SessionIDFrom(ctx)))
 		// conversation_search: full-text search across the workspace's message
 		// history (deeper than list_sessions' titles+summaries). Same gate.
 		builtins = append(builtins, tools.NewConversationSearchTool(r.db))
@@ -648,9 +655,13 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 	// form for it (mirrors how the skills block uses skillToolNameFor). The empty
 	// provider is the keyless claude-cli default; native API providers take false.
 	cli := agent.Provider == "" || agent.Provider == "claude-cli"
+	// Gateway dynamic surface (Doc 52 Faz 1-b): a claude-cli agent loads the deferred
+	// built-in (extended) tools via TionSwarm's activate_tools, not the CLI's ToolSearch
+	// (which cannot find a tool that is not advertised yet). Only when the flag is on.
+	gateway := cli && r.tun != nil && r.tun.GatewayDynamicExtended()
 	// Visible lazy tools are enumerated; the hidden self-management suite is folded
 	// into a single skill pointer (rendered when hiddenCount > 0).
-	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), cli)
+	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), cli, gateway)
 }
 
 // lazyCatalogMCPListLimit caps how many MCP (namespaced) lazy tools are listed
@@ -713,7 +724,7 @@ func catalogDisplayName(name string, cli bool) (string, bool) {
 // TionSwarm's native activate_tools (the CLI has neither activate_tools nor
 // tool_search). CLI-native built-ins (WebFetch) are dropped. This mirrors how the
 // skills block (CatalogBlockForAgentTool) already adapts to the CLI.
-func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool) string {
+func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli, gateway bool) string {
 	if len(lazy) == 0 && hiddenCount == 0 {
 		return ""
 	}
@@ -729,12 +740,23 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool) 
 
 	var b strings.Builder
 	b.WriteString("# Available Tools (load on demand)\n")
-	if cli {
+	switch {
+	case cli && gateway:
+		// Gateway dynamic surface (Doc 52 Faz 1-b): the built-in extended tools below are
+		// NOT in your tool list yet — you load them by calling `activate_tools` (a core
+		// tool), which registers them and makes them callable the SAME turn. This is the
+		// TionSwarm path, NOT the CLI's own ToolSearch (which cannot find an un-advertised
+		// tool). External MCP server tools (mcp__<server>__…) still load via ToolSearch.
+		b.WriteString("These TionSwarm tools are DEFERRED (not yet in your tool list). To use one, call " +
+			"`activate_tools` with its name(s) (the namespaced name shown below, or its bare form) — it becomes " +
+			"callable immediately. Activate everything you expect to need in one call. (External MCP server tools " +
+			"named `mcp__<server>__…` load with the `ToolSearch` tool instead.)\n")
+	case cli:
 		b.WriteString("These TionSwarm tools are exposed as MCP tools and may be DEFERRED (schema not " +
 			"preloaded). They are listed by their EXACT namespaced names below (some with a short summary). " +
 			"Before your first call, load one with `ToolSearch` (e.g. `select:<name>`); calling an unloaded " +
 			"name returns \"No such tool available\". Load everything you expect to need in one call.\n")
-	} else {
+	default:
 		b.WriteString("These tools are NOT loaded yet — only their names (and a short summary for some) are shown. " +
 			"Entries listed by name alone are deferred: use `tool_search` to discover what they do by keyword. " +
 			"To use any tool, first call `activate_tools` with its exact name(s); its full schema becomes " +

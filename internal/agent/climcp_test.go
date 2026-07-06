@@ -73,13 +73,15 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 		t.Errorf("extended URL must target the /extended tier, got %q", ext.URL)
 	}
 
-	// Allowlist entries are namespaced under each tier's server key.
+	// Core tier is allowlisted per-tool under the core server key; the extended tier
+	// uses a single SERVER-LEVEL wildcard (no per-tool suffix) so tools added later via
+	// tools/list_changed are already permitted and the persistent-session fingerprint
+	// stays stable (Doc 52 §3-D).
 	want := map[string]bool{
 		"mcp__tionswarm_interaction__Bash":              true,
 		"mcp__tionswarm_interaction__ask_user":          true,
 		"mcp__tionswarm_interaction__permission_prompt": true,
-		"mcp__tionswarm_extended__update_session":       true,
-		"mcp__tionswarm_extended__create_agent":         true,
+		"mcp__tionswarm_extended":                       true, // wildcard covers update_session, create_agent, and any list_changed additions
 	}
 	got := map[string]bool{}
 	for _, a := range allowed {
@@ -88,6 +90,13 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 	for w := range want {
 		if !got[w] {
 			t.Errorf("allowlist missing %q; got %v", w, allowed)
+		}
+	}
+	// The extended tier must NOT be enumerated per-tool any more (that per-tool churn is
+	// exactly what the wildcard replaces).
+	for _, a := range allowed {
+		if strings.HasPrefix(a, "mcp__tionswarm_extended__") {
+			t.Errorf("extended tier should use a server-level wildcard, not per-tool entry %q", a)
 		}
 	}
 }

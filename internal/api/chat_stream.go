@@ -442,7 +442,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			run.setTierVis(visOf)
 			if url := s.interactionURL(); url != "" {
 				coreNames, extNames := splitInteractionTiers(interactionAdvertisedNames(s.tun, false), bridgeDefs, visOf)
-				turnCtx = tools.WithInteractionEndpoint(turnCtx, url, run.token, coreNames, extNames)
+				// Stable per-(session,agent) Bearer token (not run.token): keeps the CLI
+				// mcp-config byte-identical across turns so a persistent process stays warm
+				// (Doc 52 §3-D). bindActive resolves it to this in-flight run.
+				tok := s.runs.interactionToken(req.SessionID, agentRow.ID)
+				s.runs.bindActive(tok, run)
+				turnCtx = tools.WithInteractionEndpoint(turnCtx, url, tok, coreNames, extNames)
 			}
 
 			agentStart := time.Now()

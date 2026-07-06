@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeBackend is a minimal Backend for protocol tests.
@@ -118,10 +119,53 @@ func TestInteraction_ToolsCall(t *testing.T) {
 	}
 }
 
-func TestInteraction_GetNotAllowed(t *testing.T) {
-	h := Handler(&fakeBackend{validToken: "good"}, nil)
-	rec := do(h, http.MethodGet, "Bearer good", "")
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("want 405, got %d", rec.Code)
+// TestInteraction_GetStreamReceivesPush verifies the GET SSE stream is held open and
+// a PushToolsChanged frame reaches it — the gateway push channel (Doc 52 Faz 1). The
+// stream blocks until its request context is cancelled, so we drive it with a
+// cancellable context and cancel once the frame has been observed.
+func TestInteraction_GetStreamReceivesPush(t *testing.T) {
+	srv := NewServer(&fakeBackend{validToken: "good"}, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req := httptest.NewRequest(http.MethodGet, "/mcp/interaction", nil).WithContext(ctx)
+	req.Header.Set("Authorization", "Bearer good")
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() { srv.ServeHTTP(rec, req); close(done) }()
+
+	// Wait until the stream is registered, then push a list_changed frame.
+	deadline := time.Now().Add(2 * time.Second)
+	for !srv.HasStream("good") {
+		if time.Now().After(deadline) {
+			t.Fatal("stream was not registered")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !srv.PushToolsChanged("good") {
+		t.Fatal("PushToolsChanged returned false for an open stream")
+	}
+
+	// Give the writer a moment to flush, then close the stream and inspect the body.
+	for time.Now().Before(deadline) {
+		if strings.Contains(rec.Body.String(), "tools/list_changed") {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if !strings.Contains(rec.Body.String(), "notifications/tools/list_changed") {
+		t.Fatalf("SSE stream did not carry list_changed; body=%q", rec.Body.String())
+	}
+}
+
+// TestInteraction_PushNoStreamIsNoop verifies a push to a session with no open
+// stream is a safe no-op (returns false, does not block).
+func TestInteraction_PushNoStreamIsNoop(t *testing.T) {
+	srv := NewServer(&fakeBackend{validToken: "good"}, nil)
+	if srv.PushToolsChanged("good") {
+		t.Fatal("push to a session with no open stream should return false")
 	}
 }

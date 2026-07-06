@@ -151,6 +151,14 @@ type Tunables struct {
 	// (enableCodeMode, default off); TIONSWARM_CODE_MODE=1 seeds the setting at
 	// boot. See codemode_tunable.go.
 	codeMode bool
+
+	// gatewayDynamicExtended (Doc 52 Faz 1-b) — when true, the claude-cli Interaction
+	// MCP extended tier starts EMPTY and grows on demand: the model calls activate_tools,
+	// the backend registers the tool + pushes tools/list_changed, the CLI re-lists and
+	// calls it the same turn (gateway pattern). When false (default), the extended tier
+	// advertises its full set up front (historical). TIONSWARM_GATEWAY_DYNAMIC_EXTENDED=1
+	// seeds it at boot. See gateway_tunable.go.
+	gatewayDynamicExtended bool
 }
 
 // DefaultDebugJournalCap mirrors db.DefaultDebugJournalCap as the resolved

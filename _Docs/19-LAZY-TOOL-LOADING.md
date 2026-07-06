@@ -518,3 +518,39 @@ yüzden kaynak model 4 tier kalır. claude-cli inherently 2 durumludur → 4 tie
 **iyi tanımlı bir projeksiyona** iz düşer. Tests: `api/clitier_test.go`
 (`TestCLITierProjectsVisibility`, `TestSplitInteractionTiersHonorsVisibility`),
 `tools/bridge_filter_test.go` (`TestBridgeableDefsIncludesFullSelfManaged`).
+
+## Extended tier wildcard allowlist + persistent config kararlılığı (2026-07-06)
+
+> **Not:** Gateway entegrasyonunun (Doc **52**) Faz 0-b'si. Extended tier'ın CLI
+> allowlist'i **per-tool → sunucu-seviyesi wildcard**'a geçti; ayrıca persistent
+> claude-cli oturumunun her tur cold-restart olmasına yol açan config kararsızlığı düzeltildi.
+
+- **`mcp__tionswarm_extended` wildcard** (`climcp.go`): extended araçlar artık tek tek
+  (`mcp__tionswarm_extended__<tool>`) değil, dış MCP'lerin `mcp__<key>` deseniyle aynı
+  **tek wildcard** ile allowlist'lenir. Sonuç: (a) `tools/list_changed` ile sonradan
+  gelen araç zaten izinli (gateway ön koşulu, Doc 52 Q2 doğruladı), (b) allowlist
+  turn-arası **sabit** → persistent launch fingerprint churn'ü kalkar. Core tier per-tool
+  kaldı. Test: `TestWriteCLIMCPConfigTwoTierInteraction` güncellendi.
+- **İçerik-hash fingerprint** (`claudecli_session.go`): `persistentFingerprint` config
+  dosyası **yolunu** değil **içeriğini** hash'ler → aynı içerik farklı temp yolda warm kalır.
+- **Stable per-(session,agent) token** (`chat_control.go`/`chat_stream.go`/
+  `autonomous_interaction.go`): Interaction MCP Bearer token per-run uuid yerine
+  (session,agent) başına kararlı sır; `byToken` `active` map ile in-flight run'a çözer.
+- **Etki:** persistent+MCP birlikte artık turn-arası **warm** kalır (önceden her tur soğuk).
+  Detay + spike sonuçları: Doc **52** §3-E, §12.
+
+### Gateway dinamik extended yüzeyi — feature-flag (2026-07-06, Faz 1-b)
+
+- **`GatewayDynamicExtended` tunable (default OFF)** + `TIONSWARM_GATEWAY_DYNAMIC_EXTENDED=1`
+  boot seed. Açıkken claude-cli extended tier'ı **boş başlar**; model core'daki
+  **`activate_tools`** meta-tool'unu çağırınca backend aracı kaydeder + `tools/list_changed`
+  push eder → CLI re-list eder → aynı turda çağrılabilir (Doc 52 spike Q1/Q2). `deactivate_tools`
+  bağlamı boşaltır.
+- Kapalıyken (varsayılan) davranış aynen eski: extended tam set ilan eder, CLI kendi
+  ToolSearch'iyle defer eder. `renderLazyToolCatalog` CLI+gateway modunda katalog nudge'ını
+  "ToolSearch yerine `activate_tools`" olarak render eder.
+- **CLI'da 2-durum projeksiyonu netleşir:** flag açıkken `hidden`/name-only tümü gerçekten
+  "tools/list'te yok, activate ile gelir" = **deferred-usable**. summary/name-only CLI'da
+  anlamsızlaşır (yalnız native). Bu, §7-15'teki 2-durum modeline giden yol.
+- Kod: `agent/gateway_tunable.go`, `api/mcp_interaction.go` (`callActivate`, `activated`,
+  `Tools` filtre), `interaction/server.go` (push). Detay: Doc **52** §12.

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"runtime"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
@@ -26,6 +28,90 @@ const askTimeout = 15 * time.Minute
 type interactionBackend struct {
 	runs *chatRuns
 	tun  *agent.Tunables // gates self-manage tools (spawn_session) on the CLI path
+	// srv is the streaming server, used to PUSH tools/list_changed when activate_tools
+	// grows a session's extended surface (Doc 52 Faz 1-b). Set after server construction
+	// (setServer); nil-safe — without it activation still mutates state, the client just
+	// converges on its next tools/list instead of via an immediate push.
+	srv *interaction.Server
+	// mu guards activated. activated maps a session token to the set of extended tool
+	// names the model has turned on this session (gateway dynamic surface). Only
+	// consulted when tun.GatewayDynamicExtended() is on; otherwise the extended tier
+	// advertises its full set and activated is unused.
+	mu        sync.Mutex
+	activated map[string]map[string]bool
+}
+
+// setServer wires the streaming server so the backend can push tools/list_changed.
+func (b *interactionBackend) setServer(s *interaction.Server) { b.srv = s }
+
+// dynamicExtended reports whether the gateway dynamic extended surface is on.
+func (b *interactionBackend) dynamicExtended() bool {
+	return b.tun != nil && b.tun.GatewayDynamicExtended()
+}
+
+// isActivated reports whether name is in the session's activated extended set.
+func (b *interactionBackend) isActivated(token, name string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	set := b.activated[token]
+	return set != nil && set[name]
+}
+
+// activateExtended turns names on for a session and returns the names newly added
+// (already-active names are skipped). Caller filters names to the real extended set.
+func (b *interactionBackend) activateExtended(token string, names []string) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.activated == nil {
+		b.activated = map[string]map[string]bool{}
+	}
+	set := b.activated[token]
+	if set == nil {
+		set = map[string]bool{}
+		b.activated[token] = set
+	}
+	var added []string
+	for _, n := range names {
+		if !set[n] {
+			set[n] = true
+			added = append(added, n)
+		}
+	}
+	return added
+}
+
+// deactivateExtended turns names off for a session and returns the names removed.
+func (b *interactionBackend) deactivateExtended(token string, names []string) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	set := b.activated[token]
+	if set == nil {
+		return nil
+	}
+	var removed []string
+	for _, n := range names {
+		if set[n] {
+			delete(set, n)
+			removed = append(removed, n)
+		}
+	}
+	return removed
+}
+
+// activeExtended returns a sorted snapshot of the session's activated extended tools.
+func (b *interactionBackend) activeExtended(token string) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	set := b.activated[token]
+	if len(set) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for n := range set {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Valid implements interaction.Backend.
@@ -54,6 +140,13 @@ var coreInteractionTools = map[string]bool{
 	"skill_search":         true,
 	"run_subagent":         true,
 	"permission_prompt":    true,
+	// Gateway meta-tools (Doc 52 Faz 1-b/2): activate/deactivate/list the extended
+	// surface. Always core (eager) so the model can always grow the surface without a
+	// discovery round-trip. Only advertised when GatewayDynamicExtended is on (see
+	// interactionToolSpecs).
+	"activate_tools":   true,
+	"deactivate_tools": true,
+	"active_tools":     true,
 }
 
 // cliTier classifies a bare tool name into the claude-cli wire tier: "core"
@@ -133,13 +226,50 @@ func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 	if run != nil {
 		visOf = run.tierVisFor()
 	}
+	// Gateway dynamic surface (Doc 52 Faz 1-b): when on, the EXTENDED tier advertises
+	// only the tools the model has activated this session — it starts empty and grows
+	// via activate_tools + tools/list_changed. Core is unaffected (always eager). When
+	// off, the extended tier advertises its full set (historical behaviour).
+	dynExtended := tier == "extended" && b.dynamicExtended()
 	filtered := make([]interaction.ToolSpec, 0, len(specs))
 	for _, s := range specs {
-		if cliTier(s.Name, visOf) == tier {
-			filtered = append(filtered, s)
+		if cliTier(s.Name, visOf) != tier {
+			continue
 		}
+		if dynExtended && !b.isActivated(token, s.Name) {
+			continue
+		}
+		filtered = append(filtered, s)
 	}
 	return filtered
+}
+
+// extendedCandidates returns the bare names that WOULD be advertised on the extended
+// tier for this run (ignoring activation) — the valid targets for activate_tools. Used
+// to validate activate/deactivate names so a typo is reported instead of silently
+// registering a phantom tool.
+func (b *interactionBackend) extendedCandidates(run *chatRun) map[string]bool {
+	specs := interactionToolSpecs(b.tun, run != nil && run.autonomous)
+	var bridge []providers.ToolDef
+	var visOf func(string) string
+	if run != nil {
+		bridge = run.bridgeDefsFor()
+		visOf = run.tierVisFor()
+	}
+	names := make([]string, 0, len(specs)+len(bridge))
+	for _, s := range specs {
+		names = append(names, s.Name)
+	}
+	for _, d := range bridge {
+		names = append(names, d.Name)
+	}
+	out := map[string]bool{}
+	for _, n := range names {
+		if cliTier(n, visOf) == "extended" {
+			out[n] = true
+		}
+	}
+	return out
 }
 
 // interactionAdvertisedNames returns the bare tool names the Interaction MCP
@@ -272,6 +402,29 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		Description: "Internal permission handler: the CLI calls this before running a tool that requires approval; it returns an allow/deny decision.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"tool_name":{"type":"string"},"input":{"type":"object"}},"required":["tool_name"]}`),
 	})
+	// Gateway meta-tools (Doc 52 Faz 1-b): only advertised when the dynamic extended
+	// surface is on. With it on, the extended tier starts empty and the model grows it
+	// by calling activate_tools; the backend registers the tool and pushes
+	// tools/list_changed so the CLI re-lists and can call it the same turn.
+	if tun != nil && tun.GatewayDynamicExtended() {
+		specs = append(specs,
+			interaction.ToolSpec{
+				Name:        "activate_tools",
+				Description: "Load one or more on-demand tools (from the 'Available Tools' catalog) into this session so you can call them. After activating, the tool becomes callable immediately. Pass tool names in `tools`.",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"On-demand tool names to activate"}},"required":["tools"]}`),
+			},
+			interaction.ToolSpec{
+				Name:        "deactivate_tools",
+				Description: "Unload previously activated on-demand tools from this session to free context. Pass tool names in `tools`.",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"Tool names to deactivate"}},"required":["tools"]}`),
+			},
+			interaction.ToolSpec{
+				Name:        "active_tools",
+				Description: "List the on-demand tools you have activated in this session (the ones you can call now, besides the always-loaded core tools).",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{}}`),
+			},
+		)
+	}
 	return specs
 }
 
@@ -401,6 +554,12 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callShell(ctx, run, args)
 	case "run_subagent":
 		return b.callRunSubagent(ctx, run, args)
+	case "activate_tools":
+		return b.callActivate(token, run, args, true)
+	case "deactivate_tools":
+		return b.callActivate(token, run, args, false)
+	case "active_tools":
+		return b.callActiveTools(token), nil
 	default:
 		// CLI-3: dispatch a bridged self-management tool through the run's native
 		// registry. The advertised catalog (and the per-agent tool filter) gates
@@ -414,6 +573,92 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		}
 		return interaction.CallResult{Text: "unknown tool: " + name, IsError: true}, nil
 	}
+}
+
+// callActivate handles the gateway activate_tools / deactivate_tools meta-tools
+// (Doc 52 Faz 1-b): it mutates the session's activated extended set and pushes
+// tools/list_changed so the CLI re-lists. activate=true adds, false removes. Names
+// are validated against the run's real extended candidates so a typo is reported
+// rather than silently registering a phantom tool.
+func (b *interactionBackend) callActivate(token string, run *chatRun, args json.RawMessage, activate bool) (interaction.CallResult, error) {
+	if !b.dynamicExtended() {
+		// Meta-tools are only advertised when the dynamic surface is on; a stray call
+		// with it off is a no-op the model can recover from.
+		return interaction.CallResult{Text: "dynamic tool activation is not enabled", IsError: true}, nil
+	}
+	var in struct {
+		Tools []string `json:"tools"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return interaction.CallResult{Text: "invalid input: " + err.Error(), IsError: true}, nil
+	}
+	if len(in.Tools) == 0 {
+		return interaction.CallResult{Text: "no tool names given", IsError: true}, nil
+	}
+	// Accept either the bare name ("notify") or the namespaced form the catalog shows
+	// ("mcp__tionswarm_extended__notify") — the model may echo either. Normalise to bare.
+	for i, n := range in.Tools {
+		in.Tools[i] = bareToolName(n)
+	}
+
+	if activate {
+		// Split requested names into valid extended candidates vs unknown, so the model
+		// gets clear feedback instead of a silent partial success.
+		candidates := b.extendedCandidates(run)
+		var valid, unknown []string
+		for _, n := range in.Tools {
+			if candidates[n] {
+				valid = append(valid, n)
+			} else {
+				unknown = append(unknown, n)
+			}
+		}
+		added := b.activateExtended(token, valid)
+		// Push list_changed so the CLI re-fetches tools/list and the newly registered
+		// tools become callable this turn. Pushed BEFORE returning so, by the time the
+		// model reads this result, the notification is already queued on the SSE stream
+		// (ordering mitigation, Doc 52 YENI-D). Nil-safe: without a live stream the
+		// client still converges on its next tools/list.
+		pushed := false
+		if len(added) > 0 && b.srv != nil {
+			pushed = b.srv.PushToolsChanged(token)
+		}
+		msg := "activated: " + strings.Join(added, ", ")
+		if len(added) == 0 {
+			msg = "no new tools activated (already active or none valid)"
+		}
+		if len(unknown) > 0 {
+			msg += "; unknown (not in the on-demand catalog): " + strings.Join(unknown, ", ")
+		}
+		if len(added) > 0 && !pushed {
+			msg += "\n(note: tools registered; they will appear on your next tool list)"
+		}
+		return interaction.CallResult{Text: msg, IsError: len(added) == 0 && len(unknown) > 0}, nil
+	}
+
+	removed := b.deactivateExtended(token, in.Tools)
+	if len(removed) > 0 && b.srv != nil {
+		b.srv.PushToolsChanged(token)
+	}
+	if len(removed) == 0 {
+		return interaction.CallResult{Text: "no tools deactivated (none were active)", IsError: false}, nil
+	}
+	return interaction.CallResult{Text: "deactivated: " + strings.Join(removed, ", ")}, nil
+}
+
+// callActiveTools implements the active_tools meta-tool: it lists the extended tools
+// the model has activated this session (the gateway analogue of the TS gateway's
+// active_tools). Config-level MCP server management (list/enable/disable) is a separate
+// concern served by the self-management suite (list_mcp_servers / toggle_mcp_server).
+func (b *interactionBackend) callActiveTools(token string) interaction.CallResult {
+	if !b.dynamicExtended() {
+		return interaction.CallResult{Text: "dynamic tool activation is not enabled", IsError: true}
+	}
+	active := b.activeExtended(token)
+	if len(active) == 0 {
+		return interaction.CallResult{Text: "No on-demand tools activated. Use activate_tools to load one from the 'Available Tools' catalog."}
+	}
+	return interaction.CallResult{Text: "Activated tools (callable now):\n- " + strings.Join(active, "\n- ")}
 }
 
 // interactionURL builds the loopback URL a CLI subprocess uses to reach this

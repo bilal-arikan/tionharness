@@ -2,6 +2,30 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-06**
 
+## `archive_sessions` (workspace-scoped toplu oturum arşivleme) ✅ (2026-07-06)
+
+**İstek:** Bir oturum incelemesinde ajanın "başka oturumları temizle" isteğinde
+`update_session` yalnız **mevcut** oturumu arşivleyebildiği için **ham REST**'e
+(`Invoke-RestMethod /api/sessions/{id}/state`) düştüğü, `X-Workspace-Id` header'ı
+verilmeyince **yanlış (Default) workspace'i** arşivlediği tespit edildi. Bu boşluğu
+kapatan workspace-scoped toplu-arşiv aracı gerekiyordu.
+
+**Ne yapıldı:**
+- **Araç:** `internal/tools/builtin_sessionarchive.go` `archive_sessions` — `r.db`'ye
+  bağlı (fiziksel workspace scope), **mevcut oturumu daima hariç tutar**
+  (`SessionIDFrom(ctx)` build anında). Filtreler: `idle_days` (N günden eski),
+  `title_contains`; `exclude` (ek koru), `dry_run` (önizleme), `limit` (vars. 100
+  güvenlik tavanı). Yalnız `Kind=="chat"` + `State=="active"` hedefler; arşiv
+  soft/geri alınabilir (`SetSessionState(...,"archived")`).
+- **Kayıt:** `toolsetup.go` — `list_sessions`'ın yanına, `SessionContextEnabled()`
+  gate'i altında eager. `categories.go` → `CategoryAgents`. Risk sınıfı listelenmedi
+  → varsayılan `RiskWrite` (mutasyon; "ask" modda onay ister).
+- **Test:** `builtin_sessionarchive_test.go` (3 test): current+non-chat+archived
+  hariç tutma & scope; `dry_run` değiştirmez; `title_contains` + `idle_days` filtre.
+  `go build ./...` + `go test ./internal/agent ./internal/tools` yeşil.
+- **Doküman/skill:** `24-SELF-MANAGEMENT.md` yeni "Oturum yönetimi (workspace-scoped)"
+  satırı; `tionswarm-project` + `tionswarm-session-debug` skill'leri (yeni §7 kök-neden).
+
 ## `render_template` + `html-preview` (şablonlu HTML render) ✅ (2026-07-06)
 
 **İstek:** the external agent project'ın "Source Templates / `render_template`" özelliğini TionSwarm'a taşı —

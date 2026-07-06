@@ -41,7 +41,8 @@ var builtinCategory = map[string]string{
 	"run_subagent": CategoryAgents, "spawn_session": CategoryAgents,
 	"handoff_session": CategoryAgents, "send_message": CategoryAgents,
 	"list_sessions": CategoryAgents, "update_session": CategoryAgents,
-	"focus_view": CategoryAgents, "get_session_info": CategoryAgents,
+	"archive_sessions": CategoryAgents,
+	"focus_view":       CategoryAgents, "get_session_info": CategoryAgents,
 
 	// User profile (Settings ▸ Profile) — grouped with settings/config.
 	"update_user_preferences": CategoryConfig,

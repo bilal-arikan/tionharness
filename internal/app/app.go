@@ -130,6 +130,16 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	case "1", "true", "on", "yes":
 		tun.SetCLIBridgeSkipHidden(true)
 	}
+	// Gateway dynamic extended surface (Doc 52 Faz 1-b): the extended tier starts empty
+	// and grows via activate_tools + tools/list_changed. Default OFF (NewTunables); this
+	// env opts in per boot while it is validated live.
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("TIONSWARM_GATEWAY_DYNAMIC_EXTENDED"))) {
+	case "1", "true", "on", "yes":
+		tun.SetGatewayDynamicExtended(true)
+		logger.Warn("gateway: dynamic extended surface ENABLED (TIONSWARM_GATEWAY_DYNAMIC_EXTENDED=1)")
+	case "0", "false", "off", "no":
+		tun.SetGatewayDynamicExtended(false)
+	}
 	// The gated tool capabilities (shell / self-management / agent delegation) are
 	// off by default and now live in the Settings screen (persisted settings.json,
 	// pushed live via applySettings). The legacy TIONSWARM_ENABLE_* env vars act as a

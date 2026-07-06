@@ -5,6 +5,13 @@
 // the TionSwarm UI — the same behaviour the native (anthropic/minimax) tool path
 // already provides via a context bridge. See _Docs/11-INTERACTION-MCP.md.
 //
+// It is also the substrate for the Go-native MCP gateway (Doc 52): the server is
+// STATEFUL and STREAMING — it advertises tools.listChanged and holds a per-session
+// server->client SSE stream (GET) open so the backend can PUSH
+// notifications/tools/list_changed mid-session and grow the advertised tool surface
+// on demand (the gateway pattern). Tool-call RESPONSES still return inline on the
+// POST; only server-initiated notifications ride the GET stream.
+//
 // This package is transport+protocol only (no agent/api imports) so it stays
 // dependency-light and unit-testable. The caller supplies a Backend that
 // resolves a per-run Bearer token to a live turn and dispatches tool calls.
@@ -13,11 +20,14 @@ package interaction
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"path"
 	"strings"
+	"sync"
+	"time"
 )
 
 // ProtocolVersion is the MCP protocol revision this server speaks. Clients may
@@ -80,30 +90,57 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-// Handler returns an http.Handler implementing the Streamable HTTP MCP subset
-// TionSwarm needs: initialize, notifications/initialized, tools/list, tools/call.
-func Handler(b Backend, logger *slog.Logger) http.Handler {
+// Server implements the Streamable HTTP MCP subset TionSwarm needs: initialize,
+// notifications/initialized, tools/list, tools/call (POST) plus a long-lived
+// server->client SSE stream (GET) carrying tools/list_changed notifications.
+type Server struct {
+	backend Backend
+	logger  *slog.Logger
+
+	mu sync.Mutex
+	// streams maps a per-connection key (token + tier) to the channel feeding that
+	// connection's open GET SSE stream. A single CLI process opens the SAME token on
+	// BOTH the core and extended MCP server entries (two connections, one Bearer), so
+	// keying by token alone would let one overwrite the other and a push could land on
+	// the wrong connection — the client would never re-list the tier that actually grew.
+	// PushToolsChanged broadcasts to every stream for a token so the right tier re-lists
+	// (re-listing the other tier is a cheap no-op).
+	streams map[string]chan []byte
+}
+
+// streamKey composes the per-connection stream key from a session token and its tier
+// ("core" | "extended" | ""). Two claude MCP connections share the token but differ in
+// tier, so this keeps their SSE streams distinct.
+func streamKey(token, tier string) string { return token + "\x00" + tier }
+
+// NewServer builds a stateful streaming Interaction MCP server.
+func NewServer(b Backend, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &mcpHandler{backend: b, logger: logger}
+	return &Server{backend: b, logger: logger, streams: map[string]chan []byte{}}
 }
 
-type mcpHandler struct {
-	backend Backend
-	logger  *slog.Logger
+// Handler returns the server as an http.Handler (compat shim for existing callers).
+func Handler(b Backend, logger *slog.Logger) http.Handler {
+	return NewServer(b, logger)
 }
 
-func (h *mcpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token := bearer(r.Header.Get("Authorization"))
 	if token == "" || !h.backend.Valid(token) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// GET is the optional server->client SSE stream. The MVP returns tool
-	// results inline on the POST response, so we don't open one (claude tolerates
-	// a 405 here — verified in the spike).
+	// GET is the server->client SSE stream: the gateway push channel for
+	// notifications/tools/list_changed. Held open for the life of the client
+	// connection (one persistent CLI process). Tool-call responses do NOT ride it —
+	// they return inline on the POST below.
+	if r.Method == http.MethodGet {
+		h.serveStream(w, r, token, tierFromPath(r.URL.Path))
+		return
+	}
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -128,7 +165,9 @@ func (h *mcpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.writeRPC(w, req.ID, map[string]any{
 			"protocolVersion": ProtocolVersion,
 			"serverInfo":      map[string]string{"name": "tionswarm-interaction", "version": "0.0.1"},
-			"capabilities":    map[string]any{"tools": map[string]any{}},
+			// Advertise tools.listChanged so the client watches the GET stream and
+			// re-fetches tools/list when the surface grows (gateway pattern, Doc 52).
+			"capabilities": map[string]any{"tools": map[string]any{"listChanged": true}},
 		}, nil)
 	case "notifications/initialized":
 		w.WriteHeader(http.StatusAccepted)
@@ -163,6 +202,111 @@ func (h *mcpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// serveStream holds the server->client SSE stream open for one connection (token+tier)
+// and flushes any notification frames pushed for it (the gateway push channel).
+func (h *Server) serveStream(w http.ResponseWriter, r *http.Request, token, tier string) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	key := streamKey(token, tier)
+	ch := h.registerStream(key)
+	defer h.unregisterStream(key, ch)
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	ka := time.NewTicker(20 * time.Second)
+	defer ka.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case frame := <-ch:
+			fmt.Fprintf(w, "data: %s\n\n", frame)
+			flusher.Flush()
+		case <-ka.C:
+			// SSE comment line keeps intermediaries from closing an idle stream.
+			fmt.Fprint(w, ": keepalive\n\n")
+			flusher.Flush()
+		}
+	}
+}
+
+// registerStream installs (replacing any prior) the notify channel for a per-connection
+// key and returns it. A replaced stream's reader exits when its request context ends.
+func (h *Server) registerStream(key string) chan []byte {
+	ch := make(chan []byte, 8)
+	h.mu.Lock()
+	h.streams[key] = ch
+	h.mu.Unlock()
+	h.logger.Debug("interaction stream opened", "key", key)
+	return ch
+}
+
+// unregisterStream removes the key's stream only if it is still ch (a newer stream may
+// have replaced it), so a stale close does not orphan the live channel.
+func (h *Server) unregisterStream(key string, ch chan []byte) {
+	h.mu.Lock()
+	if h.streams[key] == ch {
+		delete(h.streams, key)
+	}
+	h.mu.Unlock()
+	h.logger.Debug("interaction stream closed", "key", key)
+}
+
+// PushToolsChanged broadcasts a notifications/tools/list_changed frame to EVERY open
+// SSE stream for a token (both the core and extended connections), so whichever tier
+// grew gets re-listed by the client. Returns true if at least one stream received it.
+// No-op (per stream) when a buffer is full; a slow/absent reader never stalls the
+// caller (the activate path) — the safety-net TTL and next tools/list still converge.
+func (h *Server) PushToolsChanged(token string) bool {
+	frame, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0", "method": "notifications/tools/list_changed",
+	})
+	prefix := token + "\x00"
+	h.mu.Lock()
+	var targets []chan []byte
+	for key, ch := range h.streams {
+		if strings.HasPrefix(key, prefix) {
+			targets = append(targets, ch)
+		}
+	}
+	h.mu.Unlock()
+	sent := false
+	for _, ch := range targets {
+		select {
+		case ch <- frame:
+			sent = true
+		default:
+			h.logger.Warn("interaction list_changed dropped (stream buffer full)", "session", token)
+		}
+	}
+	if sent {
+		h.logger.Debug("interaction pushed tools/list_changed", "session", token, "streams", len(targets))
+	}
+	return sent
+}
+
+// HasStream reports whether a session currently has any open SSE stream (a live CLI
+// process listening for notifications). Used by the activate path to decide whether a
+// mid-turn push can reach the client or must fall back to next-turn re-list.
+func (h *Server) HasStream(token string) bool {
+	prefix := token + "\x00"
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for key := range h.streams {
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // toolContent builds the MCP tools/call result envelope.
 func toolContent(text string, isError bool) map[string]any {
 	return map[string]any{
@@ -171,7 +315,7 @@ func toolContent(text string, isError bool) map[string]any {
 	}
 }
 
-func (h *mcpHandler) writeRPC(w http.ResponseWriter, id json.RawMessage, result any, e *rpcError) {
+func (h *Server) writeRPC(w http.ResponseWriter, id json.RawMessage, result any, e *rpcError) {
 	w.Header().Set("Content-Type", "application/json")
 	resp := rpcResponse{JSONRPC: "2.0", ID: id, Result: result, Error: e}
 	b, err := json.Marshal(resp)
