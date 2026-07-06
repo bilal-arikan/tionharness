@@ -172,16 +172,21 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
         hideRail
       >
         <SidebarHeader title="Yürütmeler">
+          <RefreshButton onClick={() => reloadItems()} />
+        </SidebarHeader>
+
+        {/* Full-width action opening the bulk sessions table (sized/placed like the
+            chat sidebar's "Yeni Sohbet" button). */}
+        <div className="px-3 pb-1 pt-1">
           <button
             onClick={() => setOverviewOpen(true)}
             title="Tüm oturumları tablo olarak gör"
             data-testid="sessions-overview-open"
-            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
           >
-            <Table2 size={14} />
+            <Table2 size={15} /> Oturumlar
           </button>
-          <RefreshButton onClick={() => reloadItems()} />
-        </SidebarHeader>
+        </div>
 
         {/* Kind filter tabs */}
         <div className="flex flex-wrap gap-1 px-3 pb-2">

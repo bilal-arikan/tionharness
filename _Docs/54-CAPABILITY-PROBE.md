@@ -86,16 +86,41 @@ Yeni bir harici tool için `capabilities.go`'ya tek bir `Capability` eklemek yet
 `Detect` `exec.LookPath("...")` veya settings-flag olabilir. Assembler/enjeksiyon
 noktaları değişmez.
 
+## Workspace-geneli metin araması — `codebase_workspace_search`
+
+`search_code` project-scoped; workspace-geneli metin araması için fan-out köprü tool:
+`internal/tools/builtin_codebase_search.go` `CodebaseWorkspaceSearchTool`.
+
+- **Akış:** `<command> cli list_projects` → store'daki her project için `<command> cli
+  search_code {project,pattern,mode,limit}` → sonuçlar project'e göre birleşir.
+- **Sınırlar:** toplam sonuç `limit` (vars. 30), fan-out `maxCodebaseProjects` (40);
+  boş-sonuç project'ler atlanır, bir project'in hatası tüm aramayı düşürmez.
+- **Bağlama:** `toolsetup.go` — yalnız enabled codebase-memory sunucusu varsa
+  (`r.codebaseMemoryCmd(ctx) != ""`), `CBMStoreDir()` ile aynı store'a. Risk `RiskRead`
+  (classify.go) → read-only modda da açık; kategori `CategorySearch`.
+- **Not:** graf/mimari sorguları (`get_architecture`, `query_graph`) zaten native
+  fleet; bu tool yalnız metin-arama boşluğunu doldurur.
+
+## Frontend — "izole store" rozeti
+
+`ToolsPanel.tsx` MCP sunucu satırında, `command` içinde `codebase-memory-mcp` geçen
+sunucuya **"izole store"** rozeti + tooltip (`CBM_CACHE_DIR = <workspace>/cbm-store`).
+`data-testid="mcp-server-isolated-store"`.
+
 ## Dosyalar
 
-- `internal/agent/capabilities.go` (yeni) · `capabilities_test.go` (yeni)
-- `internal/agent/runtime.go` (`cbmIndexed` alanı + headless enjeksiyon)
-- `internal/agent/toolsetup.go` (`CBM_CACHE_DIR` env enjeksiyonu)
+- `internal/agent/capabilities.go` (yeni: Capability + codebase-memory + `sessionCwd`
+  + `codebaseMemoryCmd` + `EnsureCodebaseIndexed`) · `capabilities_test.go` (yeni)
+- `internal/agent/runtime.go` (`cbmIndexed` alanı + headless enjeksiyon, `autonomousSystemPrompt(ctx,a)`)
+- `internal/agent/executor.go` · `subagent.go` (ctx'li çağrı)
+- `internal/agent/toolsetup.go` (`CBM_CACHE_DIR` env enjeksiyonu + tool kaydı)
 - `internal/api/chat_turn.go` (chat enjeksiyon + `EnsureCodebaseIndexed`)
+- `internal/tools/builtin_codebase_search.go` (+test) · `classify.go` · `categories.go`
+- `frontend/src/components/panels/ToolsPanel.tsx` (izole store rozeti)
 
 ## Sıradaki adımlar (opsiyonel)
 
-- Headless yola da cwd/project id (ctx'ten session çözerek `autonomousSystemPrompt`'a
-  cwd threading).
-- `search_code` project-scoped → workspace-geneli metin araması için fan-out köprü tool.
+- `codebase_workspace_search` fan-out'unu paralelleştir (şu an sıralı; project sayısı
+  arttıkça hızlanır).
 - Mevcut default-store'daki eski TionSwarm kopyasının temizliği (çok-workspace geçişte).
+- Fan-out'u CLI-shell yerine canlı MCP pool üzerinden (process/SQLite contention'ı azaltır).

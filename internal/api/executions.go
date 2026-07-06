@@ -88,7 +88,14 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:    sess.UpdatedAt,
 		})
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt > out[j].UpdatedAt })
+	// Newest-updated first, with a SessionID tie-break so equal-UpdatedAt rows keep
+	// a STABLE order across polls (otherwise the feed reshuffles every few seconds).
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].UpdatedAt != out[j].UpdatedAt {
+			return out[i].UpdatedAt > out[j].UpdatedAt
+		}
+		return out[i].SessionID > out[j].SessionID
+	})
 	writeJSON(w, http.StatusOK, out)
 }
 

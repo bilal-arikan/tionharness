@@ -70,6 +70,17 @@ func codebaseMemoryCommand(servers []db.MCPServer) string {
 	return ""
 }
 
+// codebaseMemoryCmd returns the enabled codebase-memory executable path for this
+// workspace, or "" when no such server is enabled. Backs the codebase_workspace_search
+// tool registration (fan-out search across the workspace store).
+func (r *Runtime) codebaseMemoryCmd(ctx context.Context) string {
+	servers, err := r.db.ListEnabledMCPServers(ctx)
+	if err != nil {
+		return ""
+	}
+	return codebaseMemoryCommand(servers)
+}
+
 var codebaseMemoryCapability = Capability{
 	ID: "codebase-memory-mcp",
 	Detect: func(ctx context.Context, r *Runtime) bool {
@@ -134,6 +145,22 @@ func (r *Runtime) CBMStoreDir() string {
 		return ""
 	}
 	return filepath.Join(filepath.Dir(r.workDir), "cbm-store")
+}
+
+// sessionCwd returns the session's EXPLICIT working directory (the repo the agent
+// operates on) from ctx, or "" when unset. Unlike effectiveWorkDir it does NOT
+// fall back to the workspace default, so the capability project-id hint and the
+// auto-index only ever target a real repo the user chose — never the sandbox root.
+func (r *Runtime) sessionCwd(ctx context.Context) string {
+	sid := SessionIDFrom(ctx)
+	if sid == "" {
+		return ""
+	}
+	s, err := r.db.GetSession(ctx, sid)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(s.WorkingDir)
 }
 
 // EnsureCodebaseIndexed fires a best-effort, background incremental index of cwd

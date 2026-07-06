@@ -7,6 +7,7 @@ import { AutoPromptNote } from './AutoPromptNote'
 import { TaskNotificationNote } from './TaskNotificationNote'
 import { UserTurn } from './UserTurn'
 import { UserBubble } from './UserBubble'
+import { PeerTurn } from './PeerTurn'
 import { AssistantTurn } from './AssistantTurn'
 
 interface Props {
@@ -96,11 +97,28 @@ export function MessageList({
     const ids = new Set<string>()
     for (const m of messages) {
       if (m.role === 'assistant' && m.agentId) ids.add(m.agentId)
+      // A peer message (agent-authored, stored role "user") contributes its SENDER
+      // — otherwise an inbox thread (owner + one sender) would read as 1:1 and hide
+      // the direction cue.
+      if (m.authorKind === 'agent' && m.authorId) ids.add(m.authorId)
       if (m.recipientId && m.recipientId !== '*') ids.add(m.recipientId)
       if (ids.size > 1) return true
     }
     return false
   }, [messages])
+  // A message authored by ANOTHER agent but stored with role "user" (a peer/inbox
+  // delivery). It renders as an incoming LEFT bubble (PeerTurn), not the human's
+  // own right-aligned turn.
+  const isPeer = (m: Message): boolean =>
+    m.role === 'user' && m.authorKind === 'agent' && !!m.authorId
+  // Resolve a peer message's addressee label unconditionally (not gated by the
+  // multiParticipant heuristic): an inbox delivery always states whom it reached.
+  const peerRecipient = (m: Message): string | undefined => {
+    const rid = m.recipientId
+    if (!rid) return undefined
+    if (rid === '*') return 'herkes'
+    return agents.find((a) => a.id === rid)?.name ?? rid
+  }
   // Resolve a turn's "→ <name>" recipient label from recipientId (falling back to
   // the legacy agentId a user turn carries). Empty in a 1:1 thread or an undirected
   // (thread-at-large) turn; "herkes" for a broadcast ("*").
@@ -197,7 +215,8 @@ export function MessageList({
   // container's scrollHeight, which is what previously caused a clamp↔unclamp
   // reflow oscillation (visible flicker + fighting the scroll).
   const pinned = activePinnedIndex >= 0 ? messages[activePinnedIndex] : undefined
-  const pinnedTyped = pinned && pinned.role === 'user' && !pinned.origin ? pinned : undefined
+  const pinnedTyped =
+    pinned && pinned.role === 'user' && !pinned.origin && !isPeer(pinned) ? pinned : undefined
 
   return (
     <div className="relative min-h-0 flex-1">
@@ -230,12 +249,23 @@ export function MessageList({
           // for external automation to detect turn completion without polling.
           const rowLive = m.role !== 'user' && !!streaming && i === messages.length - 1
           // A real (typed) user message — the only rows eligible to pin at top.
-          const isTypedUser = m.role === 'user' && !m.origin
+          // Peer/inbox deliveries share role "user" but are incoming, not typed.
+          const isTypedUser = m.role === 'user' && !m.origin && !isPeer(m)
           if (m.role === 'user') {
-            // Worker <task-notification> injections get their own collapsible
+            // Peer/inbox delivery (another agent authored it): render as an
+            // incoming LEFT bubble with the sender's identity — not our own turn.
+            row = isPeer(m) ? (
+              <PeerTurn
+                message={m}
+                sender={agentById(m.authorId)}
+                recipientLabel={peerRecipient(m)}
+                onDelete={onDeleteMessage}
+                onOpenAgent={onOpenAgent}
+              />
+            ) : // Worker <task-notification> injections get their own collapsible
             // card (raw XML is unreadable as a plain note); other origins keep
             // the generic auto-continuation note.
-            row = m.origin === 'worker-note' ? (
+            m.origin === 'worker-note' ? (
               <TaskNotificationNote message={m} onDelete={onDeleteMessage} />
             ) : m.origin ? (
               <AutoPromptNote message={m} onDelete={onDeleteMessage} />

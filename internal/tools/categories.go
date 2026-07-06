@@ -33,7 +33,8 @@ var builtinCategory = map[string]string{
 
 	// Search & web
 	"WebFetch": CategorySearch, "WebSearch": CategorySearch,
-	"conversation_search": CategorySearch,
+	"conversation_search":       CategorySearch,
+	"codebase_workspace_search": CategorySearch,
 
 	// Agents, subagents, sessions, delegation
 	"create_agent": CategoryAgents, "update_agent": CategoryAgents,

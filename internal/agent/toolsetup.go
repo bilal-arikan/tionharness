@@ -234,6 +234,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		builtins = append(builtins, tools.NewReadSessionDebugTool(r.db))
 	}
 
+	// codebase_workspace_search: fan out codebase-memory's project-scoped search_code
+	// across EVERY project in this workspace's isolated store, for "where in the whole
+	// workspace is X?" queries (graph/architecture queries are already fleet-wide;
+	// this fills the text-search gap). Only when an enabled codebase-memory server is
+	// present — the tool shells out to that same executable + this workspace's store.
+	if cmd := r.codebaseMemoryCmd(ctx); cmd != "" {
+		builtins = append(builtins, tools.NewCodebaseWorkspaceSearchTool(cmd, r.CBMStoreDir()))
+	}
+
 	// get_session_info: the read counterpart of the session-edit tools — the
 	// agent inspects its own session's metadata (title/state/tags/goal/cwd/role/
 	// lineage) before mutating it, or orients itself in a fresh autonomous turn.

@@ -1058,19 +1058,24 @@ func (r *Runtime) systemPrompt(a db.Agent) string {
 // request) had no catalog, so a scheduled agent never learned its skills. Adding
 // it here — together with the autonomous Interaction use_skill bridge — gives
 // headless runs the same skill access chat agents have.
-func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
+func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string {
 	out := r.systemPrompt(a)
 	if sb := r.SkillsCatalogBlockForAgent(a); sb != "" {
 		out = strings.TrimSpace(out + "\n\n" + sb)
 	}
 	// Advertise optional external-tool capabilities (e.g. codebase-memory) present
-	// in this workspace so a headless turn reaches for them too. Presence is stable,
-	// so it rides the cached static prefix. Shares ONE source with the chat path
-	// (api.composeTurnRequest). cwd-less here: the headless assembler is per-agent,
-	// not per-session, so the project-id hint is added only on the chat path.
-	if cb := r.CapabilityContext(context.Background(), ""); cb != "" {
+	// in this workspace so a headless turn reaches for them too, WITH the session's
+	// cwd-derived project id (ctx carries the session id on scheduler/spawn/flow
+	// paths). Presence is stable, so it rides the cached static prefix. Shares ONE
+	// source with the chat path (api.composeTurnRequest).
+	cwd := r.sessionCwd(ctx)
+	if cb := r.CapabilityContext(ctx, cwd); cb != "" {
 		out = strings.TrimSpace(out + "\n\n" + cb)
 	}
+	// Best-effort: ensure the session's repo is indexed in this workspace's isolated
+	// store (guarded once per cwd per process; no-op without a cwd or an enabled
+	// codebase-memory server).
+	r.EnsureCodebaseIndexed(ctx, cwd)
 	// Boot/verification sequence (Anthropic long-running-agent harness discipline):
 	// a headless turn starts with a fresh context, so nudge it through the fixed
 	// orient → recall → select-one → verify-baseline → work → close-the-loop routine

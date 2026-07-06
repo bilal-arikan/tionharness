@@ -199,6 +199,13 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   için döngü kırıldı; satırlar tam-yükseklikte kalır. Her satırı şu bileşenlere
   devreder:
   - `UserTurn.tsx` — gerçek kullanıcı mesajı (balon + sağ meta satırı).
+  - `PeerTurn.tsx` — **gelen peer/inbox mesajı** (2026-07-06): başka bir ajanın
+    yazdığı, `Role:"user"` ama `authorKind:"agent"` (+`authorId`) ile damgalı mesaj.
+    Kullanıcının sağ-hizalı balonu yerine **sola-hizalı, gönderen ajanın avatar+adı**
+    ile (AgentHeader) çizilir; altında `DirectionBadge` ile "→ alıcı" ve zaman/silme
+    meta'sı gösterilir. `MessageList` `isPeer(m)` ile tespit edip bu bileşene devreder;
+    peer satırları "typed user" pin/overlay'den de dışlanır. Gönderen roster'da yoksa
+    ham `authorId` fallback olarak yazılır (atıf sessizce kaybolmaz).
   - `AutoPromptNote.tsx` — `Message.origin` dolu olduğunda (`wake`/`schedule`)
     ortalanmış "⏰ Otomatik devam / Zamanlanmış görev" notu (kullanıcı balonu değil).
   - `AssistantTurn.tsx` — asistan turu (başlık + akıl yürütme + iz + cevap + meta).

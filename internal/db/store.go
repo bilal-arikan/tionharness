@@ -529,11 +529,17 @@ func (d *DB) ListSessions(ctx context.Context, agentID string) ([]Session, error
 	}
 	// Pinned sessions float to the top; within each group, most-recently-updated
 	// first. A view preference, so it never changes the underlying activity order.
+	// Tie-break on ID so equal-UpdatedAt sessions keep a STABLE order across calls
+	// (the source map iterates in random order, so without this the list reshuffles
+	// on every poll).
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Pinned != out[j].Pinned {
 			return out[i].Pinned
 		}
-		return out[i].UpdatedAt > out[j].UpdatedAt
+		if out[i].UpdatedAt != out[j].UpdatedAt {
+			return out[i].UpdatedAt > out[j].UpdatedAt
+		}
+		return out[i].ID > out[j].ID
 	})
 	return out, nil
 }

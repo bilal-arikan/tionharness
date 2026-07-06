@@ -2,6 +2,43 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-06**
 
+## Fix: Yürütme/oturum listesi sırası her poll'de değişiyordu ✅ (2026-07-06)
+
+**Belirti:** Aktivite ekranındaki yürütme listesi (ve sol oturum listesi) "durduk
+yere" sürekli yeniden sıralanıyordu.
+
+**Kök neden:** `DB.ListSessions` kaynak `d.sessions` **map**'i üzerinde dönüyor →
+Go map iterasyon sırası her çağrıda rastgele. Sıralama yalnız `(Pinned, UpdatedAt
+desc)` idi; **eşit `UpdatedAt`** (saniye-hassasiyetli damga, aynı anda güncellenen
+oturumlar) olan satırlar `SliceStable`'da rastgele gelen map sırasını koruyordu →
+her 5 sn'lik poll'de yer değiştirme.
+
+**Düzeltme:** İki sıralamaya da kararlı **ID tie-break** eklendi:
+`store.go ListSessions` (`ID` desc) + `api/executions.go handleListExecutions`
+(`SessionID` desc). Artık eşit-zamanlı satırlar sabit sırada. `go build ./...` yeşil.
+
+## Oturumlar toplu tablo görünümü (Aktivite ekranı) ✅ (2026-07-06)
+
+**İstek:** Claude-Code-Agent-Monitor'ün "Sessions" ekranı gibi tüm oturumları
+tek tabloda topluca (aranabilir/filtrelenebilir/sıralanabilir) görebilmek. Aktivite
+ekranında yürütme listesinin en üstünde bu tabloyu açan bir buton olsun.
+
+**Ne yapıldı:**
+- **Paylaşılan meta çıkarıldı:** `frontend/src/components/panels/executionsShared.tsx`
+  — `KIND_META`/`FILTERS`/`kindMeta`/`shortId`/`StatusPill` `ExecutionsPanel`'den
+  buraya taşındı; hem panel listesi hem yeni tablo aynı kaynağı kullanır (kind rozeti/
+  filtre/kimlik-kısaltma/durum pill'i birebir aynı).
+- **Yeni bileşen:** `SessionsOverview.tsx` — `ModalOverlay` içinde geniş tablo.
+  Kolonlar: Başlık (canlı/okunmadı noktası + kopyalanabilir kısa kimlik), Tür, Ajan
+  (avatar), Mesaj, Durum (çalışıyor/başarılı/hata), Süre (bitmiş=created→updated,
+  canlı=created→now), Oluşturma, Güncelleme. Kolon başlığına tıkla → sırala (aynı
+  kolon yön çevirir; sayısal/tarih kolonları azalan varsayılan). Arama başlık/kimlik/
+  ajan üzerinde; kind filtre sekmeleri. Ekstra fetch YOK — panelin zaten yüklü
+  `listExecutions()` verisini kullanır. Satıra tıkla → o yürütmeyi seç + overlay kapan.
+- **Panel entegrasyonu:** `ExecutionsPanel` "Yürütmeler" başlığına `Table2` ikonlu
+  buton (`data-testid="sessions-overview-open"`) + `overviewOpen` state + koşullu
+  overlay render. `frontend tsc --noEmit` temiz.
+
 ## Capability Probe → Context Genişletme + per-workspace codebase-memory store ✅ (2026-07-06)
 
 **İstek:** Cihazda `codebase-memory-mcp` **mevcutsa** yeni oturumların sistem
@@ -33,6 +70,15 @@ her workspace kendi **izole** codebase-memory store'unu kullansın. Tam tasarım
 - **Test:** `capabilities_test.go` — `projectIDForPath` (gerçek örnekler), `codebaseMemoryCommand`
   (stdio-match/http-skip/absent), `CBMStoreDir`. `go build ./...` + `go test ./internal/agent`
   yeşil.
+- **Takip (aynı gün):** (1) **Headless project id** — `autonomousSystemPrompt(ctx,a)` +
+  `sessionCwd(ctx)` → headless turlar da cwd/project id + auto-index alır (executor+subagent
+  ctx'li çağrı). (2) **Workspace-geneli arama** — `codebase_workspace_search`
+  (`builtin_codebase_search.go`): `list_projects`→her project'e `search_code` fan-out,
+  project'e göre birleşik sonuç (`limit` 30 / `maxCodebaseProjects` 40); `RiskRead` +
+  `CategorySearch`; yalnız enabled codebase-memory sunucusu varsa kayıtlı. (3) **Frontend** —
+  `ToolsPanel.tsx` MCP sunucu satırında **"izole store"** rozeti+tooltip
+  (`data-testid="mcp-server-isolated-store"`). `go build`/`go test ./internal/agent
+  ./internal/tools` + `npm run build` yeşil.
 
 ## `archive_sessions` (workspace-scoped toplu oturum arşivleme) ✅ (2026-07-06)
 

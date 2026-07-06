@@ -214,7 +214,7 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	} else {
 		msgs = []providers.Message{{Role: providers.RoleUser, Text: task}}
 	}
-	sys := r.autonomousSystemPrompt(agent)
+	sys := r.autonomousSystemPrompt(ctx, agent)
 	if contract := delegationContract(spec); contract != "" {
 		sys = strings.TrimSpace(sys + "\n\n" + contract)
 	}

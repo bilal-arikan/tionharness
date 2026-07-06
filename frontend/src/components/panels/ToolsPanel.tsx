@@ -895,6 +895,15 @@ function ServerManagement(props: {
                   <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]">
                     {s.transport}
                   </span>
+                  {s.command.toLowerCase().includes('codebase-memory-mcp') && (
+                    <span
+                      data-testid="mcp-server-isolated-store"
+                      className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--color-accent)]"
+                      title="Bu sunucu workspace'e özel izole bir indeks store kullanır (CBM_CACHE_DIR = <workspace>/cbm-store) — indeksler workspace'ler arası karışmaz."
+                    >
+                      izole store
+                    </span>
+                  )}
                   {!s.enabled && <span className="text-xs text-[var(--color-text-dim)]">(devre dışı)</span>}
                 </div>
                 <div className="truncate text-xs text-[var(--color-text-dim)]">
