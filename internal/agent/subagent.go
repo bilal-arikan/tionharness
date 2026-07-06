@@ -50,6 +50,22 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 			"anything. Your reply is the only thing the caller sees.",
 		AllowedTools: []string{"Read", "LS", "Glob", "Grep"},
 	},
+	// config is the mini-agent analog (the external agent project getMiniAgentSystemPrompt): a cheap,
+	// tightly-scoped editor for a workspace's config/ files. It is sandboxed to the
+	// config tools (which are themselves rooted at config/), so it can never wander
+	// the filesystem or grow the change — ideal for a quick "change the theme" /
+	// "edit this prompt" delegation on a small/fast model.
+	"config": {
+		ID: "config",
+		SystemPrompt: "You are a Config subagent: a focused editor for this workspace's config/ files " +
+			"(runtime prompts, instructions, README, and app config like statuses/labels/permissions). " +
+			"Make ONLY the requested change: discover with list_config, read with read_config, write it " +
+			"back with write_config, then verify with config_validate. Keep edits minimal and idiomatic — " +
+			"never add unrequested changes or features. You are sandboxed to config/ and cannot touch " +
+			"anything else. Report the file(s) you changed in one line. Your reply is the only thing the " +
+			"caller sees.",
+		AllowedTools: []string{"list_config", "read_config", "write_config", "config_validate"},
+	},
 }
 
 // SubagentProfiles returns the built-in profile ids (sorted-free; for display).
@@ -143,7 +159,7 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	// Reject this impossible combination up front (before provider resolution and
 	// budget spend) so the error is deterministic and no budget unit is wasted.
 	if spec.Wait == "async" && ephemeral {
-		return tools.RunAgentResult{}, fmt.Errorf("async subagents require a persistent agent target; %q resolved to a built-in profile (explore|coder|reviewer) which has no session — create/name a workspace agent for async, or call this target with wait=\"sync\"", spec.Target)
+		return tools.RunAgentResult{}, fmt.Errorf("async subagents require a persistent agent target; %q resolved to a built-in profile (explore|coder|reviewer|config) which has no session — create/name a workspace agent for async, or call this target with wait=\"sync\"", spec.Target)
 	}
 	if m := strings.TrimSpace(spec.Model); m != "" {
 		agent.Model = m
@@ -264,7 +280,7 @@ func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, ta
 		}
 		return eph, true, nil
 	}
-	return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not an existing agent and not a built-in profile (explore|coder|reviewer)", target)
+	return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not an existing agent and not a built-in profile (explore|coder|reviewer|config)", target)
 }
 
 // subFuture is the pending result of a run_subagent call started concurrently by

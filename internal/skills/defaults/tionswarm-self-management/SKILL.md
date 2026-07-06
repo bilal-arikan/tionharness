@@ -76,8 +76,10 @@ deliberately, it is not reversible.
   promise more work here. Optional `{reason}`.
 
 > Built-in run_subagent profiles: `explore` (read-only search), `coder` (write/edit
-> code), `reviewer` (read-only review). Pass an existing agent's name or ID as
-> `target` to use a persistent agent instead of an ephemeral profile.
+> code), `reviewer` (read-only review), `config` (mini-agent: quick edits to
+> config/ files — prompts/instructions/statuses/labels/permissions — sandboxed to
+> the config tools). Pass an existing agent's name or ID as `target` to use a
+> persistent agent instead of an ephemeral profile.
 >
 > There is no separate `call_agent` / `spawn_session` / `send_agent_message` tool:
 > `run_subagent` covers delegation (isolated task → result) and `send_message`

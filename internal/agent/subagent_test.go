@@ -132,6 +132,33 @@ func TestResolveSubagentAgentBeatsProfile(t *testing.T) {
 	}
 }
 
+// TestResolveSubagentConfigProfile verifies the config mini-agent profile resolves
+// to an ephemeral worker whose allowlist is restricted to the config tools, so it
+// can only touch config/ and never wanders the filesystem.
+func TestResolveSubagentConfigProfile(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	caller := db.Agent{ID: "AGT1", Name: "Caller", Provider: "anthropic", Model: "claude", PermissionMode: "ask"}
+
+	eph, ephemeral, err := rt.resolveSubagentTarget(context.Background(), caller, "config")
+	if err != nil || !ephemeral {
+		t.Fatalf("expected ephemeral config profile, got ephemeral=%v err=%v", ephemeral, err)
+	}
+	if eph.Name != "subagent:config" || eph.Soul == "" {
+		t.Fatalf("config profile must carry its persona: %+v", eph)
+	}
+	var allow []string
+	_ = json.Unmarshal([]byte(eph.AllowedTools), &allow)
+	want := map[string]bool{"list_config": true, "read_config": true, "write_config": true, "config_validate": true}
+	if len(allow) != len(want) {
+		t.Fatalf("config profile allowlist = %v, want the 4 config tools", allow)
+	}
+	for _, tool := range allow {
+		if !want[tool] {
+			t.Fatalf("config profile must not allow %q (config-only sandbox); allowlist=%v", tool, allow)
+		}
+	}
+}
+
 // TestAsyncProfileRejected verifies async delegation to a built-in profile (no
 // persistent session) fails with an explanatory error naming the profile.
 func TestAsyncProfileRejected(t *testing.T) {
