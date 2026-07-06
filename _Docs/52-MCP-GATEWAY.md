@@ -594,10 +594,16 @@ büyük tasarruf; bir araç aktive edilince maliyeti o an yayılır. Persistent+
 prefix bir kez yazılır, sonra `cacheRead` ile okunur → küçük prefix warm turda da ucuz.
 
 **DEFAULT-ON KARARI (Bilal onayına):** Sinyal güçlü ve tek yönlü pozitif; mekanizma
-unit+canlı+ölçüm ile kanıtlı; risk flag'le izole. **Öneri:** bir sonraki adımda
-`GatewayDynamicExtended` **default ON** yap (veya önce gerçek-workspace bir tur ölçümüyle
-teyit). Karşı-argüman: tam-yol (`api.interactionBackend` canlı chatRun) henüz ölçülmedi;
-permission_prompt (YENİ-A) canlı doğrulanmadı → önce onları kapat, sonra default-on.
+unit+canlı+ölçüm ile kanıtlı; risk flag'le izole. Ön koşullar:
+- ✅ **permission_prompt (YENİ-A):** namespaced araç bare risk'iyle gate'lenir (`callPermission`
+  namespace'i soyar; `TestPermissionPromptStripsNamespace`). Kapatıldı.
+- ⏳ **Tam-yol canlı tur** (gerçek `api.interactionBackend` + canlı chatRun): mekanizma
+  `TestLiveGatewayActivate` (gerçek `interaction.Server` + fake backend) ile kanıtlı; tam
+  runtime turu hâlâ manuel/QA adımı.
+
+**Öneri:** YENİ-A kapandığına ve mekanizma kanıtlı olduğuna göre `GatewayDynamicExtended`
+**default ON** yapmak güvenli — ama bu üretim davranışını değiştiren tek-yön bir karar
+olduğundan **Bilal'in açık onayı** bekleniyor (flag ile hemen geri alınabilir).
 
 ### ✅ Faz 3 — harici `/mcp/gateway` endpoint (UYGULANDI, 2026-07-06)
 
@@ -644,8 +650,9 @@ gateway-of-gateways (yerel → VPS zincir) neredeyse bedava.
 Tam zincir **claude → gateway → pool → backend MCP** doğrulandı (num_turns=3, tek `-p`).
 
 **KALAN (Faz 3 tamamlama):**
-- **Pool yaşam döngüsü:** dedicated pool shutdown'da kapatılmalı (`api.Server.Close` hook'u
-  yok → follow-up). Ref-count paylaşımı (iç ajan + dış client aynı backend, #11) — follow-up.
+- ✅ **Pool yaşam döngüsü:** `api.Server.Close()` eklendi (dedicated gateway pool'u kapatır,
+  stdio child'ları orphan bırakmaz); `App.Shutdown` çağırır. Ref-count paylaşımı (iç ajan +
+  dış client aynı backend, #11) — hâlâ follow-up.
 - **Workspace seçimi:** MVP default workspace'e bağlı; header/token→workspace eşlemesi follow-up.
 
 ### Sıradaki

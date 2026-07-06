@@ -356,6 +356,16 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/{id}/reveal", s.handleRevealSession)
 }
 
+// Close releases server-owned resources. Currently the external gateway's dedicated
+// MCP pool (Doc 52 Faz 3), so a shutdown terminates any backend stdio subprocesses it
+// spawned instead of orphaning them. Nil-safe and idempotent.
+func (s *Server) Close() {
+	if s.gatewayPool != nil {
+		s.gatewayPool.Close()
+		s.gatewayPool = nil
+	}
+}
+
 // envTruthy reports whether an env value opts a feature in (1/true/on/yes).
 func envTruthy(v string) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {

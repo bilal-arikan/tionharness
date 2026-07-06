@@ -264,6 +264,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 		a.backups.Stop()
 	}
 	err := a.httpSrv.Shutdown(ctx)
+	if a.server != nil {
+		a.server.Close() // releases the external gateway's dedicated MCP pool (Doc 52 Faz 3)
+	}
 	a.manager.Close()
 	return err
 }
