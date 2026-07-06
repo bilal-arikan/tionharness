@@ -81,6 +81,11 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// "now" without a tool round-trip (there is no get_current_time tool). Volatile
 	// by nature, so it leads the dynamic suffix and never invalidates the cache.
 	dynamic := dateTimeContextBlock()
+	// Session + workspace identity (the external agent project session_state parity): which session
+	// and workspace the agent runs in, plus its permission mode so it knows what it
+	// may do (read-only vs. auto) instead of attempting an edit that will be denied.
+	// Volatile side because the mode can change mid-session (Shift+Tab).
+	dynamic = strings.TrimSpace(dynamic + "\n\n" + sessionStateBlock(session, agentRow, wsp.ID, wsp.Name, wsp.DataDir))
 	// The session's persistent goal leads the dynamic context — it is the agent's
 	// north star and should be the first thing it reads after the static persona.
 	if gb := goalContextBlock(session.Goal, session.GoalDone); gb != "" {
@@ -165,6 +170,26 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 func dateTimeContextBlock() string {
 	return "Current date and time (captured at the start of this turn; seconds-precise, does not tick mid-turn): " +
 		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)")
+}
+
+// sessionStateBlock renders the session + workspace identity as a compact
+// <session_state> block (the external agent project parity), so the agent knows which session and
+// workspace it runs in, the workspace's data dir, and its permission mode — the
+// last so it does not attempt an edit/command that read-only mode will deny.
+// permissionMode is per-agent ("read-only" | "ask" | "auto"; empty → auto).
+func sessionStateBlock(session db.Session, agentRow db.Agent, wsID, wsName, wsPath string) string {
+	mode := strings.TrimSpace(agentRow.PermissionMode)
+	if mode == "" {
+		mode = "auto"
+	}
+	var b strings.Builder
+	b.WriteString("<session_state>\n")
+	b.WriteString("sessionId: " + session.ID + "\n")
+	b.WriteString("permissionMode: " + mode + " (read-only = no edits/commands · ask = confirm first · auto = full autonomy)\n")
+	b.WriteString("workspace: " + wsID + " \"" + wsName + "\"\n")
+	b.WriteString("workspacePath: " + wsPath + "\n")
+	b.WriteString("</session_state>")
+	return b.String()
 }
 
 // conversationSummaryBlock renders the rolling compaction summary for the dynamic

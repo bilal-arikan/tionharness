@@ -4,10 +4,30 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
+
+// TestSessionStateBlock verifies the <session_state> block carries session +
+// workspace identity and resolves an empty permission mode to "auto".
+func TestSessionStateBlock(t *testing.T) {
+	got := sessionStateBlock(
+		db.Session{ID: "SES9"},
+		db.Agent{PermissionMode: "read-only"},
+		"WS1", "My Space", "/data/ws1",
+	)
+	for _, want := range []string{"<session_state>", "sessionId: SES9", "permissionMode: read-only", "workspace: WS1 \"My Space\"", "workspacePath: /data/ws1", "</session_state>"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("session_state block missing %q\n%s", want, got)
+		}
+	}
+	// Empty permission mode defaults to auto.
+	if def := sessionStateBlock(db.Session{ID: "S"}, db.Agent{}, "WS1", "n", "/p"); !strings.Contains(def, "permissionMode: auto") {
+		t.Fatalf("empty permission mode must default to auto, got:\n%s", def)
+	}
+}
 
 // newTestServer builds a Server with just a discarding logger — enough for the
 // turn-routing helpers that only touch the DB and the logger.
