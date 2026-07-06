@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
@@ -14,9 +16,11 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/gateway"
 	"github.com/bilal-arikan/tionswarm/internal/interaction"
 	"github.com/bilal-arikan/tionswarm/internal/logbuf"
 	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/settings"
 	"github.com/bilal-arikan/tionswarm/internal/web"
@@ -55,6 +59,14 @@ type Server struct {
 	// interactionSrv is the same server as a concrete type, so the activate path can
 	// push tools/list_changed to a live CLI session's SSE stream (gateway, Doc 52).
 	interactionSrv *interaction.Server
+	// gatewaySrv is the EXTERNAL MCP gateway (Doc 52 Faz 3), exposing the workspace's
+	// MCP pool to outside clients at /mcp/gateway. nil unless opted in at boot
+	// (TIONSWARM_GATEWAY_EXTERNAL). gatewayPool is its dedicated backend pool.
+	gatewaySrv  *gateway.Server
+	gatewayPool *mcp.Pool
+	// gatewayRequireLoopback is true when no auth token is configured: the endpoint is
+	// then reachable ONLY from loopback (the safe default — no token, no network).
+	gatewayRequireLoopback bool
 	// backups runs the periodic workspace-backup loop; reconfigured on every
 	// settings change. nil until wired by SetBackupManager (after construction).
 	backups *backup.Manager
@@ -88,6 +100,45 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	// Wire the pusher back so activate_tools can push tools/list_changed (gateway, Doc 52).
 	interBackend.setServer(s.interactionSrv)
 	s.interactionMCP = s.interactionSrv
+	// External MCP gateway (Doc 52 Faz 3): opt-in at boot. Exposes the default
+	// workspace's enabled MCP servers to OUTSIDE clients at /mcp/gateway, gateway-style
+	// (meta-tools + activate + tools/list_changed). Security: a token
+	// (TIONSWARM_GATEWAY_AUTH_TOKEN) is required to reach it over the network; without a
+	// token it is loopback-only. Default OFF — external exposure must be explicit.
+	if envTruthy(os.Getenv("TIONSWARM_GATEWAY_EXTERNAL")) {
+		token := strings.TrimSpace(os.Getenv("TIONSWARM_GATEWAY_AUTH_TOKEN"))
+		pool := mcp.NewPool()
+		pool.SetLogger(logger)
+		s.gatewayPool = pool
+		serversFn := func(ctx context.Context) ([]mcp.ServerConfig, error) {
+			wsp := s.workspaces.Default()
+			if wsp == nil || wsp.DB == nil {
+				return nil, nil
+			}
+			rows, err := wsp.DB.ListEnabledMCPServers(ctx)
+			if err != nil {
+				return nil, err
+			}
+			cfgs := make([]mcp.ServerConfig, 0, len(rows))
+			for _, m := range rows {
+				cfgs = append(cfgs, agent.ToServerConfig(m))
+			}
+			return cfgs, nil
+		}
+		var authFn func(string) bool
+		if token != "" {
+			authFn = func(t string) bool { return t == token }
+		}
+		gb := gateway.NewBackend(pool, serversFn, logger)
+		s.gatewaySrv = gateway.NewServer(gb, authFn, logger)
+		gb.SetServer(s.gatewaySrv)
+		s.gatewayRequireLoopback = token == ""
+		if token == "" {
+			logger.Warn("external MCP gateway ENABLED at /mcp/gateway — loopback-only (no TIONSWARM_GATEWAY_AUTH_TOKEN set)")
+		} else {
+			logger.Warn("external MCP gateway ENABLED at /mcp/gateway — token auth required")
+		}
+	}
 	// Headless Interaction MCP: give autonomous (scheduler/spawn) CLI
 	// turns the same use_skill/shell/self-manage bridge chat turns get.
 	manager.SetAutonomousInteraction(s.autonomousInteraction)
@@ -305,6 +356,38 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/{id}/reveal", s.handleRevealSession)
 }
 
+// envTruthy reports whether an env value opts a feature in (1/true/on/yes).
+func envTruthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "on", "yes":
+		return true
+	}
+	return false
+}
+
+// loopbackGuard wraps a handler so that, when the external gateway has no auth token,
+// only loopback clients may reach it (no token → no network exposure). With a token
+// configured the guard is a pass-through and the handler's own bearer check applies.
+func (s *Server) loopbackGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.gatewayRequireLoopback && !isLoopbackAddr(r.RemoteAddr) {
+			http.Error(w, "external gateway is loopback-only (set TIONSWARM_GATEWAY_AUTH_TOKEN to expose it)", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// isLoopbackAddr reports whether a "host:port" remote address is a loopback client.
+func isLoopbackAddr(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	ip := net.ParseIP(strings.TrimSpace(host))
+	return ip != nil && ip.IsLoopback()
+}
+
 // registerChatRoutes registers the completion endpoints.
 func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/chat", s.handleChat)
@@ -326,6 +409,12 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 		// /mcp/interaction/extended) reach the same handler; it derives the tier from
 		// the path's last segment (see interaction.tierFromPath).
 		mux.Handle("/mcp/interaction/", s.interactionMCP)
+	}
+	// External MCP gateway (Doc 52 Faz 3), opt-in. Loopback-guarded when no token is set.
+	if s.gatewaySrv != nil {
+		h := s.loopbackGuard(s.gatewaySrv)
+		mux.Handle("/mcp/gateway", h)
+		mux.Handle("/mcp/gateway/", h)
 	}
 }
 

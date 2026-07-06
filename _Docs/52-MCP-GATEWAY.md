@@ -599,9 +599,54 @@ unit+canlı+ölçüm ile kanıtlı; risk flag'le izole. **Öneri:** bir sonraki 
 teyit). Karşı-argüman: tam-yol (`api.interactionBackend` canlı chatRun) henüz ölçülmedi;
 permission_prompt (YENİ-A) canlı doğrulanmadı → önce onları kapat, sonra default-on.
 
+### ✅ Faz 3 — harici `/mcp/gateway` endpoint (UYGULANDI, 2026-07-06)
+
+TionSwarm artık MCP havuzunu **dış client'lara** (harici Claude Code / External Agent) tek
+endpoint arkasında sunabiliyor — TS `gateway-manager`'ın Go-native muadili. **Opt-in**
+(`TIONSWARM_GATEWAY_EXTERNAL=1`), `go test ./...` **706 passed**.
+
+**Yeni paket `internal/gateway`** (interaction'dan AYRI — auth ve session modeli farklı):
+- `server.go` — streaming MCP-over-HTTP: `initialize`'da **session id MİNTLER** (bearer'dan
+  türetmez), `listChanged:true`, GET SSE per-session, `PushToolsChanged`. Auth **ayrı**
+  bearer kontrolü (dış client'lar tek paylaşılan token, her bağlantı izole session).
+- `backend.go` — `mcp.Pool` üzerinde meta-araçlar: **`list_servers` / `activate_tools` /
+  `deactivate_tools` / `active_tools`**. `activate_tools(["docker"])` → `pool.Catalog` ile
+  bağlan + araçları namespaced (`server__tool`) kaydet + `list_changed` push. Proxied çağrı
+  → `pool.Call`. Servers **canlı** okunur (`ServersFunc`, config değişince restart yok).
+
+**API entegrasyonu** (`api/server.go`): opt-in iken dedicated `mcp.Pool` + default
+workspace'in enabled MCP server'ları (`workspaces.Default().DB.ListEnabledMCPServers` →
+`agent.ToServerConfig`) + mount `/mcp/gateway` (+subtree).
+
+**Güvenlik (§7-9, §11-B):**
+- **Token yoksa → loopback-only** (`loopbackGuard`: non-loopback RemoteAddr → 403). Ağa
+  açmak için **`TIONSWARM_GATEWAY_AUTH_TOKEN` ŞART** (set edilince bearer zorunlu, guard pass-through).
+- Default **KAPALI** — harici sunum explicit tercih.
+- Test: `TestLoopbackGuard`, `TestIsLoopbackAddr` (IPv4+IPv6 loopback), `TestGatewayAuth`
+  (401 token yok/yanlış, 200+session-id doğru).
+
+**VPS zincir göçü (§11-B):** TionSwarm `internal/mcp` zaten streamable-http backend
+destekliyor → `vps-*` sunucular yalnız **URL'li MCP server satırları** (transport `http`,
+`headers` ile auth). Göç = TS `config.json`'daki 18+7 server'ı default workspace'e MCP
+server olarak ekle (`create_mcp_server`/UI/API) → dış client'ı `/mcp/gateway` + token'a
+yönelt. `ServersFunc` canlı okuduğu için server ekleme **restart gerektirmez**. Böylece
+gateway-of-gateways (yerel → VPS zincir) neredeyse bedava.
+
+**Testler:** `internal/gateway/gateway_test.go` — `TestGatewayActivateAndProxy` (gerçek
+`mcp.Pool` + fake backend MCP: meta-only → activate → namespaced araç görünür → proxied
+`echo` round-trip → deactivate), `TestGatewayAuth`.
+
+**KALAN (Faz 3 tamamlama):**
+- **Canlı dış-client validation:** gerçek harici claude-cli `/mcp/gateway`'e bağlanıp
+  activate→çağrı yapsın (in-process pool + auth testlendi; uçtan-uca dış tur kaldı —
+  Faz 1-b'nin `TestLiveGatewayActivate` muadili).
+- **Pool yaşam döngüsü:** dedicated pool shutdown'da kapatılmalı (`api.Server.Close` hook'u
+  yok → follow-up). Ref-count paylaşımı (iç ajan + dış client aynı backend, #11) — follow-up.
+- **Workspace seçimi:** MVP default workspace'e bağlı; header/token→workspace eşlemesi follow-up.
+
 ### Sıradaki
 
 - **Default-on ön koşulu:** tam-yol canlı tur (gerçek `api.interactionBackend`) + token
   ölçümü + permission_prompt (YENİ-A) doğrulaması.
-- **Faz 3:** harici `/mcp/gateway` (auth loopback+token, VPS zincir göçü) — §11-B.
+- **Faz 3 tamamlama:** canlı dış-client validation + pool cleanup + VPS göç uygulaması.
 - **Follow-up:** hidden→deferred-usable + gateway `tool_search` (default-on sonrası).

@@ -27,6 +27,11 @@ func (r *Runtime) skillExists(slug string) bool {
 
 // toServerConfig converts a stored MCP server row into a transport-agnostic
 // launch spec for the mcp package.
+// ToServerConfig converts a stored MCP server row into an mcp.ServerConfig. Exported
+// so the external gateway (Doc 52 Faz 3) can expose the same enabled servers the agent
+// tool loop connects to, via one converter (no second parser).
+func ToServerConfig(m db.MCPServer) mcp.ServerConfig { return toServerConfig(m) }
+
 func toServerConfig(m db.MCPServer) mcp.ServerConfig {
 	var args []string
 	_ = json.Unmarshal([]byte(m.Args), &args)
