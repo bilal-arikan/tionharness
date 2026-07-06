@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  MessageSquare,
-  LayoutGrid,
-  GitBranch,
-  Clock,
-  Activity,
-  Copy,
-  Sparkles,
-  type LucideIcon,
-} from 'lucide-react'
+import { GitBranch, Activity, Copy, Table2 } from 'lucide-react'
 import type { Agent, Message } from '../../types'
 import { api } from '../../api'
 import { useRefreshTrigger } from '../../hooks/useRefreshTrigger'
@@ -23,6 +14,8 @@ import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '../commo
 import { SidebarHeader, RefreshButton } from '../common/SidebarChrome'
 import { CopyPathButton } from '../CopyPathButton'
 import { RevealButton } from '../RevealButton'
+import { FILTERS, kindMeta, shortId, StatusPill } from './executionsShared'
+import { SessionsOverview } from './SessionsOverview'
 
 interface Props {
   agents: Agent[]
@@ -37,64 +30,17 @@ interface Props {
   onSelectExecution?: (sessionId: string) => void
 }
 
-// Per-kind display metadata: every execution path funnels into a Session tagged
-// with a kind, so the feed renders each uniformly with its own icon + label.
-const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
-  chat: { label: 'Sohbet', icon: MessageSquare },
-  task: { label: 'Görev', icon: LayoutGrid },
-  flow: { label: 'Akış', icon: GitBranch },
-  schedule: { label: 'Zamanlama', icon: Clock },
-  spawned: { label: 'Spawn', icon: Sparkles },
-}
-
-// Filter tabs (in display order). '' is "all".
-const FILTERS: { key: string; label: string }[] = [
-  { key: '', label: 'Tümü' },
-  { key: 'chat', label: 'Sohbet' },
-  { key: 'task', label: 'Görev' },
-  { key: 'flow', label: 'Akış' },
-  { key: 'spawned', label: 'Spawn' },
-  { key: 'schedule', label: 'Zamanlama' },
-]
-
 const POLL_MS = 5000
 // Faster polling interval used when the selected execution is still running.
 const RUNNING_POLL_MS = 2000
-
-function kindMeta(kind: string) {
-  return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
-}
-
-// shortId trims a session id to a compact, recognisable suffix for list rows
-// (the full id is shown — and copyable — in the detail header).
-function shortId(id: string) {
-  return id.length > 8 ? id.slice(-8) : id
-}
-
-// StatusPill shows a finished run's pass/fail outcome (task/flow kinds).
-function StatusPill({ status }: { status: string }) {
-  if (status !== 'success' && status !== 'failure') return null
-  const ok = status === 'success'
-  return (
-    <span
-      className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-      style={{
-        color: ok ? 'var(--color-success)' : 'var(--color-danger)',
-        backgroundColor: ok
-          ? 'color-mix(in srgb, var(--color-success) 14%, transparent)'
-          : 'color-mix(in srgb, var(--color-danger) 14%, transparent)',
-      }}
-    >
-      {ok ? 'başarılı' : 'hata'}
-    </span>
-  )
-}
 
 // ExecutionsPanel is the unified activity feed: a single list of every execution
 // across chat / task / flow / schedule (each backed by a Session),
 // with live status, plus a read-only transcript viewer for the selected one.
 export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, onOpenFlowRun, focusId, onSelectExecution }: Props) {
   const [filter, setFilter] = useState('')
+  // Bulk sessions overview overlay (searchable/sortable table of every session).
+  const [overviewOpen, setOverviewOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(focusId ?? null)
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
@@ -226,6 +172,14 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
         hideRail
       >
         <SidebarHeader title="Yürütmeler">
+          <button
+            onClick={() => setOverviewOpen(true)}
+            title="Tüm oturumları tablo olarak gör"
+            data-testid="sessions-overview-open"
+            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+          >
+            <Table2 size={14} />
+          </button>
           <RefreshButton onClick={() => reloadItems()} />
         </SidebarHeader>
 
@@ -411,6 +365,17 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
           </div>
         )}
       </div>
+
+      {/* Bulk sessions overview: a searchable/sortable table of every session,
+          opened from the list header. Selecting a row jumps to its transcript. */}
+      {overviewOpen && (
+        <SessionsOverview
+          items={items}
+          agents={agents}
+          onSelect={select}
+          onClose={() => setOverviewOpen(false)}
+        />
+      )}
     </div>
   )
 }

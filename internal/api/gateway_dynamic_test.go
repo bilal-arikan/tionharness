@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/interaction"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 func specNames(specs []interaction.ToolSpec) []string {
@@ -97,5 +100,46 @@ func TestGatewayActivateAcceptsNamespacedName(t *testing.T) {
 	}
 	if ext := b.Tools(tok, "extended"); !specHasTool(ext, "notify") {
 		t.Fatalf("notify must be active after namespaced activate, got %v", specNames(ext))
+	}
+}
+
+// TestGatewayHiddenActivatableAndToolSearch locks Doc 52 §7-15 / follow-up: a HIDDEN-tier
+// tool is not advertised up front (zero token cost), is discoverable via tool_search
+// (even though it is absent from the catalog), and becomes activatable + advertised on
+// the extended tier once turned on — the CLI analogue of native hidden tools.
+func TestGatewayHiddenActivatableAndToolSearch(t *testing.T) {
+	tun := agent.NewTunables()
+	runs := newChatRuns()
+	b := &interactionBackend{runs: runs, tun: tun}
+	run := runs.register("r1", "s1", func() {})
+	tok := runs.interactionToken("s1", "a1")
+	runs.bindActive(tok, run)
+
+	// Bridge a hidden-classified tool with a dispatcher.
+	run.setBridge(
+		[]providers.ToolDef{{Name: "secret_ops", Description: "perform a secret hidden maintenance operation"}},
+		func(_ context.Context, name string, _ json.RawMessage) (string, error) { return "did:" + name, nil },
+	)
+	run.setTierVis(func(name string) string {
+		if name == "secret_ops" {
+			return tools.VisibilityHidden
+		}
+		return tools.VisibilityNameOnly
+	})
+
+	// Not advertised before activation (hidden + not activated).
+	if specHasTool(b.Tools(tok, "extended"), "secret_ops") {
+		t.Fatal("hidden tool must NOT be advertised before activation")
+	}
+	// tool_search finds it despite being absent from the catalog.
+	if res := b.callToolSearch(run, json.RawMessage(`{"query":"secret maintenance"}`)); !strings.Contains(res.Text, "secret_ops") {
+		t.Fatalf("tool_search must surface the hidden tool, got %q", res.Text)
+	}
+	// Activating it advertises it on the extended tier.
+	if res, _ := b.callActivate(tok, run, json.RawMessage(`{"tools":["secret_ops"]}`), true); res.IsError {
+		t.Fatalf("activating a hidden tool must succeed, got %q", res.Text)
+	}
+	if !specHasTool(b.Tools(tok, "extended"), "secret_ops") {
+		t.Fatal("hidden tool must be advertised on the extended tier after activation")
 	}
 }

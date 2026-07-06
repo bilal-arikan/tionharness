@@ -2,6 +2,38 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-06**
 
+## Capability Probe → Context Genişletme + per-workspace codebase-memory store ✅ (2026-07-06)
+
+**İstek:** Cihazda `codebase-memory-mcp` **mevcutsa** yeni oturumların sistem
+promptuna **kısa + cachelenebilir** bir bilgi bloğu enjekte et → ajan varlığını
+bilsin ve workspace indeksleme/arama araçlarını kullansın. Tespit + genişletme
+katmanı **generic** olsun (ileride başka tool'lar tek kayıtla eklenebilsin). Ayrıca
+her workspace kendi **izole** codebase-memory store'unu kullansın. Tam tasarım: **_Docs/54**.
+
+**Ne yapıldı:**
+- **Generic katman:** `internal/agent/capabilities.go` — `Capability{ID, Detect, Context}`
+  + `[]capabilities` kaydı + `(*Runtime).CapabilityContext(ctx, cwd)`. `Detect` MCP-sunucu
+  varlığı / on-PATH binary / settings-flag olabilir → yeni tool = slice'a bir kayıt.
+- **İlk müşteri codebase-memory:** enabled stdio MCP sunucusunun `Command`'ında
+  `codebase-memory-mcp` işareti aranarak tespit; kısa statik blok (araç-tercihi + izole
+  store + cwd'den türetilen `project` id, `projectIDForPath`). Path→id kuralı
+  codebase-memory ile birebir (iki gerçek örnekle test edildi), ıskalarsa `list_projects`
+  hedge'i.
+- **Enjeksiyon (iki senkron assembler):** chat `api.composeTurnRequest` statik prefix'e
+  (cwd/project id'li) + headless `agent.autonomousSystemPrompt` (cwd-siz farkındalık).
+  Cache breakpoint bozulmaz (presence sabit; sunucu yokken blok "" → no-op).
+- **Per-workspace store (§C):** `(*Runtime).CBMStoreDir()` = `<workspace-container>/cbm-store`
+  (skills/hook-scripts kardeşi). `toolsetup.go` codebase-memory sunucusunun stdio env'ine
+  `CBM_CACHE_DIR`'i enjekte eder (user-set kazanır) → store = workspace sınırı, indeksler
+  karışmaz.
+- **Auto-index (§C):** `(*Runtime).EnsureCodebaseIndexed(ctx, cwd)` — best-effort, arka
+  plan, `(cwd,store)` başına süreç-içi tek sefer (`cbmIndexed sync.Map`); `command cli
+  index_repository` + `CBM_CACHE_DIR`. Hata **loglanır** (yutulmaz), guard silinip sonraki
+  tur retry olur.
+- **Test:** `capabilities_test.go` — `projectIDForPath` (gerçek örnekler), `codebaseMemoryCommand`
+  (stdio-match/http-skip/absent), `CBMStoreDir`. `go build ./...` + `go test ./internal/agent`
+  yeşil.
+
 ## `archive_sessions` (workspace-scoped toplu oturum arşivleme) ✅ (2026-07-06)
 
 **İstek:** Bir oturum incelemesinde ajanın "başka oturumları temizle" isteğinde

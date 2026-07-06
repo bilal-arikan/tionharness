@@ -94,6 +94,11 @@ type Runtime struct {
 	// Tunables.FileFreshnessGuard; unstamped-session builds (catalog/preview) get nil.
 	readTrackers sync.Map
 
+	// cbmIndexed guards the best-effort codebase-memory auto-index so a repo is
+	// indexed into this workspace's isolated store at most once per (cwd, store) per
+	// process. Keyed by "<cwd>|<store>"; value is bool. See EnsureCodebaseIndexed.
+	cbmIndexed sync.Map
+
 	// shellMgrs holds one *tools.ShellManager per session id, tracking that session's
 	// background shells (run_in_background) so their output can be polled and they can
 	// be stopped across turns. Session-scoped and persistent across turns; keyed by
@@ -552,17 +557,13 @@ func (r *Runtime) SkillAllowedToolsForAgent(agent db.Agent, slug string) []strin
 func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.ToolDef, func(ctx context.Context, name string, args json.RawMessage) (string, error)) {
 	reg := r.buildRegistry(ctx, agent)
 	allow := r.toolFilter(ctx, agent)
-	// POC: optionally withhold the hidden-tier self-management suite from the CLI
-	// bridge so their full schemas never travel to the CLI process. Measure the win
-	// via the skipped-count log below (bytes not shipped ~= sum of those schemas).
-	skipHidden := r.tun.CLIBridgeSkipHidden()
-	defs := reg.BridgeableDefsFiltered(allow, skipHidden)
-	if skipHidden && r.logger != nil {
-		if n := reg.HiddenBridgeableCount(allow); n > 0 {
-			r.logger.Info("cli bridge: hidden tier withheld (POC)",
-				"agent", agent.ID, "skipped_hidden_tools", n, "bridged_tools", len(defs))
-		}
-	}
+	// Bridge ALL lazy built-ins INCLUDING the hidden tier. With the gateway dynamic
+	// surface (Doc 52), the extended tier advertises nothing until the model activates a
+	// tool, so bridging hidden schemas costs zero tokens up front — yet it makes hidden
+	// tools discoverable (tool_search) and activatable in-turn, the CLI analogue of
+	// native hidden tools. (The former cliBridgeSkipHidden POC that withheld them is
+	// obsolete now that advertisement is on-demand.)
+	defs := reg.BridgeableDefsFiltered(allow, false)
 	// Bridge a few EAGER built-ins that the CLI would otherwise lack but that have
 	// no native-loop context dependency (they only need r.mem / r.db, which reg
 	// already holds). They stay eager on the native path — we just advertise them
@@ -1061,6 +1062,14 @@ func (r *Runtime) autonomousSystemPrompt(a db.Agent) string {
 	out := r.systemPrompt(a)
 	if sb := r.SkillsCatalogBlockForAgent(a); sb != "" {
 		out = strings.TrimSpace(out + "\n\n" + sb)
+	}
+	// Advertise optional external-tool capabilities (e.g. codebase-memory) present
+	// in this workspace so a headless turn reaches for them too. Presence is stable,
+	// so it rides the cached static prefix. Shares ONE source with the chat path
+	// (api.composeTurnRequest). cwd-less here: the headless assembler is per-agent,
+	// not per-session, so the project-id hint is added only on the chat path.
+	if cb := r.CapabilityContext(context.Background(), ""); cb != "" {
+		out = strings.TrimSpace(out + "\n\n" + cb)
 	}
 	// Boot/verification sequence (Anthropic long-running-agent harness discipline):
 	// a headless turn starts with a fresh context, so nudge it through the fixed

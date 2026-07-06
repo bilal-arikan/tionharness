@@ -442,8 +442,21 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// state (e.g. the gateway's activate_tools) survives across calls. The
 		// catalog refreshes on tools/list_changed (and a safety-net TTL).
 		cfgs := make([]mcp.ServerConfig, 0, len(servers))
+		cbmStore := r.CBMStoreDir()
 		for _, m := range servers {
-			cfgs = append(cfgs, toServerConfig(m))
+			cfg := toServerConfig(m)
+			// Route the codebase-memory server at this workspace's ISOLATED store so
+			// its index never mixes with other workspaces (store = workspace boundary).
+			// A user-set CBM_CACHE_DIR wins; we only fill it when unset.
+			if cbmStore != "" && strings.Contains(strings.ToLower(m.Command), codebaseMemoryCommandMarker) {
+				if cfg.Env == nil {
+					cfg.Env = map[string]string{}
+				}
+				if _, set := cfg.Env["CBM_CACHE_DIR"]; !set {
+					cfg.Env["CBM_CACHE_DIR"] = cbmStore
+				}
+			}
+			cfgs = append(cfgs, cfg)
 		}
 		entries, cfgByServer, errs := r.mcpPool.Catalog(ctx, cfgs)
 		for name, e := range errs {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"runtime"
 	"sort"
 	"strings"
@@ -140,6 +141,7 @@ var coreInteractionTools = map[string]bool{
 	"activate_tools":   true,
 	"deactivate_tools": true,
 	"active_tools":     true,
+	"tool_search":      true,
 }
 
 // cliTier classifies a bare tool name into the claude-cli wire tier: "core"
@@ -219,28 +221,46 @@ func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 	if run != nil {
 		visOf = run.tierVisFor()
 	}
-	// Gateway dynamic surface (Doc 52 Faz 1-b): the EXTENDED tier advertises only the
-	// tools the model has activated this session — it starts empty and grows via
-	// activate_tools + tools/list_changed. Core is unaffected (always eager).
-	dynExtended := tier == "extended"
+	// Gateway dynamic surface (Doc 52): the EXTENDED tier advertises only the tools the
+	// model has activated this session — it starts empty and grows via activate_tools +
+	// tools/list_changed. The deferred/activatable tier is now everything non-core
+	// (extended AND hidden): with nothing advertised until activated, hidden tools cost
+	// no tokens up front, so they become discoverable (tool_search) + activatable in-turn
+	// — the CLI analogue of native hidden tools (§7-15). Core is unaffected (always eager).
 	filtered := make([]interaction.ToolSpec, 0, len(specs))
 	for _, s := range specs {
-		if cliTier(s.Name, visOf) != tier {
+		t := cliTier(s.Name, visOf)
+		if tier == "extended" {
+			if t == "core" || !b.isActivated(token, s.Name) {
+				continue
+			}
+			filtered = append(filtered, s)
 			continue
 		}
-		if dynExtended && !b.isActivated(token, s.Name) {
-			continue
+		if t == tier {
+			filtered = append(filtered, s)
 		}
-		filtered = append(filtered, s)
 	}
 	return filtered
 }
 
-// extendedCandidates returns the bare names that WOULD be advertised on the extended
-// tier for this run (ignoring activation) — the valid targets for activate_tools. Used
-// to validate activate/deactivate names so a typo is reported instead of silently
-// registering a phantom tool.
+// extendedCandidates returns the bare names activate_tools may turn on for this run —
+// every NON-CORE tool (the deferred tier = extended + hidden). Used to validate
+// activate/deactivate names so a typo is reported instead of registering a phantom tool.
+// Hidden tools qualify: with the gateway advertising nothing until activated, they are
+// bridged for free and become activatable in-turn (the CLI analogue of native hidden).
 func (b *interactionBackend) extendedCandidates(run *chatRun) map[string]bool {
+	out := map[string]bool{}
+	for name := range b.candidateDefs(run) {
+		out[name] = true
+	}
+	return out
+}
+
+// candidateDefs returns name→description for every NON-CORE (activatable) tool this run
+// exposes: the static interaction specs plus the bridged self-management/hidden defs.
+// Shared by extendedCandidates (validation) and tool_search (discovery).
+func (b *interactionBackend) candidateDefs(run *chatRun) map[string]string {
 	specs := interactionToolSpecs(b.tun, run != nil && run.autonomous)
 	var bridge []providers.ToolDef
 	var visOf func(string) string
@@ -248,17 +268,15 @@ func (b *interactionBackend) extendedCandidates(run *chatRun) map[string]bool {
 		bridge = run.bridgeDefsFor()
 		visOf = run.tierVisFor()
 	}
-	names := make([]string, 0, len(specs)+len(bridge))
+	out := map[string]string{}
 	for _, s := range specs {
-		names = append(names, s.Name)
+		if cliTier(s.Name, visOf) != "core" {
+			out[s.Name] = s.Description
+		}
 	}
 	for _, d := range bridge {
-		names = append(names, d.Name)
-	}
-	out := map[string]bool{}
-	for _, n := range names {
-		if cliTier(n, visOf) == "extended" {
-			out[n] = true
+		if cliTier(d.Name, visOf) != "core" {
+			out[d.Name] = d.Description
 		}
 	}
 	return out
@@ -414,6 +432,11 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 			Description: "List the on-demand tools you have activated in this session (the ones you can call now, besides the always-loaded core tools).",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{}}`),
 		},
+		interaction.ToolSpec{
+			Name:        "tool_search",
+			Description: "Search ALL on-demand tools by keyword — including ones not shown in the 'Available Tools' catalog (hidden tier). Returns matching names to load with activate_tools. Use when you need a capability you don't see listed.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"Keywords to match against tool names + descriptions"}},"required":["query"]}`),
+		},
 	)
 	return specs
 }
@@ -550,6 +573,8 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callActivate(token, run, args, false)
 	case "active_tools":
 		return b.callActiveTools(token), nil
+	case "tool_search":
+		return b.callToolSearch(run, args), nil
 	default:
 		// CLI-3: dispatch a bridged self-management tool through the run's native
 		// registry. The advertised catalog (and the per-agent tool filter) gates
@@ -641,6 +666,58 @@ func (b *interactionBackend) callActiveTools(token string) interaction.CallResul
 		return interaction.CallResult{Text: "No on-demand tools activated. Use activate_tools to load one from the 'Available Tools' catalog."}
 	}
 	return interaction.CallResult{Text: "Activated tools (callable now):\n- " + strings.Join(active, "\n- ")}
+}
+
+// callToolSearch implements the tool_search meta-tool: it keyword-searches EVERY
+// activatable (non-core) tool — including hidden-tier ones not shown in the catalog — so
+// the model can discover a capability it doesn't see listed, then load it with
+// activate_tools. Mirrors the native tool_search over the load-on-demand catalog.
+func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) interaction.CallResult {
+	var in struct {
+		Query string `json:"query"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return interaction.CallResult{Text: "invalid input: " + err.Error(), IsError: true}
+	}
+	q := strings.ToLower(strings.TrimSpace(in.Query))
+	if q == "" {
+		return interaction.CallResult{Text: "empty query", IsError: true}
+	}
+	terms := strings.Fields(q)
+	cands := b.candidateDefs(run)
+	names := make([]string, 0, len(cands))
+	for name := range cands {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var matches []string
+	for _, name := range names {
+		hay := strings.ToLower(name + " " + cands[name])
+		all := true
+		for _, term := range terms {
+			if !strings.Contains(hay, term) {
+				all = false
+				break
+			}
+		}
+		if all {
+			desc := cands[name]
+			if len(desc) > 100 {
+				desc = desc[:100] + "…"
+			}
+			matches = append(matches, "- "+name+" — "+desc)
+		}
+	}
+	if len(matches) == 0 {
+		return interaction.CallResult{Text: fmt.Sprintf("No on-demand tools match %q.", in.Query)}
+	}
+	const max = 30
+	more := ""
+	if len(matches) > max {
+		more = fmt.Sprintf("\n…and %d more; refine the query.", len(matches)-max)
+		matches = matches[:max]
+	}
+	return interaction.CallResult{Text: "Matching tools (load with activate_tools):\n" + strings.Join(matches, "\n") + more}
 }
 
 // interactionURL builds the loopback URL a CLI subprocess uses to reach this

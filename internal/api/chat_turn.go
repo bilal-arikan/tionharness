@@ -76,6 +76,17 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if tb := wsp.Runtime.LazyToolsCatalogBlock(ctx, agentRow); tb != "" {
 		system = strings.TrimSpace(system + "\n\n" + tb)
 	}
+	// Advertise optional external-tool capabilities (e.g. codebase-memory) present in
+	// this workspace so the agent reaches for them, with the cwd-derived project id.
+	// Presence is stable per workspace/session, so it rides the cached static prefix.
+	// Shares ONE source with the headless path (agent.autonomousSystemPrompt).
+	if cb := wsp.Runtime.CapabilityContext(ctx, strings.TrimSpace(session.WorkingDir)); cb != "" {
+		system = strings.TrimSpace(system + "\n\n" + cb)
+	}
+	// Best-effort: ensure the session's repo is indexed in this workspace's isolated
+	// store (guarded to run at most once per cwd per process; no-op without a cwd or
+	// an enabled codebase-memory server).
+	wsp.Runtime.EnsureCodebaseIndexed(ctx, session.WorkingDir)
 
 	// Wall-clock awareness: a single date/time line so the agent always knows
 	// "now" without a tool round-trip (there is no get_current_time tool). Volatile

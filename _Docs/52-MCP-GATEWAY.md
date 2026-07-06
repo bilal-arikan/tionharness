@@ -659,9 +659,20 @@ Tam zincir **claude → gateway → pool → backend MCP** doğrulandı (num_tur
   dış client aynı backend, #11) — hâlâ follow-up.
 - **Workspace seçimi:** MVP default workspace'e bağlı; header/token→workspace eşlemesi follow-up.
 
+### ✅ Follow-up'lar (2026-07-06)
+
+- ✅ **Ref-count paylaşımı (#11):** harici gateway dedicated pool yerine default workspace'in
+  pool'unu paylaşır (`Runtime.MCPPool()` + `PoolFunc` canlı çözüm) → iç ajan + dış client aynı
+  backend bağlantısını kullanır. `api.Server.Close()`/`gatewayPool` kaldırıldı.
+- ✅ **hidden→deferred-usable + `tool_search`:** gateway advertise-on-demand olduğundan hidden
+  köprüleme sıfır token → `cliBridgeSkipHidden` POC **kaldırıldı** (`skipHidden=false`). Yeni
+  core `tool_search` meta-tool katalogda görünmeyen hidden dahil tüm aktive-edilebilir araçları
+  arar; `Tools("extended")` aktive edilmiş non-core (extended+hidden) ilan eder. CLI'da native
+  hidden-tier'ın tam muadili. Test: `TestGatewayHiddenActivatableAndToolSearch`.
+
 ### Sıradaki
 
 - **Default-on ön koşulu:** tam-yol canlı tur (gerçek `api.interactionBackend`) + token
   ölçümü + permission_prompt (YENİ-A) doğrulaması.
-- **Faz 3 tamamlama:** canlı dış-client validation + pool cleanup + VPS göç uygulaması.
-- **Follow-up:** hidden→deferred-usable + gateway `tool_search` (default-on sonrası).
+- **Faz 3 tamamlama:** VPS göç aracı (18+7 server → workspace).
+- **Tam-runtime QA:** gerçek workspace + canlı chatRun ile üretim davranışı.

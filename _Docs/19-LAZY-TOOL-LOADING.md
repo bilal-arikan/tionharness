@@ -554,5 +554,15 @@ yüzden kaynak model 4 tier kalır. claude-cli inherently 2 durumludur → 4 tie
 - **CLI'da 2-durum projeksiyonu:** summary/name-only zaten `cliTier`'da tek `extended`
   durumuna iner; artık extended de gerçekten "tools/list'te yok, activate ile gelir" =
   **deferred-usable**. summary/name-only CLI'da anlamsız (yalnız native token farkı için).
-- Kod: `api/mcp_interaction.go` (`callActivate`/`callActiveTools`/`activated`/`Tools` filtre —
-  koşulsuz), `interaction/server.go` (push). Detay: Doc **52** §12.
+- **hidden → deferred-usable + `tool_search` (2026-07-06 follow-up):** Gateway hiçbir
+  extended aracı activate'e kadar ilan etmediğinden, `hidden` araçları köprülemek artık
+  **sıfır token** — bu yüzden `cliBridgeSkipHidden` POC'si **kaldırıldı** (`clibridge_tunable.go`
+  silindi, `BridgeTools` daima `skipHidden=false`). Artık hidden araçlar da köprüleniyor ama
+  activate'e kadar ilan edilmiyor. Yeni core meta-tool **`tool_search`** (`callToolSearch`)
+  katalogda görünmeyen hidden dahil TÜM aktive-edilebilir araçları keyword ile arar →
+  `activate_tools` ile yüklenir. `Tools("extended")` artık aktive edilmiş **non-core**
+  (extended+hidden) araçları ilan eder; `extendedCandidates`/`candidateDefs` non-core'u kapsar.
+  Böylece CLI'da native hidden-tier'ın (`tool_search`+activate) tam muadili kuruldu.
+- Kod: `api/mcp_interaction.go` (`callActivate`/`callActiveTools`/`callToolSearch`/`activated`/
+  `Tools`/`candidateDefs` — koşulsuz), `agent/runtime.go` (`BridgeTools` skipHidden=false),
+  `interaction/server.go` (push). Detay: Doc **52** §12.
