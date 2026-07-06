@@ -59,11 +59,11 @@ type Server struct {
 	// interactionSrv is the same server as a concrete type, so the activate path can
 	// push tools/list_changed to a live CLI session's SSE stream (gateway, Doc 52).
 	interactionSrv *interaction.Server
-	// gatewaySrv is the EXTERNAL MCP gateway (Doc 52 Faz 3), exposing the workspace's
-	// MCP pool to outside clients at /mcp/gateway. nil unless opted in at boot
-	// (TIONSWARM_GATEWAY_EXTERNAL). gatewayPool is its dedicated backend pool.
-	gatewaySrv  *gateway.Server
-	gatewayPool *mcp.Pool
+	// gatewaySrv is the EXTERNAL MCP gateway (Doc 52 Faz 3), exposing the default
+	// workspace's SHARED MCP pool to outside clients at /mcp/gateway. nil unless opted in
+	// at boot (TIONSWARM_GATEWAY_EXTERNAL). It borrows the workspace pool (#11), so there
+	// is nothing pool-related to own or close here.
+	gatewaySrv *gateway.Server
 	// gatewayRequireLoopback is true when no auth token is configured: the endpoint is
 	// then reachable ONLY from loopback (the safe default — no token, no network).
 	gatewayRequireLoopback bool
@@ -107,9 +107,16 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	// token it is loopback-only. Default OFF — external exposure must be explicit.
 	if envTruthy(os.Getenv("TIONSWARM_GATEWAY_EXTERNAL")) {
 		token := strings.TrimSpace(os.Getenv("TIONSWARM_GATEWAY_AUTH_TOKEN"))
-		pool := mcp.NewPool()
-		pool.SetLogger(logger)
-		s.gatewayPool = pool
+		// Share the default workspace's persistent MCP pool (#11) — no dedicated pool, so
+		// internal agent turns and external gateway clients reuse one connection per server.
+		// Resolved live so it always tracks the current default workspace.
+		poolFn := func() *mcp.Pool {
+			wsp := s.workspaces.Default()
+			if wsp == nil || wsp.Runtime == nil {
+				return nil
+			}
+			return wsp.Runtime.MCPPool()
+		}
 		serversFn := func(ctx context.Context) ([]mcp.ServerConfig, error) {
 			wsp := s.workspaces.Default()
 			if wsp == nil || wsp.DB == nil {
@@ -129,7 +136,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		if token != "" {
 			authFn = func(t string) bool { return t == token }
 		}
-		gb := gateway.NewBackend(pool, serversFn, logger)
+		gb := gateway.NewBackend(poolFn, serversFn, logger)
 		s.gatewaySrv = gateway.NewServer(gb, authFn, logger)
 		gb.SetServer(s.gatewaySrv)
 		s.gatewayRequireLoopback = token == ""
@@ -354,16 +361,6 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions/{id}/context-preview", s.handleSessionContextPreview)
 	mux.HandleFunc("GET /api/sessions/{id}/path", s.handleSessionPath)
 	mux.HandleFunc("POST /api/sessions/{id}/reveal", s.handleRevealSession)
-}
-
-// Close releases server-owned resources. Currently the external gateway's dedicated
-// MCP pool (Doc 52 Faz 3), so a shutdown terminates any backend stdio subprocesses it
-// spawned instead of orphaning them. Nil-safe and idempotent.
-func (s *Server) Close() {
-	if s.gatewayPool != nil {
-		s.gatewayPool.Close()
-		s.gatewayPool = nil
-	}
 }
 
 // envTruthy reports whether an env value opts a feature in (1/true/on/yes).

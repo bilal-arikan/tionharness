@@ -62,7 +62,7 @@ func TestGatewayActivateAndProxy(t *testing.T) {
 	servers := func(context.Context) ([]mcp.ServerConfig, error) {
 		return []mcp.ServerConfig{{Name: "fake", Transport: "http", URL: back.URL}}, nil
 	}
-	b := NewBackend(pool, servers, nil)
+	b := NewBackend(func() *mcp.Pool { return pool }, servers, nil)
 	srv := NewServer(b, nil, nil)
 	b.SetServer(srv)
 
@@ -121,7 +121,7 @@ func TestGatewayActivateAndProxy(t *testing.T) {
 func TestGatewayAuth(t *testing.T) {
 	pool := mcp.NewPool()
 	defer pool.Close()
-	b := NewBackend(pool, func(context.Context) ([]mcp.ServerConfig, error) { return nil, nil }, nil)
+	b := NewBackend(func() *mcp.Pool { return pool }, func(context.Context) ([]mcp.ServerConfig, error) { return nil, nil }, nil)
 	srv := NewServer(b, func(tok string) bool { return tok == "secret" }, nil)
 	b.SetServer(srv)
 	ts := httptest.NewServer(srv)

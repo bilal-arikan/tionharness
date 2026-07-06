@@ -293,6 +293,12 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	return r
 }
 
+// MCPPool exposes this workspace's persistent, ref-counted MCP connection pool so the
+// external gateway (Doc 52 Faz 3) can SHARE it — an internal agent turn and an external
+// gateway client then reuse one backend connection per server instead of spawning
+// duplicate subprocesses (#11). The pool is workspace-owned; callers must NOT Close it.
+func (r *Runtime) MCPPool() *mcp.Pool { return r.mcpPool }
+
 // CloseMCP terminates this workspace's persistent MCP connections. Called when
 // the workspace is deleted or the manager shuts down.
 func (r *Runtime) CloseMCP() {

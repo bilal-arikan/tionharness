@@ -88,7 +88,7 @@ func TestLiveExternalGateway(t *testing.T) {
 		return []mcp.ServerConfig{{Name: "fake", Transport: "http", URL: back.URL}}, nil
 	}
 	const token = "gw-live-tok"
-	b := NewBackend(pool, servers, nil)
+	b := NewBackend(func() *mcp.Pool { return pool }, servers, nil)
 	srv := NewServer(b, func(tok string) bool { return tok == token }, nil)
 	b.SetServer(srv)
 	gw := httptest.NewServer(srv)
