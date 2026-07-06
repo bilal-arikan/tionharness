@@ -81,14 +81,23 @@ export function NewItemButton({
   return <div className={`px-3 pb-1 pt-1 ${className ?? ''}`}>{btn}</div>
 }
 
-// ResizeHandle is the invisible drag strip on the right edge of a list column.
-// Wire onMouseDown to useResizableSidebar's startDrag.
-export function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
+// ResizeHandle is the invisible drag strip on the edge of a resizable column.
+// Wire onMouseDown to useResizableSidebar's startDrag. `side` picks the edge:
+// 'right' (default) for a left-hand list column, 'left' for a right-hand panel.
+export function ResizeHandle({
+  onMouseDown,
+  side = 'right',
+}: {
+  onMouseDown: (e: React.MouseEvent) => void
+  side?: 'left' | 'right'
+}) {
   return (
     <div
       onMouseDown={onMouseDown}
       title="Genişliği ayarla"
-      className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent transition hover:bg-[var(--color-accent)]"
+      className={`absolute top-0 h-full w-1 cursor-col-resize bg-transparent transition hover:bg-[var(--color-accent)] ${
+        side === 'left' ? 'left-0' : 'right-0'
+      }`}
     />
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Bug, ChevronDown, ChevronRight, Loader2, AlertTriangle, Info } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionDebugSummary, SessionDebugEvent } from '../../types'
+import { SessionFlowViz } from './viz/SessionFlowViz'
 
 // SessionDebugCard renders the per-session DEBUG journal (parallel observability
 // stream): turn timings, token spend by model, per-tool latency/size/errors,
@@ -12,9 +13,13 @@ import type { SessionDebugSummary, SessionDebugEvent } from '../../types'
 export function SessionDebugCard({
   sessionId,
   refreshKey,
+  agentNames = {},
 }: {
   sessionId: string
   refreshKey?: number
+  // agentId → display name, used to label the workflow visualizations' agent
+  // lanes/nodes. Empty is fine (falls back to a generic label).
+  agentNames?: Record<string, string>
 }) {
   const [sum, setSum] = useState<SessionDebugSummary | null>(null)
   // Whole-card fold (collapsed by default — debug is secondary; the header line
@@ -228,6 +233,10 @@ export function SessionDebugCard({
           </div>
         </div>
       )}
+
+      {/* Workflow visualizations: tool-execution Sankey + concurrency timeline
+          (foldable, lazily fetches its own raw events). */}
+      <SessionFlowViz sessionId={sessionId} agentNames={agentNames} refreshKey={refreshKey} />
 
       {/* Raw event log (lazy) */}
       <button

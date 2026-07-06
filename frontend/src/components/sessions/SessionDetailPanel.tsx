@@ -6,6 +6,8 @@ import { SessionDebugCard } from './SessionDebugCard'
 import { CoordinatorSection } from './CoordinatorSection'
 import { AgentIdentity } from '../agents/AgentIdentity'
 import { PromptEditor, KeyValueRow as Row, TagEditor } from '../common'
+import { ResizeHandle } from '../common/SidebarChrome'
+import { useResizableSidebar } from '../../hooks/useResizableSidebar'
 import { roleColor } from '../../lib/palette'
 import { usd, tokens as fmtTok } from '../../lib/format'
 
@@ -46,6 +48,15 @@ export function SessionDetailPanel({
   onSelectAgent,
   onRerun,
 }: Props) {
+  // Persisted, drag-resizable width. The panel sits on the RIGHT, so its handle
+  // is on the LEFT edge and the drag direction is inverted (drag left = wider).
+  const { width, startDrag } = useResizableSidebar({
+    storageKey: 'tionswarm.sessionInfoWidth',
+    defaultWidth: 320,
+    min: 280,
+    max: 640,
+    invert: true,
+  })
   const [info, setInfo] = useState<SessionInfo | null>(null)
   // In-flight action guard for the running-process card (stop/restart/drop).
   const [procBusy, setProcBusy] = useState<'' | 'stop' | 'restart' | 'drop'>('')
@@ -274,7 +285,14 @@ export function SessionDetailPanel({
   const ctxPct = Math.round((ctxUsed / ctxWindow) * 100)
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+    <aside
+      style={{ width }}
+      className="relative flex h-full shrink-0 flex-col overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-surface)] max-md:!w-[85vw] max-md:!max-w-sm"
+    >
+      {/* Drag strip on the LEFT edge to resize the right-hand panel. It stays put
+          while the content scrolls, so the scroll lives on the inner wrapper. */}
+      <ResizeHandle onMouseDown={startDrag} side="left" />
+      <div className="flex h-full flex-col overflow-y-auto">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
           Oturum bilgisi
@@ -699,7 +717,11 @@ export function SessionDetailPanel({
 
           {/* Per-session debug journal (parallel observability stream): timings,
               token spend, tool latency/errors, compaction/recovery + raw log. */}
-          <SessionDebugCard sessionId={sessionId} refreshKey={(refreshKey ?? 0) + localRefresh} />
+          <SessionDebugCard
+            sessionId={sessionId}
+            refreshKey={(refreshKey ?? 0) + localRefresh}
+            agentNames={Object.fromEntries(info.agents.map((a) => [a.agentId, a.name]))}
+          />
 
           {/* Actions / tools */}
           <Section title="Araçlar">
@@ -725,6 +747,7 @@ export function SessionDetailPanel({
           </Section>
         </div>
       )}
+      </div>
     </aside>
   )
 }

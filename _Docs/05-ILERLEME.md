@@ -2,6 +2,52 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-06**
 
+## "Oturum bilgisi" paneli genişletilebilir (drag-resize) ✅ (2026-07-06)
+
+**İstek:** Sağdaki "Oturum bilgisi" paneli (SessionDetailPanel) sabit `w-80`
+genişlikteydi; sürükleyerek genişletilebilir olsun.
+
+**Ne yapıldı:**
+- **`useResizableSidebar` hook'una `invert` seçeneği:** sağ-taraf paneli sol
+  kenardan sürüklendiğinde (clientX azalırken) **büyümesi** için delta ters
+  çevrilir. Deps'e eklendi.
+- **`ResizeHandle`'a `side` prop'u:** `'right'` (varsayılan, sol-liste kolonları)
+  veya `'left'` (sağ panel). `left-0`/`right-0` konumlandırma.
+- **SessionDetailPanel:** sabit `w-80` → `useResizableSidebar({storageKey:
+  'tionswarm.sessionInfoWidth', default 320, min 280, max 640, invert:true})` +
+  inline `style.width`. Sol kenarda `ResizeHandle side="left"`. Handle içerik
+  kaydırılınca kaymasın diye aside `overflow-hidden` yapıldı, scroll **iç
+  sarmalayıcıya** taşındı (ListPane deseni). Mobil çekmece için genişlik
+  `max-md:!w-[85vw] max-md:!max-w-sm` ile bağlandı (inline stili `!important`
+  ezsin diye). Genişlik `localStorage`'da kalıcı. `frontend tsc --noEmit` temiz.
+
+## İş akışı görselleştirmeleri: Araç Sankey + Eşzamanlılık zaman çizelgesi ✅ (2026-07-06)
+
+**İstek:** CCAM'in Workflows ekranındaki "Tool execution Sankey" ve "Concurrency
+timeline" görselleştirmelerini TionSwarm'a ekle.
+
+**Ne yapıldı (yalnız frontend; mevcut `debug.jsonl` verisinden, ekstra backend yok):**
+- **Veri katmanı (saf):** `frontend/src/components/sessions/viz/flowVizData.ts` —
+  `buildToolSankey` (tool olaylarını `Ajan → Araç → Tamam|Hata` mermaid `sankey-beta`
+  koduna toplar; hata dalı yalnız hata varsa) + `buildConcurrencyTimeline` (zaman
+  damgalı `llm_call`/`turn` olaylarını ajan-şeritli bar modeline; olay COMPLETION'da
+  damgalandığı için bar = `[ts−durMs, ts]`; sweep-line ile şeritler-arası çakışma =
+  `hasOverlap`). Yan-etkisiz → test edilebilir.
+- **Sankey bileşeni:** `viz/ToolSankey.tsx` — mevcut `MermaidDiagram`'ı (lazy mermaid,
+  tema-duyarlı, expand) `sankey-beta` koduyla besler.
+- **Zaman çizelgesi:** `viz/ConcurrencyTimeline.tsx` — bağımlılıksız SVG Gantt
+  (Sparkline desenine uygun); ajan başına şerit, zaman-eksenli barlar (hata=kırmızı),
+  3 eksen tick'i, seri/eşzamanlı rozeti, `<title>` tooltip.
+- **Kapsayıcı:** `viz/SessionFlowViz.tsx` — katlanabilir "İş akışı görselleştirmeleri"
+  bölümü; açılınca olayları lazy çeker (limit 500, truncation notu), iki görseli üst
+  üste render eder. Durum `localStorage`'da (`tionswarm.flowVizOpen`).
+- **Bağlama:** `SessionDebugCard`'a `agentNames` opsiyonel prop + model dökümünden
+  sonra `SessionFlowViz` render; `SessionDetailPanel` `info.agents`'tan agentId→name
+  map'i geçirir. Yer: **oturum detay panelinin Debug bölümü**.
+- **Not:** Tek-ajan seri oturumda zaman çizelgesi "seri" görünür; koordinatör/çok-ajan
+  oturumlarda şerit-çakışması gerçek eşzamanlılığı gösterir. `frontend tsc --noEmit`
+  temiz (lint `set-state-in-effect` kuralı repo-genelinde mevcut, idioma uygun).
+
 ## Fix: Yürütme/oturum listesi sırası her poll'de değişiyordu ✅ (2026-07-06)
 
 **Belirti:** Aktivite ekranındaki yürütme listesi (ve sol oturum listesi) "durduk
