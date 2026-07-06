@@ -52,11 +52,12 @@ skills for a session are listed in its skills catalog. Key default skills:
 - `tionswarm-guide` — the runtime's overall map and conventions.
 - `tionswarm-settings` — every application setting and how to change it.
 - `tionswarm-self-management` — managing agents, flows, schedules, tasks, MCP
-  servers, secrets, skills, memory, and app settings from within a session.
+  servers, secrets, skills, and app settings from within a session.
 - `tionswarm-autonomous-ops` — the discipline for autonomous/headless turns.
 - `tionswarm-flows` — building and running orchestration graphs.
 - `tionswarm-progress` — the durable task-list convention.
 - `tionswarm-self-debug` — reading your own session debug journal.
+- `tionswarm-deliverables` — surfacing output as artifacts vs. inline media.
 
 ## Rendering
 
