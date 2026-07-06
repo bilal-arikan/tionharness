@@ -730,9 +730,11 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
 - ✅ **Audit paritesi:** proxied backend tool çağrıları `AuditEntry{ts,server,tool,ok,error}`
   ile kaydedilir (TS `gateway-audit.jsonl` muadili). Opt-in `TIONSWARM_GATEWAY_AUDIT_LOG=<path>`
   (JSONL append, fire-and-forget; meta-araçlar denetlenmez). Test: `TestGatewayAuditRecordsProxiedCalls`.
-- ⏳ **Canlı VPS göç uygulaması — HAZIR, onay bekliyor:** `migrate-vps.py` gerçek `config.json`
-  + `secrets.json` üzerinde doğrulandı (**23 server** normalize: 7 vps http + local; secrets
-  çözüldü). Canlı instance :8090'da çalışıyor (WS1/WS5/WS8/WS9). **Canlı import yapılmadı**
-  çünkü: (a) hangi workspace? (b) 23 gerçek-secret config yazımı geri-alması zor, (c) çakışma
-  (ör. WS5'te `mcp-chrome` zaten var). Bilal workspace seçip onaylayınca tek komutla yapılır
-  (§11-B prosedürü).
+- ✅ **Canlı VPS göç uygulaması — YAPILDI (2026-07-06):** kullanıcı onayıyla (tüm workspace'ler,
+  23 server, çakışanların üstüne). Masaüstü app kapalıyken `cmd/tionswarm` geçici olarak
+  gerçek data-dir'e (`~/.tionswarm`) karşı `:8095`'te başlatıldı; `apply-migration.py`
+  (delete-colliding + import) 4 workspace'e uygulandı → **WS1: 2 overwrite +23, WS5: 1
+  overwrite +23 (non-colliding `codebase-memory` korundu → 24), WS8: +23, WS9: +23**;
+  0 hata, **dupe yok** (doğrulandı). Geçici server durduruldu, secret'lı `import.json` +
+  binary silindi. Sonraki masaüstü açılışında WS1/5/8/9'da 23 server hazır. Araçlar:
+  `_spikes/52-gateway/migrate-vps.py` + `apply-migration.py`.
