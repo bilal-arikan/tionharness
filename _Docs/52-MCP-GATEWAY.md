@@ -636,10 +636,14 @@ gateway-of-gateways (yerel → VPS zincir) neredeyse bedava.
 `mcp.Pool` + fake backend MCP: meta-only → activate → namespaced araç görünür → proxied
 `echo` round-trip → deactivate), `TestGatewayAuth`.
 
+**✅ Canlı dış-client validation (2026-07-06):** `internal/gateway/live_gateway_test.go`
+(`TestLiveExternalGateway`, gate `TIONSWARM_LIVE_CLI=1`). Gerçek claude-cli, token'lı
+`/mcp/gateway`'e (gerçek `gateway.Server` + gerçek `mcp.Pool` + fake backend MCP) bağlandı;
+**tek turda** `activate_tools(servers=["fake"])` → gateway pool ile backend'e bağlandı +
+`list_changed` push → claude re-list → proxied `get_secret` → **`SECRET=GW_EXT_OK_88`**.
+Tam zincir **claude → gateway → pool → backend MCP** doğrulandı (num_turns=3, tek `-p`).
+
 **KALAN (Faz 3 tamamlama):**
-- **Canlı dış-client validation:** gerçek harici claude-cli `/mcp/gateway`'e bağlanıp
-  activate→çağrı yapsın (in-process pool + auth testlendi; uçtan-uca dış tur kaldı —
-  Faz 1-b'nin `TestLiveGatewayActivate` muadili).
 - **Pool yaşam döngüsü:** dedicated pool shutdown'da kapatılmalı (`api.Server.Close` hook'u
   yok → follow-up). Ref-count paylaşımı (iç ajan + dış client aynı backend, #11) — follow-up.
 - **Workspace seçimi:** MVP default workspace'e bağlı; header/token→workspace eşlemesi follow-up.
