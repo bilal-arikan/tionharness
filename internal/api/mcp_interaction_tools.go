@@ -83,19 +83,30 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 	if in.ToolName == "ExitPlanMode" {
 		return b.callExitPlan(ctx, run, in.Input)
 	}
-	risk := tools.Classify(in.ToolName)
+	// Strip the Interaction MCP namespace so a bridged/activated tool is classified by
+	// its REAL bare name (mcp__tionswarm_extended__create_agent -> create_agent). Without
+	// this, a namespaced name misses the risk table and defaults to RiskWrite — safe
+	// (never wrongly auto-allows) but it would needlessly prompt for a read-only tool and
+	// skip matching standing grants. Gateway-activated extended tools (Doc 52 Faz 1-b)
+	// reach the CLI's permission prompt under their namespaced name, so this matters
+	// exactly for them (YENI-A). Non-interaction names (native Bash, external mcp__x__y)
+	// are returned unchanged and keep their existing classification.
+	toolName := bareToolName(in.ToolName)
+	risk := tools.Classify(toolName)
 	// Argument-aware grants (B2): honour a standing rule (e.g. Bash(git *)) that
 	// already covers this command without re-prompting.
-	arg := tools.RepresentativeArg(in.ToolName, in.Input)
-	if risk == tools.RiskRead || run.grantStore().Matches(in.ToolName, arg) {
+	arg := tools.RepresentativeArg(toolName, in.Input)
+	if risk == tools.RiskRead || run.grantStore().Matches(toolName, arg) {
 		return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
 	}
-	run.emit("step", agent.TurnStep{Kind: agent.StepPermission, Tool: in.ToolName, Reason: string(risk), Text: arg, Options: tools.PermissionOptions})
+	run.emit("step", agent.TurnStep{Kind: agent.StepPermission, Tool: toolName, Reason: string(risk), Text: arg, Options: tools.PermissionOptions})
 	select {
 	case ans := <-run.answer:
 		switch tools.NormalizePermission(ans) {
 		case "always":
-			run.grantStore().GrantRule(tools.DeriveGrantRule(in.ToolName, arg))
+			// Derive the standing rule from the bare name so it matches future calls (we
+			// now match grants by the stripped name above).
+			run.grantStore().GrantRule(tools.DeriveGrantRule(toolName, arg))
 			return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
 		case "allow":
 			return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
