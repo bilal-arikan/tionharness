@@ -694,9 +694,34 @@ Tam zincir **claude → gateway → pool → backend MCP** doğrulandı (num_tur
   arar; `Tools("extended")` aktive edilmiş non-core (extended+hidden) ilan eder. CLI'da native
   hidden-tier'ın tam muadili. Test: `TestGatewayHiddenActivatableAndToolSearch`.
 
-### Sıradaki
+### ✅ VPS göç aracı (2026-07-06)
 
-- **Default-on ön koşulu:** tam-yol canlı tur (gerçek `api.interactionBackend`) + token
-  ölçümü + permission_prompt (YENİ-A) doğrulaması.
-- **Faz 3 tamamlama:** VPS göç aracı (18+7 server → workspace).
-- **Tam-runtime QA:** gerçek workspace + canlı chatRun ile üretim davranışı.
+`_spikes/52-gateway/migrate-vps.py` — TS `config.json` → `/api/mcp-servers/import` formatı.
+Prosedür §11-B'de. Masked template'te doğrulandı (18 server). Canlı import elle (secrets).
+
+### Tam-runtime QA — durum + manuel checklist
+
+**Otomatik kapsam (yeterli kanıt):** mekanizma uçtan uca kanıtlı — `TestLiveGatewayActivate`
+(gerçek `interaction.Server` + gerçek claude, aynı-tur activate→çağrı), `TestLiveExternalGateway`
+(gerçek `gateway.Server`+pool+claude), `TestMeasureGatewaySavings` (token), ve `interactionBackend`
+mantığı gerçek `chatRun`'larla unit-testli (`gateway_dynamic_test.go`: activate/deactivate/
+active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/kırılgan olacağından
+(her CI'da token harcar) yazılmadı; onun yerine **manuel QA checklist** (Bilal, canlı TionSwarm):
+
+1. Boot: izole `TIONSWARM_DATA_DIR` + ayrı port ile `tionswarm` başlat; claude-cli agent oluştur
+   (`MCPEnabled`, persistent session açık), birkaç extended/hidden görünürlüklü araç ayarla.
+2. Bir chat turu at: modelden bir extended aracı (ör. `notify`) veya hidden aracı **kullanmasını**
+   iste. Beklenen: model `activate_tools` (ya da hidden için önce `tool_search`) çağırır → araç
+   aynı turda çalışır. UI/Logs'ta `tools/list_changed` push + tool çağrısı görünür.
+3. Ask modda: activate edilen mutating bir araç çağrılınca **permission kartı** çıkar (YENİ-A —
+   bare risk sınıfıyla). Read-only araç sormadan geçer.
+4. Persistent warm: 2. turda config değişmediyse `cold start` **yok** (Logs'ta warm-reuse);
+   `debug.jsonl`'de `cache_read > 0`.
+5. Token: aynı senaryoyu ölç (öncesi=full-extended yoktu; şimdi boş-extended) → taze input düşük.
+
+> Bu checklist geçerse gateway üretimde tam doğrulanmış sayılır; mekanizma zaten otomatik kanıtlı.
+
+### Kalan (opsiyonel, ileri)
+
+- Workspace seçimi: header/token→workspace eşlemesi (MVP default workspace'e bağlı).
+- Audit paritesi: gateway proxied çağrıları için `gateway-audit.jsonl` muadili (debug.jsonl'e).
