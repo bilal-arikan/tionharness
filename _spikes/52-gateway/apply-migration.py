@@ -34,7 +34,8 @@ def main():
 
     doc = json.load(open(args.import_json, encoding="utf-8"))
     import_names = set(doc.get("mcpServers", {}).keys())
-    print(f"import.json: {len(import_names)} servers")
+    disable_after = set(doc.get("_disabled", []))  # servers disabled in TS -> turn off post-import
+    print(f"import.json: {len(import_names)} servers ({len(disable_after)} to disable after import)")
 
     workspaces = args.ws
     if not workspaces:
@@ -56,10 +57,20 @@ def main():
                 except Exception as e:
                     print(f"  ! delete {s.get('name')} failed: {e}")
         # 2) bulk import
-        status, res = http("POST", f"{args.base}/api/mcp-servers/import", ws=ws, body=doc)
+        status, res = http("POST", f"{args.base}/api/mcp-servers/import", ws=ws, body={"mcpServers": doc["mcpServers"]})
         created = len((res or {}).get("created", []))
         errs = (res or {}).get("errors", {})
-        print(f"  overwritten(deleted): {deleted}  created: {created}  errors: {len(errs)}")
+        # 3) disable the TS-disabled servers so the app does not eagerly dial backends that
+        #    are not running (import always creates them enabled).
+        disabled = 0
+        if disable_after:
+            _, rows = http("GET", f"{args.base}/api/mcp-servers", ws=ws)
+            rows = rows if isinstance(rows, list) else (rows or {}).get("servers", [])
+            for s in rows:
+                if s.get("name") in disable_after and s.get("enabled", True):
+                    http("POST", f"{args.base}/api/mcp-servers/{s['id']}/toggle", ws=ws, body={"enabled": False})
+                    disabled += 1
+        print(f"  overwritten(deleted): {deleted}  created: {created}  disabled: {disabled}  errors: {len(errs)}")
         for name, msg in errs.items():
             print(f"    ! {name}: {msg}")
     print("\nDONE.")

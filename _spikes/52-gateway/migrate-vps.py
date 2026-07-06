@@ -81,6 +81,7 @@ def main():
 
     servers = cfg.get("mcpServers", {})
     out = {}
+    disabled_names = []
     report = []
     for name, spec in servers.items():
         norm, disabled, warnings = normalize(name, spec, secrets)
@@ -88,10 +89,14 @@ def main():
             report.append(f"SKIP (disabled): {name}")
             continue
         out[name] = norm
+        if disabled:
+            disabled_names.append(name)  # import can't carry a disabled flag; apply toggles these off
         flag = " [disabled in TS -> toggle off after import]" if disabled else ""
         report.append(f"{name}: {norm['type']}{flag}" + (f"  ! {'; '.join(warnings)}" if warnings else ""))
 
-    json.dump({"mcpServers": out}, sys.stdout, indent=2)
+    # _disabled is ignored by the import endpoint (reads only mcpServers) but consumed by
+    # apply-migration.py to disable those servers post-import (preserve the TS split).
+    json.dump({"mcpServers": out, "_disabled": disabled_names}, sys.stdout, indent=2)
     sys.stdout.write("\n")
     print(f"\n# {len(out)} servers normalized (of {len(servers)}):", file=sys.stderr)
     for line in report:

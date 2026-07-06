@@ -738,3 +738,10 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   0 hata, **dupe yok** (doğrulandı). Geçici server durduruldu, secret'lı `import.json` +
   binary silindi. Sonraki masaüstü açılışında WS1/5/8/9'da 23 server hazır. Araçlar:
   `_spikes/52-gateway/migrate-vps.py` + `apply-migration.py`.
+  > **Ek düzeltme (2026-07-06):** Import her server'ı **enabled** oluşturduğundan (import
+  > endpoint'i `disabled` alanı taşımıyor), TS'de disabled olan 13 server TionSwarm'da açık
+  > geldi → app açılışta backend'i çalışmayanlara eager dial → `dial failed`/`context canceled`
+  > log spam'i. Çözüm: `migrate-vps.py` artık çıktıya `_disabled: [...]` ekler; `apply-migration.py`
+  > import sonrası bunları `toggle {enabled:false}` ile kapatır. Canlıda 4 workspace'te 13'er
+  > server disable edildi → enabled set TS ile eşleşti (10 server). Kalan enabled http backend'leri
+  > (mcp-chrome/unity/mcp-alpha/vps-*) çalışmadıkça hâlâ warn verebilir — bu TS'nin enabled setiyle aynı.
