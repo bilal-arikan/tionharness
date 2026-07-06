@@ -162,6 +162,13 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		// disabled the agent should not delegate at all. Either way the native launcher
 		// must be suppressed — same shadowing class as TodoWrite/Skill above.
 		disallowed = append(disallowed, "Task", "Agent")
+		// Peer messaging: claude-cli 2.x ships a native `SendMessage` tool (sibling of
+		// Task/Agent) that talks to the CLI's OWN in-process subagents — it knows
+		// nothing about TionSwarm agents, so it fails with "agent not found" even for a
+		// valid TionSwarm id. It SHADOWS the bridged send_message (DeliverAgentMessage);
+		// a model that discovers the native one via ToolSearch reaches for it and every
+		// delivery fails. Suppress it so bridged send_message is the only peer-DM path.
+		disallowed = append(disallowed, "SendMessage")
 		// Bash: only suppress the CLI's native POSIX Bash when TionSwarm's own shell is
 		// bridged (shell enabled) as its replacement — otherwise the agent would lose
 		// shell entirely (TionSwarm's shell is not bridged when disabled). With the
