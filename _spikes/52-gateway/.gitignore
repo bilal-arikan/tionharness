@@ -2,3 +2,4 @@ server/spikegw.exe
 server/server.log
 *.stream.json
 *.err.log
+*.log

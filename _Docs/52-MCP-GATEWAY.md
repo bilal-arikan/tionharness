@@ -568,8 +568,40 @@ Gateway'de hidden'ı da aktive edilebilir yapmak, CLI için **hidden araçları 
 `tool_search` meta-tool** + hidden'ı köprüleme gerektirir → görünürlük postürünü değiştirir,
 gateway default-on kararıyla (Faz 4) birlikte ele alınmalı.
 
-### Sıradaki (Faz 2 sonrası)
+### ✅ Faz 4 — token ölçümü (2026-07-06, gerçek claude-cli 2.1.201 + claude-fable-5)
 
+Harness: `internal/interaction/measure_gateway_test.go` (`TestMeasureGatewaySavings`,
+gate `TIONSWARM_LIVE_CLI=1`). Gerçek `interaction.Server` + fake backend, extended tier
+**30 gerçekçi self-management-tarzı araç** (ad+özet+küçük şema). Trivial, araç-gerektirmeyen
+prompt (`"reply DONE"`) → tek fark: extended kaç araç ilan ediyor. Her senaryo benzersiz
+marker ile (cache paylaşımı yok, `cacheRead=0` → temiz soğuk ölçüm).
+
+| Extended tier | Soğuk prefix (input + cacheCreate) | input | cacheCreate |
+|---|---|---|---|
+| **FULL (30 araç)** | **52.269** | 3.977 | 48.292 |
+| **EMPTY (gateway)** | **46.373** | 3.509 | 42.864 |
+| **TASARRUF** | **5.896 token** | — | — |
+
+**Sonuç — gateway'in ana tezi DOĞRULANDI.** 30 "deferred" extended araç ilan etmek CLI'da
+**yine de ~5.9K token** yiyor (≈197 token/araç) — çünkü claude bunları %10 eşiği altında
+**inline ediyor** (brief §1'in tam bulgusu: name-only/deferral CLI'da kazandırmıyor).
+Gateway'in **boş-başlaması** bu maliyeti araç gerçekten aktive edilene kadar **tamamen
+ortadan kaldırıyor**. Gerçek extended yüzeyi (self-management + name-only, ~30-50 araç,
+daha zengin şemalar) için tasarruf muhtemelen **daha yüksek** (~6-12K token/tur, soğuk prefix).
+
+**Model/pay-for-use:** gateway "kullandığın kadar öde" — çoğu turda extended kullanılmaz →
+büyük tasarruf; bir araç aktive edilince maliyeti o an yayılır. Persistent+warm (Faz 0-b) ile
+prefix bir kez yazılır, sonra `cacheRead` ile okunur → küçük prefix warm turda da ucuz.
+
+**DEFAULT-ON KARARI (Bilal onayına):** Sinyal güçlü ve tek yönlü pozitif; mekanizma
+unit+canlı+ölçüm ile kanıtlı; risk flag'le izole. **Öneri:** bir sonraki adımda
+`GatewayDynamicExtended` **default ON** yap (veya önce gerçek-workspace bir tur ölçümüyle
+teyit). Karşı-argüman: tam-yol (`api.interactionBackend` canlı chatRun) henüz ölçülmedi;
+permission_prompt (YENİ-A) canlı doğrulanmadı → önce onları kapat, sonra default-on.
+
+### Sıradaki
+
+- **Default-on ön koşulu:** tam-yol canlı tur (gerçek `api.interactionBackend`) + token
+  ölçümü + permission_prompt (YENİ-A) doğrulaması.
 - **Faz 3:** harici `/mcp/gateway` (auth loopback+token, VPS zincir göçü) — §11-B.
-- **Faz 4:** öncesi/sonrası token ölçümü (aynı harness) + default-on kararı; sonra
-  hidden→deferred-usable + gateway `tool_search` follow-up.
+- **Follow-up:** hidden→deferred-usable + gateway `tool_search` (default-on sonrası).
