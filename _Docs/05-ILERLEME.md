@@ -2,6 +2,45 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
 
+## Frontend feature-bazlı refactor (3 aşama) ✅ (2026-07-07)
+
+**İstek:** Frontend kodlarının daha düzenli bir yapıya refactor edilmesi.
+Davranış eşdeğeri, 3 commit: yapı taşıma → App.tsx decompose → dev dosya bölme.
+Her aşamada `tsc -b` + `vite build` yeşil; eslint problem sayısı 116 → 102
+(yeni ihlal sıfır, kalanlar refactor öncesinden).
+
+- **Aşama 1 — feature klasörleri + `@/` alias:** 223 dosya taşındı (git rename
+  olarak). Yeni yerleşim: `app/` (kabuk: App, NavRail, MobileNavBar, url/event
+  hook'ları), `features/<domain>/` (chat, sessions, agents, flows, tasks,
+  schedules, executions, artifacts, skills, tools, market, budget, logs,
+  network, settings, workspace), `shared/` (components [eski common + markdown
+  + çapraz-feature agent widget'ları], hooks, lib). `api/` + `types/` barrel'ları
+  değişmedi. `tsconfig.app.json` `paths` + vite `resolve.alias` ile `@/*` = `src/*`.
+- **Aşama 2 — App.tsx decompose:** 1.446 → ~630 satır kompozisyon kökü. Yeni
+  `app/` modülleri: `viewRegistry` (VIEW_TITLE/HEADERLESS + `isChatKind`),
+  `lazyPanels`, `useAppearance`, `useDeepLinks`, `useSessionsController`
+  (agents/sessions/transcript state + tüm aksiyonlar), `useAppEvents` (SSE
+  dağıtımı), `useAppNavigation` (URL↔state), `AppHeader`, ve
+  `features/chat/ChatView` (transcript + alt yığın).
+- **Aşama 3 — dev dosya bölmeleri (saf kod taşıma):**
+  `useChatStream` 1006→375 + 7 modül (`chatStreamSend/AutoLive/Commands/
+  Interventions/History/Types/Helpers`); `FlowsPanel` 1143→~450 +
+  `FlowsListPane/FlowsHeader/FlowEditorView/flowActions/flowGraphOps/
+  flowsPanelShared`; `MarketPanel` 1089→370 + `MarketGrid/PackDetailModal/
+  PackPreview/previewParts/marketHelpers`; `ToolsPanel` 1033→314 +
+  `useToolsPanelState/ServerManagement/ToolDetail/VisibilityControls`;
+  `SessionDetailPanel` 897→429 + 9 bölüm modülü.
+- **Eski→yeni yol eşlemesi (eski dokümanlardaki atıflar için):**
+  `components/panels/X` → `features/<domain>/X` · `components/chat|sessions|
+  agents|flow|artifacts|workspace|settings/` → `features/<domain>/` ·
+  `components/common/` → `shared/components/` · `components/markdown/` →
+  `shared/components/markdown/` · `hooks/`+`lib/` → feature'a aitse
+  `features/<domain>/`, genel ise `shared/hooks|lib/`, app-kabuğuysa `app/`.
+  05 ve öncesi tarihli dokümanlardaki eski yollar bu tabloyla okunmalı.
+- Ölü dosya adayları (0 import, silinmedi): `features/agents/AgentRoster.tsx`,
+  `features/sessions/SpawnSessionModal.tsx`, `shared/hooks/useResizableWidth.ts`,
+  `app/App.css`.
+
 ## Self-healing Faz F: hata→ders döngüsü + Ayarlar UI ✅ (2026-07-07)
 
 **İstek:** Self-healing ayarlarının frontend'e eklenmesi + hermes `background_review`
@@ -111,6 +150,15 @@ yönlendirilsin.
   aynı kapıyı tetikler (`handleAttachWorkspace`) — bağlanan workspace'in kendi
   yetkilendirilmemiş claude-home'u olabilir; `attachWorkspace`'in hata-fırlatma sözleşmesi
   korunur (inline doğrulama hataları).
+- **Sohbet-açılışında tekrar-hatırlatma (`requireNoProvider`):** Kapı iki nedenle tetiklenir
+  — (a) oluştur/bağla (`requireNoProvider=false`, her zaman probe/popup); (b) her sohbet
+  ekranı girişinde + workspace değişiminde (`requireNoProvider=true`). (b) yalnızca
+  workspace'te **hiçbir kullanılabilir provider yoksa** iş yapar: `hasNoUsableProvider()` =
+  hiçbir built-in anahtar (anthropic/minimax/openrouter) + claude-cli token + custom provider
+  yok. Bu **ucuz** ön-kontrol, **pahalı** `claude -p` login probe'undan ÖNCE çalışır →
+  provider'ı olan kullanıcı asla rahatsız edilmez, hiç kurulumu olmayan kullanıcı her sohbet
+  açılışında popup'ı yeniden görür (CLI kuruluysa) veya Sağlayıcılar'a yönlendirilir (CLI
+  yoksa). `App`'te `claudeGate={nonce,requireNoProvider}` durumu + `view==='chat'` effect'i.
 
 ## API-native P2+P3: sunucu web search/fetch + server-side compaction (toggle'lı) ✅ (2026-07-07)
 
