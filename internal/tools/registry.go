@@ -280,13 +280,46 @@ func foldExamples(d providers.ToolDef) providers.ToolDef {
 	return d
 }
 
+// foldStrict normalizes a Strict-marked tool's schema for API-side validation:
+// strict tool use requires additionalProperties:false AND a required array on
+// the root object, so both are injected when absent (empty required = all
+// params optional). Non-strict tools pass through untouched.
+func foldStrict(d providers.ToolDef) providers.ToolDef {
+	if !d.Strict || len(d.InputSchema) == 0 {
+		return d
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(d.InputSchema, &obj); err != nil {
+		d.Strict = false // non-object schema can't be strict-validated
+		return d
+	}
+	changed := false
+	if _, ok := obj["additionalProperties"]; !ok {
+		obj["additionalProperties"] = json.RawMessage("false")
+		changed = true
+	}
+	if _, ok := obj["required"]; !ok {
+		obj["required"] = json.RawMessage("[]")
+		changed = true
+	}
+	if changed {
+		if merged, err := json.Marshal(obj); err == nil {
+			d.InputSchema = merged
+		}
+	}
+	return d
+}
+
+// prepDef applies the request-assembly normalizations to a builtin def.
+func prepDef(d providers.ToolDef) providers.ToolDef { return foldStrict(foldExamples(d)) }
+
 // Defs returns the tool schemas to offer the model. If allow is non-nil, only
 // tools whose name satisfies allow(name) are included.
 func (r *Registry) Defs(allow func(name string) bool) []providers.ToolDef {
 	var out []providers.ToolDef
 	for name, t := range r.builtins {
 		if allow == nil || allow(name) {
-			out = append(out, foldExamples(t.Def()))
+			out = append(out, prepDef(t.Def()))
 		}
 	}
 	for _, e := range r.mcpEntries {
@@ -319,7 +352,7 @@ func (r *Registry) ActiveDefs(allow func(name string) bool, active map[string]bo
 	var out []providers.ToolDef
 	for name, t := range r.builtins {
 		if keep(name) {
-			out = append(out, foldExamples(t.Def()))
+			out = append(out, prepDef(t.Def()))
 		}
 	}
 	for _, e := range r.mcpEntries {
@@ -358,7 +391,7 @@ func (r *Registry) DeferredDefs(allow func(name string) bool, active map[string]
 		out = append(out, d)
 	}
 	for name, t := range r.builtins {
-		add(foldExamples(t.Def()), r.lazy[name])
+		add(prepDef(t.Def()), r.lazy[name])
 	}
 	for _, e := range r.mcpEntries {
 		add(providers.ToolDef{

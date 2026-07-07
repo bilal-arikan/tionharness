@@ -6,7 +6,16 @@
 > anthropic** sağlayıcıyı hedefler (`provider.Name() == "anthropic"` kapısı); claude-cli kendi
 > döngüsünü, minimax-anthropic/custom uçlar kendi kısıtlarını korur.
 
-Oluşturma: 2026-07-07 · Durum: **P0 tamam, P1+ planlandı**
+Oluşturma: 2026-07-07 · Durum: **P0, P1, P4, P6 ve P7 (batch hariç) tamam; P2/P3/P5 planlı**
+
+> **Uygulama notu (2026-07-07):** P1 (structured outputs — titler + flow `outputSchema`/`jsonField`),
+> P6 (mid-conversation system — steer mesajları Opus 4.8'de `role:system`, diğerlerinde
+> `<system-reminder>` fold), P7 (strict fs/Grep araçları + `xhigh`/`max` thinking seviyeleri +
+> `CountTokens`/`?accurate=1` önizleme sayımı) ve P4 (programmatic tool calling —
+> `AnthropicProgrammaticTools` ayarı, `allowed_callers`, container zinciri, saf tool_result
+> yanıtları, steer erteleme) uygulandı. Summarizer/System B serbest metin bırakıldı (çıktıları
+> zaten metin ürünü — şema parse güvenilirliği kazandırmaz). Flow-builder UI'da
+> `outputSchema`/`jsonField` alanları henüz görsel olarak düzenlenemiyor (graf JSON'unda desteklenir).
 
 ---
 

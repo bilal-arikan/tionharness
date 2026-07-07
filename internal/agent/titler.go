@@ -2,12 +2,27 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
+
+// titleOutputSchema constrains the titler's reply to {"title": string} on
+// models with structured-output support — the API then GUARANTEES parseable
+// JSON, so quote/preamble sanitation becomes a no-op there. Providers/models
+// without support ignore the schema and reply free-text, which the fallback
+// parse below still handles.
+var titleOutputSchema = json.RawMessage(`{
+	"type": "object",
+	"properties": {
+		"title": {"type": "string", "description": "Concise 3-6 word title, max 60 characters, same language as the input"}
+	},
+	"required": ["title"],
+	"additionalProperties": false
+}`)
 
 // titleSystemPrompt instructs a provider to emit a short, bare title that
 // summarizes a request or conversation. The wording is deliberately strict so
@@ -39,14 +54,24 @@ func (r *Runtime) GenerateTitle(ctx context.Context, agent db.Agent, source stri
 	}
 
 	resp, err := r.guardedComplete(WithCallKind(ctx, KindTitle), agent, providers.Request{
-		Model:  model,
-		System: r.readPrompt("title"),
+		Model:        model,
+		System:       r.readPrompt("title"),
+		OutputSchema: titleOutputSchema,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: userPrompt},
 		},
 	}, false)
 	if err != nil {
 		return "", err
+	}
+	// Structured path first: models with output_config.format support return
+	// guaranteed-valid {"title": ...}; everything else falls back to the
+	// free-text sanitizer.
+	var structured struct {
+		Title string `json:"title"`
+	}
+	if json.Unmarshal([]byte(strings.TrimSpace(resp.Text)), &structured) == nil && strings.TrimSpace(structured.Title) != "" {
+		return SanitizeTitle(structured.Title), nil
 	}
 	return SanitizeTitle(resp.Text), nil
 }

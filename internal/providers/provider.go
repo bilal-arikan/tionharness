@@ -44,6 +44,17 @@ type ToolDef struct {
 	// without native tool search ignore it (the def ships normally). The
 	// Anthropic client auto-adds the search server tool when any def carries it.
 	DeferLoading bool `json:"-"`
+	// Strict requests API-side input validation (strict tool use): tool_use
+	// inputs are GUARANTEED to validate against InputSchema. Requires the schema
+	// to carry additionalProperties:false and a required array — the registry
+	// normalizes both at request assembly. Ignored by providers without support;
+	// dropped automatically on code-callable tools (incompatible with PTC).
+	Strict bool `json:"-"`
+	// CodeCallable marks the tool invocable from Claude-written code in the
+	// code-execution container (programmatic tool calling): the anthropic client
+	// maps it to allowed_callers:["code_execution_20260120"] when the request
+	// enables PTC. Intermediate results stay out of the model's context.
+	CodeCallable bool `json:"-"`
 	// Examples are concrete sample tool calls (each a JSON object matching
 	// InputSchema) that demonstrate usage conventions a schema alone cannot express
 	// — date formats, ID patterns, which optional fields go together. They are
@@ -59,6 +70,16 @@ type ToolCall struct {
 	ID    string          `json:"id"`
 	Name  string          `json:"name"`
 	Input json.RawMessage `json:"input"`
+	// Caller identifies how the call was made: "" / "direct" for ordinary tool
+	// use, or a code-execution version ("code_execution_20260120") when Claude's
+	// code invoked the tool programmatically. Programmatic batches constrain the
+	// answering user message to PURE tool_result blocks (no text).
+	Caller string `json:"caller,omitempty"`
+}
+
+// Programmatic reports whether this call came from code execution (PTC).
+func (c ToolCall) Programmatic() bool {
+	return c.Caller != "" && c.Caller != "direct"
 }
 
 // ToolResult is the outcome of executing a ToolCall, fed back to the model.
@@ -84,6 +105,11 @@ type Message struct {
 	// Text/ToolCalls stay populated alongside as the portable fallback — every
 	// other provider ignores RawContent and renders those instead.
 	RawContent json.RawMessage
+	// OnlyToolResults marks a user message answering a PROGRAMMATIC tool batch:
+	// the API requires it to contain nothing but tool_result blocks, so the
+	// anthropic client suppresses the volatile dynamic-suffix append (and any
+	// other extra text) on it.
+	OnlyToolResults bool
 }
 
 // Request is a completion request. Tools, when non-empty, enables tool use.
@@ -122,6 +148,19 @@ type Request struct {
 	// SupportsTaskBudget); everyone else ignores it. Values below the API minimum
 	// (20K) are raised to it.
 	TaskBudgetTokens int
+	// OutputSchema, when set, constrains the reply to this JSON Schema via
+	// output_config.format (structured outputs). Only sent to models with
+	// support (SupportsStructuredOutputs); other providers/models ignore it, so
+	// callers MUST parse-with-fallback (the reply may be free text).
+	OutputSchema json.RawMessage
+	// ProgrammaticTools enables programmatic tool calling on providers with
+	// support: the code-execution server tool is added and CodeCallable defs get
+	// allowed_callers, letting Claude invoke tools from code with intermediate
+	// results kept out of context. Ignored elsewhere.
+	ProgrammaticTools bool
+	// ContainerID resumes the code-execution container from a previous response
+	// in the same turn (REQUIRED while a programmatic tool call is pending).
+	ContainerID string
 	// PermissionMode controls tool-use gating for providers that run their own
 	// loop. The claude CLI maps it to its --permission-mode / --dangerously-skip-
 	// permissions flags. "" | "auto" | "ask" | "read-only" (empty = auto).
@@ -209,6 +248,16 @@ type Response struct {
 	// back on the assistant turn (Message.RawContent) so server-side blocks —
 	// tool-search results, server tool use — survive loop iterations.
 	RawContent json.RawMessage
+	// ContainerID is the code-execution container of this response (PTC); pass
+	// it back as Request.ContainerID on the next call of the same turn.
+	ContainerID string
+}
+
+// TokenCounter is implemented by providers exposing an exact server-side token
+// count for a request (Anthropic /v1/messages/count_tokens). Used to display
+// accurate figures next to the local heuristic estimate.
+type TokenCounter interface {
+	CountTokens(ctx context.Context, req Request) (int, error)
 }
 
 // Provider is implemented by every LLM backend.

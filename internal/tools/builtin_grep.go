@@ -23,6 +23,7 @@ func NewFSGrepTool(sb Sandbox) FSGrepTool { return FSGrepTool{sb: sb} }
 func (FSGrepTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "Grep",
+		Strict: true, // API-side input validation (schema has additionalProperties:false; registry normalizes required)
 		// Grep ships EAGERLY every turn, so the flag semantics live once in the
 		// description; the schema's ripgrep-style flag keys carry no per-property
 		// descriptions (their meaning is standard and already stated above).

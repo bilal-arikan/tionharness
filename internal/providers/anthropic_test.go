@@ -83,7 +83,7 @@ func TestSystemField_DynamicOnlyReturnsNil(t *testing.T) {
 // tools) and at the same 1h TTL as the system block.
 func TestToAnthropicTools_CacheBreakpointOnLastTool(t *testing.T) {
 	defs := []ToolDef{{Name: "a"}, {Name: "b"}, {Name: "c"}}
-	got := toAnthropicTools(defs, true)
+	got := toAnthropicTools(defs, true, false)
 	if len(got) != 3 {
 		t.Fatalf("got %d tools, want 3", len(got))
 	}
@@ -105,7 +105,7 @@ func TestToAnthropicTools_CacheBreakpointOnLastTool(t *testing.T) {
 // With caching off, no tool carries a breakpoint — the caching on/off policy is
 // unchanged, only its granularity improves when on.
 func TestToAnthropicTools_NoCacheWhenDisabled(t *testing.T) {
-	got := toAnthropicTools([]ToolDef{{Name: "a"}, {Name: "b"}}, false)
+	got := toAnthropicTools([]ToolDef{{Name: "a"}, {Name: "b"}}, false, false)
 	for _, tl := range got {
 		if tl.CacheControl != nil {
 			t.Errorf("tool %q must not be cached when extendedCache is off", tl.Name)
@@ -122,7 +122,7 @@ func TestToAnthropicMessages_RollingHistoryBreakpoint(t *testing.T) {
 		{Role: RoleAssistant, Text: "hello"},
 		{Role: RoleUser, Text: "again"},
 	}
-	got := toAnthropicMessages(msgs, true, "")
+	got := toAnthropicMessages(msgs, true, "", "claude-sonnet-4-6")
 	if len(got) != 3 {
 		t.Fatalf("got %d messages, want 3", len(got))
 	}
@@ -150,7 +150,7 @@ func TestToAnthropicMessages_DynamicTrailsAfterBreakpoint(t *testing.T) {
 		{Role: RoleAssistant, Text: "hello"},
 		{Role: RoleUser, Text: "again"},
 	}
-	got := toAnthropicMessages(msgs, true, "NOW: 2026 + recalled memory")
+	got := toAnthropicMessages(msgs, true, "NOW: 2026 + recalled memory", "claude-sonnet-4-6")
 	last := got[len(got)-1].Content
 	if len(last) != 2 {
 		t.Fatalf("last message should have persisted block + dynamic block, got %d", len(last))
@@ -166,7 +166,7 @@ func TestToAnthropicMessages_DynamicTrailsAfterBreakpoint(t *testing.T) {
 // With caching OFF, the dynamic is NOT moved into the messages (it stays in the
 // concatenated system field) — the non-cached path is unchanged.
 func TestToAnthropicMessages_DynamicIgnoredWhenCacheOff(t *testing.T) {
-	got := toAnthropicMessages([]Message{{Role: RoleUser, Text: "hi"}}, false, "VOLATILE")
+	got := toAnthropicMessages([]Message{{Role: RoleUser, Text: "hi"}}, false, "VOLATILE", "claude-sonnet-4-6")
 	last := got[len(got)-1].Content
 	if len(last) != 1 || last[0].Text != "hi" {
 		t.Errorf("dynamic must not be appended to messages when caching is off, got %+v", last)
@@ -180,7 +180,7 @@ func TestToAnthropicMessages_BreakpointOnLastBlockAcrossKinds(t *testing.T) {
 		{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "t1", Name: "x", Input: json.RawMessage(`{}`)}}},
 		{Role: RoleUser, ToolResults: []ToolResult{{CallID: "t1", Content: "ok"}}},
 	}
-	got := toAnthropicMessages(msgs, true, "")
+	got := toAnthropicMessages(msgs, true, "", "claude-sonnet-4-6")
 	last := got[len(got)-1].Content
 	if last[len(last)-1].Type != "tool_result" {
 		t.Fatalf("expected last block to be tool_result, got %q", last[len(last)-1].Type)
@@ -192,7 +192,7 @@ func TestToAnthropicMessages_BreakpointOnLastBlockAcrossKinds(t *testing.T) {
 
 // With caching off, no message carries a breakpoint.
 func TestToAnthropicMessages_NoCacheWhenDisabled(t *testing.T) {
-	got := toAnthropicMessages([]Message{{Role: RoleUser, Text: "hi"}}, false, "")
+	got := toAnthropicMessages([]Message{{Role: RoleUser, Text: "hi"}}, false, "", "claude-sonnet-4-6")
 	for _, b := range got[0].Content {
 		if b.CacheControl != nil {
 			t.Error("no breakpoint expected when extendedCache is off")
@@ -233,7 +233,7 @@ func TestBuildSystemAndMessages_SummaryHeadCachedWhenOn(t *testing.T) {
 		Summary:       "PRIOR SUMMARY",
 		Messages:      []Message{{Role: RoleAssistant, Text: "hello"}, {Role: RoleUser, Text: "again"}},
 	}
-	sysField, msgs := a.buildSystemAndMessages(req)
+	sysField, msgs := a.buildSystemAndMessages(req, "claude-sonnet-4-6")
 	// System is static-only (summary is NOT here — it moved to the message head).
 	blocks := asBlocks(t, sysField)
 	if len(blocks) != 1 || blocks[0].Text != "PERSONA" {
@@ -273,8 +273,8 @@ func TestCacheBreakpointStability(t *testing.T) {
 		Tools:         []ToolDef{{Name: "read", InputSchema: json.RawMessage(`{"type":"object"}`)}},
 		Messages:      []Message{{Role: RoleAssistant, Text: "hello"}, {Role: RoleUser, Text: "again"}},
 	}
-	sysField, msgs := a.buildSystemAndMessages(req)
-	tools := toAnthropicTools(req.Tools, a.extendedCache)
+	sysField, msgs := a.buildSystemAndMessages(req, "claude-sonnet-4-6")
+	tools := toAnthropicTools(req.Tools, a.extendedCache, false)
 
 	// Every TTL present must equal cacheTTL.
 	for _, b := range asBlocks(t, sysField) {
@@ -360,7 +360,7 @@ func TestBuildSystemAndMessages_SummaryFoldsIntoSystemWhenOff(t *testing.T) {
 		Summary:       "PRIOR SUMMARY",
 		Messages:      []Message{{Role: RoleUser, Text: "hi"}},
 	}
-	sysField, msgs := a.buildSystemAndMessages(req)
+	sysField, msgs := a.buildSystemAndMessages(req, "claude-sonnet-4-6")
 	s, ok := sysField.(string)
 	if !ok {
 		t.Fatalf("caching off must yield a plain string system, got %T", sysField)

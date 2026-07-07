@@ -38,6 +38,11 @@ type Node struct {
 	AgentID string `json:"agentId,omitempty"`
 	Prompt  string `json:"prompt,omitempty"` // template: {{input}}, {{last}}, {{node.<id>}}
 	Next    string `json:"next,omitempty"`   // next node id ("" = end)
+	// OutputSchema (optional) constrains the node's reply to this JSON Schema
+	// via structured outputs on providers/models that support it. Pair with a
+	// downstream branch node's JSONField for parse-proof routing decisions.
+	// Unsupported providers reply free-text — schemas must stay advisory there.
+	OutputSchema string `json:"outputSchema,omitempty"`
 
 	// branch — Branches are the routing arms; an empty Contains is the default
 	// arm. MatchMode decides how Contains is compared to the last output:
@@ -45,6 +50,12 @@ type Node struct {
 	// trimmed exact), or "regex" (Go regexp on the raw output).
 	Branches  []Branch `json:"branches,omitempty"`
 	MatchMode string   `json:"matchMode,omitempty"`
+	// JSONField (optional, branch): when set, the matched value is the named
+	// top-level field of the last output parsed as JSON (e.g. "verdict" over
+	// {"verdict":"SHIP"}) instead of the raw text — the structured-outputs
+	// counterpart of the string modes. Falls back to the raw text when the last
+	// output is not valid JSON or lacks the field.
+	JSONField string `json:"jsonField,omitempty"`
 
 	// parallel
 	Parallel []string `json:"parallel,omitempty"` // agent node ids to run concurrently

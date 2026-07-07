@@ -37,6 +37,7 @@ func NewFSReadFileTool(sb Sandbox, tracker *ReadTracker) FSReadFileTool {
 func (FSReadFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "Read",
+		Strict: true, // API-side input validation (schema has additionalProperties:false; registry normalizes required)
 		Description: "Read a UTF-8 text file. Output is line-numbered (\"<lineno>\\t<content>\", cat -n style) — when copying text for Edit's old_string, strip the number+tab prefix. " +
 			"By default returns the first 2000 lines (up to 256KB); use offset (1-based start line) and limit (line count) to read a window of a large file. " +
 			"Accepts an absolute path or one relative to the working directory.",

@@ -37,7 +37,7 @@ func TestToAnthropicTools_DeferLoading(t *testing.T) {
 		{Name: "eager_a", Description: "always on"},
 		{Name: "lazy_b", Description: "discoverable", DeferLoading: true},
 	}
-	out := toAnthropicTools(defs, true)
+	out := toAnthropicTools(defs, true, false)
 	if len(out) != 3 {
 		t.Fatalf("expected search tool + 2 defs, got %d entries", len(out))
 	}
@@ -66,9 +66,48 @@ func TestToAnthropicTools_DeferLoading(t *testing.T) {
 	}
 
 	// No deferred defs → no server tool appended (behaviour unchanged).
-	plain := toAnthropicTools([]ToolDef{{Name: "only"}}, false)
+	plain := toAnthropicTools([]ToolDef{{Name: "only"}}, false, false)
 	if len(plain) != 1 || plain[0].Type != "" {
 		t.Errorf("plain path grew a server tool: %+v", plain)
+	}
+}
+
+// TestToAnthropicTools_ProgrammaticCalling: PTC prepends the code-execution
+// server tool, code-callable defs get allowed_callers, and strict is dropped on
+// them (incompatible).
+func TestToAnthropicTools_ProgrammaticCalling(t *testing.T) {
+	defs := []ToolDef{
+		{Name: "Read", Strict: true, CodeCallable: true},
+		{Name: "ask_user", Strict: true}, // interactive → not code-callable
+	}
+	out := toAnthropicTools(defs, false, true)
+	if len(out) != 3 || out[0].Type != codeExecToolType || out[0].Name != codeExecToolName {
+		t.Fatalf("code execution server tool must lead: %+v", out)
+	}
+	for _, at := range out[1:] {
+		switch at.Name {
+		case "Read":
+			if len(at.AllowedCallers) != 1 || at.AllowedCallers[0] != codeExecToolType {
+				t.Errorf("Read must be code-callable: %+v", at)
+			}
+			if at.Strict {
+				t.Error("strict must be dropped on code-callable tools")
+			}
+		case "ask_user":
+			if at.AllowedCallers != nil {
+				t.Errorf("ask_user must stay direct-only: %+v", at)
+			}
+			if !at.Strict {
+				t.Error("non-callable tool keeps strict")
+			}
+		}
+	}
+	// PTC off → CodeCallable ignored entirely.
+	off := toAnthropicTools(defs, false, false)
+	for _, at := range off {
+		if at.AllowedCallers != nil {
+			t.Errorf("allowed_callers must not ship when PTC is off: %+v", at)
+		}
 	}
 }
 
@@ -99,7 +138,7 @@ func TestToAnthropicMessages_RawPassthrough(t *testing.T) {
 		{Role: RoleUser, Text: "question"},
 		{Role: RoleAssistant, Text: "srv", RawContent: json.RawMessage(`[{"type":"text","text":"srv"}]`)},
 	}
-	out := toAnthropicMessages(msgs, true, "VOLATILE-DYN")
+	out := toAnthropicMessages(msgs, true, "VOLATILE-DYN", "claude-sonnet-4-6")
 	if len(out) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(out))
 	}
@@ -113,7 +152,7 @@ func TestToAnthropicMessages_RawPassthrough(t *testing.T) {
 	}
 	// An adjacent same-role plain turn must NOT be coalesced into the raw one.
 	msgs = append(msgs, Message{Role: RoleAssistant, Text: "tail"})
-	if out = toAnthropicMessages(msgs, false, ""); len(out) != 3 {
+	if out = toAnthropicMessages(msgs, false, "", "claude-sonnet-4-6"); len(out) != 3 {
 		t.Errorf("raw message was coalesced with a plain neighbour: %d messages", len(out))
 	}
 }

@@ -20,13 +20,21 @@ type flowRunner struct {
 
 // RunAgentNode implements orchestration.AgentRunner.
 func (f flowRunner) RunAgentNode(ctx context.Context, agentID, prompt string) (string, error) {
+	return f.RunAgentNodeSchema(ctx, agentID, prompt, "")
+}
+
+// RunAgentNodeSchema implements orchestration.SchemaAgentRunner: an agent node
+// with an OutputSchema gets its reply constrained via structured outputs on
+// providers/models with support (parse-proof branch routing); elsewhere the
+// schema is ignored and the reply stays free text.
+func (f flowRunner) RunAgentNodeSchema(ctx context.Context, agentID, prompt, outputSchema string) (string, error) {
 	agent, err := f.rt.db.GetAgent(ctx, agentID)
 	if err != nil {
 		return "", err
 	}
 	// Volatile clock/goal ride the dynamic suffix so the node's static system
 	// prefix stays byte-stable across nodes and runs (cacheable).
-	return f.rt.complete(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx), prompt, f.autonomous)
+	return f.rt.complete(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx), prompt, outputSchema, f.autonomous)
 }
 
 // RunFlow starts a new run of a flow with the given input and drives it to

@@ -40,7 +40,9 @@ func resolveMaxToolIters() int {
 const activeToolMaxIdle = 3
 
 // thinkingBudgetForLevel maps an agent's ThinkingLevel to a provider thinking
-// token budget (0 = off). Providers without thinking support ignore it.
+// token budget (0 = off). Providers without thinking support ignore it. The
+// xhigh/max tiers exist as effort levels on adaptive-class models only; the
+// legacy enabled+budget wire format clamps them down provider-side.
 func thinkingBudgetForLevel(level string) int {
 	switch level {
 	case "low":
@@ -49,6 +51,10 @@ func thinkingBudgetForLevel(level string) int {
 		return 8192
 	case "high":
 		return 16384
+	case "xhigh":
+		return 32768
+	case "max":
+		return 65536
 	default:
 		return 0
 	}
@@ -309,19 +315,39 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// (minimax-anthropic, custom endpoints) would reject the server tool type,
 	// hence the exact-name gate. Everything else keeps the activation flow.
 	nativeSearch := r.tun.NativeToolSearch() && provider.Name() == "anthropic"
+	// Programmatic tool calling (PTC): the code-execution server tool lets the
+	// model call code-callable tools from Python inside Anthropic's container —
+	// intermediate results never enter context. First-party anthropic only.
+	ptcMode := r.tun.ProgrammaticTools() && provider.Name() == "anthropic"
 	shipDefs := func() []providers.ToolDef {
+		var defs []providers.ToolDef
 		if nativeSearch {
-			return reg.DeferredDefs(toolFilter, active.Snapshot())
+			defs = reg.DeferredDefs(toolFilter, active.Snapshot())
+		} else {
+			defs = reg.ActiveDefs(toolFilter, active.Snapshot())
 		}
-		return reg.ActiveDefs(toolFilter, active.Snapshot())
+		if ptcMode {
+			for i := range defs {
+				// MCP tools are incompatible with PTC (namespaced server__tool);
+				// interactive/recursive builtins are excluded by the same policy
+				// code mode uses (they would hang or recurse inside a script).
+				if strings.Contains(defs[i].Name, "__") || !tools.CodeModeEligible(defs[i].Name) {
+					continue
+				}
+				defs[i].CodeCallable = true
+			}
+		}
+		return defs
 	}
 	req.Tools = shipDefs()
-	// rawEcho gates the verbatim assistant-content echo on native-search mode:
-	// only there do responses carry server blocks (tool-search results) that MUST
-	// ride back exactly; everywhere else the portable Text+ToolCalls echo stays,
-	// so inherited-context subagents on other providers see no behaviour change.
+	req.ProgrammaticTools = ptcMode
+	// rawEcho gates the verbatim assistant-content echo on the modes whose
+	// responses carry server blocks (tool-search results, code-execution runs)
+	// that MUST ride back exactly; everywhere else the portable Text+ToolCalls
+	// echo stays, so inherited-context subagents on other providers see no
+	// behaviour change.
 	rawEcho := func(raw json.RawMessage) json.RawMessage {
-		if nativeSearch {
+		if nativeSearch || ptcMode {
 			return raw
 		}
 		return nil
@@ -368,14 +394,28 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		emit(st)
 		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugError, AgentID: agent.ID, Detail: reason + ": " + err.Error(), Err: true})
 	}
+	// Steer messages ride the operator channel ({"role":"system"} in messages)
+	// on models that support it — cache-safe, non-spoofable, and valid between a
+	// tool_result user turn and the next assistant turn. Elsewhere they stay
+	// user-role (the provider folds them to keep alternation intact).
+	steerRole := providers.RoleUser
+	if provider.Name() == "anthropic" && providers.SupportsSystemInMessages(agent.Model) {
+		steerRole = providers.RoleSystem
+	}
+	// pendingProgrammatic defers steering while a programmatic tool batch awaits
+	// its results: that request's trailing message must stay PURE tool_results,
+	// so queued guidance is delivered on the next ordinary iteration instead.
+	pendingProgrammatic := false
 	for i := 0; i < maxToolIters; i++ {
 		// Live steering: fold any user guidance that arrived since the last
 		// iteration into the conversation before the next model call.
-		for _, m := range drainSteer(ctx) {
-			req.Messages = append(req.Messages, providers.Message{Role: providers.RoleUser, Text: steerPrefix + m})
-			st := TurnStep{Kind: StepSteer, Text: m}
-			steps = append(steps, st)
-			emit(st)
+		if !pendingProgrammatic {
+			for _, m := range drainSteer(ctx) {
+				req.Messages = append(req.Messages, providers.Message{Role: steerRole, Text: steerPrefix + m})
+				st := TurnStep{Kind: StepSteer, Text: m}
+				steps = append(steps, st)
+				emit(st)
+			}
 		}
 		// Recompute the shipped tool schemas for this step: eager tools plus any
 		// lazy tools activated so far (native-search mode: full deferred catalog,
@@ -411,6 +451,15 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		}
 		last = resp
 		turnUsage = sumUsage(turnUsage, resp.Usage)
+		// The request that carried pending programmatic results has completed;
+		// steering may resume (a new programmatic batch re-defers it below).
+		pendingProgrammatic = false
+		// PTC container chaining: while code execution is live, every follow-up
+		// request of this turn must name the container (the API rejects a
+		// continuation with pending programmatic calls but no container id).
+		if resp.ContainerID != "" {
+			req.ContainerID = resp.ContainerID
+		}
 		// Surface SERVER-executed steps (native tool-search discovery rides
 		// resp.Trace as "tool" entries) so the chat UI shows them like any other
 		// tool card. Client tool calls are traced by the loop itself below;
@@ -652,10 +701,22 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			steps = append(steps, st)
 			emit(st)
 		}
+		// A programmatic batch (calls made from Claude's code) constrains the
+		// answering message to PURE tool_result blocks and defers steering until
+		// the code run has consumed the results.
+		progBatch := false
+		for _, c := range resp.ToolCalls {
+			if c.Programmatic() {
+				progBatch = true
+				break
+			}
+		}
 		req.Messages = append(req.Messages, providers.Message{
-			Role:        providers.RoleUser,
-			ToolResults: results,
+			Role:            providers.RoleUser,
+			ToolResults:     results,
+			OnlyToolResults: progBatch,
 		})
+		pendingProgrammatic = progBatch
 		// Phase 3: drop lazy tools activated but left unused for a while, so a long
 		// turn does not keep shipping schemas the model is no longer reaching for.
 		if pruned := active.Prune(activeToolMaxIdle); len(pruned) > 0 {

@@ -2,6 +2,54 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
 
+## API-native P1+P6+P7+P4: structured outputs, system mesajları, strict/effort, PTC ✅ (2026-07-07)
+
+**İstek:** _Docs/55 yol haritasının P1, P6, P7, P4 maddelerinin uygulanması.
+
+**P1 — Structured Outputs (`output_config.format`):**
+- `Request.OutputSchema` → `applyOutputSchema` (yalnız destekleyen modeller: Fable/Mythos,
+  Opus 4.8, Sonnet 5, Haiku 4.5, legacy 4.5/4.1 — Opus 4.6/4.7 ve Sonnet 4.6 matriste YOK).
+- **Titler**: `{"title": string}` şeması + JSON-parse-else-fallback (claude-cli serbest metin
+  dönmeye devam eder, sanitizer korunur).
+- **Orchestration**: agent node `outputSchema` alanı (yeni `SchemaAgentRunner` opsiyonel
+  arayüzü — mevcut runner mock'ları değişmedi); branch node `jsonField` alanı — son çıktı
+  JSON'ından üst-düzey alan çekilip eşleştirilir (`{"verdict":"SHIP"}` → parse-proof karar).
+
+**P6 — Mid-conversation system messages (Opus 4.8):**
+- `toAnthropicMessages` artık RoleSystem'ı düşürmüyor: Opus 4.8'de `{"role":"system"}` olarak
+  geçer (cache-safe operatör kanalı); diğer modellerde `foldSystemMessages` metni ÖNCEKİ user
+  mesajına `<system-reminder>` bloğu olarak katlar (rol alternasyonu korunur — steer'in
+  user-user 400 riskini de çözer). Tool-loop steer mesajları Opus 4.8 + anthropic'te
+  system rolüyle gönderilir.
+
+**P7 — küçükler:**
+- **Strict tool use**: `ToolDef.Strict` → `strict:true` (fs süiti Read/Write/Edit/LS/Glob +
+  Grep); registry `foldStrict` şemaya `additionalProperties:false` + `required:[]` enjekte
+  eder; PTC'li (allowed_callers) araçlarda otomatik düşer (uyumsuz).
+- **xhigh/max thinking**: ThinkingLevel'a iki yeni seviye (32K/64K bütçe eşlemesi) →
+  adaptive sınıfta `effort: xhigh|max`; legacy enabled+budget yolunda 16384'e kırpılır.
+  Ajan formu + composer picker seçenekleri eklendi.
+- **CountTokens**: `providers.TokenCounter` + `Anthropic.CountTokens`
+  (/v1/messages/count_tokens); oturum bağlam önizlemesi `?accurate=1` ile gerçek sayımı
+  `accurateTokens` alanında döner (sezgisel tahmin compaction'ı sürmeye devam eder —
+  davranış değişmez, yalnız drift görünür olur).
+
+**P4 — Programmatic Tool Calling (`code_execution_20260120`):**
+- `AnthropicProgrammaticTools` ayarı (varsayılan kapalı) → tunables → tool loop: uygun
+  builtinler (`CodeModeEligible`, MCP hariç) `allowed_callers:["code_execution_20260120"]`
+  ile işaretlenir; code-execution sunucu aracı listeye eklenir.
+- `ToolCall.Caller` parse edilir; programatik batch'in yanıt mesajı `OnlyToolResults` —
+  dinamik sonek o mesaja binmez (API şartı: saf tool_result). Steer, programatik sonuç
+  beklerken ERTELENIR (sıradaki normal iterasyonda teslim edilir).
+- Container zinciri: yanıttaki `container.id` sonraki isteklere `container` olarak taşınır
+  (bekleyen programatik çağrı varken zorunlu). RawContent verbatim echo PTC modunda da açık.
+- `code_execution_tool_result` stdout/stderr'ı iz adımı olarak UI'a düşer.
+- UI: Ayarlar → Bağlam → "Programatik araç çağrısı (code execution)" toggle'ı.
+
+Testler: `anthropic_native_test.go` (output schema, system fold/native, saf tool_result,
+caller sınıflandırma, effort/clamp), PTC tool-marshal testleri. ✅ build/vet temiz;
+`go test ./...` 732 test / 35 paket; frontend `tsc` temiz.
+
 ## API-native Task Budgets + Tool Search (beta) ✅ (2026-07-07)
 
 **İstek:** Anthropic'in güncel API özelliklerinden Task Budgets ve native (sunucu-tarafı)

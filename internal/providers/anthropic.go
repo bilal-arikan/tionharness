@@ -113,7 +113,10 @@ type anthropicReq struct {
 	Thinking          *thinkingParam     `json:"thinking,omitempty"`
 	OutputConfig      *outputConfig      `json:"output_config,omitempty"`
 	ContextManagement *contextManagement `json:"context_management,omitempty"`
-	Stream            bool               `json:"stream,omitempty"`
+	// Container resumes a code-execution container from a prior response of the
+	// same turn (REQUIRED while a programmatic tool call is pending).
+	Container string `json:"container,omitempty"`
+	Stream    bool   `json:"stream,omitempty"`
 }
 
 // contextManagement carries the API-native context-editing directives (P3). The
@@ -166,8 +169,28 @@ type thinkingParam struct {
 // outputConfig carries response-level controls; effort steers thinking depth on
 // adaptive-class models (the replacement for budget_tokens).
 type outputConfig struct {
-	Effort     string      `json:"effort,omitempty"` // "low" | "medium" | "high"
-	TaskBudget *taskBudget `json:"task_budget,omitempty"`
+	Effort     string        `json:"effort,omitempty"` // "low" | "medium" | "high" | "xhigh" | "max"
+	TaskBudget *taskBudget   `json:"task_budget,omitempty"`
+	Format     *outputFormat `json:"format,omitempty"`
+}
+
+// outputFormat constrains the reply to a JSON Schema (structured outputs, GA).
+type outputFormat struct {
+	Type   string          `json:"type"` // "json_schema"
+	Schema json.RawMessage `json:"schema"`
+}
+
+// applyOutputSchema folds the request's structured-output schema into the
+// output config when the model supports it (no beta header — GA).
+func applyOutputSchema(model string, schema json.RawMessage, cfg *outputConfig) *outputConfig {
+	if len(schema) == 0 || !SupportsStructuredOutputs(model) {
+		return cfg
+	}
+	if cfg == nil {
+		cfg = &outputConfig{}
+	}
+	cfg.Format = &outputFormat{Type: "json_schema", Schema: schema}
+	return cfg
 }
 
 // taskBudget is the (beta) agentic-loop token budget: the server shows the model
@@ -231,6 +254,12 @@ func thinkingFor(model string, budget, maxTokens int) (*thinkingParam, *outputCo
 	}
 	if budget <= 0 {
 		return nil, nil, maxTokens
+	}
+	// The xhigh/max tiers exist only as effort levels on the adaptive class;
+	// clamp legacy budgets so an "xhigh"/"max" agent on an old model neither
+	// blows past family output caps nor sends an absurd budget.
+	if budget > 16384 {
+		budget = 16384
 	}
 	if maxTokens <= budget {
 		maxTokens = budget + defaultMaxTokens
@@ -307,6 +336,12 @@ type anthropicTool struct {
 	// out of the model's context until discovered via the search tool. Discovered
 	// schemas are APPENDED to the prompt, preserving the cached prefix.
 	DeferLoading bool `json:"defer_loading,omitempty"`
+	// Strict (structured tool use): the API guarantees tool_use inputs validate
+	// against InputSchema. Incompatible with allowed_callers (PTC).
+	Strict bool `json:"strict,omitempty"`
+	// AllowedCallers (programmatic tool calling): which contexts may invoke the
+	// tool — ["direct"] and/or ["code_execution_20260120"].
+	AllowedCallers []string `json:"allowed_callers,omitempty"`
 	// CacheControl, when set on the LAST tool, marks a cache breakpoint after the
 	// whole tools block. Anthropic caches by prefix in tools → system → messages
 	// order, so this caches the tool schemas INDEPENDENTLY of the (possibly
@@ -325,7 +360,19 @@ type anthropicResp struct {
 		ID       string          `json:"id"`
 		Name     string          `json:"name"`
 		Input    json.RawMessage `json:"input"`
+		// Caller identifies how a tool_use was invoked (PTC): {"type":"direct"}
+		// or {"type":"code_execution_20260120","tool_id":"srvtoolu_..."}.
+		Caller *struct {
+			Type string `json:"type"`
+		} `json:"caller"`
+		// SubContent is the nested content of server tool-result blocks (e.g.
+		// code_execution_tool_result → {stdout, stderr, return_code}).
+		SubContent json.RawMessage `json:"content"`
 	} `json:"content"`
+	// Container is the code-execution container of this response (PTC).
+	Container *struct {
+		ID string `json:"id"`
+	} `json:"container"`
 	StopReason string `json:"stop_reason"`
 	Model      string `json:"model"`
 	Usage      struct {
@@ -356,17 +403,20 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	}
 	thinking, outCfg, maxTokens := thinkingFor(model, req.ThinkingBudget, maxTokens)
 	outCfg, taskBudgetBeta := applyTaskBudget(model, req.TaskBudgetTokens, outCfg)
+	outCfg = applyOutputSchema(model, req.OutputSchema, outCfg)
+	ptc := req.ProgrammaticTools && SupportsProgrammaticTools(model)
 
-	sysField, msgs := a.buildSystemAndMessages(req)
+	sysField, msgs := a.buildSystemAndMessages(req, model)
 	body := anthropicReq{
 		Model:             model,
 		MaxTokens:         maxTokens,
 		System:            sysField,
 		Messages:          msgs,
-		Tools:             toAnthropicTools(req.Tools, a.extendedCache),
+		Tools:             toAnthropicTools(req.Tools, a.extendedCache, ptc),
 		Thinking:          thinking,
 		OutputConfig:      outCfg,
 		ContextManagement: a.contextMgmt(),
+		Container:         req.ContainerID,
 	}
 
 	headers := map[string]string{
@@ -407,11 +457,18 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 				trace = append(trace, TraceStep{Kind: "thinking", Text: c.Thinking})
 			}
 		case "tool_use":
-			calls = append(calls, ToolCall{ID: c.ID, Name: c.Name, Input: c.Input})
+			call := ToolCall{ID: c.ID, Name: c.Name, Input: c.Input}
+			if c.Caller != nil {
+				call.Caller = c.Caller.Type
+			}
+			calls = append(calls, call)
 		case "server_tool_use":
-			// Server-executed tool (native tool search): nothing to run client-side,
-			// but surface it in the trace so the UI shows the discovery step.
+			// Server-executed tool (native tool search / code execution): nothing
+			// to run client-side, but surface it so the UI shows the step.
 			trace = append(trace, TraceStep{Kind: "tool", Tool: c.Name, Input: c.Input, Output: "(executed server-side)"})
+		case "code_execution_tool_result", "bash_code_execution_tool_result":
+			// Completed code run: show stdout/stderr as the step's output.
+			trace = append(trace, TraceStep{Kind: "tool", Tool: codeExecToolName, Output: renderCodeExecResult(c.SubContent)})
 		}
 	}
 
@@ -423,11 +480,17 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	}
 	_ = json.Unmarshal(raw, &rawEnv)
 
+	containerID := ""
+	if parsed.Container != nil {
+		containerID = parsed.Container.ID
+	}
+
 	return &Response{
-		Text:       text,
-		ToolCalls:  calls,
-		RawContent: rawEnv.Content,
-		StopReason: parsed.StopReason,
+		Text:        text,
+		ToolCalls:   calls,
+		RawContent:  rawEnv.Content,
+		ContainerID: containerID,
+		StopReason:  parsed.StopReason,
 		Model:      parsed.Model,
 		Trace:      trace,
 		Usage: Usage{
@@ -437,6 +500,55 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 			CacheReadTokens:  parsed.Usage.CacheReadInputTokens,
 		},
 	}, nil
+}
+
+// CountTokens implements TokenCounter via POST /v1/messages/count_tokens: the
+// server counts the EXACT prompt tokens for this request (system + messages +
+// tools) with the target model's real tokenizer. Used to show accurate figures
+// next to the local heuristic estimate (the heuristic keeps driving compaction
+// so behaviour is unchanged); costs one free HTTP call, no generation.
+func (a *Anthropic) CountTokens(ctx context.Context, req Request) (int, error) {
+	if a.apiKey == "" {
+		return 0, fmt.Errorf("anthropic: missing API key")
+	}
+	model := req.Model
+	if model == "" {
+		model = a.defaultModel
+	}
+	sysField, msgs := a.buildSystemAndMessages(req, model)
+	if len(msgs) == 0 {
+		// The endpoint requires a non-empty messages array.
+		msgs = []anthropicMessage{{Role: RoleUser, Content: []contentBlock{{Type: "text", Text: "."}}}}
+	}
+	body := struct {
+		Model    string             `json:"model"`
+		System   any                `json:"system,omitempty"`
+		Messages []anthropicMessage `json:"messages"`
+		Tools    []anthropicTool    `json:"tools,omitempty"`
+	}{Model: model, System: sysField, Messages: msgs, Tools: toAnthropicTools(req.Tools, false, false)}
+
+	headers := map[string]string{
+		"x-api-key":         a.apiKey,
+		"anthropic-version": anthropicVersion,
+	}
+	var parsed struct {
+		InputTokens int `json:"input_tokens"`
+		Error       *struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	status, raw, err := postJSON(ctx, a.client, a.name, a.baseURL+"/count_tokens", headers, body, &parsed)
+	if err != nil {
+		return 0, err
+	}
+	if status != http.StatusOK {
+		if parsed.Error != nil {
+			return 0, fmt.Errorf("anthropic count_tokens (%s): %s", parsed.Error.Type, parsed.Error.Message)
+		}
+		return 0, fmt.Errorf("anthropic count_tokens HTTP %d: %s", status, string(raw))
+	}
+	return parsed.InputTokens, nil
 }
 
 // Stream implements Streamer via the Messages API with "stream": true. It
@@ -460,7 +572,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 	}
 	thinking, outCfg, maxTokens := thinkingFor(model, req.ThinkingBudget, maxTokens)
 
-	sysField, msgs := a.buildSystemAndMessages(req)
+	sysField, msgs := a.buildSystemAndMessages(req, model)
 	body := anthropicReq{
 		Model:        model,
 		MaxTokens:    maxTokens,
@@ -566,6 +678,73 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 	return out, nil
 }
 
+// foldSystemMessages prepares mid-conversation RoleSystem entries for the wire.
+// On supporting models (Opus 4.8) they pass through untouched and are emitted
+// with role "system". Elsewhere each one's text is folded into the PRECEDING
+// user message (as a <system-reminder> block) so role alternation stays valid;
+// a system message with no user predecessor downgrades to a plain user turn.
+func foldSystemMessages(msgs []Message, native bool) []Message {
+	if native {
+		return msgs
+	}
+	hasSystem := false
+	for _, m := range msgs {
+		if m.Role == RoleSystem {
+			hasSystem = true
+			break
+		}
+	}
+	if !hasSystem {
+		return msgs
+	}
+	out := make([]Message, 0, len(msgs))
+	for _, m := range msgs {
+		if m.Role != RoleSystem {
+			out = append(out, m)
+			continue
+		}
+		note := "<system-reminder>\n" + strings.TrimSpace(m.Text) + "\n</system-reminder>"
+		if n := len(out); n > 0 && out[n-1].Role == RoleUser && len(out[n-1].RawContent) == 0 && !out[n-1].OnlyToolResults {
+			prev := &out[n-1]
+			if prev.Text == "" {
+				prev.Text = note
+			} else {
+				prev.Text = prev.Text + "\n\n" + note
+			}
+			continue
+		}
+		out = append(out, Message{Role: RoleUser, Text: note})
+	}
+	return out
+}
+
+// renderCodeExecResult flattens a code-execution result block's nested content
+// ({stdout, stderr, return_code}) into a readable trace line.
+func renderCodeExecResult(sub json.RawMessage) string {
+	var r struct {
+		Stdout     string `json:"stdout"`
+		Stderr     string `json:"stderr"`
+		ReturnCode int    `json:"return_code"`
+	}
+	if len(sub) == 0 || json.Unmarshal(sub, &r) != nil {
+		return "(code execution finished)"
+	}
+	out := strings.TrimSpace(r.Stdout)
+	if s := strings.TrimSpace(r.Stderr); s != "" {
+		if out != "" {
+			out += "\n"
+		}
+		out += "[stderr] " + s
+	}
+	if r.ReturnCode != 0 {
+		out = strings.TrimSpace(fmt.Sprintf("[exit %d] %s", r.ReturnCode, out))
+	}
+	if out == "" {
+		out = "(no output)"
+	}
+	return out
+}
+
 // joinNonEmptyComma joins the non-empty parts with a comma — for the
 // anthropic-beta header, which takes a comma-separated flag list.
 func joinNonEmptyComma(parts ...string) string {
@@ -605,13 +784,13 @@ func (a *Anthropic) betaHeader() string {
 // between folds, while the volatile dynamic trails AFTER the breakpoint. With
 // caching OFF there is no cached prefix to protect, so both the summary and the
 // dynamic fold back into the system prompt (byte-parity with the pre-cache path).
-func (a *Anthropic) buildSystemAndMessages(req Request) (any, []anthropicMessage) {
+func (a *Anthropic) buildSystemAndMessages(req Request, model string) (any, []anthropicMessage) {
 	if a.extendedCache {
 		msgs := prependSummaryMessage(req.Messages, req.Summary)
-		return a.systemField(req.System, req.SystemDynamic), toAnthropicMessages(msgs, true, req.SystemDynamic)
+		return a.systemField(req.System, req.SystemDynamic), toAnthropicMessages(msgs, true, req.SystemDynamic, model)
 	}
 	dyn := joinNonEmpty(req.SystemDynamic, req.Summary)
-	return a.systemField(req.System, dyn), toAnthropicMessages(req.Messages, false, dyn)
+	return a.systemField(req.System, dyn), toAnthropicMessages(req.Messages, false, dyn, model)
 }
 
 func (a *Anthropic) systemField(static, dynamic string) any {
@@ -654,16 +833,22 @@ func (a *Anthropic) systemField(static, dynamic string) any {
 // breakpoint moves forward to the newest message — the standard "sliding
 // breakpoint" pattern. Gated on the same extendedCache flag as the system/tool
 // breakpoints so the caching on/off policy stays unified.
-func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic string) []anthropicMessage {
+func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model string) []anthropicMessage {
+	// Mid-conversation system messages: Opus 4.8 accepts {"role":"system"}
+	// entries natively (the cache-safe, non-spoofable operator channel). Older
+	// models 400 on them, so the fallback folds the text into the PRECEDING user
+	// message as a <system-reminder> block (keeps role alternation intact); a
+	// system message with no user predecessor downgrades to a user turn.
+	msgs = foldSystemMessages(msgs, SupportsSystemInMessages(model))
 	// Anthropic requires strictly alternating roles; merge any back-to-back
 	// same-role plain-text turns (e.g. two agents' replies in a shared thread)
 	// into one so the request is valid.
 	msgs = coalescePlainSameRole(msgs)
+	// A trailing message answering a PROGRAMMATIC tool batch must contain pure
+	// tool_result blocks — no dynamic-suffix text may be appended to it.
+	pureTail := len(msgs) > 0 && msgs[len(msgs)-1].OnlyToolResults
 	out := make([]anthropicMessage, 0, len(msgs))
 	for _, m := range msgs {
-		if m.Role == RoleSystem {
-			continue
-		}
 		// Verbatim echo: an assistant turn captured from a prior response in this
 		// tool loop carries the exact content array (incl. server-tool blocks the
 		// union below cannot model) and must go back byte-identical.
@@ -715,7 +900,7 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic string) []a
 		// the dynamic block's absence in the next turn's rebuilt history is
 		// irrelevant because it was never part of the cached prefix. When there are
 		// no messages yet, seed one so the dynamic is not dropped.
-		if d := strings.TrimSpace(dynamic); d != "" {
+		if d := strings.TrimSpace(dynamic); d != "" && !pureTail {
 			if len(out) == 0 {
 				out = append(out, anthropicMessage{Role: RoleUser, Content: []contentBlock{{Type: "text", Text: d}}})
 			} else if last := &out[len(out)-1]; len(last.Raw) == 0 {
@@ -735,11 +920,11 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic string) []a
 // so a 1h tool breakpoint never lands after a shorter-TTL one. Gated on the same
 // extendedCache flag as the system breakpoint, so the caching on/off policy is
 // unchanged; only its granularity improves.
-func toAnthropicTools(tools []ToolDef, extendedCache bool) []anthropicTool {
+func toAnthropicTools(tools []ToolDef, extendedCache, ptc bool) []anthropicTool {
 	if len(tools) == 0 {
 		return nil
 	}
-	out := make([]anthropicTool, 0, len(tools)+1)
+	out := make([]anthropicTool, 0, len(tools)+2)
 	deferred := false
 	for _, t := range tools {
 		schema := t.InputSchema
@@ -747,13 +932,30 @@ func toAnthropicTools(tools []ToolDef, extendedCache bool) []anthropicTool {
 			schema = json.RawMessage(`{"type":"object"}`)
 		}
 		deferred = deferred || t.DeferLoading
-		out = append(out, anthropicTool{Name: t.Name, Description: t.Description, InputSchema: schema, DeferLoading: t.DeferLoading})
+		at := anthropicTool{
+			Name:         t.Name,
+			Description:  t.Description,
+			InputSchema:  schema,
+			DeferLoading: t.DeferLoading,
+			Strict:       t.Strict,
+		}
+		// PTC: mark code-callable defs; strict is incompatible with
+		// allowed_callers, so it is dropped on those.
+		if ptc && t.CodeCallable {
+			at.AllowedCallers = []string{codeExecToolType}
+			at.Strict = false
+		}
+		out = append(out, at)
+	}
+	// Server tools are PREPENDED so the tools block keeps a stable prefix; the
+	// rolling cache breakpoint stays on the last USER tool, never a server tool.
+	// Programmatic tool calling requires the code-execution tool in the request.
+	if ptc {
+		out = append([]anthropicTool{{Type: codeExecToolType, Name: codeExecToolName}}, out...)
 	}
 	// Native tool search: any deferred def requires the search server tool in the
 	// same request (deferred tools are unreachable without it, and an all-deferred
 	// list is a 400 — the eager set is always non-deferred, so that cannot occur).
-	// Prepended so the tools block starts with a stable prefix; the rolling cache
-	// breakpoint stays on the last USER tool below, never on a server-tool entry.
 	if deferred {
 		out = append([]anthropicTool{{Type: nativeToolSearchType, Name: nativeToolSearchName}}, out...)
 	}
@@ -770,4 +972,12 @@ func toAnthropicTools(tools []ToolDef, extendedCache bool) []anthropicTool {
 const (
 	nativeToolSearchType = "tool_search_tool_regex_20251119"
 	nativeToolSearchName = "tool_search_tool_regex"
+)
+
+// Code execution server tool (programmatic tool calling): Claude writes Python
+// that calls code-callable tools as async functions inside the Anthropic-hosted
+// container; only the script's final output re-enters the model's context.
+const (
+	codeExecToolType = "code_execution_20260120"
+	codeExecToolName = "code_execution"
 )

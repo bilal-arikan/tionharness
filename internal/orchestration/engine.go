@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -21,6 +22,14 @@ const maxDelayMs = 5 * 60 * 1000
 // stays free of any LLM/provider dependency.
 type AgentRunner interface {
 	RunAgentNode(ctx context.Context, agentID, prompt string) (string, error)
+}
+
+// SchemaAgentRunner is an OPTIONAL extension: runners that can constrain an
+// agent node's reply to a JSON Schema (structured outputs) implement it. The
+// engine uses it only for nodes with a non-empty OutputSchema; plain runners
+// keep working unchanged (the schema is then advisory-only).
+type SchemaAgentRunner interface {
+	RunAgentNodeSchema(ctx context.Context, agentID, prompt, outputSchema string) (string, error)
 }
 
 // NodeEvent reports a node's lifecycle to an Observer so a caller can stream
@@ -115,6 +124,11 @@ func (e *Engine) runAgentNodeSafe(ctx context.Context, node Node, prompt string)
 			err = fmt.Errorf("agent node %q panicked: %v", node.ID, p)
 		}
 	}()
+	if node.OutputSchema != "" {
+		if sr, ok := e.runner.(SchemaAgentRunner); ok {
+			return sr.RunAgentNodeSchema(ctx, node.AgentID, prompt, node.OutputSchema)
+		}
+	}
 	return e.runner.RunAgentNode(ctx, node.AgentID, prompt)
 }
 
@@ -271,6 +285,14 @@ func (st *State) appendTrace(node Node, output string) {
 //	equals             — case-insensitive, trimmed exact match
 //	regex              — Go regexp on the raw value (invalid patterns never match)
 func evalBranch(node Node, value string) (string, string) {
+	// Structured routing: extract the named top-level JSON field as the matched
+	// value (schema-constrained upstream nodes make this parse-proof). Falls
+	// back to the raw text when the output isn't JSON or lacks the field.
+	if node.JSONField != "" {
+		if v, ok := jsonTopField(value, node.JSONField); ok {
+			value = v
+		}
+	}
 	lower := strings.ToLower(value)
 	trimmed := strings.ToLower(strings.TrimSpace(value))
 	var def *Branch
@@ -288,6 +310,27 @@ func evalBranch(node Node, value string) (string, string) {
 		return def.Next, "default"
 	}
 	return "", "no match"
+}
+
+// jsonTopField extracts a top-level field from a JSON object output, rendered
+// as a plain string (strings verbatim; numbers/bools via fmt).
+func jsonTopField(raw, field string) (string, bool) {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &obj); err != nil {
+		return "", false
+	}
+	v, ok := obj[field]
+	if !ok {
+		return "", false
+	}
+	switch t := v.(type) {
+	case string:
+		return t, true
+	case nil:
+		return "", false
+	default:
+		return fmt.Sprintf("%v", t), true
+	}
 }
 
 // branchArmMatches reports whether one arm's pattern matches the value under the

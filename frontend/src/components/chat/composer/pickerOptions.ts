@@ -17,6 +17,8 @@ export const THINKING_OPTIONS: PickerOption[] = [
   { value: 'low', label: 'Düşük', hint: 'Kısa akıl yürütme', icon: '◔' },
   { value: 'medium', label: 'Orta', hint: 'Dengeli', icon: '◑' },
   { value: 'high', label: 'Yüksek', hint: 'Derin akıl yürütme', icon: '●' },
+  { value: 'xhigh', label: 'Çok yüksek', hint: 'effort xhigh — kodlama/ajan işleri (güncel modeller)', icon: '◉' },
+  { value: 'max', label: 'Maks', hint: 'effort max — en zor işler (güncel modeller)', icon: '✦' },
 ]
 
 // Permission modes offered in the composer picker / Shift+Tab cycle. '' defers

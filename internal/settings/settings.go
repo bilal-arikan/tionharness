@@ -120,6 +120,12 @@ type Settings struct {
 	// whole agentic loop and paces itself. Values below the API minimum (20000)
 	// are raised to it. 0 = off. Adaptive-class anthropic models only.
 	AutonomousTaskBudgetTokens int `json:"autonomousTaskBudgetTokens"`
+	// AnthropicProgrammaticTools enables programmatic tool calling on native
+	// anthropic tool turns: the code-execution server tool is added and eligible
+	// builtins become callable from Claude-written Python in Anthropic's
+	// container — intermediate results never enter context. MCP + interactive
+	// tools excluded. Off by default. First-party anthropic provider only.
+	AnthropicProgrammaticTools bool `json:"anthropicProgrammaticTools"`
 
 	// Desktop / display behaviour (applied client-side).
 	DesktopNotifications bool `json:"desktopNotifications"` // browser notifications
@@ -437,6 +443,7 @@ type DTO struct {
 	ExtendedPromptCache        bool `json:"extendedPromptCache"`
 	AnthropicContextEditing    bool `json:"anthropicContextEditing"`
 	AnthropicNativeToolSearch  bool `json:"anthropicNativeToolSearch"`
+	AnthropicProgrammaticTools bool `json:"anthropicProgrammaticTools"`
 	AutonomousTaskBudgetTokens int  `json:"autonomousTaskBudgetTokens"`
 
 	DesktopNotifications bool `json:"desktopNotifications"`
@@ -544,6 +551,7 @@ func (s Settings) ToDTO() DTO {
 		ExtendedPromptCache:        s.ExtendedPromptCache,
 		AnthropicContextEditing:    s.AnthropicContextEditing,
 		AnthropicNativeToolSearch:  s.AnthropicNativeToolSearch,
+		AnthropicProgrammaticTools: s.AnthropicProgrammaticTools,
 		AutonomousTaskBudgetTokens: s.AutonomousTaskBudgetTokens,
 
 		DesktopNotifications: s.DesktopNotifications,
@@ -644,6 +652,7 @@ type Patch struct {
 	ExtendedPromptCache        *bool `json:"extendedPromptCache"`
 	AnthropicContextEditing    *bool `json:"anthropicContextEditing"`
 	AnthropicNativeToolSearch  *bool `json:"anthropicNativeToolSearch"`
+	AnthropicProgrammaticTools *bool `json:"anthropicProgrammaticTools"`
 	AutonomousTaskBudgetTokens *int  `json:"autonomousTaskBudgetTokens"`
 
 	DesktopNotifications *bool `json:"desktopNotifications"`

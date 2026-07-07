@@ -68,23 +68,29 @@ func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt strin
 }
 
 // complete is the shared single-prompt provider call. system is the static
-// prefix, systemDynamic the volatile suffix (see providers.Request). It routes
-// through CompleteWithTools, which enforces the daily budget (when autonomous),
-// records usage, and runs the agentic tool loop when the agent has tools enabled.
-// Used by the orchestration flow runner (flow.go).
-func (r *Runtime) complete(ctx context.Context, agent db.Agent, system, systemDynamic, prompt string, autonomous bool) (string, error) {
+// prefix, systemDynamic the volatile suffix (see providers.Request);
+// outputSchema (may be "") constrains the reply via structured outputs on
+// supporting providers/models. It routes through CompleteWithTools, which
+// enforces the daily budget (when autonomous), records usage, and runs the
+// agentic tool loop when the agent has tools enabled. Used by the orchestration
+// flow runner (flow.go).
+func (r *Runtime) complete(ctx context.Context, agent db.Agent, system, systemDynamic, prompt, outputSchema string, autonomous bool) (string, error) {
 	provider, err := r.providers.Get(agent.Provider)
 	if err != nil {
 		return "", err
 	}
-	resp, err := r.CompleteWithTools(ctx, agent, provider, providers.Request{
+	req := providers.Request{
 		Model:         agent.Model,
 		System:        system,
 		SystemDynamic: systemDynamic,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: prompt},
 		},
-	}, autonomous)
+	}
+	if s := strings.TrimSpace(outputSchema); s != "" {
+		req.OutputSchema = json.RawMessage(s)
+	}
+	resp, err := r.CompleteWithTools(ctx, agent, provider, req, autonomous)
 	if err != nil {
 		return "", err
 	}

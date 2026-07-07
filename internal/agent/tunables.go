@@ -161,6 +161,14 @@ type Tunables struct {
 	// and the shipped tools block is byte-stable across loop iterations.
 	// TionSwarm's own activation builtins keep working alongside. Off by default.
 	nativeToolSearch bool
+
+	// programmaticTools — when true, native anthropic tool turns add the
+	// code-execution server tool and mark eligible builtins code-callable
+	// (allowed_callers): the model invokes tools from Python inside Anthropic's
+	// container, keeping intermediate results out of context. The API-native
+	// counterpart of the local run_code code mode (which needs local Python);
+	// MCP and interactive tools are excluded. Off by default.
+	programmaticTools bool
 }
 
 // DefaultDebugJournalCap mirrors db.DefaultDebugJournalCap as the resolved
@@ -816,6 +824,21 @@ func (t *Tunables) SetNativeToolSearch(enabled bool) {
 	t.mu.Lock()
 	t.nativeToolSearch = enabled
 	t.mu.Unlock()
+}
+
+// SetProgrammaticTools toggles programmatic tool calling (code_execution +
+// allowed_callers) on the native anthropic tool loop. Off by default.
+func (t *Tunables) SetProgrammaticTools(enabled bool) {
+	t.mu.Lock()
+	t.programmaticTools = enabled
+	t.mu.Unlock()
+}
+
+// ProgrammaticTools reports whether programmatic tool calling is enabled.
+func (t *Tunables) ProgrammaticTools() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.programmaticTools
 }
 
 // NativeToolSearch reports whether native tool search is enabled.

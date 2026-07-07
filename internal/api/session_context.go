@@ -55,7 +55,13 @@ type sessionContextPreview struct {
 	// screen counts is Tools+LazyTools, not just the eager schemas shipped per turn.
 	LazyTools     []toolSummary    `json:"lazyTools"`
 	TotalTokens   int              `json:"totalTokens"`
-	Cache         cachePreview     `json:"cache"`
+	// AccurateTokens is the EXACT prompt size of this composed request, counted
+	// server-side by the provider's real tokenizer (/v1/messages/count_tokens).
+	// Only populated on ?accurate=1 for providers implementing TokenCounter
+	// (anthropic); 0 otherwise. Lets the UI show heuristic-vs-real drift — the
+	// heuristic keeps driving compaction, so behaviour is unchanged.
+	AccurateTokens int          `json:"accurateTokens,omitempty"`
+	Cache          cachePreview `json:"cache"`
 	// CLIOverhead is set only for CLI-wrapper providers (claude-cli),
 	// where TotalTokens above under-reports the real billed input — see the type doc.
 	CLIOverhead *cliOverheadPreview `json:"cliOverhead,omitempty"`
@@ -412,6 +418,23 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	}
 	cliOver := computeCLIOverhead(ctx, wsp, agent.Provider, session.ID, totalTok, eagerTools)
 
+	// Exact server-side count on demand (?accurate=1): the composed request —
+	// system + dynamic + summary + messages + tool schemas — is counted by the
+	// provider's REAL tokenizer, so the UI can show heuristic drift. One free
+	// HTTP call, no generation; skipped silently on providers without support.
+	accurateTok := 0
+	if ok, _ := strconv.ParseBool(r.URL.Query().Get("accurate")); ok {
+		if p, perr := s.providers.Get(agent.Provider); perr == nil {
+			if tc, isTC := p.(providers.TokenCounter); isTC {
+				countReq := req
+				countReq.Tools = defs
+				if n, cerr := tc.CountTokens(ctx, countReq); cerr == nil {
+					accurateTok = n
+				}
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, sessionContextPreview{
 		AgentName:           agent.Name,
 		Provider:            agent.Provider,
@@ -432,6 +455,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		ToolTokens:          toolTok,
 		LazyTools:           lazyList,
 		TotalTokens:         totalTok,
+		AccurateTokens:      accurateTok,
 		Cache:               cache,
 		CLIOverhead:         cliOver,
 		CompactionSimulated: simulateCompaction,
