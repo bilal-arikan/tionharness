@@ -76,23 +76,55 @@
 - Yeni adım reason'ları: `provider_retry` (StepRecovery), `guardrail_block`/
   `guardrail_halt`. UI mevcut StepRecovery/StepError kartlarıyla gösterir.
 
-## Ayarlar (settings.json → Tunables)
+### Faz F — Hata→ders döngüsü (lesson reflect, 2026-07-07)
+external-context-agent `background_review`'un TionSwarm uyarlaması (memory alt sistemi
+kaldırıldığı için hedef store dar-kapsamlı yeni bir sidecar):
+
+- **Reflector** `internal/agent/lessons.go`: kötü biten her tur
+  (`AutoTagTurn` hunisi üzerinden, kendi gate'iyle) arka-plan goroutine'de
+  ucuz bir model çağrısı yapar (başlık modeli varsa o, yoksa ajanın modeli;
+  `KindReflect` olarak faturalanır, `guardedComplete` bütçe/pause guard'ından
+  geçer). Kanıt: en fazla 3 gerçek tool hatası (policy denial + guardrail
+  coaching metni dışlanır) + tur-seviyesi hata. Model tek, genellenebilir bir
+  ders döner (`NONE` → kaydedilmez). Kullanıcı iptali ve stuck-gate reddi
+  yansıtılmaz.
+- **Store** `internal/db/store_lessons.go`: workspace-geneli `lessons.jsonl`
+  (store kökünde, kendi mutex'i). **Signature dedupe**: aynı hata şekli
+  (tool + normalize hata digest'i) tekrarında mevcut ders güncellenir
+  (`Count++`, yeni metin kazanır) — yığılma yok. Cap 200 (en yeniler).
+  `AddLesson`/`ListLessons`/`DeleteLesson`.
+- **Enjeksiyon** `Runtime.LessonsContextBlock`: en yeni 5 ders "Lessons from
+  past failures" bloğu olarak **hem** chat (`composeTurnRequest` dynamic)
+  **hem** headless (`autonomousDynamicSuffix`) turlara girer — volatile suffix,
+  cache'li prefix'e dokunmaz.
+- Debug olayı: `lesson` (tool `Name`'de, ders özeti `Detail`'de).
+
+## Ayarlar (settings.json → Tunables → Ayarlar UI "Bağlam" sekmesi)
 | Ayar | Varsayılan | Etki |
 |---|---|---|
 | `maxProviderRetries` | 2 (0..5) | geçici provider hatası retry bütçesi |
 | `toolGuardWarnings` | true | hint ekleme |
 | `toolGuardHardStop` | false | blok/halt devre kesici |
 | `stuckTurnThreshold` | 3 (0..20) | stuck etiketi + otonom gate eşiği |
+| `lessonReflect` | true | hata→ders döngüsü (kötü tur başına 1 ucuz çağrı) |
+
+Frontend: `ContextPanel.tsx` "Self-healing (döngü koruması & ders çıkarma)"
+bölümü (guardrail toggle'ları + stuck eşiği + lesson toggle) ve "Tur kurtarma"
+grid'inde sağlayıcı retry bütçesi alanı. Not: `SettingsPanel.saveApp` patch'ine
+eksik olan handoff/progress/autoTag/debugJournal alanları da eklendi (bu
+toggle'lar daha önce kaydedilmiyordu — düzeltildi).
 
 ## Testler
 - `errclass_test.go` (sınıflandırma/retryable/backoff/sleepCtx + provider-retry
   karar tabloları), `toolguard_test.go` (uyar/blok/halt/reset/no-progress),
   `conversation/repair_test.go` (9 onarım senaryosu + idempotentlik),
-  `stuck_test.go` (sayaç/etiket/gate/untag-reset).
+  `stuck_test.go` (sayaç/etiket/gate/untag-reset),
+  `store_lessons_test.go` (round-trip/dedupe/sıralama/cap/delete),
+  `lessons_test.go` (kanıt toplama/signature/gate'ler/context bloğu).
 
 ## Kapsam dışı / sıradaki adımlar
-- **Hata→ders döngüsü** (hermes `background_review` karşılığı): tur-sonu
-  reflektör fork'u dersleri skill/artifact'a yazar; `stuck`/`tool-error`
-  etiketleri + otomasyon altyapısı zemin hazır. Ayrı plan.
 - Guardrail eşiklerinin settings'e açılması (şimdilik sabit default'lar).
-- Frontend Ayarlar UI'ına yeni alanların eklenmesi (API/DTO hazır).
+- Lessons için UI görünürlüğü (listeleme/silme ekranı) + `read_lessons`/
+  `delete_lesson` ajan araçları (store API hazır: `ListLessons`/`DeleteLesson`).
+- Ders enjeksiyonunu ajan/tool bazında filtreleme (şimdilik workspace-geneli
+  en yeni 5).

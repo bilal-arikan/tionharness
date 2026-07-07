@@ -2,6 +2,26 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
 
+## Self-healing Faz F: hata→ders döngüsü + Ayarlar UI ✅ (2026-07-07)
+
+**İstek:** Self-healing ayarlarının frontend'e eklenmesi + hermes `background_review`
+karşılığı hata→ders döngüsü. Detay: `_Docs/56-SELF-HEALING.md` (Faz F bölümü).
+
+- **Lesson reflector** (`internal/agent/lessons.go`): kötü biten tur → arka-plan ucuz
+  model çağrısı (`KindReflect`) → tek genellenebilir ders; `AutoTagTurn` hunisinden
+  tetiklenir, `lessonReflect` ayarıyla (vars. açık) gate'li. Policy denial/guardrail
+  coaching/iptal/stuck-gate reddi kanıta girmez; `NONE` cevabı kaydedilmez.
+- **Lessons store** (`internal/db/store_lessons.go`): workspace-geneli `lessons.jsonl`,
+  signature dedupe (tekrar → `Count++` + metin tazelenir), cap 200, kendi mutex'i.
+- **Enjeksiyon**: `Runtime.LessonsContextBlock` — en yeni 5 ders chat + headless
+  dinamik suffix'ine girer (cache'li prefix bozulmaz). Debug olayı: `lesson`.
+- **Frontend**: `ContextPanel` "Self-healing" bölümü (guardrail uyarı/devre kesici
+  toggle'ları, stuck eşiği, lesson toggle) + "Tur kurtarma" grid'ine sağlayıcı retry
+  bütçesi; `types/settings.ts` + `SettingsPanel.saveApp` patch'i. **Bugfix:** saveApp
+  patch'inde handoff/progress/autoTag/debugJournal alanları eksikti (bu toggle'lar
+  hiç kaydedilmiyordu) — eklendi.
+- Testler: `store_lessons_test.go` + `lessons_test.go`; `tsc --noEmit` + vite build temiz.
+
 ## Fable 5 uyumluluk paketi (6 madde) ✅ (2026-07-07)
 
 **İstek:** Fable 5 uyumluluk denetiminde bulunan 6 boşluğun kapatılması.
@@ -87,7 +107,10 @@ yönlendirilsin.
   (buton `ClaudeAuthDialog`'u açar, kimlik doğrudan bu workspace'in claude-home'una yazılır);
   CLI yok → `onNavigateProviders` ile Sağlayıcılar ekranı (`setSettingsCat('providers')`).
 - `App` tüm oluşturma yollarını (onboarding + rail + mobil) tek `handleCreateWorkspace`
-  sarmalayıcısından geçirir.
+  sarmalayıcısından geçirir. **Mevcut klasör bağlama** (`attachWorkspace`, onboarding) da
+  aynı kapıyı tetikler (`handleAttachWorkspace`) — bağlanan workspace'in kendi
+  yetkilendirilmemiş claude-home'u olabilir; `attachWorkspace`'in hata-fırlatma sözleşmesi
+  korunur (inline doğrulama hataları).
 
 ## API-native P2+P3: sunucu web search/fetch + server-side compaction (toggle'lı) ✅ (2026-07-07)
 
