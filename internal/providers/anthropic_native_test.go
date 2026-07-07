@@ -1,9 +1,11 @@
 package providers
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestApplyOutputSchema: supported models get output_config.format; others are
@@ -181,6 +183,55 @@ func TestContextMgmt_ServerCompaction(t *testing.T) {
 	// Both off → nil (field omitted).
 	if cm = (&Anthropic{}).contextMgmt(); cm != nil {
 		t.Errorf("no edits expected: %+v", cm)
+	}
+}
+
+// TestSanitizeFallbackEcho: content with a mid-output fallback boundary drops
+// pre-boundary thinking/tool_use blocks on echo; content without one passes
+// through byte-identical.
+func TestSanitizeFallbackEcho(t *testing.T) {
+	plain := json.RawMessage(`[{"type":"text","text":"hi"},{"type":"tool_use","id":"t1","name":"Read"}]`)
+	if got := sanitizeFallbackEcho(plain); string(got) != string(plain) {
+		t.Errorf("content without a fallback block must pass through untouched")
+	}
+	mixed := json.RawMessage(`[
+		{"type":"thinking","thinking":"..."},
+		{"type":"text","text":"partial"},
+		{"type":"tool_use","id":"t1","name":"Read"},
+		{"type":"fallback","from":{"model":"claude-fable-5"},"to":{"model":"claude-opus-4-8"}},
+		{"type":"text","text":"continued"},
+		{"type":"tool_use","id":"t2","name":"Grep"}
+	]`)
+	out := string(sanitizeFallbackEcho(mixed))
+	if strings.Contains(out, `"thinking"`) || strings.Contains(out, `"t1"`) {
+		t.Errorf("pre-boundary thinking/tool_use must be dropped: %s", out)
+	}
+	for _, keep := range []string{"partial", "continued", `"fallback"`, `"t2"`} {
+		if !strings.Contains(out, keep) {
+			t.Errorf("echo lost %q: %s", keep, out)
+		}
+	}
+	// "fallback" only inside a string value → untouched.
+	str := json.RawMessage(`[{"type":"text","text":"the word fallback appears here"}]`)
+	if got := sanitizeFallbackEcho(str); string(got) != string(str) {
+		t.Errorf("string-only mention must not trigger sanitization")
+	}
+}
+
+// TestRequestCtx pins the model-class wall-clock budgets.
+func TestRequestCtx(t *testing.T) {
+	a := &Anthropic{}
+	ctx, cancel := a.requestCtx(context.Background(), "claude-fable-5")
+	defer cancel()
+	dl, ok := ctx.Deadline()
+	if !ok || time.Until(dl) < 9*time.Minute {
+		t.Errorf("adaptive class should get the long budget, got %v", time.Until(dl))
+	}
+	ctx2, cancel2 := a.requestCtx(context.Background(), "claude-haiku-4-5")
+	defer cancel2()
+	dl2, _ := ctx2.Deadline()
+	if time.Until(dl2) > 3*time.Minute {
+		t.Errorf("legacy class should keep the short budget, got %v", time.Until(dl2))
 	}
 }
 

@@ -142,6 +142,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       anthropicProgrammaticTools: draft.anthropicProgrammaticTools,
       anthropicWebTools: draft.anthropicWebTools,
       anthropicServerCompaction: draft.anthropicServerCompaction,
+      anthropicRefusalFallback: draft.anthropicRefusalFallback,
       autonomousTaskBudgetTokens: draft.autonomousTaskBudgetTokens,
       desktopNotifications: draft.desktopNotifications, keepAwake: draft.keepAwake,
       userName: draft.userName, userTimezone: draft.userTimezone, userCity: draft.userCity,

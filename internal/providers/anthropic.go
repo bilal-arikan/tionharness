@@ -21,7 +21,16 @@ const (
 	// (default ~150K tokens); the blocks must be echoed back on later requests
 	// (the RawContent verbatim echo handles that within a turn).
 	betaServerCompaction = "compact-2026-01-12"
+	// betaServerFallback enables the server-side refusal fallback: a request the
+	// safety classifiers decline is transparently re-served by the fallback model
+	// inside the same call (a decline before output isn't billed; the rescue
+	// bills at the fallback model's rates). Per-request, Fable-class models only.
+	betaServerFallback = "server-side-fallback-2026-06-01"
 )
+
+// refusalFallbackModel is the substitute model for refused Fable-class requests
+// — the only supported server-side fallback target at launch.
+const refusalFallbackModel = "claude-opus-4-8"
 
 // Server-side web tools. The _20260209 variants carry dynamic filtering (a
 // code-execution environment under the hood) and require the 4.6+ model class;
@@ -51,11 +60,20 @@ const (
 )
 
 const (
-	anthropicURL       = "https://api.anthropic.com/v1/messages"
-	anthropicVersion   = "2023-06-01"
-	DefaultModel       = "claude-sonnet-5"
-	defaultMaxTokens   = 4096
-	requestTimeoutSecs = 120
+	anthropicURL     = "https://api.anthropic.com/v1/messages"
+	anthropicVersion = "2023-06-01"
+	DefaultModel     = "claude-sonnet-5"
+	defaultMaxTokens = 4096
+	// Per-request wall-clock budgets (ctx deadlines, retries included). The
+	// adaptive class — Fable 5 especially — can legitimately run a SINGLE
+	// request for many minutes on hard tasks; the legacy budget would kill it
+	// mid-generation and then re-bill it via the transport retry.
+	requestTimeoutSecs         = 120
+	adaptiveRequestTimeoutSecs = 600
+	// clientTimeoutSecs is the http.Client transport safety net, kept above the
+	// largest per-request budget so the ctx deadline (model-class aware) is
+	// always the binding limit.
+	clientTimeoutSecs = adaptiveRequestTimeoutSecs + 30
 )
 
 // cacheTTL is the SINGLE ttl used by EVERY prompt-cache breakpoint (tools, static
@@ -82,6 +100,7 @@ type Anthropic struct {
 	extendedCache    bool // 1h extended prompt cache TTL beta
 	contextEditing   bool // API-native context editing (clear_tool_uses) beta
 	serverCompaction bool // API-native compaction (compact_20260112) beta
+	refusalFallback  bool // server-side refusal fallback (Fable-class requests only)
 }
 
 // NewAnthropic creates a client with the given API key, defaulting to the
@@ -89,7 +108,7 @@ type Anthropic struct {
 func NewAnthropic(apiKey string) *Anthropic {
 	return &Anthropic{
 		apiKey:       apiKey,
-		client:       &http.Client{Timeout: requestTimeoutSecs * time.Second},
+		client:       &http.Client{Timeout: clientTimeoutSecs * time.Second},
 		baseURL:      anthropicURL,
 		defaultModel: DefaultModel,
 		name:         "anthropic",
@@ -126,6 +145,26 @@ func (a *Anthropic) WithBetas(extendedCache, contextEditing, serverCompaction bo
 	return a
 }
 
+// WithRefusalFallback toggles the server-side refusal fallback: Fable-class
+// requests carry fallbacks=[claude-opus-4-8] + its beta header, so a safety-
+// classifier decline is re-served by Opus 4.8 inside the same call instead of
+// failing the turn. Anthropic's guidance is to ship Fable code with this on.
+func (a *Anthropic) WithRefusalFallback(enabled bool) *Anthropic {
+	a.refusalFallback = enabled
+	return a
+}
+
+// requestCtx bounds one API call (retries included) by model class: adaptive
+// models get the long budget (single Fable requests can run for minutes), the
+// rest keep the historical 120s. A sooner parent deadline still wins.
+func (a *Anthropic) requestCtx(ctx context.Context, model string) (context.Context, context.CancelFunc) {
+	d := time.Duration(requestTimeoutSecs) * time.Second
+	if UsesAdaptiveThinking(model) {
+		d = time.Duration(adaptiveRequestTimeoutSecs) * time.Second
+	}
+	return context.WithTimeout(ctx, d)
+}
+
 // Name implements Provider.
 func (a *Anthropic) Name() string { return a.name }
 
@@ -142,7 +181,10 @@ type anthropicReq struct {
 	// Container resumes a code-execution container from a prior response of the
 	// same turn (REQUIRED while a programmatic tool call is pending).
 	Container string `json:"container,omitempty"`
-	Stream    bool   `json:"stream,omitempty"`
+	// Fallbacks (beta): substitute models that transparently re-serve the
+	// request when the safety classifiers decline it (Fable-class only).
+	Fallbacks []fallbackParam `json:"fallbacks,omitempty"`
+	Stream    bool            `json:"stream,omitempty"`
 }
 
 // contextManagement carries the API-native context-editing directives (P3). The
@@ -409,7 +451,12 @@ type anthropicResp struct {
 		ID string `json:"id"`
 	} `json:"container"`
 	StopReason string `json:"stop_reason"`
-	Model      string `json:"model"`
+	// StopDetails classifies a refusal (populated only on stop_reason "refusal").
+	StopDetails *struct {
+		Category    string `json:"category"`
+		Explanation string `json:"explanation"`
+	} `json:"stop_details"`
+	Model string `json:"model"`
 	Usage      struct {
 		InputTokens              int `json:"input_tokens"`
 		OutputTokens             int `json:"output_tokens"`
@@ -422,6 +469,11 @@ type anthropicResp struct {
 	} `json:"error"`
 }
 
+// fallbackParam names one substitute model for the server-side refusal fallback.
+type fallbackParam struct {
+	Model string `json:"model"`
+}
+
 // Complete implements Provider.
 func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error) {
 	if a.apiKey == "" {
@@ -432,6 +484,10 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	if model == "" {
 		model = a.defaultModel
 	}
+	// Model-class-aware wall clock: adaptive models (Fable especially) may run a
+	// single request for minutes; legacy models keep the historical budget.
+	ctx, cancel := a.requestCtx(ctx, model)
+	defer cancel()
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = defaultMaxTokens
@@ -458,9 +514,21 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		"x-api-key":         a.apiKey,
 		"anthropic-version": anthropicVersion,
 	}
+	// Server-side refusal fallback: Fable-class requests (always-on classifiers)
+	// carry the fallbacks param so a policy decline is transparently re-served by
+	// Opus 4.8 inside the same call. First-party endpoint only — protocol
+	// lookalikes (minimax-anthropic, custom) would reject the param.
+	refusalFallback := a.refusalFallback && a.name == "anthropic" && AlwaysOnThinking(model)
+	if refusalFallback {
+		body.Fallbacks = []fallbackParam{{Model: refusalFallbackModel}}
+	}
+
 	beta := a.betaHeader()
 	if taskBudgetBeta {
 		beta = joinNonEmptyComma(beta, betaTaskBudgets)
+	}
+	if refusalFallback {
+		beta = joinNonEmptyComma(beta, betaServerFallback)
 	}
 	if beta != "" {
 		headers["anthropic-beta"] = beta
@@ -473,7 +541,14 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	}
 	if status != http.StatusOK {
 		if parsed.Error != nil {
-			return nil, fmt.Errorf("anthropic API error (%s): %s", parsed.Error.Type, parsed.Error.Message)
+			msg := parsed.Error.Message
+			// Fable 5 requires 30-day data retention: a ZDR/short-retention org
+			// gets 400 on EVERY request with a payload-shaped error. Attach the
+			// actionable hint so the user doesn't debug the request body.
+			if AlwaysOnThinking(model) && strings.Contains(strings.ToLower(msg), "retention") {
+				msg += " (hint: Claude Fable 5 requires 30-day data retention; organizations configured for zero/short retention get 400 on every request — check the org's data-retention setting, not the request)"
+			}
+			return nil, fmt.Errorf("anthropic API error (%s): %s", parsed.Error.Type, msg)
 		}
 		return nil, fmt.Errorf("anthropic HTTP %d: %s", status, string(raw))
 	}
@@ -512,6 +587,10 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 			// Server-side compaction replaced earlier history with a summary
 			// block; surface the event (the block itself rides RawContent).
 			trace = append(trace, TraceStep{Kind: "text", Text: "(conversation history compacted server-side)"})
+		case "fallback":
+			// Refusal fallback switch point: the requested model declined and the
+			// fallback model continued inside the same call.
+			trace = append(trace, TraceStep{Kind: "text", Text: "(safety refusal — fallback model continued the request)"})
 		}
 	}
 
@@ -522,17 +601,26 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		Content json.RawMessage `json:"content"`
 	}
 	_ = json.Unmarshal(raw, &rawEnv)
+	// A mid-output refusal fallback constrains the echo: thinking/tool_use blocks
+	// BEFORE the final fallback boundary must be omitted when the content is sent
+	// back (text and post-boundary blocks echo normally).
+	rawContent := sanitizeFallbackEcho(rawEnv.Content)
 
 	containerID := ""
 	if parsed.Container != nil {
 		containerID = parsed.Container.ID
 	}
+	var stopDetails *StopDetails
+	if parsed.StopReason == StopRefusal && parsed.StopDetails != nil {
+		stopDetails = &StopDetails{Category: parsed.StopDetails.Category, Explanation: parsed.StopDetails.Explanation}
+	}
 
 	return &Response{
 		Text:        text,
 		ToolCalls:   calls,
-		RawContent:  rawEnv.Content,
+		RawContent:  rawContent,
 		ContainerID: containerID,
+		StopDetails: stopDetails,
 		StopReason:  parsed.StopReason,
 		Model:      parsed.Model,
 		Trace:      trace,
@@ -558,6 +646,9 @@ func (a *Anthropic) CountTokens(ctx context.Context, req Request) (int, error) {
 	if model == "" {
 		model = a.defaultModel
 	}
+	// Counting is cheap and fast — the legacy budget is always enough.
+	ctx, cancel := context.WithTimeout(ctx, requestTimeoutSecs*time.Second)
+	defer cancel()
 	sysField, msgs := a.buildSystemAndMessages(req, model)
 	if len(msgs) == 0 {
 		// The endpoint requires a non-empty messages array.
@@ -609,6 +700,8 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 	if model == "" {
 		model = a.defaultModel
 	}
+	ctx, cancel := a.requestCtx(ctx, model)
+	defer cancel()
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = defaultMaxTokens
@@ -759,6 +852,53 @@ func foldSystemMessages(msgs []Message, native bool) []Message {
 		out = append(out, Message{Role: RoleUser, Text: note})
 	}
 	return out
+}
+
+// sanitizeFallbackEcho prepares a response content array for the verbatim echo
+// when it contains a refusal-fallback boundary: thinking/redacted_thinking/
+// tool_use blocks BEFORE the final "fallback" block must be omitted on replay
+// (the fallback model never produced them); everything else — text blocks, the
+// fallback marker itself, all post-boundary blocks — echoes unchanged. Content
+// without a fallback block is returned byte-identical (the common case).
+func sanitizeFallbackEcho(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 || !strings.Contains(string(raw), `"fallback"`) {
+		return raw
+	}
+	var blocks []json.RawMessage
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return raw
+	}
+	blockType := func(b json.RawMessage) string {
+		var t struct {
+			Type string `json:"type"`
+		}
+		_ = json.Unmarshal(b, &t)
+		return t.Type
+	}
+	last := -1
+	for i, b := range blocks {
+		if blockType(b) == "fallback" {
+			last = i
+		}
+	}
+	if last < 0 {
+		return raw // "fallback" appeared only inside a string value
+	}
+	out := make([]json.RawMessage, 0, len(blocks))
+	for i, b := range blocks {
+		if i < last {
+			switch blockType(b) {
+			case "thinking", "redacted_thinking", "tool_use":
+				continue
+			}
+		}
+		out = append(out, b)
+	}
+	merged, err := json.Marshal(out)
+	if err != nil {
+		return raw
+	}
+	return merged
 }
 
 // renderWebToolResult summarizes a web search/fetch result block for the trace:

@@ -1134,15 +1134,22 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	return out
 }
 
-// autonomousBootReminder nudges every headless turn (schedule/spawn/flow/subagent)
-// to run the fixed boot/verification sequence before acting. The full recipe lives
-// in the tionswarm-autonomous-ops skill (§10); we inject only this pointer so the
-// cached system prefix stays small. Mirrors the long-running-agent "open the
-// project the same way every time" discipline that compensates for lost context.
-const autonomousBootReminder = "# Autonomous boot sequence\n" +
-	"This is a headless turn with a fresh context. Before acting, run the boot " +
-	"sequence: orient (pwd/branch) → recall (git log + the persisted progress file " +
-	"if any + list_tasks) → select ONE task → verify the baseline (smoke/e2e) and " +
-	"fix it first if it is red → do the one task → close the loop (git commit + " +
-	"append a board/progress note, never overwrite a prior note). " +
-	"Full recipe: use_skill \"tionswarm-autonomous-ops\" (§10)."
+// autonomousBootReminder frames every headless turn (schedule/spawn/flow/
+// subagent). Deliberately stated as GOALS AND BOUNDARIES rather than a numbered
+// step recipe: current-generation models (Fable 5 class) follow intent well and
+// over-prescriptive scaffolding measurably reduces their output quality. Three
+// concerns, per Anthropic's long-running-agent guidance: (1) autonomy — no user
+// is watching, act instead of asking or ending on a plan; (2) grounded progress
+// — claims must be backed by a tool result from this session; (3) durable
+// closure — record what changed so the next fresh context can pick it up. The
+// detailed recipe stays in the tionswarm-autonomous-ops skill.
+const autonomousBootReminder = "# Autonomous operation\n" +
+	"This is a headless turn with a fresh context; no user is watching and none can answer questions, " +
+	"so do not ask permission and do not end the turn with a plan or a promise — for reversible actions " +
+	"that follow from the task, act. Orient yourself before changing anything (working directory, git state, " +
+	"the persisted progress file, open tasks) and verify the baseline is green before building on it; " +
+	"fix a broken baseline first. Work on ONE piece of work per turn, done properly, rather than several half-done. " +
+	"Before reporting progress, check each claim against a tool result from this session — report only what you can " +
+	"point to evidence for, and say explicitly when something is not yet verified. Close the loop when finished: " +
+	"commit/record what changed and append a progress note (never overwrite a prior note). " +
+	"Playbook when needed: use_skill \"tionswarm-autonomous-ops\"."

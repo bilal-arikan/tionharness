@@ -32,6 +32,8 @@ func (NotifyTool) Def() providers.ToolDef {
 		Name: "notify",
 		Description: "Raise a desktop notification to get the user's attention when they may not be " +
 			"looking at the app (a long task finished, an autonomous run needs input, an error occurred). " +
+			"Title and body reach the user EXACTLY as written (never summarized), so use this when content " +
+			"must arrive verbatim mid-task — a progress update with specific numbers, a partial result. " +
 			"Does NOT block — it fires the toast and returns immediately. Use ask_user/request_confirmation " +
 			"when you actually need an answer; use notify only to inform.",
 		InputSchema: json.RawMessage(`{

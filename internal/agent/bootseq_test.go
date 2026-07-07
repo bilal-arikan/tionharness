@@ -25,12 +25,15 @@ func TestAutonomousBootSeqDefaultOn(t *testing.T) {
 	}
 }
 
-// TestAutonomousBootReminderContent pins the reminder's load-bearing parts: the
-// boot-sequence header and the pointer to the full recipe skill.
+// TestAutonomousBootReminderContent pins the reminder's load-bearing parts:
+// the autonomy framing (act, don't ask — no user is watching), baseline
+// verification, grounded progress claims, and the playbook skill pointer.
 func TestAutonomousBootReminderContent(t *testing.T) {
 	for _, want := range []string{
-		"Autonomous boot sequence",
+		"Autonomous operation",
+		"do not ask permission",
 		"verify the baseline",
+		"tool result from this session",
 		`use_skill "tionswarm-autonomous-ops"`,
 	} {
 		if !strings.Contains(autonomousBootReminder, want) {

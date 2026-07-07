@@ -40,6 +40,7 @@ type Registry struct {
 	betaExtendedCache    bool // anthropic extended prompt-cache TTL beta
 	betaContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
 	betaServerCompaction bool // anthropic API-native compaction beta (compact_20260112)
+	betaRefusalFallback  bool // anthropic server-side refusal fallback (Fable-class requests)
 
 	minimaxKey     string // MiniMax (OpenAI-compatible) API key
 	minimaxBaseURL string // MiniMax base URL ("" = public default)
@@ -107,11 +108,12 @@ func (r *Registry) SetDefaultModel(model string) {
 
 // SetAnthropicBetas toggles the optional Anthropic beta capabilities applied to
 // anthropic provider instances.
-func (r *Registry) SetAnthropicBetas(extendedCache, contextEditing, serverCompaction bool) {
+func (r *Registry) SetAnthropicBetas(extendedCache, contextEditing, serverCompaction, refusalFallback bool) {
 	r.mu.Lock()
 	r.betaExtendedCache = extendedCache
 	r.betaContextEditing = contextEditing
 	r.betaServerCompaction = serverCompaction
+	r.betaRefusalFallback = refusalFallback
 	r.mu.Unlock()
 }
 
@@ -242,6 +244,7 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 		ExtendedCache:      r.betaExtendedCache,
 		ContextEditing:     r.betaContextEditing,
 		ServerCompaction:   r.betaServerCompaction,
+		RefusalFallback:    r.betaRefusalFallback,
 	}
 	switch id {
 	case "anthropic":

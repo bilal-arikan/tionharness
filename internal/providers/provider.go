@@ -24,7 +24,23 @@ const (
 	// conversation WITH the assistant's content appended verbatim (no extra user
 	// message) — the server detects the trailing server-tool block and continues.
 	StopPauseTurn = "pause_turn"
+	// StopRefusal: safety classifiers declined the request (HTTP 200!). Content
+	// is empty (pre-output, unbilled) or partial (mid-stream, billed — discard).
+	// Fable-class models fire this most; see Response.StopDetails.
+	StopRefusal = "refusal"
+	// StopContextWindow: the model hit its CONTEXT WINDOW mid-turn (4.5+ signals
+	// it as a stop reason, distinct from the max_tokens output cap). Recoverable
+	// by compacting the in-flight history and retrying.
+	StopContextWindow = "model_context_window_exceeded"
 )
+
+// StopDetails classifies a refusal (populated ONLY when StopReason ==
+// StopRefusal): Category names the policy area ("cyber", "bio", … or ""),
+// Explanation is an optional human-readable reason.
+type StopDetails struct {
+	Category    string `json:"category,omitempty"`
+	Explanation string `json:"explanation,omitempty"`
+}
 
 // ToolDef describes a tool offered to the model. InputSchema is a JSON Schema
 // object describing the tool's arguments.
@@ -256,6 +272,9 @@ type Response struct {
 	// ContainerID is the code-execution container of this response (PTC); pass
 	// it back as Request.ContainerID on the next call of the same turn.
 	ContainerID string
+	// StopDetails carries the refusal classification when StopReason is
+	// StopRefusal; nil for every other stop reason.
+	StopDetails *StopDetails
 }
 
 // TokenCounter is implemented by providers exposing an exact server-side token

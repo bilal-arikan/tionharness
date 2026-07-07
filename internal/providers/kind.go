@@ -45,6 +45,7 @@ type ResolvedConfig struct {
 	ExtendedCache    bool // anthropic extended prompt-cache beta
 	ContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
 	ServerCompaction bool // anthropic API-native compaction beta (compact_20260112)
+	RefusalFallback  bool // anthropic server-side refusal fallback (Fable-class requests)
 }
 
 // ProviderKind is one transport "plugin": it describes itself (Manifest),

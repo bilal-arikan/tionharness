@@ -14,7 +14,7 @@ func init() {
 			AllowCustomModel: true,
 			Order:            1,
 			Models: []ModelInfo{
-				{ID: "claude-fable-5", Label: "Claude Fable 5 — öncü", Description: "En yeni nesil; 1M bağlam, adaptif düşünme (daima açık), ajan görevleri"},
+				{ID: "claude-fable-5", Label: "Claude Fable 5 — öncü", Description: "En yeni nesil; 1M bağlam, adaptif düşünme (daima açık), ajan görevleri. Not: 30 günlük veri saklama gerektirir (ZDR organizasyonlarda çalışmaz); güvenlik sınıflandırıcıları reddi Opus 4.8 fallback'iyle karşılanır (Ayarlar)"},
 				{ID: "claude-opus-4-8", Label: "Claude Opus 4.8 — en yetenekli", Description: "Karmaşık akıl yürütme, kodlama, ajan görevleri"},
 				{ID: "claude-sonnet-5", Label: "Claude Sonnet 5 — dengeli", Description: "En yeni dengeli nesil; 1M bağlam, güçlü ajan/kodlama, hız/kalite dengesi"},
 				{ID: "claude-sonnet-4-6", Label: "Claude Sonnet 4.6 — önceki dengeli", Description: "Güçlü ve hızlı; önceki nesil dengeli model"},
@@ -26,7 +26,7 @@ func init() {
 			if cfg.Key == "" {
 				return nil, fmt.Errorf("anthropic provider not configured (set an API key in Settings)")
 			}
-			return NewAnthropic(cfg.Key).WithBetas(cfg.ExtendedCache, cfg.ContextEditing, cfg.ServerCompaction), nil
+			return NewAnthropic(cfg.Key).WithBetas(cfg.ExtendedCache, cfg.ContextEditing, cfg.ServerCompaction).WithRefusalFallback(cfg.RefusalFallback), nil
 		},
 	))
 }

@@ -109,7 +109,12 @@ func (s *Server) handleGetWorkspaceSettings(w http.ResponseWriter, r *http.Reque
 // claudeAuthDTO reports whether THIS workspace's claude-home is authenticated,
 // as measured by a live pre-flight probe.
 type claudeAuthDTO struct {
-	LoggedIn      bool   `json:"loggedIn"`
+	LoggedIn bool `json:"loggedIn"`
+	// Installed reports whether the claude CLI binary is resolvable at all. It
+	// separates "CLI missing" (steer the user to the Providers screen) from "CLI
+	// present but not logged in" (offer the auth popup). Only meaningful when
+	// LoggedIn is false.
+	Installed     bool   `json:"installed"`
 	ClaudeHomeDir string `json:"claudeHomeDir"`
 	Detail        string `json:"detail,omitempty"` // failure reason when LoggedIn is false
 }
@@ -132,14 +137,23 @@ func (s *Server) handleWorkspaceClaudeAuth(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "claude-cli provider unavailable")
 		return
 	}
+	// The CLI binary must exist before a login probe makes sense. When it is
+	// missing there is nothing to authenticate — report Installed:false so the
+	// client can steer the user to set up a provider instead of showing a login
+	// popup for a CLI that cannot run.
+	if !cli.Installed() {
+		writeJSON(w, http.StatusOK, claudeAuthDTO{ClaudeHomeDir: home,
+			Detail: "claude CLI not found (set its path in Providers, or use an API-key provider)"})
+		return
+	}
 	cli.SetConfigDir(home)
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	if perr := cli.ProbeAuth(ctx); perr != nil {
-		writeJSON(w, http.StatusOK, claudeAuthDTO{ClaudeHomeDir: home, Detail: perr.Error()})
+		writeJSON(w, http.StatusOK, claudeAuthDTO{Installed: true, ClaudeHomeDir: home, Detail: perr.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, claudeAuthDTO{LoggedIn: true, ClaudeHomeDir: home})
+	writeJSON(w, http.StatusOK, claudeAuthDTO{LoggedIn: true, Installed: true, ClaudeHomeDir: home})
 }
 
 // handleUpdateWorkspaceSettings applies a partial update (including rename) to

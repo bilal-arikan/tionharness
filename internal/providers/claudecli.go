@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -60,6 +61,19 @@ type ClaudeCLI struct {
 // (pass "","" for none; see the struct fields).
 func NewClaudeCLI(binPath, model, configDir, authKind, authToken string) *ClaudeCLI {
 	return &ClaudeCLI{binPath: binPath, model: model, configDir: configDir, authKind: authKind, authToken: authToken}
+}
+
+// Installed reports whether the configured claude binary can be resolved to an
+// executable — an absolute/relative path that exists, or a bare name found on
+// PATH. It does NOT check login state; a true result only means the CLI is
+// present to run. Callers use this to distinguish "CLI missing" (steer the user
+// to set up a provider) from "CLI present but not authenticated" (offer login).
+func (c *ClaudeCLI) Installed() bool {
+	if c.binPath == "" {
+		return false
+	}
+	_, err := exec.LookPath(c.binPath)
+	return err == nil
 }
 
 // ConfigureMCP enables MCP tool delegation for subsequent Complete calls.

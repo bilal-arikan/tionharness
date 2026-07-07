@@ -16,7 +16,12 @@ import (
 )
 
 // scheduleTimeout bounds a single scheduled fire (task run or prompt delivery).
-const scheduleTimeout = 120 * time.Second
+// Sized for current-generation models: a Fable-class agent can legitimately run
+// ONE request for many minutes, and a multi-iteration tool loop longer still —
+// the old 120s ceiling killed exactly the long autonomous work schedules exist
+// for. Runaway protection comes from the loop guards (iteration cap, budgets),
+// not this wall clock.
+const scheduleTimeout = 30 * time.Minute
 
 // Scheduler runs a workspace's enabled schedules on their cron expressions.
 // Cron expressions use the standard 5-field format (minute hour dom month dow).

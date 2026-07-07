@@ -38,6 +38,7 @@ export interface AppSettings {
   anthropicProgrammaticTools: boolean
   anthropicWebTools: boolean
   anthropicServerCompaction: boolean
+  anthropicRefusalFallback: boolean
   autonomousTaskBudgetTokens: number
 
   desktopNotifications: boolean

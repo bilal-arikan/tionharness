@@ -2,6 +2,40 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
 
+## Fable 5 uyumluluk paketi (6 madde) ✅ (2026-07-07)
+
+**İstek:** Fable 5 uyumluluk denetiminde bulunan 6 boşluğun kapatılması.
+
+1. **Thinking-blok echo'su (kritik):** Fable/Mythos'ta thinking HER yanıtta var (araç
+   döngüsü dahil) ve bloklar aynen geri gönderilmek zorunda. `rawEcho` kapısına
+   `providers.AlwaysOnThinking(agent.Model)` eklendi — Fable'lı ajanlar hiçbir toggle'a
+   bağlı olmadan verbatim echo alır.
+2. **Refusal + server-side fallback:** `AnthropicRefusalFallback` ayarı (**varsayılan
+   AÇIK**, Anthropic'in Fable rehberi) → Fable-sınıfı isteklere `fallbacks:
+   [claude-opus-4-8]` + `server-side-fallback-2026-06-01` beta; sınıflandırıcı reddi aynı
+   çağrıda Opus 4.8'le karşılanır. `stop_details` parse edilir (`Response.StopDetails`);
+   araç döngüsünde `refusal` artık boş balon yerine kategori+açıklamalı hata kartı üretir.
+   Mid-output fallback echo kuralı için `sanitizeFallbackEcho` (sınır öncesi thinking/
+   tool_use blokları düşülür). UI toggle + `fallback` iz adımı.
+3. **Zaman aşımları:** model-sınıflı istek bütçesi — adaptive sınıf (Fable/4.7+/Sonnet 5)
+   600s, eskiler 120s (`requestCtx`; client transport tavanı 630s). `scheduleTimeout`
+   120s → **30 dk** (Fable'ın dakikalarca süren tek istekleri + uzun araç döngüleri;
+   kaçak koruması iterasyon/bütçe guard'larında).
+4. **`model_context_window_exceeded` stop reason:** `decideRecovery`'ye dal eklendi —
+   hata-şekilli taşmayla aynı tek-atım compact-and-retry; tekrarında tur artık
+   "completed" değil `context_window_exhausted` olarak işaretlenir (iz kartı + kırpılma
+   notu). Araç döngüsünün yanıt-tarafına compact uygulaması eklendi.
+5. **Prompt ince ayarı:** `autonomousBootReminder` de-prescribe edildi ve genişletildi —
+   "Autonomous operation": izin sorma/planla bitirme yok (aksiyon al), baseline doğrula,
+   TEK iş, ilerleme iddiaları bu oturumdaki araç sonuçlarına dayansın, kapanışta kayıt.
+   `notify` açıklamasına birebir-iletim (verbatim) tetiği eklendi (send_to_user deseni).
+6. **Veri saklama notu:** Fable katalog açıklamasına 30-gün saklama + fallback notu;
+   anthropic 400 hatasında "retention" geçiyorsa eyleme dönük ipucu ekleniyor
+   (ZDR org'da isteğin değil org ayarının sorun olduğu).
+
+Testler: `TestSanitizeFallbackEcho`, `TestRequestCtx`, `TestDecideRecovery_ContextWindowStop`,
+güncellenen boot-reminder pinleri. ✅ build/vet temiz; 764 test / 35 paket; frontend `tsc` temiz.
+
 ## Kendi kendini onaran oturum akışları (self-healing, Faz A–D) ✅ (2026-07-07)
 
 **İstek:** external-context-agent incelemesinden çıkan self-healing desenlerinin TionSwarm'a
