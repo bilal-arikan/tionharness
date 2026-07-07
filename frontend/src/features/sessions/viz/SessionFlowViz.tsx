@@ -4,6 +4,7 @@ import { api } from '@/api'
 import type { SessionDebugEvent } from '@/types'
 import { ToolSankey } from './ToolSankey'
 import { ConcurrencyTimeline } from './ConcurrencyTimeline'
+import { SelfHealingEvents } from './SelfHealingEvents'
 
 // How many raw events to pull for the visualizations. Covers the whole span for
 // typical sessions; very long ones are truncated to the newest window (noted).
@@ -92,6 +93,17 @@ export function SessionFlowViz({
                   gerçek eşzamanlılığı gösterir.
                 </p>
                 <ConcurrencyTimeline events={events} agentNames={agentNames} />
+              </div>
+
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                  Self-healing olayları
+                </div>
+                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
+                  Tur kurtarmaları, mesaj dizisi onarımları, guardrail kararları ve
+                  damıtılan dersler (56-SELF-HEALING).
+                </p>
+                <SelfHealingEvents events={events} />
               </div>
 
               {events.length >= EVENT_LIMIT && (
