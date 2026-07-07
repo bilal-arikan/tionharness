@@ -2,6 +2,42 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
 
+## API-native Task Budgets + Tool Search (beta) ✅ (2026-07-07)
+
+**İstek:** Anthropic'in güncel API özelliklerinden Task Budgets ve native (sunucu-tarafı)
+Tool Search'ün TionSwarm'a eklenmesi (optimizasyon araştırması madde 1-2).
+
+**Task Budgets (`task-budgets-2026-03-13` beta):**
+- `providers.Request.TaskBudgetTokens` + `anthropic.go applyTaskBudget`: adaptive-sınıf
+  modellerde (Opus 4.7/4.8, Sonnet 5, Fable 5 — `SupportsTaskBudget`) isteğe
+  `output_config.task_budget {type:"tokens", total:N}` + beta başlığı eklenir; API
+  minimumu 20K'nın altı otomatik yükseltilir. Model tüm ajan döngüsü için geri sayım
+  görür ve kendini ona göre ayarlar — sert iterasyon caplerinin yumuşak, model-farkındalı
+  tamamlayıcısı.
+- Ayar: `AutonomousTaskBudgetTokens` (0 = kapalı, varsayılan) → tunables →
+  `completeTracedInner` yalnız OTONOM turlarda `req.TaskBudgetTokens` doldurur
+  (etkileşimli sohbet bütçesiz kalır). UI: Ayarlar → Bağlam → "Otonom görev bütçesi".
+
+**Native Tool Search (`tool_search_tool_regex_20251119`):**
+- `ToolDef.DeferLoading` + `tools.Registry.DeferredDefs`: TAM katalog gönderilir —
+  eager araçlar normal, lazy/hidden/MCP araçları `defer_loading:true` ile; aktive
+  edilenler sıcak kalır (deferred değil). Herhangi bir deferred def varsa Anthropic
+  istemcisi arama sunucu-aracını listeye başa ekler (breakpoint asla sunucu araca
+  binmez). Keşfedilen şemalar sunucuda EKLENEREK yüklenir → cache öneki bozulmaz;
+  araç bloğu iterasyonlar arası bayt-stabil.
+- **Raw passthrough:** `Response.RawContent` / `Message.RawContent` — native-search
+  modunda asistan turları sunucu bloklarını (tool_search_tool_result / server_tool_use)
+  bire bir geri yansıtır (`anthropicMessage.Raw` + özel MarshalJSON). Raw mesajlar
+  coalesce edilmez, breakpoint/dinamik binmez. `pause_turn` stop-reason'ı döngüde
+  otomatik devam ettirilir (asistan içerik verbatim eklenir, ek user mesajı yok).
+- Kapı: `AnthropicNativeToolSearch` ayarı (varsayılan kapalı) + `provider.Name() ==
+  "anthropic"` (minimax-anthropic/custom uçlar sunucu araç tipini reddeder). Mevcut
+  activate_tools/tool_search builtinleri yanında çalışmaya devam eder.
+
+Testler: `anthropic_toolsearch_test.go` (task budget resolver, defer serileştirme,
+raw marshal/passthrough), `deferred_defs_test.go`. ✅ build/vet temiz; 725 test yeşil;
+frontend `tsc` temiz.
+
 ## Token/prompt optimizasyon turu: adaptive thinking + cache varsayılanı + headless split ✅ (2026-07-07)
 
 **İstek:** Kapsamlı optimizasyon denetiminin 1,2,3,4,6,7,9 numaralı maddelerinin uygulanması.

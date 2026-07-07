@@ -144,6 +144,23 @@ type Tunables struct {
 	// (enableCodeMode, default off); TIONSWARM_CODE_MODE=1 seeds the setting at
 	// boot. See codemode_tunable.go.
 	codeMode bool
+
+	// autonomousTaskBudget (beta) — when > 0, autonomous turns announce this
+	// token budget to the model via the API-native task-budget directive
+	// (output_config.task_budget): the model sees a running countdown for the
+	// whole agentic loop and paces itself, wrapping up gracefully instead of
+	// being cut off by the iteration cap. A soft, model-aware complement to the
+	// hard guards (maxToolIters/auto-continue caps); only adaptive-class
+	// anthropic models honour it. 0 = off (default).
+	autonomousTaskBudget int
+
+	// nativeToolSearch (beta) — when true, native anthropic tool turns ship the
+	// FULL tool catalog with lazy tools marked defer_loading plus the server-side
+	// tool-search tool: the model discovers tools by regex without an
+	// activate_tools round-trip, discovered schemas are APPENDED (cache-safe),
+	// and the shipped tools block is byte-stable across loop iterations.
+	// TionSwarm's own activation builtins keep working alongside. Off by default.
+	nativeToolSearch bool
 }
 
 // DefaultDebugJournalCap mirrors db.DefaultDebugJournalCap as the resolved
@@ -771,6 +788,41 @@ func (t *Tunables) AutoTagSessions() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.autoTagSessions
+}
+
+// SetAutonomousTaskBudget sets the token budget announced to autonomous turns
+// via the API-native task-budget directive. 0 disables; positive values below
+// the API minimum (20K) are raised by the provider.
+func (t *Tunables) SetAutonomousTaskBudget(tokens int) {
+	t.mu.Lock()
+	t.autonomousTaskBudget = tokens
+	t.mu.Unlock()
+}
+
+// AutonomousTaskBudget returns the configured autonomous task budget (0 = off).
+func (t *Tunables) AutonomousTaskBudget() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.autonomousTaskBudget < 0 {
+		return 0
+	}
+	return t.autonomousTaskBudget
+}
+
+// SetNativeToolSearch toggles native (server-side) tool search on the anthropic
+// tool loop: full catalog shipped with lazy tools deferred + the search server
+// tool. Off by default (beta API surface).
+func (t *Tunables) SetNativeToolSearch(enabled bool) {
+	t.mu.Lock()
+	t.nativeToolSearch = enabled
+	t.mu.Unlock()
+}
+
+// NativeToolSearch reports whether native tool search is enabled.
+func (t *Tunables) NativeToolSearch() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.nativeToolSearch
 }
 
 // SetMaxToolIters overrides the native agentic tool-loop iteration cap.

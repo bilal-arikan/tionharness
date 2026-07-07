@@ -260,6 +260,8 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 
 	applyBool(&next.ExtendedPromptCache, p.ExtendedPromptCache)
 	applyBool(&next.AnthropicContextEditing, p.AnthropicContextEditing)
+	applyBool(&next.AnthropicNativeToolSearch, p.AnthropicNativeToolSearch)
+	applyInt(&next.AutonomousTaskBudgetTokens, p.AutonomousTaskBudgetTokens)
 	applyBool(&next.DesktopNotifications, p.DesktopNotifications)
 	applyBool(&next.KeepAwake, p.KeepAwake)
 

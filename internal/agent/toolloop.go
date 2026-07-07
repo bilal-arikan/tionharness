@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
@@ -139,6 +140,14 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// Carry the agent's permission mode so provider-driven loops (claude CLI) can
 	// gate their tool use. Empty maps to "auto" downstream.
 	req.PermissionMode = effectivePermissionMode(agent.PermissionMode, autonomous)
+
+	// Announce the configured task budget to autonomous turns (API-native
+	// output_config.task_budget): the model sees a running countdown for the
+	// whole loop and paces itself. Providers/models without support ignore it;
+	// interactive chat turns stay un-budgeted (a human is watching).
+	if autonomous {
+		req.TaskBudgetTokens = r.tun.AutonomousTaskBudget()
+	}
 
 	// Resolve this turn's working directory: the session's WorkingDir override
 	// (else the workspace default). Autonomous turns may additionally get an
@@ -293,7 +302,30 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		return resp, nil, err
 	}
 	toolFilter := r.toolFilter(ctx, agent)
-	req.Tools = reg.ActiveDefs(toolFilter, active.Snapshot())
+	// Native (server-side) tool search — first-party anthropic only: the full
+	// catalog ships with lazy tools marked defer_loading + the search server
+	// tool, so discovery needs no activate_tools round-trip and the tools block
+	// stays byte-stable across iterations. Anthropic-protocol lookalikes
+	// (minimax-anthropic, custom endpoints) would reject the server tool type,
+	// hence the exact-name gate. Everything else keeps the activation flow.
+	nativeSearch := r.tun.NativeToolSearch() && provider.Name() == "anthropic"
+	shipDefs := func() []providers.ToolDef {
+		if nativeSearch {
+			return reg.DeferredDefs(toolFilter, active.Snapshot())
+		}
+		return reg.ActiveDefs(toolFilter, active.Snapshot())
+	}
+	req.Tools = shipDefs()
+	// rawEcho gates the verbatim assistant-content echo on native-search mode:
+	// only there do responses carry server blocks (tool-search results) that MUST
+	// ride back exactly; everywhere else the portable Text+ToolCalls echo stays,
+	// so inherited-context subagents on other providers see no behaviour change.
+	rawEcho := func(raw json.RawMessage) json.RawMessage {
+		if nativeSearch {
+			return raw
+		}
+		return nil
+	}
 
 	// Wire the generic subagent runner for this turn: the run_subagent tool reads
 	// it (and the shared loop guards) from the context. &req lets an inherited-
@@ -346,10 +378,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			emit(st)
 		}
 		// Recompute the shipped tool schemas for this step: eager tools plus any
-		// lazy tools activated so far. Cheap; reflects activate/deactivate calls
-		// from the previous iteration.
+		// lazy tools activated so far (native-search mode: full deferred catalog,
+		// byte-stable apart from activations). Cheap; reflects activate/deactivate
+		// calls from the previous iteration.
 		active.SetIter(i)
-		req.Tools = reg.ActiveDefs(toolFilter, active.Snapshot())
+		req.Tools = shipDefs()
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
 			// A1: a context-overflow error is recoverable once per turn by
@@ -378,6 +411,22 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		}
 		last = resp
 		turnUsage = sumUsage(turnUsage, resp.Usage)
+		// pause_turn: the SERVER-side tool loop (native tool search) hit its
+		// internal limit mid-turn. Echo the assistant content verbatim and
+		// immediately re-request — the server detects the trailing server-tool
+		// block and resumes where it left off (no extra user message). Bounded by
+		// the surrounding iteration cap.
+		if resp.StopReason == providers.StopPauseTurn && len(resp.ToolCalls) == 0 {
+			req.Messages = append(req.Messages, providers.Message{
+				Role:       providers.RoleAssistant,
+				Text:       resp.Text,
+				RawContent: rawEcho(resp.RawContent),
+			})
+			rec := TurnStep{Kind: StepRecovery, Reason: "pause_turn", Text: "Server-side tool run paused mid-turn; resuming automatically."}
+			steps = append(steps, rec)
+			emit(rec)
+			continue
+		}
 		if resp.StopReason != providers.StopToolUse || len(resp.ToolCalls) == 0 {
 			// A1: resume an answer cut off by the output-token cap (bounded by
 			// the guard) so the full reply is produced across capped calls.
@@ -417,10 +466,14 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		}
 
 		// Record the assistant's tool-call turn, then execute and answer each.
+		// RawContent carries the response's exact content array so server-side
+		// blocks (native tool-search results) survive the echo; providers without
+		// raw support render Text+ToolCalls instead.
 		req.Messages = append(req.Messages, providers.Message{
-			Role:      providers.RoleAssistant,
-			Text:      resp.Text,
-			ToolCalls: resp.ToolCalls,
+			Role:       providers.RoleAssistant,
+			Text:       resp.Text,
+			ToolCalls:  resp.ToolCalls,
+			RawContent: rawEcho(resp.RawContent),
 		})
 		// Parallel fan-out: when this batch holds multiple run_subagent calls, start
 		// them concurrently up front; the loop below awaits each future in place

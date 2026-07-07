@@ -138,6 +138,8 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       openrouterBaseUrl: draft.openrouterBaseUrl,
       extendedPromptCache: draft.extendedPromptCache,
       anthropicContextEditing: draft.anthropicContextEditing,
+      anthropicNativeToolSearch: draft.anthropicNativeToolSearch,
+      autonomousTaskBudgetTokens: draft.autonomousTaskBudgetTokens,
       desktopNotifications: draft.desktopNotifications, keepAwake: draft.keepAwake,
       userName: draft.userName, userTimezone: draft.userTimezone, userCity: draft.userCity,
       userCountry: draft.userCountry, userNotes: draft.userNotes,

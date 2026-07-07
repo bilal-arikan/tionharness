@@ -19,6 +19,11 @@ const (
 	StopEndTurn = "end_turn" // model finished a normal textual reply
 	StopToolUse = "tool_use" // model wants one or more tools executed
 	StopMaxTok  = "max_tokens"
+	// StopPauseTurn: a server-side tool loop (e.g. native tool search) hit its
+	// internal iteration limit mid-turn. The caller resumes by re-sending the
+	// conversation WITH the assistant's content appended verbatim (no extra user
+	// message) — the server detects the trailing server-tool block and continues.
+	StopPauseTurn = "pause_turn"
 )
 
 // ToolDef describes a tool offered to the model. InputSchema is a JSON Schema
@@ -32,6 +37,13 @@ type ToolDef struct {
 	// pulls the real schema on demand via activate_tools (progressive disclosure).
 	// Not serialised to providers — it only informs catalog/request assembly.
 	Lazy bool `json:"-"`
+	// DeferLoading marks a tool for NATIVE (server-side) tool search: the full
+	// def is included in the request but the server withholds it from the model's
+	// context until discovered via the tool-search server tool — discovered
+	// schemas are APPENDED, so the prompt-cache prefix survives. Providers
+	// without native tool search ignore it (the def ships normally). The
+	// Anthropic client auto-adds the search server tool when any def carries it.
+	DeferLoading bool `json:"-"`
 	// Examples are concrete sample tool calls (each a JSON object matching
 	// InputSchema) that demonstrate usage conventions a schema alone cannot express
 	// — date formats, ID patterns, which optional fields go together. They are
@@ -64,6 +76,14 @@ type Message struct {
 	Text        string
 	ToolCalls   []ToolCall
 	ToolResults []ToolResult
+	// RawContent, when set, is the provider-native content-block array for this
+	// turn, echoed back VERBATIM by providers that understand it (anthropic).
+	// The native tool loop sets it on assistant turns from Response.RawContent so
+	// server-side blocks the abstraction cannot model (tool search results,
+	// server tool use) survive loop iterations exactly as the API requires.
+	// Text/ToolCalls stay populated alongside as the portable fallback — every
+	// other provider ignores RawContent and renders those instead.
+	RawContent json.RawMessage
 }
 
 // Request is a completion request. Tools, when non-empty, enables tool use.
@@ -94,6 +114,14 @@ type Request struct {
 	// ThinkingBudget, when > 0, requests extended reasoning with that many
 	// thinking tokens (providers that support it, e.g. anthropic). 0 = off.
 	ThinkingBudget int
+	// TaskBudgetTokens, when > 0, tells the model how many tokens the WHOLE
+	// agentic loop has (thinking + tool calls + output): the server injects a
+	// running countdown the model sees and paces itself against — a soft,
+	// model-aware complement to the caller's hard iteration caps. Only providers/
+	// models with task-budget support send it (anthropic, adaptive class; see
+	// SupportsTaskBudget); everyone else ignores it. Values below the API minimum
+	// (20K) are raised to it.
+	TaskBudgetTokens int
 	// PermissionMode controls tool-use gating for providers that run their own
 	// loop. The claude CLI maps it to its --permission-mode / --dangerously-skip-
 	// permissions flags. "" | "auto" | "ask" | "read-only" (empty = auto).
@@ -176,6 +204,11 @@ type Response struct {
 	// num_turns), because the CLI reports Usage CUMULATIVELY across those steps — so
 	// Usage divided by ProviderCalls recovers the per-call (single-pass) token cost.
 	ProviderCalls int
+	// RawContent is the provider-native content-block array of this response,
+	// verbatim (anthropic only; empty elsewhere). The native tool loop echoes it
+	// back on the assistant turn (Message.RawContent) so server-side blocks —
+	// tool-search results, server tool use — survive loop iterations.
+	RawContent json.RawMessage
 }
 
 // Provider is implemented by every LLM backend.

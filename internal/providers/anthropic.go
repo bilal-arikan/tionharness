@@ -166,7 +166,41 @@ type thinkingParam struct {
 // outputConfig carries response-level controls; effort steers thinking depth on
 // adaptive-class models (the replacement for budget_tokens).
 type outputConfig struct {
-	Effort string `json:"effort,omitempty"` // "low" | "medium" | "high"
+	Effort     string      `json:"effort,omitempty"` // "low" | "medium" | "high"
+	TaskBudget *taskBudget `json:"task_budget,omitempty"`
+}
+
+// taskBudget is the (beta) agentic-loop token budget: the server shows the model
+// a running countdown so it paces thinking/tool use/output against it. A soft,
+// model-aware limit — max_tokens stays the enforced per-response ceiling.
+// Requires the task-budgets beta header; only adaptive-class models accept it.
+type taskBudget struct {
+	Type  string `json:"type"` // "tokens"
+	Total int    `json:"total"`
+}
+
+// minTaskBudgetTokens is the API's minimum accepted task budget; smaller
+// configured values are raised to it rather than rejected.
+const minTaskBudgetTokens = 20000
+
+// betaTaskBudgets is the per-request beta flag enabling output_config.task_budget.
+const betaTaskBudgets = "task-budgets-2026-03-13"
+
+// applyTaskBudget folds the request's task budget into the output config when
+// the model supports it, returning the (possibly newly allocated) config and
+// whether the task-budgets beta header must be added to this request.
+func applyTaskBudget(model string, budget int, cfg *outputConfig) (*outputConfig, bool) {
+	if budget <= 0 || !SupportsTaskBudget(model) {
+		return cfg, false
+	}
+	if budget < minTaskBudgetTokens {
+		budget = minTaskBudgetTokens
+	}
+	if cfg == nil {
+		cfg = &outputConfig{}
+	}
+	cfg.TaskBudget = &taskBudget{Type: "tokens", Total: budget}
+	return cfg, true
 }
 
 // thinkingFor returns the thinking parameter, the optional output_config, and
@@ -218,10 +252,30 @@ type cacheControl struct {
 }
 
 // anthropicMessage carries an array of content blocks (text / tool_use /
-// tool_result), which is the form required once tools are involved.
+// tool_result), which is the form required once tools are involved. Raw, when
+// set, is a verbatim provider-native content array (Message.RawContent) that
+// replaces the structured blocks at marshal time — the echo path for server
+// blocks (tool search results / server tool use) the block union cannot model.
 type anthropicMessage struct {
-	Role    string         `json:"role"`
-	Content []contentBlock `json:"content"`
+	Role    string          `json:"role"`
+	Content []contentBlock  `json:"content"`
+	Raw     json.RawMessage `json:"-"`
+}
+
+// MarshalJSON emits the verbatim Raw content when present, else the structured
+// blocks. Keeping this at the marshal seam means every builder path (breakpoints,
+// dynamic suffix) can keep operating on Content without knowing about Raw.
+func (m anthropicMessage) MarshalJSON() ([]byte, error) {
+	if len(m.Raw) > 0 {
+		return json.Marshal(struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		}{m.Role, m.Raw})
+	}
+	return json.Marshal(struct {
+		Role    string         `json:"role"`
+		Content []contentBlock `json:"content"`
+	}{m.Role, m.Content})
 }
 
 // contentBlock is a tagged union over the block types we use.
@@ -243,9 +297,16 @@ type contentBlock struct {
 }
 
 type anthropicTool struct {
+	// Type identifies an Anthropic-defined server tool (e.g. the tool-search
+	// tool); empty for ordinary user-defined tools.
+	Type        string          `json:"type,omitempty"`
 	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	InputSchema json.RawMessage `json:"input_schema"`
+	Description string          `json:"description,omitempty"`
+	InputSchema json.RawMessage `json:"input_schema,omitempty"`
+	// DeferLoading (native tool search): the def is indexed server-side but kept
+	// out of the model's context until discovered via the search tool. Discovered
+	// schemas are APPENDED to the prompt, preserving the cached prefix.
+	DeferLoading bool `json:"defer_loading,omitempty"`
 	// CacheControl, when set on the LAST tool, marks a cache breakpoint after the
 	// whole tools block. Anthropic caches by prefix in tools → system → messages
 	// order, so this caches the tool schemas INDEPENDENTLY of the (possibly
@@ -294,6 +355,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		maxTokens = defaultMaxTokens
 	}
 	thinking, outCfg, maxTokens := thinkingFor(model, req.ThinkingBudget, maxTokens)
+	outCfg, taskBudgetBeta := applyTaskBudget(model, req.TaskBudgetTokens, outCfg)
 
 	sysField, msgs := a.buildSystemAndMessages(req)
 	body := anthropicReq{
@@ -311,7 +373,11 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		"x-api-key":         a.apiKey,
 		"anthropic-version": anthropicVersion,
 	}
-	if beta := a.betaHeader(); beta != "" {
+	beta := a.betaHeader()
+	if taskBudgetBeta {
+		beta = joinNonEmptyComma(beta, betaTaskBudgets)
+	}
+	if beta != "" {
 		headers["anthropic-beta"] = beta
 	}
 
@@ -342,12 +408,25 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 			}
 		case "tool_use":
 			calls = append(calls, ToolCall{ID: c.ID, Name: c.Name, Input: c.Input})
+		case "server_tool_use":
+			// Server-executed tool (native tool search): nothing to run client-side,
+			// but surface it in the trace so the UI shows the discovery step.
+			trace = append(trace, TraceStep{Kind: "tool", Tool: c.Name, Input: c.Input, Output: "(executed server-side)"})
 		}
 	}
+
+	// Verbatim content array for the tool loop's assistant echo: server blocks
+	// (tool search results / server tool use) the typed union above cannot model
+	// must ride back exactly as received on subsequent loop iterations.
+	var rawEnv struct {
+		Content json.RawMessage `json:"content"`
+	}
+	_ = json.Unmarshal(raw, &rawEnv)
 
 	return &Response{
 		Text:       text,
 		ToolCalls:  calls,
+		RawContent: rawEnv.Content,
 		StopReason: parsed.StopReason,
 		Model:      parsed.Model,
 		Trace:      trace,
@@ -487,6 +566,18 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 	return out, nil
 }
 
+// joinNonEmptyComma joins the non-empty parts with a comma — for the
+// anthropic-beta header, which takes a comma-separated flag list.
+func joinNonEmptyComma(parts ...string) string {
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return strings.Join(out, ",")
+}
+
 // betaHeader builds the comma-separated anthropic-beta header from the enabled
 // beta flags ("" when none).
 func (a *Anthropic) betaHeader() string {
@@ -573,6 +664,13 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic string) []a
 		if m.Role == RoleSystem {
 			continue
 		}
+		// Verbatim echo: an assistant turn captured from a prior response in this
+		// tool loop carries the exact content array (incl. server-tool blocks the
+		// union below cannot model) and must go back byte-identical.
+		if len(m.RawContent) > 0 {
+			out = append(out, anthropicMessage{Role: m.Role, Raw: m.RawContent})
+			continue
+		}
 		var blocks []contentBlock
 		if m.Text != "" {
 			blocks = append(blocks, contentBlock{Type: "text", Text: m.Text})
@@ -601,10 +699,12 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic string) []a
 		// Rolling history breakpoint: mark the last block of the last (persisted)
 		// message so tools + system + the whole conversation prefix is cached. On
 		// turn N this prefix is a cache write; on N+1 the same prefix is a cache
-		// read and the breakpoint slides forward to the newest turn.
+		// read and the breakpoint slides forward to the newest turn. A verbatim
+		// (Raw) last message cannot carry a breakpoint — that only occurs on a
+		// pause_turn resume, where the prior turn's breakpoint still serves reads.
 		if len(out) > 0 {
 			last := &out[len(out)-1]
-			if n := len(last.Content); n > 0 {
+			if n := len(last.Content); n > 0 && len(last.Raw) == 0 {
 				last.Content[n-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: cacheTTL}
 			}
 		}
@@ -618,8 +718,9 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic string) []a
 		if d := strings.TrimSpace(dynamic); d != "" {
 			if len(out) == 0 {
 				out = append(out, anthropicMessage{Role: RoleUser, Content: []contentBlock{{Type: "text", Text: d}}})
-			} else {
-				last := &out[len(out)-1]
+			} else if last := &out[len(out)-1]; len(last.Raw) == 0 {
+				// A verbatim (Raw) last message must stay byte-identical — on that
+				// rare pause_turn resume the dynamic is simply skipped for one call.
 				last.Content = append(last.Content, contentBlock{Type: "text", Text: d})
 			}
 		}
@@ -638,16 +739,35 @@ func toAnthropicTools(tools []ToolDef, extendedCache bool) []anthropicTool {
 	if len(tools) == 0 {
 		return nil
 	}
-	out := make([]anthropicTool, 0, len(tools))
+	out := make([]anthropicTool, 0, len(tools)+1)
+	deferred := false
 	for _, t := range tools {
 		schema := t.InputSchema
 		if len(schema) == 0 {
 			schema = json.RawMessage(`{"type":"object"}`)
 		}
-		out = append(out, anthropicTool{Name: t.Name, Description: t.Description, InputSchema: schema})
+		deferred = deferred || t.DeferLoading
+		out = append(out, anthropicTool{Name: t.Name, Description: t.Description, InputSchema: schema, DeferLoading: t.DeferLoading})
+	}
+	// Native tool search: any deferred def requires the search server tool in the
+	// same request (deferred tools are unreachable without it, and an all-deferred
+	// list is a 400 — the eager set is always non-deferred, so that cannot occur).
+	// Prepended so the tools block starts with a stable prefix; the rolling cache
+	// breakpoint stays on the last USER tool below, never on a server-tool entry.
+	if deferred {
+		out = append([]anthropicTool{{Type: nativeToolSearchType, Name: nativeToolSearchName}}, out...)
 	}
 	if extendedCache {
 		out[len(out)-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: cacheTTL}
 	}
 	return out
 }
+
+// Native (server-side) tool search: the model discovers deferred tool defs by
+// regex search; discovered schemas are appended without invalidating the cached
+// prefix. Distinct from TionSwarm's own builtin `tool_search` (the client-side
+// catalog search), which stays available alongside.
+const (
+	nativeToolSearchType = "tool_search_tool_regex_20251119"
+	nativeToolSearchName = "tool_search_tool_regex"
+)

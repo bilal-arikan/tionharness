@@ -34,6 +34,8 @@ export interface AppSettings {
 
   extendedPromptCache: boolean
   anthropicContextEditing: boolean
+  anthropicNativeToolSearch: boolean
+  autonomousTaskBudgetTokens: number
 
   desktopNotifications: boolean
   keepAwake: boolean

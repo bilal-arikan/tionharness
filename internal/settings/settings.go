@@ -108,6 +108,18 @@ type Settings struct {
 	// clear_tool_uses on the cached prefix — the microcompact analogue, P3). Off by
 	// default; complements the client-side compaction, does not replace it.
 	AnthropicContextEditing bool `json:"anthropicContextEditing"`
+	// AnthropicNativeToolSearch (beta) ships the FULL tool catalog on native
+	// anthropic tool turns with lazy tools marked defer_loading plus the
+	// server-side tool-search tool: discovery without an activate_tools
+	// round-trip, cache-safe schema appends, byte-stable tools block. Off by
+	// default. First-party anthropic provider only.
+	AnthropicNativeToolSearch bool `json:"anthropicNativeToolSearch"`
+	// AutonomousTaskBudgetTokens (beta), when > 0, announces a token budget to
+	// every AUTONOMOUS turn via the API-native task-budget directive
+	// (output_config.task_budget): the model sees a running countdown for the
+	// whole agentic loop and paces itself. Values below the API minimum (20000)
+	// are raised to it. 0 = off. Adaptive-class anthropic models only.
+	AutonomousTaskBudgetTokens int `json:"autonomousTaskBudgetTokens"`
 
 	// Desktop / display behaviour (applied client-side).
 	DesktopNotifications bool `json:"desktopNotifications"` // browser notifications
@@ -422,8 +434,10 @@ type DTO struct {
 
 	CustomProviders []CustomProviderDTO `json:"customProviders"`
 
-	ExtendedPromptCache     bool `json:"extendedPromptCache"`
-	AnthropicContextEditing bool `json:"anthropicContextEditing"`
+	ExtendedPromptCache        bool `json:"extendedPromptCache"`
+	AnthropicContextEditing    bool `json:"anthropicContextEditing"`
+	AnthropicNativeToolSearch  bool `json:"anthropicNativeToolSearch"`
+	AutonomousTaskBudgetTokens int  `json:"autonomousTaskBudgetTokens"`
 
 	DesktopNotifications bool `json:"desktopNotifications"`
 	KeepAwake            bool `json:"keepAwake"`
@@ -527,8 +541,10 @@ func (s Settings) ToDTO() DTO {
 		OpenRouterBaseURL:     s.OpenRouterBaseURL,
 		CustomProviders:       customProvidersToDTO(s.CustomProviders),
 
-		ExtendedPromptCache:     s.ExtendedPromptCache,
-		AnthropicContextEditing: s.AnthropicContextEditing,
+		ExtendedPromptCache:        s.ExtendedPromptCache,
+		AnthropicContextEditing:    s.AnthropicContextEditing,
+		AnthropicNativeToolSearch:  s.AnthropicNativeToolSearch,
+		AutonomousTaskBudgetTokens: s.AutonomousTaskBudgetTokens,
 
 		DesktopNotifications: s.DesktopNotifications,
 		KeepAwake:            s.KeepAwake,
@@ -625,8 +641,10 @@ type Patch struct {
 	OpenRouterKey         *string `json:"openrouterKey"` // write-only
 	OpenRouterBaseURL     *string `json:"openrouterBaseUrl"`
 
-	ExtendedPromptCache     *bool `json:"extendedPromptCache"`
-	AnthropicContextEditing *bool `json:"anthropicContextEditing"`
+	ExtendedPromptCache        *bool `json:"extendedPromptCache"`
+	AnthropicContextEditing    *bool `json:"anthropicContextEditing"`
+	AnthropicNativeToolSearch  *bool `json:"anthropicNativeToolSearch"`
+	AutonomousTaskBudgetTokens *int  `json:"autonomousTaskBudgetTokens"`
 
 	DesktopNotifications *bool `json:"desktopNotifications"`
 	KeepAwake            *bool `json:"keepAwake"`

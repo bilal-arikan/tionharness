@@ -38,6 +38,13 @@ func AlwaysOnThinking(model string) bool {
 	return strings.Contains(m, "fable") || strings.Contains(m, "mythos")
 }
 
+// SupportsTaskBudget reports whether the model accepts the (beta) task-budget
+// directive (output_config.task_budget + the task-budgets beta header): the
+// model sees a running token countdown for the whole agentic loop and paces
+// itself. Supported on exactly the adaptive-thinking class (Fable/Mythos 5,
+// Opus 4.7/4.8, Sonnet 5).
+func SupportsTaskBudget(model string) bool { return UsesAdaptiveThinking(model) }
+
 // EffortForThinkingBudget maps a legacy thinking token budget (as produced by
 // the agent's ThinkingLevel) to the output_config.effort value used by
 // adaptive-class models. 0 means "no override" (server default).

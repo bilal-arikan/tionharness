@@ -19,6 +19,10 @@ export function ContextPanel({ draft, set }: PanelProps) {
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">Yalnız anthropic sağlayıcıda etkili; claude-cli'da etkisizdir. (1M bağlam artık GA — ayar gerekmez.)</p>
       <Toggle label="Uzatılmış prompt cache (1 saat)" hint="Sistem promptunu 1 saatlik cache_control ile önbelleğe alır — tekrar eden büyük persona/bağlam ucuzlar." checked={draft.extendedPromptCache} onChange={(v) => set('extendedPromptCache', v)} />
       <Toggle label="API-native bağlam düzenleme (clear_tool_uses)" hint="Sunucu, cache'li önekteki eski tool sonuçlarını yerinde budar (microcompact muadili) — önek soğumadan küçülür. İstemci-tarafı compaction'ı tamamlar, değiştirmez." checked={draft.anthropicContextEditing} onChange={(v) => set('anthropicContextEditing', v)} />
+      <Toggle label="API-native araç arama (tool search)" hint="Tüm araç kataloğu defer_loading ile gönderilir + sunucu-tarafı regex arama aracı eklenir: model, activate_tools tur-gidiş-dönüşü olmadan araç keşfeder; bulunan şemalar cache'i BOZMADAN eklenir. Yalnız birinci-parti anthropic sağlayıcı; mevcut activate_tools/tool_search akışı yanında çalışmaya devam eder." checked={draft.anthropicNativeToolSearch} onChange={(v) => set('anthropicNativeToolSearch', v)} />
+      <Field label="Otonom görev bütçesi (token)" hint="0 = kapalı. Pozitifken her OTONOM tura API-native task_budget bildirilir: model tüm araç döngüsü için geri sayımı görür ve kendini ona göre ayarlar (kesilmek yerine düzgün toparlar). API minimumu 20000'dir — altı otomatik yükseltilir. Yalnız adaptive-sınıf anthropic modeller (Opus 4.7/4.8, Sonnet 5, Fable 5).">
+        <input type="number" min={0} step={1000} value={draft.autonomousTaskBudgetTokens} onChange={(e) => set('autonomousTaskBudgetTokens', Number(e.target.value))} className={inputCls} />
+      </Field>
 
       <SubHead icon={RotateCcw}>Context reset (handoff)</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">

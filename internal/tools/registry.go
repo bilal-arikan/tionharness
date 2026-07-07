@@ -335,6 +335,42 @@ func (r *Registry) ActiveDefs(allow func(name string) bool, active map[string]bo
 	return out
 }
 
+// DeferredDefs returns the FULL tool catalog for providers with NATIVE
+// (server-side) tool search: eager tools ship normally; every lazy tool —
+// summary, name-only and hidden tiers alike, plus all MCP tools — is included
+// with DeferLoading set, so the server indexes it for regex discovery without
+// spending context tokens until the model actually finds it. Tools the model
+// has explicitly ACTIVATED this turn (activate_tools) ship non-deferred so they
+// stay hot. allow filters by name as in Defs (nil = allow all).
+//
+// Unlike ActiveDefs, the returned set is IDENTICAL every iteration (activation
+// aside), so the request's tools block stays byte-stable across the loop — the
+// cache-friendliest shape. TionSwarm's own activate_tools/tool_search builtins
+// remain in the set and keep working; native search is an additional, round-trip
+// -free discovery path on top.
+func (r *Registry) DeferredDefs(allow func(name string) bool, active map[string]bool) []providers.ToolDef {
+	var out []providers.ToolDef
+	add := func(d providers.ToolDef, lazy bool) {
+		if allow != nil && !allow(d.Name) {
+			return
+		}
+		d.DeferLoading = lazy && !active[d.Name]
+		out = append(out, d)
+	}
+	for name, t := range r.builtins {
+		add(foldExamples(t.Def()), r.lazy[name])
+	}
+	for _, e := range r.mcpEntries {
+		add(providers.ToolDef{
+			Name:        e.NamespacedName,
+			Description: e.Tool.Description,
+			InputSchema: mcp.NormalizeSchema(e.Tool.InputSchema),
+		}, r.lazy[e.NamespacedName])
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
 // lazyCatalogDescMaxChars bounds a single tool's description in the rendered
 // "Available Tools (load on demand)" block. The lazy block is a name+summary
 // teaser only — the FULL description ships later, in the activated tool's schema

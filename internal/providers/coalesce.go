@@ -19,10 +19,12 @@ package providers
 func coalescePlainSameRole(msgs []Message) []Message {
 	out := make([]Message, 0, len(msgs))
 	for _, m := range msgs {
-		plain := len(m.ToolCalls) == 0 && len(m.ToolResults) == 0
+		// A RawContent turn is never "plain": its blocks are echoed verbatim
+		// (server tool use, tool search results) and must not be merged away.
+		plain := len(m.ToolCalls) == 0 && len(m.ToolResults) == 0 && len(m.RawContent) == 0
 		if plain && len(out) > 0 {
 			last := &out[len(out)-1]
-			lastPlain := len(last.ToolCalls) == 0 && len(last.ToolResults) == 0
+			lastPlain := len(last.ToolCalls) == 0 && len(last.ToolResults) == 0 && len(last.RawContent) == 0
 			if lastPlain && last.Role == m.Role {
 				switch {
 				case m.Text == "":
