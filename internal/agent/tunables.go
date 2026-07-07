@@ -75,6 +75,14 @@ type Tunables struct {
 	// thresholds (opt-in circuit breaker).
 	toolGuardWarnings bool
 	toolGuardHardStop bool
+	// Guardrail thresholds (<=0 → Default* constant). Warn thresholds apply to
+	// the warning hints; block/halt fire only with the hard stop armed.
+	guardExactWarn      int
+	guardExactBlock     int
+	guardSameToolWarn   int
+	guardSameToolHalt   int
+	guardNoProgressWarn int
+	guardNoProgressBlck int
 
 	// stuckTurnThreshold (Faz D): consecutive bad turns before a session is
 	// tagged "stuck" and its autonomous turns are refused. 0 disables; <0 → default.
@@ -512,6 +520,27 @@ func (t *Tunables) ToolGuardHardStop() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.toolGuardHardStop
+}
+
+// SetToolGuardThresholds configures the six guardrail thresholds. Values <= 0
+// select the built-in defaults (2/5, 3/8, 2/5).
+func (t *Tunables) SetToolGuardThresholds(exactWarn, exactBlock, sameToolWarn, sameToolHalt, noProgressWarn, noProgressBlock int) {
+	t.mu.Lock()
+	t.guardExactWarn = exactWarn
+	t.guardExactBlock = exactBlock
+	t.guardSameToolWarn = sameToolWarn
+	t.guardSameToolHalt = sameToolHalt
+	t.guardNoProgressWarn = noProgressWarn
+	t.guardNoProgressBlck = noProgressBlock
+	t.mu.Unlock()
+}
+
+// ToolGuardThresholds returns the six guardrail thresholds as configured
+// (values <= 0 mean "use the default"; newToolGuard resolves them).
+func (t *Tunables) ToolGuardThresholds() (exactWarn, exactBlock, sameToolWarn, sameToolHalt, noProgressWarn, noProgressBlock int) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.guardExactWarn, t.guardExactBlock, t.guardSameToolWarn, t.guardSameToolHalt, t.guardNoProgressWarn, t.guardNoProgressBlck
 }
 
 // SetStuckTurnThreshold configures the consecutive bad-turn count that tags a

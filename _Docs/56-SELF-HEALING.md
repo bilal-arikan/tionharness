@@ -107,6 +107,20 @@ kaldırıldığı için hedef store dar-kapsamlı yeni bir sidecar):
 | `toolGuardHardStop` | false | blok/halt devre kesici |
 | `stuckTurnThreshold` | 3 (0..20) | stuck etiketi + otonom gate eşiği |
 | `lessonReflect` | true | hata→ders döngüsü (kötü tur başına 1 ucuz çağrı) |
+| `guardExactWarn` / `guardExactBlock` | 2 / 5 | birebir aynı başarısız çağrı: uyarı / blok eşiği |
+| `guardSameToolWarn` / `guardSameToolHalt` | 3 / 8 | aynı araç ardışık hata: uyarı / tur-durdurma eşiği |
+| `guardNoProgressWarn` / `guardNoProgressBlock` | 2 / 5 | idempotent aynı çağrı tekrarı: uyarı / blok eşiği |
+
+Eşiklerde 0 = yerleşik varsayılan (clamp 0..50); blok/halt yalnız devre kesici
+(`toolGuardHardStop`) açıkken etkilidir.
+
+## Lessons API + UI
+- `GET /api/lessons` (workspace-scoped, tümü, en yeni önce) ·
+  `DELETE /api/lessons/{id}` (stale ders budama). Yazma yolu YOK — dersleri
+  yalnız reflector üretir.
+- Ayarlar → Bağlam → Self-healing bölümünde `LessonsList` bileşeni: kayıtlı
+  dersler (araç rozeti, görülme sayısı, tarih) + satır-başı silme + yenile.
+  Silinen ders bir daha enjekte edilmez (aynı hata tekrar ederse yeniden doğar).
 
 Frontend: `ContextPanel.tsx` "Self-healing (döngü koruması & ders çıkarma)"
 bölümü (guardrail toggle'ları + stuck eşiği + lesson toggle) ve "Tur kurtarma"
@@ -123,8 +137,9 @@ toggle'lar daha önce kaydedilmiyordu — düzeltildi).
   `lessons_test.go` (kanıt toplama/signature/gate'ler/context bloğu).
 
 ## Kapsam dışı / sıradaki adımlar
-- Guardrail eşiklerinin settings'e açılması (şimdilik sabit default'lar).
-- Lessons için UI görünürlüğü (listeleme/silme ekranı) + `read_lessons`/
-  `delete_lesson` ajan araçları (store API hazır: `ListLessons`/`DeleteLesson`).
+- ~~Guardrail eşiklerinin settings'e açılması~~ ✅ (2026-07-07, 6 eşik ayarı).
+- ~~Lessons için UI görünürlüğü~~ ✅ (2026-07-07, API + LessonsList).
+- `read_lessons`/`delete_lesson` ajan araçları (store + REST hazır; ajan
+  şimdilik dersleri yalnız enjekte edilen bloktan görür).
 - Ders enjeksiyonunu ajan/tool bazında filtreleme (şimdilik workspace-geneli
   en yeni 5).

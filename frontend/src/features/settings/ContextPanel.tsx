@@ -2,6 +2,7 @@ import { Layers, LifeBuoy, Scissors, Sparkles, FlaskConical, RotateCcw, ListChec
 import { Field, Toggle, Slider, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
+import { LessonsList } from './LessonsList'
 
 export function ContextPanel({ draft, set }: PanelProps) {
   return (
@@ -157,10 +158,30 @@ export function ContextPanel({ draft, set }: PanelProps) {
       />
       <Toggle
         label="Devre kesici (hard stop)"
-        hint="Eşik üstü tekrar: birebir aynı başarısız çağrı 5. tekrarında çalıştırılmadan bloklanır; aynı araç 8 ardışık hatada turu kontrollü sonlandırır (guardrail_halt). Varsayılan kapalı."
+        hint="Eşik üstü tekrar: birebir aynı başarısız çağrı blok eşiğinde çalıştırılmadan bloklanır; aynı araç halt eşiğinde turu kontrollü sonlandırır (guardrail_halt). Varsayılan kapalı."
         checked={draft.toolGuardHardStop}
         onChange={(v) => set('toolGuardHardStop', v)}
       />
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Aynı çağrı: uyarı" hint="Birebir aynı (araç+argüman) başarısız çağrı bu sayıda uyarı alır (0 = varsayılan 2).">
+          <input type="number" min={0} max={50} value={draft.guardExactWarn} onChange={(e) => set('guardExactWarn', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Aynı çağrı: blok" hint="Devre kesici açıkken birebir aynı başarısız çağrı bu sayıda çalıştırılmadan bloklanır (0 = varsayılan 5).">
+          <input type="number" min={0} max={50} value={draft.guardExactBlock} onChange={(e) => set('guardExactBlock', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Aynı araç: uyarı" hint="Aynı araç (farklı argümanlarla da olsa) bu kadar ardışık hatada uyarı alır (0 = varsayılan 3).">
+          <input type="number" min={0} max={50} value={draft.guardSameToolWarn} onChange={(e) => set('guardSameToolWarn', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Aynı araç: tur durdur" hint="Devre kesici açıkken aynı araç bu kadar ardışık hatada turu kontrollü sonlandırır (0 = varsayılan 8).">
+          <input type="number" min={0} max={50} value={draft.guardSameToolHalt} onChange={(e) => set('guardSameToolHalt', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="İlerleme yok: uyarı" hint="Aynı salt-okunur çağrının başarılı tekrarları bu sayıyı aşınca uyarı alır (0 = varsayılan 2).">
+          <input type="number" min={0} max={50} value={draft.guardNoProgressWarn} onChange={(e) => set('guardNoProgressWarn', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="İlerleme yok: blok" hint="Devre kesici açıkken aynı salt-okunur çağrı bu sayıda tekrarda bloklanır (0 = varsayılan 5).">
+          <input type="number" min={0} max={50} value={draft.guardNoProgressBlock} onChange={(e) => set('guardNoProgressBlock', Number(e.target.value))} className={inputCls} />
+        </Field>
+      </div>
       <Field
         label="Stuck oturum eşiği"
         hint="Üst üste bu kadar tur kötü biten (tur hatası / guardrail halt) oturum 'stuck' etiketi alır ve OTONOM turları reddedilir; temiz bir tur sayacı sıfırlar, etiketi kaldırmak da sıfırlar. 0 = kapalı."
@@ -173,6 +194,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
         checked={draft.lessonReflect}
         onChange={(v) => set('lessonReflect', v)}
       />
+      <LessonsList />
 
 
       <SubHead icon={Scissors}>Araç çıktısı sıkıştırma — Sistem A (deterministik)</SubHead>

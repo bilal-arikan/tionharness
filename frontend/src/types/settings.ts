@@ -82,6 +82,12 @@ export interface AppSettings {
   maxProviderRetries: number // transient provider-fault retries per turn (0 = disabled, max 5)
   toolGuardWarnings: boolean // append recovery hints to failing tool results
   toolGuardHardStop: boolean // circuit breaker: block repeated identical failures / halt looping turns
+  guardExactWarn: number // identical failing call → warn (0 = default 2)
+  guardExactBlock: number // identical failing call → block, hard stop only (0 = default 5)
+  guardSameToolWarn: number // same-tool consecutive failures → warn (0 = default 3)
+  guardSameToolHalt: number // same-tool consecutive failures → halt turn, hard stop only (0 = default 8)
+  guardNoProgressWarn: number // identical successful idempotent repeats → warn (0 = default 2)
+  guardNoProgressBlock: number // identical successful idempotent repeats → block, hard stop only (0 = default 5)
   stuckTurnThreshold: number // consecutive bad turns before "stuck" tag + autonomous suspension (0 = off)
   lessonReflect: boolean     // distill failed turns into stored lessons injected into future turns
 

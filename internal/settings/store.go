@@ -324,6 +324,12 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.ToolGuardHardStop != nil {
 		next.ToolGuardHardStop = *p.ToolGuardHardStop
 	}
+	applyInt(&next.GuardExactWarn, p.GuardExactWarn)
+	applyInt(&next.GuardExactBlock, p.GuardExactBlock)
+	applyInt(&next.GuardSameToolWarn, p.GuardSameToolWarn)
+	applyInt(&next.GuardSameToolHalt, p.GuardSameToolHalt)
+	applyInt(&next.GuardNoProgressWarn, p.GuardNoProgressWarn)
+	applyInt(&next.GuardNoProgressBlck, p.GuardNoProgressBlck)
 	applyInt(&next.StuckTurnThreshold, p.StuckTurnThreshold)
 	if p.LessonReflect != nil {
 		next.LessonReflect = *p.LessonReflect
@@ -530,6 +536,22 @@ func normalize(v Settings) Settings {
 	if v.MaxProviderRetries > 5 {
 		v.MaxProviderRetries = 5
 	}
+	// Guardrail thresholds: 0 selects the built-in default; clamp negatives to 0
+	// and cap so a typo cannot effectively disable the circuit breaker.
+	clampGuard := func(v *int) {
+		if *v < 0 {
+			*v = 0
+		}
+		if *v > 50 {
+			*v = 50
+		}
+	}
+	clampGuard(&v.GuardExactWarn)
+	clampGuard(&v.GuardExactBlock)
+	clampGuard(&v.GuardSameToolWarn)
+	clampGuard(&v.GuardSameToolHalt)
+	clampGuard(&v.GuardNoProgressWarn)
+	clampGuard(&v.GuardNoProgressBlck)
 	// Stuck gate: 0 is valid (disables the gate); clamp the ceiling.
 	if v.StuckTurnThreshold < 0 {
 		v.StuckTurnThreshold = 0

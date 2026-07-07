@@ -24,9 +24,18 @@ const (
 )
 
 // toolGuardConfig is the per-turn guardrail policy, resolved from tunables.
+// Threshold fields <= 0 fall back to their Default* constant in newToolGuard,
+// so a zero-value config still behaves sanely (tests, unset settings).
 type toolGuardConfig struct {
 	warnings bool // append recovery guidance to failing results (default on)
 	hardStop bool // block/halt on the upper thresholds (opt-in circuit breaker)
+
+	exactWarn      int // identical failing call → warn
+	exactBlock     int // identical failing call → block (hard stop)
+	sameToolWarn   int // same tool consecutive failures → warn
+	sameToolHalt   int // same tool consecutive failures → halt turn (hard stop)
+	noProgressWarn int // identical successful idempotent repeats → warn
+	noProgressBlck int // identical successful idempotent repeats → block (hard stop)
 }
 
 // guardVerdict is what the pre-execution check tells the loop to do with a call.
@@ -50,6 +59,17 @@ type toolGuard struct {
 }
 
 func newToolGuard(cfg toolGuardConfig) *toolGuard {
+	def := func(v *int, d int) {
+		if *v <= 0 {
+			*v = d
+		}
+	}
+	def(&cfg.exactWarn, DefaultGuardExactWarnAfter)
+	def(&cfg.exactBlock, DefaultGuardExactBlockAfter)
+	def(&cfg.sameToolWarn, DefaultGuardSameToolWarnAfter)
+	def(&cfg.sameToolHalt, DefaultGuardSameToolHaltAfter)
+	def(&cfg.noProgressWarn, DefaultGuardNoProgressWarn)
+	def(&cfg.noProgressBlck, DefaultGuardNoProgressBlock)
 	return &toolGuard{
 		cfg:        cfg,
 		exactFail:  map[string]int{},
@@ -72,14 +92,14 @@ func (g *toolGuard) check(call providers.ToolCall) (verdict guardVerdict, reason
 	if !g.cfg.hardStop {
 		return guardAllow, ""
 	}
-	if g.sameFail[call.Name] >= DefaultGuardSameToolHaltAfter {
+	if g.sameFail[call.Name] >= g.cfg.sameToolHalt {
 		return guardHalt, fmt.Sprintf("%s failed %d times in a row this turn", call.Name, g.sameFail[call.Name])
 	}
 	key := callKey(call)
-	if g.exactFail[key] >= DefaultGuardExactBlockAfter {
+	if g.exactFail[key] >= g.cfg.exactBlock {
 		return guardBlock, fmt.Sprintf("this exact %s call already failed %d times this turn", call.Name, g.exactFail[key])
 	}
-	if tools.Classify(call.Name) == tools.RiskRead && g.noProgress[key] >= DefaultGuardNoProgressBlock {
+	if tools.Classify(call.Name) == tools.RiskRead && g.noProgress[key] >= g.cfg.noProgressBlck {
 		return guardBlock, fmt.Sprintf("this identical %s call already succeeded %d times this turn (no new information)", call.Name, g.noProgress[key])
 	}
 	return guardAllow, ""
@@ -98,10 +118,10 @@ func (g *toolGuard) observe(call providers.ToolCall, res providers.ToolResult) (
 		if !g.cfg.warnings {
 			return ""
 		}
-		if g.exactFail[key] >= DefaultGuardExactWarnAfter {
+		if g.exactFail[key] >= g.cfg.exactWarn {
 			return exactFailureHint(call.Name, g.exactFail[key])
 		}
-		if g.sameFail[call.Name] >= DefaultGuardSameToolWarnAfter {
+		if g.sameFail[call.Name] >= g.cfg.sameToolWarn {
 			return sameToolFailureHint(call.Name, g.sameFail[call.Name])
 		}
 		return ""
@@ -113,7 +133,7 @@ func (g *toolGuard) observe(call providers.ToolCall, res providers.ToolResult) (
 	// same data — re-reading is a loop, not progress.
 	if tools.Classify(call.Name) == tools.RiskRead {
 		g.noProgress[key]++
-		if g.cfg.warnings && g.noProgress[key] > DefaultGuardNoProgressWarn {
+		if g.cfg.warnings && g.noProgress[key] > g.cfg.noProgressWarn {
 			return noProgressHint(call.Name, g.noProgress[key])
 		}
 	}

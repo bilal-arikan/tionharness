@@ -2,6 +2,34 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
 
+## Self-healing: Lessons UI + guardrail eşikleri ayarlara açıldı ✅ (2026-07-07)
+
+- **Lessons API/UI:** `GET /api/lessons` + `DELETE /api/lessons/{id}`
+  (`internal/api/lessons.go`, workspace-scoped) → Ayarlar → Bağlam → Self-healing
+  bölümünde `LessonsList` bileşeni (araç rozeti, görülme sayısı, tarih, satır-başı
+  silme, yenile). Frontend: `api/lessons.ts` + `types/lesson.ts` barrel'lara eklendi.
+- **Guardrail eşikleri:** 6 eşik ayara açıldı (`guardExactWarn/Block`,
+  `guardSameToolWarn/Halt`, `guardNoProgressWarn/Block`; 0 = varsayılan 2/5, 3/8,
+  2/5; clamp 0..50). `toolGuardConfig` eşikleri taşır, `newToolGuard` <=0'ı
+  varsayılana çözer; UI'da Self-healing bölümünde 3'lü grid. Detay `56` (ayarlar tablosu).
+
+## Sohbet boş-durum ekranı: "Yeni sohbete başla" ✅ (2026-07-07)
+
+**İstek:** Sohbet ekranını ilk açtığımızda ve hiç sohbet yokken devre-dışı bir input alanı
+görünüyordu ama ajan bile seçili olmuyordu. Bunun yerine düzgün bir "Yeni sohbete başla"
+ekranı çıksın.
+
+- Yeni `features/chat/ChatEmptyState.tsx`: `ChatView` artık `activeSessionId` yokken (aktif
+  oturum yok) transcript+devre-dışı composer yerine ortalanmış bir başlangıç kartı gösterir.
+  - Ajan varsa: başlık "Yeni sohbete başla" + (birden fazla ajan varsa) ajan seçici (default'u
+    `pickDefaultAgent` ile ayarlar) + **"Yeni sohbet"** butonu (`ctl.newSession` → seçili
+    ajanla taze oturum açar). Tek ajan varsa hangi ajanın kullanılacağı rozet olarak gösterilir.
+  - Ajan yoksa: "Önce bir ajan oluştur" + Ajanlar ekranına kısayol (`selectView('agents')`).
+- `ChatView` yeni prop'lar alır: `defaultAgentId`/`onNewSession`/`onSelectDefaultAgent`/
+  `onGoToAgents`; erken-return tüm hook'lardan SONRA (rules-of-hooks güvenli).
+- `App`, `ctl.defaultAgentId`/`ctl.newSession`/`ctl.pickDefaultAgent`/`selectView('agents')`
+  ile bağlar.
+
 ## Frontend feature-bazlı refactor (3 aşama) ✅ (2026-07-07)
 
 **İstek:** Frontend kodlarının daha düzenli bir yapıya refactor edilmesi.

@@ -241,6 +241,7 @@ func (s *Server) applySettings() {
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
 	s.tun.SetProviderRetryMax(cur.MaxProviderRetries)
 	s.tun.SetToolGuard(cur.ToolGuardWarnings, cur.ToolGuardHardStop)
+	s.tun.SetToolGuardThresholds(cur.GuardExactWarn, cur.GuardExactBlock, cur.GuardSameToolWarn, cur.GuardSameToolHalt, cur.GuardNoProgressWarn, cur.GuardNoProgressBlck)
 	s.tun.SetStuckTurnThreshold(cur.StuckTurnThreshold)
 	s.tun.SetLessonReflect(cur.LessonReflect)
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
@@ -511,8 +512,11 @@ func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/workspace-tools", s.handleSetWorkspaceTools)
 }
 
-// registerHookRoutes registers PreToolUse/PostToolUse hooks (Phase P4).
+// registerHookRoutes registers PreToolUse/PostToolUse hooks (Phase P4) plus the
+// failure-lesson store endpoints (self-healing, read + prune).
 func (s *Server) registerHookRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/lessons", s.handleListLessons)
+	mux.HandleFunc("DELETE /api/lessons/{id}", s.handleDeleteLesson)
 	mux.HandleFunc("GET /api/hooks", s.handleListHooks)
 	mux.HandleFunc("GET /api/hooks/builtins", s.handleListBuiltinHooks)
 	mux.HandleFunc("POST /api/hooks", s.handleCreateHook)

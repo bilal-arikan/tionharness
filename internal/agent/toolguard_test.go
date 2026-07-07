@@ -117,6 +117,32 @@ func TestToolGuard_NoProgressOnIdempotentRepeats(t *testing.T) {
 	}
 }
 
+func TestToolGuard_CustomThresholds(t *testing.T) {
+	// Tightened thresholds from settings: warn at 1, block at 2, halt at 3.
+	g := newToolGuard(toolGuardConfig{
+		warnings: true, hardStop: true,
+		exactWarn: 1, exactBlock: 2, sameToolWarn: 1, sameToolHalt: 3,
+		noProgressWarn: 1, noProgressBlck: 2,
+	})
+	call := gcall("Read", `{"path":"x"}`)
+	if hint := g.observe(call, failRes(call.ID)); hint == "" {
+		t.Errorf("custom warn=1: first failure must already hint")
+	}
+	g.observe(call, failRes(call.ID))
+	if v, _ := g.check(call); v != guardBlock {
+		t.Errorf("custom block=2: verdict = %v, want block", v)
+	}
+	// Zero-value config resolves to the defaults (no premature warn).
+	d := newToolGuard(toolGuardConfig{warnings: true})
+	c2 := gcall("Grep", `{"q":"x"}`)
+	if hint := d.observe(c2, failRes(c2.ID)); hint != "" {
+		t.Errorf("default thresholds: first failure hinted early: %q", hint)
+	}
+	if d.cfg.exactBlock != DefaultGuardExactBlockAfter || d.cfg.sameToolHalt != DefaultGuardSameToolHaltAfter {
+		t.Errorf("zero config not resolved to defaults: %+v", d.cfg)
+	}
+}
+
 func TestToolGuard_WarningsDisabledStaysSilent(t *testing.T) {
 	g := newToolGuard(toolGuardConfig{warnings: false, hardStop: false})
 	call := gcall("Read", `{"path":"x"}`)

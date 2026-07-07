@@ -411,9 +411,16 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// Tool-loop guardrail (self-healing Faz B): per-turn loop detection. Warnings
 	// ride the failing tool results; block/halt fire only when the hard stop is
 	// enabled in settings.
+	gew, geb, gsw, gsh, gnw, gnb := r.tun.ToolGuardThresholds()
 	guard := newToolGuard(toolGuardConfig{
-		warnings: r.tun.ToolGuardWarnings(),
-		hardStop: r.tun.ToolGuardHardStop(),
+		warnings:       r.tun.ToolGuardWarnings(),
+		hardStop:       r.tun.ToolGuardHardStop(),
+		exactWarn:      gew,
+		exactBlock:     geb,
+		sameToolWarn:   gsw,
+		sameToolHalt:   gsh,
+		noProgressWarn: gnw,
+		noProgressBlck: gnb,
 	})
 	guardHaltReason := ""
 	// partial accumulates answer text across max-output-token resumes, so the

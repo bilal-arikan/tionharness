@@ -232,6 +232,14 @@ type Settings struct {
 	// tool keeps failing (circuit breaker, opt-in).
 	ToolGuardWarnings bool `json:"toolGuardWarnings"`
 	ToolGuardHardStop bool `json:"toolGuardHardStop"`
+	// Guardrail thresholds (0 = built-in default). Warn thresholds shape the
+	// warning hints; block/halt apply only when the hard stop is armed.
+	GuardExactWarn      int `json:"guardExactWarn"`       // identical failing call → warn (default 2)
+	GuardExactBlock     int `json:"guardExactBlock"`      // identical failing call → block (default 5)
+	GuardSameToolWarn   int `json:"guardSameToolWarn"`    // same-tool consecutive failures → warn (default 3)
+	GuardSameToolHalt   int `json:"guardSameToolHalt"`    // same-tool consecutive failures → halt turn (default 8)
+	GuardNoProgressWarn int `json:"guardNoProgressWarn"`  // identical successful idempotent repeats → warn (default 2)
+	GuardNoProgressBlck int `json:"guardNoProgressBlock"` // identical successful idempotent repeats → block (default 5)
 	// StuckTurnThreshold: consecutive bad turns (turn error or guardrail halt)
 	// before a session is tagged "stuck" and its AUTONOMOUS turns are refused
 	// until resolved. 0 disables the gate.
@@ -388,15 +396,21 @@ func Default() Settings {
 		DebugJournalEnabled: true,
 		DebugJournalCap:     5000,
 
-		ReactiveCompact:    true,
-		MaxTokenRetries:    3,
-		ReactiveKeepRecent: 6,
-		MaxProviderRetries: 2,
-		ToolGuardWarnings:  true,
-		ToolGuardHardStop:  false,
-		StuckTurnThreshold: 3,
-		LessonReflect:      true,
-		MaxOutputTokens:    0, // auto: per-model family default
+		ReactiveCompact:     true,
+		MaxTokenRetries:     3,
+		ReactiveKeepRecent:  6,
+		MaxProviderRetries:  2,
+		ToolGuardWarnings:   true,
+		ToolGuardHardStop:   false,
+		GuardExactWarn:      2,
+		GuardExactBlock:     5,
+		GuardSameToolWarn:   3,
+		GuardSameToolHalt:   8,
+		GuardNoProgressWarn: 2,
+		GuardNoProgressBlck: 5,
+		StuckTurnThreshold:  3,
+		LessonReflect:       true,
+		MaxOutputTokens:     0, // auto: per-model family default
 
 		// Both systems on by default, the external agent project-style: System A (free, deterministic)
 		// always runs; System B (cheap-model summary) kicks in for big outputs. A's
@@ -526,15 +540,21 @@ type DTO struct {
 	DebugJournalEnabled bool `json:"debugJournalEnabled"`
 	DebugJournalCap     int  `json:"debugJournalCap"`
 
-	ReactiveCompact    bool `json:"reactiveCompact"`
-	MaxTokenRetries    int  `json:"maxTokenRetries"`
-	ReactiveKeepRecent int  `json:"reactiveKeepRecent"`
-	MaxProviderRetries int  `json:"maxProviderRetries"`
-	ToolGuardWarnings  bool `json:"toolGuardWarnings"`
-	ToolGuardHardStop  bool `json:"toolGuardHardStop"`
-	StuckTurnThreshold int  `json:"stuckTurnThreshold"`
-	LessonReflect      bool `json:"lessonReflect"`
-	MaxOutputTokens    int  `json:"maxOutputTokens"`
+	ReactiveCompact     bool `json:"reactiveCompact"`
+	MaxTokenRetries     int  `json:"maxTokenRetries"`
+	ReactiveKeepRecent  int  `json:"reactiveKeepRecent"`
+	MaxProviderRetries  int  `json:"maxProviderRetries"`
+	ToolGuardWarnings   bool `json:"toolGuardWarnings"`
+	ToolGuardHardStop   bool `json:"toolGuardHardStop"`
+	GuardExactWarn      int  `json:"guardExactWarn"`
+	GuardExactBlock     int  `json:"guardExactBlock"`
+	GuardSameToolWarn   int  `json:"guardSameToolWarn"`
+	GuardSameToolHalt   int  `json:"guardSameToolHalt"`
+	GuardNoProgressWarn int  `json:"guardNoProgressWarn"`
+	GuardNoProgressBlck int  `json:"guardNoProgressBlock"`
+	StuckTurnThreshold  int  `json:"stuckTurnThreshold"`
+	LessonReflect       bool `json:"lessonReflect"`
+	MaxOutputTokens     int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   bool   `json:"compactToolOutput"`
 	CompactMaxLines     int    `json:"compactMaxLines"`
@@ -642,15 +662,21 @@ func (s Settings) ToDTO() DTO {
 		DebugJournalEnabled: s.DebugJournalEnabled,
 		DebugJournalCap:     s.DebugJournalCap,
 
-		ReactiveCompact:    s.ReactiveCompact,
-		MaxTokenRetries:    s.MaxTokenRetries,
-		ReactiveKeepRecent: s.ReactiveKeepRecent,
-		MaxProviderRetries: s.MaxProviderRetries,
-		ToolGuardWarnings:  s.ToolGuardWarnings,
-		ToolGuardHardStop:  s.ToolGuardHardStop,
-		StuckTurnThreshold: s.StuckTurnThreshold,
-		LessonReflect:      s.LessonReflect,
-		MaxOutputTokens:    s.MaxOutputTokens,
+		ReactiveCompact:     s.ReactiveCompact,
+		MaxTokenRetries:     s.MaxTokenRetries,
+		ReactiveKeepRecent:  s.ReactiveKeepRecent,
+		MaxProviderRetries:  s.MaxProviderRetries,
+		ToolGuardWarnings:   s.ToolGuardWarnings,
+		ToolGuardHardStop:   s.ToolGuardHardStop,
+		GuardExactWarn:      s.GuardExactWarn,
+		GuardExactBlock:     s.GuardExactBlock,
+		GuardSameToolWarn:   s.GuardSameToolWarn,
+		GuardSameToolHalt:   s.GuardSameToolHalt,
+		GuardNoProgressWarn: s.GuardNoProgressWarn,
+		GuardNoProgressBlck: s.GuardNoProgressBlck,
+		StuckTurnThreshold:  s.StuckTurnThreshold,
+		LessonReflect:       s.LessonReflect,
+		MaxOutputTokens:     s.MaxOutputTokens,
 
 		CompactToolOutput:   s.CompactToolOutput,
 		CompactMaxLines:     s.CompactMaxLines,
@@ -751,15 +777,21 @@ type Patch struct {
 	DebugJournalEnabled *bool `json:"debugJournalEnabled"`
 	DebugJournalCap     *int  `json:"debugJournalCap"`
 
-	ReactiveCompact    *bool `json:"reactiveCompact"`
-	MaxTokenRetries    *int  `json:"maxTokenRetries"`
-	ReactiveKeepRecent *int  `json:"reactiveKeepRecent"`
-	MaxProviderRetries *int  `json:"maxProviderRetries"`
-	ToolGuardWarnings  *bool `json:"toolGuardWarnings"`
-	ToolGuardHardStop  *bool `json:"toolGuardHardStop"`
-	StuckTurnThreshold *int  `json:"stuckTurnThreshold"`
-	LessonReflect      *bool `json:"lessonReflect"`
-	MaxOutputTokens    *int  `json:"maxOutputTokens"`
+	ReactiveCompact     *bool `json:"reactiveCompact"`
+	MaxTokenRetries     *int  `json:"maxTokenRetries"`
+	ReactiveKeepRecent  *int  `json:"reactiveKeepRecent"`
+	MaxProviderRetries  *int  `json:"maxProviderRetries"`
+	ToolGuardWarnings   *bool `json:"toolGuardWarnings"`
+	ToolGuardHardStop   *bool `json:"toolGuardHardStop"`
+	GuardExactWarn      *int  `json:"guardExactWarn"`
+	GuardExactBlock     *int  `json:"guardExactBlock"`
+	GuardSameToolWarn   *int  `json:"guardSameToolWarn"`
+	GuardSameToolHalt   *int  `json:"guardSameToolHalt"`
+	GuardNoProgressWarn *int  `json:"guardNoProgressWarn"`
+	GuardNoProgressBlck *int  `json:"guardNoProgressBlock"`
+	StuckTurnThreshold  *int  `json:"stuckTurnThreshold"`
+	LessonReflect       *bool `json:"lessonReflect"`
+	MaxOutputTokens     *int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   *bool   `json:"compactToolOutput"`
 	CompactMaxLines     *int    `json:"compactMaxLines"`
