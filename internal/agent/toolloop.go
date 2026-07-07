@@ -432,6 +432,17 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		// calls from the previous iteration.
 		active.SetIter(i)
 		req.Tools = shipDefs()
+		// Self-healing: enforce the tool_use↔tool_result pairing invariants on
+		// the in-flight history before every provider call. A well-formed slice
+		// passes through untouched; a healed one is logged + journaled (never
+		// silent), instead of surfacing as an opaque provider 400.
+		if repaired, notes := conversation.RepairSequence(req.Messages); len(notes) > 0 {
+			req.Messages = repaired
+			for _, n := range notes {
+				r.logger.Warn("message sequence repaired", "agent", agent.ID, "rule", n.Rule, "detail", n.Detail)
+				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugRepair, AgentID: agent.ID, Name: n.Rule, Detail: n.Detail})
+			}
+		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
 			// A1: a context-overflow error is recoverable once per turn by

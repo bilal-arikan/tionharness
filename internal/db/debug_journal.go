@@ -29,14 +29,16 @@ const DefaultDebugJournalCap = 5000
 
 // Debug event type tags (the "type" field of a DebugEvent).
 const (
-	DebugTurn       = "turn"       // one assistant turn finished (durMs, stop, err)
-	DebugLLMCall    = "llm_call"   // one provider completion (model, in/out/cache tokens)
-	DebugTool       = "tool"       // one tool execution (name, durMs, outBytes, err)
-	DebugHook       = "hook"       // one PreToolUse/PostToolUse hook ran (name, detail)
-	DebugError      = "error"      // a turn-level / permission / budget error
+	DebugTurn       = "turn"        // one assistant turn finished (durMs, stop, err)
+	DebugLLMCall    = "llm_call"    // one provider completion (model, in/out/cache tokens)
+	DebugTool       = "tool"        // one tool execution (name, durMs, outBytes, err)
+	DebugHook       = "hook"        // one PreToolUse/PostToolUse hook ran (name, detail)
+	DebugError      = "error"       // a turn-level / permission / budget error
 	DebugCompaction = "compaction"  // in-flight history was compacted (savedBytes)
 	DebugRecovery   = "recovery"    // a turn recovery fired (output resume / compact)
 	DebugCacheBreak = "cache_break" // the prompt-cache warm prefix was lost (attributed reason in Name/Detail)
+	DebugRepair     = "repair"      // message-sequence repair healed the in-flight history (rule in Name)
+	DebugGuardrail  = "guardrail"   // tool-loop guardrail decision (warn/block/halt in Name, tool in Detail)
 )
 
 // DebugEvent is one structured observability record. Fields are sparse
