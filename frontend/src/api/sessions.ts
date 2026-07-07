@@ -220,10 +220,14 @@ export const sessionApi = {
   // tools) the session's agent would be sent. Optional sample "next" user message.
   // compact=true simulates this turn's budgeted compaction (read-only, no summary
   // generated/persisted) so the message array matches what the model receives.
-  sessionContextPreview: (sessionId: string, message?: string, compact = false) => {
+  // accurate=true additionally asks the provider's REAL tokenizer to count the
+  // composed request server-side (/v1/messages/count_tokens; anthropic only) —
+  // returned as accurateTokens so heuristic drift is visible.
+  sessionContextPreview: (sessionId: string, message?: string, compact = false, accurate = false) => {
     const p = new URLSearchParams()
     if (message) p.set('message', message)
     if (compact) p.set('compact', '1')
+    if (accurate) p.set('accurate', '1')
     const q = p.toString()
     return req<SessionContextPreview>(
       `/api/sessions/${sessionId}/context-preview${q ? `?${q}` : ''}`,

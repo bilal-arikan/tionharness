@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react
 import type { Agent, Artifact, Message } from '@/types'
 import { MessageList } from './MessageList'
 import { Composer } from './Composer'
+import { ChatEmptyState } from './ChatEmptyState'
 import { RewindDialog } from './RewindDialog'
 import { AskPrompt } from './AskPrompt'
 import { PermissionPrompt } from './PermissionPrompt'
@@ -23,6 +24,11 @@ export interface ChatViewProps {
   artifacts: Artifact[]
   activeSessionId: string | null
   activeAgentId: string | null
+  // Empty-state ("Yeni sohbete başla") wiring, used when no session is active.
+  defaultAgentId: string | null
+  onNewSession: () => void
+  onSelectDefaultAgent: (id: string) => void
+  onGoToAgents: () => void
   // Remount key for the Composer so it re-reads its persisted draft (rewind).
   composerKey: number
   focusSessionId: string | null
@@ -44,6 +50,10 @@ export function ChatView({
   artifacts,
   activeSessionId,
   activeAgentId,
+  defaultAgentId,
+  onNewSession,
+  onSelectDefaultAgent,
+  onGoToAgents,
   composerKey,
   focusSessionId,
   scrollToMsgId,
@@ -77,6 +87,20 @@ export function ChatView({
   // The active session's current checklist (latest todo_write across the
   // transcript). Pinned above the composer and updated as the agent ticks items.
   const currentTodos = useMemo(() => latestTodos(messages), [messages])
+
+  // No active session → show the "start a new chat" screen instead of a bare,
+  // disabled composer with no agent selected.
+  if (!activeSessionId) {
+    return (
+      <ChatEmptyState
+        agents={agents}
+        defaultAgentId={defaultAgentId}
+        onNewSession={onNewSession}
+        onSelectDefaultAgent={onSelectDefaultAgent}
+        onGoToAgents={onGoToAgents}
+      />
+    )
+  }
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">

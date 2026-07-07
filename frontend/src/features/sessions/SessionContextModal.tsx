@@ -44,15 +44,19 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
   // When on, the preview simulates this turn's budgeted compaction (fewer
   // messages) so the array matches what the model actually receives.
   const [simulate, setSimulate] = useState(false)
+  // When on, the provider's REAL tokenizer counts the composed request
+  // server-side (?accurate=1 — anthropic only, one free API call); the result
+  // renders next to the heuristic total so drift is visible.
+  const [accurate, setAccurate] = useState(false)
   // Token summary + CLI-overhead strip: collapsible, default collapsed.
   const [statsOpen, setStatsOpen] = useState(false)
   const { bulk, expandAll, collapseAll } = useBulkToggle(true)
 
   const load = useCallback(
-    (msg: string, compact: boolean) => {
+    (msg: string, compact: boolean, exact = false) => {
       setLoading(true)
       api
-        .sessionContextPreview(sessionId, msg.trim() || undefined, compact)
+        .sessionContextPreview(sessionId, msg.trim() || undefined, compact, exact)
         .then(setData)
         .catch((e) => setErr((e as Error).message))
         .finally(() => setLoading(false))
@@ -60,9 +64,9 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
     [sessionId],
   )
 
-  // Reload whenever the sample message is (re)submitted or the compaction toggle
-  // flips. simulate is a dependency so toggling it refetches immediately.
-  useEffect(() => load(message, simulate), [load, simulate]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Reload whenever the sample message is (re)submitted or a toggle flips.
+  // simulate/accurate are dependencies so toggling them refetches immediately.
+  useEffect(() => load(message, simulate, accurate), [load, simulate, accurate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const copy = () => {
     if (!data) return
@@ -138,6 +142,14 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
               <span className="font-medium">Token özeti</span>
               <span className="text-[var(--color-text-dim)]">
                 · Toplam {data.totalTokens.toLocaleString()} <span className="opacity-70">(~tahmini)</span>
+                {!!data.accurateTokens && (
+                  <span className="ml-1 font-medium text-[var(--color-accent)]">
+                    · Gerçek {data.accurateTokens.toLocaleString()}
+                    <span className="opacity-70">
+                      {' '}({data.totalTokens > 0 ? `${data.accurateTokens >= data.totalTokens ? '+' : ''}${Math.round(((data.accurateTokens - data.totalTokens) / data.totalTokens) * 100)}% sapma` : ''})
+                    </span>
+                  </span>
+                )}
               </span>
               {data.cliOverhead && (
                 <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
@@ -267,7 +279,19 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
           >
             <FoldVertical size={13} /> Compaction {simulate ? 'açık' : 'simüle'}
           </button>
-          <Button onClick={() => load(message, simulate)} disabled={loading} className="shrink-0">
+          <button
+            onClick={() => setAccurate((a) => !a)}
+            disabled={loading}
+            title="Gerçek sayım: birleştirilmiş istek, sağlayıcının GERÇEK tokenizer'ıyla sunucuda sayılır (count_tokens; yalnız anthropic, üretim yok — ücretsiz bir API çağrısı). Sezgisel tahminle sapma yüzdesi Token özetinde görünür."
+            className={`flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs ${
+              accurate
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            Σ Gerçek sayım
+          </button>
+          <Button onClick={() => load(message, simulate, accurate)} disabled={loading} className="shrink-0">
             {loading ? '…' : 'Önizle'}
           </Button>
         </div>

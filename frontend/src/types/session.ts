@@ -180,6 +180,9 @@ export interface SessionContextPreview {
   // rendered accordingly (summary keeps its description, name-only/hidden name alone).
   lazyTools: { name: string; description: string; visibility?: string }[]
   totalTokens: number
+  // Exact prompt size counted by the provider's REAL tokenizer server-side
+  // (?accurate=1, anthropic only). 0/absent = not requested or unsupported.
+  accurateTokens?: number
   cache: CachePreview
   // Present only for CLI-wrapper providers (claude-cli): the gap
   // between TionSwarm's segment estimate (totalTokens) and the real prompt the CLI

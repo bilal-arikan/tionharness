@@ -74,14 +74,43 @@ export default function App() {
   // Post-create claude-cli readiness gate: bumped once per successful workspace
   // creation so ClaudeAuthGate (re-)probes the new workspace's login state and
   // either offers the auth popup or steers to the Providers screen.
-  const [claudeGateNonce, setClaudeGateNonce] = useState(0)
+  // requireNoProvider distinguishes the two gate reasons:
+  //   - create/attach (false): always probe/offer login for the new workspace.
+  //   - chat-open (true): only nag when the workspace has NO usable provider at
+  //     all, so users who configured a provider are never bothered.
+  const [claudeGate, setClaudeGate] = useState<{ nonce: number; requireNoProvider: boolean }>({
+    nonce: 0,
+    requireNoProvider: false,
+  })
+  const bumpClaudeGate = useCallback((requireNoProvider: boolean) => {
+    setClaudeGate((g) => ({ nonce: g.nonce + 1, requireNoProvider }))
+  }, [])
   const handleCreateWorkspace = useCallback(
     async (data: Parameters<typeof createWorkspace>[0]) => {
       const created = await createWorkspace(data)
-      if (created) setClaudeGateNonce((n) => n + 1)
+      if (created) bumpClaudeGate(false)
     },
-    [createWorkspace],
+    [createWorkspace, bumpClaudeGate],
   )
+  // Adopting an existing workspace folder runs the same claude-cli gate: the
+  // attached workspace may have its own (unauthenticated) claude-home. Preserves
+  // attachWorkspace's throw-on-failure contract so the onboarding screen still
+  // renders inline validation errors.
+  const handleAttachWorkspace = useCallback(
+    async (path: string) => {
+      const attached = await attachWorkspace(path)
+      if (attached) bumpClaudeGate(false)
+      return attached
+    },
+    [attachWorkspace, bumpClaudeGate],
+  )
+  // Re-nag on every chat-screen entry (and workspace switch while in chat): when
+  // the workspace has no provider configured and claude-cli is present but not
+  // logged in, the gate re-shows the auth popup. The "no provider" precondition
+  // lives in the gate, checked cheaply before the (expensive) login probe.
+  useEffect(() => {
+    if (view === 'chat') bumpClaudeGate(true)
+  }, [view, activeWorkspaceId, bumpClaudeGate])
 
   // First-run gating. `hadSetupAtBoot` is captured ONCE at mount: a returning
   // user (who has had at least one workspace before) skips the splash entirely
@@ -331,7 +360,7 @@ export default function App() {
   // List resolved and there are zero workspaces → onboarding. Closing the popup
   // without creating one provisions nothing (no default workspace).
   if (!wsLoading && workspaces.length === 0) {
-    return <OnboardingScreen onCreate={handleCreateWorkspace} onAttach={attachWorkspace} />
+    return <OnboardingScreen onCreate={handleCreateWorkspace} onAttach={handleAttachWorkspace} />
   }
 
   return (
@@ -435,6 +464,10 @@ export default function App() {
             artifacts={ctl.sessionArtifacts}
             activeSessionId={ctl.activeSessionId}
             activeAgentId={ctl.activeAgentId}
+            defaultAgentId={ctl.defaultAgentId}
+            onNewSession={ctl.newSession}
+            onSelectDefaultAgent={ctl.pickDefaultAgent}
+            onGoToAgents={() => selectView('agents')}
             composerKey={ctl.composerKey}
             focusSessionId={ctl.focusSessionId}
             scrollToMsgId={ctl.scrollToMsgId}
@@ -631,11 +664,13 @@ export default function App() {
           headerless, sidebar-to-top screens still show errors consistently). */}
       <ErrorToast message={error ?? ''} onDismiss={() => setError(null)} />
 
-      {/* Post-create claude-cli gate: after a new workspace is created, probe its
-          login state — offer the auth popup when the CLI is present but not
-          logged in, or open the Providers screen when the CLI is missing. */}
+      {/* claude-cli gate: after a workspace is created/attached — and on every
+          chat-screen entry when no provider is configured — probe the CLI login
+          state. Offers the auth popup when the CLI is present but not logged in,
+          or opens the Providers screen when the CLI is missing. */}
       <ClaudeAuthGate
-        trigger={claudeGateNonce}
+        trigger={claudeGate.nonce}
+        requireNoProvider={claudeGate.requireNoProvider}
         onNavigateProviders={() => {
           links.setSettingsCat('providers')
           setView('settings')

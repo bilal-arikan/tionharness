@@ -19,16 +19,42 @@ import type { AppSettings } from '@/types'
 import { ClaudeAuthDialog } from '@/features/settings/ClaudeAuthDialog'
 
 interface Props {
-  // Bumped by the parent after each successful workspace creation. A value <= 0
-  // means "no create yet" and is ignored so a fresh mount does not probe.
+  // Bumped by the parent to run the gate: after a workspace is created/attached,
+  // and on every chat-screen entry. A value <= 0 means "not yet" and is ignored
+  // so a fresh mount does not probe.
   trigger: number
+  // When true (chat-open reason) the gate only acts if the workspace has NO
+  // usable provider configured — so a user who set up any provider is never
+  // nagged. Checked cheaply BEFORE the expensive claude-cli login probe. When
+  // false (create/attach reason) the probe always runs.
+  requireNoProvider?: boolean
   // Called when the CLI is not installed, so the app can open the Providers
   // ("Sağlayıcılar") screen where a provider/credential can be configured.
   onNavigateProviders: () => void
   onError?: (msg: string) => void
 }
 
-export function ClaudeAuthGate({ trigger, onNavigateProviders, onError }: Props) {
+// hasNoUsableProvider reports whether this workspace has no way to run a turn:
+// none of the built-in provider keys are set, no claude-cli token is stored, and
+// no custom provider exists. (A claude-cli login living only in the workspace's
+// claude-home is caught separately by the login probe.)
+async function hasNoUsableProvider(): Promise<boolean> {
+  const [s, custom] = await Promise.all([api.getSettings(), api.listCustomProviders()])
+  return (
+    !s.anthropicKeySet &&
+    !s.minimaxKeySet &&
+    !s.openrouterKeySet &&
+    !s.claudeCliAuthSet &&
+    custom.length === 0
+  )
+}
+
+export function ClaudeAuthGate({
+  trigger,
+  requireNoProvider = false,
+  onNavigateProviders,
+  onError,
+}: Props) {
   // Non-null while the "login needed" notification is showing; carries the probe
   // failure reason for the tooltip.
   const [notice, setNotice] = useState<{ detail?: string } | null>(null)
@@ -44,6 +70,13 @@ export function ClaudeAuthGate({ trigger, onNavigateProviders, onError }: Props)
     setDialogSettings(null)
     ;(async () => {
       try {
+        // Chat-open reason: skip the expensive login probe entirely when the
+        // workspace already has a usable provider — only a fully unconfigured
+        // workspace is re-nagged.
+        if (requireNoProvider) {
+          const noProvider = await hasNoUsableProvider()
+          if (!alive || !noProvider) return
+        }
         const r = await api.checkWorkspaceClaudeAuth()
         if (!alive) return
         if (r.loggedIn) return // ready — nothing to prompt
@@ -61,8 +94,8 @@ export function ClaudeAuthGate({ trigger, onNavigateProviders, onError }: Props)
     return () => {
       alive = false
     }
-    // Intentionally keyed only on `trigger`: the callbacks are stable enough and
-    // re-running on their identity would double-probe.
+    // Intentionally keyed only on `trigger`: requireNoProvider is bumped together
+    // with trigger, and re-running on callback identity would double-probe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trigger])
 
