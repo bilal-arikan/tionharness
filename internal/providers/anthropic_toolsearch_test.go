@@ -37,7 +37,7 @@ func TestToAnthropicTools_DeferLoading(t *testing.T) {
 		{Name: "eager_a", Description: "always on"},
 		{Name: "lazy_b", Description: "discoverable", DeferLoading: true},
 	}
-	out := toAnthropicTools(defs, true, false)
+	out := toAnthropicTools(defs, true, serverToolOpts{})
 	if len(out) != 3 {
 		t.Fatalf("expected search tool + 2 defs, got %d entries", len(out))
 	}
@@ -66,7 +66,7 @@ func TestToAnthropicTools_DeferLoading(t *testing.T) {
 	}
 
 	// No deferred defs → no server tool appended (behaviour unchanged).
-	plain := toAnthropicTools([]ToolDef{{Name: "only"}}, false, false)
+	plain := toAnthropicTools([]ToolDef{{Name: "only"}}, false, serverToolOpts{})
 	if len(plain) != 1 || plain[0].Type != "" {
 		t.Errorf("plain path grew a server tool: %+v", plain)
 	}
@@ -80,7 +80,7 @@ func TestToAnthropicTools_ProgrammaticCalling(t *testing.T) {
 		{Name: "Read", Strict: true, CodeCallable: true},
 		{Name: "ask_user", Strict: true}, // interactive → not code-callable
 	}
-	out := toAnthropicTools(defs, false, true)
+	out := toAnthropicTools(defs, false, serverToolOpts{ptc: true})
 	if len(out) != 3 || out[0].Type != codeExecToolType || out[0].Name != codeExecToolName {
 		t.Fatalf("code execution server tool must lead: %+v", out)
 	}
@@ -103,7 +103,7 @@ func TestToAnthropicTools_ProgrammaticCalling(t *testing.T) {
 		}
 	}
 	// PTC off → CodeCallable ignored entirely.
-	off := toAnthropicTools(defs, false, false)
+	off := toAnthropicTools(defs, false, serverToolOpts{})
 	for _, at := range off {
 		if at.AllowedCallers != nil {
 			t.Errorf("allowed_callers must not ship when PTC is off: %+v", at)

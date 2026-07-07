@@ -16,6 +16,28 @@ import (
 const (
 	betaExtendedCacheTTL  = "extended-cache-ttl-2025-04-11"
 	betaContextManagement = "context-management-2025-06-27"
+	// betaServerCompaction enables API-native compaction: the server summarizes
+	// earlier history into compaction blocks once the prompt nears the trigger
+	// (default ~150K tokens); the blocks must be echoed back on later requests
+	// (the RawContent verbatim echo handles that within a turn).
+	betaServerCompaction = "compact-2026-01-12"
+)
+
+// Server-side web tools. The _20260209 variants carry dynamic filtering (a
+// code-execution environment under the hood) and require the 4.6+ model class;
+// older models — and PTC turns, which already run their own code-execution
+// environment (two would confuse the model) — use the basic variants.
+const (
+	webSearchDynType   = "web_search_20260209"
+	webSearchBasicType = "web_search_20250305"
+	webSearchName      = "web_search"
+	webFetchDynType    = "web_fetch_20260209"
+	webFetchBasicType  = "web_fetch_20250910"
+	webFetchName       = "web_fetch"
+	// Per-turn use caps: web search is billed per search, so both tools carry a
+	// conservative max_uses ceiling rather than an unbounded loop.
+	webSearchMaxUses = 8
+	webFetchMaxUses  = 12
 )
 
 // Context-editing defaults (P3): the server clears old tool_use/tool_result blocks
@@ -57,8 +79,9 @@ type Anthropic struct {
 	defaultModel string // model applied when a request omits one
 	name         string // provider identity reported by Name()
 
-	extendedCache  bool // 1h extended prompt cache TTL beta
-	contextEditing bool // API-native context editing (clear_tool_uses) beta
+	extendedCache    bool // 1h extended prompt cache TTL beta
+	contextEditing   bool // API-native context editing (clear_tool_uses) beta
+	serverCompaction bool // API-native compaction (compact_20260112) beta
 }
 
 // NewAnthropic creates a client with the given API key, defaulting to the
@@ -93,10 +116,13 @@ func (a *Anthropic) WithEndpoint(name, messagesURL, defaultModel string) *Anthro
 
 // WithBetas enables optional Anthropic beta capabilities and returns the client
 // for chaining. extendedCache = 1h prompt-cache TTL; contextEditing = API-native
-// context editing (server-side clear_tool_uses, the microcompact analogue).
-func (a *Anthropic) WithBetas(extendedCache, contextEditing bool) *Anthropic {
+// context editing (server-side clear_tool_uses, the microcompact analogue);
+// serverCompaction = API-native compaction (server-side history summarization
+// into compaction blocks once the prompt nears the trigger).
+func (a *Anthropic) WithBetas(extendedCache, contextEditing, serverCompaction bool) *Anthropic {
 	a.extendedCache = extendedCache
 	a.contextEditing = contextEditing
+	a.serverCompaction = serverCompaction
 	return a
 }
 
@@ -140,21 +166,27 @@ type contextThreshold struct {
 	Value int    `json:"value"`
 }
 
-// contextMgmt builds the context-editing directive when the beta is enabled, else
-// nil (the field is omitted). One strategy: clear_tool_uses_20250919 with
-// conservative defaults (see the context-editing constants).
+// contextMgmt builds the context-management directives from the enabled betas,
+// else nil (the field is omitted). Two independent strategies: context editing
+// (clear_tool_uses_20250919 with conservative defaults — see the constants) and
+// server-side compaction (compact_20260112, server-default trigger ~150K).
 func (a *Anthropic) contextMgmt() *contextManagement {
-	if !a.contextEditing {
-		return nil
-	}
-	return &contextManagement{
-		Edits: []contextEdit{{
+	var edits []contextEdit
+	if a.contextEditing {
+		edits = append(edits, contextEdit{
 			Type:         "clear_tool_uses_20250919",
 			Trigger:      &contextThreshold{Type: "input_tokens", Value: contextClearTriggerTokens},
 			Keep:         &contextThreshold{Type: "tool_uses", Value: contextClearKeepToolUses},
 			ClearAtLeast: &contextThreshold{Type: "input_tokens", Value: contextClearAtLeastTokens},
-		}},
+		})
 	}
+	if a.serverCompaction {
+		edits = append(edits, contextEdit{Type: "compact_20260112"})
+	}
+	if len(edits) == 0 {
+		return nil
+	}
+	return &contextManagement{Edits: edits}
 }
 
 // thinkingParam enables extended reasoning. Adaptive-class models take
@@ -342,6 +374,9 @@ type anthropicTool struct {
 	// AllowedCallers (programmatic tool calling): which contexts may invoke the
 	// tool — ["direct"] and/or ["code_execution_20260120"].
 	AllowedCallers []string `json:"allowed_callers,omitempty"`
+	// MaxUses caps how many times a server tool (web search/fetch) may run per
+	// turn — web search is billed per search, so the ceiling bounds cost.
+	MaxUses int `json:"max_uses,omitempty"`
 	// CacheControl, when set on the LAST tool, marks a cache breakpoint after the
 	// whole tools block. Anthropic caches by prefix in tools → system → messages
 	// order, so this caches the tool schemas INDEPENDENTLY of the (possibly
@@ -412,7 +447,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		MaxTokens:         maxTokens,
 		System:            sysField,
 		Messages:          msgs,
-		Tools:             toAnthropicTools(req.Tools, a.extendedCache, ptc),
+		Tools:             toAnthropicTools(req.Tools, a.extendedCache, serverToolOpts{ptc: ptc, webTools: req.WebTools, model: model}),
 		Thinking:          thinking,
 		OutputConfig:      outCfg,
 		ContextManagement: a.contextMgmt(),
@@ -469,6 +504,14 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		case "code_execution_tool_result", "bash_code_execution_tool_result":
 			// Completed code run: show stdout/stderr as the step's output.
 			trace = append(trace, TraceStep{Kind: "tool", Tool: codeExecToolName, Output: renderCodeExecResult(c.SubContent)})
+		case "web_search_tool_result":
+			trace = append(trace, TraceStep{Kind: "tool", Tool: webSearchName, Output: renderWebToolResult(c.SubContent, "result")})
+		case "web_fetch_tool_result":
+			trace = append(trace, TraceStep{Kind: "tool", Tool: webFetchName, Output: renderWebToolResult(c.SubContent, "document")})
+		case "compaction":
+			// Server-side compaction replaced earlier history with a summary
+			// block; surface the event (the block itself rides RawContent).
+			trace = append(trace, TraceStep{Kind: "text", Text: "(conversation history compacted server-side)"})
 		}
 	}
 
@@ -525,7 +568,7 @@ func (a *Anthropic) CountTokens(ctx context.Context, req Request) (int, error) {
 		System   any                `json:"system,omitempty"`
 		Messages []anthropicMessage `json:"messages"`
 		Tools    []anthropicTool    `json:"tools,omitempty"`
-	}{Model: model, System: sysField, Messages: msgs, Tools: toAnthropicTools(req.Tools, false, false)}
+	}{Model: model, System: sysField, Messages: msgs, Tools: toAnthropicTools(req.Tools, false, serverToolOpts{})}
 
 	headers := map[string]string{
 		"x-api-key":         a.apiKey,
@@ -718,6 +761,28 @@ func foldSystemMessages(msgs []Message, native bool) []Message {
 	return out
 }
 
+// renderWebToolResult summarizes a web search/fetch result block for the trace:
+// a success carries an array (search) or object (fetch) of content; an error
+// carries an object with error_code. Kept to a one-line summary — the model has
+// the full content in its own context; the trace is for the human.
+func renderWebToolResult(sub json.RawMessage, unit string) string {
+	if len(sub) == 0 {
+		return "(no content)"
+	}
+	// Error shape: {"type":"...","error_code":"max_uses_exceeded"}.
+	var errObj struct {
+		ErrorCode string `json:"error_code"`
+	}
+	if json.Unmarshal(sub, &errObj) == nil && errObj.ErrorCode != "" {
+		return "error: " + errObj.ErrorCode
+	}
+	var items []json.RawMessage
+	if json.Unmarshal(sub, &items) == nil {
+		return fmt.Sprintf("%d %s(s) (executed server-side)", len(items), unit)
+	}
+	return "1 " + unit + " (executed server-side)"
+}
+
 // renderCodeExecResult flattens a code-execution result block's nested content
 // ({stdout, stderr, return_code}) into a readable trace line.
 func renderCodeExecResult(sub json.RawMessage) string {
@@ -766,6 +831,9 @@ func (a *Anthropic) betaHeader() string {
 	}
 	if a.contextEditing {
 		betas = append(betas, betaContextManagement)
+	}
+	if a.serverCompaction {
+		betas = append(betas, betaServerCompaction)
 	}
 	return strings.Join(betas, ",")
 }
@@ -920,11 +988,18 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model stri
 // so a 1h tool breakpoint never lands after a shorter-TTL one. Gated on the same
 // extendedCache flag as the system breakpoint, so the caching on/off policy is
 // unchanged; only its granularity improves.
-func toAnthropicTools(tools []ToolDef, extendedCache, ptc bool) []anthropicTool {
-	if len(tools) == 0 {
+// serverToolOpts selects which Anthropic server tools ride the request and how.
+type serverToolOpts struct {
+	ptc      bool   // programmatic tool calling (code execution + allowed_callers)
+	webTools bool   // server-side web search + web fetch
+	model    string // resolved model — picks dynamic vs basic web tool variants
+}
+
+func toAnthropicTools(tools []ToolDef, extendedCache bool, opts serverToolOpts) []anthropicTool {
+	if len(tools) == 0 && !opts.webTools {
 		return nil
 	}
-	out := make([]anthropicTool, 0, len(tools)+2)
+	out := make([]anthropicTool, 0, len(tools)+4)
 	deferred := false
 	for _, t := range tools {
 		schema := t.InputSchema
@@ -941,25 +1016,44 @@ func toAnthropicTools(tools []ToolDef, extendedCache, ptc bool) []anthropicTool 
 		}
 		// PTC: mark code-callable defs; strict is incompatible with
 		// allowed_callers, so it is dropped on those.
-		if ptc && t.CodeCallable {
+		if opts.ptc && t.CodeCallable {
 			at.AllowedCallers = []string{codeExecToolType}
 			at.Strict = false
 		}
 		out = append(out, at)
 	}
-	// Server tools are PREPENDED so the tools block keeps a stable prefix; the
-	// rolling cache breakpoint stays on the last USER tool, never a server tool.
-	// Programmatic tool calling requires the code-execution tool in the request.
-	if ptc {
-		out = append([]anthropicTool{{Type: codeExecToolType, Name: codeExecToolName}}, out...)
-	}
+	// Server tools LEAD the list (stable prefix); the rolling cache breakpoint
+	// stays on the last USER tool, never a server-tool entry. Assembled in one
+	// slice so their relative order is fixed: search → code exec → web.
+	var servers []anthropicTool
 	// Native tool search: any deferred def requires the search server tool in the
 	// same request (deferred tools are unreachable without it, and an all-deferred
 	// list is a 400 — the eager set is always non-deferred, so that cannot occur).
 	if deferred {
-		out = append([]anthropicTool{{Type: nativeToolSearchType, Name: nativeToolSearchName}}, out...)
+		servers = append(servers, anthropicTool{Type: nativeToolSearchType, Name: nativeToolSearchName})
 	}
-	if extendedCache {
+	// Programmatic tool calling requires the code-execution tool in the request.
+	if opts.ptc {
+		servers = append(servers, anthropicTool{Type: codeExecToolType, Name: codeExecToolName})
+	}
+	// Web search/fetch: the dynamic (_20260209) variants require the 4.6+ class
+	// AND run their own code-execution environment under the hood, so PTC turns
+	// (which already carry one) fall back to the basic variants too.
+	if opts.webTools {
+		searchType, fetchType := webSearchBasicType, webFetchBasicType
+		if !opts.ptc && SupportsDynamicWebTools(opts.model) {
+			searchType, fetchType = webSearchDynType, webFetchDynType
+		}
+		servers = append(servers,
+			anthropicTool{Type: searchType, Name: webSearchName, MaxUses: webSearchMaxUses},
+			anthropicTool{Type: fetchType, Name: webFetchName, MaxUses: webFetchMaxUses},
+		)
+	}
+	out = append(servers, out...)
+	// The rolling breakpoint rides the last USER tool only — when the list is
+	// all server tools (web tools with no user defs) it is skipped rather than
+	// attached to a server-tool entry.
+	if extendedCache && len(tools) > 0 {
 		out[len(out)-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: cacheTTL}
 	}
 	return out

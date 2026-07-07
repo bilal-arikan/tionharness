@@ -70,6 +70,26 @@ func SupportsSystemInMessages(model string) bool {
 	return strings.Contains(m, "opus-4-8") || strings.Contains(m, "opus-4.8")
 }
 
+// SupportsDynamicWebTools reports whether the model accepts the _20260209 web
+// search/fetch variants (dynamic filtering): the Claude 4.6+ class — Opus
+// 4.6/4.7/4.8, Sonnet 4.6, Sonnet 5, Fable/Mythos. Older models use the basic
+// variants instead.
+func SupportsDynamicWebTools(model string) bool {
+	m := strings.ToLower(model)
+	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
+		return true
+	}
+	for _, s := range []string{
+		"opus-4-6", "opus-4.6", "opus-4-7", "opus-4.7", "opus-4-8", "opus-4.8",
+		"sonnet-4-6", "sonnet-4.6", "sonnet-5",
+	} {
+		if strings.Contains(m, s) {
+			return true
+		}
+	}
+	return false
+}
+
 // SupportsProgrammaticTools reports whether the model supports programmatic
 // tool calling (code_execution_20260120 + allowed_callers): Claude Opus 4.5+
 // and Sonnet 4.5+ (incl. Sonnet 5) and the Fable/Mythos class.

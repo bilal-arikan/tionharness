@@ -158,6 +158,11 @@ type Request struct {
 	// allowed_callers, letting Claude invoke tools from code with intermediate
 	// results kept out of context. Ignored elsewhere.
 	ProgrammaticTools bool
+	// WebTools adds the server-side web search + web fetch tools (anthropic
+	// only): searches run on Anthropic's infrastructure and return cited results
+	// in the same response — no client-side execution. Billed per search, so the
+	// client attaches conservative max_uses ceilings. Ignored elsewhere.
+	WebTools bool
 	// ContainerID resumes the code-execution container from a previous response
 	// in the same turn (REQUIRED while a programmatic tool call is pending).
 	ContainerID string

@@ -114,6 +114,76 @@ func TestToolCallProgrammatic(t *testing.T) {
 	}
 }
 
+// TestToAnthropicTools_WebTools: the web toggle adds both server tools with
+// per-turn use caps; the dynamic variants ride 4.6+ models, the basic variants
+// ride older models AND PTC turns (which already carry a code-execution
+// environment); the rolling breakpoint never lands on a server tool.
+func TestToAnthropicTools_WebTools(t *testing.T) {
+	defs := []ToolDef{{Name: "Read"}}
+	out := toAnthropicTools(defs, true, serverToolOpts{webTools: true, model: "claude-opus-4-8"})
+	if len(out) != 3 {
+		t.Fatalf("expected web_search + web_fetch + Read, got %d entries", len(out))
+	}
+	if out[0].Type != webSearchDynType || out[0].MaxUses != webSearchMaxUses {
+		t.Errorf("dynamic web search expected on 4.6+: %+v", out[0])
+	}
+	if out[1].Type != webFetchDynType || out[1].MaxUses != webFetchMaxUses {
+		t.Errorf("dynamic web fetch expected on 4.6+: %+v", out[1])
+	}
+	if out[0].CacheControl != nil || out[1].CacheControl != nil {
+		t.Error("breakpoint must not sit on server tools")
+	}
+	if out[2].Name != "Read" || out[2].CacheControl == nil {
+		t.Errorf("breakpoint must sit on the last user tool: %+v", out[2])
+	}
+	// Older model → basic variants.
+	out = toAnthropicTools(defs, false, serverToolOpts{webTools: true, model: "claude-haiku-4-5"})
+	if out[0].Type != webSearchBasicType || out[1].Type != webFetchBasicType {
+		t.Errorf("basic variants expected on older models: %+v %+v", out[0], out[1])
+	}
+	// PTC + web on a 4.6+ model → basic variants (no second execution env).
+	out = toAnthropicTools(defs, false, serverToolOpts{ptc: true, webTools: true, model: "claude-opus-4-8"})
+	types := map[string]bool{}
+	for _, at := range out {
+		types[at.Type] = true
+	}
+	if !types[codeExecToolType] || !types[webSearchBasicType] || types[webSearchDynType] {
+		t.Errorf("PTC must force basic web variants: %+v", out)
+	}
+	// Toggle off → no web tools.
+	out = toAnthropicTools(defs, false, serverToolOpts{model: "claude-opus-4-8"})
+	if len(out) != 1 {
+		t.Errorf("web tools must not ship when off: %+v", out)
+	}
+}
+
+// TestContextMgmt_ServerCompaction: the compaction beta contributes the
+// compact_20260112 edit + its beta header; independent of context editing.
+func TestContextMgmt_ServerCompaction(t *testing.T) {
+	a := &Anthropic{serverCompaction: true}
+	cm := a.contextMgmt()
+	if cm == nil || len(cm.Edits) != 1 || cm.Edits[0].Type != "compact_20260112" {
+		t.Fatalf("compact edit missing: %+v", cm)
+	}
+	if !strings.Contains(a.betaHeader(), betaServerCompaction) {
+		t.Errorf("compact beta header missing: %q", a.betaHeader())
+	}
+	// Both flags on → both edits, both betas.
+	a = &Anthropic{serverCompaction: true, contextEditing: true}
+	cm = a.contextMgmt()
+	if cm == nil || len(cm.Edits) != 2 {
+		t.Fatalf("expected clear + compact edits: %+v", cm)
+	}
+	h := a.betaHeader()
+	if !strings.Contains(h, betaServerCompaction) || !strings.Contains(h, betaContextManagement) {
+		t.Errorf("both betas expected: %q", h)
+	}
+	// Both off → nil (field omitted).
+	if cm = (&Anthropic{}).contextMgmt(); cm != nil {
+		t.Errorf("no edits expected: %+v", cm)
+	}
+}
+
 // TestEffortForThinkingBudget_Extended pins the new xhigh/max tiers.
 func TestEffortForThinkingBudget_Extended(t *testing.T) {
 	if got := EffortForThinkingBudget(32768); got != "xhigh" {

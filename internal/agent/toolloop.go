@@ -319,6 +319,13 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// model call code-callable tools from Python inside Anthropic's container —
 	// intermediate results never enter context. First-party anthropic only.
 	ptcMode := r.tun.ProgrammaticTools() && provider.Name() == "anthropic"
+	// Server-side web search + fetch (first-party anthropic only): declared in
+	// the tools array, executed on Anthropic's infrastructure, results ride the
+	// same response with citations.
+	webMode := r.tun.WebTools() && provider.Name() == "anthropic"
+	// API-native compaction (beta, applied provider-side): the loop only needs
+	// to know so the verbatim echo below preserves compaction blocks.
+	serverCompact := r.tun.ServerCompaction() && provider.Name() == "anthropic"
 	shipDefs := func() []providers.ToolDef {
 		var defs []providers.ToolDef
 		if nativeSearch {
@@ -341,13 +348,14 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	}
 	req.Tools = shipDefs()
 	req.ProgrammaticTools = ptcMode
+	req.WebTools = webMode
 	// rawEcho gates the verbatim assistant-content echo on the modes whose
-	// responses carry server blocks (tool-search results, code-execution runs)
-	// that MUST ride back exactly; everywhere else the portable Text+ToolCalls
-	// echo stays, so inherited-context subagents on other providers see no
-	// behaviour change.
+	// responses carry server blocks (tool-search results, code-execution runs,
+	// web tool results, compaction blocks) that MUST ride back exactly;
+	// everywhere else the portable Text+ToolCalls echo stays, so
+	// inherited-context subagents on other providers see no behaviour change.
 	rawEcho := func(raw json.RawMessage) json.RawMessage {
-		if nativeSearch || ptcMode {
+		if nativeSearch || ptcMode || webMode || serverCompact {
 			return raw
 		}
 		return nil

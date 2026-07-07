@@ -6,7 +6,16 @@
 > anthropic** sağlayıcıyı hedefler (`provider.Name() == "anthropic"` kapısı); claude-cli kendi
 > döngüsünü, minimax-anthropic/custom uçlar kendi kısıtlarını korur.
 
-Oluşturma: 2026-07-07 · Durum: **P0, P1, P4, P6 ve P7 (batch hariç) tamam; P2/P3/P5 planlı**
+Oluşturma: 2026-07-07 · Durum: **P0–P4, P6, P7 (batch hariç) tamam; yalnız P5 (memory tool) planlı**
+
+> **Uygulama notu (2026-07-07, ikinci tur):** P2 (sunucu web search/fetch — `AnthropicWebTools`
+> ayarı; 4.6+ modellerde `_20260209` dinamik-filtreli sürüm, eski modellerde ve PTC açıkken
+> temel sürüm — çifte code-execution ortamı engellenir; tur başına max_uses 8/12) ve P3
+> (server-side compaction — `AnthropicServerCompaction` ayarı; `compact-2026-01-12` beta +
+> `compact_20260112` context_management edit'i; compaction blokları tur içinde RawContent
+> verbatim echo ile korunur, turlar-arası transkripti istemci compaction yönetmeye devam eder)
+> uygulandı. Her ikisi de Ayarlar → Bağlam → "Anthropic beta" altında ayrı toggle; ek
+> sunucu/süreç gerektirmez — ikisi de mevcut /v1/messages çağrısının alanlarıdır.
 
 > **Uygulama notu (2026-07-07):** P1 (structured outputs — titler + flow `outputSchema`/`jsonField`),
 > P6 (mid-conversation system — steer mesajları Opus 4.8'de `role:system`, diğerlerinde

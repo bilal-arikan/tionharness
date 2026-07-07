@@ -26,7 +26,7 @@ func init() {
 			if cfg.Key == "" {
 				return nil, fmt.Errorf("anthropic provider not configured (set an API key in Settings)")
 			}
-			return NewAnthropic(cfg.Key).WithBetas(cfg.ExtendedCache, cfg.ContextEditing), nil
+			return NewAnthropic(cfg.Key).WithBetas(cfg.ExtendedCache, cfg.ContextEditing, cfg.ServerCompaction), nil
 		},
 	))
 }

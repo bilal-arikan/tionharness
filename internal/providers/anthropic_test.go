@@ -83,7 +83,7 @@ func TestSystemField_DynamicOnlyReturnsNil(t *testing.T) {
 // tools) and at the same 1h TTL as the system block.
 func TestToAnthropicTools_CacheBreakpointOnLastTool(t *testing.T) {
 	defs := []ToolDef{{Name: "a"}, {Name: "b"}, {Name: "c"}}
-	got := toAnthropicTools(defs, true, false)
+	got := toAnthropicTools(defs, true, serverToolOpts{})
 	if len(got) != 3 {
 		t.Fatalf("got %d tools, want 3", len(got))
 	}
@@ -105,7 +105,7 @@ func TestToAnthropicTools_CacheBreakpointOnLastTool(t *testing.T) {
 // With caching off, no tool carries a breakpoint — the caching on/off policy is
 // unchanged, only its granularity improves when on.
 func TestToAnthropicTools_NoCacheWhenDisabled(t *testing.T) {
-	got := toAnthropicTools([]ToolDef{{Name: "a"}, {Name: "b"}}, false, false)
+	got := toAnthropicTools([]ToolDef{{Name: "a"}, {Name: "b"}}, false, serverToolOpts{})
 	for _, tl := range got {
 		if tl.CacheControl != nil {
 			t.Errorf("tool %q must not be cached when extendedCache is off", tl.Name)
@@ -274,7 +274,7 @@ func TestCacheBreakpointStability(t *testing.T) {
 		Messages:      []Message{{Role: RoleAssistant, Text: "hello"}, {Role: RoleUser, Text: "again"}},
 	}
 	sysField, msgs := a.buildSystemAndMessages(req, "claude-sonnet-4-6")
-	tools := toAnthropicTools(req.Tools, a.extendedCache, false)
+	tools := toAnthropicTools(req.Tools, a.extendedCache, serverToolOpts{})
 
 	// Every TTL present must equal cacheTTL.
 	for _, b := range asBlocks(t, sysField) {
@@ -322,7 +322,7 @@ func TestContextEditing_OffByDefault(t *testing.T) {
 }
 
 func TestContextEditing_On(t *testing.T) {
-	a := (&Anthropic{}).WithBetas(true, true)
+	a := (&Anthropic{}).WithBetas(true, true, false)
 	cm := a.contextMgmt()
 	if cm == nil || len(cm.Edits) != 1 {
 		t.Fatalf("expected one context edit, got %+v", cm)

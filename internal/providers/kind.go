@@ -42,8 +42,9 @@ type ResolvedConfig struct {
 	CLIConfigDir  string // CLAUDE_CONFIG_DIR override for the claude-cli subprocess ("" = inherit ~/.claude)
 	CLIAuthKind   string // claude-cli credential kind: "oauth" | "apikey" | "" (none)
 	CLIAuthToken   string // claude-cli credential value injected into the subprocess env
-	ExtendedCache  bool   // anthropic extended prompt-cache beta
-	ContextEditing bool   // anthropic API-native context-editing beta (clear_tool_uses)
+	ExtendedCache    bool // anthropic extended prompt-cache beta
+	ContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
+	ServerCompaction bool // anthropic API-native compaction beta (compact_20260112)
 }
 
 // ProviderKind is one transport "plugin": it describes itself (Manifest),

@@ -2,6 +2,42 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
 
+## API-native P2+P3: sunucu web search/fetch + server-side compaction (toggle'lı) ✅ (2026-07-07)
+
+**İstek:** _Docs/55 P2 ve P3'ün eklenmesi, her ikisi de ayarlardan açılıp kapanabilir.
+İkisi de ek sunucu/süreç GEREKTİRMEZ — mevcut /v1/messages isteğinin alanlarıdır.
+
+**P2 — Sunucu-tarafı web search + web fetch (`AnthropicWebTools`, varsayılan kapalı):**
+- `Request.WebTools` → `toAnthropicTools` (yeni `serverToolOpts` yapısı): `web_search` +
+  `web_fetch` sunucu araçları isteğe eklenir; aramayı Anthropic yürütür, alıntılı sonuçlar
+  aynı yanıtta döner. 4.6+ modellerde `_20260209` dinamik-filtreli sürüm
+  (`SupportsDynamicWebTools`); eski modellerde VE PTC açıkken temel sürümler
+  (`web_search_20250305`/`web_fetch_20250910`) — dinamik sürüm kendi code-execution
+  ortamını taşıdığından PTC'yle çifte ortam oluşmaz.
+- Maliyet freni: tur başına `max_uses` tavanları (arama 8, çekme 12, sabit).
+- Sonuç blokları iz adımı olarak UI'a düşer (`web_*_tool_result` → sonuç sayısı/hata kodu);
+  RawContent verbatim echo web modunda da açık (şifreli alıntı içeriği tur içinde korunur).
+- Yalnız `provider.Name()=="anthropic"` + native tool loop (araçları açık ajanlar).
+
+**P3 — Server-side compaction (`AnthropicServerCompaction`, varsayılan kapalı):**
+- `WithBetas` üçüncü parametre → `compact-2026-01-12` beta başlığı +
+  `context_management.edits`'e `{type:"compact_20260112"}` (sunucu-varsayılan ~150K tetik).
+  Context-editing ile bağımsız; ikisi açıkken iki edit birden gönderilir.
+- Compaction blokları TUR İÇİNDE RawContent verbatim echo ile aynen geri gönderilir
+  (API şartı) — uzun tek turların (araç döngüsü) taşma sigortası. Turlar-arası transkripti
+  istemci-tarafı compaction yönetmeye devam eder (çifte özetleme çakışması yok; tam
+  turlar-arası server compaction, compaction bloklarının db persist'ini gerektirir — P3'ün
+  ileride derinleştirilecek kısmı olarak _Docs/55'te not edildi).
+- Kayıt zinciri: settings → `SetAnthropicBetas(cache, ctxEdit, serverCompact)` (registry →
+  kind cfg → `WithBetas`) + tunables aynası (rawEcho kapısı için).
+
+**UI:** Ayarlar → Bağlam → "Anthropic beta" altında iki yeni toggle (web araçları +
+API-native compaction), Türkçe ipuçlarıyla.
+
+Testler: `TestToAnthropicTools_WebTools` (dinamik/temel sürüm seçimi, PTC çakışma kuralı,
+max_uses, breakpoint yerleşimi), `TestContextMgmt_ServerCompaction` (edit + beta başlığı,
+bağımsızlık). ✅ build/vet temiz; `go test ./...` 734 test / 35 paket; frontend `tsc` temiz.
+
 ## API-native P1+P6+P7+P4: structured outputs, system mesajları, strict/effort, PTC ✅ (2026-07-07)
 
 **İstek:** _Docs/55 yol haritasının P1, P6, P7, P4 maddelerinin uygulanması.

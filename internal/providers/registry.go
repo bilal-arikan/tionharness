@@ -37,8 +37,9 @@ type Registry struct {
 	claudeAuthToken    string // claude-cli credential value injected into the subprocess env
 	defaultModel       string // applied when a request leaves Model empty
 
-	betaExtendedCache  bool // anthropic extended prompt-cache TTL beta
-	betaContextEditing bool // anthropic API-native context-editing beta (clear_tool_uses)
+	betaExtendedCache    bool // anthropic extended prompt-cache TTL beta
+	betaContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
+	betaServerCompaction bool // anthropic API-native compaction beta (compact_20260112)
 
 	minimaxKey     string // MiniMax (OpenAI-compatible) API key
 	minimaxBaseURL string // MiniMax base URL ("" = public default)
@@ -106,10 +107,11 @@ func (r *Registry) SetDefaultModel(model string) {
 
 // SetAnthropicBetas toggles the optional Anthropic beta capabilities applied to
 // anthropic provider instances.
-func (r *Registry) SetAnthropicBetas(extendedCache, contextEditing bool) {
+func (r *Registry) SetAnthropicBetas(extendedCache, contextEditing, serverCompaction bool) {
 	r.mu.Lock()
 	r.betaExtendedCache = extendedCache
 	r.betaContextEditing = contextEditing
+	r.betaServerCompaction = serverCompaction
 	r.mu.Unlock()
 }
 
@@ -239,6 +241,7 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 		CLIAuthToken:       r.claudeAuthToken,
 		ExtendedCache:      r.betaExtendedCache,
 		ContextEditing:     r.betaContextEditing,
+		ServerCompaction:   r.betaServerCompaction,
 	}
 	switch id {
 	case "anthropic":

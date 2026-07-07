@@ -126,6 +126,18 @@ type Settings struct {
 	// container — intermediate results never enter context. MCP + interactive
 	// tools excluded. Off by default. First-party anthropic provider only.
 	AnthropicProgrammaticTools bool `json:"anthropicProgrammaticTools"`
+	// AnthropicWebTools adds the SERVER-SIDE web search + web fetch tools to
+	// native anthropic tool turns: searches run on Anthropic's infrastructure
+	// (no local process) and return cited results in the same response. Billed
+	// per search — conservative per-turn max_uses ceilings are applied. Off by
+	// default. First-party anthropic provider only.
+	AnthropicWebTools bool `json:"anthropicWebTools"`
+	// AnthropicServerCompaction enables API-native compaction (beta): the server
+	// summarizes earlier history into compaction blocks once the prompt nears
+	// its trigger (~150K tokens); within a turn the blocks are echoed back
+	// verbatim. Complements the client-side compaction (which keeps managing
+	// the cross-turn transcript). Off by default. anthropic provider only.
+	AnthropicServerCompaction bool `json:"anthropicServerCompaction"`
 
 	// Desktop / display behaviour (applied client-side).
 	DesktopNotifications bool `json:"desktopNotifications"` // browser notifications
@@ -444,6 +456,8 @@ type DTO struct {
 	AnthropicContextEditing    bool `json:"anthropicContextEditing"`
 	AnthropicNativeToolSearch  bool `json:"anthropicNativeToolSearch"`
 	AnthropicProgrammaticTools bool `json:"anthropicProgrammaticTools"`
+	AnthropicWebTools          bool `json:"anthropicWebTools"`
+	AnthropicServerCompaction  bool `json:"anthropicServerCompaction"`
 	AutonomousTaskBudgetTokens int  `json:"autonomousTaskBudgetTokens"`
 
 	DesktopNotifications bool `json:"desktopNotifications"`
@@ -552,6 +566,8 @@ func (s Settings) ToDTO() DTO {
 		AnthropicContextEditing:    s.AnthropicContextEditing,
 		AnthropicNativeToolSearch:  s.AnthropicNativeToolSearch,
 		AnthropicProgrammaticTools: s.AnthropicProgrammaticTools,
+		AnthropicWebTools:          s.AnthropicWebTools,
+		AnthropicServerCompaction:  s.AnthropicServerCompaction,
 		AutonomousTaskBudgetTokens: s.AutonomousTaskBudgetTokens,
 
 		DesktopNotifications: s.DesktopNotifications,
@@ -653,6 +669,8 @@ type Patch struct {
 	AnthropicContextEditing    *bool `json:"anthropicContextEditing"`
 	AnthropicNativeToolSearch  *bool `json:"anthropicNativeToolSearch"`
 	AnthropicProgrammaticTools *bool `json:"anthropicProgrammaticTools"`
+	AnthropicWebTools          *bool `json:"anthropicWebTools"`
+	AnthropicServerCompaction  *bool `json:"anthropicServerCompaction"`
 	AutonomousTaskBudgetTokens *int  `json:"autonomousTaskBudgetTokens"`
 
 	DesktopNotifications *bool `json:"desktopNotifications"`

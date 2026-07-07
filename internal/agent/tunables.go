@@ -169,6 +169,17 @@ type Tunables struct {
 	// counterpart of the local run_code code mode (which needs local Python);
 	// MCP and interactive tools are excluded. Off by default.
 	programmaticTools bool
+
+	// webTools — when true, native anthropic tool turns add the server-side
+	// web search + web fetch tools: searches run on Anthropic's infrastructure
+	// and return cited results in the same response. Billed per search
+	// (conservative per-turn max_uses ceilings applied). Off by default.
+	webTools bool
+
+	// serverCompaction mirrors the AnthropicServerCompaction beta so the tool
+	// loop knows to echo assistant content verbatim (compaction blocks must ride
+	// back exactly). The beta itself is applied provider-side (WithBetas).
+	serverCompaction bool
 }
 
 // DefaultDebugJournalCap mirrors db.DefaultDebugJournalCap as the resolved
@@ -839,6 +850,36 @@ func (t *Tunables) ProgrammaticTools() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.programmaticTools
+}
+
+// SetWebTools toggles the server-side web search + web fetch tools on the
+// native anthropic tool loop. Off by default.
+func (t *Tunables) SetWebTools(enabled bool) {
+	t.mu.Lock()
+	t.webTools = enabled
+	t.mu.Unlock()
+}
+
+// WebTools reports whether the server-side web tools are enabled.
+func (t *Tunables) WebTools() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.webTools
+}
+
+// SetServerCompaction mirrors the API-native compaction beta into the agent
+// layer (the tool loop needs it for the verbatim assistant echo).
+func (t *Tunables) SetServerCompaction(enabled bool) {
+	t.mu.Lock()
+	t.serverCompaction = enabled
+	t.mu.Unlock()
+}
+
+// ServerCompaction reports whether API-native compaction is enabled.
+func (t *Tunables) ServerCompaction() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.serverCompaction
 }
 
 // NativeToolSearch reports whether native tool search is enabled.
