@@ -140,7 +140,7 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 // activate_tools (Doc 52) — external MCP tools still noted for ToolSearch.
 func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	lazy := []providers.ToolDef{
-		{Name: "update_session"},               // lazy built-in → extended namespace
+		{Name: "update_session"},                  // lazy built-in → extended namespace
 		{Name: "WebFetch", Description: "fetch"},  // CLI-native → dropped
 		{Name: "srvA__alpha", Description: "mcp"}, // MCP → mcp__ prefix
 	}

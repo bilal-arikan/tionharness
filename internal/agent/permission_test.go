@@ -116,11 +116,11 @@ func TestEffectivePermissionMode(t *testing.T) {
 		autonomous bool
 		want       string
 	}{
-		{"ask", true, "auto"},        // autonomous: no user → force auto
-		{"auto", true, "auto"},       // already auto
-		{"", true, "auto"},           // empty → auto
+		{"ask", true, "auto"},            // autonomous: no user → force auto
+		{"auto", true, "auto"},           // already auto
+		{"", true, "auto"},               // empty → auto
 		{"read-only", true, "read-only"}, // preserved: non-interactive guard
-		{"ask", false, "ask"},        // chat turn: keep agent's mode
+		{"ask", false, "ask"},            // chat turn: keep agent's mode
 		{"read-only", false, "read-only"},
 		{"auto", false, "auto"},
 	}

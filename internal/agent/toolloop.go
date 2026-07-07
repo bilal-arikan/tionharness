@@ -388,8 +388,9 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// resolved, settings-driven recovery policy for this turn.
 	var ls loopState
 	cfg := recoveryConfig{
-		maxTokenLimit:   r.tun.MaxTokenRetries(),
-		reactiveCompact: r.tun.ReactiveCompact(),
+		maxTokenLimit:      r.tun.MaxTokenRetries(),
+		reactiveCompact:    r.tun.ReactiveCompact(),
+		maxProviderRetries: r.tun.ProviderRetryMax(),
 	}
 	keepRecent := r.tun.ReactiveKeepRecent()
 	// partial accumulates answer text across max-output-token resumes, so the
@@ -434,9 +435,26 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
 			// A1: a context-overflow error is recoverable once per turn by
-			// compacting the in-flight history and retrying; any other error
-			// ends the turn. decideRecovery keeps this policy pure + testable.
+			// compacting the in-flight history and retrying; a transient
+			// provider fault (429/5xx/timeout) is retried after a backoff,
+			// bounded by the budget; any other error ends the turn.
+			// decideRecovery keeps this policy pure + testable.
 			d := decideRecovery(nil, err, ls, cfg)
+			if d.cont {
+				ls.providerRetries++
+				ls.lastContinue = d.reason
+				rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
+				steps = append(steps, rec)
+				emit(rec)
+				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugRecovery, AgentID: agent.ID, Detail: string(d.reason) + ": " + err.Error()})
+				// Backoff is ctx-aware: a user stop during the wait ends the
+				// turn instead of firing one more doomed request.
+				if !sleepCtx(ctx, d.backoff) {
+					fail(string(termCancelled), ctx.Err())
+					return nil, steps, ctx.Err()
+				}
+				continue
+			}
 			if d.compact {
 				cctx := conversation.WithCompactPrompt(ctx, r.CompactPromptTemplate())
 				folded, ok, cerr := conversation.CompactInFlightMessages(cctx, r.db, provider, agent, req.Messages, keepRecent)
@@ -454,7 +472,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 					continue
 				}
 			}
-			fail(string(termProviderErr), err)
+			fail(string(d.term), err)
 			return nil, steps, err
 		}
 		last = resp

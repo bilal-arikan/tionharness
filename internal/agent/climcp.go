@@ -21,7 +21,7 @@ type cliMCPServer struct {
 	Command string            `json:"command,omitempty"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
-	Type    string            `json:"type,omitempty"`    // sse | http
+	Type    string            `json:"type,omitempty"` // sse | http
 	URL     string            `json:"url,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"` // http transport (e.g. Authorization)
 	// AlwaysLoad exempts a server's tools from the CLI's tool-search deferral

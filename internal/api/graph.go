@@ -291,4 +291,3 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 }
-

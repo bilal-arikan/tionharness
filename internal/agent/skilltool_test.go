@@ -16,8 +16,8 @@ func TestSkillToolNameFor(t *testing.T) {
 		provider string
 		want     string
 	}{
-		{"", ns},               // empty → keyless claude-cli default
-		{"claude-cli", ns},     // bridged through Interaction MCP
+		{"", ns},           // empty → keyless claude-cli default
+		{"claude-cli", ns}, // bridged through Interaction MCP
 		{"anthropic", skills.DefaultSkillTool},
 		{"minimax", skills.DefaultSkillTool},
 		{"openrouter", skills.DefaultSkillTool},

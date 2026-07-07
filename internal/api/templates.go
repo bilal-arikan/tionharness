@@ -162,19 +162,19 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			mcpEnabled = true
 		}
 		agent, err := wsNew.DB.CreateAgent(ctx, db.Agent{
-			Name:            ta.Name,
-			Soul:            ta.Soul,
-			Identity:        ta.Identity,
-			Avatar:          ta.Avatar,
-			Color:           ta.Color,
-			Provider:        ap,
-			Model:           am,
-			ThinkingLevel:   ta.ThinkingLevel,
-			PermissionMode:  ta.PermissionMode,
-			MCPEnabled:      mcpEnabled,
-			AllowedTools:    ta.AllowedTools,
-			BlockedTools:    ta.BlockedTools,
-			Skills:          known,
+			Name:           ta.Name,
+			Soul:           ta.Soul,
+			Identity:       ta.Identity,
+			Avatar:         ta.Avatar,
+			Color:          ta.Color,
+			Provider:       ap,
+			Model:          am,
+			ThinkingLevel:  ta.ThinkingLevel,
+			PermissionMode: ta.PermissionMode,
+			MCPEnabled:     mcpEnabled,
+			AllowedTools:   ta.AllowedTools,
+			BlockedTools:   ta.BlockedTools,
+			Skills:         known,
 		})
 		if err != nil {
 			s.logger.Warn("seed template agent failed", "workspace", wsNew.ID, "agent", ta.Name, "error", err)

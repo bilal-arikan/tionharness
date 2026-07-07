@@ -9,12 +9,12 @@ import (
 
 func TestProjectIDForPath(t *testing.T) {
 	cases := map[string]string{
-		"":                                      "",
-		"   ":                                    "",
-		`C:/Users/user/Desktop/Projects/TionSwarm`:                        "C-Users-user-Desktop-Projects-TionSwarm",
-		`C:\Users\user\Desktop\Projects\TionSwarm`:                        "C-Users-user-Desktop-Projects-TionSwarm",
-		`C:\Users\user\AppData\Local\Programs\@external-agentelectron`:       "C-Users-user-AppData-Local-Programs-external-agentelectron",
-		`/home/user/my-repo`:                                               "home-user-my-repo",
+		"":    "",
+		"   ": "",
+		`C:/Users/user/Desktop/Projects/TionSwarm`:                  "C-Users-user-Desktop-Projects-TionSwarm",
+		`C:\Users\user\Desktop\Projects\TionSwarm`:                  "C-Users-user-Desktop-Projects-TionSwarm",
+		`C:\Users\user\AppData\Local\Programs\@external-agentelectron`: "C-Users-user-AppData-Local-Programs-external-agentelectron",
+		`/home/user/my-repo`:                                         "home-user-my-repo",
 	}
 	for in, want := range cases {
 		if got := projectIDForPath(in); got != want {

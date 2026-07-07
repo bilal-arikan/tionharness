@@ -239,6 +239,7 @@ func (s *Server) applySettings() {
 	s.tun.SetWebTools(cur.AnthropicWebTools)
 	s.tun.SetServerCompaction(cur.AnthropicServerCompaction)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
+	s.tun.SetProviderRetryMax(cur.MaxProviderRetries)
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
 	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold, cur.CompactModel)
 	if s.backups != nil {
@@ -597,7 +598,6 @@ func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/backups/restore", s.handleRestoreBackup)
 	mux.HandleFunc("DELETE /api/backups/archives", s.handleDeleteArchive)
 }
-
 
 // registerSecretRoutes registers the per-workspace secret vault (resolved from
 // X-Workspace-Id). Values are write-only except for the explicit reveal action.

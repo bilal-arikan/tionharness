@@ -18,19 +18,19 @@ import (
 // A debug view mirroring the agent context preview, but for a live session (real
 // history, author labels, tool recap, running summary, memory, goal, cwd).
 type sessionContextPreview struct {
-	AgentName     string           `json:"agentName"`
+	AgentName string `json:"agentName"`
 	// Provider drives provider-aware UI notes (e.g. claude-cli delivers tools via
 	// the CLI/MCP bridge and weaves the dynamic suffix into the last user message).
-	Provider      string           `json:"provider"`
-	MultiAgent    bool             `json:"multiAgent"`
-	System        string           `json:"system"`
-	SystemTokens  int              `json:"systemTokens"`
+	Provider     string `json:"provider"`
+	MultiAgent   bool   `json:"multiAgent"`
+	System       string `json:"system"`
+	SystemTokens int    `json:"systemTokens"`
 	// Skills is the agent's selected-skills catalog block (slug + summary of each
 	// skill; full body loaded lazily via use_skill). It lives INSIDE the cached
 	// static system prefix, but is split out here so the preview UI can fold it as
 	// its own segment. Empty when the agent has no skills selected.
-	Skills        string           `json:"skills"`
-	SkillsTokens  int              `json:"skillsTokens"`
+	Skills       string `json:"skills"`
+	SkillsTokens int    `json:"skillsTokens"`
 	// Summary is the rolling summary (the compacted stand-in for the dropped
 	// messages), split out of the dynamic suffix so the UI can show it as its own
 	// category. Empty when the session has no summary. Counts toward TotalTokens.
@@ -45,16 +45,16 @@ type sessionContextPreview struct {
 	// it is NOT part of TotalTokens because they are not on the wire.
 	DroppedMessages []previewMessage `json:"droppedMessages"`
 	DroppedTokens   int              `json:"droppedTokens"`
-	Tools         []toolSummary    `json:"tools"`
-	ToolTokens    int              `json:"toolTokens"`
+	Tools           []toolSummary    `json:"tools"`
+	ToolTokens      int              `json:"toolTokens"`
 	// LazyTools are the on-demand tools whose schemas are NOT shipped at turn start.
 	// Their names+descriptions live in the system prompt's load-on-demand catalog
 	// block (counted under SystemTokens); activated via activate_tools / ToolSearch.
 	// Mirrors agentContextPreview.LazyTools so the session popup shows the same
 	// eager-vs-lazy split the agent preview does — the effective catalog the info
 	// screen counts is Tools+LazyTools, not just the eager schemas shipped per turn.
-	LazyTools     []toolSummary    `json:"lazyTools"`
-	TotalTokens   int              `json:"totalTokens"`
+	LazyTools   []toolSummary `json:"lazyTools"`
+	TotalTokens int           `json:"totalTokens"`
 	// AccurateTokens is the EXACT prompt size of this composed request, counted
 	// server-side by the provider's real tokenizer (/v1/messages/count_tokens).
 	// Only populated on ?accurate=1 for providers implementing TokenCounter
@@ -108,17 +108,17 @@ type cliOverheadPreview struct {
 // no breakpoint of its own, but --resume (ClaudeResume, warm) keeps the system +
 // the first CachedMsgCount messages server-side, sending only the newest delta.
 type cachePreview struct {
-	Mode           string `json:"mode"` // "anthropic" | "claude-resume" | "none"
-	Note           string `json:"note"` // one-line human explanation
-	SystemCached   bool   `json:"systemCached"`
-	DynamicCached  bool   `json:"dynamicCached"`
-	ToolsCached    bool   `json:"toolsCached"`
+	Mode          string `json:"mode"` // "anthropic" | "claude-resume" | "none"
+	Note          string `json:"note"` // one-line human explanation
+	SystemCached  bool   `json:"systemCached"`
+	DynamicCached bool   `json:"dynamicCached"`
+	ToolsCached   bool   `json:"toolsCached"`
 	// SummaryCached reports whether the rolling summary is served warm. Since P2 the
 	// native providers place it as a synthetic head message INSIDE the cached prefix
 	// (a cache READ between folds), so it is cached there; on claude-cli it rides the
 	// uncached tail (woven fresh each turn), so it is not.
-	SummaryCached  bool   `json:"summaryCached"`
-	CachedMsgCount int    `json:"cachedMsgCount"` // leading messages served warm
+	SummaryCached  bool `json:"summaryCached"`
+	CachedMsgCount int  `json:"cachedMsgCount"` // leading messages served warm
 }
 
 // computeCachePreview derives the per-segment cache map from the provider, the

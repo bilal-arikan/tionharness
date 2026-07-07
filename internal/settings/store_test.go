@@ -67,4 +67,3 @@ func TestGatedToolFlagsRoundTrip(t *testing.T) {
 		t.Fatalf("DTO missing delegation fields: %+v", dto)
 	}
 }
-

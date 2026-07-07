@@ -20,18 +20,18 @@ type kindStat struct {
 // agentBudgetRow is one agent's today usage plus its caps, joined with the
 // agent's display identity so the screen renders without extra round-trips.
 type agentBudgetRow struct {
-	AgentID         string              `json:"agentId"`
-	Name            string              `json:"name"`
-	Avatar          string              `json:"avatar,omitempty"`
-	Color           string              `json:"color,omitempty"`
-	Provider        string              `json:"provider,omitempty"`
-	Calls           int                 `json:"calls"`
-	InputTokens     int                 `json:"inputTokens"`
-	OutputTokens    int                 `json:"outputTokens"`
-	ByKind          map[string]kindStat `json:"byKind,omitempty"`
-	CostUSD         float64             `json:"costUSD"`
-	Priced          bool                `json:"priced"`    // false when any of this agent's spend is unpriced (e.g. claude-cli)
-	Estimated       bool                `json:"estimated"` // true when cost is an equivalent-API estimate (subscription provider)
+	AgentID      string              `json:"agentId"`
+	Name         string              `json:"name"`
+	Avatar       string              `json:"avatar,omitempty"`
+	Color        string              `json:"color,omitempty"`
+	Provider     string              `json:"provider,omitempty"`
+	Calls        int                 `json:"calls"`
+	InputTokens  int                 `json:"inputTokens"`
+	OutputTokens int                 `json:"outputTokens"`
+	ByKind       map[string]kindStat `json:"byKind,omitempty"`
+	CostUSD      float64             `json:"costUSD"`
+	Priced       bool                `json:"priced"`    // false when any of this agent's spend is unpriced (e.g. claude-cli)
+	Estimated    bool                `json:"estimated"` // true when cost is an equivalent-API estimate (subscription provider)
 	// Tool-output compaction savings (bytes) for this agent today — System A
 	// (deterministic) and System B (LLM summary), standalone meters with no cost.
 	CompactSavedBytes    int `json:"compactSavedBytes"`

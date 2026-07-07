@@ -1,4 +1,4 @@
-﻿package settings
+package settings
 
 import "testing"
 
@@ -73,4 +73,3 @@ func TestCustomProviderCRUD(t *testing.T) {
 		t.Error("deleting missing provider should error")
 	}
 }
-

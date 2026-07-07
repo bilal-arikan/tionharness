@@ -84,7 +84,7 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 // always-on spawn_session are advertised.
 func TestInteractionAdvertisedNames(t *testing.T) {
 	b := &interactionBackend{runs: newChatRuns()}
-	specs := b.Tools("", "")                      // no token → static set only (no per-run bridge); tier "" → full set
+	specs := b.Tools("", "") // no token → static set only (no per-run bridge); tier "" → full set
 	want := make(map[string]bool, len(specs))
 	for _, s := range specs {
 		want[s.Name] = true

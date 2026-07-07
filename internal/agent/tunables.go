@@ -11,6 +11,7 @@ const DefaultSessionContextRecent = 5
 const (
 	DefaultMaxTokenRetries    = 3 // resume attempts after the output-token cap
 	DefaultReactiveKeepRecent = 6 // in-flight messages kept verbatim when compacting
+	DefaultProviderRetryMax   = 2 // retries per turn for transient provider faults (429/5xx/timeout)
 )
 
 // Default spawn guards. They bound the fire-and-forget spawn_session surface so a
@@ -65,6 +66,7 @@ type Tunables struct {
 	maxTokenRetries    int  // resume attempts after the output cap (0 = disabled)
 	reactiveKeepRecent int  // messages kept verbatim when compacting (<2 → default)
 	maxOutputTokens    int  // generation cap override (0 = auto: per-model family)
+	providerRetryMax   int  // transient provider-fault retries per turn (<0 → default, 0 = disabled)
 
 	// Tool-output token optimization — two independent, parallel systems.
 	// System A: deterministic compaction (free, rule-based, every result).
@@ -205,6 +207,7 @@ func NewTunables() *Tunables {
 		reactiveCompact:    true,
 		maxTokenRetries:    DefaultMaxTokenRetries,
 		reactiveKeepRecent: DefaultReactiveKeepRecent,
+		providerRetryMax:   DefaultProviderRetryMax,
 		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
 		// dir by default — the safety brake for the otherwise-unconfined tools.
 		autonomousConfine: true,
@@ -440,6 +443,26 @@ func (t *Tunables) MaxTokenRetries() int {
 		return 0
 	}
 	return t.maxTokenRetries
+}
+
+// SetProviderRetryMax configures the per-turn retry budget for transient
+// provider faults (429/5xx/timeout). 0 disables retry; negative resets to the
+// built-in default.
+func (t *Tunables) SetProviderRetryMax(max int) {
+	t.mu.Lock()
+	t.providerRetryMax = max
+	t.mu.Unlock()
+}
+
+// ProviderRetryMax returns the per-turn provider-retry budget. Negative (unset)
+// resolves to the default; an explicit 0 disables retry.
+func (t *Tunables) ProviderRetryMax() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.providerRetryMax < 0 {
+		return DefaultProviderRetryMax
+	}
+	return t.providerRetryMax
 }
 
 // ReactiveKeepRecent returns the in-flight compaction tail size (default when <2,

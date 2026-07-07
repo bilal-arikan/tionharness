@@ -2,6 +2,7 @@ package agent
 
 import (
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
@@ -13,9 +14,10 @@ import (
 type contReason string
 
 const (
-	contToolUse        contReason = "tool_use"                    // model requested tools
-	contMaxTokenResume contReason = "max_output_tokens_recovery"  // resume after output cap
-	contCompactRetry   contReason = "reactive_compact_retry"      // context overflow → compact → retry
+	contToolUse        contReason = "tool_use"                   // model requested tools
+	contMaxTokenResume contReason = "max_output_tokens_recovery" // resume after output cap
+	contCompactRetry   contReason = "reactive_compact_retry"     // context overflow → compact → retry
+	contProviderRetry  contReason = "provider_retry"             // transient provider fault → backoff → retry
 )
 
 // termReason tags why the loop returned (a terminal transition). Surfaced as the
@@ -36,6 +38,7 @@ const (
 type loopState struct {
 	maxTokenRetries int        // 0..cfg.maxTokenLimit
 	compacted       bool       // reactive compaction is one-shot per turn
+	providerRetries int        // 0..cfg.maxProviderRetries (transient provider faults)
 	lastContinue    contReason // why the previous iteration continued ("" on first)
 }
 
@@ -43,8 +46,9 @@ type loopState struct {
 // decideRecovery each iteration. Kept separate from loopState (the mutable
 // guards) so the decision stays a pure function of (result, guards, policy).
 type recoveryConfig struct {
-	maxTokenLimit   int  // resume budget after the output cap (0 = resume disabled)
-	reactiveCompact bool // whether context-overflow compaction-and-retry is allowed
+	maxTokenLimit      int  // resume budget after the output cap (0 = resume disabled)
+	reactiveCompact    bool // whether context-overflow compaction-and-retry is allowed
+	maxProviderRetries int  // retry budget for transient provider faults (0 = retry disabled)
 }
 
 // decision is the output of the pure recovery analysis: it tells the loop body
@@ -57,6 +61,7 @@ type decision struct {
 	compact bool               // run reactive compaction, then continue
 	reason  contReason         // machine tag for a cont/compact transition
 	inject  *providers.Message // message to append before the next iteration
+	backoff time.Duration      // ctx-aware wait before the retry (provider_retry only)
 	term    termReason         // terminal tag when neither cont nor compact
 	err     error              // non-nil → propagate as the loop's error return
 }
@@ -68,13 +73,23 @@ type decision struct {
 // table-testable in isolation from the provider and the message plumbing.
 func decideRecovery(resp *providers.Response, callErr error, st loopState, cfg recoveryConfig) decision {
 	if callErr != nil {
+		switch cls := classifyProviderError(callErr); {
 		// Context overflow is recoverable once per turn by compacting the
-		// in-flight history and retrying — when enabled; any other error
-		// (or a disabled toggle) is terminal.
-		if cfg.reactiveCompact && isContextOverflow(callErr) && !st.compacted {
+		// in-flight history and retrying — when enabled.
+		case cls == errContextOverflow && cfg.reactiveCompact && !st.compacted:
 			return decision{compact: true, reason: contCompactRetry, err: callErr}
+		// A user stop must terminate immediately — retrying a cancelled call
+		// would resurrect a turn the user just killed.
+		case cls == errCancelled:
+			return decision{term: termCancelled, err: callErr}
+		// Transient provider faults (429/5xx/timeout) are retried with the SAME
+		// request after a jittered backoff, bounded by the per-turn budget.
+		// Deterministic classes (auth/billing/unknown) never enter this path.
+		case cls.retryable() && st.providerRetries < cfg.maxProviderRetries:
+			return decision{cont: true, reason: contProviderRetry, backoff: retryBackoff(st.providerRetries), err: callErr}
+		default:
+			return decision{term: termProviderErr, err: callErr}
 		}
-		return decision{term: termProviderErr, err: callErr}
 	}
 	// The model stopped because it ran into the output-token cap mid-answer.
 	// Resume it (up to the configured budget) so the full answer is produced
@@ -108,6 +123,8 @@ func recoveryText(r contReason) string {
 		return "Çıktı token limitine ulaşıldı; yanıt kaldığı yerden sürdürülüyor."
 	case contCompactRetry:
 		return "Bağlam taşması algılandı; eski mesajlar özetlenip tur yeniden denendi."
+	case contProviderRetry:
+		return "Geçici sağlayıcı hatası (aşırı yük/zaman aşımı); kısa bekleme sonrası yeniden denendi."
 	default:
 		return "Tur kurtarma yoluna girdi."
 	}

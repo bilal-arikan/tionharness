@@ -316,6 +316,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	}
 	applyInt(&next.MaxTokenRetries, p.MaxTokenRetries)
 	applyInt(&next.ReactiveKeepRecent, p.ReactiveKeepRecent)
+	applyInt(&next.MaxProviderRetries, p.MaxProviderRetries)
 	applyInt(&next.MaxOutputTokens, p.MaxOutputTokens)
 
 	if p.CompactToolOutput != nil {
@@ -509,6 +510,14 @@ func normalize(v Settings) Settings {
 	}
 	if v.ReactiveKeepRecent > 50 {
 		v.ReactiveKeepRecent = 50
+	}
+	// Provider retry: 0 is valid (disables retry); clamp the ceiling so a typo
+	// cannot make one turn hammer a failing provider.
+	if v.MaxProviderRetries < 0 {
+		v.MaxProviderRetries = 0
+	}
+	if v.MaxProviderRetries > 5 {
+		v.MaxProviderRetries = 5
 	}
 	// Output cap: 0 is valid (auto, per-model family). A positive override is
 	// clamped to a sane range — a floor so it can't cripple answers, a ceiling at

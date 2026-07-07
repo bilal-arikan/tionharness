@@ -21,9 +21,9 @@ import (
 type agentContextPreview struct {
 	// Provider drives provider-aware UI notes (e.g. claude-cli weaves the dynamic
 	// suffix into the last user message rather than a separate system block).
-	Provider     string        `json:"provider"`
-	System       string        `json:"system"`
-	SystemTokens int           `json:"systemTokens"`
+	Provider     string `json:"provider"`
+	System       string `json:"system"`
+	SystemTokens int    `json:"systemTokens"`
 	// Skills is the agent's selected-skills catalog block, split out of the system
 	// prompt so the preview UI can fold it as its own segment (it still lives inside
 	// the cached static prefix). Empty when the agent has no skills selected.
