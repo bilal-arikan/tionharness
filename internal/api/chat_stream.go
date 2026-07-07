@@ -303,10 +303,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			// tell who said what in a thread shared by several agents (no-op for a
 			// single-agent session). multiAgent gates the explanatory system note.
 			history, multiAgent := s.labelMultiAgentHistory(ctx, database, agentRow.ID, history)
-			// Fold a compact recap of recent turns' tool I/O into the history so the
-			// agent can see what tools it ran and what they returned (the trace is
-			// otherwise dropped when history → provider messages).
-			history = appendRecentToolSummaries(history)
+			// Recap of recent turns' tool I/O (the trace is otherwise dropped when
+			// history → provider messages). Rendered as a volatile dynamic block —
+			// NOT folded into the history — so the history messages stay byte-stable
+			// for the rolling prompt-cache breakpoint.
+			toolRecap := recentToolActivityBlock(history)
 			// Carry this workspace's editable compaction prompt onto the turn context.
 			ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
 			// PreCompact lifecycle hook (Claude Code parity): Prepare invokes this just
@@ -323,7 +324,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent, passContext)
+			llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent, toolRecap, passContext)
 			// claude-cli session resume (opt-in): when engaged, this trims llmReq to the
 			// unseen delta and sets ResumeSessionID so the CLI reuses its warm cache.
 			resumePlan := s.planClaudeResume(provider, len(agents), session, rawHistory, &llmReq)

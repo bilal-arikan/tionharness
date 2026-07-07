@@ -23,9 +23,11 @@ func TestCostDetailed_CacheTiers(t *testing.T) {
 	if got := p.CostDetailed(0, 0, 1_000_000, 0); !approx(got, 0.5) {
 		t.Errorf("cache-read cost = %v, want 0.5", got)
 	}
-	// 1M cache-write = 5 * 1.25 = $6.25.
-	if got := p.CostDetailed(0, 0, 0, 1_000_000); !approx(got, 6.25) {
-		t.Errorf("cache-write cost = %v, want 6.25", got)
+	// 1M cache-write = 5 * 2.0 = $10 — the native anthropic client always
+	// requests the 1-hour extended TTL, whose write premium is 2× (not the
+	// standard 5-minute tier's 1.25×).
+	if got := p.CostDetailed(0, 0, 0, 1_000_000); !approx(got, 10) {
+		t.Errorf("cache-write cost = %v, want 10 (1h TTL premium)", got)
 	}
 	// Savings on 1M cache-read = 5 * 0.90 = $4.50.
 	if got := p.CacheSavings(1_000_000); !approx(got, 4.5) {

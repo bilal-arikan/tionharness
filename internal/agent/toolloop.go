@@ -53,17 +53,14 @@ func thinkingBudgetForLevel(level string) int {
 	}
 }
 
-// resolveThinkingBudget is the model-class-aware resolver. It starts from the
-// agent's ThinkingLevel, but for models that mandate always-on adaptive
-// reasoning (Fable/Mythos 5 class — they reject thinking:disabled with a 400)
-// it floors an "off"/"low" request to a minimal adaptive budget so the request
-// stays valid. Opus/Sonnet/Haiku are unaffected.
+// resolveThinkingBudget resolves the agent's ThinkingLevel to a token budget.
+// Model-class translation (adaptive vs legacy wire format, always-on models)
+// now lives in the provider (providers.thinkingFor), so the budget passes
+// through unchanged: 0 means "off" for every model class — on always-on models
+// (Fable/Mythos 5) the provider simply omits the thinking field.
 func resolveThinkingBudget(model, level string) int {
-	budget := thinkingBudgetForLevel(level)
-	if providers.RequiresAdaptiveThinking(model) && budget < providers.MinAdaptiveThinkingBudget {
-		return providers.MinAdaptiveThinkingBudget
-	}
-	return budget
+	_ = model // kept for call-site/test stability; translation moved provider-side
+	return thinkingBudgetForLevel(level)
 }
 
 // CompleteWithTools runs a completion that may use tools. Behaviour depends on

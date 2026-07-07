@@ -15,7 +15,7 @@ func TestSystemPromptInjectsWorkspaceInstructions(t *testing.T) {
 
 	// No instructions set → bare persona plus the cached goal-usage hint.
 	noInstr := r.systemPrompt(agent)
-	if !strings.HasPrefix(noInstr, buildSystemPrompt(agent)) {
+	if !strings.HasPrefix(noInstr, BuildSystemPrompt(agent)) {
 		t.Fatalf("without instructions: persona prefix dropped: %q", noInstr)
 	}
 	if !strings.Contains(noInstr, GoalUsageHint) {

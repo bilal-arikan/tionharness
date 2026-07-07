@@ -113,23 +113,16 @@ func CodeModeEligible(name string) bool { return !codeModeExcludedBuiltins[name]
 func (RunCodeTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "run_code",
-		Description: "Run a Python script that calls tools as ordinary functions (code-execution mode). " +
-			"Every enabled MCP tool AND TionSwarm's own built-in tools are exposed as generated Python modules under " + runCodeBindingsDir + "/ " +
-			"(one module per MCP server + a `tionswarm` module for built-ins, on PYTHONPATH — `from <server> import <tool>` / " +
-			"`from tionswarm import <tool>`). This lets you orchestrate a multi-tool workflow (list → filter → act) in ONE " +
-			"call instead of many tool round-trips. Call with NO script first: " +
-			"the bindings are (re)generated and the module/function listing is returned; then Read a module file " +
-			"to see each function's docstring + input schema. Pass arguments as keywords; functions return the " +
-			"tool's result (JSON-decoded when possible) and raise _bridge.MCPError on failure. Keep large " +
-			"intermediate results in variables or files — ONLY what you print() (capped at 16KB) returns to the " +
-			"conversation, which is the point: filter/aggregate in code instead of pulling raw data into context. " +
-			"Runs in an isolated subprocess with a stripped environment (no API keys/secrets) and a bounded " +
-			"timeout; MCP calls are limited to the tools this agent may use anyway. Under the 'ask' permission " +
-			"mode each in-script MCP call may pause for user approval — the wait counts against the script's " +
-			"timeout, so raise timeout_sec for scripts expected to prompt. ACCURACY: tool results are strings " +
-			"in a format you have NOT seen — never aggregate them blindly (len()/count on an opaque string is " +
-			"wrong). On first use of a tool, print a small sample (e.g. repr(result)[:200]) to verify the " +
-			"format, then compute.",
+		// Deliberately short — run_code ships EAGERLY every turn, so the def
+		// carries only what is needed to decide to call it. Usage detail (keyword
+		// args, error type, ask-mode timeout, sampling accuracy) is returned by
+		// the discovery call (renderBindingListing) exactly when it is needed.
+		Description: "Run a Python script that calls this agent's tools (MCP + built-ins) as ordinary functions — " +
+			"orchestrate a multi-tool workflow (list → filter → act) in ONE call instead of many round-trips. " +
+			"Call with NO script first: bindings are regenerated under " + runCodeBindingsDir + "/ and the " +
+			"module/function listing is returned; Read a module file for docstrings + schemas. Only print() " +
+			"output (capped 16KB) returns to the conversation — keep large intermediates in variables/files. " +
+			"Isolated subprocess, stripped env (no secrets), bounded timeout.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -294,6 +287,11 @@ func renderBindingListing(modules map[string][]string) string {
 		fmt.Fprintf(&b, "- %s: %s\n", m, strings.Join(modules[m], ", "))
 	}
 	b.WriteString("\nRead " + runCodeBindingsDir + "/<module>.py for each function's docstring + input schema, " +
-		"then call run_code with a script (e.g. `from <module> import <function>`).")
+		"then call run_code with a script (e.g. `from <module> import <function>`).\n" +
+		"Notes: pass arguments as keywords; functions return the tool's result (JSON-decoded when possible) and " +
+		"raise _bridge.MCPError on failure. Under the 'ask' permission mode each in-script call may pause for " +
+		"user approval — the wait counts against the script's timeout, so raise timeout_sec for scripts expected " +
+		"to prompt. ACCURACY: tool results are strings in a format you have NOT seen — on first use of a tool, " +
+		"print a small sample (e.g. repr(result)[:200]) to verify the format before aggregating.")
 	return b.String()
 }

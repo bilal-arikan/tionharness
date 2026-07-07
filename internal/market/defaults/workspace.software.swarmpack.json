@@ -75,7 +75,7 @@
               "id": "execute",
               "title": "Execute",
               "agentKey": "execute",
-              "prompt": "Implement the following plan with clean, atomic changes.\n\n{{last}}"
+              "prompt": "Task:\n{{input}}\n\nFindings:\n{{node.search}}\n\nImplement the following plan with clean, atomic changes.\n\nPlan:\n{{last}}"
             },
             {
               "id": "verify",

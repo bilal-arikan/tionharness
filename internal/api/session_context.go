@@ -230,9 +230,10 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
-	// Same history shaping the real turn does — author labels + recent tool recap.
+	// Same history shaping the real turn does — author labels + recent tool recap
+	// (the recap is a volatile dynamic block, mirroring the real turn).
 	history, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, agent.ID, history)
-	history = appendRecentToolSummaries(history)
+	toolRecap := recentToolActivityBlock(history)
 
 	// Split the transcript into what the model ACTUALLY receives (the live tail) vs
 	// the messages that are no longer sent because they were folded into the rolling
@@ -304,7 +305,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		Summary:  session.Summary,
 		Messages: historyToPreviewMessages(liveHistory),
 	}
-	req := s.composeTurnRequest(ctx, wsp, session, agent, []db.Agent{agent}, sample, prep, false, multiAgent, "")
+	req := s.composeTurnRequest(ctx, wsp, session, agent, []db.Agent{agent}, sample, prep, false, multiAgent, toolRecap, "")
 
 	// Shipped (eager) tool catalog — schemas actually sent each turn.
 	defs := wsp.Runtime.ShippedToolCatalog(ctx, agent)

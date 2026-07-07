@@ -149,7 +149,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	history, multiAgent := s.labelMultiAgentHistory(ctx, database, agent.ID, history)
 	// Recap recent turns' tool I/O so the agent can answer "what did you just do /
 	// what did that return" (the tool trace is dropped when history → messages).
-	history = appendRecentToolSummaries(history)
+	// Rendered as a volatile dynamic block — NOT folded into the history — so the
+	// history messages stay byte-stable for the rolling prompt-cache breakpoint.
+	toolRecap := recentToolActivityBlock(history)
 	// Carry this workspace's editable compaction prompt onto the turn context so
 	// any fold (rolling summary here, or reactive mid-loop downstream) uses it.
 	ctx = conversation.WithCompactPrompt(ctx, ws(r).Runtime.CompactPromptTemplate())
@@ -161,7 +163,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Blocking (non-streaming) path: lifecycle hooks fire on the streaming path
 	// (the UI default); "" here satisfies the request builder signature.
-	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession, multiAgent, "")
+	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession, multiAgent, toolRecap, "")
 
 	// Manual chat is not budget-gated (autonomous=false). When the agent has
 	// tools enabled this drives the agentic loop (native) or CLI delegation;
@@ -220,20 +222,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// buildSystemPrompt composes the agent's system prompt from soul + identity, plus
-// the shared goal-usage hint in the cached static prefix (so chat turns nudge the
-// agent to use set_session_goal/complete_goal without loading a skill). Mirrors
-// the agent package's assembler; both append the same agent.GoalUsageHint.
+// buildSystemPrompt delegates to the agent package's single persona assembler
+// (soul + identity + goal-usage hint) so the chat/preview and headless paths can
+// never drift apart.
 func buildSystemPrompt(a db.Agent) string {
-	var b strings.Builder
-	if a.Soul != "" {
-		b.WriteString(a.Soul)
-		b.WriteString("\n\n")
-	}
-	if a.Identity != "" {
-		b.WriteString(a.Identity)
-		b.WriteString("\n\n")
-	}
-	b.WriteString(agent.GoalUsageHint)
-	return strings.TrimSpace(b.String())
+	return agent.BuildSystemPrompt(a)
 }

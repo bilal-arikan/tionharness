@@ -42,14 +42,14 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// single-agent session) so a woken agent in a shared thread can still tell
 		// who said what.
 		history, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, ag.ID, history)
-		history = appendRecentToolSummaries(history)
+		toolRecap := recentToolActivityBlock(history)
 		ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
 		prep, err := s.convo.Prepare(ctx, wsp.DB, provider, session, ag, history)
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: prepare: %w", err)
 		}
 		// freshSession=false: a wake always continues an existing conversation.
-		req := s.composeTurnRequest(ctx, wsp, session, ag, []db.Agent{ag}, prompt, prep, false, multiAgent, "")
+		req := s.composeTurnRequest(ctx, wsp, session, ag, []db.Agent{ag}, prompt, prep, false, multiAgent, toolRecap, "")
 		// autonomous=true: a wake is a headless, budget-gated run (no live client);
 		// completeTraced auto-wires the Interaction MCP bridge for CLI agents. The
 		// session-step emitter streams this turn's activity to the bus so a window

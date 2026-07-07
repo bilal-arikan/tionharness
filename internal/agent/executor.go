@@ -53,10 +53,10 @@ func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt strin
 	resp, steps, err := r.CompleteWithToolsStream(ctx, agent, provider, providers.Request{
 		Model:  agent.Model,
 		System: r.autonomousSystemPrompt(ctx, agent),
-		// The session's persistent goal steers headless runs too (scheduler/spawn/
-		// peer stamp the session id in ctx). Kept in the volatile dynamic suffix —
-		// "" when the session has no active goal, so it's a safe no-op.
-		SystemDynamic: r.autonomousGoalBlock(ctx),
+		// Volatile per-turn context (turn-start clock + the session's persistent
+		// goal, when scheduler/spawn/peer stamp a session id in ctx) rides the
+		// dynamic suffix so the static prefix above stays byte-stable and cacheable.
+		SystemDynamic: r.autonomousDynamicSuffix(ctx),
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: prompt},
 		},

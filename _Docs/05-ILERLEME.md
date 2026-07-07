@@ -2,6 +2,42 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
 
+## Token/prompt optimizasyon turu: adaptive thinking + cache varsayılanı + headless split ✅ (2026-07-07)
+
+**İstek:** Kapsamlı optimizasyon denetiminin 1,2,3,4,6,7,9 numaralı maddelerinin uygulanması.
+
+**Ne yapıldı (backend):**
+- **Adaptive thinking (kritik düzeltme):** `providers/anthropic.go` — `thinking:{type:"enabled",budget_tokens}`
+  formatı Opus 4.7/4.8, Sonnet 5 ve Fable 5'te **400 döndürüyordu** (kataloğun tamamı). `thinkingFor`
+  artık model-sınıf farkındalı: adaptive sınıfta `{type:"adaptive", display:"summarized"}` +
+  `output_config.effort` (bütçe→low/medium/high eşlemesi); Fable/Mythos'ta "off" alanı tamamen
+  atlar (explicit disabled da 400); eski modeller + MiniMax `enabled+budget` şeklinde kalır.
+  `providers/thinking.go` yeniden yazıldı (`UsesAdaptiveThinking`/`AlwaysOnThinking`/
+  `EffortForThinkingBudget`); `agent.resolveThinkingBudget` Fable tabanı kaldırıldı (çeviri
+  provider'a taşındı). Testler güncellendi.
+- **Prompt caching varsayılan AÇIK:** `settings.Default()` → `ExtendedPromptCache: true`
+  (mevcut settings.json dosyaları kayıtlı değerini korur; yeni kurulum cache'li başlar).
+- **Headless statik/dinamik ayrımı:** `autonomousSystemPrompt`'tan uçucu tarih/saat çıkarıldı
+  (env satırı bayt-stabil olduğundan statikte kaldı); yeni `autonomousDynamicSuffix(ctx)`
+  (saat + hedef bloğu) scheduler/spawn/subagent/flow yollarında `SystemDynamic`'e bağlandı →
+  otonom turlar da artık statik prefix cache'inden yararlanır. `DateTimeContextBlock`
+  agent paketine alındı; chat yolu aynı kaynağı kullanır.
+- **Fiyat düzeltmeleri:** Fable 5 $3/$15 → **$10/$50** (anthropic + openrouter tabloları);
+  native anthropic girdilerine `CacheWrite1hMult=2.0` override'ı (client daima 1h TTL ister —
+  yazma primi 1.25× değil 2×).
+- **`<recent_tool_activity>` dinamik soneke taşındı:** recap artık geçmiş asistan mesajlarına
+  gömülmüyor (pencereden düşen turun baytları değişip rolling cache breakpoint'ini kırıyordu);
+  `recentToolActivityBlock(history)` tek birleşik blok üretir, `composeTurnRequest` yeni
+  `toolRecap` parametresiyle dinamik tarafa ekler (chat/stream/wake/preview 4 çağrı yolu).
+- **Eager araç tanımları küçültüldü:** `run_code` 1577→~600 karakter (kullanım detayı keşif
+  çıktısına taşındı), `run_subagent` açıklama+şema sadeleşti, `Grep` şemasındaki bayrak
+  açıklamaları kaldırıldı (anlamları tanımda tek yerde). Tur başına ~1.5-2K token kazanç.
+- **Tekilleştirme/temizlik:** `agent.BuildSystemPrompt` tek persona kaynağı (api kopyası
+  delegasyona döndü); ölü `default-instructions_old.md` (~40KB) silindi; software swarmpack
+  akışının Execute node'u artık `{{input}}` + `{{node.search}}` bulgularını da alıyor.
+
+✅ `go build`/`vet` temiz; `go test ./...` 720 test / 35 paket yeşil.
+
 ## Agent config: yasaklı araç + atanan skill "chip"leri tıkla-kaldır ✅ (2026-07-07)
 
 **İstek:** (1) Yasaklı araç chip'inde ayrı çarpı yerine chip'in kendisine tıklayınca

@@ -24,7 +24,9 @@ func (f flowRunner) RunAgentNode(ctx context.Context, agentID, prompt string) (s
 	if err != nil {
 		return "", err
 	}
-	return f.rt.complete(ctx, agent, f.rt.systemPrompt(agent), "", prompt, f.autonomous)
+	// Volatile clock/goal ride the dynamic suffix so the node's static system
+	// prefix stays byte-stable across nodes and runs (cacheable).
+	return f.rt.complete(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx), prompt, f.autonomous)
 }
 
 // RunFlow starts a new run of a flow with the given input and drives it to

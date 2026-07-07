@@ -23,27 +23,30 @@ func NewFSGrepTool(sb Sandbox) FSGrepTool { return FSGrepTool{sb: sb} }
 func (FSGrepTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "Grep",
+		// Grep ships EAGERLY every turn, so the flag semantics live once in the
+		// description; the schema's ripgrep-style flag keys carry no per-property
+		// descriptions (their meaning is standard and already stated above).
 		Description: "Search file contents for a regular expression (RE2). Searches the working directory by default; pass path to scope to a file or directory. " +
 			"output_mode: \"content\" (matching lines, default), \"files_with_matches\" (paths only), or \"count\" (match count per file). " +
-			"Filter with glob or type (e.g. \"go\", \"ts\"). Content mode supports -A/-B/-C context, -i case-insensitive, -n line numbers (default on), -o only-matching. " +
+			"Filter with glob (e.g. \"**/*.go\") or type (e.g. \"go\", \"ts\"). Content mode: -A/-B/-C context lines, -i case-insensitive, -n line numbers (default on), -o only-matching. " +
 			"multiline lets a match span lines. head_limit caps results. Honours .gitignore (always skips .git) unless no_ignore is set.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"pattern":{"type":"string","description":"RE2 regular expression to search for"},
-				"path":{"type":"string","description":"File or directory to search (absolute or relative to the working directory); default working directory"},
-				"glob":{"type":"string","description":"Glob to restrict which files are searched (e.g. \"**/*.go\")"},
-				"type":{"type":"string","description":"Language file-type filter (e.g. go, py, ts, js, rust, java, json, yaml, md)"},
-				"output_mode":{"type":"string","enum":["content","files_with_matches","count"],"description":"content (default), files_with_matches, or count"},
-				"-i":{"type":"boolean","description":"Case-insensitive search"},
-				"-n":{"type":"boolean","description":"Show line numbers (content mode; default true)"},
-				"-A":{"type":"integer","description":"Lines of context after each match (content mode)"},
-				"-B":{"type":"integer","description":"Lines of context before each match (content mode)"},
-				"-C":{"type":"integer","description":"Lines of context before and after each match (content mode)"},
-				"-o":{"type":"boolean","description":"Print only the matched part of each line (content mode)"},
-				"multiline":{"type":"boolean","description":"Allow a match to span lines ( . matches newline )"},
-				"head_limit":{"type":"integer","description":"Limit the number of results returned"},
-				"no_ignore":{"type":"boolean","description":"Search files that .gitignore would exclude (default false)"}
+				"path":{"type":"string","description":"File or directory to search; default working directory"},
+				"glob":{"type":"string"},
+				"type":{"type":"string"},
+				"output_mode":{"type":"string","enum":["content","files_with_matches","count"]},
+				"-i":{"type":"boolean"},
+				"-n":{"type":"boolean"},
+				"-A":{"type":"integer"},
+				"-B":{"type":"integer"},
+				"-C":{"type":"integer"},
+				"-o":{"type":"boolean"},
+				"multiline":{"type":"boolean"},
+				"head_limit":{"type":"integer"},
+				"no_ignore":{"type":"boolean"}
 			},
 			"required":["pattern"],
 			"additionalProperties":false

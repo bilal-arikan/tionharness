@@ -2,19 +2,54 @@ package providers
 
 import "strings"
 
-// MinAdaptiveThinkingBudget is the lowest thinking budget to send for a model
-// that mandates always-on adaptive reasoning. It keeps "off"/"low" requests
-// valid for those models without spending a large reasoning budget.
-const MinAdaptiveThinkingBudget = 1024
-
-// RequiresAdaptiveThinking reports whether a model rejects thinking:disabled and
-// instead demands an always-on (adaptive) reasoning budget — the Claude Fable 5
-// / Mythos 5 class. For these, omitting the thinking parameter makes the API
-// return 400, so callers must send a (possibly minimal) budget instead.
+// Thinking wire formats on the Anthropic Messages API differ by model class:
 //
-// Opus / Sonnet / Haiku and every other model return false → unchanged behaviour
-// (thinking stays opt-in via the agent's ThinkingLevel).
-func RequiresAdaptiveThinking(model string) bool {
+//   - Adaptive class (Fable/Mythos 5, Opus 4.7/4.8, Sonnet 5): the legacy
+//     {type:"enabled", budget_tokens:N} shape is REMOVED and returns 400.
+//     Thinking is requested as {type:"adaptive"} and depth is steered with
+//     output_config.effort. Within this class Fable/Mythos are always-on:
+//     an explicit {type:"disabled"} also 400s, so "off" omits the field.
+//   - Everything else (Opus/Sonnet 4.6 and older, Haiku, and non-Claude
+//     endpoints that speak the Anthropic protocol such as MiniMax): the legacy
+//     enabled+budget shape still applies.
+
+// UsesAdaptiveThinking reports whether the model rejects the legacy
+// enabled+budget_tokens thinking shape and requires {type:"adaptive"} +
+// output_config.effort instead.
+func UsesAdaptiveThinking(model string) bool {
+	if AlwaysOnThinking(model) {
+		return true
+	}
+	m := strings.ToLower(model)
+	for _, s := range []string{"opus-4-7", "opus-4.7", "opus-4-8", "opus-4.8", "sonnet-5"} {
+		if strings.Contains(m, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// AlwaysOnThinking reports whether the model runs with thinking permanently on
+// (the Fable/Mythos 5 class): both the legacy enabled shape AND an explicit
+// {type:"disabled"} return 400 there, so "off" must omit the thinking field
+// entirely (the server thinks anyway).
+func AlwaysOnThinking(model string) bool {
 	m := strings.ToLower(model)
 	return strings.Contains(m, "fable") || strings.Contains(m, "mythos")
+}
+
+// EffortForThinkingBudget maps a legacy thinking token budget (as produced by
+// the agent's ThinkingLevel) to the output_config.effort value used by
+// adaptive-class models. 0 means "no override" (server default).
+func EffortForThinkingBudget(budget int) string {
+	switch {
+	case budget <= 0:
+		return ""
+	case budget <= 2048:
+		return "low"
+	case budget <= 8192:
+		return "medium"
+	default:
+		return "high"
+	}
 }

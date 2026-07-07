@@ -219,9 +219,12 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		sys = strings.TrimSpace(sys + "\n\n" + contract)
 	}
 	req := providers.Request{
-		Model:    agent.Model,
-		System:   sys,
-		Messages: msgs,
+		Model:  agent.Model,
+		System: sys,
+		// Volatile turn-start clock (+ session goal when ctx carries a session)
+		// rides the dynamic suffix, keeping the static prefix cacheable.
+		SystemDynamic: r.autonomousDynamicSuffix(ctx),
+		Messages:      msgs,
 	}
 
 	r.logger.Info("subagent run",

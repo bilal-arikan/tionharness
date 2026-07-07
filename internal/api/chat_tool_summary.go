@@ -9,10 +9,11 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
-// Bounds for the recent-tool-activity recap folded back into the history. Only
-// the last few assistant turns get a recap, each turn lists at most N tools, and
-// each tool's output is truncated — so an agent can answer "what did you just do /
-// what did that return" without re-bloating context with full tool I/O.
+// Bounds for the recent-tool-activity recap injected into the volatile dynamic
+// suffix. Only the last few assistant turns are recapped, each turn lists at
+// most N tools, and each tool's output is truncated — so an agent can answer
+// "what did you just do / what did that return" without re-bloating context
+// with full tool I/O.
 const (
 	toolSummaryRecentTurns = 4   // assistant turns (newest) that get a recap
 	toolSummaryMaxTools    = 10  // tool lines per turn before eliding the rest
@@ -35,47 +36,59 @@ type histToolStep struct {
 	IsError  bool            `json:"isError"`
 }
 
-// appendRecentToolSummaries folds a compact recap of each recent assistant turn's
-// tool activity into that turn's text, so the model can see WHICH tools it ran and
-// what they returned in the last few turns. The stored tool I/O lives only in the
-// message's Steps trace (dropped when history → provider messages), so without
-// this an agent literally cannot answer "what did that command output". Bounded
-// (last N turns, M tools/turn, truncated output) to keep the token cost small.
+// recentToolActivityBlock renders ONE compact <recent_tool_activity> block
+// covering the newest assistant turns' tool I/O, for the volatile dynamic
+// suffix. The stored tool I/O lives only in each message's Steps trace (dropped
+// when history → provider messages), so without this an agent literally cannot
+// answer "what did that command output".
 //
-// Works on a copy; the stored messages are never mutated.
-func appendRecentToolSummaries(history []db.Message) []db.Message {
-	// Indices of the newest assistant turns that should get a recap.
-	recap := make(map[int]bool)
-	seen := 0
-	for i := len(history) - 1; i >= 0 && seen < toolSummaryRecentTurns; i-- {
-		if history[i].Role == providers.RoleAssistant {
-			recap[i] = true
-			seen++
-		}
+// It deliberately does NOT fold the recap into the history messages themselves
+// (the previous design): a recap embedded in a past assistant turn changes that
+// turn's bytes when it later drops out of the newest-N window, invalidating the
+// rolling prompt-cache breakpoint on the conversation history. As a dynamic
+// block it rides after the cache breakpoint and the history stays byte-stable.
+// Returns "" when none of the recapped turns ran tools.
+func recentToolActivityBlock(history []db.Message) string {
+	// Newest assistant turns, oldest→newest, with their age in assistant turns.
+	type turn struct {
+		age   int // 0 = latest assistant turn
+		steps string
 	}
-	if len(recap) == 0 {
-		return history
-	}
-
-	out := make([]db.Message, len(history))
-	copy(out, history)
-	for i := range out {
-		if !recap[i] || out[i].Steps == "" {
+	var turns []turn
+	age := 0
+	for i := len(history) - 1; i >= 0 && age < toolSummaryRecentTurns; i-- {
+		if history[i].Role != providers.RoleAssistant {
 			continue
 		}
-		if block := toolRecapBlock(out[i].Steps); block != "" {
-			out[i].Text = strings.TrimSpace(out[i].Text + "\n\n" + block)
+		if history[i].Steps != "" {
+			turns = append([]turn{{age: age, steps: history[i].Steps}}, turns...)
 		}
+		age++
 	}
-	return out
+	var sections []string
+	for _, t := range turns {
+		lines := toolRecapLines(t.steps)
+		if len(lines) == 0 {
+			continue
+		}
+		label := "[latest assistant turn]"
+		if t.age > 0 {
+			label = fmt.Sprintf("[%d assistant turn(s) ago]", t.age)
+		}
+		sections = append(sections, label+"\n"+strings.Join(lines, "\n"))
+	}
+	if len(sections) == 0 {
+		return ""
+	}
+	return "<recent_tool_activity>\n" + strings.Join(sections, "\n") + "\n</recent_tool_activity>"
 }
 
-// toolRecapBlock parses a serialized Steps trace and renders a compact
-// <recent_tool_activity> block, or "" when the turn ran no tools.
-func toolRecapBlock(stepsJSON string) string {
+// toolRecapLines parses a serialized Steps trace and renders its compact recap
+// lines, or nil when the turn ran no tools.
+func toolRecapLines(stepsJSON string) []string {
 	var steps []histToolStep
 	if err := json.Unmarshal([]byte(stepsJSON), &steps); err != nil {
-		return ""
+		return nil
 	}
 	lines := make([]string, 0, toolSummaryMaxTools)
 	elided := 0
@@ -94,12 +107,12 @@ func toolRecapBlock(stepsJSON string) string {
 		lines = append(lines, formatToolRecapLine(st))
 	}
 	if len(lines) == 0 {
-		return ""
+		return nil
 	}
 	if elided > 0 {
 		lines = append(lines, fmt.Sprintf("- … (+%d more tool call(s))", elided))
 	}
-	return "<recent_tool_activity>\n" + strings.Join(lines, "\n") + "\n</recent_tool_activity>"
+	return lines
 }
 
 // formatToolRecapLine renders one tool step as "- Tool(argHint) → result".

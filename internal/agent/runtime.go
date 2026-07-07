@@ -1007,8 +1007,10 @@ func (r *Runtime) agentName(id string) string {
 	return id
 }
 
-// buildSystemPrompt composes the agent's persona from soul + identity.
-func buildSystemPrompt(a db.Agent) string {
+// BuildSystemPrompt composes the agent's persona from soul + identity plus the
+// goal-usage hint. Exported as the SINGLE persona assembler: the chat/preview
+// path (api package) uses it too, so the two paths can never drift apart.
+func BuildSystemPrompt(a db.Agent) string {
 	out := ""
 	if a.Soul != "" {
 		out = a.Soul
@@ -1020,8 +1022,7 @@ func buildSystemPrompt(a db.Agent) string {
 		out += a.Identity
 	}
 	// One-line nudge to use the session's north-star goal, in the cached static
-	// prefix for autonomous/flow turns (this is the agent-package assembler; the
-	// chat path's parallel api.buildSystemPrompt appends the same line).
+	// prefix for every turn (chat and autonomous/flow both go through here).
 	if out != "" {
 		out += "\n\n"
 	}
@@ -1032,8 +1033,7 @@ func buildSystemPrompt(a db.Agent) string {
 // GoalUsageHint is a single cached-prefix line teaching proactive goal use. The
 // tools are always available (eager); this nudges the agent to actually reach for
 // them on substantial work. Full guidance lives in the tionswarm-guide skill.
-// Exported so the api package's parallel buildSystemPrompt (chat + preview path)
-// appends the identical line — both prompt assemblers share ONE source.
+// Appended by BuildSystemPrompt (the single persona assembler for all paths).
 const GoalUsageHint = "For substantial multi-turn work, set a durable objective with `set_session_goal` " +
 	"(one north star, not a checklist) and `complete_goal` when it is met; keep replies aligned with the session's active goal."
 
@@ -1058,7 +1058,7 @@ func EnvironmentContextBlock() string {
 // followed by this workspace's instructions (when set). Both are stable, so they
 // belong in the cached static prefix rather than the volatile dynamic suffix.
 func (r *Runtime) systemPrompt(a db.Agent) string {
-	out := buildSystemPrompt(a)
+	out := BuildSystemPrompt(a)
 	if p := r.instructions.Load(); p != nil {
 		if ins := strings.TrimSpace(*p); ins != "" {
 			if out != "" {
@@ -1102,15 +1102,35 @@ func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string
 	if r.tun.AutonomousBootSeq() {
 		out = strings.TrimSpace(out + "\n\n" + autonomousBootReminder)
 	}
-	// Wall-clock awareness for headless runs: chat turns get this via
-	// composeTurnRequest's dynamic suffix; autonomous turns build their own request,
-	// so inject the date/time line here too (replaces the removed get_current_time).
-	out = strings.TrimSpace(out + "\n\nCurrent date and time (captured at the start of this turn; seconds-precise, does not tick mid-turn): " +
-		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)"))
 	// Machine-environment marker (OS/arch/shell) so a headless turn writes shell
-	// commands in the right syntax; chat turns get the same line via
-	// composeTurnRequest's dynamic suffix.
+	// commands in the right syntax. Its bytes never change within a process, so
+	// it is safe inside the cached static prefix. The VOLATILE pieces (turn-start
+	// clock, session goal) deliberately live in autonomousDynamicSuffix — putting
+	// them here would change the prefix bytes every turn and defeat prompt
+	// caching for every headless run.
 	out = strings.TrimSpace(out + "\n\n" + EnvironmentContextBlock())
+	return out
+}
+
+// DateTimeContextBlock renders the turn-start clock line. Exported so the chat
+// path (api.composeTurnRequest) and the headless dynamic suffix share ONE
+// wording. It is volatile by nature, so it must ride SystemDynamic — never the
+// cached static prefix.
+func DateTimeContextBlock() string {
+	return "Current date and time (captured at the start of this turn; seconds-precise, does not tick mid-turn): " +
+		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)")
+}
+
+// autonomousDynamicSuffix builds the VOLATILE system suffix for headless turns
+// (scheduler/spawn/flow/subagent): the turn-start clock plus the session's
+// active goal (if any). Chat turns assemble the same pieces in
+// composeTurnRequest; keeping them out of autonomousSystemPrompt keeps the
+// static prefix byte-stable across turns so cache-capable providers reuse it.
+func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
+	out := DateTimeContextBlock()
+	if g := r.autonomousGoalBlock(ctx); g != "" {
+		out += "\n\n" + g
+	}
 	return out
 }
 

@@ -111,6 +111,7 @@ type anthropicReq struct {
 	Messages          []anthropicMessage `json:"messages"`
 	Tools             []anthropicTool    `json:"tools,omitempty"`
 	Thinking          *thinkingParam     `json:"thinking,omitempty"`
+	OutputConfig      *outputConfig      `json:"output_config,omitempty"`
 	ContextManagement *contextManagement `json:"context_management,omitempty"`
 	Stream            bool               `json:"stream,omitempty"`
 }
@@ -153,24 +154,54 @@ func (a *Anthropic) contextMgmt() *contextManagement {
 	}
 }
 
-// thinkingParam enables extended reasoning. The model emits thinking blocks
-// (not shown by TionSwarm) before its answer; max_tokens must exceed budget.
+// thinkingParam enables extended reasoning. Adaptive-class models take
+// {type:"adaptive"} (budget_tokens is rejected there); legacy models take
+// {type:"enabled", budget_tokens:N}.
 type thinkingParam struct {
-	Type         string `json:"type"` // "enabled"
-	BudgetTokens int    `json:"budget_tokens"`
+	Type         string `json:"type"`                    // "adaptive" | "disabled" | "enabled"
+	BudgetTokens int    `json:"budget_tokens,omitempty"` // legacy enabled shape only
+	Display      string `json:"display,omitempty"`       // "summarized" — adaptive class defaults to "omitted" (empty traces)
 }
 
-// thinkingFor returns the thinking parameter (or nil) and the max_tokens to use:
-// when thinking is on, max_tokens must be strictly greater than the budget, so
-// it is bumped to leave room for the visible answer.
-func thinkingFor(budget, maxTokens int) (*thinkingParam, int) {
+// outputConfig carries response-level controls; effort steers thinking depth on
+// adaptive-class models (the replacement for budget_tokens).
+type outputConfig struct {
+	Effort string `json:"effort,omitempty"` // "low" | "medium" | "high"
+}
+
+// thinkingFor returns the thinking parameter, the optional output_config, and
+// the max_tokens to use for the given model.
+//
+// Adaptive class (UsesAdaptiveThinking — Fable/Mythos 5, Opus 4.7/4.8,
+// Sonnet 5): the legacy enabled+budget shape 400s, so the budget is translated
+// to {type:"adaptive"} + output_config.effort, with display:"summarized" so the
+// thinking trace carries text (these models default to "omitted"). Budget 0 →
+// explicit {type:"disabled"}, except always-on models (Fable/Mythos) where
+// disabled also 400s and the field is omitted entirely.
+//
+// Legacy models keep enabled+budget_tokens; max_tokens must be strictly greater
+// than the budget, so it is bumped to leave room for the visible answer.
+func thinkingFor(model string, budget, maxTokens int) (*thinkingParam, *outputConfig, int) {
+	if UsesAdaptiveThinking(model) {
+		if budget <= 0 {
+			if AlwaysOnThinking(model) {
+				return nil, nil, maxTokens
+			}
+			return &thinkingParam{Type: "disabled"}, nil, maxTokens
+		}
+		var cfg *outputConfig
+		if effort := EffortForThinkingBudget(budget); effort != "" {
+			cfg = &outputConfig{Effort: effort}
+		}
+		return &thinkingParam{Type: "adaptive", Display: "summarized"}, cfg, maxTokens
+	}
 	if budget <= 0 {
-		return nil, maxTokens
+		return nil, nil, maxTokens
 	}
 	if maxTokens <= budget {
 		maxTokens = budget + defaultMaxTokens
 	}
-	return &thinkingParam{Type: "enabled", BudgetTokens: budget}, maxTokens
+	return &thinkingParam{Type: "enabled", BudgetTokens: budget}, nil, maxTokens
 }
 
 // systemBlock is the structured form of the system prompt, used when extended
@@ -262,7 +293,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	if maxTokens <= 0 {
 		maxTokens = defaultMaxTokens
 	}
-	thinking, maxTokens := thinkingFor(req.ThinkingBudget, maxTokens)
+	thinking, outCfg, maxTokens := thinkingFor(model, req.ThinkingBudget, maxTokens)
 
 	sysField, msgs := a.buildSystemAndMessages(req)
 	body := anthropicReq{
@@ -272,6 +303,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		Messages:          msgs,
 		Tools:             toAnthropicTools(req.Tools, a.extendedCache),
 		Thinking:          thinking,
+		OutputConfig:      outCfg,
 		ContextManagement: a.contextMgmt(),
 	}
 
@@ -347,16 +379,17 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 	if maxTokens <= 0 {
 		maxTokens = defaultMaxTokens
 	}
-	thinking, maxTokens := thinkingFor(req.ThinkingBudget, maxTokens)
+	thinking, outCfg, maxTokens := thinkingFor(model, req.ThinkingBudget, maxTokens)
 
 	sysField, msgs := a.buildSystemAndMessages(req)
 	body := anthropicReq{
-		Model:     model,
-		MaxTokens: maxTokens,
-		System:    sysField,
-		Messages:  msgs,
-		Thinking:  thinking,
-		Stream:    true,
+		Model:        model,
+		MaxTokens:    maxTokens,
+		System:       sysField,
+		Messages:     msgs,
+		Thinking:     thinking,
+		OutputConfig: outCfg,
+		Stream:       true,
 	}
 	headers := map[string]string{
 		"x-api-key":         a.apiKey,

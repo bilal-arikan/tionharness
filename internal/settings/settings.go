@@ -314,6 +314,13 @@ func Default() Settings {
 		// clobber a file changed out-of-band since it was last read.
 		FileFreshnessGuard: true,
 
+		// Extended prompt caching (1h TTL) on by default: cache reads bill at
+		// ~0.1× the input price, so with the static/dynamic prompt split every
+		// follow-up turn re-reads the transcript prefix nearly free instead of
+		// paying full input price. Only affects the anthropic provider; existing
+		// settings.json files keep whatever the user last saved.
+		ExtendedPromptCache: true,
+
 		// Auto-tagging on by default: derives error/goal/archived tags for automation
 		// scanning; add-only and cheap (a small write only when a tag actually changes).
 		AutoTagSessions: true,

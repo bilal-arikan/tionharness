@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
@@ -29,7 +28,11 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // artifacts) that changes every turn and is kept outside the cached prefix.
 //
 // Shared by both the blocking (chat.go) and streaming (chat_stream.go) handlers.
-func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool, lifecycleContext string) providers.Request {
+// toolRecap (may be "") is the <recent_tool_activity> block rendered from the
+// recent assistant turns' Steps traces — injected here on the volatile side so
+// the history messages themselves stay byte-stable for the rolling cache
+// breakpoint (see recentToolActivityBlock).
+func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool, toolRecap, lifecycleContext string) providers.Request {
 	system := buildSystemPrompt(agentRow)
 	// Coordinator sessions (M2, _Docs/47) lead with the coordinator operating manual
 	// so the agent drives workers, synthesizes their notifications itself, and runs
@@ -102,6 +105,12 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if gb := goalContextBlock(session.Goal, session.GoalDone); gb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + gb)
 	}
+	// Recap of recent turns' tool I/O ("what did you just run / what did it
+	// return"). Volatile by design: injecting it here instead of into the history
+	// messages keeps those messages byte-stable for the rolling cache breakpoint.
+	if strings.TrimSpace(toolRecap) != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + toolRecap)
+	}
 	// Tell the agent its working directory (cwd) + git branch, so it knows where
 	// its file/shell tools operate. The session override wins; else the workspace
 	// default. Kept in the dynamic suffix because the branch can change.
@@ -172,15 +181,12 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 }
 
 // dateTimeContextBlock renders the current server-local date/time as a single
-// system-prompt line, e.g. "Current date and time: Monday, 2026-06-22 15:31:08
-// (+03:00)". It replaces the removed get_current_time tool: the agent reads
-// "now" straight from its context instead of spending a tool round-trip on it.
-// Includes seconds and is labelled as the turn-start instant so an agent doing a
-// timing task uses this exact value as a baseline instead of fabricating one — it
-// is captured once per turn and does NOT advance mid-turn.
+// system-prompt line. It replaces the removed get_current_time tool: the agent
+// reads "now" straight from its context instead of spending a tool round-trip
+// on it. Wording lives in agent.DateTimeContextBlock so the chat and headless
+// paths share ONE source.
 func dateTimeContextBlock() string {
-	return "Current date and time (captured at the start of this turn; seconds-precise, does not tick mid-turn): " +
-		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)")
+	return agent.DateTimeContextBlock()
 }
 
 // sessionStateBlock renders the session + workspace identity as a compact
