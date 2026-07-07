@@ -1,4 +1,4 @@
-import { Layers, LifeBuoy, Scissors, Sparkles, FlaskConical, RotateCcw, ListChecks, Bug, Tags } from 'lucide-react'
+import { Layers, LifeBuoy, Scissors, Sparkles, FlaskConical, RotateCcw, ListChecks, Bug, Tags, ShieldCheck } from 'lucide-react'
 import { Field, Toggle, Slider, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
@@ -139,7 +139,41 @@ export function ContextPanel({ draft, set }: PanelProps) {
         <Field label="Maks. token resume denemesi" hint="Çıktı limiti aşılınca tur kaç kez sürdürülür (0 = kapalı; kısmi cevap olduğu gibi gösterilir)."><input type="number" value={draft.maxTokenRetries} onChange={(e) => set('maxTokenRetries', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Sıkıştırmada korunan mesaj" hint="Reaktif sıkıştırmada aynen tutulan en yeni mesaj sayısı (≥2)."><input type="number" value={draft.reactiveKeepRecent} onChange={(e) => set('reactiveKeepRecent', Number(e.target.value))} className={inputCls} /></Field>
         <Field label="Çıktı token tavanı" hint="Tur başına maks. çıktı tokeni (max_tokens). 0 = otomatik: modele göre aile-bazlı (opus/sonnet/fable+minimax 32K, haiku 16K, deepseek/gemini 8K). Pozitif değer tüm modeller için sabit tavanı zorlar. Düşük tavan resume döngüsünü daha sık tetikler."><input type="number" value={draft.maxOutputTokens} onChange={(e) => set('maxOutputTokens', Number(e.target.value))} className={inputCls} /></Field>
+        <Field label="Sağlayıcı retry bütçesi" hint="Geçici sağlayıcı hatasında (429 / 5xx / zaman aşımı) tur içinde kaç kez jitter'lı backoff'la yeniden denenir (0 = kapalı, maks 5). Kalıcı hatalar (auth/kota) asla yeniden denenmez."><input type="number" min={0} max={5} value={draft.maxProviderRetries} onChange={(e) => set('maxProviderRetries', Number(e.target.value))} className={inputCls} /></Field>
       </div>
+
+      <SubHead icon={ShieldCheck}>Self-healing (döngü koruması & ders çıkarma)</SubHead>
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+        Kendi kendini onaran oturum akışları (<code>56-SELF-HEALING</code>): araç döngüsü tur içinde tekrar eden hataları izler
+        (aynı çağrı 2 hatada uyarılır, aynı araç 3 ardışık hatada uyarılır); devre kesici açıksa 5 tekrarında çağrı bloklanır,
+        8 ardışık hatada tur kontrollü durdurulur. Üst üste kötü biten oturumlar <code>stuck</code> etiketi alır ve otonom turları
+        askıya alınır (manuel sohbet hiç etkilenmez). Ders çıkarma, başarısız turlardan kısa dersler damıtıp sonraki turlara enjekte eder.
+      </div>
+      <Toggle
+        label="Guardrail uyarıları"
+        hint="Tekrar eden başarısız araç çağrısının sonucuna eyleme dönük kurtarma ipucu eklenir (teşhis et, farklı argüman/araç dene). Yürütmeyi asla engellemez."
+        checked={draft.toolGuardWarnings}
+        onChange={(v) => set('toolGuardWarnings', v)}
+      />
+      <Toggle
+        label="Devre kesici (hard stop)"
+        hint="Eşik üstü tekrar: birebir aynı başarısız çağrı 5. tekrarında çalıştırılmadan bloklanır; aynı araç 8 ardışık hatada turu kontrollü sonlandırır (guardrail_halt). Varsayılan kapalı."
+        checked={draft.toolGuardHardStop}
+        onChange={(v) => set('toolGuardHardStop', v)}
+      />
+      <Field
+        label="Stuck oturum eşiği"
+        hint="Üst üste bu kadar tur kötü biten (tur hatası / guardrail halt) oturum 'stuck' etiketi alır ve OTONOM turları reddedilir; temiz bir tur sayacı sıfırlar, etiketi kaldırmak da sıfırlar. 0 = kapalı."
+      >
+        <input type="number" min={0} max={20} value={draft.stuckTurnThreshold} onChange={(e) => set('stuckTurnThreshold', Number(e.target.value))} className={inputCls} />
+      </Field>
+      <Toggle
+        label="Hatalardan ders çıkar (lesson reflect)"
+        hint="Kötü biten turdan arka planda kısa bir ders damıtılır (başlık modeli varsa o, yoksa ajanın modeli — hata turu başına 1 ucuz çağrı) ve workspace-geneli lessons.jsonl'e yazılır; en yeni 5 ders her turun dinamik bağlamına enjekte edilir. Aynı hata şekli tekrarında mevcut ders güncellenir (yığılmaz)."
+        checked={draft.lessonReflect}
+        onChange={(v) => set('lessonReflect', v)}
+      />
+
 
       <SubHead icon={Scissors}>Araç çıktısı sıkıştırma — Sistem A (deterministik)</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">

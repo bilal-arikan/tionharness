@@ -78,6 +78,13 @@ export interface AppSettings {
   reactiveKeepRecent: number
   maxOutputTokens: number // generation cap (max_tokens); 0 = auto (per-model family)
 
+  // Self-healing (56-SELF-HEALING).
+  maxProviderRetries: number // transient provider-fault retries per turn (0 = disabled, max 5)
+  toolGuardWarnings: boolean // append recovery hints to failing tool results
+  toolGuardHardStop: boolean // circuit breaker: block repeated identical failures / halt looping turns
+  stuckTurnThreshold: number // consecutive bad turns before "stuck" tag + autonomous suspension (0 = off)
+  lessonReflect: boolean     // distill failed turns into stored lessons injected into future turns
+
   // Tool-output token optimization — two independent, parallel systems.
   compactToolOutput: boolean   // System A: deterministic (free)
   compactMaxLines: number
