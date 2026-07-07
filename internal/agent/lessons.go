@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -168,14 +169,14 @@ func (r *Runtime) reflectLessons(ctx context.Context, sessionID string, evidence
 }
 
 // lessonSignature builds the dedupe key for a failure shape: the failing tool
-// plus a digest of the normalized error text, so the same recurring failure
+// plus a digest of the NORMALIZED error text, so the same recurring failure
 // updates one lesson instead of accumulating near-duplicates.
 func lessonSignature(tool string, evidence []lessonEvidence, turnLevel string) string {
 	src := turnLevel
 	if len(evidence) > 0 {
 		src = evidence[0].errs
 	}
-	src = strings.ToLower(src)
+	src = normalizeErrSig(src)
 	if len(src) > 120 {
 		src = src[:120]
 	}
@@ -183,17 +184,61 @@ func lessonSignature(tool string, evidence []lessonEvidence, turnLevel string) s
 	return tool + ":" + hex.EncodeToString(sum[:8])
 }
 
+// normalizeErrSig collapses the VARIABLE parts of an error message — paths,
+// numbers, ids — so two occurrences of the same failure shape hash identically
+// even when the concrete file, line number or token count differs (e.g.
+// "no such file: C:\a\b.txt" and "no such file: /tmp/c.txt" are one shape).
+func normalizeErrSig(s string) string {
+	s = strings.ToLower(s)
+	fields := strings.Fields(s)
+	for i, f := range fields {
+		// A token containing a path separator is a path → collapse entirely.
+		if strings.ContainsAny(f, `/\`) {
+			fields[i] = "<path>"
+			continue
+		}
+		// Digit runs (line numbers, token counts, ports, ids) → '#'.
+		fields[i] = digitRunRe.ReplaceAllString(f, "#")
+	}
+	return strings.Join(fields, " ")
+}
+
+// digitRunRe matches runs of digits for signature normalization.
+var digitRunRe = regexp.MustCompile(`\d+`)
+
 // LessonsContextBlock renders the newest stored lessons as a dynamic-context
 // block for chat + headless turns ("" when there are none or the feature is
-// off). Volatile by nature (lessons accrue over time), so it must ride
-// SystemDynamic — never the cached static prefix.
-func (r *Runtime) LessonsContextBlock(ctx context.Context) string {
+// off). Lessons learned by THIS agent rank first (its own failure history is
+// the most relevant), then the rest of the workspace's, newest first within
+// each group. agentID may be "" (no prioritization). Volatile by nature
+// (lessons accrue over time), so it must ride SystemDynamic — never the
+// cached static prefix.
+func (r *Runtime) LessonsContextBlock(ctx context.Context, agentID string) string {
 	if r == nil || r.db == nil || !r.tun.LessonReflect() {
 		return ""
 	}
-	lessons, err := r.db.ListLessons(lessonsInjectCount)
-	if err != nil || len(lessons) == 0 {
+	// Overfetch so same-agent lessons beyond the newest-N window can still be
+	// promoted into the injected set.
+	all, err := r.db.ListLessons(lessonsInjectCount * 10)
+	if err != nil || len(all) == 0 {
 		return ""
+	}
+	lessons := make([]db.Lesson, 0, lessonsInjectCount)
+	if agentID != "" {
+		for _, l := range all {
+			if l.AgentID == agentID && len(lessons) < lessonsInjectCount {
+				lessons = append(lessons, l)
+			}
+		}
+	}
+	for _, l := range all {
+		if len(lessons) >= lessonsInjectCount {
+			break
+		}
+		if agentID != "" && l.AgentID == agentID {
+			continue // already taken in the first pass
+		}
+		lessons = append(lessons, l)
 	}
 	var b strings.Builder
 	b.WriteString("## Lessons from past failures (auto-collected)\n")

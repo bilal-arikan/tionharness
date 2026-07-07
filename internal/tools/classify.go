@@ -26,6 +26,9 @@ var toolRisk = map[string]Risk{
 	"get_session_info":     RiskRead,
 	// Read-only: fans out codebase-memory search_code across the workspace store.
 	"codebase_workspace_search": RiskRead,
+	// Read-only: lists the workspace's auto-collected failure lessons
+	// (delete_lesson stays at the default write tier — it mutates the store).
+	"read_lessons": RiskRead,
 
 	// Core file/shell built-ins share claude-cli's tool names (Read/Write/Edit/
 	// LS/Glob/Grep/Bash), so native and CLI agents — and the CLI permission-prompt
@@ -42,12 +45,12 @@ var toolRisk = map[string]Risk{
 	// effects, so it auto-allows if it ever reaches the permission gate. ExitPlanMode
 	// is handled specially (plan-approval card), not via this table.
 	"EnterPlanMode": RiskRead,
-	"Edit":         RiskWrite,
-	"Write":        RiskWrite,
-	"MultiEdit":    RiskWrite,
-	"NotebookEdit": RiskWrite,
-	"Bash":         RiskExec,
-	"PowerShell":   RiskExec, // Windows-native shell sibling of Bash
+	"Edit":          RiskWrite,
+	"Write":         RiskWrite,
+	"MultiEdit":     RiskWrite,
+	"NotebookEdit":  RiskWrite,
+	"Bash":          RiskExec,
+	"PowerShell":    RiskExec, // Windows-native shell sibling of Bash
 
 	// transform_data runs an arbitrary host script (python/node/bun) in a
 	// subprocess. The env is stripped of secrets and it is time-bounded, but it is

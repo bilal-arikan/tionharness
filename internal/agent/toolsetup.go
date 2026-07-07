@@ -234,6 +234,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		builtins = append(builtins, tools.NewReadSessionDebugTool(r.db))
 	}
 
+	// read_lessons / delete_lesson: the agent inspects and prunes the workspace's
+	// auto-collected failure lessons (self-healing). The newest few already ride
+	// its context; these tools expose the full set + ids. Gated by the same
+	// setting that produces lessons — with the loop off there is nothing to read.
+	if r.tun != nil && r.tun.LessonReflect() {
+		builtins = append(builtins, tools.NewReadLessonsTool(r.db), tools.NewDeleteLessonTool(r.db))
+	}
+
 	// codebase_workspace_search: fan out codebase-memory's project-scoped search_code
 	// across EVERY project in this workspace's isolated store, for "where in the whole
 	// workspace is X?" queries (graph/architecture queries are already fleet-wide;

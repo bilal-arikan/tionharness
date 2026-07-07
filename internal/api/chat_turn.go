@@ -125,6 +125,13 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// commands in the right syntax without guessing. Shares ONE source with the
 	// headless path (agent.autonomousSystemPrompt). Volatile side, never cached.
 	dynamic = strings.TrimSpace(dynamic + "\n\n" + agent.EnvironmentContextBlock())
+	// Shell tools (Bash/PowerShell) are gated: advertise them here — and only when
+	// the gate is on and a backing shell exists — so the static instructions don't
+	// promise a tool that isn't registered (a bare `PowerShell` call otherwise hits
+	// "not enabled in this context"). Volatile side: the gate can toggle mid-session.
+	if sh := wsp.Runtime.ShellToolsContextBlock(); sh != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + sh)
+	}
 	// Coordination scratchpad (M2/M3): a shared folder the coordinator and ALL its
 	// workers can read/write, for durable cross-worker knowledge that shouldn't ride
 	// in every prompt. Injected for a coordinator session and for its workers so
@@ -146,7 +153,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// Failure lessons (hata→ders döngüsü): the newest distilled lessons from
 	// past failed turns, workspace-wide, so known failure shapes are not
 	// repeated. Volatile side (the set accrues over time), never cached.
-	if lb := wsp.Runtime.LessonsContextBlock(ctx); lb != "" {
+	if lb := wsp.Runtime.LessonsContextBlock(ctx, agentRow.ID); lb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + lb)
 	}
 	// Surface the active todo checklist so the agent keeps tracking it even after

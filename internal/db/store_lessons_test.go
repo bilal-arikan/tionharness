@@ -3,6 +3,7 @@ package db
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func lessonsDB(t *testing.T) *DB {
@@ -17,7 +18,7 @@ func lessonsDB(t *testing.T) *DB {
 
 func TestLessons_AddListRoundTrip(t *testing.T) {
 	d := lessonsDB(t)
-	l, err := d.AddLesson(Lesson{Time: 100, Tool: "Read", Signature: "Read:abc", Text: "check the path exists first"})
+	l, err := d.AddLesson(Lesson{Time: now() - 300, Tool: "Read", Signature: "Read:abc", Text: "check the path exists first"})
 	if err != nil {
 		t.Fatalf("add: %v", err)
 	}
@@ -35,12 +36,13 @@ func TestLessons_AddListRoundTrip(t *testing.T) {
 
 func TestLessons_DedupeBySignature(t *testing.T) {
 	d := lessonsDB(t)
-	_, _ = d.AddLesson(Lesson{Time: 100, Tool: "Bash", Signature: "Bash:x", Text: "old wording", SessionID: "SES1"})
-	l, err := d.AddLesson(Lesson{Time: 200, Tool: "Bash", Signature: "Bash:x", Text: "new wording", SessionID: "SES2"})
+	base := time.Now().Unix()
+	_, _ = d.AddLesson(Lesson{Time: base - 300, Tool: "Bash", Signature: "Bash:x", Text: "old wording", SessionID: "SES1"})
+	l, err := d.AddLesson(Lesson{Time: base - 200, Tool: "Bash", Signature: "Bash:x", Text: "new wording", SessionID: "SES2"})
 	if err != nil {
 		t.Fatalf("add: %v", err)
 	}
-	if l.Count != 2 || l.Text != "new wording" || l.SessionID != "SES2" || l.Time != 200 {
+	if l.Count != 2 || l.Text != "new wording" || l.SessionID != "SES2" || l.Time != base-200 {
 		t.Fatalf("dedupe result = %+v, want count 2 + refreshed fields", l)
 	}
 	got, _ := d.ListLessons(0)
@@ -51,9 +53,9 @@ func TestLessons_DedupeBySignature(t *testing.T) {
 
 func TestLessons_NewestFirstAndLimit(t *testing.T) {
 	d := lessonsDB(t)
-	_, _ = d.AddLesson(Lesson{Time: 100, Signature: "a", Text: "oldest"})
-	_, _ = d.AddLesson(Lesson{Time: 300, Signature: "b", Text: "newest"})
-	_, _ = d.AddLesson(Lesson{Time: 200, Signature: "c", Text: "middle"})
+	_, _ = d.AddLesson(Lesson{Time: now() - 300, Signature: "a", Text: "oldest"})
+	_, _ = d.AddLesson(Lesson{Time: now() - 100, Signature: "b", Text: "newest"})
+	_, _ = d.AddLesson(Lesson{Time: now() - 200, Signature: "c", Text: "middle"})
 	got, _ := d.ListLessons(2)
 	if len(got) != 2 || got[0].Text != "newest" || got[1].Text != "middle" {
 		t.Fatalf("list = %+v, want [newest, middle]", got)
@@ -62,7 +64,7 @@ func TestLessons_NewestFirstAndLimit(t *testing.T) {
 
 func TestLessons_Delete(t *testing.T) {
 	d := lessonsDB(t)
-	l, _ := d.AddLesson(Lesson{Time: 100, Signature: "a", Text: "x"})
+	l, _ := d.AddLesson(Lesson{Time: now() - 300, Signature: "a", Text: "x"})
 	if err := d.DeleteLesson(l.ID); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
@@ -77,8 +79,9 @@ func TestLessons_Delete(t *testing.T) {
 
 func TestLessons_CapKeepsNewest(t *testing.T) {
 	d := lessonsDB(t)
+	base := time.Now().Unix()
 	for i := 0; i < DefaultLessonsCap+10; i++ {
-		_, err := d.AddLesson(Lesson{Time: int64(i), Signature: sigN(i), Text: "t"})
+		_, err := d.AddLesson(Lesson{Time: base - int64(DefaultLessonsCap+10) + int64(i), Signature: sigN(i), Text: "t"})
 		if err != nil {
 			t.Fatalf("add %d: %v", i, err)
 		}
@@ -87,8 +90,20 @@ func TestLessons_CapKeepsNewest(t *testing.T) {
 	if len(got) != DefaultLessonsCap {
 		t.Fatalf("list len = %d, want cap %d", len(got), DefaultLessonsCap)
 	}
-	if got[0].Time != int64(DefaultLessonsCap+9) {
-		t.Errorf("newest kept = %d, want %d", got[0].Time, DefaultLessonsCap+9)
+	if got[0].Time != base-1 {
+		t.Errorf("newest kept = %d, want %d", got[0].Time, base-1)
+	}
+}
+
+func TestLessons_AgingPrunesStale(t *testing.T) {
+	d := lessonsDB(t)
+	base := time.Now().Unix()
+	// One lesson well past LessonMaxAge, one fresh.
+	_, _ = d.AddLesson(Lesson{Time: base - int64(LessonMaxAge.Seconds()) - 3600, Signature: "old", Text: "stale lesson"})
+	_, _ = d.AddLesson(Lesson{Time: base - 60, Signature: "new", Text: "fresh lesson"})
+	got, _ := d.ListLessons(0)
+	if len(got) != 1 || got[0].Text != "fresh lesson" {
+		t.Fatalf("list = %+v, want only the fresh lesson (stale aged out)", got)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // lessonsFile is the workspace-scoped failure-lesson store (self-healing,
@@ -16,6 +17,13 @@ const lessonsFile = "lessons.jsonl"
 // DefaultLessonsCap bounds the lessons file (newest kept). Lessons are meant to
 // be a small, high-signal set — not a log.
 const DefaultLessonsCap = 200
+
+// LessonMaxAge is how long a lesson stays alive without recurring. A failure
+// shape not seen for this long is likely fixed or obsolete — keeping it would
+// pollute the injected context with stale guidance. Expired entries are pruned
+// on the next AddLesson rewrite; if the failure recurs, a fresh lesson is
+// recorded anyway.
+const LessonMaxAge = 45 * 24 * time.Hour
 
 // Lesson is one distilled failure lesson, produced by the lesson reflector
 // after a turn that ended badly. Signature identifies the failure shape
@@ -47,6 +55,16 @@ func (d *DB) AddLesson(l Lesson) (Lesson, error) {
 	if err != nil {
 		return Lesson{}, err
 	}
+	// Age out lessons whose failure shape has not recurred within LessonMaxAge —
+	// stale guidance must not keep riding every turn's context.
+	cutoff := time.Now().Add(-LessonMaxAge).Unix()
+	fresh := lessons[:0:0]
+	for _, existing := range lessons {
+		if existing.Time >= cutoff {
+			fresh = append(fresh, existing)
+		}
+	}
+	lessons = fresh
 	updated := false
 	for i := range lessons {
 		if l.Signature != "" && lessons[i].Signature == l.Signature {

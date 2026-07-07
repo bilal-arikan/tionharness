@@ -1054,6 +1054,34 @@ func EnvironmentContextBlock() string {
 		runtime.GOOS, runtime.GOARCH, shell, shell)
 }
 
+// ShellToolsContextBlock advertises the shell execution tools (Bash / PowerShell)
+// ONLY when this workspace's shell gate is on (Tunables.ShellEnabled) AND a
+// backing interpreter is present — mirroring buildRegistry's registration
+// conditions exactly (same resolvers via tools.ShellToolNames). When the gate is
+// off the block is empty, so the workspace instructions never promise a shell tool
+// that was never registered — the mismatch that made the model emit a bare
+// `PowerShell` call and hit "No such tool available: PowerShell … not enabled in
+// this context". It rides the VOLATILE dynamic suffix on both the chat
+// (composeTurnRequest) and headless (autonomousDynamicSuffix) paths because the
+// gate can toggle mid-session; the file tools (Read/Write/Edit/LS/Glob/Grep) stay
+// the always-on core named in the static instructions.
+func (r *Runtime) ShellToolsContextBlock() string {
+	if !r.tun.ShellEnabled() {
+		return ""
+	}
+	names := tools.ShellToolNames()
+	if len(names) == 0 {
+		return ""
+	}
+	noun, verb := "tool", "runs"
+	if len(names) > 1 {
+		noun, verb = "tools", "run"
+	}
+	return "Shell execution is ENABLED for this session: the " + strings.Join(names, " / ") + " " + noun +
+		" " + verb + " host commands — not confined to the working directory (absolute paths and `..` allowed), " +
+		"with the permission mode as the safety layer. Call " + strings.Join(names, " / ") + " by that exact name."
+}
+
 // systemPrompt builds an agent's static system prefix: its soul+identity persona
 // followed by this workspace's instructions (when set). Both are stable, so they
 // belong in the cached static prefix rather than the volatile dynamic suffix.
@@ -1133,8 +1161,21 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	}
 	// Failure lessons (hata→ders döngüsü): the newest distilled lessons ride
 	// every headless turn so a fresh context does not repeat known failures.
-	if lb := r.LessonsContextBlock(ctx); lb != "" {
+	// The turn's own agent (resolved via the stamped session) ranks first.
+	agentID := ""
+	if sid := SessionIDFrom(ctx); sid != "" {
+		if sess, err := r.db.GetSession(ctx, sid); err == nil {
+			agentID = sess.AgentID
+		}
+	}
+	if lb := r.LessonsContextBlock(ctx, agentID); lb != "" {
 		out += "\n\n" + lb
+	}
+	// Shell tools (Bash/PowerShell) are gated; advertise them only when actually
+	// registered (gate on + backing shell present). Volatile → dynamic suffix,
+	// mirroring the chat path, since the gate can toggle mid-session.
+	if sh := r.ShellToolsContextBlock(); sh != "" {
+		out += "\n\n" + sh
 	}
 	return out
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
@@ -49,6 +50,28 @@ func TestLessonSignature_StableAndToolScoped(t *testing.T) {
 	if a == c {
 		t.Errorf("different tools must not collide")
 	}
+	// Variable parts (paths, numbers) collapse: same failure shape on a
+	// different file / line count hashes identically.
+	d := lessonSignature("Read", []lessonEvidence{{tool: "Read", errs: "no such file or directory: C:\\other\\place.txt"}}, "")
+	if a != d {
+		t.Errorf("path variance must not split the signature: %q vs %q", a, d)
+	}
+	e1 := lessonSignature("", nil, "prompt is too long: 250000 tokens > 200000 maximum")
+	e2 := lessonSignature("", nil, "prompt is too long: 310007 tokens > 200000 maximum")
+	if e1 != e2 {
+		t.Errorf("digit variance must not split the signature")
+	}
+}
+
+func TestNormalizeErrSig(t *testing.T) {
+	got := normalizeErrSig("No such file: C:\\Users\\x\\a.txt (line 42)")
+	want := "no such file: <path> (line #)"
+	if got != want {
+		t.Errorf("normalizeErrSig = %q, want %q", got, want)
+	}
+	if normalizeErrSig("exit status 1") != "exit status #" {
+		t.Errorf("digit run not collapsed: %q", normalizeErrSig("exit status 1"))
+	}
 }
 
 func TestMaybeReflectLessons_GatesAndSkips(t *testing.T) {
@@ -80,15 +103,16 @@ func TestLessonsContextBlock(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	ctx := context.Background()
 	tun.SetLessonReflect(true)
+	base := time.Now().Unix()
 
-	if b := rt.LessonsContextBlock(ctx); b != "" {
+	if b := rt.LessonsContextBlock(ctx, ""); b != "" {
 		t.Fatalf("empty store must yield empty block, got %q", b)
 	}
-	_, _ = rt.db.AddLesson(db.Lesson{Time: 100, Tool: "Read", Signature: "s1", Text: "verify the path exists before reading"})
-	_, _ = rt.db.AddLesson(db.Lesson{Time: 200, Tool: "Read", Signature: "s1", Text: "verify the path exists before reading"}) // count → 2
-	_, _ = rt.db.AddLesson(db.Lesson{Time: 300, Signature: "s2", Text: "turn-level lesson"})
+	_, _ = rt.db.AddLesson(db.Lesson{Time: base - 300, Tool: "Read", Signature: "s1", Text: "verify the path exists before reading"})
+	_, _ = rt.db.AddLesson(db.Lesson{Time: base - 200, Tool: "Read", Signature: "s1", Text: "verify the path exists before reading"}) // count → 2
+	_, _ = rt.db.AddLesson(db.Lesson{Time: base - 100, Signature: "s2", Text: "turn-level lesson"})
 
-	b := rt.LessonsContextBlock(ctx)
+	b := rt.LessonsContextBlock(ctx, "")
 	if !strings.Contains(b, "Lessons from past failures") ||
 		!strings.Contains(b, "[Read] verify the path exists before reading (seen 2 times)") ||
 		!strings.Contains(b, "- turn-level lesson") {
@@ -96,7 +120,32 @@ func TestLessonsContextBlock(t *testing.T) {
 	}
 
 	tun.SetLessonReflect(false)
-	if rt.LessonsContextBlock(ctx) != "" {
+	if rt.LessonsContextBlock(ctx, "") != "" {
 		t.Errorf("gate off must suppress the block")
 	}
 }
+
+func TestLessonsContextBlock_AgentPriority(t *testing.T) {
+	rt, tun := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	tun.SetLessonReflect(true)
+	base := time.Now().Unix()
+
+	// Six newer lessons from other agents + one OLDER lesson from AGT1: without
+	// prioritization AGT1's would fall outside the newest-5 window.
+	for i := 0; i < 6; i++ {
+		_, _ = rt.db.AddLesson(db.Lesson{Time: base - int64(10*i), AgentID: "OTHER", Signature: sig("o", i), Text: "other lesson"})
+	}
+	_, _ = rt.db.AddLesson(db.Lesson{Time: base - 900, AgentID: "AGT1", Signature: "mine", Text: "my own hard-won lesson"})
+
+	b := rt.LessonsContextBlock(ctx, "AGT1")
+	if !strings.Contains(b, "my own hard-won lesson") {
+		t.Fatalf("own-agent lesson not promoted into the injected set:\n%s", b)
+	}
+	// Without an agent id the same lesson is outside the newest-5 window.
+	if strings.Contains(rt.LessonsContextBlock(ctx, ""), "my own hard-won lesson") {
+		t.Errorf("unprioritized block unexpectedly contains the old lesson")
+	}
+}
+
+func sig(p string, i int) string { return p + string(rune('a'+i)) }
