@@ -411,6 +411,18 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		}
 		last = resp
 		turnUsage = sumUsage(turnUsage, resp.Usage)
+		// Surface SERVER-executed steps (native tool-search discovery rides
+		// resp.Trace as "tool" entries) so the chat UI shows them like any other
+		// tool card. Client tool calls are traced by the loop itself below;
+		// thinking entries can't occur here (thinking is off on the tool path).
+		for _, ts := range resp.Trace {
+			if ts.Kind != "tool" {
+				continue
+			}
+			st := TurnStep{Kind: StepTool, Tool: ts.Tool, Input: ts.Input, Output: ts.Output}
+			steps = append(steps, st)
+			emit(st)
+		}
 		// pause_turn: the SERVER-side tool loop (native tool search) hit its
 		// internal limit mid-turn. Echo the assistant content verbatim and
 		// immediately re-request — the server detects the trailing server-tool
