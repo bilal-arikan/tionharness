@@ -122,6 +122,16 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 	}
 
 	r.addSessionTags(ctx, sess, add)
+
+	// Repair-automation dispatch: a FAILED turn signals the failed-turn hooks
+	// (automation engine only) so an automation watching an error-class tag —
+	// "stuck" above all — fires on the failing turn itself. Success turns keep
+	// their existing FireTurnFinished call sites; the stuck gate's own refusal
+	// is excluded (firing on it would re-dispatch for every refused wake).
+	if e := strings.TrimSpace(turnErr); e != "" && e != "stopped" && !strings.Contains(e, stuckGuardMarker) {
+		// Re-read so the hook sees the tags added just above (e.g. "stuck").
+		r.FireTurnFailed(sess.ID, sess.AgentID, e)
+	}
 }
 
 // AutoTagEnabled reports whether event-driven auto-tagging is on (settings gate).

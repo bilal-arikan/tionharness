@@ -247,7 +247,9 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 	// and leaving the parent flagged forever. auth-error is deliberately excluded:
 	// it is terminal (needs /login), not something a repair turn can clear.
 	var clearParentTags []string
-	if a.TriggerTag == TagToolError || a.TriggerTag == TagError {
+	if a.TriggerTag == TagToolError || a.TriggerTag == TagError || a.TriggerTag == TagStuck {
+		// For "stuck", RemoveSessionTags also resets the StuckTurns counter, so
+		// a successful fixer re-opens the parent's autonomy in one step.
 		clearParentTags = []string{a.TriggerTag}
 	}
 

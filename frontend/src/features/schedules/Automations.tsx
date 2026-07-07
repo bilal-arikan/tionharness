@@ -298,6 +298,32 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
   const [maxIterations, setMaxIterations] = useState('50')
   const [cooldownSec, setCooldownSec] = useState('0')
   const [expiresAt, setExpiresAt] = useState('')
+  // spawnTagsOverride: set by a template (e.g. stuck repair must NOT re-tag the
+  // fixer, or it would loop); null = backend default ([triggerTag]).
+  const [spawnTagsOverride, setSpawnTagsOverride] = useState<string[] | null>(null)
+
+  // Prefill the create form as a "stuck session repairer" (self-healing,
+  // _Docs/56): fires on the failing turn of a session tagged `stuck`, spawns a
+  // fixer that diagnoses via the debug journal; on the fixer's success the
+  // framework clears the parent's stuck tag + counter, re-opening autonomy.
+  const applyStuckTemplate = () => {
+    setName('Stuck oturum onarıcısı')
+    setTriggerTag('stuck')
+    setPromptTemplate(
+      'Session {{sessionId}} ("{{title}}") is STUCK: it failed several consecutive turns and its ' +
+        'autonomous turns are now suspended. Last error:\n{{result}}\n\n' +
+        'Diagnose and fix it:\n' +
+        '1. Read its debug journal (read_session_debug with session_id {{sessionId}}) and recent ' +
+        'messages (conversation_search) to find the failing tool calls and the root cause.\n' +
+        '2. Fix the underlying problem if it is fixable (wrong path/config, missing file, bad state). ' +
+        'Check read_lessons for known failure shapes first.\n' +
+        '3. Report what you found and what you changed. Do NOT retry the same failing calls blindly.\n' +
+        'When you finish successfully, the stuck tag and counter are cleared automatically.',
+    )
+    setMaxIterations('10')
+    setCooldownSec('300')
+    setSpawnTagsOverride([]) // the fixer itself must not carry `stuck`
+  }
 
   // Inline edit state (one automation edited at a time, within this section).
   const [editId, setEditId] = useState<string | null>(null)
@@ -336,6 +362,7 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
         triggerKind: kind,
         ...(isBoardKind ? { boardOp, boardFromState, boardToState } : { triggerTag: triggerTag.trim() }),
         ...(targetMode === 'flow' ? { flowId } : { targetAgentId }),
+        ...(spawnTagsOverride !== null ? { spawnTags: spawnTagsOverride } : {}),
         promptTemplate: promptTemplate.trim(),
         maxIterations: Number(maxIterations) || 0,
         cooldownSec: Number(cooldownSec) || 0,
@@ -349,6 +376,7 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
       setBoardToState('')
       setExpiresAt('')
       setFlowId('')
+      setSpawnTagsOverride(null)
     } catch (e) {
       onError((e as Error).message)
     }
@@ -553,6 +581,22 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
           <PromptVarsField kind={kind} value={promptTemplate} onChange={setPromptTemplate} />
           <Button onClick={create}>+ Otomasyon</Button>
         </div>
+        {!isBoardKind && (
+          <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
+            Şablon:
+            <button
+              type="button"
+              onClick={applyStuckTemplate}
+              className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-0.5 font-medium text-[var(--color-text)] hover:border-[var(--color-accent)]"
+              title="Formu 'stuck oturum onarıcısı' olarak doldurur: stuck etiketli (üst üste turları hata veren) oturumun BAŞARISIZ turunda tetiklenir, teşhis+onarım yapan bir fixer başlatır; fixer başarıyla bitince stuck etiketi + sayaç otomatik temizlenir ve otonomi yeniden açılır. Fixer'a stuck etiketi verilmez (döngü olmaz). Hedef ajanı seçmeyi unutma."
+            >
+              🩹 Stuck oturum onarıcısı
+            </button>
+            {spawnTagsOverride !== null && (
+              <span className="text-[var(--color-warning)]">şablon aktif: fixer oturumu etiketsiz başlar (döngüsüz)</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* List */}

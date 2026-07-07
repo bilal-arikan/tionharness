@@ -79,6 +79,10 @@ type Runtime struct {
 	// FireTurnFinished may already be firing.
 	turnHooks   []func(context.Context, TurnFinished)
 	turnHooksMu sync.RWMutex
+	// failedTurnHooks fire on turns that ended with an ERROR (see FireTurnFailed):
+	// only the automation engine subscribes, so repair automations can react to
+	// the failing turn itself. Guarded by the same mutex.
+	failedTurnHooks []func(context.Context, TurnFinished)
 
 	// coordSlots serializes turns per session for the coordinator/worker loop: one
 	// slot per coordinator session so concurrent worker notifications never run two
@@ -840,6 +844,42 @@ func (r *Runtime) AddTurnHook(fn func(context.Context, TurnFinished)) {
 	r.turnHooksMu.Lock()
 	defer r.turnHooksMu.Unlock()
 	r.turnHooks = append(r.turnHooks, fn)
+}
+
+// AddFailedTurnHook appends a FAILED-turn observer. Kept separate from the
+// success hooks: coordination must never receive an error turn as a worker
+// result, but the automation engine must — a repair automation watching an
+// error-class tag ("stuck"/"error") has to fire on the very turn that failed,
+// not wait for a success that may never come (the stuck gate refuses further
+// autonomous turns). Wired by the workspace manager next to SetTurnHook.
+func (r *Runtime) AddFailedTurnHook(fn func(context.Context, TurnFinished)) {
+	if fn == nil {
+		return
+	}
+	r.turnHooksMu.Lock()
+	defer r.turnHooksMu.Unlock()
+	r.failedTurnHooks = append(r.failedTurnHooks, fn)
+}
+
+// FireTurnFailed dispatches a turn-FAILURE signal to the failed-turn hooks
+// (detached, like FireTurnFinished). output carries the turn's error text so an
+// automation's {{result}} placeholder renders the failure reason.
+func (r *Runtime) FireTurnFailed(sessionID, agentID, output string) {
+	if sessionID == "" {
+		return
+	}
+	r.turnHooksMu.RLock()
+	hooks := r.failedTurnHooks
+	r.turnHooksMu.RUnlock()
+	tf := TurnFinished{SessionID: sessionID, AgentID: agentID, Output: output}
+	for _, fn := range hooks {
+		fn := fn
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
+			defer cancel()
+			fn(ctx, tf)
+		}()
+	}
 }
 
 // FireTurnFinished dispatches a turn-completion signal to every wired hook, each

@@ -251,6 +251,11 @@ func (m *Manager) open(meta Meta) error {
 	// hook so a tagged session finishing a turn can spawn a follow-up (the loop).
 	autoEngine := agent.NewAutomationEngine(database, rt, m.logger)
 	rt.SetTurnHook(autoEngine.OnTurnFinished)
+	// Failed turns dispatch to the automation engine ONLY (not coordination):
+	// repair automations watching error-class tags ("stuck"/"error") must fire
+	// on the failing turn itself — a stuck session gets no more autonomous
+	// successes to fire from.
+	rt.AddFailedTurnHook(autoEngine.OnTurnFinished)
 	// Board-triggered automations: a kanban card change (create/move/update/delete)
 	// fires the engine on a detached goroutine so the mutation is never blocked.
 	database.SetBoardHook(func(ev db.BoardChangeEvent) {
