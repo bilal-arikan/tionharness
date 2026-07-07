@@ -1,10 +1,12 @@
 package agent
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 
+	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
@@ -116,6 +118,35 @@ func (g *toolGuard) observe(call providers.ToolCall, res providers.ToolResult) (
 		}
 	}
 	return ""
+}
+
+// stuckGuardMarker tags the stuck-gate refusal error so AutoTagTurn can exclude
+// it from the stuck counter (the gate must not count its own refusals).
+const stuckGuardMarker = "suspended by stuck guard"
+
+// stuckGate refuses an autonomous turn for a session whose StuckTurns counter
+// crossed the threshold (Faz D). Threshold 0 disables the gate; a missing
+// session id (detached auxiliary calls) always passes.
+func (r *Runtime) stuckGate(ctx context.Context) error {
+	threshold := r.tun.StuckTurnThreshold()
+	if threshold <= 0 {
+		return nil
+	}
+	sid := SessionIDFrom(ctx)
+	if sid == "" {
+		return nil
+	}
+	sess, err := r.db.GetSession(ctx, sid)
+	if err != nil {
+		return nil // unknown session: not this gate's problem
+	}
+	if sess.StuckTurns < threshold {
+		return nil
+	}
+	r.logger.Warn("autonomous turn refused: session "+stuckGuardMarker, "session", sid, "stuckTurns", sess.StuckTurns, "threshold", threshold)
+	r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: sess.AgentID, Name: "stuck_gate", Detail: fmt.Sprintf("stuckTurns=%d threshold=%d", sess.StuckTurns, threshold), Err: true})
+	return fmt.Errorf("session %s %s: %d consecutive failed turns (threshold %d) — resolve manually or via a repair automation, or remove the %q tag to reset",
+		sid, stuckGuardMarker, sess.StuckTurns, threshold, TagStuck)
 }
 
 // blockedResultMsg is the synthetic error result for a call the guardrail

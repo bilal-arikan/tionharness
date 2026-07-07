@@ -12,6 +12,7 @@ const (
 	DefaultMaxTokenRetries    = 3 // resume attempts after the output-token cap
 	DefaultReactiveKeepRecent = 6 // in-flight messages kept verbatim when compacting
 	DefaultProviderRetryMax   = 2 // retries per turn for transient provider faults (429/5xx/timeout)
+	DefaultStuckTurnThreshold = 3 // consecutive bad turns before a session is tagged "stuck" (autonomy refused)
 )
 
 // Default spawn guards. They bound the fire-and-forget spawn_session surface so a
@@ -74,6 +75,10 @@ type Tunables struct {
 	// thresholds (opt-in circuit breaker).
 	toolGuardWarnings bool
 	toolGuardHardStop bool
+
+	// stuckTurnThreshold (Faz D): consecutive bad turns before a session is
+	// tagged "stuck" and its autonomous turns are refused. 0 disables; <0 → default.
+	stuckTurnThreshold int
 
 	// Tool-output token optimization — two independent, parallel systems.
 	// System A: deterministic compaction (free, rule-based, every result).
@@ -217,7 +222,8 @@ func NewTunables() *Tunables {
 		providerRetryMax:   DefaultProviderRetryMax,
 		// Guardrail warnings on by default (gentle nudge appended to failing
 		// results); the hard stop stays opt-in from settings.
-		toolGuardWarnings: true,
+		toolGuardWarnings:  true,
+		stuckTurnThreshold: DefaultStuckTurnThreshold,
 		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
 		// dir by default — the safety brake for the otherwise-unconfined tools.
 		autonomousConfine: true,
@@ -498,6 +504,25 @@ func (t *Tunables) ToolGuardHardStop() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.toolGuardHardStop
+}
+
+// SetStuckTurnThreshold configures the consecutive bad-turn count that tags a
+// session "stuck" and suspends its autonomous turns. 0 disables the gate;
+// negative resets to the built-in default.
+func (t *Tunables) SetStuckTurnThreshold(n int) {
+	t.mu.Lock()
+	t.stuckTurnThreshold = n
+	t.mu.Unlock()
+}
+
+// StuckTurnThreshold returns the stuck-session threshold (0 = gate disabled).
+func (t *Tunables) StuckTurnThreshold() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.stuckTurnThreshold < 0 {
+		return DefaultStuckTurnThreshold
+	}
+	return t.stuckTurnThreshold
 }
 
 // ReactiveKeepRecent returns the in-flight compaction tail size (default when <2,

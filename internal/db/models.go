@@ -139,6 +139,14 @@ type Session struct {
 	// Automation watching that tag fires (see internal/db/models_automation.go).
 	Tags []string `json:"tags,omitempty"`
 
+	// StuckTurns counts CONSECUTIVE turns of this session that ended badly (turn
+	// error or a guardrail halt). It is reset to 0 by any clean turn, or when the
+	// "stuck" tag is removed (a fixer resolving the session). At the configured
+	// threshold the session is tagged "stuck" and further AUTONOMOUS turns are
+	// refused until a human (or a repair automation) intervenes — the persistent,
+	// process-restart-surviving sibling of the per-turn loop guards.
+	StuckTurns int `json:"stuckTurns,omitempty"`
+
 	// Conversation compaction state (see internal/conversation).
 	Summary         string `json:"summary"`
 	SummaryMsgCount int    `json:"summaryMsgCount"`

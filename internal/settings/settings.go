@@ -138,6 +138,13 @@ type Settings struct {
 	// verbatim. Complements the client-side compaction (which keeps managing
 	// the cross-turn transcript). Off by default. anthropic provider only.
 	AnthropicServerCompaction bool `json:"anthropicServerCompaction"`
+	// AnthropicRefusalFallback (beta) attaches the server-side fallback to
+	// Fable-class requests: a safety-classifier decline (stop_reason "refusal")
+	// is transparently re-served by Opus 4.8 inside the same call instead of
+	// failing the turn (a decline before output isn't billed; the rescue bills
+	// at Opus rates). ON by default per Anthropic's Fable guidance — false
+	// positives on benign adjacent work do happen. anthropic provider only.
+	AnthropicRefusalFallback bool `json:"anthropicRefusalFallback"`
 
 	// Desktop / display behaviour (applied client-side).
 	DesktopNotifications bool `json:"desktopNotifications"` // browser notifications
@@ -225,6 +232,10 @@ type Settings struct {
 	// tool keeps failing (circuit breaker, opt-in).
 	ToolGuardWarnings bool `json:"toolGuardWarnings"`
 	ToolGuardHardStop bool `json:"toolGuardHardStop"`
+	// StuckTurnThreshold: consecutive bad turns (turn error or guardrail halt)
+	// before a session is tagged "stuck" and its AUTONOMOUS turns are refused
+	// until resolved. 0 disables the gate.
+	StuckTurnThreshold int `json:"stuckTurnThreshold"`
 	// MaxOutputTokens is the generation cap (max output tokens) applied when a
 	// turn leaves it unset. 0 = auto: resolve per model family (providers.
 	// MaxOutputFor), which keeps answers from being truncated at the providers'
@@ -358,6 +369,11 @@ func Default() Settings {
 		// settings.json files keep whatever the user last saved.
 		ExtendedPromptCache: true,
 
+		// Refusal fallback on by default (Anthropic's Fable 5 guidance): only
+		// Fable-class requests carry it, and without it a classifier false
+		// positive fails the turn outright.
+		AnthropicRefusalFallback: true,
+
 		// Auto-tagging on by default: derives error/goal/archived tags for automation
 		// scanning; add-only and cheap (a small write only when a tag actually changes).
 		AutoTagSessions: true,
@@ -373,6 +389,7 @@ func Default() Settings {
 		MaxProviderRetries: 2,
 		ToolGuardWarnings:  true,
 		ToolGuardHardStop:  false,
+		StuckTurnThreshold: 3,
 		MaxOutputTokens:    0, // auto: per-model family default
 
 		// Both systems on by default, the external agent project-style: System A (free, deterministic)
@@ -468,6 +485,7 @@ type DTO struct {
 	AnthropicProgrammaticTools bool `json:"anthropicProgrammaticTools"`
 	AnthropicWebTools          bool `json:"anthropicWebTools"`
 	AnthropicServerCompaction  bool `json:"anthropicServerCompaction"`
+	AnthropicRefusalFallback   bool `json:"anthropicRefusalFallback"`
 	AutonomousTaskBudgetTokens int  `json:"autonomousTaskBudgetTokens"`
 
 	DesktopNotifications bool `json:"desktopNotifications"`
@@ -508,6 +526,7 @@ type DTO struct {
 	MaxProviderRetries int  `json:"maxProviderRetries"`
 	ToolGuardWarnings  bool `json:"toolGuardWarnings"`
 	ToolGuardHardStop  bool `json:"toolGuardHardStop"`
+	StuckTurnThreshold int  `json:"stuckTurnThreshold"`
 	MaxOutputTokens    int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   bool   `json:"compactToolOutput"`
@@ -581,6 +600,7 @@ func (s Settings) ToDTO() DTO {
 		AnthropicProgrammaticTools: s.AnthropicProgrammaticTools,
 		AnthropicWebTools:          s.AnthropicWebTools,
 		AnthropicServerCompaction:  s.AnthropicServerCompaction,
+		AnthropicRefusalFallback:   s.AnthropicRefusalFallback,
 		AutonomousTaskBudgetTokens: s.AutonomousTaskBudgetTokens,
 
 		DesktopNotifications: s.DesktopNotifications,
@@ -621,6 +641,7 @@ func (s Settings) ToDTO() DTO {
 		MaxProviderRetries: s.MaxProviderRetries,
 		ToolGuardWarnings:  s.ToolGuardWarnings,
 		ToolGuardHardStop:  s.ToolGuardHardStop,
+		StuckTurnThreshold: s.StuckTurnThreshold,
 		MaxOutputTokens:    s.MaxOutputTokens,
 
 		CompactToolOutput:   s.CompactToolOutput,
@@ -685,6 +706,7 @@ type Patch struct {
 	AnthropicContextEditing    *bool `json:"anthropicContextEditing"`
 	AnthropicNativeToolSearch  *bool `json:"anthropicNativeToolSearch"`
 	AnthropicProgrammaticTools *bool `json:"anthropicProgrammaticTools"`
+	AnthropicRefusalFallback   *bool `json:"anthropicRefusalFallback"`
 	AnthropicWebTools          *bool `json:"anthropicWebTools"`
 	AnthropicServerCompaction  *bool `json:"anthropicServerCompaction"`
 	AutonomousTaskBudgetTokens *int  `json:"autonomousTaskBudgetTokens"`
@@ -727,6 +749,7 @@ type Patch struct {
 	MaxProviderRetries *int  `json:"maxProviderRetries"`
 	ToolGuardWarnings  *bool `json:"toolGuardWarnings"`
 	ToolGuardHardStop  *bool `json:"toolGuardHardStop"`
+	StuckTurnThreshold *int  `json:"stuckTurnThreshold"`
 	MaxOutputTokens    *int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   *bool   `json:"compactToolOutput"`

@@ -22,6 +22,7 @@ const (
 	TagGoal      = "goal"       // session has a persistent goal set
 	TagGoalDone  = "goal-done"  // that goal is marked done
 	TagArchived  = "archived"   // session is archived
+	TagStuck     = "stuck"      // StuckTurns crossed the threshold — autonomous turns refused
 )
 
 // AutoTagTurn inspects a finished turn (its trace steps + an optional turn-level
@@ -80,6 +81,37 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 	}
 	if sess.State == "archived" {
 		add = append(add, TagArchived)
+	}
+
+	// Stuck-turn counter (self-healing Faz D): a bad turn (turn error or a
+	// guardrail halt) increments the persistent per-session counter; a clean
+	// turn resets it. At the threshold the session is tagged "stuck" and the
+	// autonomous gate (completeTracedInner) refuses further unattended turns.
+	// The gate's own refusal is excluded so a blocked session doesn't keep
+	// counting itself deeper into the hole.
+	if threshold := r.tun.StuckTurnThreshold(); threshold > 0 && !strings.Contains(turnErr, stuckGuardMarker) {
+		bad := strings.TrimSpace(turnErr) != "" && turnErr != "stopped"
+		if !bad {
+			for _, st := range steps {
+				if st.Kind == StepRecovery && st.Reason == string(termGuardrailHalt) {
+					bad = true
+					break
+				}
+			}
+		}
+		switch {
+		case bad:
+			n := sess.StuckTurns + 1
+			if err := r.db.SetSessionStuckTurns(ctx, sess.ID, n); err != nil {
+				r.logger.Warn("stuck counter: persist failed", "session", sess.ID, "error", err)
+			} else if n >= threshold {
+				add = append(add, TagStuck)
+			}
+		case sess.StuckTurns > 0:
+			if err := r.db.SetSessionStuckTurns(ctx, sess.ID, 0); err != nil {
+				r.logger.Warn("stuck counter: reset failed", "session", sess.ID, "error", err)
+			}
+		}
 	}
 
 	r.addSessionTags(ctx, sess, add)
@@ -162,6 +194,14 @@ func (r *Runtime) RemoveSessionTags(ctx context.Context, sessionID string, drop 
 	if err := r.db.SetSessionTags(ctx, sessionID, kept); err != nil {
 		r.logger.Warn("repair: clear parent tag failed", "session", sessionID, "error", err)
 		return
+	}
+	// Removing the "stuck" tag means a fixer (or the user) resolved the session:
+	// also reset the counter, otherwise the autonomous gate would keep refusing
+	// turns and the session could never recover.
+	if dropSet[TagStuck] {
+		if err := r.db.SetSessionStuckTurns(ctx, sessionID, 0); err != nil {
+			r.logger.Warn("stuck counter: reset on untag failed", "session", sessionID, "error", err)
+		}
 	}
 	r.publish(events.Event{
 		Type:   "session",

@@ -264,6 +264,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyBool(&next.AnthropicProgrammaticTools, p.AnthropicProgrammaticTools)
 	applyBool(&next.AnthropicWebTools, p.AnthropicWebTools)
 	applyBool(&next.AnthropicServerCompaction, p.AnthropicServerCompaction)
+	applyBool(&next.AnthropicRefusalFallback, p.AnthropicRefusalFallback)
 	applyInt(&next.AutonomousTaskBudgetTokens, p.AutonomousTaskBudgetTokens)
 	applyBool(&next.DesktopNotifications, p.DesktopNotifications)
 	applyBool(&next.KeepAwake, p.KeepAwake)
@@ -323,6 +324,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.ToolGuardHardStop != nil {
 		next.ToolGuardHardStop = *p.ToolGuardHardStop
 	}
+	applyInt(&next.StuckTurnThreshold, p.StuckTurnThreshold)
 	applyInt(&next.MaxOutputTokens, p.MaxOutputTokens)
 
 	if p.CompactToolOutput != nil {
@@ -524,6 +526,13 @@ func normalize(v Settings) Settings {
 	}
 	if v.MaxProviderRetries > 5 {
 		v.MaxProviderRetries = 5
+	}
+	// Stuck gate: 0 is valid (disables the gate); clamp the ceiling.
+	if v.StuckTurnThreshold < 0 {
+		v.StuckTurnThreshold = 0
+	}
+	if v.StuckTurnThreshold > 20 {
+		v.StuckTurnThreshold = 20
 	}
 	// Output cap: 0 is valid (auto, per-model family). A positive override is
 	// clamped to a sane range — a floor so it can't cripple answers, a ceiling at

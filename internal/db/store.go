@@ -381,6 +381,17 @@ func (d *DB) SetSessionTags(ctx context.Context, sessionID string, tags []string
 	})
 }
 
+// SetSessionStuckTurns persists the consecutive bad-turn counter (self-healing
+// Faz D). Does not bump UpdatedAt — the counter is bookkeeping, not activity.
+func (d *DB) SetSessionStuckTurns(ctx context.Context, sessionID string, n int) error {
+	if n < 0 {
+		n = 0
+	}
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.StuckTurns = n
+	})
+}
+
 // SetSessionPinned pins/unpins a session to the top of the sidebar list. Does not
 // bump UpdatedAt (pinning is a view preference, not activity).
 func (d *DB) SetSessionPinned(ctx context.Context, sessionID string, pinned bool) error {

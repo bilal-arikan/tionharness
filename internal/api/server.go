@@ -210,7 +210,7 @@ func (s *Server) applySettings() {
 	s.providers.SetClaudeConfigDir(cur.ClaudeConfigDir)
 	s.providers.SetClaudeAuth(s.settings.ClaudeCliAuthToken(), cur.ClaudeCliAuthKind)
 	s.providers.SetDefaultModel(cur.DefaultModel)
-	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache, cur.AnthropicContextEditing, cur.AnthropicServerCompaction)
+	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache, cur.AnthropicContextEditing, cur.AnthropicServerCompaction, cur.AnthropicRefusalFallback)
 	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
 	s.providers.SetOpenRouter(s.settings.OpenRouterKey(), cur.OpenRouterBaseURL)
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
@@ -241,6 +241,7 @@ func (s *Server) applySettings() {
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
 	s.tun.SetProviderRetryMax(cur.MaxProviderRetries)
 	s.tun.SetToolGuard(cur.ToolGuardWarnings, cur.ToolGuardHardStop)
+	s.tun.SetStuckTurnThreshold(cur.StuckTurnThreshold)
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
 	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold, cur.CompactModel)
 	if s.backups != nil {

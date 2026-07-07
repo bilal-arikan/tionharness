@@ -143,6 +143,16 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 }
 
 func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool, onStep func(TurnStep)) (*providers.Response, []TurnStep, error) {
+	// Stuck-session gate (self-healing Faz D): a session whose consecutive
+	// bad-turn counter crossed the threshold gets no further AUTONOMOUS turns —
+	// unattended retries of a failing session only burn budget. Manual chat is
+	// never gated (a human driving the session is exactly how it recovers), and
+	// a clean manual turn resets the counter via AutoTagTurn.
+	if autonomous {
+		if err := r.stuckGate(ctx); err != nil {
+			return nil, nil, err
+		}
+	}
 	// Carry the agent's permission mode so provider-driven loops (claude CLI) can
 	// gate their tool use. Empty maps to "auto" downstream.
 	req.PermissionMode = effectivePermissionMode(agent.PermissionMode, autonomous)
@@ -354,8 +364,13 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// web tool results, compaction blocks) that MUST ride back exactly;
 	// everywhere else the portable Text+ToolCalls echo stays, so
 	// inherited-context subagents on other providers see no behaviour change.
+	//
+	// Always-on-thinking models (Fable/Mythos 5) are ALWAYS raw-echoed: they
+	// think on every response — tool loop included — and the API requires those
+	// thinking blocks back exactly as received on the same model; the
+	// constructed Text+ToolCalls echo would drop them and break the turn.
 	rawEcho := func(raw json.RawMessage) json.RawMessage {
-		if nativeSearch || ptcMode || webMode || serverCompact {
+		if nativeSearch || ptcMode || webMode || serverCompact || providers.AlwaysOnThinking(agent.Model) {
 			return raw
 		}
 		return nil
@@ -552,6 +567,47 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				emit(rec)
 				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugRecovery, AgentID: agent.ID, Detail: string(d.reason)})
 				continue
+			}
+			// Context window hit as a STOP REASON (Claude 4.5+): same one-shot
+			// compact-and-retry as the error-shaped overflow above.
+			if d.compact {
+				cctx := conversation.WithCompactPrompt(ctx, r.CompactPromptTemplate())
+				folded, ok, cerr := conversation.CompactInFlightMessages(cctx, r.db, provider, agent, req.Messages, keepRecent)
+				if cerr == nil && ok {
+					req.Messages = folded
+					ls.compacted = true
+					ls.lastContinue = d.reason
+					markContextOverflow(ctx)
+					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
+					steps = append(steps, rec)
+					emit(rec)
+					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugCompaction, AgentID: agent.ID, Detail: string(d.reason)})
+					continue
+				}
+			}
+			// Safety refusal (Fable-class classifiers; HTTP 200 + empty/partial
+			// content): surface WHAT happened instead of a silent empty bubble.
+			// With the server-side fallback enabled this only fires when the
+			// fallback chain itself declined.
+			if resp.StopReason == providers.StopRefusal {
+				txt := "Güvenlik sınıflandırıcıları bu isteği reddetti; yanıt üretilmedi."
+				if resp.StopDetails != nil && resp.StopDetails.Category != "" {
+					txt += " Kategori: " + resp.StopDetails.Category + "."
+				}
+				if resp.StopDetails != nil && resp.StopDetails.Explanation != "" {
+					txt += " " + resp.StopDetails.Explanation
+				}
+				st := TurnStep{Kind: StepError, Reason: string(providers.StopRefusal), Text: txt, IsError: true}
+				steps = append(steps, st)
+				emit(st)
+				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugError, AgentID: agent.ID, Detail: "refusal: " + txt, Err: true})
+			}
+			// A truncated reply (context window exhausted after compaction) must
+			// say so in the trace rather than masquerading as a completed turn.
+			if d.term == termContextExhausted {
+				rec := TurnStep{Kind: StepRecovery, Reason: string(termContextExhausted), Text: "Bağlam penceresi doldu; yanıt bu noktada kesildi (sıkıştırma hakkı tükendi)."}
+				steps = append(steps, rec)
+				emit(rec)
 			}
 			// Stitch any earlier capped fragments onto the final answer.
 			if partial.Len() > 0 {
