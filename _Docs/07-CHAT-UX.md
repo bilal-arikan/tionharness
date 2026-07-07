@@ -344,7 +344,7 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   `wake_turn.go` üzerinden bundan geçer) mesajı `[Gönderen → Alıcı (you)]` atfeder.
   Detay `_Docs/47`.
 - **Sıradaki-tur bağlam önizleme (debug, 2026-06-23):** Agent ekranındaki bağlam
-  önizlemesinin oturum karşılığı. SessionDetailPanel → **"Bağlam önizle (debug)"** →
+  önizlemesinin oturum karşılığı. SessionDetailPanel → **"Bağlam (debug)"** →
   `SessionContextModal`, `GET /api/sessions/{id}/context-preview?message=`. Ajanın bu
   oturumda **bir sonraki turda alacağı tam isteği** gösterir: composed sistem promptu +
   dinamik suffix + **modele gidecek mesaj dizisi** (yazar etiketleri + araç özeti folded)

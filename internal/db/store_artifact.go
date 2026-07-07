@@ -160,6 +160,21 @@ func (d *DB) UpdateArtifactMeta(ctx context.Context, id, title, kind, language s
 	return a, d.persistArtifactLocked(&a)
 }
 
+// SetArtifactGroup assigns an artifact's organisation bucket (its Artifacts-UI
+// `group` label) without touching any other field. An empty group ungroups it.
+// Returns the updated row.
+func (d *DB) SetArtifactGroup(ctx context.Context, id, group string) (Artifact, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	a, ok := d.artifacts[id]
+	if !ok {
+		return Artifact{}, ErrNotFound
+	}
+	a.Group = strings.TrimSpace(group)
+	a.UpdatedAt = now()
+	return a, d.persistArtifactLocked(&a)
+}
+
 // SaveFileArtifact upserts an artifact mirroring a file the agent wrote: if one
 // already exists for the same session + source path it is overwritten in place,
 // otherwise a new one is created. This dedups repeated writes of the same file

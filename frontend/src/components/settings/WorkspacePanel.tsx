@@ -79,6 +79,16 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       )}
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Kod bilgi-grafiği (codebase-memory)
+      </div>
+      <Toggle
+        label="codebase-memory yeteneği"
+        hint="Bu workspace'te bir codebase-memory MCP sunucusu varsa: ajanın bağlamına 'kod bilgi-grafiği mevcut' ipucu eklenir, sunucu workspace'e özel izole bir indeks store'a yönlendirilir (indeksler karışmaz), session çalışma dizini otomatik indekslenir ve codebase_workspace_search (workspace-geneli arama) aracı sunulur. Kapalı = tamamen devre dışı (sunucu kendi varsayılan store'unu kullanır)."
+        checked={ws.codebaseMemoryEnabled}
+        onChange={(v) => setWsField('codebaseMemoryEnabled', v)}
+      />
+
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Sil
       </div>
 

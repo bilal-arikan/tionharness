@@ -763,3 +763,27 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   **WS5(8):** +unity-mcp, desktop-commander, codebase-memory ·
   **WS8(7)/WS9(7):** unity-mcp, desktop-commander, mcp-chrome, playwright, stitch, photopea, mcp-alpha.
   Gateway mekanizmasının kendisi (asıl hedef) değişmedi.
+
+- 🩹 **activate_tools/active_tools çıktısı namespaced ad döndürüyor (2026-07-06):** Semptom
+  (SES125): ajan `activate_tools({tools:['list_agents']})` çağırıyor, çıktı **bare** `"activated:
+  list_agents"` diyor; ama claude-cli'de deferred tool YALNIZ namespaced adla çağrılabilir
+  (`mcp__tionswarm_extended__list_agents`). Model çıplak `list_agents` çağırıp `"No such tool
+  available: list_agents"` alıyor, sonra doğru adla yeniden deneyip başarıyor — boş round-trip
+  (+ autotag fix'inden önce sahte `tool-error`). Fix (`mcp_interaction.go`): `callActivate` +
+  `callActiveTools` artık **namespaced çağrılabilir adı** raporluyor (`extendedNSPrefix` sabiti) +
+  "Call each by this exact (namespaced) name." Test: `TestGatewayActivateAcceptsNamespacedName`
+  namespaced çıktıyı da assert ediyor. İlgili: `PowerShell`/`list_agents` çıplak-ad reddi artık
+  `tool-error` almıyor (`internal/agent/autotag.go` `permissionDenyMarkers`, bkz. _Docs/46).
+
+- 🩹 **recent_tool_activity recap tam (namespaced) adı gösteriyor (2026-07-06):** Bilal'in tespiti —
+  bare-name alışkanlığının asıl kaynağı buymuş. `traceStepToTurnStep` (`internal/agent/trace.go`)
+  CLI tool adından namespace'i soyup **bare** saklıyor (UI'da temiz kart için doğru). Ama bu bare ad
+  `<recent_tool_activity>` recap'ine de gidiyordu → model bir sonraki turda "list_tasks kullandım"
+  görüp **bare** çağırıyor → CLI reddediyor. Fix: `TurnStep`'e `CallName` alanı eklendi — soyulduğunda
+  orijinal namespaced ad orada saklanır (native/bare tool'larda boş). Recap (`chat_tool_summary.go`
+  `formatToolRecapLine`) artık `CallName` varsa onu gösteriyor → model gerçek çağrılabilir adı görüyor.
+  UI hâlâ bare `Tool`'u kullanıyor (kartlar değişmedi). Test: `TestToolRecapBlockUsesCallName`.
+  Ayrıca **activate→call race** (SES125 `list_tasks`): model doğru namespaced adı çağırsa bile
+  `activate_tools` sonrası CLI `tools/list`'i henüz yenilememişse "No such tool available" gelir,
+  retry ile toparlar — bu transient race benign (autotag muaf tutuyor); server-side bloklamalı fix
+  CLI'nin bildirim-işleme sırasına bağlı olduğundan riskli, yapılmadı.

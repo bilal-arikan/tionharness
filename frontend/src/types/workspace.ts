@@ -48,6 +48,7 @@ export interface WorkspaceSettings {
   sessionContextEnabled: boolean
   sessionContextEveryTurn: boolean
   sessionContextRecentCount: number
+  codebaseMemoryEnabled: boolean
   boardColumns: BoardColumnDef[]
   createdAt: number
   agentCount: number
@@ -72,6 +73,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'sessionContextEnabled'
     | 'sessionContextEveryTurn'
     | 'sessionContextRecentCount'
+    | 'codebaseMemoryEnabled'
     | 'boardColumns'
   >
 >

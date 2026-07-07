@@ -14,17 +14,23 @@ export function SessionDebugCard({
   sessionId,
   refreshKey,
   agentNames = {},
+  alwaysOpen = false,
 }: {
   sessionId: string
   refreshKey?: number
   // agentId → display name, used to label the workflow visualizations' agent
   // lanes/nodes. Empty is fine (falls back to a generic label).
   agentNames?: Record<string, string>
+  // When true (e.g. rendered inside the dedicated Debug modal) the card is always
+  // expanded and its collapse header is hidden — the modal supplies the title.
+  alwaysOpen?: boolean
 }) {
   const [sum, setSum] = useState<SessionDebugSummary | null>(null)
   // Whole-card fold (collapsed by default — debug is secondary; the header line
   // still shows a one-glance summary). Persisted so the choice sticks.
-  const [open, setOpen] = useState(() => localStorage.getItem('tionswarm.debugCardOpen') === '1')
+  const [open, setOpen] = useState(
+    () => alwaysOpen || localStorage.getItem('tionswarm.debugCardOpen') === '1',
+  )
   const toggleOpen = () =>
     setOpen((v) => {
       const next = !v
@@ -83,22 +89,25 @@ export function SessionDebugCard({
   return (
     <section>
       {/* Foldable header: click to expand/collapse the whole card. Collapsed, it
-          still shows a one-glance summary (turns + any warnings). */}
-      <button
-        onClick={toggleOpen}
-        className="flex w-full items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70 transition hover:opacity-100"
-      >
-        {open ? <ChevronDown size={12} className="shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
-        <Bug size={12} className="shrink-0" /> Debug / Gözlemlenebilirlik
-        {!open && (
-          <span className="ml-auto flex items-center gap-1.5 normal-case tracking-normal">
-            <span>{sum.turns} tur</span>
-            {warnCount > 0 && (
-              <span className="text-[var(--color-error)]">· {warnCount} uyarı</span>
-            )}
-          </span>
-        )}
-      </button>
+          still shows a one-glance summary (turns + any warnings). Hidden when
+          alwaysOpen (the Debug modal renders its own title). */}
+      {!alwaysOpen && (
+        <button
+          onClick={toggleOpen}
+          className="flex w-full items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70 transition hover:opacity-100"
+        >
+          {open ? <ChevronDown size={12} className="shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
+          <Bug size={12} className="shrink-0" /> Debug / Gözlemlenebilirlik
+          {!open && (
+            <span className="ml-auto flex items-center gap-1.5 normal-case tracking-normal">
+              <span>{sum.turns} tur</span>
+              {warnCount > 0 && (
+                <span className="text-[var(--color-error)]">· {warnCount} uyarı</span>
+              )}
+            </span>
+          )}
+        </button>
+      )}
 
       {open && (
         <div className="mt-2">

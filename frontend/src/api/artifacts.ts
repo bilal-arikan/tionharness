@@ -25,6 +25,14 @@ export const artifactApi = {
   ) => req<Artifact>(`/api/artifacts/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
   deleteArtifact: (id: string) =>
     req<{ ok: boolean }>(`/api/artifacts/${id}`, { method: 'DELETE' }),
+  // Assign an artifact's `group` (its Artifacts-UI organisation bucket) without
+  // touching any other field. Empty string ungroups it. Drives the bulk "set
+  // group" action, mirroring the Skills screen's grouping.
+  setArtifactGroup: (id: string, group: string) =>
+    req<Artifact>(`/api/artifacts/${id}/group`, {
+      method: 'PUT',
+      body: JSON.stringify({ group }),
+    }),
   // Locate the artifact on disk: its file path + containing folder.
   artifactPath: (id: string) =>
     req<{ path: string; dir: string }>(`/api/artifacts/${id}/path`),

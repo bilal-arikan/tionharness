@@ -72,7 +72,11 @@ func (d *DB) UpdateAutomation(ctx context.Context, a Automation) error {
 		return ErrNotFound
 	}
 	cur.Name = a.Name
+	cur.TriggerKind = a.TriggerKind
 	cur.TriggerTag = strings.TrimSpace(a.TriggerTag)
+	cur.BoardOp = a.BoardOp
+	cur.BoardFromState = a.BoardFromState
+	cur.BoardToState = a.BoardToState
 	cur.TargetAgentID = a.TargetAgentID
 	cur.FlowID = a.FlowID
 	cur.PromptTemplate = a.PromptTemplate

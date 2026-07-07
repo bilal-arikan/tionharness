@@ -58,6 +58,12 @@ type WSSettings struct {
 	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`   // false = only a session's first turn
 	SessionContextRecentCount int  `json:"sessionContextRecentCount"` // past sessions listed (0 = default 5)
 
+	// CodebaseMemoryEnabled toggles the codebase-memory capability system for this
+	// workspace: when a codebase-memory MCP server is present, inject a prompt hint,
+	// route it at a per-workspace isolated store, auto-index the session cwd, and
+	// offer the codebase_workspace_search tool. Default on; off = fully vanilla.
+	CodebaseMemoryEnabled bool `json:"codebaseMemoryEnabled"`
+
 	// BoardColumns overrides the default kanban column set for this workspace.
 	// Empty/nil means "use db.DefaultBoardColumns()".
 	BoardColumns []db.BoardColumnDef `json:"boardColumns,omitempty"`
@@ -72,6 +78,7 @@ func defaultWSSettings() WSSettings {
 		SessionContextEnabled:     true,
 		SessionContextEveryTurn:   false,
 		SessionContextRecentCount: 5,
+		CodebaseMemoryEnabled:     true,
 	}
 }
 
@@ -94,6 +101,8 @@ type WSSettingsPatch struct {
 	SessionContextEnabled     *bool `json:"sessionContextEnabled"`
 	SessionContextEveryTurn   *bool `json:"sessionContextEveryTurn"`
 	SessionContextRecentCount *int  `json:"sessionContextRecentCount"`
+
+	CodebaseMemoryEnabled *bool `json:"codebaseMemoryEnabled"`
 
 	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
 }
@@ -131,6 +140,7 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetInstructions(s.Instructions)
 		w.Runtime.SetDefaultWorkDir(s.DefaultWorkingDir)
 		w.Runtime.SetSessionContext(s.SessionContextEnabled, s.SessionContextEveryTurn, s.SessionContextRecentCount)
+		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
 	}
 }
 
@@ -219,6 +229,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.SessionContextRecentCount != nil {
 		ws.settings.cur.SessionContextRecentCount = clampRecent(*patch.SessionContextRecentCount)
 	}
+	if patch.CodebaseMemoryEnabled != nil {
+		ws.settings.cur.CodebaseMemoryEnabled = *patch.CodebaseMemoryEnabled
+	}
 	if patch.BoardColumns != nil {
 		ws.settings.cur.BoardColumns = *patch.BoardColumns
 	}
@@ -228,6 +241,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	scEnabled := ws.settings.cur.SessionContextEnabled
 	scEvery := ws.settings.cur.SessionContextEveryTurn
 	scRecent := ws.settings.cur.SessionContextRecentCount
+	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
 	ws.settings.mu.Unlock()
 
 	if err := ws.saveSettings(); err != nil {
@@ -243,6 +257,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetInstructions(instructions)
 		ws.Runtime.SetDefaultWorkDir(defaultWorkDir)
 		ws.Runtime.SetSessionContext(scEnabled, scEvery, scRecent)
+		ws.Runtime.SetCodebaseMemory(cbmEnabled)
 	}
 	return ws, nil
 }

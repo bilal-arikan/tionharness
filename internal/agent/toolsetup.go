@@ -451,7 +451,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// state (e.g. the gateway's activate_tools) survives across calls. The
 		// catalog refreshes on tools/list_changed (and a safety-net TTL).
 		cfgs := make([]mcp.ServerConfig, 0, len(servers))
-		cbmStore := r.CBMStoreDir()
+		// Only route codebase-memory at the isolated store when the feature is on;
+		// disabled → leave the server on its own default store (fully vanilla).
+		cbmStore := ""
+		if r.CodebaseMemoryEnabled() {
+			cbmStore = r.CBMStoreDir()
+		}
 		for _, m := range servers {
 			cfg := toServerConfig(m)
 			// Route the codebase-memory server at this workspace's ISOLATED store so

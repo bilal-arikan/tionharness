@@ -4,6 +4,43 @@ import (
 	"context"
 )
 
+// BoardChangeEvent describes a single kanban card change. It is delivered to the
+// board hook (see SetBoardHook) so board-triggered automations can react. Op is
+// one of BoardOpCreate/BoardOpMove/BoardOpUpdate/BoardOpDelete. For a move,
+// FromState/ToState hold the old and new columns; create leaves FromState empty
+// and delete leaves ToState empty.
+type BoardChangeEvent struct {
+	TaskID       string
+	Title        string
+	Op           string
+	FromState    string
+	ToState      string
+	OwnerAgentID string
+}
+
+// BoardChangeFn observes board card changes. The store calls it after releasing
+// its lock; implementations must return promptly (dispatch async).
+type BoardChangeFn func(ev BoardChangeEvent)
+
+// SetBoardHook registers (or clears, with nil) the board-change observer. Wired
+// once at workspace boot by the manager to the AutomationEngine.
+func (d *DB) SetBoardHook(fn BoardChangeFn) {
+	d.boardHookMu.Lock()
+	d.boardHook = fn
+	d.boardHookMu.Unlock()
+}
+
+// fireBoardHook dispatches a board-change event to the registered observer (if
+// any). Called after the store lock is released.
+func (d *DB) fireBoardHook(ev BoardChangeEvent) {
+	d.boardHookMu.RLock()
+	fn := d.boardHook
+	d.boardHookMu.RUnlock()
+	if fn != nil {
+		fn(ev)
+	}
+}
+
 func (d *DB) persistTaskLocked(t Task) error {
 	return dbPersistLocked(d, d.tasks, dirTasks, t.ID, t)
 }
@@ -20,8 +57,16 @@ func (d *DB) CreateTask(ctx context.Context, t Task) (Task, error) {
 		t.Dependencies = "[]"
 	}
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	return t, d.persistTaskLocked(t)
+	err := d.persistTaskLocked(t)
+	d.mu.Unlock()
+	if err != nil {
+		return t, err
+	}
+	d.fireBoardHook(BoardChangeEvent{
+		TaskID: t.ID, Title: t.Title, Op: BoardOpCreate,
+		ToState: t.BoardState, OwnerAgentID: t.OwnerAgentID,
+	})
+	return t, nil
 }
 
 // GetTask loads a task by id.
@@ -35,13 +80,16 @@ func (d *DB) ListTasks(ctx context.Context) ([]Task, error) {
 }
 
 // UpdateTask edits the mutable fields of a task (title/description/prompt/owner/state).
+// It fires the board hook afterwards: as a move when the board state changed,
+// otherwise as a plain update (so board automations with op update/any can react).
 func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	cur, ok := d.tasks[t.ID]
 	if !ok {
+		d.mu.Unlock()
 		return ErrNotFound
 	}
+	oldBoard := cur.BoardState
 	cur.Title = t.Title
 	cur.Description = t.Description
 	cur.Prompt = t.Prompt
@@ -57,31 +105,59 @@ func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 	cur.StartDate = t.StartDate
 	cur.DueDate = t.DueDate
 	cur.UpdatedAt = now()
-	return d.persistTaskLocked(cur)
+	err := d.persistTaskLocked(cur)
+	d.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	ev := BoardChangeEvent{TaskID: cur.ID, Title: cur.Title, OwnerAgentID: cur.OwnerAgentID}
+	if cur.BoardState != oldBoard {
+		ev.Op, ev.FromState, ev.ToState = BoardOpMove, oldBoard, cur.BoardState
+	} else {
+		ev.Op, ev.ToState = BoardOpUpdate, cur.BoardState
+	}
+	d.fireBoardHook(ev)
+	return nil
 }
 
-// MoveTask changes only a task's board state (kanban drag/drop).
+// MoveTask changes only a task's board state (kanban drag/drop). Fires the board
+// hook as a move when the column actually changed.
 func (d *DB) MoveTask(ctx context.Context, id, boardState string) error {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	t, ok := d.tasks[id]
 	if !ok {
+		d.mu.Unlock()
 		return ErrNotFound
 	}
+	oldBoard := t.BoardState
 	t.BoardState = boardState
 	t.UpdatedAt = now()
-	return d.persistTaskLocked(t)
+	err := d.persistTaskLocked(t)
+	title, owner := t.Title, t.OwnerAgentID
+	d.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if oldBoard != boardState {
+		d.fireBoardHook(BoardChangeEvent{
+			TaskID: id, Title: title, Op: BoardOpMove,
+			FromState: oldBoard, ToState: boardState, OwnerAgentID: owner,
+		})
+	}
+	return nil
 }
 
 // DeleteTask removes a task and all of its runs.
 func (d *DB) DeleteTask(ctx context.Context, id string) error {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	if _, ok := d.tasks[id]; !ok {
+	t, ok := d.tasks[id]
+	if !ok {
+		d.mu.Unlock()
 		return ErrNotFound
 	}
 	delete(d.tasks, id)
 	if err := removeFile(d.dir(dirTasks, id+".json")); err != nil {
+		d.mu.Unlock()
 		return err
 	}
 	// Cascade: remove runs belonging to this task.
@@ -91,5 +167,11 @@ func (d *DB) DeleteTask(ctx context.Context, id string) error {
 			_ = removeFile(d.dir(dirRuns, rid+".json"))
 		}
 	}
+	title, board, owner := t.Title, t.BoardState, t.OwnerAgentID
+	d.mu.Unlock()
+	d.fireBoardHook(BoardChangeEvent{
+		TaskID: id, Title: title, Op: BoardOpDelete,
+		FromState: board, OwnerAgentID: owner,
+	})
 	return nil
 }

@@ -61,8 +61,10 @@ export function AgentsView({
   // Right-hand activity panel visibility (persisted) — mirrors the chat
   // SessionDetailPanel open/close affordance so the middle settings area can use
   // the full width when the feed isn't needed.
+  // Default CLOSED on the Agents screen (the settings area gets the full width);
+  // only reopen if the user explicitly left it open before ('1').
   const [activityOpen, setActivityOpen] = useState(
-    () => localStorage.getItem('tionswarm.agentActivityOpen') !== '0',
+    () => localStorage.getItem('tionswarm.agentActivityOpen') === '1',
   )
   const toggleActivity = () =>
     setActivityOpen((v) => {

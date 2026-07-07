@@ -3,6 +3,7 @@ import { useSessionState } from '../../hooks/useSessionState'
 import {
   FileText, FileCode, UploadCloud,
   Trash2, ExternalLink, Copy, Check, Pencil, Save, X, Search,
+  ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FolderInput,
 } from 'lucide-react'
 import { api } from '../../api'
 import type { Agent, Artifact, ArtifactKind } from '../../types'
@@ -13,6 +14,7 @@ import { AgentAvatar } from '../agents/AgentAvatar'
 import { relativeTime } from '../../lib/time'
 import { copyToClipboard } from '../../lib/clipboard'
 import { useMultiSelect } from '../../hooks/useMultiSelect'
+import { useGroupedList } from '../../hooks/useGroupedList'
 import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '../common'
 import { useCollapsibleList } from '../../hooks/useCollapsibleList'
 import { useRegisterDirty } from '../../lib/dirtySignals'
@@ -31,6 +33,21 @@ interface Props {
   selectedId?: string | null
   // Jump back to the artifact's origin chat session.
   onOpenSession?: (sessionId: string) => void
+}
+
+// Label for the bucket holding artifacts with no `group` set; always rendered last.
+const UNGROUPED = 'Grupsuz'
+
+// Group key for one artifact: its `group` field, or the ungrouped bucket.
+function artifactGroupKey(a: Artifact): string {
+  return a.group?.trim() || UNGROUPED
+}
+
+// Order groups: named groups alphabetically (tr) first, ungrouped bucket last.
+function sortArtifactGroups(a: string, b: string): number {
+  if (a === UNGROUPED) return 1
+  if (b === UNGROUPED) return -1
+  return a.localeCompare(b, 'tr')
 }
 
 // Draft holds the editable fields while creating or editing an artifact.
@@ -148,6 +165,38 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk artifact deletion.
   const sel = useMultiSelect()
   const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.artifactsListOpen')
+  // Draft group name + busy flag for the bulk "set group" action on the selection.
+  const [bulkGroup, setBulkGroup] = useState('')
+  const [bulkGroupBusy, setBulkGroupBusy] = useState(false)
+
+  // Filtered artifacts bucketed by group (named groups first, ungrouped last),
+  // with persisted per-group collapse state. Mirrors the Skills screen so both
+  // list screens organise the same way. Grouping runs on the already-filtered
+  // list so search/origin facets still apply.
+  const {
+    groups: grouped,
+    collapsed,
+    toggle: toggleGroup,
+    allCollapsed,
+    toggleAll,
+  } = useGroupedList(filtered, {
+    keyOf: artifactGroupKey,
+    sortGroups: sortArtifactGroups,
+    persistKey: 'tionswarm.artifactsCollapsedGroups',
+  })
+  // Distinct existing group names (across the full list, not just the filtered
+  // view), offered as bulk-group autocomplete suggestions.
+  const groupNames = useMemo(
+    () => [...new Set(list.map((a) => a.group?.trim()).filter((g): g is string => !!g))].sort((a, b) => a.localeCompare(b, 'tr')),
+    [list],
+  )
+  // Flattened visible (non-collapsed) id order, so a Shift+Click range can cross
+  // group boundaries but skips folded groups. Feeds multi-select + select-all.
+  const orderedIds = useMemo(
+    () => grouped.flatMap(([name, items]) => (collapsed.has(name) ? [] : items.map((a) => a.id))),
+    [grouped, collapsed],
+  )
+
   const bulkDelete = useCallback(async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
@@ -162,6 +211,29 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       reload()
     }
   }, [sel, onError, reload])
+
+  // Bulk-set the `group` of every selected artifact at once, so a batch lands
+  // under one collapsible header without opening each artifact. An empty group
+  // ungroups them. Keeps the selection so the user can chain another action; the
+  // list re-buckets after the reload.
+  const bulkSetGroup = useCallback(
+    (group: string) => {
+      const ids = [...sel.selected]
+      if (ids.length === 0) return
+      setBulkGroupBusy(true)
+      Promise.all(ids.map((id) => api.setArtifactGroup(id, group)))
+        .then(() => {
+          setBulkGroup('')
+          reload()
+          if (activeId && sel.selected.has(activeId)) {
+            api.getArtifact(activeId).then(setActive).catch(() => {})
+          }
+        })
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setBulkGroupBusy(false))
+    },
+    [sel.selected, reload, activeId, onError],
+  )
 
   // Create a blank artifact and drop straight into edit mode.
   const createNew = useCallback(async () => {
@@ -333,6 +405,16 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         <SidebarHeader
           title={`Artifactlar · ${filtered.length === list.length ? list.length : `${filtered.length}/${list.length}`}`}
         >
+          {grouped.length > 1 && (
+            <button
+              data-testid="artifacts-toggle-all"
+              onClick={toggleAll}
+              title={allCollapsed ? 'Tüm grupları aç' : 'Tüm grupları katla'}
+              className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            >
+              {allCollapsed ? <ChevronsUpDown size={13} /> : <ChevronsDownUp size={13} />}
+            </button>
+          )}
           <RefreshButton onClick={reload} />
         </SidebarHeader>
         <NewItemButton
@@ -403,36 +485,60 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
               Filtreyle eşleşen artifact yok.
             </div>
           )}
-          {filtered.map((a) => {
-            const Icon = KIND_ICON[a.kind] ?? FileText
-            const isActive = a.id === activeId
-            const orderedIds = filtered.map((x) => x.id)
+          {grouped.map(([groupName, items]) => {
+            const isCollapsed = collapsed.has(groupName)
             return (
-              <button
-                key={a.id}
-                data-testid="artifacts-list-item"
-                data-artifact-id={a.id}
-                onClick={(e) => {
-                  if (sel.handleClick(e, a.id, orderedIds, activeId)) return
-                  setActiveId(a.id)
-                }}
-                className={`group mb-1 flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
-                  sel.isSelected(a.id)
-                    ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
-                    : isActive
-                      ? SELECTED_ITEM_CLS
-                      : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
-                }`}
-              >
-                <Icon size={16} className="mt-0.5 shrink-0" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{a.title}</span>
-                  <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
-                    <OriginBadge origin={a.origin} />
-                    <span>{KIND_LABEL[a.kind] ?? a.kind} · {relativeTime(a.updatedAt)}</span>
+              <div key={groupName} className="mb-1">
+                <button
+                  data-testid="artifacts-group-header"
+                  data-group-name={groupName}
+                  data-collapsed={isCollapsed}
+                  onClick={() => toggleGroup(groupName)}
+                  title={isCollapsed ? 'Grubu aç' : 'Grubu katla'}
+                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                >
+                  {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                  <span className="min-w-0 flex-1 truncate">{groupName}</span>
+                  <span className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--color-text-dim)]">
+                    {items.length}
                   </span>
-                </span>
-              </button>
+                </button>
+                {!isCollapsed && (
+                  <div className="mt-1 space-y-1 pl-1.5">
+                    {items.map((a) => {
+                      const Icon = KIND_ICON[a.kind] ?? FileText
+                      const isActive = a.id === activeId
+                      return (
+                        <button
+                          key={a.id}
+                          data-testid="artifacts-list-item"
+                          data-artifact-id={a.id}
+                          onClick={(e) => {
+                            if (sel.handleClick(e, a.id, orderedIds, activeId)) return
+                            setActiveId(a.id)
+                          }}
+                          className={`group flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
+                            sel.isSelected(a.id)
+                              ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
+                              : isActive
+                                ? SELECTED_ITEM_CLS
+                                : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
+                          }`}
+                        >
+                          <Icon size={16} className="mt-0.5 shrink-0" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{a.title}</span>
+                            <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
+                              <OriginBadge origin={a.origin} />
+                              <span>{KIND_LABEL[a.kind] ?? a.kind} · {relativeTime(a.updatedAt)}</span>
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
@@ -440,8 +546,39 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         <SelectionBar
           count={sel.count}
           onClear={sel.clear}
-          onSelectAll={filtered.length ? () => sel.selectAll(filtered.map((a) => a.id)) : undefined}
+          onSelectAll={orderedIds.length ? () => sel.selectAll(orderedIds) : undefined}
         >
+          {/* Bulk group: move every selected artifact into one organisation bucket. */}
+          <div data-testid="artifacts-bulk-group" className="inline-flex items-center gap-1">
+            <input
+              list="artifacts-bulk-group-names"
+              value={bulkGroup}
+              onChange={(e) => setBulkGroup(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  bulkSetGroup(bulkGroup.trim())
+                }
+              }}
+              disabled={bulkGroupBusy}
+              placeholder="Grup ata…"
+              data-testid="artifacts-bulk-group-input"
+              className="w-28 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+            />
+            <datalist id="artifacts-bulk-group-names">
+              {groupNames.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+            <SelectionBarButton
+              icon={<FolderInput size={13} />}
+              onClick={() => bulkSetGroup(bulkGroup.trim())}
+              disabled={bulkGroupBusy}
+              title={bulkGroup.trim() ? `Seçili artifactları "${bulkGroup.trim()}" grubuna taşı` : 'Seçili artifactları grupsuz yap'}
+            >
+              {bulkGroup.trim() ? 'Ata' : 'Grupsuz'}
+            </SelectionBarButton>
+          </div>
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
             Sil
           </SelectionBarButton>
@@ -472,6 +609,11 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             active ? (
               <>
                 <OriginBadge origin={active.origin} />
+                {active.group && (
+                  <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
+                    {active.group}
+                  </span>
+                )}
                 <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-dim)]">
                   {KIND_LABEL[active.kind] ?? active.kind}
                   {active.language ? ` · ${active.language}` : ''}

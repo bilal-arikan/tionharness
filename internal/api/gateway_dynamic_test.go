@@ -101,6 +101,13 @@ func TestGatewayActivateAcceptsNamespacedName(t *testing.T) {
 	if ext := b.Tools(tok, "extended"); !specHasTool(ext, "notify") {
 		t.Fatalf("notify must be active after namespaced activate, got %v", specNames(ext))
 	}
+	// The result must name the NAMESPACED callable form, not the bare name: echoing
+	// "activated: notify" made the model call bare `notify` and hit "No such tool
+	// available: notify" before retrying (SES125 / list_agents). Report the exact
+	// callable name so there is no mis-address round-trip.
+	if want := extendedNSPrefix + "notify"; !strings.Contains(res.Text, want) {
+		t.Fatalf("activate result must name the namespaced callable %q, got %q", want, res.Text)
+	}
 }
 
 // TestGatewayHiddenActivatableAndToolSearch locks Doc 52 §7-15 / follow-up: a HIDDEN-tier

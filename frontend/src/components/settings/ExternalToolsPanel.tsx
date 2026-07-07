@@ -117,6 +117,15 @@ export function ExternalToolsPanel({ onError }: Props) {
         <span className="font-mono"> hook</span> araçları tek tıkla bağlanır;{' '}
         <span className="font-mono">mcp</span>/<span className="font-mono">cli</span> araçları bilgi rozetiyle gösterilir.
       </div>
+      <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+        <span className="font-medium text-[var(--color-text)]">🧠 codebase-memory entegrasyonu:</span> Bir{' '}
+        <code>codebase-memory-mcp</code> sunucusunu <span className="font-mono">Ayarlar ▸ MCP</span>'den eklersen, TionSwarm otomatik olarak{' '}
+        ajanın bağlamına <span className="font-medium text-[var(--color-text)]">"kod bilgi-grafiği mevcut"</span> ipucu ekler,
+        sunucuyu <span className="font-medium text-[var(--color-text)]">workspace'e özel izole bir store</span>'a yönlendirir
+        (indeksler workspace'ler arası karışmaz), çalışma dizinini otomatik indeksler ve{' '}
+        <code>codebase_workspace_search</code> aracını sunar. Bu sistem{' '}
+        <span className="font-medium text-[var(--color-text)]">Ayarlar ▸ Bu Workspace</span> altından açılıp kapatılabilir.
+      </div>
       <button
         type="button"
         onClick={checkTools}

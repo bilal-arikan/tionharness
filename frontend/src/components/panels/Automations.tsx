@@ -1,12 +1,31 @@
 import { useEffect, useState } from 'react'
-import { Repeat, RotateCcw, Trash2, Info, Pencil, X, Workflow } from 'lucide-react'
+import type { Dispatch, SetStateAction } from 'react'
+import { RotateCcw, Trash2, Info, Pencil, X, Workflow, LayoutGrid } from 'lucide-react'
 import { api } from '../../api'
-import type { Agent, Automation, Flow } from '../../types'
+import type { Agent, Automation, Flow, BoardColumnDef, AutomationTriggerKind, BoardOp } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { Button, TagEditor } from '../common'
 import { normalizeAvatar } from '../../lib/avatar'
 import { TargetModeToggle, FlowPicker } from './Schedules'
+
+// Fallback columns used until workspace board columns load (mirrors TaskBoard).
+const DEFAULT_COLUMNS: BoardColumnDef[] = [
+  { key: 'todo', label: 'Yapılacak', color: '' },
+  { key: 'in_progress', label: 'Devam Eden', color: '' },
+  { key: 'review', label: 'İnceleme', color: '' },
+  { key: 'done', label: 'Bitti', color: '' },
+  { key: 'failed', label: 'Başarısız', color: '' },
+]
+
+// Board-trigger operation options (label = Turkish UI text).
+const BOARD_OPS: { value: BoardOp; label: string }[] = [
+  { value: 'move', label: 'Taşındı (sütun değişti)' },
+  { value: 'create', label: 'Oluşturuldu' },
+  { value: 'update', label: 'Güncellendi' },
+  { value: 'delete', label: 'Silindi' },
+  { value: 'any', label: 'Herhangi bir değişiklik' },
+]
 
 // datetime-local <-> unix-seconds helpers (mirrors Schedules.tsx).
 function unixToLocalInput(unix?: number): string {
@@ -21,7 +40,7 @@ function localInputToUnix(s: string): number {
   return isNaN(ms) ? 0 : Math.floor(ms / 1000)
 }
 
-// PromptTemplate placeholders (kept in sync with agent/automation.go turnVars).
+// Tag-trigger prompt placeholders (kept in sync with agent/automation.go turnVars).
 const PROMPT_VARS: { name: string; desc: string }[] = [
   { name: '{{result}}', desc: 'Biten oturumun son yanıtı' },
   { name: '{{title}}', desc: 'Biten oturumun başlığı' },
@@ -37,10 +56,157 @@ const PROMPT_VARS: { name: string; desc: string }[] = [
   { name: '{{datetime}}', desc: 'Tarih + saat' },
 ]
 
-interface Props {
-  agents: Agent[]
-  flows: Flow[]
-  onError: (msg: string) => void
+// Board-trigger prompt placeholders (kept in sync with agent/automation.go boardVars).
+const BOARD_PROMPT_VARS: { name: string; desc: string }[] = [
+  { name: '{{taskId}}', desc: 'Değişen kartın ID’si' },
+  { name: '{{title}}', desc: 'Kartın başlığı' },
+  { name: '{{op}}', desc: 'İşlem (move/create/update/delete)' },
+  { name: '{{from}}', desc: 'Önceki sütun anahtarı' },
+  { name: '{{to}}', desc: 'Yeni sütun anahtarı' },
+  { name: '{{fromLabel}}', desc: 'Önceki sütun adı' },
+  { name: '{{toLabel}}', desc: 'Yeni sütun adı' },
+  { name: '{{board}}', desc: 'Güncel sütun (= {{to}})' },
+  { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
+  { name: '{{maxIterations}}', desc: 'Üst sınır (0 → ∞)' },
+  { name: '{{automation}}', desc: 'Otomasyonun adı' },
+  { name: '{{date}}', desc: 'Geçerli tarih' },
+  { name: '{{time}}', desc: 'Geçerli saat' },
+  { name: '{{datetime}}', desc: 'Tarih + saat' },
+]
+
+// Default prompt template for a fresh automation of each kind.
+const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
+  tag: 'Devam et. Önceki sonuç:\n{{result}}',
+  board: 'Bir kart taşındı: {{title}} ({{op}} → {{toLabel}}). Gereğini yap.',
+}
+
+// BoardTriggerFields renders the op + source/target column filters for a
+// board-triggered automation. Source is shown for move/any/delete, target for
+// everything except delete.
+function BoardTriggerFields({
+  op,
+  from,
+  to,
+  columns,
+  onChange,
+}: {
+  op: BoardOp
+  from: string
+  to: string
+  columns: BoardColumnDef[]
+  onChange: (patch: { op?: BoardOp; from?: string; to?: string }) => void
+}) {
+  const selCls =
+    'rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]'
+  const showFrom = op === 'move' || op === 'any' || op === 'delete'
+  const showTo = op !== 'delete'
+  return (
+    <>
+      <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+        Olay
+        <select value={op} onChange={(e) => onChange({ op: e.target.value as BoardOp })} className={selCls}>
+          {BOARD_OPS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {showFrom && (
+        <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+          Kaynak
+          <select value={from} onChange={(e) => onChange({ from: e.target.value })} className={selCls}>
+            <option value="">(herhangi)</option>
+            {columns.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {showTo && (
+        <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+          Hedef
+          <select value={to} onChange={(e) => onChange({ to: e.target.value })} className={selCls}>
+            <option value="">(herhangi)</option>
+            {columns.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </>
+  )
+}
+
+// PromptVarsField renders the prompt-template textarea plus the ℹ️ variable
+// picker popover, choosing the variable list by trigger kind.
+function PromptVarsField({
+  kind,
+  value,
+  onChange,
+}: {
+  kind: AutomationTriggerKind
+  value: string
+  onChange: (next: string) => void
+}) {
+  const [show, setShow] = useState(false)
+  const vars = kind === 'board' ? BOARD_PROMPT_VARS : PROMPT_VARS
+  return (
+    <div className="relative flex-1">
+      <div className="mb-1 flex items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
+        <span>Prompt şablonu</span>
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          className={`rounded p-0.5 transition hover:text-[var(--color-accent)] ${show ? 'text-[var(--color-accent)]' : ''}`}
+          title="Kullanılabilir değişkenler"
+          aria-label="Kullanılabilir değişkenler"
+        >
+          <Info size={13} />
+        </button>
+      </div>
+      {show && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setShow(false)} />
+          <div className="absolute bottom-full left-0 z-20 mb-1 w-[360px] max-w-[90vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
+            <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--color-text-dim)]">
+              Şablonda kullanılabilir değişkenler (tıkla → ekle)
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {vars.map((v) => (
+                <button
+                  key={v.name}
+                  type="button"
+                  onClick={() => {
+                    onChange(value + v.name)
+                    setShow(false)
+                  }}
+                  className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]"
+                  title="Şablona ekle"
+                >
+                  <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
+                    {v.name}
+                  </code>
+                  <span className="text-[11px] text-[var(--color-text-dim)]">{v.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={2}
+        placeholder="Prompt şablonu — ℹ️ ile değişkenleri gör."
+        className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
+      />
+    </div>
+  )
 }
 
 function fmtTime(unix?: number): string {
@@ -48,51 +214,111 @@ function fmtTime(unix?: number): string {
   return new Date(unix * 1000).toLocaleString('tr-TR')
 }
 
-// Automations — tag-triggered loop rules. When a session carrying triggerTag
-// finishes a turn, its final reply is rendered into promptTemplate and a new
-// session is spawned for the target agent (which, tagged with triggerTag by
-// default, re-triggers the rule → a bounded loop). Rendered as a distinct
-// section inside the Schedules screen.
-export function Automations({ agents, flows, onError }: Props) {
+interface Props {
+  agents: Agent[]
+  flows: Flow[]
+  onError: (msg: string) => void
+  // Which section to render: 'tag' or 'board'. null renders nothing (the parent
+  // is showing a different tab) — the component stays mounted so its item fetch
+  // and counts stay live for the parent's tab badges.
+  activeKind: AutomationTriggerKind | null
+  // Reports per-kind counts up so the parent tab bar can badge them.
+  onCounts?: (counts: { tag: number; board: number }) => void
+}
+
+// Automations — event-driven rules of two kinds: 🏷 tag-triggered (a tagged
+// session finishing a turn) and 🗂 board-triggered (a kanban card change). It is
+// controlled by the parent (Schedules) tab bar via activeKind: it renders the
+// matching AutomationSection (own create form / list / inline-edit state) or
+// nothing. It owns the shared item + column fetch and reports counts upward.
+export function Automations({ agents, flows, onError, activeKind, onCounts }: Props) {
   const [items, setItems] = useState<Automation[]>([])
-
-  // Create form.
-  const [showVars, setShowVars] = useState(false)
-  const [name, setName] = useState('')
-  const [triggerTag, setTriggerTag] = useState('')
-  const [targetAgentId, setTargetAgentId] = useState('')
-  const [targetMode, setTargetMode] = useState<'agent' | 'flow'>('agent')
-  const [flowId, setFlowId] = useState('')
-  const [promptTemplate, setPromptTemplate] = useState('Devam et. Önceki sonuç:\n{{result}}')
-  const [maxIterations, setMaxIterations] = useState('50')
-  const [cooldownSec, setCooldownSec] = useState('0')
-  const [expiresAt, setExpiresAt] = useState('')
-
-  // Inline edit state (one automation edited at a time).
-  const [editId, setEditId] = useState<string | null>(null)
-  const [edit, setEdit] = useState({
-    name: '', triggerTag: '', targetAgentId: '', targetMode: 'agent' as 'agent' | 'flow',
-    flowId: '', promptTemplate: '', maxIterations: '50', cooldownSec: '0', expiresAt: '',
-  })
-  const [showEditVars, setShowEditVars] = useState(false)
-
-  const flowName = (id?: string) => flows.find((f) => f.id === id)?.name ?? id ?? '—'
-  // Resolved (mojibake-safe) flow emoji, or null when the flow has none.
-  const flowEmoji = (id?: string) => normalizeAvatar(flows.find((f) => f.id === id)?.emoji)
+  // Workspace board columns, for the board-trigger source/target filters.
+  const [columns, setColumns] = useState<BoardColumnDef[]>(DEFAULT_COLUMNS)
 
   const reload = () =>
     api.listAutomations().then(setItems).catch((e) => onError((e as Error).message))
 
   useEffect(() => {
     reload()
+    api
+      .getWorkspaceSettings()
+      .then((s) => {
+        if (s.boardColumns && s.boardColumns.length > 0) setColumns(s.boardColumns)
+      })
+      .catch(() => {
+        /* keep default columns on failure */
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Report per-kind counts up whenever the list changes (for the tab badges).
+  useEffect(() => {
+    onCounts?.({
+      tag: items.filter((a) => (a.triggerKind ?? 'tag') === 'tag').length,
+      board: items.filter((a) => (a.triggerKind ?? 'tag') === 'board').length,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items])
+
+  if (!activeKind) return null
+
+  const shared = { allItems: items, setItems, reload, agents, flows, columns, onError }
+  return <AutomationSection kind={activeKind} {...shared} />
+}
+
+interface SectionProps {
+  kind: AutomationTriggerKind
+  allItems: Automation[]
+  setItems: Dispatch<SetStateAction<Automation[]>>
+  reload: () => void
+  agents: Agent[]
+  flows: Flow[]
+  columns: BoardColumnDef[]
+  onError: (msg: string) => void
+}
+
+// AutomationSection is one kind-scoped block (tag or board): header, create form,
+// and list. It filters the shared item list to its own kind and drives all
+// mutations through the parent's setItems/reload so the two sections stay in sync.
+function AutomationSection({ kind, allItems, setItems, reload, agents, flows, columns, onError }: SectionProps) {
+  const isBoardKind = kind === 'board'
+  const items = allItems.filter((a) => (a.triggerKind ?? 'tag') === kind)
+
+  // Create form.
+  const [name, setName] = useState('')
+  const [triggerTag, setTriggerTag] = useState('')
+  const [boardOp, setBoardOp] = useState<BoardOp>('move')
+  const [boardFromState, setBoardFromState] = useState('')
+  const [boardToState, setBoardToState] = useState('')
+  const [targetAgentId, setTargetAgentId] = useState('')
+  const [targetMode, setTargetMode] = useState<'agent' | 'flow'>('agent')
+  const [flowId, setFlowId] = useState('')
+  const [promptTemplate, setPromptTemplate] = useState(DEFAULT_PROMPT[kind])
+  const [maxIterations, setMaxIterations] = useState('50')
+  const [cooldownSec, setCooldownSec] = useState('0')
+  const [expiresAt, setExpiresAt] = useState('')
+
+  // Inline edit state (one automation edited at a time, within this section).
+  const [editId, setEditId] = useState<string | null>(null)
+  const [edit, setEdit] = useState({
+    name: '', triggerTag: '', boardOp: 'move' as BoardOp, boardFromState: '', boardToState: '',
+    targetAgentId: '', targetMode: 'agent' as 'agent' | 'flow',
+    flowId: '', promptTemplate: '', maxIterations: '50', cooldownSec: '0', expiresAt: '',
+  })
+
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? '—'
+  const flowName = (id?: string) => flows.find((f) => f.id === id)?.name ?? id ?? '—'
+  const flowEmoji = (id?: string) => normalizeAvatar(flows.find((f) => f.id === id)?.emoji)
+  const colLabel = (key?: string) => (key ? columns.find((c) => c.key === key)?.label ?? key : '—')
 
   const create = async () => {
-    if (!triggerTag.trim() || !promptTemplate.trim()) {
-      onError('Tetikleyici etiket ve prompt şablonu zorunlu')
+    if (!promptTemplate.trim()) {
+      onError('Prompt şablonu zorunlu')
+      return
+    }
+    if (!isBoardKind && !triggerTag.trim()) {
+      onError('Tetikleyici etiket zorunlu')
       return
     }
     if (targetMode === 'flow' ? !flowId : !targetAgentId) {
@@ -107,7 +333,8 @@ export function Automations({ agents, flows, onError }: Props) {
     try {
       const a = await api.createAutomation({
         name: name.trim(),
-        triggerTag: triggerTag.trim(),
+        triggerKind: kind,
+        ...(isBoardKind ? { boardOp, boardFromState, boardToState } : { triggerTag: triggerTag.trim() }),
         ...(targetMode === 'flow' ? { flowId } : { targetAgentId }),
         promptTemplate: promptTemplate.trim(),
         maxIterations: Number(maxIterations) || 0,
@@ -118,6 +345,8 @@ export function Automations({ agents, flows, onError }: Props) {
       setItems((prev) => [a, ...prev])
       setName('')
       setTriggerTag('')
+      setBoardFromState('')
+      setBoardToState('')
       setExpiresAt('')
       setFlowId('')
     } catch (e) {
@@ -127,10 +356,12 @@ export function Automations({ agents, flows, onError }: Props) {
 
   const startEdit = (a: Automation) => {
     setEditId(a.id)
-    setShowEditVars(false)
     setEdit({
       name: a.name ?? '',
       triggerTag: a.triggerTag,
+      boardOp: a.boardOp ?? 'move',
+      boardFromState: a.boardFromState ?? '',
+      boardToState: a.boardToState ?? '',
       targetAgentId: a.targetAgentId,
       targetMode: a.flowId ? 'flow' : 'agent',
       flowId: a.flowId ?? '',
@@ -144,8 +375,12 @@ export function Automations({ agents, flows, onError }: Props) {
   const cancelEdit = () => setEditId(null)
 
   const saveEdit = async (a: Automation) => {
-    if (!edit.triggerTag.trim() || !edit.promptTemplate.trim()) {
-      onError('Tetikleyici etiket ve prompt şablonu zorunlu')
+    if (!edit.promptTemplate.trim()) {
+      onError('Prompt şablonu zorunlu')
+      return
+    }
+    if (!isBoardKind && !edit.triggerTag.trim()) {
+      onError('Tetikleyici etiket zorunlu')
       return
     }
     if (edit.targetMode === 'flow' ? !edit.flowId : !edit.targetAgentId) {
@@ -160,8 +395,12 @@ export function Automations({ agents, flows, onError }: Props) {
     try {
       await api.updateAutomation(a.id, {
         name: edit.name.trim(),
-        triggerTag: edit.triggerTag.trim(),
-        // Send the active target explicitly; the other is cleared server-side.
+        // A full edit always sends the (fixed) kind so the board filters below are
+        // re-applied together with it; a partial patch (e.g. spawnTags) omits it.
+        triggerKind: kind,
+        ...(isBoardKind
+          ? { boardOp: edit.boardOp, boardFromState: edit.boardFromState, boardToState: edit.boardToState }
+          : { triggerTag: edit.triggerTag.trim() }),
         ...(edit.targetMode === 'flow'
           ? { flowId: edit.flowId, targetAgentId: '' }
           : { targetAgentId: edit.targetAgentId, flowId: '' }),
@@ -218,20 +457,28 @@ export function Automations({ agents, flows, onError }: Props) {
     }
   }
 
+  const accent = isBoardKind ? 'border-l-sky-500' : 'border-l-violet-500'
+
   return (
-    <div className="mt-6">
-      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
-        <Repeat size={15} className="text-violet-500" />
-        Otomasyonlar (etiket tetikleyicili döngüler)
-      </div>
+    <div>
       <p className="mb-3 text-xs text-[var(--color-text-dim)]">
-        Bir <span className="font-mono">tetikleyici etiket</span> taşıyan oturum bir turu bitirdiğinde,
-        son yanıtı prompt şablonuna işlenir ve hedef ajan için yeni bir oturum başlatılır. Yeni oturum
-        aynı etiketi taşıdığından döngü kendiliğinden sürer (maks. iterasyon / bekleme / aç-kapa ile sınırlı).
+        {isBoardKind ? (
+          <>
+            Bir kanban kartı panoda <span className="font-medium">taşındığında</span> (veya oluşturulunca/
+            güncellenince/silinince) hedef ajan/akış, kart bağlamıyla çalışır. Olay + kaynak/hedef sütun ile
+            filtrelenir; kendini döngülemez (maks. iterasyon / bekleme / aç-kapa ile sınırlı).
+          </>
+        ) : (
+          <>
+            Bir <span className="font-mono">tetikleyici etiket</span> taşıyan oturum bir turu bitirdiğinde son
+            yanıtı prompt şablonuna işlenir ve hedef ajan/akış çalışır. Yeni oturum aynı etiketi taşıdığından
+            döngü kendiliğinden sürer (maks. iterasyon / bekleme / aç-kapa ile sınırlı).
+          </>
+        )}
       </p>
 
       {/* Create form */}
-      <div className="mb-4 space-y-2 rounded-lg border border-l-4 border-[var(--color-border)] border-l-violet-500 bg-[var(--color-surface)] p-3">
+      <div className={`mb-4 space-y-2 rounded-lg border border-l-4 border-[var(--color-border)] ${accent} bg-[var(--color-surface)] p-3`}>
         <div className="flex flex-wrap items-center gap-2">
           <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
           {targetMode === 'flow' ? (
@@ -239,12 +486,26 @@ export function Automations({ agents, flows, onError }: Props) {
           ) : (
             <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
           )}
-          <input
-            value={triggerTag}
-            onChange={(e) => setTriggerTag(e.target.value)}
-            placeholder="tetikleyici etiket (ör. loop)"
-            className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
-          />
+          {isBoardKind ? (
+            <BoardTriggerFields
+              op={boardOp}
+              from={boardFromState}
+              to={boardToState}
+              columns={columns}
+              onChange={(p) => {
+                if (p.op !== undefined) setBoardOp(p.op)
+                if (p.from !== undefined) setBoardFromState(p.from)
+                if (p.to !== undefined) setBoardToState(p.to)
+              }}
+            />
+          ) : (
+            <input
+              value={triggerTag}
+              onChange={(e) => setTriggerTag(e.target.value)}
+              placeholder="tetikleyici etiket (ör. loop)"
+              className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
+            />
+          )}
           <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
             Maks. iter.
             <input
@@ -289,57 +550,7 @@ export function Automations({ agents, flows, onError }: Props) {
           </label>
         </div>
         <div className="flex items-end gap-2">
-          <div className="relative flex-1">
-            <div className="mb-1 flex items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
-              <span>Prompt şablonu</span>
-              <button
-                type="button"
-                onClick={() => setShowVars((v) => !v)}
-                className={`rounded p-0.5 transition hover:text-[var(--color-accent)] ${showVars ? 'text-[var(--color-accent)]' : ''}`}
-                title="Kullanılabilir değişkenler"
-                aria-label="Kullanılabilir değişkenler"
-              >
-                <Info size={13} />
-              </button>
-            </div>
-            {showVars && (
-              <>
-                {/* Click-away backdrop closes the popover. */}
-                <div className="fixed inset-0 z-10" onClick={() => setShowVars(false)} />
-                <div className="absolute bottom-full left-0 z-20 mb-1 w-[360px] max-w-[90vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
-                  <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--color-text-dim)]">
-                    Şablonda kullanılabilir değişkenler (tıkla → ekle)
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {PROMPT_VARS.map((v) => (
-                      <button
-                        key={v.name}
-                        type="button"
-                        onClick={() => {
-                          setPromptTemplate((p) => p + v.name)
-                          setShowVars(false)
-                        }}
-                        className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]"
-                        title="Şablona ekle"
-                      >
-                        <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
-                          {v.name}
-                        </code>
-                        <span className="text-[11px] text-[var(--color-text-dim)]">{v.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-            <textarea
-              value={promptTemplate}
-              onChange={(e) => setPromptTemplate(e.target.value)}
-              rows={2}
-              placeholder="Prompt şablonu — ℹ️ ile değişkenleri gör. Örn: Devam et. Önceki sonuç:\n{{result}}"
-              className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
-            />
-          </div>
+          <PromptVarsField kind={kind} value={promptTemplate} onChange={setPromptTemplate} />
           <Button onClick={create}>+ Otomasyon</Button>
         </div>
       </div>
@@ -347,17 +558,20 @@ export function Automations({ agents, flows, onError }: Props) {
       {/* List */}
       <div className="space-y-2">
         {items.length === 0 && (
-          <p className="text-sm text-[var(--color-text-dim)]">Henüz otomasyon yok.</p>
+          <p className="text-sm text-[var(--color-text-dim)]">
+            {isBoardKind ? 'Henüz pano otomasyonu yok.' : 'Henüz etiket otomasyonu yok.'}
+          </p>
         )}
         {items.map((a) => {
           const maxed = a.maxIterations > 0 && a.iterationCount >= a.maxIterations
           const expired = a.expiresAt && a.expiresAt <= Math.floor(Date.now() / 1000)
+          const boardOpLabel = BOARD_OPS.find((o) => o.value === (a.boardOp || 'move'))?.label ?? a.boardOp
 
           if (editId === a.id) {
             return (
               <div
                 key={a.id}
-                className="space-y-2 rounded-lg border border-l-4 border-[var(--color-accent)] border-l-violet-500 bg-[var(--color-surface)] p-3 text-sm"
+                className={`space-y-2 rounded-lg border border-l-4 border-[var(--color-accent)] ${accent} bg-[var(--color-surface)] p-3 text-sm`}
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <TargetModeToggle mode={edit.targetMode} onChange={(m) => setEdit((s) => ({ ...s, targetMode: m }))} />
@@ -366,12 +580,29 @@ export function Automations({ agents, flows, onError }: Props) {
                   ) : (
                     <AgentPicker agents={agents} value={edit.targetAgentId} onChange={(v) => setEdit((s) => ({ ...s, targetAgentId: v }))} />
                   )}
-                  <input
-                    value={edit.triggerTag}
-                    onChange={(e) => setEdit((s) => ({ ...s, triggerTag: e.target.value }))}
-                    placeholder="tetikleyici etiket"
-                    className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
-                  />
+                  {isBoardKind ? (
+                    <BoardTriggerFields
+                      op={edit.boardOp}
+                      from={edit.boardFromState}
+                      to={edit.boardToState}
+                      columns={columns}
+                      onChange={(p) =>
+                        setEdit((s) => ({
+                          ...s,
+                          ...(p.op !== undefined ? { boardOp: p.op } : {}),
+                          ...(p.from !== undefined ? { boardFromState: p.from } : {}),
+                          ...(p.to !== undefined ? { boardToState: p.to } : {}),
+                        }))
+                      }
+                    />
+                  ) : (
+                    <input
+                      value={edit.triggerTag}
+                      onChange={(e) => setEdit((s) => ({ ...s, triggerTag: e.target.value }))}
+                      placeholder="tetikleyici etiket"
+                      className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
+                    />
+                  )}
                   <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
                     Maks. iter.
                     <input type="number" min={0} value={edit.maxIterations}
@@ -397,38 +628,11 @@ export function Automations({ agents, flows, onError }: Props) {
                     )}
                   </label>
                 </div>
-                <div className="relative">
-                  <div className="mb-1 flex items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
-                    <span>Prompt şablonu</span>
-                    <button type="button" onClick={() => setShowEditVars((v) => !v)}
-                      className={`rounded p-0.5 transition hover:text-[var(--color-accent)] ${showEditVars ? 'text-[var(--color-accent)]' : ''}`}
-                      title="Kullanılabilir değişkenler" aria-label="Kullanılabilir değişkenler">
-                      <Info size={13} />
-                    </button>
-                  </div>
-                  {showEditVars && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setShowEditVars(false)} />
-                      <div className="absolute bottom-full left-0 z-20 mb-1 w-[360px] max-w-[90vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
-                        <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--color-text-dim)]">Şablonda kullanılabilir değişkenler (tıkla → ekle)</div>
-                        <div className="max-h-64 overflow-y-auto">
-                          {PROMPT_VARS.map((v) => (
-                            <button key={v.name} type="button"
-                              onClick={() => { setEdit((s) => ({ ...s, promptTemplate: s.promptTemplate + v.name })); setShowEditVars(false) }}
-                              className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]" title="Şablona ekle">
-                              <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">{v.name}</code>
-                              <span className="text-[11px] text-[var(--color-text-dim)]">{v.desc}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                  <textarea value={edit.promptTemplate}
-                    onChange={(e) => setEdit((s) => ({ ...s, promptTemplate: e.target.value }))}
-                    rows={2}
-                    className="w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]" />
-                </div>
+                <PromptVarsField
+                  kind={kind}
+                  value={edit.promptTemplate}
+                  onChange={(next) => setEdit((s) => ({ ...s, promptTemplate: next }))}
+                />
                 <div className="flex items-center gap-2">
                   <Button onClick={() => saveEdit(a)}>Kaydet</Button>
                   <Button variant="secondary" onClick={cancelEdit}>İptal</Button>
@@ -440,7 +644,7 @@ export function Automations({ agents, flows, onError }: Props) {
           return (
             <div
               key={a.id}
-              className="flex items-start gap-3 rounded-lg border border-l-4 border-[var(--color-border)] border-l-violet-500 bg-[var(--color-surface)] px-3 py-2 text-sm"
+              className={`flex items-start gap-3 rounded-lg border border-l-4 border-[var(--color-border)] ${accent} bg-[var(--color-surface)] px-3 py-2 text-sm`}
             >
               {/* Enable toggle on top, agent/flow icon below (stacked vertically). */}
               <div className="flex shrink-0 flex-col items-center gap-2">
@@ -475,9 +679,26 @@ export function Automations({ agents, flows, onError }: Props) {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
-                    #{a.triggerTag}
-                  </span>
+                  {isBoardKind ? (
+                    <span
+                      className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
+                      title="Pano (kart) tetikleyicili otomasyon"
+                    >
+                      <LayoutGrid size={11} />
+                      {boardOpLabel}
+                      {(a.boardFromState || a.boardToState) && (
+                        <span className="opacity-80">
+                          {' '}
+                          ({a.boardFromState ? colLabel(a.boardFromState) : '∗'} →{' '}
+                          {a.boardToState ? colLabel(a.boardToState) : '∗'})
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
+                      #{a.triggerTag}
+                    </span>
+                  )}
                   <span className="text-xs text-[var(--color-text-dim)]">
                     → {a.flowId ? `${flowEmoji(a.flowId) ?? '🔀'} ${flowName(a.flowId)}` : agentName(a.targetAgentId)}
                   </span>
@@ -501,7 +722,12 @@ export function Automations({ agents, flows, onError }: Props) {
                   ) : null}
                   {a.lastError && <span className="text-[var(--color-danger)]">Hata: {a.lastError}</span>}
                 </div>
-                {a.flowId ? (
+                {isBoardKind ? (
+                  <div className="mt-1.5 text-[11px] text-[var(--color-text-dim)] opacity-80">
+                    Pano tetikleyicili — bir kart {boardOpLabel?.toLowerCase()} olduğunda çalışır
+                    (kendini döngülemez; spawn etiketleri yok sayılır).
+                  </div>
+                ) : a.flowId ? (
                   <div className="mt-1.5 text-[11px] text-[var(--color-text-dim)] opacity-80">
                     Akış tabanlı — her tetikte akış çalışır (kendini döngülemez; spawn etiketleri yok sayılır).
                   </div>

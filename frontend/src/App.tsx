@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
-import { PanelRight, Menu, ScanEye } from 'lucide-react'
+import { PanelRight, Menu, ScanEye, Bug } from 'lucide-react'
 import { CopyPathButton } from './components/CopyPathButton'
 import { RevealButton } from './components/RevealButton'
 import { ErrorToast } from './components/common/ErrorToast'
@@ -40,6 +40,7 @@ import { MarketPanel } from './components/panels/MarketPanel'
 import { BudgetPanel } from './components/panels/BudgetPanel'
 import { SessionDetailPanel } from './components/sessions/SessionDetailPanel'
 import { SessionContextModal } from './components/sessions/SessionContextModal'
+import { SessionDebugModal } from './components/sessions/SessionDebugModal'
 import { SettingsPanel } from './components/SettingsPanel'
 import { WorkspaceView } from './components/workspace/WorkspaceView'
 import { OnboardingScreen } from './components/workspace/OnboardingScreen'
@@ -119,6 +120,10 @@ export default function App() {
   // Bumped to remount the Composer so it re-reads its persisted draft — used to
   // restore a rewound prompt back into the input box.
   const [composerKey, setComposerKey] = useState(0)
+  // Id of a freshly-created chat that should receive input focus. Set only when
+  // the user opens a NEW chat (newSession); switching to an existing session
+  // leaves it unchanged so the composer does NOT steal focus on plain selection.
+  const [focusSessionId, setFocusSessionId] = useState<string | null>(null)
   const [view, setView] = useState<View>(INITIAL_ROUTE.view)
   const [meterRefresh, setMeterRefresh] = useState(0)
   // Deep-link target for the schedules screen (highlights the routed schedule).
@@ -213,6 +218,9 @@ export default function App() {
   // Next-turn context preview modal (moved here from the detail panel so it opens
   // straight from the chat header without first opening the detail inspector).
   const [ctxPreviewOpen, setCtxPreviewOpen] = useState(false)
+  // Debug/observability modal (moved out of the detail inspector into its own
+  // panel, opened from the chat header's "Debug" button).
+  const [debugOpen, setDebugOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(
     () => localStorage.getItem('tionswarm.detailOpen') === '1',
   )
@@ -900,6 +908,9 @@ export default function App() {
     setMessages([])
     // Track it as a fresh, unused chat (cleared once a message is sent / it's left).
     freshEmptyRef.current = s.id
+    // Mark this new chat as the one that should auto-focus the input (the composer
+    // focuses only when the active session matches this id).
+    setFocusSessionId(s.id)
   }, [defaultAgentId, agents, discardEmptyFresh, activeSessionIdRef])
 
   // Regenerate a session's title from its conversation on demand.
@@ -942,6 +953,9 @@ export default function App() {
       if (text) {
         writeSessionDraft(activeSessionId ?? undefined, text)
         setComposerKey((k) => k + 1)
+        // Rewind restores a prompt for a deliberate re-try → land the cursor in the
+        // (remounted) input, matching the pre-existing rewind behaviour.
+        setFocusSessionId(activeSessionId)
       }
       return text
     },
@@ -1183,11 +1197,16 @@ export default function App() {
                   </button>
                 )
               })()}
-              <span className="shrink-0 text-sm font-semibold">{VIEW_TITLE[view]}</span>
-              {view === 'chat' && (
-                <span className="truncate text-sm text-[var(--color-text-dim)]">
-                  · {agents.find((a) => a.id === activeAgentId)?.name ?? 'Ajan seçilmedi'}
+              {view === 'chat' ? (
+                // Show the session's own title (not "Sohbet · Ajan"); fall back to
+                // the agent name, then a generic label for a fresh untitled chat.
+                <span className="truncate text-sm font-semibold">
+                  {sessions.find((s) => s.id === activeSessionId)?.title ||
+                    agents.find((a) => a.id === activeAgentId)?.name ||
+                    'Yeni sohbet'}
                 </span>
+              ) : (
+                <span className="shrink-0 text-sm font-semibold">{VIEW_TITLE[view]}</span>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-3">
@@ -1214,7 +1233,16 @@ export default function App() {
                     className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
                   >
                     <ScanEye size={15} className="shrink-0" />
-                    <span className="hidden sm:inline">Bağlam önizle</span>
+                    <span className="hidden sm:inline">Bağlam</span>
+                  </button>
+                  {/* Debug / observability panel (moved out of the detail inspector). */}
+                  <button
+                    onClick={() => setDebugOpen(true)}
+                    title="Debug / gözlemlenebilirlik panelini aç"
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                  >
+                    <Bug size={15} className="shrink-0" />
+                    <span className="hidden sm:inline">Debug</span>
                   </button>
                   <button
                     onClick={toggleDetail}
@@ -1282,6 +1310,7 @@ export default function App() {
                 key={composerKey}
                 disabled={!activeSessionId}
                 sessionId={activeSessionId ?? undefined}
+                focusSessionId={focusSessionId}
                 streaming={chat.activeStreaming}
                 waiting={!!chat.activeWakeWait}
                 onCancelWait={chat.cancelWake}
@@ -1460,6 +1489,17 @@ export default function App() {
           sessionId={activeSessionId}
           title={sessions.find((s) => s.id === activeSessionId)?.title}
           onClose={() => setCtxPreviewOpen(false)}
+        />
+      )}
+
+      {/* Debug / observability panel: opened from the chat header's "Debug" button
+          (independent of the detail inspector). */}
+      {debugOpen && activeSessionId && (
+        <SessionDebugModal
+          sessionId={activeSessionId}
+          title={sessions.find((s) => s.id === activeSessionId)?.title}
+          agentNames={Object.fromEntries(agents.map((a) => [a.id, a.name]))}
+          onClose={() => setDebugOpen(false)}
         />
       )}
 

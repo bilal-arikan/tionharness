@@ -33,6 +33,11 @@ interface Props {
   disabled: boolean
   // sessionId scopes uploads; attachments require an active session.
   sessionId?: string
+  // Id of a freshly-opened chat that should auto-focus the input. The composer
+  // focuses only when sessionId === focusSessionId — i.e. right after the user
+  // opens a NEW chat. Switching to an existing session (sessionId changes but
+  // does not match) leaves the input un-focused so selection never steals focus.
+  focusSessionId?: string | null
   // streaming: a turn is currently in flight. Changes the action buttons:
   // empty input → "Durdur"; filled input → Queue / Interrupt / Steer.
   streaming?: boolean
@@ -74,6 +79,7 @@ interface Props {
 export function Composer({
   disabled,
   sessionId,
+  focusSessionId,
   streaming = false,
   waiting = false,
   onCancelWait,
@@ -139,13 +145,15 @@ export function Composer({
     el.style.height = `${el.scrollHeight}px`
   }, [text])
 
-  // Focus the input whenever the active session changes — opening a new chat or
-  // switching to an existing one lands the cursor in the prompt box so the user
-  // can type immediately. Skipped while disabled (no session / read-only state).
+  // Focus the input ONLY when the active session is a freshly-opened new chat
+  // (sessionId matches the parent's focusSessionId). Switching to an existing
+  // session changes sessionId but does not match, so plain selection never steals
+  // focus. Skipped while disabled (no session / read-only state).
   useEffect(() => {
     if (disabled) return
+    if (!sessionId || sessionId !== focusSessionId) return
     taRef.current?.focus()
-  }, [sessionId, disabled])
+  }, [sessionId, disabled, focusSessionId])
 
   // uploadFiles uploads each file, tracking per-file progress in `pending`. Image
   // files get a local object-URL preview shown immediately. Requires a session.

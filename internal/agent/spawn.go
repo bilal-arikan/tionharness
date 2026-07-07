@@ -37,6 +37,14 @@ type SpawnOptions struct {
 	// after, avoids a race with the background turn finishing before the tag lands.
 	Tags []string
 
+	// ClearParentTagsOnSuccess names tags to remove from ParentSessionID once THIS
+	// spawn's turn completes successfully (err == nil). Set by an error-repair
+	// automation so the fixer clears the trigger tag from the ERRORED (parent)
+	// session — which it otherwise cannot, since the in-turn update_session tool only
+	// edits the fixer's OWN session. Skipped on failure so the tag survives and the
+	// bounded repair loop can retry. Requires ParentSessionID.
+	ClearParentTagsOnSuccess []string
+
 	// Coordinator/worker link (see coordination.go, _Docs/47). When
 	// CoordinatorSessionID is set the spawn is a WORKER: the session is created with
 	// Kind="worker" + Role="worker" + this back-link, and its background turn runs
@@ -159,7 +167,7 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	if coordID != "" {
 		go r.runWorker(agent, session.ID, prompt, coordID)
 	} else {
-		go r.runSpawn(agent, session.ID, prompt)
+		go r.runSpawn(agent, session.ID, prompt, opts)
 	}
 
 	return SpawnResult{SessionID: session.ID, AgentName: agent.Name}, nil
@@ -169,7 +177,7 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 // session live (so the executions feed shows a "running" indicator), runs the
 // agent autonomously (daily budget enforced), records the reply (or the failure)
 // as an assistant turn, then releases the concurrency slot and notifies.
-func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
+func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnOptions) {
 	defer r.releaseSpawnSlot()
 
 	ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
@@ -224,6 +232,14 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string) {
 	r.emitSpawnEvent(agent, sessionID, prompt, true)
 	// Auto-tag any tool errors / goal state from this spawned turn.
 	r.AutoTagTurn(ctx, sessionID, steps, "")
+	// Repair completion: a fixer spawned to clear an errored PARENT session's tag
+	// cannot reach it via the current-session-scoped update_session tool. Now that
+	// the fixer's turn finished cleanly, clear the requested tag(s) from the parent.
+	// (On failure the runSpawn error branch above returned early, so the tag survives
+	// and the bounded repair loop can retry.)
+	if len(opts.ClearParentTagsOnSuccess) > 0 && strings.TrimSpace(opts.ParentSessionID) != "" {
+		r.RemoveSessionTags(ctx, opts.ParentSessionID, opts.ClearParentTagsOnSuccess)
+	}
 	// Tag-triggered automations: a spawned session completing is the natural loop
 	// step — if it carries an automation's trigger tag, this fires the next spawn.
 	r.FireTurnFinished(sessionID, agent.ID, output)

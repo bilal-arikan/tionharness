@@ -67,10 +67,22 @@ export interface Schedule {
 // spawned for targetAgentId. When the spawned session carries triggerTag too (the
 // default), each completion re-fires the rule — a self-continuing loop bounded by
 // maxIterations / cooldownSec / enabled. Surfaced in the Schedules screen.
+// Automation trigger kind: 'tag' (a tagged session finishing a turn) or 'board'
+// (a kanban card change). '' from older files is treated as 'tag'.
+export type AutomationTriggerKind = 'tag' | 'board'
+// Board card operation a board automation reacts to.
+export type BoardOp = 'any' | 'move' | 'create' | 'update' | 'delete'
+
 export interface Automation {
   id: string
   name: string
+  // Defaults to 'tag' when absent (backward compatible).
+  triggerKind?: AutomationTriggerKind
   triggerTag: string
+  // Board-trigger fields (only meaningful when triggerKind === 'board').
+  boardOp?: BoardOp
+  boardFromState?: string
+  boardToState?: string
   targetAgentId: string
   // When set, the automation runs this flow (with the rendered prompt as input)
   // instead of spawning a session for targetAgentId. Per-trigger (no self-loop).

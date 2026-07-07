@@ -88,6 +88,10 @@ export function MessageList({
   // re-pin to the bottom regardless of the previous scroll position.
   const firstId = messages[0]?.id
   const prevFirstId = useRef(firstId)
+  // Last message id, used to detect a freshly-appended turn. When the newest turn
+  // is the human's own just-sent message we always re-pin to the bottom (see the
+  // scroll effect), even if the user had scrolled up to read history.
+  const prevLastId = useRef(messages[messages.length - 1]?.id)
   const agentById = (id?: string) => (id ? agents.find((a) => a.id === id) : undefined)
   // Multi-participant thread detection (generic participant model): count the
   // distinct agents that authored or were addressed in this transcript. Only when
@@ -176,6 +180,17 @@ export function MessageList({
       prevFirstId.current = firstId
       pinnedRef.current = true
     }
+    // A newly-appended human turn (we just sent a message) always re-pins to the
+    // bottom, even if the user had scrolled up — so the sent message is visible.
+    // Peer/inbox deliveries (agent-authored role "user") and streaming assistant
+    // deltas don't force this; they respect the existing pin state.
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg && lastMsg.id !== prevLastId.current) {
+      if (lastMsg.role === 'user' && lastMsg.authorKind !== 'agent') {
+        pinnedRef.current = true
+      }
+    }
+    prevLastId.current = lastMsg?.id
     if (!pinnedRef.current) {
       // Streaming/layout grew the content; the active pinned header may change.
       updateActivePinned(el)

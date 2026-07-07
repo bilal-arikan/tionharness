@@ -6,6 +6,15 @@ import { copyToClipboard } from '../../lib/clipboard'
 import { Markdown } from '../markdown/Markdown'
 import { Button, CollapsibleSection, InfoPopover, ModalOverlay, useBulkToggle } from '../common'
 
+// LAZY_VIS_CHIP labels a lazy tool's visibility tier next to its name so the
+// load-on-demand list reflects the same Tam/Özet/İsim/Gizli chips set in the tools
+// screen: "summary" keeps its description, "name-only"/"hidden" show the name alone.
+const LAZY_VIS_CHIP: Record<string, string> = {
+  summary: 'Özet',
+  'name-only': 'İsim',
+  hidden: 'Gizli',
+}
+
 interface Props {
   agentId: string
   agentName: string
@@ -72,7 +81,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
         {/* Header — title with the copy + close actions inline beside it. */}
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold">Bağlam önizleme — {agentName}</h2>
+            <h2 className="truncate text-sm font-semibold">Bağlam — {agentName}</h2>
             <p className="truncate text-xs text-[var(--color-text-dim)]">
               Ajanın sıfırdan (oturum yokken) bir tura başlarken aldığı sistem promptu + araçlar
             </p>
@@ -295,8 +304,17 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                         key={t.name}
                         className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 opacity-75"
                       >
-                        <code className="text-xs font-medium text-[var(--color-text-dim)]">{t.name}</code>
-                        <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">{t.description}</p>
+                        <div className="flex items-center gap-1.5">
+                          <code className="text-xs font-medium text-[var(--color-text-dim)]">{t.name}</code>
+                          {t.visibility && LAZY_VIS_CHIP[t.visibility] && (
+                            <span className="rounded bg-[var(--color-surface-3)] px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+                              {LAZY_VIS_CHIP[t.visibility]}
+                            </span>
+                          )}
+                        </div>
+                        {t.description && (
+                          <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">{t.description}</p>
+                        )}
                       </li>
                     ))}
                   </ul>

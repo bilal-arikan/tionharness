@@ -107,6 +107,34 @@ noktaları değişmez.
 sunucuya **"izole store"** rozeti + tooltip (`CBM_CACHE_DIR = <workspace>/cbm-store`).
 `data-testid="mcp-server-isolated-store"`.
 
+## Aç/kapa — workspace toggle
+
+Tüm codebase-memory yeteneği bir workspace ayarıyla açılıp kapanır (**default açık**):
+
+- **Ayar:** `WSSettings.CodebaseMemoryEnabled` (`workspace/settings.go`, json
+  `codebaseMemoryEnabled`) — default seed `true`, patch `*bool`, `loadSettings` +
+  `UpdateSettings` → `Runtime.SetCodebaseMemory`.
+- **Runtime gate:** `runtime.go` `codebaseMemoryEnabled atomic.Bool` (NewRuntime'da
+  `true` tohum) + `CodebaseMemoryEnabled()`/`SetCodebaseMemory`.
+- **Tek choke-point:** `codebaseMemoryCmd(ctx)` kapalıyken `""` döner → hint bloğu
+  (Detect), auto-index (EnsureCodebaseIndexed) ve `codebase_workspace_search` kaydı
+  birlikte kaybolur. Env enjeksiyonu da `toolsetup`'ta `CodebaseMemoryEnabled()` ile
+  gate'li (kapalı → sunucu kendi default store'unda, tamamen vanilla).
+- **API:** `workspaceSettingsDTO` (GET/PUT `/api/workspace-settings`) alanı taşır —
+  **DTO'ya eklenmezse patch kaydedilir ama UI hep boş görür** (smoke test bunu yakaladı).
+- **UI:** `WorkspacePanel.tsx` "Kod bilgi-grafiği" bölümünde Toggle; harici-tools
+  ekranında (`ExternalToolsPanel.tsx`) bilgilendirici callout ("Ayarlar ▸ Bu Workspace'ten
+  aç/kapa"). Frontend tip + patch + `WorkspaceView` mapping güncellendi.
+
+## Canlı duman testi (2026-07-07)
+
+- **CLI kontratı:** izole temp store → `index_repository` (10056 node) → `list_projects`
+  (yalnız TionSwarm → izolasyon ✓) → `search_code` fan-out (sonuç döndü). `EnsureCodebaseIndexed`
+  + `CodebaseWorkspaceSearchTool`'un dayandığı JSON kontratı doğrulandı.
+- **Uygulama boot:** binary izole `TIONSWARM_DATA_DIR` + loopback portta panic'siz boot etti.
+- **Toggle round-trip (canlı API):** default `true` → PUT `false` → re-GET `false` (kalıcı) →
+  PUT `true`. DTO düzeltmesi bu testte ortaya çıktı ve giderildi.
+
 ## Dosyalar
 
 - `internal/agent/capabilities.go` (yeni: Capability + codebase-memory + `sessionCwd`
@@ -117,6 +145,11 @@ sunucuya **"izole store"** rozeti + tooltip (`CBM_CACHE_DIR = <workspace>/cbm-st
 - `internal/api/chat_turn.go` (chat enjeksiyon + `EnsureCodebaseIndexed`)
 - `internal/tools/builtin_codebase_search.go` (+test) · `classify.go` · `categories.go`
 - `frontend/src/components/panels/ToolsPanel.tsx` (izole store rozeti)
+- **Toggle:** `internal/workspace/settings.go` (`CodebaseMemoryEnabled` alan/default/patch/apply +test)
+  · `internal/agent/runtime.go` (atomic + `Set/CodebaseMemoryEnabled`) · `internal/agent/toolsetup.go`
+  + `capabilities.go` (gate) · `internal/api/workspace_settings.go` (DTO alanı) ·
+  `frontend/.../WorkspacePanel.tsx` (Toggle) · `ExternalToolsPanel.tsx` (callout) ·
+  `types/workspace.ts` + `WorkspaceView.tsx` (tip/patch/mapping)
 
 ## Sıradaki adımlar (opsiyonel)
 

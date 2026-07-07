@@ -130,10 +130,53 @@ func (r *Runtime) addSessionTags(ctx context.Context, sess db.Session, add []str
 	})
 }
 
+// RemoveSessionTags deletes each tag in drop from a session's tags, persisting and
+// emitting a refresh event only when something changed — the complement of the
+// add-only auto-tag path. The auto-repair flow uses it to clear an ERRORED (parent)
+// session's tag once the spawned fixer completes: the fixer runs in its OWN session,
+// so the current-session-scoped update_session tool can never reach the parent.
+func (r *Runtime) RemoveSessionTags(ctx context.Context, sessionID string, drop []string) {
+	if sessionID == "" || len(drop) == 0 {
+		return
+	}
+	sess, err := r.db.GetSession(ctx, sessionID)
+	if err != nil {
+		return
+	}
+	dropSet := make(map[string]bool, len(drop))
+	for _, t := range drop {
+		dropSet[t] = true
+	}
+	kept := sess.Tags[:0:0]
+	changed := false
+	for _, t := range sess.Tags {
+		if dropSet[t] {
+			changed = true
+			continue
+		}
+		kept = append(kept, t)
+	}
+	if !changed {
+		return
+	}
+	if err := r.db.SetSessionTags(ctx, sessionID, kept); err != nil {
+		r.logger.Warn("repair: clear parent tag failed", "session", sessionID, "error", err)
+		return
+	}
+	r.publish(events.Event{
+		Type:   "session",
+		Level:  "info",
+		Target: map[string]string{"sessionId": sessionID},
+	})
+}
+
 // permissionDenyMarkers are substrings that identify a policy denial (a disallowed
-// or ungranted tool) rather than a genuine tool failure. Matched case-insensitively
-// against a tool step's reason/output/text so the claude-cli disallowed-tool case
-// is excluded from the "tool-error" tag.
+// or ungranted tool, or a self-management provenance guard) rather than a genuine
+// tool failure. Matched case-insensitively against a tool step's reason/output/text
+// so the claude-cli disallowed-tool case, and rejections like requireAgentCreatedByAgent
+// (builtin_agentmgmt.go and its sibling *mgmt.go guards), are excluded from the
+// "tool-error" tag — an agent correctly refusing to touch a user-created entity is
+// not a bug to auto-repair.
 var permissionDenyMarkers = []string{
 	"permission_denied",
 	"requested permissions",
@@ -145,6 +188,15 @@ var permissionDenyMarkers = []string{
 	"isn't allowed",
 	"tool is not permitted",
 	"disallowed",
+	"was created by the user and cannot be",
+	// claude-cli rejection when the model calls a bridged tool by its BARE name
+	// (e.g. `PowerShell`) instead of the allowlisted namespaced form
+	// (`mcp__tionswarm_interaction__PowerShell`): "No such tool available: X. X
+	// exists but is not enabled in this context." The model immediately retries with
+	// the correct name — a self-recovered mis-address, not a repairable failure, so
+	// it must not get the "tool-error" tag / spawn an auto-repair.
+	"no such tool available",
+	"not enabled in this context",
 }
 
 // authErrorMarkers identify a turn that failed because the provider could not

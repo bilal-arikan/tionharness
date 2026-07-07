@@ -113,6 +113,10 @@ type Skill struct {
 	SubSkills []string `json:"subSkills,omitempty"`
 	// Source is the tier this skill was resolved from.
 	Source Source `json:"source"`
+	// ModifiedAt is the SKILL.md file's last-modified time (Unix seconds), surfaced
+	// so the Skills screen can show a "last edited" date and sort skills within a
+	// group newest-first. 0 when the file could not be stat'd. Set in scanDir.
+	ModifiedAt int64 `json:"modifiedAt,omitempty"`
 	// Path is the absolute path of the backing SKILL.md (not serialised; the
 	// body is exposed via the detail endpoint instead).
 	Path string `json:"-"`

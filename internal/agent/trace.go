@@ -108,11 +108,17 @@ type TurnStep struct {
 	Kind StepKind `json:"kind"`
 	// Text/Thinking payload.
 	Text string `json:"text,omitempty"`
-	// Tool payload.
-	Tool    string          `json:"tool,omitempty"`
-	Input   json.RawMessage `json:"input,omitempty"`
-	Output  string          `json:"output,omitempty"`
-	IsError bool            `json:"isError,omitempty"`
+	// Tool payload. Tool is the BARE name (namespace stripped) so the UI renders the
+	// same clean cards as the native path. CallName is the EXACT name the provider
+	// used — namespaced on the claude-cli path (mcp__tionswarm_extended__list_tasks) —
+	// set only when it differs from Tool. The recent-tool-activity recap fed back to
+	// the model uses CallName so the model sees the real callable name and does not
+	// re-call the bare form (which the CLI rejects with "No such tool available").
+	Tool     string          `json:"tool,omitempty"`
+	CallName string          `json:"callName,omitempty"`
+	Input    json.RawMessage `json:"input,omitempty"`
+	Output   string          `json:"output,omitempty"`
+	IsError  bool            `json:"isError,omitempty"`
 	// Options are the suggested clickable answers for a StepAsk prompt (optional;
 	// the user may always type a free-text answer instead).
 	Options []string `json:"options,omitempty"`
@@ -161,13 +167,22 @@ func traceStepToTurnStep(t providers.TraceStep) TurnStep {
 	} else {
 		tool = strings.TrimPrefix(tool, extendedToolPrefix)
 	}
+	// Preserve the EXACT (namespaced) name the provider used when we stripped a
+	// prefix, so the recent-tool-activity recap can show the real callable name and
+	// the model doesn't re-call the bare form next turn (CLI rejects it). Native /
+	// already-bare tools leave CallName empty (Tool alone is the callable name).
+	callName := ""
+	if tool != t.Tool {
+		callName = t.Tool
+	}
 	st := TurnStep{
-		Kind:    StepKind(t.Kind),
-		Text:    t.Text,
-		Tool:    tool,
-		Input:   t.Input,
-		Output:  t.Output,
-		IsError: t.IsError,
+		Kind:     StepKind(t.Kind),
+		Text:     t.Text,
+		Tool:     tool,
+		CallName: callName,
+		Input:    t.Input,
+		Output:   t.Output,
+		IsError:  t.IsError,
 	}
 	if st.Kind == StepTool && !st.IsError && tool == "todo_write" {
 		if todos := parseTodos(t.Input); len(todos) > 0 {

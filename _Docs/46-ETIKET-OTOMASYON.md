@@ -1,11 +1,17 @@
-# 46 — Etiketler + Etiket-Tetikleyicili Otomasyonlar
+# 46 — Etiketler + Etiket/Pano-Tetikleyicili Otomasyonlar
 
 > Durum: **Uygulandı + canlı doğrulandı** (2026-07-02/03, WS2, sonnet/claude-cli).
+> Pano (kart) tetikleyicisi eklendi 2026-07-06.
 
-Üç özellik: (1) oturum/flow/schedule kayıtlarına **etiket** (tag), (2) belirli bir
-etikete sahip oturum bir turu bitirince o oturumun sonucunu alıp yeni bir oturum
-başlatan **etiket-tetikleyicili otomasyonlar** — kendiliğinden süren döngüler,
-(3) tur olaylarına göre **otomatik etiketleme** (§3).
+Üç özellik: (1) oturum/flow/schedule kayıtlarına **etiket** (tag), (2) bir olay
+gerçekleşince hedef ajanı/akışı çalıştıran **otomasyonlar** — iki tetik türü:
+**etiket** (etiketli oturum bir turu bitirince) ve **pano** (bir kanban kartı
+değişince, §2.5), (3) tur olaylarına göre **otomatik etiketleme** (§3).
+
+**Tetik türü (`Automation.TriggerKind`, 2026-07-06):** `""`/`"tag"` (varsayılan,
+geriye dönük uyumlu) = etiket tetikleyicili; `"board"` = pano tetikleyicili. Guardrail'ler
+(MaxIterations/CooldownSec/ExpiresAt/Enabled), hedefleme (TargetAgentID **veya** FlowID)
+ve iterasyon defteri iki tür için **ortaktır** (`guardsPass` paylaşılır).
 
 ## 1. Etiketler
 
@@ -122,6 +128,77 @@ Sayaç tek otomasyon üzerinde birikir (tüm spawn'lar aynı etiketi → aynı k
   Etiket-tetikleyici event'leri `automation` tipiyle
   yayınlanır (deep-link: başarı→executions, limit/hata→schedules).
 
+## 2.5 Pano (Kart) Tetikleyicili Otomasyonlar (2026-07-06)
+
+Aynı `Automation` entity'si, `TriggerKind="board"` ile bir **kanban kart değişiminde**
+tetiklenir. Böylece "bir kart _İnceleme_'ye taşınınca kod-gözden-geçir ajanını çalıştır"
+gibi akışlar kurulur. Etiket türüyle **aynı** hedefleme (ajan **veya** flow) ve guardrail'leri
+paylaşır; farkı yalnızca **tetik** ve **prompt değişkenleri**dir.
+
+### Ek alanlar (yalnız `board` türünde anlamlı)
+| Alan | Anlam |
+|------|-------|
+| `BoardOp` | Hangi kart değişimi tetikler: `move` (varsayılan, boş=`move`), `create`, `update`, `delete`, `any`. |
+| `BoardFromState` | Kartın **çıktığı** sütun filtresi (boş=herhangi). |
+| `BoardToState` | Kartın **girdiği** sütun filtresi (boş=herhangi). |
+
+`boardMatches(a, ev)`: op (boş→move; `any`→hepsi) **ve** from/to sütun filtreleri (boş→herhangi)
+eşleşince ateşler.
+
+### Tetik: db board hook (çift-yol tek nokta)
+Kart mutasyonları hem UI (`api/tasks.go`) hem ajan araçları (`move_task`/`update_task`/
+`create_task`/`delete_task`) üzerinden gelir; ikisi de **`db` katmanındaki** aynı
+`CreateTask`/`MoveTask`/`UpdateTask`/`DeleteTask` fonksiyonlarından geçer. Bu yüzden tetik
+**db seviyesinde** bir gözlemci hook'a bağlandı (`DB.SetBoardHook`, `BoardChangeEvent`):
+mutasyon fonksiyonu kilidi bıraktıktan sonra hook'u çağırır; workspace manager onu
+`autoEngine.OnBoardChange`'e (ayrı goroutine → kart mutasyonu **hiç bloklanmaz**) bağlar.
+- `CreateTask` → `create` (ToState=başlangıç sütunu)
+- `MoveTask` → `move` (yalnız sütun **gerçekten** değişince; From/To dolu)
+- `UpdateTask` → sütun değiştiyse `move`, aksi halde `update`
+- `DeleteTask` → `delete` (FromState=son sütun)
+
+### Prompt değişkenleri (`boardVars`, `agent/automation.go`)
+`{{taskId}}` · `{{title}}` · `{{op}}` · `{{from}}` · `{{to}}` · `{{fromLabel}}` ·
+`{{toLabel}}` (sütun anahtarı→ad; özel sütun için anahtar) · `{{board}}` (=`{{to}}`) ·
+ortak: `{{iteration}}` · `{{maxIterations}}` · `{{automation}}` · `{{date}}` · `{{time}}` ·
+`{{datetime}}`. `{{result}}` **yoktur** (oturum sonucu yok → append yapılmaz).
+
+### Döngü/güvenlik
+Pano otomasyonu **kendini etiketle döngülemez** (spawn'lanan oturum tetik etiketi taşımaz;
+`SpawnTags` yok sayılır). Ateşleyen ajan bir kartı taşırsa dolaylı yeniden-tetik olabilir;
+MaxIterations (vars. 50) + Cooldown bunu sınırlar. Bildirim tipi yine `automation`
+(başlık `🗂`, başarı→executions).
+
+### API / Araç / UI
+- **API:** `automationReq`'e `triggerKind`/`boardOp`/`boardFromState`/`boardToState`. Create'te
+  board türü `triggerTag` **istemez**, `boardOp` doğrulanır (`ValidBoardOp`); tag türü hâlâ
+  `triggerTag` ister. Update'te `triggerKind` **verilmezse** dokunulmaz (kısmi patch — ör.
+  yalnız-spawnTags — board otomasyonunu tag'e çevirmesin); verilirse board filtreleri onunla
+  birlikte (yeniden) uygulanır.
+- **Araçlar:** `create/update/list_automation`'a aynı alanlar (`list` çıktısına `triggerKind`/
+  `boardOp`/`boardToState`). `TriggerKind` kısmi patch'te pointer ile korunur.
+- **UI — birleşik 3 SEKME (`Schedules.tsx`, 2026-07-07):** Otomasyon ekranı tek bir **tab bar**
+  altında toplandı: **⏰ Zamanlamalar (cron)** · **🏷 Etiket otomasyonları** · **🗂 Pano
+  otomasyonları** (her sekmede canlı sayaç rozeti). Tab state Schedules'ta tutulur; `schedules`
+  sekmesinde cron başlık+form+liste, diğerlerinde `Automations` bileşeni ilgili bölümü gösterir.
+  `Automations` artık **kontrollü**: `activeKind` prop'u (`'tag'|'board'|null`) hangi
+  `AutomationSection`'ı render edeceğini belirler (`null` → hiçbir şey; ama bileşen mount kalır ki
+  öğe fetch'i + `onCounts` ile bildirilen sayaçlar canlı kalsın). Her `AutomationSection`'ın kendi
+  oluşturma formu/listesi/edit state'i var; tür toggle'ı yok (kind sekmeye göre sabit). Board
+  bölümünde olay + kaynak/hedef sütun seçicileri; ortak `PromptVarsField` türe göre değişken
+  listesi; board satırında `🗂 <op> (kaynak→hedef)` çipi. Board bölümünde etiket kutusu yerine **olay +
+  kaynak/hedef sütun** seçicileri (`BoardTriggerFields`; sütunlar `getWorkspaceSettings().
+  boardColumns`'tan, yoksa default). Prompt textarea + ℹ️ değişken popover'ı ortak `PromptVarsField`
+  bileşeninde, türe göre `BOARD_PROMPT_VARS`/`PROMPT_VARS` gösterir. Board satırında `#tag` yerine
+  `🗂 <op> (kaynak→hedef)` çipi; spawn-etiket editörü gizli (yerine bilgi notu). Parent `Automations`
+  tek `listAutomations` çeker + `columns`'ı yükler, listeyi `kind`'e göre iki bölüme böler ve ortak
+  `setItems`/`reload` ile senkron tutar (optimistic toggle/sil/spawnTags tam liste üzerinde çalışır).
+
+### Test
+- `internal/agent/automation_test.go` — `boardMatches` (op/from/to matrisi), `boardVars` (ikame).
+- `internal/db/store_task_hook_test.go` — hook create/move/no-op-move/update/delete olaylarında
+  doğru `Op`/`From`/`To` ile ateşliyor.
+
 ## 3. Otomatik Etiketleme (olay → etiket)
 
 Tur olaylarına ve oturum durumuna göre well-known etiketler otomatik atanır
@@ -129,6 +206,16 @@ Tur olaylarına ve oturum durumuna göre well-known etiketler otomatik atanır
 işleyebilir — hedef akış: "tool-error"/"error" etiketli oturumları bulup onaran
 tag-tetikleyicili otomasyon. **ADD-only**: etiket, bir onarıcı `set_session_tags`/
 API ile silene kadar kalır (onarım sinyali budur).
+
+**Parent-tag temizliği — auto-repair fix (2026-07-06):** Onarıcı spawn, hatalı **parent**
+oturumu (`ParentSessionID`) düzeltmek için açılır ama kendi ayrı oturumunda çalışır; `update_session`
+tool'u **yalnız içinde bulunduğu oturumu** düzenler → onarıcı parent'ın etiketine ulaşamaz.
+Eski davranışta ajan etiketi (yanlışlıkla) **kendinden** kaldırıp parent'ı sonsuza dek işaretli
+bırakıyordu. Fix: `SpawnOptions.ClearParentTagsOnSuccess` — motor (`automation.go`), tetikleyici
+tag error-sınıfıysa (`tool-error`/`error`; `auth-error` **hariç**, terminal) bunu `[tetik-tag]`
+yapar; onarıcı spawn'ın turu **başarıyla** bitince (`runSpawn`, `err==nil`) framework parent'tan
+o tag'i `Runtime.RemoveSessionTags` ile siler (başarısızlıkta silmez → sınırlı döngü tekrar
+deneyebilir). Böylece etiket temizliği ajanın `update_session` çağrısına bağlı değil.
 
 Atanan etiketler (`agent/autotag.go` sabitleri):
 | Etiket | Ne zaman |
@@ -154,6 +241,15 @@ atanmaz. Native yolda red zaten `StepError{Reason:"permission_denied"}` (StepToo
 değil) olduğu için sayılmaz; claude-cli yolunda `isPermissionDenyError` metin
 işaretleriyle (`permission_denied`, "requested permissions", "haven't granted",
 "not allowed", "disallowed" …) hariç tutar (`permissionDenyMarkers`).
+
+**Bare-name mis-address istisnası (2026-07-06):** Model bir köprülü tool'u **çıplak
+adıyla** çağırırsa (ör. `PowerShell`, allowlist'teki `mcp__tionswarm_interaction__PowerShell`
+yerine) claude-cli `"No such tool available: PowerShell. PowerShell exists but is not
+enabled in this context."` ile reddeder ve model **hemen doğru adla yeniden dener**. Bu
+kendi kendine toparlanan bir yanlış-adresleme, onarılabilir bir hata değil — bu yüzden
+`permissionDenyMarkers`'a `"no such tool available"` + `"not enabled in this context"`
+eklendi; artık `tool-error` **atanmaz** (sahte auto-repair spawn'ı tetiklemez). Birim
+testi: `autotag_test.go` (bare-`PowerShell` reddi deny kümesinde).
 
 **Tetik noktaları:** `Runtime.AutoTagTurn(ctx, sessionID, steps, turnErr)` — chat
 (başarı + cerr hata yolu), spawn (başarı + hata), scheduler `deliverPrompt` +

@@ -47,27 +47,32 @@ func NewCreateAutomationTool(database *db.DB, actorID string) CreateAutomationTo
 func (CreateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "create_automation",
-		Description: "Create a tag-triggered automation: when a session carrying triggerTag finishes a turn, " +
-			"its final reply is rendered into promptTemplate ({{result}}, {{title}}, {{tag}}, {{sessionId}}) and the " +
-			"target runs. The target is EITHER an agent (targetAgentId → a NEW session is spawned; by default it carries " +
-			"triggerTag too, re-firing the automation — a self-continuing loop bounded by maxIterations) OR an " +
-			"orchestration flow (flowId → the rendered prompt is run as the flow input; per-trigger, no self-loop). " +
-			"To tag an existing session so it participates, use set_session_tags.",
+		Description: "Create an event-driven automation. Two trigger kinds: (a) triggerKind='tag' (default) — when a session " +
+			"carrying triggerTag finishes a turn, its final reply is rendered into promptTemplate ({{result}}, {{title}}, " +
+			"{{tag}}, {{sessionId}}) and the target runs; (b) triggerKind='board' — when a kanban card changes (created/moved/" +
+			"updated/deleted), the target runs with the card context ({{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, " +
+			"{{toLabel}}). The target is EITHER an agent (targetAgentId → a NEW session is spawned) OR an orchestration flow " +
+			"(flowId → the rendered prompt is run as the flow input). For a tag automation the spawned session carries " +
+			"triggerTag by default (a self-continuing loop bounded by maxIterations); board automations do not self-loop.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Optional display name"},
-				"triggerTag":{"type":"string","description":"The session tag that fires this automation when a tagged session's turn ends"},
+				"triggerKind":{"type":"string","enum":["tag","board"],"description":"What fires the automation: 'tag' (default; session tag) or 'board' (kanban card change)"},
+				"triggerTag":{"type":"string","description":"[tag kind] The session tag that fires this automation when a tagged session's turn ends"},
+				"boardOp":{"type":"string","enum":["any","move","create","update","delete"],"description":"[board kind] Which card change fires it (default 'move')"},
+				"boardFromState":{"type":"string","description":"[board kind] Only fire when a card LEAVES this column (empty = any source)"},
+				"boardToState":{"type":"string","description":"[board kind] Only fire when a card ENTERS this column (empty = any target)"},
 				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents). Omit when flowId is set."},
 				"flowId":{"type":"string","description":"Run this orchestration flow with the rendered prompt as its input instead of spawning an agent session (see list_flows)."},
-				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Placeholders: {{result}} (finishing reply), {{title}}, {{tag}}, {{sessionId}}, {{iteration}} (1-based fire number), {{maxIterations}}, {{agent}}/{{agentName}}, {{prevPrompt}} (the prior user prompt), {{automation}}, {{date}}, {{time}}, {{datetime}}"},
-				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (default: [triggerTag] → loop; pass [] to break the loop). Ignored for flow-backed automations."},
+				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
+				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (tag kind default: [triggerTag] → loop; pass [] to break the loop). Ignored for flow-backed and board automations."},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling (0 = unlimited; default 50)"},
 				"cooldownSec":{"type":"integer","description":"Minimum seconds between fires (default 0)"},
 				"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); after it the automation auto-disables. 0 = no end date"},
 				"enabled":{"type":"boolean","description":"Active immediately (default true)"}
 			},
-			"required":["triggerTag","promptTemplate"],
+			"required":["promptTemplate"],
 			"additionalProperties":false
 		}`),
 		Examples: []json.RawMessage{
@@ -79,7 +84,11 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		Name           string   `json:"name"`
+		TriggerKind    string   `json:"triggerKind"`
 		TriggerTag     string   `json:"triggerTag"`
+		BoardOp        string   `json:"boardOp"`
+		BoardFromState string   `json:"boardFromState"`
+		BoardToState   string   `json:"boardToState"`
 		TargetAgentID  string   `json:"targetAgentId"`
 		FlowID         string   `json:"flowId"`
 		PromptTemplate string   `json:"promptTemplate"`
@@ -92,11 +101,22 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
 	}
+	in.TriggerKind = strings.TrimSpace(in.TriggerKind)
 	in.TriggerTag = strings.TrimSpace(in.TriggerTag)
+	in.BoardOp = strings.TrimSpace(in.BoardOp)
+	in.BoardFromState = strings.TrimSpace(in.BoardFromState)
+	in.BoardToState = strings.TrimSpace(in.BoardToState)
 	in.TargetAgentID = strings.TrimSpace(in.TargetAgentID)
 	in.FlowID = strings.TrimSpace(in.FlowID)
-	if in.TriggerTag == "" || strings.TrimSpace(in.PromptTemplate) == "" {
-		return "", fmt.Errorf("triggerTag and promptTemplate are required")
+	if strings.TrimSpace(in.PromptTemplate) == "" {
+		return "", fmt.Errorf("promptTemplate is required")
+	}
+	if in.TriggerKind == db.TriggerBoard {
+		if !db.ValidBoardOp(in.BoardOp) {
+			return "", fmt.Errorf("invalid boardOp %q (any|move|create|update|delete)", in.BoardOp)
+		}
+	} else if in.TriggerTag == "" {
+		return "", fmt.Errorf("triggerTag is required for tag automations")
 	}
 	// Either a flow (flowId) or an agent (targetAgentId) is the target.
 	if in.FlowID != "" {
@@ -129,7 +149,11 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	created, err := t.d.db.CreateAutomation(ctx, db.Automation{
 		Name:           strings.TrimSpace(in.Name),
+		TriggerKind:    in.TriggerKind,
 		TriggerTag:     in.TriggerTag,
+		BoardOp:        in.BoardOp,
+		BoardFromState: in.BoardFromState,
+		BoardToState:   in.BoardToState,
 		TargetAgentID:  in.TargetAgentID,
 		FlowID:         in.FlowID,
 		PromptTemplate: in.PromptTemplate,
@@ -164,7 +188,11 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 			"properties":{
 				"id":{"type":"string","description":"The automation id (see list_automations)"},
 				"name":{"type":"string"},
+				"triggerKind":{"type":"string","enum":["tag","board"]},
 				"triggerTag":{"type":"string"},
+				"boardOp":{"type":"string","enum":["any","move","create","update","delete"]},
+				"boardFromState":{"type":"string","description":"[board kind] source-column filter (empty = any)"},
+				"boardToState":{"type":"string","description":"[board kind] target-column filter (empty = any)"},
 				"targetAgentId":{"type":"string"},
 				"flowId":{"type":"string","description":"Run this flow with the rendered prompt as input instead of spawning an agent session (see list_flows). Setting it clears the agent."},
 				"promptTemplate":{"type":"string"},
@@ -183,7 +211,11 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	var in struct {
 		ID             string    `json:"id"`
 		Name           *string   `json:"name"`
+		TriggerKind    *string   `json:"triggerKind"`
 		TriggerTag     *string   `json:"triggerTag"`
+		BoardOp        *string   `json:"boardOp"`
+		BoardFromState *string   `json:"boardFromState"`
+		BoardToState   *string   `json:"boardToState"`
 		TargetAgentID  *string   `json:"targetAgentId"`
 		FlowID         *string   `json:"flowId"`
 		PromptTemplate *string   `json:"promptTemplate"`
@@ -207,8 +239,24 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	if in.Name != nil {
 		cur.Name = strings.TrimSpace(*in.Name)
 	}
+	if in.TriggerKind != nil {
+		cur.TriggerKind = strings.TrimSpace(*in.TriggerKind)
+	}
 	if in.TriggerTag != nil {
 		cur.TriggerTag = strings.TrimSpace(*in.TriggerTag)
+	}
+	if in.BoardOp != nil {
+		if op := strings.TrimSpace(*in.BoardOp); db.ValidBoardOp(op) {
+			cur.BoardOp = op
+		} else {
+			return "", fmt.Errorf("invalid boardOp %q (any|move|create|update|delete)", op)
+		}
+	}
+	if in.BoardFromState != nil {
+		cur.BoardFromState = strings.TrimSpace(*in.BoardFromState)
+	}
+	if in.BoardToState != nil {
+		cur.BoardToState = strings.TrimSpace(*in.BoardToState)
 	}
 	// A non-empty flowId switches to flow-backed (and clears the agent); an
 	// explicit targetAgentId switches back to agent-backed (and clears the flow).
@@ -319,7 +367,10 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 	type row struct {
 		ID             string `json:"id"`
 		Name           string `json:"name"`
-		TriggerTag     string `json:"triggerTag"`
+		TriggerKind    string `json:"triggerKind"`
+		TriggerTag     string `json:"triggerTag,omitempty"`
+		BoardOp        string `json:"boardOp,omitempty"`
+		BoardToState   string `json:"boardToState,omitempty"`
 		TargetAgentID  string `json:"targetAgentId"`
 		FlowID         string `json:"flowId,omitempty"`
 		Enabled        bool   `json:"enabled"`
@@ -329,10 +380,17 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 	}
 	out := make([]row, 0, len(autos))
 	for _, a := range autos {
+		kind := a.TriggerKind
+		if kind == "" {
+			kind = db.TriggerTag
+		}
 		out = append(out, row{
 			ID:             a.ID,
 			Name:           a.Name,
+			TriggerKind:    kind,
 			TriggerTag:     a.TriggerTag,
+			BoardOp:        a.BoardOp,
+			BoardToState:   a.BoardToState,
 			TargetAgentID:  a.TargetAgentID,
 			FlowID:         a.FlowID,
 			Enabled:        a.Enabled,

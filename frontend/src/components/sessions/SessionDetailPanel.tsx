@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Sparkles, Trash2, Loader2, ChevronDown, Check, Pencil, X, Target, CheckCircle2, Circle, PiggyBank, ListChecks, Square, ChevronRight, RotateCcw, Flame, type LucideIcon } from 'lucide-react'
 import { api } from '../../api'
 import type { SessionInfo, SessionUsageDetail, SessionProgress } from '../../types'
-import { SessionDebugCard } from './SessionDebugCard'
 import { CoordinatorSection } from './CoordinatorSection'
 import { AgentIdentity } from '../agents/AgentIdentity'
 import { PromptEditor, KeyValueRow as Row, TagEditor } from '../common'
@@ -683,9 +682,6 @@ export function SessionDetailPanel({
               cost (the session-scoped analog of the agent's daily total below). */}
           {sessionUsage && (sessionUsage.calls > 0 || sessionUsage.compactSavedBytes > 0 || sessionUsage.compactSavedBytesLLM > 0) && (
             <Section title="Bu oturumun harcaması">
-              <p className="mb-2 text-[10px] text-[var(--color-text-dim)]">
-                Bu sohbetin ömür boyu toplamı (yalnız bu oturum).
-              </p>
               <div className="mb-2 flex items-baseline gap-2">
                 <span className="text-lg font-semibold text-[var(--color-text)]">
                   {(sessionUsage.estimated ? '~' : '') + usd(sessionUsage.costUSD)}
@@ -715,13 +711,8 @@ export function SessionDetailPanel({
             </Section>
           )}
 
-          {/* Per-session debug journal (parallel observability stream): timings,
-              token spend, tool latency/errors, compaction/recovery + raw log. */}
-          <SessionDebugCard
-            sessionId={sessionId}
-            refreshKey={(refreshKey ?? 0) + localRefresh}
-            agentNames={Object.fromEntries(info.agents.map((a) => [a.agentId, a.name]))}
-          />
+          {/* Debug / observability moved to its own panel — opened from the chat
+              header's "Debug" button (SessionDebugModal). */}
 
           {/* Actions / tools */}
           <Section title="Araçlar">
@@ -733,7 +724,7 @@ export function SessionDetailPanel({
                 disabled={info.messageCount === 0 || titling}
                 busy={titling}
               />
-              {/* "Bağlam önizle" moved to the chat header (App.tsx) so it opens
+              {/* "Bağlam" moved to the chat header (App.tsx) so it opens
                   without first opening this inspector. */}
               <ActionBtn
                 icon={Trash2}

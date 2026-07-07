@@ -251,6 +251,11 @@ func (m *Manager) open(meta Meta) error {
 	// hook so a tagged session finishing a turn can spawn a follow-up (the loop).
 	autoEngine := agent.NewAutomationEngine(database, rt, m.logger)
 	rt.SetTurnHook(autoEngine.OnTurnFinished)
+	// Board-triggered automations: a kanban card change (create/move/update/delete)
+	// fires the engine on a detached goroutine so the mutation is never blocked.
+	database.SetBoardHook(func(ev db.BoardChangeEvent) {
+		go autoEngine.OnBoardChange(context.Background(), ev)
+	})
 
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())

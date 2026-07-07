@@ -60,6 +60,9 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 		return
 	}
 	for _, a := range autos {
+		if a.TriggerKind == db.TriggerBoard {
+			continue // board automations react to card changes, not turns
+		}
 		if a.TriggerTag == "" || !containsTag(sess.Tags, a.TriggerTag) {
 			continue
 		}
@@ -67,31 +70,125 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 	}
 }
 
-// fire evaluates one matching automation's guardrails and, if they pass, spawns
-// the follow-up session. Guardrail decisions are logged so a stalled loop is
-// explainable in the Logs view.
-func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Session, tf TurnFinished) {
+// OnBoardChange is the board hook (see db.SetBoardHook). For every enabled board
+// automation whose op/column filters match the change, it evaluates the shared
+// guardrails and (if clear) fires the target agent or flow with the card context
+// rendered into the prompt. Runs on its own detached goroutine (wired by the
+// workspace manager) so a card mutation is never blocked.
+func (e *AutomationEngine) OnBoardChange(ctx context.Context, ev db.BoardChangeEvent) {
+	autos, err := e.db.ListEnabledAutomations(ctx)
+	if err != nil {
+		e.logger.Warn("automation: list failed (board)", "task", ev.TaskID, "error", err)
+		return
+	}
+	for _, a := range autos {
+		if a.TriggerKind != db.TriggerBoard || !boardMatches(a, ev) {
+			continue
+		}
+		e.fireBoard(ctx, a, ev)
+	}
+}
+
+// boardMatches reports whether a board automation's op and column filters accept
+// this card change. An empty BoardOp defaults to move; BoardOpAny matches all
+// ops. Empty From/To filters match any column.
+func boardMatches(a db.Automation, ev db.BoardChangeEvent) bool {
+	op := a.BoardOp
+	if op == "" {
+		op = db.BoardOpMove
+	}
+	if op != db.BoardOpAny && op != ev.Op {
+		return false
+	}
+	if a.BoardFromState != "" && a.BoardFromState != ev.FromState {
+		return false
+	}
+	if a.BoardToState != "" && a.BoardToState != ev.ToState {
+		return false
+	}
+	return true
+}
+
+// fireBoard evaluates a board automation's guardrails and, if they pass, runs its
+// target flow or spawns its target agent with the card context in the prompt.
+// Unlike tag automations there is no originating session and no self-tagging loop
+// (the spawned session carries no trigger tag); the guardrails still bound how
+// often card changes may fire it.
+func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db.BoardChangeEvent) {
+	if !e.guardsPass(ctx, a) {
+		return
+	}
+	prompt := renderAutomationPrompt(a.PromptTemplate, e.boardVars(a, ev))
+	if strings.TrimSpace(prompt) == "" {
+		e.recordFailure(ctx, a, "rendered prompt is empty")
+		return
+	}
+
+	// Flow-backed: run the rendered prompt as the flow input.
+	if a.FlowID != "" {
+		e.fireFlow(ctx, a, prompt)
+		return
+	}
+
+	agent, err := e.db.GetAgent(ctx, a.TargetAgentID)
+	if err != nil {
+		e.recordFailure(ctx, a, "target agent gone: "+err.Error())
+		return
+	}
+	// SpawnTags default to none for board automations (an empty/nil slice) so a
+	// board fire does not tag its spawned session — board rules match on card
+	// changes, not tags, so there is no self-loop to seed.
+	res, err := e.rt.SpawnSession(ctx, agent.ID, prompt, SpawnOptions{
+		Title:     "🗂 " + automationLabel(a),
+		CreatedBy: "automation:" + a.ID,
+		Tags:      a.SpawnTags,
+	})
+	if err != nil {
+		e.recordFailure(ctx, a, "spawn failed: "+err.Error())
+		return
+	}
+	if err := e.db.RecordAutomationFire(ctx, a.ID, res.SessionID, ""); err != nil {
+		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
+	}
+	e.logger.Info("automation: fired (board)",
+		"automation", a.ID, "op", ev.Op, "task", ev.TaskID,
+		"spawned", res.SessionID, "agent", agent.ID, "iteration", a.IterationCount+1)
+	e.rt.publish(events.Event{
+		Type:   "automation",
+		Level:  "success",
+		Title:  "🗂 Otomasyon tetiklendi (pano) — " + automationLabel(a),
+		Body:   notifyLine(prompt, 120),
+		Target: map[string]string{"view": "executions", "sessionId": res.SessionID},
+	})
+}
+
+// guardsPass evaluates an automation's shared runtime guardrails (expiry,
+// cooldown, iteration cap) and returns true when it is clear to fire. Expiry and
+// the iteration cap auto-disable the automation as a side effect; every decision
+// is logged so a stalled loop is explainable in the Logs view. Shared by both the
+// tag (fire) and board (fireBoard) paths.
+func (e *AutomationEngine) guardsPass(ctx context.Context, a db.Automation) bool {
 	// Expiry: past its optional end date → auto-disable and stop.
 	if a.ExpiresAt > 0 && time.Now().Unix() >= a.ExpiresAt {
 		e.logger.Info("automation: past end date; auto-disabling",
-			"automation", a.ID, "tag", a.TriggerTag, "expiresAt", a.ExpiresAt)
+			"automation", a.ID, "trigger", automationTrigger(a), "expiresAt", a.ExpiresAt)
 		if err := e.db.SetAutomationEnabled(ctx, a.ID, false); err != nil {
 			e.logger.Warn("automation: expiry auto-disable failed", "automation", a.ID, "error", err)
 		}
-		return
+		return false
 	}
 	// Cooldown: skip if the previous fire was too recent.
 	if a.CooldownSec > 0 && a.LastFiredAt > 0 {
 		if elapsed := time.Now().Unix() - a.LastFiredAt; elapsed < int64(a.CooldownSec) {
 			e.logger.Info("automation: cooldown, skipping",
-				"automation", a.ID, "tag", a.TriggerTag, "elapsed", elapsed, "cooldown", a.CooldownSec)
-			return
+				"automation", a.ID, "trigger", automationTrigger(a), "elapsed", elapsed, "cooldown", a.CooldownSec)
+			return false
 		}
 	}
 	// Iteration cap: disable and stop once the budget is spent (0 = unlimited).
 	if a.MaxIterations > 0 && a.IterationCount >= a.MaxIterations {
 		e.logger.Info("automation: max iterations reached; auto-disabling",
-			"automation", a.ID, "tag", a.TriggerTag, "iterations", a.IterationCount, "max", a.MaxIterations)
+			"automation", a.ID, "trigger", automationTrigger(a), "iterations", a.IterationCount, "max", a.MaxIterations)
 		if err := e.db.SetAutomationEnabled(ctx, a.ID, false); err != nil {
 			e.logger.Warn("automation: auto-disable failed", "automation", a.ID, "error", err)
 		}
@@ -102,6 +199,15 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 			Body:   "Maksimum iterasyon (" + strconv.Itoa(a.MaxIterations) + ") aşıldı; otomasyon devre dışı bırakıldı.",
 			Target: map[string]string{"view": "schedules"},
 		})
+		return false
+	}
+	return true
+}
+
+// fire evaluates one matching tag automation's guardrails and, if they pass,
+// spawns the follow-up session.
+func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Session, tf TurnFinished) {
+	if !e.guardsPass(ctx, a) {
 		return
 	}
 
@@ -133,11 +239,24 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 		spawnTags = []string{a.TriggerTag}
 	}
 
+	// Error-repair semantic: when the trigger is an error-class tag, the spawned
+	// fixer is meant to clear that tag from the ERRORED (parent) session once it is
+	// repaired. The fixer runs in its OWN session, so its update_session tool can't
+	// reach the parent — the framework clears it on the fixer's success instead. This
+	// fixes the fixer's old habit of stripping the tag off itself (the wrong session)
+	// and leaving the parent flagged forever. auth-error is deliberately excluded:
+	// it is terminal (needs /login), not something a repair turn can clear.
+	var clearParentTags []string
+	if a.TriggerTag == TagToolError || a.TriggerTag == TagError {
+		clearParentTags = []string{a.TriggerTag}
+	}
+
 	res, err := e.rt.SpawnSession(ctx, agent.ID, prompt, SpawnOptions{
-		Title:           "🔁 " + automationLabel(a),
-		CreatedBy:       "automation:" + a.ID,
-		ParentSessionID: sess.ID,
-		Tags:            spawnTags,
+		Title:                    "🔁 " + automationLabel(a),
+		CreatedBy:                "automation:" + a.ID,
+		ParentSessionID:          sess.ID,
+		Tags:                     spawnTags,
+		ClearParentTagsOnSuccess: clearParentTags,
 	})
 	if err != nil {
 		e.recordFailure(ctx, a, "spawn failed: "+err.Error())
@@ -250,6 +369,61 @@ func (e *AutomationEngine) turnVars(ctx context.Context, a db.Automation, sess d
 		"time":          now.Format("15:04"),
 		"datetime":      now.Format("2006-01-02 15:04"),
 	}
+}
+
+// boardVars assembles the placeholder values available to a board automation's
+// prompt template for one card change. There is no session result, so {{result}}
+// is absent (renderAutomationPrompt appends nothing).
+func (e *AutomationEngine) boardVars(a db.Automation, ev db.BoardChangeEvent) map[string]string {
+	now := time.Now()
+	maxIter := strconv.Itoa(a.MaxIterations)
+	if a.MaxIterations == 0 {
+		maxIter = "∞"
+	}
+	return map[string]string{
+		"taskId":        ev.TaskID,
+		"title":         ev.Title,
+		"op":            ev.Op,
+		"from":          ev.FromState,
+		"to":            ev.ToState,
+		"fromLabel":     boardLabel(ev.FromState),
+		"toLabel":       boardLabel(ev.ToState),
+		"board":         ev.ToState, // convenience alias for the current column
+		"iteration":     strconv.Itoa(a.IterationCount + 1),
+		"maxIterations": maxIter,
+		"automation":    automationLabel(a),
+		"date":          now.Format("2006-01-02"),
+		"time":          now.Format("15:04"),
+		"datetime":      now.Format("2006-01-02 15:04"),
+	}
+}
+
+// boardLabel resolves a column key to its human label using the built-in column
+// set, falling back to the key itself (custom columns keep their key). Empty key
+// (e.g. the source of a create, or target of a delete) renders as "—".
+func boardLabel(key string) string {
+	if key == "" {
+		return "—"
+	}
+	for _, c := range db.DefaultBoardColumns() {
+		if c.Key == key {
+			return c.Label
+		}
+	}
+	return key
+}
+
+// automationTrigger returns a short trigger descriptor for logging (the tag for
+// tag automations, the board op for board ones).
+func automationTrigger(a db.Automation) string {
+	if a.TriggerKind == db.TriggerBoard {
+		op := a.BoardOp
+		if op == "" {
+			op = db.BoardOpMove
+		}
+		return "board:" + op
+	}
+	return "tag:" + a.TriggerTag
 }
 
 // renderAutomationPrompt substitutes {{name}} placeholders (see turnVars) into the

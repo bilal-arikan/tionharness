@@ -42,6 +42,10 @@ type workspaceSettingsDTO struct {
 	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`
 	SessionContextRecentCount int  `json:"sessionContextRecentCount"`
 
+	// CodebaseMemoryEnabled toggles the codebase-memory capability system (hint +
+	// isolated store + auto-index + codebase_workspace_search) for this workspace.
+	CodebaseMemoryEnabled bool `json:"codebaseMemoryEnabled"`
+
 	// BoardColumns is the ordered column set for this workspace's kanban board.
 	// Always non-nil: falls back to db.DefaultBoardColumns() when unconfigured.
 	BoardColumns []db.BoardColumnDef `json:"boardColumns"`
@@ -80,6 +84,8 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		SessionContextEnabled:     s.SessionContextEnabled,
 		SessionContextEveryTurn:   s.SessionContextEveryTurn,
 		SessionContextRecentCount: s.SessionContextRecentCount,
+
+		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
 
 		BoardColumns: cols,
 	}

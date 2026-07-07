@@ -165,6 +165,12 @@ type Runtime struct {
 	sessionCtxEveryTurn atomic.Bool
 	sessionCtxRecent    atomic.Int64
 
+	// codebaseMemoryEnabled gates the whole codebase-memory capability system for
+	// this workspace: the prompt hint block, the per-workspace isolated store env,
+	// the cwd auto-index, and the codebase_workspace_search tool. Default on;
+	// workspace settings can switch the entire feature off. See capabilities.go.
+	codebaseMemoryEnabled atomic.Bool
+
 	// activeSessions tracks sessions currently executing an autonomous invoke
 	// (schedule / spawn). Keyed by session id; value is struct{}.
 	// Used by the executions feed to show a live "running" indicator for
@@ -260,6 +266,14 @@ func (r *Runtime) SessionContextRecentCount() int {
 	return DefaultSessionContextRecent
 }
 
+// SetCodebaseMemory toggles the codebase-memory capability system for this
+// workspace (hint block + isolated store + auto-index + workspace-search tool).
+func (r *Runtime) SetCodebaseMemory(enabled bool) { r.codebaseMemoryEnabled.Store(enabled) }
+
+// CodebaseMemoryEnabled reports whether the codebase-memory capability system is on
+// for this workspace.
+func (r *Runtime) CodebaseMemoryEnabled() bool { return r.codebaseMemoryEnabled.Load() }
+
 // NewRuntime constructs the runtime. tun carries the process-wide tunables
 // (autonomy pause, title-model override) shared across all workspace runtimes.
 // workDir is the workspace sandbox root for built-in filesystem/shell tools.
@@ -288,6 +302,10 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		mcpPool:     mcp.NewPool(),
 		cliSessions: providers.NewCLISessionPool(),
 	}
+	// The codebase-memory capability defaults ON; workspace settings (loadSettings)
+	// override it at boot. Seeded here so bare runtimes (before settings apply) still
+	// behave as "on" rather than silently off.
+	r.codebaseMemoryEnabled.Store(true)
 	// Surface MCP connection lifecycle (dial / re-dial / list_changed) in the
 	// in-app Logs screen; the persistent pool is otherwise opaque.
 	r.mcpPool.SetLogger(logger)

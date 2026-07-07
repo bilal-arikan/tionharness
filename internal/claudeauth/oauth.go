@@ -43,11 +43,6 @@ const (
 	authorizeURL = "https://claude.com/cai/oauth/authorize"
 	tokenURL     = "https://platform.claude.com/v1/oauth/token"
 	redirectURI  = "https://platform.claude.com/oauth/code/callback"
-	// loopbackClientID is the "client-id metadata document" identity (the metadata
-	// URL is itself the client_id), which is registered with localhost redirect URIs
-	// — used by the paste-less loopback flow where the browser redirects straight
-	// back to a local listener. Confirmed from the public client-metadata document.
-	loopbackClientID = "https://claude.ai/oauth/claude-code-client-metadata"
 	// scopes requested — matches what a working subscription credential stores
 	// (space-separated on the wire). user:inference is the one that actually
 	// authorises model calls; the rest mirror the CLI's own request.
@@ -68,10 +63,16 @@ func ManualConfig() FlowConfig {
 	return FlowConfig{ClientID: clientID, RedirectURI: redirectURI}
 }
 
-// LoopbackConfig is the paste-less flow: the metadata-document client + a
-// http://127.0.0.1:<port>/callback the browser redirects to automatically.
+// LoopbackConfig is the paste-less flow: the SAME public UUID client as the manual
+// flow (the claude.com/cai authorize endpoint validates client_id as a UUID and
+// rejects the metadata-document URL client with "Input should be a valid UUID"),
+// paired with a http://localhost:<port>/callback the browser redirects to
+// automatically. The redirect host MUST be "localhost" (not 127.0.0.1): the
+// authorize endpoint normalizes 127.0.0.1 -> localhost, so the token exchange's
+// redirect_uri has to match the normalized form or it fails as a redirect mismatch.
+// The local listener still binds 127.0.0.1 — browsers resolve localhost to it.
 func LoopbackConfig(port int) FlowConfig {
-	return FlowConfig{ClientID: loopbackClientID, RedirectURI: fmt.Sprintf("http://127.0.0.1:%d/callback", port)}
+	return FlowConfig{ClientID: clientID, RedirectURI: fmt.Sprintf("http://localhost:%d/callback", port)}
 }
 
 // PendingLogin holds the per-attempt PKCE secrets the caller must stash between

@@ -87,6 +87,7 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
         sessionContextEnabled: ws.sessionContextEnabled,
         sessionContextEveryTurn: ws.sessionContextEveryTurn,
         sessionContextRecentCount: ws.sessionContextRecentCount,
+        codebaseMemoryEnabled: ws.codebaseMemoryEnabled,
       })
       setWs(updated)
       setWsOrig(updated)

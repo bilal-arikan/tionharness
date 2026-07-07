@@ -14,10 +14,10 @@ import (
 // create, edit, move and delete tasks in its workspace — so an agent can track
 // and update work as a passive status board (e.g. moving a task it finished to
 // "done"). The board never executes tasks; flows, schedules and agent sessions
-// do the work and reflect status here. Safety boundary: read/create/edit/move
-// are allowed on ANY task (agents act on the user's board), but delete is
-// restricted to tasks the agent itself created (provenance via Task.CreatedBy),
-// so an agent can never throw away the user's work.
+// do the work and reflect status here. Agents act on the user's board, so
+// read/create/edit/move/delete are all allowed on ANY task (including
+// user-created ones). Task.CreatedBy is still stamped for provenance/display,
+// but no longer gates deletion.
 
 type taskDeps struct {
 	db      *db.DB
@@ -45,7 +45,7 @@ func NewListTasksTool(database *db.DB, actorID string) ListTasksTool {
 func (ListTasksTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_tasks",
-		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, flowId, priority, tags, last run status, and whether each was created by an agent and is therefore deletable by you). Board columns are: todo, in_progress, review, done, failed.",
+		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, flowId, priority, tags, last run status, and whether each was created by an agent). You can edit, move and delete ANY task. Board columns are: todo, in_progress, review, done, failed.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	}
 }
@@ -342,7 +342,7 @@ func (t MoveTaskTool) Call(ctx context.Context, input json.RawMessage) (string, 
 
 // ---- delete_task ----
 
-// DeleteTaskTool removes an agent-created task (provenance-enforced).
+// DeleteTaskTool removes any task from the board (user- or agent-created).
 type DeleteTaskTool struct{ d taskDeps }
 
 // NewDeleteTaskTool constructs delete_task.
@@ -353,7 +353,7 @@ func NewDeleteTaskTool(database *db.DB, actorID string) DeleteTaskTool {
 func (DeleteTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "delete_task",
-		Description: "Delete an agent-created task (not one made by the user). Pass the task id.",
+		Description: "Delete a task from the kanban board (any task, including ones created by the user). Pass the task id. This is irreversible — the task is removed from the board.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"id":{"type":"string","description":"The task id (see list_tasks)"}},
@@ -374,12 +374,8 @@ func (t DeleteTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	cur, err := t.d.db.GetTask(ctx, in.ID)
-	if err != nil {
+	if _, err := t.d.db.GetTask(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("no task with id %q (use list_tasks)", in.ID)
-	}
-	if cur.CreatedBy == "" {
-		return "", fmt.Errorf("task %q was created by the user and cannot be deleted by an agent", in.ID)
 	}
 	if err := t.d.db.DeleteTask(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("delete task: %w", err)

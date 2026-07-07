@@ -73,8 +73,8 @@ onClick={(e) => {
 | Ajanlar | `AgentsView` | Ajanı seç | Sil |
 | Board kartları | `TaskBoard` | Task detayı | Sütuna taşı · Ajan ata · Sil |
 | Hafıza | `MemoryPanel` | Kartı genişlet | Sil (**yalnız modifier-click seçer**) |
-| Artifact | `ArtifactsPanel` | Artifact aç | Sil |
-| Skills | `SkillsPanel` | Skill detayı | Görünürlük türü (Tam/Özet/İsim/Gizli) · **Grup ata** (input+datalist, "Ata"/"Grupsuz") · Sil (katlanmış grupları atlar) |
+| Artifact | `ArtifactsPanel` | Artifact aç | **Grup ata** (input+datalist, "Ata"/"Grupsuz") · Sil |
+| Skills | `SkillsPanel` | Skill detayı | Görünürlük türü (Tam/Özet/İsim/Gizli) · **Erişim** (Kısıtla/Paylaş) · **Grup ata** (input+datalist, "Ata"/"Grupsuz") · Sil (katlanmış grupları atlar) |
 | Flows | `FlowsPanel` (Akışlarım) | Flow'u aç | Çalıştır · Sil |
 | Araçlar (ajan) | `AgentToolsSection` | Anında yasakla | "Seçilenleri yasakla" (tek PATCH) |
 | Araçlar (workspace) | `ToolsPanel` (Ayarlar) | Detay aç | Etkinleştir · Devre dışı · NameOnly · Göster |
@@ -101,6 +101,13 @@ onClick={(e) => {
   her liste satırı artık tek bir **görünürlük çipi** (`VisibilityChip`,
   `VISIBILITY_TIERS` rengi/etiketi) taşır — eski dağınık "Gizli"/"NameOnly"
   rozetleri kaldırıldı, "Tam"/"Özet" dahil dört tier tek bakışta okunur.
+- **Skills toplu erişim (Kısıtla/Paylaş):** SelectionBar'da iki-düğmeli segmented
+  grup (`data-testid="skills-bulk-access"`; `skills-bulk-access-restrict` Kilit /
+  `skills-bulk-access-share` Globe). Seçili her skill için `api.setSkillAccess(slug,
+  shared)` → `PUT /api/skills/{slug}/access` (frontmatter `access: shared` yazar/
+  siler). **Erişim ekseni görünürlükten bağımsızdır:** Kısıtla = yalnız atanan
+  ajanlar (`Agent.Skills`), Paylaş = tüm ajanlar on-demand. Detayı tekil değiştiren
+  `skill-detail-toggle-access` butonunun toplu karşılığı.
 - **Skills toplu grup atama:** SelectionBar'da bir grup input'u (`data-testid=
   "skills-bulk-group-input"`, mevcut grup adları `datalist` ile önerilir) + "Ata"/
   "Grupsuz" butonu (`skills-bulk-group`); Enter da uygular. Seçili her skill için
@@ -108,6 +115,19 @@ onClick={(e) => {
   `Store.SetGroup`, yalnız `group` frontmatter'ını yazar, `category` alias'ını
   düşürür). Boş grup = grupsuz. İçe aktarılan bir paketi (import namespace, `_Docs\37`)
   sonradan tek başlıkta toplamak/dağıtmak için — her skill'i tek tek açmadan.
+
+- **Artifact gruplama (Skills paritesi):** `ArtifactsPanel` artık becerilerdeki gibi
+  `useGroupedList` ile `group` alanına göre kovalanır — katlanabilir grup başlıkları
+  (`data-testid="artifacts-group-header"`), tümünü katla/aç (`artifacts-toggle-all`),
+  ve SelectionBar'da grup input'u (`artifacts-bulk-group-input`, mevcut adlar
+  `datalist` ile) + "Ata"/"Grupsuz" (`artifacts-bulk-group`); Enter da uygular.
+  Seçili her artifact için `api.setArtifactGroup(id, group)` → `PUT /api/artifacts/
+  {id}/group` (backend `DB.SetArtifactGroup`, yalnız `group` alanını yazar). Gruplama
+  **arama+origin filtresinden sonra** çalışır (filtreli görünümde de kovalar). Grup
+  başlıkları alfabetik (tr), "Grupsuz" en sonda. Detay artifact başlığında grup rozeti
+  gösterilir. `Artifact.Group` first-class JSON alanı (skill'lerden farklı olarak
+  frontmatter değil, entity alanı — artifact'lar dosya-tabanlı JSON entity'dir).
+  Collapse durumu `tionswarm.artifactsCollapsedGroups` localStorage'da kalıcı.
 
 ## İleride
 - Klavye gezinme (Space=toggle, Shift+Ok ile aralık).

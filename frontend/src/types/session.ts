@@ -176,7 +176,9 @@ export interface SessionContextPreview {
   // Lazy (on-demand) tools: schemas NOT shipped at turn start; name+desc only.
   // Their token cost is already inside systemTokens (load-on-demand catalog block).
   // tools + lazyTools = the effective catalog the session/agent info screen counts.
-  lazyTools: { name: string; description: string }[]
+  // visibility is the tool's tier ("summary" | "name-only" | "hidden"); the row is
+  // rendered accordingly (summary keeps its description, name-only/hidden name alone).
+  lazyTools: { name: string; description: string; visibility?: string }[]
   totalTokens: number
   cache: CachePreview
   // Present only for CLI-wrapper providers (claude-cli): the gap

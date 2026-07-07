@@ -88,7 +88,8 @@ export interface AgentContextPreview {
   toolTokens: number
   // Lazy (on-demand) tools: schemas NOT shipped at turn start; name+desc only.
   // Their token cost is already included in systemTokens (catalog block).
-  lazyTools: { name: string; description: string }[]
+  // visibility is the tool's tier ("summary" | "name-only" | "hidden").
+  lazyTools: { name: string; description: string; visibility?: string }[]
   // Simulated per-turn dynamic suffix for the optional sample message (recalled
   // memory + cross-session block). Empty when no message / cross-session off.
   dynamic: string

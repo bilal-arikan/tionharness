@@ -23,11 +23,16 @@ const (
 // trace — just the tool name, input and (truncated) output. Mirrors the relevant
 // fields of agent.TurnStep without importing it.
 type histToolStep struct {
-	Kind    string          `json:"kind"`
-	Tool    string          `json:"tool"`
-	Input   json.RawMessage `json:"input"`
-	Output  string          `json:"output"`
-	IsError bool            `json:"isError"`
+	Kind string `json:"kind"`
+	Tool string `json:"tool"`
+	// CallName is the exact (namespaced) name the provider used on the claude-cli
+	// path; empty for native/bare tools. Preferred over Tool in the recap so the
+	// model sees the real callable name (mcp__tionswarm_extended__list_tasks) and
+	// does not re-call the bare form (which the CLI rejects). See agent.TurnStep.
+	CallName string          `json:"callName"`
+	Input    json.RawMessage `json:"input"`
+	Output   string          `json:"output"`
+	IsError  bool            `json:"isError"`
 }
 
 // appendRecentToolSummaries folds a compact recap of each recent assistant turn's
@@ -100,9 +105,15 @@ func toolRecapBlock(stepsJSON string) string {
 // formatToolRecapLine renders one tool step as "- Tool(argHint) → result".
 func formatToolRecapLine(st histToolStep) string {
 	arg := toolArgHint(st.Input)
-	head := st.Tool
+	// Prefer the exact callable name (namespaced on the CLI path) so the model can
+	// re-call the tool verbatim; fall back to the bare name for native tools.
+	name := st.CallName
+	if name == "" {
+		name = st.Tool
+	}
+	head := name
 	if arg != "" {
-		head = fmt.Sprintf("%s(%s)", st.Tool, arg)
+		head = fmt.Sprintf("%s(%s)", name, arg)
 	}
 	result := truncateRunes(strings.TrimSpace(st.Output), toolSummaryMaxOutput)
 	if st.IsError {

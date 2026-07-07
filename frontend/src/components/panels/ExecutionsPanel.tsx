@@ -53,7 +53,14 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The feed is read-only, so the
   // one bulk action is copying the selected session ids (handy for cross-tooling).
   const sel = useMultiSelect()
-  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.executionsListOpen')
+  const { open: listOpen, toggle: toggleList, setOpen: setListOpen } = useCollapsibleList('tionswarm.executionsListOpen')
+  // Landing on the screen with nothing selected: open the list drawer so a narrow
+  // screen shows the pickable list instead of an empty detail pane. Runs once on
+  // mount; on md+ the list is always visible so this is a no-op there.
+  useEffect(() => {
+    if (!selectedRef.current) setListOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const bulkCopyIds = () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return

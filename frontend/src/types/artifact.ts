@@ -30,6 +30,8 @@ export interface Artifact {
   // agent-written file, a create_artifact tool call, or the session's rolling
   // artifact of approved ExitPlanMode plans ("plan").
   origin?: 'chat' | 'manual' | 'agent' | 'tool' | 'plan'
+  // Free-text organisation bucket (Artifacts-UI grouping). Empty = ungrouped.
+  group?: string
   createdAt: number
   updatedAt: number
 }

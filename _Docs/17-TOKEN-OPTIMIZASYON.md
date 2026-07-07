@@ -485,6 +485,71 @@ gate saf fonksiyona çıkarıldı (`resumeGateEnabled`) + regresyon testi
 (`TestResumeGateEnabled`). Anlamlı metrik **cacheWrite** (cold-write pahalıdır); output
 turdan tura değiştiği için maliyeti tam normalize etme.
 
+### Optimizasyon zinciri — uçtan uca vaka çalışması (2026-07-06)
+
+Aynı 3-turluk sohbet (opus-4-8) hem TionSwarm'da (AGT1/AGT9, claude-cli) hem Craft
+Agent'ta (native Anthropic API) çalıştırılıp `usage-detail` + `info` + ham `claude -p`
+`usage` ile karşılaştırıldı. Amaç: TionSwarm claude-cli yolundaki her ek yükü ölçüp
+teker teker kırmak. **Referans farkı:** aynı iş Craft native-API'de ~\$0.31 iken
+TionSwarm claude-cli klasik başlangıçta ~\$2.59 (~8.4x) idi.
+
+**Kaldıraç kaldıraç ölçülen kazanç (AGT9, tur-1 `cache_creation` prefix'i — deterministik):**
+
+| Adım | Kaldıraç | Prefix | Not |
+|---|---|---|---|
+| 0 | Klasik (persistent kapalı, full tools, +instr) | ~66.6k | T2 cache-miss → her tur re-cache |
+| 1 | **Persistent süreç** (`claudePersistentSession`) | — | maliyet −23%; T2 artık cache-**read** (yukarıdaki "Canlı ölçüm" ile tutarlı) |
+| 2 | **Araç denylist** (`BlockedTools`, 140→18) | ~66.6k→**~60k** | CLI'de zayıf: 122 araç bloklamak yalnız ~6.8k düşürdü (native muhasebe 31k→4k gösterse de) |
+| 3 | **Sistem-promptu kök nedeni** (bkz. altta) | ~66.6k→**52.6k** | −14k |
+| 4 | **mcp-gateway** (MCP kataloğunu tek geçit aracına katlar) | 52.6k→**34.6k** | −18k; MCP araç payı ~24.5k→~6.5k |
+| — | *Teorik taban* (yalnız CLI harness) | *~26.3k* | *native'e geçmeden inmez* |
+
+**Kök neden (Adım 3) — devasa dosya `--append-system-prompt`'a sızmıştı:** 41.265
+karakterlik bir `the external agent projectInstructions.md` yanlışlıkla statik sistem promptuna
+ekleniyordu → `systemTokens` 10.317, prefix'e ~14k. Kaldırınca `systemTokens`
+**10.317→913** (system 41.265→3.715 char), prefix 66.6k→52.6k. TionSwarm'ın kendi
+sistem-promptu katkısı artık ~%3.
+
+**Prefix dekompozisyon YÖNTEMİ (tekrar üretilebilir):** ham `claude -p`'yi izole
+`claude-home` ile boş bir cwd'den (CLAUDE.md kapmasın) kademeli çalıştır, `result`
+olayındaki `usage`'ı (input + cache_creation + cache_read) topla, farkı al:
+
+```bash
+export CLAUDE_CONFIG_DIR=~/.tionswarm/claude-home
+echo "ok" | claude -p --output-format stream-json --verbose --model opus [EK]
+# A: EK yok           → ~26.3k  (CLI harness: default sistem promptu + built-in tool docs)
+# B: + --append-system-prompt-file <agent_sys>  → +~15.9k (TionSwarm sys+skills) — instr fix'ten ÖNCE
+# gerçek: canlı turun T1 cache_creation (usage-detail) → toplam prefix
+# MCP payı = gerçek − A − B  (çıkarma)
+```
+
+Bu ölçüm `clioverhead.go` sabitlerini (`CLIBaseTokens`~26.2k) canlı doğruladı.
+
+**Gateway sonrası dekompozisyon (~34.6k):** CLI harness ~26.3k (%76, **sabit**) +
+TionSwarm sys+skills ~1.8k + MCP araçlar ~6.5k. Yani claude-cli yolunda **pratik
+tabana** ulaşıldı; kalan tek büyük kalem CLI'nin kendi harness'ı.
+
+**Kapsam sınırları (deneyle doğrulandı):**
+- **code-mode / run_code + MCP binding = NATIVE-PATH-ONLY.** claude-cli köprüsü
+  `run_code`'u hiç sunmaz (`toolsetup.go` `cliLazyBridgeExcluded["run_code"]=true`;
+  `catalogDisplayName(...,cli=true)` → `("",false)`). AGT1 canlı testte "run_code aracım
+  yok" deyip PowerShell'e düştü. Ayrıca MCP aracı yoksa code-mode native tarafta bile
+  kazanç vermez (run_code'un kendi ~490 tokenını **ekler**) — kazanç MCP şema yüzeyine
+  orantılıdır.
+- **⚠️ Ölçüm tuzağı:** `/api/sessions/{id}/info` **fillers** ve `/context-preview`
+  **native-path kompozisyonunu** raporlar → claude-cli'ye GERÇEKTE gönderileni
+  yansıtmaz (code-mode aktifken `run_code`'u listeler, denylist/gateway katlamasını
+  göstermez). claude-cli tarafında **tek güvenilir ölçü** ham `claude -p` `usage`'ıdır
+  (yukarıdaki yöntem) veya `usage-detail`'in `cacheWrite`'ı. Bütçe/context ekranı bu
+  yüzden claude-cli kazançlarını olduğundan büyük/küçük gösterebilir.
+
+**Açık kaldıraç (devam):** kalan ~26k CLI harness'ını kırpmanın tek yolu
+`--append-system-prompt` yerine `--system-prompt` (default prompt'u TAMAMEN replace) —
+ama CLI'nin tool-use/stream-json/permission davranışını bozma riski var. Beyin fırtınası
++ risk/fayda tasarımı ayrı bir çalışmada (Craft session "claude-cli --system-prompt
+Brainstorm", 2026-07-06). Alternatif: native anthropic-API provider (harness tamamen
+kalkar, anahtarsız/oauth avantajı gider).
+
 ## Dinamik bağlam (recall) gürültü kapısı — KALDIRILDI (2026-07-05)
 
 > **KALDIRILDI (2026-07-05):** Bu bölüm memory alt sistemine ait recall/journal

@@ -410,7 +410,14 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   // run / delete. Runs fire-and-forget with an empty input.
   const sel = useMultiSelect()
   // Left flow list collapse (slim rail / mobile drawer).
-  const { open: flowsListOpen, toggle: toggleFlowsList } = useCollapsibleList('tionswarm.flowsListOpen')
+  const { open: flowsListOpen, toggle: toggleFlowsList, setOpen: setFlowsListOpen } = useCollapsibleList('tionswarm.flowsListOpen')
+  // Landing on the screen with no flow selected: open the list drawer so a narrow
+  // screen shows the pickable flow list instead of an empty canvas. Runs once on
+  // mount; on md+ the list is always visible so this is a no-op there.
+  useEffect(() => {
+    if (!selectedId) setFlowsListOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // Node editor popup: clicking a node (not dragging) opens a modal to edit it,
   // instead of a docked side panel. Closing keeps the node selected on canvas.
   const [nodeEditorOpen, setNodeEditorOpen] = useState(false)

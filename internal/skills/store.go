@@ -128,6 +128,11 @@ func scanDir(t tier) []Skill {
 			Source:          t.source,
 			Path:            path,
 		}
+		// Stamp the SKILL.md last-modified time (Unix seconds) so the UI can show
+		// a "last edited" date and sort by recency. Best-effort: 0 if stat fails.
+		if info, statErr := os.Stat(path); statErr == nil {
+			sk.ModifiedAt = info.ModTime().Unix()
+		}
 		sk.Visibility = skillVisibility(sk)
 		out = append(out, sk)
 	}

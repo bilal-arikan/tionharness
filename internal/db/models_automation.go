@@ -1,5 +1,36 @@
 package db
 
+// Automation trigger kinds. An automation fires either on a tagged session
+// finishing a turn (the original, default kind) or on a board (kanban) card
+// change. TriggerKind == "" is treated as TriggerTag for backward compatibility
+// with automation files written before board triggers existed.
+const (
+	TriggerTag   = "tag"   // fire when a session carrying TriggerTag ends a turn
+	TriggerBoard = "board" // fire when a board card changes (see BoardOp)
+)
+
+// Board operation filters for a board-triggered automation. BoardOp == "" is
+// treated as BoardOpMove (the common case: a card dragged to another column).
+// BoardOpAny matches every card change (create/move/update/delete).
+const (
+	BoardOpAny    = "any"
+	BoardOpMove   = "move"
+	BoardOpCreate = "create"
+	BoardOpUpdate = "update"
+	BoardOpDelete = "delete"
+)
+
+// ValidBoardOp reports whether op is empty (defaults to move) or a known board
+// operation filter.
+func ValidBoardOp(op string) bool {
+	switch op {
+	case "", BoardOpAny, BoardOpMove, BoardOpCreate, BoardOpUpdate, BoardOpDelete:
+		return true
+	default:
+		return false
+	}
+}
+
 // Automation is an event-driven rule that starts a NEW session whenever a
 // session carrying TriggerTag finishes a turn (StopReason end_turn). It takes
 // the finishing session's final reply as the "result", renders it into
@@ -19,9 +50,24 @@ package db
 type Automation struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	// TriggerTag is the session tag this rule watches. A finishing session whose
-	// Tags contain TriggerTag fires the rule.
+	// TriggerKind selects what fires the automation: TriggerTag (default, "" is
+	// treated the same) watches a finishing session's tags; TriggerBoard watches
+	// board (kanban) card changes. The board fields below apply only when
+	// TriggerKind == TriggerBoard.
+	TriggerKind string `json:"triggerKind,omitempty"`
+	// TriggerTag is the session tag this rule watches (TriggerTag kind). A
+	// finishing session whose Tags contain TriggerTag fires the rule.
 	TriggerTag string `json:"triggerTag"`
+	// BoardOp filters which card change fires a board automation: BoardOpMove
+	// (default when empty), BoardOpCreate, BoardOpUpdate, BoardOpDelete, or
+	// BoardOpAny. Ignored for tag automations.
+	BoardOp string `json:"boardOp,omitempty"`
+	// BoardFromState, when set, requires the card to have LEFT this column for a
+	// board automation to fire (source-column filter). Empty = any source.
+	BoardFromState string `json:"boardFromState,omitempty"`
+	// BoardToState, when set, requires the card to have ENTERED this column for a
+	// board automation to fire (target-column filter). Empty = any target.
+	BoardToState string `json:"boardToState,omitempty"`
 	// TargetAgentID is the agent that runs the spawned session. Optional when
 	// FlowID is set (a flow-backed automation runs a flow instead of one agent).
 	TargetAgentID string `json:"targetAgentId"`

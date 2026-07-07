@@ -8,6 +8,8 @@ import (
 
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
@@ -55,6 +57,31 @@ type toolSummary struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
+	// Visibility is the tool's effective tier ("full" | "summary" | "name-only" |
+	// "hidden"), set only for lazy (on-demand) entries so the UI can badge each and
+	// render it like the load-on-demand catalog block does: summary keeps its
+	// description, name-only/hidden show the name alone. Empty for eager tools.
+	Visibility string `json:"visibility,omitempty"`
+}
+
+// tieredLazyTools shapes the on-demand (lazy) tool list for a context preview so
+// each entry mirrors what the "Available Tools (load on demand)" block actually
+// renders to the model: summary keeps its (truncated) description, name-only and
+// hidden shed it (name alone). The visibility tier rides along so the UI can badge
+// each row (Özet / İsim / Gizli). lazyDefs come from Runtime.LazyToolCatalog (bare
+// built-in names, namespaced MCP names) and visOf resolves each tool's tier from
+// the same per-agent registry the real turn uses.
+func tieredLazyTools(visOf func(string) string, lazyDefs []providers.ToolDef) []toolSummary {
+	out := make([]toolSummary, 0, len(lazyDefs))
+	for _, d := range lazyDefs {
+		vis := visOf(d.Name)
+		desc := d.Description
+		if vis == tools.VisibilityNameOnly || vis == tools.VisibilityHidden {
+			desc = "" // name alone — matches the rendered catalog block
+		}
+		out = append(out, toolSummary{Name: d.Name, Description: desc, Visibility: vis})
+	}
+	return out
 }
 
 // handleAgentContext returns the assembled fresh-start context for an agent so
@@ -78,11 +105,10 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 		tools = append(tools, toolSummary{Name: d.Name, Description: d.Description, InputSchema: d.InputSchema})
 	}
 	// Lazy tools: name+description only (schemas not shipped; tokens already in sysTok).
+	// Tier-aware so each row mirrors the load-on-demand catalog block (summary keeps
+	// its description, name-only/hidden show the name alone) and carries its chip.
 	lazyDefs := wsp.Runtime.LazyToolCatalog(ctx, agent)
-	lazyTools := make([]toolSummary, 0, len(lazyDefs))
-	for _, d := range lazyDefs {
-		lazyTools = append(lazyTools, toolSummary{Name: d.Name, Description: d.Description})
-	}
+	lazyTools := tieredLazyTools(wsp.Runtime.ToolVisibilityFunc(ctx, agent), lazyDefs)
 	// Optional sample message → simulate the message-dependent dynamic suffix.
 	dynamic := buildAgentDynamicPrompt(ctx, wsp, agent, r.URL.Query().Get("message"))
 

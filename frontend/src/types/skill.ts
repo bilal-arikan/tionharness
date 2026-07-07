@@ -43,6 +43,9 @@ export interface Skill {
   // Skills screen's tier selector reads and writes; mirrors a tool's visibility.
   visibility?: ToolVisibility
   source: SkillSource
+  // SKILL.md last-modified time (Unix seconds). Surfaced in the Skills screen as
+  // a "last edited" label; skills are sorted within each group newest-first by it.
+  modifiedAt?: number
 }
 
 export interface SkillDetail extends Skill {

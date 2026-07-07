@@ -320,10 +320,9 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	// lazy split the agent preview does, matching the effective catalog the info
 	// screen counts (e.g. deferred MCP + self-management tools).
 	lazyDefs := wsp.Runtime.LazyToolCatalog(ctx, agent)
-	lazyList := make([]toolSummary, 0, len(lazyDefs))
-	for _, d := range lazyDefs {
-		lazyList = append(lazyList, toolSummary{Name: d.Name, Description: d.Description})
-	}
+	// Tier-aware: summary keeps its description, name-only/hidden show the name alone
+	// (mirroring the rendered load-on-demand block) and each row carries its chip.
+	lazyList := tieredLazyTools(wsp.Runtime.ToolVisibilityFunc(ctx, agent), lazyDefs)
 
 	msgs := make([]previewMessage, 0, len(req.Messages))
 	msgTok := 0

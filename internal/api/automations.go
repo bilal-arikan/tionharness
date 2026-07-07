@@ -24,7 +24,11 @@ func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 
 type automationReq struct {
 	Name           string   `json:"name"`
+	TriggerKind    string   `json:"triggerKind"`
 	TriggerTag     string   `json:"triggerTag"`
+	BoardOp        string   `json:"boardOp"`
+	BoardFromState string   `json:"boardFromState"`
+	BoardToState   string   `json:"boardToState"`
 	TargetAgentID  string   `json:"targetAgentId"`
 	FlowID         string   `json:"flowId"`
 	PromptTemplate string   `json:"promptTemplate"`
@@ -40,11 +44,26 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	req.TriggerKind = strings.TrimSpace(req.TriggerKind)
 	req.TriggerTag = strings.TrimSpace(req.TriggerTag)
+	req.BoardOp = strings.TrimSpace(req.BoardOp)
+	req.BoardFromState = strings.TrimSpace(req.BoardFromState)
+	req.BoardToState = strings.TrimSpace(req.BoardToState)
 	req.TargetAgentID = strings.TrimSpace(req.TargetAgentID)
 	req.FlowID = strings.TrimSpace(req.FlowID)
-	if req.TriggerTag == "" || strings.TrimSpace(req.PromptTemplate) == "" {
-		writeError(w, http.StatusBadRequest, "triggerTag and promptTemplate are required")
+	if strings.TrimSpace(req.PromptTemplate) == "" {
+		writeError(w, http.StatusBadRequest, "promptTemplate is required")
+		return
+	}
+	// Board automations trigger on card changes (no session tag); tag automations
+	// (the default) require a trigger tag.
+	if req.TriggerKind == db.TriggerBoard {
+		if !db.ValidBoardOp(req.BoardOp) {
+			writeError(w, http.StatusBadRequest, "invalid boardOp")
+			return
+		}
+	} else if req.TriggerTag == "" {
+		writeError(w, http.StatusBadRequest, "triggerTag is required for tag automations")
 		return
 	}
 	ctx := r.Context()
@@ -82,7 +101,11 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	}
 	created, err := ws(r).DB.CreateAutomation(ctx, db.Automation{
 		Name:           strings.TrimSpace(req.Name),
+		TriggerKind:    req.TriggerKind,
 		TriggerTag:     req.TriggerTag,
+		BoardOp:        req.BoardOp,
+		BoardFromState: req.BoardFromState,
+		BoardToState:   req.BoardToState,
 		TargetAgentID:  req.TargetAgentID,
 		FlowID:         req.FlowID,
 		PromptTemplate: req.PromptTemplate,
@@ -112,6 +135,20 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	}
 	if t := strings.TrimSpace(req.TriggerTag); t != "" {
 		cur.TriggerTag = t
+	}
+	// Trigger kind + board filters. TriggerKind is only applied when the request
+	// specifies it (a partial patch like spawnTags-only sends "" and must not flip
+	// a board automation back to a tag one). A full edit always sends the kind, so
+	// the board filters are re-applied together with it (empty = "any" / cleared).
+	if k := strings.TrimSpace(req.TriggerKind); k != "" {
+		if k == db.TriggerBoard && !db.ValidBoardOp(strings.TrimSpace(req.BoardOp)) {
+			writeError(w, http.StatusBadRequest, "invalid boardOp")
+			return
+		}
+		cur.TriggerKind = k
+		cur.BoardOp = strings.TrimSpace(req.BoardOp)
+		cur.BoardFromState = strings.TrimSpace(req.BoardFromState)
+		cur.BoardToState = strings.TrimSpace(req.BoardToState)
 	}
 	// Targeting: apply only when the request specifies a target, so partial
 	// updates (e.g. spawnTags-only) don't wipe it. Setting a flow switches the

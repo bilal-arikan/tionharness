@@ -1,6 +1,174 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-06**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
+
+## Agent config: yasaklı araç + atanan skill "chip"leri tıkla-kaldır ✅ (2026-07-07)
+
+**İstek:** (1) Yasaklı araç chip'inde ayrı çarpı yerine chip'in kendisine tıklayınca
+yasak kalksın. (2) Ajana atanan skiller liste değil chip olarak görünsün.
+
+**Ne yapıldı (yalnız frontend):**
+- `AgentToolsSection.tsx`: yasaklı araç `<li>` içindeki ayrı `X` butonu kaldırıldı;
+  chip'in tamamı artık `unblock` butonu (`data-testid="agent-tool-blocked"` üstünde
+  onClick). Hover'da `Ban` ikonu `X`'e döner + kırmızı vurgu. Eski `agent-tool-unblock`
+  testid'i kaldırıldı (dış referansı yok).
+- `AgentSkillsSection.tsx`: seçili skiller `<ul>` liste yerine `flex-wrap` **chip**
+  (aşağıdaki ekleme picker'larıyla aynı görsel dil). Chip'in tamamı `remove` kontrolü
+  (`data-testid="skill-remove"` korundu); hover'da kırmızı vurgu + `X`. Bulunamayan
+  slug kırmızı chip. Frontend `tsc` yeşil.
+
+## Sohbet iz kartları arka-plansız + gönderince en-alta kay ✅ (2026-07-07)
+
+**İstek:** (1) Yeni mesaj gönderince transkript en alta kaysın. (2) Sohbetteki
+"Görev Listesi" bubble'ının arka-plan dolgusu kalksın; benzer UI bileşenlerinde de.
+
+**Ne yapıldı (yalnız frontend):**
+- **Auto-scroll:** `MessageList.tsx` — kaydırma yalnız kullanıcı en-alta "pinned"
+  iken çalışıyordu; yukarı kaydırıp mesaj gönderince gönderilen mesaj görünmüyordu.
+  `prevLastId` ref'i eklendi: en yeni tur **insanın kendi** turu (role `user`,
+  `authorKind !== 'agent'`) ise `pinnedRef` zorla `true` → en alta kayar. Peer/inbox
+  mesajları + streaming asistan delta'ları eski pin davranışına saygı gösterir.
+- **Pinned `TodoPanel` — kutu yok ama opak:** composer üstündeki pinned "Görev Listesi"
+  tepsisinden **iç bubble-kutusu** kaldırıldı (`bg-surface-2`+`border` yok → düz görünür),
+  ama **dış tray opak** tutuldu (`bg-[var(--color-bg)]`+`border-t`) → arkasındaki transkript
+  **sızmaz** (şeffaf yapılınca içerik geçiyordu; opak zemin bunu keser). Transkript içindeki
+  katlanabilir iz kartları (`TodoCard`/`DiffCard`/`ThinkingBlock`/`TextStep`) arka-planını
+  korur + **`shadow-sm` gölge** eklendi. `tsc` + prod build yeşil.
+
+## Artifact gruplama: Skills paritesi (katlanabilir gruplar + toplu grup atama) ✅ (2026-07-07)
+
+**İstek:** Artifactları da skiller gibi gruplayabilelim.
+
+**Ne yapıldı:**
+- **Backend:** `Artifact` modeline first-class `Group string` alanı (`models_artifact.go`);
+  `DB.SetArtifactGroup(ctx, id, group)` yalnız `group`'u yazar (`store_artifact.go`);
+  `handleSetArtifactGroup` + rota `PUT /api/artifacts/{id}/group` (`artifacts.go`,
+  `server.go`). Skill gruplamasından fark: skill'de grup frontmatter'da, artifact'ta
+  entity JSON alanında (artifact'lar dosya-tabanlı entity).
+- **Frontend:** `Artifact.group?` tipi + `api.setArtifactGroup`. `ArtifactsPanel`
+  `useGroupedList` ile kovalanır (arama+origin filtresinden **sonra**): katlanabilir
+  grup başlıkları, tümünü katla/aç, SelectionBar'da grup input'u (`datalist` önerili)
+  + "Ata"/"Grupsuz" (Enter da uygular). `orderedIds` görünür (katlanmamış) sırayı
+  izler → shift-aralık folded grupları atlar. Detay başlığında grup rozeti. Collapse
+  durumu `tionswarm.artifactsCollapsedGroups`'ta kalıcı.
+- **Doğrulama:** `go build ./...` + `go test ./internal/db ./internal/api` (135 passed)
+  + frontend `tsc` yeşil. Docs: `45-COKLU-SECIM.md` (tablo + not), `SKILL.md` artifact satırı.
+
+## Composer odağı: yalnız yeni sohbet açılınca input'a odaklan ✅ (2026-07-07)
+
+**İstek:** Bir sohbet penceresi açınca input'a odaklanma **yalnız yeni sohbet
+oturumu açılınca** olsun; mevcut oturumlara tıklayınca input otomatik odaklanmasın.
+
+**Ne yapıldı (yalnız frontend):**
+- **Kök neden:** `Composer.tsx` odak effect'i `[sessionId, disabled]`'e bağlıydı →
+  Composer oturum geçişinde remount olmadığı için (`composerKey` yalnız rewind'de artar)
+  **her** oturum değişiminde `taRef.focus()` çalışıyordu (mevcut oturuma tıklayınca da).
+- **Çözüm:** `App.tsx`'e `focusSessionId` state'i eklendi; **yalnız** `newSession()`
+  bunu yeni oturum id'sine set eder. Composer'a `focusSessionId` prop'u geçildi; odak
+  effect'i artık yalnız `sessionId === focusSessionId` iken odaklanır. Mevcut oturum
+  seçimi (sidebar) bu sinyali değiştirmediğinden odak çalınmaz. İlk açılışta (mevcut
+  oturum gösterilir) `focusSessionId=null` → odak yok.
+- **Rewind korundu:** `handleRewind` de `setFocusSessionId(activeSessionId)` yaparak
+  remount sonrası imleci input'a bırakır (eski davranış). Frontend `tsc` yeşil.
+
+## Skills ekranı: son düzenleme tarihi + grup içi recency sıralaması ✅ (2026-07-06)
+
+**İstek:** Skills ekranında her becerinin son düzenleme tarihi görünsün ve skill
+grupları içinde güncelden eskiye doğru sıralansın.
+
+**Ne yapıldı:**
+- **Backend:** `skills.Skill`'e `ModifiedAt int64` (`json:"modifiedAt"`, Unix saniye)
+  alanı eklendi; `store.go scanDir` her `SKILL.md`'yi `os.Stat` ile damgalar (best-effort,
+  stat başarısızsa 0). API `Skill`'i doğrudan serialize ettiği için ek endpoint gerekmedi.
+- **Frontend:** `types/skill.ts` `modifiedAt?: number`; `SkillsPanel.tsx` listeyi
+  `modifiedAt` DESC sıralayıp `useGroupedList`'e verir (hook grup-içi giriş sırasını korur →
+  her grup en yeni düzenlenenden eskiye sıralanır). Liste öğesinde "Düzenlendi: <relatif>"
+  satırı (`relativeTime`, hover'da tam tarih), detay panelinde "Son düzenleme: <tam tarih>".
+- **Not:** `store.List()` prompt kataloğu için hâlâ ada göre sıralı — yalnız UI sunum
+  sırası değişti. `go build` + frontend `tsc` yeşil.
+
+## Pano (kart) tetikleyicili otomasyonlar ✅ (2026-07-06)
+
+**İstek:** Otomasyonlara cron + etiket türlerine ek olarak, **Board'daki kart
+değişimlerinde** çalışan bir tetik türü ekle — genel kart değişimlerini dinlesin;
+bir kart bir board'a taşınınca ajan veya flow çalışabilsin.
+
+**Ne yapıldı:** Aynı `Automation` entity'sine ikinci bir tetik türü eklendi
+(`TriggerKind`: `""`/`tag` varsayılan, `board` yeni). Board türü alanları:
+`BoardOp` (`move` vars./`create`/`update`/`delete`/`any`), `BoardFromState`,
+`BoardToState` (sütun filtreleri).
+
+- **Tek nokta tetik (db hook):** UI ve ajan araçları kart mutasyonlarını hep
+  `db` katmanından (`CreateTask`/`MoveTask`/`UpdateTask`/`DeleteTask`) geçirdiği için
+  gözlemci `DB.SetBoardHook`/`BoardChangeEvent` ile **db seviyesine** kondu; kilit
+  bırakıldıktan sonra çağrılır, manager onu ayrı goroutine'de `OnBoardChange`'e bağlar
+  (mutasyon bloklanmaz). Move yalnız sütun **gerçekten** değişince ateşler; update
+  sütun değiştiyse `move` aksi halde `update`.
+- **Motor:** `AutomationEngine.OnBoardChange` + `boardMatches` + `fireBoard` +
+  `boardVars` (`{{taskId}}/{{title}}/{{op}}/{{from}}/{{to}}/{{toLabel}}/{{board}}` …).
+  Guardrail bloğu `guardsPass`'e çıkarılıp tag/board yolları paylaşır. Board otomasyonu
+  kendini döngülemez (spawn'lanan oturum etiket taşımaz); MaxIterations/Cooldown sınırlar.
+- **API + araçlar:** `automationReq` + `create/update/list_automation` yeni alanları alır;
+  board türü `triggerTag` istemez, `boardOp` doğrulanır; update kısmi patch'te `triggerKind`
+  verilmezse dokunulmaz (board→tag kazara dönüşümü önlenir).
+- **UI — birleşik 3 SEKME (2026-07-07 güncelleme):** Otomasyon ekranı tek bir tab bar altında:
+  **⏰ Zamanlamalar (cron)** · **🏷 Etiket otomasyonları** · **🗂 Pano otomasyonları** (canlı sayaç
+  rozetleri). Tab state `Schedules.tsx`'te; `schedules` sekmesinde cron başlık+form+liste, diğer
+  sekmelerde `Automations`. `Automations` **kontrollü** hâle geldi (`activeKind: 'tag'|'board'|null`;
+  `null` → render yok ama mount kalır → `onCounts` ile sayaçlar canlı). Her `AutomationSection`'ın
+  kendi formu/listesi/edit state'i; tür toggle'ı yok. Board bölümünde olay + kaynak/hedef sütun
+  seçicileri; ortak `PromptVarsField`; board satırında `🗂 <op> (…→…)` çipi.
+- **Test:** `boardMatches`/`boardVars` (agent) + `store_task_hook_test.go` (db hook 5 olay).
+  `go build ./...` + `go test ./internal/db ./internal/agent` (175) + frontend `tsc` + prod build yeşil.
+- **Dok:** `_Docs/46-ETIKET-OTOMASYON.md` §2.5 + intro; SKILL.md otomasyon maddesi.
+
+## Dar ekranda liste drawer'ı seçim yoksa otomatik açılır (Aktivite + Akışlar) ✅ (2026-07-07)
+
+**İstek:** Activities ekranına girince hiçbir aktivite seçili değilse dar
+ekranlarda aktivite listesi paneli otomatik açılsın; aynısı Akışlar ekranında
+flow listesi için.
+
+**Ne yapıldı:** `ExecutionsPanel` ve `FlowsPanel`'e mount-once `useEffect` — seçim
+yoksa (`!selectedId`) `useCollapsibleList.setOpen(true)` ile liste drawer'ı açılır.
+`useCollapsibleList.open` yalnız dar ekranlarda etkili (md+ CSS ile hep görünür) →
+otomatik açılma sadece dar ekranı etkiler, geniş ekranda no-op. Paneller view'e
+göre remount olduğundan effect her girişte çalışır. `frontend tsc --noEmit` temiz.
+
+## Ajanlar kullanıcının görevlerini de silebilir (delete_task köken kısıtı kaldırıldı) ✅ (2026-07-06)
+
+**İstek:** Boards (kanban) ekranındaki görevleri ajanlar da silebilsin —
+kullanıcının oluşturdukları dahil.
+
+**Ne yapıldı:** `builtin_taskmgmt.go` `delete_task` aracındaki köken (provenance)
+kısıtı kaldırıldı. Önceden `cur.CreatedBy == ""` (kullanıcı görevi) ise silme
+reddediliyordu; artık **her görev** silinebilir (yalnız var-olma kontrolü kalır;
+yok id → net hata, sessiz no-op değil). Açıklamalar + dosya-başı güvenlik yorumu +
+`list_tasks` açıklaması güncellendi (`CreatedBy` yalnız provenance/gösterim için
+damgalanmaya devam eder). Test `TestDeleteTaskGuard` → `TestDeleteTaskAny` (kullanıcı
++ ajan görevi silinebilir + yok-id hatası). Self-management default SKILL + proje
+skill notu güncellendi. `go build ./...` + `go test ./internal/tools -run Task` (4)
+yeşil.
+
+## Chat başlığı = oturum title + ayrı "Debug" paneli ✅ (2026-07-06)
+
+**İstek:** (1) Chat header'ında "Sohbet · Manager" yerine oturumun **title**'ı
+yazsın. (2) Sağdaki "Bağlam" butonunun yanına **"Debug"** butonu. (3) "Oturum
+bilgisi" içindeki Debug parçalarını **yeni bir panele** taşı; title'daki Debug
+butonuyla açılsın.
+
+**Ne yapıldı (frontend):**
+- **Başlık:** `App.tsx` chat header artık `VIEW_TITLE`+ajan yerine `sessions.find(
+  ...).title` gösterir (fallback: ajan adı → "Yeni sohbet"). Diğer view'ler
+  değişmedi.
+- **Debug butonu:** header'da "Bağlam" ile "Detay" arasına `Bug` ikonlu buton →
+  `setDebugOpen(true)`.
+- **Yeni panel:** `SessionDebugModal.tsx` — `ModalOverlay` içinde başlık + kapat;
+  gövdede `SessionDebugCard`'ı **`alwaysOpen`** modunda render eder (iç katlama yok,
+  chrome'u modal verir). `SessionDebugCard`'a `alwaysOpen` prop'u eklendi (açık
+  başlar, katlama başlığı gizlenir).
+- **Taşıma:** `SessionDetailPanel`'den `SessionDebugCard` (+import) kaldırıldı;
+  Debug artık yalnız modalda. Modal `agents`'tan agentId→name map'i alır (viz
+  şerit/düğüm etiketleri). `frontend tsc --noEmit` temiz.
 
 ## "Oturum bilgisi" paneli genişletilebilir (drag-resize) ✅ (2026-07-06)
 
@@ -125,6 +293,14 @@ her workspace kendi **izole** codebase-memory store'unu kullansın. Tam tasarım
   `ToolsPanel.tsx` MCP sunucu satırında **"izole store"** rozeti+tooltip
   (`data-testid="mcp-server-isolated-store"`). `go build`/`go test ./internal/agent
   ./internal/tools` + `npm run build` yeşil.
+- **Aç/kapa toggle + canlı duman testi (2026-07-07):** Tüm yetenek workspace ayarıyla
+  açılıp kapanır (default açık): `WSSettings.CodebaseMemoryEnabled` → `Runtime` atomic gate →
+  `codebaseMemoryCmd` tek choke-point (kapalı → hint/auto-index/tool/env hepsi kaybolur).
+  UI: `WorkspacePanel` Toggle + `ExternalToolsPanel` callout ("Ayarlar ▸ Bu Workspace"). **Smoke:**
+  CLI kontratı (izole store index→list→search fan-out) + binary boot (panic yok) + canlı toggle
+  round-trip (default true→PUT false→re-GET false→PUT true). Test, `workspaceSettingsDTO`'da
+  **eksik alan** bug'ını yakaladı → GET her zaman boş dönüyordu; DTO'ya eklenip giderildi.
+  `go test ./internal/{agent,tools,workspace,api}` + `npm run build` yeşil.
 
 ## `archive_sessions` (workspace-scoped toplu oturum arşivleme) ✅ (2026-07-06)
 
@@ -208,15 +384,26 @@ CLI binary'sinden (v2.1.201) + public client-metadata dokümanından çıkarıld
 bir login ile doğrulanabilir — sabitler doğru ama scope/param ince ayarı gerekirse tek dosya
 (`oauth.go` const bloğu). Go build+vet+78 test yeşil, tsc temiz.
 
-**Loopback (paste'siz) varyant ✅ (2026-07-06):** İkinci akış eklendi — client-metadata
-`http://127.0.0.1:<port>/callback` redirect'ini kullanır (client_id = metadata URL,
-`LoopbackConfig`). Backend efemeral portta yerel dinleyici açar (`claude_oauth_loopback.go`);
+**Loopback (paste'siz) varyant ✅ (2026-07-06):** İkinci akış eklendi —
+`http://localhost:<port>/callback` redirect'ini kullanır (`LoopbackConfig`). Backend efemeral portta yerel dinleyici açar (`claude_oauth_loopback.go`);
 tarayıcı yetkilendirmeden sonra doğrudan geri döner, callback handler kodu exchange edip
 credential'ı yazar, tarayıcıya HTML başarı sayfası basar. Popup `.../oauth/loopback/status`'ı
 poll eder → paste GEREKMEZ. `oauth.go` `Begin`→`BeginWith(FlowConfig)` refaktörüyle iki akış
 tek çekirdeği paylaşır (`PendingLogin` client/redirect taşır). Popup'ta "Otomatik (önerilen)"
 vs "Elle kod" alt-modu; otomatik varsayılan. Yalnız tarayıcı backend ile aynı makinedeyken
 (masaüstü/yerel) çalışır — uzak/LAN'da manuel-paste'e düşülür.
+
+**Loopback client_id fix ✅ (2026-07-06):** Otomatik (loopback) akış tarayıcıda "OAuth Request
+Failed — client_id: Input should be a valid UUID, found `h` at 1" hatası veriyordu. Sebep:
+`LoopbackConfig` client_id olarak metadata-doküman URL'i (`https://claude.ai/oauth/
+claude-code-client-metadata`) gönderiyordu, ama `claude.com/cai/oauth/authorize` endpoint'i
+client_id'yi **UUID** olarak doğrular ve URL'i (`https`'in `h`'sinden) reddeder. Düzeltme:
+loopback artık manuel akışla **aynı public UUID client**'ı (`9d1c250a-…`) kullanır. Ayrıca
+redirect_uri `127.0.0.1` → **`localhost`** yapıldı: authorize endpoint 127.0.0.1'i localhost'a
+normalize ediyor; token-exchange redirect_uri'si normalize edilmiş biçimle eşleşmezse
+"redirect mismatch" olurdu. Yerel dinleyici hâlâ 127.0.0.1'e bind (tarayıcı localhost'u ona
+çözer). Canlı doğrulama: UUID+localhost authorize URL'i artık UUID hatası vermiyor (yalnız
+oturumsuz 403). Tek dosya: `internal/claudeauth/oauth.go` (`loopbackClientID` const kaldırıldı).
 
 **Rebuild+test (2026-07-06):** `go build ./cmd/tionswarm` (binary + gömülü dist) ✓,
 `go vet ./...` ✓, `go test ./...` **673 test / 34 paket** ✓, frontend `npm run build` ✓, tsc temiz.

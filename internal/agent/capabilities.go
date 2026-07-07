@@ -74,6 +74,12 @@ func codebaseMemoryCommand(servers []db.MCPServer) string {
 // workspace, or "" when no such server is enabled. Backs the codebase_workspace_search
 // tool registration (fan-out search across the workspace store).
 func (r *Runtime) codebaseMemoryCmd(ctx context.Context) string {
+	// Single gate for the whole feature: when the workspace toggle is off, report
+	// "no server" so the hint block, auto-index, and workspace-search tool all
+	// disappear together.
+	if !r.CodebaseMemoryEnabled() {
+		return ""
+	}
 	servers, err := r.db.ListEnabledMCPServers(ctx)
 	if err != nil {
 		return ""
@@ -84,11 +90,7 @@ func (r *Runtime) codebaseMemoryCmd(ctx context.Context) string {
 var codebaseMemoryCapability = Capability{
 	ID: "codebase-memory-mcp",
 	Detect: func(ctx context.Context, r *Runtime) bool {
-		servers, err := r.db.ListEnabledMCPServers(ctx)
-		if err != nil {
-			return false
-		}
-		return codebaseMemoryCommand(servers) != ""
+		return r.codebaseMemoryCmd(ctx) != ""
 	},
 	Context: func(ctx context.Context, r *Runtime, cwd string) string {
 		var b strings.Builder
@@ -172,11 +174,7 @@ func (r *Runtime) EnsureCodebaseIndexed(ctx context.Context, cwd string) {
 	if cwd == "" {
 		return
 	}
-	servers, err := r.db.ListEnabledMCPServers(ctx)
-	if err != nil {
-		return
-	}
-	command := codebaseMemoryCommand(servers)
+	command := r.codebaseMemoryCmd(ctx) // "" when disabled or no server
 	if command == "" {
 		return
 	}

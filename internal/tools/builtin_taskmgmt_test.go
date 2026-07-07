@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -56,29 +55,35 @@ func TestMoveTaskChangesColumn(t *testing.T) {
 	}
 }
 
-// TestDeleteTaskGuard verifies only agent-created tasks can be deleted.
-func TestDeleteTaskGuard(t *testing.T) {
+// TestDeleteTaskAny verifies an agent can delete ANY task — both user-created
+// and agent-created — and that a missing id errors.
+func TestDeleteTaskAny(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
 	const actor = "actor-1"
-
-	userTask, _ := d.CreateTask(ctx, db.Task{Title: "User", Prompt: "x"}) // CreatedBy == ""
 	del := NewDeleteTaskTool(d, actor)
-	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userTask.ID+`"}`)); err == nil {
-		t.Fatal("expected delete of user-created task to be rejected")
-	} else if !strings.Contains(err.Error(), "created by the user") {
-		t.Fatalf("unexpected error: %v", err)
+
+	// User-created task (CreatedBy == "") is now deletable by an agent.
+	userTask, _ := d.CreateTask(ctx, db.Task{Title: "User", Prompt: "x"})
+	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userTask.ID+`"}`)); err != nil {
+		t.Fatalf("delete of user-created task should succeed: %v", err)
 	}
-	if _, err := d.GetTask(ctx, userTask.ID); err != nil {
-		t.Fatalf("user task should still exist: %v", err)
+	if _, err := d.GetTask(ctx, userTask.ID); err == nil {
+		t.Fatal("user task should be gone")
 	}
 
+	// Agent-created task is deletable too.
 	agentTask, _ := d.CreateTask(ctx, db.Task{Title: "Agent", Prompt: "y", CreatedBy: actor})
 	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+agentTask.ID+`"}`)); err != nil {
 		t.Fatalf("delete of agent-created task should succeed: %v", err)
 	}
 	if _, err := d.GetTask(ctx, agentTask.ID); err == nil {
 		t.Fatal("agent task should be gone")
+	}
+
+	// Unknown id is a clear error, not a silent no-op.
+	if _, err := del.Call(ctx, json.RawMessage(`{"id":"tsk_missing"}`)); err == nil {
+		t.Fatal("expected error deleting a non-existent task")
 	}
 }
 

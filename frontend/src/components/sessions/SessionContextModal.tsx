@@ -14,6 +14,16 @@ const FLOOR_NOTE =
   '"Beklenen taban" = bir sonraki minimal tur için ALT SINIR (yalnız CLI tabanı + eager araç şemaları). ' +
   'Ölçülen "Gerçek" bunu aşabilir: fark, oturum boyunca biriken sıcak bağlam (--resume ile server-side tutulan geçmiş, her iç çağrıda cacheRead) + çalışma-anında aktive edilen deferred araçlardır.'
 
+// LAZY_VIS_CHIP labels a lazy tool's visibility tier next to its name so the
+// load-on-demand list reflects the same Tam/Özet/İsim/Gizli chips set in the tools
+// screen: "summary" keeps its description, "name-only"/"hidden" show the name alone.
+// ("full" tools are eager, never in this list.)
+const LAZY_VIS_CHIP: Record<string, string> = {
+  summary: 'Özet',
+  'name-only': 'İsim',
+  hidden: 'Gizli',
+}
+
 interface Props {
   sessionId: string
   title?: string
@@ -491,7 +501,14 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                         key={t.name}
                         className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 opacity-75"
                       >
-                        <code className="text-xs font-medium text-[var(--color-text-dim)]">{t.name}</code>
+                        <div className="flex items-center gap-1.5">
+                          <code className="text-xs font-medium text-[var(--color-text-dim)]">{t.name}</code>
+                          {t.visibility && LAZY_VIS_CHIP[t.visibility] && (
+                            <span className="rounded bg-[var(--color-surface-3)] px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+                              {LAZY_VIS_CHIP[t.visibility]}
+                            </span>
+                          )}
+                        </div>
                         {t.description && (
                           <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">{t.description}</p>
                         )}

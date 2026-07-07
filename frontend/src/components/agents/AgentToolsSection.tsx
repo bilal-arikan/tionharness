@@ -125,24 +125,20 @@ export function AgentToolsSection({ agentId, onError }: Props) {
           ) : (
             <ul className="mb-3 flex flex-wrap gap-1.5">
               {blockedList.map((t) => (
-                <li
-                  key={t.name}
-                  data-testid="agent-tool-blocked"
-                  data-tool-name={t.name}
-                  className="flex items-center gap-1.5 rounded-full border border-[var(--color-danger)]/40 bg-[var(--color-surface-2)] px-2.5 py-1 text-xs"
-                  title={t.description}
-                >
-                  <Ban size={12} className="shrink-0 text-[var(--color-danger)]" />
-                  <code className="text-xs">{t.name}</code>
+                <li key={t.name}>
+                  {/* The whole chip is the un-block control: click it to lift the
+                      ban (no separate X). */}
                   <button
-                    data-testid="agent-tool-unblock"
+                    data-testid="agent-tool-blocked"
                     data-tool-name={t.name}
                     onClick={() => unblock(t.name)}
                     disabled={busy}
-                    title="Yasağı kaldır"
-                    className="rounded text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+                    title={`${t.description}\n\nYasağı kaldırmak için tıkla`}
+                    className="group flex items-center gap-1.5 rounded-full border border-[var(--color-danger)]/40 bg-[var(--color-surface-2)] px-2.5 py-1 text-xs transition hover:border-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_12%,var(--color-surface-2))] disabled:opacity-50"
                   >
-                    <X size={13} />
+                    <Ban size={12} className="shrink-0 text-[var(--color-danger)] group-hover:hidden" />
+                    <X size={12} className="hidden shrink-0 text-[var(--color-danger)] group-hover:block" />
+                    <code className="text-xs">{t.name}</code>
                   </button>
                 </li>
               ))}

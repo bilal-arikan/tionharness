@@ -3,6 +3,8 @@ package agent
 import (
 	"strings"
 	"testing"
+
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 func TestRenderAutomationPrompt(t *testing.T) {
@@ -28,6 +30,43 @@ func TestRenderAutomationPrompt(t *testing.T) {
 	got = renderAutomationPrompt("Just do X.", map[string]string{"result": ""})
 	if got != "Just do X." {
 		t.Fatalf("unexpected mutation: %q", got)
+	}
+}
+
+func TestBoardMatches(t *testing.T) {
+	move := db.BoardChangeEvent{Op: db.BoardOpMove, FromState: "todo", ToState: "in_progress"}
+	create := db.BoardChangeEvent{Op: db.BoardOpCreate, ToState: "todo"}
+
+	cases := []struct {
+		name string
+		a    db.Automation
+		ev   db.BoardChangeEvent
+		want bool
+	}{
+		{"empty op defaults to move", db.Automation{TriggerKind: db.TriggerBoard}, move, true},
+		{"empty op does not match create", db.Automation{TriggerKind: db.TriggerBoard}, create, false},
+		{"any matches create", db.Automation{TriggerKind: db.TriggerBoard, BoardOp: db.BoardOpAny}, create, true},
+		{"op filter mismatch", db.Automation{TriggerKind: db.TriggerBoard, BoardOp: db.BoardOpCreate}, move, false},
+		{"to filter match", db.Automation{TriggerKind: db.TriggerBoard, BoardOp: db.BoardOpMove, BoardToState: "in_progress"}, move, true},
+		{"to filter mismatch", db.Automation{TriggerKind: db.TriggerBoard, BoardOp: db.BoardOpMove, BoardToState: "done"}, move, false},
+		{"from filter match", db.Automation{TriggerKind: db.TriggerBoard, BoardOp: db.BoardOpMove, BoardFromState: "todo"}, move, true},
+		{"from filter mismatch", db.Automation{TriggerKind: db.TriggerBoard, BoardOp: db.BoardOpMove, BoardFromState: "review"}, move, false},
+	}
+	for _, c := range cases {
+		if got := boardMatches(c.a, c.ev); got != c.want {
+			t.Errorf("%s: boardMatches = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestBoardVarsSubstitution(t *testing.T) {
+	e := &AutomationEngine{}
+	a := db.Automation{TriggerKind: db.TriggerBoard, MaxIterations: 5}
+	ev := db.BoardChangeEvent{TaskID: "tsk_1", Title: "Ship it", Op: db.BoardOpMove, FromState: "todo", ToState: "done"}
+	got := renderAutomationPrompt("[{{op}}] {{title}} {{from}}→{{to}} ({{toLabel}})", e.boardVars(a, ev))
+	want := "[move] Ship it todo→done (Bitti)"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }
 

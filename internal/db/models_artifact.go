@@ -51,6 +51,11 @@ type Artifact struct {
 	// media kinds (their bytes live at SourcePath).
 	ContentFile string `json:"contentFile,omitempty"`
 
+	// Group is the Artifacts-UI organisation bucket this artifact belongs to
+	// (free-text, user-assigned). Empty means the "ungrouped" bucket. Purely an
+	// organisational label — it does not affect capture, rendering, or origin.
+	Group string `json:"group,omitempty"`
+
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
 }

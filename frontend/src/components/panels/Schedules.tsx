@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Hourglass, Pencil, X, Clock, Workflow } from 'lucide-react'
+import { Play, Hourglass, Pencil, X, Clock, Workflow, Repeat, LayoutGrid } from 'lucide-react'
 import { api } from '../../api'
-import type { Agent, Flow, Schedule } from '../../types'
+import type { Agent, Flow, Schedule, AutomationTriggerKind } from '../../types'
 import { AgentPicker } from '../agents/AgentPicker'
 import { AgentAvatar } from '../agents/AgentAvatar'
 import { Button, TagEditor, PaneHeader } from '../common'
@@ -189,6 +189,11 @@ export function Schedules({ agents, focusId, onError }: Props) {
   // null = not loaded yet (hide the toggle until we know the real value).
   const [pauseAutonomy, setPauseAutonomy] = useState<boolean | null>(null)
   const [savingPause, setSavingPause] = useState(false)
+
+  // Top-level tab: cron schedules vs the two automation kinds. The Automations
+  // component reports its per-kind counts up (autoCounts) for the tab badges.
+  const [tab, setTab] = useState<'schedules' | AutomationTriggerKind>('schedules')
+  const [autoCounts, setAutoCounts] = useState({ tag: 0, board: 0 })
 
   const reload = () =>
     api.listSchedules().then(setSchedules).catch((e) => onError(e.message))
@@ -424,15 +429,53 @@ export function Schedules({ agents, focusId, onError }: Props) {
           pinned outside the scroll and ate vertical space). */}
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
 
+      {/* Unified tab bar: cron schedules + the two automation kinds. */}
+      <div className="mb-4 flex items-center gap-1 border-b border-[var(--color-border)]">
+        {([
+          { key: 'schedules', label: 'Zamanlamalar', icon: Clock, color: 'text-[#6b8e23]', count: schedules.length },
+          { key: 'tag', label: 'Etiket otomasyonları', icon: Repeat, color: 'text-violet-500', count: autoCounts.tag },
+          { key: 'board', label: 'Pano otomasyonları', icon: LayoutGrid, color: 'text-sky-500', count: autoCounts.board },
+        ] as const).map((t) => {
+          const active = tab === t.key
+          const Icon = t.icon
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${
+                active
+                  ? 'border-[var(--color-accent)] text-[var(--color-text)]'
+                  : 'border-transparent text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              <Icon size={15} className={active ? t.color : ''} />
+              <span className="hidden sm:inline">{t.label}</span>
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+                  active
+                    ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                    : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+                }`}
+              >
+                {t.count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'schedules' && (
+      <>
       {/* Section header — schedules are cron/time based (sky accent), distinct
-          from the tag-triggered Automations below (violet accent). */}
+          from the tag-/board-triggered Automations in their own tabs. */}
       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
-        <Clock size={15} className="text-sky-500" />
+        <Clock size={15} className="text-[#6b8e23]" />
         Zamanlamalar (cron / zaman tabanlı)
       </div>
 
       {/* New schedule form */}
-      <div className="mb-4 space-y-2 rounded-lg border border-l-4 border-[var(--color-border)] border-l-sky-500 bg-[var(--color-surface)] p-3">
+      <div className="mb-4 space-y-2 rounded-lg border border-l-4 border-[var(--color-border)] border-l-[#6b8e23] bg-[var(--color-surface)] p-3">
         <div className="flex flex-wrap items-start gap-2">
           <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
           {targetMode === 'flow' ? (
@@ -516,7 +559,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
           editId === s.id ? (
             <div
               key={s.id}
-              className="space-y-2 rounded-lg border border-l-4 border-[var(--color-accent)] border-l-sky-500 bg-[var(--color-surface)] p-3 text-sm"
+              className="space-y-2 rounded-lg border border-l-4 border-[var(--color-accent)] border-l-[#6b8e23] bg-[var(--color-surface)] p-3 text-sm"
             >
               <div className="flex flex-wrap items-start gap-2">
                 <TargetModeToggle mode={editTargetMode} onChange={setEditTargetMode} />
@@ -595,7 +638,7 @@ export function Schedules({ agents, focusId, onError }: Props) {
             data-testid="schedule-row"
             data-schedule-id={s.id}
             ref={s.id === focusId ? focusRef : undefined}
-            className={`flex items-center gap-3 rounded-lg border border-l-4 border-l-sky-500 bg-[var(--color-surface)] px-3 py-2 text-sm transition ${
+            className={`flex items-center gap-3 rounded-lg border border-l-4 border-l-[#6b8e23] bg-[var(--color-surface)] px-3 py-2 text-sm transition ${
               highlightId === s.id
                 ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]'
                 : 'border-[var(--color-border)]'
@@ -722,10 +765,20 @@ export function Schedules({ agents, focusId, onError }: Props) {
           </div>
           ),
         )}
-
-        {/* Tag-triggered automations (event-driven loops) live in the same screen. */}
-        <Automations agents={agents} flows={flows} onError={onError} />
       </div>
+      </>
+      )}
+
+      {/* Automations live in their own tabs. The component stays mounted (even on
+          the schedules tab, activeKind=null → renders nothing) so its item fetch
+          and per-kind counts stay live for the tab badges. */}
+      <Automations
+        agents={agents}
+        flows={flows}
+        onError={onError}
+        activeKind={tab === 'schedules' ? null : tab}
+        onCounts={setAutoCounts}
+      />
       </div>
     </div>
   )

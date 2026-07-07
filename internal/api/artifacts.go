@@ -283,6 +283,29 @@ func (s *Server) handleUpdateArtifact(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a)
 }
 
+// handleSetArtifactGroup assigns an artifact's `group` (its Artifacts-UI
+// organisation bucket) without touching any other field, then returns the
+// updated artifact. An empty group ungroups it. This is the per-artifact
+// endpoint the Artifacts screen's bulk "set group" action calls for each
+// selected artifact.
+//
+// PUT /api/artifacts/{id}/group
+func (s *Server) handleSetArtifactGroup(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[struct {
+		Group string `json:"group"`
+	}](w, r)
+	if !ok {
+		return
+	}
+	a, err := ws(r).DB.SetArtifactGroup(r.Context(), r.PathValue("id"), req.Group)
+	if writeDBError(w, err, "artifact not found") {
+		return
+	}
+	publishEntityChange(ws(r), "artifact", "Artifact güncellendi: "+a.Title, a.Kind,
+		map[string]string{"view": "artifacts", "artifactId": a.ID, "sessionId": a.SessionID})
+	writeJSON(w, http.StatusOK, a)
+}
+
 // handleDeleteArtifact removes an artifact.
 func (s *Server) handleDeleteArtifact(w http.ResponseWriter, r *http.Request) {
 	if err := ws(r).DB.DeleteArtifact(r.Context(), r.PathValue("id")); writeDBError(w, err, "artifact not found") {

@@ -96,8 +96,8 @@ cron timing or enabled state — the manual trigger; it works on any schedule, n
 only ones you created (running is not destructive).
 
 **Tasks (kanban board)** — `list_tasks`, `create_task`, `update_task`, `move_task`,
-`delete_task`. The board is passive (no run tool). Read/create/edit/move any task;
-delete only tasks you created.
+`delete_task`. The board is passive (no run tool). Read/create/edit/move/delete
+ANY task (including user-created ones) — `delete_task` is irreversible.
 
 **Hooks** — `list_hooks`, `create_hook`, `delete_hook`. PreToolUse/PostToolUse
 external commands that intercept native tool calls (standard hook contract).
@@ -173,7 +173,8 @@ the `tionswarm-settings` skill for the full field reference and safety notes.
 - **Activate narrowly, up front.** One `activate_tools` call for the whole task
   beats activating tool-by-tool.
 - **Respect provenance.** Delete/destructive operations are restricted to the
-  entities you created — don't try to work around that.
+  entities you created — don't try to work around that. (Exception: kanban
+  `delete_task` may remove ANY task, including user-created ones.)
 - **Prefer reading first.** Use the matching `list_*` / `get_*` tool to see
   current state before you create or edit. Never create an entity (agent, flow,
   skill, schedule, hook, MCP server…) without first checking whether one that

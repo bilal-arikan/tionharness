@@ -52,6 +52,16 @@ type DB struct {
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
 
+	// boardHook is an optional observer invoked (best-effort) after a task's
+	// board state changes or a task is created/deleted. It backs board-triggered
+	// automations; the workspace manager wires it to the AutomationEngine. It is
+	// called AFTER the store lock is released, and the registered callback is
+	// expected to return promptly (dispatch on its own goroutine), so a board
+	// mutation is never blocked by automation dispatch. Guarded by boardHookMu
+	// since SetBoardHook runs during boot while a mutation may already be firing.
+	boardHook   BoardChangeFn
+	boardHookMu sync.RWMutex
+
 	// debugCount tracks the on-disk line count of each session's debug.jsonl so
 	// the append path can cap the file (oldest events pruned) without re-reading
 	// it every write. Guarded by its own mutex (independent of mu) so a debug

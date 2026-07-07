@@ -33,6 +33,28 @@ func TestToolRecapBlock(t *testing.T) {
 	}
 }
 
+// TestToolRecapBlockUsesCallName shows the exact (namespaced) callable name in the
+// recap when a step carries CallName — so a claude-cli agent re-reading its history
+// calls mcp__tionswarm_extended__list_tasks, not the bare list_tasks the CLI rejects.
+func TestToolRecapBlockUsesCallName(t *testing.T) {
+	steps := `[
+		{"kind":"tool","tool":"list_tasks","callName":"mcp__tionswarm_extended__list_tasks","input":{},"output":"[]"},
+		{"kind":"tool","tool":"Grep","input":{"pattern":"foo"},"output":"hit"}
+	]`
+	block := toolRecapBlock(steps)
+	if !strings.Contains(block, "mcp__tionswarm_extended__list_tasks") {
+		t.Errorf("recap must show the namespaced callable name: %q", block)
+	}
+	// A bridged tool's bare name must NOT be what the model sees to re-call.
+	if strings.Contains(block, "- list_tasks →") {
+		t.Errorf("recap should not show the bare bridged name: %q", block)
+	}
+	// Native tools (no CallName) stay bare.
+	if !strings.Contains(block, "Grep(foo)") {
+		t.Errorf("native tool should stay bare: %q", block)
+	}
+}
+
 // TestToolRecapBlockEmpty returns "" for a turn with no tool steps.
 func TestToolRecapBlockEmpty(t *testing.T) {
 	if got := toolRecapBlock(`[{"kind":"text","text":"just text"}]`); got != "" {

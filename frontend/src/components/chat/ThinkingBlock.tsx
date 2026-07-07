@@ -13,7 +13,7 @@ export function ThinkingBlock({ text }: Props) {
   const preview = text.replace(/\s+/g, ' ').trim()
 
   return (
-    <div className="overflow-hidden rounded-lg bg-[var(--color-surface)]">
+    <div className="overflow-hidden rounded-lg bg-[var(--color-surface)] shadow-sm">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"

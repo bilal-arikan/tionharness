@@ -15,6 +15,9 @@ func TestDefaultWSSettings(t *testing.T) {
 	if d.SessionContextRecentCount != 5 {
 		t.Errorf("recent count default = %d, want 5", d.SessionContextRecentCount)
 	}
+	if !d.CodebaseMemoryEnabled {
+		t.Error("codebase-memory capability should default on")
+	}
 }
 
 // TestClampRecent bounds the recent count to [1,20].

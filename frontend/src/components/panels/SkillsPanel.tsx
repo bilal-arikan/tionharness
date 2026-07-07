@@ -13,6 +13,7 @@ import { useGroupedList } from '../../hooks/useGroupedList'
 import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '../common'
 import { NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING } from '../common/SidebarChrome'
 import { useCollapsibleList } from '../../hooks/useCollapsibleList'
+import { relativeTime, fullDateTime } from '../../lib/time'
 
 interface Props {
   onError: (msg: string) => void
@@ -155,12 +156,22 @@ export function SkillsPanel({ onError }: Props) {
   const [deleteBusy, setDeleteBusy] = useState(false)
   // True while a bulk visibility-tier change is applying to the selected skills.
   const [bulkVisBusy, setBulkVisBusy] = useState(false)
+  // True while a bulk access change (restrict/share) is applying to the selection.
+  const [bulkAccessBusy, setBulkAccessBusy] = useState(false)
   // Draft group name + busy flag for the bulk "set group" action on the selection.
   const [bulkGroup, setBulkGroup] = useState('')
   const [bulkGroupBusy, setBulkGroupBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
   const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.skillsListOpen')
+
+  // Skills sorted newest-edited first. Since useGroupedList preserves incoming
+  // order within each bucket, feeding it this pre-sorted list makes every group
+  // list its skills from most- to least-recently edited (by SKILL.md mtime).
+  const sortedList = useMemo(
+    () => [...list].sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0)),
+    [list],
+  )
 
   // Skills bucketed by group (named groups first, ungrouped last), with
   // persisted per-group collapse state. Recomputed only when the catalog changes.
@@ -170,7 +181,7 @@ export function SkillsPanel({ onError }: Props) {
     toggle: toggleGroup,
     allCollapsed,
     toggleAll,
-  } = useGroupedList(list, {
+  } = useGroupedList(sortedList, {
     keyOf: skillGroupKey,
     sortGroups: sortSkillGroups,
     persistKey: 'tionswarm.skillsCollapsedGroups',
@@ -324,6 +335,28 @@ export function SkillsPanel({ onError }: Props) {
     [sel.selected, reload, activeSlug, onError],
   )
 
+  // Bulk-set the access mode (shared/on-demand vs restricted) for every selected
+  // skill at once, then refresh the catalog + selected detail. `shared=true` makes
+  // them reachable by every agent; `false` restricts them to explicitly assigned
+  // agents. Keeps the selection so the user can chain another action.
+  const bulkSetAccess = useCallback(
+    (shared: boolean) => {
+      const slugs = [...sel.selected]
+      if (slugs.length === 0) return
+      setBulkAccessBusy(true)
+      Promise.all(slugs.map((slug) => api.setSkillAccess(slug, shared)))
+        .then(() => {
+          reload()
+          if (activeSlug && sel.selected.has(activeSlug)) {
+            api.getSkill(activeSlug).then(setActive).catch(() => {})
+          }
+        })
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setBulkAccessBusy(false))
+    },
+    [sel.selected, reload, activeSlug, onError],
+  )
+
   // Bulk-set the `group` (organisation bucket) of every selected skill at once, so
   // a batch — e.g. a freshly imported pack — lands under one collapsible header
   // without opening each skill. An empty group ungroups them. Keeps the selection
@@ -462,6 +495,14 @@ export function SkillsPanel({ onError }: Props) {
                             <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
                               {sk.description || sk.slug}
                             </span>
+                            {sk.modifiedAt ? (
+                              <span
+                                className="mt-0.5 block text-[10px] text-[var(--color-text-dim)] opacity-70"
+                                title={`Son düzenleme: ${fullDateTime(sk.modifiedAt)}`}
+                              >
+                                Düzenlendi: {relativeTime(sk.modifiedAt)}
+                              </span>
+                            ) : null}
                           </span>
                         </button>
                       )
@@ -498,6 +539,34 @@ export function SkillsPanel({ onError }: Props) {
                 {tier.label}
               </button>
             ))}
+          </div>
+          {/* Bulk access: restrict (assigned-only) or share (on-demand for all). */}
+          <div
+            className="inline-flex overflow-hidden rounded-md border border-[var(--color-border)]"
+            role="group"
+            aria-label="Seçili becerilerin erişimi"
+            data-testid="skills-bulk-access"
+          >
+            <button
+              type="button"
+              disabled={bulkAccessBusy}
+              onClick={() => bulkSetAccess(false)}
+              title="Seçili becerileri kısıtla — yalnız atanan ajanlar kullanabilsin"
+              data-testid="skills-bulk-access-restrict"
+              className="flex items-center gap-1 px-2 py-1 text-xs text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+            >
+              <Lock size={13} /> Kısıtla
+            </button>
+            <button
+              type="button"
+              disabled={bulkAccessBusy}
+              onClick={() => bulkSetAccess(true)}
+              title="Seçili becerileri paylaş — tüm ajanlar gerektiğinde kullanabilsin"
+              data-testid="skills-bulk-access-share"
+              className="flex items-center gap-1 border-l border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+            >
+              <Globe size={13} /> Paylaş
+            </button>
           </div>
           {/* Bulk group: move every selected skill into one organisation bucket. */}
           <div data-testid="skills-bulk-group" className="inline-flex items-center gap-1">
@@ -641,6 +710,12 @@ export function SkillsPanel({ onError }: Props) {
                     <span className="font-medium">Ne zaman:</span> {active.whenToUse}
                   </p>
                 )}
+                {active.modifiedAt ? (
+                  <p className="mt-1 text-xs text-[var(--color-text-dim)]">
+                    <span className="font-medium">Son düzenleme:</span> {fullDateTime(active.modifiedAt)}{' '}
+                    <span className="opacity-70">({relativeTime(active.modifiedAt)})</span>
+                  </p>
+                ) : null}
                 {active.alwaysAllow && active.alwaysAllow.length > 0 && (
                   <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
                     <span className="font-medium">İzinli araçlar:</span>

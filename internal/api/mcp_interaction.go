@@ -522,6 +522,12 @@ func (b *interactionBackend) callViaSink(ctx context.Context, run *chatRun, st s
 	return interaction.CallResult{Text: text}, nil
 }
 
+// extendedNSPrefix is the claude-cli namespace every deferred (extended-tier) tool
+// is reachable under: the CLI advertises MCP tools as mcp__<server>__<tool>, so a
+// tool activated via activate_tools is callable ONLY as mcp__tionswarm_extended__<name>,
+// never by its bare name. Used to report the exact callable name back to the model.
+const extendedNSPrefix = "mcp__tionswarm_extended__"
+
 // bareToolName strips the Interaction MCP namespace so dispatch matches whether
 // the CLI sends a namespaced name (core: mcp__tionswarm_interaction__ask_user,
 // extended: mcp__tionswarm_extended__create_agent) or the bare name.
@@ -529,7 +535,7 @@ func bareToolName(name string) string {
 	if s := strings.TrimPrefix(name, "mcp__tionswarm_interaction__"); s != name {
 		return s
 	}
-	return strings.TrimPrefix(name, "mcp__tionswarm_extended__")
+	return strings.TrimPrefix(name, extendedNSPrefix)
 }
 
 // Call implements interaction.Backend.
@@ -633,9 +639,21 @@ func (b *interactionBackend) callActivate(token string, run *chatRun, args json.
 		if len(added) > 0 && b.srv != nil {
 			pushed = b.srv.PushToolsChanged(token)
 		}
-		msg := "activated: " + strings.Join(added, ", ")
+		// Report the NAMESPACED callable names (mcp__tionswarm_extended__<name>), not
+		// the bare ones: in the claude-cli path a deferred tool is reachable ONLY under
+		// its namespaced name, so echoing the bare name led the model to call e.g.
+		// `list_agents` and hit "No such tool available: list_agents" before retrying
+		// with the correct name — a wasted round-trip (and, before the autotag fix, a
+		// spurious tool-error). Naming the exact callable form removes that.
+		callable := make([]string, len(added))
+		for i, n := range added {
+			callable[i] = extendedNSPrefix + n
+		}
+		msg := "activated: " + strings.Join(callable, ", ")
 		if len(added) == 0 {
 			msg = "no new tools activated (already active or none valid)"
+		} else {
+			msg += "\nCall each by this exact (namespaced) name."
 		}
 		if len(unknown) > 0 {
 			msg += "; unknown (not in the on-demand catalog): " + strings.Join(unknown, ", ")
@@ -665,7 +683,14 @@ func (b *interactionBackend) callActiveTools(token string) interaction.CallResul
 	if len(active) == 0 {
 		return interaction.CallResult{Text: "No on-demand tools activated. Use activate_tools to load one from the 'Available Tools' catalog."}
 	}
-	return interaction.CallResult{Text: "Activated tools (callable now):\n- " + strings.Join(active, "\n- ")}
+	// Namespaced callable names (mcp__tionswarm_extended__<name>): these are the exact
+	// forms the model must call — the bare name is not a valid tool in the CLI path
+	// (see extendedNSPrefix / the activate_tools note).
+	callable := make([]string, len(active))
+	for i, n := range active {
+		callable[i] = extendedNSPrefix + bareToolName(n)
+	}
+	return interaction.CallResult{Text: "Activated tools (call by these exact names):\n- " + strings.Join(callable, "\n- ")}
 }
 
 // callToolSearch implements the tool_search meta-tool: it keyword-searches EVERY

@@ -546,6 +546,8 @@ func (s *Server) registerArtifactRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/artifacts/{id}", s.handleGetArtifact)
 	mux.HandleFunc("PUT /api/artifacts/{id}", s.handleUpdateArtifact)
 	mux.HandleFunc("DELETE /api/artifacts/{id}", s.handleDeleteArtifact)
+	// Assign an artifact's organisation bucket (Artifacts-UI grouping).
+	mux.HandleFunc("PUT /api/artifacts/{id}/group", s.handleSetArtifactGroup)
 	// Locate the artifact on disk: copy its path or open its folder in Explorer.
 	mux.HandleFunc("GET /api/artifacts/{id}/path", s.handleArtifactPath)
 	mux.HandleFunc("POST /api/artifacts/{id}/reveal", s.handleRevealArtifact)

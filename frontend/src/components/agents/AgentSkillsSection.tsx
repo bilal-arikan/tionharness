@@ -65,42 +65,37 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
         açıktır. Skills ortak havuzdandır — <strong>Skills</strong> ekranından yönetilir.
       </p>
 
-      {/* Selected (unordered set) */}
+      {/* Selected (unordered set) — chips, mirroring the add pickers below. The
+          whole chip is the remove control: click it to unassign (no separate X). */}
       {selected.length === 0 ? (
         <p className="mb-3 rounded border border-dashed border-[var(--color-border)] px-3 py-3 text-center text-xs text-[var(--color-text-dim)]">
           Henüz beceri seçilmedi. Aşağıdan ekle.
         </p>
       ) : (
-        <ul className="mb-3 space-y-1">
+        <div className="mb-3 flex flex-wrap gap-1.5">
           {selected.map((slug) => {
             const sk = bySlug.get(slug)
+            const missing = !sk
             return (
-              <li
+              <button
                 key={slug}
-                className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5"
+                data-testid="skill-remove"
+                data-skill-slug={slug}
+                onClick={() => remove(slug)}
+                title={missing ? `bulunamadı: ${slug} · Kaldırmak için tıkla` : `${sk?.description ?? ''} · Kaldırmak için tıkla`}
+                className={`group flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition hover:border-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_12%,var(--color-surface-2))] ${
+                  missing
+                    ? 'border-[var(--color-danger)]/40 bg-[var(--color-surface-2)] text-[var(--color-danger)]'
+                    : 'border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                }`}
               >
-                <span className="shrink-0 text-base leading-none">{sk?.icon || '✨'}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{sk?.name || slug}</span>
-                  {!sk && (
-                    <span className="block truncate text-[11px] text-[var(--color-danger)]">
-                      bulunamadı: {slug}
-                    </span>
-                  )}
-                </span>
-                <button
-                  data-testid="skill-remove"
-                  data-skill-slug={slug}
-                  onClick={() => remove(slug)}
-                  title="Kaldır"
-                  className="shrink-0 rounded p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-bg)] hover:text-[var(--color-danger)]"
-                >
-                  <X size={14} />
-                </button>
-              </li>
+                <span className="leading-none">{sk?.icon || '✨'}</span>
+                <span className="max-w-40 truncate">{sk?.name || slug}</span>
+                <X size={12} className="shrink-0 text-[var(--color-text-dim)] group-hover:text-[var(--color-danger)]" />
+              </button>
             )
           })}
-        </ul>
+        </div>
       )}
 
       {/* Available to add */}
