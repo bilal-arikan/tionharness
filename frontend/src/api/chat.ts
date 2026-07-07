@@ -1,6 +1,6 @@
 // Chat endpoints: the blocking turn, the SSE streaming turn (with its frame
 // parser) and the in-flight control channel.
-import type { Attachment, Message, ChatResponse, TurnStep } from '../types'
+import type { Attachment, Message, ChatResponse, TurnStep } from '@/types'
 import { req, wsHeaders, errorFromResponse } from './client'
 
 // Handlers invoked as the streaming turn dispatches parsed SSE events. Also

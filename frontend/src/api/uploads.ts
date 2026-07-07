@@ -1,6 +1,6 @@
 // File upload endpoint: stores a user attachment (or pasted text blob) under the
 // workspace and returns its descriptor, which is then sent with the chat turn.
-import type { Attachment } from '../types'
+import type { Attachment } from '@/types'
 import { getActiveWorkspace, errorFromResponse } from './client'
 
 export const uploadsApi = {

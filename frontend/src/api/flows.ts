@@ -1,5 +1,5 @@
 // Orchestration flows and their run history (Phase 7).
-import type { Attachment, Flow, FlowGraph, FlowRun, Message } from '../types'
+import type { Attachment, Flow, FlowGraph, FlowRun, Message } from '@/types'
 import { req, wsHeaders, errorFromResponse } from './client'
 
 // One node lifecycle event streamed while a flow runs (mirrors

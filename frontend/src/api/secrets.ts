@@ -1,6 +1,6 @@
 // Per-workspace secret vault: list (masked), set (write-only value), reveal a
 // single value on demand, and delete.
-import type { Secret } from '../types'
+import type { Secret } from '@/types'
 import { req } from './client'
 
 export const secretApi = {

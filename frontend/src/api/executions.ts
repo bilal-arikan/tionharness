@@ -1,7 +1,7 @@
 // Unified executions feed: every run path (chat/task/flow/schedule) funnels its
 // output into a Session, so this single list surfaces them all with kind + live
 // status. Backed by GET /api/executions.
-import type { Execution } from '../types'
+import type { Execution } from '@/types'
 import { req } from './client'
 
 export const executionApi = {

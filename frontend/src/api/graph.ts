@@ -1,5 +1,5 @@
 // Relationship-graph endpoints: the workspace collaboration network.
-import type { WorkspaceGraph } from '../types'
+import type { WorkspaceGraph } from '@/types'
 import { req } from './client'
 
 export const graphApi = {

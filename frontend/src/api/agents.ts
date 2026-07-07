@@ -1,5 +1,5 @@
 // Agents: CRUD, usage/budget guardrails and per-agent tool access.
-import type { Agent, AgentPatch, AgentUsage, AgentTools, AgentContextPreview } from '../types'
+import type { Agent, AgentPatch, AgentUsage, AgentTools, AgentContextPreview } from '@/types'
 import { req } from './client'
 
 export const agentApi = {

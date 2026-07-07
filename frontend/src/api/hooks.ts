@@ -1,5 +1,5 @@
 // PreToolUse / PostToolUse hooks (workspace-scoped, Phase P4).
-import type { Hook, HookEvent, BuiltinHook } from '../types'
+import type { Hook, HookEvent, BuiltinHook } from '@/types'
 import { req } from './client'
 
 export interface HookInput {

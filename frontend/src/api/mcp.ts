@@ -1,5 +1,5 @@
 // MCP servers (workspace-scoped) and workspace-wide tool activation.
-import type { MCPServer, MCPTransport, MCPTestResult, MCPImportResult, WorkspaceTools } from '../types'
+import type { MCPServer, MCPTransport, MCPTestResult, MCPImportResult, WorkspaceTools } from '@/types'
 import { req } from './client'
 
 export const mcpApi = {

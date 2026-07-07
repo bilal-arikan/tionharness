@@ -1,4 +1,4 @@
-import type { InstallResult, Pack, PackKind, Registry } from '../types'
+import type { InstallResult, Pack, PackKind, Registry } from '@/types'
 import { req } from './client'
 
 // ConnectorInfo describes a built-in directory-site connector (skillsmp …) for the

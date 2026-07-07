@@ -1,4 +1,4 @@
-import type { Skill, SkillDetail, SkillInput, ToolVisibility } from '../types'
+import type { Skill, SkillDetail, SkillInput, ToolVisibility } from '@/types'
 import { req } from './client'
 
 // SkillImportResult mirrors the backend skills.ImportResult (SK-IMP): the new

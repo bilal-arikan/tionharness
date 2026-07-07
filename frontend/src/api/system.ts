@@ -14,7 +14,7 @@ import type {
   BackupStatus,
   BackupResult,
   WorkspaceArchives,
-} from '../types'
+} from '@/types'
 import { req } from './client'
 
 // subscribeEvents opens the global autonomous-event SSE feed via EventSource

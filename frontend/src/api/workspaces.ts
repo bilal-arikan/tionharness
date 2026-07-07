@@ -7,7 +7,7 @@ import type {
   WorkspaceSettingsPatch,
   WorkspaceConfig,
   WorkspaceConfigPatch,
-} from '../types'
+} from '@/types'
 import { req } from './client'
 
 export const workspaceApi = {
@@ -49,7 +49,7 @@ export const workspaceApi = {
   // Pre-flight: probe whether THIS workspace's claude-home is logged in. Spawns a
   // minimal `claude -p` on the backend, so it is on-demand (behind a button).
   checkWorkspaceClaudeAuth: () =>
-    req<{ loggedIn: boolean; claudeHomeDir: string; detail?: string }>(
+    req<{ loggedIn: boolean; installed: boolean; claudeHomeDir: string; detail?: string }>(
       '/api/workspace-settings/claude-auth',
     ),
   // Begin an in-app Claude subscription (Max/Pro) OAuth login: returns the

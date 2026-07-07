@@ -17,7 +17,7 @@ import type {
   SessionDebugEvent,
   TurnDebug,
   InflightSnapshot,
-} from '../types'
+} from '@/types'
 import { req } from './client'
 
 export const sessionApi = {

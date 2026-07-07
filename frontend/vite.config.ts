@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -6,6 +7,9 @@ import tailwindcss from '@tailwindcss/vite'
 // in the run docs — :8080 collides with unity-mcp's HTTP backend).
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   server: {
     proxy: {
       // 127.0.0.1 (not "localhost") so the proxy hits the IPv4 address the Go

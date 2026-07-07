@@ -1,5 +1,5 @@
 // Artifacts — self-contained agent-produced content (workspace-scoped).
-import type { Artifact, ArtifactKind } from '../types'
+import type { Artifact, ArtifactKind } from '@/types'
 import { req } from './client'
 
 export const artifactApi = {
