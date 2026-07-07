@@ -195,10 +195,13 @@ function onStep(d: AppEventDeps, e: AppEvent) {
 }
 
 export function useAppEvents(deps: AppEventDeps) {
-  // Latest deps snapshot, refreshed each render so the once-mounted SSE
-  // subscription always navigates with current state/closures.
+  // Latest deps snapshot, refreshed after each render so the once-mounted SSE
+  // subscription always navigates with current state/closures. (Effect-time
+  // assignment: SSE frames arrive async, always after the effect has flushed.)
   const depsRef = useRef(deps)
-  depsRef.current = deps
+  useEffect(() => {
+    depsRef.current = deps
+  })
 
   // Subscribe once to the global feed: notifications (onEvent) + live turn steps
   // (onStep). Both ride one EventSource; the ref keeps closures current.

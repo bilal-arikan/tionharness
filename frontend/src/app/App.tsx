@@ -9,12 +9,8 @@ import { NavRail, type View } from './NavRail'
 import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
 import { AppHeader } from './AppHeader'
-import {
-  FlowsPanel,
-  NetworkPanel,
-  HEADERLESS_VIEWS,
-  SPLASH_MIN_MS,
-} from './viewRegistry'
+import { FlowsPanel, NetworkPanel } from './lazyPanels'
+import { HEADERLESS_VIEWS, SPLASH_MIN_MS } from './viewRegistry'
 import { INITIAL_ROUTE, useAppNavigation } from './useAppNavigation'
 import { useAppearance } from './useAppearance'
 import { useAppEvents } from './useAppEvents'
@@ -193,7 +189,12 @@ export default function App() {
     bumpMeter: ctl.bumpMeter,
   })
   // Publish the live chat handle for the controller's messages-load effect.
-  ctl.chatRef.current = chat
+  // Effect-time assignment is safe: the effect reads the ref inside an async
+  // listMessages callback, which always resolves after effects have flushed.
+  const { chatRef } = ctl
+  useEffect(() => {
+    chatRef.current = chat
+  })
 
   // handleRewind rewinds the conversation to a message (via the "/rewind" dialog
   // or a user bubble's ⟲ hover action): truncate to that checkpoint, then drop the

@@ -1,18 +1,8 @@
-// View registry: per-view metadata (titles, header layout) and the lazy-loaded
-// panel chunks. Keeping these here (not in App.tsx) lets the shell stay a thin
-// composition layer while every view-list concern lives in one place.
-import { lazy } from 'react'
+// View registry: per-view metadata (titles, header layout) and small shared
+// view predicates. Keeping these here (not in App.tsx) lets the shell stay a
+// thin composition layer while every view-list concern lives in one place.
+// The lazy panel chunks live in lazyPanels.ts (components-only module).
 import type { View } from './NavRail'
-
-// Code-split: the Flows panel pulls in React Flow (~300KB), loaded only when
-// the user opens the Akışlar view.
-export const FlowsPanel = lazy(() =>
-  import('@/features/flows/FlowsPanel').then((m) => ({ default: m.FlowsPanel })),
-)
-// The collaboration network panel also pulls in React Flow — load it on demand.
-export const NetworkPanel = lazy(() =>
-  import('@/features/network/NetworkPanel').then((m) => ({ default: m.NetworkPanel })),
-)
 
 // Minimum time the first-run splash stays on screen (ms), so an instant workspace
 // load doesn't flash the logo for a single frame. Only applies on a fresh install.

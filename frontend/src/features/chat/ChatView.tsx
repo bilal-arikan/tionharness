@@ -31,7 +31,7 @@ export interface ChatViewProps {
   onOpenFile: (path: string) => void
   onOpenArtifact: (id: string) => void
   onDeleteMessage: ComponentProps<typeof MessageList>['onDeleteMessage']
-  onRewind: ComponentProps<typeof MessageList>['onRewind']
+  onRewind: ComponentProps<typeof RewindDialog>['onRewind']
   onFeedback: ComponentProps<typeof MessageList>['onFeedback']
   onOpenAgent: (id: string) => void
   onAgentChange: (id: string) => void
