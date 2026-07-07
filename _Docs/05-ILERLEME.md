@@ -2,6 +2,59 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
 
+## Kendi kendini onaran oturum akışları (self-healing, Faz A–D) ✅ (2026-07-07)
+
+**İstek:** external-context-agent incelemesinden çıkan self-healing desenlerinin TionSwarm'a
+uyarlanması: tool hatalarını çözen, oturum akışını onaran, döngüleri kesen ve stuck
+oturumları işaretleyen katman. Detay: `_Docs/56-SELF-HEALING.md`.
+
+- **Faz A** `internal/agent/errclass.go`: provider hata taksonomisi
+  (`rate_limit/overloaded/server_error/timeout` retry-edilebilir; `auth/billing/
+  cancelled/unknown` terminal) + `decideRecovery`'de `contProviderRetry` — jitter'lı
+  backoff'la sınırlı retry (`maxProviderRetries` ayarı, vars. 2). İptal artık
+  `termCancelled`.
+- **Faz C** `internal/conversation/repair.go` `RepairSequence`: her provider çağrısı
+  öncesi tur-içi tool_use↔tool_result eşleşme onarımı (orphan drop / duplicate dedup /
+  eksik sonuç sentezi / bölünmüş assistant batch merge). Saf + idempotent; onarımlar
+  `debug.jsonl` `repair` olayı.
+- **Faz B** `internal/agent/toolguard.go`: tur-başına döngü tespiti (exact-failure 2/5,
+  same-tool 3/8, no-progress 2/5; idempotent = `RiskRead`). Uyarı hint'i başarısız
+  tool_result'a eklenir (`toolGuardWarnings` vars. açık); hard stop (`toolGuardHardStop`
+  vars. kapalı) blok/`termGuardrailHalt`. `debug.jsonl` `guardrail` olayı.
+- **Faz D** `db.Session.StuckTurns` + `stuck` auto-tag + `stuckGate`: ardışık kötü tur
+  eşiği (`stuckTurnThreshold` vars. 3) aşınca otonom turlar reddedilir (manuel chat
+  serbest); `stuck` etiketi kaldırılınca sayaç sıfırlanır. Etiket-otomasyonla onarım
+  ajanına bağlanabilir.
+- Testler: `errclass_test` / `toolguard_test` / `repair_test` / `stuck_test` (tablo
+  testleri). Sıradaki: hata→ders döngüsü (background-review karşılığı, ayrı plan).
+
+## Workspace oluşturunca claude-cli hazırlık kapısı (auth popup / Sağlayıcılar yönlendirme) ✅ (2026-07-07)
+
+**İstek:** Yeni bir workspace oluşturulduğunda, claude-cli kuruluysa ama bu workspace'in
+claude-home'u yetkilendirilmemişse bir bildirim çıksın ve oradan "claude-cli kimlik
+doğrulama" popup'ı açılabilsin; claude-cli hiç yoksa kullanıcı Sağlayıcılar ekranına
+yönlendirilsin.
+
+**Backend:**
+- `providers.ClaudeCLI.Installed()` (yeni): yapılandırılmış `binPath`'i `exec.LookPath` ile
+  çözer — CLI binary'si mevcut mu (login'den bağımsız). "CLI yok" ile "CLI var ama login yok"
+  ayrımını sağlar.
+- `claudeAuthDTO`'ya `installed bool` alanı; `handleWorkspaceClaudeAuth` artık probe'dan
+  ÖNCE `cli.Installed()` kontrolü yapıyor — binary yoksa `installed:false` + açıklayıcı detay
+  döner (login probe'u boşa çalıştırmaz).
+
+**Frontend:**
+- `api.checkWorkspaceClaudeAuth` dönüş tipine `installed` eklendi.
+- `useWorkspaces.createWorkspace` artık oluşturulan workspace'i (veya hatada `undefined`)
+  döndürüyor → çağıran taraf oluşturma-sonrası kapı çalıştırabiliyor.
+- Yeni `features/workspace/ClaudeAuthGate.tsx`: `App` bir `claudeGateNonce` sayacıyla her
+  başarılı oluşturmadan sonra tetikler; gate yeni (aktif) workspace'in login durumunu
+  problar. Sonuç: login var → sessiz; CLI var + login yok → eyleme dönüştürülebilir bildirim
+  (buton `ClaudeAuthDialog`'u açar, kimlik doğrudan bu workspace'in claude-home'una yazılır);
+  CLI yok → `onNavigateProviders` ile Sağlayıcılar ekranı (`setSettingsCat('providers')`).
+- `App` tüm oluşturma yollarını (onboarding + rail + mobil) tek `handleCreateWorkspace`
+  sarmalayıcısından geçirir.
+
 ## API-native P2+P3: sunucu web search/fetch + server-side compaction (toggle'lı) ✅ (2026-07-07)
 
 **İstek:** _Docs/55 P2 ve P3'ün eklenmesi, her ikisi de ayarlardan açılıp kapanabilir.

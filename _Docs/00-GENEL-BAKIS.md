@@ -91,6 +91,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [52-MCP-GATEWAY.md](52-MCP-GATEWAY.md) | MCP gateway (dinamik araç aktivasyonu) tasarım/analiz |
 | [53-CRAFTAGENT-PROMPT-PARITE.md](53-CRAFTAGENT-PROMPT-PARITE.md) | the external agent project sistem-promptu paritesi: statik/dinamik bloklar — alınan (env marker, session_state, self-mgmt, deliverables) / bilinçli dışlanan (datatable/call_llm/render_template/_displayName) / farklı çözülen (recovery_context → dosya-tabanlı) |
 | [54-CAPABILITY-PROBE.md](54-CAPABILITY-PROBE.md) | Generic capability probe → cachelenebilir context genişletme (opsiyonel harici tool varsa statik prefix'e kısa blok); ilk müşteri codebase-memory + per-workspace izole store (`CBM_CACHE_DIR`) + best-effort cwd auto-index |
+| [56-SELF-HEALING.md](56-SELF-HEALING.md) | Kendi kendini onaran oturum akışları: provider hata sınıflandırıcı + sınırlı retry (errclass), tool-loop guardrail (warn/block/halt), tur-içi mesaj dizisi onarımı (RepairSequence), kalıcı StuckTurns sayacı + `stuck` etiketi + otonom gate |
 | [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md) | the external agent project↔TionSwarm araç eşleştirme analizi |
 | **arsiv/** | Tarihsel inceleme dokümanları (referans/appendix) |
 | [arsiv/13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md) | external-agent-oss release incelemesi → TionSwarm çıkarımları |
