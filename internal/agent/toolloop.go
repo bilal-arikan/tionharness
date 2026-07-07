@@ -265,6 +265,8 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		}
 		// claude-cli surfaces its own tool/thinking trace via stream-json.
 		r.emitCLIToolDebug(ctx, agent, resp.Trace)
+		// Guardrail visibility parity: flag looping CLI turns post-hoc.
+		r.analyzeCLIGuardrail(ctx, agent, resp.Trace)
 		return resp, traceToSteps(resp.Trace), nil
 	}
 
@@ -295,6 +297,8 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		}
 		// The CLI runs the loop itself; its stream-json trace becomes our steps.
 		r.emitCLIToolDebug(ctx, agent, resp.Trace)
+		// Guardrail visibility parity: flag looping CLI turns post-hoc.
+		r.analyzeCLIGuardrail(ctx, agent, resp.Trace)
 		return resp, traceToSteps(resp.Trace), nil
 	}
 

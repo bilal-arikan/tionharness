@@ -140,6 +140,39 @@ func (g *toolGuard) observe(call providers.ToolCall, res providers.ToolResult) (
 	return ""
 }
 
+// analyzeCLIGuardrail gives claude-cli turns guardrail VISIBILITY parity: the
+// CLI owns its tool loop, so the native per-call guardrail cannot warn/block
+// mid-turn there. After the turn we replay the CLI's trace through the same
+// counters and journal a 'guardrail' event for every threshold the turn
+// crossed — so a looping CLI session is just as visible in debug.jsonl (and to
+// anomaly detection / repair automations) as a native one. Post-hoc analysis
+// only: nothing is blocked and no hints are injected.
+func (r *Runtime) analyzeCLIGuardrail(ctx context.Context, agent db.Agent, trace []providers.TraceStep) {
+	if !r.tun.ToolGuardWarnings() {
+		return
+	}
+	gew, geb, gsw, gsh, gnw, gnb := r.tun.ToolGuardThresholds()
+	g := newToolGuard(toolGuardConfig{
+		warnings: true, // hardStop deliberately off: analysis, not enforcement
+		exactWarn: gew, exactBlock: geb, sameToolWarn: gsw, sameToolHalt: gsh,
+		noProgressWarn: gnw, noProgressBlck: gnb,
+	})
+	warned := map[string]bool{} // one event per tool per turn, not per repeat
+	for _, ts := range trace {
+		if ts.Kind != "tool" {
+			continue
+		}
+		call := providers.ToolCall{Name: ts.Tool, Input: ts.Input}
+		hint := g.observe(call, providers.ToolResult{Content: ts.Output, IsError: ts.IsError})
+		if hint == "" || warned[ts.Tool] {
+			continue
+		}
+		warned[ts.Tool] = true
+		r.logger.Warn("cli turn crossed a guardrail threshold (post-turn analysis)", "agent", agent.ID, "tool", ts.Tool)
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "cli_warn", Detail: ts.Tool, Err: true})
+	}
+}
+
 // stuckGuardMarker tags the stuck-gate refusal error so AutoTagTurn can exclude
 // it from the stuck counter (the gate must not count its own refusals).
 const stuckGuardMarker = "suspended by stuck guard"

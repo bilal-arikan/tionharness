@@ -1,9 +1,12 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/bilal-arikan/tionswarm/internal/db"
 
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
@@ -140,6 +143,37 @@ func TestToolGuard_CustomThresholds(t *testing.T) {
 	}
 	if d.cfg.exactBlock != DefaultGuardExactBlockAfter || d.cfg.sameToolHalt != DefaultGuardSameToolHaltAfter {
 		t.Errorf("zero config not resolved to defaults: %+v", d.cfg)
+	}
+}
+
+func TestAnalyzeCLIGuardrail_FlagsLoopingTurn(t *testing.T) {
+	rt, tun := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	sess, err := rt.db.CreateSession(ctx, db.Session{Kind: "chat", AgentID: "AGT1"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	sctx := WithSessionID(ctx, sess.ID)
+	fail := providers.TraceStep{Kind: "tool", Tool: "Bash", Input: json.RawMessage(`{"cmd":"x"}`), Output: "boom", IsError: true}
+	trace := []providers.TraceStep{fail, fail, fail}
+
+	rt.analyzeCLIGuardrail(sctx, db.Agent{ID: "AGT1"}, trace)
+	evs, err := rt.db.ReadDebugEvents(ctx, sess.ID, db.DebugGuardrail, 0)
+	if err != nil {
+		t.Fatalf("read debug: %v", err)
+	}
+	if len(evs) != 1 || evs[0].Name != "cli_warn" || evs[0].Detail != "Bash" {
+		t.Fatalf("events = %+v, want one cli_warn for Bash", evs)
+	}
+
+	// A clean trace flags nothing; warnings off disables the analysis.
+	sess2, _ := rt.db.CreateSession(ctx, db.Session{Kind: "chat", AgentID: "AGT1"})
+	sctx2 := WithSessionID(ctx, sess2.ID)
+	rt.analyzeCLIGuardrail(sctx2, db.Agent{ID: "AGT1"}, []providers.TraceStep{{Kind: "tool", Tool: "Read", Output: "ok"}})
+	tun.SetToolGuard(false, false)
+	rt.analyzeCLIGuardrail(sctx2, db.Agent{ID: "AGT1"}, trace)
+	if evs, _ := rt.db.ReadDebugEvents(ctx, sess2.ID, db.DebugGuardrail, 0); len(evs) != 0 {
+		t.Fatalf("events = %+v, want none (clean trace + warnings off)", evs)
 	}
 }
 
