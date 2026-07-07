@@ -37,9 +37,9 @@ Her aşamada `tsc -b` + `vite build` yeşil; eslint problem sayısı 116 → 102
   `shared/components/markdown/` · `hooks/`+`lib/` → feature'a aitse
   `features/<domain>/`, genel ise `shared/hooks|lib/`, app-kabuğuysa `app/`.
   05 ve öncesi tarihli dokümanlardaki eski yollar bu tabloyla okunmalı.
-- Ölü dosya adayları (0 import, silinmedi): `features/agents/AgentRoster.tsx`,
+- Ölü dosyalar silindi (0 import): `features/agents/AgentRoster.tsx`,
   `features/sessions/SpawnSessionModal.tsx`, `shared/hooks/useResizableWidth.ts`,
-  `app/App.css`.
+  `app/App.css` — gerekirse git geçmişinden geri alınabilir.
 
 ## Self-healing Faz F: hata→ders döngüsü + Ayarlar UI ✅ (2026-07-07)
 
