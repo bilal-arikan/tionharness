@@ -37,7 +37,7 @@ func TestPostJSON_SuccessSendsHeadersAndBody(t *testing.T) {
 		OK bool `json:"ok"`
 		N  int  `json:"n"`
 	}
-	status, raw, err := postJSON(context.Background(), srv.Client(), "test", srv.URL,
+	status, raw, _, err := postJSON(context.Background(), srv.Client(), "test", srv.URL,
 		map[string]string{"X-Test": "1"}, map[string]any{"hi": "there"}, &out)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -70,7 +70,7 @@ func TestPostJSON_Non200ReturnsStatusAndRaw(t *testing.T) {
 	defer srv.Close()
 
 	var out map[string]any
-	status, raw, err := postJSON(context.Background(), srv.Client(), "test", srv.URL, nil, map[string]any{}, &out)
+	status, raw, _, err := postJSON(context.Background(), srv.Client(), "test", srv.URL, nil, map[string]any{}, &out)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestPostJSON_DecodeFailureWrapsPrefix(t *testing.T) {
 	defer srv.Close()
 
 	var out map[string]any
-	_, _, err := postJSON(context.Background(), srv.Client(), "myprov", srv.URL, nil, map[string]any{}, &out)
+	_, _, _, err := postJSON(context.Background(), srv.Client(), "myprov", srv.URL, nil, map[string]any{}, &out)
 	if err == nil {
 		t.Fatal("expected decode error, got nil")
 	}
@@ -105,7 +105,7 @@ func TestPostJSON_TransportError(t *testing.T) {
 	srv.Close() // close immediately so the request fails to connect
 
 	var out map[string]any
-	_, _, err := postJSON(context.Background(), client, "myprov", srv.URL, nil, map[string]any{}, &out)
+	_, _, _, err := postJSON(context.Background(), client, "myprov", srv.URL, nil, map[string]any{}, &out)
 	if err == nil {
 		t.Fatal("expected transport error, got nil")
 	}
@@ -130,7 +130,7 @@ func TestPostJSON_RetriesThenSucceeds(t *testing.T) {
 	var out struct {
 		OK bool `json:"ok"`
 	}
-	status, _, err := postJSON(context.Background(), srv.Client(), "test", srv.URL, nil, map[string]any{}, &out)
+	status, _, _, err := postJSON(context.Background(), srv.Client(), "test", srv.URL, nil, map[string]any{}, &out)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestPostJSON_RetryExhaustionReturnsLastResponse(t *testing.T) {
 	defer srv.Close()
 
 	var out map[string]any
-	status, raw, err := postJSON(context.Background(), srv.Client(), "test", srv.URL, nil, map[string]any{}, &out)
+	status, raw, _, err := postJSON(context.Background(), srv.Client(), "test", srv.URL, nil, map[string]any{}, &out)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err) // exhausted retries surface the body, not a transport error
 	}
@@ -179,7 +179,7 @@ func TestPostJSON_NonRetryableStatusNotRetried(t *testing.T) {
 	defer srv.Close()
 
 	var out map[string]any
-	status, _, err := postJSON(context.Background(), srv.Client(), "test", srv.URL, nil, map[string]any{}, &out)
+	status, _, _, err := postJSON(context.Background(), srv.Client(), "test", srv.URL, nil, map[string]any{}, &out)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

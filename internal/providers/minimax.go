@@ -266,18 +266,18 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 	headers := map[string]string{"Authorization": "Bearer " + m.apiKey}
 
 	var parsed oaiResp
-	status, raw, err := postJSON(ctx, m.client, m.name, m.baseURL+"/chat/completions", headers, body, &parsed)
+	status, raw, retryAfter, err := postJSON(ctx, m.client, m.name, m.baseURL+"/chat/completions", headers, body, &parsed)
 	if err != nil {
 		return nil, err
 	}
 	if parsed.Error != nil {
-		return nil, fmt.Errorf("%s API error (%s): %s", m.name, parsed.Error.Type, parsed.Error.Message)
+		return nil, fmt.Errorf("%s API error (%s): %s%s", m.name, parsed.Error.Type, parsed.Error.Message, RetryAfterSuffix(retryAfter))
 	}
 	if parsed.BaseResp != nil && parsed.BaseResp.StatusCode != 0 {
 		return nil, fmt.Errorf("%s API error (%d): %s", m.name, parsed.BaseResp.StatusCode, parsed.BaseResp.StatusMsg)
 	}
 	if status != http.StatusOK {
-		return nil, fmt.Errorf("%s HTTP %d: %s", m.name, status, string(raw))
+		return nil, fmt.Errorf("%s HTTP %d: %s%s", m.name, status, string(raw), RetryAfterSuffix(retryAfter))
 	}
 	if len(parsed.Choices) == 0 {
 		return nil, fmt.Errorf("%s: empty response", m.name)

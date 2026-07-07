@@ -131,3 +131,25 @@ func TestDecideRecovery_ProviderRetry(t *testing.T) {
 		t.Errorf("overflow with retry budget: compact=false, want compact path")
 	}
 }
+
+// The server's Retry-After hint (threaded through the error text by the
+// provider) overrides the computed backoff, capped at maxRetryAfterWait.
+func TestDecideRecovery_RetryAfterHint(t *testing.T) {
+	cfg := recoveryConfig{maxProviderRetries: 2}
+
+	d := decideRecovery(nil, errors.New("anthropic HTTP 429: rate limited (retry-after: 7s)"), loopState{}, cfg)
+	if !d.cont || d.backoff != 7*time.Second {
+		t.Errorf("backoff = %v, want the server's 7s hint", d.backoff)
+	}
+
+	d = decideRecovery(nil, errors.New("anthropic HTTP 429: rate limited (retry-after: 3600s)"), loopState{}, cfg)
+	if d.backoff != maxRetryAfterWait {
+		t.Errorf("backoff = %v, want capped at %v", d.backoff, maxRetryAfterWait)
+	}
+
+	// No hint: the computed jittered backoff applies (nonzero).
+	d = decideRecovery(nil, errors.New("anthropic HTTP 529: overloaded_error"), loopState{}, cfg)
+	if d.backoff <= 0 {
+		t.Errorf("no hint: computed backoff missing")
+	}
+}

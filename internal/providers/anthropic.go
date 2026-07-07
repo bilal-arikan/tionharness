@@ -457,7 +457,7 @@ type anthropicResp struct {
 		Explanation string `json:"explanation"`
 	} `json:"stop_details"`
 	Model string `json:"model"`
-	Usage      struct {
+	Usage struct {
 		InputTokens              int `json:"input_tokens"`
 		OutputTokens             int `json:"output_tokens"`
 		CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
@@ -535,11 +535,14 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	}
 
 	var parsed anthropicResp
-	status, raw, err := postJSON(ctx, a.client, a.name, a.baseURL, headers, body, &parsed)
+	status, raw, retryAfter, err := postJSON(ctx, a.client, a.name, a.baseURL, headers, body, &parsed)
 	if err != nil {
 		return nil, err
 	}
 	if status != http.StatusOK {
+		// Surface the server's own wait hint so the turn-level retry layer can
+		// honor it instead of guessing a backoff (parsed by agent errclass).
+		raSuffix := RetryAfterSuffix(retryAfter)
 		if parsed.Error != nil {
 			msg := parsed.Error.Message
 			// Fable 5 requires 30-day data retention: a ZDR/short-retention org
@@ -548,9 +551,9 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 			if AlwaysOnThinking(model) && strings.Contains(strings.ToLower(msg), "retention") {
 				msg += " (hint: Claude Fable 5 requires 30-day data retention; organizations configured for zero/short retention get 400 on every request — check the org's data-retention setting, not the request)"
 			}
-			return nil, fmt.Errorf("anthropic API error (%s): %s", parsed.Error.Type, msg)
+			return nil, fmt.Errorf("anthropic API error (%s): %s%s", parsed.Error.Type, msg, raSuffix)
 		}
-		return nil, fmt.Errorf("anthropic HTTP %d: %s", status, string(raw))
+		return nil, fmt.Errorf("anthropic HTTP %d: %s%s", status, string(raw), raSuffix)
 	}
 
 	var text string
@@ -622,8 +625,8 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		ContainerID: containerID,
 		StopDetails: stopDetails,
 		StopReason:  parsed.StopReason,
-		Model:      parsed.Model,
-		Trace:      trace,
+		Model:       parsed.Model,
+		Trace:       trace,
 		Usage: Usage{
 			InputTokens:      parsed.Usage.InputTokens,
 			OutputTokens:     parsed.Usage.OutputTokens,
@@ -672,7 +675,7 @@ func (a *Anthropic) CountTokens(ctx context.Context, req Request) (int, error) {
 			Message string `json:"message"`
 		} `json:"error"`
 	}
-	status, raw, err := postJSON(ctx, a.client, a.name, a.baseURL+"/count_tokens", headers, body, &parsed)
+	status, raw, _, err := postJSON(ctx, a.client, a.name, a.baseURL+"/count_tokens", headers, body, &parsed)
 	if err != nil {
 		return 0, err
 	}

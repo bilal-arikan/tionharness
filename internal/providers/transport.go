@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -72,6 +73,37 @@ func parseRetryAfter(h string) time.Duration {
 		return time.Duration(secs) * time.Second
 	}
 	return 0
+}
+
+// RetryAfterSuffix renders the machine-readable wait-hint suffix providers
+// append to a transient-failure error message, e.g. " (retry-after: 30s)".
+// "" when the server sent no hint. Parsed back by ParseRetryAfterHint.
+func RetryAfterSuffix(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (retry-after: %ds)", int(d.Seconds()))
+}
+
+// retryAfterHintRe matches the suffix produced by RetryAfterSuffix.
+var retryAfterHintRe = regexp.MustCompile(`\(retry-after: (\d+)s\)`)
+
+// ParseRetryAfterHint extracts the server's wait hint from a provider error
+// message (the RetryAfterSuffix marker). 0 when absent — callers fall back to
+// their own computed backoff.
+func ParseRetryAfterHint(err error) time.Duration {
+	if err == nil {
+		return 0
+	}
+	m := retryAfterHintRe.FindStringSubmatch(err.Error())
+	if m == nil {
+		return 0
+	}
+	secs, aerr := strconv.Atoi(m[1])
+	if aerr != nil || secs <= 0 {
+		return 0
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // doWithRetry sends the request produced by build, retrying transient failures
@@ -137,17 +169,19 @@ func doWithRetry(ctx context.Context, client *http.Client, prefix string, build 
 }
 
 // postJSON marshals body to JSON, POSTs it to url with the given headers, reads
-// the full response, and decodes it into out. It returns the HTTP status code
-// and the raw body so callers can apply provider-specific error handling (e.g.
-// vendor error envelopes that arrive with a 200, or non-200 fallbacks).
+// the full response, and decodes it into out. It returns the HTTP status code,
+// the raw body and the response's Retry-After delay (0 when absent) so callers
+// can apply provider-specific error handling (e.g. vendor error envelopes that
+// arrive with a 200, or non-200 fallbacks) and surface the server's own wait
+// hint to the turn-level retry layer.
 //
 // Transient failures are retried (see doWithRetry). A decode failure is reported
 // with the status code attached so the caller can surface a useful message. The
 // prefix names the provider for error wrapping.
-func postJSON(ctx context.Context, client *http.Client, prefix, url string, headers map[string]string, body, out any) (int, []byte, error) {
+func postJSON(ctx context.Context, client *http.Client, prefix, url string, headers map[string]string, body, out any) (int, []byte, time.Duration, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, 0, err
 	}
 
 	resp, err := doWithRetry(ctx, client, prefix, func() (*http.Request, error) {
@@ -162,19 +196,20 @@ func postJSON(ctx context.Context, client *http.Client, prefix, url string, head
 		return req, nil
 	})
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, 0, err
 	}
 	defer resp.Body.Close()
+	retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return resp.StatusCode, nil, err
+		return resp.StatusCode, nil, retryAfter, err
 	}
 
 	if err := json.Unmarshal(raw, out); err != nil {
-		return resp.StatusCode, raw, fmt.Errorf("%s decode (status %d): %w", prefix, resp.StatusCode, err)
+		return resp.StatusCode, raw, retryAfter, fmt.Errorf("%s decode (status %d): %w", prefix, resp.StatusCode, err)
 	}
-	return resp.StatusCode, raw, nil
+	return resp.StatusCode, raw, retryAfter, nil
 }
 
 // postSSE POSTs body and streams the Server-Sent-Events response, invoking

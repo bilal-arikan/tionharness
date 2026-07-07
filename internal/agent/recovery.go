@@ -34,6 +34,10 @@ const (
 	termContextExhausted  termReason = "context_window_exhausted"
 )
 
+// maxRetryAfterWait caps how long a server-sent Retry-After hint may delay the
+// turn-level retry — beyond this, waiting inside the turn is worse than failing.
+const maxRetryAfterWait = 60 * time.Second
+
 // loopState carries the single-shot recovery guards across loop iterations. The
 // guards make every recovery path fire at most its allotted number of times, so
 // a stuck model can never spin forever inside one turn.
@@ -85,10 +89,20 @@ func decideRecovery(resp *providers.Response, callErr error, st loopState, cfg r
 		case cls == errCancelled:
 			return decision{term: termCancelled, err: callErr}
 		// Transient provider faults (429/5xx/timeout) are retried with the SAME
-		// request after a jittered backoff, bounded by the per-turn budget.
-		// Deterministic classes (auth/billing/unknown) never enter this path.
+		// request after a backoff, bounded by the per-turn budget. The server's
+		// own Retry-After hint (threaded through the error text) overrides the
+		// computed jittered backoff, capped so a hostile/huge hint cannot stall
+		// a turn for minutes. Deterministic classes (auth/billing/unknown)
+		// never enter this path.
 		case cls.retryable() && st.providerRetries < cfg.maxProviderRetries:
-			return decision{cont: true, reason: contProviderRetry, backoff: retryBackoff(st.providerRetries), err: callErr}
+			wait := retryBackoff(st.providerRetries)
+			if ra := providers.ParseRetryAfterHint(callErr); ra > 0 {
+				if ra > maxRetryAfterWait {
+					ra = maxRetryAfterWait
+				}
+				wait = ra
+			}
+			return decision{cont: true, reason: contProviderRetry, backoff: wait, err: callErr}
 		default:
 			return decision{term: termProviderErr, err: callErr}
 		}
