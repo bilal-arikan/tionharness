@@ -240,6 +240,7 @@ func (s *Server) applySettings() {
 	s.tun.SetServerCompaction(cur.AnthropicServerCompaction)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
 	s.tun.SetProviderRetryMax(cur.MaxProviderRetries)
+	s.tun.SetToolGuard(cur.ToolGuardWarnings, cur.ToolGuardHardStop)
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
 	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold, cur.CompactModel)
 	if s.backups != nil {

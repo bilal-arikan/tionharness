@@ -317,6 +317,12 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.MaxTokenRetries, p.MaxTokenRetries)
 	applyInt(&next.ReactiveKeepRecent, p.ReactiveKeepRecent)
 	applyInt(&next.MaxProviderRetries, p.MaxProviderRetries)
+	if p.ToolGuardWarnings != nil {
+		next.ToolGuardWarnings = *p.ToolGuardWarnings
+	}
+	if p.ToolGuardHardStop != nil {
+		next.ToolGuardHardStop = *p.ToolGuardHardStop
+	}
 	applyInt(&next.MaxOutputTokens, p.MaxOutputTokens)
 
 	if p.CompactToolOutput != nil {

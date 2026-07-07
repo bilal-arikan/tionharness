@@ -219,6 +219,12 @@ type Settings struct {
 	MaxTokenRetries    int  `json:"maxTokenRetries"`    // resume attempts after the output cap (0 = disabled)
 	ReactiveKeepRecent int  `json:"reactiveKeepRecent"` // in-flight messages kept verbatim when compacting
 	MaxProviderRetries int  `json:"maxProviderRetries"` // transient provider-fault retries per turn (0 = disabled)
+	// Tool-loop guardrail: per-turn loop detection over tool calls. Warnings
+	// append recovery guidance to failing tool results; the hard stop
+	// additionally blocks repeated identical failures and halts a turn whose
+	// tool keeps failing (circuit breaker, opt-in).
+	ToolGuardWarnings bool `json:"toolGuardWarnings"`
+	ToolGuardHardStop bool `json:"toolGuardHardStop"`
 	// MaxOutputTokens is the generation cap (max output tokens) applied when a
 	// turn leaves it unset. 0 = auto: resolve per model family (providers.
 	// MaxOutputFor), which keeps answers from being truncated at the providers'
@@ -365,6 +371,8 @@ func Default() Settings {
 		MaxTokenRetries:    3,
 		ReactiveKeepRecent: 6,
 		MaxProviderRetries: 2,
+		ToolGuardWarnings:  true,
+		ToolGuardHardStop:  false,
 		MaxOutputTokens:    0, // auto: per-model family default
 
 		// Both systems on by default, the external agent project-style: System A (free, deterministic)
@@ -498,6 +506,8 @@ type DTO struct {
 	MaxTokenRetries    int  `json:"maxTokenRetries"`
 	ReactiveKeepRecent int  `json:"reactiveKeepRecent"`
 	MaxProviderRetries int  `json:"maxProviderRetries"`
+	ToolGuardWarnings  bool `json:"toolGuardWarnings"`
+	ToolGuardHardStop  bool `json:"toolGuardHardStop"`
 	MaxOutputTokens    int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   bool   `json:"compactToolOutput"`
@@ -609,6 +619,8 @@ func (s Settings) ToDTO() DTO {
 		MaxTokenRetries:    s.MaxTokenRetries,
 		ReactiveKeepRecent: s.ReactiveKeepRecent,
 		MaxProviderRetries: s.MaxProviderRetries,
+		ToolGuardWarnings:  s.ToolGuardWarnings,
+		ToolGuardHardStop:  s.ToolGuardHardStop,
 		MaxOutputTokens:    s.MaxOutputTokens,
 
 		CompactToolOutput:   s.CompactToolOutput,
@@ -713,6 +725,8 @@ type Patch struct {
 	MaxTokenRetries    *int  `json:"maxTokenRetries"`
 	ReactiveKeepRecent *int  `json:"reactiveKeepRecent"`
 	MaxProviderRetries *int  `json:"maxProviderRetries"`
+	ToolGuardWarnings  *bool `json:"toolGuardWarnings"`
+	ToolGuardHardStop  *bool `json:"toolGuardHardStop"`
 	MaxOutputTokens    *int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   *bool   `json:"compactToolOutput"`

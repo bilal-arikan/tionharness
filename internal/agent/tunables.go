@@ -68,6 +68,13 @@ type Tunables struct {
 	maxOutputTokens    int  // generation cap override (0 = auto: per-model family)
 	providerRetryMax   int  // transient provider-fault retries per turn (<0 → default, 0 = disabled)
 
+	// Tool-loop guardrail (self-healing Faz B): per-turn loop detection over
+	// tool calls. Warnings append recovery guidance to failing results (on by
+	// default); the hard stop additionally blocks/halts past the upper
+	// thresholds (opt-in circuit breaker).
+	toolGuardWarnings bool
+	toolGuardHardStop bool
+
 	// Tool-output token optimization — two independent, parallel systems.
 	// System A: deterministic compaction (free, rule-based, every result).
 	compactDeterministic bool // master switch for System A
@@ -208,6 +215,9 @@ func NewTunables() *Tunables {
 		maxTokenRetries:    DefaultMaxTokenRetries,
 		reactiveKeepRecent: DefaultReactiveKeepRecent,
 		providerRetryMax:   DefaultProviderRetryMax,
+		// Guardrail warnings on by default (gentle nudge appended to failing
+		// results); the hard stop stays opt-in from settings.
+		toolGuardWarnings: true,
 		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
 		// dir by default — the safety brake for the otherwise-unconfined tools.
 		autonomousConfine: true,
@@ -463,6 +473,31 @@ func (t *Tunables) ProviderRetryMax() int {
 		return DefaultProviderRetryMax
 	}
 	return t.providerRetryMax
+}
+
+// SetToolGuard configures the tool-loop guardrail: whether failing results get
+// warning guidance appended, and whether the hard stop (block/halt thresholds)
+// is armed.
+func (t *Tunables) SetToolGuard(warnings, hardStop bool) {
+	t.mu.Lock()
+	t.toolGuardWarnings = warnings
+	t.toolGuardHardStop = hardStop
+	t.mu.Unlock()
+}
+
+// ToolGuardWarnings reports whether guardrail warning hints are enabled.
+func (t *Tunables) ToolGuardWarnings() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.toolGuardWarnings
+}
+
+// ToolGuardHardStop reports whether the guardrail circuit breaker (block/halt)
+// is armed.
+func (t *Tunables) ToolGuardHardStop() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.toolGuardHardStop
 }
 
 // ReactiveKeepRecent returns the in-flight compaction tail size (default when <2,

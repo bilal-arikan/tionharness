@@ -30,6 +30,8 @@ const (
 	termProviderErr       termReason = "provider_error"
 	termCancelled         termReason = "cancelled"
 	termMaxTokenExhausted termReason = "max_output_tokens_exhausted"
+	termGuardrailHalt     termReason = "guardrail_halt"
+	termContextExhausted  termReason = "context_window_exhausted"
 )
 
 // loopState carries the single-shot recovery guards across loop iterations. The
@@ -99,6 +101,17 @@ func decideRecovery(resp *providers.Response, callErr error, st loopState, cfg r
 			return decision{cont: true, reason: contMaxTokenResume, inject: resumeMessage()}
 		}
 		return decision{term: termMaxTokenExhausted}
+	}
+	// The model hit its CONTEXT WINDOW mid-turn (Claude 4.5+ reports it as a
+	// stop reason rather than an error). Same one-shot policy as an overflow
+	// error: compact the in-flight history and retry; a repeat is terminal —
+	// surfaced as context_window_exhausted, NOT "completed", because the reply
+	// is truncated and the trace should say so.
+	if resp != nil && resp.StopReason == providers.StopContextWindow {
+		if cfg.reactiveCompact && !st.compacted {
+			return decision{compact: true, reason: contCompactRetry}
+		}
+		return decision{term: termContextExhausted}
 	}
 	return decision{term: termCompleted}
 }

@@ -393,6 +393,14 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		maxProviderRetries: r.tun.ProviderRetryMax(),
 	}
 	keepRecent := r.tun.ReactiveKeepRecent()
+	// Tool-loop guardrail (self-healing Faz B): per-turn loop detection. Warnings
+	// ride the failing tool results; block/halt fire only when the hard stop is
+	// enabled in settings.
+	guard := newToolGuard(toolGuardConfig{
+		warnings: r.tun.ToolGuardWarnings(),
+		hardStop: r.tun.ToolGuardHardStop(),
+	})
+	guardHaltReason := ""
 	// partial accumulates answer text across max-output-token resumes, so the
 	// stitched full answer is returned even though it arrived in capped pieces.
 	var partial strings.Builder
@@ -619,6 +627,27 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				continue
 			}
 
+			// Loop guardrail (pre-execution): a call past a block threshold is
+			// refused with a synthetic error result (pairing invariant holds);
+			// past the halt threshold the whole turn ends after this batch.
+			// Hook/permission denials above intentionally never reach the
+			// guardrail counters — only real executions are observed.
+			if verdict, greason := guard.check(call); verdict != guardAllow {
+				name := "block"
+				if verdict == guardHalt {
+					name = "halt"
+					guardHaltReason = greason
+				}
+				r.logger.Warn("tool call blocked by loop guardrail", "agent", agent.ID, "tool", call.Name, "verdict", name, "reason", greason)
+				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: name, Detail: call.Name + ": " + greason, Err: true})
+				denyMsg := blockedResultMsg(greason)
+				results = append(results, providers.ToolResult{CallID: call.ID, Content: denyMsg, IsError: true})
+				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "guardrail_" + name, Text: denyMsg, IsError: true}
+				steps = append(steps, st)
+				emit(st)
+				continue
+			}
+
 			// Attach a per-call diff sink so file-mutating built-ins (write_file /
 			// edit_file) can surface a structured diff for the UI card below. A
 			// per-call subagent sink lets run_subagent hand back its nested trace so
@@ -704,6 +733,14 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				res.Content = strings.TrimSpace(res.Content + "\n\n" + post.extra)
 			}
 
+			// Loop guardrail (post-execution): update the counters and, when a
+			// warning threshold was crossed, append the recovery guidance right
+			// onto this result so the model reads it where the failure happened.
+			if hint := guard.observe(call, res); hint != "" {
+				res.Content += hint
+				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "warn", Detail: call.Name})
+			}
+
 			results = append(results, res)
 			st := TurnStep{
 				Kind:    StepTool,
@@ -754,6 +791,20 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			OnlyToolResults: progBatch,
 		})
 		pendingProgrammatic = progBatch
+		// Guardrail halt: the batch's results are all recorded (pairing holds),
+		// so this is a clean, controlled turn end — not an error return. The
+		// recovery step tells the transcript (and Faz D's stuck counter) why.
+		if guardHaltReason != "" {
+			r.logger.Warn("turn halted by loop guardrail", "agent", agent.ID, "reason", guardHaltReason)
+			rec := TurnStep{
+				Kind:   StepRecovery,
+				Reason: string(termGuardrailHalt),
+				Text:   "Araç döngüsü guardrail tarafından durduruldu: " + guardHaltReason,
+			}
+			steps = append(steps, rec)
+			emit(rec)
+			return last, steps, nil
+		}
 		// Phase 3: drop lazy tools activated but left unused for a while, so a long
 		// turn does not keep shipping schemas the model is no longer reaching for.
 		if pruned := active.Prune(activeToolMaxIdle); len(pruned) > 0 {
