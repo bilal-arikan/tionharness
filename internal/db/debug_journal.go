@@ -39,6 +39,7 @@ const (
 	DebugCacheBreak = "cache_break" // the prompt-cache warm prefix was lost (attributed reason in Name/Detail)
 	DebugRepair     = "repair"      // message-sequence repair healed the in-flight history (rule in Name)
 	DebugGuardrail  = "guardrail"   // tool-loop guardrail decision (warn/block/halt in Name, tool in Detail)
+	DebugLesson     = "lesson"      // a failure lesson was distilled and stored (tool in Name, lesson in Detail)
 )
 
 // DebugEvent is one structured observability record. Fields are sparse

@@ -242,6 +242,7 @@ func (s *Server) applySettings() {
 	s.tun.SetProviderRetryMax(cur.MaxProviderRetries)
 	s.tun.SetToolGuard(cur.ToolGuardWarnings, cur.ToolGuardHardStop)
 	s.tun.SetStuckTurnThreshold(cur.StuckTurnThreshold)
+	s.tun.SetLessonReflect(cur.LessonReflect)
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
 	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold, cur.CompactModel)
 	if s.backups != nil {

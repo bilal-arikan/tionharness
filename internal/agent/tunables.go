@@ -80,6 +80,11 @@ type Tunables struct {
 	// tagged "stuck" and its autonomous turns are refused. 0 disables; <0 → default.
 	stuckTurnThreshold int
 
+	// lessonReflect (hata→ders döngüsü): a badly-ended turn spawns a background
+	// reflection that distills the failure into a stored lesson, injected into
+	// future turns' dynamic context. Costs one cheap-model call per failing turn.
+	lessonReflect bool
+
 	// Tool-output token optimization — two independent, parallel systems.
 	// System A: deterministic compaction (free, rule-based, every result).
 	compactDeterministic bool // master switch for System A
@@ -224,6 +229,9 @@ func NewTunables() *Tunables {
 		// results); the hard stop stays opt-in from settings.
 		toolGuardWarnings:  true,
 		stuckTurnThreshold: DefaultStuckTurnThreshold,
+		// Lesson reflection on by default: it only fires on failing turns (rare)
+		// and uses the cheap title-model override when configured.
+		lessonReflect: true,
 		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
 		// dir by default — the safety brake for the otherwise-unconfined tools.
 		autonomousConfine: true,
@@ -523,6 +531,20 @@ func (t *Tunables) StuckTurnThreshold() int {
 		return DefaultStuckTurnThreshold
 	}
 	return t.stuckTurnThreshold
+}
+
+// SetLessonReflect toggles the failure→lesson reflection loop.
+func (t *Tunables) SetLessonReflect(enabled bool) {
+	t.mu.Lock()
+	t.lessonReflect = enabled
+	t.mu.Unlock()
+}
+
+// LessonReflect reports whether the failure→lesson reflection loop is on.
+func (t *Tunables) LessonReflect() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.lessonReflect
 }
 
 // ReactiveKeepRecent returns the in-flight compaction tail size (default when <2,

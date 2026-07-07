@@ -1131,6 +1131,11 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	if g := r.autonomousGoalBlock(ctx); g != "" {
 		out += "\n\n" + g
 	}
+	// Failure lessons (hata→ders döngüsü): the newest distilled lessons ride
+	// every headless turn so a fresh context does not repeat known failures.
+	if lb := r.LessonsContextBlock(ctx); lb != "" {
+		out += "\n\n" + lb
+	}
 	return out
 }
 

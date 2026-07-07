@@ -143,6 +143,12 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if ab := artifactsContextBlock(ctx, wsp.DB, session.ID); ab != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + ab)
 	}
+	// Failure lessons (hata→ders döngüsü): the newest distilled lessons from
+	// past failed turns, workspace-wide, so known failure shapes are not
+	// repeated. Volatile side (the set accrues over time), never cached.
+	if lb := wsp.Runtime.LessonsContextBlock(ctx); lb != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + lb)
+	}
 	// Surface the active todo checklist so the agent keeps tracking it even after
 	// the original todo_write message scrolls out of context / is compacted away.
 	// On a fresh session it falls back to the durable progress file from a previous

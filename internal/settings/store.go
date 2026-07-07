@@ -325,6 +325,9 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.ToolGuardHardStop = *p.ToolGuardHardStop
 	}
 	applyInt(&next.StuckTurnThreshold, p.StuckTurnThreshold)
+	if p.LessonReflect != nil {
+		next.LessonReflect = *p.LessonReflect
+	}
 	applyInt(&next.MaxOutputTokens, p.MaxOutputTokens)
 
 	if p.CompactToolOutput != nil {

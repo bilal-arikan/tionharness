@@ -70,6 +70,10 @@ type DB struct {
 	debugMu    sync.Mutex
 	debugCount map[string]int
 
+	// lessonsMu guards the workspace-wide lessons.jsonl sidecar (failure
+	// lessons, self-healing) — independent of mu for the same reason as debugMu.
+	lessonsMu sync.Mutex
+
 	// counters holds the per-entity monotonic id sequence (prefix -> last n).
 	// It is persisted to counters.json so a number is never reused, even across
 	// deletions or restarts. Guarded by its own mutex (independent of mu) so it

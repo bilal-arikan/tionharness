@@ -41,6 +41,13 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 	if err != nil {
 		return
 	}
+
+	// Hata→ders döngüsü: a badly-ended turn spawns a background reflection that
+	// distills the failure into a stored lesson (own gate, independent of
+	// tagging — see lessons.go). Placed here because this is the one funnel
+	// every turn-completion path (chat/spawn/schedule/wake/auto-continue) hits.
+	r.maybeReflectLessons(ctx, sessionID, steps, turnErr)
+
 	var add []string
 
 	// Turn-level failure → "error" (skip a clean user cancel).

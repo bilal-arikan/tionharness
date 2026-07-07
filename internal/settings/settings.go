@@ -236,6 +236,11 @@ type Settings struct {
 	// before a session is tagged "stuck" and its AUTONOMOUS turns are refused
 	// until resolved. 0 disables the gate.
 	StuckTurnThreshold int `json:"stuckTurnThreshold"`
+	// LessonReflect (hata→ders döngüsü): after a badly-ended turn a background
+	// reflection distills the failure into a stored lesson (workspace-wide
+	// lessons.jsonl), injected into future turns' dynamic context. One
+	// cheap-model call per failing turn.
+	LessonReflect bool `json:"lessonReflect"`
 	// MaxOutputTokens is the generation cap (max output tokens) applied when a
 	// turn leaves it unset. 0 = auto: resolve per model family (providers.
 	// MaxOutputFor), which keeps answers from being truncated at the providers'
@@ -390,6 +395,7 @@ func Default() Settings {
 		ToolGuardWarnings:  true,
 		ToolGuardHardStop:  false,
 		StuckTurnThreshold: 3,
+		LessonReflect:      true,
 		MaxOutputTokens:    0, // auto: per-model family default
 
 		// Both systems on by default, the external agent project-style: System A (free, deterministic)
@@ -527,6 +533,7 @@ type DTO struct {
 	ToolGuardWarnings  bool `json:"toolGuardWarnings"`
 	ToolGuardHardStop  bool `json:"toolGuardHardStop"`
 	StuckTurnThreshold int  `json:"stuckTurnThreshold"`
+	LessonReflect      bool `json:"lessonReflect"`
 	MaxOutputTokens    int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   bool   `json:"compactToolOutput"`
@@ -642,6 +649,7 @@ func (s Settings) ToDTO() DTO {
 		ToolGuardWarnings:  s.ToolGuardWarnings,
 		ToolGuardHardStop:  s.ToolGuardHardStop,
 		StuckTurnThreshold: s.StuckTurnThreshold,
+		LessonReflect:      s.LessonReflect,
 		MaxOutputTokens:    s.MaxOutputTokens,
 
 		CompactToolOutput:   s.CompactToolOutput,
@@ -750,6 +758,7 @@ type Patch struct {
 	ToolGuardWarnings  *bool `json:"toolGuardWarnings"`
 	ToolGuardHardStop  *bool `json:"toolGuardHardStop"`
 	StuckTurnThreshold *int  `json:"stuckTurnThreshold"`
+	LessonReflect      *bool `json:"lessonReflect"`
 	MaxOutputTokens    *int  `json:"maxOutputTokens"`
 
 	CompactToolOutput   *bool   `json:"compactToolOutput"`
