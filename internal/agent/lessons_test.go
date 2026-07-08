@@ -63,6 +63,21 @@ func TestLessonSignature_StableAndToolScoped(t *testing.T) {
 	}
 }
 
+func TestCleanLessonText(t *testing.T) {
+	if got := cleanLessonText("NONE"); got != "" {
+		t.Errorf("bare NONE = %q, want empty", got)
+	}
+	if got := cleanLessonText("NONE\n\nWait — this is generalizable.\nUse a writable path."); got != "Wait — this is generalizable.\nUse a writable path." {
+		t.Errorf("leading NONE not stripped: %q", got)
+	}
+	if got := cleanLessonText("  a plain lesson  "); got != "a plain lesson" {
+		t.Errorf("plain lesson mangled: %q", got)
+	}
+	if got := cleanLessonText(""); got != "" {
+		t.Errorf("empty = %q", got)
+	}
+}
+
 func TestNormalizeErrSig(t *testing.T) {
 	got := normalizeErrSig("No such file: C:\\Users\\x\\a.txt (line 42)")
 	want := "no such file: <path> (line #)"

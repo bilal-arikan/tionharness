@@ -1,6 +1,50 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-07**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-08**
+
+## Self-healing devam turu: 8 adım + canlı E2E doğrulaması ✅ (2026-07-08)
+
+Detay: `_Docs/56-SELF-HEALING.md` "Devam turu" bölümü. Özet:
+`read_lessons`/`delete_lesson` araçları · ders yaşlandırma (45g) + signature
+normalizasyonu (yol/sayı) · ajan-öncelikli enjeksiyon · Retry-After hint'i
+turn-retry backoff'unda · CLI turlarına tur-sonu guardrail analizi (`cli_warn`) ·
+hatalı-tur dispatch'i (`FireTurnFailed`) + tek-tık "Stuck oturum onarıcısı"
+otomasyon şablonu · Debug viz'e Self-healing olayları bölümü. **Canlı E2E**
+(izole instance, gerçek fable-5): tool-error tag → guardrail → stuck zinciri →
+otomasyon → fixer → etiket/sayaç temizliği → ders doğumu → sonraki tura
+enjeksiyon uçtan uca doğrulandı; E2E'nin yakaladığı 4 bug düzeltildi
+(non-stream chat parity, CLI aux claude-home, SpawnTags omitempty, NONE artefaktı).
+
+## Bütçe/maliyet ekranı hesaplama düzeltmeleri (4 bulgu) ✅ (2026-07-08)
+
+Bütçe · oturum bilgisi · sohbet-debug · debug popup'larının hesap denetimi. Dört düzeltme, hepsi ortak `billing.PriceStat` + fiyat tablosu + `session_info` filler yolunda (tek nokta → dört ekran):
+- **claude-cli tahmini cache tasarrufu $0 idi → düzeltildi** (`billing.PriceStat`): estimated dalı maliyeti tahmin edip tasarrufu `0` bırakıyordu; artık `ep.CacheSavings(cacheRead)` da tahmin ediliyor (`priced=false` korunur). Varsayılan anahtarsız sağlayıcıda Tasarruf Merkezi/oturum kazancı/mesaj-debug artık gerçek cache ROI'yi gösteriyor.
+- **claude-cli cache-write primi 2× → 1.25×** (`providers.EstimateFor`): 1s-TTL primi (`CacheWrite1hMult`) yalnız native anthropic client'a özgü; Claude Code CLI 5dk TTL kullanır. Override sıfırlandı → ~%60 fazla fiyatlandırma giderildi.
+- **Bağlam penceresi çubuğu segment↔toplam** (`session_info.go`): "kullanılan" başlığı `+MsgOverhead` sayıyor, segmentler saymıyordu → çubuk %100'e ulaşmıyordu. `buildFillers` artık mesaj başına `conversation.MsgOverhead` ekliyor + `ContextTokens` filler toplamından türetiliyor (birebir). `MsgOverhead` dışa açıldı.
+- **"Tasarrufsuz maliyet" kartı tam-doğru baseline'a çevrildi** (`Price.CostNoCaching` + `billing.NoCacheCost` + `cumulative.noCacheCostUSD`): eski `cost + savings` cache-write primini içeride bırakıp senaryoyu şişiriyordu; artık cacheRead+cacheWrite tümü taban girdi fiyatından hesaplanan gerçek "caching yokmuş" tutarı gösteriliyor.
+- 260707-quick-pass benchmark verisi aritmetik olarak iç-tutarlı doğrulandı (1.25× ile); tek çelişki kod tarafındaki 2× regresyonuydu → yukarıda giderildi.
+- Regresyon: `billing_test.go` + `pricing_test.go`; backend build + test + frontend tsc yeşil. Detay `17-TOKEN-OPTIMIZASYON.md` §Hesaplama düzeltmeleri.
+
+## Shell-araç promptu artık gate'e dinamik bağlı (prompt ↔ katalog drift'i giderildi) ✅ (2026-07-08)
+
+**Sorun:** Statik workspace talimatları (`default-instructions.md` → `config/instructions.md`)
+`Bash`/`PowerShell`'i "core, always-available" diye koşulsuz reklam ediyordu. Ama shell
+araçları `buildRegistry`'de `r.tun.ShellEnabled()` gate'inin (+ backing shell varlığının)
+arkasında — gate kapalıyken hiç register edilmez. Sonuç: model çıplak `PowerShell` çağırıp
+`No such tool available: PowerShell … not enabled in this context` alıyordu (autotag bunu
+zaten self-recovered permission-deny sayıyor; fonksiyonel bug değil ama modeli yanıltıyordu).
+
+**Çözüm — dinamik render (tek-kaynak):**
+- Statik talimatlardan shell vaadi çıkarıldı; yalnız fs araçları (`Read/Write/Edit/LS/Glob/Grep`)
+  "always-on" kaldı. Shell satırı "gated — enabled olunca environment context söyler" notuna dönüştü.
+  (Hem embedded `internal/workspace/defaults/default-instructions.md` hem canlı WS10 `config/instructions.md`.)
+- Yeni `tools.ShellToolNames()` — `resolvePOSIXShell`/`resolvePowerShell` (araçların kendi resolver'ları)
+  ile hangi shell'lerin register edileceğini adıyla döner → advertised isim, kayıtla asla drift etmez.
+- Yeni `Runtime.ShellToolsContextBlock()` — gate açık + backing shell varsa Bash/PowerShell'i adıyla
+  duyurur, aksi halde boş string. **Volatile → dinamik suffix** (gate tur-ortası değişebilir):
+  chat yolu `composeTurnRequest` (EnvironmentContextBlock'tan hemen sonra) + headless
+  `autonomousDynamicSuffix`, `EnvironmentContextBlock` ile aynı OS/shell kimliğini paylaşır.
+- Build + vet + `internal/tools`/`internal/agent` testleri yeşil. Detay `53-CRAFTAGENT-PROMPT-PARITE.md`.
 
 ## Self-healing: Lessons UI + guardrail eşikleri ayarlara açıldı ✅ (2026-07-07)
 

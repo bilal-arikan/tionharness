@@ -143,8 +143,11 @@ func (r *Runtime) reflectLessons(ctx context.Context, sessionID string, evidence
 		r.logger.Warn("lesson reflection failed", "session", sessionID, "error", err)
 		return
 	}
-	text := strings.TrimSpace(resp.Text)
-	if text == "" || strings.EqualFold(text, "NONE") || len(text) > 1200 {
+	text := cleanLessonText(resp.Text)
+	if text == "" || len(text) > 1200 {
+		// Journal the deliberate skip so "reflection ran but stored nothing" is
+		// distinguishable from "reflection never ran" in debug.jsonl.
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugLesson, AgentID: agent.ID, Name: "none", Detail: truncateRunes(text, 80)})
 		return
 	}
 
@@ -166,6 +169,24 @@ func (r *Runtime) reflectLessons(ctx context.Context, sessionID string, evidence
 	}
 	r.logger.Info("lesson recorded", "session", sessionID, "tool", tool, "count", lesson.Count)
 	r.emitDebug(ctx, db.DebugEvent{Type: db.DebugLesson, AgentID: agent.ID, Name: tool, Detail: truncateRunes(text, 200)})
+}
+
+// cleanLessonText normalizes the reflector's reply: a model may open with
+// "NONE" and then reconsider mid-answer (seen live in the E2E), so leading
+// NONE/empty lines are stripped; a reply that is nothing but NONE — the
+// deliberate "not generalizable" verdict — collapses to "".
+func cleanLessonText(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	start := 0
+	for start < len(lines) {
+		l := strings.TrimSpace(lines[start])
+		if l == "" || strings.EqualFold(l, "NONE") {
+			start++
+			continue
+		}
+		break
+	}
+	return strings.TrimSpace(strings.Join(lines[start:], "\n"))
 }
 
 // lessonSignature builds the dedupe key for a failure shape: the failing tool

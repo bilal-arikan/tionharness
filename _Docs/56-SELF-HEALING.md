@@ -136,6 +136,48 @@ toggle'lar daha önce kaydedilmiyordu — düzeltildi).
   `store_lessons_test.go` (round-trip/dedupe/sıralama/cap/delete),
   `lessons_test.go` (kanıt toplama/signature/gate'ler/context bloğu).
 
+## Devam turu (2026-07-08): 8 adım + canlı E2E
+
+- **Ajan araçları:** `read_lessons` (RiskRead) / `delete_lesson` — tam ders seti +
+  id'lerle budama; `lessonReflect` gate'iyle kurulur.
+- **Yaşlandırma:** `db.LessonMaxAge` (45 gün) — tekrar etmeyen ders sonraki
+  AddLesson rewrite'ında düşer. **Signature normalizasyonu:** yol → `<path>`,
+  sayı dizileri → `#` (aynı hata şekli farklı dosya/satırda tek derse deduplanır).
+- **Ajan-öncelikli enjeksiyon:** `LessonsContextBlock(ctx, agentID)` — ajanın
+  kendi dersleri önce, sonra workspace havuzu (overfetch ×10, cap 5).
+- **Retry-After:** provider hata metnine ` (retry-after: Ns)` eki
+  (`RetryAfterSuffix`/`ParseRetryAfterHint`); `decideRecovery` sunucu hint'ini
+  hesaplanan backoff yerine kullanır (60s cap).
+- **CLI görünürlük paritesi:** `analyzeCLIGuardrail` — CLI trace'i tur sonunda
+  aynı sayaçlardan geçirilir, eşik aşan araç başına `guardrail/cli_warn` olayı
+  (analiz, müdahale yok).
+- **Stuck→onarım otomasyonu:** hatalı turlar artık ayrı `failedTurnHooks` ile
+  YALNIZ automation engine'e dispatch edilir (`FireTurnFailed`, AutoTagTurn
+  hunisinden; koordinasyon bilinçli hariç) — stuck etiketli oturumun BAŞARISIZ
+  turu otomasyonu tetikler. `stuck` da clear-parent-tags setine girdi (fixer
+  başarısı etiket+sayaç sıfırlar). Automations ekranında tek-tık **"🩹 Stuck
+  oturum onarıcısı"** şablonu (spawnTags=[], döngüsüz).
+- **Debug viz:** `SelfHealingEvents` — recovery/repair/guardrail/lesson
+  olayları tür rozetli liste olarak İş Akışı Görselleştirmeleri altında.
+
+### Canlı E2E doğrulaması (izole instance, gerçek claude-cli/fable-5)
+Doğrulanan zincir: başarısız Read×3 turu → `tool-error` auto-tag ✅ →
+`cli_warn` guardrail olayı ✅ → anomaly "Read 10/10 başarısız" ✅ → ölü
+provider'lı oturumda 3 tur hata → `error`+`stuck` tag, `stuckTurns=3` ✅ →
+failed-turn dispatch stuck-otomasyonunu ateşledi, fixer spawn ✅ → fixer
+başarısı parent'ın stuck etiketi+sayacını temizledi ✅ → EPERM turundan
+GERÇEK ders damıtıldı (`lesson recorded`, normalize signature) ✅ → sonraki
+turda ajan "Lessons from past failures" bloğunu kelimesi kelimesine gördü ✅.
+
+E2E'nin yakaladığı ve düzeltilen 4 bug: (1) non-stream `/api/chat`
+AutoTagTurn/FireTurnFinished çağırmıyordu; (2) CLI yardımcı çağrıları
+(title/summary/lesson) per-workspace claude-home seam'ini atlıyordu
+(`guardedComplete`'e SetConfigDir eklendi); (3) `Automation.SpawnTags`
+`omitempty` yüzünden kasıtlı `[]` persist'te kayboluyordu (fixer'lar kendini
+döngülüyordu); (4) reflector "NONE\n…reconsider" cevabında NONE artefaktı
+derse sızıyordu (`cleanLessonText`). Ayrıca NONE kararı artık `lesson/none`
+debug olayı olarak günlüklenir.
+
 ## Kapsam dışı / sıradaki adımlar
 - ~~Guardrail eşiklerinin settings'e açılması~~ ✅ (2026-07-07, 6 eşik ayarı).
 - ~~Lessons için UI görünürlüğü~~ ✅ (2026-07-07, API + LessonsList).
