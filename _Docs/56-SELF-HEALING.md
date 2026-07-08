@@ -159,6 +159,12 @@ toggle'lar daha önce kaydedilmiyordu — düzeltildi).
   oturum onarıcısı"** şablonu (spawnTags=[], döngüsüz).
 - **Debug viz:** `SelfHealingEvents` — recovery/repair/guardrail/lesson
   olayları tür rozetli liste olarak İş Akışı Görselleştirmeleri altında.
+- **Dosya-mutasyon verifier'ı** (`internal/tools/verifymutation.go`, hermes
+  `_record_file_mutation_result` paritesi): `Write`/`Edit`/`apply_patch`
+  başarılı yazım sonrası diski geri okuyup içeriği doğrular (≤1MB bayt-bayt,
+  üstü SHA-256). "Yazıldı" denilen ama AV/eşzamanlı yazar/dolu disk yüzünden
+  yere inmeyen mutasyon artık hatalı tool_result olur → guardrail sayaçları,
+  `tool-error` etiketi ve ders döngüsü normal hata gibi tepki verir.
 
 ### Canlı E2E doğrulaması (izole instance, gerçek claude-cli/fable-5)
 Doğrulanan zincir: başarısız Read×3 turu → `tool-error` auto-tag ✅ →

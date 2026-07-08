@@ -36,7 +36,7 @@ func NewFSReadFileTool(sb Sandbox, tracker *ReadTracker) FSReadFileTool {
 
 func (FSReadFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "Read",
+		Name:   "Read",
 		Strict: true, // API-side input validation (schema has additionalProperties:false; registry normalizes required)
 		Description: "Read a UTF-8 text file. Output is line-numbered (\"<lineno>\\t<content>\", cat -n style) — when copying text for Edit's old_string, strip the number+tab prefix. " +
 			"By default returns the first 2000 lines (up to 256KB); use offset (1-based start line) and limit (line count) to read a window of a large file. " +
@@ -206,6 +206,12 @@ func (t FSWriteFileTool) Call(ctx context.Context, input json.RawMessage) (strin
 	if err := os.WriteFile(abs, []byte(args.Content), 0o644); err != nil {
 		return "", err
 	}
+	// Mutation verifier (self-healing): confirm the bytes actually landed —
+	// a "successful" write clobbered by AV/concurrent writers must surface as
+	// an error, not let the agent build on a change that never happened.
+	if err := verifyMutationLanded(abs, []byte(args.Content)); err != nil {
+		return "", err
+	}
 	// Refresh the baseline to the content just authored, so a follow-up Write/Edit
 	// does not demand a re-Read of what this agent itself just wrote.
 	recordWritten(t.tracker, abs, []byte(args.Content))
@@ -299,6 +305,10 @@ func (t FSEditFileTool) Call(ctx context.Context, input json.RawMessage) (string
 		content = strings.Replace(old, args.OldString, args.NewString, 1)
 	}
 	if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
+		return "", err
+	}
+	// Mutation verifier (self-healing): the edit must actually be on disk.
+	if err := verifyMutationLanded(abs, []byte(content)); err != nil {
 		return "", err
 	}
 	// Refresh the baseline to the post-edit content so a chain of edits on the same

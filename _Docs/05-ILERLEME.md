@@ -2,6 +2,15 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-08**
 
+## Self-healing: dosya-mutasyon verifier'ı ✅ (2026-07-08)
+
+the external agent analizindeki "gereksiz adım optimizasyonu" maddesinin son boşluğu:
+`Write`/`Edit`/`apply_patch` başarılı yazım sonrası diski geri okuyup içeriğin
+gerçekten yere indiğini doğrular (`internal/tools/verifymutation.go`; ≤1MB
+bayt-bayt, üstü SHA-256; dosya-başına tek ekstra okuma). Uymuyorsa çağrı hatalı
+tool_result'a döner → mevcut self-healing zinciri (guardrail, tool-error tag,
+ders) devralır. Detay `56-SELF-HEALING.md`.
+
 ## Self-healing devam turu: 8 adım + canlı E2E doğrulaması ✅ (2026-07-08)
 
 Detay: `_Docs/56-SELF-HEALING.md` "Devam turu" bölümü. Özet:

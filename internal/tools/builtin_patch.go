@@ -138,6 +138,11 @@ func (t FSApplyPatchTool) Call(ctx context.Context, input json.RawMessage) (stri
 			if err := os.WriteFile(c.abs, []byte(c.content), 0o644); err != nil {
 				return "", fmt.Errorf("write %s failed after validation: %w", c.rel, err)
 			}
+			// Mutation verifier (self-healing): each patched file must actually
+			// be on disk as computed before the batch reports success.
+			if err := verifyMutationLanded(c.abs, []byte(c.content)); err != nil {
+				return "", err
+			}
 			recordWritten(t.tracker, c.abs, []byte(c.content))
 			added, removed, patch := lineDiff(c.old, c.content)
 			recordDiff(ctx, FileDiff{Path: c.rel, Added: added, Removed: removed, Patch: patch, Created: c.created})
