@@ -68,6 +68,13 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
+	// claude-cli auxiliary calls (title/summary/compaction/lesson reflection)
+	// must use THIS workspace's config home like tool-loop turns do — without
+	// this seam they fell back to the global claude-home, which may not be
+	// logged in even though the workspace is (found by the self-healing E2E).
+	if cli, ok := provider.(*providers.ClaudeCLI); ok {
+		cli.SetConfigDir(r.claudeHomeDir())
+	}
 	// Fill a model-aware output cap when the caller left MaxTokens unset; the
 	// explicit caps that compaction/summary/title set are respected untouched.
 	req = r.withMaxOutput(agent.Provider, req)

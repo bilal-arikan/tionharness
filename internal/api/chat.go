@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -175,6 +176,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	resp, steps, err := ws(r).Runtime.CompleteWithToolsTraced(ctx, agent, provider, llmReq, false)
 	if err != nil {
 		s.logger.Error("provider completion failed", "error", err, "agent", agent.ID)
+		// Streaming-path parity (self-healing): a failed turn must still
+		// auto-tag — error/stuck counters, lesson reflection, failed-turn
+		// automations all hang off AutoTagTurn. External clients drive this
+		// non-SSE endpoint (Doc 33), so it cannot be left out of the loop.
+		ws(r).Runtime.AutoTagTurn(context.WithoutCancel(ctx), session.ID, steps, "provider_error: "+err.Error())
 		writeError(w, http.StatusBadGateway, "provider error: "+err.Error())
 		return
 	}
@@ -199,6 +205,13 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Auto-capture any files the agent wrote this turn as artifacts.
 	s.captureFileArtifacts(ctx, database, session.ID, agent.ID, steps)
+
+	// Streaming-path parity: auto-tag the finished turn (tool-error tags, stuck
+	// counter reset, lesson reflection) and signal tag automations — previously
+	// only the SSE path did this, silently exempting external non-SSE clients
+	// from the whole self-healing loop.
+	ws(r).Runtime.AutoTagTurn(ctx, session.ID, steps, "")
+	ws(r).Runtime.FireTurnFinished(session.ID, agent.ID, resp.Text)
 
 	s.logger.Info("chat turn completed",
 		"session", session.ID, "agent", agent.Name, "provider", agent.Provider,

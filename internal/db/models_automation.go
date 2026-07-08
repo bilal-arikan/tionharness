@@ -85,7 +85,10 @@ type Automation struct {
 	// SpawnTags are the tags applied to the spawned session. When nil it defaults
 	// to [TriggerTag], so the spawned session re-triggers this rule (the loop). Set
 	// it to an empty non-nil slice ([]) or different tags to break/redirect the loop.
-	SpawnTags []string `json:"spawnTags,omitempty"`
+	// NO omitempty: [] is semantically distinct from nil (loop-break vs default) and
+	// must survive the persist/reload round-trip — omitempty silently turned every
+	// deliberate [] back into the self-looping default (found by the self-healing E2E).
+	SpawnTags []string `json:"spawnTags"`
 	// Enabled is the kill switch. A disabled automation never fires.
 	Enabled bool `json:"enabled"`
 	// MaxIterations caps the total number of fires (0 = unlimited — dangerous, an
