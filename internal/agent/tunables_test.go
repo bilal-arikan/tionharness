@@ -28,7 +28,7 @@ func TestTunables_ConcurrentAccess(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		wg.Add(2)
 		go func() { defer wg.Done(); tun.SetTitleModel("m"); _ = tun.TitleModel() }()
-		go func() { defer wg.Done(); tun.SetContextBudget(1000); _ = tun.TitleModel() }()
+		go func() { defer wg.Done(); tun.SetMaxOutputTokens(1000); _ = tun.TitleModel() }()
 	}
 	wg.Wait()
 }

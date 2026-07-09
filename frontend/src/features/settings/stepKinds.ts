@@ -148,6 +148,15 @@ export const STEP_KINDS: StepKindInfo[] = [
       'Kullanıcı-tanımlı PreToolUse/PostToolUse hook bir araç çağrısının etrafında çalıştı: girdiyi/çıktıyı değiştirdi, otomatik onayladı, ek bağlam ekledi ya da çağrıyı engelledi. Reason makine kararını taşır (hook_block / hook_modify / hook_allow / hook_context). Yalnız native (anthropic/minimax) yolda.',
   },
   {
+    kind: 'context_change',
+    label: 'Bağlam değişikliği',
+    icon: '🔄',
+    persisted: true,
+    status: 'active',
+    description:
+      'Oturumun dondurulmuş statik bağlamı (persona/talimat/skill/araç kataloğu) oturum ortasında değişti; prompt cache’i korumak için önbelleğe giren prefix hâlâ oturum-başı snapshot’ını taşır. Değişen bloklar +/- diff olarak gösterilir. Drift başına bir kez yayılır; değişiklik bir sonraki bağlam yenilemesinde (/refresh-context, compaction, boşta kalma) tam uygulanır.',
+  },
+  {
     kind: 'subagent',
     label: 'Alt-ajan',
     icon: '🤖',

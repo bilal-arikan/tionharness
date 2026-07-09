@@ -31,6 +31,15 @@ hedeftir, adım listesi değil.
 `todo_write` listesi **çalışma dizinine** (proje) bağlı bir progress dosyasına
 yazılır ve fresh oturum açılışında geri yüklenir.
 
+**Kompakt `set` formu (2026-07-10):** `todo_write` artık iki giriş şekli alır —
+`todos` (tam liste replace, eskisi gibi) veya `set` (`{"set":{"1":"completed"}}`,
+1-tabanlı indeks → status). `set` yolunda sunucu önceki listeyi `TodoSink.LoadTodos`
+ile progress dosyasından yükler, durumları birleştirir, geri persist eder; birleşik
+tam liste tool sonucunda JSON döner ki trace katmanı (`todoStepItems`) StepTodo
+kartını input yerine output'tan kurabilsin. Sink yoksa/liste yoksa açık hata döner.
+Dinamik "Active todo list" bloğu numaralıdır ve `set` formunu öğretir. Amaç: durum
+güncellemelerinde değişmeyen içerikleri yeniden göndermemek (~400 → ~40 char).
+
 - **Konum:** `<cwd>/.tionswarm/progress.json` — session'ın **explicit** working
   dir'i ayarlıysa (git-commit'lenebilir, proje'ye bağlı; **aynı projedeki tüm
   oturumlar paylaşır** = cross-session resume). Explicit proje dizini yoksa

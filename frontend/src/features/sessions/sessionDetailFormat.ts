@@ -34,6 +34,28 @@ export function pctOf(n: number, total: number): number {
   return total > 0 ? Math.round((n / total) * 100) : 0
 }
 
+// CACHE_TTL_SEC is the prompt-cache warm window in seconds. Mirrors the backend
+// constants: providers.cacheTTL ("1h" ephemeral breakpoint) and
+// agent.promptEpochAdoptAfter (time.Hour). Kept in sync manually — the backend
+// hardcodes a single 1h TTL, so no field is sent over the wire.
+export const CACHE_TTL_SEC = 3600
+
+// cacheRemaining returns the seconds left before the prompt cache goes cold,
+// derived purely from the session's last-activity timestamp. Negative once the
+// cache has expired; -1 when there is no activity timestamp yet.
+export function cacheRemaining(updatedAtSec: number, nowSec: number): number {
+  if (!updatedAtSec) return -1
+  return CACHE_TTL_SEC - (nowSec - updatedAtSec)
+}
+
+// formatCountdown renders remaining seconds as mm:ss, clamped at 0:00.
+export function formatCountdown(sec: number): string {
+  const s = Math.max(0, sec)
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return `${m}:${String(r).padStart(2, '0')}`
+}
+
 // fillerColor maps a context bucket role to a stable segment colour for the
 // usage bar and legend (hues live in the shared categorical palette).
 export const fillerColor = roleColor

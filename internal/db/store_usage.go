@@ -94,30 +94,20 @@ func (k *KindStat) add(d UsageDelta) {
 // what it would cost. ByModel is keyed by "<provider>|<model>" (model may be
 // empty, e.g. claude-cli's session default).
 type Usage struct {
-	AgentID          string              `json:"agentId"`
-	Day              string              `json:"day"`
-	Calls            int                 `json:"calls"`
-	InputTokens      int                 `json:"inputTokens"`
-	OutputTokens     int                 `json:"outputTokens"`
-	CacheReadTokens  int                 `json:"cacheReadTokens,omitempty"`
-	CacheWriteTokens int                 `json:"cacheWriteTokens,omitempty"`
+	AgentID          string `json:"agentId"`
+	Day              string `json:"day"`
+	Calls            int    `json:"calls"`
+	InputTokens      int    `json:"inputTokens"`
+	OutputTokens     int    `json:"outputTokens"`
+	CacheReadTokens  int    `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens int    `json:"cacheWriteTokens,omitempty"`
 	// ProviderCalls is the cumulative number of underlying model API round-trips
 	// behind Calls (for claude-cli a single TionSwarm turn is several internal calls,
 	// reported via result num_turns). Lets a consumer divide the cumulative token
 	// totals by it to recover per-call figures.
-	ProviderCalls    int                 `json:"providerCalls,omitempty"`
-	ByKind           map[string]KindStat `json:"byKind,omitempty"`
-	ByModel          map[string]KindStat `json:"byModel,omitempty"`
-	// CompactSavedBytes is the cumulative byte count removed from tool output by
-	// System A (deterministic compaction) for this agent on this day. It is a
-	// standalone savings meter, not tied to any LLM call (no token/cost impact).
-	CompactSavedBytes int `json:"compactSavedBytes,omitempty"`
-	// CompactSavedBytesLLM is the cumulative byte count removed from tool output by
-	// System B (LLM intent-aware summary) for this agent on this day — the bytes
-	// that will NOT be re-paid as input tokens on subsequent turns. Tracked apart
-	// from System A because System B itself costs a cheap-model call (recorded
-	// under UsageKindCompact); this is its gross output reduction.
-	CompactSavedBytesLLM int `json:"compactSavedBytesLLM,omitempty"`
+	ProviderCalls int                 `json:"providerCalls,omitempty"`
+	ByKind        map[string]KindStat `json:"byKind,omitempty"`
+	ByModel       map[string]KindStat `json:"byModel,omitempty"`
 }
 
 // ModelKey builds the ByModel map key from a provider and model id.
@@ -197,44 +187,6 @@ func (d *DB) AddUsageKind(ctx context.Context, agentID, kind, provider, model st
 		m.add(delta)
 		u.ByModel[mk] = m
 	}
-	return d.persistUsageLocked(u)
-}
-
-// AddCompactionSavings folds bytes removed by System A (deterministic tool-output
-// compaction) into today's per-agent rollup (upsert). It is a standalone counter
-// — no LLM call, no token/cost attribution — so the savings can be surfaced
-// independently of spend. A non-positive delta is a no-op.
-func (d *DB) AddCompactionSavings(ctx context.Context, agentID string, bytes int) error {
-	if bytes <= 0 {
-		return nil
-	}
-	day := today()
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	u, ok := d.usage[usageKey(agentID, day)]
-	if !ok {
-		u = Usage{AgentID: agentID, Day: day}
-	}
-	u.CompactSavedBytes += bytes
-	return d.persistUsageLocked(u)
-}
-
-// AddLLMCompactionSavings folds bytes removed by System B (LLM intent-aware
-// tool-output summary) into today's per-agent rollup (upsert). Like System A's
-// counter it is a standalone savings meter (the System B call's own token cost
-// is recorded separately under UsageKindCompact). A non-positive delta is a no-op.
-func (d *DB) AddLLMCompactionSavings(ctx context.Context, agentID string, bytes int) error {
-	if bytes <= 0 {
-		return nil
-	}
-	day := today()
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	u, ok := d.usage[usageKey(agentID, day)]
-	if !ok {
-		u = Usage{AgentID: agentID, Day: day}
-	}
-	u.CompactSavedBytesLLM += bytes
 	return d.persistUsageLocked(u)
 }
 

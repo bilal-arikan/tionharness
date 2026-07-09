@@ -208,6 +208,15 @@ type Request struct {
 	// sidesteps the Windows ~32 KB command-line limit for very large prompts; inline
 	// leaves no temp file behind. HTTP providers ignore it.
 	SysPromptFile bool
+	// DisableThinking, when set, fully disables extended thinking on a CLI
+	// provider's subprocess (claude-cli: MAX_THINKING_TOKENS=0 env). Set from the
+	// agent's ThinkingLevel "Kapalı" so the CLI honours it instead of silently
+	// falling back to its own adaptive-thinking default. Side benefit that
+	// motivated it: claude-code ≥2.1.203 refuses PARALLEL tool calls while
+	// thinking is active ("think XOR batch") — disabling thinking restores tool
+	// batching and the pre-regression cost profile (_Docs/05 2026-07-10). HTTP
+	// providers ignore it (ThinkingBudget==0 already means off there).
+	DisableThinking bool
 }
 
 // Usage reports token consumption. For providers with prompt caching, the cache
@@ -239,6 +248,10 @@ type TraceStep struct {
 	// and its tool_result on the live stream). 0 when unknown (native-loop steps,
 	// which the agent layer times itself, or a non-streamed parse).
 	DurMs int64
+	// Batch groups "tool" steps that belong to ONE assistant message carrying
+	// multiple parallel tool_use blocks (1-based id, unique within the turn;
+	// 0 = lone call). Set by the claude-cli stream parser from message ids.
+	Batch int
 }
 
 // Response is a completion result. When StopReason is StopToolUse, ToolCalls

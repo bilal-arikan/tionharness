@@ -1247,10 +1247,13 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 		out += "\n\n" + sh
 	}
 	// Prompt-epoch drift notice (mirrors the chat path): the frozen snapshot is
-	// holding back a live change — one line on the volatile side. The suffix runs
-	// after autonomousSystemPrompt in request composition, so the flag is fresh.
-	if sid := SessionIDFrom(ctx); sid != "" && r.PromptEpochStale(sid, agentID) {
-		out += "\n\n" + PromptEpochStaleNote
+	// holding back a live change — a compact diff on the volatile side. The suffix
+	// runs after autonomousSystemPrompt in request composition, so the diff (set by
+	// EpochStaticSystem) is fresh for this turn.
+	if sid := SessionIDFrom(ctx); sid != "" {
+		if note := r.PromptEpochContextNote(sid, agentID); note != "" {
+			out += "\n\n" + note
+		}
 	}
 	return out
 }

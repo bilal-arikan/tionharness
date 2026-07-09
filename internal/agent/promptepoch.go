@@ -78,6 +78,38 @@ type promptEpochEntry struct {
 	toolsStale    bool  // live tool defs drifted from the frozen ones
 	staleNotified bool  // "stale" debug event already emitted for this drift
 	persistedUse  int64 // LastUsedAt value last flushed to the sidecar (write throttle)
+
+	// systemChange / toolsChange are the computed diffs (frozen ↔ live) for the
+	// current drift episode, recomputed each stale turn. They feed both the
+	// agent-facing suffix note (every stale turn) and the chat context_change
+	// step (once per episode). Kept separate because they are computed on
+	// different paths (static prefix vs. tool loop) and merged on access.
+	systemChange *ContextChange
+	toolsChange  *ContextChange
+	// changePending gates the one-shot chat step: set when a fresh drift is first
+	// detected, cleared by ConsumeContextChange. Re-armed when the drift clears.
+	changePending bool
+}
+
+// combinedChange merges the entry's system + tools diffs into one fresh value
+// (non-mutating: the stored diffs are reused across turns until refresh).
+func (e *promptEpochEntry) combinedChange() *ContextChange {
+	if e.systemChange.Empty() && e.toolsChange.Empty() {
+		return nil
+	}
+	out := &ContextChange{}
+	for _, src := range []*ContextChange{e.systemChange, e.toolsChange} {
+		if src == nil {
+			continue
+		}
+		out.Added += src.Added
+		out.Removed += src.Removed
+		out.Truncated += src.Truncated
+		for _, a := range src.Areas {
+			out.appendArea(a)
+		}
+	}
+	return out
 }
 
 // epochUsePersistEvery throttles the sidecar write that only refreshes
@@ -180,8 +212,15 @@ func (r *Runtime) EpochStaticSystem(ctx context.Context, sessionID string, a db.
 		return fresh.System, false
 	}
 
-	// Serving the frozen snapshot: detect (but do not adopt) live drift.
-	e.systemStale = build() != e.System
+	// Serving the frozen snapshot: detect (but do not adopt) live drift, and
+	// compute the paragraph-level diff so the note/step can show WHAT changed.
+	live := build()
+	e.systemStale = live != e.System
+	if e.systemStale {
+		e.systemChange = diffSystemPrefix(e.System, live)
+	} else {
+		e.systemChange = nil
+	}
 	r.noteEpochStaleLocked(ctx, sessionID, a.ID, e)
 	e.LastUsedAt = now.UnixMilli()
 	if e.LastUsedAt-e.persistedUse > epochUsePersistEvery.Milliseconds() {
@@ -217,9 +256,25 @@ func (r *Runtime) EpochToolDefs(ctx context.Context, sessionID string, a db.Agen
 		r.persistEpochLocked(sessionID)
 		return e.Tools, e.systemStale || e.toolsStale
 	}
-	e.toolsStale = toolDefsSig(build()) != toolDefsSig(e.Tools)
+	live := build()
+	e.toolsStale = toolDefsSig(live) != toolDefsSig(e.Tools)
+	if e.toolsStale {
+		e.toolsChange = diffToolNames(toolDefNames(e.Tools), toolDefNames(live))
+	} else {
+		e.toolsChange = nil
+	}
 	r.noteEpochStaleLocked(ctx, sessionID, a.ID, e)
 	return e.Tools, e.systemStale || e.toolsStale
+}
+
+// toolDefNames extracts the ordered tool names from a def list (for the human-
+// readable added/removed tool diff; the byte-level signature stays toolDefsSig).
+func toolDefNames(defs []providers.ToolDef) []string {
+	out := make([]string, len(defs))
+	for i, d := range defs {
+		out[i] = d.Name
+	}
+	return out
 }
 
 // RefreshPromptEpoch drops a session's snapshots so the next turn re-freezes
@@ -262,6 +317,9 @@ func (r *Runtime) noteEpochStaleLocked(ctx context.Context, sessionID, agentID s
 	stale := e.systemStale || e.toolsStale
 	if stale && !e.staleNotified {
 		e.staleNotified = true
+		// Arm the one-shot chat step for this fresh drift episode; ConsumeContextChange
+		// clears it after emitting once (subsequent stale turns only refresh the note).
+		e.changePending = true
 		what := "system"
 		if e.toolsStale && e.systemStale {
 			what = "system+tools"
@@ -272,7 +330,60 @@ func (r *Runtime) noteEpochStaleLocked(ctx context.Context, sessionID, agentID s
 	}
 	if !stale {
 		e.staleNotified = false
+		e.changePending = false
 	}
+}
+
+// PromptEpochContextNote returns the agent-facing dynamic-suffix note for a
+// session/agent while the frozen snapshot lags live state: a compact diff of
+// what changed when known, else the generic stale note, else "" when in sync.
+// Wrapped in the shared <context_snapshot_note> marker so it never double-
+// appends with the tool-loop's fallback and never busts the cached prefix.
+func (r *Runtime) PromptEpochContextNote(sessionID, agentID string) string {
+	if sessionID == "" || !r.PromptEpochEnabled() {
+		return ""
+	}
+	r.epochMu.Lock()
+	defer r.epochMu.Unlock()
+	e := r.epochEntry(sessionID, agentID)
+	if e == nil || !(e.systemStale || e.toolsStale) {
+		return ""
+	}
+	return e.combinedChange().SuffixNote()
+}
+
+// ConsumeContextChange returns the drift diff for the chat context_change step
+// ONCE per drift episode, then disarms it (later stale turns only refresh the
+// suffix note). Returns nil when no fresh change is pending.
+func (r *Runtime) ConsumeContextChange(sessionID, agentID string) *ContextChange {
+	if sessionID == "" || !r.PromptEpochEnabled() {
+		return nil
+	}
+	r.epochMu.Lock()
+	defer r.epochMu.Unlock()
+	e := r.epochEntry(sessionID, agentID)
+	if e == nil || !e.changePending {
+		return nil
+	}
+	e.changePending = false
+	c := e.combinedChange()
+	if c.Empty() {
+		return nil
+	}
+	return c
+}
+
+// epochEntry returns the in-memory entry for (session, agent) without loading
+// the sidecar (callers here run after EpochStaticSystem has established it).
+// Caller must hold epochMu.
+func (r *Runtime) epochEntry(sessionID, agentID string) *promptEpochEntry {
+	if r.epochCache == nil {
+		return nil
+	}
+	if m, ok := r.epochCache[sessionID]; ok {
+		return m[agentID]
+	}
+	return nil
 }
 
 // toolDefsSig hashes the fields of a tool-def list that reach the wire (and thus

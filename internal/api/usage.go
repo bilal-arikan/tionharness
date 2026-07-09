@@ -28,20 +28,18 @@ func (s *Server) handleAgentUsage(w http.ResponseWriter, r *http.Request) {
 	models, cost, savings, priced, estimated, cacheRead, cacheWrite := modelRowsFor(usage.ByModel)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"day":                  usage.Day,
-		"calls":                usage.Calls,
-		"inputTokens":          usage.InputTokens,
-		"outputTokens":         usage.OutputTokens,
-		"cacheReadTokens":      cacheRead,
-		"cacheWriteTokens":     cacheWrite,
-		"byKind":               usage.ByKind, // per-origin breakdown (chat/task/schedule/flow/compact/…)
-		"byModel":              models,       // per-model detail with cost
-		"costUSD":              cost,
-		"savingsUSD":           savings,
-		"priced":               priced,
-		"estimated":            estimated,
-		"compactSavedBytes":    usage.CompactSavedBytes,
-		"compactSavedBytesLLM": usage.CompactSavedBytesLLM,
+		"day":              usage.Day,
+		"calls":            usage.Calls,
+		"inputTokens":      usage.InputTokens,
+		"outputTokens":     usage.OutputTokens,
+		"cacheReadTokens":  cacheRead,
+		"cacheWriteTokens": cacheWrite,
+		"byKind":           usage.ByKind, // per-origin breakdown (chat/task/schedule/flow/compact/…)
+		"byModel":          models,       // per-model detail with cost
+		"costUSD":          cost,
+		"savingsUSD":       savings,
+		"priced":           priced,
+		"estimated":        estimated,
 	})
 }
 

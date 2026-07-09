@@ -91,14 +91,6 @@ export interface AppSettings {
   stuckTurnThreshold: number // consecutive bad turns before "stuck" tag + autonomous suspension (0 = off)
   lessonReflect: boolean     // distill failed turns into stored lessons injected into future turns
 
-  // Tool-output token optimization — two independent, parallel systems.
-  compactToolOutput: boolean   // System A: deterministic (free)
-  compactMaxLines: number
-  compactMaxBytes: number
-  compactLlmSummary: boolean   // System B: LLM intent-aware summary (costs a call)
-  compactLlmThreshold: number
-  compactModel: string         // System B model id; "" → title model, then agent's model
-
   autoTitleEnabled: boolean
   titleModel: string
 

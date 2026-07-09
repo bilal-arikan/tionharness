@@ -1,6 +1,294 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-09**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-10**
+
+## Token-optimizer UI callout + hook matcher düzeltmesi + API GET no-store ✅ (2026-07-10)
+
+Token-optimizer capability'sinin (rtk/sqz) devamı — UI tarafı + bir gerçek matcher bug'ı
++ canlı testte yakalanan bir cache bug'ı.
+
+- **UI callout (`ExternalToolsPanel.tsx`):** "Token / bağlam optimizasyonu" grubunun altına
+  codebase-memory callout'unun eşdeğeri "⚡ Token optimizasyonu entegrasyonu" bloğu eklendi —
+  rtk/sqz hook olarak bağlıysa ajanın promptuna bilgi bloğu enjekte edildiğini, çıktının otomatik
+  kısaltıldığını (kayıp değil) ve matcher'ın `Bash,PowerShell` olması gerektiğini açıklar. **Matcher
+  onarımı:** bağlı bir token hook'unun matcher'ı PowerShell'i kapsamıyorsa (`coversPowerShell`,
+  backend `hookMatches` aynası: boş/`*`/`PowerShell` → kapsar) ⚠ rozeti + tek-tık **"Matcher'ı
+  düzelt"** butonu (`fixMatcher` → mevcut matcher'a `PowerShell`'i merge eder, diğer alanları korur,
+  `updateHook` PUT). `data-testid="fix-matcher"`.
+- **Gerçek matcher bug'ı (WS5 + WS1):** rtk/sqz hook'ları `matcher=Bash` ile kayıtlıydı; ajanlar
+  Windows'ta `PowerShell` aracını kullandığı için hook'lar **hiç ateşlenmiyordu**. Canlı UI butonuyla
+  düzeltildi → ikisi de `Bash,PowerShell`.
+- **API GET no-store (`api/client.ts`):** canlı testte yakalandı — `req()` `fetch`'i default cache
+  ile çağırıyordu, tarayıcı `/api/hooks` gibi GET'leri **stale servis edebiliyordu** (panel bir
+  değişiklikten sonra eski veriyi gösteriyordu). `fetch(path, { cache: 'no-store', … })` eklendi;
+  çağıran `init.cache` ile hâlâ override edebilir. Tüm GET domain modülleri için canlı-veri tazeliği.
+
+Doğrulama: `npx tsc -b` temiz; Playwright ile WS5'te callout + ⚠ uyarı + "Matcher'ı düzelt" butonu
+uçtan uca test edildi (tık → WS5 hook `Bash,PowerShell` → uyarı sıfırlandı). Not: canlı backend eski
+binary — token-optimizer **prompt bloğunun** enjekte olması için backend yeniden derlenip başlatılmalı.
+
+## todo_write kompakt `set` formu: durum güncellemesi tüm listeyi yeniden göndermiyor ✅ (2026-07-10)
+
+AlgoBench dökümünde todo_write çağrıları koşu başına ~1.2k output-char tutuyordu — her
+güncellemede tüm liste yeniden gönderiliyordu. Artık iki form var (tam olarak biri):
+
+- **`todos`** — tam liste (oluşturma / metin değişikliği; eskisi gibi replace).
+- **`set`** — `{"set":{"1":"completed","2":"in_progress"}}`: 1-tabanlı indeks → status.
+  Sunucu önceki listeyi **todo sink'ten** yükler (`TodoSink.LoadTodos`, progress
+  dosyası), birleştirir, geri persist eder. Sink yoksa veya henüz liste yoksa **yüksek
+  sesle hata** verir ("send the full todos array"). Tipik güncelleme ~400 → ~40 char.
+- **Trace/UI:** `set` çağrısının input'unda liste olmadığından birleşik tam liste tool
+  SONUCUNDA JSON olarak döner; `todoStepItems` (trace.go + toolloop.go) input boşsa
+  output'tan parse edip StepTodo kartına terfi ettirir — CLI ve native yol aynı.
+- **Model tarafı:** dinamik prompt'taki "Active todo list" bloğu artık **numaralı**
+  (`1. [x] …`) ve `set` formunu öğretiyor; araç açıklaması da güncellendi.
+- Test: builtin_todo_test (merge + alan koruma + 6 hata senaryosu), todos_test numaralı
+  format. `go build ./...` + `go test ./internal/...` yeşil (799 test).
+
+## AlgoBench ~1.7× output farkı ayrıştırıldı: %81'i Write payload'ı, kaynak ajan personası ✅ (2026-07-10)
+
+v6/v7 transkriptlerinde TS vs CA output-token dökümü (dedup usage; karakter bazında kategori):
+
+- **Fark narasyon değil, üretilen dosya içeriği.** TS v7 38.0k out-char / CA v7 22.2k.
+  Delta 15.8k char'ın dağılımı: **Write %81** (+12.8k), text +1.1k, `todo_write` +1.2k
+  (CA hiç todo kullanmadı), shell +0.6k. Her iki tarafta da out-char'ın %94-96'sı tool_use.
+- **TS aynı görevde ~%64 daha uzun kod yazıyor** (iki koşuda da tutarlı → sistematik, sampling değil):
+  6 algoritma dosyası 9.9k vs 5.8k · testler 7.7k vs 4.6k (30 test vs 22) · Go portu 4 dosyaya
+  bölünmüş 3.8k vs tek main.go 2.4k · compute.py 2.4k vs 1.3k (bağımsız çapraz-doğrulama kodu) ·
+  REPORT.md 4.6k vs 2.6k.
+- **Kök neden: benchmark ajanı AGT10'un personası** ("focused implementation engineer …
+  running code to verify") + TR yanıt tercihi. Görev metinleri birebir aynı (diff'lendi);
+  TS statik prefix'i (5k char, epoch sidecar'dan okundu) verbosity talimatı içermiyor.
+  Runtime'ın kendi output ek yükü küçük: todo_write ~1.2k char (~%3).
+- **Sonuç:** 1.7× fark büyük ölçüde persona-kaynaklı titizlik (daha çok test, cross-check,
+  dosya bölme) — kalite/maliyet dengesi, runtime bug'ı değil. Adil kıyas için TS koşusu
+  boş-persona ajanla (AGT9 CoderEmpty benzeri, thinking-off) tekrarlanmalı.
+- **Adil tekrar koşu (aynı gece, AGT11 "BenchBare": boş soul/identity + thinking-off,
+  v7 ile aynı sunucu binary'si, taze `bench-tionswarm-bare`):** toplam 16.4k out-tok
+  (0 thinking; batching var: [5,3,2,2,2,2,2]). Persona hipotezi **kısmen** doğrulandı:
+  REPORT.md 4.6k→2.8k (CA seviyesi), compute.py 2.4k→2.1k, algoritma dosyaları kısaldı
+  (örn. binary_search 1601→898) — ama **30 test yine yazıldı** ve Go yine dosyalara
+  bölündü → bunlar persona değil. Koşu ortada bir kez kesildi (non-stream istemci koptu;
+  **inflight paritesi çalıştı**, 32 adım kayıpsız persist edildi) ve devam turu ~3-4k
+  char yeniden-bağlam maliyeti ekledi (8 Read + ekstra shell). Düzeltilmiş tahmin
+  ~14.5-15k tok → CA'nın hâlâ ~1.4×'i. **Net:** persona ~%15-20'lik kısmı açıklıyor;
+  kalan fark TS runtime append'i / model davranışı / örneklem gürültüsü — kesinleşme
+  n≥5 istatistiksel seriye kaldı.
+
+## Token-optimizer capability probe: rtk/sqz kuruluysa prompta bilgi bloğu ✅ (2026-07-10)
+
+codebase-memory capability'siyle aynı desen: workspace'te `rtk`/`sqz` **hook ile bağlı**
+ise ajanın statik prompt prefix'ine "# Token optimization active" bloğu enjekte edilir.
+
+- **Yeni:** `internal/agent/capabilities_tokenopt.go` — `tokenOptimizerCapability`
+  (registry'ye eklendi). `detectTokenOptimizers` enabled Pre/PostToolUse hook
+  komutlarını `\brtk\b` / `\bsqz\b` ile tarar (kelime-sınırlı → `quirtky`/`sqzip`
+  false-positive vermez). **Tespit hook komutundan**, PATH'ten değil (bağlanmamış ikili
+  hiçbir şey optimize etmez → over-claim yok). Hata yutulmaz (loglanır, atlanır).
+- **Blok içeriği:** hangi optimizer aktifse onu anlatır (rtk = komut proxy'si, sqz =
+  çıktı sıkıştırıcı) + "kendisi çağırma, otomatik" + "çıktı kısaltılmış olabilir, kayıp
+  değil" + **matcher kapsam notu**.
+- **Kritik gerçek (SES130 kök nedeni):** WS5'in iki hook'u da `matcher=Bash`; ajanlar
+  Windows'ta `PowerShell` aracını kullandığı için ikisi de **hiç ateşlenmiyordu**. Blok
+  bunu açıkça söyler ("eşleşen `Bash` aracını token-ağır komutlar için tercih et").
+- Test: `capabilities_tokenopt_test.go` (WS5-şekli iki-hook, kelime-sınırı, wildcard-no-scope).
+
+Doğrulama: `go build ./...` + `go vet ./internal/agent` + `go test ./internal/agent ./internal/tools ./internal/api` yeşil (449 test). Detay `54-CAPABILITY-PROBE.md`.
+
+## Oturum incelemesi düzeltmeleri: PowerShell UTF-8 + lazy-tool uyarısı + codebase-memory hint ✅ (2026-07-10)
+
+Bir board-otomasyon oturumunun (SES130) debug/transkript analizinden çıkan üç somut sürtünme
+noktası düzeltildi:
+
+- **PowerShell 5.1 mojibake (kök neden + fix).** `internal/tools/builtin_shell.go` PowerShell
+  aracını `powershell.exe -NoProfile -NonInteractive -Command …` ile hiçbir kodlama zorlaması
+  yapmadan çalıştırıyordu. Windows PowerShell 5.1 (pwsh **yoksa** kullanılan fallback) konsol
+  çıktısını + dosya-okuma cmdlet'lerini (Get-Content/Select-String/Import-Csv) legacy ANSI/OEM
+  code-page'iyle çözer → **UTF-8-BOM'suz** bir Türkçe dosya cp1254 olarak okunur ve baytlar
+  Go'ya geçersiz UTF-8 olarak ulaşır (ör. `talimatlar��`). Ajan bu oturumda ws-settings ve
+  agent-soul'ları **bozuk** okumuştu. **Yeni:** `internal/tools/builtin_shell_encoding.go` —
+  yalnızca legacy host'a (pwsh'e değil) bir UTF-8 prelude enjekte eder: `[Console]::OutputEncoding`
+  + `$OutputEncoding` = UTF-8 (BOM'suz) ve `$PSDefaultParameterValues` ile Get-Content/Select-String/
+  Import-Csv okuma default'u `utf8`. **Yazma davranışına dokunulmaz** (global `*:Encoding` set
+  edilmez → BOM regresyonu yok). Canlı doğrulandı: prelude'suz mojibake, prelude'lu çıktı orijinal
+  UTF-8 baytlarıyla birebir. Test: `builtin_shell_encoding_test.go`.
+- **Lazy-tool same-batch reddi (#1).** İki-tier claude-cli köprüsünde extended (deferred) tier
+  boş başlar, `activate_tools`'tan **sonraki** turda büyür; ajan `activate_tools`'u aktive edilen
+  aracı **aynı yanıtta** çağırırsa CLI `No such tool available` döner. Araçları eager CORE'a taşımak
+  bilinçli gateway-bütçe tasarımını (ve `TestInteractionTierSplit` sözleşmesini) bozacağı için
+  **bütçe-nötr** çözüm: `activate_tools` açıklaması + çalıştırma sonucu artık "aktive edilenler
+  yalnız **SONRAKI** adımda gelir, bu yanıtta çağırma" diye açıkça uyarır (`builtin_activate.go`).
+- **codebase-memory hint güçlendirildi (#4).** `capabilities.go codebaseMemoryGuidance` artık raw
+  shell grep'lerini (Select-String / Get-Content -Recurse / grep / findstr) ilk hamle olarak
+  **yasaklar**, "yalnız indeks cevap veremezse son çare" der. (SES130'da ajan ~13 ardışık
+  Select-String taraması yapıp indeksi az kullanmıştı.)
+
+Ayrıca aynı analizde netleşen **sqz/rtk sorusu** (kod değişikliği gerektirmez): sqz TionSwarm'a
+gömülü değil, `token` kategorisinde bir **PostToolUse hook** olarak Ayarlar→Hooks'tan bağlanır;
+rtk ise ajanın Bash ile komutu sarmalamasıyla çalışır. İkisi de bu workspace'te bağlı/çağrılmadığı
+için devreye girmiyordu; ayrıca claude-cli per-workspace `claude-home` kullandığından kullanıcının
+global `~/.claude` rtk hook'u **devralınmaz** (CLI hook'ları yalnız TionSwarm'ın kendi hook DB'sinden
+`--settings`'e yazılır). Detay `17-TOKEN-OPTIMIZASYON.md`.
+
+Doğrulama: `go build ./...` + `go test ./internal/tools ./internal/agent ./internal/api` yeşil (445 test).
+
+## Skills + Artifacts: sürükle-bırak ile grup değiştirme ✅ (2026-07-10)
+
+Skills ve Artifacts listelerinde bir kartı başka bir grubun üzerine sürükleyip bırakmak,
+o kartın `group` alanını kalıcı olarak değiştiriyor. Backend'e **sıfır** değişiklik: mevcut
+`PUT /api/skills/{slug}/group` ve `PUT /api/artifacts/{id}/group` uçları (ve `Artifact.Group`
+alanı) zaten vardı — kart notundaki "veri modeline group eklenmesi gerekebilir" varsayımı
+yanlış çıktı.
+
+**Yeni:** `frontend/src/shared/hooks/useGroupDnD.ts` — iki panelin paylaştığı **native HTML5
+DnD** hook'u (`useGroupedList` ile aynı desen; `dnd-kit`/`react-dnd` gibi yeni bağımlılık
+**eklenmedi**, TaskBoard'ın kanban sürüklemesiyle aynı yaklaşım). Hook `itemProps(item)` +
+`groupProps(groupName)` prop-paketleri döndürür; paneller bunları karta ve grup sarmalayıcısına
+yayar.
+
+Davranış kararları:
+
+- **No-op garantisi:** sürüklenen kartların hepsi zaten hedef gruptaysa `dragover` üzerinde
+  `preventDefault()` **çağrılmaz** → tarayıcı bırakmayı reddeder → `drop` olayı hiç doğmaz →
+  API isteği de gitmez. (Bayrakla bastırmak yerine tarayıcıya reddettiriyoruz.)
+- **Dosya yükleme regresyonu yok:** sürükleme kendi MIME tipini taşır
+  (`application/x-tionswarm-group-item`), ArtifactsPanel kökündeki upload drop zone ise
+  `Files` tipine bakar. Ayrıca kart `onDrop`'u `stopPropagation()` çağırır → kart bırakması
+  asla upload zone'una sızmaz.
+- **Seçim farkındalığı:** sürüklenen kart mevcut çoklu seçimin içindeyse **tüm seçim** taşınır,
+  değilse yalnız o kart.
+- **Hata yutulmaz:** `onMove` hatasında `onError(...)` gösterilir ve her iki yolda `reload()`
+  çalışır → liste yarım uygulanmış bir taşımada kalmaz, sunucu gerçeğine döner.
+- **Katlı grup** başlığına bırakma çalışır (drop hedefi başlık + gövdeyi kapsayan sarmalayıcı).
+- **Grupsuz** bucket'ına bırakmak `group=""` gönderir.
+
+Test kancaları: grup sarmalayıcısında `data-drop-active`, kartta `data-dragging`
+(mevcut `data-testid="skills-group-header"` / `artifacts-group-header` korundu).
+
+Doğrulama: `go build ./...` + `go vet ./...` + `go test ./internal/...` temiz (backend'e
+dokunulmadı, regresyon güvencesi); `npx tsc -b` + `npm run build` temiz. Not: repoda frontend
+test altyapısı (vitest) **yok**, bu yüzden birim testi eklenmedi; `npm run lint` repo genelinde
+zaten kırmızı (86 hata) — yeni hook sıfır bulgu veriyor, dokunulan iki panelin bulguları
+değişikliğimizden önce de vardı.
+
+## Built-in araç-çıktısı sıkıştırması TAMAMEN kaldırıldı → harici hook'lara devredildi ✅ (2026-07-10)
+
+Az önce Sistem B (LLM özeti) kaldırılmıştı; bu adımda **Sistem A (deterministik) de
+kaldırıldı** — TionSwarm artık **hiçbir built-in araç-çıktısı sıkıştırması içermez**.
+Sıkıştırma tamamen **harici araçlara** devredildi: `sqz` (PostToolUse hook,
+`agent/toolloop.go`'daki tek shrink yolu) ve `rtk` (komut-katmanında agent tarafından
+`rtk <cmd>`). Gerekçe: server-tarafı `clear_tool_uses`/API-native compaction + retrieval
+transcript baskısını zaten karşılıyor; ham çıktı kırpmasını bakımı-kolay harici bir
+hook/CLI katmanına taşımak built-in bir alt sistem tutmaktan temiz. **Uyarı:** artık
+kullanıcı bir hook bağlamazsa araç çıktıları sıkıştırılmadan modele gider (tek koruma
+tool'ların kendi 64 KB hard-cap'i; hata/boş sonuçlar aynen geçer).
+
+**Silinenler:** `internal/tools/compact` paketi (compact.go + test); `agent/compactor.go`
+tümüyle + `toolloop.go` çağrısı; tunables `compactDeterministic/MaxLines/MaxBytes` +
+`SetToolCompaction`/`CompactDeterministic`/`CompactMaxLines`/`CompactMaxBytes(For)` +
+tüm **bütçe-ölçekleme aparatı** (`contextBudgetTokens`/`SetContextBudget`/
+`ContextBudgetTokens`/`budgetScaleFor`/`budgetScaleLocked`/`defaultContextBudgetTokens` +
+`DefaultCompactMax*`) + `server.go` iki çağrı; settings `CompactToolOutput/MaxLines/MaxBytes`
+(struct/DTO/patch/default/clamp); DB `Usage.CompactSavedBytes` + `SessionUsage.CompactSavedBytes`
++ `AddCompactionSavings`/`AddSessionCompactionSavings`; API `budget/usage/session_usage`
+`compactSavedBytes`; frontend `ContextPanel` sıkıştırma bölümü + `BudgetPanel` Tasarruf Merkezi
+(tek Prompt-cache hücresi kaldı, "Sıkıştırma" trend metriği düştü) + `SessionUsageCard`/
+`SessionDetailPanel`/`SettingsPanel` + `types/{settings,usage,agent}.ts`; testler.
+`KindCompact`/`UsageKindCompact` **paylaşımlı** (ana konuşma compaction'ı) → korundu.
+Doküman `17-TOKEN-OPTIMIZASYON.md` harici-delegasyon anlatısına dönüştürüldü, `tionswarm-settings`
+skill'i güncellendi. `go build ./...` + `go test` (agent/db/settings/api **312 test**) +
+frontend `tsc --noEmit` temiz.
+
+## Araç-çıktısı LLM-özeti ("Sistem B") tamamen kaldırıldı ✅ (2026-07-10)
+
+Araç çıktısı token optimizasyonundaki opt-in **LLM intent-aware özet** geçişi uçtan uca
+silindi; yalnız **deterministik (Sistem A, ücretsiz kural tabanlı)** sıkıştırma kaldı.
+Gerekçe: server-tarafı `clear_tool_uses` / API-native compaction (eskiyen/taşan sonuçlar)
++ retrieval katmanı bu ihtiyacı zaten karşılıyordu; ekstra ucuz-model çağrısı + gecikme +
+tek-sağlayıcı sınırı değmiyordu (Sistem A ise sağlayıcıdan bağımsız giriş-noktası kalkanı,
+kalıyor). Silinenler: `compactor.go` B dalı + `summarizeToolOutput`/`toolSummarySystemPrompt`;
+tunables `CompactLLM*`/`CompactModel` + `SetToolCompaction` imzası (artık 3 arg); settings
+`CompactLlmSummary`/`CompactLLMThreshold`/`CompactModel` (struct/DTO/patch/clamp/default);
+DB `Usage.CompactSavedBytesLLM` + `AddLLMCompactionSavings`/`AddSessionLLMCompactionSavings`;
+API `budget.go`/`usage.go`/`session_usage.go` `compactSavedBytesLLM` alanları; frontend
+`ContextPanel` "Sistem B" bölümü + `BudgetPanel` Tasarruf Merkezi 3→2 hücre + trend tek seri
++ `SessionUsageCard`/`SessionDetailPanel`/`SettingsPanel` + `types/{settings,usage,agent}.ts`.
+`KindCompact`/`UsageKindCompact` **paylaşımlı** (ana konuşma compaction'ı) → dokunulmadı.
+Doküman: `17-TOKEN-OPTIMIZASYON.md` tek-sisteme indirildi, `tionswarm-settings` skill güncellendi.
+`go build ./...` + `go test` (agent/db/settings 226 test) + frontend `tsc --noEmit` temiz.
+
+## Cross-session bloğu artık aktif oturumları OTOMATİK göndermiyor ✅ (2026-07-10)
+
+Dinamik bağlama enjekte edilen "Other sessions in this workspace" bloğu
+(`internal/api/sessions_context.go` `sessionsContextBlock`) artık **yalnız geçmiş
+(non-active) chat oturumlarını** listeliyor. **Aktif (canlı) oturumlar otomatik
+gönderilmiyor** — sürekli değişip gürültü ekledikleri için ajan bunları **kendi
+inisiyatifiyle** `list_sessions` aracıyla çeker (manuel kontrol). Blok başlığı
+buna göre güncellendi ("Active (live) sessions are NOT listed here; call the
+list_sessions tool..."), `Active:` bölümü ve kullanılmayan `maxActiveSessionsInBlock`
+sabiti kaldırıldı. Tek kaynak: chat yolu (`composeTurnRequest`) + headless
+(`buildAgentDynamicPrompt`) aynı fonksiyonu çağırdığı için ikisi de otomatik
+hizalı. Workspace ayarları (`SessionContextEnabled`/`EveryTurn`/`RecentCount`)
+aynen geçerli — yalnız aktif oturum satırları düştü. Test `TestSessionsContextBlock`
+güncellendi (aktif oturum yok, yalnız `Recent:`).
+
+**Manuel kontrol için statik ipucu + frontend temizliği:** `list_sessions` aracının
+açıklaması (`internal/tools/builtin_sessions.go`, statik/cache'li şema) artık aktif
+oturumların bağlama otomatik enjekte EDİLMEDİĞİNİ ve devam eden işi görmek için bu
+aracın çağrılması gerektiğini söylüyor. Frontend `WorkspacePanel` "Session bağlamı"
+toggle hint'i "aktif + son" yerine "son (geçmiş) sessionlar; aktif olanları
+list_sessions ile kendi çeker" olarak güncellendi.
+
+## Batching bulgusu REVİZE: deterministik değil, olasılıksal ✅ (2026-07-10, v6/v7)
+
+v6/v7 koşuları önceki iki keskin hipotezi (yalnız-sürüm, katı "think XOR batch")
+**olasılıksal** bir resme çevirdi: TS v6 (2.1.205, 8 thinking bloğu) **batch'ledi**;
+CA v6 (2.1.197, 0 thinking) **serial** koştu. 16 koşu/probe'luk toplam örneklem
+yine güçlü eğilimler gösteriyor — 2.1.197: 6/7 batch · 2.1.203/205+thinking: 1/5
+batch · 2.1.205+thinking-off: 2/2 batch — yani sürüm ve thinking batching
+OLASILIĞINI kuvvetle etkileyen kovaryatlar, ama garanti değil. Maliyetin gerçek
+belirleyicisi **batch⇔ucuz / serial⇔pahalı**; ikinci kalıcı bulgu: TS aynı görevde
+CA'dan **~1.7× fazla output token** üretiyor (18k vs 10k — prompt/verbosite
+kaynaklı, ayrı optimizasyon adayı). Kesinleşen tek şey: v7'de `thinkingLevel`
+Kapalı → **0 thinking** (aşağıdaki DisableThinking bağlaması canlıda doğrulandı).
+Sağlıklı kıyas için sıradaki adım: koşul başına n≥5 tekrarla batching-oranı +
+maliyet dağılımı.
+
+## ThinkingLevel "Kapalı" → CLI'da MAX_THINKING_TOKENS=0 (batch dönüşü) ✅ (2026-07-10)
+
+"Think XOR batch" bulgusunun ürün çözümü: `Request.DisableThinking` (yeni alan) —
+`completeTracedInner` `thinkingBudgetForLevel(agent.ThinkingLevel)==0` ise set
+eder (UI'daki **Kapalı** = `""`, per-turn `off` dahil); claude-cli **her iki
+yolda** (one-shot `Complete` + persistent-session launcher) subprocess'e
+`MAX_THINKING_TOKENS=0` env'i enjekte eder → thinking tamamen kapanır, Claude
+Code ≥2.1.203'te paralel araç batch'leri geri gelir (probe kanıtı: gerçek
+AlgoBench 2.1.205'te `[6,6,1,1,4,1]`). Native sağlayıcılar alanı yok sayar
+(orada budget 0 zaten kapalı) — yani bu aynı zamanda bir **parite düzeltmesi**:
+"Kapalı" seçimi artık CLI'da da gerçekten kapalı (eskiden CLI kendi adaptive
+default'una düşüyordu). `cliEffortLevel("off")` low→high düzeltildi (thinking
+zaten kapalı; düşük effort basit-görev batch'ini riske atar). **Frontend:**
+Ajan ayarlarında thinking seçicisinin altı güncellendi — seviyenin artık CLI
+`effortLevel`'ına eşlendiği yazıyor; **claude-cli + Kapalı** seçiliyken ⚡'lı
+bilgi kutusu "think XOR batch" davranışını, maliyet kazancını ve takası anlatır
+(`AgentSettingsForm.tsx`). Test: `TestCLIEffortLevel` güncel; suite 791/29
+paket + tsc yeşil. Benchmark ajanını **Kapalı**'ya alıp v6'yı 2.1.205'te koşmak
+artık pin gerektirmiyor.
+
+## Paralel araç batch'leri chat'te gruplu görünüyor ✅ (2026-07-10)
+
+Tek provider cevabında gelen çoklu paralel tool çağrıları artık UI'da tek küme
+olarak render ediliyor: `TurnStep.Batch` (tur içi 1-tabanlı grup id, `omitempty`)
+— **native döngü** her çok-çağrılı cevaba grup id atar (`toolloop.go` `batchSeq`;
+tool kartı + izin/guardrail hataları dahil), **claude-cli yolu** stream-json'da
+aynı API mesaj id'sini paylaşan `tool_use` event'lerini gruplar (`cliMessage.ID`
++ parser `curMsgID/curMsgTools/batchSeq`; CLI bir mesajı bloklara bölerek
+yayınladığı için 2. çağrıda geriye dönük damgalama). Frontend: `TurnSteps.tsx`
+ardışık aynı-batch adımları "⚡ N paralel araç çağrısı (tek istekte)" başlıklı
+vurgulu çerçevede kümeler (tekil render'a düşen grup düz satıra döner);
+`renderStep` yardımcıya çıkarıldı. Test: `claudecli_batch_test.go` (bölünmüş
+mesaj + tekil + tek-event'te 3'lü senaryosu); suite 801/30 paket + tsc yeşil.
+effortLevel düzeltmesiyle birlikte batching görünürlüğü de tamam — v4
+benchmark'ta gruplar chat'te doğrudan izlenebilir.
 
 ## Benchmark serileşmesinin GERÇEK kök nedeni: `effortLevel` ✅ (2026-07-09, akşam)
 
@@ -15,9 +303,29 @@ settings ile default'a düşüyordu. `--disallowedTools`/`--allowedTools`/
 `--dangerously-skip-permissions`/`stream-json` tek tek elendi (hepsi batch'li).
 the external agent projects 2.1.197'ye pinli olduğu için hiç etkilenmedi. Maliyet zinciri:
 default effort → serileşme → çağrı başına prefix re-read + cache-write primi →
-$0.65→$1.51. **Çözüm adayı:** workspace claude-home seed'ine / per-turn
-`--settings` dosyasına `effortLevel` yazmak (agent ThinkingLevel eşlemesi veya
-sabit high) — aşağıdaki v1↔v2 girdisinin devamı.
+$0.65→$1.51. **Uygulanan katman + SONRADAN DÜZELTİLEN beklenti (v5 sonrası,
+2026-07-10 gece):** `ensureClaudeHomeEffortLevel` (workspace açılışında claude-home
+settings'e eksikse `effortLevel`, kullanıcı `~/.claude`'undan kopya/`high`) +
+`writeCLISettings` per-turn `effortLevel` (`cliEffortLevel`: ThinkingLevel eşlemesi)
+uygulandı ve kalıcı (zararsız + ThinkingLevel'a CLI karşılığı kazandırır). ANCAK
+v5 koşusu + belirleyici probe (gerçek AlgoBench promptu + `effortLevel:high` +
+2.1.205, `--max-turns 6`) gösterdi ki **effortLevel yalnız basit/thinkingsiz
+görevlerdeki serileşmeyi düzeltiyor; karmaşık (thinking tetikleyen) görevlerde
+2.1.203+ effort değerinden bağımsız serileştiriyor** (ayarlar/hook/deny/MCP/
+append-system-prompt tek tek probe'la aklandı; medium bile trivial görevde
+batch'liyor). **NİHAİ KÖK NEDEN (aynı gece, probe'la kanıtlı):** 2.1.203+
+**thinking aktifken paralel tool çağrısı yapmıyor** (think XOR batch; eski
+CLI'lar — CA 2.1.197, TS 2.1.202 — hem düşünüp hem batch'liyordu).
+`CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1` YETMİYOR (yine thinking üretti,
+serial); **`MAX_THINKING_TOKENS=0`** thinking'i tamamen kapatınca gerçek
+AlgoBench 2.1.205'te **[6,6,1,1,4,1] batch imzasına döndü** (v1 paritesi). Yani
+iki geçerli çözüm: (a) CLI'ı ≤2.1.202'ye pinle (thinking + batch birlikte), veya
+(b) 2.1.205'te `MAX_THINKING_TOKENS=0` env'i (batch var, thinking yok —
+kalite/maliyet takası ajan bazında seçilmeli; TionSwarm'a ThinkingLevel="off" →
+env enjeksiyonu olarak bağlanabilir, henüz bağlanmadı). Kaynaklar: claude-code
+issue #24131 (paralel Write sınırı, closed-not-planned), #65785 (`--thinking
+disabled` dokümantasyonu), topluluk: MAX_THINKING_TOKENS/effort yazıları.
+Test: `claudehome_effort_test.go`; suite 800/30 paket yeşil.
 
 ## Benchmark v1↔v2 maliyet farkı analizi: fail CLI sürümüydü ✅ (2026-07-09)
 
@@ -121,6 +429,17 @@ silmek referansı düşürür, artifact'ı silmez; çözülemeyen id'ler UI'da a
   inflight kurtarma dahil; (d) `ExecutionsPanel` kendi polling/tick transkript mantığını bu
   hook'la değiştirdi (liste polling'i kaldı). Sonuç: tek SSE → tek stepBus → N transkript
   görünümü aynı canlı kodu paylaşır. `tsc` + `vite build` temiz.
+- **Executions canlı-transkript flicker fix (2026-07-10):** `useLiveTranscript.load`
+  arka-plan poll'de (`RUNNING_POLL_MS` 2sn) + her `executions` sinyalinde `setMessages(m)`
+  ile tüm listeyi kalıcı mesajlarla değiştirip **canlı ghost balonu düşürüyor**, ardından
+  `recoverInflightSnapshot`'ı **her yüklemede** çağırıp akümülatörü snapshot'ın (≤600ms
+  throttle) daha az adımına resetliyor + balon id'sini `live-auto-*`↔`messageId` arası
+  değiştiriyordu → çalışan turda saniyede birkaç kez titreme ("N araç" oynaması, balonun
+  çıplak working-dots'a düşüp geri gelmesi). Düzeltme: (a) ghost balonu kalıcı-liste
+  takasında **koru** (id ile, yalnız `running` iken ve henüz persist olmamışsa); (b)
+  `recoverInflightSnapshot`'ı yalnız **ghost yokken** çağır (gerçek mid-turn reload); (c)
+  ghost persist olunca **veya** tur bitince akümülatörü sil (bir sonraki turun stale
+  girdiye eklemesini önler). `runningRef` ile `load` kimliği stabil kalır. `tsc` temiz.
 
 ## Board otomasyon değişkenleri: `{{owner}}` + `{{priority}}` ✅ (2026-07-09)
 

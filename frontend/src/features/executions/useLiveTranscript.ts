@@ -48,6 +48,10 @@ export function useLiveTranscript(
 ): LiveTranscript {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
+  // Mirror `running` into a ref so the (identity-stable) `load` callback can read
+  // the latest turn state without being re-created on every running flip.
+  const runningRef = useRef(running)
+  runningRef.current = running
 
   // Ghost-bubble accumulator keyed by session (mirrors useChatStream). This view
   // never OWNS a run, so runsRef stays empty — that makes foldAutoStep /
@@ -75,10 +79,34 @@ export function useLiveTranscript(
       try {
         const m = await api.listMessages(sid)
         if (activeSessionIdRef.current !== sid) return
-        setMessages(m)
-        // Mid-turn: if a turn is running and its reply hasn't persisted yet, seed
-        // the ghost bubble from the inflight snapshot; the step bus then grows it.
-        await recoverInflightSnapshot(ctx.current, sid, m)
+        // Reconcile the live ghost bubble with the freshly persisted list. A
+        // background poll/tick previously replaced the whole array (dropping the
+        // ghost) and then re-seeded it from the inflight snapshot on EVERY call —
+        // which reset the bus-accumulated steps and churned the bubble id, so the
+        // transcript flickered ("N araç" jumping, the bubble blinking to bare
+        // working-dots) a few times a second while a turn ran.
+        const ghostId = autoLiveRef.current.get(sid)?.id
+        const ghostPersisted = !!ghostId && m.some((x) => x.id === ghostId)
+        // Drop the accumulator once the turn's authoritative message has landed
+        // (ghost id now in the list) or the turn is no longer running — otherwise
+        // a stale entry would be appended to by the NEXT turn's steps.
+        if (ghostId && (ghostPersisted || !runningRef.current)) {
+          autoLiveRef.current.delete(sid)
+        }
+        setMessages((prev) => {
+          // Keep the still-live ghost across the persisted-list swap so a poll
+          // doesn't blink it out (it isn't persisted yet).
+          if (runningRef.current && autoLiveRef.current.has(sid) && !ghostPersisted) {
+            const ghost = prev.find((x) => x.id === ghostId)
+            if (ghost) return [...m, ghost]
+          }
+          return m
+        })
+        // Seed the ghost from the inflight snapshot ONLY when there is none yet —
+        // a genuine mid-turn reload — not on every background poll.
+        if (!autoLiveRef.current.has(sid)) {
+          await recoverInflightSnapshot(ctx.current, sid, m)
+        }
       } catch (e) {
         if (activeSessionIdRef.current === sid) onError?.((e as Error).message)
       } finally {

@@ -43,8 +43,13 @@ func TestMoveTaskChangesColumn(t *testing.T) {
 	tk, _ := d.CreateTask(ctx, db.Task{Title: "T", Prompt: "p"})
 
 	move := NewMoveTaskTool(d, "actor-1")
-	if _, err := move.Call(ctx, json.RawMessage(`{"id":"`+tk.ID+`","boardState":"nope"}`)); err == nil {
+	if _, err := move.Call(ctx, json.RawMessage(`{"id":"`+tk.ID+`","boardState":"Not Valid!"}`)); err == nil {
 		t.Fatal("expected invalid boardState to be rejected")
+	}
+	// A custom workspace column key (lowercase/digits/underscores) is accepted —
+	// move_task no longer restricts boardState to the five built-in columns.
+	if _, err := move.Call(ctx, json.RawMessage(`{"id":"`+tk.ID+`","boardState":"pbi"}`)); err != nil {
+		t.Fatalf("move_task to custom column key should succeed: %v", err)
 	}
 	if _, err := move.Call(ctx, json.RawMessage(`{"id":"`+tk.ID+`","boardState":"done"}`)); err != nil {
 		t.Fatalf("move_task: %v", err)

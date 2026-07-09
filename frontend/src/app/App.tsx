@@ -634,6 +634,7 @@ export default function App() {
         <SessionContextModal
           sessionId={ctl.activeSessionId}
           title={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.title}
+          updatedAt={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.updatedAt}
           onClose={() => setCtxPreviewOpen(false)}
         />
       )}

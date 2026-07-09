@@ -23,6 +23,10 @@ type TodoSinkItem struct {
 // agent/api (which would cycle).
 type TodoSink interface {
 	SaveTodos(ctx context.Context, todos []TodoSinkItem) error
+	// LoadTodos returns the last persisted checklist (ok=false when none exists
+	// yet). It backs todo_write's compact `set` update form, which needs the
+	// previous list to merge status changes into.
+	LoadTodos(ctx context.Context) (todos []TodoSinkItem, ok bool, err error)
 }
 
 type todoSinkKey struct{}

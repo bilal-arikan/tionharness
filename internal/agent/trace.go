@@ -87,6 +87,15 @@ const (
 	// — path plus added/removed line counts and an optional unified patch — rather
 	// than a generic tool row. The payload lives in Path/Added/Removed/Patch.
 	StepDiff StepKind = "diff"
+	// StepContextChange announces that the session's frozen static context (prompt
+	// epoch snapshot) drifted from live state mid-session: the user edited the
+	// agent persona/instructions, changed skills, toggled a capability, or the
+	// tool catalog changed. Text is the headline; Areas carries the per-block
+	// added/removed diff. Emitted once per drift episode; persisted so the chat
+	// history shows when a change landed. The change only takes full effect after
+	// a context refresh (the frozen prefix is kept byte-stable until then to
+	// preserve the prompt cache).
+	StepContextChange StepKind = "context_change"
 	// StepSubagent is one run_subagent invocation rendered as a collapsible nested
 	// agent card: Tool holds the resolved target (profile id or agent name), Text
 	// the delegated task, Output the subagent's final reply, and SubSteps the
@@ -148,6 +157,41 @@ type TurnStep struct {
 	// SubSteps carries the nested activity trace of a StepSubagent step — the
 	// subagent's own tool calls / thinking, captured in its isolated context.
 	SubSteps []TurnStep `json:"subSteps,omitempty"`
+	// Batch groups tool steps born from ONE provider response that carried
+	// multiple parallel tool calls: all of them share the same 1-based group id
+	// (unique within the turn), so the UI can render them as one "N parallel
+	// calls" cluster. 0 (omitted) = a lone call, no grouping. Set by the native
+	// tool loop and the claude-cli stream parser alike.
+	Batch int `json:"batch,omitempty"`
+	// Areas carries the per-block added/removed diff for a StepContextChange step
+	// (the prompt-epoch drift). Added/Removed above hold the rollup counts.
+	Areas []ContextArea `json:"areas,omitempty"`
+}
+
+// ContextChangeStep builds the persisted/streamed TurnStep for a prompt-epoch
+// drift, from the computed diff. Returns a zero step when the change is empty.
+func ContextChangeStep(c *ContextChange) TurnStep {
+	if c.Empty() {
+		return TurnStep{}
+	}
+	return TurnStep{
+		Kind:    StepContextChange,
+		Text:    c.Summary(),
+		Added:   c.Added,
+		Removed: c.Removed,
+		Areas:   c.Areas,
+	}
+}
+
+// todoStepItems resolves the checklist a todo_write call represents: the
+// full-replace form carries it in the input; the compact `set` form carries the
+// server-merged list in the tool RESULT (same {"todos":[...]} shape inside the
+// JSON confirmation).
+func todoStepItems(input json.RawMessage, output string) []TodoItem {
+	if todos := parseTodos(input); len(todos) > 0 {
+		return todos
+	}
+	return parseTodos(json.RawMessage(output))
 }
 
 // parseTodos extracts the checklist items from a todo_write tool call's input
@@ -189,9 +233,10 @@ func traceStepToTurnStep(t providers.TraceStep) TurnStep {
 		Input:    t.Input,
 		Output:   t.Output,
 		IsError:  t.IsError,
+		Batch:    t.Batch,
 	}
 	if st.Kind == StepTool && !st.IsError && tool == "todo_write" {
-		if todos := parseTodos(t.Input); len(todos) > 0 {
+		if todos := todoStepItems(t.Input, t.Output); len(todos) > 0 {
 			st.Kind = StepTodo
 			st.Todos = todos
 		}

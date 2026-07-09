@@ -60,7 +60,7 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       </div>
       <Toggle
         label="Session bağlamı"
-        hint="Bu workspace'in ajanlarına aktif + son sessionlarının kısa özetini bağlama ekler ve list_sessions aracını sunar. Mevcut başlık/özet kullanılır (yeni LLM çağrısı yok)."
+        hint="Bu workspace'in ajanlarına son (geçmiş) sessionlarının kısa özetini bağlama ekler ve list_sessions aracını sunar. Aktif (canlı) sessionlar otomatik gönderilmez — ajan onları list_sessions ile kendi çeker. Mevcut başlık/özet kullanılır (yeni LLM çağrısı yok)."
         checked={ws.sessionContextEnabled}
         onChange={(v) => setWsField('sessionContextEnabled', v)}
       />

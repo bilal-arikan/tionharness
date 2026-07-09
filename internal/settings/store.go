@@ -336,20 +336,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	}
 	applyInt(&next.MaxOutputTokens, p.MaxOutputTokens)
 
-	if p.CompactToolOutput != nil {
-		next.CompactToolOutput = *p.CompactToolOutput
-	}
-	applyInt(&next.CompactMaxLines, p.CompactMaxLines)
-	applyInt(&next.CompactMaxBytes, p.CompactMaxBytes)
-	if p.CompactLLMSummary != nil {
-		next.CompactLLMSummary = *p.CompactLLMSummary
-	}
-	applyInt(&next.CompactLLMThreshold, p.CompactLLMThreshold)
-	if p.CompactModel != nil {
-		// Trim: a model id with surrounding spaces would break provider resolution.
-		next.CompactModel = strings.TrimSpace(*p.CompactModel)
-	}
-
 	if p.AutoTitleEnabled != nil {
 		next.AutoTitleEnabled = *p.AutoTitleEnabled
 	}
@@ -570,27 +556,6 @@ func normalize(v Settings) Settings {
 	}
 	if v.MaxOutputTokens > 512000 {
 		v.MaxOutputTokens = 512000
-	}
-	// Tool-output compaction (System A): clamp line/byte caps to sane bounds.
-	// 0 is allowed and means "use the built-in default" downstream in Tunables.
-	if v.CompactMaxLines < 0 {
-		v.CompactMaxLines = 0
-	}
-	if v.CompactMaxLines > 5000 {
-		v.CompactMaxLines = 5000
-	}
-	if v.CompactMaxBytes < 0 {
-		v.CompactMaxBytes = 0
-	}
-	if v.CompactMaxBytes > 262144 {
-		v.CompactMaxBytes = 262144
-	}
-	// System B threshold: 0 selects the default; clamp the ceiling.
-	if v.CompactLLMThreshold < 0 {
-		v.CompactLLMThreshold = 0
-	}
-	if v.CompactLLMThreshold > 262144 {
-		v.CompactLLMThreshold = 262144
 	}
 	// Delegation guards: keep at least one level/call; clamp to sane ceilings.
 	if v.DelegationMaxDepth < 1 {

@@ -32,10 +32,6 @@ type agentBudgetRow struct {
 	CostUSD      float64             `json:"costUSD"`
 	Priced       bool                `json:"priced"`    // false when any of this agent's spend is unpriced (e.g. claude-cli)
 	Estimated    bool                `json:"estimated"` // true when cost is an equivalent-API estimate (subscription provider)
-	// Tool-output compaction savings (bytes) for this agent today — System A
-	// (deterministic) and System B (LLM summary), standalone meters with no cost.
-	CompactSavedBytes    int `json:"compactSavedBytes"`
-	CompactSavedBytesLLM int `json:"compactSavedBytesLLM"`
 }
 
 // tokenTotals is the shared token-counter block carried by every spend slice
@@ -104,13 +100,11 @@ func modelRowsFor(byModel map[string]db.KindStat) (rows []modelStat, totalCost, 
 type dayPoint struct {
 	Day string `json:"day"`
 	tokenTotals
-	CostUSD              float64 `json:"costUSD"`
-	SavingsUSD           float64 `json:"savingsUSD"`
+	CostUSD    float64 `json:"costUSD"`
+	SavingsUSD float64 `json:"savingsUSD"`
 	// NoCacheCostUSD (per day) feeds only the window-cumulative "cost without caching"
 	// baseline; it is not part of the per-day trend wire shape (json:"-").
-	NoCacheCostUSD       float64 `json:"-"`
-	CompactSavedBytes    int     `json:"compactSavedBytes"`
-	CompactSavedBytesLLM int     `json:"compactSavedBytesLLM"`
+	NoCacheCostUSD float64 `json:"-"`
 }
 
 // handleWorkspaceUsage returns the data behind the Budget screen: today's
@@ -142,7 +136,6 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	byModel := map[string]map[string]*modelStat{}
 	var totalCost, totalSavings float64
 	var totalCacheRead, totalCacheWrite int
-	var totalCompactBytes, totalCompactBytesLLM int
 	totalPriced := true
 	totalEstimated := false
 	rows := make([]agentBudgetRow, 0, len(agents))
@@ -154,22 +147,18 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		}
 		roll := billing.RollupOf(u.ByModel)
 		row := agentBudgetRow{
-			AgentID:              a.ID,
-			Name:                 a.Name,
-			Avatar:               a.Avatar,
-			Color:                a.Color,
-			Provider:             a.Provider,
-			Calls:                u.Calls,
-			InputTokens:          u.InputTokens,
-			OutputTokens:         u.OutputTokens,
-			CostUSD:              roll.CostUSD,
-			Priced:               roll.Priced,
-			Estimated:            roll.Estimated,
-			CompactSavedBytes:    u.CompactSavedBytes,
-			CompactSavedBytesLLM: u.CompactSavedBytesLLM,
+			AgentID:      a.ID,
+			Name:         a.Name,
+			Avatar:       a.Avatar,
+			Color:        a.Color,
+			Provider:     a.Provider,
+			Calls:        u.Calls,
+			InputTokens:  u.InputTokens,
+			OutputTokens: u.OutputTokens,
+			CostUSD:      roll.CostUSD,
+			Priced:       roll.Priced,
+			Estimated:    roll.Estimated,
 		}
-		totalCompactBytes += u.CompactSavedBytes
-		totalCompactBytesLLM += u.CompactSavedBytesLLM
 		if len(u.ByKind) > 0 {
 			row.ByKind = map[string]kindStat{}
 			for k, st := range u.ByKind {
@@ -299,8 +288,6 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		p.NoCacheCostUSD += day.NoCacheCostUSD
 		p.CacheReadTokens += day.CacheReadTokens
 		p.CacheWriteTokens += day.CacheWriteTokens
-		p.CompactSavedBytes += u.CompactSavedBytes
-		p.CompactSavedBytesLLM += u.CompactSavedBytesLLM
 	}
 	trend := make([]dayPoint, 0, len(perDay))
 	for _, p := range perDay {
@@ -316,7 +303,6 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	// is being reused instead of re-paid.
 	var cumCalls, cumIn, cumOut, cumCacheRead, cumCacheWrite int
 	var cumCost, cumSavings, cumNoCache float64
-	var cumCompactBytes, cumCompactBytesLLM int
 	for _, p := range trend {
 		cumCalls += p.Calls
 		cumIn += p.InputTokens
@@ -326,8 +312,6 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		cumCost += p.CostUSD
 		cumSavings += p.SavingsUSD
 		cumNoCache += p.NoCacheCostUSD
-		cumCompactBytes += p.CompactSavedBytes
-		cumCompactBytesLLM += p.CompactSavedBytesLLM
 	}
 	var cacheHitRate float64
 	if denom := cumCacheRead + cumIn + cumCacheWrite; denom > 0 {
@@ -337,35 +321,31 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"day": today,
 		"totals": map[string]any{
-			"calls":                totals.Calls,
-			"inputTokens":          totals.InputTokens,
-			"outputTokens":         totals.OutputTokens,
-			"cacheReadTokens":      totalCacheRead,
-			"cacheWriteTokens":     totalCacheWrite,
-			"byKind":               byKind,
-			"costUSD":              totalCost,
-			"savingsUSD":           totalSavings,         // saved by prompt-cache reads vs full input price
-			"priced":               totalPriced,          // false when some spend is unpriced (subscription/custom)
-			"estimated":            totalEstimated,       // true when cost includes equivalent-API estimates (e.g. claude-cli)
-			"compactSavedBytes":    totalCompactBytes,    // System A: bytes trimmed from tool output (deterministic)
-			"compactSavedBytesLLM": totalCompactBytesLLM, // System B: bytes trimmed by LLM summary
+			"calls":            totals.Calls,
+			"inputTokens":      totals.InputTokens,
+			"outputTokens":     totals.OutputTokens,
+			"cacheReadTokens":  totalCacheRead,
+			"cacheWriteTokens": totalCacheWrite,
+			"byKind":           byKind,
+			"costUSD":          totalCost,
+			"savingsUSD":       totalSavings,   // saved by prompt-cache reads vs full input price
+			"priced":           totalPriced,    // false when some spend is unpriced (subscription/custom)
+			"estimated":        totalEstimated, // true when cost includes equivalent-API estimates (e.g. claude-cli)
 		},
 		"byProvider": providerRows,
 		"agents":     rows,
 		"trend":      trend,
 		"cumulative": map[string]any{
-			"days":                 days,
-			"calls":                cumCalls,
-			"inputTokens":          cumIn,
-			"outputTokens":         cumOut,
-			"cacheReadTokens":      cumCacheRead,
-			"cacheWriteTokens":     cumCacheWrite,
-			"costUSD":              cumCost,
-			"savingsUSD":           cumSavings,         // total saved by prompt-cache reads over the window
-			"noCacheCostUSD":       cumNoCache,         // counterfactual: what the window would cost with NO caching (cache read/write as fresh input)
-			"cacheHitRate":         cacheHitRate,       // cacheRead / (cacheRead + input + cacheWrite)
-			"compactSavedBytes":    cumCompactBytes,    // System A bytes trimmed over the window
-			"compactSavedBytesLLM": cumCompactBytesLLM, // System B bytes trimmed over the window
+			"days":             days,
+			"calls":            cumCalls,
+			"inputTokens":      cumIn,
+			"outputTokens":     cumOut,
+			"cacheReadTokens":  cumCacheRead,
+			"cacheWriteTokens": cumCacheWrite,
+			"costUSD":          cumCost,
+			"savingsUSD":       cumSavings,   // total saved by prompt-cache reads over the window
+			"noCacheCostUSD":   cumNoCache,   // counterfactual: what the window would cost with NO caching (cache read/write as fresh input)
+			"cacheHitRate":     cacheHitRate, // cacheRead / (cacheRead + input + cacheWrite)
 		},
 	})
 }

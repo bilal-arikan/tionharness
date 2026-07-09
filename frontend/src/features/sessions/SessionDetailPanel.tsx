@@ -14,7 +14,8 @@ import { SessionGoalSection } from './SessionGoalSection'
 import { SessionContextUsage } from './SessionContextUsage'
 import { SessionAgentsSection } from './SessionAgentsSection'
 import { SessionUsageCard } from './SessionUsageCard'
-import { formatBytes, formatDate } from './sessionDetailFormat'
+import { CacheWarmthBadge } from './CacheWarmthBadge'
+import { formatBytes, formatDate, cacheRemaining } from './sessionDetailFormat'
 
 interface Props {
   sessionId: string
@@ -142,12 +143,21 @@ export function SessionDetailPanel({
     }
   }, [isBusy, sessionId])
 
-  // Live elapsed timer: tick every second while a turn is running.
+  // Live 1s tick: drives the running-turn elapsed timer AND the prompt-cache
+  // warmth countdown. Runs while a turn is in flight OR the cache is still warm,
+  // then self-stops once it goes cold (no per-second effect churn — the gate
+  // depends only on the stable running/updatedAt inputs).
   useEffect(() => {
-    if (!info?.running) return
-    const t = setInterval(() => setNowTick(Math.floor(Date.now() / 1000)), 1000)
+    const running = !!info?.running
+    const updatedAt = info?.updatedAt ?? 0
+    const needsTick = () => running || cacheRemaining(updatedAt, Math.floor(Date.now() / 1000)) > 0
+    if (!needsTick()) return
+    const t = setInterval(() => {
+      setNowTick(Math.floor(Date.now() / 1000))
+      if (!needsTick()) clearInterval(t)
+    }, 1000)
     return () => clearInterval(t)
-  }, [info?.running])
+  }, [info?.running, info?.updatedAt])
 
   // Stop the in-flight turn: cancels the run's context, which terminates the
   // background provider/claude-cli subprocess. Works for detached/autonomous turns.
@@ -399,8 +409,14 @@ export function SessionDetailPanel({
           <Section title="Genel">
             <Row label="Başlama" value={formatDate(info.createdAt)} />
             <Row label="Son etkinlik" value={formatDate(info.updatedAt)} />
-            <Row label="Mesaj sayısı" value={String(info.messageCount)} />
+            {/* Prompt-cache warmth: how long the cached prefix stays warm after
+                the last turn (1h Anthropic ephemeral TTL / prompt epoch). */}
+            <div className="flex items-center justify-between py-0.5 text-xs">
+              <span className="text-[var(--color-text-dim)]">Prompt cache</span>
+              <CacheWarmthBadge updatedAt={info.updatedAt} nowSec={nowTick} />
+            </div>
             <Row label="Boyut" value={`${formatBytes(info.sizeBytes)} · ${info.fileCount} dosya`} />
+            <Row label="Mesaj sayısı" value={String(info.messageCount)} />
           </Section>
 
 
@@ -423,7 +439,7 @@ export function SessionDetailPanel({
 
           {/* This session's own lifetime spend + savings — the per-conversation
               cost (the session-scoped analog of the agent's daily total below). */}
-          {sessionUsage && (sessionUsage.calls > 0 || sessionUsage.compactSavedBytes > 0 || sessionUsage.compactSavedBytesLLM > 0) && (
+          {sessionUsage && sessionUsage.calls > 0 && (
             <SessionUsageCard sessionUsage={sessionUsage} />
           )}
 

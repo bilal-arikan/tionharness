@@ -35,9 +35,6 @@ export interface BudgetAgentRow {
   costUSD: number
   priced: boolean
   estimated?: boolean // equivalent-API estimate for subscription providers (e.g. claude-cli)
-  // Tool-output compaction savings (bytes) for this agent today.
-  compactSavedBytes?: number
-  compactSavedBytesLLM?: number
 }
 
 export interface ProviderStat {
@@ -63,8 +60,6 @@ export interface BudgetTrendPoint {
   cacheWriteTokens: number
   costUSD: number
   savingsUSD: number
-  compactSavedBytes: number
-  compactSavedBytesLLM: number
 }
 
 // Window-cumulative totals across the selected trend window ("oturumlar arası
@@ -85,8 +80,6 @@ export interface BudgetCumulative {
   // the write premium). Always ≥ costUSD.
   noCacheCostUSD: number
   cacheHitRate: number
-  compactSavedBytes: number
-  compactSavedBytesLLM: number
 }
 
 export interface WorkspaceUsage {
@@ -102,8 +95,6 @@ export interface WorkspaceUsage {
     savingsUSD: number
     priced: boolean
     estimated?: boolean // true when cost includes equivalent-API estimates (e.g. claude-cli)
-    compactSavedBytes: number    // System A: deterministic tool-output trim
-    compactSavedBytesLLM: number // System B: LLM summary trim
   }
   byProvider: ProviderStat[]
   agents: BudgetAgentRow[]
@@ -127,8 +118,6 @@ export interface SessionUsageDetail {
   savingsUSD: number
   priced: boolean
   estimated?: boolean
-  compactSavedBytes: number
-  compactSavedBytesLLM: number
 }
 
 // Per-session debug journal — GET /api/sessions/{id}/debug. The parallel

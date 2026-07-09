@@ -216,7 +216,6 @@ func (s *Server) applySettings() {
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
-	s.tun.SetContextBudget(cur.MaxContextTokens)                             // scale tool-output thresholds to the budget (CG-9)
 	s.tun.SetTitleModel(cur.TitleModel)
 	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffPressure, cur.HandoffMaxChain, cur.HandoffWriteFile)
 	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
@@ -245,7 +244,6 @@ func (s *Server) applySettings() {
 	s.tun.SetStuckTurnThreshold(cur.StuckTurnThreshold)
 	s.tun.SetLessonReflect(cur.LessonReflect)
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
-	s.tun.SetToolCompaction(cur.CompactToolOutput, cur.CompactMaxLines, cur.CompactMaxBytes, cur.CompactLLMSummary, cur.CompactLLMThreshold, cur.CompactModel)
 	if s.backups != nil {
 		s.backups.Configure(backup.Config{
 			Enabled:       cur.BackupEnabled,

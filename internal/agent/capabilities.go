@@ -26,7 +26,7 @@ type Capability struct {
 
 // capabilities is the ordered registry of optional-tool probes. Append here to
 // teach the agent about a new external tool.
-var capabilities = []Capability{codebaseMemoryCapability}
+var capabilities = []Capability{codebaseMemoryCapability, tokenOptimizerCapability}
 
 // CapabilityContext concatenates the context blocks of every capability currently
 // present. cwd is the session working directory (may be ""), used by capabilities
@@ -108,11 +108,13 @@ var codebaseMemoryCapability = Capability{
 
 const codebaseMemoryGuidance = "# Code knowledge-graph available\n" +
 	"A codebase-memory MCP server is connected. For ANY code search, navigation, or " +
-	"structural understanding, PREFER its tools over broad grep/file-scans: search_code " +
-	"(text/symbol), search_graph + get_code_snippet (read a definition), query_graph / " +
-	"trace_path (relationships), get_architecture (workspace-wide overview). It is faster " +
-	"and far more token-efficient. After code changes, re-run index_repository (or rely on " +
-	"the background watcher) so results stay fresh."
+	"structural understanding, use its tools FIRST: search_code (text/symbol), " +
+	"search_graph + get_code_snippet (read a definition), query_graph / trace_path " +
+	"(relationships), get_architecture (workspace-wide overview). It is faster and far " +
+	"more token-efficient. Do NOT reach for raw shell greps (PowerShell Select-String, " +
+	"Get-Content -Recurse, grep, findstr) as your first move — they are the LAST resort, " +
+	"only when the index genuinely has no answer for a query. After code changes, re-run " +
+	"index_repository (or rely on the background watcher) so results stay fresh."
 
 // projectIDForPath mirrors codebase-memory-mcp's path->project-id rule: path
 // separators (and the drive colon) collapse to '-', and any character outside

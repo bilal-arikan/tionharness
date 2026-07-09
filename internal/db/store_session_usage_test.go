@@ -30,12 +30,6 @@ func TestSessionUsage(t *testing.T) {
 	if err := d.AddSessionUsageKind(ctx, "", agent, UsageKindChat, "anthropic", "x", UsageDelta{Calls: 9, InputTokens: 9}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.AddSessionCompactionSavings(ctx, sid, agent, 1200); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.AddSessionLLMCompactionSavings(ctx, sid, agent, 800); err != nil {
-		t.Fatal(err)
-	}
 
 	u, err := d.GetSessionUsage(ctx, sid)
 	if err != nil {
@@ -53,13 +47,6 @@ func TestSessionUsage(t *testing.T) {
 	if m := u.ByModel[ModelKey("anthropic", "claude-haiku-4-5")]; m.Calls != 1 || m.CacheReadTokens != 500 {
 		t.Errorf("haiku model bucket=%+v, want 1 call / 500 cacheRead", m)
 	}
-	if u.CompactSavedBytes != 1200 || u.CompactSavedBytesLLM != 800 {
-		t.Errorf("savings A=%d B=%d, want 1200/800", u.CompactSavedBytes, u.CompactSavedBytesLLM)
-	}
-	// Savings are standalone — token counters untouched by them.
-	if u.InputTokens != 300 {
-		t.Errorf("savings must not touch token counters: in=%d", u.InputTokens)
-	}
 
 	// Survives reload.
 	d2, err := Open(storePath)
@@ -70,7 +57,7 @@ func TestSessionUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u2.Calls != 2 || u2.CompactSavedBytes != 1200 || u2.CompactSavedBytesLLM != 800 {
+	if u2.Calls != 2 {
 		t.Fatalf("after reload: %+v", u2)
 	}
 }
@@ -115,38 +102,3 @@ func TestSessionUsageProviderCalls(t *testing.T) {
 	}
 }
 
-// TestAddLLMCompactionSavings verifies System B's byte savings accumulate into
-// today's per-agent rollup independently of token counters and System A's meter.
-func TestAddLLMCompactionSavings(t *testing.T) {
-	ctx := context.Background()
-	d, err := Open(filepath.Join(t.TempDir(), "store"))
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	const agent = "AGT1"
-
-	if err := d.AddLLMCompactionSavings(ctx, agent, 500); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.AddLLMCompactionSavings(ctx, agent, 300); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.AddCompactionSavings(ctx, agent, 1000); err != nil { // System A meter, separate
-		t.Fatal(err)
-	}
-	// Non-positive deltas are no-ops.
-	if err := d.AddLLMCompactionSavings(ctx, agent, 0); err != nil {
-		t.Fatal(err)
-	}
-
-	u, err := d.GetUsageToday(ctx, agent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.CompactSavedBytesLLM != 800 {
-		t.Fatalf("CompactSavedBytesLLM=%d, want 800", u.CompactSavedBytesLLM)
-	}
-	if u.CompactSavedBytes != 1000 {
-		t.Fatalf("System A meter leaked: CompactSavedBytes=%d, want 1000", u.CompactSavedBytes)
-	}
-}

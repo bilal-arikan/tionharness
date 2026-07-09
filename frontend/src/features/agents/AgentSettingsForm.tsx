@@ -225,8 +225,19 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           />
         </Field>
         <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
-          Uzatılmış akıl yürütme yalnız <strong>anthropic</strong> sağlayıcıda ve araçsız sohbette etkilidir.
+          Uzatılmış akıl yürütme <strong>anthropic</strong> sağlayıcıda araçsız sohbette etkilidir.{' '}
+          <strong>claude-cli</strong>'da seviye artık alt sürece de geçer: seçilen seviye CLI{' '}
+          <code>effortLevel</code>'ına eşlenir; <strong>Kapalı</strong> thinking'i tamamen kapatır
+          (<code>MAX_THINKING_TOKENS=0</code>).
         </p>
+        {provider === 'claude-cli' && !thinkingLevel && (
+          <p className="-mt-1 rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-2 py-1 text-xs text-[var(--color-text-dim)]">
+            ⚡ <strong>Kapalı + claude-cli:</strong> Claude Code ≥2.1.203 thinking açıkken paralel araç
+            çağrısı yapmaz ("think XOR batch"). Bu seçimle thinking kapanır ve paralel batch'ler
+            (tek istekte N araç) geri gelir — daha hızlı ve belirgin şekilde daha ucuz; bedeli derin
+            akıl yürütmenin olmaması.
+          </p>
+        )}
 
         <Field label="İzin modu (araç kullanımı)">
           <OptionPills

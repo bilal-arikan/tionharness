@@ -15,6 +15,7 @@ import { relativeTime } from '@/shared/lib/time'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupedList } from '@/shared/hooks/useGroupedList'
+import { useGroupDnD } from '@/shared/hooks/useGroupDnD'
 import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '@/shared/components'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
@@ -41,6 +42,11 @@ const UNGROUPED = 'Grupsuz'
 // Group key for one artifact: its `group` field, or the ungrouped bucket.
 function artifactGroupKey(a: Artifact): string {
   return a.group?.trim() || UNGROUPED
+}
+
+// Identity of one artifact row (module-scope so the drag hook's lookup map is stable).
+function artifactId(a: Artifact): string {
+  return a.id
 }
 
 // Order groups: named groups alphabetically (tr) first, ungrouped bucket last.
@@ -234,6 +240,31 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
     },
     [sel.selected, reload, activeId, onError],
   )
+
+  // Drag-and-drop group move: dropping a card on a group header rewrites its
+  // `group` through the same endpoint the bulk action uses. Dragging a card that
+  // belongs to the current selection moves the whole selection.
+  const moveToGroup = useCallback(
+    (ids: string[], group: string) => {
+      Promise.all(ids.map((id) => api.setArtifactGroup(id, group)))
+        .then(() => {
+          if (activeId && ids.includes(activeId)) return api.getArtifact(activeId).then(setActive)
+        })
+        .catch((e) => onError((e as Error).message))
+        // Refresh either way: on success to re-bucket the list, on failure so the
+        // cards snap back to the persisted truth instead of a half-applied move.
+        .finally(() => reload())
+    },
+    [activeId, reload, onError],
+  )
+  const dnd = useGroupDnD<Artifact>({
+    items: list,
+    idOf: artifactId,
+    groupOf: artifactGroupKey,
+    ungroupedLabel: UNGROUPED,
+    selectedIds: sel.selected,
+    onMove: moveToGroup,
+  })
 
   // Create a blank artifact and drop straight into edit mode.
   const createNew = useCallback(async () => {
@@ -487,15 +518,23 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
           )}
           {grouped.map(([groupName, items]) => {
             const isCollapsed = collapsed.has(groupName)
+            const isDropTarget = dnd.isOver(groupName)
             return (
-              <div key={groupName} className="mb-1">
+              // The whole group (header + body) is the drop target, so a card can
+              // be dropped on a folded group's header too.
+              <div key={groupName} className="mb-1" {...dnd.groupProps(groupName)}>
                 <button
                   data-testid="artifacts-group-header"
                   data-group-name={groupName}
                   data-collapsed={isCollapsed}
+                  data-drop-active={isDropTarget}
                   onClick={() => toggleGroup(groupName)}
                   title={isCollapsed ? 'Grubu aç' : 'Grubu katla'}
-                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                  className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
+                    isDropTarget
+                      ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
+                      : 'text-[var(--color-text-dim)]'
+                  }`}
                 >
                   {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                   <span className="min-w-0 flex-1 truncate">{groupName}</span>
@@ -513,7 +552,11 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                           key={a.id}
                           data-testid="artifacts-list-item"
                           data-artifact-id={a.id}
+                          {...dnd.itemProps(a)}
                           onClick={(e) => {
+                            // A drag may end with a trailing click on the source
+                            // card; that click must not change the selection.
+                            if (dnd.consumedByDrag()) return
                             if (sel.handleClick(e, a.id, orderedIds, activeId)) return
                             setActiveId(a.id)
                           }}
@@ -523,7 +566,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                               : isActive
                                 ? SELECTED_ITEM_CLS
                                 : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
-                          }`}
+                          } ${dnd.dragIds.has(a.id) ? 'opacity-50' : ''}`}
                         >
                           <Icon size={16} className="mt-0.5 shrink-0" />
                           <span className="min-w-0 flex-1">

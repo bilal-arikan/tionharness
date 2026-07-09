@@ -84,12 +84,6 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
 - `debugJournalEnabled` (default true) — write the parallel `debug.jsonl` stream per session (turn timings, per-call token spend, per-tool latency/size/errors, hook decisions, compaction/recovery). Off = no debug events written.
 - `debugJournalCap` (default 5000, `0` = default) — newest events kept per session; older ones are pruned once the file passes cap + cap/4. Read it with the `read_session_debug` tool or `GET /api/sessions/{id}/debug`. See `_Docs/38-SESSION-DEBUG.md`.
 
-### Tool-output compaction
-- System A (deterministic, free): `compactToolOutput` (default true),
-  `compactMaxLines` (0–5000, default 200), `compactMaxBytes` (0–262144, default 16384).
-- System B (LLM summary, opt-in): `compactLlmSummary` (default false),
-  `compactLlmThreshold` bytes (default 12288), `compactModel` (`""` = title model).
-
 ### Autonomy
 - The per-agent daily spend caps (`defaultDailyCallLimit`/`defaultDailyTokenLimit` +
   per-agent `dailyCallLimit`/`dailyTokenLimit` + enforcement) were **removed entirely**

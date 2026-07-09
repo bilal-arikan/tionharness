@@ -24,10 +24,19 @@ export type StepKind =
   | 'diff'
   | 'hook'
   | 'subagent'
+  | 'context_change'
 
 export interface TodoItem {
   content: string
   status: 'pending' | 'in_progress' | 'completed'
+}
+
+// One changed region of the frozen static context (prompt-epoch drift), self-
+// labelled by the first line of the changed paragraph. kind ∈ added | removed.
+export interface ContextArea {
+  label: string
+  kind: 'added' | 'removed'
+  lines?: string[]
 }
 
 export interface TurnStep {
@@ -60,6 +69,13 @@ export interface TurnStep {
   // Nested activity trace of a 'subagent' step — the subagent's own tool calls /
   // thinking, captured in its isolated context.
   subSteps?: TurnStep[]
+  // Parallel-batch group id (1-based, unique within the turn): steps born from
+  // ONE provider response that carried multiple parallel tool calls share it, so
+  // the UI clusters them. Absent/0 = lone call.
+  batch?: number
+  // 'context_change' payload: the per-block added/removed diff of the frozen
+  // static context (prompt-epoch drift). added/removed above hold rollup counts.
+  areas?: ContextArea[]
 }
 
 // A slash command surfaced in the chat composer ("/" menu).

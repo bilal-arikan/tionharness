@@ -5,6 +5,8 @@ import { api } from '@/api'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { Button, CollapsibleSection, InfoPopover, ModalOverlay, useBulkToggle, type BulkToggle } from '@/shared/components'
+import { CacheWarmthBadge } from './CacheWarmthBadge'
+import { cacheRemaining } from './sessionDetailFormat'
 
 // FLOOR_NOTE clarifies that the predicted CLI overhead is a per-turn FLOOR (base
 // system + built-ins + eager tools only), so a measured turn can exceed it: the
@@ -27,6 +29,9 @@ const LAZY_VIS_CHIP: Record<string, string> = {
 interface Props {
   sessionId: string
   title?: string
+  // Session last-activity timestamp (unix seconds) — drives the prompt-cache
+  // warmth countdown in the cache legend. Optional: omit to hide the badge.
+  updatedAt?: number
   onClose: () => void
 }
 
@@ -35,8 +40,10 @@ interface Props {
 // transcript (with author labels + tool recap folded in) and the tool catalog,
 // each with a token estimate. A debug view: an optional sample message shows what
 // the agent would receive if that were sent next. Read-only — no turn is run.
-export function SessionContextModal({ sessionId, title, onClose }: Props) {
+export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Props) {
   const [data, setData] = useState<SessionContextPreview | null>(null)
+  // Live 1s tick for the prompt-cache warmth countdown; self-stops once cold.
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000))
   const [err, setErr] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [message, setMessage] = useState('')
@@ -67,6 +74,18 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
   // Reload whenever the sample message is (re)submitted or a toggle flips.
   // simulate/accurate are dependencies so toggling them refetches immediately.
   useEffect(() => load(message, simulate, accurate), [load, simulate, accurate]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tick every second while the prompt cache is still warm, then self-stop.
+  useEffect(() => {
+    if (!updatedAt) return
+    const warm = () => cacheRemaining(updatedAt, Math.floor(Date.now() / 1000)) > 0
+    if (!warm()) return
+    const t = setInterval(() => {
+      setNowSec(Math.floor(Date.now() / 1000))
+      if (!warm()) clearInterval(t)
+    }, 1000)
+    return () => clearInterval(t)
+  }, [updatedAt])
 
   const copy = () => {
     if (!data) return
@@ -253,6 +272,15 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                 <InfoPopover text={data.cache.note} label="Cache nasıl çalışır?" />
               )}
             </span>
+            {/* Prompt-cache TTL countdown: how long this warm prefix survives
+                before the 1h ephemeral cache goes cold (time axis, distinct from
+                the per-segment cached/uncached flags above). */}
+            {updatedAt ? (
+              <span className="ml-auto inline-flex items-center gap-1">
+                <span className="text-[var(--color-text-dim)]">TTL:</span>
+                <CacheWarmthBadge updatedAt={updatedAt} nowSec={nowSec} />
+              </span>
+            ) : null}
           </div>
         )}
 

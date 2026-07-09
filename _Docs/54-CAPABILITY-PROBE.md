@@ -2,7 +2,23 @@
 
 > Generic bir katman: cihazda/işlemde bir **opsiyonel harici yetenek** mevcutsa,
 > ajanın **cachelenebilir statik** sistem-prompt prefix'ine kısa bir bilgi bloğu
-> enjekte edilir. İlk müşteri: `codebase-memory-mcp` (kod bilgi-grafiği).
+> enjekte edilir. Müşteriler: `codebase-memory-mcp` (kod bilgi-grafiği) ve
+> **token-optimizers** (`rtk`/`sqz`, 2026-07-10).
+
+## Token-optimizer capability (rtk / sqz) — 2026-07-10
+
+`internal/agent/capabilities_tokenopt.go`: workspace'in **enabled** Pre/PostToolUse
+hook'larını tarayıp `rtk` / `sqz` işaretçilerini (`\brtk\b` / `\bsqz\b`, kelime-sınırlı)
+arar. Bulunursa statik prefix'e "# Token optimization active" bloğu enjekte edilir —
+ajan bu optimizer'ların **hook ile otomatik** çalıştığını (kendisi çağırmaz) ve gördüğü
+araç çıktısının kısaltılmış olabileceğini (veri kaybı değil) bilir. **Tespit hook
+KOMUTUNDANDIR**, yalnız PATH'ten değil (PATH'te duran ama hook'a bağlanmamış bir ikili
+hiçbir şey yapmaz → over-claim edilmez). Blok, hook'ların **matcher kapsamını** da
+belirtir: WS5'te iki hook da `matcher=Bash` olduğundan, `PowerShell` aracıyla çalışan
+komutlar optimize EDİLMEZ → blok "eşleşen aracı tercih et" der (kritik: bu yüzden bir
+`PowerShell`-ağırlıklı oturumda ikisi de hiç ateşlenmemişti). `rtk` agent-Bash ile,
+`sqz` PostToolUse çıkış sıkıştırmasıyla; ikisinin de mekaniği `17-TOKEN-OPTIMIZASYON.md`.
+Test: `capabilities_tokenopt_test.go` (WS5-şekli + kelime-sınırı + wildcard).
 
 ## Amaç
 

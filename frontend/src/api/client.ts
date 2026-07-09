@@ -74,7 +74,11 @@ export async function errorFromResponse(res: Response): Promise<string> {
 export async function req<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
-    res = await fetch(path, { headers: wsHeaders(), ...init })
+    // no-store: API responses are live workspace state, never cacheable. Without
+    // this the browser may heuristically serve a stale GET (e.g. /api/hooks after
+    // an out-of-band change), so a panel shows outdated data until a hard reload.
+    // A caller may still override via init.cache.
+    res = await fetch(path, { cache: 'no-store', headers: wsHeaders(), ...init })
   } catch {
     // fetch rejects (no response at all) when the dev server / network is down.
     throw new Error('Sunucuya bağlanılamadı. Ağ bağlantını ve backend\'in çalışıp çalışmadığını kontrol et.')

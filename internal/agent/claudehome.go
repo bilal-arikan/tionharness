@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -76,6 +77,48 @@ func EnsureWorkspaceClaudeHome(wsRoot string) {
 				_ = copyClaudeHome(src, home)
 			}
 		}
+	}
+	// Runs on EVERY workspace open (not only fresh seeds) so existing homes are
+	// healed too — the effortLevel guard matters for all CLI turns, including the
+	// non-MCP path that gets no per-turn --settings file.
+	ensureClaudeHomeEffortLevel(home)
+}
+
+// ensureClaudeHomeEffortLevel makes sure a workspace claude-home's settings.json
+// carries an EXPLICIT effortLevel. Claude Code ≥2.1.203 serialises parallel tool
+// calls when effortLevel is unset (default adaptive effort) — each Write becomes
+// its own API call, multiplying prompt-cache re-reads and cost (the AlgoBench
+// v2/v3 regression: workspace homes seeded minimal settings while the user's own
+// ~/.claude carried "high", so only TionSwarm turns degraded). The value is
+// copied ONCE from the user's real ~/.claude/settings.json when set there, else
+// defaults to "high" (pre-2.1.203 batching parity). An existing explicit
+// effortLevel is never overwritten, so the user stays in control per workspace.
+// Best-effort: an unreadable/unparseable settings file is left untouched.
+func ensureClaudeHomeEffortLevel(home string) {
+	path := filepath.Join(home, "settings.json")
+	cfg := map[string]any{}
+	if b, err := os.ReadFile(path); err == nil {
+		if json.Unmarshal(b, &cfg) != nil {
+			return // unparseable: do not risk clobbering a hand-edited file
+		}
+	}
+	if _, ok := cfg["effortLevel"]; ok {
+		return
+	}
+	effort := "high"
+	if uh, err := os.UserHomeDir(); err == nil && uh != "" {
+		if b, err := os.ReadFile(filepath.Join(uh, ".claude", "settings.json")); err == nil {
+			var user map[string]any
+			if json.Unmarshal(b, &user) == nil {
+				if v, ok := user["effortLevel"].(string); ok && v != "" {
+					effort = v
+				}
+			}
+		}
+	}
+	cfg["effortLevel"] = effort
+	if b, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+		_ = os.WriteFile(path, b, 0o644)
 	}
 }
 

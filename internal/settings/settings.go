@@ -257,17 +257,6 @@ type Settings struct {
 	// fallback when this is 0.
 	MaxOutputTokens int `json:"maxOutputTokens"`
 
-	// Tool-output token optimization — two independent, parallel systems applied
-	// to tool results before they re-enter the model context.
-	// System A: deterministic, free, rule-based (dedupe/group/truncate).
-	CompactToolOutput bool `json:"compactToolOutput"` // System A master switch
-	CompactMaxLines   int  `json:"compactMaxLines"`   // lines kept before middle elision (0 = default)
-	CompactMaxBytes   int  `json:"compactMaxBytes"`   // hard byte cap after line work (0 = default)
-	// System B: LLM intent-aware summary (costs a cheap model call, size-gated).
-	CompactLLMSummary   bool   `json:"compactLlmSummary"`   // System B master switch
-	CompactLLMThreshold int    `json:"compactLlmThreshold"` // only summarize output larger than this (bytes, 0 = default)
-	CompactModel        string `json:"compactModel"`        // model id for System B; "" → TitleModel, then agent's own model
-
 	// Auto-title generation.
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
 	TitleModel       string `json:"titleModel"` // "" = use the agent's model
@@ -412,19 +401,6 @@ func Default() Settings {
 		LessonReflect:       true,
 		MaxOutputTokens:     0, // auto: per-model family default
 
-		// Both systems on by default, the external agent project-style: System A (free, deterministic)
-		// always runs; System B (cheap-model summary) kicks in for big outputs. A's
-		// byte cap (16KB) sits ABOVE B's threshold (12KB) so A's middle-elision never
-		// pre-empts B's intelligent summary — outputs in the 12–16KB band reach B,
-		// and anything larger is A-truncated to 16KB then B-summarized. Set a cheap
-		// CompactModel (e.g. claude-haiku) so B stays inexpensive.
-		CompactToolOutput:   true,
-		CompactMaxLines:     200,
-		CompactMaxBytes:     16384,
-		CompactLLMSummary:   true,
-		CompactLLMThreshold: 12288,
-		CompactModel:        "",
-
 		AutoTitleEnabled: true,
 		TitleModel:       "",
 
@@ -556,13 +532,6 @@ type DTO struct {
 	LessonReflect       bool `json:"lessonReflect"`
 	MaxOutputTokens     int  `json:"maxOutputTokens"`
 
-	CompactToolOutput   bool   `json:"compactToolOutput"`
-	CompactMaxLines     int    `json:"compactMaxLines"`
-	CompactMaxBytes     int    `json:"compactMaxBytes"`
-	CompactLLMSummary   bool   `json:"compactLlmSummary"`
-	CompactLLMThreshold int    `json:"compactLlmThreshold"`
-	CompactModel        string `json:"compactModel"`
-
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
 	TitleModel       string `json:"titleModel"`
 
@@ -678,13 +647,6 @@ func (s Settings) ToDTO() DTO {
 		LessonReflect:       s.LessonReflect,
 		MaxOutputTokens:     s.MaxOutputTokens,
 
-		CompactToolOutput:   s.CompactToolOutput,
-		CompactMaxLines:     s.CompactMaxLines,
-		CompactMaxBytes:     s.CompactMaxBytes,
-		CompactLLMSummary:   s.CompactLLMSummary,
-		CompactLLMThreshold: s.CompactLLMThreshold,
-		CompactModel:        s.CompactModel,
-
 		AutoTitleEnabled: s.AutoTitleEnabled,
 		TitleModel:       s.TitleModel,
 
@@ -792,13 +754,6 @@ type Patch struct {
 	StuckTurnThreshold  *int  `json:"stuckTurnThreshold"`
 	LessonReflect       *bool `json:"lessonReflect"`
 	MaxOutputTokens     *int  `json:"maxOutputTokens"`
-
-	CompactToolOutput   *bool   `json:"compactToolOutput"`
-	CompactMaxLines     *int    `json:"compactMaxLines"`
-	CompactMaxBytes     *int    `json:"compactMaxBytes"`
-	CompactLLMSummary   *bool   `json:"compactLlmSummary"`
-	CompactLLMThreshold *int    `json:"compactLlmThreshold"`
-	CompactModel        *string `json:"compactModel"`
 
 	AutoTitleEnabled *bool   `json:"autoTitleEnabled"`
 	TitleModel       *string `json:"titleModel"`

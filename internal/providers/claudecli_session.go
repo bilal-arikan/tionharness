@@ -181,6 +181,14 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
 	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
+	// Thinking parity with the one-shot path: "Kapalı" disables thinking for the
+	// whole persistent process (MAX_THINKING_TOKENS=0; restores ≥2.1.203 parallel
+	// tool batching — see Request.DisableThinking). Safe to pin at launch: the
+	// pool key is per (session, agent), so the agent's level is stable for the
+	// process lifetime.
+	if req.DisableThinking {
+		cmd.Env = append(cmd.Env, "MAX_THINKING_TOKENS=0")
+	}
 	if req.WorkDir != "" {
 		if fi, statErr := os.Stat(req.WorkDir); statErr == nil && fi.IsDir() {
 			cmd.Dir = req.WorkDir

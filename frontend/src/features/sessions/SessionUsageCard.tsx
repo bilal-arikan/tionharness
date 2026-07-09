@@ -1,7 +1,6 @@
 import { PiggyBank } from 'lucide-react'
 import type { SessionUsageDetail } from '@/types'
 import { Section, SaveRow } from './SessionDetailBits'
-import { formatBytes } from './sessionDetailFormat'
 import { usd, tokens as fmtTok } from '@/shared/lib/format'
 
 // This session's own lifetime spend + savings — the per-conversation
@@ -17,7 +16,7 @@ export function SessionUsageCard({ sessionUsage }: { sessionUsage: SessionUsageD
           {sessionUsage.calls} çağrı · {fmtTok(sessionUsage.inputTokens + sessionUsage.outputTokens)} token
         </span>
       </div>
-      {/* Savings breakdown: prompt-cache USD + tool-output compaction bytes */}
+      {/* Savings breakdown: prompt-cache USD */}
       <div className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-success)_6%,transparent)] px-2.5 py-2">
         <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-success)]">
           <PiggyBank size={12} /> Kazanç / tasarruf
@@ -25,13 +24,7 @@ export function SessionUsageCard({ sessionUsage }: { sessionUsage: SessionUsageD
         {sessionUsage.savingsUSD > 0 && (
           <SaveRow label="Prompt-cache" value={usd(sessionUsage.savingsUSD)} />
         )}
-        {sessionUsage.compactSavedBytes > 0 && (
-          <SaveRow label="Sıkıştırma (kural)" value={formatBytes(sessionUsage.compactSavedBytes)} hint="araç çıktısından kırpılan" />
-        )}
-        {sessionUsage.compactSavedBytesLLM > 0 && (
-          <SaveRow label="Sıkıştırma (LLM)" value={formatBytes(sessionUsage.compactSavedBytesLLM)} hint="özetle kırpılan" />
-        )}
-        {sessionUsage.savingsUSD === 0 && sessionUsage.compactSavedBytes === 0 && sessionUsage.compactSavedBytesLLM === 0 && (
+        {sessionUsage.savingsUSD === 0 && (
           <span className="text-[11px] text-[var(--color-text-dim)]">Henüz tasarruf yok.</span>
         )}
       </div>

@@ -157,6 +157,16 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// gate their tool use. Empty maps to "auto" downstream.
 	req.PermissionMode = effectivePermissionMode(agent.PermissionMode, autonomous)
 
+	// Thinking parity for provider-driven loops: a ThinkingLevel that resolves to
+	// no budget ("Kapalı"/"off") now reaches the claude-cli subprocess as
+	// MAX_THINKING_TOKENS=0 instead of silently falling back to the CLI's own
+	// adaptive-thinking default. Besides honouring the setting, this restores
+	// PARALLEL tool batching on claude-code ≥2.1.203, which refuses parallel tool
+	// calls while thinking is active ("think XOR batch" — the AlgoBench cost
+	// regression, _Docs/05 2026-07-10). Native providers ignore the flag
+	// (ThinkingBudget==0 already means off there).
+	req.DisableThinking = thinkingBudgetForLevel(agent.ThinkingLevel) == 0
+
 	// Announce the configured task budget to autonomous turns (API-native
 	// output_config.task_budget): the model sees a running countdown for the
 	// whole loop and paces itself. Providers/models without support ignore it;
@@ -282,7 +292,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// Per-turn --settings: permission deny-list (mirrors disallowed) plus the
 			// workspace's PreToolUse/PostToolUse hooks, so the CLI's own loop honours
 			// the same blocks/hooks the native loop does. "" when there is nothing.
-			settingsPath, settingsCleanup, serr := r.writeCLISettings(ctx, disallowed)
+			settingsPath, settingsCleanup, serr := r.writeCLISettings(ctx, disallowed, cliEffortLevel(agent.ThinkingLevel))
 			if serr != nil {
 				r.logger.Warn("cli settings write failed", "error", serr)
 			}
@@ -374,8 +384,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		}
 		return mergeFrozenToolDefs(frozenDefs, shipDefs(), active.Snapshot())
 	}
-	if toolsStale && !strings.Contains(req.SystemDynamic, "<context_snapshot_note>") {
-		req.SystemDynamic = strings.TrimSpace(req.SystemDynamic + "\n\n" + PromptEpochStaleNote)
+	if toolsStale && !strings.Contains(req.SystemDynamic, suffixNoteMarker) {
+		if note := r.PromptEpochContextNote(SessionIDFrom(ctx), agent.ID); note != "" {
+			req.SystemDynamic = strings.TrimSpace(req.SystemDynamic + "\n\n" + note)
+		}
 	}
 	req.Tools = shipFor()
 	req.ProgrammaticTools = ptcMode
@@ -462,6 +474,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	if provider.Name() == "anthropic" && providers.SupportsSystemInMessages(agent.Model) {
 		steerRole = providers.RoleSystem
 	}
+	// batchSeq allocates the 1-based parallel-batch group ids: every provider
+	// response carrying MULTIPLE tool calls gets one, and all steps born from it
+	// share TurnStep.Batch so the UI clusters them (0 = lone call, no group).
+	batchSeq := 0
 	// pendingProgrammatic defers steering while a programmatic tool batch awaits
 	// its results: that request's trailing message must stay PURE tool_results,
 	// so queued guidance is delivered on the next ordinary iteration instead.
@@ -670,6 +686,13 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		// (results stay in tool_use order). nil when there is nothing to parallelise.
 		subFutures := r.launchParallelSubagents(ctx, reg, resp.ToolCalls)
 		results := make([]providers.ToolResult, 0, len(resp.ToolCalls))
+		// One multi-call response = one parallel batch: allocate its group id so
+		// every step below (tool cards, permission/guardrail errors) carries it.
+		batch := 0
+		if len(resp.ToolCalls) > 1 {
+			batchSeq++
+			batch = batchSeq
+		}
 		for _, call := range resp.ToolCalls {
 			r.logger.Info("tool call", "agent", agent.ID, "tool", call.Name)
 			active.MarkUsed(call.Name) // reset idle age for pruning (Phase 3)
@@ -705,7 +728,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			if !allowed {
 				r.logger.Info("tool blocked", "agent", agent.ID, "tool", call.Name, "mode", agent.PermissionMode)
 				results = append(results, providers.ToolResult{CallID: call.ID, Content: denyMsg, IsError: true})
-				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "permission_denied", Text: denyMsg, IsError: true}
+				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "permission_denied", Text: denyMsg, IsError: true, Batch: batch}
 				steps = append(steps, st)
 				emit(st)
 				continue
@@ -726,7 +749,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: name, Detail: call.Name + ": " + greason, Err: true})
 				denyMsg := blockedResultMsg(greason)
 				results = append(results, providers.ToolResult{CallID: call.ID, Content: denyMsg, IsError: true})
-				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "guardrail_" + name, Text: denyMsg, IsError: true}
+				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "guardrail_" + name, Text: denyMsg, IsError: true, Batch: batch}
 				steps = append(steps, st)
 				emit(st)
 				continue
@@ -792,13 +815,16 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				return last, steps, ctx.Err()
 			}
 
-			// Token optimization: shrink the result before it re-enters context
-			// (and the persisted step) via the two independent compaction systems.
-			res = r.compactToolResult(ctx, agent, call.Name, call.Input, res)
-
+			// Token optimization: there is NO built-in tool-output compaction
+			// anymore (the deterministic "System A" was removed 2026-07-10). Shrinking
+			// large outputs is delegated entirely to external tools — a PostToolUse
+			// hook (e.g. sqz) below, or the agent invoking a wrapper like rtk at the
+			// command layer. A raw result re-enters context untouched unless a hook
+			// rewrites it.
+			//
 			// PostToolUse hooks (Faz P4): user-defined commands may rewrite the
 			// output (e.g. external compression like sqz), append extra context, or
-			// block the result. Runs after compaction so a hook sees the final text.
+			// block the result — the only tool-output shrink path now.
 			post := r.runPostToolHooks(ctx, "", call, res)
 			for _, st := range post.steps {
 				steps = append(steps, st)
@@ -832,10 +858,12 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				Input:   call.Input,
 				Output:  res.Content,
 				IsError: res.IsError,
+				Batch:   batch,
 			}
 			// The working checklist is a first-class step, not a generic tool row.
+			// `set` updates carry the merged list in the result, not the input.
 			if call.Name == "todo_write" && !res.IsError {
-				if todos := parseTodos(call.Input); len(todos) > 0 {
+				if todos := todoStepItems(call.Input, res.Content); len(todos) > 0 {
 					st.Kind = StepTodo
 					st.Todos = todos
 				}

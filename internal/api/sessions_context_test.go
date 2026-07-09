@@ -9,8 +9,9 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
-// TestSessionsContextBlock verifies the cross-session block: active vs recent
-// split, current-session exclusion, the chat-only filter, and graceful empty.
+// TestSessionsContextBlock verifies the cross-session block: active sessions are
+// NOT auto-injected (agent lists them on demand), only recent PAST sessions are;
+// current-session exclusion, the chat-only filter, and graceful empty.
 func TestSessionsContextBlock(t *testing.T) {
 	database, err := db.Open(filepath.Join(t.TempDir(), "store"))
 	if err != nil {
@@ -21,21 +22,21 @@ func TestSessionsContextBlock(t *testing.T) {
 
 	current, _ := database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Current Work", State: "active"})
 	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Other Active", State: "active", Summary: "wiring the API"})
-	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Old Thread", State: "archived"})
+	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Old Thread", State: "archived", Summary: "shipped the parser"})
 	database.CreateSession(ctx, db.Session{Kind: "schedule", Title: "Pulse Loop", State: "active"})
 
 	block := sessionsContextBlock(ctx, database, current.ID, 5)
 	if block == "" {
 		t.Fatal("expected a non-empty block")
 	}
-	if !strings.Contains(block, "Other Active") {
-		t.Errorf("active session missing:\n%s", block)
-	}
-	if !strings.Contains(block, "wiring the API") {
-		t.Errorf("summary snippet missing:\n%s", block)
+	if strings.Contains(block, "Other Active") {
+		t.Errorf("active session must NOT be auto-injected:\n%s", block)
 	}
 	if !strings.Contains(block, "Old Thread") {
 		t.Errorf("recent (archived) session missing:\n%s", block)
+	}
+	if !strings.Contains(block, "shipped the parser") {
+		t.Errorf("summary snippet missing:\n%s", block)
 	}
 	if strings.Contains(block, "Current Work") {
 		t.Errorf("current session must be excluded:\n%s", block)
@@ -43,8 +44,11 @@ func TestSessionsContextBlock(t *testing.T) {
 	if strings.Contains(block, "Pulse Loop") {
 		t.Errorf("non-chat (schedule) session must be filtered out:\n%s", block)
 	}
-	if !strings.Contains(block, "Active:") || !strings.Contains(block, "Recent:") {
-		t.Errorf("expected both Active and Recent sections:\n%s", block)
+	if strings.Contains(block, "Active:") {
+		t.Errorf("Active section must be gone:\n%s", block)
+	}
+	if !strings.Contains(block, "Recent:") {
+		t.Errorf("expected a Recent section:\n%s", block)
 	}
 }
 

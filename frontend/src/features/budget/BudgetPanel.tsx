@@ -16,7 +16,7 @@ import { PaneHeader } from '@/shared/components'
 import type { KindStat, ProviderStat, BudgetTrendPoint } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { kindColor } from '@/shared/lib/palette'
-import { tokens as fmt, usd, bytes, approxTokens } from '@/shared/lib/format'
+import { tokens as fmt, usd } from '@/shared/lib/format'
 import { useAsync } from '@/shared/hooks/useAsync'
 
 interface Props {
@@ -25,8 +25,8 @@ interface Props {
 
 // TrendMetric selects which series the daily trend chart plots. Each maps a
 // BudgetTrendPoint to a scalar, a formatter, a bar colour and a tooltip suffix
-// so the same chart can show token volume, spend, caching ROI or compaction.
-type TrendMetric = 'token' | 'cost' | 'cacheSave' | 'compact'
+// so the same chart can show token volume, spend or caching ROI.
+type TrendMetric = 'token' | 'cost' | 'cacheSave'
 
 interface TrendMetricDef {
   key: TrendMetric
@@ -56,13 +56,6 @@ const TREND_METRICS: TrendMetricDef[] = [
     label: 'Cache tasarrufu',
     value: (p) => p.savingsUSD,
     fmt: usd,
-    color: 'var(--color-success)',
-  },
-  {
-    key: 'compact',
-    label: 'Sıkıştırma',
-    value: (p) => p.compactSavedBytes + p.compactSavedBytesLLM,
-    fmt: bytes,
     color: 'var(--color-success)',
   },
 ]
@@ -419,17 +412,15 @@ export function BudgetPanel({ onError }: Props) {
             />
           </div>
 
-          {/* Tasarruf Merkezi — every optimization's contribution in one place:
-              prompt-cache USD savings + tool-output compaction bytes (System A
-              deterministic + System B LLM summary). The compaction meters are
-              token-equivalent estimates, not real billing. */}
+          {/* Tasarruf Merkezi — prompt-cache USD savings, the only source with
+              real billing impact. */}
           <div className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)]">
             <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
               <PiggyBank size={15} style={{ color: 'var(--color-success)' }} />
               <span className="text-sm font-medium text-[var(--color-text)]">Tasarruf Merkezi</span>
               <span className="text-xs text-[var(--color-text-dim)]">· son {days}g · tüm optimizasyon kaynakları</span>
             </div>
-            <div className="grid grid-cols-1 divide-y divide-[var(--color-border)] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="grid grid-cols-1">
               {/* Prompt-cache — the only source with real USD billing impact. */}
               <SavingsCell
                 title="Prompt-cache"
@@ -437,29 +428,6 @@ export function BudgetPanel({ onError }: Props) {
                 sub={`${fmt(usage.cumulative.cacheReadTokens)} token önbellekten · %${(usage.cumulative.cacheHitRate * 100).toFixed(0)} isabet`}
                 hint="Statik prefix'in tekrar okunması yerine cache'ten gelmesinin tam girdi fiyatına kıyasla kazandırdığı gerçek USD."
               />
-              {/* System A — deterministic tool-output compaction (free, no LLM). */}
-              <SavingsCell
-                title="Sıkıştırma · kural (Sistem A)"
-                primary={bytes(usage.cumulative.compactSavedBytes)}
-                sub={`~${fmt(approxTokens(usage.cumulative.compactSavedBytes))} token context'e girmedi`}
-                hint="Araç çıktısından dedupe + boş-satır + ortadan kırpma ile model'e gitmeden çıkarılan bayt. Ücretsiz (yerel)."
-              />
-              {/* System B — LLM intent-aware summary (costs a cheap call). */}
-              <SavingsCell
-                title="Sıkıştırma · LLM (Sistem B)"
-                primary={bytes(usage.cumulative.compactSavedBytesLLM)}
-                sub={`~${fmt(approxTokens(usage.cumulative.compactSavedBytesLLM))} token özetle kırpıldı`}
-                hint="Ucuz modelle niyet-farkında özetin araç çıktısından çıkardığı bayt. Özet çağrısının kendi maliyeti 'Sıkıştırma' kökeninde."
-              />
-            </div>
-            <div className="border-t border-[var(--color-border)] px-4 py-2 text-[11px] text-[var(--color-text-dim)]">
-              Toplam context tasarrufu:{' '}
-              <span className="font-medium text-[var(--color-text)]">
-                {bytes(usage.cumulative.compactSavedBytes + usage.cumulative.compactSavedBytesLLM)}
-              </span>{' '}
-              (~{fmt(approxTokens(usage.cumulative.compactSavedBytes + usage.cumulative.compactSavedBytesLLM))} token) + cache{' '}
-              <span className="font-medium" style={{ color: 'var(--color-success)' }}>{usd(usage.cumulative.savingsUSD)}</span>.
-              Sıkıştırma bayt ölçerdir (token-eşdeğeri tahmini, gerçek faturalandırma değil).
             </div>
           </div>
 
@@ -499,8 +467,8 @@ export function BudgetPanel({ onError }: Props) {
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="text-sm font-medium text-[var(--color-text)]">Trend — son {days} gün</div>
-                {/* Metric selector: plot the same window as token volume, spend,
-                    caching ROI or tool-output compaction. */}
+                {/* Metric selector: plot the same window as token volume, spend
+                    or caching ROI. */}
                 <div className="flex overflow-hidden rounded border border-[var(--color-border)] text-[11px]">
                   {TREND_METRICS.map((m) => (
                     <button
@@ -525,13 +493,12 @@ export function BudgetPanel({ onError }: Props) {
                     const v = metricDef.value(p)
                     const h = (v / trendMax) * 100
                     const tok = p.inputTokens + p.outputTokens
-                    const compact = p.compactSavedBytes + p.compactSavedBytesLLM
                     return (
                       <div
                         key={p.day}
                         className="flex-1 rounded-t transition-all hover:opacity-80"
                         style={{ height: `${Math.max(2, h)}%`, background: metricDef.color }}
-                        title={`${p.day} · ${metricDef.label}: ${metricDef.fmt(v)}\n${fmt(tok)} token · ${p.calls} çağrı · ${usd(p.costUSD)} maliyet${p.savingsUSD > 0 ? ` · cache ${usd(p.savingsUSD)}` : ''}${compact > 0 ? ` · sıkıştırma ${bytes(compact)}` : ''}`}
+                        title={`${p.day} · ${metricDef.label}: ${metricDef.fmt(v)}\n${fmt(tok)} token · ${p.calls} çağrı · ${usd(p.costUSD)} maliyet${p.savingsUSD > 0 ? ` · cache ${usd(p.savingsUSD)}` : ''}`}
                       />
                     )
                   })}

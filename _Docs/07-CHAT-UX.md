@@ -203,7 +203,13 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   hem `line-clamp-2` alıyordu; uzun mesaj pinlenince yüksekliği düşüp `scrollHeight`'i
   değiştiriyor → scroll kayıyor → eşik tekrar geçiliyor → clamp↔unclamp titreşimi
   (flicker + aşağı kaydırma zorluğu). Overlay flow yüksekliğini hiç değiştirmediği
-  için döngü kırıldı; satırlar tam-yükseklikte kalır. Her satırı şu bileşenlere
+  için döngü kırıldı; satırlar tam-yükseklikte kalır. **Overlay flash fix
+  (2026-07-10):** scroll-dibe-sabitle + `updateActivePinned` efekti `useEffect`
+  yerine **`useLayoutEffect`** ile boyama ÖNCESİ çalışır; eski `useEffect`'te her
+  streaming/tool-adımı `messages` değişimi bir kare **eski scroll konumu + eski
+  pinned index** ile boyanıp overlay'i (tam-genişlik gradyanlı sticky soru) tek
+  kare flash'lıyordu. Pre-paint çalışınca scroll ile overlay görünürlüğü aynı
+  commit'e bağlanır → ara tutarsız kare yok. Her satırı şu bileşenlere
   devreder:
   - `UserTurn.tsx` — gerçek kullanıcı mesajı (balon + sağ meta satırı).
   - `PeerTurn.tsx` — **gelen peer/inbox mesajı** (2026-07-06): başka bir ajanın

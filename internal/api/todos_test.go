@@ -45,7 +45,9 @@ func TestRenderTodoBlock(t *testing.T) {
 		{Content: "write", Status: "pending"},
 	}
 	out := renderTodoBlock(todos)
-	for _, want := range []string{"- [x] read", "- [~] work", "- [ ] write", "Active todo list"} {
+	// Numbered lines: the model references these 1-based indices in the
+	// compact todo_write {"set":{...}} update form.
+	for _, want := range []string{"1. [x] read", "2. [~] work", "3. [ ] write", `{"set":`, "Active todo list"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("block missing %q\n%s", want, out)
 		}

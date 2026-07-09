@@ -12,9 +12,11 @@ import (
 )
 
 // ListSessionsTool lets an agent pull the workspace's chat sessions on demand —
-// the "pull" complement to the cross-session context block that is pushed into
-// the prompt. It reuses each session's stored Title and rolling Summary (no new
-// LLM call) and is scoped to this workspace's DB.
+// the "pull" complement to the cross-session context block. That block pushes
+// only RECENT (past) sessions into the prompt; ACTIVE (live) sessions are never
+// auto-injected, so this tool is the agent's only way to see them. It reuses
+// each session's stored Title and rolling Summary (no new LLM call) and is
+// scoped to this workspace's DB.
 type ListSessionsTool struct{ db *db.DB }
 
 // NewListSessionsTool binds the tool to a workspace DB.
@@ -26,8 +28,10 @@ func (ListSessionsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_sessions",
 		Description: "List the chat sessions in this workspace for situational awareness — " +
-			"their titles, message counts, age and a short summary. Use it to see what other " +
-			"work is in progress or recently happened. Returns active sessions by default.",
+			"their titles, message counts, age and a short summary. Active (live) sessions are " +
+			"NOT auto-injected into your context, so call this tool whenever you need to see what " +
+			"other work is currently in progress. Returns active sessions by default; pass " +
+			"state:\"all\" to include past ones.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {

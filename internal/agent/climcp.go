@@ -241,11 +241,14 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 
 // cliSettings is the subset of the claude CLI's settings.json TionSwarm generates
 // per turn: a permission deny-list (defense-in-depth alongside --disallowedTools,
-// with pattern support) plus the workspace's PreToolUse/PostToolUse hooks so the
-// CLI's own tool loop fires the same hooks the native loop does (CLI-path hooks).
+// with pattern support), the workspace's PreToolUse/PostToolUse hooks so the
+// CLI's own tool loop fires the same hooks the native loop does (CLI-path hooks),
+// and an explicit effortLevel (parallel-tool-call batching guard, see
+// cliEffortLevel).
 type cliSettings struct {
 	Permissions *cliPermissions          `json:"permissions,omitempty"`
 	Hooks       map[string][]cliHookRule `json:"hooks,omitempty"`
+	EffortLevel string                   `json:"effortLevel,omitempty"`
 }
 
 type cliPermissions struct {
@@ -276,8 +279,12 @@ type cliHookSpec struct {
 // Caveat: CLI hooks run under the CLI's own hook runner/shell, which may differ
 // from TionSwarm's execHook (PowerShell on Windows). A hook authored for TionSwarm's
 // shell may need adjusting to run identically here.
-func (r *Runtime) writeCLISettings(ctx context.Context, deny []string) (string, func(), error) {
-	set := cliSettings{}
+//
+// effort pins the CLI's effortLevel for this turn (see cliEffortLevel); it is
+// always non-empty, so the settings file is now written on every MCP-delegated
+// turn (previously only when a deny-list or hooks existed).
+func (r *Runtime) writeCLISettings(ctx context.Context, deny []string, effort string) (string, func(), error) {
+	set := cliSettings{EffortLevel: effort}
 	if len(deny) > 0 {
 		set.Permissions = &cliPermissions{Deny: append([]string(nil), deny...)}
 	}
@@ -308,7 +315,7 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string) (string, 
 		set.Hooks = hooks
 	}
 
-	if set.Permissions == nil && set.Hooks == nil {
+	if set.Permissions == nil && set.Hooks == nil && set.EffortLevel == "" {
 		return "", func() {}, nil
 	}
 
@@ -328,6 +335,25 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string) (string, 
 	}
 	_ = f.Close()
 	r.logger.Info("cli settings written", "path", filepath.Base(path),
-		"deny", len(deny), "hookEvents", len(hooks))
+		"deny", len(deny), "hookEvents", len(hooks), "effort", effort)
 	return path, func() { _ = os.Remove(path) }, nil
+}
+
+// cliEffortLevel maps an agent's ThinkingLevel onto Claude Code's effortLevel
+// setting, so the level has a CLI-side meaning. Claude Code ≥2.1.203 serialises
+// parallel tool calls when effortLevel is unset (default adaptive effort) on
+// SIMPLE tasks — an explicit effort restores their batching; complex (thinking)
+// tasks additionally need thinking off (Request.DisableThinking, "think XOR
+// batch") — see _Docs/05 2026-07-09/10. Empty ("Kapalı") and "off" map to
+// "high": thinking is already disabled for those levels, and high effort keeps
+// simple-task batching (a low effort risks re-serialising it).
+func cliEffortLevel(thinkingLevel string) string {
+	switch thinkingLevel {
+	case "low":
+		return "low"
+	case "medium":
+		return "medium"
+	default: // "", "off", "high", "xhigh", "max", unknown
+		return "high"
+	}
 }

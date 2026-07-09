@@ -96,8 +96,8 @@ func renderTodoBlock(todos []agent.TodoItem) string {
 
 	var b strings.Builder
 	b.WriteString("## Active todo list (this session)\n")
-	b.WriteString("This is the checklist you are tracking with the todo_write tool. It persists here even if the original message has scrolled out of context. Keep it current by calling todo_write as you start and finish items.\n")
-	for _, t := range todos {
+	b.WriteString("This is the checklist you are tracking with the todo_write tool. It persists here even if the original message has scrolled out of context. Keep it current: flip statuses with the compact form todo_write {\"set\":{\"<index>\":\"<status>\"}} using the 1-based indices below.\n")
+	for i, t := range todos {
 		mark := " "
 		switch t.Status {
 		case "completed":
@@ -105,7 +105,7 @@ func renderTodoBlock(todos []agent.TodoItem) string {
 		case "in_progress":
 			mark = "~"
 		}
-		fmt.Fprintf(&b, "- [%s] %s\n", mark, t.Content)
+		fmt.Fprintf(&b, "%d. [%s] %s\n", i+1, mark, t.Content)
 	}
 	return strings.TrimSpace(b.String())
 }

@@ -340,6 +340,16 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			}
 
 			llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent, toolRecap, passContext)
+			// Prompt-epoch drift step: if the static context changed since the frozen
+			// snapshot, surface a context_change step at the head of the turn (once per
+			// drift episode). Emitted live and prepended to the persisted trace so the
+			// chat history shows when the change landed. The agent already read the diff
+			// via the dynamic-suffix note composeTurnRequest injected.
+			leadSteps := consumeContextChangeLead(wsp.Runtime, session.ID, agentRow.ID)
+			for _, st := range leadSteps {
+				sse("step", st)
+				wsp.Runtime.EmitSessionStep(session.ID, st)
+			}
 			// claude-cli session resume (opt-in): when engaged, this trims llmReq to the
 			// unseen delta and sets ResumeSessionID so the CLI reuses its warm cache.
 			resumePlan := s.planClaudeResume(provider, len(agents), session, rawHistory, &llmReq)
@@ -527,7 +537,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 				} else {
 					s.logger.Error("stream completion failed", "error", cerr, "agent", agentRow.ID)
 				}
-				trace := append(kept, agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason})
+				trace := append(append(leadSteps, kept...), agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason})
 				// Persist with a detached context so a cancelled (stopped) ctx still saves.
 				persistCtx := context.WithoutCancel(ctx)
 				payload := map[string]any{"error": detail, "reason": reason}
@@ -564,7 +574,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 				Role:       providers.RoleAssistant,
 				AgentID:    agentRow.ID,
 				Text:       resp.Text,
-				Steps:      marshalSteps(steps),
+				Steps:      marshalSteps(append(leadSteps, steps...)),
 				Model:      resp.Model,
 				StopReason: resp.StopReason,
 				Usage:      messageUsage(resp.Usage),

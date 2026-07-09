@@ -9,16 +9,15 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
-// maxActiveSessionsInBlock bounds how many active sessions the cross-session
-// context block lists, so a busy workspace can't blow up the prompt.
-const maxActiveSessionsInBlock = 12
-
 // sessionsContextBlock builds a short, system-prompt section giving an agent
-// situational awareness of the workspace's OTHER chat sessions: the active ones
-// plus the most recent past ones. It reuses each session's existing Title and
-// rolling Summary — no new LLM call — and is kept in the dynamic (uncached)
-// suffix since the session list changes over time. Returns "" when there is
-// nothing else to show. currentID is excluded (the agent is already in it).
+// situational awareness of the workspace's OTHER chat sessions. It lists only
+// the most recent PAST (non-active) chat sessions: active (live) sessions are
+// deliberately NOT auto-injected — they churn constantly and the agent pulls
+// them on demand via the list_sessions tool (manual control). It reuses each
+// session's existing Title and rolling Summary — no new LLM call — and rides
+// the dynamic (uncached) suffix since the session list changes over time.
+// Returns "" when there is nothing else to show. currentID is excluded (the
+// agent is already in it).
 func sessionsContextBlock(ctx context.Context, database *db.DB, currentID string, recentCount int) string {
 	sessions, err := database.ListSessions(ctx, "") // workspace-wide, UpdatedAt desc
 	if err != nil || len(sessions) == 0 {
@@ -29,37 +28,27 @@ func sessionsContextBlock(ctx context.Context, database *db.DB, currentID string
 	}
 
 	now := time.Now().Unix()
-	var active, past []string
+	var past []string
 	for _, s := range sessions {
-		if s.Kind != "chat" || s.ID == currentID {
+		// Skip non-chat, the current session, and every ACTIVE session: active
+		// sessions are no longer auto-sent — the agent lists them itself.
+		if s.Kind != "chat" || s.ID == currentID || s.State == "active" {
 			continue
 		}
-		if s.State == "active" {
-			if len(active) < maxActiveSessionsInBlock {
-				active = append(active, formatSessionLine(s, now))
-			}
-		} else if len(past) < recentCount {
+		if len(past) < recentCount {
 			past = append(past, formatSessionLine(s, now))
 		}
 	}
-	if len(active) == 0 && len(past) == 0 {
+	if len(past) == 0 {
 		return ""
 	}
 
 	var b strings.Builder
 	b.WriteString("## Other sessions in this workspace\n")
-	b.WriteString("Situational awareness only — these are the workspace's other chat sessions. Use the list_sessions tool if you need fuller detail.\n")
-	if len(active) > 0 {
-		b.WriteString("\nActive:\n")
-		for _, l := range active {
-			b.WriteString(l + "\n")
-		}
-	}
-	if len(past) > 0 {
-		b.WriteString("\nRecent:\n")
-		for _, l := range past {
-			b.WriteString(l + "\n")
-		}
+	b.WriteString("Situational awareness only — the workspace's recent PAST chat sessions. Active (live) sessions are NOT listed here; call the list_sessions tool when you need the currently active ones or fuller detail.\n")
+	b.WriteString("\nRecent:\n")
+	for _, l := range past {
+		b.WriteString(l + "\n")
 	}
 	return strings.TrimSpace(b.String())
 }

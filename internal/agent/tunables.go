@@ -31,15 +31,6 @@ const (
 	DefaultCoordinatorMaxTurns   = 50 // max auto-triggered coordinator turns per session (notify-loop cap)
 )
 
-// Default tool-output compaction bounds. System A (deterministic) trims every
-// tool result; System B (LLM intent-aware summary) only fires past its byte
-// threshold. Both default to sane values used by test runtimes.
-const (
-	DefaultCompactMaxLines     = 200   // System A: lines kept before middle elision
-	DefaultCompactMaxBytes     = 16384 // System A: hard byte cap (above B's threshold so A never pre-empts B)
-	DefaultCompactLLMThreshold = 12288 // System B: only summarize output larger than this (~the external agent project's 12K)
-)
-
 // Tunables holds process-wide, settings-driven knobs that cut across every
 // workspace runtime: an optional model override for auto-title generation and
 // context/journal/memory controls. (Autonomy pausing is per-workspace — see
@@ -92,20 +83,6 @@ type Tunables struct {
 	// reflection that distills the failure into a stored lesson, injected into
 	// future turns' dynamic context. Costs one cheap-model call per failing turn.
 	lessonReflect bool
-
-	// Tool-output token optimization — two independent, parallel systems.
-	// System A: deterministic compaction (free, rule-based, every result).
-	compactDeterministic bool // master switch for System A
-	compactMaxLines      int  // 0 → DefaultCompactMaxLines
-	compactMaxBytes      int  // 0 → DefaultCompactMaxBytes
-	// System B: LLM intent-aware summary (costs a cheap model call, gated by size).
-	compactLLM          bool   // master switch for System B
-	compactLLMThreshold int    // 0 → DefaultCompactLLMThreshold
-	compactModel        string // model id for System B; "" → titleModel, then agent's own model
-	// contextBudgetTokens mirrors settings.MaxContextTokens so the byte thresholds
-	// above scale with the budget (CG-9): bigger budget → bigger tool results
-	// tolerated before compaction. 0 → default budget (scale 1).
-	contextBudgetTokens int
 
 	// Working-directory guards (fs/shell are otherwise unconfined).
 	autonomousConfine    bool // confine fs/shell to the working dir on autonomous turns (default on)
@@ -605,145 +582,6 @@ func (t *Tunables) MaxOutputTokens() int {
 		return 0
 	}
 	return t.maxOutputTokens
-}
-
-// SetToolCompaction configures the two independent tool-output optimization
-// systems. System A (deterministic) and System B (LLM summary) are toggled
-// separately and may run in parallel (A first, then B on whatever remains over
-// its threshold). A value of 0 selects the built-in default for each limit.
-func (t *Tunables) SetToolCompaction(deterministic bool, maxLines, maxBytes int, llm bool, llmThreshold int, model string) {
-	t.mu.Lock()
-	t.compactDeterministic = deterministic
-	t.compactMaxLines = maxLines
-	t.compactMaxBytes = maxBytes
-	t.compactLLM = llm
-	t.compactLLMThreshold = llmThreshold
-	t.compactModel = model
-	t.mu.Unlock()
-}
-
-// CompactDeterministic reports whether System A (deterministic compaction) is on.
-func (t *Tunables) CompactDeterministic() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.compactDeterministic
-}
-
-// CompactMaxLines returns System A's line cap before middle elision (default when unset).
-func (t *Tunables) CompactMaxLines() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.compactMaxLines <= 0 {
-		return DefaultCompactMaxLines
-	}
-	return t.compactMaxLines
-}
-
-// defaultContextBudgetTokens mirrors conversation.defaultMaxTokens (the transcript
-// budget) so tool-output thresholds can scale relative to it.
-const defaultContextBudgetTokens = 12000
-
-// budgetScaleLocked is the tool-threshold multiplier derived from the context
-// budget (CG-9, second half): a larger MaxContextTokens means a single tool
-// result may be larger before it's worth compacting. scale = budget / default,
-// clamped to [1, 5] so thresholds never drop below the configured defaults and a
-// huge budget can't explode them (5× ≈ 60KB System-B trigger, matching
-// the external agent project's ~60KB summary ceiling). Both byte thresholds use the SAME factor,
-// so the A-cap > B-threshold invariant holds at every scale. Caller holds the lock.
-func (t *Tunables) budgetScaleLocked() float64 {
-	return budgetScaleFor(t.contextBudgetTokens)
-}
-
-// budgetScaleFor is the pure scale calculation for an arbitrary budget (tokens),
-// so callers can scale by a per-model budget instead of the stored process-wide
-// one (see the compactor, which knows each turn's agent/model).
-func budgetScaleFor(budgetTokens int) float64 {
-	b := budgetTokens
-	if b <= 0 {
-		b = defaultContextBudgetTokens
-	}
-	scale := float64(b) / float64(defaultContextBudgetTokens)
-	if scale < 1 {
-		scale = 1
-	}
-	// Upper bound tracks conversation.budgetAutoCeil (128K) / default budget (12K)
-	// ≈ 10.7, with a little headroom — so a model-aware budget at the ceiling is
-	// not clipped, while a misconfigured huge budget still can't explode thresholds.
-	if scale > 12 {
-		scale = 12
-	}
-	return scale
-}
-
-// ContextBudgetTokens returns the configured transcript budget (0 = default), so
-// the compactor can derive a per-model effective budget from it.
-func (t *Tunables) ContextBudgetTokens() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.contextBudgetTokens
-}
-
-// CompactMaxBytes returns System A's hard byte cap, scaled to the stored
-// process-wide budget (default when unset).
-func (t *Tunables) CompactMaxBytes() int { return t.CompactMaxBytesFor(0) }
-
-// CompactMaxBytesFor returns System A's hard byte cap scaled to the given budget
-// (tokens); 0 → the stored process-wide budget. Lets the compactor scale by a
-// per-model effective budget.
-func (t *Tunables) CompactMaxBytesFor(budgetTokens int) int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	base := t.compactMaxBytes
-	if base <= 0 {
-		base = DefaultCompactMaxBytes
-	}
-	if budgetTokens <= 0 {
-		budgetTokens = t.contextBudgetTokens
-	}
-	return int(float64(base) * budgetScaleFor(budgetTokens))
-}
-
-// CompactLLM reports whether System B (LLM intent-aware summary) is on.
-func (t *Tunables) CompactLLM() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.compactLLM
-}
-
-// CompactLLMThreshold returns the System B summary trigger, scaled to the stored
-// process-wide budget (default when unset).
-func (t *Tunables) CompactLLMThreshold() int { return t.CompactLLMThresholdFor(0) }
-
-// CompactLLMThresholdFor returns the System B summary trigger scaled to the given
-// budget (tokens); 0 → the stored process-wide budget. Lets the compactor scale
-// by a per-model effective budget.
-func (t *Tunables) CompactLLMThresholdFor(budgetTokens int) int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	base := t.compactLLMThreshold
-	if base <= 0 {
-		base = DefaultCompactLLMThreshold
-	}
-	if budgetTokens <= 0 {
-		budgetTokens = t.contextBudgetTokens
-	}
-	return int(float64(base) * budgetScaleFor(budgetTokens))
-}
-
-// SetContextBudget records the transcript token budget (settings.MaxContextTokens)
-// so the tool-output byte thresholds scale with it (CG-9). 0 → default budget.
-func (t *Tunables) SetContextBudget(maxContextTokens int) {
-	t.mu.Lock()
-	t.contextBudgetTokens = maxContextTokens
-	t.mu.Unlock()
-}
-
-// CompactModel returns the dedicated model id for System B's summary, or "" when
-// unset (callers then fall back to the title model, then the agent's own model).
-func (t *Tunables) CompactModel() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.compactModel
 }
 
 // SetWorkdirGuards configures the working-directory safety guards: whether

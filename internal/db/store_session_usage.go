@@ -6,32 +6,27 @@ import (
 
 // SessionUsage is a per-session lifetime rollup of LLM consumption — the same
 // shape as the per-agent/day Usage rollup, but keyed by session id and never
-// reset by day, so the budget screen can attribute spend (and compaction
-// savings) to a single conversation across its whole life. AgentID records the
+// reset by day, so the budget screen can attribute spend to a single
+// conversation across its whole life. AgentID records the
 // session's owning agent at the time spend was recorded (sessions are
 // single-agent). ByKind breaks the total down by call origin and ByModel by the
 // provider+model that served the call (for cost, including cache tiers).
 type SessionUsage struct {
-	SessionID        string              `json:"sessionId"`
-	AgentID          string              `json:"agentId"`
-	Calls            int                 `json:"calls"`
-	InputTokens      int                 `json:"inputTokens"`
-	OutputTokens     int                 `json:"outputTokens"`
-	CacheReadTokens  int                 `json:"cacheReadTokens,omitempty"`
-	CacheWriteTokens int                 `json:"cacheWriteTokens,omitempty"`
+	SessionID        string `json:"sessionId"`
+	AgentID          string `json:"agentId"`
+	Calls            int    `json:"calls"`
+	InputTokens      int    `json:"inputTokens"`
+	OutputTokens     int    `json:"outputTokens"`
+	CacheReadTokens  int    `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens int    `json:"cacheWriteTokens,omitempty"`
 	// ProviderCalls is the cumulative number of underlying model API round-trips
 	// behind Calls over this session's life (for claude-cli one TionSwarm turn is
 	// several internal calls — result num_turns). The CLI-overhead preview divides
 	// the cumulative token totals by it to recover the per-call (single-pass) context
 	// when the per-turn debug journal is unavailable.
-	ProviderCalls    int                 `json:"providerCalls,omitempty"`
-	ByKind           map[string]KindStat `json:"byKind,omitempty"`
-	ByModel          map[string]KindStat `json:"byModel,omitempty"`
-	// Compaction savings mirror the per-agent meters but are attributed to this
-	// session: System A (deterministic) and System B (LLM summary) bytes trimmed
-	// from tool output. Standalone meters with no token/cost impact.
-	CompactSavedBytes    int `json:"compactSavedBytes,omitempty"`
-	CompactSavedBytesLLM int `json:"compactSavedBytesLLM,omitempty"`
+	ProviderCalls int                 `json:"providerCalls,omitempty"`
+	ByKind        map[string]KindStat `json:"byKind,omitempty"`
+	ByModel       map[string]KindStat `json:"byModel,omitempty"`
 }
 
 func sessionUsageFile(sessionID string) string { return sessionID + ".json" }
@@ -94,38 +89,6 @@ func (d *DB) AddSessionUsageKind(ctx context.Context, sessionID, agentID, kind, 
 		m.add(delta)
 		u.ByModel[mk] = m
 	}
-	return d.persistSessionUsageLocked(u)
-}
-
-// AddSessionCompactionSavings folds System A bytes into a session's lifetime
-// rollup (upsert). Blank sessionID or non-positive delta is a no-op.
-func (d *DB) AddSessionCompactionSavings(ctx context.Context, sessionID, agentID string, bytes int) error {
-	if sessionID == "" || bytes <= 0 {
-		return nil
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	u, ok := d.sessionUsage[sessionID]
-	if !ok {
-		u = SessionUsage{SessionID: sessionID, AgentID: agentID}
-	}
-	u.CompactSavedBytes += bytes
-	return d.persistSessionUsageLocked(u)
-}
-
-// AddSessionLLMCompactionSavings folds System B bytes into a session's lifetime
-// rollup (upsert). Blank sessionID or non-positive delta is a no-op.
-func (d *DB) AddSessionLLMCompactionSavings(ctx context.Context, sessionID, agentID string, bytes int) error {
-	if sessionID == "" || bytes <= 0 {
-		return nil
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	u, ok := d.sessionUsage[sessionID]
-	if !ok {
-		u = SessionUsage{SessionID: sessionID, AgentID: agentID}
-	}
-	u.CompactSavedBytesLLM += bytes
 	return d.persistSessionUsageLocked(u)
 }
 

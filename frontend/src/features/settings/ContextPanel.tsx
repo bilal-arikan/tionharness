@@ -1,4 +1,4 @@
-import { Layers, LifeBuoy, Scissors, Sparkles, FlaskConical, RotateCcw, ListChecks, Bug, Tags, ShieldCheck } from 'lucide-react'
+import { Layers, LifeBuoy, FlaskConical, RotateCcw, ListChecks, Bug, Tags, ShieldCheck } from 'lucide-react'
 import { Field, Toggle, Slider, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
@@ -195,29 +195,6 @@ export function ContextPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('lessonReflect', v)}
       />
       <LessonsList />
-
-
-      <SubHead icon={Scissors}>Araç çıktısı sıkıştırma — Sistem A (deterministik)</SubHead>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Araç çıktıları (shell, dosya, MCP) modele dönmeden önce <span className="font-medium text-[var(--color-text)]">ücretsiz, kural tabanlı</span> kısaltılır:
-        ardışık tekrar satırları birleştirilir, boş satır blokları sadeleşir, çok uzun çıktının ortası kırpılıp baş/son korunur. Model çağrısı yapmaz; her çıktıda çalışır.
-      </div>
-      <Toggle label="Deterministik sıkıştırma (Sistem A)" hint="Token kazanımı için araç çıktılarını yerel olarak kısaltır. Hata çıktıları aynen korunur." checked={draft.compactToolOutput} onChange={(v) => set('compactToolOutput', v)} />
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Maks. satır" hint="Bu sayıyı aşan çıktının ortası atlanır (baş+son korunur)."><input type="number" value={draft.compactMaxLines} onChange={(e) => set('compactMaxLines', Number(e.target.value))} className={inputCls} /></Field>
-        <Field label="Maks. bayt" hint="Satır işleminden sonra uygulanan sert bayt sınırı."><input type="number" value={draft.compactMaxBytes} onChange={(e) => set('compactMaxBytes', Number(e.target.value))} className={inputCls} /></Field>
-      </div>
-
-      <SubHead icon={Sparkles}>Araç çıktısı özeti — Sistem B (LLM)</SubHead>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Sistem A'dan sonra çıktı hâlâ eşik üstündeyse, ucuz bir model (başlık modeli → yoksa ajanın modeli) çıktıyı <span className="font-medium text-[var(--color-text)]">niyet-farkında</span> özetler.
-        Sistem A'dan bağımsızdır; ikisi de açıkken ardışık çalışır. <span className="text-[var(--color-warning)]">Ek bir model çağrısı maliyeti</span> getirir, bu yüzden varsayılan kapalıdır.
-      </div>
-      <Toggle label="LLM intent-aware özet (Sistem B)" hint="Eşik üstü araç çıktılarını ucuz modelle özetler. Maliyetlidir; kullanım 'compact' türünde sayaca işlenir." checked={draft.compactLlmSummary} onChange={(v) => set('compactLlmSummary', v)} />
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Özet eşiği (bayt)" hint="Sistem A sonrası bu boyutu aşan çıktılar özetlenir."><input type="number" value={draft.compactLlmThreshold} onChange={(e) => set('compactLlmThreshold', Number(e.target.value))} className={inputCls} /></Field>
-        <Field label="Özet modeli" hint="Sistem B'nin kullanacağı model. Boşsa: Başlık modeli → o da boşsa ajanın kendi modeli. Sağlayıcı her zaman ajanın sağlayıcısıdır. Ucuz bir model (ör. claude-haiku-4-5) önerilir."><input type="text" value={draft.compactModel} placeholder="boş = başlık modeli / ajan modeli" onChange={(e) => set('compactModel', e.target.value)} className={inputCls} /></Field>
-      </div>
     </>
   )
 }

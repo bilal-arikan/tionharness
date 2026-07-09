@@ -61,8 +61,6 @@ export interface AgentUsage {
   savingsUSD?: number
   priced?: boolean
   estimated?: boolean
-  compactSavedBytes?: number
-  compactSavedBytesLLM?: number
 }
 
 export interface AgentTools {

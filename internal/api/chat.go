@@ -220,6 +220,12 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Blocking (non-streaming) path: lifecycle hooks fire on the streaming path
 	// (the UI default); "" here satisfies the request builder signature.
 	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession, multiAgent, toolRecap, "")
+	// Prompt-epoch drift step (streaming-path parity): prepend a context_change
+	// step to the persisted trace once per drift episode so the change is visible
+	// in history. The agent already read the diff via the suffix note above. Type
+	// inference keeps this free of the agent package name, which the db.Agent
+	// variable `agent` shadows in this handler.
+	leadSteps := consumeContextChangeLead(ws(r).Runtime, session.ID, agent.ID)
 
 	// Manual chat is not budget-gated (autonomous=false). When the agent has
 	// tools enabled this drives the agentic loop (native) or CLI delegation;
@@ -278,7 +284,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		Role:       providers.RoleAssistant,
 		AgentID:    agent.ID,
 		Text:       resp.Text,
-		Steps:      marshalSteps(steps),
+		Steps:      marshalSteps(append(leadSteps, steps...)),
 		Model:      resp.Model,
 		StopReason: resp.StopReason,
 		Usage:      messageUsage(resp.Usage),

@@ -174,6 +174,10 @@ func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, o
 		// the OUTER shell expand (and strip) any $variable before the inner shell sees
 		// it — breaking scripts like `$x = ...; $x | ...`. Strip one redundant wrapper.
 		command = unwrapRedundantPowershell(command)
+		// Force UTF-8 I/O on the legacy Windows PowerShell 5.1 host so non-ASCII
+		// (e.g. Turkish) file content is not mangled on the round-trip to Go. No-op
+		// for pwsh 7+, which is UTF-8 by default. See builtin_shell_encoding.go.
+		command = applyWinPSUTF8(t.exe, command)
 		return proc.CommandContext(runCtx, t.exe, "-NoProfile", "-NonInteractive", "-Command", command)
 	}
 	if args.RunInBackground {

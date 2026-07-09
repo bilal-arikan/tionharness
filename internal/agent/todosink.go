@@ -59,6 +59,20 @@ func (r *Runtime) NewTodoSink(sessionID, agentID string) tools.TodoSink {
 	return &todoSink{publish: r.publish, db: r.db, sessionID: sessionID, agentID: agentID, dir: r.ProgressDir(sessionID)}
 }
 
+// LoadTodos returns the checklist last persisted to the progress file, backing
+// todo_write's compact `set` update form (status-only changes merged server-side).
+func (s *todoSink) LoadTodos(_ context.Context) ([]tools.TodoSinkItem, bool, error) {
+	rec, ok, err := progress.Load(s.dir)
+	if err != nil || !ok || len(rec.Todos) == 0 {
+		return nil, false, err
+	}
+	items := make([]tools.TodoSinkItem, len(rec.Todos))
+	for i, t := range rec.Todos {
+		items[i] = tools.TodoSinkItem{Content: t.Content, Status: t.Status, Category: t.Category, Steps: t.Steps}
+	}
+	return items, true, nil
+}
+
 func (s *todoSink) SaveTodos(_ context.Context, todos []tools.TodoSinkItem) error {
 	items := make([]progress.TodoItem, len(todos))
 	var done, active, pending int

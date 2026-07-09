@@ -1,105 +1,39 @@
 # 17 — Araç Çıktısı Token Optimizasyonu
 
 > Ajan araç çıktılarının (shell, dosya, MCP) LLM context'ine girmeden önce küçültülmesi.
-> **İki bağımsız sistem**, paralel veya tek başına çalışabilir; her biri Ayarlar'dan ayrı konfigüre edilir.
+>
+> **Not (2026-07-10): built-in araç-çıktısı sıkıştırması TAMAMEN KALDIRILDI.**
+> TionSwarm artık hiçbir built-in (deterministik veya LLM tabanlı) araç-çıktısı
+> sıkıştırması **içermez**. Eskiden var olan iki sistem — "Sistem A" (deterministik,
+> kural tabanlı, `internal/tools/compact`) ve daha eski "Sistem B" (ucuz-model LLM
+> özeti) — ilgili ayarlar (`compactToolOutput` / `compactMaxLines` / `compactMaxBytes`),
+> tasarruf sayaçları (`CompactSavedBytes` / `compactSavedBytes`) ve tüm bütçe/UI
+> hücreleriyle birlikte **çıkarıldı**. Bu iş artık tamamen **harici araçlara** devredildi:
+>
+> - **`rtk`** — komut-katmanında **agent tarafından** çağrılır (Bash sarmalayıcı; bkz.
+>   kullanıcı `CLAUDE.md`'sindeki manuel fallback).
+> - **`sqz`** — **PostToolUse hook** olarak bağlanır; araç çıktısını modele dönmeden
+>   önce hook zincirinde kısaltır.
+>
+> Server-tarafı `clear_tool_uses` / API-native compaction (eskiyen/taşan sonuçlar) ve
+> retrieval katmanı zaten transcript-düzeyi baskıyı karşılıyordu; ham araç-çıktısı
+> kırpmasını harici bir hook/CLI katmanına taşımak built-in bir alt sistemi bakmaktan
+> daha temiz. Aşağıda **harici araç tespiti + hook entegrasyonu** (artık ana yol)
+> anlatılır; ardından prompt-cache ve bütçe konuları gelir.
 
-## Neden?
+## Neden harici?
 
 TionSwarm'nun native agentic döngüsünde (`agent/toolloop.go`) her araç çağrısının çıktısı bir
 `ToolResult` olarak konuşmaya eklenir ve sonraki model çağrısında **girdi token'ı** olarak ücretlenir.
 `Bash` gibi araçlar 64 KB'ye kadar ham çıktı döndürebilir. `git status`, test runner, `ls -R`, `grep`
-gibi komutlar context'i hızla şişirir. Bu katman, çıktı transcript'e *girmeden önce* onu kırpar — mevcut
-`internal/conversation` compaction'ı (transcript bütçesi) ve prompt-cache'i tamamlar.
+gibi komutlar context'i hızla şişirir. Bu baskıyı azaltmak artık **built-in bir katman değil**, harici
+araçların (`rtk` CLI / `sqz` PostToolUse hook) sorumluluğundadır — mevcut `internal/conversation`
+compaction'ı (transcript bütçesi) ve prompt-cache bu harici katmanı tamamlar.
 
-## İki Sistem
+Built-in tarafında geriye kalan tek koruma tool'ların kendi 64 KB hard-cap'idir; hata/boş sonuçlar
+her zaman olduğu gibi **hiç dokunulmadan** modele gider.
 
-| | **Sistem A — Deterministik** | **Sistem B — LLM Özeti** |
-|---|---|---|
-| Paket | `internal/tools/compact` | `internal/agent/compactor.go` |
-| İlham | `rtk-ai/rtk` (Rust Token Killer) | `external-agent-oss` (Large Response Handling) |
-| Yöntem | Kural tabanlı: dedupe + boş-satır sadeleştirme + ortadan kırpma | Ucuz modelle niyet-farkında özet |
-| Maliyet | Sıfır (yerel) | Ekstra model çağrısı (`KindCompact`) |
-| Tetik | Her başarılı araç çıktısı | Yalnız (A sonrası) eşik üstü çıktı |
-| Varsayılan | **Açık** | **Kapalı** (opt-in, maliyetli) |
-
-İkisi de açıksa **ardışık**: önce ücretsiz A, kalan hâlâ eşik üstündeyse B. Biri açıksa yalnız o çalışır.
-İkisi de kapalıysa eski davranış (sadece tool'un kendi 64 KB hard-cap'i) korunur.
-
-```mermaid
-graph TD
-    A["Tool çıktısı (res.Content)"] --> E{"IsError / boş?"}
-    E -->|evet| OUT["dokunulmaz → context"]
-    E -->|hayır| CA{"Sistem A açık?"}
-    CA -->|evet| RA["compact.Compact:<br/>dedupe / boş-satır / ortadan kırp"]
-    CA -->|hayır| SB
-    RA --> SB{"Sistem B açık<br/>& boyut > eşik?"}
-    SB -->|evet| LB["summarizeToolOutput<br/>(cheap model, intent-aware)"]
-    SB -->|hayır| OUT2["context'e + persisted step"]
-    LB -->|başarı| OUT2
-    LB -->|hata/boş| OUT2
-    style RA fill:#2d6,stroke:#093
-    style LB fill:#69d,stroke:#036
-```
-
-## Sistem A — `internal/tools/compact`
-
-`Compact(output string, opts Options) (string, Stats)` — dep-siz, hata döndürmez (en kötü ihtimalle
-orijinali verir).
-
-- **Dedupe:** Ardışık aynı satırlar `satır  (×N)` olarak birleşir (trailing whitespace yok sayılır).
-- **Boş satır blokları:** 2+ ardışık boş satır → tek boş satır.
-- **Satır eleme:** `MaxLines` aşılırsa baş + son yarı korunur, ortaya `… N satır atlandı …` işareti.
-- **Bayt kırpma:** `MaxBytes` aşılırsa baş (2/3) + son (1/3) korunarak ortaya `… [çıktı N bayt kırpıldı] …`;
-  kesim **rune sınırında** yapılır (UTF-8 bozulmaz — Türkçe karakterler güvenli).
-- `Stats{BeforeBytes, AfterBytes, Applied}` + `Saved()` — log ve tasarruf ölçümü.
-- **Kalıcı tasarruf sayacı:** `Stats.Saved()` (Sistem A'nın kazandırdığı bayt) `compactToolResult` içinde
-  `db.AddCompactionSavings(agentID, bytes)` ile günlük usage rollup'una yazılır →
-  `Usage.CompactSavedBytes` (ajan+gün başına, `compactSavedBytes` JSON). LLM çağrısı/token sayaçlarından
-  **bağımsız** bir ölçer (maliyet etkisi yok). **Bütçe ekranında gösteriliyor (2026-06-24):** bkz.
-  [§Bütçe görünürlüğü](#bütçe-görünürlüğü--tasarruf-merkezi--session-bazlı-2026-06-24).
-
-## Sistem B — `agent/compactor.go`
-
-- `compactToolResult(ctx, agent, toolName, input, res)` — A'yı uygular, sonra B eşiğini kontrol eder.
-  `IsError` veya boş sonuçlar **hiç dokunulmadan** geçer.
-- `summarizeToolOutput(...)` — `guardedComplete` + `WithCallKind(ctx, KindCompact)`.
-  **Model çözüm zinciri:** adanmış sıkıştırma modeli (`CompactModel`) → yoksa başlık modeli (`TitleModel`)
-  → yoksa ajanın kendi modeli. **Sağlayıcı her zaman ajanın sağlayıcısıdır** (`guardedComplete`
-  `r.providers.Get(agent.Provider)` ile çözer — ayrı seçilemez). `CompactModel` yalnızca bir model-id'dir;
-  o yüzden ajanın sağlayıcısıyla uyumlu, ucuz bir model (ör. `claude-haiku-4-5`) verilmelidir.
-  **Niyet** = tool adı + (varsa) input özeti (`intentInputRunes=300`).
-  Sistem prompt: olguları (yol/kimlik/hata/sayı/sonuç) koru, uydurma yapma, sadece sonucu döndür.
-- Bütçeyi **gate'lemez** (autonomous=false) — titler/summary ile aynı politika; usage yine işlenir.
-- **Tasarruf sayacı (2026-06-24):** özet başarılıysa `len(içerik)-len(özet)` bayt `db.AddLLMCompactionSavings`
-  ile günlük rollup'a (`Usage.CompactSavedBytesLLM`, `compactSavedBytesLLM` JSON) yazılır — Sistem A ölçerinden
-  **ayrı** (özet çağrısının kendi token maliyeti `UsageKindCompact` altında zaten kayıtlı; bu, brüt çıktı azaltımı).
-- Yalnız **native döngüde** (Anthropic/MiniMax) etkilidir; claude-cli delegasyonu kendi döngüsünü sürdürür
-  (çıktıları TionSwarm'nun `ToolResult` katmanından geçmez).
-
-## Ayarlar
-
-`settings.Settings` / `DTO` / `Patch` (clamp'ler `store.go::validate`'de):
-
-| Alan | Sistem | Vars. | Clamp |
-|------|--------|-------|-------|
-| `compactToolOutput` | A aç/kapa | `true` | — |
-| `compactMaxLines` | A satır sınırı | `200` | 0 (=default) – 5000 |
-| `compactMaxBytes` | A bayt sınırı | `16384` | 0 (=default) – 262144 |
-| `compactLlmSummary` | B aç/kapa | `true` | — |
-| `compactLlmThreshold` | B eşik (bayt) | `12288` | 0 (=default) – 262144 |
-| `compactModel` | B model-id | `""` | trim'lenir; boş = TitleModel → ajan modeli |
-
-Canlı push: `api/server.go::applySettings` → `Tunables.SetToolCompaction(...)`. 0 değerleri Tunables
-getter'larında built-in default'a (`DefaultCompact*`) çevrilir. UI: **Ayarlar → Bağlam** içinde iki
-ayrı bölüm (`frontend/.../settings/appPanels.tsx` `ContextPanel`).
-
-> **Varsayılan politika değişikliği (2026-06-22):** Sistem B artık **varsayılan AÇIK**, the external agent project
-> tarzı (~12KB eşik). Kritik bağımlılık: **A'nın bayt cap'i (16KB) B eşiğinin (12KB) ÜSTÜNDE** olmalı —
-> aksi halde A çıktıyı B eşiğinin altına kırpıp B'yi hiç tetiklenmez bırakır. Yeni varsayılanlar bu
-> sırayı korur: 12–16KB bandı A'dan geçip B'ye ulaşır, >16KB ise A 16KB'ye kırpar sonra B özetler.
-> B bir ucuz model çağrısı maliyetlidir → `compactModel`'i ucuz bir modele (ör. `claude-haiku`) pinle.
-
-## Harici araç tespiti (presence-only)
+## Harici araç tespiti (presence-only) — ana yol
 
 Ayarlar → **Hooks** ekranındaki "Kurulu mu kontrol et" butonu (panel açılışında otomatik de çalışır), bu
 cihazda isteğe bağlı harici CLI araçlarının **kurulu olup olmadığını** gösterir. Liste artık yalnız
@@ -107,7 +41,7 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
 
 | Kategori (`category`) | Araç | Kullanım (`wire`) |
 |---|---|---|
-| `token` (Token / bağlam optimizasyonu) | `rtk`, `sqz` | `hook` — tek tıkla PreToolUse hook'u bağlanır |
+| `token` (Token / bağlam optimizasyonu) | `rtk`, `sqz` | `hook` — tek tıkla PostToolUse hook'u bağlanır (`sqz`); `rtk` ise komut-katmanında agent tarafından Bash ile çağrılır |
 | `dev` (Geliştirme araçları) | `crabbox` | `cli` — ajan Bash ile doğrudan çağırır (bilgi rozeti) |
 | `render` (Render / diyagram) | `mmdc` (mermaid-cli) | `cli` — yerelde mermaid→SVG/PNG dosya çıktısı |
 
@@ -117,16 +51,29 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
   (yalnız `wire="hook"` ise frontend `TOOL_HOOK_TEMPLATES`'e ek şablon gerekir).
 - Frontend: `systemApi.externalTools()` + `HooksPanel`; araçlar `category`'ye göre gruplanır, `wire`'a
   göre rozet/buton gösterilir (`hook`→Bağla/Aktif toggle, `mcp`→MCP rozeti, `cli`→CLI rozeti) + repo linki.
-- Bu yalnızca **bilgilendirme + opsiyonel wire-up**'tır; TionSwarm bu araçları kendiliğinden çalıştırmaz
-  (token sıkıştırması Sistem A/B native'dir). `cli` araçları (`crabbox`/`mmdc`) ajan tarafından
-  geliştirme sırasında Bash ile kullanılır.
+- Bu yalnızca **bilgilendirme + opsiyonel wire-up**'tır; TionSwarm bu araçları kendiliğinden çalıştırmaz.
+  Araç-çıktısı sıkıştırması **artık yalnız bu harici yoldadır** (built-in `compact` alt sistemi
+  kaldırıldı): `sqz` PostToolUse hook'u olarak bağlanır, `rtk` agent tarafından Bash ile çağrılır.
+  `cli` araçları (`crabbox`/`mmdc`) ajan tarafından geliştirme sırasında Bash ile kullanılır.
+
+### `sqz` PostToolUse hook entegrasyonu
+
+- `sqz` `token` kategorisinde, `wire="hook"` olarak listelenir → Ayarlar → **Hooks** ekranında
+  tek tıkla **PostToolUse** hook'u olarak bağlanabilir (frontend `TOOL_HOOK_TEMPLATES`).
+- PostToolUse zincirinde araç çıktısı, modele/transkripte dönmeden önce `sqz`'e verilir; hook
+  kısaltılmış çıktıyı geri döndürür. TionSwarm bu kazanımı **ölçmez** (Claude Code hook sözleşmesi
+  tasarruf sayacı sunmaz) — kazanç dolaylı olarak input-token düşüşünde görünür.
+- `rtk` için ayrı bir hook şablonu gerekmez; agent gürültülü komutları doğrudan `rtk <cmd>` ile
+  sarmalar (kullanıcı `CLAUDE.md`'sindeki manuel fallback listesi).
 
 ## Sınırlar / Notlar
 
-- Sıkıştırma hem modele giden `ToolResult`'a **hem de** UI'da gösterilen/persist edilen `TurnStep.Output`'a
-  uygulanır → kullanıcı, modelin gördüğü çıktıyı görür (tutarlılık).
-- Komut-özel akıllı kısaltıcılar (git/test/grep'e özgü) henüz yok; A jeneriktir. → bkz. [Yapılacak](#yapılacak--craftagenttan-aktarılacak-fikirler).
-- claude-cli delegasyon yolu kapsam dışıdır (yukarıdaki sebep).
+- Built-in araç-çıktısı kırpması **yoktur**; kullanıcı, modele giden `ToolResult` ile UI'da
+  gösterilen/persist edilen `TurnStep.Output`'u birebir aynı görür (harici hook uygulanmışsa her
+  ikisi de hook'tan geçmiş haliyle gösterilir → tutarlılık korunur).
+- Komut-özel akıllı kısaltma (git/test/grep'e özgü) built-in tarafta yok; bu iş harici `rtk`/`sqz`
+  araçlarının komut-aile kurallarına bırakıldı.
+- claude-cli delegasyon yolu kapsam dışıdır (çıktıları TionSwarm'nun `ToolResult` katmanından geçmez).
 
 ### Tool dizisi prompt-cache breakpoint'i (2026-07-02)
 
@@ -211,37 +158,22 @@ edilir; bu arada ajan dinamik tarafta "snapshot eski" notu görür. Workspace ay
 
 ### Sırada (TODO)
 
-#### 1. Komut-aile-bazlı deterministik bash sıkıştırıcı (RTK tarzı) 🔶
-
-the external agent project yerel **RTK (Rewrite Toolkit)** binary'siyle `git diff`, `ls -R`, `bun test`, `npm install`,
-`grep` gibi gürültülü bash çıktılarını **model'e gitmeden önce** komut-ailesine özel kurallarla yeniden yazar
-(tasarruf istatistiği de tutar). TionSwarm'da Sistem A jeneriktir (dedupe + boş-satır + ortadan kırpma);
-komut-özel akıllı kısaltıcı yok.
-
-- **Yapılacak:** `internal/tools/compact` içine komut-aile tanıyıcı bir katman (ör. `compact/rules_*.go`):
-  `git diff`/`git status` → dosya başına özet, `ls -R`/`tree` → derinlik kırpma, test runner → yalnız
-  fail+özet satırları, `grep` → eşleşme yoğunluğu kırpma.
-- Tetik: `Bash` tool input'undaki komut adına göre kural seçimi; kural yoksa mevcut jenerik A'ya düş.
-- Sistem A ile aynı sözleşme: dep-siz, hata döndürmez, `Stats.Saved()` rollup'a yazılır.
-
-#### 2. `_intent` — açık niyet enjeksiyonu 🔶
-
-the external agent project her MCP tool çağrısında şemaya bir **`_intent`** alanı enjekte eder; bu, büyük-sonuç
-özetlemesinin **neye odaklanacağını** açıkça söyler. TionSwarm'da Sistem B niyeti *çıkarımla* buluyor
-(tool adı + ilk `intentInputRunes=300` input). Açık niyet daha iyi sinyal verir.
-
-- **Yapılacak:** native tool-use döngüsünde (`agent/toolloop.go`) modelin tool çağrısına opsiyonel bir
-  `_intent` (kısa amaç cümlesi) taşımasını sağla; `summarizeToolOutput` bunu çıkarım yerine doğrudan
-  niyet olarak kullansın. MCP araçlarında şema NormalizeSchema sırasında `_intent` alanı eklenebilir.
-- Düşük maliyet / yüksek fayda: Sistem B özet kalitesini, ekstra model çağrısı olmadan artırır.
+> **Not (2026-07-10):** Eski "komut-aile-bazlı deterministik bash sıkıştırıcı" ve
+> "`_intent` açık niyet enjeksiyonu" TODO'ları **iptal edildi** — ikisi de kaldırılan
+> built-in `compact`/özet alt sistemine dayanıyordu. Komut-aile-özel akıllı kısaltma
+> ihtiyacı artık **harici araçlarla** (`rtk`/`sqz`) karşılanır; bu araçlar zaten
+> `git diff`/`ls -R`/test-runner/`grep` gibi komutlar için komut-ailesine özel kurallar
+> içerir. TionSwarm tarafında yapılacak tek iş varsa o da `sqz` hook şablonlarını /
+> `rtk` sarmalama kılavuzunu güncel tutmaktır.
 
 ### Tamamlanan iyileştirmeler (özet)
 
 > Tam tarihçe (test adları, canlı-test bulguları, ara-revizeler) → [05-ILERLEME.md](05-ILERLEME.md).
+> **Not (2026-07-10):** Aşağıdaki "Sistem A/B" (built-in araç-çıktısı sıkıştırması)
+> kayıtları **tarihseldir**; ilgili alt sistem kaldırıldı. Konuşma-özeti (transcript
+> compaction) ve prompt-cache iyileştirmeleri geçerliliğini korur.
 
-- **✅ B özet eşiğini the external agent project ile hizala** (2026-06-22) — Sistem B varsayılan AÇIK, eşik 12288 bayt; A bayt-cap 16384'e çıkarıldı (A→B sırası korunur).
 - **✅ Density-aware token tahmini** (CG-9/1, 2026-06-22) — `estimateText` yoğun içerikte ~1.5 chars/token, düz metinde ~4; `tokens_test.go`.
-- **✅ Bütçe-orantılı tool eşikleri** (CG-9/2, 2026-06-22) — A-cap + B-eşik `budget/12000` (clamp [1×,5×]) ile ölçeklenir, A>B değişmezi korunur.
 - **✅ Per-model context-window metadata** (2026-06-22) — `ModelInfo.ContextWindow` + `ContextWindowFor(provider,model)` aile-tablosu; UI + bütçe-tavanı guard için.
 - **✅ Modele göre akıllı varsayılan bütçe** (2026-06-22) — `EffectiveBudget` model penceresine göre ölçekler; fraction/ceil canlı yapılandırılabilir. **Güncel değerler → [§12](#12--context-rot-farkındalığı-ve-bütçe-stratejisi-2026-06-25)** (256K + adaptif).
 - **✅ Yapılandırılmış konuşma-özeti** (Claude Code parite, 2026-06-23) — `compactPrompt` 8-bölümlü yapı + anti-decay; `compactMaxOutputTokens=8192`; kapanış-cue'su claude-cli framing'ini bastırır.
@@ -249,37 +181,38 @@ the external agent project her MCP tool çağrısında şemaya bir **`_intent`**
 - **✅ `conversation_search` güçlendirme** (2026-06-24) — `full=true` (birebir tam metin) + `context=N` (çevre turlar) + `session_id`; bkz. [27-CROSS-SESSION-SEARCH.md](27-CROSS-SESSION-SEARCH.md).
 - **✅ claude-cli oturum sürekliliği `--resume`** (2026-06-24, opt-in) — `ClaudeResume` ile sıcak prompt-cache; warm modda compaction CLI'a geçer (deneysel). Akış: `api/chat_resume.go`.
 
-## Bütçe görünürlüğü — Tasarruf Merkezi + session bazlı (2026-06-24)
+## Bütçe görünürlüğü — Tasarruf Merkezi + session bazlı
 
-Önceden tüm tasarruf mekanizmaları (cache, Sistem A/B) toplanıyordu ama dağınık/gizliydi; kullanım yalnız
-**ajan+gün** anahtarlıydı (oturum-başına atfedilemiyordu). Üç fazlık geliştirme:
+> **Güncelleme (2026-07-10):** Built-in araç-çıktısı sıkıştırması kaldırıldığı için
+> tasarruf ölçerleri (`CompactSavedBytes` / `compactSavedBytes` **ve** LLM varyantı
+> `CompactSavedBytesLLM` / `compactSavedBytesLLM`) ile ilgili API alanları, DB metotları
+> (`AddCompactionSavings`, `AddLLMCompactionSavings`, `AddSessionCompactionSavings`,
+> `AddSessionLLMCompactionSavings`) ve UI hücreleri **çıkarıldı**. Bütçe ekranında:
+> - **Tasarruf Merkezi** artık **tek hücre** gösterir: **Prompt-cache USD** (gerçek
+>   faturalandırma etkisi olan tek kaynak). "Sıkıştırma · kural" hücresi ve
+>   "Toplam context tasarrufu" footer'ı kaldırıldı.
+> - **Trend metrik seçici** artık **3 seri**dir: **Token · Maliyet · Cache tasarrufu**
+>   (`TREND_METRICS`). "Sıkıştırma" serisi kaldırıldı.
+> - Session/agent kartlarındaki "Sıkıştırma (kural)" satırı ve ilgili boş-durum koşulu
+>   kaldırıldı; yalnız Prompt-cache kazancı kalır.
 
-### Faz 1 — Sıkıştırma tasarrufunu görünür kıl
-- DB: `Usage.CompactSavedBytesLLM` alanı + `AddLLMCompactionSavings` (Sistem B brüt çıktı azaltımı). Sistem A'nın
-  `CompactSavedBytes`'ı zaten vardı.
-- API: `GET /api/usage` totals + cumulative + trend artık `compactSavedBytes`/`compactSavedBytesLLM` taşır;
-  `GET /api/agents/{id}/usage` de ekledi.
-- UI: Bütçe ekranında **Tasarruf Merkezi** bölümü (3 hücre: Prompt-cache USD · Sistem A bayt · Sistem B bayt +
-  token-eşdeğeri tahmini). Bayt ölçerdir, gerçek faturalandırma değil.
+Cache tasarrufu ile session bazlı kullanım/maliyet dağınık/gizli değildir; kullanım hem
+**ajan+gün** hem **session (ömür-boyu)** anahtarlı tutulur. Kalıcı olan iki mekanizma:
 
-### Faz 2 — Session bazlı kullanım/maliyet
-- DB: yeni `SessionUsage` rollup (`internal/db/store_session_usage.go`) — **sessionID anahtarlı, ömür-boyu**
-  (gün-reset YOK); ByKind/ByModel + cache + her iki compaction ölçeri. Dosya `store/session-usage/<sid>.json`.
-  Metotlar: `AddSessionUsageKind` · `AddSessionCompactionSavings` · `AddSessionLLMCompactionSavings` ·
-  `GetSessionUsage`. Boş sessionID = no-op.
-- Wiring: `RecordUsage` + `compactToolResult` ctx'teki `SessionIDFrom`'u okuyup ajan kaydının **yanında** session
-  rollup'a da yazar (chat/schedule/spawn/flow yolları zaten `WithSessionID` damgalı; chat_stream.go:256).
+### Prompt-cache görünürlüğü
+- API: `GET /api/usage` totals + cumulative + trend `savingsUSD` (prompt-cache USD tasarrufu) taşır.
+- UI: Bütçe ekranında **Tasarruf Merkezi** bölümü tek hücre — **Prompt-cache** (gerçek USD).
+  Bayt/token tahmin hücreleri artık yoktur.
+
+### Session bazlı kullanım/maliyet
+- DB: `SessionUsage` rollup (`internal/db/store_session_usage.go`) — **sessionID anahtarlı, ömür-boyu**
+  (gün-reset YOK); ByKind/ByModel + cache sayaçları. Dosya `store/session-usage/<sid>.json`.
+  Metotlar: `AddSessionUsageKind` · `GetSessionUsage`. Boş sessionID = no-op.
+- Wiring: `RecordUsage` ctx'teki `SessionIDFrom`'u okuyup ajan kaydının **yanında** session
+  rollup'a da yazar (chat/schedule/spawn/flow yolları zaten `WithSessionID` damgalı).
 - API: `GET /api/sessions/{id}/usage-detail` (cost helper'ları `modelRowsFor` ile paylaşılır → workspace ekranıyla
-  birebir tutarlı). UI: `SessionDetailPanel`'de **"Bu oturumun harcaması"** kartı (maliyet + kazanç/tasarruf
-  kırılımı) — eskiden yalnız "ajanın bugünkü toplamı" gösteriliyordu.
-
-### Faz 3 — Tasarruf Merkezi (birleşik kazanç görünümü)
-- Tüm tasarruf kaynakları tek panelde: cache (gerçek USD) + Sistem A (ücretsiz bayt) + Sistem B (LLM bayt) +
-  toplam context tasarrufu (bayt → ~token tahmini, `bytes/4`). Bütçe ekranı kümülatif penceresinden beslenir.
-- **Trend metrik seçici (2026-06-25):** günlük trend grafiği artık 4 seri arasında geçiş yapar —
-  **Token · Maliyet · Cache tasarrufu · Sıkıştırma** (`TREND_METRICS`, `BudgetPanel`). Backend her `dayPoint`'e
-  `compactSavedBytes`/`compactSavedBytesLLM` ekledi → trend bunları gün-bazında çizebiliyor; bar rengi+formatlayıcı
-  metriğe göre değişir, altta pencere-toplamı gösterilir.
+  birebir tutarlı). UI: `SessionDetailPanel`'de **"Bu oturumun harcaması"** kartı (maliyet + prompt-cache
+  kazancı) — eskiden yalnız "ajanın bugünkü toplamı" gösteriliyordu.
 
 ### Hesaplama düzeltmeleri (2026-07-08)
 Bütçe / oturum-bilgisi / sohbet-debug / debug popup'larının hesap tutarlılık denetiminde bulunup düzeltilen dört nokta (hepsi ortak `billing.PriceStat` + fiyat tablosu + `session_info` filler yolunda → tek noktadan dört ekranı da düzeltir):
@@ -290,13 +223,14 @@ Bütçe / oturum-bilgisi / sohbet-debug / debug popup'larının hesap tutarlıl�
 - **"Tasarrufsuz maliyet" tam-doğru baseline'a çevrildi** (`providers.Price.CostNoCaching` + `billing.NoCacheCost` + `Rollup.NoCacheCostUSD` → `cumulative.noCacheCostUSD`): kart eskiden `cost + savings` gösteriyordu; bu, cacheRead'i tam fiyatlıyor ama cache-write primini (1.25×/2×) içeride bırakıp "caching olmasaydı" senaryosunu `(writeMult−1)×cacheWrite×inP` kadar şişiriyordu. Yeni baseline, cacheRead **ve** cacheWrite tokenlarının tümünü taban girdi fiyatından (indirim/prim yok) + input + output ile hesaplar → gerçek "caching yokmuş" tutarı. (Not: 1s-TTL 2× primi nedeniyle tek soğuk yazma, o yazma için tasarrufsuz baseline'ı bile aşabilir — caching kazancı tekrar-okumada realize olur.) Regresyon: `billing_test.go` + `pricing_test.go`.
 
 **Notlar / sınırlar:**
-- Hook'lar (`PreToolUse`/`PostToolUse`) hâlâ tasarruf **ölçmez** (Claude Code sözleşmesi; gerçek token-tasarruf
-  mekanizması Sistem A/B'dir). `rtk`/`sqz` harici araçları yalnız **presence-only** tespit edilir,
-  TionSwarm çıktıları onlardan geçirmez → ölçülen kazanç yok; yerel eşdeğer = Sistem A.
-- Bayt→token→USD: Sistem A/B için yalnız bayt + ~token gösterilir, **USD'ye çevrilmez** (uydurma sayı olmaması
-  için). Gerçek USD yalnız prompt-cache'te.
-- Geriye-uyumlu: eski usage dosyaları yeni alanları taşımaz (omitempty → 0); session rollup yeni turlardan dolar.
-- Testler: `store_session_usage_test.go` (session attribution + reload), `store_usage_test.go` (`AddLLMCompactionSavings`).
+- Hook'lar (`PreToolUse`/`PostToolUse`) tasarruf **ölçmez** (Claude Code sözleşmesi). Araç-çıktısı
+  sıkıştırması artık tamamen bu harici hook/CLI yolundadır (`sqz` PostToolUse hook · `rtk` Bash
+  sarmalama); TionSwarm bu kazanımı sayaçlamaz — kazanç dolaylı olarak input-token düşüşünde görünür.
+- Bütçe ekranında gösterilen tek gerçek tasarruf **prompt-cache USD**'sidir; built-in bayt/token
+  sıkıştırma ölçeri yoktur.
+- Geriye-uyumlu: eski usage dosyalarındaki artık-kullanılmayan `compactSavedBytes*` alanları yok sayılır
+  (omitempty); session rollup yeni turlardan dolar.
+- Testler: `store_session_usage_test.go` (session attribution + reload).
 
 ## Context reset (handoff) — in-place compaction'ın tamamlayıcısı
 

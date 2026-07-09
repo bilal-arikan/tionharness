@@ -49,8 +49,10 @@ func (ActivateToolsTool) Def() providers.ToolDef {
 		Name: "activate_tools",
 		Description: "Load the full schemas of one or more tools listed in your system prompt under " +
 			"\"Available Tools (load on demand)\". Call this BEFORE using such a tool: pass its exact " +
-			"name(s); the tool(s) become callable on your next step. Activate everything you expect to " +
-			"need for the task in one call.",
+			"name(s). Activate everything you expect to need for the task in one call. IMPORTANT: the " +
+			"activated tools only become callable on your NEXT step — do NOT call them in the SAME " +
+			"response/batch as this activate_tools call, or the runtime will reject them as \"No such " +
+			"tool available\". Activate now, use them next turn.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
@@ -91,7 +93,7 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 
 	var b strings.Builder
 	if len(added) > 0 {
-		fmt.Fprintf(&b, "Activated %d tool(s); their schemas are available on your next step:\n", len(added))
+		fmt.Fprintf(&b, "Activated %d tool(s). Their schemas arrive on your NEXT step — do not call them in this same response:\n", len(added))
 		for _, n := range added {
 			fmt.Fprintf(&b, "- %s — %s\n", n, t.byName[n])
 		}

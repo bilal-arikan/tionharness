@@ -39,7 +39,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// config drift (skill installs, settings edits, capability toggles, a new
 	// participant) cannot bust the prompt cache. prep.Compacted marks a fold —
 	// the history cache is busted anyway, so pending changes adopt for free.
-	system, sysStale := wsp.Runtime.EpochStaticSystem(ctx, session.ID, agentRow, multiAgent, prep.Compacted,
+	system, _ := wsp.Runtime.EpochStaticSystem(ctx, session.ID, agentRow, multiAgent, prep.Compacted,
 		strings.TrimSpace(session.WorkingDir), func() string {
 			return s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
 		})
@@ -121,8 +121,9 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if tb := todoContextBlock(ctx, wsp.DB, session.ID, wsp.Runtime.ProgressDir(session.ID), s.tun.ProgressResume()); tb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + tb)
 	}
-	// Cross-session awareness: a short summary of the workspace's active + recent
-	// sessions. Configured PER WORKSPACE; injected every turn or only on a
+	// Cross-session awareness: a short summary of the workspace's recent PAST
+	// sessions (active/live sessions are NOT auto-sent — the agent lists them on
+	// demand). Configured PER WORKSPACE; injected every turn or only on a
 	// session's first turn (its "start") depending on the toggle.
 	if sc := wsp.Settings(); sc.SessionContextEnabled && (sc.SessionContextEveryTurn || freshSession) {
 		recent := sc.SessionContextRecentCount
@@ -143,10 +144,12 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	}
 
 	// Prompt-epoch drift notice: the frozen snapshot is holding back a live
-	// change. One line on the VOLATILE side, so telling the agent about the drift
-	// never causes the very cache bust the snapshot exists to prevent.
-	if sysStale {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + agent.PromptEpochStaleNote)
+	// change. A compact diff of WHAT changed (persona/instructions/skills/tools)
+	// on the VOLATILE side, so telling the agent about the drift never causes the
+	// very cache bust the snapshot exists to prevent. Empty when in sync; falls
+	// back to the generic one-liner when the diff could not be itemised.
+	if note := wsp.Runtime.PromptEpochContextNote(session.ID, agentRow.ID); note != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + note)
 	}
 
 	return providers.Request{
@@ -156,6 +159,18 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		Summary:       summary,
 		Messages:      prep.Messages,
 	}
+}
+
+// consumeContextChangeLead returns a one-element lead trace (a context_change
+// step) when the session's frozen static context drifted this episode, else
+// nil. Consumes the one-shot so it fires once per drift episode. Lives here (not
+// chat.go) because the db.Agent variable `agent` shadows the agent package name
+// in that handler; returning the slice lets callers use type inference.
+func consumeContextChangeLead(rt *agent.Runtime, sessionID, agentID string) []agent.TurnStep {
+	if cc := rt.ConsumeContextChange(sessionID, agentID); cc != nil {
+		return []agent.TurnStep{agent.ContextChangeStep(cc)}
+	}
+	return nil
 }
 
 // buildStaticPrefix composes the STATIC system prefix for one chat turn from

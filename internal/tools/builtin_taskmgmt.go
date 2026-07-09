@@ -45,7 +45,7 @@ func NewListTasksTool(database *db.DB, actorID string) ListTasksTool {
 func (ListTasksTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_tasks",
-		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, flowId, priority, tags, last run status, and whether each was created by an agent). You can edit, move and delete ANY task. Board columns are: todo, in_progress, review, done, failed.",
+		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, flowId, priority, tags, last run status, and whether each was created by an agent). You can edit, move and delete ANY task. Built-in board columns are: todo, in_progress, review, done, failed — this workspace may also define custom columns; check existing tasks' boardState values or the board UI to see them.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	}
 }
@@ -106,7 +106,7 @@ func (CreateTaskTool) Def() providers.ToolDef {
 				"description":{"type":"string"},
 				"ownerAgentId":{"type":"string","description":"Agent that runs the task (see list_agents); not required for flow-backed tasks"},
 				"flowId":{"type":"string","description":"When set, running the task executes this flow (see list_flows)"},
-				"boardState":{"type":"string","enum":["todo","in_progress","review","done","failed"],"description":"Initial column (default todo)"},
+				"boardState":{"type":"string","description":"Initial column key (default todo). Built-in: todo, in_progress, review, done, failed — but a workspace may define custom columns (see list_tasks description or the board UI); any lowercase letters/digits/underscores key is accepted."},
 				"dependencies":{"type":"string","description":"JSON array of task IDs that must complete before this task, e.g. [\"id1\",\"id2\"]"},
 				"priority":{"type":"string","enum":["critical","high","medium","low"],"description":"Task priority (optional)"},
 				"tags":{"type":"array","items":{"type":"string"},"description":"Free-form labels (optional)"}
@@ -137,8 +137,8 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.Title == "" && in.Prompt == "" && in.FlowID == "" {
 		return "", fmt.Errorf("provide at least one of: prompt, title, flowId")
 	}
-	if in.BoardState != "" && !db.ValidBoardState(in.BoardState) {
-		return "", enumErr("boardState", in.BoardState, "todo", "in_progress", "review", "done", "failed")
+	if in.BoardState != "" && !db.IsValidBoardKey(in.BoardState) {
+		return "", enumErr("boardState", in.BoardState, "todo", "in_progress", "review", "done", "failed", "or a workspace custom column key (lowercase letters/digits/underscores)")
 	}
 	if !db.ValidPriority(in.Priority) {
 		return "", enumErr("priority", in.Priority, "critical", "high", "medium", "low")
@@ -199,7 +199,7 @@ func (UpdateTaskTool) Def() providers.ToolDef {
 				"description":{"type":"string"},
 				"ownerAgentId":{"type":"string"},
 				"flowId":{"type":"string","description":"Set to empty string to unlink the flow"},
-				"boardState":{"type":"string","enum":["todo","in_progress","review","done","failed"]},
+				"boardState":{"type":"string","description":"Column key. Built-in: todo, in_progress, review, done, failed — plus any workspace custom column key."},
 				"dependencies":{"type":"string","description":"JSON array of task IDs this task depends on, e.g. [\"id1\",\"id2\"]. Pass [] to clear."},
 				"priority":{"type":"string","enum":["critical","high","medium","low",""],"description":"Priority ('' clears it)"},
 				"tags":{"type":"array","items":{"type":"string"},"description":"Free-form labels (replaces the set; [] clears)"}
@@ -268,8 +268,8 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		cur.FlowID = *in.FlowID
 	}
 	if in.BoardState != nil {
-		if !db.ValidBoardState(*in.BoardState) {
-			return "", enumErr("boardState", *in.BoardState, "todo", "in_progress", "review", "done", "failed")
+		if !db.IsValidBoardKey(*in.BoardState) {
+			return "", enumErr("boardState", *in.BoardState, "todo", "in_progress", "review", "done", "failed", "or a workspace custom column key (lowercase letters/digits/underscores)")
 		}
 		cur.BoardState = *in.BoardState
 	}
@@ -305,12 +305,12 @@ func NewMoveTaskTool(database *db.DB, actorID string) MoveTaskTool {
 func (MoveTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "move_task",
-		Description: "Move a task to a different board column (todo, in_progress, review, done, failed). Allowed on any task.",
+		Description: "Move a task to a different board column. Built-in columns: todo, in_progress, review, done, failed — a workspace may also define custom columns. Allowed on any task.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"id":{"type":"string","description":"The task id (see list_tasks)"},
-				"boardState":{"type":"string","enum":["todo","in_progress","review","done","failed"]}
+				"boardState":{"type":"string","description":"Column key. Built-in: todo, in_progress, review, done, failed — plus any workspace custom column key."}
 			},
 			"required":["id","boardState"],
 			"additionalProperties":false
@@ -330,8 +330,8 @@ func (t MoveTaskTool) Call(ctx context.Context, input json.RawMessage) (string, 
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	if !db.ValidBoardState(in.BoardState) {
-		return "", enumErr("boardState", in.BoardState, "todo", "in_progress", "review", "done", "failed")
+	if !db.IsValidBoardKey(in.BoardState) {
+		return "", enumErr("boardState", in.BoardState, "todo", "in_progress", "review", "done", "failed", "or a workspace custom column key (lowercase letters/digits/underscores)")
 	}
 	if err := t.d.db.MoveTask(ctx, in.ID, in.BoardState); err != nil {
 		return "", fmt.Errorf("move task: %w", err)

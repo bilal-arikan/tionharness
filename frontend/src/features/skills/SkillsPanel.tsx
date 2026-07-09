@@ -10,6 +10,7 @@ import { RevealButton } from '@/shared/components/RevealButton'
 import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupedList } from '@/shared/hooks/useGroupedList'
+import { useGroupDnD } from '@/shared/hooks/useGroupDnD'
 import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '@/shared/components'
 import { NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING } from '@/shared/components/SidebarChrome'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
@@ -32,6 +33,11 @@ const UNGROUPED = 'Grupsuz'
 // Group key for one skill: its `group` field, or the ungrouped bucket.
 function skillGroupKey(sk: Skill): string {
   return sk.group?.trim() || UNGROUPED
+}
+
+// Identity of one skill row (module-scope so the drag hook's lookup map is stable).
+function skillId(sk: Skill): string {
+  return sk.slug
 }
 
 // Order groups: named groups alphabetically (tr) first, ungrouped bucket last.
@@ -380,6 +386,31 @@ export function SkillsPanel({ onError }: Props) {
     [sel.selected, reload, activeSlug, onError],
   )
 
+  // Drag-and-drop group move: dropping a card on a group header rewrites its
+  // `group` through the same endpoint the bulk action uses. Dragging a card that
+  // belongs to the current selection moves the whole selection.
+  const moveToGroup = useCallback(
+    (slugs: string[], group: string) => {
+      Promise.all(slugs.map((slug) => api.setSkillGroup(slug, group)))
+        .then(() => {
+          if (activeSlug && slugs.includes(activeSlug)) return api.getSkill(activeSlug).then(setActive)
+        })
+        .catch((e) => onError((e as Error).message))
+        // Refresh either way: on success to re-bucket the list, on failure so the
+        // cards snap back to the persisted truth instead of a half-applied move.
+        .finally(() => reload())
+    },
+    [activeSlug, reload, onError],
+  )
+  const dnd = useGroupDnD<Skill>({
+    items: list,
+    idOf: skillId,
+    groupOf: skillGroupKey,
+    ungroupedLabel: UNGROUPED,
+    selectedIds: sel.selected,
+    onMove: moveToGroup,
+  })
+
   // Re-scan tiers on disk, then refresh the catalog + current selection.
   const rescan = useCallback(() => {
     api
@@ -447,15 +478,23 @@ export function SkillsPanel({ onError }: Props) {
           )}
           {grouped.map(([groupName, items]) => {
             const isCollapsed = collapsed.has(groupName)
+            const isDropTarget = dnd.isOver(groupName)
             return (
-              <div key={groupName} className="mb-1">
+              // The whole group (header + body) is the drop target, so a card can
+              // be dropped on a folded group's header too.
+              <div key={groupName} className="mb-1" {...dnd.groupProps(groupName)}>
                 <button
                   data-testid="skills-group-header"
                   data-group-name={groupName}
                   data-collapsed={isCollapsed}
+                  data-drop-active={isDropTarget}
                   onClick={() => toggleGroup(groupName)}
                   title={isCollapsed ? 'Grubu aç' : 'Grubu katla'}
-                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                  className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
+                    isDropTarget
+                      ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
+                      : 'text-[var(--color-text-dim)]'
+                  }`}
                 >
                   {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                   <span className="min-w-0 flex-1 truncate">{groupName}</span>
@@ -472,7 +511,11 @@ export function SkillsPanel({ onError }: Props) {
                           key={sk.slug}
                           data-testid="skills-list-item"
                           data-skill-slug={sk.slug}
+                          {...dnd.itemProps(sk)}
                           onClick={(e) => {
+                            // A drag may end with a trailing click on the source
+                            // card; that click must not change the selection.
+                            if (dnd.consumedByDrag()) return
                             if (sel.handleClick(e, sk.slug, orderedSlugs, activeSlug)) return
                             setActiveSlug(sk.slug)
                           }}
@@ -482,7 +525,7 @@ export function SkillsPanel({ onError }: Props) {
                               : isActive
                                 ? SELECTED_ITEM_CLS
                                 : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
-                          }`}
+                          } ${dnd.dragIds.has(sk.slug) ? 'opacity-50' : ''}`}
                         >
                           <span className="mt-0.5 shrink-0 text-base leading-none">{sk.icon || '✨'}</span>
                           <span className="min-w-0 flex-1">

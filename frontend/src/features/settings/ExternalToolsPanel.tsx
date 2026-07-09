@@ -68,6 +68,8 @@ export function ExternalToolsPanel({ onError }: Props) {
   // to add/remove it in one click from its callout below the tool row.
   const [servers, setServers] = useState<MCPServer[]>([])
   const [mcpBusy, setMcpBusy] = useState(false)
+  // Busy flag (keyed by hook id) while repairing a token-optimizer hook's matcher.
+  const [fixBusy, setFixBusy] = useState<string | null>(null)
 
   const checkTools = async () => {
     setChecking(true)
@@ -121,6 +123,44 @@ export function ExternalToolsPanel({ onError }: Props) {
       onError((e as Error).message)
     } finally {
       setToolBusy(null)
+    }
+  }
+
+  // coversPowerShell reports whether a hook matcher fires for the PowerShell tool.
+  // Mirrors backend hookMatches: empty matcher (or `*`) matches everything; a
+  // comma-separated list must name PowerShell explicitly.
+  const coversPowerShell = (matcher: string): boolean => {
+    const parts = matcher.split(',').map((s) => s.trim()).filter(Boolean)
+    return parts.length === 0 || parts.includes('*') || parts.includes('PowerShell')
+  }
+
+  // Wired token-optimizer hooks whose matcher omits PowerShell — on Windows the
+  // agent uses the PowerShell tool, so a Bash-only matcher means the hook silently
+  // never fires. Surfaced with a one-click repair in the token callout.
+  const tokenHooksNeedingFix = (): Hook[] =>
+    Object.keys(TOOL_HOOK_TEMPLATES)
+      .map((name) => wiredHook(name))
+      .filter((h): h is Hook => !!h && !coversPowerShell(h.matcher))
+
+  // Repair one hook's matcher: merge PowerShell into the existing matcher (or set
+  // Bash,PowerShell when empty), preserving every other field.
+  const fixMatcher = async (h: Hook) => {
+    setFixBusy(h.id)
+    try {
+      const parts = h.matcher.split(',').map((s) => s.trim()).filter(Boolean)
+      const merged = parts.length ? Array.from(new Set([...parts, 'PowerShell'])).join(',') : 'Bash,PowerShell'
+      await api.updateHook(h.id, {
+        event: h.event,
+        matcher: merged,
+        command: h.command,
+        timeoutSec: h.timeoutSec,
+        enabled: h.enabled,
+      })
+      await loadHooks()
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setFixBusy(null)
     }
   }
 
@@ -283,6 +323,45 @@ export function ExternalToolsPanel({ onError }: Props) {
                     )}
                     </div>
                   ))}
+                {/* Token-optimizer integration: mirrors the codebase-memory callout —
+                    explains the prompt-side capability injection and flags any wired
+                    hook whose matcher omits PowerShell (so it would never fire on
+                    Windows), with a one-click repair. Rendered once under the group. */}
+                {cat === 'token' && (
+                  <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+                    <span className="font-medium text-[var(--color-text)]">⚡ Token optimizasyonu entegrasyonu:</span> Bir{' '}
+                    <code>rtk</code> / <code>sqz</code> aracı hook olarak bağlandığında, TionSwarm ajanın bağlamına{' '}
+                    <span className="font-medium text-[var(--color-text)]">"token optimizasyonu aktif"</span> bilgi bloğu ekler
+                    (codebase-memory entegrasyonu gibi) — böylece ajan araç çıktısının otomatik kısaltıldığını{' '}
+                    <span className="font-medium text-[var(--color-text)]">(kayıp değil)</span> bilir ve komutlardan çekinmez.
+                    Hook <span className="font-medium text-[var(--color-text)]">matcher</span>'ı{' '}
+                    <code>Bash,PowerShell</code> olmalı; yalnız <code>Bash</code> ise Windows'ta ajanın kullandığı{' '}
+                    <code>PowerShell</code> aracında <span className="font-medium text-[var(--color-text)]">hiç ateşlenmez</span>.
+                    rtk ve sqz'yi aynı anda açma (ikisi de komutu yeniden yazar).
+                    {tokenHooksNeedingFix().length > 0 && (
+                      <div className="mt-2 flex flex-col gap-1.5 border-t border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] pt-2">
+                        {tokenHooksNeedingFix().map((h) => (
+                          <div key={h.id} className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-[var(--color-warning)]">
+                              ⚠ matcher <code>{h.matcher}</code> — PowerShell kapsamıyor
+                            </span>
+                            <button
+                              type="button"
+                              data-testid="fix-matcher"
+                              data-hook={h.id}
+                              disabled={fixBusy === h.id}
+                              onClick={() => fixMatcher(h)}
+                              className="shrink-0 rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                              title="Matcher'a PowerShell ekle (Bash,PowerShell)"
+                            >
+                              {fixBusy === h.id ? '…' : 'Matcher’ı düzelt'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
         </div>

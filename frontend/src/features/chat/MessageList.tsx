@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Agent, Artifact, Message } from '@/types'
 import { MessageTime, LiveTimer } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
@@ -172,7 +172,14 @@ export function MessageList({
     updateActivePinned(el)
   }
 
-  useEffect(() => {
+  // useLayoutEffect (NOT useEffect): the scroll-to-bottom + active-pinned-index
+  // update must run BEFORE the browser paints. With a post-paint useEffect, each
+  // streaming/tool-step messages change painted one frame at the stale scroll
+  // position and stale pinned index first, which flashed the full-width sticky
+  // pinned-question overlay for a single frame before the effect corrected it.
+  // Running pre-paint ties the scroll and the overlay's visibility to the same
+  // commit, so there is no intermediate inconsistent frame.
+  useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el) return
     if (prevFirstId.current !== firstId) {

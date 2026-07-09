@@ -255,6 +255,7 @@ type cliBlock struct {
 }
 
 type cliMessage struct {
+	ID      string     `json:"id"` // API message id — one id may span several assistant events
 	Model   string     `json:"model"`
 	Content []cliBlock `json:"content"`
 	Usage   *cliUsage  `json:"usage"`
@@ -505,6 +506,12 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// env didn't already provide, so a user override still wins. Values are ms.
 	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TOOL_TIMEOUT", "600000")
 	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TIMEOUT", "60000")
+	// Thinking parity: "Kapalı" turns extended thinking fully off in the CLI
+	// (MAX_THINKING_TOKENS=0). Also restores parallel tool batching on claude-code
+	// ≥2.1.203 ("think XOR batch") — see Request.DisableThinking.
+	if req.DisableThinking {
+		cmd.Env = append(cmd.Env, "MAX_THINKING_TOKENS=0")
+	}
 	// Isolated config home: point the CLI at a clean CLAUDE_CONFIG_DIR so its
 	// skills/settings/commands/global CLAUDE.md/login come from there instead of the
 	// shared ~/.claude. Appended last so it overrides any inherited value.
@@ -726,6 +733,13 @@ type cliStreamParser struct {
 	notLoggedIn  bool                 // the turn was rejected because this claude-home is not authenticated
 	authMsg      string               // human-readable detail for the auth failure ("Not logged in · ...")
 	toolStart    map[string]time.Time // tool_use id → time the event was seen (for per-tool latency)
+	// Parallel-batch grouping: the CLI splits ONE API assistant message (which may
+	// carry several parallel tool_use blocks) into several stream events sharing the
+	// same message id. Track the current message's tool trace indices so the 2nd+
+	// tool_use of a message allocates a batch id and stamps the earlier ones too.
+	curMsgID    string // assistant message id currently being accumulated
+	curMsgTools []int  // trace indices of that message's tool steps
+	batchSeq    int    // 1-based batch id allocator (unique within the turn)
 }
 
 // primaryModelUsage returns the model key that consumed the most tokens in a
@@ -823,6 +837,13 @@ func (p *cliStreamParser) feed(line string) {
 		if ev.Message == nil {
 			return
 		}
+		// New API message → reset the parallel-batch accumulator (see curMsgID).
+		// An empty id (older CLI) degrades to per-event grouping, which is still
+		// correct when one event carries all of a message's blocks.
+		if ev.Message.ID != p.curMsgID {
+			p.curMsgID = ev.Message.ID
+			p.curMsgTools = p.curMsgTools[:0]
+		}
 		if ev.Message.Model != "" {
 			p.resp.Model = ev.Message.Model
 		}
@@ -851,9 +872,23 @@ func (p *cliStreamParser) feed(line string) {
 			case "tool_use":
 				p.flushText()
 				p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "tool", Tool: b.Name, Input: b.Input})
+				idx := len(p.resp.Trace) - 1
 				if b.ID != "" {
-					p.toolIdx[b.ID] = len(p.resp.Trace) - 1
+					p.toolIdx[b.ID] = idx
 					p.toolStart[b.ID] = time.Now() // start the latency clock for this tool
+				}
+				// Parallel-batch grouping: the 2nd tool_use of the SAME API message
+				// allocates a batch id and stamps every tool of that message (incl.
+				// retroactively the 1st, whose result has not arrived yet — tool steps
+				// emit only on tool_result, so the stamp lands before delivery).
+				p.curMsgTools = append(p.curMsgTools, idx)
+				if len(p.curMsgTools) == 2 {
+					p.batchSeq++
+				}
+				if len(p.curMsgTools) >= 2 {
+					for _, ti := range p.curMsgTools {
+						p.resp.Trace[ti].Batch = p.batchSeq
+					}
 				}
 				// Not emitted yet — wait for its tool_result to fill the output.
 			}

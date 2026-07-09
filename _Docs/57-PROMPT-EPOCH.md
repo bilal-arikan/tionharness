@@ -109,11 +109,52 @@ Adopt tüm entry'yi düşürür → hem system hem tools birlikte yeniden donar
   doğrudan `build()` döner, `EpochToolDefs` nil/fail-open).
 - Chat `/` menüsü: `refresh-context` komutu (🔄) — `POST /api/sessions/{id}/summarize`
   `kind=refresh-context` (compact ile aynı kanal).
+- **Cache-warmth göstergesi:** `CacheWarmthBadge.tsx` yalnız `updatedAt` + canlı
+  1sn tick'ten türeyen prompt-cache sıcaklığını gösterir — 🔥 **Sıcak · mm:ss
+  kaldı** (TTL soğumasına geri sayım) veya ❄️ **Soğuk** (1sa TTL doldu → sonraki
+  tur tam cache-miss). Backend alanı YOK (TTL sabit 1sa; `CACHE_TTL_SEC=3600`,
+  `sessionDetailFormat.cacheRemaining`). İki yerde: **Oturum bilgisi** panelinin
+  "Genel" bölümünde satır (`SessionDetailPanel`) + **"Sıradaki tur bağlam
+  önizleme"** popup'ının cache legend'ında TTL geri sayımı (`SessionContextModal`,
+  `updatedAt` App.tsx'ten geçer; per-segment cache'li/dışı bayrakları = token
+  ekseni, TTL = zaman ekseni). Her iki yerde 1sn tick tur çalışırken **veya**
+  cache sıcakken döner, soğuyunca kendini durdurur.
+
+## Context-Change Diff Yüzeyleme (2026-07-10)
+
+Stale notu artık jenerik tek satır değil: donmuş snapshot ile canlı prefix
+arasındaki **gerçek farkı** hesaplayıp iki yerde yüzeyler (ikisi de volatil
+tarafta → cache'i asla bozmaz).
+
+- **Diff motoru** `internal/agent/contextdiff.go` — paragraf-seviyeli LCS
+  (`diffSystemPrefix`) + araç-adı küme farkı (`diffToolNames`). Statik prefix
+  bloklar `\n\n` ile birleştiği için diff **kendiliğinden blok-hizalı**: her
+  değişen paragrafın ilk satırı doğal etiket olur (`# Workspace Instructions`,
+  `<user_context>`, skill katalog başlığı…) — hardcoded marker gerekmez. Notun
+  her stale turda ridee etmesi için cap'li (`maxContextAreas`/`maxAreaLines`).
+- **Hesaplama seam'i:** `EpochStaticSystem` zaten `build() != e.System`
+  karşılaştırmasında canlı+donmuş metnin ikisini de elinde tutuyor → orada
+  `e.systemChange` doldurulur; `EpochToolDefs` `e.toolsChange`'i doldurur;
+  `combinedChange` ikisini birleştirir.
+- **Ajana (suffix notu):** `PromptEpochContextNote` her stale turda `<context_
+  snapshot_note>` içine "What changed since the snapshot: +/- <etiket>" listesi
+  enjekte eder (chat + headless + toolloop, hepsi `suffixNoteMarker` guard'ıyla
+  çift-eklenme korumalı). Böylece ajan davranışını cache adopte edilmeden **kısmen
+  hemen** uyarlayabilir. Boş diff → jenerik `PromptEpochStaleNote`'a düşer.
+- **Kullanıcıya (chat UI):** yeni `StepContextChange` (`kind="context_change"`)
+  TurnStep — drift **başına bir kez** (`changePending` one-shot, `noteEpoch
+  StaleLocked` arms/re-arms), `ConsumeContextChange` ile tüketilir; canlı SSE'ye
+  yayılır + kalıcı `steps`'e prepend (reload'da kalır). Chat/non-stream yolları
+  `consumeContextChangeLead` helper'ını paylaşır. Frontend `ContextChangeCard.tsx`:
+  katlanabilir renkli +/- diff (blok başlığı → gövde), Ayarlar → Adım Türleri'nde
+  belgeli. Not: değişiklik yine sadece bir sonraki refresh'te **tam** uygulanır.
 
 ## Bilinçli Takaslar
 
 - Kullanıcı ajan promptunu/skill setini düzenleyince açık oturumlarda davranış
-  **hemen** değişmez (stale notu + refresh gerek) — hermes'in bilinçli takası.
+  **tam** hemen değişmez (frozen prefix refresh'e kadar sabit) — ama ajan artık
+  suffix notundaki diff'ten NE değiştiğini görür, kullanıcı da context_change
+  adımından. hermes'in bilinçli takası + değişiklik görünürlüğü.
 - Donmuş MCP şeması sunucu tarafında değişmişse arg uyumsuzluğu hatalı
   tool_result üretir → self-healing (toolguard/lessons) yakalar; stale notu
   refresh'i işaret eder.
@@ -142,6 +183,12 @@ workspace claude-home'unda seed'lenmiş credential ile turlar arasında aralıkl
 
 ## Dosya Haritası
 
+- `internal/agent/contextdiff.go` (+`_test.go`) — diff motoru + `ContextChange`/
+  `ContextArea` + `SuffixNote`; `trace.go` — `StepContextChange`/`ContextChangeStep`;
+  `promptepoch.go` — `systemChange`/`toolsChange`/`changePending` + `PromptEpoch
+  ContextNote`/`ConsumeContextChange`; enjekte: `chat_turn.go`(+`consumeContextChangeLead`)/
+  `chat.go`/`chat_stream.go`/`runtime.go autonomousDynamicSuffix`/`toolloop.go`;
+  frontend `features/chat/ContextChangeCard.tsx` + `types/message.ts` + `settings/stepKinds.ts`
 - `internal/agent/promptepoch.go` (+`_test.go`) — çekirdek
 - `internal/db/promptepoch.go` — sidecar; `internal/db/debug_journal.go` — `DebugEpoch`
 - `internal/api/chat_turn.go` — `buildStaticPrefix` + epoch + stale notu
@@ -150,3 +197,7 @@ workspace claude-home'unda seed'lenmiş credential ile turlar arasında aralıkl
 - `internal/agent/sessionsink.go` + `internal/tools/sessionsink.go` + `builtin_sessionupdate.go` — `refresh_context`
 - `internal/api/summary.go` — `/refresh-context`; `internal/api/workspace_settings.go` — DTO
 - `internal/workspace/settings.go` — ayar; frontend: `WorkspacePanel.tsx`, `chatStreamCommands.ts`, `types/workspace.ts`, `WorkspaceView.tsx`
+- Cache-warmth göstergesi (frontend): `features/sessions/CacheWarmthBadge.tsx` +
+  `sessionDetailFormat.ts` (`CACHE_TTL_SEC`/`cacheRemaining`/`formatCountdown`),
+  bağlayanlar `SessionDetailPanel.tsx` (Genel bölümü) + `SessionContextModal.tsx`
+  (popup cache legend) + `app/App.tsx` (`updatedAt` prop'u)
